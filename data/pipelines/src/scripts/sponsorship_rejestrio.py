@@ -125,6 +125,26 @@ def _krs_entries_of(payload: dict) -> tuple[str, ...]:
     return nip_lookup.newest_first(h.get("krs") for h in hits if h.get("krs"))
 
 
+def _names_of(payload: dict) -> dict[str, str]:
+    """KRS to the name the register printed for it, from a stored search answer.
+
+    Each entry carries its own: a transformed company is "EMITEL SPÓŁKA
+    AKCYJNA" under 0000716108 and "EMITEL SPÓŁKA Z OGRANICZONĄ
+    ODPOWIEDZIALNOŚCIĄ" under 0000482636, and labelling both with the open
+    entry's name would hide which era a board sat in.
+
+    Free, in the sense that it is read out of an answer already on file --
+    `parse_search` has kept `nazwa` all along and nothing downstream asked for
+    it, so every company the run did not separately hold went unnamed.
+    """
+    names: dict[str, str] = {}
+    for hit in payload.get("hits") or []:
+        krs = nip_lookup.newest_first(hit.get("krs"))
+        if krs and hit.get("name"):
+            names[krs[0]] = str(hit["name"])
+    return names
+
+
 def _krs_of(payload: dict) -> str | None:
     """The open register entry a stored search found, or None if it found none."""
     entries = _krs_entries_of(payload)
