@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import itertools
 import resource
 from dataclasses import dataclass
 
@@ -36,11 +35,16 @@ class OpenAICompatibleMultiPortLLM(LLM):
         self.config = config or OpenAICompatibleConfig()
         if not self.config.ports:
             raise ValueError("At least one LLM port must be configured")
-        self._port_cycle = itertools.cycle(self.config.ports)
         self._semaphores = {
             port: asyncio.Semaphore(self.config.per_port_concurrency)
             for port in self.config.ports
         }
+        # Requests currently in flight per port (holding a semaphore slot). The
+        # scheduler sends the next request to the port with the fewest in
+        # flight, so fast servers fill up to their per-port concurrency cap
+        # before a slow one is given more work.
+        self._in_flight = {port: 0 for port in self.config.ports}
+        self._equal_load_tiebreak = 0
         self.prompt_tokens = 0
         self.completion_tokens = 0
         self.total_tokens = 0
@@ -87,6 +91,20 @@ class OpenAICompatibleMultiPortLLM(LLM):
     def response_pool(self) -> LLMResponsePool:
         return OpenAICompatibleResponsePool(self)
 
+    def _pick_port(self) -> int:
+        """The port with the fewest requests in flight.
+
+        Ties are broken by round-robin so one server is not hammered while it
+        catches up with the others. This keeps every port saturated to its
+        ``per_port_concurrency`` cap before a slower one gets more work.
+        """
+        ports = self.config.ports
+        least = min(self._in_flight[port] for port in ports)
+        candidates = [port for port in ports if self._in_flight[port] == least]
+        port = candidates[self._equal_load_tiebreak % len(candidates)]
+        self._equal_load_tiebreak += 1
+        return port
+
     async def _complete_with_retry(
         self,
         session: aiohttp.ClientSession,
@@ -94,7 +112,7 @@ class OpenAICompatibleMultiPortLLM(LLM):
     ) -> LLMResponse:
         last_exc: Exception | None = None
         for attempt in range(1, self.config.retries + 1):
-            port = next(self._port_cycle)
+            port = self._pick_port()
             try:
                 return await self._complete_once(session, port, request)
             except Exception as exc:
@@ -126,16 +144,20 @@ class OpenAICompatibleMultiPortLLM(LLM):
                 ),
             }
         async with self._semaphores[port]:
-            async with session.post(
-                f"{self._endpoint(port)}/chat/completions",
-                json=payload,
-                headers=self._headers(),
-                timeout=aiohttp.ClientTimeout(
-                    total=self.config.request_timeout_seconds
-                ),
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
+            self._in_flight[port] += 1
+            try:
+                async with session.post(
+                    f"{self._endpoint(port)}/chat/completions",
+                    json=payload,
+                    headers=self._headers(),
+                    timeout=aiohttp.ClientTimeout(
+                        total=self.config.request_timeout_seconds
+                    ),
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+            finally:
+                self._in_flight[port] -= 1
         choice = data["choices"][0]
         content = choice["message"]["content"]
         finish_reason = choice.get("finish_reason")
@@ -161,16 +183,14 @@ class OpenAICompatibleMultiPortLLM(LLM):
 class OpenAICompatibleResponsePool(LLMResponsePool):
     def __init__(self, llm: OpenAICompatibleMultiPortLLM) -> None:
         self._llm = llm
-        self._capacity_size = (
-            len(llm.config.ports) * llm.config.per_port_concurrency
-        )
+        self._capacity_size = len(llm.config.ports) * llm.config.per_port_concurrency
         self._capacity = asyncio.Semaphore(self._capacity_size)
         self._request_queue: asyncio.Queue[_QueuedRequest | None] = asyncio.Queue(
             maxsize=self._capacity_size
         )
-        self._response_queue: asyncio.Queue[
-            tuple[int, LLMResponse | Exception]
-        ] = asyncio.Queue()
+        self._response_queue: asyncio.Queue[tuple[int, LLMResponse | Exception]] = (
+            asyncio.Queue()
+        )
         self._next_request_id = 0
         self._session: aiohttp.ClientSession | None = None
         self._workers: list[asyncio.Task[None]] = []
@@ -180,8 +200,7 @@ class OpenAICompatibleResponsePool(LLMResponsePool):
         connector = aiohttp.TCPConnector(limit=self._capacity_size)
         self._session = aiohttp.ClientSession(connector=connector)
         self._workers = [
-            asyncio.create_task(self._worker())
-            for _ in range(self._capacity_size)
+            asyncio.create_task(self._worker()) for _ in range(self._capacity_size)
         ]
         return self
 
@@ -227,11 +246,11 @@ class OpenAICompatibleResponsePool(LLMResponsePool):
             if queued is None:
                 return
             try:
-                response: LLMResponse | Exception = (
-                    await self._llm._complete_with_retry(
-                        self._session,
-                        queued.request,
-                    )
+                response: (
+                    LLMResponse | Exception
+                ) = await self._llm._complete_with_retry(
+                    self._session,
+                    queued.request,
                 )
             except Exception as exc:
                 response = exc
