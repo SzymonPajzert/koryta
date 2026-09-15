@@ -121,6 +121,74 @@ def resolutions_from_bucket(
     return resolutions
 
 
+def resolutions_for_krs(
+    path: Path, known_nip: typing.Mapping[str, str] | None = None
+) -> dict[str, nip_lookup.NipResolution]:
+    """Register entries named directly, for the ones no NIP of ours reaches.
+
+    The chain is keyed on NIPs because that is what a spend register gives it.
+    Re-keying an artifact it has already published is the case that does not
+    fit: `krs_odpis_people` holds 255 entries and only 64 of them can be
+    reversed to a NIP through `companies_merged` or the search bucket, so
+    without this the other 191 could not be re-fetched at all -- and a run that
+    republished the artifact would silently drop 6,281 rows.
+
+    Keyed `krs:<number>` rather than by NIP, because most of these have no NIP
+    and one empty-string key would collapse them all into a single entry.
+    """
+    known_nip = known_nip or {}
+    out: dict[str, nip_lookup.NipResolution] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        krs = nip_lookup.newest_first(line.strip())
+        if not krs:
+            continue
+        out.setdefault(
+            f"krs:{krs[0]}",
+            nip_lookup.NipResolution(
+                nip=known_nip.get(krs[0], ""), krs=krs[0], source="krs-list"
+            ),
+        )
+    return out
+
+
+def known_nip_by_krs(
+    known: typing.Mapping[str, str | typing.Sequence[str]],
+) -> dict[str, str]:
+    """Invert the NIP-to-entries mapping, so a named entry can still carry one."""
+    out: dict[str, str] = {}
+    for nip, entries in known.items():
+        for krs in nip_lookup.newest_first(entries):
+            out.setdefault(krs, nip)
+    return out
+
+
+def add_named_entries(
+    args,
+    resolutions: dict[str, nip_lookup.NipResolution],
+    known_nip: typing.Mapping[str, str],
+) -> dict[str, nip_lookup.NipResolution]:
+    """`--also-krs`, minus whatever the source already reaches.
+
+    Reported rather than added silently: the count that matters is how many of
+    the named entries the population did *not* already cover, since that is
+    what the run costs on top of what was priced.
+    """
+    if not getattr(args, "also_krs", None):
+        return {}
+    already = {krs for r in resolutions.values() for krs in r.krs_entries}
+    named = resolutions_for_krs(Path(args.also_krs), known_nip)
+    extra = {
+        key: resolution
+        for key, resolution in named.items()
+        if resolution.krs not in already
+    }
+    print(
+        f"  --also-krs                   {len(extra):>8,}  "
+        f"({len(named) - len(extra):,} of {len(named):,} already in the population)"
+    )
+    return extra
+
+
 def has_source(args) -> bool:
     """Whether the run was given a population of its own."""
     return bool(args.spreadsheet or args.nip_list or args.nip) or args.cru is not None
@@ -171,6 +239,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    parser.add_argument(
+        "--also-krs",
+        help=(
+            "a file of KRS numbers to fetch as well, one per line. Not a "
+            "source: it names register entries directly, for the entries no "
+            "NIP in our data reaches"
+        ),
+    )
     parser.add_argument("--cru-limit", type=int, help="stop after N CRU party rows")
     parser.add_argument(
         "--limit-companies",
@@ -334,6 +410,9 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
         f"FROM THE SEARCH BUCKET  {len(resolutions):,} of {len(nips):,} NIPs "
         f"have a KRS number ({from_known:,} of them from companies_merged)"
     )
+    # After the count, because that count is about NIPs and these are not
+    # reached through one -- folded in earlier it read "2,468 of 2,361 NIPs".
+    resolutions.update(add_named_entries(args, resolutions, known_nip_by_krs(known)))
 
     # The wykaz path returns here too. Without it `--resolve-only` -- the one
     # flag whose whole job is "tell me where this stands and fetch nothing" --
@@ -435,6 +514,8 @@ def main() -> None:
             f"  NOT ASKED (request cap)      {len(unasked):>8,}  "
             f"-- rerun tomorrow or raise --max-mf-requests"
         )
+
+    resolutions.update(add_named_entries(args, resolutions, known_nip_by_krs(known)))
 
     if args.resolve_only:
         return

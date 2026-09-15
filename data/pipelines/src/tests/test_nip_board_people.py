@@ -368,3 +368,39 @@ def test_each_entry_is_named_as_the_register_printed_it(bucket, monkeypatch):
         "0000716108": "EMITEL SPÓŁKA AKCYJNA",
         "0000482636": "EMITEL SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
     }
+
+
+def test_also_krs_names_entries_no_nip_of_ours_reaches(tmp_path):
+    """Re-keying the artifact is the case the NIP-keyed chain cannot serve.
+
+    `krs_odpis_people` holds 255 entries and only 64 reverse to a NIP through
+    `companies_merged` or the search bucket, so without naming entries directly
+    a republish would have dropped 6,281 rows on the floor.
+    """
+    path = tmp_path / "krs.txt"
+    path.write_text("9458\n0000017753\n\n0000017753\n", encoding="utf-8")
+    out = nip_board_people.resolutions_for_krs(path, {"0000009458": "1111111111"})
+    # Padded, deduplicated, and keyed so that entries with no NIP do not all
+    # collapse onto one empty-string key.
+    assert sorted(out) == ["krs:0000009458", "krs:0000017753"]
+    assert out["krs:0000009458"].krs == "0000009458"
+    assert out["krs:0000009458"].nip == "1111111111"
+    assert out["krs:0000017753"].nip == ""
+
+
+def test_also_krs_skips_what_the_population_already_covers(tmp_path, capsys):
+    already = nip_board_people.nip_lookup.NipResolution(
+        nip="1111111111", krs="0000000002", also_krs=("0000000001",)
+    )
+    path = tmp_path / "krs.txt"
+    path.write_text("0000000001\n0000000003\n", encoding="utf-8")
+    extra = nip_board_people.add_named_entries(
+        argparse.Namespace(also_krs=str(path)), {"1111111111": already}, {}
+    )
+    # 0000000001 is already reached, as a superseded entry of the same company.
+    assert sorted(extra) == ["krs:0000000003"]
+    assert "1 of 2 already in the population" in capsys.readouterr().out
+
+
+def test_no_also_krs_adds_nothing():
+    assert nip_board_people.add_named_entries(argparse.Namespace(), {}, {}) == {}
