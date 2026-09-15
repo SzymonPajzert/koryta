@@ -404,3 +404,23 @@ def test_also_krs_skips_what_the_population_already_covers(tmp_path, capsys):
 
 def test_no_also_krs_adds_nothing():
     assert nip_board_people.add_named_entries(argparse.Namespace(), {}, {}) == {}
+
+
+def test_the_unresolved_count_is_about_nips_only(capsys):
+    """`--also-krs` entries share the dict and are not NIPs.
+
+    Counted among them, a run that named 251 entries reported "no KRS number
+    yet: -167", which is not a quantity of anything.
+    """
+    resolutions = {
+        "1111111111": nip_board_people.nip_lookup.NipResolution(
+            nip="1111111111", krs="0000000001", source="search"
+        ),
+        "krs:0000000002": nip_board_people.nip_lookup.NipResolution(
+            nip="", krs="0000000002", source="krs-list"
+        ),
+    }
+    nip_board_people.report_resolution(["1111111111", "2222222222"], resolutions)
+    out = capsys.readouterr().out
+    assert "no KRS number yet                   1" in out
+    assert "odpisy to fetch                     2" in out

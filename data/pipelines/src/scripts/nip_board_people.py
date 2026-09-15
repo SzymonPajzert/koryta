@@ -592,7 +592,12 @@ def report_resolution(nips, resolutions: dict[str, nip_lookup.NipResolution]) ->
     """
     entries = {krs for r in resolutions.values() for krs in r.krs_entries}
     superseded = len(entries) - len(resolutions)
-    print(f"  no KRS number yet            {len(nips) - len(resolutions):>8,}")
+    # Only the resolutions that came from a NIP can answer "how many of the
+    # NIPs are still unresolved". `--also-krs` entries are in the same dict and
+    # are not NIPs, so counting them here printed a negative: -167 on a run
+    # that named 251 entries.
+    from_nip = sum(1 for r in resolutions.values() if r.source != "krs-list")
+    print(f"  no KRS number yet            {len(nips) - from_nip:>8,}")
     print(f"  odpisy to fetch              {len(entries):>8,}", end="")
     if superseded:
         print(f"  ({superseded:,} superseded entries)", end="")
