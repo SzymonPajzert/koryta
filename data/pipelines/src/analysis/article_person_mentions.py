@@ -18,6 +18,7 @@ did. People are keyed by their koryta ``id``, not by register ids.
 """
 
 import asyncio
+import hashlib
 import json
 import re
 from collections import Counter
@@ -39,7 +40,10 @@ from scrapers.article.pipelines.common import (
 from scrapers.article.pipelines.domain_to_region_pipeline import DomainToRegion
 from scrapers.article.pipelines.incremental import IncrementalJsonlPipeline
 from scrapers.article.pipelines.parsed_pipeline import ArticleParsed
-from scrapers.article.pipelines.pipeline_utils import llm_model
+from scrapers.article.pipelines.pipeline_utils import (
+    article_mentions_cache,
+    llm_model,
+)
 from scrapers.koryta.download import KorytaPeople
 from scrapers.stores import (
     LLM,
@@ -79,6 +83,14 @@ _RUN_RE = re.compile(rf"(?:{_WORD}\s+){{1,{_MAX_RUN_WORDS - 1}}}{_WORD}")
 # truncated article excerpt, so verdicts can be eyeballed later.
 _DEBUG_FILE = Path(VERSIONED_DIR) / "article_person_mentions" / "judge_debug.jsonl"
 _DEBUG_CONTENT_LIMIT = 2000
+# Verdict reuse across runs: keyed by (article content hash, person id, judge
+# version), so re-running after only the people set changed re-asks the model
+# nothing it already answered. A person who has since been merged is looked up
+# under the ids that merged into them too - the fact and the article are the
+# same, only the id moved.
+_JUDGE_CACHE_FILE = (
+    Path(VERSIONED_DIR) / "article_person_mentions" / "judge_cache.jsonl"
+)
 
 
 def _name_tuple(name: str) -> tuple[str, ...]:
@@ -459,10 +471,34 @@ def _load_index_and_profiles(
     krs_names: dict[str, str],
     person_krs: dict[str, set[str]],
 ) -> tuple[PersonNameIndex, PersonProfileIndex]:
-    """Build the name index and per-person profiles in one pass."""
+    """Build the name index and per-person profiles in one pass.
+
+    Merged-away people are not indexed under their own id; their name is added
+    as an alias of the survivor instead. The site sends readers of a duplicate
+    page to the survivor, and the two names usually differ - "Marian Uherek"
+    was merged into "Marian Antoni Uherek" - so dropping the duplicate outright
+    would stop its name matching anything at all.
+    """
     index = PersonNameIndex()
     profiles = PersonProfileIndex()
+    rows = list(rows)
+    by_id = {_person_id(row): row for row in rows if _person_id(row)}
+    # survivor display name -> duplicate display names that point at it.
+    aliases: dict[str, list[str]] = {}
+    merged = 0
     for row in rows:
+        merged_into = _merged_into(row)
+        if merged_into is not None:
+            # A tombstone is never indexed under its own id, whatever happens
+            # next: its mention must reach the survivor or nobody.
+            merged += 1
+            survivor_id = _resolve_merged(merged_into, by_id)
+            survivor = by_id.get(survivor_id) if survivor_id else None
+            dup_display = _display_name(row)
+            survivor_display = _display_name(survivor) if survivor else ""
+            if dup_display and survivor_display and dup_display != survivor_display:
+                aliases.setdefault(survivor_display, []).append(dup_display)
+            continue
         display = _display_name(row)
         if not display:
             continue
@@ -486,7 +522,55 @@ def _load_index_and_profiles(
             if name:
                 profile.orgs.update(_org_match_terms(ascii_lower(name)))
         profiles.add(display, person_id, profile)
+    for survivor_display, duplicates in aliases.items():
+        for dup_display in duplicates:
+            index.add(survivor_display, [_name_tuple(dup_display)])
+    if merged:
+        print(
+            f"Aliased {merged:,} merged-away people onto their survivors "
+            f"({sum(len(v) for v in aliases.values()):,} extra name forms)"
+        )
     return index, profiles
+
+
+def _resolve_merged(
+    survivor_id: str | None, by_id: dict[str, dict[str, Any]]
+) -> str | None:
+    """Follow `merged_into` to the surviving person's id, or None if not merged.
+
+    The site resolves a merge on write so a chain should not form, but the same
+    bound it uses (`MAX_MERGE_HOPS`) is kept here so a cycle fails the row
+    rather than looping.
+    """
+    if not survivor_id:
+        return None
+    current = survivor_id
+    seen: set[str] = set()
+    for _ in range(8):
+        if not current or current in seen:
+            return None
+        seen.add(current)
+        row = by_id.get(current)
+        if row is None:
+            return None
+        nxt = _merged_into(row)
+        if not nxt:
+            return current
+        current = nxt
+    return None
+
+
+def _merged_into(row: dict[str, Any]) -> str | None:
+    """The survivor id on a merged-away person row, or None for a real person.
+
+    `iterate_pipeline_dict` has already turned an absent/NaN field into None;
+    the NaN check guards a caller that handed a raw DataFrame row instead.
+    """
+    value = row.get("merged_into")
+    if value is None or (isinstance(value, float) and value != value):
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _person_id(row: dict[str, Any]) -> str:
@@ -889,6 +973,17 @@ def _parse_verdict(text: str) -> tuple[str, str]:
     return verdict, justification[:500]
 
 
+def _no_think_retry(request: LLMRequest) -> LLMRequest:
+    """A cheap re-ask without thinking, for a pair the model left ``unknown``."""
+    return LLMRequest(
+        prompt=request.prompt,
+        max_tokens=1500,
+        temperature=TEMPERATURE,
+        model=request.model,
+        enable_thinking=False,
+    )
+
+
 def _emit_person(
     ctx: Context,
     row: dict[str, Any],
@@ -998,11 +1093,14 @@ async def _submit_requests(
     pool: LLMResponsePool,
     inflight: dict[
         int,
-        tuple[dict[str, Any], str, str, list[ProofSignal], str, LLMRequest, bool],
+        tuple[
+            dict[str, Any], str, str, list[ProofSignal], str, str, LLMRequest, bool
+        ],
     ],
     drain: Any,
     row: dict[str, Any],
     content: str,
+    content_hash: str,
     requests: list[tuple[str, str, list[ProofSignal], LLMRequest]],
 ) -> None:
     """Queue one article's judged pairs on the LLM response pool."""
@@ -1016,12 +1114,226 @@ async def _submit_requests(
             person_id,
             proof,
             content,
+            content_hash,
             request,
             False,
         )
 
 
-async def _scan_and_judge(
+def _content_hash(content: str) -> str:
+    """A stable digest of the exact text the judge is asked about."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _legacy_ids_by_survivor(
+    rows: Iterable[dict[str, Any]],
+) -> dict[str, set[str]]:
+    """survivor person id -> the ids that were merged into it.
+
+    A pair judged before a merge was cached under the duplicate's id, and the
+    same article now resolves to the survivor's, so a lookup has to try these
+    too or the cache misses exactly where the id moved.
+    """
+    rows = list(rows)
+    by_id = {_person_id(row): row for row in rows if _person_id(row)}
+    legacy: dict[str, set[str]] = {}
+    for row in rows:
+        merged_into = _merged_into(row)
+        if merged_into is None:
+            continue
+        person_id = _person_id(row)
+        survivor = _resolve_merged(merged_into, by_id)
+        if survivor and survivor != person_id:
+            legacy.setdefault(survivor, set()).add(person_id)
+    return legacy
+
+
+class JudgeCache:
+    """Verdict reuse for the mention judge, keyed by content hash + person id.
+
+    Two sources: the persistent ``judge_cache.jsonl``, appended to as verdicts
+    land, and a one-time seed read from the previous run's output (which
+    predates this cache and carries only the url, not a content hash). A lookup
+    also tries the ids a merged-away person came from, so a merge moves the id
+    without costing the verdict. Only definite verdicts are cached - an
+    ``unknown`` is re-asked.
+    """
+
+    def __init__(
+        self,
+        cache_file: Path,
+        legacy_ids: dict[str, set[str]] | None = None,
+    ) -> None:
+        self._cache_file = cache_file
+        self._legacy_ids = legacy_ids or {}
+        # (content_hash, person_id, JUDGE_VERSION) -> (verdict, justification)
+        self._entries: dict[tuple[str, str, int], tuple[str, str]] = {}
+        # (url, person_id) -> (verdict, justification), seeded from the output
+        self._seed: dict[tuple[str, str], tuple[str, str]] = {}
+        self.hits = 0
+        self.misses = 0
+        self._load()
+
+    def _load(self) -> None:
+        if not self._cache_file.exists():
+            return
+        with self._cache_file.open(encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                verdict = row.get("verdict")
+                content_hash = str(row.get("content_hash") or "")
+                person_id = str(row.get("person_id") or "")
+                version = int(row.get("judge_version") or 0)
+                if (
+                    verdict in {"yes", "no"}
+                    and content_hash
+                    and person_id
+                    and version == JUDGE_VERSION
+                ):
+                    self._entries[(content_hash, person_id, version)] = (
+                        verdict,
+                        str(row.get("justification") or ""),
+                    )
+
+    def seed_from_output(self, path: Path) -> int:
+        """Read a previous ``article_person_mentions.jsonl`` as a url-keyed seed.
+
+        The old output carries no content hash, so a hit here is trusted for
+        the run that migrates onto the hashed cache; the verdict is stored
+        under the current content hash when it is reused.
+        """
+        if not path.exists():
+            return 0
+        seeded = 0
+        with path.open(encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                verdict = row.get("verdict")
+                url = row.get("url")
+                person_id = row.get("person_id")
+                if verdict in {"yes", "no"} and url and person_id:
+                    self._seed[(str(url), str(person_id))] = (
+                        verdict,
+                        str(row.get("justification") or ""),
+                    )
+                    seeded += 1
+        return seeded
+
+    def _candidate_ids(self, person_id: str) -> list[str]:
+        return [person_id, *sorted(self._legacy_ids.get(person_id, ()))]
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def lookup(
+        self, content_hash: str, url: str, person_id: str
+    ) -> tuple[str, str] | None:
+        for candidate in self._candidate_ids(person_id):
+            entry = self._entries.get((content_hash, candidate, JUDGE_VERSION))
+            if entry is not None:
+                return entry
+        for candidate in self._candidate_ids(person_id):
+            entry = self._seed.get((url, candidate))
+            if entry is not None:
+                return entry
+        return None
+
+    def store(
+        self,
+        content_hash: str,
+        person_id: str,
+        verdict: str,
+        justification: str,
+    ) -> None:
+        """Persist a fresh verdict; a no-op for anything but yes/no."""
+        if verdict not in {"yes", "no"}:
+            return
+        key = (content_hash, person_id, JUDGE_VERSION)
+        if key in self._entries:
+            return
+        self._entries[key] = (verdict, justification)
+        self._cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with self._cache_file.open("a", encoding="utf-8") as handle:
+            handle.write(
+                json.dumps(
+                    {
+                        "content_hash": content_hash,
+                        "person_id": person_id,
+                        "judge_version": JUDGE_VERSION,
+                        "verdict": verdict,
+                        "justification": justification,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+
+def _try_reuse(
+    ctx: Context,
+    cache: JudgeCache,
+    content_hash: str,
+    row: dict[str, Any],
+    person: str,
+    person_id: str,
+    proof: list[ProofSignal],
+    content: str,
+) -> bool:
+    """Emit a cached verdict for one pair, or leave it to the model.
+
+    Keeps the scan loop free of the cache bookkeeping, so it can return early
+    on a hit without duplicating the emit/debug calls.
+    """
+    cached = cache.lookup(content_hash, row["url"], person_id)
+    if cached is None:
+        cache.misses += 1
+        return False
+    verdict, justification = cached
+    cache.hits += 1
+    _emit_person(ctx, row, person, person_id, proof, verdict, justification)
+    _write_debug(row, person, person_id, proof, verdict, justification, content)
+    return True
+
+
+async def _judge_or_reuse(
+    ctx: Context,
+    pool: LLMResponsePool,
+    inflight: dict[int, Any],
+    drain: Any,
+    cache: "JudgeCache | None",
+    bar: Any,
+    row: dict[str, Any],
+    content: str,
+    requests: list[tuple[str, str, list[ProofSignal], LLMRequest]],
+) -> None:
+    """Emit cached pairs for one article and submit the rest to the model."""
+    content_hash = _content_hash(content)
+    to_submit: list[tuple[str, str, list[ProofSignal], LLMRequest]] = []
+    for person, person_id, proof, request in requests:
+        if cache is not None and _try_reuse(
+            ctx, cache, content_hash, row, person, person_id, proof, content
+        ):
+            bar.update(1)
+            continue
+        to_submit.append((person, person_id, proof, request))
+    await _submit_requests(
+        pool, inflight, drain, row, content, content_hash, to_submit
+    )
+
+
+async def _scan_and_judge(  # noqa: PLR0915
     ctx: Context,
     parsed_path: Path,
     index: PersonNameIndex,
@@ -1030,20 +1342,25 @@ async def _scan_and_judge(
     generic_org_stems: frozenset[str],
     *,
     model: str,
+    cache: "JudgeCache | None" = None,
 ) -> None:
     """Scan parsed articles and LLM-judge confirmed matches on the fly.
 
     Reads the corpus line by line; every article whose names pass the proof
     filter has its (article, person) pairs submitted to the LLM response pool
     immediately, so judging overlaps the scan and article text is never kept in
-    memory. Each row is emitted as soon as its last request lands.
+    memory. Each row is emitted as soon as its last request lands. A pair the
+    ``cache`` already holds is emitted without a request.
     """
     await LLM.from_context(ctx).check_health()
 
-    # request_id -> (row, person, person_id, proof, content, request, retried)
+    # request_id -> (row, person, person_id, proof, content, content_hash,
+    #                request, retried)
     inflight: dict[
         int,
-        tuple[dict[str, Any], str, str, list[ProofSignal], str, LLMRequest, bool],
+        tuple[
+            dict[str, Any], str, str, list[ProofSignal], str, str, LLMRequest, bool
+        ],
     ] = {}
 
     candidates = 0
@@ -1052,8 +1369,8 @@ async def _scan_and_judge(
 
     async def drain(pool: LLMResponsePool) -> None:
         request_id, response = await pool.get_response()
-        row, person, person_id, proof, content, request, retried = inflight.pop(
-            request_id
+        row, person, person_id, proof, content, content_hash, request, retried = (
+            inflight.pop(request_id)
         )
         if isinstance(response, Exception):
             verdict, justification = "unknown", str(response)[:200]
@@ -1063,18 +1380,23 @@ async def _scan_and_judge(
             # Extremely rare: the model can still burn its whole output budget
             # inside a <think> block and return no verdict. Re-ask once without
             # thinking so every pair gets a verdict instead of a silent unknown.
-            retry_req = LLMRequest(
-                prompt=request.prompt,
-                max_tokens=1500,
-                temperature=TEMPERATURE,
-                model=request.model,
-                enable_thinking=False,
-            )
+            retry_req = _no_think_retry(request)
             while pool.is_full():
                 await drain(pool)
             rid = await pool.put_request(retry_req)
-            inflight[rid] = (row, person, person_id, proof, content, retry_req, True)
+            inflight[rid] = (
+                row,
+                person,
+                person_id,
+                proof,
+                content,
+                content_hash,
+                retry_req,
+                True,
+            )
             return
+        if cache is not None:
+            cache.store(content_hash, person_id, verdict, justification)
         _emit_person(ctx, row, person, person_id, proof, verdict, justification)
         _write_debug(row, person, person_id, proof, verdict, justification, content)
         bar.update(1)
@@ -1117,8 +1439,16 @@ async def _scan_and_judge(
                     # `or 0` for the type checker only: tqdm types `total` as
                     # optional, and this bar was built with `total=0`.
                     bar.total = (bar.total or 0) + len(requests)
-                    await _submit_requests(
-                        pool, inflight, drain, row, content, requests
+                    await _judge_or_reuse(
+                        ctx,
+                        pool,
+                        inflight,
+                        drain,
+                        cache,
+                        bar,
+                        row,
+                        content,
+                        requests,
                     )
             while inflight:
                 await drain(pool)
@@ -1127,6 +1457,11 @@ async def _scan_and_judge(
         f"Confirmed {candidates:,} candidate people across {rows:,} articles "
         f"({dropped:,} dropped for lack of proof)"
     )
+    if cache is not None:
+        print(
+            f"Judge cache: {cache.hits:,} reused, {cache.misses:,} re-judged "
+            f"({len(cache):,} entries)"
+        )
 
 
 def _print_llm_usage(ctx: Context) -> None:
@@ -1184,6 +1519,25 @@ class ArticlePersonMentions(IncrementalJsonlPipeline[ArticlePersonMentioned]):
             print("No parsed articles found, nothing to emit")
             return pd.DataFrame()
 
+        cache = None
+        if article_mentions_cache():
+            cache = JudgeCache(
+                _JUDGE_CACHE_FILE, _legacy_ids_by_survivor(people_rows)
+            )
+            # Seed from the output being replaced, which predates this cache and
+            # carries only the url (no content hash). The versioned cache takes
+            # precedence on lookup, so seeding unconditionally only fills gaps.
+            # A change to JUDGE_VERSION should either clear that output or run
+            # with --no-article-mentions-cache.
+            seeded = cache.seed_from_output(self.final_output_path)
+            if seeded:
+                print(
+                    f"Seeded {seeded:,} prior verdicts from "
+                    f"{self.final_output_path.name}"
+                )
+        else:
+            print("Mention judge cache disabled (--no-article-mentions-cache)")
+
         model = llm_model()
         asyncio.run(
             _scan_and_judge(
@@ -1194,6 +1548,7 @@ class ArticlePersonMentions(IncrementalJsonlPipeline[ArticlePersonMentioned]):
                 domain_map,
                 generic_org_stems,
                 model=model,
+                cache=cache,
             )
         )
         _print_llm_usage(ctx)

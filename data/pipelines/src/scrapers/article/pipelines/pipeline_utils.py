@@ -236,6 +236,24 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "verified fact.",
     )
     parser.add_argument(
+        "--article-analyzed-dedup-existing-facts",
+        action="store_true",
+        help="Drop facts the site already holds. Reads the KorytaFacts "
+        "pipeline (the `extractions` Firestore export) and rebuilds the same "
+        "dedup key ArticleAnalyzed uses for each fact already matched to a "
+        "person, so only facts new to the site survive. Requires the export "
+        "to be reachable. Off by default: no dependency on the site's state.",
+    )
+    parser.add_argument(
+        "--article-mentions-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reuse mention-judge verdicts across runs, keyed by article "
+        "content hash + person id + judge version (and the ids a merged "
+        "person came from). Default: on; pass --no-article-mentions-cache to "
+        "re-judge every pair.",
+    )
+    parser.add_argument(
         "--tag",
         type=str,
         default=None,
@@ -331,3 +349,11 @@ def article_analyzed_keep_evidence() -> bool:
 
 def article_analyzed_only_matched_koryta() -> bool:
     return bool(_args().article_analyzed_only_matched_koryta)
+
+
+def article_analyzed_dedup_existing_facts() -> bool:
+    return bool(_args().article_analyzed_dedup_existing_facts)
+
+
+def article_mentions_cache() -> bool:
+    return bool(_args().article_mentions_cache)
