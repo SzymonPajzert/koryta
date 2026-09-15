@@ -424,3 +424,21 @@ def test_the_unresolved_count_is_about_nips_only(capsys):
     out = capsys.readouterr().out
     assert "no KRS number yet                   1" in out
     assert "odpisy to fetch                     2" in out
+
+
+def test_an_entry_reached_by_no_nip_writes_null_not_empty_string(tmp_path):
+    """`--also-krs` sets "" for an entry no NIP of ours reaches.
+
+    Published as "" it would be a second spelling of "unknown" beside null,
+    which is exactly the sort of thing that survives until somebody's `IS NULL`
+    quietly misses 191 rows.
+    """
+    company = nip_board_people.nip_lookup.NipResolution(
+        nip="", krs="0000000001", source="krs-list"
+    )
+    path = tmp_path / "people.jsonl"
+    nip_board_people.write_output(
+        path, [odpis_person("0000000001", "NOWAK")], {"0000000001": company}, []
+    )
+    row = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+    assert row["nip"] is None
