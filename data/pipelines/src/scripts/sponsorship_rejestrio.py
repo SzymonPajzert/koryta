@@ -141,7 +141,7 @@ def _krs_entries_of(payload: dict) -> tuple[str, ...]:
     that company.
 
     Refusing them cost the CRU population **1,272 recipients carrying
-    746,376,522 PLN** -- 97% of all the money it could not resolve -- among
+    746,378,072 PLN** -- 97% of all the money it could not resolve -- among
     them EMITEL, TEXOM and CATERMED, which are companies we plainly want.
     """
     hits = payload.get("hits") or []
