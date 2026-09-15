@@ -15,11 +15,13 @@ from scrapers.article.pipelines.koryciarski_scores_pipeline import (
 )
 from scrapers.article.pipelines.parsed_pipeline import ArticleParsed
 from scrapers.article.pipelines.pipeline_utils import (
+    article_analyzed_dedup_existing_facts,
     article_analyzed_keep_evidence,
     article_analyzed_only_matched_koryta,
     article_tag,
 )
 from scrapers.article.pipelines.verified_facts_pipeline import ArticleFactsVerified
+from scrapers.koryta.download import KorytaPeople
 from scrapers.stores import VERSIONED_DIR, Context
 
 _PARSED_FILE = Path(VERSIONED_DIR) / "article_parsed" / "article_parsed.jsonl"
@@ -1189,7 +1191,6 @@ def _fact_key(
 _MENTIONS_FILE = (
     Path(VERSIONED_DIR) / "article_person_mentions" / "article_person_mentions.jsonl"
 )
-_KORYTA_PEOPLE_FILE = Path(VERSIONED_DIR) / "person_koryta" / "person_koryta.jsonl"
 
 # Verifier bookkeeping fields kept in article_facts_verified but stripped from
 # the analyzed output.
@@ -1205,14 +1206,17 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
     parsed: ArticleParsed
     koryciarski_scores: ArticleKoryciarskiScores
     verified_facts: ArticleFactsVerified
+    # The same people source ArticlePersonMentions matches against, so the ids
+    # its output carries resolve to names here. The old hardcoded non-dated
+    # `person_koryta/person_koryta.jsonl` was a stale snapshot and silently
+    # dropped the facts of everybody who joined the site since.
+    koryta_people: KorytaPeople
 
     @property
     def output_class(self):
         return ArticleAnalyzedRecord
 
     def process(self, ctx: Context) -> pd.DataFrame:
-        tag = article_tag()
-
         # Load facts first (small) to get the URL set we care about
         print("Loading facts...")
         facts = _load_facts(_FACTS_FILE)
@@ -1239,10 +1243,15 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
 
         keep_evidence = article_analyzed_keep_evidence()
         only_matched = article_analyzed_only_matched_koryta()
+        # Facts the site already holds, keyed the same way as our own. Empty
+        # unless --article-analyzed-dedup-existing-facts is set.
+        existing_keys = _load_existing_fact_keys(ctx)
         # Names of the koryta people each article's ids resolve to, so a fact
         # whose person matches by name can be tied to a person page (the exact
         # rule the website ingest applies).
-        koryta_name_by_id = _koryta_name_by_id(_KORYTA_PEOPLE_FILE)
+        koryta_name_by_id = _koryta_name_by_id(
+            Path(VERSIONED_DIR) / self.koryta_people.output_path()
+        )
         print(f"  {len(koryta_name_by_id):,} koryta people loaded")
 
         emitted = 0
@@ -1284,6 +1293,9 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
                 ):
                     continue
                 verified_facts.append(fact)
+            # Keep only facts the site does not already hold, so an upload from
+            # this output carries nothing a reviewer has seen before.
+            verified_facts = _drop_existing_facts(verified_facts, existing_keys)
             triaged = _dedup_facts_for_article(
                 url,
                 verified_facts,
@@ -1317,7 +1329,6 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
                 title=parsed_row.get("title")
                 or title_from_ld_json(parsed_row.get("ld_json")),
                 publication_date=publication_date,
-                article_content=parsed_row.get("article_content", ""),
                 koryciarski_llm_score=(
                     score_row.get("koryciarski_llm_score") if score_row else None
                 ),
@@ -1326,7 +1337,7 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
                 ),
                 extracted_facts=deduped_facts,
                 koryta_ids=koryta_ids_by_url.get(url, []),
-                tag=tag,
+                tag=article_tag(),
             )
             ctx.io.dumper.insert_into(record, [])  # type: ignore[attr-defined]
             emitted += 1
@@ -1339,10 +1350,21 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
 def _strip_and_date_fact(
     fact: dict[str, Any], publication_date: str | None
 ) -> dict[str, Any]:
-    """Drop verifier bookkeeping and stamp the article date onto a fact."""
-    fact = {k: v for k, v in fact.items() if k not in _VERIFICATION_FIELDS}
-    fact["date"] = publication_date
-    return fact
+    """Drop verifier bookkeeping and null fields, and stamp the article date.
+
+    The ingest schema declares every optional fact field as `z.string().optional()`
+    - optional means ABSENT, not null - so a `role: None` the extractor left
+    behind is a 400 at upload rather than an empty value. `date` is only added
+    when the article has one, for the same reason.
+    """
+    cleaned = {
+        key: value
+        for key, value in fact.items()
+        if key not in _VERIFICATION_FIELDS and value is not None
+    }
+    if publication_date is not None:
+        cleaned["date"] = publication_date
+    return cleaned
 
 
 def _dedup_facts_for_article(
@@ -1387,6 +1409,80 @@ def _fact_person(
     name = str(fact.get("person") or fact.get("subject") or "")
     normed = _norm(name)
     return normed, person_ids.get(normed, "")
+
+
+def _fact_key_name_only(fact: dict[str, Any]) -> _FactKey:
+    """The fact's dedup key with no person id.
+
+    Used to compare against facts the site already holds: the site stores the
+    person id it matched, while our own facts only resolve one through article
+    mentions, and a missing id on either side would hide a real duplicate.
+    """
+    name = str(fact.get("person") or fact.get("subject") or "")
+    return _fact_key(fact, person_name=_norm(name), person_id="")
+
+
+def _existing_fact_keys(ctx: Context) -> set[_FactKey]:
+    """Dedup keys of the facts the site already holds on a named person.
+
+    Reads the KorytaFacts pipeline (its `extractions` Firestore export) and
+    rebuilds the same key `_fact_key` builds for our own facts, so a fact whose
+    key is absent is one the site does not have yet. Comparing on the name only
+    is deliberate - see `_fact_key_name_only`.
+    """
+    from scrapers.koryta.download import KorytaFacts  # noqa: PLC0415
+
+    facts = KorytaFacts().read_or_process(ctx)
+    keys: set[_FactKey] = set()
+    if facts is None or facts.empty:
+        print("No facts already held by the site, nothing to dedup against")
+        return keys
+    # A cached output written before KorytaFacts carried fact content has no
+    # person/organization columns, so every key would read as blank and the
+    # dedup would drop real facts. Fail loudly instead.
+    if "person" not in facts.columns and "subject" not in facts.columns:
+        raise RuntimeError(
+            "KorytaFacts output has no fact content columns; re-run "
+            "`koryta KorytaFacts --refresh KorytaFacts` before "
+            "--article-analyzed-dedup-existing-facts."
+        )
+    for row in facts.to_dict(orient="records"):
+        # pandas turns an absent optional field into a float NaN, and NaN is
+        # truthy - `_fact_key` would then read it as a real organization/role.
+        clean = {
+            str(key): value
+            for key, value in row.items()
+            if not (isinstance(value, float) and value != value)
+        }
+        keys.add(_fact_key_name_only(clean))
+    print(f"  {len(keys):,} facts already held by the site")
+    return keys
+
+
+def _load_existing_fact_keys(ctx: Context) -> set[_FactKey]:
+    """The site's fact keys, or an empty set when the flag is off.
+
+    Off by default on purpose: the pipeline must not reach for the KorytaFacts
+    export unless asked, so a normal run keeps no dependency on the site's
+    state.
+    """
+    if not article_analyzed_dedup_existing_facts():
+        return set()
+    return _existing_fact_keys(ctx)
+
+
+def _drop_existing_facts(
+    verified_facts: list[dict[str, Any]],
+    existing_keys: set[_FactKey],
+) -> list[dict[str, Any]]:
+    """Drop the facts whose dedup key the site already holds."""
+    if not existing_keys:
+        return verified_facts
+    return [
+        fact
+        for fact in verified_facts
+        if _fact_key_name_only(fact) not in existing_keys
+    ]
 
 
 def _person_ids_by_url(path: Path) -> dict[str, dict[str, str]]:

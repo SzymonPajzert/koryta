@@ -6,7 +6,9 @@ from scrapers.article.pipelines.article_analyzed_pipeline import (
     _canonical_role,
     _collapse_between_articles,
     _dedup_facts_for_article,
+    _drop_existing_facts,
     _fact_key,
+    _fact_key_name_only,
     _fact_matches_koryta,
     _fact_person,
     _koryta_name_by_id,
@@ -640,6 +642,24 @@ def test_strip_and_date_fact_drops_verifier_fields():
     assert fact["date"] == "2020-01-01"
 
 
+def test_strip_and_date_fact_drops_null_fields():
+    # The ingest schema takes optional strings as absent, never null.
+    fact = _strip_and_date_fact(
+        {
+            "fact_type": "employment",
+            "person": "Jan Kowalski",
+            "organization": "Orlen",
+            "role": None,
+            "justification_in_text": None,
+        },
+        None,
+    )
+    assert "role" not in fact
+    assert "justification_in_text" not in fact
+    assert "date" not in fact
+    assert fact["organization"] == "Orlen"
+
+
 # --- _dedup_facts_for_article --------------------------------------------- #
 
 
@@ -830,3 +850,42 @@ def test_fact_person_uses_person_then_subject():
         "jan kowalski",
         "",
     )
+
+
+# --- existing-facts dedup (_fact_key_name_only / _drop_existing_facts) ----- #
+
+
+def test_fact_key_name_only_matches_name_key_without_id():
+    fact = employment("Jan Kowalski", "Alior Bank", "prezes")
+    assert _fact_key_name_only(fact) == _fact_key(
+        fact, person_name="jan kowalski", person_id=""
+    )
+    # A key carrying a person id is NOT the same as the name-only key.
+    assert _fact_key_name_only(fact) != _fact_key(
+        fact, person_name="jan kowalski", person_id="k1"
+    )
+
+
+def test_fact_key_name_only_relation_uses_subject():
+    fact = {
+        "fact_type": "personal_relation",
+        "subject": "Barbara Gieroń",
+        "object": "Łukasz",
+        "relation": "matka",
+    }
+    assert _fact_key_name_only(fact) == _fact_key(
+        fact, person_name="barbara gieroń", person_id=""
+    )
+
+
+def test_drop_existing_facts_keeps_only_new():
+    held = employment("Jan Kowalski", "Alior Bank", "prezes")
+    fresh = employment("Anna Nowak", "Orlen", "prezes")
+    existing = {_fact_key_name_only(held)}
+    kept = _drop_existing_facts([held, fresh], existing)
+    assert kept == [fresh]
+
+
+def test_drop_existing_facts_no_keys_is_noop():
+    fact = employment("Jan Kowalski", "Alior Bank", "prezes")
+    assert _drop_existing_facts([fact], set()) == [fact]
