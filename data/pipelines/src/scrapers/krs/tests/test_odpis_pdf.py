@@ -474,3 +474,29 @@ def test_a_partnership_representation_rubryka_has_a_role():
     """
     assert role_of("Uprawnieni do reprezentowania spółki") == "reprezentacja"
     assert role_of("Organ uprawniony do reprezentacji podmiotu") == "reprezentacja"
+
+
+@pytest.mark.parametrize(
+    "rubryka, role",
+    [
+        ("Dane komplementariuszy", "komplementariusz"),
+        ("Organ uprawniony do reprezentowania zagranicznego przedsiębiorcy",
+         "reprezentacja_pz"),
+        ("Osoby reprezentujące zagranicznego przedsiębiorcę w oddziale", "osoba_pz"),
+    ],
+)
+def test_the_rubryki_a_wider_population_turned_up(rubryka, role):
+    """All three were printed by `unread_person_rubryki` on a real run.
+
+    They only appear once the population reaches partnerships and branches of
+    foreign companies: 19 people across 6 of 1,225 stored odpisy. The two
+    foreign ones are deliberately different roles -- one is the parent's board
+    abroad, the other is who runs the Polish oddział.
+    """
+    assert role_of(rubryka) == role
+
+
+def test_the_foreign_rubryki_do_not_collide_with_the_domestic_one():
+    """`role_of` is a prefix match, and these three all start with "organ"."""
+    assert role_of("Organ uprawniony do reprezentacji podmiotu") == "reprezentacja"
+    assert role_of("Organ nadzoru") == "nadzor"

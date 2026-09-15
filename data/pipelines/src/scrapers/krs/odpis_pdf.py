@@ -141,6 +141,17 @@ ROLE_BY_RUBRYKA: tuple[tuple[str, str], ...] = (
     ("uprawnieni do reprezentowania spolki", "reprezentacja"),
     ("organ nadzoru", "nadzor"),
     ("prokurenci", "prokurent"),
+    # A spolka komandytowa's general partners: personally liable and normally
+    # entitled to represent, so not the same thing as `wspolnik`. The JSON side
+    # names partners separately too (`wspolnicyPartnerzy` -> wspolnik_partner).
+    ("dane komplementariuszy", "komplementariusz"),
+    # A branch of a foreign company files two person-bearing rubryki: the
+    # foreign parent's own board, and whoever represents it here. They are
+    # different claims -- the first runs the company abroad, the second runs
+    # the Polish oddzial -- so they keep different roles, and `osoba_pz`
+    # matches what `PERSON_PATHS` already calls the second in the JSON.
+    ("organ uprawniony do reprezentowania zagranicznego", "reprezentacja_pz"),
+    ("osoby reprezentujace zagranicznego przedsiebiorce", "osoba_pz"),
     ("pelnomocnicy", "pelnomocnik"),
     ("dane jedynego akcjonariusza", "jedyny_akcjonariusz"),
     ("jedyny akcjonariusz", "jedyny_akcjonariusz"),
