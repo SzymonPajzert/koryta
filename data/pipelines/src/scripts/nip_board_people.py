@@ -296,6 +296,16 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
         f"FROM THE SEARCH BUCKET  {len(resolutions):,} of {len(nips):,} NIPs "
         f"have a KRS number ({from_known:,} of them from companies_merged)"
     )
+
+    # The wykaz path returns here too. Without it `--resolve-only` -- the one
+    # flag whose whole job is "tell me where this stands and fetch nothing" --
+    # began an hours-long crawl of a government service, which is the opposite
+    # of what it says and the worst direction for the mistake to run.
+    if args.resolve_only:
+        unresolved = len(nips) - len(resolutions)
+        print(f"  no KRS number yet            {unresolved:>8,}")
+        return
+
     people, company_by_krs, results = fetch_and_match(
         args, resolutions, salt, known_names, pesel_sink
     )
