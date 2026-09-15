@@ -16,6 +16,11 @@ class Koryta:
     rejestrIo: str | None = None
     teryt_wojewodztwo: list[str] = field(default_factory=list)
     teryt_powiat: list[str] = field(default_factory=list)
+    #: Where a duplicate page's readers are sent: the id of the person this node
+    #: was merged into. Set only by a merge, alongside `deleted`, and never a
+    #: chain (the site resolves it on write). A node carrying it is a tombstone,
+    #: not a person, so no mention or fact may be linked to it.
+    merged_into: str | None = None
 
 
 @dataclass
@@ -115,6 +120,26 @@ class PersonFact:
     #: matcher put this fact on the wrong person. Stored apart from `correct`
     #: because the fact can be perfectly true about somebody else.
     wrong_person: bool = False
+    #: The fact's own content, carried verbatim so a consumer can rebuild the
+    #: same dedup key `ArticleAnalyzed` uses and tell which facts the site
+    #: already holds. Optional: older exports (and the scoring model, which
+    #: only needs the id/type) leave them unset.
+    person: str | None = None
+    organization: str | None = None
+    role: str | None = None
+    party: str | None = None
+    subject: str | None = None
+    object: str | None = None
+    relation: str | None = None
+    affair: str | None = None
+    #: The extractor's own text: the quote it drew the fact from, both as the
+    #: model wrote it and as the verbatim article span it resolved to.
+    justification: str | None = None
+    justification_in_text: str | None = None
+    #: Provenance of the extraction: the article's domain and the prompt tag
+    #: (e.g. `v26-mentions-qwen3.8-27b-only-matched-koryta-id`).
+    article_domain: str | None = None
+    tag: str | None = None
 
 
 def is_pipeline_uid(user_uid: str | None) -> bool:
