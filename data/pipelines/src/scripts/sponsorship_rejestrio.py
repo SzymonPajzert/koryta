@@ -50,12 +50,13 @@ import csv
 import json
 import sys
 import time
+import typing
 from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 
 from conductor import setup_context
-from scrapers.krs import nip_sources, rejestrio, search
+from scrapers.krs import nip_lookup, nip_sources, rejestrio, search
 from scrapers.krs.nip_lookup import known_from_companies_merged, nip_valid
 from scrapers.stores import CloudStorage, Context
 from scrapers.stores.file import DownloadableFile
@@ -128,20 +129,32 @@ def cached_answers(ctx: Context) -> dict[str, dict]:
     return {nip: payload for nip, (_, payload) in newest.items()}
 
 
-def _krs_of(payload: dict) -> str | None:
-    """The single KRS a stored search found, or None if it is not single.
+def _krs_entries_of(payload: dict) -> tuple[str, ...]:
+    """Every KRS a stored search found for this NIP, the open entry first.
 
-    `search.parse_search` has already collapsed the two rows a subject in both
-    registers produces, so more than one hit here means genuinely more than one
-    subject -- and picking the first would choose a company by accident.
+    More than one hit used to resolve to nothing, on the reading that it meant
+    more than one subject. It does not: a NIP belongs to one taxpayer, so the
+    extra rows are that taxpayer's earlier register entries. The register says
+    so itself -- NIP 5272703675 returns 0000482636 and 0000716108, the odpis
+    of the first is stamped ``WYKREŚLENIE Z KRAJOWEGO REJESTRU SĄDOWEGO`` on
+    27.02.2018 and the second records its own origin as ``PRZEKSZTAŁCENIE`` of
+    that company.
+
+    Refusing them cost the CRU population **1,272 recipients carrying
+    746,376,522 PLN** -- 97% of all the money it could not resolve -- among
+    them EMITEL, TEXOM and CATERMED, which are companies we plainly want.
     """
     hits = payload.get("hits") or []
-    if len(hits) == 1 and hits[0].get("krs"):
-        return str(hits[0]["krs"])
-    return None
+    return nip_lookup.newest_first(h.get("krs") for h in hits if h.get("krs"))
 
 
-def known_for(args) -> dict[str, str]:
+def _krs_of(payload: dict) -> str | None:
+    """The open register entry a stored search found, or None if it found none."""
+    entries = _krs_entries_of(payload)
+    return entries[0] if entries else None
+
+
+def known_for(args) -> dict[str, tuple[str, ...]]:
     """NIP-to-KRS pairs we already hold, so the ministry is not asked for them.
 
     A pair from `companies_merged` is an answer, so every mode reads them --
@@ -163,22 +176,30 @@ def known_for(args) -> dict[str, str]:
 
 
 def _mapping(
-    cached: dict[str, dict], recipients, known: dict[str, str] | None = None
+    cached: dict[str, dict],
+    recipients,
+    known: typing.Mapping[str, str | typing.Sequence[str]] | None = None,
 ) -> dict[str, str]:
     """Every recipient whose KRS is settled, from the bucket or from what we hold.
 
     The bucket wins where both answer: it is the register's own reply to this
     NIP, while `companies_merged` is a pair recorded whenever that company was
     last crawled.
+
+    **One KRS per recipient, deliberately.** This is what prices and buys the
+    rejestr.io calls, so a taxpayer's earlier register entries are left out of
+    it -- they would multiply a paid query set without anybody asking. The free
+    odpis chain reads all of them; see `nip_lookup.NipResolution.also_krs`.
     """
     wanted = {r.nip for r in recipients}
     out = {}
     for nip, payload in cached.items():
         if nip in wanted and (krs := _krs_of(payload)):
             out[nip] = krs
-    for nip, krs in (known or {}).items():
-        if nip in wanted:
-            out.setdefault(nip, krs)
+    for nip, held in (known or {}).items():
+        entries = nip_lookup.newest_first(held)
+        if nip in wanted and entries:
+            out.setdefault(nip, entries[0])
     return out
 
 
