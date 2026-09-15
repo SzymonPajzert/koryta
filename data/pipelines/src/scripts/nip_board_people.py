@@ -664,6 +664,12 @@ def write_output(path, people, company_by_krs, results, salt=None) -> None:
     `salt_id` goes on every row rather than into a sidecar, because rows get
     sliced, concatenated and re-uploaded -- and a fingerprint whose key nobody
     can name is a join waiting to pair unrelated people.
+
+    `nip` goes on for the same reason. A company that has been transformed has
+    several `krs` values here, and without the taxpayer's own number nothing in
+    the artifact says they are one company -- a reader would count EMITEL twice
+    and find its pre-2018 board under a KRS that answers to no name it knows.
+    `krs_is_open_entry` says which of them is the entry still standing.
     """
     by_person = {id(result.person): result for result in results}
     key = pesel_util.salt_id(salt) if salt else None
@@ -675,6 +681,10 @@ def write_output(path, people, company_by_krs, results, salt=None) -> None:
             record["full_name"] = person.full_name
             company = company_by_krs.get(person.krs)
             record["company_name"] = company.name if company else None
+            record["nip"] = company.nip if company else None
+            record["krs_is_open_entry"] = (
+                company.krs == person.krs if company else None
+            )
             result = by_person.get(id(person))
             matched = result.matched if result else None
             record["match_verdict"] = result.verdict if result else None
