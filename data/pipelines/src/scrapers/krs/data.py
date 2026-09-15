@@ -721,6 +721,13 @@ def register_companies(self: CompaniesHardcoded):
             "0000245948",
             "0000246335",
             "0000271562",
+            # ENERGA SA, one of the four big energy groups, missing from both
+            # spreadsheets above -- 29 KRS numbers away from TAURON, which is
+            # here. Without a seed for the group `propagate_is_public` has
+            # nothing to walk down from, so ENERGA - OBRÓT and ENERGA
+            # OŚWIETLENIE read as private even though their odpis names ENERGA
+            # SPÓŁKA AKCYJNA as the current sole shareholder.
+            "0000271591",
             "0000278401",
             "0000284830",
             "0000285139",
@@ -791,6 +798,15 @@ def register_companies(self: CompaniesHardcoded):
             "0000717327",
             "0000759991",
             "0000760312",
+            # POLREGIO, both register entries, seeded because nothing here can
+            # derive it. The SA (0000929422) is an SA, whose shareholders KRS
+            # does not record at all; on the predecessor (0000031521) every
+            # state holding -- SKARB PAŃSTWA, PKP SA, WOJEWÓDZTWO MAZOWIECKIE,
+            # then ARP -- is struck out, because that is what transforming into
+            # the SA did to them. `is_public` reads the odpis *aktualny*, which
+            # for both entries therefore shows no shareholder whatsoever.
+            "0000031521",
+            "0000929422",
         ],
     )
 
