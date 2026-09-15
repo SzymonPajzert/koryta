@@ -27,10 +27,8 @@ def bucket(monkeypatch):
     stored: dict[str, dict] = {}
     fake = types.ModuleType("scripts.sponsorship_rejestrio")
     fake.cached_answers = lambda ctx: stored
-    fake._krs_of = lambda payload: (
-        str(payload["hits"][0]["krs"])
-        if len(payload.get("hits") or []) == 1 and payload["hits"][0].get("krs")
-        else None
+    fake._krs_entries_of = lambda payload: nip_board_people.nip_lookup.newest_first(
+        h.get("krs") for h in (payload.get("hits") or []) if h.get("krs")
     )
     monkeypatch.setitem(sys.modules, "scripts.sponsorship_rejestrio", fake)
     monkeypatch.setattr(nip_board_people, "setup_context", lambda: (None, None))
@@ -58,9 +56,21 @@ def test_keeps_the_source_order(bucket):
     assert list(nip_board_people.resolutions_from_bucket(asked)) == asked
 
 
-def test_a_multi_hit_answer_resolves_nothing(bucket):
+def test_a_multi_hit_answer_is_one_taxpayer_not_none(bucket):
+    """It used to resolve to nothing, on the reading that it meant two companies.
+
+    A NIP belongs to one taxpayer, so the extra hits are its earlier register
+    entries. Refusing them dropped 1,272 CRU recipients carrying 746 m PLN --
+    EMITEL, TEXOM and CATERMED among them.
+    """
     bucket["1111111111"] = answer("1111111111", "0000000001", "0000000002")
-    assert nip_board_people.resolutions_from_bucket(["1111111111"]) == {}
+    resolutions = nip_board_people.resolutions_from_bucket(["1111111111"])
+    resolution = resolutions["1111111111"]
+    # The open entry first: KRS numbers are sequential, so the largest is the
+    # latest registration and the earlier ones are what it superseded.
+    assert resolution.krs == "0000000002"
+    assert resolution.also_krs == ("0000000001",)
+    assert resolution.krs_entries == ("0000000002", "0000000001")
 
 
 def test_an_unasked_nip_is_absent(bucket):
@@ -214,3 +224,54 @@ def test_without_resolve_only_the_search_bucket_path_does_fetch(bucket, monkeypa
         salt="k",
     )
     assert [list(c) for c in calls] == [["1111111111"]]
+
+
+def resolution(nip: str, *krs: str) -> "nip_board_people.nip_lookup.NipResolution":
+    entries = nip_board_people.nip_lookup.newest_first(krs)
+    return nip_board_people.nip_lookup.NipResolution(
+        nip=nip, krs=entries[0], also_krs=entries[1:], name=f"COMPANY {nip[:2]}"
+    )
+
+
+def test_every_register_entry_of_a_company_is_fetched():
+    """The board of the years before a transformation is only in the old entry.
+
+    EMITEL is the worked example: 0000482636 was struck out on 2018-02-27 and
+    the business continues as 0000716108. Fetching only the open entry loses
+    everyone who sat on the sp. z o.o. board, which is the history this chain
+    exists to read.
+    """
+    resolutions = {
+        "1111111111": resolution("1111111111", "0000482636", "0000716108"),
+        "2222222222": resolution("2222222222", "0000000007"),
+    }
+    args = argparse.Namespace(limit_companies=None)
+    krs_numbers, company_by_krs = nip_board_people.pick_companies(args, resolutions)
+    assert krs_numbers == ["0000716108", "0000482636", "0000000007"]
+    # Both entries point back at the taxpayer, so the odpis stage can name it.
+    assert company_by_krs["0000482636"].nip == "1111111111"
+
+
+def test_a_cap_cuts_between_companies_not_through_one():
+    """Half a transformed company's history is worse than none of it.
+
+    Nothing downstream records which entries a company had, so a run that
+    fetched the open entry and not its predecessor would look complete.
+    """
+    resolutions = {
+        "1111111111": resolution("1111111111", "0000000001", "0000000002"),
+        "2222222222": resolution("2222222222", "0000000003"),
+    }
+    args = argparse.Namespace(limit_companies=2)
+    krs_numbers, _ = nip_board_people.pick_companies(args, resolutions)
+    assert krs_numbers == ["0000000002", "0000000001"]
+
+
+def test_the_same_entry_under_two_nips_is_fetched_once():
+    resolutions = {
+        "1111111111": resolution("1111111111", "0000000001"),
+        "2222222222": resolution("2222222222", "0000000001"),
+    }
+    args = argparse.Namespace(limit_companies=None)
+    krs_numbers, _ = nip_board_people.pick_companies(args, resolutions)
+    assert krs_numbers == ["0000000001"]

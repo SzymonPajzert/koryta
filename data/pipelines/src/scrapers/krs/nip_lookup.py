@@ -93,15 +93,52 @@ class NipResolution:
     #: The wykaz's ``statusVat``: "Czynny", "Zwolniony", or absent for an
     #: entity it does not hold.
     vat_status: str | None = None
+    #: This taxpayer's *other* register entries, newest first.
+    #:
+    #: A NIP belongs to one taxpayer, so several KRS numbers under it are that
+    #: taxpayer's successive entries -- a transformation, a merger, a
+    #: re-registration -- and not several companies. Verified in the register
+    #: itself: NIP 5272703675 returns 0000482636 and 0000716108, and the odpis
+    #: of the first carries ``WYKREŚLENIE Z KRAJOWEGO REJESTRU SĄDOWEGO``
+    #: (wpis 27, 27.02.2018) while the second says it came into being by
+    #: ``PRZEKSZTAŁCENIE`` of exactly that company.
+    #:
+    #: They are kept because the board of the years before a transformation
+    #: exists **only** in the struck-out entry, and "everyone who has ever sat
+    #: on this company's board" is the whole point of the chain reading them.
+    also_krs: tuple[str, ...] = ()
 
     @property
     def in_krs(self) -> bool:
         return bool(self.krs)
 
+    @property
+    def krs_entries(self) -> tuple[str, ...]:
+        """Every register entry of this taxpayer, the open one first."""
+        return (self.krs, *self.also_krs) if self.krs else ()
+
 
 def _pad_krs(value: typing.Any) -> str | None:
     digits = only_digits(value)
     return digits.rjust(10, "0") if digits else None
+
+
+def newest_first(values: typing.Any) -> tuple[str, ...]:
+    """KRS numbers padded, deduplicated, most recent registration first.
+
+    They are assigned sequentially, so the largest is the latest entry -- and
+    where one taxpayer holds several, the latest is the one still open. See
+    `NipResolution.also_krs` for the register's own confirmation of that.
+
+    Takes a bare string as readily as a sequence, because every caller here
+    used to hold exactly one and some still pass one.
+    """
+    if values is None:
+        return ()
+    if isinstance(values, str):
+        values = (values,)
+    padded = {p for p in (_pad_krs(v) for v in values) if p}
+    return tuple(sorted(padded, reverse=True))
 
 
 def parse_mf_response(payload: dict) -> dict[str, NipResolution]:
@@ -184,7 +221,7 @@ def fetch_mf_batch(
 
 def known_from_companies_merged(
     path: "pathlib.Path | None",
-) -> tuple[dict[str, str], dict[str, str]]:
+) -> tuple[dict[str, tuple[str, ...]], dict[str, str]]:
     """NIP-to-KRS pairs, and KRS-to-name, from companies we already hold.
 
     Free, offline, and the first thing to try: every row here is a wykaz
@@ -194,13 +231,19 @@ def known_from_companies_merged(
     9.57 bn PLN. Small in share, large in money, which is why asking the
     ministry about them again is the expensive kind of waste.
 
+    Every entry is kept, newest first. `setdefault` used to keep whichever row
+    the file happened to list first, which for **294 of the 15,402 NIPs** here
+    is an arbitrary choice between a company's successive register entries --
+    ORLEN LABORATORIUM is 0000151568 and 0000628738, ENEA ELEKTROWNIA POŁANIEC
+    0000053769 and 0001251428 -- and nothing said which one the caller got.
+
     A missing file is not an error: the artifact is a pipeline output, and a
     checkout that has not built it should degrade to asking rather than fail.
     """
-    known: dict[str, str] = {}
+    found: dict[str, list[str]] = {}
     names: dict[str, str] = {}
     if path is None or not path.is_file():
-        return known, names
+        return {}, names
     with path.open(encoding="utf-8") as handle:
         for line in handle:
             row = json.loads(line)
@@ -209,16 +252,16 @@ def known_from_companies_merged(
             if len(nip) != 10 or not krs:
                 continue
             padded = krs.rjust(10, "0")
-            known.setdefault(nip, padded)
+            found.setdefault(nip, []).append(padded)
             if row.get("name"):
                 names.setdefault(padded, str(row["name"]))
-    return known, names
+    return {nip: newest_first(krs) for nip, krs in found.items()}, names
 
 
 def resolve(
     nips: typing.Iterable[str],
     date: str,
-    known: typing.Mapping[str, str] | None = None,
+    known: typing.Mapping[str, str | typing.Sequence[str]] | None = None,
     max_requests: int = MF_DAILY_REQUESTS,
     opener: typing.Any | None = None,
     progress: typing.Callable[[int, int], None] | None = None,
@@ -249,8 +292,12 @@ def resolve(
             out[nip] = NipResolution(nip=nip, krs=None, source="invalid")
             continue
         if nip in known:
+            entries = newest_first(known[nip])
             out[nip] = NipResolution(
-                nip=nip, krs=_pad_krs(known[nip]), source="cache"
+                nip=nip,
+                krs=entries[0] if entries else None,
+                also_krs=entries[1:],
+                source="cache",
             )
             continue
         to_ask.append(nip)

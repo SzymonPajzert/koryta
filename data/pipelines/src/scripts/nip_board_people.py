@@ -94,7 +94,7 @@ def resolutions_from_bucket(
     rather than its head.
     """
     from scripts.sponsorship_rejestrio import (  # noqa: PLC0415
-        _krs_of,
+        _krs_entries_of,
         cached_answers,
     )
 
@@ -104,10 +104,14 @@ def resolutions_from_bucket(
     resolutions: dict[str, nip_lookup.NipResolution] = {}
     for nip in nips:
         payload = cached.get(nip)
-        krs = _krs_of(payload) if payload else None
-        if krs:
+        entries = _krs_entries_of(payload) if payload else ()
+        if entries:
             resolutions[nip] = nip_lookup.NipResolution(
-                nip=nip, krs=krs, name=names.get(nip) or None, source="search"
+                nip=nip,
+                krs=entries[0],
+                also_krs=entries[1:],
+                name=names.get(nip) or None,
+                source="search",
             )
     return resolutions
 
@@ -242,7 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
 def merge_resolutions(
     nips: typing.Sequence[str],
     from_bucket: dict[str, nip_lookup.NipResolution],
-    known: typing.Mapping[str, str],
+    known: typing.Mapping[str, str | typing.Sequence[str]],
     names: typing.Mapping[str, str] | None = None,
 ) -> dict[str, nip_lookup.NipResolution]:
     """The two sources of a KRS number, in the order the population names them.
@@ -271,8 +275,15 @@ def merge_resolutions(
         if nip in from_bucket:
             resolutions[nip] = from_bucket[nip]
         elif nip in known:
+            entries = nip_lookup.newest_first(known[nip])
+            if not entries:
+                continue
             resolutions[nip] = nip_lookup.NipResolution(
-                nip=nip, krs=known[nip], name=names.get(nip) or None, source="cache"
+                nip=nip,
+                krs=entries[0],
+                also_krs=entries[1:],
+                name=names.get(nip) or None,
+                source="cache",
             )
     return resolutions
 
@@ -314,8 +325,7 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
     # began an hours-long crawl of a government service, which is the opposite
     # of what it says and the worst direction for the mistake to run.
     if args.resolve_only:
-        unresolved = len(nips) - len(resolutions)
-        print(f"  no KRS number yet            {unresolved:>8,}")
+        report_resolution(nips, resolutions)
         return
 
     people, company_by_krs, results = fetch_and_match(
@@ -463,16 +473,45 @@ def publish(people, company_by_krs, results, salt=None) -> None:
     CloudStorageClient().upload_backup_from_path(ARTIFACT, str(path))
 
 
+def report_resolution(nips, resolutions: dict[str, nip_lookup.NipResolution]) -> None:
+    """What `--resolve-only` is reached for: where this stands, and its price.
+
+    The odpis count is not the company count. A taxpayer with an earlier
+    register entry costs one request per entry, so the figure that prices the
+    fetch is the number of distinct entries -- and saying "N companies" where
+    the run will make N+1,300 requests is how a paced crawl overruns the window
+    somebody left for it.
+    """
+    entries = {krs for r in resolutions.values() for krs in r.krs_entries}
+    superseded = len(entries) - len(resolutions)
+    print(f"  no KRS number yet            {len(nips) - len(resolutions):>8,}")
+    print(f"  odpisy to fetch              {len(entries):>8,}", end="")
+    if superseded:
+        print(f"  ({superseded:,} superseded entries)", end="")
+    # A floor, not an estimate: `REQUEST_INTERVAL` is the delay *between*
+    # requests and the service's own response time is on top of it. Said as
+    # "about N hours" it would be read as the budget to leave for the run.
+    floor = len(entries) * search.REQUEST_INTERVAL / 3600
+    print(f"\n  at {search.REQUEST_INTERVAL}s between requests {floor:>8.1f} h and up")
+
+
 def pick_companies(
     args, resolutions: dict[str, nip_lookup.NipResolution]
 ) -> tuple[list[str], dict[str, nip_lookup.NipResolution]]:
-    """The distinct KRS numbers to fetch, in the order the source named them."""
+    """The distinct KRS numbers to fetch, in the order the source named them.
+
+    A taxpayer's earlier register entries follow its open one, adjacently, so
+    `--limit-companies` cuts between companies rather than through one -- half
+    a transformed company's board history is a worse answer than none of it,
+    because nothing downstream would say which half was missing.
+    """
     krs_numbers: list[str] = []
     company_by_krs: dict[str, nip_lookup.NipResolution] = {}
     for resolution in resolutions.values():
-        if resolution.krs and resolution.krs not in company_by_krs:
-            company_by_krs[resolution.krs] = resolution
-            krs_numbers.append(resolution.krs)
+        for krs in resolution.krs_entries:
+            if krs not in company_by_krs:
+                company_by_krs[krs] = resolution
+                krs_numbers.append(krs)
 
     if args.limit_companies:
         skipped = krs_numbers[args.limit_companies :]

@@ -220,7 +220,7 @@ def test_pairs_we_already_hold_are_read_back(tmp_path):
     known, names = known_from_companies_merged(path)
     # Zero-filled, because that is how every other KRS in this pipeline is
     # written and a half-padded key never matches.
-    assert known == {"5262557278": "0000123456"}
+    assert known == {"5262557278": ("0000123456",)}
     assert names == {"0000123456": "POLREGIO"}
 
 
@@ -234,14 +234,32 @@ def test_a_row_with_no_krs_or_a_short_nip_is_skipped(tmp_path):
     assert known_from_companies_merged(path) == ({}, {})
 
 
-def test_the_first_row_wins_so_a_rerun_is_stable(tmp_path):
+def test_every_entry_of_one_taxpayer_is_kept_newest_first(tmp_path):
+    """`setdefault` kept whichever row came first, and said nothing about it.
+
+    294 of the 15,402 NIPs in the real artifact carry more than one KRS --
+    ORLEN LABORATORIUM, ENEA ELEKTROWNIA POŁANIEC, SODA POLSKA CIECH -- and
+    they are one company's successive register entries, not two companies. The
+    open one is the higher number; the rest hold the board of the years before
+    a transformation, which is what the odpis chain is reading them for.
+    """
     path = merged(
         tmp_path,
         {"nip": "5262557278", "krs": "111", "name": "first"},
         {"nip": "5262557278", "krs": "222", "name": "second"},
     )
     known, _ = known_from_companies_merged(path)
-    assert known == {"5262557278": "0000000111"}
+    assert known == {"5262557278": ("0000000222", "0000000111")}
+
+
+def test_a_repeated_row_does_not_duplicate_an_entry(tmp_path):
+    path = merged(
+        tmp_path,
+        {"nip": "5262557278", "krs": "111", "name": "once"},
+        {"nip": "5262557278", "krs": "0000000111", "name": "again, padded"},
+    )
+    known, _ = known_from_companies_merged(path)
+    assert known == {"5262557278": ("0000000111",)}
 
 
 def test_a_missing_artifact_is_not_an_error(tmp_path):
