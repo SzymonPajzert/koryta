@@ -442,3 +442,16 @@ def test_an_entry_reached_by_no_nip_writes_null_not_empty_string(tmp_path):
     )
     row = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
     assert row["nip"] is None
+
+
+def test_the_odpis_cost_is_reported_on_both_paths(capsys):
+    """The wykaz path took `--resolve-only` and never priced its own fetch."""
+    resolutions = {
+        "1111111111": nip_board_people.nip_lookup.NipResolution(
+            nip="1111111111", krs="0000000002", also_krs=("0000000001",)
+        )
+    }
+    nip_board_people.report_odpis_cost(resolutions)
+    out = capsys.readouterr().out
+    assert "odpisy to fetch                     2" in out
+    assert "(1 superseded entries)" in out
