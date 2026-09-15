@@ -8,11 +8,13 @@ ordering, which `--limit-companies` truncates on.
 """
 
 import argparse
+import json
 import sys
 import types
 
 import pytest
 
+from scrapers.krs.odpis_pdf import OdpisPerson
 from scripts import nip_board_people
 
 
@@ -275,3 +277,50 @@ def test_the_same_entry_under_two_nips_is_fetched_once():
     args = argparse.Namespace(limit_companies=None)
     krs_numbers, _ = nip_board_people.pick_companies(args, resolutions)
     assert krs_numbers == ["0000000001"]
+
+
+def odpis_person(krs: str, surname: str) -> OdpisPerson:
+    return OdpisPerson(
+        krs=krs,
+        dzial=2,
+        rubryka="Organ uprawniony do reprezentacji podmiotu",
+        role="reprezentacja",
+        organ_name="ZARZĄD",
+        organ=None,
+        position=1,
+        surname=surname,
+        given_names="JAN",
+        funkcja="PREZES ZARZĄDU",
+        birth_date="1970-01-01",
+        sex="M",
+        pesel_fingerprint="ff",
+        has_pesel=True,
+        is_company=False,
+        entry_added="1",
+        entry_removed="-",
+    )
+
+
+def test_a_row_carries_the_nip_that_joins_a_company_s_entries(tmp_path):
+    """Several `krs` for one company, and nothing in the row saying so.
+
+    EMITEL is two entries since the 2018 transformation. Without the taxpayer's
+    own number a reader counts it twice and finds its pre-2018 board filed
+    under a KRS that answers to no name they know.
+    """
+    open_entry, superseded = "0000716108", "0000482636"
+    company = nip_board_people.nip_lookup.NipResolution(
+        nip="5272703675",
+        krs=open_entry,
+        also_krs=(superseded,),
+        name="EMITEL SPÓŁKA AKCYJNA",
+    )
+    people = [odpis_person(open_entry, "NOWAK"), odpis_person(superseded, "KOWALSKI")]
+    path = tmp_path / "people.jsonl"
+    nip_board_people.write_output(
+        path, people, {open_entry: company, superseded: company}, []
+    )
+
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert [r["nip"] for r in rows] == ["5272703675", "5272703675"]
+    assert [r["krs_is_open_entry"] for r in rows] == [True, False]
