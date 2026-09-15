@@ -132,6 +132,13 @@ def fold(text: str) -> str:
 #: compared.
 ROLE_BY_RUBRYKA: tuple[tuple[str, str], ...] = (
     ("organ uprawniony do reprezentacji", "reprezentacja"),
+    # A partnership has no zarzad, so its form titles Dzial 2 Rubryka 1
+    # differently and the sp. z o.o./SA prefix above finds nobody in it. This
+    # is the *only* place a spolka jawna's or komandytowa's controllers appear:
+    # found by `unread_person_rubryki` in 2 of 28 stored odpisy -- the three
+    # SZPANSCY partners of KRS 0000157870, and CLIMAMEDIC sp. z o.o. with
+    # PANEK at KRS 0000352529, a sp.k. whose general partner is a company.
+    ("uprawnieni do reprezentowania spolki", "reprezentacja"),
     ("organ nadzoru", "nadzor"),
     ("prokurenci", "prokurent"),
     ("pelnomocnicy", "pelnomocnik"),
