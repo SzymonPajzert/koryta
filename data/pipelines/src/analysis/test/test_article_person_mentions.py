@@ -6,16 +6,22 @@ from dataclasses import asdict
 import pytest
 
 from analysis.article_person_mentions import (
+    JudgeCache,
     PersonProfile,
     PersonProfileIndex,
     _confirm_mentions,
+    _content_hash,
     _context_window,
     _employed_krs,
+    _legacy_ids_by_survivor,
+    _load_index_and_profiles,
+    _merged_into,
     _org_match_terms,
     _parse_multi_verdict,
     _parse_verdict,
     _party_match_terms,
     _rejestr_io_id,
+    _resolve_merged,
     _stem,
 )
 from entities.article import ArticlePersonMentioned, ProofSignal
@@ -305,3 +311,140 @@ def test_parse_multi_verdict_picks_candidate():
     )
     assert verdict == "no"
     assert matched == ""
+
+
+# --- merged-away people resolve to their survivor -------------------------- #
+
+
+def _person_row(person_id: str, name: str, **extra):
+    row = {
+        "id": person_id,
+        "full_name": name,
+        "parties": [],
+        "teryt_wojewodztwo": [],
+        "teryt_powiat": [],
+    }
+    row.update(extra)
+    return row
+
+
+def test_merged_into_reads_only_a_real_survivor_id():
+    assert _merged_into({"merged_into": "survivor"}) == "survivor"
+    assert _merged_into({"merged_into": None}) is None
+    assert _merged_into({"merged_into": ""}) is None
+    assert _merged_into({"merged_into": "   "}) is None
+    assert _merged_into({"merged_into": float("nan")}) is None
+    assert _merged_into({}) is None
+
+
+def test_resolve_merged_follows_a_chain_to_the_end():
+    by_id = {
+        "a": _person_row("a", "A", merged_into="b"),
+        "b": _person_row("b", "B", merged_into="c"),
+        "c": _person_row("c", "C"),
+    }
+    assert _resolve_merged("a", by_id) == "c"
+    assert _resolve_merged(None, by_id) is None
+    assert _resolve_merged("missing", by_id) is None
+
+
+def test_resolve_merged_survives_a_cycle():
+    by_id = {
+        "a": _person_row("a", "A", merged_into="b"),
+        "b": _person_row("b", "B", merged_into="a"),
+    }
+    # A cycle is broken rather than followed for ever.
+    assert _resolve_merged("a", by_id) is None
+
+
+def test_load_index_aliases_merged_name_onto_the_survivor():
+    rows = [
+        _person_row("p1", "Marian Antoni Uherek"),
+        _person_row("p2", "Marian Uherek", merged_into="p1"),
+    ]
+    index, profiles = _load_index_and_profiles(rows, {}, {})
+    # The duplicate's shorter name now resolves to the survivor's display, and
+    # therefore to the survivor's id - never to the tombstone p2.
+    assert index.find_in_text("Marian Uherek") == {"Marian Antoni Uherek"}
+    assert index.find_in_text("Marian Antoni Uherek") == {"Marian Antoni Uherek"}
+    candidates = profiles.candidates("Marian Antoni Uherek")
+    assert [pid for pid, _ in candidates] == ["p1"]
+
+
+def test_load_index_keeps_unmerged_people_when_column_absent():
+    rows = [_person_row("p1", "Jan Kowalski"), _person_row("p2", "Anna Nowak")]
+    index, _ = _load_index_and_profiles(rows, {}, {})
+    assert index.find_in_text("Anna Nowak") == {"Anna Nowak"}
+
+
+def test_load_index_drops_a_merged_name_with_no_survivor():
+    rows = [_person_row("p2", "Anna Nowak", merged_into="gone")]
+    index, _ = _load_index_and_profiles(rows, {}, {})
+    assert index.find_in_text("Anna Nowak") == set()
+
+
+# --- judge verdict cache --------------------------------------------------- #
+
+
+def test_content_hash_is_stable_and_content_sensitive():
+    assert _content_hash("ten sam tekst") == _content_hash("ten sam tekst")
+    assert _content_hash("a") != _content_hash("b")
+
+
+def test_legacy_ids_by_survivor_maps_the_duplicate():
+    rows = [
+        {"id": "surv", "full_name": "Marian Antoni Uherek"},
+        {"id": "dup", "full_name": "Marian Uherek", "merged_into": "surv"},
+    ]
+    assert _legacy_ids_by_survivor(rows) == {"surv": {"dup"}}
+
+
+def test_judge_cache_roundtrip_persists(tmp_path):
+    path = tmp_path / "judge_cache.jsonl"
+    cache = JudgeCache(path)
+    h = _content_hash("artykul")
+    assert cache.lookup(h, "a.pl/1", "p1") is None
+    cache.store(h, "p1", "yes", "uzasadnienie")
+    assert cache.lookup(h, "a.pl/1", "p1") == ("yes", "uzasadnienie")
+    # A fresh instance reads it back off disk.
+    assert JudgeCache(path).lookup(h, "a.pl/1", "p1") == ("yes", "uzasadnienie")
+
+
+def test_judge_cache_does_not_store_unknown(tmp_path):
+    cache = JudgeCache(tmp_path / "c.jsonl")
+    cache.store("h", "p1", "unknown", "brak")
+    assert cache.lookup("h", "a.pl/1", "p1") is None
+
+
+def test_judge_cache_reuses_a_verdict_across_a_merge(tmp_path):
+    path = tmp_path / "c.jsonl"
+    h = _content_hash("artykul")
+    JudgeCache(path).store(h, "dup", "yes", "uzasadnienie")
+    # The pair was judged under the duplicate's id; the new run resolves to the
+    # survivor, which is the id that merged the duplicate in.
+    cache = JudgeCache(path, legacy_ids={"surv": {"dup"}})
+    assert cache.lookup(h, "a.pl/1", "surv") == ("yes", "uzasadnienie")
+
+
+def test_judge_cache_seeds_from_previous_output_by_url(tmp_path):
+    out = tmp_path / "article_person_mentions.jsonl"
+    out.write_text(
+        json.dumps(
+            {
+                "url": "a.pl/1",
+                "person": "Jan Kowalski",
+                "person_id": "p1",
+                "verdict": "no",
+                "justification": "inna osoba",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cache = JudgeCache(tmp_path / "c.jsonl")
+    assert cache.seed_from_output(out) == 1
+    # No content hash needed: the seed is keyed by url.
+    assert cache.lookup(_content_hash("cokolwiek"), "a.pl/1", "p1") == (
+        "no",
+        "inna osoba",
+    )
