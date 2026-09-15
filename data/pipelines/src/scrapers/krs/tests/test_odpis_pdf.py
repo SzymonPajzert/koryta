@@ -462,3 +462,15 @@ KTOŚ
 
 def test_a_known_rubryka_is_not_reported_as_unread():
     assert unread_person_rubryki(ODPIS) == set()
+
+
+def test_a_partnership_representation_rubryka_has_a_role():
+    """A partnership has no zarząd, so its form titles the rubryka differently.
+
+    `unread_person_rubryki` found it on a real run: the sp. z o.o./SA prefix
+    "organ uprawniony do reprezentacji" finds nobody under "Uprawnieni do
+    reprezentowania spółki", which for a spółka jawna or komandytowa is the
+    only place its controllers are named at all.
+    """
+    assert role_of("Uprawnieni do reprezentowania spółki") == "reprezentacja"
+    assert role_of("Organ uprawniony do reprezentacji podmiotu") == "reprezentacja"
