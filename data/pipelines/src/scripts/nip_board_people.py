@@ -807,7 +807,12 @@ def write_output(path, people, company_by_krs, results, salt=None) -> None:
             record["full_name"] = person.full_name
             company = company_by_krs.get(person.krs)
             record["company_name"] = company.name if company else None
-            record["nip"] = company.nip if company else None
+            # `or None` because `--also-krs` names entries that reach us
+            # through no NIP at all, and it sets "" for them. Two spellings of
+            # "unknown" in one published column is a trap for whoever filters
+            # on it -- an empty string is truthy in some readers and not in
+            # SQL's `IS NULL`.
+            record["nip"] = (company.nip or None) if company else None
             record["krs_is_open_entry"] = (
                 company.krs == person.krs if company else None
             )
