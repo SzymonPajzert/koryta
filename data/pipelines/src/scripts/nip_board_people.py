@@ -74,7 +74,9 @@ VERSIONED = Path(VERSIONED_DIR)
 
 
 def resolutions_from_bucket(
-    nips: typing.Sequence[str], names: dict[str, str] | None = None
+    nips: typing.Sequence[str],
+    names: dict[str, str] | None = None,
+    cached: dict[str, dict] | None = None,
 ) -> dict[str, nip_lookup.NipResolution]:
     """The search answers already in the bucket, for this run's NIPs.
 
@@ -98,8 +100,11 @@ def resolutions_from_bucket(
         cached_answers,
     )
 
-    ctx, _ = setup_context()
-    cached = cached_answers(ctx)
+    # `cached` is a listing of ~17,000 blobs, so a caller that needs the names
+    # as well passes the one it already has rather than paying for a second.
+    if cached is None:
+        ctx, _ = setup_context()
+        cached = cached_answers(ctx)
     names = names or {}
     resolutions: dict[str, nip_lookup.NipResolution] = {}
     for nip in nips:
@@ -283,12 +288,30 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
     its answers are already in the bucket. So the whole NIP-to-KRS stage is
     skipped and its output reconstructed.
     """
+    from scripts.sponsorship_rejestrio import (  # noqa: PLC0415
+        _names_of,
+        cached_answers,
+    )
+
     names: dict[str, str] = {}
     for row in rows:
         for nip in row.nips:
             if row.party_text:
                 names.setdefault(nip, row.party_text)
-    from_bucket = resolutions_from_bucket(nips, names)
+
+    ctx, _ = setup_context()
+    cached = cached_answers(ctx)
+    from_bucket = resolutions_from_bucket(nips, names, cached)
+
+    # The register's own name for each entry, which the stored answers have
+    # carried all along. Without it a company is named only if we separately
+    # hold it, so on a `--nip-list` source -- which has no party text at all --
+    # most rows were published with `company_name: null`.
+    search_names: dict[str, str] = {}
+    for nip in nips:
+        payload = cached.get(nip)
+        if payload:
+            search_names.update(_names_of(payload))
 
     # The same pairs `resolve` refuses to spend a request on. Without them this
     # stage would silently drop every company we already hold -- 1,512 of the
@@ -301,6 +324,10 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
     )
     resolutions = merge_resolutions(nips, from_bucket, known, names)
     from_known = sum(1 for r in resolutions.values() if r.source == "cache")
+
+    # `companies_merged` wins where both name an entry: it is the name the site
+    # already shows, so the artifact and a koryta page agree.
+    known_names = {**search_names, **known_names}
 
     print("\n" + "=" * 72)
     print(

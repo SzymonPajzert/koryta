@@ -32,6 +32,11 @@ def bucket(monkeypatch):
     fake._krs_entries_of = lambda payload: nip_board_people.nip_lookup.newest_first(
         h.get("krs") for h in (payload.get("hits") or []) if h.get("krs")
     )
+    fake._names_of = lambda payload: {
+        str(h["krs"]): str(h["name"])
+        for h in (payload.get("hits") or [])
+        if h.get("krs") and h.get("name")
+    }
     monkeypatch.setitem(sys.modules, "scripts.sponsorship_rejestrio", fake)
     monkeypatch.setattr(nip_board_people, "setup_context", lambda: (None, None))
     return stored
@@ -324,3 +329,42 @@ def test_a_row_carries_the_nip_that_joins_a_company_s_entries(tmp_path):
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert [r["nip"] for r in rows] == ["5272703675", "5272703675"]
     assert [r["krs_is_open_entry"] for r in rows] == [True, False]
+
+
+def named_answer(nip: str, *pairs: tuple[str, str]) -> dict:
+    """A stored search answer that carries the register's name for each entry."""
+    return {"nip": nip, "hits": [{"krs": k, "name": n} for k, n in pairs]}
+
+
+def test_each_entry_is_named_as_the_register_printed_it(bucket, monkeypatch):
+    """`nazwa` was parsed and stored all along, and nothing ever read it.
+
+    On a `--nip-list` source there is no party text, so a company was named
+    only if `companies_merged` happened to hold it -- and these are CRU
+    counterparties, most of which it does not. The two entries of a transformed
+    company also have different names, and using the open one's for both would
+    hide which era a board sat in.
+    """
+    bucket["1111111111"] = named_answer(
+        "1111111111",
+        ("0000716108", "EMITEL SPÓŁKA AKCYJNA"),
+        ("0000482636", "EMITEL SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ"),
+    )
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(
+        nip_board_people,
+        "fetch_and_match",
+        lambda args, resolutions, salt, known_names=None, *rest: (
+            seen.update(known_names or {}) or ([], {}, [])
+        ),
+    )
+    nip_board_people.from_search_bucket(
+        resolve_only_args(resolve_only=False),
+        rows=[],
+        nips=["1111111111"],
+        salt="k",
+    )
+    assert seen == {
+        "0000716108": "EMITEL SPÓŁKA AKCYJNA",
+        "0000482636": "EMITEL SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    }
