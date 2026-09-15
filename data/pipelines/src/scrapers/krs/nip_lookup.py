@@ -130,12 +130,14 @@ def newest_first(values: typing.Any) -> tuple[str, ...]:
     where one taxpayer holds several, the latest is the one still open. See
     `NipResolution.also_krs` for the register's own confirmation of that.
 
-    Takes a bare string as readily as a sequence, because every caller here
-    used to hold exactly one and some still pass one.
+    Takes a bare value as readily as a sequence, because every caller here used
+    to hold exactly one and some still pass one -- including straight out of a
+    stored search answer, where `krs` has been seen as both a string and a
+    number. Iterating that number is a `TypeError` in the middle of a run.
     """
     if values is None:
         return ()
-    if isinstance(values, str):
+    if isinstance(values, (str, bytes, int)):
         values = (values,)
     padded = {p for p in (_pad_krs(v) for v in values) if p}
     return tuple(sorted(padded, reverse=True))

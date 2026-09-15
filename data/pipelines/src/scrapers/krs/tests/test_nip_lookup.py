@@ -17,6 +17,7 @@ from scrapers.krs.nip_lookup import (
     MfQuotaExhausted,
     fetch_mf_batch,
     known_from_companies_merged,
+    newest_first,
     nip_valid,
     parse_mf_response,
     resolve,
@@ -294,3 +295,21 @@ def test_the_result_keeps_the_order_the_caller_asked_in():
     )
     assert list(out) == asked
     assert [out[nip].source for nip in asked] == ["mf", "cache", "mf"]
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, ()),
+        ("", ()),
+        ("123456", ("0000123456",)),
+        # A stored search answer has carried `krs` as a number as well as a
+        # string; iterating the number raises mid-run.
+        (123456, ("0000123456",)),
+        (["222", "111", "222"], ("0000000222", "0000000111")),
+        ((n for n in ("111", "222")), ("0000000222", "0000000111")),
+        (["0000000111", "111"], ("0000000111",)),
+    ],
+)
+def test_newest_first(value, expected):
+    assert newest_first(value) == expected
