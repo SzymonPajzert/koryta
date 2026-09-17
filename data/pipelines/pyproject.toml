@@ -128,6 +128,7 @@ koryta = "koryta:main"
 koryta_uploader = "uploader:main"
 koryta_pipelines = "pipelines:main"
 koryta_crawl = "crawl_cli:main"
+koryta_scrape_bip = "bip_cli:main"
 koryta_scraper = "scraper:main"
 koryta_scrape_krs = "scraper:scrape_krs"
 koryta_scrape_krs_free = "scraper:scrape_krs_free"
@@ -307,6 +308,8 @@ ignore_imports = [
     # In-memory tar extraction of GCS blobs and URL joining for link discovery
     "scrapers.article.pipelines.pipeline_utils -> io",
     "scrapers.article.crawler -> urllib",
+    # Absolute link resolution for BIP pages
+    "scrapers.bip.classify -> urllib",
     # Created a quick export of library util.firestore
     "util.firestore -> firebase_admin",
     "util.firestore -> os",

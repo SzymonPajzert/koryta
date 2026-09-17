@@ -29,5 +29,8 @@ models
 # from pytest-fast-first
 .pytest-runtimes
 
+# BIP crawler frontier + harvested bundles (iteration 1)
+bip_crawl_out/
+
 # The nightly's expected row counts and column coverage - tracked on purpose
 !src/tests/e2e/baseline.json
