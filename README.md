@@ -1,4 +1,5 @@
 # Koryta.pl
+[![Checked with pyright](https://microsoft.github.io/pyright/img/pyright_badge.svg)](https://microsoft.github.io/pyright/)
 
 This documentation outlines the project's structure and the technologies used. Refer to the README files in each directory for more thorough overview of each part.
 
