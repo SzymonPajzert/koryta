@@ -70,6 +70,7 @@ export const skippedChangeFields = new Set([
   "merged_into",
   "needs_split",
   "nameChunksLower",
+  "content_changed_at",
 ]);
 
 /** How each proposable field reads in Polish.

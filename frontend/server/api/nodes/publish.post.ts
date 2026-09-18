@@ -5,6 +5,7 @@ import { requireAdmin } from "~~/server/utils/auth";
 import { recordAudit } from "~~/server/utils/audit";
 import { cascadeUnpublishEdges } from "~~/server/utils/edgePublication";
 import { applyRevision } from "~~/server/utils/revisions";
+import { CONTENT_CHANGED_AT } from "~~/shared/lastmod";
 import { notifyRevisionReviewed } from "~~/server/utils/revisionNotifications";
 import { latestPublishableRevision } from "~~/shared/revisions";
 import type { Revision } from "~~/shared/model";
@@ -116,7 +117,18 @@ export default defineEventHandler(async (event) => {
   // or when - the one decision that settles what the public sees was the one
   // decision leaving no trace.
   const batch = db.batch();
-  batch.update(nodeRef, { published: body.published });
+  batch.update(nodeRef, {
+    published: body.published,
+    // The change this endpoint exists to make is the largest one a page ever
+    // undergoes, and it is the one the document records least: `published` is a
+    // boolean the next decision overwrites, and publishing writes no revision,
+    // so `revisions.latest_time` does not move either. Without this a page that
+    // reached the public today would advertise in the sitemap the date of the
+    // bulk ingest that created it - for most of the company pages, a 41-minute
+    // window on 2026-08-29. One more key on a write that was happening anyway,
+    // so it costs no operation. See shared/lastmod.ts.
+    [CONTENT_CHANGED_AT]: new Date().toISOString(),
+  });
   recordAudit(
     db,
     {

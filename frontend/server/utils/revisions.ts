@@ -113,6 +113,12 @@ export const INTERNAL_FIELDS = new Set([
   "merged_into", // where a duplicate page's readers are sent, see utils/merge
   "needs_split", // an admin's note that the page is two people, see nodes/split
   "nameChunksLower", // used for search indexing
+  // When the page last visibly changed, see shared/lastmod.ts. Stamped by the
+  // write rather than stated by a revision, so leaving it out would carry it
+  // into every revision's `data` through `withoutInternalFields` - and from
+  // there back onto the node whenever an old revision was re-approved,
+  // restoring a stale date over the live one.
+  "content_changed_at",
 ]);
 
 /** The existing node's fields, to layer a partial update on top of.

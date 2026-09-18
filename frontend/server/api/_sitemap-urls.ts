@@ -1,4 +1,5 @@
 import { generateEntityUrl } from "~~/app/composables/slugs";
+import { sitemapLastmod } from "~~/shared/lastmod";
 import { type NodeType, pageIsPublic } from "~~/shared/model";
 
 /** Node types whose entity page renders a page of its own.
@@ -32,7 +33,19 @@ const SITEMAP_NODE_TYPES: readonly NodeType[] = ["person", "article", "place"];
  *
  * `fetchNodes` has an hour-long cache of its own, but only per Cloud Run
  * instance, and a sitemap fetch is exactly the request most likely to land on
- * a cold one. */
+ * a cold one.
+ *
+ * `<lastmod>` added nothing to that bill, and that is a choice about where the
+ * work happens rather than luck. Every way of computing the date here has to
+ * learn which relations touch which page, and the cheapest honest version of
+ * that is a sweep of `edges`: 49,583 documents, which at the measured 13.14
+ * handler misses a day is 651,662 reads a day - a third again of everything the
+ * site reads - and 47.5 MiB of heap on an instance already running 737-972 MiB
+ * against a 1,024 MiB cap. It would also be the slowest thing here, and the
+ * failure mode is not a slow sitemap: a source that misses the module's 5 s
+ * timeout yields an *empty* sitemap, served 200 and cached. So the date is
+ * written where the change happens, by whoever makes it, and this handler only
+ * reads a field off a document it was already reading. See shared/lastmod.ts. */
 export default defineCachedEventHandler(
   async () => {
     const urls: { loc: string; lastmod?: string }[] = [];
@@ -45,8 +58,13 @@ export default defineCachedEventHandler(
       Object.entries(nodesSnapshot).forEach(([id, data]) => {
         if (pageIsPublic(data) && data.name) {
           if (SITEMAP_NODE_TYPES.includes(data.type)) {
+            // Omitted rather than guessed where there is nothing to say: the
+            // module keeps the url and drops the element, and a url without a
+            // `lastmod` is one Google schedules exactly as it did before.
+            const lastmod = sitemapLastmod(data);
             urls.push({
               loc: generateEntityUrl(data.type, id, data.name),
+              ...(lastmod ? { lastmod } : {}),
             });
           }
         }

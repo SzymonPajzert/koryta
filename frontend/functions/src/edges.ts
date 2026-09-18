@@ -5,10 +5,15 @@ import {
   getFirestore,
   FieldValue,
   type Firestore,
+  type Timestamp,
 } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { computeEdgeStats } from "./stats";
 import { bodyIsPaidPost } from "./companyBodies";
+import {
+  CONTENT_CHANGED_AT,
+  pagesChangedByEdgeWrite,
+} from "../../shared/lastmod";
 import type { Edge } from "./model";
 
 // Ensure the Firebase Admin SDK is initialized
@@ -32,6 +37,29 @@ if (getApps().length === 0) {
  * Admin SDK in these functions touches it.
  */
 const DIRTY_COLLECTION = "edgeStatsDirty";
+
+/**
+ * Nodes whose *page* changed because a relation did, one document per node,
+ * keyed by node id.
+ *
+ * Both ends, where `edgeStatsDirty` above marks only the `source`. That is the
+ * right rule for `stats.edges`, which counts what a node points at, and the
+ * wrong one for a page: publishing an employment changes the person's page and
+ * the company's alike, and 4,761 of the 6,802 pages in the sitemap - 70%,
+ * nearly all of them companies - are only ever a `target`, so nothing on the
+ * site writes to them at all when a relation appears.
+ *
+ * A second collection rather than a flag on the one above, because the two jobs
+ * are not the same size. Stamping reads nothing. Recomputing reads every edge
+ * the node is a source of plus a `getAll` of their targets, which for a region
+ * that thousands of `election` edges point *at* is exactly the quadratic read
+ * the marker collection was introduced to stop - see the note there. Kept
+ * apart, neither trigger can turn one job into the other.
+ *
+ * Not matched in `firestore.rules`, so it is default-deny to clients, exactly
+ * as `edgeStatsDirty` is.
+ */
+const CONTENT_DIRTY_COLLECTION = "nodeContentDirty";
 
 /** Edge types that carry a region up into the source node's `targetNodeIds`:
  * a seat does it exactly as ownership does. One query rather than two, so the
@@ -87,37 +115,120 @@ export const onEdgeWritten = onDocumentWritten(
     const before = event.data?.before;
     const after = event.data?.after;
 
-    const beforeSource = before?.exists
-      ? (before.data()?.source as string | undefined)
-      : undefined;
-    const afterSource = after?.exists
-      ? (after.data()?.source as string | undefined)
-      : undefined;
+    const beforeData = before?.exists ? before.data() : undefined;
+    const afterData = after?.exists ? after.data() : undefined;
 
     // Both ends, not just the current one: re-pointing an edge at a different
     // source leaves the node it came from counting an edge it no longer has.
     const sources = [
-      ...new Set([beforeSource, afterSource].filter(Boolean) as string[]),
+      ...new Set(
+        [beforeData?.source, afterData?.source].filter(
+          (id): id is string => typeof id === "string" && id.length > 0,
+        ),
+      ),
     ];
+
+    // The pages this write says something different about - both endpoints,
+    // before and after, and nothing at all for a draft. The rule lives in
+    // shared/lastmod.ts, next to the `<lastmod>` that reads its answer back.
+    const endpoints = pagesChangedByEdgeWrite(beforeData, afterData);
 
     if (sources.length === 0) {
       logger.warn(
         `Could not determine source nodeId for edge doc: ${event.params.edgeId}`,
       );
-      return;
     }
+    if (sources.length === 0 && endpoints.length === 0) return;
 
     const db = getFirestore("koryta-pl");
-    await Promise.all(
-      sources.map((sourceId) =>
+    await Promise.all([
+      ...sources.map((sourceId) =>
         db
           .collection(DIRTY_COLLECTION)
           .doc(sourceId)
           .set({ at: FieldValue.serverTimestamp() }),
       ),
-    );
+      // One marker per node however many of its edges moved, so publishing a
+      // person's thirty relations costs the node one stamp rather than thirty -
+      // and, because the marker collection has no triggers of its own, none of
+      // those writes fans out into `onNodeWritten` the way writing the node
+      // document directly from here would.
+      ...endpoints.map((nodeId) =>
+        db
+          .collection(CONTENT_DIRTY_COLLECTION)
+          .doc(nodeId)
+          .set({ at: FieldValue.serverTimestamp() }),
+      ),
+    ]);
   },
 );
+
+/**
+ * Writes `content_changed_at` onto every node whose page a relation changed,
+ * and does nothing else.
+ *
+ * No reads beyond the marker query itself: the marker's id is the node and its
+ * `at` is when the edge was written, so the date stored is an instant that was
+ * recorded rather than the minute the sweep happened to run. That is what lets
+ * /api/_sitemap-urls answer with no query of its own - the alternative, working
+ * each page's date out from the edges at request time, is a 49,583-document
+ * sweep per cache miss.
+ *
+ * Returns how many nodes were dated, for the log line.
+ */
+async function stampContentChanges(db: Firestore): Promise<number> {
+  const pending = await db
+    .collection(CONTENT_DIRTY_COLLECTION)
+    .orderBy("at")
+    .limit(SWEEP_BATCH)
+    .get();
+
+  if (pending.empty) return 0;
+
+  const queue = [...pending.docs];
+  let stamped = 0;
+
+  const worker = async () => {
+    for (let doc = queue.shift(); doc; doc = queue.shift()) {
+      const at = doc.get("at") as Timestamp | undefined;
+      const changedAt = (at ? at.toDate() : new Date()).toISOString();
+      try {
+        await db
+          .collection("nodes")
+          .doc(doc.id)
+          .update({ [CONTENT_CHANGED_AT]: changedAt });
+        stamped++;
+      } catch (error) {
+        if (statusCode(error) !== NOT_FOUND) {
+          // Leave the marker in place; the next sweep retries it.
+          logger.error(`Could not date changed node: ${doc.id}`, error);
+          continue;
+        }
+        // A node that has gone away has no page left to date, so its marker is
+        // dropped below rather than retried every minute forever.
+      }
+
+      try {
+        // The same precondition as the stats sweep: an edge that landed while
+        // this was writing rewrote the marker with a later `at`, and dropping
+        // it here would lose that instant.
+        await doc.ref.delete({ lastUpdateTime: doc.updateTime });
+      } catch (error) {
+        if (statusCode(error) === FAILED_PRECONDITION) continue;
+        // Contained per marker, exactly as the stats worker below contains a
+        // failed recompute. This pass runs first and unconditionally, so an
+        // error escaping it would take the whole sweep down with it and leave
+        // `stats.edges` unrecomputed for a minute over a marker that will be
+        // retried anyway. The SDK has already retried anything retryable by
+        // the time this fires.
+        logger.error(`Could not drop the marker for: ${doc.id}`, error);
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: SWEEP_CONCURRENCY }, () => worker()));
+  return stamped;
+}
 
 /**
  * Recalculate and store `stats.edges` for one node.
@@ -230,6 +341,10 @@ export const sweepEdgeStats = onSchedule(
   async () => {
     const db = getFirestore("koryta-pl");
 
+    // First, and unconditionally: the dates are what the sitemap reads, and
+    // they must not be skipped on a minute when no node's stats went stale.
+    const stamped = await stampContentChanges(db);
+
     // Oldest first, so a node dirtied during a long backlog is not starved.
     const pending = await db
       .collection(DIRTY_COLLECTION)
@@ -237,7 +352,12 @@ export const sweepEdgeStats = onSchedule(
       .limit(SWEEP_BATCH)
       .get();
 
-    if (pending.empty) return;
+    if (pending.empty) {
+      if (stamped > 0) {
+        logger.info(`Content dates: ${stamped} node(s) stamped`);
+      }
+      return;
+    }
 
     const queue = [...pending.docs];
     let recomputed = 0;
@@ -279,7 +399,7 @@ export const sweepEdgeStats = onSchedule(
     );
 
     logger.info(
-      `Edge stats sweep: ${recomputed} recomputed, ${rewritten} rewritten mid-sweep, ${failed} failed, of ${pending.size} claimed`,
+      `Edge stats sweep: ${recomputed} recomputed, ${rewritten} rewritten mid-sweep, ${failed} failed, of ${pending.size} claimed; ${stamped} node(s) dated`,
     );
   },
 );
