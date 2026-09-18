@@ -69,6 +69,45 @@ def parse_yes_no(s: str, _: Never) -> str:
     raise ValueError(f"Unknown bool: {s}")
 
 
+def parse_mandate(s: str, _: Never) -> str:
+    """
+    Read the `Mandat` column of a candidate list.
+
+    It is not a yes/no: PKW writes a letter naming *how* the seat was taken
+    and leaves everyone else either blank or `N`. Measured over every source
+    that carries the column, the whole vocabulary is
+    `T`/`W`/`G`/`B`/`L`/`P`/`O`/`K`/`N`, and each letter but the last is a
+    seat:
+
+    - `T` tak, `W` wybrany, `G` wybrany w głosowaniu -- the ordinary win;
+    - `B` bez głosowania, where a district fielded no more candidates than it
+      had seats, so nobody voted. These rows carry no vote count at all;
+    - `L` w losowaniu, a tie broken by drawing lots;
+    - `P`, the last seat of a district taken out of a tie: all 27 rows in the
+      1998 council files are level on votes with a candidate the same file
+      marks `N`, and 20 of the 27 poll below every `W` around them;
+    - `O`/`K` z listy okręgowej / z listy krajowej, how the pre-2001 Sejm
+      files distinguish the two halves of the chamber.
+
+    A blank means a loss, not an unknown. In 2018 `T` (43,683) plus `B`
+    (3,062) is exactly the 46,745 rows of `2018-radni.xlsx`, the separate
+    list of who was elected, and every blank row is absent from it. The
+    letter counts line up the same way elsewhere: `O` + `K` is 391 + 69 = 460
+    Sejm seats in 1991, 1993 and 1997, `T` is 100 senators, and `T` is 54/50/51
+    MEPs in 2004/2009/2014.
+    """
+    if s is None or s != s:  # None, or a pandas NaN
+        return "FALSE"
+
+    match str(s).strip():
+        case "T" | "W" | "G" | "B" | "L" | "P" | "O" | "K":
+            return "TRUE"
+        case "N" | "" | "nan":
+            return "FALSE"
+
+    raise ValueError(f"Unknown mandate: {s!r}")
+
+
 def lookup_teryt_from_city(teryt, city: str, _: None) -> str:
     # Remove trailing roman numerals, e.g. Warszawa II
     city = city.rstrip("I").rstrip()
@@ -214,7 +253,9 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Lista": None,
     "Lp": None,
     "Mand.": None,
-    "Mandat": None,
+    # Every candidate list that carries this column is a result file: the
+    # winners are marked, everyone else is blank or `N`. See parse_mandate.
+    "Mandat": SetField("candidacy_success", parse_mandate),
     "Miejce zam.": None,
     "Miejce\n zam.": None,
     "Miejsce zam.": None,
