@@ -147,13 +147,21 @@ class _HostCrawler:
         for seed in seeds:
             if seed:
                 self.enqueue(seed, 0, "")
-        while (
-            self.page_queue or self.doc_queue
-        ) and self.pages_fetched < self.options.max_pages_per_host:
-            url, depth, discovered_from = self._next()
-            if depth <= self.options.max_depth:
-                self._visit(url, depth, discovered_from)
-        self._finish()
+        try:
+            while (
+                self.page_queue or self.doc_queue
+            ) and self.pages_fetched < self.options.max_pages_per_host:
+                url, depth, discovered_from = self._next()
+                if depth <= self.options.max_depth:
+                    self._visit(url, depth, discovered_from)
+        except Exception:
+            # Leave a trace before re-raising: _finish still has to close the
+            # bundle and mark the host, or a crash strands a .part and leaves
+            # the host looking untouched.
+            self.stats.errors += 1
+            raise
+        finally:
+            self._finish()
         return self.stats
 
     def _visit(self, url: str, depth: int, discovered_from: str) -> None:
@@ -330,6 +338,7 @@ class _HostCrawler:
                 self.enqueue(link.url, depth + 1, url)
 
     def _finish(self) -> None:
+        self.store.close_host(self.host.host)
         self.frontier.record_urls(self.urls_to_record)
         if self.stats.errors and self.pages_fetched:
             self.stats.status = "partial"
