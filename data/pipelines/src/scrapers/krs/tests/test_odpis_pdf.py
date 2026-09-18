@@ -10,6 +10,7 @@ being written kept in deliberately:
 * one label carries several versions of its value;
 * ``Prokurenci`` and ``Dane jedynego akcjonariusza`` hold their people with no
   ``Podrubryka`` around them;
+* a rodzaj prokury names *another* person by PESEL, inside its free text;
 * the rubryka separator is a soft hyphen.
 
 Every PESEL here is synthetic -- constructed to pass its own check digit so the
@@ -247,7 +248,7 @@ ANNA MARIA
 4.Rodzaj prokury
 1
 -
-PROKURA SAMOISTNA
+PROKURA ODDZIAŁOWA ŁĄCZNA, DO DZIAŁANIA Z PROKURENTEM GRZEGORZ PIOTR NOWAK (PESEL: {BOARD_CURRENT})
 Dział 3
 Rubryka 1 ­ Przedmiot działalności
 1.Przedmiot przeważającej
@@ -403,6 +404,34 @@ def test_no_pesel_is_ever_carried_on_the_record(people):
         for value in (person.surname, person.given_names, person.funkcja or ""):
             for number in (BOARD_FORMER, BOARD_CURRENT, SUPERVISOR, PROXY):
                 assert number not in value
+
+
+def test_a_pesel_written_into_a_free_text_field_is_redacted(people):
+    """A prokura that names its co-proxy by number must not carry the number.
+
+    The field belongs to ZIELIŃSKA and the PESEL in it is NOWAK's, so nothing
+    about this person's own identifier stops it: it is somebody else's, in
+    prose. Nine rows of ORLEN SA's entry are exactly this.
+    """
+    funkcja = find(people, "ZIELIŃSKA").funkcja or ""
+    assert BOARD_CURRENT not in funkcja
+    assert "[PESEL]" in funkcja
+    assert funkcja.startswith("PROKURA ODDZIAŁOWA ŁĄCZNA")
+
+
+def test_a_redacted_pesel_becomes_the_fingerprint_that_person_carries():
+    """With a key, the cross-reference survives being redacted.
+
+    Substituting the same fingerprint the referenced person's own row holds is
+    what keeps "exercise this prokura with X" answerable inside the artifact,
+    where a fixed marker would leave it pointing at nobody.
+    """
+    keyed = parse_people(ODPIS, krs="0000000001", salt="test-salt")
+    nowak = find(keyed, "NOWAK")
+    funkcja = find(keyed, "ZIELIŃSKA").funkcja or ""
+    assert nowak.pesel_fingerprint
+    assert nowak.pesel_fingerprint in funkcja
+    assert BOARD_CURRENT not in funkcja
 
 
 def test_the_soft_hyphen_does_not_hide_a_rubryka(people):
