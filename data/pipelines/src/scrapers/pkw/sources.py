@@ -551,7 +551,10 @@ for index in range(0, 16):
                 "https://danewyborcze.kbw.gov.pl/dane/1998/rada_gminy/1998_rady_gmin.zip",
                 "1998_rady_gmin.zip",
             ),
-            ZipExtractor(None, XlsExtractor(header_rows=1), index=0),
+            # One workbook per województwo, and the loop variable is which.
+            # Pinned at 0 this read dolnośląskie sixteen times and the other
+            # fifteen not at all; all sixteen carry the same header.
+            ZipExtractor(None, XlsExtractor(header_rows=1), index=index),
             1998,
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
