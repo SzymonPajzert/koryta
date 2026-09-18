@@ -513,7 +513,7 @@ def unmapped_committees(elections: list[Election]) -> list[str]:
     ]
 
 
-def canonical_name(values: typing.Sequence) -> str | None:
+def canonical_name(values: typing.Iterable) -> str | None:
     """One name for a person whose sources spell them several ways.
 
     `full_name` is a `list_distinct` aggregate, so a person the register wrote
