@@ -512,15 +512,17 @@ def test_a_partnership_representation_rubryka_has_a_role():
         ("Organ uprawniony do reprezentowania zagranicznego przedsiębiorcy",
          "reprezentacja_pz"),
         ("Osoby reprezentujące zagranicznego przedsiębiorcę w oddziale", "osoba_pz"),
+        ("Dane partnerów", "wspolnik_partner"),
     ],
 )
 def test_the_rubryki_a_wider_population_turned_up(rubryka, role):
-    """All three were printed by `unread_person_rubryki` on a real run.
+    """All four were printed by `unread_person_rubryki` on a real run.
 
     They only appear once the population reaches partnerships and branches of
-    foreign companies: 19 people across 6 of 1,225 stored odpisy. The two
-    foreign ones are deliberately different roles -- one is the parent's board
-    abroad, the other is who runs the Polish oddział.
+    foreign companies: 19 people across 6 of 1,225 stored odpisy, and "Dane
+    partnerów" once the crawl reached 3,161. The two foreign ones are
+    deliberately different roles -- one is the parent's board abroad, the other
+    is who runs the Polish oddział -- and a partner is not a wspolnik.
     """
     assert role_of(rubryka) == role
 
