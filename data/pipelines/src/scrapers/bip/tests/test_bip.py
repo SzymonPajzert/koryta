@@ -320,3 +320,92 @@ def test_crawl_host_follows_links_and_stores_docs(tmp_path: Path) -> None:
     assert frontier.stats()["docs"] == 2
     assert frontier.stats()["urls"] == 4
     frontier.close()
+
+
+def _one_doc_site():
+    return {
+        "https://bip.test/": (
+            "text/html",
+            b"<html><a href=/attachments/download/1>doc</a></html>",
+        ),
+        "https://bip.test/attachments/download/1": (
+            "application/pdf",
+            b"%PDF-1.4 one",
+        ),
+    }
+
+
+def test_bundle_is_finalized_at_host_end(tmp_path: Path) -> None:
+    """Regression: bundles used to stay .part until the whole run finished."""
+    frontier = Frontier(tmp_path / "frontier.db")
+    store = LocalBundleStore(tmp_path / "out")
+    pages = _one_doc_site()
+
+    def fetch(url: str, timeout: float, user_agent: str) -> FetchResult:
+        content_type, content = pages[url]
+        return FetchResult(
+            url=url, status=200, content_type=content_type, content=content
+        )
+
+    host = HostRow(
+        host="bip.test",
+        name="t",
+        source_url="https://bip.test/",
+        teryt="",
+        entry_count=1,
+    )
+    crawl_host(
+        host,
+        frontier=frontier,
+        store=store,
+        fetch=fetch,
+        robots_allowed=lambda url: True,
+        rate_limiter=HostRateLimiter(0.0),
+        options=CrawlOptions(max_pages_per_host=5, max_depth=2),
+    )
+    parts = list((tmp_path / "out").rglob("*.part"))
+    bundles = list((tmp_path / "out").rglob("uid_*.tar.gz"))
+    assert parts == []
+    assert len(bundles) == 1
+    assert frontier.stats()["docs"] == 1
+    frontier.close()
+
+
+def test_crashed_host_is_marked_and_bundle_closed(tmp_path: Path) -> None:
+    frontier = Frontier(tmp_path / "frontier.db")
+    store = LocalBundleStore(tmp_path / "out")
+    pages = _one_doc_site()
+
+    def fetch(url: str, timeout: float, user_agent: str) -> FetchResult:
+        if url.endswith("/attachments/download/1"):
+            raise RuntimeError("boom")
+        content_type, content = pages[url]
+        return FetchResult(
+            url=url, status=200, content_type=content_type, content=content
+        )
+
+    host = HostRow(
+        host="bip.test",
+        name="t",
+        source_url="https://bip.test/",
+        teryt="",
+        entry_count=1,
+    )
+    frontier.upsert_hosts([host])
+    try:
+        crawl_host(
+            host,
+            frontier=frontier,
+            store=store,
+            fetch=fetch,
+            robots_allowed=lambda url: True,
+            rate_limiter=HostRateLimiter(0.0),
+            options=CrawlOptions(max_pages_per_host=5, max_depth=2),
+        )
+        raise AssertionError("expected the fetch failure to propagate")
+    except RuntimeError:
+        pass
+    assert list((tmp_path / "out").rglob("*.part")) == []
+    status = frontier.iter_hosts(limit=1)[0].status
+    assert status in ("partial", "dead")
+    frontier.close()
