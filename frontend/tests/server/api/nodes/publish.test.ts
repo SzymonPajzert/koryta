@@ -136,6 +136,7 @@ describe("api/nodes/publish", () => {
 
     expect(mockBatchUpdate).toHaveBeenCalledWith("nodes/node-1", {
       published: true,
+      content_changed_at: expect.any(String),
     });
     expect(mockCommit).toHaveBeenCalled();
     expect(result).toEqual({
@@ -143,6 +144,39 @@ describe("api/nodes/publish", () => {
       published: true,
       hiddenEdges: [],
       approvedRevisionId: null,
+    });
+  });
+
+  it("dates the page, because publishing writes no revision to date it by", async () => {
+    // The sitemap's `<lastmod>` reads this. `published` is a boolean the next
+    // decision overwrites and publication files no revision, so without the
+    // stamp a page that went live today would advertise the date of the bulk
+    // ingest that created it. See shared/lastmod.ts.
+    stored["nodes/node-1"] = {
+      name: "X",
+      revision_id: { path: "revisions/r" },
+    };
+
+    await handler({} as never);
+
+    const [, payload] = mockBatchUpdate.mock.calls.find(
+      ([path]) => path === "nodes/node-1",
+    ) as [string, { content_changed_at: string }];
+    expect(Number.isNaN(Date.parse(payload.content_changed_at))).toBe(false);
+  });
+
+  it("dates it on the way down as well as on the way up", async () => {
+    // Taking a page off the site changes it for a reader exactly as much as
+    // putting it up does - and where the url survives as a 410 or a redirect,
+    // that is the one thing a crawler most wants to be told about promptly.
+    stored["nodes/node-1"] = { name: "X", published: true };
+    requestPublished(false);
+
+    await handler({} as never);
+
+    expect(mockBatchUpdate).toHaveBeenCalledWith("nodes/node-1", {
+      published: false,
+      content_changed_at: expect.any(String),
     });
   });
 
@@ -260,6 +294,7 @@ describe("api/nodes/publish", () => {
     );
     expect(mockBatchUpdate).toHaveBeenCalledWith("nodes/node-1", {
       published: true,
+      content_changed_at: expect.any(String),
     });
     expect(result).toMatchObject({
       published: true,
@@ -326,6 +361,7 @@ describe("api/nodes/publish", () => {
     expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
     expect(mockBatchUpdate).toHaveBeenCalledWith("nodes/node-1", {
       published: true,
+      content_changed_at: expect.any(String),
     });
     expect(result).toMatchObject({ approvedRevisionId: null });
   });

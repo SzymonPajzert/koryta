@@ -44,6 +44,21 @@ type PageBase<PageType> = {
   visibility?: boolean;
   stats?: NodeStats;
   revisions?: NodeRevisions;
+  /** When this page last changed in a way a reader could see: it went live, it
+   * came down, or a relation at either end of it was published, hidden or
+   * edited while it was live. ISO 8601, UTC, like `AuditEntry.at`.
+   *
+   * Written in the same commit as the change - one extra key on the `update`
+   * /api/nodes/publish already makes, and by the trigger in
+   * `functions/src/edges.ts` for the relation half, because publishing an
+   * employment changes the company's page as much as the person's and writes
+   * neither node. Read by `<lastmod>` in the sitemap and by nothing else; see
+   * shared/lastmod.ts, which also lists what deliberately does not move it.
+   *
+   * On `PageBase` rather than on the node types alone, like `needs_split`,
+   * although only nodes carry it: an edge's change is recorded on the two nodes
+   * it is a claim about, never on the edge. */
+  content_changed_at?: string;
 };
 
 export interface NodeRevisions {
