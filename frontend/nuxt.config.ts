@@ -292,6 +292,23 @@ export default defineNuxtConfig({
       project: "koryta-pl",
     },
     telemetry: !isLocal,
+
+    /** What actually loads sentry.server.config.ts on a deployed backend.
+     *
+     * Without this the module emits `.output/server/sentry.server.config.mjs`
+     * and then leaves it to the process being started with `node --import` to
+     * pull it in. App Hosting does not do that - `.apphosting/bundle.yaml`
+     * pins `runConfig.runCommand: node .output/server/index.mjs` - so nothing
+     * ever imported the file and the server half of Sentry had never reported
+     * from production: every `span.op:http.server` in the retained window was
+     * tagged `development`, and 90 days of `!environment:development` returned
+     * nothing at all. Errors went with the traces, including 40 origin 5xx in
+     * the 30 days to 2026-09-18.
+     *
+     * It looked fine in dev because `nuxt dev` inlines the config into its
+     * single-file bundle, which is exactly why the only events that ever
+     * arrived were the local ones. */
+    autoInjectServerSentry: "top-level-import",
   },
 
   sourcemap: {
