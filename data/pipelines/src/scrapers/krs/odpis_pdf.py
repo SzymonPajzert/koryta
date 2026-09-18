@@ -455,6 +455,41 @@ def _fingerprint(
     return digest
 
 
+#: An 11-digit run in a free-text field. A REGON is 9 or 14 digits and a NIP
+#: 10, so nothing else the register prints inside a sentence is this long.
+_ELEVEN_DIGITS = re.compile(r"(?<!\d)\d{11}(?!\d)")
+
+
+def _redact_pesels(
+    value: str | None, salt: str | None, sink: dict[str, str] | None
+) -> str | None:
+    """Replace every PESEL written *into* a free-text field.
+
+    `funkcja` is not a controlled vocabulary: a prokura oddzialowa names the
+    proxies it must be exercised with, and the register writes each of them out
+    as ``IMIE NAZWISKO (PESEL: 12345678901)``. Nine rows of ORLEN SA's entry
+    carry ten other people's numbers this way, which is how a field that holds
+    no identifier of its own subject still ends up holding identifiers.
+
+    A number that parses as a PESEL becomes the same fingerprint that person's
+    own row carries, so the cross-reference survives the redaction and joins
+    within the artifact; anything else 11 digits long is replaced outright,
+    because `publish` refuses an artifact with any 11-digit run in it and a
+    number we cannot explain is not a number to make an exception for.
+    """
+    if not value:
+        return value
+
+    def replace(match: re.Match[str]) -> str:
+        digits = match.group()
+        if pesel_util.looks_like_pesel(digits):
+            digest = _fingerprint(digits, salt, sink)
+            return digest if digest else "[PESEL]"
+        return "[11 CYFR]"
+
+    return _ELEVEN_DIGITS.sub(replace, value)
+
+
 def parse_people(
     text: str,
     krs: str,
@@ -516,7 +551,7 @@ def parse_people(
                     dzial=section.dzial,
                     rubryka=section.rubryka,
                     role=role,
-                    organ_name=organ_name,
+                    organ_name=_redact_pesels(organ_name, salt, pesel_sink),
                     organ=(
                         organ_kind(organ_name)
                         if organ_name and role in _SUPERVISORY_ROLES
@@ -525,7 +560,11 @@ def parse_people(
                     position=position,
                     surname=surname.value,
                     given_names=given.value if given else "",
-                    funkcja=funkcja.value if funkcja and funkcja.value else None,
+                    funkcja=_redact_pesels(
+                        funkcja.value if funkcja and funkcja.value else None,
+                        salt,
+                        pesel_sink,
+                    ),
                     birth_date=facts.birth_date if facts else None,
                     sex=facts.sex if facts else None,
                     pesel_fingerprint=_fingerprint(pesel, salt, pesel_sink),
