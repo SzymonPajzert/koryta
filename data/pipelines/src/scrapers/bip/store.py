@@ -154,6 +154,18 @@ class LocalBundleStore:
                 self._close(bundle)
         return rows
 
+    def close_host(self, host: str) -> None:
+        """Finalize a host's open bundle so its documents get a real blob.
+
+        Without this the bundle only closes at `max_bundle_bytes` or at process
+        end, so every killed run strands one `.part` per crawled host and the
+        docs table points at a file that never materialized.
+        """
+        with self._lock:
+            bundle = self._bundles.get(host)
+            if bundle is not None:
+                self._close(bundle)
+
     def known_digest(self, digest: str) -> bool:
         with self._lock:
             return digest in self._seen
