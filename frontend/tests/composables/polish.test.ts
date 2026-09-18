@@ -3,6 +3,7 @@ import {
   polishCounting,
   polishCountingGenitive,
   polishCountingGrouped,
+  polishNoun,
   polishNumber,
 } from "../../app/composables/polish";
 
@@ -84,5 +85,44 @@ describe("polishCounting", () => {
     expect(polishCounting(5, "osoba", "osoby", "osób")).toBe("5 osób");
     expect(polishCounting(11, "osoba", "osoby", "osób")).toBe("11 osób");
     expect(polishCounting(0, "osoba", "osoby", "osób")).toBe("0 osób");
+  });
+});
+
+describe("polishNoun", () => {
+  /** The card puts the figure in a 64px element of its own and the noun under
+   * it, so it needs the noun without the numeral. Same rule as
+   * `polishCounting`, which is the point of it being one function. */
+  const posada = (n: number) =>
+    polishNoun(n, "obecna posada", "obecne posady", "obecnych posad");
+
+  it("gives the bare one the singular", () => {
+    expect(posada(1)).toBe("obecna posada");
+  });
+
+  it("gives 2-4 the plural", () => {
+    expect(posada(2)).toBe("obecne posady");
+    expect(posada(4)).toBe("obecne posady");
+  });
+
+  it("gives the teens the genitive, last digit notwithstanding", () => {
+    expect(posada(11)).toBe("obecnych posad");
+    expect(posada(12)).toBe("obecnych posad");
+    expect(posada(14)).toBe("obecnych posad");
+  });
+
+  it("gives everything but a bare one that ends in 1 the genitive", () => {
+    // „21 obecna posada” is the error this rule exists to prevent.
+    expect(posada(21)).toBe("obecnych posad");
+    expect(posada(101)).toBe("obecnych posad");
+  });
+
+  it("gives a compound ending in 2-4 the plural", () => {
+    expect(posada(22)).toBe("obecne posady");
+    expect(posada(25)).toBe("obecnych posad");
+  });
+
+  it("returns the noun alone, with no numeral in it", () => {
+    expect(posada(5)).toBe("obecnych posad");
+    expect(posada(5)).not.toContain("5");
   });
 });

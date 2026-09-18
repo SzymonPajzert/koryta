@@ -149,6 +149,11 @@ export default defineNuxtConfig({
       // has no indexable content to lose, and every entity URL 301s into it
       // with its own ?krs=/?teryt=. That is the bulk of the crawl budget.
       "/eksploruj/tabela",
+      // The generated social cards. A crawler reaches them through `og:image`
+      // on the page they belong to, which is how a link preview is meant to
+      // find one; crawling them as documents in their own right spends budget
+      // on images that say nothing the page does not, and each miss is a render.
+      "/_og",
     ],
   },
   plausible: {
@@ -318,7 +323,26 @@ export default defineNuxtConfig({
   ogImage: {
     defaults: {
       extension: "png",
+      // The module's own default height is 600, while every `og:image:height`
+      // this site already advertises says 630 - and `public/social-card.png`,
+      // which the card falls back to, is 1200x630. Stated rather than inherited
+      // so a generated card and the static one are the same shape.
+      width: 1200,
+      height: 630,
     },
+    // Both subsets, and both are load-bearing. Fontsource splits Roboto so that
+    // `latin` carries ó and not the other eight Polish diacritics, and
+    // `latin-ext` carries those eight and not ó; satori keeps only the first
+    // file per (family, weight, style), so one subset alone renders half the
+    // alphabet as tofu. The module handles the pair by renaming them to
+    // `Roboto__0`/`Roboto__1` and chaining them as fallbacks - see
+    // `renameSubsetFonts` - which only works if both were downloaded.
+    fontSubsets: ["latin", "latin-ext"],
+    // `true` here resolves to unstorage's default memory driver: an unbounded
+    // Map inside a 1024 MiB container shared with SSR and firebase-admin.
+    // Bounded instead - 200 cards at ~29 KB is ~6 MB. Never `false`: that emits
+    // `no-cache, no-store` and destroys the CDN caching this feature relies on.
+    runtimeCacheStorage: { driver: "lruCache", max: 200 },
   },
 
   hooks: {

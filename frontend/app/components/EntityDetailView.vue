@@ -454,6 +454,7 @@ import type {
   NodeType,
   Revision,
 } from "~~/shared/model";
+import { personCardProps } from "~/composables/ogCard";
 import { predecessorsByEdge } from "~/utils/succession";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
@@ -618,15 +619,80 @@ const seoDescription = computed(() =>
     : null,
 );
 
+/** Whether this page may carry a card of its own rather than the site banner.
+ *
+ * Stricter than `seoEntity`, which only asks whether the load succeeded. An
+ * `/_og/` URL is permanently replayable and cached by the CDN for three days,
+ * so it must never be minted from anything a reader is not already entitled to
+ * see:
+ *
+ * - `published` because `authFetch` appends `latest=true` for a signed-in
+ *   reader and /api/nodes/[id] skips its public check when it is set, so a
+ *   status-only guard would mint cards for drafts.
+ * - `revisionId` because `entity` above overlays unapproved revision data on
+ *   the stored node, and that overlay would be baked into a public image.
+ * - `deleted`, `merged_into` and `needs_split` because each means the page is
+ *   not the thing it appears to be. `needs_split` most of all: the page is two
+ *   people, and „4 obecne posady” would merge two lives into one claim.
+ *
+ * Only people get a card in this component; it also renders regions, articles
+ * and topics, and those keep the static banner for now.
+ */
+const ogCardEligible = computed(() => {
+  // Left as the union `entity` actually is: casting it to `Person` first would
+  // make the `type` test below a tautology the compiler folds away, and that
+  // test is the one thing keeping a region or a topic off a person's card.
+  const e = entity.value;
+  return (
+    type === "person" &&
+    status.value === "success" &&
+    !revisionId.value &&
+    !!e &&
+    e.type === "person" &&
+    e.published === true &&
+    e.deleted !== true &&
+    !e.merged_into &&
+    !e.needs_split &&
+    !!e.name.trim()
+  );
+});
+
+// One-shot and non-reactive: the options are read once, here, after every await
+// in this setup. Safe because `pages/[seoType]/[slug].vue` keys this component
+// by id, so moving between two people re-runs setup rather than mutating this.
+if (ogCardEligible.value) {
+  defineOgImageComponent(
+    "NodeCard",
+    personCardProps({
+      person: entity.value as Person,
+      targets: targets.value,
+      edges: edges.value,
+    }),
+    {
+      width: 1200,
+      height: 630,
+      alt: `${(entity.value as Person).name} — koryta.pl`,
+    },
+  );
+}
+
+/** The static banner, for every page that did not just define its own card.
+ * `undefined` leaves the tag to nuxt-og-image, which registers it at a higher
+ * priority than `useSeoMeta` and would win regardless; saying so here keeps the
+ * emitted head readable. */
+const ogFallbackCard = computed(() =>
+  ogCardEligible.value ? undefined : SOCIAL_CARD,
+);
+
 useSeoMeta({
   title: seoTitle,
   description: seoDescription,
   ogTitle: seoTitle,
   ogDescription: seoDescription,
   ogType: () => (seoEntity.value ? entityOgType(seoEntity.value) : "website"),
-  ogImage: SOCIAL_CARD,
+  ogImage: ogFallbackCard,
   twitterCard: "summary_large_image",
-  twitterImage: SOCIAL_CARD,
+  twitterImage: ogFallbackCard,
 });
 
 /** The relations a reader may add by hand: who somebody knows, and where they

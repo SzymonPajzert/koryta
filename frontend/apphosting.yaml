@@ -96,7 +96,36 @@ env:
       - BUILD
       - RUNTIME
 
-# Grant access to secrets in Cloud Secret Manager.
-# See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
-# - variable: MY_SECRET
-#   secret: mySecretRef
+  # A Secret Manager reference rather than a value. See
+  # https://firebase.google.com/docs/app-hosting/configure#secret-parameters
+  #
+  # What signs the generated social-card URLs, and the reason it is pinned
+  # rather than left out.
+  #
+  # nuxt-og-image signs every `/_og/` URL and rejects an unsigned one with a
+  # 403. With neither `ogImage.security.secret` nor this variable set, it
+  # *invents* a secret at module setup - `randomBytes(32)` - so the key changes
+  # on every build. That is not a missing lock; it is a lock rekeyed on each
+  # deploy, and the signature is part of the URL. Every card anybody had already
+  # shared would 403 the next time a platform re-scraped it, and Facebook and
+  # LinkedIn cache a failed scrape for days.
+  #
+  # So this has to exist from the same commit that starts emitting `/_og/` URLs.
+  # Setting it now is free; setting it later is the rotation.
+  #
+  # Needs BUILD as well as RUNTIME: the value is read while nuxt builds, and at
+  # runtime nitro only overrides runtimeConfig from `NUXT_`-prefixed names.
+  #
+  # Create it once with:
+  #   firebase apphosting:secrets:set nuxt-og-image-secret --project koryta-pl
+  #   firebase apphosting:secrets:grantaccess nuxt-og-image-secret \
+  #     --project koryta-pl --backend prod
+  # (and again with `--backend autopush`; both backends read this file). Any
+  # long random string will do - `openssl rand -base64 32`. It guards render
+  # abuse, not user data, but it is still a signing key, so it lives in Secret
+  # Manager rather than in git.
+  - variable: NUXT_OG_IMAGE_SECRET
+    secret: nuxt-og-image-secret
+    availability:
+      - BUILD
+      - RUNTIME

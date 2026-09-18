@@ -228,6 +228,7 @@ import {
 } from "~/composables/entitySeo";
 import { useAuthState, authFetch } from "@/composables/auth";
 import type { Company, Revision } from "~~/shared/model";
+import { companyCardProps } from "~/composables/ogCard";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
@@ -346,15 +347,63 @@ const seoDescription = computed(() =>
     : null,
 );
 
+/** Whether this institution may carry a card of its own rather than the site
+ * banner. The same gate `EntityDetailView.vue` applies to a person, and for the
+ * same reason: an `/_og/` URL is permanently replayable and CDN-cached, so it
+ * must never be minted from a draft, from an unapproved revision overlay, or
+ * from a page that has been deleted or merged away. */
+const ogCardEligible = computed(() => {
+  const c = company.value;
+  return (
+    status.value === "success" &&
+    !revisionId.value &&
+    !!c &&
+    // Widened on purpose. `company` is declared as a Company, but the value came
+    // off an API response and nothing between Firestore and here proves it is
+    // one - which is why the template guards `company?.type !== "place"` too.
+    // Compared as a `Company` the test is folded away and the guard is gone.
+    (c.type as string) === "place" &&
+    c.published === true &&
+    c.deleted !== true &&
+    !c.merged_into &&
+    !c.needs_split &&
+    !!c.name.trim()
+  );
+});
+
+// One-shot and non-reactive, read once after every await in this setup. The
+// page keys this component by id, so navigating between institutions re-runs it.
+if (ogCardEligible.value) {
+  defineOgImageComponent(
+    "NodeCard",
+    companyCardProps({
+      company: company.value as Company,
+      sources: sources.value,
+      owners: owners.value,
+      subsidiaryCount: subsidiaries.value.length,
+      location: location.value,
+    }),
+    {
+      width: 1200,
+      height: 630,
+      alt: `${(company.value as Company).name} — koryta.pl`,
+    },
+  );
+}
+
+const ogFallbackCard = computed(() =>
+  ogCardEligible.value ? undefined : SOCIAL_CARD,
+);
+
 useSeoMeta({
   title: seoTitle,
   description: seoDescription,
   ogTitle: seoTitle,
   ogDescription: seoDescription,
   ogType: () => (seoCompany.value ? entityOgType(seoCompany.value) : "website"),
-  ogImage: SOCIAL_CARD,
+  ogImage: ogFallbackCard,
   twitterCard: "summary_large_image",
-  twitterImage: SOCIAL_CARD,
+  twitterImage: ogFallbackCard,
 });
 
 const canAddRelations = computed(() => !!user.value);

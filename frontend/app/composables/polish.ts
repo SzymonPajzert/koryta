@@ -10,8 +10,13 @@ export interface PolishNoun {
 /** Which of the three nominative forms a count takes. Split out of
  * `polishCounting` so that the grouped variant below picks the noun by the
  * same rule; two copies of it would answer „1 284 osoba” the first time one of
- * them was corrected and the other was not. */
-function nominativeNoun(
+ * them was corrected and the other was not.
+ *
+ * Exported because the social card needs the noun *without* the numeral: there
+ * the figure is a 64px element of its own and the label sits under it, so
+ * `polishCounting`'s „5 obecnych posad” is one string too many. Same rule,
+ * one implementation - which is what the paragraph above is about. */
+export function polishNoun(
   number: number,
   form_singular: string,
   form_plural: string,
@@ -38,7 +43,7 @@ export function polishCounting(
   form_plural: string,
   form_genitive: string,
 ): string {
-  return `${number} ${nominativeNoun(number, form_singular, form_plural, form_genitive)}`;
+  return `${number} ${polishNoun(number, form_singular, form_plural, form_genitive)}`;
 }
 
 /** A figure with its thousands grouped, „1 284” rather than „1284”.
@@ -88,5 +93,5 @@ export function polishCountingGrouped(
   form_plural: string,
   form_genitive: string,
 ): string {
-  return `${polishNumber(number)} ${nominativeNoun(number, form_singular, form_plural, form_genitive)}`;
+  return `${polishNumber(number)} ${polishNoun(number, form_singular, form_plural, form_genitive)}`;
 }
