@@ -157,6 +157,13 @@ ROLE_BY_RUBRYKA: tuple[tuple[str, str], ...] = (
     ("jedyny akcjonariusz", "jedyny_akcjonariusz"),
     ("wspolnicy", "wspolnik"),
     ("dane wspolnikow", "wspolnik"),
+    # A spolka partnerska's partners -- the doctors, lawyers and architects the
+    # form exists for. Found by `unread_person_rubryki` over the 3,161 odpisy
+    # stored on 2026-09-18, and named for the JSON side's `wspolnicyPartnerzy`
+    # rather than folded into `wspolnik`: a partner answers personally for
+    # their own professional acts and not for their partners', which is the
+    # whole point of the form and is not what being a wspolnik means.
+    ("dane partnerow", "wspolnik_partner"),
     ("komitet zalozycielski", "komitet_zalozycielski"),
     ("kurator", "kurator"),
     ("likwidacja", "likwidator"),
