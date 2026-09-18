@@ -11,7 +11,9 @@ export interface PolishNoun {
  * `polishCounting` so that the grouped variant below picks the noun by the
  * same rule; two copies of it would answer „1 284 osoba” the first time one of
  * them was corrected and the other was not. Exported for a figure set apart
- * from its noun, like a large number over its caption. */
+ * from its noun, like a large number over its caption: the social card's
+ * 64px figure with its label under it is one, where `polishCounting`'s
+ * „5 obecnych posad” would be one string too many. */
 export function nominativeNoun(
   number: number,
   form_singular: string,
