@@ -55,7 +55,7 @@ class BipFrontier:
         sql = """
             SELECT host, name, source_url, teryt, entry_count, status
               FROM bip_hosts
-             WHERE status IN ('new', 'partial')
+             WHERE status IN ('new', 'partial', 'active')
                 OR (
                      status = 'ok'
                      AND %s::bigint IS NOT NULL
