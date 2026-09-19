@@ -1,298 +1,260 @@
-# BIP crawler — design (iteration 1: harvest documents)
+# BIP crawler — design (iteration 2: Postgres queue, coordinator + fetchers)
 
-Status: draft · untracked, not committed · worktree `/home/mp/Projects/koryta.wt/bip-scraping`
-(branch `bip-scraping` @ `2d41b223`). Companion recon: `BIP_SCRAPING_80_20.md`.
+Status: revised 2026-09-19 after review feedback. Supersedes the SQLite/host-shard
+design of iteration 1. Recon evidence lives in `BIP_SCRAPING_80_20.md`.
 
 ## 1. Goal
 
-An iterative crawler that walks all Polish BIP sites and harvests every public document
-(PDF / office / zip) with provenance and last-seen state. Parsing, OCR and entity
-resolution are explicitly out of scope for iteration 1.
+Crawl every BIP site in the official gov.pl registry and harvest every public
+document (PDF / office / zip) with provenance and per-URL freshness, so reruns
+are incremental and a host is only marked done when it was fully explored.
 
-Success = a complete, resumable, deduplicated document inventory per host, plus the blobs,
-plus the URL chain that led to each blob.
+## 2. Non-goals
 
-## 2. Non-goals (iteration 2+)
-
-- OCR / text extraction / table parsing.
-- Normalising structured feeds (store them as-is, parse later).
-- Entity resolution / company-ownership edges.
-- Full-text search.
+- OCR / text extraction / parsing (later iteration).
+- Vendor adapters (Netkoncept `/xml`, SharePoint OData, Liferay JSON) — later.
+- GCS upload (local output for now; swap point is `ctx.io.batch_upload`).
 
 ## 3. Recon facts that shape the design
 
-- **Registry**: `https://www.gov.pl/web/bip/spis` → 302 → ZIP → `subjects.xml`.
-  Measured: 13,296 rows, 13,178 unique URLs, **9,744 unique hosts**; fields
-  `id, name, url, place, communeTercCode`, contacts. Self-declared, ~3 "w przygotowaniu",
-  69 duplicate URLs.
-- **Sitemaps**: only **16.7%** of hosts expose one (120-host random sample). Median 55 URLs,
-  mean 1,037, max 11,897 → power law. Sitemaps index **HTML pages, not attachments**, so
-  document discovery must follow links.
-- **Platform families** (registry hosts): own-domain 5,160 · `*.bip.gov.pl` 2,187 ·
-  `gov.pl/web` 535 · naszbip 388 · wikom 346 · szkolnastrona 314 · biuletyn.net 192 ·
-  lubelskie 137 · biposwiata 121 · ibip 99 · edupage 93 · 4bip 74 · bip.net 60 ·
-  bip.info.pl 25.
-- **Document URL patterns observed** (classifier seed):
-  `/attachments/download/<id>` · `/attachments/<id>/download/<slug>` · `/api/files/<id>` ·
-  `/fobjects/download/<id>/<slug>.html` · `/download/attachment/<id>/<file>` ·
-  `/plik,<id>,<slug>.pdf` · `/documents/<a>/<b>/<file>/<uuid>` · `getFile?id=` ·
-  `plik.php?id=` · `dokument.php?iddok=` · `/res/serwisy/pliki/<id>` ·
-  `/resource/<id>/<file>.pdf` · `/upload/pliki/<file>.pdf` · `/system/obj/<file>.pdf` ·
-  `/fls/bip_pliki/...`.
-- **Structured feeds are rare (~1–4% of hosts)**: Wrocław `/przetargi/xml/1/1` (100 rec/page,
-  `nr-sprawy, wartosc-zamowienia, termin-skladania-ofert`), Warszawa
-  `POST /o/rest/central-registry/agreement` (JSON), Katowice SharePoint OData,
-  Netkoncept per-page `/xml`. Capture as-is; do not build adapters around them first.
-- **PDFs**: ~30–50% need OCR; ~85–90% are usable for numbers; declarations worst.
-  (Relevant to iteration 2, not now.)
-- **Churn**: ~2.5% of hosts are dead at any time.
+(Full evidence in `BIP_SCRAPING_80_20.md`; only what constrains the crawler.)
+
+- **Registry**: `https://www.gov.pl/web/bip/spis` → ZIP → `subjects.xml`;
+  13.3k rows → 9,707 unique hosts; fields include `name`, `url`, `communeTercCode`.
+- **Sitemaps**: only ~17% of hosts expose one; median 55 URLs, mean 1,037, max ~12k.
+- **Document URL patterns** (classifier seed): `/attachments/download/<id>`,
+  `/api/files/<id>`, `/fobjects/download/…`, `/plik,<id>,<slug>.pdf`, `getFile?id=`,
+  `plik.php?zid=`, `dokument.php?iddok=`, `/res/serwisy/pliki/`, `/resource/…`,
+  `/upload/pliki/…`, `/system/obj/…`.
+- **HTML is not the data**: declaration/contract values are in the linked files;
+  pages carry metadata and links. Structured feeds exist on ~1–4% of hosts.
+- **Churn**: ~30% of registry URLs are dead or 403-blocked; ~30% of hosts yield
+  documents. Capacities measured on the first full pass: 9.7k hosts → 235k docs,
+  ~200 GB, ~70% PDFs.
 
 ## 4. Architecture
 
 ```
-bip_registry  ──> hosts table ──> frontier (SQLite)
-                                    │
-                        bip_fetcher │ robots · rate-limit · conditional GET
-                                    ▼
-                     ┌── HTML/listing ──> link extractor (generic | adapter)
-                     │                        └──> enqueue pages + docs
-                     └── document ──────> bip_store (tar.zst bundle + manifest)
-                                            └──> provenance chain + sha256 dedup
+gov.pl ZIP ─► stores/bip_registry.py ─► registry.py ─► bip_hosts (Postgres)
+
+coordinator (one process, owns Postgres + quota state + bundle writes)
+  ├─ claim_urls(): SELECT … FROM bip_urls WHERE state='queued' ORDER BY priority, id
+  │                FOR UPDATE SKIP LOCKED → UPDATE state='claimed', locked_until=…
+  ├─ quota gate: skip URLs whose host exhausted pages/docs budget
+  ├─ fetch_q ──► fetcher threads (8–12): curl_cffi fetch, classify, extract links
+  │                  ▲                    │
+  │                  └──── results ───────┘
+  └─ on result: upsert bip_urls (last_checked/state), store document,
+                append to host bundle, enqueue discovered URLs, update quotas
 ```
 
-Components:
-- `bip_registry` — ingest registry → host rows + platform fingerprint.
-- `bip_frontier` — SQLite state store (source of truth for what is new/changed/gone).
-- `bip_fetcher` — HTTP layer: `curl_cffi` impersonate, robots cache, per-host token bucket,
-  retries/backoff, conditional GET.
-- `bip_adapters` — platform-specific extractors; generic fallback for the long tail.
-- `bip_store` — blob writer (local dir first, GCS later), bundling, manifest.
-- `bip_cli` — `koryta_scrape_bip` entrypoint: `registry`, `crawl`, `report`, `prune`.
+- **No host sharding.** Work is URL-level; many URLs of the same host are in
+  flight at once (throttled), other hosts interleave naturally.
+- **One writer.** Fetchers do HTTP + parsing only; the coordinator writes DB rows
+  and bundles, so there are no cross-thread writes and no file locks.
+- **Single process + threads** (like the article crawler). Multiple coordinator
+  processes are possible later because claims are safe; only the per-host rate
+  limit would then need sharing (see §8).
 
-## 5. Frontier schema (SQLite)
+## 5. Postgres schema (one-time manual setup)
+
+DB: the same Postgres the article crawler uses (`POSTGRES_*` in `.env`).
+Run this **once by hand** (`psql`); the crawler never creates or migrates schema.
+`sqlite` is gone from the codebase.
 
 ```sql
-CREATE TABLE hosts (
-  host TEXT PRIMARY KEY, name TEXT, teryt TEXT, source_url TEXT,
-  platform TEXT, adapter TEXT, robots TEXT, crawl_delay REAL,
-  last_crawled TEXT, status TEXT          -- ok|robots-deny|dead|blocked
+CREATE TABLE bip_hosts (
+  host          text PRIMARY KEY,
+  name          text NOT NULL DEFAULT '',
+  source_url    text NOT NULL DEFAULT '',
+  teryt         text NOT NULL DEFAULT '',
+  entry_count   int  NOT NULL DEFAULT 1,
+  platform      text NOT NULL DEFAULT 'unknown',
+  status        text NOT NULL DEFAULT 'new',   -- new|ok|partial|dead
+  pages_fetched int  NOT NULL DEFAULT 0,       -- current attempt
+  docs_fetched  int  NOT NULL DEFAULT 0,
+  pending_urls  int  NOT NULL DEFAULT 0,       -- claimable or in flight
+  cap_hit       bool NOT NULL DEFAULT false,
+  crawl_id      text NOT NULL DEFAULT '',      -- current attempt id
+  first_seen    timestamptz NOT NULL DEFAULT now(),
+  last_crawled  timestamptz
 );
-CREATE TABLE urls (
-  url TEXT PRIMARY KEY, host TEXT, kind TEXT,      -- page|listing|feed|doc
-  discovered_from TEXT, depth INTEGER, section TEXT,
-  content_type TEXT, size INTEGER, sha256 TEXT,
-  etag TEXT, last_modified TEXT,
-  first_seen TEXT, last_checked TEXT, last_status INTEGER,
-  state TEXT                              -- new|seen|unchanged|modified|gone|blocked|error
+
+CREATE TABLE bip_urls (
+  url            text PRIMARY KEY,
+  host           text NOT NULL,
+  kind           text NOT NULL DEFAULT 'page',  -- page|doc
+  discovered_from text NOT NULL DEFAULT '',
+  depth          int  NOT NULL DEFAULT 0,
+  section        text NOT NULL DEFAULT '',
+  priority       int  NOT NULL DEFAULT 50,      -- lower = sooner
+  content_type   text NOT NULL DEFAULT '',
+  size           bigint NOT NULL DEFAULT 0,
+  sha256         text NOT NULL DEFAULT '',
+  title          text NOT NULL DEFAULT '',
+  last_status    int  NOT NULL DEFAULT 0,
+  state          text NOT NULL DEFAULT 'queued', -- queued|claimed|fetched|error|skipped
+  attempts       int  NOT NULL DEFAULT 0,
+  locked_by      text,
+  locked_until   timestamptz,
+  first_seen     timestamptz NOT NULL DEFAULT now(),
+  last_checked   timestamptz,
+  last_seen      timestamptz NOT NULL DEFAULT now()
 );
-CREATE TABLE docs (
-  sha256 TEXT PRIMARY KEY, url TEXT, host TEXT,
-  content_type TEXT, size INTEGER, filename TEXT, title TEXT,
-  bundle TEXT, bundle_offset INTEGER,
-  chain TEXT,                             -- JSON: [{url,title,section}, ...]
-  first_seen TEXT, last_seen TEXT,
-  pages INTEGER, needs_ocr INTEGER
+CREATE INDEX bip_urls_claim_idx ON bip_urls (state, priority, first_seen);
+CREATE INDEX bip_urls_host_idx  ON bip_urls (host, state);
+
+CREATE TABLE bip_docs (
+  sha256       text PRIMARY KEY,
+  url          text NOT NULL,
+  host         text NOT NULL,
+  kind         text NOT NULL DEFAULT 'pdf',
+  content_type text NOT NULL DEFAULT '',
+  size         bigint NOT NULL DEFAULT 0,
+  filename     text NOT NULL DEFAULT '',
+  title        text NOT NULL DEFAULT '',
+  bundle       text NOT NULL DEFAULT '',
+  chain        jsonb NOT NULL DEFAULT '[]',
+  crawl_id     text NOT NULL DEFAULT '',
+  first_seen   timestamptz NOT NULL DEFAULT now(),
+  last_seen    timestamptz NOT NULL DEFAULT now()
 );
-CREATE TABLE url_aliases (url TEXT PRIMARY KEY, sha256 TEXT);  -- many URLs → one blob
-CREATE TABLE runs (
-  run_id TEXT, started TEXT, finished TEXT,
-  hosts INTEGER, fetched INTEGER, docs_new INTEGER,
-  docs_unchanged INTEGER, errors INTEGER
+CREATE INDEX bip_docs_host_idx ON bip_docs (host);
+
+CREATE TABLE bip_runs (
+  run_id   text PRIMARY KEY,
+  started  timestamptz NOT NULL DEFAULT now(),
+  finished timestamptz,
+  hosts_done int NOT NULL DEFAULT 0,
+  pages      int NOT NULL DEFAULT 0,
+  docs_new   int NOT NULL DEFAULT 0,
+  docs_seen  int NOT NULL DEFAULT 0,
+  errors     int NOT NULL DEFAULT 0
 );
 ```
 
-## 6. Crawl algorithm
+## 6. URL lifecycle
 
-1. **Seeds**: registry URL + host root. Try `sitemap.xml` (follow sitemap index, gunzip
-   `.gz` children), then `robots.txt` `Sitemap:` directives.
-2. **Classify** each response:
-   - content-type `application/pdf|msword|officedocument|zip` → document;
-   - else URL matches a document pattern (§3) → document (verify by fetch);
-   - else page.
-3. **Extract** links from pages with the adapter if the host matches a known platform,
-   otherwise generic (`<a href>` same-host, normalized).
-4. **Bound** discovery: depth ≤ 4, same-host only, per-host page cap (default 5,000),
-   section allow-list for paginators/calendars.
-5. **Store** documents (bundle + manifest) and HTML snapshots of listing/entity pages.
-6. **Persist** frontier state after each host (resumable).
-
-## 7. Provenance
-
-For every document keep the discovery chain plus harvested metadata:
-
-```json
-{
-  "sha256": "…", "url": "https://bip.x.pl/attachments/download/97417",
-  "host": "bip.x.pl", "content_type": "application/pdf", "size": 231940,
-  "title": "oświadczenie roczne za 2020 rok",
-  "chain": [
-    {"url": "https://www.gov.pl/web/bip/spis", "title": "Urząd Miejski X"},
-    {"url": "https://bip.x.pl/", "title": "BIP — strona główna"},
-    {"url": "https://bip.x.pl/artykuly/71415/oswiadczenia-majatkowe", "section": "oświadczenia majątkowe"},
-    {"url": "https://bip.x.pl/oswiadczenie-majatkowe/1147901/grzybowski-piotr", "title": "Grzybowski Piotr"}
-  ],
-  "first_seen": "2026-09-16T…", "last_seen": "2026-09-16T…"
-}
+```
+insert (discovered)   → state='queued', first_seen=now(), last_seen=now()
+claim                 → state='claimed', locked_by, locked_until=now()+10min, attempts+1
+fetch ok              → state='fetched', last_checked=now(), last_seen=now()
+fetch error           → state='error' (after attempts exhausted) or back to 'queued'
+quota / out of scope  → state='skipped'
+re-encountered later  → UPDATE last_seen=now(); NEVER a second row
+claim expired         → back to 'queued' (another coordinator or the next run picks it up)
 ```
 
-The chain is stored per document (not per URL) and is small — this is the audit/rebuild key.
+## 7. Coordinator: quotas, completion, status
 
-## 8. Storage
+- **Quotas are per host per attempt**, owned by the coordinator in memory
+  (loaded from `bip_hosts.pages_fetched/docs_fetched` at start): default
+  150 pages / 500 docs, deep pass 400 / 1500.
+- A URL whose host is over budget is marked `skipped`; `bip_hosts.cap_hit=true`.
+- **`pending_urls`** counts `queued + claimed` for the host. When it drops to 0
+  and no fetch is in flight:
+  - `status='ok'` **only** if `cap_hit=false` and no errors → host fully explored;
+  - otherwise `status='partial'`;
+  - `status='dead'` if no page was ever fetched successfully.
+- **Freshness (`--freshness 7d`)**: selection is
+  `status='new' OR status='partial' OR (status='ok' AND last_crawled < now()-freshness)`.
+  Selected hosts get a new `crawl_id`, counters reset, and their `page` URLs
+  re-queued (documents are immutable: sha256 dedup means re-fetching a document
+  is cheap to skip; documents whose bundle is missing are re-stored).
 
-- **Local (default in this container)**: `bip_crawl_out/hostname=<host>/<yyyy-mm>/<batch>.tar.zst`
-  plus `manifest.jsonl`; HTML snapshots under `…/<yyyy-mm>/pages/`.
-- **GCS (later, behind `--storage gcs`)**: same key layout in a dedicated bucket
-  (default `koryta-pl-bip`), reusing `ctx.io` / `CloudStorage`.
-- **Bundling, not compression**: PDFs are already DEFLATE-compressed; `tar.zst` is for
-  object-count reduction (millions of tiny GCS objects are slow/expensive to list/read),
-  expect ~0–5% size gain.
-- **Dedup**: `sha256` is the primary blob identity; many URLs may alias one blob
-  (`url_aliases`).
+## 8. Politeness, robots, rate limit
 
-## 9. URL normalisation
+- Reuse the article crawler's machinery instead of copying it:
+  - **Robots**: `stores/web.py` robot logic, extended for `Crawl-delay` and
+    `http://` hosts, cached per host.
+  - **Token bucket**: the article crawler's per-host limiter, extracted to a
+    shared util; one bucket per fetching process (agreed: same semantics as the
+    article crawler).
+  - **Fetch**: a small shared wrapper around `curl_cffi` (`impersonate`,
+    timeout, retries, UA).
+- Robot rules are evaluated per URL; `Disallow` → `state='skipped'`.
 
-- lowercase host, drop default ports, strip fragments.
-- strip cache-busters seen in the wild: `t`, `ts`, `v`, `ver`, `version`, `cache`, `_`.
-- decode double-encoded paths once (`%25C5%259B` → `%C5%9B`).
-- keep `http`/`https` as discovered, record canonical form.
+## 9. Storage
 
-## 10. Incremental strategy
+- **Local by default**: `--out DIR`; bundle layout
+  `hostname=<host>/crawl=<crawl_id>/uid_<id>.tar.gz` + `index.txt`.
+  One bundle per host+crawl gives isolation between attempts and keeps parallel
+  re-crawls from mixing.
+- The coordinator is the only bundle writer; fetchers hand over bytes.
+- Bundles are **not** appendable after an interrupted process; a killed crawl
+  leaves `.part` files that are recovered by re-crawling (docs dedup by sha).
+- Later: same interface backed by `ctx.io.batch_upload` (tar.gz per host+date) so
+  output lands in GCS without touching crawler logic.
 
-- Conditional GET (`If-None-Match`, `If-Modified-Since`); `304` → `unchanged`.
-- Change signals: sitemap `lastmod`, RSS/feed entries, XML listing feeds.
-- `sha256` mismatch on a `200` → `modified` (new blob, URL keeps history).
-- `404/410` → `gone` (never hard-delete history).
-- Cadence: registry monthly; hosts quarterly; hot sections (`oświadczenia`, `przetargi`)
-  monthly. Reruns should be seconds per unchanged host.
+## 10. Shared utils to extract (no duplication)
 
-## 11. Politeness
+| Piece | Current home | Action |
+|---|---|---|
+| robots.txt fetch/parse + Crawl-delay | `stores/web.py` (`WebImpl`) | extend; import from both crawlers |
+| token-bucket rate limiter | `scrapers/article/crawler.py` (private) | promote to a shared module |
+| link extraction | `scrapers/article/crawler.py` | shared version with `keep_query=True` flag (article strips queries, BIP needs them) |
+| fetch wrapper (curl_cffi) | `article/crawler.py` + `bip_cli.py` | shared util |
+| bundle/batch upload | `stores/storage.py` (`BatchClient.batch_upload`) | reuse for the GCS backend later |
 
-- Cache `robots.txt` per host; honor `Disallow` and `Crawl-delay` (observed: some hosts
-  `Disallow: /` → mark `robots-deny`; Wrocław bans `/*pdf*` but serves documents via
-  `/attachments/download/<id>`, which robots permits — robots governs paths, not types).
-- Per-host token bucket (default 1 req/s), concurrency **across** hosts only.
-- Identifying User-Agent with contact; exponential backoff on 429/503.
+## 11. CLI
 
-## 12. Repo integration
+```
+koryta_scrape_bip registry [--db DSN]
+koryta_scrape_bip crawl    --out DIR --workers N --freshness 7d [--hosts N]
+                           [--max-pages N] [--max-docs N] [--depth N] [--rate S]
+koryta_scrape_bip stats
+```
 
-- New package `data/pipelines/src/scrapers/bip/` (`__init__.py`, `registry.py`,
-  `frontier.py`, `fetcher.py`, `adapters/`, `store.py`, `cli.py`, `tests/`).
-- Entry point `koryta_scrape_bip` in `pyproject.toml [project.scripts]`; register pipeline
-  exports in `src/pipelines.py` if it should participate in the graph.
-- Reuse: `src/stores/web.py` (`robot_txt_allowed`), the rate-limiter pattern from
-  `src/scrapers/article/crawler.py`, `ctx.io` / `CloudStorage` for GCS, and
-  `src/scrapers/tests/mocks.py` for tests.
-- Emit `versioned/bip_hosts`, `versioned/bip_urls`, `versioned/bip_docs` JSONL so later
-  pipelines can consume them; respect import-linter layers (`pyproject.toml`).
+- `--workers`: fetcher threads (default 8, capped ~12).
+- `--freshness`: host selection window (see §7).
+- `--out`: local bundle directory (default `bip_crawl_out`, soon the default
+  Postgres-backed GCS path).
+- Progress on screen every ~30 s: hosts done/remaining, URLs queued/claimed/
+  fetched, docs stored (new/seen), bytes, errors, current rate — same shape as
+  `koryta_crawl` logs.
 
-## 13. Environment caveats (this container)
+## 12. Migration of the existing corpus (one-time, manual)
 
-- **GCS Application Default Credentials are missing** → local-first; GCS path implemented
-  but unverified until creds/mount exist.
-- `uv` only at `/home/mp/Projects/koryta/data/pipelines/.venv/bin/uv`; the worktree venv is
-  isolated (`pipelines.pth` → worktree `src`).
-- No `libGL` (future OCR must use `opencv-python-headless`) — not needed for iteration 1.
+The iteration-1 corpus (9,707 hosts, 235k docs, ~200 GB on
+`/mnt/disk/koryta/bip`) must be imported into Postgres once:
 
-## 14. Milestones & acceptance
+1. Run the DDL from §5 by hand.
+2. One-off script (kept outside the package, `tools/sqlite_to_pg.py`):
+   `frontier.db` → `bip_hosts` / `bip_urls` / `bip_docs` (URLs states mapped:
+   `seen→fetched`, `error→error`, `new→queued`).
+3. Delete `frontier.py` and every SQLite reference from the package.
+
+## 13. Milestones & acceptance
 
 | # | Deliverable | Acceptance |
 |---|---|---|
-| M1 | Registry ingest → `bip_hosts` | 13,296 rows / 13,178 URLs / 9,744 hosts reconciled |
-| M2 | Frontier + generic crawler + doc classifier, run on 100 random hosts | report: docs/host, PDF share, robots-blocked, dead hosts, bundle size, rerun time |
-| M3 | Provenance + sha256 dedup + `tar.zst` bundling | every doc has a non-empty chain; zero duplicate blobs |
-| M4 | Platform adapters (`attachments/download`, Netkoncept, bip.info.pl, malopolska) | measurable docs/host uplift vs generic on those platforms |
-| M5 | Scale to all hosts + incremental rerun | 2nd run >90% URLs `unchanged`, runtime ≪ first run |
+| M1 | Postgres schema + registry ingest | 13.3k rows → 9,707 `bip_hosts`; no sqlite in the tree |
+| M2 | URL queue + coordinator + fetchers | one host fully explored end-to-end; quotas and `pending_urls` reconcile |
+| M3 | Shared utils extraction (robots, bucket, links, fetch) | article crawler still passes its tests using the shared code |
+| M4 | Freshness + resume | rerun selects only `new`/stale/`partial`; second pass does not duplicate URL rows |
+| M5 | Full run | every host `ok`/`partial`/`dead`; `ok` implies no cap hit and no errors |
 
-## 15. Metrics per run
+## 14. Risks / open questions
 
-hosts crawled · pages fetched · docs new/unchanged · bytes stored · bundles written ·
-robots-blocked · dead hosts · 4xx/5xx · rerun duration.
+- **Coordinator throughput**: single writer could become the bottleneck once
+  fetchers return large documents; mitigate by batching DB writes (the article
+  crawler flushes in batches) and by keeping document bytes on the fetcher until
+  the coordinator requests them if memory becomes an issue.
+- **Claim expiry vs long documents**: 10 min may be too short for a 60 MB file on
+  a slow host; either raise `locked_until` per attempt or renew on progress.
+- **`pending_urls` drift**: must be updated in the same transaction as the URL
+  state change; a periodic reconciliation query can repair it.
+- **Rate limit with multiple coordinators**: per-process buckets multiply the
+  per-host rate; if we ever run several coordinators, move the bucket to
+  Postgres (`next_allowed_at` per host).
 
-## 16. Risks / open questions
+## 15. As-built history (iteration 1, for context)
 
-- **Runaway discovery** (paginators, calendars, search result loops) → depth + per-host cap
-  + section allow-list.
-- **Duplicate content** under many URLs → sha256 dedup + alias table.
-- **Scanned declarations** dominate OCR cost later; crawler only stores, flags nothing yet.
-- **robots/legal**: reuse is permitted (ustawa z 11.08.2021 o otwartych danych) with
-  attribution; still honor per-host robots and rate limits.
-- **Storage sizing**: 2.5M PDFs ≈ 1.5–2.5 TB → bundle format chosen, bucket TBD.
-- **Open**: bucket name (`koryta-pl-bip` vs reuse `koryta-pl-crawled`); whether to keep HTML
-  snapshots of *all* pages or only listing/entity pages (current: listing/entity only).
-
-## 17. As built (iteration 1, 2026-09-17)
-
-### Layout
-
-| File | Layer | Purpose |
-|---|---|---|
-| `src/stores/bip_registry.py` | stores | registry ZIP download + unpack (`zipfile`/`io` are forbidden in scrapers) |
-| `src/scrapers/bip/registry.py` | scrapers | `parse_subjects_xml` → rows, `hosts_from_entries` → hosts |
-| `src/scrapers/bip/frontier.py` | scrapers | SQLite state store (hosts / urls / docs / runs), thread-safe writes |
-| `src/scrapers/bip/classify.py` | scrapers | document-URL + content-type detection, link extraction, section/low-value filters |
-| `src/scrapers/bip/ratelimit.py` | scrapers | per-host min-interval limiter (injectable clock) |
-| `src/scrapers/bip/store.py` | scrapers | `LocalBundleStore`: `tar.gz` per (host, date) + `index.txt` |
-| `src/scrapers/bip/crawler.py` | scrapers | per-host loop, injectable fetch/robots |
-| `src/bip_cli.py` | top-level | `koryta_scrape_bip registry\|crawl\|stats`; concrete HTTP + robots + wiring |
-
-### Reuse decisions (kept)
-
-- `BatchClient.batch_upload` shape reused as `LocalBundleStore` (tar.gz + `index.txt`, same
-  naming) so switching to GCS is a class swap. **Not yet wired to GCS** (no ADC here).
-- `NormalizedParse` for host normalisation (strips `www.`, which merged 9,707 hosts).
-- Token bucket copied (thread-safe, per-host) rather than importing a private function.
-- Robots reimplemented in `bip_cli.RobotsCache` (exempt layer): https→http fallback, 404
-  means allow, unreachable means deny. The article crawler's `WebImpl` always used https
-  and treated "robots unavailable" as deny.
-- `CrawlQueue`/`PostgresCrawlQueue` **not** reused (claim/lock/priority queue, wrong model).
-
-### Crawl-order fixes found during the smoke test
-
-Plain BFS spent the whole page budget on a homepage menu (Częstochowa: 40 depth-1 links,
-0 documents). Changes:
-1. documents found on a page are fetched **before** the rest of the page queue;
-2. URLs matching document-bearing sections (`oswiadczen`, `przetarg`, `umow`, `budzet`,
-   `majatek`, `jednostk`, …) are queued first;
-3. low-value URLs (banners, `view/*`, sitemap, search, print, rss) are skipped;
-4. trailing-slash duplicates normalised.
-
-### M1 result
-
-`registry` ingest: **13,306 registry rows → 13,179 unique URLs → 9,707 hosts**
-(9,707 < 9,744 because `www.` variants merge). 127 duplicate URLs.
-
-### M2 smoke result
-
-`bip.kleszczow.pl`: 40 pages → **37 documents / 42.5 MB** after the ordering fix (0 before).
-`bip.czestochowa.pl` seed failed once with a transient error, reachable on retry.
-
-### M2 run: first 100 registry hosts (2026-09-17, ~80 min wall)
-
-| Metric | Value |
-|---|---|
-| hosts crawled | 103 (100 + 3 smoke) — 44 ok, 31 partial, 28 dead |
-| URLs seen | 9,006 (4,902 pages, 4,104 docs) |
-| fetch errors | 401 status-0, 491 HTTP ≥ 400 |
-| documents stored | **4,243 (4.8 GB)** |
-| PDFs | **3,439 (4.4 GB) = 81%** |
-| office/xls/zip/other | 804 (DOCX 336, DOC 164, force-download 137, …) |
-| bundles | 63 completed (~3.6 GB on disk) |
-| top hosts | uml.lodz.pl 500 docs, checiny.biuletyn.net 500, umlipno 500, cuwopoczno 500 |
-| docs with missing blob | 1,362 (all from hosts killed mid-bundle) |
-
-**Bug found and fixed:** `LocalBundleStore` was not thread-safe — 8 workers shared
-`tarfile` handles and the bundle map, and the run **deadlocked** (`futex_wait`, CPU frozen)
-after ~90 minutes with several `.part` bundles open. Fix: an `RLock` around every mutation,
-plus a regression test (`test_store_is_thread_safe`). The 28 interrupted `.part` files were
-deleted.
-
-**Integrity follow-up:** a doc whose bundle was lost is no longer treated as a duplicate.
-`Frontier.doc_bundle()` + `LocalBundleStore.blob_exists()` make the crawler re-store it, and
-`record_docs` now upserts the bundle path. Re-crawling the five 500-doc hosts will repair the
-1,362 missing blobs (the mechanism is covered by `test_missing_bundle_is_restored`).
-
-**Throughput observation:** `max_docs_per_host=500` at 1 req/s means a doc-rich host takes
-8+ minutes; five such hosts dominated the run. Next iteration should either fetch documents
-with a small per-host concurrency (e.g. 3–4 in flight, still ~1 req/s) or lower the cap.
-
-
+- Registry: 13,306 rows → 9,707 hosts.
+- Full pass: 9,707/9,707 hosts attempted; 234,959 docs (~200 GB, ~70% PDFs);
+  5,400+ bundles; 3,055 dead (stale/blocked), 1,785 partial.
+- Two production bugs found and fixed: bundles not finalized per host, and
+  cap-truncated hosts marked `ok` (both with regression tests).
+- Iteration-1 code lives in `scrapers/bip/` (frontier SQLite, LocalBundleStore,
+  thread pool per host); iteration 2 replaces the frontier and the work model,
+  keeping `registry.py`, `classify.py`, `models.py` and the tests' intent.
