@@ -10,6 +10,7 @@ It defines two main pipelines:
 """
 
 import dataclasses
+import math
 import typing
 from datetime import datetime
 
@@ -245,6 +246,16 @@ def _teryt_from_edges(data: dict) -> tuple[list[str], list[str]]:
     return sorted(woj), sorted(powiat)
 
 
+def _missing(value: object) -> bool:
+    """Whether a field is absent - None, or the float NaN pandas leaves behind.
+
+    An optional field is absent for some document types and a float NaN rather
+    than None once the export has been through a DataFrame, and NaN is truthy.
+    `math.isnan` needs the guard because it raises on anything non-float.
+    """
+    return value is None or (isinstance(value, float) and math.isnan(value))
+
+
 def _merged_into(data: dict) -> str | None:
     """The id a merged-away person node points at, or None when it is a person.
 
@@ -255,7 +266,7 @@ def _merged_into(data: dict) -> str | None:
     through pandas, which is truthy and must not become the string "nan".
     """
     value = data.get("merged_into")
-    if value is None or (isinstance(value, float) and value != value):
+    if _missing(value):
         return None
     text = str(value).strip()
     return text or None
@@ -622,7 +633,7 @@ def _fact_str(data: dict, key: str) -> str | None:
     "nan" as an organization.
     """
     value = data.get(key)
-    if value is None or (isinstance(value, float) and value != value):
+    if _missing(value):
         return None
     text = str(value).strip()
     return text or None
