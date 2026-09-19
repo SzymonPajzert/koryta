@@ -1,11 +1,13 @@
-"""Document detection and link extraction for BIP pages."""
+"""Document detection and link filtering for BIP pages.
+
+Link extraction itself lives in `scrapers.common.links` (shared with the
+article crawler); this module only holds BIP-specific policy: which URLs are
+documents, which are junk, and which sections to crawl first.
+"""
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-
-from bs4 import BeautifulSoup, Tag
 
 # URL shapes that serve a file rather than a page. Measured across the sample in
 # BIP_SCRAPING_80_20.md; extensionless endpoints (attachments/download, getFile)
@@ -36,9 +38,7 @@ _DOC_CONTENT_TYPES = (
     "application/rtf",
 )
 
-_SKIP_SCHEMES = ("#", "mailto:", "tel:", "javascript:", "data:")
-
-# Pages that never lead to documents and would eat the per-host page budget.
+# Pages that never lead to documents and would eat the host's page budget.
 _LOW_VALUE_RE = re.compile(
     r"/(?:banners?|view|tags?|search|szukaj|print|drukuj|rss|feed|login"
     r"|logowanie|polityka-prywatnosci|deklaracja-dostepnosci|mapa-strony"
@@ -70,6 +70,39 @@ _SECTION_KEYWORDS = (
 
 _FILENAME_RE = re.compile(r"/([^/?#]+?)(?:[?#].*)?$")
 
+PRIORITY_DOC = 10
+PRIORITY_SECTION = 20
+PRIORITY_PAGE = 50
+PRIORITY_JUNK = 90
+
+_HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
+
+
+def is_html(content_type: str) -> bool:
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    return media_type in _HTML_CONTENT_TYPES
+
+
+def is_document_url(url: str) -> bool:
+    return any(pattern.search(url) for pattern in _DOC_PATTERNS)
+
+
+def is_document_content_type(content_type: str) -> bool:
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    return media_type.startswith(_DOC_CONTENT_TYPES)
+
+
+def looks_like_document(url: str, content_type: str) -> bool:
+    return is_document_content_type(content_type) or (
+        is_document_url(url) and not is_html(content_type)
+    )
+
+
+def filename_from_url(url: str) -> str:
+    match = _FILENAME_RE.search(url)
+    name = match.group(1) if match else "document"
+    return name or "document"
+
 
 def normalize_url(url: str) -> str:
     """Drop the fragment and collapse a trailing slash (except for the root)."""
@@ -88,65 +121,21 @@ def is_section_url(url: str) -> bool:
     return any(keyword in lowered for keyword in _SECTION_KEYWORDS)
 
 
-@dataclass(frozen=True)
-class Link:
-    url: str
-    text: str
+def priority_for(url: str) -> int:
+    """Lower runs sooner: documents, then document-bearing sections, then pages."""
+    if is_document_url(url):
+        return PRIORITY_DOC
+    if is_section_url(url):
+        return PRIORITY_SECTION
+    return PRIORITY_PAGE
 
 
-def is_document_url(url: str) -> bool:
-    return any(pattern.search(url) for pattern in _DOC_PATTERNS)
-
-
-def is_document_content_type(content_type: str) -> bool:
-    media_type = content_type.split(";", maxsplit=1)[0].strip().lower()
-    return media_type.startswith(_DOC_CONTENT_TYPES)
-
-
-def filename_from_url(url: str) -> str:
-    match = _FILENAME_RE.search(url)
+def host_of(url: str) -> str:
+    match = re.match(r"^https?://([^/]+)", url, re.IGNORECASE)
     if match is None:
-        return "document"
-    name = match.group(1)
-    return name or "document"
+        return ""
+    return match.group(1).lower().removeprefix("www.").split(":")[0]
 
 
-def _clean(href: str) -> str:
-    return href.strip().split("#")[0].strip()
-
-
-def extract_links(html: str, base_url: str) -> list[Link]:
-    """Absolute links from anchor tags, query strings preserved.
-
-    Unlike the article crawler's variant this must NOT drop the query string:
-    document URLs here are routinely `plik.php?zid=121727` or `getFile?id=...`.
-    """
-    soup = BeautifulSoup(html, "lxml")
-    base_tag = soup.find("base", href=True)
-    if isinstance(base_tag, Tag):
-        base_href = base_tag.get("href")
-        if isinstance(base_href, str) and base_href.strip():
-            base_url = base_href.strip()
-
-    seen: dict[str, str] = {}
-    for anchor in soup.find_all("a", href=True):
-        if not isinstance(anchor, Tag):
-            continue
-        raw = anchor.get("href")
-        if not isinstance(raw, str):
-            continue
-        href = _clean(raw)
-        if not href or href.startswith(_SKIP_SCHEMES):
-            continue
-        try:
-            from urllib.parse import urljoin  # noqa: PLC0415
-
-            absolute = urljoin(base_url, href)
-        except ValueError:
-            continue
-        if not absolute.startswith(("http://", "https://")):
-            continue
-        text = anchor.get_text(" ", strip=True)[:120]
-        if absolute not in seen or (text and not seen[absolute]):
-            seen[absolute] = text
-    return [Link(url=url, text=text) for url, text in seen.items()]
+def path_of(url: str) -> str:
+    return re.sub(r"^https?://[^/]+", "", url, flags=re.IGNORECASE)

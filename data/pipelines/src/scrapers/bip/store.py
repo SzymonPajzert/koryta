@@ -46,17 +46,17 @@ class LocalBundleStore:
         # deadlocked the first 100-host run).
         self._lock = threading.RLock()
 
-    def _next_uid(self, host: str, date: str) -> str:
+    def _next_uid(self, host: str, crawl_id: str) -> str:
         self._uid_counter += 1
-        return f"{date}-{self._uid_counter:04d}"
+        return f"{crawl_id}-{self._uid_counter:04d}"
 
-    def _open(self, host: str) -> _Bundle:
+    def _open(self, host: str, crawl_id: str) -> _Bundle:
         bundle = self._bundles.get(host)
         if bundle is not None:
             return bundle
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = crawl_id
         uid = self._next_uid(host, date)
-        directory = self.root / f"hostname={host}" / f"date={date}"
+        directory = self.root / f"hostname={host}" / f"crawl={crawl_id}"
         directory.mkdir(parents=True, exist_ok=True)
         final_path = directory / f"uid_{uid}.tar.gz"
         part_path = directory / f"uid_{uid}.tar.gz.part"
@@ -85,6 +85,7 @@ class LocalBundleStore:
         self,
         *,
         host: str,
+        crawl_id: str,
         url: str,
         data: bytes,
         content_type: str,
@@ -96,6 +97,7 @@ class LocalBundleStore:
         with self._lock:
             return self._add(
                 host=host,
+                crawl_id=crawl_id,
                 url=url,
                 data=data,
                 content_type=content_type,
@@ -108,6 +110,7 @@ class LocalBundleStore:
         self,
         *,
         host: str,
+        crawl_id: str,
         url: str,
         data: bytes,
         content_type: str,
@@ -118,7 +121,7 @@ class LocalBundleStore:
         digest = hashlib.sha256(data).hexdigest()
         bundle_path = self._seen.get(digest)
         if bundle_path is None:
-            bundle = self._open(host)
+            bundle = self._open(host, crawl_id)
             member = f"{host}/{filename}"
             info = tarfile.TarInfo(name=member)
             info.size = len(data)

@@ -1,19 +1,16 @@
-"""BIP document crawler (iteration 1: harvest documents, no parsing)."""
+"""BIP document crawler (iteration 2: Postgres frontier, coordinator + fetchers)."""
 
-from scrapers.bip.models import (
-    CrawlOptions,
-    DocRow,
-    HostCrawlStats,
-    HostRow,
-    RegistryEntry,
-    UrlRow,
-)
+from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
+from scrapers.bip.frontier import BipFrontier
+from scrapers.bip.models import DocRow, HostRow, RegistryEntry, RunStats, UrlRow
 
 __all__ = [
-    "CrawlOptions",
+    "BipCoordinator",
+    "BipFrontier",
+    "CoordinatorOptions",
     "DocRow",
-    "HostCrawlStats",
     "HostRow",
     "RegistryEntry",
+    "RunStats",
     "UrlRow",
 ]

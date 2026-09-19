@@ -70,7 +70,7 @@ CREATE TABLE bip_hosts (
   teryt         text NOT NULL DEFAULT '',
   entry_count   int  NOT NULL DEFAULT 1,
   platform      text NOT NULL DEFAULT 'unknown',
-  status        text NOT NULL DEFAULT 'new',   -- new|ok|partial|dead
+  status        text NOT NULL DEFAULT 'new',   -- new|active|ok|partial|dead
   pages_fetched int  NOT NULL DEFAULT 0,       -- current attempt
   docs_fetched  int  NOT NULL DEFAULT 0,
   pending_urls  int  NOT NULL DEFAULT 0,       -- claimable or in flight

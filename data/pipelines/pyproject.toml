@@ -294,7 +294,6 @@ forbidden_modules = [
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.interesting",
     "scrapers.article.test_postgres_queue -> os",
-    "scrapers.article.postgres_queue -> os",
     "scrapers.article.scripts.bench_crawl -> sys",
     "scrapers.article.scripts.bench_crawl -> os",
     "scrapers.article.scripts.bench_crawl -> io",
@@ -305,11 +304,12 @@ ignore_imports = [
     # Joining local versioned output paths for --force-download-shared-cache
     "scrapers.stores -> os",
     "scrapers.cru.config -> os",
-    # In-memory tar extraction of GCS blobs and URL joining for link discovery
+    # In-memory tar extraction of GCS blobs
     "scrapers.article.pipelines.pipeline_utils -> io",
-    "scrapers.article.crawler -> urllib",
-    # Absolute link resolution for BIP pages
-    "scrapers.bip.classify -> urllib",
+    # Absolute link resolution (shared link extractor + BIP classifier)
+    "scrapers.common.links -> urllib",
+    # DSN from env, same vars as the article crawler
+    "scrapers.common.pg -> os",
     # Created a quick export of library util.firestore
     "util.firestore -> firebase_admin",
     "util.firestore -> os",

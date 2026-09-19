@@ -12,15 +12,15 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal, cast
-from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
-from bs4 import BeautifulSoup, Tag
-from curl_cffi import requests
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
+from scrapers.common.fetch import HttpResult, http_get
+from scrapers.common.links import extract_links
+from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.stores import (
     Context,
     CrawlQueue,
@@ -80,34 +80,22 @@ def stopwatch():
         stats.duration = time.perf_counter() - start
 
 
-# Per each hostname we do on-worker rate limiting with a token bucket. A domain
-# refills at 1 token per `rate_limit` seconds (i.e. the configured qpm) and a
-# request costs one token. The bucket may hold up to _BURST_WINDOW_S seconds'
-# worth of tokens, so when a backlog of top-priority URLs for one domain shows
-# up they can fire back-to-back (draining what accumulated while the domain was
-# idle) instead of being released/re-locked one interval at a time. The long-run
-# average still can't exceed the configured qpm.
-_BURST_WINDOW_S = 60.0
-_next_req_lock = threading.Lock()
-# domain -> (tokens_available, last_refill_monotonic)
-_token_buckets: dict[str, tuple[float, float]] = {}
+# Per each hostname we do on-worker rate limiting with the shared token bucket
+# (scrapers.common.ratelimit): a domain refills at 1 token per `rate_limit`
+# seconds and a request costs one token, so the long-run average can't exceed
+# the configured qpm. One bucket per distinct rate limit keeps the original
+# module-level behaviour.
+_buckets_by_interval: dict[float, HostTokenBucket] = {}
 
 
 def _can_crawl(parsed: NormalizedParse, rate_limit: float) -> bool:
     if rate_limit <= 0:
         return True
-    refill_per_s = 1.0 / rate_limit
-    capacity = max(1.0, _BURST_WINDOW_S * refill_per_s)
-    with _next_req_lock:
-        domain = parsed.hostname_normalized
-        now = time.monotonic()
-        tokens, last = _token_buckets.get(domain, (capacity, now))
-        tokens = min(capacity, tokens + (now - last) * refill_per_s)
-        if tokens >= 1.0:
-            _token_buckets[domain] = (tokens - 1.0, now)
-            return True
-        _token_buckets[domain] = (tokens, now)
-        return False
+    bucket = _buckets_by_interval.get(rate_limit)
+    if bucket is None:
+        bucket = HostTokenBucket(rate_limit)
+        _buckets_by_interval[rate_limit] = bucket
+    return bucket.acquire(parsed.hostname_normalized)
 
 
 _HASH_SUFFIX_LEN = 10  # chars taken from md5 hexdigest
@@ -143,12 +131,11 @@ def _storage_path(
     return _compress_long_segments(storage_path, 200)
 
 
-def _content_type_from_response(response: requests.Response) -> str:
-    raw = response.headers.get("Content-Type", "")
-    return raw.strip().lower()
+def _content_type_from_response(response: HttpResult) -> str:
+    return response.content_type.strip().lower()
 
 
-def _is_html_response(response: requests.Response) -> bool:
+def _is_html_response(response: HttpResult) -> bool:
     content_type = _content_type_from_response(response)
     media_type = content_type.split(";")[0].strip()
     if not media_type:
@@ -160,7 +147,7 @@ def _is_html_response(response: requests.Response) -> bool:
 def _upload_response(
     ctx: Context,
     parsed: NormalizedParse,
-    response: requests.Response,
+    response: HttpResult,
     options: CrawlOptions,
 ) -> str:
     path = _storage_path(parsed)
@@ -203,26 +190,19 @@ def crawl_url(
         return CrawlResult(hit_rate_limit=True)
 
     with stopwatch() as t_request:
-        try:
-            response = requests.get(
-                parsed_url.full_url,
-                impersonate="chrome136",
-                headers={"User-Agent": KORYTA_UA},
-                timeout=options.request_timeout_seconds,
-                allow_redirects=True,
-            )
-        except requests.RequestsError as exc:
+        result = http_get(
+            parsed_url.full_url,
+            timeout=options.request_timeout_seconds,
+            user_agent=KORYTA_UA,
+        )
+        if result.error:
             return CrawlResult(
-                error=str(exc),
+                error=result.error,
                 request_duration_s=t_request.duration,
             )
-        except Exception as exc:
-            return CrawlResult(
-                error=f"unexpected: {exc}",
-                request_duration_s=t_request.duration,
-            )
+        response = result
 
-    if response.status_code != 200:
+    if response.status != 200:
         return CrawlResult(
             error=f"http {response.status_code}",
             request_duration_s=t_request.duration,
@@ -260,48 +240,15 @@ def crawl_url(
 
 def extract_urls_from_html(html: str, base_url: str) -> set[str]:
     """Extract and normalise all absolute URLs from anchor tags in HTML."""
-    discovered: set[str] = set()
-    soup = BeautifulSoup(html, "lxml")
-
-    base_tag = soup.find("base", href=True)
-    if isinstance(base_tag, Tag):
-        base_href = base_tag.get("href")
-        if isinstance(base_href, str):
-            base_url = base_href
-
-    for link_el in soup.find_all("a", href=True):
-        if not isinstance(link_el, Tag):
-            continue
-        href_attr = link_el.get("href")
-        if not isinstance(href_attr, str):
-            continue
-        link = href_attr.strip()
-        if not link or link.startswith(
-            ("#", "mailto:", "tel:", "javascript:", "data:")
-        ):
-            continue
-        try:
-            absolute_link = urljoin(base_url, link)
-        except ValueError:
-            continue
-        clean_link = absolute_link.split("?")[0].split("#")[0].rstrip("/")
-        if clean_link.startswith(("http://", "https://")):
-            parsed_link = NormalizedParse.parse(clean_link)
-            clean_link = (
-                f"{parsed_link.scheme}://"
-                f"{parsed_link.hostname_normalized}"
-                f"{parsed_link.path}"
-            )
-            discovered.add(clean_link)
-
-    return discovered
+    return set(extract_links(html, base_url, keep_query=False))
 
 
 def _extract_urls(
     ctx: Context,
-    response: requests.Response,
+    response: HttpResult,
 ) -> set[str]:
-    return extract_urls_from_html(response.text, response.url)
+    html = response.content.decode("utf-8", "replace")
+    return extract_urls_from_html(html, response.url)
 
 
 _FLUSH_INTERVAL_S = 30.0  # also flush after this many seconds of inactivity
