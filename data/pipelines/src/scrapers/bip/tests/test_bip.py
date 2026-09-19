@@ -371,6 +371,46 @@ def test_bundle_is_finalized_at_host_end(tmp_path: Path) -> None:
     frontier.close()
 
 
+def test_host_that_hits_page_cap_is_partial(tmp_path: Path) -> None:
+    frontier = Frontier(tmp_path / "frontier.db")
+    store = LocalBundleStore(tmp_path / "out")
+    pages = {
+        "https://bip.test/": (
+            "text/html",
+            b"<html><a href=/a>a</a><a href=/b>b</a><a href=/c>c</a></html>",
+        ),
+        "https://bip.test/a": ("text/html", b"<html>a</html>"),
+        "https://bip.test/b": ("text/html", b"<html>b</html>"),
+        "https://bip.test/c": ("text/html", b"<html>c</html>"),
+    }
+
+    def fetch(url: str, timeout: float, user_agent: str) -> FetchResult:
+        content_type, content = pages[url]
+        return FetchResult(
+            url=url, status=200, content_type=content_type, content=content
+        )
+
+    host = HostRow(
+        host="bip.test",
+        name="t",
+        source_url="https://bip.test/",
+        teryt="",
+        entry_count=1,
+    )
+    frontier.upsert_hosts([host])
+    crawl_host(
+        host,
+        frontier=frontier,
+        store=store,
+        fetch=fetch,
+        robots_allowed=lambda url: True,
+        rate_limiter=HostRateLimiter(0.0),
+        options=CrawlOptions(max_pages_per_host=2, max_depth=3),
+    )
+    assert frontier.iter_hosts(limit=1)[0].status == "partial"
+    frontier.close()
+
+
 def test_crashed_host_is_marked_and_bundle_closed(tmp_path: Path) -> None:
     frontier = Frontier(tmp_path / "frontier.db")
     store = LocalBundleStore(tmp_path / "out")
