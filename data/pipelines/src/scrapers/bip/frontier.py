@@ -1,137 +1,73 @@
-"""SQLite state store for the BIP crawler.
+"""Postgres-backed frontier for the BIP crawler.
 
-The frontier is the crawler's source of truth: one row per host, URL and stored
-document, with `state`/`first_seen`/`last_checked` so reruns are incremental
-instead of full crawls. Claim/lock/retry semantics were deliberately left out
-(unlike the article crawler's Postgres queue) because BIP crawling is a state
-machine, not a work queue.
+Tables `bip_hosts` / `bip_urls` / `bip_docs` / `bip_runs` are created once by
+hand (DDL in BIP_CRAWLER_DESIGN.md §5); this class never creates schema.
+
+The coordinator is the only writer, so the API is deliberately coarse: claim a
+batch of URLs, mark results, keep per-host counters and finalize hosts.
 """
 
 from __future__ import annotations
 
 import json
-import sqlite3
-import threading
-from pathlib import Path
 
-from scrapers.bip.models import DocRow, HostRow, UrlRow
+from scrapers.bip.models import DocRow, HostRow, RunStats, UrlRow
+from scrapers.common.pg import PostgresClient
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS hosts (
-  host TEXT PRIMARY KEY,
-  name TEXT NOT NULL DEFAULT '',
-  source_url TEXT NOT NULL DEFAULT '',
-  teryt TEXT NOT NULL DEFAULT '',
-  entry_count INTEGER NOT NULL DEFAULT 1,
-  platform TEXT NOT NULL DEFAULT 'unknown',
-  status TEXT NOT NULL DEFAULT 'new',
-  last_crawled TEXT
-);
-CREATE TABLE IF NOT EXISTS urls (
-  url TEXT PRIMARY KEY,
-  host TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'page',
-  discovered_from TEXT NOT NULL DEFAULT '',
-  depth INTEGER NOT NULL DEFAULT 0,
-  section TEXT NOT NULL DEFAULT '',
-  content_type TEXT NOT NULL DEFAULT '',
-  size INTEGER NOT NULL DEFAULT 0,
-  sha256 TEXT NOT NULL DEFAULT '',
-  title TEXT NOT NULL DEFAULT '',
-  last_status INTEGER NOT NULL DEFAULT 0,
-  first_seen TEXT NOT NULL DEFAULT (datetime('now')),
-  last_checked TEXT,
-  state TEXT NOT NULL DEFAULT 'new'
-);
-CREATE INDEX IF NOT EXISTS urls_host_idx ON urls(host);
-CREATE INDEX IF NOT EXISTS urls_sha_idx ON urls(sha256);
-CREATE TABLE IF NOT EXISTS docs (
-  sha256 TEXT PRIMARY KEY,
-  url TEXT NOT NULL,
-  host TEXT NOT NULL,
-  content_type TEXT NOT NULL DEFAULT '',
-  size INTEGER NOT NULL DEFAULT 0,
-  filename TEXT NOT NULL DEFAULT '',
-  title TEXT NOT NULL DEFAULT '',
-  bundle TEXT NOT NULL DEFAULT '',
-  chain TEXT NOT NULL DEFAULT '[]',
-  first_seen TEXT NOT NULL DEFAULT (datetime('now')),
-  last_seen TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS docs_host_idx ON docs(host);
-CREATE TABLE IF NOT EXISTS runs (
-  run_id TEXT PRIMARY KEY,
-  started TEXT NOT NULL DEFAULT (datetime('now')),
-  finished TEXT,
-  hosts INTEGER NOT NULL DEFAULT 0,
-  pages INTEGER NOT NULL DEFAULT 0,
-  docs_new INTEGER NOT NULL DEFAULT 0,
-  docs_unchanged INTEGER NOT NULL DEFAULT 0,
-  errors INTEGER NOT NULL DEFAULT 0
-);
-"""
+# Postgres btree rejects index entries over ~2704 bytes; urls.url is the primary
+# key, so over-long URLs (tracking blobs, encoded payloads) are never real
+# pages. Same guard as the article crawler's queue.
+MAX_URL_BYTES = 2000
 
 
-class Frontier:
-    def __init__(self, path: str | Path) -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
-        self._lock = threading.Lock()
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA synchronous=NORMAL")
-        self.conn.executescript(_SCHEMA)
-        self.conn.commit()
-
-    def close(self) -> None:
-        self.conn.close()
+class BipFrontier:
+    def __init__(self, pg: PostgresClient) -> None:
+        self.pg = pg
 
     # -- hosts ---------------------------------------------------------------
     def upsert_hosts(self, hosts: list[HostRow]) -> tuple[int, int]:
         """Insert new hosts, refresh names of known ones. (inserted, updated)."""
-        with self._lock:
-            return self._upsert_hosts(hosts)
+        rows = [(h.host, h.name, h.source_url, h.teryt, h.entry_count) for h in hosts]
+        with self.pg.transaction() as cur:
+            cur.execute(
+                "SELECT host FROM bip_hosts WHERE host = ANY(%s)",
+                ([r[0] for r in rows],),
+            )
+            existing = {r[0] for r in cur.fetchall()}
+            cur.executemany(
+                """
+                INSERT INTO bip_hosts (host, name, source_url, teryt, entry_count)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (host) DO UPDATE
+                   SET name = EXCLUDED.name,
+                       entry_count = EXCLUDED.entry_count,
+                       teryt = COALESCE(NULLIF(EXCLUDED.teryt, ''), bip_hosts.teryt)
+                """,
+                rows,
+            )
+        inserted = sum(1 for r in rows if r[0] not in existing)
+        return inserted, len(rows) - inserted
 
-    def _upsert_hosts(self, hosts: list[HostRow]) -> tuple[int, int]:
-        inserted = 0
-        for host in hosts:
-            row = self.conn.execute(
-                "SELECT 1 FROM hosts WHERE host = ?", (host.host,)
-            ).fetchone()
-            if row is None:
-                self.conn.execute(
-                    "INSERT INTO hosts (host, name, source_url, teryt, entry_count)"
-                    " VALUES (?, ?, ?, ?, ?)",
-                    (
-                        host.host,
-                        host.name,
-                        host.source_url,
-                        host.teryt,
-                        host.entry_count,
-                    ),
-                )
-                inserted += 1
-            else:
-                self.conn.execute(
-                    "UPDATE hosts SET name = ?, entry_count = ?, teryt = ?"
-                    " WHERE host = ?",
-                    (host.name, host.entry_count, host.teryt, host.host),
-                )
-        self.conn.commit()
-        return inserted, len(hosts) - inserted
-
-    def iter_hosts(
-        self, limit: int | None = None, offset: int = 0, status: str | None = None
+    def select_hosts(
+        self, *, freshness_seconds: int | None, limit: int
     ) -> list[HostRow]:
-        query = "SELECT host, name, source_url, teryt, entry_count, platform, status"
-        query += " FROM hosts"
-        params: list[object] = []
-        if status is not None:
-            query += " WHERE status = ?"
-            params.append(status)
-        query += " ORDER BY rowid LIMIT ? OFFSET ?"
-        params.extend([limit if limit is not None else -1, offset])
-        rows = self.conn.execute(query, params).fetchall()
+        """Hosts to crawl: new, unfinished, or stale `ok` ones."""
+        sql = """
+            SELECT host, name, source_url, teryt, entry_count, status
+              FROM bip_hosts
+             WHERE status IN ('new', 'partial')
+                OR (
+                     status = 'ok'
+                     AND %s::bigint IS NOT NULL
+                     AND last_crawled
+                         < now() - make_interval(secs => %s::double precision)
+                   )
+             ORDER BY last_crawled NULLS FIRST, host
+             LIMIT %s
+        """
+        rows = self.pg.fetchall(
+            sql, (freshness_seconds, freshness_seconds or 0, limit)
+        )
         return [
             HostRow(
                 host=r[0],
@@ -139,129 +75,260 @@ class Frontier:
                 source_url=r[2],
                 teryt=r[3],
                 entry_count=r[4],
-                platform=r[5],
-                status=r[6],
+                status=r[5],
             )
             for r in rows
         ]
 
-    def mark_host(self, host: str, status: str, crawled: bool = False) -> None:
-        with self._lock:
-            self._mark_host(host, status, crawled)
-
-    def _mark_host(self, host: str, status: str, crawled: bool = False) -> None:
-        if crawled:
-            self.conn.execute(
-                "UPDATE hosts SET status = ?,"
-                " last_crawled = datetime('now') WHERE host = ?",
-                (status, host),
-            )
-        else:
-            self.conn.execute(
-                "UPDATE hosts SET status = ? WHERE host = ?", (status, host)
-            )
-        self.conn.commit()
-
-    # -- urls / docs ---------------------------------------------------------
-    def record_urls(self, rows: list[UrlRow]) -> None:
-        with self._lock:
-            self._record_urls(rows)
-
-    def _record_urls(self, rows: list[UrlRow]) -> None:
-        self.conn.executemany(
-            "INSERT INTO urls (url, host, kind, discovered_from, depth, section,"
-            " content_type, size, sha256, title, last_status, state, last_checked)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
-            " ON CONFLICT(url) DO UPDATE SET"
-            " content_type = excluded.content_type,"
-            " size = excluded.size,"
-            " sha256 = excluded.sha256,"
-            " title = CASE WHEN excluded.title <> '' THEN excluded.title"
-            "              ELSE urls.title END,"
-            " last_status = excluded.last_status,"
-            " state = excluded.state,"
-            " last_checked = datetime('now')",
-            [
-                (
-                    r.url,
-                    r.host,
-                    r.kind,
-                    r.discovered_from,
-                    r.depth,
-                    r.section,
-                    r.content_type,
-                    r.size,
-                    r.sha256,
-                    r.title,
-                    r.last_status,
-                    r.state,
-                )
-                for r in rows
-            ],
+    def start_host(self, host: str, crawl_id: str) -> None:
+        self.pg.execute(
+            """
+            UPDATE bip_hosts
+               SET crawl_id = %s, status = 'active', pages_fetched = 0,
+                   docs_fetched = 0, cap_hit = false
+             WHERE host = %s
+            """,
+            (crawl_id, host),
         )
-        self.conn.commit()
 
-    def record_docs(self, rows: list[DocRow]) -> int:
-        """Insert documents, ignoring duplicates by sha256. Returns new count."""
-        with self._lock:
-            return self._record_docs(rows)
+    def bump_host(
+        self, host: str, *, pages: int = 0, docs: int = 0, cap_hit: bool = False
+    ) -> None:
+        self.pg.execute(
+            """
+            UPDATE bip_hosts
+               SET pages_fetched = pages_fetched + %s,
+                   docs_fetched = docs_fetched + %s,
+                   cap_hit = cap_hit OR %s
+             WHERE host = %s
+            """,
+            (pages, docs, cap_hit, host),
+        )
 
-    def _record_docs(self, rows: list[DocRow]) -> int:
-        new = 0
-        for row in rows:
-            exists = self.conn.execute(
-                "SELECT 1 FROM docs WHERE sha256 = ?", (row.sha256,)
-            ).fetchone()
-            if exists is None:
-                new += 1
-            self.conn.execute(
-                "INSERT INTO docs (sha256, url, host, content_type, size,"
-                " filename, title, bundle, chain)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                " ON CONFLICT(sha256) DO UPDATE SET"
-                " bundle = excluded.bundle,"
-                " url = excluded.url,"
-                " last_seen = datetime('now')",
+    def host_pending(self, host: str) -> int:
+        row = self.pg.fetchone(
+            """
+            SELECT COUNT(*) FROM bip_urls
+             WHERE host = %s AND state IN ('queued', 'claimed')
+            """,
+            (host,),
+        )
+        return int(row[0]) if row else 0
+
+    def finalize_host(self, host: str, status: str) -> None:
+        self.pg.execute(
+            """
+            UPDATE bip_hosts
+               SET status = %s, last_crawled = now()
+             WHERE host = %s
+            """,
+            (status, host),
+        )
+
+    # -- urls ----------------------------------------------------------------
+    def queue_url(self, row: UrlRow, *, requeue: bool = False) -> bool:
+        """Insert a URL as queued, or refresh an existing row.
+
+        Returns True when the URL was newly inserted. `requeue=True` also puts a
+        previously fetched/skipped URL back into the queue (freshness re-crawl).
+        """
+        if len(row.url.encode("utf-8")) > MAX_URL_BYTES:
+            return False
+        with self.pg.transaction() as cur:
+            cur.execute(
+                """
+                INSERT INTO bip_urls
+                    (url, host, kind, discovered_from, depth, section, priority, state)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'queued')
+                ON CONFLICT (url) DO UPDATE
+                   SET last_seen = now(),
+                       priority = LEAST(bip_urls.priority, EXCLUDED.priority),
+                       state = CASE
+                                 WHEN %s OR bip_urls.state = 'skipped' THEN 'queued'
+                                 ELSE bip_urls.state
+                               END,
+                       locked_by = CASE
+                                     WHEN %s OR bip_urls.state = 'skipped'
+                                     THEN NULL ELSE bip_urls.locked_by
+                                   END,
+                       locked_until = CASE
+                                        WHEN %s OR bip_urls.state = 'skipped'
+                                        THEN NULL ELSE bip_urls.locked_until
+                                      END
+                RETURNING (xmax = 0) AS inserted
+                """,
                 (
-                    row.sha256,
                     row.url,
                     row.host,
-                    row.content_type,
-                    row.size,
-                    row.filename,
-                    row.title,
-                    row.bundle,
-                    json.dumps(row.chain),
+                    row.kind,
+                    row.discovered_from,
+                    row.depth,
+                    row.section,
+                    row.priority,
+                    requeue,
+                    requeue,
+                    requeue,
                 ),
             )
-        self.conn.commit()
+            result = cur.fetchone()
+        return bool(result and result[0])
+
+    def claim_urls(
+        self, worker_id: str, *, limit: int, lock_seconds: int
+    ) -> list[UrlRow]:
+        rows = self.pg.fetchall(
+            """
+            UPDATE bip_urls u
+               SET state = 'claimed',
+                   locked_by = %s,
+                   locked_until = now() + make_interval(secs => %s),
+                   attempts = attempts + 1
+             WHERE u.url IN (
+                   SELECT url FROM bip_urls
+                    WHERE state = 'queued'
+                       OR (state = 'claimed' AND locked_until < now())
+                    ORDER BY priority, first_seen
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT %s
+             )
+            RETURNING u.url, u.host, u.kind, u.discovered_from,
+                      u.depth, u.section, u.priority
+            """,
+            (worker_id, lock_seconds, limit),
+        )
+        return [
+            UrlRow(
+                url=r[0],
+                host=r[1],
+                kind=r[2],
+                discovered_from=r[3],
+                depth=r[4],
+                section=r[5],
+                priority=r[6],
+            )
+            for r in rows
+        ]
+
+    def mark_url(
+        self,
+        url: str,
+        *,
+        state: str,
+        status: int = 0,
+        content_type: str = "",
+        size: int = 0,
+        sha256: str = "",
+        title: str = "",
+    ) -> None:
+        self.pg.execute(
+            """
+            UPDATE bip_urls
+               SET state = %s, last_status = %s, last_checked = now(),
+                   last_seen = now(),
+                   content_type = COALESCE(NULLIF(%s, ''), content_type),
+                   size = %s,
+                   sha256 = COALESCE(NULLIF(%s, ''), sha256),
+                   title = COALESCE(NULLIF(%s, ''), title)
+             WHERE url = %s
+            """,
+            (state, status, content_type, size, sha256, title, url),
+        )
+
+    # -- documents -----------------------------------------------------------
+    def record_docs(self, docs: list[DocRow], crawl_id: str) -> int:
+        """Insert documents, ignoring duplicates by sha256. Returns new count."""
+        if not docs:
+            return 0
+        new = 0
+        with self.pg.transaction() as cur:
+            for row in docs:
+                cur.execute(
+                    """
+                    INSERT INTO bip_docs
+                        (sha256, url, host, content_type, size, filename, title,
+                         bundle, chain, crawl_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (sha256) DO UPDATE
+                       SET bundle = EXCLUDED.bundle,
+                           url = EXCLUDED.url,
+                           last_seen = now()
+                    RETURNING (xmax = 0) AS inserted
+                    """,
+                    (
+                        row.sha256,
+                        row.url,
+                        row.host,
+                        row.content_type,
+                        row.size,
+                        row.filename,
+                        row.title,
+                        row.bundle,
+                        json.dumps(row.chain),
+                        crawl_id,
+                    ),
+                )
+                result = cur.fetchone()
+                if result and result[0]:
+                    new += 1
         return new
 
     def doc_bundle(self, sha256: str) -> str | None:
-        """The bundle a stored document points at, if the document is known."""
-        row = self.conn.execute(
-            "SELECT bundle FROM docs WHERE sha256 = ?", (sha256,)
-        ).fetchone()
-        if row is None:
-            return None
-        return str(row[0])
-
-    def url_count(self) -> int:
-        return int(self.conn.execute("SELECT COUNT(*) FROM urls").fetchone()[0])
-
-    def stats(self) -> dict[str, int]:
-        host_count = int(
-            self.conn.execute("SELECT COUNT(*) FROM hosts").fetchone()[0]
+        row = self.pg.fetchone(
+            "SELECT bundle FROM bip_docs WHERE sha256 = %s", (sha256,)
         )
-        doc_count = int(self.conn.execute("SELECT COUNT(*) FROM docs").fetchone()[0])
-        doc_bytes = int(
-            self.conn.execute(
-                "SELECT COALESCE(SUM(size), 0) FROM docs"
-            ).fetchone()[0]
+        return str(row[0]) if row else None
+
+    # -- runs / stats --------------------------------------------------------
+    def start_run(self, run_id: str) -> None:
+        self.pg.execute(
+            "INSERT INTO bip_runs (run_id) VALUES (%s) ON CONFLICT DO NOTHING",
+            (run_id,),
         )
-        return {
-            "hosts": host_count,
-            "urls": self.url_count(),
-            "docs": doc_count,
-            "doc_bytes": doc_bytes,
-        }
+
+    def finish_run(self, run_id: str, stats: RunStats) -> None:
+        self.pg.execute(
+            """
+            UPDATE bip_runs
+               SET finished = now(), hosts_done = %s, pages = %s, docs_new = %s,
+                   docs_seen = %s, errors = %s
+             WHERE run_id = %s
+            """,
+            (
+                stats.hosts_finalized,
+                stats.pages_fetched,
+                stats.docs_new,
+                stats.docs_seen,
+                stats.errors,
+                run_id,
+            ),
+        )
+
+    def stats(self) -> dict[str, object]:
+        row = self.pg.fetchone(
+            """
+            SELECT
+              (SELECT COUNT(*) FROM bip_hosts),
+              (SELECT COUNT(*) FROM bip_hosts WHERE status = 'new'),
+              (SELECT COUNT(*) FROM bip_hosts WHERE status = 'active'),
+              (SELECT COUNT(*) FROM bip_hosts WHERE status = 'ok'),
+              (SELECT COUNT(*) FROM bip_hosts WHERE status = 'partial'),
+              (SELECT COUNT(*) FROM bip_hosts WHERE status = 'dead'),
+              (SELECT COUNT(*) FROM bip_urls WHERE state = 'queued'),
+              (SELECT COUNT(*) FROM bip_urls WHERE state = 'claimed'),
+              (SELECT COUNT(*) FROM bip_docs),
+              (SELECT COALESCE(SUM(size), 0) FROM bip_docs)
+            """
+        )
+        keys = [
+            "hosts",
+            "hosts_new",
+            "hosts_active",
+            "hosts_ok",
+            "hosts_partial",
+            "hosts_dead",
+            "urls_queued",
+            "urls_claimed",
+            "docs",
+            "doc_bytes",
+        ]
+        return dict(zip(keys, row)) if row else {}

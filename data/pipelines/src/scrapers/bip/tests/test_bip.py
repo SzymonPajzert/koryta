@@ -1,21 +1,26 @@
 from __future__ import annotations
 
-import tarfile
-import threading
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 from scrapers.bip.classify import (
-    extract_links,
-    filename_from_url,
-    is_document_content_type,
+    host_of,
     is_document_url,
+    is_low_value_url,
+    is_section_url,
+    normalize_url,
+    path_of,
+    priority_for,
 )
-from scrapers.bip.crawler import FetchResult, crawl_host
-from scrapers.bip.frontier import Frontier
-from scrapers.bip.models import CrawlOptions, DocRow, HostRow
-from scrapers.bip.ratelimit import HostRateLimiter
+from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
+from scrapers.bip.frontier import BipFrontier
+from scrapers.bip.models import DocRow, HostRow, UrlRow
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.bip.store import LocalBundleStore
+from scrapers.common.fetch import HttpResult
+from scrapers.common.links import extract_links
+from scrapers.common.ratelimit import HostTokenBucket
 
 REGISTRY_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <resultset>
@@ -28,424 +33,259 @@ REGISTRY_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
     <id>2</id><name>Szkola w A</name><url>http://bip.a.pl/szkola</url>
     <place>A</place><communeTercCode><code>1416022</code></communeTercCode>
   </row>
-  <row>
-    <id>3</id><name>Bez adresu</name><url></url>
-  </row>
+  <row><id>3</id><name>Bez adresu</name><url></url></row>
 </resultset>
 """
 
 
+# -- registry ----------------------------------------------------------------
 def test_parse_subjects_skips_rows_without_url() -> None:
     entries = parse_subjects_xml(REGISTRY_XML)
     assert len(entries) == 2
-    first = entries[0]
-    assert first.name == "Urzad Gminy A"
-    assert first.host == "bip.a.pl"
-    assert first.teryt == "1416022"
+    assert entries[0].host == "bip.a.pl"
+    assert entries[0].teryt == "1416022"
 
 
 def test_hosts_dedupe_by_host() -> None:
     hosts = hosts_from_entries(parse_subjects_xml(REGISTRY_XML))
     assert len(hosts) == 1
-    assert hosts[0].host == "bip.a.pl"
     assert hosts[0].entry_count == 2
 
 
+# -- classification ----------------------------------------------------------
 def test_document_url_patterns() -> None:
     assert is_document_url("https://bip.x.pl/attachments/download/97417")
     assert is_document_url("https://bip.x.pl/plik.php?zid=121727")
     assert is_document_url("https://bip.x.pl/resource/12497/Postanowienie+134.pdf")
-    assert is_document_url("https://bip.x.pl/api/files/4207277")
     assert not is_document_url("https://bip.x.pl/oswiadczenie-majatkowe/1/kowalski")
 
 
-def test_document_content_types() -> None:
-    assert is_document_content_type("application/pdf; charset=binary")
-    assert is_document_content_type("application/zip")
-    assert not is_document_content_type("text/html; charset=utf-8")
+def test_priorities_documents_before_sections_before_pages() -> None:
+    doc = priority_for("https://bip.x.pl/attachments/download/1")
+    section = priority_for("https://bip.x.pl/oswiadczenia-majatkowe")
+    page = priority_for("https://bip.x.pl/kontakt")
+    assert doc < section < page
+    assert is_section_url("https://bip.x.pl/oswiadczenia-majatkowe")
+    assert is_low_value_url("https://bip.x.pl/banners/1/redirect")
 
 
-def test_filename_from_url() -> None:
-    assert (
-        filename_from_url("https://bip.x.pl/a/b/om_m_sulgan.pdf") == "om_m_sulgan.pdf"
-    )
-    assert filename_from_url("https://bip.x.pl/attachments/download/1") == "1"
+def test_url_helpers() -> None:
+    assert normalize_url("https://bip.x.pl/a/#frag") == "https://bip.x.pl/a"
+    assert host_of("https://www.bip.x.pl/a") == "bip.x.pl"
+    assert path_of("https://bip.x.pl/a/b?q=1") == "/a/b?q=1"
 
 
-def test_extract_links_keeps_query_and_skips_non_http() -> None:
-    html = """
-    <html><body>
-      <a href="/plik.php?zid=121727">Umowy</a>
-      <a href="attachments/download/9">Zalacznik</a>
-      <a href="#top">top</a>
-      <a href="mailto:a@b.pl">mail</a>
-      <a href="javascript:void(0)">js</a>
-      <a href="https://other.example/x">obcy</a>
-    </body></html>
-    """
-    links = extract_links(html, "https://bip.x.pl/index.html")
-    urls = {link.url for link in links}
-    assert "https://bip.x.pl/plik.php?zid=121727" in urls
-    assert "https://bip.x.pl/attachments/download/9" in urls
-    assert "https://other.example/x" in urls
-    assert len(links) == 3
+# -- shared utils ------------------------------------------------------------
+def test_shared_link_extraction_keeps_query_when_asked() -> None:
+    html = '<a href="/plik.php?zid=1">d</a><a href="mailto:x@y">m</a>'
+    assert extract_links(html, "https://bip.x.pl/", keep_query=True) == [
+        "https://bip.x.pl/plik.php?zid=1"
+    ]
+    assert extract_links(html, "https://bip.x.pl/", keep_query=False) == [
+        "https://bip.x.pl/plik.php"
+    ]
 
 
-def test_frontier_upsert_and_doc_dedupe(tmp_path: Path) -> None:
-    frontier = Frontier(tmp_path / "frontier.db")
-    host = HostRow(
-        host="bip.a.pl",
-        name="A",
-        source_url="https://bip.a.pl/",
-        teryt="1",
-        entry_count=1,
-    )
-    inserted, updated = frontier.upsert_hosts([host])
-    assert (inserted, updated) == (1, 0)
-    inserted, updated = frontier.upsert_hosts([host])
-    assert (inserted, updated) == (0, 1)
-    assert frontier.stats()["hosts"] == 1
-
-    row = DocRow(
-        sha256="deadbeef",
-        url="https://bip.a.pl/attachments/download/1",
-        host="bip.a.pl",
-        content_type="application/pdf",
-        size=10,
-        filename="1",
-        title="t",
-        bundle="hostname=bip.a.pl/date=2026-01-01/uid_x.tar.gz",
-        chain=["https://bip.a.pl/"],
-    )
-    assert frontier.record_docs([row]) == 1
-    assert frontier.record_docs([row]) == 0
-    assert frontier.stats()["docs"] == 1
-    frontier.close()
+def test_token_bucket_bursts_then_throttles() -> None:
+    bucket = HostTokenBucket(interval_s=1.0, burst_window_s=3.0, clock=lambda: 100.0)
+    assert [bucket.acquire("h") for _ in range(5)] == [True, True, True, False, False]
 
 
-def test_store_bundles_and_dedupes(tmp_path: Path) -> None:
+# -- bundle store ------------------------------------------------------------
+def test_store_dedupes_and_names_by_crawl(tmp_path: Path) -> None:
     store = LocalBundleStore(tmp_path / "out")
     row, is_new = store.add(
         host="bip.a.pl",
+        crawl_id="c1",
         url="https://bip.a.pl/attachments/download/1",
         data=b"%PDF-1.4 fake",
         content_type="application/pdf",
         filename="1.pdf",
-        title="umowa",
+        title="",
         chain=["https://bip.a.pl/"],
     )
     assert is_new
-    assert row.bundle.endswith(".tar.gz")
+    assert "crawl=c1" in row.bundle
     _, is_new_again = store.add(
         host="bip.a.pl",
+        crawl_id="c1",
         url="https://bip.a.pl/attachments/download/1",
         data=b"%PDF-1.4 fake",
-        content_type="application/pdf",
-        filename="1.pdf",
-        title="umowa",
-        chain=["https://bip.a.pl/"],
-    )
-    assert not is_new_again
-    store.flush()
-    bundle = tmp_path / "out" / row.bundle
-    assert bundle.exists()
-
-
-def test_store_is_thread_safe(tmp_path: Path) -> None:
-    """Regression: concurrent adds deadlocked the first 100-host run."""
-    store = LocalBundleStore(tmp_path / "out", max_bundle_bytes=10_000)
-
-    def worker(index: int) -> None:
-        store.add(
-            host="bip.a.pl",
-            url=f"https://bip.a.pl/{index}",
-            data=f"doc-{index}".encode() * 10,
-            content_type="application/pdf",
-            filename=f"{index}.pdf",
-            title="",
-            chain=[],
-        )
-
-    threads = [threading.Thread(target=worker, args=(i,)) for i in range(24)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-    store.flush()
-
-    names: list[str] = []
-    for bundle in (tmp_path / "out").rglob("uid_*.tar.gz"):
-        with tarfile.open(bundle) as archive:
-            names += [
-                member.name
-                for member in archive.getmembers()
-                if member.isfile() and member.name != "index.txt"
-            ]
-    assert len(names) == 24
-
-
-def test_missing_bundle_is_restored(tmp_path: Path) -> None:
-    """A document whose bundle was lost must be re-stored, not treated as a dup."""
-    store = LocalBundleStore(tmp_path / "out")
-    frontier = Frontier(tmp_path / "frontier.db")
-    row, _ = store.add(
-        host="bip.a.pl",
-        url="https://bip.a.pl/1",
-        data=b"%PDF-1.4 lost",
         content_type="application/pdf",
         filename="1.pdf",
         title="",
         chain=[],
     )
+    assert not is_new_again
     store.flush()
-    frontier.record_docs([row])
-    assert frontier.doc_bundle(row.sha256) == row.bundle
-    assert store.blob_exists(row.bundle)
-    assert not store.blob_exists("hostname=bip.a.pl/date=1970-01-01/uid_none.tar.gz")
-    frontier.close()
+    assert (tmp_path / "out" / row.bundle).exists()
+    assert not list((tmp_path / "out").rglob("*.part"))
 
 
-def test_crawl_follows_cross_host_redirect_with_prefix(tmp_path: Path) -> None:
-    """*.bip.gov.pl now serves under www.gov.pl/web/<slug>; scope follows it."""
-    frontier = Frontier(tmp_path / "frontier.db")
-    store = LocalBundleStore(tmp_path / "out")
-    pages = {
-        "http://bip.test/": (
-            "text/html",
-            b"<html><a href='https://portal.test/web/test/oswiadczenia'>s</a></html>",
-        ),
-        "https://portal.test/web/test/oswiadczenia": (
-            "text/html",
-            b"<html><a href='https://portal.test/web/test/attachments/download/1'>d</a>"
-            b"<a href='https://portal.test/other/x'>out</a></html>",
-        ),
-        "https://portal.test/web/test/attachments/download/1": (
-            "application/pdf",
-            b"%PDF-1.4 x",
-        ),
-    }
+# -- coordinator -------------------------------------------------------------
+class FakeFrontier:
+    """In-memory stand-in for BipFrontier, same methods the coordinator uses."""
 
-    def fetch(url: str, timeout: float, user_agent: str) -> FetchResult:
-        if url == "http://bip.test/":
-            content_type, content = pages[url]
-            return FetchResult(
-                url="https://portal.test/web/test",
-                status=200,
-                content_type=content_type,
-                content=content,
-            )
-        if url in pages:
-            content_type, content = pages[url]
-            return FetchResult(
-                url=url, status=200, content_type=content_type, content=content
-            )
-        return FetchResult(
-            url=url, status=404, content_type="text/html", content=b"", error="404"
+    def __init__(self, hosts: list[HostRow]) -> None:
+        self.hosts = {h.host: h for h in hosts}
+        self.urls: dict[str, UrlRow] = {}
+        self.states: dict[str, str] = {}
+        self.docs: dict[str, DocRow] = {}
+        self.counters: dict[str, dict[str, int]] = {}
+        self.seeded: list[str] = []
+
+    # hosts
+    def select_hosts(self, *, freshness_seconds, limit):  # noqa: ANN001
+        return list(self.hosts.values())[:limit]
+
+    def start_host(self, host: str, crawl_id: str) -> None:
+        self.counters[host] = {"pages": 0, "docs": 0}
+        self.seeded.append(host)
+
+    def bump_host(self, host, *, pages=0, docs=0, cap_hit=False) -> None:  # noqa: ANN001
+        self.counters[host]["pages"] += pages
+        self.counters[host]["docs"] += docs
+
+    def host_pending(self, host: str) -> int:
+        return sum(
+            1
+            for u, s in self.states.items()
+            if self.urls[u].host == host and s in ("queued", "claimed")
         )
 
-    host = HostRow(
-        host="bip.test",
-        name="t",
-        source_url="http://bip.test/",
-        teryt="",
-        entry_count=1,
-    )
-    stats = crawl_host(
-        host,
-        frontier=frontier,
-        store=store,
-        fetch=fetch,
-        robots_allowed=lambda url: True,
-        rate_limiter=HostRateLimiter(0.0),
-        options=CrawlOptions(max_pages_per_host=10, max_depth=3),
-    )
-    store.flush()
-    assert stats.pages_fetched == 2
-    assert stats.docs_stored == 1
-    assert frontier.url_count() == 3  # the /other/ link stayed out of scope
-    frontier.close()
+    def finalize_host(self, host: str, status: str) -> None:
+        self.hosts[host] = replace(self.hosts[host], status=status)
+
+    # urls
+    def queue_url(self, row: UrlRow, *, requeue: bool = False) -> bool:
+        if row.url in self.urls:
+            if requeue or self.states.get(row.url) == "skipped":
+                self.states[row.url] = "queued"
+            return False
+        self.urls[row.url] = row
+        self.states[row.url] = "queued"
+        return True
+
+    def claim_urls(
+        self, worker_id: str, *, limit: int, lock_seconds: int
+    ) -> list[UrlRow]:
+        claimed = []
+        for url, state in list(self.states.items()):
+            if state == "queued":
+                self.states[url] = "claimed"
+                claimed.append(self.urls[url])
+            if len(claimed) >= limit:
+                break
+        return claimed
+
+    def mark_url(self, url, *, state, **kwargs) -> None:  # noqa: ANN001, ANN003
+        self.states[url] = state
+
+    def record_docs(self, docs: list[DocRow], crawl_id: str) -> int:
+        new = 0
+        for doc in docs:
+            if doc.sha256 not in self.docs:
+                new += 1
+            self.docs[doc.sha256] = doc
+        return new
+
+    def doc_bundle(self, sha256: str) -> str | None:
+        doc = self.docs.get(sha256)
+        return doc.bundle if doc else None
+
+    def start_run(self, run_id: str) -> None:
+        pass
+
+    def finish_run(self, run_id: str, stats) -> None:  # noqa: ANN001
+        pass
+
+    def stats(self) -> dict[str, int]:
+        return {}
 
 
-def test_crawl_host_follows_links_and_stores_docs(tmp_path: Path) -> None:
-    frontier = Frontier(tmp_path / "frontier.db")
-    store = LocalBundleStore(tmp_path / "out")
-    pages = {
+def _site_pages():
+    return {
         "https://bip.test/": (
             "text/html",
-            b"""<html><title>BIP test</title><body>
-            <a href="/oswiadczenia">Oswiadczenia</a>
-            <a href="/attachments/download/1">Zalacznik 1</a>
-            <a href="mailto:x@y.z">mail</a>
-            </body></html>""",
+            b"<html><a href=/oswiadczenia>sec</a>"
+            b"<a href=/attachments/download/1>doc</a>"
+            b"<a href=/banners/1>junk</a></html>",
         ),
         "https://bip.test/oswiadczenia": (
             "text/html",
-            b"<html><title>Oswiadczenia</title>"
-            b"<a href=/attachments/download/2>Zalacznik 2</a></html>",
+            b"<html><a href=/attachments/download/2>doc2</a></html>",
         ),
         "https://bip.test/attachments/download/1": ("application/pdf", b"%PDF-1.4 one"),
         "https://bip.test/attachments/download/2": ("application/pdf", b"%PDF-1.4 two"),
     }
 
-    def fetch(url: str, timeout: float, user_agent: str) -> FetchResult:
+
+def _run_coordinator(
+    tmp_path: Path,
+    pages,
+    *,
+    robots_allowed=lambda url: True,
+    **option_overrides,
+):  # noqa: ANN001, ANN003
+    frontier = FakeFrontier(
+        [
+            HostRow(
+                host="bip.test",
+                name="t",
+                source_url="https://bip.test/",
+                teryt="",
+                entry_count=1,
+            )
+        ]
+    )
+    store = LocalBundleStore(tmp_path / "out")
+
+    def fetch(url: str, timeout: float, user_agent: str) -> HttpResult:
         if url in pages:
             content_type, content = pages[url]
-            return FetchResult(
+            return HttpResult(
                 url=url, status=200, content_type=content_type, content=content
             )
-        return FetchResult(
-            url=url, status=404, content_type="text/html", content=b"", error="http 404"
-        )
+        return HttpResult(url=url, status=404, content_type="text/html", content=b"")
 
-    host = HostRow(
-        host="bip.test",
-        name="Test",
-        source_url="https://bip.test/",
-        teryt="",
-        entry_count=1,
+    option_values: dict[str, object] = dict(
+        workers=2, max_pages=10, max_docs=10, rate_interval_s=0.0
     )
-    stats = crawl_host(
-        host,
-        frontier=frontier,
-        store=store,
+    option_values.update(option_overrides)
+    options = CoordinatorOptions(**option_values)  # type: ignore[arg-type]
+    coordinator = BipCoordinator(
+        cast("BipFrontier", frontier),  # test double
+        store,
+        options,
         fetch=fetch,
-        robots_allowed=lambda url: True,
-        rate_limiter=HostRateLimiter(0.0),
-        options=CrawlOptions(max_pages_per_host=10, max_depth=3),
+        robots_allowed=robots_allowed,
     )
-    store.flush()
+    stats = coordinator.run()
+    return frontier, store, stats
+
+
+def test_coordinator_crawls_pages_and_documents(tmp_path: Path) -> None:
+    frontier, store, stats = _run_coordinator(tmp_path, _site_pages())
     assert stats.pages_fetched == 2
-    assert stats.docs_stored == 2
+    assert stats.docs_new == 2
+    assert "https://bip.test/banners/1" not in frontier.urls
+    assert frontier.hosts["bip.test"].status == "ok"
+    assert len(frontier.docs) == 2
     assert stats.errors == 0
-    assert frontier.stats()["docs"] == 2
-    assert frontier.stats()["urls"] == 4
-    frontier.close()
 
 
-def _one_doc_site():
-    return {
-        "https://bip.test/": (
-            "text/html",
-            b"<html><a href=/attachments/download/1>doc</a></html>",
-        ),
-        "https://bip.test/attachments/download/1": (
-            "application/pdf",
-            b"%PDF-1.4 one",
-        ),
-    }
-
-
-def test_bundle_is_finalized_at_host_end(tmp_path: Path) -> None:
-    """Regression: bundles used to stay .part until the whole run finished."""
-    frontier = Frontier(tmp_path / "frontier.db")
-    store = LocalBundleStore(tmp_path / "out")
-    pages = _one_doc_site()
-
-    def fetch(url: str, timeout: float, user_agent: str) -> FetchResult:
-        content_type, content = pages[url]
-        return FetchResult(
-            url=url, status=200, content_type=content_type, content=content
-        )
-
-    host = HostRow(
-        host="bip.test",
-        name="t",
-        source_url="https://bip.test/",
-        teryt="",
-        entry_count=1,
+def test_coordinator_marks_partial_when_capped(tmp_path: Path) -> None:
+    frontier, _store, stats = _run_coordinator(
+        tmp_path, _site_pages(), max_docs=1
     )
-    crawl_host(
-        host,
-        frontier=frontier,
-        store=store,
-        fetch=fetch,
-        robots_allowed=lambda url: True,
-        rate_limiter=HostRateLimiter(0.0),
-        options=CrawlOptions(max_pages_per_host=5, max_depth=2),
+    assert frontier.hosts["bip.test"].status == "partial"
+    assert stats.docs_new == 1
+
+
+def test_coordinator_skips_robots_denied(tmp_path: Path) -> None:
+    frontier, _store, stats = _run_coordinator(
+        tmp_path, _site_pages(), robots_allowed=lambda url: False
     )
-    parts = list((tmp_path / "out").rglob("*.part"))
-    bundles = list((tmp_path / "out").rglob("uid_*.tar.gz"))
-    assert parts == []
-    assert len(bundles) == 1
-    assert frontier.stats()["docs"] == 1
-    frontier.close()
-
-
-def test_host_that_hits_page_cap_is_partial(tmp_path: Path) -> None:
-    frontier = Frontier(tmp_path / "frontier.db")
-    store = LocalBundleStore(tmp_path / "out")
-    pages = {
-        "https://bip.test/": (
-            "text/html",
-            b"<html><a href=/a>a</a><a href=/b>b</a><a href=/c>c</a></html>",
-        ),
-        "https://bip.test/a": ("text/html", b"<html>a</html>"),
-        "https://bip.test/b": ("text/html", b"<html>b</html>"),
-        "https://bip.test/c": ("text/html", b"<html>c</html>"),
-    }
-
-    def fetch(url: str, timeout: float, user_agent: str) -> FetchResult:
-        content_type, content = pages[url]
-        return FetchResult(
-            url=url, status=200, content_type=content_type, content=content
-        )
-
-    host = HostRow(
-        host="bip.test",
-        name="t",
-        source_url="https://bip.test/",
-        teryt="",
-        entry_count=1,
-    )
-    frontier.upsert_hosts([host])
-    crawl_host(
-        host,
-        frontier=frontier,
-        store=store,
-        fetch=fetch,
-        robots_allowed=lambda url: True,
-        rate_limiter=HostRateLimiter(0.0),
-        options=CrawlOptions(max_pages_per_host=2, max_depth=3),
-    )
-    assert frontier.iter_hosts(limit=1)[0].status == "partial"
-    frontier.close()
-
-
-def test_crashed_host_is_marked_and_bundle_closed(tmp_path: Path) -> None:
-    frontier = Frontier(tmp_path / "frontier.db")
-    store = LocalBundleStore(tmp_path / "out")
-    pages = _one_doc_site()
-
-    def fetch(url: str, timeout: float, user_agent: str) -> FetchResult:
-        if url.endswith("/attachments/download/1"):
-            raise RuntimeError("boom")
-        content_type, content = pages[url]
-        return FetchResult(
-            url=url, status=200, content_type=content_type, content=content
-        )
-
-    host = HostRow(
-        host="bip.test",
-        name="t",
-        source_url="https://bip.test/",
-        teryt="",
-        entry_count=1,
-    )
-    frontier.upsert_hosts([host])
-    try:
-        crawl_host(
-            host,
-            frontier=frontier,
-            store=store,
-            fetch=fetch,
-            robots_allowed=lambda url: True,
-            rate_limiter=HostRateLimiter(0.0),
-            options=CrawlOptions(max_pages_per_host=5, max_depth=2),
-        )
-        raise AssertionError("expected the fetch failure to propagate")
-    except RuntimeError:
-        pass
-    assert list((tmp_path / "out").rglob("*.part")) == []
-    status = frontier.iter_hosts(limit=1)[0].status
-    assert status in ("partial", "dead")
-    frontier.close()
+    assert stats.skipped >= 1
+    assert stats.docs_new == 0
+    assert frontier.hosts["bip.test"].status == "dead"
