@@ -96,7 +96,9 @@ def cmd_crawl(args: argparse.Namespace) -> int:
 def cmd_stats(args: argparse.Namespace) -> int:
     pg = PostgresClient.from_env()
     try:
-        stats = BipFrontier(pg).stats()
+        frontier = BipFrontier(pg)
+        stats = frontier.stats()
+        rates = frontier.recent_rates()
     finally:
         pg.close()
     for key, value in stats.items():
@@ -104,6 +106,13 @@ def cmd_stats(args: argparse.Namespace) -> int:
             print(f"{key:16} {float(value) / 1e9:.1f} GB")  # type: ignore[arg-type]
         else:
             print(f"{key:16} {value}")
+    print(
+        f"\nlast {rates['window_minutes']} min: "
+        f"pages={rates['pages']} ({rates['pages_per_min']}/min)  "
+        f"new docs={rates['docs']} ({rates['docs_per_min']}/min)  "
+        f"hosts done={rates['hosts']}  hosts with docs={rates['doc_hosts']}  "
+        f"{rates['bytes'] / 1e9:.2f} GB"
+    )
     return 0
 
 
