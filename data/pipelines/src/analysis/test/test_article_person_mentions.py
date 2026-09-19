@@ -371,6 +371,43 @@ def test_load_index_aliases_merged_name_onto_the_survivor():
     assert [pid for pid, _ in candidates] == ["p1"]
 
 
+def test_load_index_matches_when_article_drops_the_middle_name():
+    # The article says "Tomasz Kotajny"; we hold the register's full name.
+    # Registering only full_name left every middle-name person unmatchable.
+    index, _ = _load_index_and_profiles(
+        [_person_row("p1", "Tomasz Jerzy Kotajny")], {}, {}
+    )
+    assert index.find_in_text("dyrektor Tomasz Kotajny odszedł") == {
+        "Tomasz Jerzy Kotajny"
+    }
+
+
+def test_load_index_matches_a_hyphenated_surname_in_the_article():
+    # We hold the shorter form; the article uses the married hyphenated one.
+    index, _ = _load_index_and_profiles(
+        [_person_row("p1", "Magdalena Porzucek")], {}, {}
+    )
+    assert index.find_in_text("jego żona Magdalena Zgiep-Porzucek") == {
+        "Magdalena Porzucek"
+    }
+
+
+def test_load_index_matches_when_article_uses_the_shorter_surname():
+    # The mirror case: we hold the hyphenated form, the article uses one half.
+    index, _ = _load_index_and_profiles(
+        [_person_row("p1", "Magdalena Zgiep-Porzucek")], {}, {}
+    )
+    assert index.find_in_text("radna Magdalena Porzucek") == {
+        "Magdalena Zgiep-Porzucek"
+    }
+
+
+def test_load_index_does_not_match_a_lone_surname():
+    # Last-name-only is deliberately not a form: "Wolski" alone is three people.
+    index, _ = _load_index_and_profiles([_person_row("p1", "Piotr Wolski")], {}, {})
+    assert index.find_in_text("Wolski powiedział, że") == set()
+
+
 def test_load_index_keeps_unmerged_people_when_column_absent():
     rows = [_person_row("p1", "Jan Kowalski"), _person_row("p2", "Anna Nowak")]
     index, _ = _load_index_and_profiles(rows, {}, {})
