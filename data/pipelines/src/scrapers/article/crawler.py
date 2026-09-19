@@ -212,7 +212,7 @@ def crawl_url(
 
     if response.status != 200:
         return CrawlResult(
-            error=f"http {response.status_code}",
+            error=f"http {response.status}",
             request_duration_s=t_request.duration,
         )
 
