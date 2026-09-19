@@ -303,6 +303,39 @@ class BipFrontier:
             ),
         )
 
+    def recent_rates(self, window_minutes: int = 60) -> dict[str, float]:
+        """Moving per-window throughput: pages, docs, hosts and bytes."""
+        row = self.pg.fetchone(
+            """
+            SELECT
+              (SELECT COUNT(*) FROM bip_urls
+                WHERE kind = 'page'
+                  AND last_checked > now() - make_interval(mins => %s)),
+              (SELECT COUNT(*) FROM bip_docs
+                WHERE first_seen > now() - make_interval(mins => %s)),
+              (SELECT COUNT(*) FROM bip_hosts
+                WHERE last_crawled > now() - make_interval(mins => %s)),
+              (SELECT COUNT(DISTINCT host) FROM bip_urls
+                WHERE last_checked > now() - make_interval(mins => %s)),
+              (SELECT COALESCE(SUM(size), 0) FROM bip_docs
+                WHERE first_seen > now() - make_interval(mins => %s))
+            """,
+            (window_minutes,) * 5,
+        )
+        pages, docs, hosts, doc_hosts, size = row or (0, 0, 0, 0, 0)
+        minutes = max(window_minutes, 1)
+        return {
+            "window_minutes": window_minutes,
+            "pages": int(pages),
+            "docs": int(docs),
+            "hosts": int(hosts),
+            "doc_hosts": int(doc_hosts),
+            "bytes": int(size),
+            "pages_per_min": round(pages / minutes, 1),
+            "docs_per_min": round(docs / minutes, 1),
+            "hosts_per_min": round(hosts / minutes, 2),
+        }
+
     def stats(self) -> dict[str, object]:
         row = self.pg.fetchone(
             """
