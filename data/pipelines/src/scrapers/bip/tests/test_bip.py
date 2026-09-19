@@ -202,6 +202,19 @@ class FakeFrontier:
     def stats(self) -> dict[str, int]:
         return {}
 
+    def recent_rates(self, window_minutes: int = 60) -> dict[str, float]:
+        return {
+            "window_minutes": window_minutes,
+            "pages": 0,
+            "docs": 0,
+            "hosts": 0,
+            "doc_hosts": 0,
+            "bytes": 0,
+            "pages_per_min": 0.0,
+            "docs_per_min": 0.0,
+            "hosts_per_min": 0.0,
+        }
+
 
 def _site_pages():
     return {

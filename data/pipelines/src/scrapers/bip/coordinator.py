@@ -408,6 +408,7 @@ class BipCoordinator:
 
     def _print_progress(self) -> None:
         stats = self.frontier.stats()
+        rates = self.frontier.recent_rates()
         print(
             "hosts ok={ok} partial={partial} dead={dead} active={active} | "
             "urls queued={queued} claimed={claimed} | docs={docs} | "
@@ -423,6 +424,15 @@ class BipCoordinator:
                 new=self.stats.docs_new,
                 seen=self.stats.docs_seen,
                 errors=self.stats.errors,
+            )
+            + " | last {m}m: pages={p} docs={d} hosts={h} "
+            "({ppm}/min pages, {dpm}/min docs)".format(
+                m=rates["window_minutes"],
+                p=rates["pages"],
+                d=rates["docs"],
+                h=rates["hosts"],
+                ppm=rates["pages_per_min"],
+                dpm=rates["docs_per_min"],
             ),
             flush=True,
         )
