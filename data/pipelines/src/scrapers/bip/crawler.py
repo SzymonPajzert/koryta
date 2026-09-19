@@ -340,10 +340,16 @@ class _HostCrawler:
     def _finish(self) -> None:
         self.store.close_host(self.host.host)
         self.frontier.record_urls(self.urls_to_record)
-        if self.stats.errors and self.pages_fetched:
-            self.stats.status = "partial"
-        elif self.stats.errors:
-            self.stats.status = "dead"
+        hit_cap = (
+            self.pages_fetched >= self.options.max_pages_per_host
+            or self.docs_seen >= self.options.max_docs_per_host
+        )
+        if self.stats.errors or hit_cap:
+            # A truncated host is not a finished one: mark it partial so the
+            # deeper pass picks it up again.
+            self.stats.status = (
+                "partial" if (self.pages_fetched or self.docs_seen) else "dead"
+            )
         else:
             self.stats.status = "ok"
         self.frontier.mark_host(self.host.host, self.stats.status, crawled=True)
