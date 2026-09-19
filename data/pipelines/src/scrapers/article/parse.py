@@ -19,6 +19,14 @@ _EMPTY_RESULT: dict[str, Any] = {
     "extraction_method": None,
 }
 
+#: Selector value meaning "this site has no usable DOM selector; read the body
+#: from the client-rendered `window.__newsData` payload instead". Stored in
+#: `verified_selectors.json` under the domain, which is just a JSON map -- so
+#: the sentinel is a reserved selector string rather than a real CSS selector.
+#: A domain carrying it goes straight to the `__newsData` reader; `select_one`
+#: is never called with it. See ``NEWS_DATA_BODY_KEYS``.
+NEWS_DATA_SELECTOR = "__news_data__"
+
 # The TVP regional CMS renders its articles client-side: the served HTML has
 # only empty containers, and the text lives in a `window.__newsData = {...}`
 # object literal that the browser executes. Every *_tvp.pl regional site
@@ -315,7 +323,10 @@ def extract_article_content(
     # single picked metadata node, which often lacks the date.
     publication_date = _best_date_from_items(ld_json_items)
 
-    element = soup.select_one(selector)
+    # The sentinel means this site's body is client-rendered, so there is no
+    # DOM selector to try: go straight to the `__newsData` reader below. Any
+    # other value is a real selector.
+    element = None if selector == NEWS_DATA_SELECTOR else soup.select_one(selector)
 
     if element:
         content = element.get_text(separator=" ", strip=True)
@@ -330,10 +341,11 @@ def extract_article_content(
             "extraction_method": "selector",
         }
 
-    # Client-rendered fallback, tried only when the selector found nothing -
-    # the selector stays the primary path, so a site that renders server-side
-    # is unaffected. `__newsData` is the TVP regional CMS and carries the body
-    # the DOM never gets.
+    # Client-rendered fallback, tried when the selector found nothing (or when
+    # the sentinel skipped the selector entirely). The selector stays the
+    # primary path, so a site that renders server-side is unaffected.
+    # `__newsData` is the TVP regional CMS and carries the body the DOM never
+    # gets.
     html_text = html_bytes.decode("utf-8", errors="replace")
     news = _extract_news_data(html_text)
     if news is not None:

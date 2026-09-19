@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scrapers.article.parse import extract_article_content
+from scrapers.article.parse import NEWS_DATA_SELECTOR, extract_article_content
 from scrapers.article.selectors import load_selector_map
 
 
@@ -81,6 +81,33 @@ def test_news_data_fallback_does_not_override_a_matching_selector():
 def test_news_data_fallback_is_silent_when_the_object_is_missing():
     html = b"<html><body><main class='story-body'>Text</main></body></html>"
     assert extract_article_content(html, ".missing")["extraction_method"] is None
+
+
+def test_news_data_sentinel_reads_the_payload_without_a_selector():
+    # A domain mapped to the sentinel has no usable DOM selector: the payload is
+    # read straight from __newsData, never via select_one.
+    result = extract_article_content(_TVP_HTML, NEWS_DATA_SELECTOR)
+
+    assert result["extraction_method"] == "news_data"
+    assert result["selector_matched"] is False
+    assert "Grzegorz Żmuda" in result["article_content"]
+
+
+def test_news_data_sentinel_ignores_a_dom_selector_that_would_match():
+    # The page's DOM holds only empty containers, but `#navbar` exists. The
+    # sentinel must not fall back to it - that empty div is exactly the
+    # "selector matched nothing useful" failure the sentinel exists to avoid.
+    result = extract_article_content(_TVP_HTML, NEWS_DATA_SELECTOR)
+
+    assert result["extraction_method"] == "news_data"
+    assert result["article_content"].strip() != ""
+
+
+def test_news_data_sentinel_is_silent_without_a_payload():
+    html = b"<html><body><main class='story-body'>Text</main></body></html>"
+    assert (
+        extract_article_content(html, NEWS_DATA_SELECTOR)["extraction_method"] is None
+    )
 
 
 def test_news_data_fallback_survives_malformed_and_empty_objects():
