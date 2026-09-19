@@ -44,7 +44,7 @@ from scrapers.article.pipelines.pipeline_utils import (
     article_mentions_cache,
     llm_model,
 )
-from scrapers.koryta.download import KorytaPeople
+from scrapers.koryta.download import KorytaPeople, _missing
 from scrapers.stores import (
     LLM,
     VERSIONED_DIR,
@@ -567,7 +567,7 @@ def _merged_into(row: dict[str, Any]) -> str | None:
     the NaN check guards a caller that handed a raw DataFrame row instead.
     """
     value = row.get("merged_into")
-    if value is None or (isinstance(value, float) and value != value):
+    if _missing(value):
         return None
     text = str(value).strip()
     return text or None
