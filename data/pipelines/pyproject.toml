@@ -235,6 +235,10 @@ max-branches = 15
 "src/scripts/text_gemini_on_ner.py" = ["PLR0402"]
 "src/scrapers/article/hardcoded/listawstydupo.py" = ["E501"]
 "src/scrapers/article/hardcoded/kazdymusigdziespracowac.py" = ["E501"]
+# The `ODPIS` fixture is a register document reproduced verbatim, and one of
+# its rows is a prokura clause that names a second person. Wrapping it would
+# make the fixture a document the register never prints.
+"src/scrapers/krs/tests/test_odpis_pdf.py" = ["E501"]
 "src/stores/storage.py" = ["PLR0402"]
 
 [tool.pytest.ini_options]
