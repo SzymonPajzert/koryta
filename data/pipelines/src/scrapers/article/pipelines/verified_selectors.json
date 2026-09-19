@@ -1383,5 +1383,6 @@
   "zyciezamoscia.pl": ".post.type-post.format-standard .article-content",
   "zyrardow.naszemiasto.pl": "main.layoutsContainer.layoutsContainer--article",
   "zywiec.naszemiasto.pl": "main.layoutsContainer.layoutsContainer--article",
-  "zywiecinfo.pl": ".post-template-default.single"
+  "zywiecinfo.pl": ".post-template-default.single",
+  "7dni.com.pl": ".wpr-post-content"
 }
