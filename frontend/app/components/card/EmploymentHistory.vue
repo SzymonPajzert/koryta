@@ -64,6 +64,15 @@
           >
             {{ committeeOf(edge) }}
           </span>
+          <v-chip
+            v-if="wonSeat(edge)"
+            size="x-small"
+            color="success"
+            variant="flat"
+            :data-testid="`edge-elected-${edge.id}`"
+          >
+            Wybrany
+          </v-chip>
           <ChipPublicCompany :company="edgeCompany(edge)" />
           <!-- Which sector the employer belongs to, so a career reads as the
                shape it has - three railways and a water utility - rather than
@@ -367,6 +376,21 @@ function committeeOf(edge: EdgeNode): string | undefined {
     return undefined;
   }
   return edge.committee;
+}
+
+/** Whether PKW recorded this candidacy as winning the mandate.
+ *
+ * Only a win renders. `elected` is stored as a bare boolean, and `false` is
+ * what `useEdgeEdit` writes for every box a contributor left unticked, so it
+ * does not mean "lost" - it means nobody said, which is also true of the 70%
+ * of PKW's register that publishes no result at all. A "Przegrał" chip built
+ * on that would be a claim about a named person drawn from an absence.
+ *
+ * Guarded on the type for the reason `committeeOf` is: the card lists every
+ * relation a person has, and only a candidacy can be won.
+ */
+function wonSeat(edge: EdgeNode): boolean {
+  return edge.type === "election" && edge.elected === true;
 }
 
 /** Whether the edge asserts a period at all.

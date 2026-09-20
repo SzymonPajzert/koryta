@@ -160,6 +160,21 @@ const electionRequestSchema = z.object({
    * True for a coalition as well, where the map knows the committee but `party`
    * stays empty because a joint list names no single party. */
   party_from_committee: z.boolean().optional(),
+  /** Whether PKW recorded the candidacy as winning the mandate.
+   *
+   * Sent only when it won. The payload's own field is tri-state - see
+   * `entities.composite.Election.elected`, where None is "PKW said nothing",
+   * which is 68,728 of its 97,748 rows and all of them before 2010 - but a
+   * stored `false` cannot carry that third state here: `useEdgeEdit` defaults
+   * a hand-made edge to `elected: false` for every box the form left blank,
+   * and `field()` in server/utils/edges.ts folds `false` to null so the two
+   * writers agree. An ingested `false` would therefore be indistinguishable
+   * from a blank form while reading, on the page, as an assertion that a named
+   * person lost.
+   *
+   * Accepted here or zod strips it, which is what happened to `committee` for
+   * as long as it went undeclared. */
+  elected: z.boolean().optional(),
   election_year: z.string().optional(),
   election_type: z.enum(electionPositionValues),
   teryt: z.string().optional(),
@@ -169,6 +184,7 @@ export type ElectionRequest = {
   party?: string;
   committee?: string;
   party_from_committee?: boolean;
+  elected?: boolean;
   election_year?: string;
   election_type: ElectionPosition;
   teryt?: string;

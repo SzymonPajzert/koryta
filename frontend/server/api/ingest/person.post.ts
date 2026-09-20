@@ -8,6 +8,7 @@ import {
   withoutInternalFields,
 } from "~~/server/utils/revisions";
 import {
+  addsOnlyAnnotations,
   edgeDocumentId,
   edgeIdentity,
   enrichedEdge,
@@ -512,6 +513,11 @@ async function createElection(
   // has one - and why two candidacies in one town in one year are so often
   // indistinguishable. It is the strongest discriminator the payload carries.
   if (election.committee) edgeData.committee = election.committee;
+  // Only a win is written. `false` is what the edit form stores for a box
+  // nobody ticked, so an ingested one would claim a named person lost an
+  // election PKW may simply have said nothing about - and it says nothing
+  // about 70% of the register. See `elected` in shared/api.ts.
+  if (election.elected) edgeData.elected = true;
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }
@@ -763,7 +769,14 @@ async function findEdgeOrCreate(
       edge,
     );
 
-    if (vouched || ctx.autoapprove) {
+    // A revision that adds nothing but the result is written out rather than
+    // proposed: PKW published the mandate column, so there is no judgement in
+    // it for a reviewer to make, and 15,681 stored candidacies are waiting to
+    // be told what happened to them. Anything else in the same revision -
+    // above all a committee the curated table does not recognise - puts it
+    // back on the reviewed path.
+    const resultOnly = addsOnlyAnnotations(candidate.stored, edge);
+    if (vouched || resultOnly || ctx.autoapprove) {
       createRevisionTransaction(
         ctx.db,
         ctx.batch,
