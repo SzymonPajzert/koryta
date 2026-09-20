@@ -250,6 +250,42 @@ describe("buildStructuralFilterOps, teryt filter", () => {
   });
 });
 
+describe("buildStructuralFilterOps, the difficulty tier", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDb();
+  });
+
+  it("asks Firestore for the tier, and filters the same way in memory", async () => {
+    const { ops, fields } = await buildStructuralFilterOps(
+      db,
+      { queueTier: 1 },
+      "approved",
+    );
+
+    expect(fields).toContain("stats.queueTier");
+
+    const query = { where: vi.fn().mockReturnThis() };
+    ops[0]!.applyFs(query as unknown as FirebaseFirestore.Query);
+    expect(query.where).toHaveBeenCalledWith("stats.queueTier", "==", 1);
+
+    const nodes = [
+      { id: "wiki", stats: { queueTier: 1 } },
+      { id: "wybory", stats: { queueTier: 2 } },
+      // A person /api/stats/computeNodes has not reached since the field was
+      // added carries no tier at all, and must not be swept into one.
+      { id: "niepoliczony", stats: {} },
+    ];
+    expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual(["wiki"]);
+  });
+
+  it("adds no tier op when the query names none", async () => {
+    const { ops } = await buildStructuralFilterOps(db, {}, "approved");
+
+    expect(ops).toHaveLength(0);
+  });
+});
+
 describe("buildStructuralFilterOps, company level filters", () => {
   beforeEach(() => {
     vi.clearAllMocks();

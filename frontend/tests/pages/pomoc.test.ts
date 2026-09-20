@@ -23,6 +23,14 @@ global.ResizeObserver = class {
   disconnect() {}
 };
 
+registerEndpoint("/api/stats/queueTiers", () => ({
+  tiers: [
+    { tier: 1, toCheck: 407, examples: [] },
+    { tier: 2, toCheck: 859, examples: [] },
+    { tier: 3, toCheck: 1320, examples: [] },
+  ],
+}));
+
 registerEndpoint("/api/stats/progress", () => ({
   total: 100,
   approved: 40,
@@ -82,8 +90,28 @@ describe("PomocPage", () => {
     const section = wrapper.get("section#sprawdzanie");
     const chips = section.findAll(".v-chip").map((chip) => chip.text());
 
-    expect(chips).toHaveLength(4);
+    // Four tasks, and the three difficulty tiers under them - every door out
+    // of this section is the queue or a vote, and none of those can be cast
+    // without a name attached.
+    expect(chips).toHaveLength(7);
     for (const chip of chips) expect(chip).toBe("po zalogowaniu");
+  });
+
+  it("hands out the three difficulty tiers, with what is left in each", async () => {
+    const wrapper = await mount();
+
+    const tiers = wrapper.get('[data-testid="queue-tiers"]');
+    expect(tiers.text()).toContain("407 osób do sprawdzenia");
+    expect(
+      wrapper
+        .findAllComponents({ name: "CardAction" })
+        .map((card) => card.props("to"))
+        .filter((to?: string) => to?.startsWith("/eksploruj/nowe?tier=")),
+    ).toEqual([
+      "/eksploruj/nowe?tier=1",
+      "/eksploruj/nowe?tier=2",
+      "/eksploruj/nowe?tier=3",
+    ]);
   });
 
   it("has dropped the promise that contradicted them", async () => {

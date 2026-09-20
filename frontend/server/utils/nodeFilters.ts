@@ -43,6 +43,9 @@ export type StructuralQuery = {
   currentlyEmployed?: "all" | "any" | "selected";
   minEmploymentDate?: string;
   minVotes?: number;
+  /** Difficulty tier, as `stats.queueTier` on the person - see
+   * shared/queueTiers.ts. */
+  queueTier?: number;
 };
 
 /** A query parameter that may arrive once, repeated, or not at all. */
@@ -247,6 +250,20 @@ export async function buildStructuralFilterOps(
       applyMem: (nodes) =>
         nodes.filter((n) => (n.stats?.votes?.interesting ?? 0) >= minVotes),
       fields: ["stats.votes.interesting"],
+    });
+  }
+
+  if (query.queueTier != null) {
+    const queueTier = query.queueTier;
+    ops.push({
+      applyFs: (q) => q.where("stats.queueTier", "==", queueTier),
+      // A person the tier computation has not reached carries no
+      // `stats.queueTier` at all, and neither form matches one: Firestore
+      // does not match a document lacking the field, and `undefined === 1` is
+      // false. Both leave them out of the tier rather than in it.
+      applyMem: (nodes) =>
+        nodes.filter((n) => n.stats?.queueTier === queueTier),
+      fields: ["stats.queueTier"],
     });
   }
 

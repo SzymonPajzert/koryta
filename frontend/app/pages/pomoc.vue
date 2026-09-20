@@ -223,6 +223,11 @@
           />
         </v-col>
       </v-row>
+
+      <!-- Which of those people to take first, and what each kind costs. The
+           cards above say what the tasks are; this says which of them a reader
+           with one free evening can actually finish. -->
+      <PomocQueueTiers class="mt-4" />
     </section>
 
     <!-- Dołącz do zespołu -->
