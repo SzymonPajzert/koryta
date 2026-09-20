@@ -27,16 +27,13 @@ def answer(nip: str, *krs: str) -> dict:
 def bucket(monkeypatch):
     """Stand in for the crawl bucket, so no test touches GCS."""
     stored: dict[str, dict] = {}
+    # Only the bucket read is faked. `krs_entries_of` and `names_of` are real:
+    # they moved to `scrapers.krs.nip_resolutions`, and stubbing them here is
+    # what let an earlier version of this fixture disagree with the parser it
+    # was standing in for.
     fake = types.ModuleType("scripts.krs_nip_resolve")
-    fake.cached_answers = lambda ctx: stored
-    fake._krs_entries_of = lambda payload: nip_board_people.nip_lookup.newest_first(
-        h.get("krs") for h in (payload.get("hits") or []) if h.get("krs")
-    )
-    fake._names_of = lambda payload: {
-        str(h["krs"]): str(h["name"])
-        for h in (payload.get("hits") or [])
-        if h.get("krs") and h.get("name")
-    }
+    fake.cached_answers = lambda ctx, artifact=None: stored
+    fake.resolutions_artifact = lambda args: None
     monkeypatch.setitem(sys.modules, "scripts.krs_nip_resolve", fake)
     monkeypatch.setattr(nip_board_people, "setup_context", lambda: (None, None))
     return stored

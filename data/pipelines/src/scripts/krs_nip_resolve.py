@@ -56,22 +56,17 @@ from dataclasses import asdict
 from pathlib import Path
 
 from conductor import setup_context
-from scrapers.krs import nip_lookup, nip_sources, rejestrio, search
+from scrapers.krs import (
+    nip_lookup,
+    nip_resolutions,
+    nip_sources,
+    rejestrio,
+    search,
+)
 from scrapers.krs.nip_lookup import known_from_companies_merged, nip_valid
 from scrapers.stores import CloudStorage, Context
 from scrapers.stores.file import DownloadableFile
 from stores import config
-
-#: Where a NIP search is filed in the crawl bucket. Not a real route -- the
-#: search is a POST and its body is not in the URL -- but it identifies the
-#: question, which is what the store needs of a key.
-SEARCH_URL = "https://wyszukiwarka-krs-api.ms.gov.pl/api/wyszukiwarka/krs/nip/{nip}"
-
-#: The bucket prefix every one of those lands under.
-SEARCH_PREFIX = "hostname=wyszukiwarka-krs-api.ms.gov.pl"
-
-#: The marker inside a stored key that says "this blob is a NIP search".
-_NIP_SEGMENT = "/wyszukiwarka/krs/nip/"
 
 #: Where rejestr.io connection lists land. `upload_result` turns the query
 #: string into a path segment, so `?aktualnosc=aktualne` is stored as
@@ -97,7 +92,7 @@ def nip_list_recipients(path: Path, limit: int | None) -> list[nip_sources.Recip
     return chosen[:limit] if limit else chosen
 
 
-def cached_answers(ctx: Context) -> dict[str, dict]:
+def cached_answers(ctx: Context, artifact=None) -> dict[str, dict]:
     """Every NIP search already in the bucket, newest crawl per NIP.
 
     Read rather than re-fetched so a rerun is free -- the same reason
@@ -105,70 +100,33 @@ def cached_answers(ctx: Context) -> dict[str, dict]:
     answer of "no such NIP" is stored and honoured too: it is a result, and
     re-asking it every run would be the same mistake as treating the wykaz's
     ``subject: null`` as a gap.
+
+    `artifact` reads the `KrsNipResolutions` output instead, which is the same
+    answers in one file rather than 17,008 objects. **Only for the paths that
+    report or consume.** `resolve` and `fetch` must see the bucket: the
+    artifact is a snapshot, and one built before the last `resolve` would send
+    this back to a government service for answers already on file.
     """
-    newest: dict[str, tuple[str, dict]] = {}
-    for ref in ctx.io.list_files(CloudStorage(prefix=SEARCH_PREFIX)):
-        if not isinstance(ref, DownloadableFile) or _NIP_SEGMENT not in ref.url:
-            continue
-        tail = ref.url.split(_NIP_SEGMENT, 1)[1]
-        nip, _, stamp = tail.partition("/date=")
-        nip = "".join(c for c in nip if c.isdigit())
-        if len(nip) != 10:
-            continue
-        if nip in newest and newest[nip][0] >= stamp:
-            continue
+    if artifact is not None:
+        return nip_resolutions.payloads_from_artifact(artifact)
+
+    answers: dict[str, dict] = {}
+    for nip, (_, ref) in nip_resolutions.newest_blob_per_nip(ctx).items():
         try:
             body = ctx.io.read_data(ref).read_string()
-            payload = json.loads(body) if body else {}
+            answers[nip] = json.loads(body) if body else {}
         except Exception:  # noqa: BLE001 - an unreadable blob is not fatal
-            payload = {}
-        newest[nip] = (stamp, payload)
-    return {nip: payload for nip, (_, payload) in newest.items()}
+            answers[nip] = {}
+    return answers
 
 
-def _krs_entries_of(payload: dict) -> tuple[str, ...]:
-    """Every KRS a stored search found for this NIP, the open entry first.
-
-    More than one hit used to resolve to nothing, on the reading that it meant
-    more than one subject. It does not: a NIP belongs to one taxpayer, so the
-    extra rows are that taxpayer's earlier register entries. The register says
-    so itself -- NIP 5272703675 returns 0000482636 and 0000716108, the odpis
-    of the first is stamped ``WYKREŚLENIE Z KRAJOWEGO REJESTRU SĄDOWEGO`` on
-    27.02.2018 and the second records its own origin as ``PRZEKSZTAŁCENIE`` of
-    that company.
-
-    Refusing them cost the CRU population **1,272 recipients carrying
-    746,378,072 PLN** -- 97% of all the money it could not resolve -- among
-    them EMITEL, TEXOM and CATERMED, which are companies we plainly want.
-    """
-    hits = payload.get("hits") or []
-    return nip_lookup.newest_first(h.get("krs") for h in hits if h.get("krs"))
-
-
-def _names_of(payload: dict) -> dict[str, str]:
-    """KRS to the name the register printed for it, from a stored search answer.
-
-    Each entry carries its own: a transformed company is "EMITEL SPÓŁKA
-    AKCYJNA" under 0000716108 and "EMITEL SPÓŁKA Z OGRANICZONĄ
-    ODPOWIEDZIALNOŚCIĄ" under 0000482636, and labelling both with the open
-    entry's name would hide which era a board sat in.
-
-    Free, in the sense that it is read out of an answer already on file --
-    `parse_search` has kept `nazwa` all along and nothing downstream asked for
-    it, so every company the run did not separately hold went unnamed.
-    """
-    names: dict[str, str] = {}
-    for hit in payload.get("hits") or []:
-        krs = nip_lookup.newest_first(hit.get("krs"))
-        if krs and hit.get("name"):
-            names[krs[0]] = str(hit["name"])
-    return names
-
-
-def _krs_of(payload: dict) -> str | None:
-    """The open register entry a stored search found, or None if it found none."""
-    entries = _krs_entries_of(payload)
-    return entries[0] if entries else None
+def resolutions_artifact(args):
+    """The `KrsNipResolutions` output, when the caller asked to read it."""
+    if not getattr(args, "resolutions", False):
+        return None
+    return config.require_artifact(
+        "krs_nip_resolutions", "KrsNipResolutions", "--resolutions"
+    )
 
 
 def known_for(args) -> dict[str, tuple[str, ...]]:
@@ -215,7 +173,7 @@ def _mapping(
     wanted = {r.nip for r in recipients}
     out = {}
     for nip, payload in cached.items():
-        if nip in wanted and (krs := _krs_of(payload)):
+        if nip in wanted and (krs := nip_resolutions.krs_of(payload)):
             out[nip] = krs
     for nip, held in (known or {}).items():
         entries = nip_lookup.newest_first(held)
@@ -293,7 +251,11 @@ def resolve(args) -> None:
         # A stored zero-hit answer may be a throttled request rather than a
         # real absence -- the service returns the same thing for both. Dropping
         # them from the cache re-asks exactly those, on the confirming path.
-        empty = [nip for nip, payload in cached.items() if not _krs_of(payload)]
+        empty = [
+            nip
+            for nip, payload in cached.items()
+            if not nip_resolutions.krs_of(payload)
+        ]
         for nip in empty:
             cached.pop(nip)
         print(f"re-asking {len(empty)} zero-hit answers", file=sys.stderr)
@@ -313,7 +275,7 @@ def resolve(args) -> None:
         # know that the service's `numer` arrives unpadded.
         payload = {"nip": recipient.nip, "hits": [asdict(h) for h in hits]}
         ctx.io.upload(
-            SEARCH_URL.format(nip=recipient.nip),
+            nip_resolutions.SEARCH_URL.format(nip=recipient.nip),
             json.dumps(payload, ensure_ascii=False),
             "application/json",
             include_query=True,
@@ -439,7 +401,9 @@ def fetch(args) -> None:
 def _resolved(args) -> list[tuple[nip_sources.Recipient, str]]:
     ctx, _ = setup_context()
     recipients = recipients_for(args)
-    mapping = _mapping(cached_answers(ctx), recipients, known_for(args))
+    mapping = _mapping(
+        cached_answers(ctx, resolutions_artifact(args)), recipients, known_for(args)
+    )
     pairs = [(r, mapping[r.nip]) for r in recipients if r.nip in mapping]
     print(
         f"# {len(pairs)} of {len(recipients)} have a KRS in the bucket; "
@@ -452,7 +416,9 @@ def _resolved(args) -> list[tuple[nip_sources.Recipient, str]]:
 def worklist(args) -> None:
     ctx, _ = setup_context()
     recipients = recipients_for(args)
-    mapping = _mapping(cached_answers(ctx), recipients, known_for(args))
+    mapping = _mapping(
+        cached_answers(ctx, resolutions_artifact(args)), recipients, known_for(args)
+    )
     missing = [r for r in recipients if r.nip not in mapping]
 
     writer = csv.writer(sys.stdout)
@@ -562,6 +528,12 @@ def build_parser() -> argparse.ArgumentParser:
     node.set_defaults(func=resolve)
 
     node = sub.add_parser("worklist", help="NIPs still without a KRS, as CSV")
+    node.add_argument(
+        "--resolutions",
+        action="store_true",
+        help="read the KrsNipResolutions artifact instead of scanning the "
+        "bucket; a snapshot, so never for resolve or fetch",
+    )
     node.add_argument("--nip-list", help="a file of NIPs, one per line")
     node.add_argument("--cru", action="store_true", help="use the CRU register")
     node.add_argument("--limit", type=int, help="only the richest N")
@@ -585,6 +557,12 @@ def build_parser() -> argparse.ArgumentParser:
         ("queries", queries, "the same as RejestrIOQuery objects, priced"),
     ):
         node = sub.add_parser(name, help=helptext)
+        node.add_argument(
+            "--resolutions",
+            action="store_true",
+            help="read the KrsNipResolutions artifact instead of scanning "
+            "the bucket; a snapshot, so never for resolve or fetch",
+        )
         node.add_argument("--nip-list", help="a file of NIPs, one per line")
         node.add_argument("--cru", action="store_true", help="use the CRU register")
         node.add_argument("--limit", type=int, help="only the richest N")

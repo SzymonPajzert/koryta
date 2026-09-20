@@ -58,6 +58,7 @@ from dotenv import load_dotenv
 from conductor import setup_context
 from scrapers.krs import (
     nip_lookup,
+    nip_resolutions,
     nip_sources,
     odpis_pdf,
     odpis_store,
@@ -97,10 +98,7 @@ def resolutions_from_bucket(
     ordering would make a capped run cover an arbitrary subset of the source
     rather than its head.
     """
-    from scripts.krs_nip_resolve import (  # noqa: PLC0415
-        _krs_entries_of,
-        cached_answers,
-    )
+    from scripts.krs_nip_resolve import cached_answers  # noqa: PLC0415
 
     # `cached` is a listing of ~17,000 blobs, so a caller that needs the names
     # as well passes the one it already has rather than paying for a second.
@@ -111,7 +109,7 @@ def resolutions_from_bucket(
     resolutions: dict[str, nip_lookup.NipResolution] = {}
     for nip in nips:
         payload = cached.get(nip)
-        entries = _krs_entries_of(payload) if payload else ()
+        entries = nip_resolutions.krs_entries_of(payload) if payload else ()
         if entries:
             resolutions[nip] = nip_lookup.NipResolution(
                 nip=nip,
@@ -238,6 +236,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "take the KRS numbers the register's own search already resolved "
             "into the crawl bucket, skipping the wykaz entirely"
+        ),
+    )
+    parser.add_argument(
+        "--resolutions",
+        action="store_true",
+        help=(
+            "with --from-search-bucket, read the KrsNipResolutions artifact "
+            "instead of the 17,008 objects it was built from. A snapshot, so "
+            "a NIP resolved since it was built looks unresolved here"
         ),
     )
 
@@ -367,8 +374,8 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
     skipped and its output reconstructed.
     """
     from scripts.krs_nip_resolve import (  # noqa: PLC0415
-        _names_of,
         cached_answers,
+        resolutions_artifact,
     )
 
     names: dict[str, str] = {}
@@ -378,7 +385,7 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
                 names.setdefault(nip, row.party_text)
 
     ctx, _ = setup_context()
-    cached = cached_answers(ctx)
+    cached = cached_answers(ctx, resolutions_artifact(args))
     from_bucket = resolutions_from_bucket(nips, names, cached)
 
     # The register's own name for each entry, which the stored answers have
@@ -389,7 +396,7 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
     for nip in nips:
         payload = cached.get(nip)
         if payload:
-            search_names.update(_names_of(payload))
+            search_names.update(nip_resolutions.names_of(payload))
 
     # The same pairs `resolve` refuses to spend a request on. Without them this
     # stage would silently drop every company we already hold -- 1,512 of the
