@@ -69,3 +69,50 @@ def test_the_default_location_is_outside_every_checkout():
     assert "worktree" not in config.PESEL_SALT_FILE
     assert not config.PESEL_SALT_FILE.startswith(config.PROJECT_ROOT)
     assert config.PESEL_SALT_FILE.endswith(os.path.join("koryta", "pesel-salt"))
+
+
+def test_artifact_path_is_the_layout_every_pipeline_writes():
+    assert config.artifact_path("cru_umowy").parts[-2:] == (
+        "cru_umowy",
+        "cru_umowy.jsonl",
+    )
+
+
+def test_require_artifact_names_the_pipeline_that_builds_it(monkeypatch, tmp_path):
+    """A bare FileNotFoundError says a path is missing, not how to get one."""
+    monkeypatch.setattr(config, "VERSIONED_DIR", str(tmp_path))
+    with pytest.raises(SystemExit) as caught:
+        config.require_artifact("cru_umowy", "CruUmowy", "--cru")
+    assert "uv run koryta CruUmowy" in str(caught.value)
+    assert "--cru" in str(caught.value)
+
+
+def test_require_artifact_returns_the_path_when_it_is_there(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "VERSIONED_DIR", str(tmp_path))
+    built = tmp_path / "cru_umowy" / "cru_umowy.jsonl"
+    built.parent.mkdir(parents=True)
+    built.write_text("", encoding="utf-8")
+    assert config.require_artifact("cru_umowy", "CruUmowy", "--cru") == built
+
+
+def test_optional_artifact_degrades_but_says_what_it_costs(
+    monkeypatch, tmp_path, capsys
+):
+    """Degrading is right; degrading quietly is what hides the cost."""
+    monkeypatch.setattr(config, "VERSIONED_DIR", str(tmp_path))
+    missing = config.optional_artifact("companies_merged", "Companies", "X is paid")
+    assert missing is None
+    err = capsys.readouterr().err
+    assert "X is paid" in err
+    assert "uv run koryta Companies" in err
+
+
+def test_optional_artifact_is_quiet_when_the_artifact_is_there(
+    monkeypatch, tmp_path, capsys
+):
+    monkeypatch.setattr(config, "VERSIONED_DIR", str(tmp_path))
+    built = tmp_path / "companies_merged" / "companies_merged.jsonl"
+    built.parent.mkdir(parents=True)
+    built.write_text("", encoding="utf-8")
+    assert config.optional_artifact("companies_merged", "Companies", "x") == built
+    assert capsys.readouterr().err == ""
