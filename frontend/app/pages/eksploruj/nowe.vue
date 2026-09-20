@@ -101,6 +101,21 @@
             clearable
             style="min-width: 200px; max-width: 260px"
           />
+
+          <!-- Set by the cards on /pomoc, which is where most readers will
+               meet it: each one hands out a task, and this is the filter that
+               narrows the queue to the people that task is about. -->
+          <v-select
+            v-model="filterTier"
+            :items="tierItems"
+            label="Poziom trudności"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            data-testid="queue-tier-filter"
+            style="min-width: 200px; max-width: 300px"
+          />
         </div>
 
         <div class="text-caption text-medium-emphasis mt-2">
@@ -357,6 +372,11 @@ import {
 import { ref, computed, watch } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { useQueryFilters } from "~/composables/queryFilters";
+import {
+  queueTiers,
+  queueTierCopy,
+  type QueueTier,
+} from "~~/shared/queueTiers";
 import { polishCounting } from "~/composables/polish";
 import { voteMeaning } from "~/composables/votes";
 import { companyCategories } from "~~/shared/companyCategories";
@@ -408,11 +428,41 @@ const orderRecent = computed(() => filterOrder.value === "recent");
  * queue stays a shortlist rather than everyone ever ingested. */
 const DEFAULT_MIN_VOTES = 3;
 const filterMinVotes = numberFilter("minVotes");
+
+/** Which difficulty tier the queue is narrowed to - see shared/queueTiers.ts.
+ *
+ * The cards on /pomoc link straight in here with one of these set, so a reader
+ * who picked a task arrives at exactly the people it describes. */
+const filterTier = numberFilter("tier");
+/** The same value, once it has been checked against the tiers that exist.
+ *
+ * `tier` arrives from the url, so it can be any integer somebody types. A
+ * number that is not a tier asks for nobody, and the queue would answer with
+ * an empty list and a description of a level that does not exist - so it is
+ * dropped here and the queue reads as unfiltered. */
+const activeTier = computed<QueueTier | null>(
+  () => queueTiers.find((tier) => tier === filterTier.value) ?? null,
+);
+const tierItems = queueTiers.map((tier) => ({
+  title: `${tier}. ${queueTierCopy[tier].title}`,
+  value: tier,
+}));
+
+/** The score floor, which a chosen tier turns off.
+ *
+ * The floor is there to keep an *unfiltered* queue from being all ~5,200
+ * unpublished people. A tier is already a shortlist - 407 people in tier 1 -
+ * and one picked deliberately off /pomoc is a reader saying which task they
+ * want, not which of its people are highly rated. Leaving the floor on would
+ * hide most of what the card just promised them. */
+const defaultMinVotes = computed(() =>
+  activeTier.value == null ? DEFAULT_MIN_VOTES : 0,
+);
 /** Kept out of the url while it equals the default, like every other filter
  * here. Clearing the field therefore reads back as the default rather than as
  * "no minimum" - the two are the same absent-from-the-url state. */
 const minVotes = computed<number, number | string | null>({
-  get: () => filterMinVotes.value ?? DEFAULT_MIN_VOTES,
+  get: () => filterMinVotes.value ?? defaultMinVotes.value,
   set: (value) => {
     // The text field hands back a string, and an empty one once it is cleared.
     const parsed =
@@ -420,19 +470,24 @@ const minVotes = computed<number, number | string | null>({
         ? value
         : Number.parseInt(String(value ?? ""), 10);
     filterMinVotes.value =
-      !Number.isFinite(parsed) || parsed === DEFAULT_MIN_VOTES ? null : parsed;
+      !Number.isFinite(parsed) || parsed === defaultMinVotes.value
+        ? null
+        : parsed;
   },
 });
 
 /** Who the queue is showing, in one line under the controls that decide it. */
-const queueDescription = computed(() =>
-  orderRecent.value
+const queueDescription = computed(() => {
+  const base = orderRecent.value
     ? `Osoby, które zaczęły pracę najpóźniej, z sumą ocen co najmniej ${minVotes.value} i bez głosu od żadnej osoby.`
-    : "Osoby z najwyższą sumą ocen, bez głosu od żadnej osoby.",
-);
+    : "Osoby z najwyższą sumą ocen, bez głosu od żadnej osoby.";
+  const tier = activeTier.value;
+  if (tier == null) return base;
+  return `${base} Tylko poziom ${tier}: ${queueTierCopy[tier].what}`;
+});
 
 // The card stack is paged in memory rather than through the url.
-watch([filterCategory, filterOrder, minVotes], () => {
+watch([filterCategory, filterOrder, minVotes, activeTier], () => {
   page.value = 1;
 });
 
@@ -592,6 +647,7 @@ const apiQuery = computed(
         (filterCurrentlyEmployed.value as Query["currentlyEmployed"]) ||
         undefined,
       minVotes: orderRecent.value ? minVotes.value : undefined,
+      queueTier: activeTier.value ?? undefined,
     }) as Query,
 );
 

@@ -16,6 +16,7 @@ import {
   type RevisionMinimal,
 } from "~~/shared/revisions";
 import { computeNodeStats } from "~~/shared/stats";
+import { queueTier } from "~~/shared/queueTiers";
 import { pageIsPublic } from "~~/shared/model";
 import { bodyIsPaidPost } from "~~/shared/companyBodies";
 import { getEdges, getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
@@ -62,6 +63,7 @@ function buildNodeUpdateData(
   publicPlaceIds: ReadonlySet<string>,
   unpaidSeatPlaceIds: ReadonlySet<string>,
   nodeFactsCount: number,
+  nodeFactTypes: ReadonlySet<string>,
 ) {
   const transitiveTargets = calculateTransitiveTargets(
     nodeEdges,
@@ -81,6 +83,14 @@ function buildNodeUpdateData(
   );
 
   stats.nodeGroupSize = nodeGroupSizeMap[node.id] || 0;
+  if (node.data.type === "person") {
+    stats.queueTier = queueTier(
+      node.data as Person,
+      nodeEdges,
+      publicPlaceIds,
+      nodeFactTypes,
+    );
+  }
   if (node.data.type === "region") {
     stats.people = targetCounts[node.id]?.size || 0;
   }
@@ -128,7 +138,10 @@ export default defineEventHandler(async (event) => {
     // Only the id of the person each fact was matched to: the justification is
     // a paragraph of prose and there is one per fact, so reading the documents
     // whole would be the largest read in this handler to count them.
-    db.collection("extractions").select("personNodeId").get(),
+    // ... and its kind, which is what tells a party membership from a sentence
+    // about somebody's job: `queueTier` files a person by what their facts
+    // could settle, not by how many of them there are.
+    db.collection("extractions").select("personNodeId", "fact_type").get(),
   ]);
 
   const nodes = nodesSnap.docs.map((doc) => ({
@@ -167,12 +180,18 @@ export default defineEventHandler(async (event) => {
   // repairs a node whose ingest-time update failed - and what stops this
   // handler from wiping the field, since it writes `stats` as a whole map.
   const factsByNode: Record<string, number> = {};
+  const factTypesByNode: Record<string, Set<string>> = {};
   for (const doc of extractionsSnap.docs) {
     const personNodeId = doc.get("personNodeId") as string | undefined;
     if (personNodeId) {
       factsByNode[personNodeId] = (factsByNode[personNodeId] ?? 0) + 1;
+      const factType = doc.get("fact_type") as string | undefined;
+      if (factType) {
+        (factTypesByNode[personNodeId] ??= new Set()).add(factType);
+      }
     }
   }
+  const noFactTypes: ReadonlySet<string> = new Set();
 
   const revisionsByNode: Record<string, { id: string; data: Revision }[]> = {};
   for (const rev of revisions) {
@@ -339,6 +358,7 @@ export default defineEventHandler(async (event) => {
       publicPlaceIds,
       unpaidSeatPlaceIds,
       factsByNode[node.id] ?? 0,
+      factTypesByNode[node.id] ?? noFactTypes,
     );
 
     if (node.data.type === "region") {
