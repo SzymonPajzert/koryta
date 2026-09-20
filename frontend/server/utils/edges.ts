@@ -30,6 +30,17 @@ type EdgeSemantics = {
    * discriminator it does not have, rather than stored beside it as a second
    * fact. See `enriches`. */
   enrichable: boolean;
+  /** Fields that say something *about* the episode without saying which
+   * episode it is.
+   *
+   * They take part in enrichment - filling one in is a reason to write, and
+   * disagreeing about one is a conflict - but never in identity, so learning
+   * one cannot move an edge to a different document id. `elected` is the case
+   * this exists for: the outcome of a candidacy is worth storing and worth
+   * refusing to overwrite, but two candidacies are not made different episodes
+   * by one of them having won. Putting it in `discriminators` would hash every
+   * winning candidacy to a new id and store it a second time. */
+  annotations?: readonly string[];
 };
 
 export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
@@ -112,6 +123,7 @@ export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
     discriminators: ["position", "start_date", "party", "committee", "term"],
     identicalMeansSame: false,
     enrichable: true,
+    annotations: ["elected"],
   },
 
   // Written by hand through /api/edges/create, never by an ingest.
@@ -159,6 +171,21 @@ export type EdgeLike = Partial<Edge> & Pick<Edge, "source" | "target" | "type">;
  * spelling.
  */
 const FOLDED_FIELDS = new Set(["committee"]);
+
+/** Why `elected: false` is still read as a blank, below.
+ *
+ * "Stood and did not take the seat" would be worth recording, and reading it
+ * as "nobody said" makes it unstorable. It is read that way anyway, because
+ * nothing in this codebase asserts it: the ingest sends a win and never a
+ * defeat (see `elected` in shared/api.ts), and all 15 of the stored `false`
+ * values are checkboxes a contributor left unticked, not defeats anybody
+ * entered. Treating those 15 as recorded losses would freeze them - an
+ * incoming win would be a conflict rather than an enrichment - which is
+ * exactly the backfill this annotation exists for, blocked on the people it
+ * would be most wrong about.
+ *
+ * `/api/edges/create` no longer writes one, so the set cannot grow. Whatever
+ * starts meaning "lost" is what should make `false` an answer here. */
 
 /** One writer's "unset" has to equal another's.
  *
@@ -280,10 +307,10 @@ export function edgeRelation(
   stored: EdgeLike,
   incoming: EdgeLike,
 ): EdgeRelation {
-  const { discriminators } = edgeSemantics(incoming.type);
+  const { discriminators, annotations } = edgeSemantics(incoming.type);
 
   let added = 0;
-  for (const name of discriminators) {
+  for (const name of [...discriminators, ...(annotations ?? [])]) {
     const before = field(stored, name);
     const after = field(incoming, name);
     if (before === null) {
@@ -328,6 +355,33 @@ export function enrichedEdge(
   return result;
 }
 
+/** Whether everything the payload would add to this edge is an annotation.
+ *
+ * The question a caller asks before writing an enrichment out rather than
+ * proposing it. A candidacy's committee is proposed because recognising it is
+ * a judgement; its result is not a judgement at all - PKW publishes who took
+ * the mandate, and the payload carries that column and nothing else. But the
+ * two ride in one revision: `enrichedEdge` fills every blank it can, so
+ * vouching for a revision because it carries a result would write an
+ * unrecognised committee out on the back of it, which is the review the
+ * committee rule exists for.
+ *
+ * So it is the whole set that has to be annotations, not merely one of them.
+ */
+export function addsOnlyAnnotations(
+  /** The stored document, as `enrichedEdge` takes it - straight off Firestore,
+   * so typed as the map it is rather than as an `Edge`. */
+  stored: Record<string, unknown>,
+  incoming: EdgeLike,
+): boolean {
+  const { discriminators, annotations } = edgeSemantics(incoming.type);
+  if (!annotations?.length) return false;
+
+  const adds = (name: string) =>
+    field(stored as EdgeLike, name) === null && field(incoming, name) !== null;
+  return annotations.some(adds) && !discriminators.some(adds);
+}
+
 /** How every stored edge between this pair relates to `edge`.
  *
  * One query, partitioned in memory, because the answers all come from the same
@@ -370,7 +424,18 @@ export async function findEdgeMatches(
     ids.add(doc.id);
     const stored = doc.data();
     if (edgeIdentity(stored as EdgeLike) === identity) {
-      same.push(doc.id);
+      // The same episode, by every field that says which episode it is. It can
+      // still be missing an annotation the payload carries - whether the
+      // candidacy took the seat - and that is a reason to write even though
+      // nothing about *which* candidacy it is has changed. A disagreement
+      // about one is not: the stored answer is either a reviewer's or an
+      // earlier run's, and `enrichedEdge` fills blanks rather than
+      // overwriting, so there is nothing there for the payload to do.
+      const relation = mayEnrich
+        ? edgeRelation(stored as EdgeLike, edge)
+        : "same";
+      if (relation === "enriches") enrichable.push({ id: doc.id, stored });
+      else same.push(doc.id);
       continue;
     }
     if (!mayEnrich || !meetsEnrichFloor(stored as EdgeLike)) continue;
