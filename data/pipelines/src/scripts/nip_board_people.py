@@ -65,7 +65,6 @@ from scrapers.krs import (
     search,
 )
 from stores import config
-from stores.config import VERSIONED_DIR
 from stores.storage import Client as CloudStorageClient
 from util import pesel as pesel_util
 
@@ -74,9 +73,6 @@ from util import pesel as pesel_util
 #: publish successive versions of one dataset instead of a family of
 #: near-identical ones.
 ARTIFACT = "krs_odpis_people"
-
-#: `stores.config.VERSIONED_DIR` is a str, so every use here goes through Path.
-VERSIONED = Path(VERSIONED_DIR)
 
 
 def resolutions_from_bucket(
@@ -209,7 +205,7 @@ def gather_rows(args) -> tuple[list[nip_sources.NipRow], list[nip_sources.NipRow
         # branch and read nothing at all.
         path = Path(args.cru)
         if not path.is_file():
-            path = VERSIONED / "cru_umowy" / "cru_umowy.jsonl"
+            path = config.require_artifact("cru_umowy", "CruUmowy", "--cru")
         # Ordered by attributed contract value, always. The odpis stage is one
         # request per company, so every CRU run is capped in practice -- and a
         # cap on file order covers a slice of the alphabet while a cap on
@@ -402,7 +398,12 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
     known, known_names = nip_lookup.known_from_companies_merged(
         Path(args.companies_merged)
         if args.companies_merged
-        else VERSIONED / "companies_merged" / "companies_merged.jsonl"
+        else config.optional_artifact(
+            "companies_merged",
+            "Companies",
+            "the pairs we already hold cannot be reused and the wykaz is asked "
+            "about them again",
+        )
     )
     resolutions = merge_resolutions(nips, from_bucket, known, names)
     from_known = sum(1 for r in resolutions.values() if r.source == "cache")
@@ -494,7 +495,12 @@ def main() -> None:
     known, known_names = nip_lookup.known_from_companies_merged(
         Path(args.companies_merged)
         if args.companies_merged
-        else VERSIONED / "companies_merged" / "companies_merged.jsonl"
+        else config.optional_artifact(
+            "companies_merged",
+            "Companies",
+            "the pairs we already hold cannot be reused and the wykaz is asked "
+            "about them again",
+        )
     )
     print("\n" + "=" * 72)
     print("NIP -> KRS")
@@ -555,9 +561,8 @@ def publish(people, company_by_krs, results, salt=None) -> None:
     key that stays on this machine. That is checked here rather than trusted,
     because this is the one step that makes the data leave the machine.
     """
-    directory = VERSIONED / ARTIFACT
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{ARTIFACT}.jsonl"
+    path = config.artifact_path(ARTIFACT)
+    path.parent.mkdir(parents=True, exist_ok=True)
     write_output(path, people, company_by_krs, results, salt)
 
     leaked = 0
@@ -774,10 +779,27 @@ def fetch_and_match(args, resolutions, salt, known_names=None, pesel_sink=None):
     merged_path = (
         Path(args.people_merged)
         if args.people_merged
-        else VERSIONED / "people_merged" / "people_merged.jsonl"
+        else config.artifact_path("people_merged")
     )
     if not merged_path.is_file():
-        print(f"\n  [skip] no people_merged at {merged_path}")
+        # Skipping the match is a legitimate way to run -- `--nip <n> --show`
+        # on a checkout that has built nothing is how you look at one company.
+        # Publishing the result of one is not: every row would carry
+        # `match_verdict: null`, which reads in the artifact as "matched
+        # against PeopleMerged and found nobody" rather than "never asked",
+        # and there is nothing in the file to tell the two apart.
+        if args.publish:
+            raise SystemExit(
+                f"\n{merged_path} is missing, so nobody can be matched, and "
+                f"--publish would file {len(people):,} people as unmatched "
+                f"rather than as unchecked.\n"
+                f"Build it with:  uv run koryta PeopleMerged"
+            )
+        print(
+            f"\n  [WARN] no people_merged at {merged_path}, so all "
+            f"{len(people):,} people stay unmatched.\n"
+            f"         Build it with:  uv run koryta PeopleMerged"
+        )
         return people, company_by_krs, []
 
     print("\n" + "=" * 72)

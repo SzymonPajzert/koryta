@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import pathlib
 import sys
 
 import pandas as pd
@@ -76,6 +77,51 @@ if not os.path.exists(VERSIONED_DIR):
     os.makedirs(VERSIONED_DIR)
 if not os.path.exists(DOWNLOADED_DIR):
     os.makedirs(DOWNLOADED_DIR)
+
+
+def artifact_path(name: str) -> pathlib.Path:
+    """``versioned/<name>/<name>.jsonl`` -- the layout every `Pipeline` writes.
+
+    Spelled once here because the scripts that read pipeline output are not
+    pipelines themselves, so they cannot reach it through `Pipeline.read` and
+    were each building the path by hand.
+    """
+    return pathlib.Path(VERSIONED_DIR) / name / f"{name}.jsonl"
+
+
+def require_artifact(name: str, built_by: str, needed_for: str) -> pathlib.Path:
+    """The artifact, or exit saying which pipeline builds it.
+
+    For an input the caller cannot do without. The alternative is a
+    `FileNotFoundError` naming a path, which tells a reader that something is
+    missing but not that it is a pipeline output or how to get one.
+    """
+    path = artifact_path(name)
+    if not path.is_file():
+        raise SystemExit(
+            f"{path} is missing, and {needed_for} needs it.\n"
+            f"Build it with:  uv run koryta {built_by}"
+        )
+    return path
+
+
+def optional_artifact(name: str, built_by: str, without_it: str) -> pathlib.Path | None:
+    """The artifact if it is there, or None after saying what its absence costs.
+
+    For an input that is an optimisation rather than a requirement. Degrading
+    is correct; degrading quietly is not, because the cost lands somewhere
+    else -- as a slower run, a bigger bill, or a weaker answer -- with nothing
+    in the output connecting it back to a file nobody built.
+    """
+    path = artifact_path(name)
+    if path.is_file():
+        return path
+    print(
+        f"  [note] no {name} at {path}, so {without_it}.\n"
+        f"         Build it with:  uv run koryta {built_by}",
+        file=sys.stderr,
+    )
+    return None
 
 
 class Accessor:

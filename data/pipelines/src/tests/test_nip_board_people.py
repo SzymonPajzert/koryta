@@ -455,3 +455,50 @@ def test_the_odpis_cost_is_reported_on_both_paths(capsys):
     out = capsys.readouterr().out
     assert "odpisy to fetch                     2" in out
     assert "(1 superseded entries)" in out
+
+
+def match_args(**kwargs) -> argparse.Namespace:
+    defaults = {
+        "people_merged": None,
+        "publish": False,
+        "current_only": False,
+        "limit_companies": None,
+        "reparse_only": False,
+    }
+    return argparse.Namespace(**{**defaults, **kwargs})
+
+
+@pytest.fixture
+def no_people_merged(monkeypatch, tmp_path):
+    """A checkout where PeopleMerged has never been built."""
+    monkeypatch.setattr(nip_board_people.config, "VERSIONED_DIR", str(tmp_path))
+    monkeypatch.setattr(nip_board_people, "setup_context", lambda: (None, None))
+    monkeypatch.setattr(
+        nip_board_people,
+        "fetch_odpisy",
+        lambda *a, **k: ([odpis_person("0000000001", "KOWALSKI")], [], set()),
+    )
+
+
+def test_publishing_without_people_merged_is_refused(no_people_merged):
+    """`match_verdict: null` reads as "asked and found nobody", not "never asked".
+
+    The artifact has no other column that tells those apart, so filing a run
+    that never matched would be indistinguishable from one that matched and
+    failed -- for every person in it.
+    """
+    with pytest.raises(SystemExit) as caught:
+        nip_board_people.fetch_and_match(match_args(publish=True), {}, "salt")
+    message = str(caught.value)
+    assert "unmatched" in message
+    assert "uv run koryta PeopleMerged" in message
+
+
+def test_a_run_that_does_not_publish_still_works_without_people_merged(
+    no_people_merged, capsys
+):
+    """`--nip <n> --show` on a fresh checkout is a legitimate way to look."""
+    people, _, results = nip_board_people.fetch_and_match(match_args(), {}, "salt")
+    assert len(people) == 1
+    assert results == []
+    assert "[WARN]" in capsys.readouterr().out

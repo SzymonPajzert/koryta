@@ -60,10 +60,7 @@ from scrapers.krs import nip_lookup, nip_sources, rejestrio, search
 from scrapers.krs.nip_lookup import known_from_companies_merged, nip_valid
 from scrapers.stores import CloudStorage, Context
 from scrapers.stores.file import DownloadableFile
-from stores.config import VERSIONED_DIR
-
-#: `stores.config.VERSIONED_DIR` is a str, so every use here goes through Path.
-VERSIONED = Path(VERSIONED_DIR)
+from stores import config
 
 #: Where a NIP search is filed in the crawl bucket. Not a real route -- the
 #: search is a POST and its body is not in the URL -- but it identifies the
@@ -190,7 +187,11 @@ def known_for(args) -> dict[str, tuple[str, ...]]:
     known, _ = known_from_companies_merged(
         Path(args.companies_merged)
         if getattr(args, "companies_merged", None)
-        else VERSIONED / "companies_merged" / "companies_merged.jsonl"
+        else config.optional_artifact(
+            "companies_merged",
+            "Companies",
+            "every NIP is asked about even where we already hold the pair",
+        )
     )
     return known
 
@@ -238,7 +239,7 @@ def cru_recipients(limit: int | None) -> list[nip_sources.Recipient]:
     """
     from scripts.cru_company_overlap import CIVIL, KRS_FORM  # noqa: PLC0415
 
-    path = VERSIONED / "cru_umowy" / "cru_umowy.jsonl"
+    path = config.require_artifact("cru_umowy", "CruUmowy", "--cru")
     # Buyers included, because `n` counts every contract a NIP appears on --
     # `nip_sources.attributed_value` is what decides which side was paid.
     rows = nip_sources.from_cru(path, suppliers_only=False)
