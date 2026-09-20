@@ -56,8 +56,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from conductor import setup_context
-from scrapers.krs import nip_lookup, nip_sources, odpis_pdf, people_match, search
-from scripts import odpis_store
+from scrapers.krs import (
+    nip_lookup,
+    nip_sources,
+    odpis_pdf,
+    odpis_store,
+    people_match,
+    search,
+)
 from stores import config
 from stores.config import VERSIONED_DIR
 from stores.storage import Client as CloudStorageClient
@@ -651,7 +657,7 @@ def fetch_odpisy(
     """Read every company's odpis, from the bucket where one is already stored.
 
     Storing the PDFs is what makes a parser fix a re-parse instead of a
-    re-crawl -- see `scripts.odpis_store`, and the two parser bugs that each
+    re-crawl -- see `scrapers.krs.odpis_store`, and the two parser bugs that each
     cost a full re-fetch because the documents had been discarded.
     """
     people: list[odpis_pdf.OdpisPerson] = []
