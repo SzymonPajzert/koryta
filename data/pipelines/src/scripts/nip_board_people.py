@@ -84,7 +84,7 @@ def resolutions_from_bucket(
     selection, the odpis fetch, the match -- runs unchanged.
 
     The population is an argument rather than a list this module knows about,
-    which is what kept the two halves of the chain apart: `sponsorship_rejestrio
+    which is what kept the two halves of the chain apart: `krs_nip_resolve
     resolve --cru` can answer all 18,364 KRS-form CRU NIPs through the
     register's own free search, and a fixed list here would read back only the
     ones it knew about, leaving the wykaz -- 3,000 NIPs a day, so 7 calendar
@@ -95,7 +95,7 @@ def resolutions_from_bucket(
     ordering would make a capped run cover an arbitrary subset of the source
     rather than its head.
     """
-    from scripts.sponsorship_rejestrio import (  # noqa: PLC0415
+    from scripts.krs_nip_resolve import (  # noqa: PLC0415
         _krs_entries_of,
         cached_answers,
     )
@@ -364,7 +364,7 @@ def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
     its answers are already in the bucket. So the whole NIP-to-KRS stage is
     skipped and its output reconstructed.
     """
-    from scripts.sponsorship_rejestrio import (  # noqa: PLC0415
+    from scripts.krs_nip_resolve import (  # noqa: PLC0415
         _names_of,
         cached_answers,
     )

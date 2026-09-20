@@ -1,7 +1,7 @@
 """That the search bucket answers for the run's own NIPs, in the run's order.
 
 `resolutions_from_bucket` used to take no argument and read a population this
-module knew about, so `sponsorship_rejestrio resolve --cru` could fill the
+module knew about, so `krs_nip_resolve resolve --cru` could fill the
 bucket with 18,364 answers and the odpis stage would read back none of them.
 The population being a parameter is the whole fix; these pin it, and the
 ordering, which `--limit-companies` truncates on.
@@ -27,7 +27,7 @@ def answer(nip: str, *krs: str) -> dict:
 def bucket(monkeypatch):
     """Stand in for the crawl bucket, so no test touches GCS."""
     stored: dict[str, dict] = {}
-    fake = types.ModuleType("scripts.sponsorship_rejestrio")
+    fake = types.ModuleType("scripts.krs_nip_resolve")
     fake.cached_answers = lambda ctx: stored
     fake._krs_entries_of = lambda payload: nip_board_people.nip_lookup.newest_first(
         h.get("krs") for h in (payload.get("hits") or []) if h.get("krs")
@@ -37,7 +37,7 @@ def bucket(monkeypatch):
         for h in (payload.get("hits") or [])
         if h.get("krs") and h.get("name")
     }
-    monkeypatch.setitem(sys.modules, "scripts.sponsorship_rejestrio", fake)
+    monkeypatch.setitem(sys.modules, "scripts.krs_nip_resolve", fake)
     monkeypatch.setattr(nip_board_people, "setup_context", lambda: (None, None))
     return stored
 

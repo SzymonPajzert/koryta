@@ -2,7 +2,7 @@
 
 One command does the whole thing:
 
-    uv run python src/scripts/sponsorship_rejestrio.py resolve --nip-list nips.txt
+    uv run python src/scripts/krs_nip_resolve.py resolve --nip-list nips.txt
 
 That searches the register for each NIP the population names and
 **stores every answer in the crawled bucket**, keyed by URL and stamped with
@@ -12,10 +12,10 @@ has asked about yet are fetched. There is no intermediate file to keep.
 
 Then, once the KRS numbers are known:
 
-    uv run python src/scripts/sponsorship_rejestrio.py queries   # priced, dry run
-    uv run python src/scripts/sponsorship_rejestrio.py fetch     # actually buy them
-    uv run python src/scripts/sponsorship_rejestrio.py urls      # just the URLs
-    uv run python src/scripts/sponsorship_rejestrio.py worklist  # what is still missing
+    uv run python src/scripts/krs_nip_resolve.py queries   # priced, dry run
+    uv run python src/scripts/krs_nip_resolve.py fetch     # actually buy them
+    uv run python src/scripts/krs_nip_resolve.py urls      # just the URLs
+    uv run python src/scripts/krs_nip_resolve.py worklist  # what is still missing
 
 `fetch` needs `REJESTR_KEY` in `data/pipelines/.env`
 (https://rejestr.io/konto/api). It skips any (company, aktualnosc) pair already
