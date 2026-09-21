@@ -15,7 +15,7 @@ from pathlib import Path
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
 from scrapers.bip.frontier import BipFrontier
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
-from scrapers.bip.store import LocalBundleStore
+from scrapers.bip.store import LocalBundleStore, rewrap_part
 from scrapers.common.pg import PostgresClient
 from stores.bip_registry import download_subjects_xml
 from stores.web import RobotsCache
@@ -93,6 +93,43 @@ def cmd_crawl(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_repair(args: argparse.Namespace) -> int:
+    """Recover `.part` bundles left by a killed run, without re-downloading."""
+    root = Path(args.out)
+    parts = sorted(root.rglob("*.part"))
+    print(f"partial bundles: {len(parts)}")
+    pg = PostgresClient.from_env()
+    repaired = empty = failed = 0
+    orphaned_shas: list[str] = []
+    try:
+        frontier = BipFrontier(pg)
+        for index, part in enumerate(parts, 1):
+            bundle, members, status = rewrap_part(part, root)
+            if status == "repaired":
+                repaired += 1
+                if not args.keep_missing:
+                    known = set(members)
+                    orphaned_shas.extend(
+                        sha
+                        for sha, filename in frontier.docs_for_bundle(bundle)
+                        if filename not in known
+                    )
+            elif status == "empty":
+                empty += 1
+            elif status == "failed":
+                failed += 1
+            if index % 200 == 0:
+                print(f"  {index}/{len(parts)} rewrapped={repaired}", flush=True)
+        pruned = frontier.delete_docs(orphaned_shas) if orphaned_shas else 0
+    finally:
+        pg.close()
+    print(
+        f"rewrapped {repaired}, empty/removed {empty}, failed {failed}; "
+        f"pruned {pruned} doc rows whose member was truncated"
+    )
+    return 0
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     pg = PostgresClient.from_env()
     try:
@@ -138,6 +175,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--rate", type=float, default=1.0, help="seconds between hits on one host"
     )
     crawl.set_defaults(func=cmd_crawl)
+
+    repair = sub.add_parser(
+        "repair", help="recover .part bundles left by an interrupted run"
+    )
+    repair.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    repair.add_argument(
+        "--keep-missing",
+        action="store_true",
+        help="do not delete doc rows whose member was truncated",
+    )
+    repair.set_defaults(func=cmd_repair)
 
     stats = sub.add_parser("stats", help="print frontier statistics")
     stats.set_defaults(func=cmd_stats)

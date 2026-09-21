@@ -81,15 +81,30 @@ class BipFrontier:
         ]
 
     def start_host(self, host: str, crawl_id: str) -> None:
-        self.pg.execute(
-            """
-            UPDATE bip_hosts
-               SET crawl_id = %s, status = 'active', pages_fetched = 0,
-                   docs_fetched = 0, cap_hit = false
-             WHERE host = %s
-            """,
-            (crawl_id, host),
-        )
+        """Activate a host for a new attempt.
+
+        URLs skipped because of the previous attempt's caps go back to the
+        queue: otherwise a resumed host fetches its seed, has nothing pending
+        and is declared `ok` while thousands of its URLs are still unfetched.
+        """
+        with self.pg.transaction() as cur:
+            cur.execute(
+                """
+                UPDATE bip_hosts
+                   SET crawl_id = %s, status = 'active', pages_fetched = 0,
+                       docs_fetched = 0, cap_hit = false
+                 WHERE host = %s
+                """,
+                (crawl_id, host),
+            )
+            cur.execute(
+                """
+                UPDATE bip_urls
+                   SET state = 'queued', locked_by = NULL, locked_until = NULL
+                 WHERE host = %s AND state = 'skipped'
+                """,
+                (host,),
+            )
 
     def bump_host(
         self, host: str, *, pages: int = 0, docs: int = 0, cap_hit: bool = False
@@ -279,6 +294,22 @@ class BipFrontier:
                 if result and result[0]:
                     new += 1
         return new
+
+    def docs_for_bundle(self, bundle: str) -> list[tuple[str, str]]:
+        """(sha256, filename) for every document recorded in a bundle."""
+        return [
+            (r[0], r[1])
+            for r in self.pg.fetchall(
+                "SELECT sha256, filename FROM bip_docs WHERE bundle = %s", (bundle,)
+            )
+        ]
+
+    def delete_docs(self, shas: list[str]) -> int:
+        if not shas:
+            return 0
+        with self.pg.transaction() as cur:
+            cur.execute("DELETE FROM bip_docs WHERE sha256 = ANY(%s)", (shas,))
+            return int(cur.rowcount)
 
     def doc_bundle(self, sha256: str) -> str | None:
         row = self.pg.fetchone(
