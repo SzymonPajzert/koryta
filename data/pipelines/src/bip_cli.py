@@ -10,6 +10,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
@@ -96,8 +97,14 @@ def cmd_crawl(args: argparse.Namespace) -> int:
 def cmd_repair(args: argparse.Namespace) -> int:
     """Recover `.part` bundles left by a killed run, without re-downloading."""
     root = Path(args.out)
-    parts = sorted(root.rglob("*.part"))
-    print(f"partial bundles: {len(parts)}")
+    cutoff = time.time() - args.older_than_minutes * 60
+    parts = sorted(
+        p for p in root.rglob("*.part") if p.stat().st_mtime <= cutoff
+    )
+    print(
+        f"stale partial bundles: {len(parts)} "
+        f"(older than {args.older_than_minutes} min; live ones are left alone)"
+    )
     pg = PostgresClient.from_env()
     repaired = empty = failed = 0
     orphaned_shas: list[str] = []
@@ -180,6 +187,12 @@ def build_parser() -> argparse.ArgumentParser:
         "repair", help="recover .part bundles left by an interrupted run"
     )
     repair.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    repair.add_argument(
+        "--older-than-minutes",
+        type=int,
+        default=10,
+        help="only touch .part files older than this (live bundles stay)",
+    )
     repair.add_argument(
         "--keep-missing",
         action="store_true",
