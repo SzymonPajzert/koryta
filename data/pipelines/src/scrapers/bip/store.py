@@ -205,3 +205,55 @@ def write_run_manifest(root: Path, stats: list[dict[str, object]]) -> Path:
         for entry in stats:
             handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
     return path
+
+
+def rewrap_part(part: Path, root: Path) -> tuple[str, list[str], str]:
+    """Turn a killed run's `.part` bundle into a valid `.tar.gz`.
+
+    A `.part` is a gzip stream that was never closed: the members written
+    before the kill are intact, the tail is truncated. Copy the readable
+    members into the final bundle name (the one the docs table references) and
+    drop the `.part`. Returns (bundle relative path, member basenames, status).
+    """
+    final = part.with_suffix("")  # uid_X.tar.gz.part -> uid_X.tar.gz
+    if final.exists():
+        part.unlink(missing_ok=True)
+        return ("", [], "already-final")
+    members: list[tuple[str, bytes, int]] = []
+    try:
+        with tarfile.open(part, "r:gz") as tar:
+            for member in tar:
+                if not member.isfile() or member.name == "index.txt":
+                    continue
+                try:
+                    handle = tar.extractfile(member)
+                    data = handle.read() if handle else b""
+                except Exception:
+                    break
+                if len(data) != member.size:
+                    break
+                members.append((member.name, data, int(member.mtime)))
+    except Exception:
+        pass
+    if not members:
+        part.unlink(missing_ok=True)
+        return ("", [], "empty")
+    tmp = part.with_name(part.name + ".repair")
+    try:
+        with tarfile.open(tmp, "w:gz") as out:
+            for name, data, mtime in members:
+                info = tarfile.TarInfo(name=name)
+                info.size = len(data)
+                info.mtime = mtime
+                out.addfile(info, _BytesReader(data))
+            index = ("\n".join(n for n, _, _ in members) + "\n").encode("utf-8")
+            info = tarfile.TarInfo(name="index.txt")
+            info.size = len(index)
+            out.addfile(info, _BytesReader(index))
+        tmp.rename(final)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        return ("", [], "failed")
+    part.unlink(missing_ok=True)
+    basenames = [name.rsplit("/", 1)[-1] for name, _, _ in members]
+    return (str(final.relative_to(root)), basenames, "repaired")

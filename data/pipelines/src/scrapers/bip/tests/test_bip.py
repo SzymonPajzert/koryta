@@ -17,7 +17,7 @@ from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
 from scrapers.bip.frontier import BipFrontier
 from scrapers.bip.models import DocRow, HostRow, UrlRow
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
-from scrapers.bip.store import LocalBundleStore
+from scrapers.bip.store import LocalBundleStore, rewrap_part
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import extract_links
 from scrapers.common.ratelimit import HostTokenBucket
@@ -120,6 +120,33 @@ def test_store_dedupes_and_names_by_crawl(tmp_path: Path) -> None:
     store.flush()
     assert (tmp_path / "out" / row.bundle).exists()
     assert not list((tmp_path / "out").rglob("*.part"))
+
+
+def test_rewrap_recovers_a_truncated_bundle(tmp_path: Path) -> None:
+    """A killed run's .part must be recoverable without re-downloading."""
+    store = LocalBundleStore(tmp_path / "out")
+    row, _ = store.add(
+        host="bip.a.pl",
+        crawl_id="c1",
+        url="https://bip.a.pl/1",
+        data=b"first",
+        content_type="application/pdf",
+        filename="one.pdf",
+        title="",
+        chain=[],
+    )
+    store.flush()
+    bundle = tmp_path / "out" / row.bundle
+    killed = bundle.read_bytes()
+    bundle.unlink()
+    part = Path(f"{bundle}.part")
+    part.write_bytes(killed[:-16])  # drop the gzip trailer: what a kill leaves
+
+    rel, members, status = rewrap_part(part, tmp_path / "out")
+    assert status == "repaired"
+    assert members == ["one.pdf"]
+    assert (tmp_path / "out" / rel).exists()
+    assert not part.exists()
 
 
 # -- coordinator -------------------------------------------------------------
