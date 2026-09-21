@@ -167,10 +167,12 @@ class FakeFrontier:
         return True
 
     def claim_urls(
-        self, worker_id: str, *, limit: int, lock_seconds: int
+        self, worker_id: str, *, hosts: list[str], limit: int, lock_seconds: int
     ) -> list[UrlRow]:
         claimed = []
         for url, state in list(self.states.items()):
+            if self.urls[url].host not in hosts:
+                continue
             if state == "queued":
                 self.states[url] = "claimed"
                 claimed.append(self.urls[url])
@@ -293,6 +295,43 @@ def test_coordinator_marks_partial_when_capped(tmp_path: Path) -> None:
     )
     assert frontier.hosts["bip.test"].status == "partial"
     assert stats.docs_new == 1
+
+
+class RecordingStore(LocalBundleStore):
+    flushed = False
+
+    def flush(self):  # noqa: ANN201
+        self.flushed = True
+        return super().flush()
+
+
+def test_stopped_run_flushes_bundles(tmp_path: Path) -> None:
+    """Ctrl-C/SIGTERM must close open bundles, not leave .part files behind."""
+    frontier = FakeFrontier(
+        [
+            HostRow(
+                host="bip.test",
+                name="t",
+                source_url="https://bip.test/",
+                teryt="",
+                entry_count=1,
+            )
+        ]
+    )
+    store = RecordingStore(tmp_path / "out")
+    coordinator = BipCoordinator(
+        cast("BipFrontier", frontier),  # test double
+        store,
+        CoordinatorOptions(workers=1, rate_interval_s=0.0),
+        fetch=lambda url, timeout, ua: HttpResult(
+            url=url, status=404, content_type="text/html", content=b""
+        ),
+        robots_allowed=lambda url: True,
+    )
+    coordinator.stop()
+    coordinator.run()
+    assert store.flushed
+    assert list((tmp_path / "out").rglob("*.part")) == []
 
 
 def test_coordinator_skips_robots_denied(tmp_path: Path) -> None:

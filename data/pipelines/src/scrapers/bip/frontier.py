@@ -174,8 +174,15 @@ class BipFrontier:
         return bool(result and result[0])
 
     def claim_urls(
-        self, worker_id: str, *, limit: int, lock_seconds: int
+        self,
+        worker_id: str,
+        *,
+        hosts: list[str],
+        limit: int,
+        lock_seconds: int,
     ) -> list[UrlRow]:
+        if not hosts:
+            return []
         rows = self.pg.fetchall(
             """
             UPDATE bip_urls u
@@ -185,8 +192,9 @@ class BipFrontier:
                    attempts = attempts + 1
              WHERE u.url IN (
                    SELECT url FROM bip_urls
-                    WHERE state = 'queued'
-                       OR (state = 'claimed' AND locked_until < now())
+                    WHERE host = ANY(%s)
+                      AND (state = 'queued'
+                           OR (state = 'claimed' AND locked_until < now()))
                     ORDER BY priority, first_seen
                     FOR UPDATE SKIP LOCKED
                     LIMIT %s
@@ -194,7 +202,7 @@ class BipFrontier:
             RETURNING u.url, u.host, u.kind, u.discovered_from,
                       u.depth, u.section, u.priority
             """,
-            (worker_id, lock_seconds, limit),
+            (worker_id, lock_seconds, hosts, limit),
         )
         return [
             UrlRow(

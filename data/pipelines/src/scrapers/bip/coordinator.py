@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import signal
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, wait
@@ -318,7 +319,18 @@ class BipCoordinator:
         logger.debug("page %s (+%d links)", row.url, added)
 
     # -- main loop -----------------------------------------------------------
+    def _install_signal_handlers(self) -> None:
+        def handler(signum: int, _frame: object) -> None:
+            logger.warning(
+                "signal %s: finishing in-flight fetches, then stopping", signum
+            )
+            self.stop()
+
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            signal.signal(sig, handler)
+
     def run(self) -> RunStats:
+        self._install_signal_handlers()
         self.frontier.start_run(self.run_id)
         self.host_iter = self.frontier.select_hosts(
             freshness_seconds=self.options.freshness_seconds,
@@ -367,6 +379,7 @@ class BipCoordinator:
             return
         claimed = self.frontier.claim_urls(
             "coordinator",
+            hosts=list(self.active),
             limit=min(free, self.options.claim_batch),
             lock_seconds=self.options.lock_seconds,
         )
