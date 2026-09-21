@@ -8,18 +8,28 @@ Crawl-delay, and caches per host (thread-safe — fetcher threads share it).
 
 import threading
 from typing import Any
+from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
 from curl_cffi import requests as cffi_requests
 
-from entities.util import NormalizedParse
 from scrapers.stores import Context, Web
 
 _EMPTY = RobotFileParser()  # no rules -> allow everything
 
 
 def _host_of(url: str) -> str:
-    return NormalizedParse.parse(url).hostname_normalized
+    """Hostname for the robots cache.
+
+    Deliberately not NormalizedParse: that one parses the query string and
+    raises on params without '=' (e.g. '?debug'), which used to take a whole
+    crawl result down. Robots only needs the host.
+    """
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return ""
+    return host[4:] if host.startswith("www.") else host
 
 
 class RobotsCache:
@@ -61,6 +71,8 @@ class RobotsCache:
 
     def allowed(self, url: str) -> bool:
         host = _host_of(url)
+        if not host:
+            return False
         parser = self._parser(host)
         if parser is None:
             return host not in self._unreachable
