@@ -123,10 +123,16 @@ def _name_forms(display: str) -> list[tuple[str, ...]]:
     surname = parts[-1]
     if "-" in surname:
         head, _, tail = surname.partition("-")
-        if head:
-            forms.append(_name_tuple(" ".join([*parts[:-1], head])))
-        if tail:
-            forms.append(_name_tuple(" ".join([*parts[:-1], tail])))
+        # The halves both keep the full prefix and drop the middle name, for the
+        # same reason the first+last form above exists: "Barbara Maria
+        # Gieroń-Piskorska" is written "Barbara Gieroń" in the article, and
+        # "Barbara Maria Gieron" matches it nowhere.
+        for half in (head, tail):
+            if not half:
+                continue
+            forms.append(_name_tuple(" ".join([*parts[:-1], half])))
+            if len(parts) >= 3:
+                forms.append(_name_tuple(f"{parts[0]} {half}"))
     # Drop duplicates while keeping order, so the full name stays first.
     seen: set[tuple[str, ...]] = set()
     unique: list[tuple[str, ...]] = []

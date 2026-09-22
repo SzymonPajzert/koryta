@@ -382,6 +382,18 @@ def test_load_index_matches_when_article_drops_the_middle_name():
     }
 
 
+def test_load_index_matches_a_hyphenated_half_when_a_middle_name_is_dropped():
+    # Both at once: we hold "Barbara Maria Gieroń-Piskorska" and the article
+    # writes "Barbara Gieroń". Generating the hyphen halves from the full prefix
+    # alone produced "barbara maria gieron", which matches nothing.
+    index, _ = _load_index_and_profiles(
+        [_person_row("p1", "Barbara Maria Gieroń-Piskorska")], {}, {}
+    )
+    assert index.find_in_text("radna Barbara Gieroń pod lupą") == {
+        "Barbara Maria Gieroń-Piskorska"
+    }
+
+
 def test_load_index_matches_a_hyphenated_surname_in_the_article():
     # We hold the shorter form; the article uses the married hyphenated one.
     index, _ = _load_index_and_profiles(
