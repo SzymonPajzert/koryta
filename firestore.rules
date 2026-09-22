@@ -35,17 +35,14 @@ service cloud.firestore {
 
     match /revisions/{revisionId} {
       allow read: if true;
-      // `update_user` has to be the caller's own uid. It is not decoration: it
-      // names the author, and approving or rejecting a revision now sends that
-      // person an email. Left unchecked, anyone signed in could file a
-      // revision attributed to somebody else and have an admin's review
-      // deliver attacker-written text to that person's inbox.
-      //
       // Nothing in the app creates a revision from the browser - every
-      // proposal goes through /api/revisions/create, and the admin SDK is not
-      // subject to these rules - so this only closes the direct path.
-      allow create: if request.auth != null
-          && request.resource.data.update_user == request.auth.uid;
+      // proposal goes through /api/revisions/create, with the admin SDK these
+      // rules do not apply to - so the client gets no write at all. Checking
+      // only `update_user` left status, review fields and times up to the
+      // writer: a revision filed as already approved and dated in the future
+      // is the newest one, which is what /api/nodes/publish approves, and it
+      // reads as an administrator's edit on /aktywnosc.
+      allow create: if false;
     }
 
     // The outgoing mail queue the Trigger Email extension delivers from. Every
