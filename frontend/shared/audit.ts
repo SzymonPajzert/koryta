@@ -34,8 +34,10 @@ export type AuditEntry = {
    * whether the target is a node or an edge, so it cannot be inferred. */
   collection: "nodes" | "edges";
   target_id: string;
-  /** The revision approved or turned down. Absent for publish/unpublish, which
-   * change who can see a page rather than what it says. */
+  /** The revision approved or turned down. A publish or unpublish row names
+   * the revision it went out with when it was filed in the same step as an
+   * approval (a relation published from the queue, "zatwierdź i opublikuj");
+   * one filed by `/api/nodes/publish` has none. */
   revision_id?: string;
   /** The admin's uid. */
   user: string;

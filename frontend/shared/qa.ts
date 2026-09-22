@@ -48,6 +48,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "publikacja-z-kolejki-liczy-sie",
+    title: "„Zatwierdź i opublikuj” liczy się jako publikacja",
+    description:
+      "Publikacja z kolejki i zatwierdzenie tematu nie zostawiały wpisu o publikacji, więc licznik " +
+      "„Opublikowane” na /eksploruj/statystyki ich nie widział. Teraz zostawiają, a propozycji usunięcia " +
+      "kolejka nie pozwala już „opublikować”.",
+    steps: [
+      "W /admin/rewizje/kolejka przy propozycji usunięcia strony ma być tylko „Zatwierdź”, bez „Zatwierdź i opublikuj”.",
+    ],
+    link: "/admin/rewizje/kolejka",
+    area: "admin",
+  },
+  {
     id: "poziomy-trudnosci-kolejki",
     title: "Kolejka ma trzy poziomy trudności, z liczbą osób do zrobienia",
     description:

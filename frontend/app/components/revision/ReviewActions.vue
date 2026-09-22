@@ -23,8 +23,15 @@
         Wpis już nie istnieje
       </span>
 
+      <!-- Not on a removal: there is no page left to publish, and the server
+           ignores the request for one. Offered anyway, it was the prominent
+           button, and it read as "delete and put live". -->
       <v-btn
-        v-if="!proposal.published && proposal.targetExists"
+        v-if="
+          !proposal.published &&
+          proposal.targetExists &&
+          proposal.kind !== 'removal'
+        "
         color="success"
         variant="flat"
         size="small"
