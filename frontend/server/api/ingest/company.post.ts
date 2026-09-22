@@ -1,6 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
-import { getUser } from "~~/server/utils/auth";
+import { getUser, requireDatascience } from "~~/server/utils/auth";
 import {
   createRevisionTransaction,
   revisionChangesNothing,
@@ -34,7 +34,11 @@ export default defineEventHandler(async (event) => {
   const body: Request = await readValidatedBody(event, (body) =>
     companyRequestSchema.parse(body),
   );
-  const user = await getUser(event);
+  // The same gate as /api/ingest/person. What this writes goes straight onto
+  // the node under an automatic revision nobody reviews, so without it any
+  // signed-in account could rename or publish a company. The only caller is
+  // `data/pipelines/src/uploader.py`, with a datascience token.
+  const user = requireDatascience(await getUser(event));
   const db = getFirestore(getApp(), "koryta-pl");
 
   const {
