@@ -11,7 +11,8 @@ class Level(IntEnum):
     UNKNOWN = 0
     NORMAL = 1
     TRUSTED = 2
-    ADMIN = 3
+    DATASCIENCE = 3
+    ADMIN = 4
 
 
 def get_custom_claims_dict(level: Level):
@@ -20,8 +21,12 @@ def get_custom_claims_dict(level: Level):
     while int(c) <= int(level):
         if c == Level.TRUSTED:
             result["trusted"] = True
+        if c == Level.DATASCIENCE:
+            result["datascience"] = True
         if c == Level.ADMIN:
             result["admin"] = True
+        if c == level:
+            break
         c = Level(int(c) + 1)
     return result
 
@@ -43,6 +48,7 @@ def dict_diff(d1, d2):
 
 ROLE_LEVELS = {
     "of0BKlwqWLX21Cuml4NMHZ18xoC3": Level.ADMIN,
+    "REdyYP4uvMSgCEjdSoiEHqy360G3": Level.ADMIN,
 }
 
 PROJECT_ID = "koryta-pl"
