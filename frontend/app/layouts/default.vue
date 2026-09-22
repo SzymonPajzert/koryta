@@ -74,6 +74,13 @@
           Rewizje
         </v-btn>
         <v-btn
+          :prepend-icon="mdiTimelineClockOutline"
+          variant="text"
+          to="/aktywnosc"
+        >
+          Aktywność
+        </v-btn>
+        <v-btn
           v-if="isAdmin"
           :prepend-icon="mdiInboxArrowDown"
           variant="text"
@@ -135,6 +142,7 @@ import {
   mdiInboxArrowDown,
   mdiLightningBolt,
   mdiShieldAccount,
+  mdiTimelineClockOutline,
   mdiViewList,
   mdiNoteTextOutline,
   mdiMessageAlertOutline,

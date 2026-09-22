@@ -48,6 +48,35 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "aktywnosc-nowych-administratorow",
+    title: "Aktywność nowych administratorów da się oglądać osobno",
+    description:
+      "Administratorzy na okresie próbnym mają na /aktywnosc chip „okres próbny”, a przycisk „Nowi " +
+      "administratorzy” zawęża listę do nich. Przy każdej decyzji widać powód, link do zmiany w " +
+      "kolejce i ostrzeżenie „własna propozycja”, gdy ktoś zatwierdził albo opublikował to, co sam zaproponował.",
+    steps: [
+      "Z konta administratora, który nie jest na okresie próbnym: na /admin, w sekcji „Aktywni w tym tygodniu”, kliknij „Nowi administratorzy” - ma się otworzyć /aktywnosc z tym filtrem i listą osób na okresie próbnym.",
+      "Przy decyzji z powodem (odrzucenie, usunięcie, scalenie) ma być widać ten powód, a link „zmiana” ma otwierać rewizję w kolejce.",
+    ],
+    link: "/aktywnosc?kto=nowi-admini",
+    area: "admin",
+  },
+  {
+    id: "aktywnosc",
+    title: "Strona „Aktywność”: kto co ostatnio zrobił",
+    description:
+      "Nowa strona dla zalogowanych, z przyciskiem „Aktywność” na pasku: oceny, notatki, propozycje " +
+      "zmian i publikacje z ostatnich dni, zebrane w jedną linijkę na osobę i posiedzenie. Nazwę " +
+      "widać tylko u osób, które włączyły ją w profilu - reszta to „Anonim”.",
+    steps: [
+      "Kliknij „Aktywność” na pasku - lista ma być pogrupowana po dniach, z godziną i linkami do stron.",
+      "Oceń kogoś w tabeli i wróć po kilku minutach - na górze ma być Twoja linijka z dopiskiem „· Ty”.",
+      "Na /profil przełącznik widoczności nazwy ma teraz wspominać także o aktywności.",
+    ],
+    link: "/aktywnosc",
+    area: "contributor",
+  },
+  {
     id: "publikacja-z-kolejki-liczy-sie",
     title: "„Zatwierdź i opublikuj” liczy się jako publikacja",
     description:
