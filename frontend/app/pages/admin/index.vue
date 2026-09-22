@@ -337,9 +337,22 @@
     </v-row>
 
     <!-- Who has been working -->
-    <div class="d-flex align-center mt-8 mb-3">
+    <div class="d-flex align-center flex-wrap mt-8 mb-3">
       <h2 class="text-h6">Aktywni w tym tygodniu</h2>
       <v-spacer />
+      <!-- What the administrators on trial did, decision by decision. The
+           table below only counts, and its links open the review queue, which
+           filters on who proposed - never on who approved. -->
+      <v-btn
+        v-if="established"
+        variant="text"
+        color="primary"
+        size="small"
+        to="/aktywnosc?kto=nowi-admini"
+        :append-icon="mdiChevronRight"
+      >
+        Nowi administratorzy
+      </v-btn>
       <v-btn
         variant="text"
         color="primary"
@@ -363,6 +376,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import { computedAsync } from "@vueuse/core";
 import {
   mdiGraphOutline,
   mdiHistory,
@@ -378,7 +392,7 @@ import {
   mdiRefresh,
   mdiMessageAlertOutline,
 } from "@mdi/js";
-import { authRequest } from "~/composables/auth";
+import { authRequest, useAuthState } from "~/composables/auth";
 import { noteAdminTypeLabel, noteKindConfig } from "~/composables/notes";
 import type { AdminSummary } from "~~/server/api/admin/summary.get";
 import type { ActivityStats } from "~~/server/api/stats/activity.get";
@@ -451,6 +465,19 @@ const subpages = [
 /** The window the panel calls "this week". The stats page lets an admin widen
  * it; here it is fixed, because the question is "who is around right now". */
 const WEEKLY_DAYS = 7;
+
+const { user } = useAuthState();
+
+/** An administrator who is not on trial - the only one /aktywnosc will show
+ * who is. The page's middleware lets in anybody holding `admin`, trial
+ * administrators too, and for them the "Nowi administratorzy" link led to a
+ * list that quietly ignored the filter. Read off the same token the server
+ * decides by; false until it has been read, so the link never flashes up for
+ * somebody it is not for. */
+const established = computedAsync(async () => {
+  const claims = (await user.value?.getIdTokenResult())?.claims;
+  return claims?.admin === true && claims.newAdmin !== true;
+}, false);
 
 const summary = ref<AdminSummary | null>(null);
 const weekly = ref<ActivityStats | null>(null);
