@@ -441,7 +441,17 @@ export function revisionTargetRef(
  * otherwise drop them.
  *
  * `publish` overrides the target's current visibility; left out, approving a
- * revision never changes who can see the page.
+ * revision never changes who can see the page. When it does change it, the
+ * change is audited as a `publish` or `unpublish` of its own, after the
+ * approval: "zatwierdź i opublikuj" in the queue and a topic's approval used to
+ * leave only the approval behind, so pages went live that neither the
+ * publication count on /eksploruj/statystyki nor /aktywnosc ever saw.
+ *
+ * Except on a removal, where `publish` is ignored. A removal takes the page
+ * away by being a removal, not by who may see it, and approving one with
+ * "zatwierdź i opublikuj" used to file a publication of the page it deleted:
+ * /aktywnosc folded the approval into it and read "opublikował/a", and the
+ * publication count went up by a page nobody can open.
  */
 export async function applyRevision(
   db: Firestore,
@@ -466,7 +476,9 @@ export async function applyRevision(
     revision_id: revisionRef,
   };
 
-  const published = publish ?? stored.published === true;
+  const removal = (revision.data as { deleted?: unknown }).deleted === true;
+  const visibility = removal ? undefined : publish;
+  const published = visibility ?? stored.published === true;
   targetData.published = published;
 
   const timestamp = Timestamp.now();
@@ -486,17 +498,34 @@ export async function applyRevision(
   // In the same commit as the approval it describes - `review_user` on the
   // revision holds only the latest verdict, so it cannot say who chose the
   // version that an older re-approval has since replaced.
+  const collection = targetRef.parent.id === "edges" ? "edges" : "nodes";
   recordAudit(
     db,
     {
       action: "approve",
-      collection: targetRef.parent.id === "edges" ? "edges" : "nodes",
+      collection,
       target_id: targetRef.id,
       revision_id: revisionRef.id,
       user: user.uid,
     },
     batch,
   );
+  // Only when visibility really changes, so re-approving a live page is not a
+  // second publication. With the revision, as `publishEdgeInBatch` files it,
+  // so a reader can tell whose proposal went live.
+  if (visibility !== undefined && visibility !== (stored.published === true)) {
+    recordAudit(
+      db,
+      {
+        action: visibility ? "publish" : "unpublish",
+        collection,
+        target_id: targetRef.id,
+        revision_id: revisionRef.id,
+        user: user.uid,
+      },
+      batch,
+    );
+  }
   await batch.commit();
 
   console.info(
