@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
-from urllib.parse import urlsplit
 
 from entities.util import NormalizedParse
 from scrapers.bip.models import HostRow, RegistryEntry
@@ -19,10 +18,10 @@ _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 def _is_root_url(url: str) -> bool:
     """True for `https://host/` (or bare host) with no userinfo garbage."""
     try:
-        parts = urlsplit(url)
-    except ValueError:
+        parsed = NormalizedParse.parse(url)
+    except Exception:
         return False
-    return (parts.path or "/") == "/" and "@" not in parts.netloc
+    return parsed.path in ("", "/") and "@" not in parsed.netloc
 
 
 def _text(row: ET.Element, tag: str) -> str:
