@@ -90,10 +90,26 @@ export function applyPartiesFilter(
   return query;
 }
 
+/** A node document's fields, less the search index. Mutates and returns
+ * `data`, which is always a fresh `doc.data()`.
+ *
+ * `nameChunksLower` is every prefix of every word of the name, written by the
+ * `onNodeWritten` trigger so /api/search can match on it with
+ * `array-contains` - a query, which never needs the field handed back. Nothing
+ * outside the server reads it, and it went out with every node anyway: 59% of
+ * the bytes of `/api/nodes?type=place`, and a share of every graph, table and
+ * entity response. */
+export function dropSearchIndex(
+  data: FirebaseFirestore.DocumentData,
+): FirebaseFirestore.DocumentData {
+  delete data.nameChunksLower;
+  return data;
+}
+
 export function parseNodeDoc<T extends { id?: string; visibility?: boolean }>(
   doc: FirebaseFirestore.QueryDocumentSnapshot,
 ): T {
-  const data = doc.data();
+  const data = dropSearchIndex(doc.data());
   if (data.revision_id && typeof data.revision_id.path === "string") {
     data.revision_id = data.revision_id.path;
   }
@@ -132,7 +148,7 @@ const _cachedFetchNodes = defineCachedFunction(
       if (!docSnap.exists) return {};
       if (docSnap.data()?.type !== path) return {};
 
-      const data = docSnap.data() || {};
+      const data = dropSearchIndex(docSnap.data() || {});
       if (data.revision_id && typeof data.revision_id.path === "string") {
         data.revision_id = data.revision_id.path;
       }

@@ -3,6 +3,7 @@ import { getApp } from "firebase-admin/app";
 import { nodeTypes, pageIsPublic } from "~~/shared/model";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { resolveMergedNode } from "~~/server/utils/merge";
+import { dropSearchIndex } from "~~/server/utils/fetch";
 import { z } from "zod";
 import type { Node } from "~~/shared/model";
 
@@ -104,7 +105,7 @@ async function getEntity(db: FirebaseFirestore.Firestore, id: string) {
   }
   const result = {
     id: nodeDoc.id,
-    ...nodeDoc.data(),
+    ...dropSearchIndex(nodeDoc.data() ?? {}),
   } as Node;
   if (result.revision_id) {
     if (typeof result.revision_id === "object") {
