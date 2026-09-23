@@ -8,6 +8,7 @@ documents, which are junk, and which sections to crawl first.
 from __future__ import annotations
 
 import re
+from urllib.parse import parse_qsl, urlencode
 
 # URL shapes that serve a file rather than a page. Measured across the sample in
 # BIP_SCRAPING_80_20.md; extensionless endpoints (attachments/download, getFile)
@@ -104,12 +105,39 @@ def filename_from_url(url: str) -> str:
     return name or "document"
 
 
+_AMP_ENTITY_RE = re.compile(r"&amp;", re.IGNORECASE)
+_AMP_PREFIX_RE = re.compile(r"^(?:amp;)+", re.IGNORECASE)
+_NOISE_QUERY_PARAMS = frozenset({"x", "y"})
+
+
 def normalize_url(url: str) -> str:
-    """Drop the fragment and collapse a trailing slash (except for the root)."""
-    clean = url.split("#", maxsplit=1)[0].strip()
+    """Drop the fragment, collapse a trailing slash, and canonicalise the query.
+
+    Some BIP platforms echo their own query string into every link, HTML-escaping
+    it a little more each round (`?amp%3Bamp%3Bacc_pa=1`), which mints an endless
+    supply of distinct URLs from one page. Unescaping `&amp;`, stripping `amp;`
+    prefixes from parameter names, dropping image-map coordinates and duplicate
+    pairs, and sorting the rest makes those permutations converge.
+    """
+    clean = _AMP_ENTITY_RE.sub("&", url).split("#", maxsplit=1)[0].strip()
     if clean.endswith("/") and clean.count("/") > 3:
         clean = clean.rstrip("/")
-    return clean
+    base, separator, query = clean.partition("?")
+    if not separator:
+        return clean
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for key, value in parse_qsl(query, keep_blank_values=True):
+        key = _AMP_PREFIX_RE.sub("", key)
+        if not key or key.lower() in _NOISE_QUERY_PARAMS:
+            continue
+        pair = (key, value)
+        if pair in seen:
+            continue
+        seen.add(pair)
+        pairs.append(pair)
+    pairs.sort()
+    return f"{base}?{urlencode(pairs)}"
 
 
 def is_low_value_url(url: str) -> bool:
