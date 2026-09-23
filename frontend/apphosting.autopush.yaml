@@ -1,0 +1,13 @@
+# Overrides for the `autopush` backend, merged over apphosting.yaml at build
+# time with this file winning. App Hosting picks it by the backend's
+# *environment name*, not by its id, so it does nothing until that name is set
+# to `autopush` (console: App Hosting > autopush > Settings > Environment).
+# prod keeps the base file's 1 GiB for as long as its own name is not this one.
+#
+# 4 GiB because POST /api/stats/computeNodes holds the whole database in
+# memory: 942 MB peak RSS against the 2026-09-23 export, and it dies on a
+# 480 MB heap. Under a 1 GiB limit node 22 sizes its heap to 524 MB - half the
+# limit, stopping at ~2 GB - so going past 4 GiB would also need
+# --max-old-space-size before node used any of it.
+runConfig:
+  memoryMiB: 4096
