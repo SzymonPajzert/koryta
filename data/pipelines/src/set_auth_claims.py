@@ -52,6 +52,8 @@ ROLE_LEVELS = {
     "8DomV5BlwlgPI9iLSDA2wHk168h1": Level.ADMIN,
     "7bu9zrX4OzVrrq1atEF7vsehea52": Level.ADMIN,
     "9YY314GDLUauY92yNpjdgYL2ONr2": Level.ADMIN,
+    "6tieFsnlz0g4kzT4nb5QFMBvTBx2": Level.ADMIN,
+    "WpuDVVsjUpOVOoCbnCfzIve2xMh1": Level.ADMIN,
 }
 
 # Administrators on trial. They hold `admin` like any other, plus `newAdmin`,
@@ -70,6 +72,8 @@ NEW_ADMINS = {
     "8DomV5BlwlgPI9iLSDA2wHk168h1",
     "7bu9zrX4OzVrrq1atEF7vsehea52",
     "9YY314GDLUauY92yNpjdgYL2ONr2",
+    "6tieFsnlz0g4kzT4nb5QFMBvTBx2",
+    "WpuDVVsjUpOVOoCbnCfzIve2xMh1",
 }
 
 PROJECT_ID = "koryta-pl"
