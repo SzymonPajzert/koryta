@@ -71,7 +71,8 @@
 
           <v-card-text>
             <div class="text-caption text-medium-emphasis mb-2">
-              Wysłane przyciskiem „Zgłoś” albo z listy QA, jeszcze nietknięte.
+              Wysłane przyciskiem „Zgłoś” albo z listy QA, jeszcze nietknięte i
+              poza kolejką.
             </div>
 
             <template v-if="pending">

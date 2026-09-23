@@ -48,6 +48,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "opinie-kolejka",
+    title: "Zgłoszenia da się ułożyć w kolejkę do zrobienia",
+    description:
+      "Na /admin/opinie są teraz trzy części zamiast filtra statusu: „Poza kolejką” (tu trafia każde nowe zgłoszenie), " +
+      "„Kolejka” (od góry to, czym zajmujemy się najpierw) i zwinięte „Zamknięte”. Kolejność układa się przyciskiem " +
+      "„Ułóż kolejkę” - zgłoszenia zwijają się wtedy do jednej linijki, bez statusu i notatki. Zgłoszenie w kolejce " +
+      "nie liczy się już do „Nowych zgłoszeń” na /admin.",
+    steps: [
+      "Przy zgłoszeniu w „Poza kolejką” kliknij „Do kolejki” - ma przejść do „Kolejki” z numerem.",
+      "Kliknij „Ułóż kolejkę”, przeciągnij zgłoszenie wyżej (albo użyj strzałki), kliknij „Gotowe” i odśwież stronę - kolejność ma zostać.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+  },
+  {
     id: "wezwanie-do-pomocy-dwa-panele",
     title: "Wezwanie do sprawdzania osób na stronie głównej ma nowy wygląd",
     description:
@@ -2813,13 +2828,13 @@ export const QA_ITEMS: QaItem[] = [
       "W kolejce zgłoszeń widać teraz na pierwszy rzut oka, czym nikt nie " +
       "musi się już zajmować: zgłoszenia ze statusem „Załatwione” i „Nie " +
       "robimy” są wyszarzone. Nie znikają - najechanie kursorem przywraca im " +
-      "pełny kontrast, a filtr statusu nad listą dalej pozwala je ukryć.",
+      "pełny kontrast.",
     steps: [
       "Jako admin wejdź na /admin/opinie.",
       "Ustaw jednemu zgłoszeniu status „Załatwione” - jego karta ma od razu zblednieć.",
       "Najedź na tę kartę kursorem - ma wrócić do pełnego kontrastu, a status dalej ma się dać zmienić.",
       "Ustaw innemu status „W trakcie” - ta karta ma zostać normalna, bo to wciąż robota do zrobienia.",
-      "Wybierz w filtrze u góry „Załatwione” - lista ma pokazać same wyszarzone karty.",
+      "Kliknij na dole „Pokaż zamknięte” - pod „Zamknięte” mają być same wyszarzone karty.",
     ],
     link: "/admin/opinie",
     area: "admin",

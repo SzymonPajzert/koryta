@@ -3,6 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { defineEventHandler } from "h3";
 import { getUser } from "~~/server/utils/auth";
 import { noteNeedsAction } from "~~/shared/model";
+import { compareNewest, isQueued, OPEN_CAP } from "~~/shared/feedbackQueue";
 import type {
   Feedback,
   FeedbackKind,
@@ -18,7 +19,8 @@ const SAMPLE_SIZE = 8;
 
 export type AdminSummary = {
   feedback: {
-    // Reports nobody has triaged yet.
+    // Reports nobody has triaged yet: still "nowe", and not given a place in
+    // the work queue on /admin/opinie either.
     needsAction: number;
     sample: {
       id: string;
@@ -126,19 +128,32 @@ export default defineEventHandler(async (event): Promise<AdminSummary> => {
   }
 
   // --- Untriaged feedback ---------------------------------------------------
+  // Putting a report in the queue is triage too, and a missing field is not
+  // something a query can filter on - so the new reports are read and the
+  // queued ones taken off the count. The read is capped: anybody can write a
+  // report, and a flood of them should not turn every visit to /admin into
+  // thousands of reads. Past the cap the count is an upper bound.
   const newFeedbackQuery = db
     .collection("feedback")
     .where("adminStatus", "==", "new");
 
-  const [feedbackCountSnap, feedbackSnap] = await Promise.all([
+  const [newFeedbackCountSnap, newFeedbackSnap] = await Promise.all([
     newFeedbackQuery.count().get(),
-    newFeedbackQuery.orderBy("createdAt", "desc").limit(SAMPLE_SIZE).get(),
+    newFeedbackQuery.orderBy("createdAt", "desc").limit(OPEN_CAP).get(),
   ]);
 
-  const feedbackSample = feedbackSnap.docs.map((doc) => {
-    const data = doc.data() as Feedback;
+  const inspectedFeedback = newFeedbackSnap.docs.map((doc) => ({
+    ...(doc.data() as Feedback),
+    id: doc.id,
+  }));
+  const untriagedFeedback = inspectedFeedback
+    .filter((report) => !isQueued(report))
+    .sort(compareNewest);
+  const queuedNewFeedback = inspectedFeedback.length - untriagedFeedback.length;
+
+  const feedbackSample = untriagedFeedback.slice(0, SAMPLE_SIZE).map((data) => {
     return {
-      id: doc.id,
+      id: data.id,
       kind: data.kind,
       message: data.message.slice(0, 200),
       route: data.context.route,
@@ -229,7 +244,7 @@ export default defineEventHandler(async (event): Promise<AdminSummary> => {
 
   return {
     feedback: {
-      needsAction: feedbackCountSnap.data().count,
+      needsAction: newFeedbackCountSnap.data().count - queuedNewFeedback,
       sample: feedbackSample,
     },
     notes: {
