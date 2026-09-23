@@ -105,7 +105,7 @@
          than printing „0 z 0”. -->
     <template v-if="total">
       <div class="cta__figures">
-        <p class="cta__eyebrow">Ile już sprawdziliśmy</p>
+        <p class="cta__eyebrow">Sprawdziliśmy już</p>
         <!-- Two spans and a space, so the text reads „1 709 z 6 412 osób”
              whichever way the flex row wraps. -->
         <p class="cta__count">
