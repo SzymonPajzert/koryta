@@ -1,24 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../server/api/notes.get";
 
-const { mockNotesGet, mockCountGet, mockNodesWhere, mockNodesGet } = vi.hoisted(
-  () => {
-    const g = globalThis as Record<string, unknown>;
-    g.createError = (opts: { statusCode: number; message?: string }) =>
-      Object.assign(new Error(opts.message), opts);
-    // Nitro auto-imports used by server/utils/fetch.ts at module load time.
-    g.defineCachedFunction = (fn: unknown) => fn;
-    g.authCachedEventHandler = (fn: unknown) => fn;
-    g.useEvent = () => ({ path: "/mock" });
+const {
+  mockNotesGet,
+  mockCountGet,
+  mockNodesWhere,
+  mockNodesGet,
+  mockRequireAdmin,
+} = vi.hoisted(() => {
+  const g = globalThis as Record<string, unknown>;
+  g.createError = (opts: { statusCode: number; message?: string }) =>
+    Object.assign(new Error(opts.message), opts);
+  // Nitro auto-imports used by server/utils/fetch.ts at module load time.
+  g.defineCachedFunction = (fn: unknown) => fn;
+  g.authCachedEventHandler = (fn: unknown) => fn;
+  g.useEvent = () => ({ path: "/mock" });
 
-    return {
-      mockNotesGet: vi.fn(),
-      mockCountGet: vi.fn(),
-      mockNodesWhere: vi.fn(),
-      mockNodesGet: vi.fn(),
-    };
-  },
-);
+  return {
+    mockNotesGet: vi.fn(),
+    mockCountGet: vi.fn(),
+    mockNodesWhere: vi.fn(),
+    mockNodesGet: vi.fn(),
+    mockRequireAdmin: vi.fn(),
+  };
+});
+
+vi.mock("~~/server/utils/auth", () => ({ requireAdmin: mockRequireAdmin }));
 
 vi.mock("h3", async (importOriginal) => {
   const actual = await importOriginal<typeof import("h3")>();
@@ -72,9 +79,22 @@ const nodeDoc = (id: string, name: string, type = "person") => ({
 describe("/api/notes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRequireAdmin.mockResolvedValue({ uid: "admin-1", admin: true });
     mockCountGet.mockResolvedValue({ data: () => ({ count: 0 }) });
     mockNotesGet.mockResolvedValue({ docs: [] });
     mockNodesGet.mockResolvedValue({ docs: [] });
+  });
+
+  it("is refused to everyone but an admin, before anything is read", async () => {
+    // Every note, its author and the name of a page that may be unpublished -
+    // the same join /api/notes/admin keeps to administrators.
+    mockRequireAdmin.mockRejectedValueOnce({ statusCode: 403 });
+
+    await expect(callHandler({ limit: "10" })).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(mockNotesGet).not.toHaveBeenCalled();
+    expect(mockCountGet).not.toHaveBeenCalled();
   });
 
   it("returns flattened notes with author uid and node metadata", async () => {
