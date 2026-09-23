@@ -214,6 +214,16 @@ class BipCoordinator:
             return
         self._register_scope(row.host, result.url)
         if looks_like_document(row.url, result.content_type):
+            # The cap is also checked at claim time, but several workers can
+            # already have document URLs in flight when the previous result
+            # pushes the host over it; enforce it here so the budget is exact.
+            if active.docs >= self.options.max_docs:
+                active.cap_hit = True
+                active.pending -= 1
+                self.frontier.mark_url(row.url, state="skipped")
+                self.stats.skipped += 1
+                self._maybe_finalize(row.host)
+                return
             self._store_document(row, result, active)
         else:
             self._handle_page(row, result, links, active)
