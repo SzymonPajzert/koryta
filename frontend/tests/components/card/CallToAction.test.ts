@@ -53,11 +53,32 @@ describe("CardCallToAction", () => {
     expect(wrapper.text()).toContain("70 z 100 osób");
   });
 
+  // Rounded, a first handful of checks out of thousands would print „0%” next
+  // to the bar - which reads as nobody having started - and the last few left
+  // would print „100%” beside a legend that still lists them.
+  it("prints the share checked, and never rounds either end to 0% or 100%", async () => {
+    expect((await mount()).get(".cta__percent").text()).toBe("70%");
+
+    try {
+      stats = { total: 1000, approved: 3, reviewed: 1, toCheck: 996 };
+      clearNuxtData("site-progress");
+      expect((await mount()).get(".cta__percent").text()).toBe("<1%");
+
+      stats = { total: 1000, approved: 996, reviewed: 1, toCheck: 3 };
+      clearNuxtData("site-progress");
+      expect((await mount()).get(".cta__percent").text()).toBe(">99%");
+    } finally {
+      stats = { total: 100, approved: 40, reviewed: 30, toCheck: 30 };
+      clearNuxtData("site-progress");
+    }
+  });
+
   it("offers exactly one primary button, and it leads to the queue", async () => {
     const wrapper = await mount();
 
-    // Filled is what „primary” means here: the two beside it are text buttons,
-    // so which one the section wants taken is visible before it is read.
+    // Filled is what „primary” means here: of the two beside it one is
+    // outlined and one is a text link, so which one the section wants taken is
+    // visible before it is read.
     const filled = wrapper.findAll(".v-btn--variant-flat");
     expect(filled).toHaveLength(1);
     expect(filled[0]!.text()).toContain("Sprawdź pierwszą osobę");
