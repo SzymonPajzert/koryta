@@ -1,28 +1,49 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../../server/api/admin/summary.get";
+import { OPEN_CAP, QUEUE_STEP } from "../../../../shared/feedbackQueue";
 
 /** A chainable query that remembers which collection it came from and what it
- * was filtered by, so one mock can serve the five different reads the handler
- * makes without the test depending on the order they happen in. */
+ * was filtered, ordered and capped by, so one mock can serve the different
+ * reads the handler makes without the test depending on the order they happen
+ * in. */
 type Where = [unknown, string, unknown];
+type OrderBy = [string, "asc" | "desc"];
+type Shape = { wheres: Where[]; orderBy: OrderBy[]; limit?: number };
+type Doc = ReturnType<typeof doc>;
 
 const results = {
-  notes: [] as unknown[],
-  unapprovedNodes: { count: 0, docs: [] as unknown[] },
-  edgeRevisions: { count: 0, docs: [] as unknown[] },
-  newFeedback: { count: 0, docs: [] as unknown[] },
-  namedNodes: [] as unknown[],
+  notes: [] as Doc[],
+  unapprovedNodes: { count: 0, docs: [] as Doc[] },
+  edgeRevisions: { count: 0, docs: [] as Doc[] },
+  // Every feedback document there is, whatever its status. The handler's
+  // equality filters are applied to it, so a test can put a settled report
+  // next to a new one and see which the query lets through.
+  feedback: [] as Doc[],
+  namedNodes: [] as Doc[],
 };
 
-function makeQuery(collection: string, wheres: Where[] = []) {
+/** Every `get()` the handler made, with the shape of the query behind it. */
+const reads: ({ collection: string } & Shape)[] = [];
+
+function makeQuery(
+  collection: string,
+  shape: Shape = { wheres: [], orderBy: [] },
+) {
+  const { wheres } = shape;
   const query = {
-    where: (...w: Where) => makeQuery(collection, [...wheres, w]),
+    where: (...w: Where) =>
+      makeQuery(collection, { ...shape, wheres: [...wheres, w] }),
     select: () => query,
-    orderBy: () => query,
-    limit: () => query,
+    orderBy: (field: string, direction: "asc" | "desc" = "asc") =>
+      makeQuery(collection, {
+        ...shape,
+        orderBy: [...shape.orderBy, [field, direction]],
+      }),
+    limit: (limit: number) => makeQuery(collection, { ...shape, limit }),
     count: () => ({ get: async () => ({ data: () => ({ count: total() }) }) }),
     get: async () => {
-      const docs = resolve();
+      reads.push({ collection, ...shape });
+      const docs = shaped(resolve());
       return { docs, empty: docs.length === 0 };
     },
   };
@@ -36,21 +57,42 @@ function makeQuery(collection: string, wheres: Where[] = []) {
       wheres.some((w) => w[0] === "revisions.has_unapproved")
     );
   }
-  function isNewFeedback() {
+  function isFeedback() {
     return collection === "feedback";
+  }
+  function matchesFilters(d: Doc) {
+    return wheres.every(([field, op, value]) => {
+      if (op !== "==") throw new Error(`unexpected ${op} on ${collection}`);
+      return d.get(field as string) === value;
+    });
+  }
+  /** What Firestore hands back: in the order asked for, and no more than the
+   * limit. */
+  function shaped(docs: Doc[]) {
+    const ordered = [...docs].sort((a, b) => {
+      for (const [field, direction] of shape.orderBy) {
+        const [x, y] = [a.get(field), b.get(field)] as [string, string];
+        if (x !== y) return (x < y ? -1 : 1) * (direction === "desc" ? -1 : 1);
+      }
+      return 0;
+    });
+    return ordered.slice(0, shape.limit ?? ordered.length);
   }
 
   function total() {
     if (isEdgeRevisions()) return results.edgeRevisions.count;
     if (isUnapprovedNodes()) return results.unapprovedNodes.count;
-    if (isNewFeedback()) return results.newFeedback.count;
+    // Counted from the documents, so the count and the read agree on which
+    // reports the filters let through.
+    if (isFeedback())
+      return shaped(results.feedback.filter(matchesFilters)).length;
     throw new Error(`unexpected count() on ${collection}`);
   }
   function resolve() {
     if (collection === "notes") return results.notes;
     if (isEdgeRevisions()) return results.edgeRevisions.docs;
     if (isUnapprovedNodes()) return results.unapprovedNodes.docs;
-    if (isNewFeedback()) return results.newFeedback.docs;
+    if (isFeedback()) return results.feedback.filter(matchesFilters);
     // The remaining read on `nodes` resolves names for the notes sample.
     return results.namedNodes;
   }
@@ -123,17 +165,35 @@ function edgeRevision(id: string, edgeId: string, automatic = false) {
   });
 }
 
+/** A report as /api/feedback/create writes it: status "new", and no queueRank
+ * until somebody puts it in the queue on /admin/opinie. */
+function report(
+  id: string,
+  createdAt: string,
+  extra: Record<string, unknown> = {},
+) {
+  return doc(id, {
+    kind: "bug",
+    message: `Zgłoszenie ${id}`,
+    context: { route: "/entity/person/1" },
+    createdAt,
+    adminStatus: "new",
+    ...extra,
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetUser.mockResolvedValue({ uid: "admin-1", admin: true });
   results.notes = [];
   results.unapprovedNodes = { count: 0, docs: [] };
   results.edgeRevisions = { count: 0, docs: [] };
-  results.newFeedback = { count: 0, docs: [] };
+  results.feedback = [];
   results.namedNodes = [];
   byId.revisions = {};
   byId.edges = {};
   byId.nodes = {};
+  reads.length = 0;
 });
 
 describe("GET /api/admin/summary", () => {
@@ -182,6 +242,146 @@ describe("GET /api/admin/summary", () => {
       kind: "change_request",
       adminType: null,
     });
+  });
+
+  it("leaves a report somebody has put in the queue out of the untriaged count", async () => {
+    results.feedback = [
+      report("fb-unranked", "2026-09-20T10:00:00.000Z"),
+      // Given a place in the queue on /admin/opinie: somebody has decided when
+      // it gets worked on, which is triage even though it still says "nowe".
+      report("fb-ranked", "2026-09-21T10:00:00.000Z", { queueRank: 1024 }),
+      // The first report put in an empty queue gets rank 0, so a truthiness
+      // check on the rank would take it for one nobody has placed.
+      report("fb-first", "2026-09-22T10:00:00.000Z", { queueRank: 0 }),
+      // Dropped above the head of the queue, where ranks go below zero.
+      report("fb-top", "2026-09-22T11:00:00.000Z", { queueRank: -1024 }),
+    ];
+
+    const summary = await handler({} as never);
+
+    expect(summary.feedback.needsAction).toBe(1);
+    expect(summary.feedback.sample.map((item) => item.id)).toEqual([
+      "fb-unranked",
+    ]);
+  });
+
+  it("counts only reports still marked new, queued or not", async () => {
+    results.feedback = [
+      report("fb-new", "2026-09-20T10:00:00.000Z"),
+      // Somebody is on it, or it is closed: triaged either way, even with no
+      // place in the queue. One that has a place is not taken off the count
+      // of new ones a second time.
+      report("fb-progress", "2026-09-21T10:00:00.000Z", {
+        adminStatus: "in_progress",
+        queueRank: 0,
+      }),
+      report("fb-resolved", "2026-09-21T11:00:00.000Z", {
+        adminStatus: "resolved",
+      }),
+      report("fb-wont-fix", "2026-09-21T12:00:00.000Z", {
+        adminStatus: "wont_fix",
+      }),
+    ];
+
+    const summary = await handler({} as never);
+
+    expect(summary.feedback.needsAction).toBe(1);
+    expect(summary.feedback.sample.map((item) => item.id)).toEqual(["fb-new"]);
+  });
+
+  it("samples the newest untriaged reports but counts all of them", async () => {
+    // Twelve unranked reports, stored out of order so the order in the sample
+    // comes from what the handler asked for rather than from the fixture.
+    const days = [5, 12, 1, 9, 3, 11, 7, 2, 10, 4, 8, 6];
+    results.feedback = [
+      ...days.map((day) =>
+        report(
+          `fb-${day}`,
+          `2026-09-${String(day).padStart(2, "0")}T12:00:00.000Z`,
+        ),
+      ),
+      // Newer than any of them but already queued, so it must not take one of
+      // the eight slots either.
+      report("fb-queued", "2026-09-20T12:00:00.000Z", { queueRank: 0 }),
+    ];
+
+    const summary = await handler({} as never);
+
+    expect(summary.feedback.needsAction).toBe(12);
+    expect(summary.feedback.sample.map((item) => item.id)).toEqual([
+      "fb-12",
+      "fb-11",
+      "fb-10",
+      "fb-9",
+      "fb-8",
+      "fb-7",
+      "fb-6",
+      "fb-5",
+    ]);
+  });
+
+  it("reads only the newest new reports, so past the cap the count is an upper bound", async () => {
+    // One report a minute, oldest first. The newest is queued, and so are the
+    // two oldest - but those two are past what the handler reads, so it cannot
+    // know they are queued and still counts them.
+    const queued = new Set([0, 1, OPEN_CAP + 1]);
+    results.feedback = Array.from({ length: OPEN_CAP + 2 }, (_, i) =>
+      report(
+        `fb-${i}`,
+        new Date(Date.UTC(2026, 8, 1) + i * 60_000).toISOString(),
+        queued.has(i) ? { queueRank: i * QUEUE_STEP } : {},
+      ),
+    );
+
+    const summary = await handler({} as never);
+
+    expect(reads.filter((read) => read.collection === "feedback")).toEqual([
+      {
+        collection: "feedback",
+        wheres: [["adminStatus", "==", "new"]],
+        orderBy: [["createdAt", "desc"]],
+        limit: OPEN_CAP,
+      },
+    ]);
+    // 502 new, less the one queued report among the 500 it read.
+    expect(summary.feedback.needsAction).toBe(OPEN_CAP + 1);
+    expect(summary.feedback.sample.map((item) => item.id)).toEqual(
+      Array.from({ length: 8 }, (_, i) => `fb-${OPEN_CAP - i}`),
+    );
+  });
+
+  it("describes each sampled report the way the dashboard shows it", async () => {
+    results.feedback = [
+      report("fb-long", "2026-09-21T10:00:00.000Z", {
+        kind: "data",
+        message: "a".repeat(300),
+        context: { route: "/entity/person/7", pageTitle: "Jan Kowalski" },
+      }),
+      // Reports filed before the page title was captured have none.
+      report("fb-old", "2026-09-20T10:00:00.000Z"),
+    ];
+
+    const summary = await handler({} as never);
+
+    expect(summary.feedback.sample).toEqual([
+      {
+        id: "fb-long",
+        kind: "data",
+        // Trimmed: the dashboard shows a line of each, not the whole report.
+        message: "a".repeat(200),
+        route: "/entity/person/7",
+        pageTitle: "Jan Kowalski",
+        createdAt: "2026-09-21T10:00:00.000Z",
+      },
+      {
+        id: "fb-old",
+        kind: "bug",
+        message: "Zgłoszenie fb-old",
+        route: "/entity/person/1",
+        pageTitle: null,
+        createdAt: "2026-09-20T10:00:00.000Z",
+      },
+    ]);
   });
 
   it("counts unsettled edge revisions alongside unapproved nodes", async () => {

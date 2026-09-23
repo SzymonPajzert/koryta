@@ -835,6 +835,11 @@ export type Feedback = {
   createdAt: string;
   adminStatus: FeedbackStatus;
   adminNote?: string;
+  /** Place in the team's work queue on /admin/opinie, lowest first. Absent
+   * means nobody has put the report in the queue yet. Sparse on purpose - see
+   * `shared/feedbackQueue.ts` - so a move writes the moved report alone. Kept
+   * when the report is settled, so reopening it puts it back where it was. */
+  queueRank?: number;
   slack?: FeedbackSlackState;
 };
 
