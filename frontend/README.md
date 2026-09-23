@@ -133,6 +133,7 @@ same commit as the change itself:
   steps: ["Wejdź na /eksploruj/tabela", "Kliknij wiersz z osobą"],
   link: "/eksploruj/tabela",     // optional
   area: "public",                // public | contributor | admin
+  fixes: ["Kx8V2mQpZrT4bN7cYh1A"], // optional - reports from /admin/opinie this answers
 }
 ```
 
@@ -159,6 +160,18 @@ Slack channel and `/admin/opinie` with the entry and the verdict attached
 or anything somebody wrote out, but never a bare "działa" and never a re-save
 of the verdict that was already there. The `qaChecks` document is written
 first, so a Slack outage costs the report and never the tick.
+
+When the change answers a report from `/admin/opinie`, put the report's id in
+`fixes` - the part after `#fb-` in the Slack "Otwórz w panelu" link, or in the
+link on the card's date. It is a claim, not a verdict. The report shows a
+"Poprawka" chip for the newest entry naming it, coloured by everybody's current
+verdict on that entry on `/qa` - any "Coś nie działa" makes it red, and only
+that person changing their verdict clears it. Behind a click are the verdicts,
+the reports written while checking any of the entries naming it, and the older
+entries. When the chip is green and none of those reports is an open "Coś nie
+działa", the card offers "Zamknij jako załatwione" - nothing closes a report by
+itself. The joins live in `shared/feedbackFixes.ts`; ids that are not Firestore
+auto-ids fail `tests/shared/qa.test.ts`.
 
 ## Scripts reference
 

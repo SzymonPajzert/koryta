@@ -2,7 +2,9 @@ import { test, expect, type Page } from "@playwright/test";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { logIn, USERS } from "./helpers/auth";
+import { FEEDBACK_ID_PATTERN } from "../../shared/feedbackFixes";
 import type { Feedback } from "../../shared/model";
+import { QA_ITEMS } from "../../shared/qa";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -43,6 +45,13 @@ async function orderOf(page: Page, ids: string[]) {
     );
   return shown.filter((id): id is string => !!id && ids.includes(id));
 }
+
+/** A changelog entry that says it fixes a report, if any does yet. The list is
+ * code, so the spec cannot make one up - it borrows a real claim and seeds the
+ * report it names. */
+const CLAIM = QA_ITEMS.find((item) =>
+  item.fixes?.some((id) => FEEDBACK_ID_PATTERN.test(id)),
+);
 
 const rankOf = async (id: string) =>
   (await db().collection("feedback").doc(id).get()).data()?.queueRank as
@@ -159,5 +168,51 @@ test.describe("Kolejka zgłoszeń", () => {
     await expect(page.locator("[data-toggle-closed]")).toContainText(
       "Ukryj zamknięte",
     );
+  });
+
+  test("zgłoszenie pokazuje wpis QA, który je poprawia, i co napisali sprawdzający", async ({
+    page,
+  }) => {
+    test.skip(
+      !CLAIM,
+      "Żaden wpis w shared/qa.ts nie wskazuje jeszcze zgłoszenia.",
+    );
+    test.setTimeout(120_000);
+
+    const entry = CLAIM!;
+    const id = entry.fixes!.find((fix) => FEEDBACK_ID_PATTERN.test(fix))!;
+    const stamp = Date.now();
+    const checker = `e2echecker${stamp}`;
+
+    await db()
+      .collection("feedback")
+      .doc(id)
+      .set(report(stamp, "poprawiane", 0));
+    // Somebody else's verdict on the entry. Only its words are asserted:
+    // qa.spec writes verdicts on the newest entries in parallel, so the colour
+    // of the chip is not this spec's to know.
+    await db()
+      .collection("qaChecks")
+      .doc(`${entry.id}_${checker}`)
+      .set({
+        itemId: entry.id,
+        userUid: checker,
+        status: "ok",
+        feedback: `sprawdzone ${stamp}`,
+        updatedAt: new Date(stamp).toISOString(),
+      });
+
+    await logIn(page, USERS.admin, "/admin/opinie");
+    const card = page.locator(`#fb-${id}`);
+    await expect(card).toBeVisible({ timeout: 60_000 });
+
+    const chip = card.locator("[data-fix-state]");
+    await expect(chip).not.toHaveAttribute("data-fix-state", "loading", {
+      timeout: 30_000,
+    });
+    await chip.click();
+    const details = page.locator("[data-fix-details]");
+    await expect(details).toContainText(entry.title);
+    await expect(details).toContainText(`sprawdzone ${stamp}`);
   });
 });

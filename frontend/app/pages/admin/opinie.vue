@@ -46,6 +46,7 @@
       :inert="pending"
       :queue="queue"
       :inbox="inbox"
+      :fix-states="fixStates"
       @move="moveTo"
       @remove="(item) => setRank(item, null)"
     />
@@ -109,7 +110,8 @@
                   {{ feedbackKindConfig[item.kind].title }}
                 </v-chip>
                 <!-- A link to the card itself, so its id can be copied: the
-                     same #fb-<id> anchor Slack's "Otwórz w panelu" uses. -->
+                     same #fb-<id> anchor Slack's "Otwórz w panelu" uses, and
+                     what a QA entry names in `fixes`. -->
                 <a
                   :href="`#fb-${item.id}`"
                   class="text-caption text-medium-emphasis"
@@ -156,6 +158,31 @@
                   <v-icon start :icon="mdiLinkVariant" />
                   {{ item.context.pageTitle || item.context.route }}
                 </v-chip>
+                <!-- A change on the QA list says it fixes this report. -->
+                <FeedbackFixChip
+                  v-if="fixInfo.has(item.id!)"
+                  :entries="fixInfo.get(item.id!)!.entries"
+                  :state="fixInfo.get(item.id!)!.state"
+                  :verdicts="fixInfo.get(item.id!)!.verdicts"
+                  :blocked="fixInfo.get(item.id!)!.blocked"
+                  :follow-ups="fixInfo.get(item.id!)!.followUps"
+                  :reporter-uid="item.userUid"
+                />
+                <!-- This report was written while checking such a change:
+                     the way back to what the change was fixing. -->
+                <v-chip
+                  v-for="target in fixTargets.get(item.id!) ?? []"
+                  :key="target.id"
+                  size="x-small"
+                  label
+                  variant="outlined"
+                  :to="{ hash: `#fb-${target.id}` }"
+                  :title="target.message"
+                  data-fix-target
+                >
+                  <v-icon start :icon="mdiArrowULeftTop" />
+                  dotyczy zgłoszenia
+                </v-chip>
                 <v-chip
                   v-if="item.slack?.state === 'failed'"
                   size="x-small"
@@ -178,6 +205,18 @@
             </v-col>
 
             <v-col cols="12" md="4" class="pa-4">
+              <v-btn
+                v-if="fixInfo.get(item.id!)?.close"
+                class="mb-3 me-2"
+                size="small"
+                variant="tonal"
+                color="ink-success"
+                :prepend-icon="mdiCheckAll"
+                :loading="saving[item.id!]"
+                @click="updateAdmin(item, { adminStatus: 'resolved' })"
+              >
+                Zamknij jako załatwione
+              </v-btn>
               <v-btn
                 v-if="section.key === 'inbox'"
                 class="mb-3"
@@ -233,7 +272,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, onMounted, watch } from "vue";
 import {
+  mdiArrowULeftTop,
   mdiCheck,
+  mdiCheckAll,
   mdiChevronDown,
   mdiChevronUp,
   mdiClipboardCheckOutline,
@@ -243,6 +284,7 @@ import {
   mdiSort,
 } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
+import { useQaChecks } from "~/composables/qa";
 import { feedbackKindConfig } from "~/composables/feedback";
 import {
   compareNewest,
@@ -254,14 +296,40 @@ import {
   renumberQueue,
   slotHasRoom,
 } from "~~/shared/feedbackQueue";
-import { qaStatusLabels } from "~~/shared/qa";
+import {
+  blocksClosing,
+  fixIndex,
+  fixState,
+  fixTargetsOf,
+  followUpsOf,
+  suggestClose,
+  type FixState,
+} from "~~/shared/feedbackFixes";
+import {
+  QA_ITEMS,
+  qaStatusLabels,
+  type QaCheck,
+  type QaItem,
+} from "~~/shared/qa";
 import type { Feedback, FeedbackStatus } from "~~/shared/model";
 
 definePageMeta({
   middleware: "admin",
 });
 
+/** Which reports the QA list says it fixes. Built once: the list is code. */
+const fixes = fixIndex(QA_ITEMS);
+
 const route = useRoute();
+/** Verdicts from /qa. Re-read with every load of the list: this page judges
+ * other people's verdicts, and a copy from earlier in the session would
+ * disagree with the follow-up reports the list has just brought in. */
+const {
+  checks,
+  checksFor,
+  loaded: checksLoaded,
+  load: loadChecks,
+} = useQaChecks();
 
 const items = ref<Feedback[]>([]);
 const pending = ref(true);
@@ -332,6 +400,57 @@ const sections = computed(() => [
   },
 ]);
 
+/** For each report a QA entry claims to fix: the entries (newest first),
+ * the reports written while checking them, where the fix stands, and whether
+ * to offer closing the report. */
+const fixInfo = computed(() => {
+  const info = new Map<
+    string,
+    {
+      entries: QaItem[];
+      followUps: Feedback[];
+      state: FixState | null;
+      verdicts: QaCheck[];
+      close: boolean;
+      blocked: boolean;
+    }
+  >();
+  for (const item of items.value) {
+    const entries = fixes.get(item.id!);
+    if (!entries) continue;
+    const followUps = followUpsOf(item, entries, items.value);
+    const state = checksLoaded.value
+      ? fixState(entries[0]!, checks.value)
+      : null;
+    info.set(item.id!, {
+      entries,
+      followUps,
+      state,
+      verdicts: checksFor(entries[0]!.id),
+      close: !!state && suggestClose(item, state, followUps),
+      blocked:
+        !isSettled(item) && state === "works" && followUps.some(blocksClosing),
+    });
+  }
+  return info;
+});
+
+/** The same, reduced to the state, for the one-line rows of ordering mode. */
+const fixStates = computed(
+  () =>
+    new Map([...fixInfo.value].map(([id, { state }]) => [id, state] as const)),
+);
+
+/** For a report written while checking a fix: the reports it was a fix for. */
+const fixTargets = computed(() => {
+  const targets = new Map<string, Feedback[]>();
+  for (const item of items.value) {
+    const found = fixTargetsOf(item, fixes, items.value);
+    if (found.length > 0) targets.set(item.id!, found);
+  }
+  return targets;
+});
+
 /** Reports are written by anyone, including signed-out visitors, so the route
  * is never trusted as a link target. The API only accepts site-relative paths;
  * this refuses anything else outright rather than rendering it. */
@@ -358,6 +477,9 @@ const rankMoves = new Map<string, number>();
 const load = async () => {
   pending.value = true;
   loadError.value = "";
+  // Not awaited: the list is useful without the verdicts, and the chips say
+  // nothing about a fix until they arrive.
+  loadChecks(true);
   try {
     const include = hashTarget();
     const data = await authRequest<{

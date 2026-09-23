@@ -11,6 +11,10 @@
  * arrives long after the deploy. `id` is what joins the two, so ids are never
  * reused or renamed: doing so would silently move somebody's verdict onto a
  * different feature.
+ *
+ * An entry can also say which reports from /admin/opinie the change answers
+ * (`fixes`), and those reports then show the entry and what its checkers
+ * found - see `shared/feedbackFixes.ts`.
  */
 
 /** Where in the site a change is visible, which decides who can check it. */
@@ -29,6 +33,13 @@ export type QaItem = {
   /** Where to start, if the change lives on one page. */
   link?: string;
   area: QaArea;
+  /** Reports this change is meant to fix, as `feedback` document ids - the
+   * part after `#fb-` in Slack's "Otwórz w panelu" link, or in the link on a
+   * card's date on /admin/opinie. A claim made in the commit that makes the
+   * fix: the report then shows this entry and what people found checking it,
+   * and an admin closes the report once they say it works. Several entries
+   * may name one report (a fix, then a fix of the fix). */
+  fixes?: string[];
 };
 
 export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
@@ -47,6 +58,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * disagreed with the order often enough that the two had to be reconciled
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
+  {
+    id: "opinie-poprawki-z-qa",
+    title: "Wpis na tej liście może wskazać zgłoszenie, które poprawia",
+    description:
+      "Takie zgłoszenie ma na /admin/opinie chip „Poprawka”: szary, dopóki nikt nie sprawdził wpisu, zielony, gdy działa, " +
+      "czerwony, gdy ktoś zgłosił problem. Link do wpisu otwiera teraz /qa na tym wpisie, nawet jeśli już go oceniłeś.",
+    steps: [
+      "Na /admin/opinie kliknij chip „QA: …” przy zgłoszeniu napisanym z tej listy - /qa ma się otworzyć na tym wpisie.",
+      "Chip „Poprawka” pojawi się przy pierwszym zgłoszeniu, które wskaże któryś następny wpis. Wtedy kliknij go - ma pokazać wpis, oceny sprawdzających i zgłoszenia napisane po poprawce. Gdy chip jest zielony, a żadne z tych zgłoszeń nie jest otwartym „Coś nie działa”, karta ma przycisk „Zamknij jako załatwione”.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+  },
   {
     id: "opinie-kolejka",
     title: "Zgłoszenia da się ułożyć w kolejkę do zrobienia",

@@ -1,13 +1,17 @@
 import type { RouteLocationNormalizedLoaded } from "vue-router";
 import {
+  mdiAlertCircleOutline,
   mdiBug,
+  mdiCheckCircleOutline,
   mdiLightbulbOutline,
   mdiDatabaseEdit,
   mdiDotsHorizontal,
+  mdiProgressClock,
 } from "@mdi/js";
 import { parseEntityUrlSlug, seoTypes, type SeoType } from "./slugs";
 import { anonymousRequest, authRequest } from "./auth";
 import { feedbackKindLabels } from "~~/shared/model";
+import type { FixState } from "~~/shared/feedbackFixes";
 import type {
   FeedbackContext,
   FeedbackKind,
@@ -54,6 +58,26 @@ export const feedbackStatusConfig: Record<
   in_progress: { title: "W trakcie", color: "warning" },
   resolved: { title: "Załatwione", color: "success" },
   wont_fix: { title: "Nie robimy", color: "grey" },
+};
+
+/** How a fix claimed on the QA list reads on a report (`shared/feedbackFixes.ts`).
+ * Ink colours: the chip is tonal and the icon stands alone in the ordering
+ * rows, so the colour has to be readable as text. */
+export const fixStateConfig: Record<
+  FixState,
+  { label: string; icon: string; color: string }
+> = {
+  awaiting: {
+    label: "czeka na sprawdzenie",
+    icon: mdiProgressClock,
+    color: "ink-neutral",
+  },
+  works: { label: "działa", icon: mdiCheckCircleOutline, color: "ink-success" },
+  broken: {
+    label: "nie działa",
+    icon: mdiAlertCircleOutline,
+    color: "ink-danger",
+  },
 };
 
 /** The node the route is about, when it is about one.

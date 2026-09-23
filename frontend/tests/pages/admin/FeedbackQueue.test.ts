@@ -1,12 +1,40 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { defineComponent, h } from "vue";
+import { defineComponent, h, ref } from "vue";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { useRouter } from "#app";
 import OpiniePage from "../../../app/pages/admin/opinie.vue";
 import type { Feedback, FeedbackStatus } from "~~/shared/model";
+import type { QaCheck, QaCheckStatus, QaItem } from "~~/shared/qa";
 
-const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
+const { mockAuthRequest, claimed, fixEntries } = vi.hoisted(() => {
+  /** Reports a QA entry names in `fixes`. Only Firestore auto-ids count as
+   * such, so these are 20 letters and digits where the rest are short. */
+  const claimed = {
+    works: "works000000000000000",
+    blocked: "blocked0000000000000",
+    broken: "broken00000000000000",
+    awaiting: "awaiting000000000000",
+  };
+  const entry = (id: string, fixes: string[]): QaItem => ({
+    id,
+    title: `Poprawka ${id}`,
+    description: "Coś poprawiono.",
+    steps: ["Sprawdź"],
+    area: "admin",
+    fixes,
+  });
+  return {
+    mockAuthRequest: vi.fn(),
+    claimed,
+    fixEntries: [
+      entry("fix-works", [claimed.works]),
+      entry("fix-blocked", [claimed.blocked]),
+      entry("fix-broken", [claimed.broken]),
+      entry("fix-awaiting", [claimed.awaiting]),
+    ],
+  };
+});
 
 vi.mock("~/composables/auth", () => ({
   authRequest: mockAuthRequest,
@@ -17,6 +45,26 @@ vi.mock("@plausible-analytics/tracker", () => ({
   init: vi.fn(),
   track: vi.fn(),
 }));
+
+/** The changelog, as far as this page reads it: which reports it claims. */
+vi.mock("~~/shared/qa", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~~/shared/qa")>()),
+  QA_ITEMS: fixEntries,
+}));
+
+/** Everybody's verdicts from /qa. Loaded unless a test says otherwise. */
+const qaChecks = {
+  checks: ref<QaCheck[]>([]),
+  loaded: ref(true),
+  load: vi.fn(async (_force?: boolean) => undefined),
+  // The composable's own: everybody's verdicts on one entry, newest first.
+  checksFor: (itemId: string) =>
+    qaChecks.checks.value
+      .filter((check) => check.itemId === itemId)
+      .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
+};
+
+vi.mock("~/composables/qa", () => ({ useQaChecks: () => qaChecks }));
 
 const feedback = (
   id: string,
@@ -170,6 +218,8 @@ const startOrdering = async (wrapper: Wrapper) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  qaChecks.checks.value = [];
+  qaChecks.loaded.value = true;
 });
 
 afterEach(() => {
@@ -766,5 +816,198 @@ describe("admin feedback queue", () => {
     expect(gets()[0]![1].query).toEqual({ include: "100%" });
     expect(cardIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
     error.mockRestore();
+  });
+});
+
+describe("fixes claimed on the QA list", () => {
+  const verdict = (
+    itemId: string,
+    userUid: string,
+    status: QaCheckStatus,
+  ): QaCheck => ({ itemId, userUid, status });
+
+  /** Everybody who has checked a fix so far. One "issue" is enough to call a
+   * fix broken, whatever else was said about it. */
+  const verdicts = (): QaCheck[] => [
+    verdict("fix-works", "checker", "ok"),
+    verdict("fix-blocked", "checker", "ok"),
+    verdict("fix-broken", "checker", "ok"),
+    verdict("fix-broken", "other", "issue"),
+  ];
+
+  /** A report written on /qa while checking one of the fixes. */
+  const followUp = (
+    id: string,
+    itemId: string,
+    status: QaCheckStatus,
+    adminStatus: FeedbackStatus = "new",
+  ) =>
+    feedback(id, adminStatus, {
+      context: {
+        route: "/qa",
+        qa: { itemId, title: `Poprawka ${itemId}`, status },
+      },
+    });
+
+  /** One report per state a fix can be in, one nobody claims, and the
+   * follow-ups: on "works" only a note that it works and a problem that has
+   * been dealt with since, on "blocked" a problem still open. */
+  const reports = (): Feedback[] => [
+    feedback(claimed.works, "new"),
+    feedback(claimed.blocked, "new"),
+    feedback(claimed.broken, "new"),
+    feedback(claimed.awaiting, "in_progress"),
+    feedback("plain", "new"),
+    followUp("works-ok", "fix-works", "ok"),
+    followUp("works-old-issue", "fix-works", "issue", "resolved"),
+    followUp("blocked-issue", "fix-blocked", "issue"),
+  ];
+
+  const fixChip = (wrapper: Wrapper, id: string) =>
+    card(wrapper, id).find("[data-fix-state]");
+
+  const hasCloseButton = (wrapper: Wrapper, id: string) =>
+    card(wrapper, id)
+      .findAll("button")
+      .some((node) => node.text().trim() === "Zamknij jako załatwione");
+
+  it("colours the chip on a claimed report by what the checkers found", async () => {
+    qaChecks.checks.value = verdicts();
+    serve(reports());
+    const wrapper = await mount();
+
+    // Asked for once the page is up.
+    expect(qaChecks.load).toHaveBeenCalledTimes(1);
+    // Forced: verdicts from earlier in the session would be stale here.
+    expect(qaChecks.load).toHaveBeenCalledWith(true);
+
+    expect(fixChip(wrapper, claimed.works).attributes("data-fix-state")).toBe(
+      "works",
+    );
+    expect(fixChip(wrapper, claimed.works).text()).toBe("Poprawka: działa");
+    expect(fixChip(wrapper, claimed.broken).attributes("data-fix-state")).toBe(
+      "broken",
+    );
+    expect(fixChip(wrapper, claimed.broken).text()).toBe(
+      "Poprawka: nie działa",
+    );
+    expect(
+      fixChip(wrapper, claimed.awaiting).attributes("data-fix-state"),
+    ).toBe("awaiting");
+    expect(fixChip(wrapper, claimed.awaiting).text()).toBe(
+      "Poprawka: czeka na sprawdzenie",
+    );
+
+    // Nothing claims these, the follow-ups included.
+    expect(fixChip(wrapper, "plain").exists()).toBe(false);
+    expect(fixChip(wrapper, "works-ok").exists()).toBe(false);
+  });
+
+  it("links a report written while checking a fix back to the report it fixes", async () => {
+    qaChecks.checks.value = verdicts();
+    serve(reports());
+    const wrapper = await mount();
+
+    // Where each "dotyczy zgłoszenia" chip on a card leads. Asked of the chip
+    // rather than read off an href: there is no router link to render one here.
+    const targets = (id: string) =>
+      card(wrapper, id)
+        .findAllComponents({ name: "VChip" })
+        .filter((chip) => chip.attributes("data-fix-target") !== undefined)
+        .map((chip) => ({ text: chip.text(), to: chip.props("to") }));
+
+    expect(targets("blocked-issue")).toEqual([
+      { text: "dotyczy zgłoszenia", to: { hash: `#fb-${claimed.blocked}` } },
+    ]);
+    expect(targets("works-ok")).toEqual([
+      { text: "dotyczy zgłoszenia", to: { hash: `#fb-${claimed.works}` } },
+    ]);
+    // Neither the report being fixed nor one about something else points
+    // anywhere.
+    expect(targets(claimed.blocked)).toEqual([]);
+    expect(targets("plain")).toEqual([]);
+  });
+
+  it("offers closing a report only once its fix works and nothing reported against it is open", async () => {
+    qaChecks.checks.value = verdicts();
+    serve(reports());
+    const wrapper = await mount();
+
+    // "works" has a problem reported against it too, but it is closed.
+    expect(hasCloseButton(wrapper, claimed.works)).toBe(true);
+    // Works for its checker, but somebody's problem with it is still open.
+    expect(fixChip(wrapper, claimed.blocked).attributes("data-fix-state")).toBe(
+      "works",
+    );
+    expect(hasCloseButton(wrapper, claimed.blocked)).toBe(false);
+    expect(hasCloseButton(wrapper, claimed.broken)).toBe(false);
+    expect(hasCloseButton(wrapper, claimed.awaiting)).toBe(false);
+    expect(hasCloseButton(wrapper, "plain")).toBe(false);
+
+    await click(
+      button(card(wrapper, claimed.works), "Zamknij jako załatwione"),
+    );
+
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0]![1].body).toEqual({
+      id: claimed.works,
+      adminStatus: "resolved",
+    });
+    expect(card(wrapper, claimed.works).classes()).toContain(
+      "feedback-settled",
+    );
+    // Closed, so there is nothing left to offer.
+    expect(hasCloseButton(wrapper, claimed.works)).toBe(false);
+  });
+
+  it("says nothing about a fix until the checks have loaded", async () => {
+    // Until then every fix would read as unchecked, and none as working. The
+    // read is still out, which must not hold up the reports themselves.
+    qaChecks.loaded.value = false;
+    qaChecks.load.mockReturnValueOnce(new Promise(() => {}));
+    serve(reports());
+    const wrapper = await mount();
+
+    expect(fixChip(wrapper, claimed.works).attributes("data-fix-state")).toBe(
+      "loading",
+    );
+    expect(fixChip(wrapper, claimed.works).text()).toBe("Poprawka");
+    expect(hasCloseButton(wrapper, claimed.works)).toBe(false);
+
+    // Arriving after the list, as they may: the page catches up in place.
+    qaChecks.checks.value = verdicts();
+    qaChecks.loaded.value = true;
+    await flushPromises();
+
+    expect(fixChip(wrapper, claimed.works).attributes("data-fix-state")).toBe(
+      "works",
+    );
+    expect(hasCloseButton(wrapper, claimed.works)).toBe(true);
+  });
+
+  it("marks a claimed report in the one-line rows of ordering mode", async () => {
+    qaChecks.checks.value = verdicts();
+    serve([
+      feedback(claimed.broken, "new", { queueRank: 1024 }),
+      feedback("queued", "new", { queueRank: 2048 }),
+      feedback(claimed.works, "new"),
+      feedback("plain", "new"),
+    ]);
+    const wrapper = await mount();
+    await startOrdering(wrapper);
+
+    const icon = (kind: "queue" | "inbox", id: string) =>
+      wrapper
+        .get(`[data-${kind}-row][data-feedback-id="${id}"]`)
+        .find("[data-fix-state-icon]");
+
+    expect(icon("queue", claimed.broken).attributes("aria-label")).toBe(
+      "Poprawka: nie działa",
+    );
+    expect(icon("inbox", claimed.works).attributes("aria-label")).toBe(
+      "Poprawka: działa",
+    );
+    expect(icon("queue", "queued").exists()).toBe(false);
+    expect(icon("inbox", "plain").exists()).toBe(false);
   });
 });

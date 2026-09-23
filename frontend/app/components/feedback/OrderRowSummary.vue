@@ -18,17 +18,34 @@
   <span class="fb-message text-body-2" :title="item.message">
     {{ item.message }}
   </span>
+  <v-icon
+    v-if="fixState"
+    class="flex-0-0"
+    size="small"
+    :icon="fixStateConfig[fixState].icon"
+    :color="fixStateConfig[fixState].color"
+    :title="`Poprawka: ${fixStateConfig[fixState].label}`"
+    :aria-label="`Poprawka: ${fixStateConfig[fixState].label}`"
+    role="img"
+    aria-hidden="false"
+    data-fix-state-icon
+  />
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { feedbackKindConfig } from "~/composables/feedback";
+import { feedbackKindConfig, fixStateConfig } from "~/composables/feedback";
+import type { FixState } from "~~/shared/feedbackFixes";
 import type { Feedback, FeedbackKind } from "~~/shared/model";
 
 /** What a report is, in one line - enough to tell reports apart while
  * ordering them. The full text is in the tooltip and on the card in the other
  * mode. */
-const props = defineProps<{ item: Feedback }>();
+const props = defineProps<{
+  item: Feedback;
+  /** Where a fix claimed on the QA list stands, when there is one. */
+  fixState?: FixState | null;
+}>();
 
 /** Where it was written. Two reports can say the same few words - a QA
  * verdict with no note arrives as "Zgłoszono problem bez opisu." - and this

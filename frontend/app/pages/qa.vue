@@ -79,6 +79,7 @@
       :other-checks="otherChecks(item.id)"
       :reported-by-others="reportedByOthers(item.id)"
       :saving="savingId === item.id"
+      :report-ids="isAdmin ? item.fixes : undefined"
       @save="(status, feedback) => save(item.id, status, feedback)"
     />
 
@@ -89,7 +90,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useQaChecks } from "~/composables/qa";
 import { useAuthState } from "~/composables/auth";
 import type { QaCheckStatus, QaItemState } from "~~/shared/qa";
@@ -103,7 +104,7 @@ definePageMeta({
 
 useHead({ title: "QA - zmiany do sprawdzenia" });
 
-const { user } = useAuthState();
+const { user, isAdmin } = useAuthState();
 const {
   items,
   load,
@@ -132,6 +133,22 @@ const matches = (state: QaItemState) =>
 const visibleItems = computed(() =>
   items.filter((item) => matches(stateOf(item.id))),
 );
+
+const route = useRoute();
+
+/** Where a link to one entry lands - the "QA: …" chip and the "Poprawka" menu
+ * on /admin/opinie, Slack's "Otwórz wpis QA". The list opens on what this
+ * reader has not checked, and an entry they have is not rendered under that
+ * filter, so the router's own scroll to the hash finds nothing. */
+async function focusHashItem() {
+  const id = /^#qa-(.+)$/.exec(route.hash)?.[1];
+  if (!id || !loaded.value || !items.some((item) => item.id === id)) return;
+  if (!matches(stateOf(id))) filter.value = "all";
+  await nextTick();
+  document.getElementById(`qa-${id}`)?.scrollIntoView({ block: "start" });
+}
+
+watch([loaded, () => route.hash], focusHashItem, { immediate: true });
 
 /** Somebody else's verdicts on an entry - this reader's own is already shown
  * on the buttons, so repeating it below them says nothing. */

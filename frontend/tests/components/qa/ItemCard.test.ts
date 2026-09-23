@@ -23,6 +23,7 @@ const mount = async (
     myCheck: QaCheck | null;
     otherChecks: QaCheck[];
     reportedByOthers: boolean;
+    reportIds: string[];
   }> = {},
 ) =>
   await mountSuspended(ItemCard, {
@@ -33,6 +34,7 @@ const mount = async (
       myCheck: overrides.myCheck ?? null,
       otherChecks: overrides.otherChecks ?? [],
       reportedByOthers: overrides.reportedByOthers ?? false,
+      reportIds: overrides.reportIds,
     },
   });
 
@@ -121,5 +123,40 @@ describe("QaItemCard", () => {
       .findAllComponents({ name: "VBtn" })
       .find((button) => button.text().includes("Otwórz"));
     expect(open?.props("to")).toBe("/eksploruj/tabela");
+  });
+
+  it("links every report the change claims to fix to its card on /admin/opinie", async () => {
+    const wrapper = await mount("unchecked", {
+      reportIds: ["aaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbb"],
+    });
+
+    const chips = wrapper
+      .findAllComponents({ name: "VChip" })
+      .filter((chip) => chip.attributes("data-qa-report") !== undefined);
+    expect(chips.map((chip) => chip.text())).toEqual([
+      "Poprawia zgłoszenie 1",
+      "Poprawia zgłoszenie 2",
+    ]);
+    // RouterLink is stubbed here too, so the destination comes off the props.
+    expect(chips.map((chip) => chip.props("to"))).toEqual([
+      "/admin/opinie#fb-aaaaaaaaaaaaaaaaaaaa",
+      "/admin/opinie#fb-bbbbbbbbbbbbbbbbbbbb",
+    ]);
+  });
+
+  it("does not number the only report a change fixes", async () => {
+    const wrapper = await mount("unchecked", {
+      reportIds: ["aaaaaaaaaaaaaaaaaaaa"],
+    });
+
+    const chips = wrapper.findAll("[data-qa-report]");
+    expect(chips.map((chip) => chip.text())).toEqual(["Poprawia zgłoszenie"]);
+  });
+
+  it("shows no report links when the page passes none", async () => {
+    // qa.vue leaves `reportIds` out for anyone but an admin.
+    const wrapper = await mount("unchecked");
+    expect(wrapper.findAll("[data-qa-report]")).toHaveLength(0);
+    expect(wrapper.text()).not.toContain("Poprawia zgłoszenie");
   });
 });
