@@ -8,7 +8,8 @@ documents, which are junk, and which sections to crawl first.
 from __future__ import annotations
 
 import re
-from urllib.parse import parse_qsl, urlencode
+
+from entities.util import format_query, parse_query
 
 # URL shapes that serve a file rather than a page. Measured across the sample in
 # BIP_SCRAPING_80_20.md; extensionless endpoints (attachments/download, getFile)
@@ -127,7 +128,7 @@ def normalize_url(url: str) -> str:
         return clean
     pairs: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for key, value in parse_qsl(query, keep_blank_values=True):
+    for key, value in parse_query(query):
         key = _AMP_PREFIX_RE.sub("", key)
         if not key or key.lower() in _NOISE_QUERY_PARAMS:
             continue
@@ -137,7 +138,7 @@ def normalize_url(url: str) -> str:
         seen.add(pair)
         pairs.append(pair)
     pairs.sort()
-    return f"{base}?{urlencode(pairs)}"
+    return f"{base}?{format_query(pairs)}"
 
 
 def is_low_value_url(url: str) -> bool:

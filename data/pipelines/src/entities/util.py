@@ -1,7 +1,7 @@
 """Utility data classes and functions for data processing."""
 
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 
 @dataclass
@@ -77,3 +77,13 @@ class NormalizedParse:
             query=query,
             full_url=parsed.geturl(),
         )
+
+
+def parse_query(query: str) -> list[tuple[str, str]]:
+    """Decoded key/value pairs from a query string, blanks and order kept."""
+    return parse_qsl(query, keep_blank_values=True)
+
+
+def format_query(pairs: list[tuple[str, str]]) -> str:
+    """Encode key/value pairs back into a query string."""
+    return urlencode(pairs)
