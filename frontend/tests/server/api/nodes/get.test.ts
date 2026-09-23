@@ -110,4 +110,22 @@ describe("GET /api/nodes/[id]", () => {
     nodes["person-1"]!.published = false;
     await expect(call()).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  // `revision_id: null` marks a page waiting for its first review, and the
+  // shape check used to refuse it - so every one of them answered 500.
+  it("hides a page waiting for its first review with a 404", async () => {
+    nodes["person-1"]!.published = false;
+    nodes["person-1"]!.revision_id = null;
+    await expect(call()).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("serves a published page whose revision_id is null", async () => {
+    nodes["person-1"]!.revision_id = null;
+    expect((await call()).node.name).toBe("Anna Nowak");
+  });
+
+  it("still refuses a published page with no name", async () => {
+    delete nodes["person-1"]!.name;
+    await expect(call()).rejects.toThrow();
+  });
 });
