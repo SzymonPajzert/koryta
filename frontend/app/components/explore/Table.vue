@@ -562,14 +562,15 @@ const props = withDefaults(
     sortBy: () => [],
     noDataText: "Brak danych",
     itemsPerPageText: "Wierszy na stronę:",
-    // Vuetify's defaults, except that the last one is labelled by its English
-    // locale string ("All") - the app never sets a Polish locale.
+    // Vuetify's defaults less the last, "All". It asks for `limit=-1`, and the
+    // rows come a page at a time from /api/nodes, which cannot be asked for
+    // every row at once - picking it was a 500 and an empty table. /zrodla
+    // leaves it out for the same reason.
     itemsPerPageOptions: () => [
       { value: 10, title: "10" },
       { value: 25, title: "25" },
       { value: 50, title: "50" },
       { value: 100, title: "100" },
-      { value: -1, title: "Wszystkie" },
     ],
     loadingText: "Ładowanie...",
     hideDefaultFooter: false,

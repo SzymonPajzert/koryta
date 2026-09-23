@@ -54,6 +54,7 @@
         :items="items"
         :items-length="totalItems"
         :loading="pending"
+        :items-per-page-options="[10, 25, 50, 100]"
         @update:options="fetchData"
       >
         <template #[`item.name`]="{ item }">
