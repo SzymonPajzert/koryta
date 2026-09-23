@@ -425,7 +425,7 @@ class BipCoordinator:
         print(
             "hosts ok={ok} partial={partial} dead={dead} active={active} | "
             "urls queued={queued} claimed={claimed} | docs={docs} | "
-            "this run: pages={pages} new={new} seen={seen} errors={errors}".format(
+            "this run: pages={pages} docs+={new} dup={seen} errors={errors}".format(
                 ok=stats.get("hosts_ok"),
                 partial=stats.get("hosts_partial"),
                 dead=stats.get("hosts_dead"),

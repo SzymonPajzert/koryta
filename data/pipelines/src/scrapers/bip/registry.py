@@ -8,11 +8,21 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
 
 from entities.util import NormalizedParse
 from scrapers.bip.models import HostRow, RegistryEntry
 
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
+
+
+def _is_root_url(url: str) -> bool:
+    """True for `https://host/` (or bare host) with no userinfo garbage."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return (parts.path or "/") == "/" and "@" not in parts.netloc
 
 
 def _text(row: ET.Element, tag: str) -> str:
@@ -67,7 +77,14 @@ def parse_subjects_xml(xml_bytes: bytes) -> list[RegistryEntry]:
 
 
 def hosts_from_entries(entries: list[RegistryEntry]) -> list[HostRow]:
-    """Deduplicate registry rows into one row per host, preserving order."""
+    """Deduplicate registry rows into one row per host, preserving order.
+
+    Shared portals host many institutions under one hostname (the City of
+    Poznań and a dozen of its units all live on `bip.poznan.pl`). The registry
+    is institution-keyed, so the host's representative is the row with a
+    root-path URL when one exists — that is the umbrella institution whose seed
+    covers the whole portal — instead of whichever unit happens to come first.
+    """
     hosts: dict[str, HostRow] = {}
     for entry in entries:
         if not entry.host:
@@ -81,12 +98,13 @@ def hosts_from_entries(entries: list[RegistryEntry]) -> list[HostRow]:
                 teryt=entry.teryt,
                 entry_count=1,
             )
-        else:
-            hosts[entry.host] = HostRow(
-                host=existing.host,
-                name=existing.name,
-                source_url=existing.source_url,
-                teryt=existing.teryt or entry.teryt,
-                entry_count=existing.entry_count + 1,
-            )
+            continue
+        promote = _is_root_url(entry.url) and not _is_root_url(existing.source_url)
+        hosts[entry.host] = HostRow(
+            host=existing.host,
+            name=entry.name if promote else existing.name,
+            source_url=entry.url if promote else existing.source_url,
+            teryt=(entry.teryt or existing.teryt) if promote else existing.teryt,
+            entry_count=existing.entry_count + 1,
+        )
     return list(hosts.values())

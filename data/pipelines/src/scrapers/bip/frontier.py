@@ -40,6 +40,7 @@ class BipFrontier:
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (host) DO UPDATE
                    SET name = EXCLUDED.name,
+                       source_url = EXCLUDED.source_url,
                        entry_count = EXCLUDED.entry_count,
                        teryt = COALESCE(NULLIF(EXCLUDED.teryt, ''), bip_hosts.teryt)
                 """,
@@ -196,28 +197,47 @@ class BipFrontier:
         limit: int,
         lock_seconds: int,
     ) -> list[UrlRow]:
+        """Claim up to `limit` URLs, round-robin across the active hosts.
+
+        Candidates are ranked within each host and taken in rank order, so a
+        single host with a huge queue cannot monopolize every worker: a batch
+        normally covers `limit` different hosts before any host gets a second
+        claim.
+        """
         if not hosts:
+            return []
+        candidates = self.pg.fetchall(
+            """
+            SELECT url FROM (
+                SELECT url, priority, first_seen,
+                       row_number() OVER (
+                           PARTITION BY host ORDER BY priority, first_seen
+                       ) AS host_rank
+                  FROM bip_urls
+                 WHERE host = ANY(%s)
+                   AND (state = 'queued'
+                        OR (state = 'claimed' AND locked_until < now()))
+            ) ranked
+            ORDER BY host_rank, priority, first_seen
+            LIMIT %s
+            """,
+            (hosts, limit),
+        )
+        if not candidates:
             return []
         rows = self.pg.fetchall(
             """
-            UPDATE bip_urls u
+            UPDATE bip_urls
                SET state = 'claimed',
                    locked_by = %s,
                    locked_until = now() + make_interval(secs => %s),
                    attempts = attempts + 1
-             WHERE u.url IN (
-                   SELECT url FROM bip_urls
-                    WHERE host = ANY(%s)
-                      AND (state = 'queued'
-                           OR (state = 'claimed' AND locked_until < now()))
-                    ORDER BY priority, first_seen
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT %s
-             )
-            RETURNING u.url, u.host, u.kind, u.discovered_from,
-                      u.depth, u.section, u.priority
+             WHERE url = ANY(%s)
+               AND (state = 'queued'
+                    OR (state = 'claimed' AND locked_until < now()))
+            RETURNING url, host, kind, discovered_from, depth, section, priority
             """,
-            (worker_id, lock_seconds, hosts, limit),
+            (worker_id, lock_seconds, [r[0] for r in candidates]),
         )
         return [
             UrlRow(
