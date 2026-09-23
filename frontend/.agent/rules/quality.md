@@ -19,7 +19,9 @@
    entry off for anybody else). An `id` is never renamed or reused: it is what
    somebody's stored verdict points at, and what a report written there links
    back to - a verdict with anything written on it is forwarded to Slack and
-   `/admin/opinie` like any other piece of feedback.
+   `/admin/opinie` like any other piece of feedback. If the change answers a
+   report from `/admin/opinie`, list the report's id in the entry's `fixes`:
+   the report then shows the entry and what its checkers found.
 
 1. **Domain Knowledge**:
    - For working with Revisions and Edges, verify `.agent/skills/revisions.md`.

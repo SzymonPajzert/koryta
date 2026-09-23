@@ -43,7 +43,10 @@
         <span class="fb-pos text-body-2 font-weight-bold"
           >{{ index + 1 }}.</span
         >
-        <FeedbackOrderRowSummary :item="item" />
+        <FeedbackOrderRowSummary
+          :item="item"
+          :fix-state="fixStates?.get(item.id!)"
+        />
         <div class="fb-actions">
           <v-btn
             icon
@@ -129,7 +132,10 @@
           @dragend="onDragEnd"
         >
           <v-icon :icon="mdiDragVertical" class="fb-handle" size="small" />
-          <FeedbackOrderRowSummary :item="item" />
+          <FeedbackOrderRowSummary
+            :item="item"
+            :fix-state="fixStates?.get(item.id!)"
+          />
           <div class="fb-actions">
             <v-btn
               icon
@@ -169,6 +175,7 @@ import {
   mdiDragVertical,
   mdiPlus,
 } from "@mdi/js";
+import type { FixState } from "~~/shared/feedbackFixes";
 import type { Feedback } from "~~/shared/model";
 
 const props = defineProps<{
@@ -176,6 +183,8 @@ const props = defineProps<{
   queue: Feedback[];
   /** Open reports nobody has put in the queue yet, newest first. */
   inbox: Feedback[];
+  /** Where the fix a QA entry claims for a report stands, if one does. */
+  fixStates?: ReadonlyMap<string, FixState | null>;
 }>();
 
 /** `index` is the slot among the queue *without* the moved report - "third"

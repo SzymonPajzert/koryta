@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { computed, ref } from "vue";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { computed, nextTick, ref } from "vue";
+import { flushPromises } from "@vue/test-utils";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
@@ -77,12 +78,39 @@ vi.mock("~/composables/qa", () => ({
   }),
 }));
 
-const mountPage = () =>
-  mountSuspended(QaPage, { global: { plugins: [vuetify] } });
+/** Every wrapper this file has mounted. The page watches the route hash, and
+ * each mount navigates, so a page left mounted would react to the next test's
+ * route - and scroll the next test's card. */
+const mounted: { unmount: () => void }[] = [];
+
+const mountPage = async (route = "/") => {
+  const wrapper = await mountSuspended(QaPage, {
+    route,
+    // In the document, so the page can find the card it scrolls to by id.
+    attachTo: document.body,
+    global: { plugins: [vuetify] },
+  });
+  mounted.push(wrapper);
+  return wrapper;
+};
+
+/** The ids of the elements the page scrolled into view, in order. */
+const scrolled: string[] = [];
 
 beforeEach(() => {
   vi.clearAllMocks();
   loaded.value = true;
+  scrolled.length = 0;
+  vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (
+    this: Element,
+  ) {
+    scrolled.push(this.id);
+  });
+});
+
+afterEach(() => {
+  while (mounted.length) mounted.pop()!.unmount();
+  vi.restoreAllMocks();
 });
 
 describe("QA page", () => {
@@ -144,5 +172,82 @@ describe("QA page", () => {
     await ok.trigger("click");
 
     expect(saveCheck).toHaveBeenCalledWith("new-thing", "ok", "działa u mnie");
+  });
+
+  describe("a link to one entry", () => {
+    type Wrapper = Awaited<ReturnType<typeof mountPage>>;
+
+    /** The label of the filter that is on. */
+    const activeFilter = (wrapper: Wrapper) =>
+      wrapper.get(".v-btn-toggle .v-btn--active").text();
+
+    /** Opens the page the way a link from /admin/opinie or Slack does: the
+     * hash is there from the start, the verdicts arrive after. */
+    const follow = async (hash: string) => {
+      loaded.value = false;
+      const wrapper = await mountPage(`/${hash}`);
+      loaded.value = true;
+      await flushPromises();
+      await nextTick();
+      return wrapper;
+    };
+
+    it("switches to every entry for one this reader has already checked", async () => {
+      const wrapper = await follow("#qa-done-thing");
+
+      // "Do sprawdzenia" does not render it, so there would be nothing to
+      // scroll to.
+      expect(activeFilter(wrapper)).toBe("Wszystkie");
+      expect(wrapper.find('[data-qa-item="done-thing"]').exists()).toBe(true);
+      expect(scrolled).toEqual(["qa-done-thing"]);
+    });
+
+    it("waits for the verdicts before choosing the filter", async () => {
+      loaded.value = false;
+      const wrapper = await mountPage("/#qa-done-thing");
+
+      // No card is rendered until then, and nothing is known about which ones
+      // this reader has checked.
+      expect(scrolled).toEqual([]);
+      expect(activeFilter(wrapper)).toMatch(/^Do sprawdzenia/);
+    });
+
+    it("shows the entry when the verdicts were in before the page opened", async () => {
+      // Back from /admin/opinie, which loads them too.
+      const wrapper = await mountPage("/#qa-done-thing");
+
+      expect(activeFilter(wrapper)).toBe("Wszystkie");
+      expect(wrapper.find('[data-qa-item="done-thing"]').exists()).toBe(true);
+      // Not the scroll: mountSuspended's async setup puts the page in the
+      // document after the tick the page waits for, which a router-rendered
+      // page does not.
+    });
+
+    it("keeps the default filter when it already shows the entry", async () => {
+      const wrapper = await follow("#qa-new-thing");
+
+      expect(activeFilter(wrapper)).toMatch(/^Do sprawdzenia/);
+      expect(scrolled).toEqual(["qa-new-thing"]);
+    });
+
+    it("ignores a hash that names no entry", async () => {
+      const wrapper = await follow("#qa-gone");
+
+      expect(activeFilter(wrapper)).toMatch(/^Do sprawdzenia/);
+      expect(wrapper.find('[data-qa-item="done-thing"]').exists()).toBe(false);
+      expect(scrolled).toEqual([]);
+    });
+
+    it("follows a hash that changes while the page is open", async () => {
+      const wrapper = await mountPage();
+      expect(activeFilter(wrapper)).toMatch(/^Do sprawdzenia/);
+
+      await useRouter().push({ path: "/", hash: "#qa-done-thing" });
+      await flushPromises();
+      await nextTick();
+
+      expect(activeFilter(wrapper)).toBe("Wszystkie");
+      expect(scrolled).toEqual(["qa-done-thing"]);
+    });
   });
 });

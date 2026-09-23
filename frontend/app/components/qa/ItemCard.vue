@@ -1,7 +1,7 @@
 <template>
   <!-- The id is what a card in Slack links back to: a report written here
        arrives with a "Otwórz wpis QA" button pointing at this anchor. -->
-  <v-card :id="`qa-${item.id}`" class="mb-4" :data-qa-item="item.id">
+  <v-card :id="`qa-${item.id}`" class="qa-card mb-4" :data-qa-item="item.id">
     <v-card-item>
       <template #prepend>
         <v-icon :icon="stateIcon" :color="qaStateConfig[state].color" />
@@ -22,6 +22,22 @@
           label
         >
           Ktoś zgłosił problem
+        </v-chip>
+        <!-- The reports this change says it fixes, for whoever can open them.
+             The label stays short: the report itself is one click away. -->
+        <v-chip
+          v-for="(reportId, index) in reportIds ?? []"
+          :key="reportId"
+          size="x-small"
+          variant="outlined"
+          label
+          :to="`/admin/opinie#fb-${reportId}`"
+          data-qa-report
+        >
+          <v-icon start :icon="mdiWrenchOutline" />
+          Poprawia zgłoszenie{{
+            (reportIds?.length ?? 0) > 1 ? ` ${index + 1}` : ""
+          }}
         </v-chip>
       </v-card-subtitle>
     </v-card-item>
@@ -130,6 +146,7 @@ import {
   mdiChevronUp,
   mdiOpenInNew,
   mdiProgressQuestion,
+  mdiWrenchOutline,
 } from "@mdi/js";
 import { computed, ref, watch } from "vue";
 import {
@@ -154,6 +171,9 @@ const props = defineProps<{
   reportedByOthers?: boolean;
   /** The page is writing this card's verdict right now. */
   saving?: boolean;
+  /** The reports on /admin/opinie this change says it fixes (`QaItem.fixes`),
+   * passed only to admins - nobody else can open them. */
+  reportIds?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -187,6 +207,13 @@ const myVerdictLabel = computed(() =>
 </script>
 
 <style scoped>
+/* A link to one entry scrolls it to the top of the window, where the app bar
+ * would cover its title - the same allowance the help page gives its
+ * headings. */
+.qa-card {
+  scroll-margin-top: 96px;
+}
+
 .qa-steps {
   padding-left: 1.25rem;
 }
