@@ -49,6 +49,9 @@ def dict_diff(d1, d2):
 ROLE_LEVELS = {
     "of0BKlwqWLX21Cuml4NMHZ18xoC3": Level.ADMIN,
     "REdyYP4uvMSgCEjdSoiEHqy360G3": Level.ADMIN,
+    "8DomV5BlwlgPI9iLSDA2wHk168h1": Level.ADMIN,
+    "7bu9zrX4OzVrrq1atEF7vsehea52": Level.ADMIN,
+    "9YY314GDLUauY92yNpjdgYL2ONr2": Level.ADMIN,
 }
 
 # Administrators on trial. They hold `admin` like any other, plus `newAdmin`,
@@ -64,7 +67,9 @@ ROLE_LEVELS = {
 #   the script. Do not delete their line instead: the script only visits
 #   ROLE_LEVELS, so the claims they hold now, admin included, would stay.
 NEW_ADMINS = {
-    "REdyYP4uvMSgCEjdSoiEHqy360G3",
+    "8DomV5BlwlgPI9iLSDA2wHk168h1",
+    "7bu9zrX4OzVrrq1atEF7vsehea52",
+    "9YY314GDLUauY92yNpjdgYL2ONr2",
 }
 
 PROJECT_ID = "koryta-pl"
