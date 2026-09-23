@@ -48,6 +48,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "pasek-zalogowanych-menu",
+    title: "Pasek zalogowanych zajmuje mniej miejsca",
+    description:
+      "Strony administracyjne są teraz w menu „Admin”, a GitHub i dyskusja w affine - w menu „Zespół”. " +
+      "Na pasku zostały „Rewizje” i „Aktywność”.",
+    steps: [
+      "Z konta administratora kliknij „Admin” - menu ma mieć „Panel administracyjny”, „Kolejka zmian”, „Notatki” i „Zgłoszenia”, a przycisk „Admin” ma być podświetlony na każdej z tych stron.",
+      "Na stronie głównej kliknij „Zespół” - „Nowy bug w GitHubie” i „Dyskusja w affine” mają się otwierać w nowej karcie.",
+    ],
+    link: "/",
+    area: "contributor",
+  },
+  {
     id: "aktywnosc-nowych-administratorow",
     title: "Aktywność nowych administratorów da się oglądać osobno",
     description:
