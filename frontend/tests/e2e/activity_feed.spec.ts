@@ -92,7 +92,7 @@ test("a reader sees their own vote named and an admin's publication masked", asy
     .getByTestId("feed-item")
     .filter({ hasText: "ocenił/a 1 osobę" });
   await expect(own).toBeVisible({ timeout: 30_000 });
-  await expect(own).toContainText("· Ty");
+  await expect(own).toContainText("Ty");
   await expect(own.getByRole("link", { name: personName })).toBeVisible();
 
   const published = page

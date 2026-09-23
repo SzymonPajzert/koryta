@@ -48,6 +48,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "aktywnosc-czytelniejsza",
+    title: "Aktywność: każda strona osobno, rodzaj akcji na ikonie",
+    description:
+      "Nazwy stron pod linijką zlewały się w jeden ciąg tekstu. Teraz każda strona to osobna zielona " +
+      "etykieta z ikoną, a kółko przy linijce mówi, czy to ocena, publikacja czy usunięcie.",
+    steps: [
+      "Wejdź na /aktywnosc - pod każdą linijką strony mają być osobnymi etykietami, a przy linijce kolorowe kółko z ikoną.",
+    ],
+    link: "/aktywnosc",
+    area: "contributor",
+  },
+  {
     id: "pasek-zalogowanych-menu",
     title: "Pasek zalogowanych zajmuje mniej miejsca",
     description:
@@ -83,7 +95,7 @@ export const QA_ITEMS: QaItem[] = [
       "widać tylko u osób, które włączyły ją w profilu - reszta to „Anonim”.",
     steps: [
       "Kliknij „Aktywność” na pasku - lista ma być pogrupowana po dniach, z godziną i linkami do stron.",
-      "Oceń kogoś w tabeli i wróć po kilku minutach - na górze ma być Twoja linijka z dopiskiem „· Ty”.",
+      "Oceń kogoś w tabeli i wróć po kilku minutach - na górze ma być Twoja linijka z oznaczeniem „Ty”.",
       "Na /profil przełącznik widoczności nazwy ma teraz wspominać także o aktywności.",
     ],
     link: "/aktywnosc",

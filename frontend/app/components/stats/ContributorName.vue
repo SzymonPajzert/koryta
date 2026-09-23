@@ -17,8 +17,11 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { mdiAccountCircle, mdiEyeOffOutline } from "@mdi/js";
-import type { ActivityContributor } from "~~/server/api/stats/activity.get";
+import {
+  contributorNameExplanation,
+  contributorNameIcon,
+  type ContributorNameRow,
+} from "~/utils/contributorName";
 
 /** One name in the public ranking, as far as the reader is allowed to see it.
  *
@@ -28,46 +31,21 @@ import type { ActivityContributor } from "~~/server/api/stats/activity.get";
  * there is no identity to fetch and nothing to fall back to.
  *
  * Only the fields it draws, so an actor from `/api/activity/feed` - decided by
- * the server the same way - fits as well as a ranking row.
+ * the server the same way - fits as well as a ranking row. What the name says
+ * about itself lives in `utils/contributorName`, which the feed shares.
  */
 const props = defineProps<{
-  row: Pick<
-    ActivityContributor,
-    "name" | "named" | "isSelf" | "photoURL" | "publicName"
-  >;
-  /** The reader is an administrator, who is shown every name whatever its
-   * owner chose - so "agreed to be shown" would be a claim about somebody who
-   * may never have. */
+  row: ContributorNameRow;
+  /** The reader is an administrator, shown every name whatever its owner
+   * chose. */
   identified?: boolean;
 }>();
 
-/** Whether everybody else sees the name on this chip. For your own row that
- * is `publicName`, not `named`: your name is shown to you whatever the setting,
- * and "visible to everyone" over a name the others see masked is a false
- * statement about your privacy. `named` stands in for a row sent without it. */
-const shownToOthers = computed(() =>
-  props.row.isSelf
-    ? (props.row.publicName ?? props.row.named)
-    : props.row.named,
-);
+const icon = computed(() => contributorNameIcon(props.row));
 
-const icon = computed(() =>
-  shownToOthers.value ? mdiAccountCircle : mdiEyeOffOutline,
+const explanation = computed(() =>
+  contributorNameExplanation(props.row, props.identified),
 );
-
-const explanation = computed(() => {
-  if (props.row.isSelf) {
-    return shownToOthers.value
-      ? "To Ty. Twoja nazwa jest widoczna dla wszystkich."
-      : "To Ty. Inni widzą w tym miejscu zamazaną nazwę — możesz to zmienić w swoim profilu.";
-  }
-  if (props.identified && props.row.named) {
-    return "Widzisz tę nazwę jako administrator. Inni widzą ją tylko wtedy, gdy ta osoba włączyła to w profilu.";
-  }
-  return props.row.named
-    ? "Ta osoba zgodziła się, żeby jej nazwa była widoczna publicznie."
-    : "Ta osoba nie pokazuje swojej nazwy publicznie.";
-});
 </script>
 
 <style scoped>
