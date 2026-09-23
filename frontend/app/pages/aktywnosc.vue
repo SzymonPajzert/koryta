@@ -8,62 +8,67 @@
       </p>
     </div>
 
-    <!-- Scrolls sideways rather than wrapping: five outlined buttons do not
-         fit 375px, and a toggle broken over two lines stops reading as one
-         choice. -->
-    <div class="activity__kinds mb-3">
-      <v-btn-toggle
+    <div class="mb-6">
+      <!-- The kinds wrap rather than slide: a sideways-scrolling row on a phone
+           cut the last chip in half with nothing to say more were there. -->
+      <v-chip-group
         v-model="kindGroup"
-        density="compact"
-        variant="outlined"
-        divided
         mandatory
+        column
+        selected-class="activity__kind--on"
+        class="py-0"
       >
-        <v-btn :value="ALL_KINDS" size="small">Wszystko</v-btn>
-        <v-btn
+        <v-chip :value="ALL_KINDS" variant="outlined" class="activity__kind">
+          Wszystko
+        </v-chip>
+        <v-chip
           v-for="group in kindGroupOptions"
           :key="group"
           :value="group"
-          size="small"
+          variant="outlined"
+          class="activity__kind"
         >
           {{ feedKindGroupLabels[group] }}
-        </v-btn>
-      </v-btn-toggle>
-    </div>
+        </v-chip>
+      </v-chip-group>
 
-    <div
-      v-if="feed?.identified || personLabel"
-      class="d-flex flex-wrap align-center ga-2 mb-4"
-    >
-      <!-- Off the response, not off `isAdmin`: the claim says "admin", and a
-           trial administrator holds it too. Only the server knows who counts
-           as established, and it says so with `identified`. -->
-      <v-chip
-        v-if="feed?.identified"
-        :variant="showingNewAdmins ? 'flat' : 'outlined'"
-        :class="{ 'bg-surface-warning': showingNewAdmins }"
-        :prepend-icon="mdiAccountClockOutline"
-        :aria-pressed="showingNewAdmins"
-        data-testid="activity-new-admins"
-        @click="toggleNewAdmins"
+      <!-- Who, rather than what: a row of its own under the kinds, so it never
+           wraps behind a divider that has nothing left of it. -->
+      <div
+        v-if="feed?.identified || personLabel"
+        class="d-flex flex-wrap align-center ga-2 mt-1"
       >
-        Nowi administratorzy
-      </v-chip>
-      <!-- The label truncates rather than the chip: an administrator's label
-           can be a whole email address, and at 375px that pushed the close
-           button past the edge of the screen. -->
-      <v-chip
-        v-if="personLabel"
-        closable
-        class="activity__person"
-        :prepend-icon="mdiFilterVariant"
-        data-testid="activity-person-filter"
-        @click:close="clearPerson"
-      >
-        <span class="text-truncate" :title="personLabel">{{
-          personLabel
-        }}</span>
-      </v-chip>
+        <!-- Off the response, not off `isAdmin`: the claim says "admin", and a
+             trial administrator holds it too. Only the server knows who counts
+             as established, and it says so with `identified`. -->
+        <v-chip
+          v-if="feed?.identified"
+          :variant="showingNewAdmins ? 'flat' : 'outlined'"
+          class="activity__kind"
+          :class="{ 'bg-surface-warning text-ink-warning': showingNewAdmins }"
+          :prepend-icon="mdiAccountClockOutline"
+          :aria-pressed="showingNewAdmins"
+          data-testid="activity-new-admins"
+          @click="toggleNewAdmins"
+        >
+          Nowi administratorzy
+        </v-chip>
+        <!-- The label truncates rather than the chip: an administrator's label
+             can be a whole email address, and at 375px that pushed the close
+             button past the edge of the screen. -->
+        <v-chip
+          v-if="personLabel"
+          closable
+          class="activity__person bg-surface-sage text-ink-sage"
+          :prepend-icon="mdiFilterVariant"
+          data-testid="activity-person-filter"
+          @click:close="clearPerson"
+        >
+          <span class="text-truncate" :title="personLabel">{{
+            personLabel
+          }}</span>
+        </v-chip>
+      </div>
     </div>
 
     <!-- Everybody on trial, including whoever did nothing - which is exactly
@@ -151,26 +156,11 @@
         "
       />
 
-      <section
-        v-for="group in dayGroups"
-        :key="group.day"
-        class="mb-4"
-        data-testid="activity-day"
-      >
-        <h2 class="text-subtitle-2 text-medium-emphasis mb-1">
-          {{ group.label }}
-        </h2>
-        <v-card variant="outlined">
-          <template v-for="(batch, index) in group.batches" :key="batch.id">
-            <v-divider v-if="index > 0" />
-            <ActivityFeedItem
-              :batch="batch"
-              :actor="actorOf(batch)"
-              @select-actor="focusActor"
-            />
-          </template>
-        </v-card>
-      </section>
+      <ActivityFeedTimeline
+        :groups="dayGroups"
+        :actor-of="actorOf"
+        @select-actor="focusActor"
+      />
 
       <!-- One button, like the home feed's: it pages through what is loaded,
            and once that runs out on a week it asks for the month. A second
@@ -178,7 +168,9 @@
            without knowing how the list is fetched. -->
       <div v-if="moreLabel" class="d-flex justify-center mt-4">
         <v-btn
-          variant="outlined"
+          variant="tonal"
+          color="ink-sage"
+          class="activity__more"
           :loading="loadingOlder"
           data-testid="activity-more"
           @click="showMore"
@@ -567,13 +559,27 @@ const dayGroups = computed(() => {
 </script>
 
 <style scoped>
-.activity__kinds {
-  overflow-x: auto;
-  scrollbar-width: none;
+/* Quiet until picked: a row of five outlined capitals was the loudest thing
+   on the page, louder than the lines it filters. Picked, a chip takes the
+   header's sage with the ink that reads on it, so the one that is on is also
+   the one that stands out. */
+.activity__kind {
+  border-color: rgba(var(--v-border-color), 0.24);
+  color: rgb(var(--v-theme-ink-neutral));
 }
 
-.activity__kinds::-webkit-scrollbar {
-  display: none;
+.activity__kind--on {
+  background: rgb(var(--v-theme-primary));
+  border-color: transparent;
+  color: rgb(var(--v-theme-ink-strong));
+  font-weight: 500;
+}
+
+/* A sentence, not a shout: Vuetify's buttons are capitals with tracking to
+   match, and this one sat under a soft list as the hardest thing on it. */
+.activity__more {
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 /* Vuetify lets the chip shrink but not its content, so the label cannot

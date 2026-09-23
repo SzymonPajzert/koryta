@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
-import FeedItem from "../../../app/components/activity/FeedItem.vue";
+import FeedTimeline from "../../../app/components/activity/FeedTimeline.vue";
 import type {
   FeedActor,
   FeedBatch,
@@ -44,10 +44,18 @@ const batch = (overrides: Partial<FeedBatch> = {}): FeedBatch => ({
   ...overrides,
 });
 
-const mountItem = (props: { batch?: FeedBatch; actor?: FeedActor } = {}) =>
-  mountSuspended(FeedItem, {
-    props: { batch: batch(), actor: actor(), ...props },
+/** One day holding one line: what the old single-line component was, so the
+ * behaviours it pinned down carry over as they were. */
+const mountItem = (props: { batch?: FeedBatch; actor?: FeedActor } = {}) => {
+  const line = props.batch ?? batch();
+  const who = props.actor ?? actor();
+  return mountSuspended(FeedTimeline, {
+    props: {
+      groups: [{ day: "2026-09-22", label: "Dzisiaj", batches: [line] }],
+      actorOf: () => who,
+    },
   });
+};
 
 type Wrapper = Awaited<ReturnType<typeof mountItem>>;
 
@@ -63,7 +71,7 @@ const linkTargets = (wrapper: Wrapper) =>
     .findAllComponents({ name: "NuxtLink" })
     .map((link) => link.props("to") as string);
 
-describe("ActivityFeedItem", () => {
+describe("ActivityFeedTimeline", () => {
   it("says who did what in one sentence", async () => {
     const wrapper = await mountItem({
       batch: batch({ count: 15, objects: { person: 15 } }),
@@ -175,9 +183,69 @@ describe("ActivityFeedItem", () => {
     expect(linkTargets(wrapper)).toContain(
       "/admin/rewizje/kolejka?rewizja=rev-1",
     );
+    // One page, so the reason does not name it again.
     expect(wrapper.get('[data-testid="feed-item-reason"]').text()).toBe(
-      "Osoba a: duplikat strony",
+      "duplikat strony",
     );
+  });
+
+  it("says which page a reason is about when there is a choice", async () => {
+    const wrapper = await mountItem({
+      batch: batch({
+        kind: "reject",
+        count: 2,
+        targets: [target("a", { reason: "brak źródła" }), target("b")],
+      }),
+    });
+
+    expect(wrapper.get('[data-testid="feed-item-reason"]').text()).toBe(
+      "Osoba a: brak źródła",
+    );
+  });
+
+  it("sets the second half of a fact or relation apart, keeping its text", async () => {
+    const wrapper = await mountItem({
+      batch: batch({
+        count: 2,
+        objects: { fact: 1, edge: 1 },
+        targets: [
+          target("f", { type: "fact", name: "Jan Kowalski · PKP SA" }),
+          target("e", { type: "edge", name: "Jan Kowalski → PKP SA" }),
+        ],
+      }),
+    });
+
+    const rests = wrapper
+      .findAll(".ft-target__rest")
+      .map((node) => node.text());
+    expect(rests).toEqual(["· PKP SA", "→ PKP SA"]);
+    expect(targetNames(wrapper)[0]).toContain("Jan Kowalski · PKP SA");
+  });
+
+  it("shows what kind of thing was done before a word is read", async () => {
+    const wrapper = await mountItem({ batch: batch({ kind: "delete" }) });
+
+    expect(wrapper.get(".ft-badge").attributes("aria-label")).toBe("Usunięcie");
+  });
+
+  it("puts each day under its own heading", async () => {
+    const wrapper = await mountSuspended(FeedTimeline, {
+      props: {
+        groups: [
+          { day: "2026-09-22", label: "Dzisiaj", batches: [batch()] },
+          {
+            day: "2026-09-21",
+            label: "Wczoraj",
+            batches: [batch({ id: "named-1:vote:2026-09-21T10:00:00.000Z" })],
+          },
+        ],
+        actorOf: () => actor(),
+      },
+    });
+
+    expect(
+      wrapper.findAll('[data-testid="activity-day"] h2').map((h) => h.text()),
+    ).toEqual(["Dzisiaj", "Wczoraj"]);
   });
 
   it("marks an administrator on trial", async () => {

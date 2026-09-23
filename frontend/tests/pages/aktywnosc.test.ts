@@ -195,6 +195,10 @@ const itemTexts = (wrapper: Wrapper) =>
 const button = (wrapper: Wrapper, label: string) =>
   wrapper.findAll("button").find((node) => node.text() === label)!;
 
+/** The kind filters are chips in a group, which Vuetify draws as spans. */
+const chip = (wrapper: Wrapper, label: string) =>
+  wrapper.findAll(".v-chip").find((node) => node.text() === label)!;
+
 beforeEach(() => {
   vi.clearAllMocks();
   inFlight = 0;
@@ -235,7 +239,7 @@ describe("/aktywnosc", () => {
     serve({ 7: contributorFeed() });
     const wrapper = await mountPage();
 
-    await button(wrapper, "Notatki").trigger("click");
+    await chip(wrapper, "Notatki").trigger("click");
     await vi.waitUntil(() => itemTexts(wrapper).length === 1, {
       timeout: 2000,
     });
