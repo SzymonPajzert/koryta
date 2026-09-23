@@ -52,6 +52,29 @@ def test_hosts_dedupe_by_host() -> None:
     assert hosts[0].entry_count == 2
 
 
+def test_shared_portal_prefers_root_entry_as_representative() -> None:
+    deep_first = b"""<resultset>
+      <row><id>1</id><name>Przedszkole Nr 96</name>
+        <url>https://bip.city.pl/bip/przedszkole,1442/</url></row>
+      <row><id>2</id><name>Urzad Miasta</name><url>https://bip.city.pl/</url></row>
+      <row><id>3</id><name>Zly adres</name><url>http://szkola@bip.city.pl</url></row>
+    </resultset>"""
+    hosts = hosts_from_entries(parse_subjects_xml(deep_first))
+    assert len(hosts) == 1
+    assert hosts[0].name == "Urzad Miasta"
+    assert hosts[0].source_url == "https://bip.city.pl/"
+    assert hosts[0].entry_count == 3
+
+    root_first = b"""<resultset>
+      <row><id>1</id><name>Urzad Miasta</name><url>https://bip.city.pl/</url></row>
+      <row><id>2</id><name>Przedszkole Nr 96</name>
+        <url>https://bip.city.pl/bip/przedszkole,1442/</url></row>
+    </resultset>"""
+    hosts = hosts_from_entries(parse_subjects_xml(root_first))
+    assert hosts[0].name == "Urzad Miasta"
+    assert hosts[0].source_url == "https://bip.city.pl/"
+
+
 # -- classification ----------------------------------------------------------
 def test_document_url_patterns() -> None:
     assert is_document_url("https://bip.x.pl/attachments/download/97417")
@@ -73,6 +96,29 @@ def test_url_helpers() -> None:
     assert normalize_url("https://bip.x.pl/a/#frag") == "https://bip.x.pl/a"
     assert host_of("https://www.bip.x.pl/a") == "bip.x.pl"
     assert path_of("https://bip.x.pl/a/b?q=1") == "/a/b?q=1"
+
+
+def test_normalize_url_collapses_echoed_query_junk() -> None:
+    base = "http://www.bip.mops.radom.pl/rejestr-zmian.html"
+    expected = f"{base}?acc_cr=1&acc_pa=1&page=6"
+    assert (
+        normalize_url(f"{base}?amp%3Bamp%3Bacc_pa=1&amp;amp%3Bacc_cr=1&page=6&acc_pa=1")
+        == expected
+    )
+    assert (
+        normalize_url(f"{base}?amp%3Bamp%3Bamp%3Bacc_pa=1&amp%3Bacc_cr=1&amp;page=6")
+        == expected
+    )
+
+
+def test_normalize_url_drops_image_map_coordinates() -> None:
+    assert normalize_url(
+        "https://www.bip.tczow.akcessnet.net/index.php"
+        "?job=wiad&idg=4&id=377&x=123&y=101&n_id=449"
+    ) == (
+        "https://www.bip.tczow.akcessnet.net/index.php"
+        "?id=377&idg=4&job=wiad&n_id=449"
+    )
 
 
 # -- shared utils ------------------------------------------------------------
@@ -196,14 +242,26 @@ class FakeFrontier:
     def claim_urls(
         self, worker_id: str, *, hosts: list[str], limit: int, lock_seconds: int
     ) -> list[UrlRow]:
-        claimed = []
-        for url, state in list(self.states.items()):
-            if self.urls[url].host not in hosts:
-                continue
-            if state == "queued":
+        queues: dict[str, list[str]] = {}
+        for url, state in self.states.items():
+            row = self.urls[url]
+            if state == "queued" and row.host in hosts:
+                queues.setdefault(row.host, []).append(url)
+        for urls in queues.values():
+            urls.sort(key=lambda u: (self.urls[u].priority, u))
+        claimed: list[UrlRow] = []
+        while len(claimed) < limit:
+            progressed = False
+            for urls in queues.values():
+                if not urls:
+                    continue
+                progressed = True
+                url = urls.pop(0)
                 self.states[url] = "claimed"
                 claimed.append(self.urls[url])
-            if len(claimed) >= limit:
+                if len(claimed) >= limit:
+                    break
+            if not progressed:
                 break
         return claimed
 
@@ -243,6 +301,25 @@ class FakeFrontier:
             "docs_per_min": 0.0,
             "hosts_per_min": 0.0,
         }
+
+
+def test_claim_urls_round_robins_across_hosts() -> None:
+    hosts = [
+        HostRow(host="a.pl", name="A", source_url="", teryt="", entry_count=1),
+        HostRow(host="b.pl", name="B", source_url="", teryt="", entry_count=1),
+    ]
+    frontier = FakeFrontier(hosts)
+    for i in range(3):
+        frontier.queue_url(
+            UrlRow(url=f"https://a.pl/d{i}.pdf", host="a.pl", kind="doc", priority=10)
+        )
+        frontier.queue_url(
+            UrlRow(url=f"https://b.pl/{i}", host="b.pl", kind="page", priority=50)
+        )
+    claimed = frontier.claim_urls(
+        "c", hosts=["a.pl", "b.pl"], limit=4, lock_seconds=60
+    )
+    assert [row.host for row in claimed] == ["a.pl", "b.pl", "a.pl", "b.pl"]
 
 
 def _site_pages():
