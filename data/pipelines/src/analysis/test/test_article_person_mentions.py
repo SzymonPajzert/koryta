@@ -108,11 +108,25 @@ def test_party_match_terms_include_short_and_full():
 def test_party_match_terms_koryta_short_labels():
     assert _party_match_terms("pis") == {"pis", "prawo i sprawiedliwosc"}
     assert _party_match_terms("psl") == {"psl", "polskie stronnictwo ludowe"}
-    # PO is an ordinary Polish word, so only the coalition name is searched.
-    assert _party_match_terms("po") == {"koalicja obywatelska"}
+    # PO is an ordinary Polish word, so the party is searched by name - and by
+    # both its names, because an article from before the KO rename says
+    # "Platforma Obywatelska".
+    assert _party_match_terms("po") == {
+        "koalicja obywatelska",
+        "platforma obywatelska",
+    }
     assert _party_match_terms("polska 2050") == {"polska 2050", "pl2050"}
     assert _party_match_terms("nowa lewica") == {"nowa lewica"}
     assert _party_match_terms("konfederacja") == {"konfederacja"}
+
+
+def test_party_match_terms_fold_a_renamed_party_both_ways():
+    # A stored full committee name resolves to both spellings too, so a pre-2018
+    # article about a PO person still yields party proof.
+    ko = _party_match_terms("koalicja obywatelska")
+    assert "platforma obywatelska" in ko
+    po = _party_match_terms("platforma obywatelska")
+    assert "koalicja obywatelska" in po
 
 
 def test_rejestr_io_id_extraction():

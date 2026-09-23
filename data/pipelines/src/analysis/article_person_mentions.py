@@ -289,11 +289,22 @@ _PARTY_KEYS = (
 # committee names still resolve through the generic loop below.
 _KORYTA_PARTY_TERMS: dict[str, set[str]] = {
     "pis": {"pis", "prawo i sprawiedliwosc"},
-    "po": {"koalicja obywatelska"},
+    "po": {"koalicja obywatelska", "platforma obywatelska"},
     "psl": {"psl", "polskie stronnictwo ludowe"},
     "polska 2050": {"polska 2050", "pl2050"},
     "nowa lewica": {"nowa lewica"},
     "konfederacja": {"konfederacja"},
+}
+
+# A party under a newer name is still the same party: an article from before a
+# rename names it the old way. Platforma Obywatelska became Koalicja
+# Obywatelska, so a stored "koalicja obywatelska" has to match "Platforma
+# Obywatelska" too or every pre-2018 article about a PO person loses its only
+# party proof. "PO" itself stays out of the search terms - it is an ordinary
+# Polish word and would prove nothing.
+_PARTY_ALIASES: dict[str, set[str]] = {
+    "koalicja obywatelska": {"platforma obywatelska"},
+    "platforma obywatelska": {"koalicja obywatelska"},
 }
 
 
@@ -309,10 +320,16 @@ def _party_match_terms(party_norm: str) -> set[str]:
     if party_norm in _KORYTA_PARTY_TERMS:
         return set(_KORYTA_PARTY_TERMS[party_norm])
     terms: set[str] = set()
+    if party_norm in _PARTY_ALIASES:
+        # A stored name that is not a `_PARTY_KEYS` needle, e.g. a bare
+        # "platforma obywatelska", is still spelled a second way in older text.
+        terms.add(party_norm)
     for key, needle in _PARTY_KEYS:
         if needle in party_norm:
             terms.add(key)
             terms.add(needle)
+    for term in list(terms):
+        terms.update(_PARTY_ALIASES.get(term, ()))
     return terms
 
 
