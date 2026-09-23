@@ -47,6 +47,10 @@ vi.hoisted(() => {
   globalThis.createError = (err: any) => err;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.defineEventHandler = (fn: any) => fn;
+  // server/utils/fetch.ts, where `dropSearchIndex` lives, wraps a Nitro
+  // auto-import at module load.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  globalThis.defineCachedFunction = (fn: any) => fn;
 });
 globalThis.getRouterParam = vi.fn(() => "person-1");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,5 +131,11 @@ describe("GET /api/nodes/[id]", () => {
   it("still refuses a published page with no name", async () => {
     delete nodes["person-1"]!.name;
     await expect(call()).rejects.toThrow();
+  });
+
+  // The search index is for /api/search's query; no reader needs it back.
+  it("leaves the search index out of the page", async () => {
+    nodes["person-1"]!.nameChunksLower = ["a", "an", "anna"];
+    expect((await call()).node).not.toHaveProperty("nameChunksLower");
   });
 });

@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import {
+  dropSearchIndex,
   fetchNodes,
   fetchOptionsValidator,
   paginate,
@@ -230,7 +231,7 @@ export default defineEventHandler(async (event) => {
     }
 
     let nodesArray = snapshot!.docs.map((doc) => {
-      const data = doc.data();
+      const data = dropSearchIndex(doc.data());
       if (data.revision_id) {
         if (typeof data.revision_id.path === "string") {
           data.revision_id = data.revision_id.path;
