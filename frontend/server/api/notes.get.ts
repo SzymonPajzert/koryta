@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getFirestore, FieldPath } from "firebase-admin/firestore";
 import { paginate } from "~~/server/utils/fetch";
+import { requireAdmin } from "~~/server/utils/auth";
 import { defineEventHandler, getValidatedQuery } from "h3";
 import type { Note } from "~~/shared/model";
 
@@ -10,7 +11,19 @@ const queryValidator = z.object({
   page: z.coerce.number().optional(),
 });
 
+/** Every note entry, with its author's uid and the name of the page it is on.
+ *
+ * Admin-only, for the reason /api/notes/admin is. Notes on a person are
+ * unreviewed claims about a named individual - `EntityDetailView` withholds
+ * them from logged out readers - and this joins them with pages that may not
+ * be published. It used to answer anybody: in September 2026 all 861 entries,
+ * 549 of them about people with no public page, were one unauthenticated
+ * request away, and something paged through every one of them twice in a day.
+ * Nothing in the app calls it; the admin queue reads /api/notes/admin.
+ */
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event);
+
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
   // TODO check it in zed
   if (query.limit > 50) throw createError({ statusCode: 400 });
