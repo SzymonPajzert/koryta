@@ -62,14 +62,51 @@
       >
         <v-spacer />
 
-        <v-btn
+        <!-- The panel and the three inboxes it lists, under the panel's own
+             names. The activator has no `to` of its own - it would navigate
+             and open the menu at once - so it is lit by hand instead. -->
+        <v-menu
           v-if="isAdmin"
-          :prepend-icon="mdiShieldAccount"
-          variant="text"
-          to="/admin"
+          location="bottom start"
+          content-class="user-toolbar-menu"
         >
-          Admin
-        </v-btn>
+          <template #activator="{ props: menu }">
+            <v-btn
+              v-bind="menu"
+              :prepend-icon="mdiShieldAccount"
+              :append-icon="mdiChevronDown"
+              :active="onAdminPage"
+              :aria-current="onAdminPage || undefined"
+              variant="text"
+            >
+              Admin
+            </v-btn>
+          </template>
+          <v-list density="compact" min-width="220">
+            <v-list-item
+              :prepend-icon="mdiShieldAccount"
+              to="/admin"
+              exact
+              title="Panel administracyjny"
+            />
+            <v-divider />
+            <v-list-item
+              :prepend-icon="mdiInboxArrowDown"
+              to="/admin/rewizje/kolejka"
+              title="Kolejka zmian"
+            />
+            <v-list-item
+              :prepend-icon="mdiNoteEditOutline"
+              to="/admin/notatki"
+              title="Notatki"
+            />
+            <v-list-item
+              :prepend-icon="mdiMessageAlertOutline"
+              to="/admin/opinie"
+              title="Zgłoszenia"
+            />
+          </v-list>
+        </v-menu>
         <v-btn :prepend-icon="mdiViewList" variant="text" to="/admin/rewizje">
           Rewizje
         </v-btn>
@@ -80,47 +117,40 @@
         >
           Aktywność
         </v-btn>
-        <v-btn
-          v-if="isAdmin"
-          :prepend-icon="mdiInboxArrowDown"
-          variant="text"
-          to="/admin/rewizje/kolejka"
-        >
-          Kolejka
-        </v-btn>
-        <v-btn
-          v-if="isAdmin"
-          :prepend-icon="mdiNoteTextOutline"
-          variant="text"
-          to="/admin/notatki"
-        >
-          Notatki
-        </v-btn>
-        <v-btn
-          v-if="isAdmin"
-          :prepend-icon="mdiMessageAlertOutline"
-          variant="text"
-          to="/admin/opinie"
-        >
-          Zgłoszenia
-        </v-btn>
-        <v-btn
-          :prepend-icon="mdiLightningBolt"
-          variant="text"
-          href="https://github.com/users/SzymonPajzert/projects/2/views/3"
-          target="_blank"
-        >
-          Nowy bug w GitHubie
-        </v-btn>
-        <v-btn
-          v-if="affineLink"
-          :prepend-icon="mdiLightningBolt"
-          variant="text"
-          :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
-          target="_blank"
-        >
-          Dyskusja w affine
-        </v-btn>
+        <!-- Both leave the site. It stays a menu on pages with no affine board
+             too, so the strip is the same shape on every page rather than
+             growing a button a tick after the route changes. -->
+        <v-menu location="bottom start" content-class="user-toolbar-menu">
+          <template #activator="{ props: menu }">
+            <v-btn
+              v-bind="menu"
+              :prepend-icon="mdiAccountGroupOutline"
+              :append-icon="mdiChevronDown"
+              variant="text"
+            >
+              Zespół
+            </v-btn>
+          </template>
+          <v-list density="compact" min-width="220">
+            <v-list-item
+              :prepend-icon="mdiGithub"
+              :append-icon="mdiOpenInNew"
+              href="https://github.com/users/SzymonPajzert/projects/2/views/3"
+              target="_blank"
+              rel="noopener"
+              title="Nowy bug w GitHubie"
+            />
+            <v-list-item
+              v-if="affineLink"
+              :prepend-icon="mdiCommentTextOutline"
+              :append-icon="mdiOpenInNew"
+              :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
+              target="_blank"
+              rel="noopener"
+              title="Dyskusja w affine"
+            />
+          </v-list>
+        </v-menu>
         <v-spacer icon />
       </v-toolbar>
     </ClientOnly>
@@ -139,12 +169,16 @@
 <script lang="ts" setup>
 import {
   mdiAccount,
+  mdiAccountGroupOutline,
+  mdiChevronDown,
+  mdiCommentTextOutline,
+  mdiGithub,
   mdiInboxArrowDown,
-  mdiLightningBolt,
+  mdiOpenInNew,
   mdiShieldAccount,
   mdiTimelineClockOutline,
   mdiViewList,
-  mdiNoteTextOutline,
+  mdiNoteEditOutline,
   mdiMessageAlertOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
@@ -162,6 +196,14 @@ const maxWidth = computed(() =>
 );
 const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const affineLink = computed(() => route?.meta?.affineLink);
+/** Whether the page is admin-only, which is what the "Admin" menu stands for
+ * while it is closed - the panel's pages without an entry of their own too.
+ * Read off the page's middleware rather than its path: /admin/rewizje and a
+ * single revision live under /admin but are open to every signed-in reader,
+ * and the router serves /admin/notatki/ as the same page as /admin/notatki. */
+const onAdminPage = computed(() =>
+  [route?.meta?.middleware].flat().includes("admin"),
+);
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
 
