@@ -48,6 +48,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wezwanie-do-pomocy-dwa-panele",
+    title: "Wezwanie do sprawdzania osób na stronie głównej ma nowy wygląd",
+    description:
+      "Postęp sprawdzania był wąską kolumną z drobnym podpisem, a pod drobnym drukiem zostawał duży " +
+      "pusty margines. Teraz liczby są na niebieskim panelu obok przycisków, a drobny druk mieści się w jednym pasku na dole karty.",
+    steps: [
+      "Otwórz stronę główną i przewiń do „Zostało jeszcze dużo osób do sprawdzenia” - po lewej ma być niebieski panel z liczbą sprawdzonych osób, legendą i paskiem, po prawej nagłówek i przyciski.",
+      "Na telefonie panel z liczbami ma być nad nagłówkiem, a nic nie może wystawać poza ekran.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "aktywnosc-czytelniejsza",
     title: "Aktywność: każda strona osobno, rodzaj akcji na ikonie",
     description:
@@ -167,13 +180,13 @@ export const QA_ITEMS: QaItem[] = [
       "do wyboru i przy każdej rzeczy pisze, czy trzeba konta.",
     steps: [
       "Otwórz stronę główną i przewiń do sekcji z paskiem postępu - nagłówek ma kończyć się słowami „do sprawdzenia”.",
-      "W sekcji ma być jeden wyróżniony przycisk „Sprawdź pierwszą osobę”, a obok niego dwa zwykłe odnośniki.",
+      "W sekcji ma być jeden wypełniony przycisk „Sprawdź pierwszą osobę”, a przy nim dwa mniej wyróżnione: „Zgłoś błąd albo pomysł” i „Inne sposoby pomocy”.",
       "Kliknij „(i)” przy nagłówku - ma się pokazać wyjaśnienie, na czym polega sprawdzanie.",
-      "Kliknij „Zgłoś błąd albo podrzuć pomysł” - ma się otworzyć to samo okno co po kliknięciu „Zgłoś” w prawym dolnym rogu.",
-      "Kliknij „Wszystkie sposoby pomocy” - na stronie „Jak możesz pomóc” sześć kafelków ma być widoczne bez przewijania.",
+      "Kliknij „Zgłoś błąd albo pomysł” - ma się otworzyć to samo okno co po kliknięciu „Zgłoś” w prawym dolnym rogu.",
+      "Kliknij „Inne sposoby pomocy” - na stronie „Jak możesz pomóc” sześć kafelków ma być widoczne bez przewijania.",
       "Kliknij kafelek „Mam minutę” - strona ma przewinąć się do sekcji, w której każda karta ma plakietkę „bez konta”.",
       "W sekcji „Wiesz coś, czego my nie wiemy” kliknij „Dopisz brakującą osobę albo spółkę” - ma się otworzyć okno dodawania osoby.",
-      "Na telefonie (375 px) sprawdź, że liczby z paska postępu są tylko w legendzie pod nim i nic nie wystaje poza ekran.",
+      "Na telefonie (375 px) sprawdź, że liczby z paska postępu są tylko w legendzie, a nie na samym pasku, i nic nie wystaje poza ekran.",
     ],
     link: "/",
     area: "public",
