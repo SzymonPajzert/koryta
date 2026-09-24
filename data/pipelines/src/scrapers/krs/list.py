@@ -11,7 +11,7 @@ from pandas import DataFrame
 from entities.company import KRS, Owner, Source
 from entities.company import Company as KrsCompany
 from entities.person import KRS as KrsPerson
-from scrapers.krs.data import CompaniesHardcoded
+from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
 from scrapers.krs.graph import QueryRelation
 from scrapers.krs.organs import supervision_kind
 from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
@@ -262,6 +262,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.company_sources: dict[str, set[Source]] = {}
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
         self.unknown_relations: typing.Counter[str] = collections.Counter()
+        #: KRS numbers whose odpis says who owns them - see `names_an_owner`.
+        self.owner_on_record: set[str] = set()
 
     @property
     def output_class(self) -> Type:
@@ -391,9 +393,20 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             return
         self.add_company(c)
         self.add_company_source(c.krs, blob_name)
+        if names_an_owner(data, self.jst_index):
+            self.owner_on_record.add(c.krs)
 
     def compute_public_krss(self, hardcoded) -> set[str]:
-        """Base case: companies explicitly public or hardcoded as public."""
+        """Base case: companies explicitly public or hardcoded as public.
+
+        REGON's ownership code is the one source consulted only when the
+        register has nothing to say, which is what `owner_on_record` tracks. It
+        is a code a company files once and seldom revisits. Where KRS does name
+        an owner, the two agree on 2,054 of the 2,129 companies REGON calls
+        public. Of the 75 they disagree on, the register shows 19 owned by
+        people alone and 54 by another company. So an owner in the register
+        outranks the code, and a register that names nobody does not.
+        """
         public_krss = set()
         for company in self.companies.values():
             if company.is_public:
@@ -406,6 +419,13 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     "SPOLKI_SKARBU_PANSTWA",
                 ]
                 for src in hc.sources
+            ):
+                public_krss.add(company.krs)
+                company.is_public = True
+            if (
+                hc
+                and REGON_PUBLIC_OWNERSHIP in hc.sources
+                and company.krs not in self.owner_on_record
             ):
                 public_krss.add(company.krs)
                 company.is_public = True
@@ -736,6 +756,44 @@ def company_from_api_krs(  # noqa: PLR0915
     except TypeError as e:
         print(data)
         raise ValueError(f"Wrong data: {data}") from e
+
+
+def names_an_owner(data: dict, jst: "JstIndex | None" = None) -> bool:
+    """Whether the odpis says who owns the company, in terms this module reads.
+
+    True when dzial 1 lists a natural person, a company by its KRS number, or a
+    government the name resolves to - an answer, whichever way it points. False
+    when it lists nobody: the register publishes the shareholders of a spolka
+    akcyjna only when there is exactly one, so that is every SA with several,
+    and every association and foundation too. Also False when all it lists are
+    names nothing here can place: a public university, KOWR, a zwiazek gmin, a
+    city's holding company written without its KRS number - or a foreign
+    company. REGON then answers for all of them alike. Going by the owners'
+    names that is right for 74 of the 76 such companies it calls public; the
+    other two belong to a GmbH and to an economists' society.
+
+    Karkonoska Agencja Rozwoju Regionalnego is the first kind. Its odpis has no
+    shareholder section at all, so it was published as private, although REGON
+    records it as owned by local government and a correction proposed on the
+    site said the same.
+    """
+    dzial1 = (data.get("odpis") or {}).get("dane", {}).get("dzial1", {})
+    siedziba = (dzial1.get("siedzibaIAdres") or {}).get("siedziba") or {}
+    seat_wojewodztwo = (
+        jst.wojewodztwo_code(siedziba.get("wojewodztwo")) if jst else None
+    )
+    for w in dzial1.get("wspolnicySpzoo", []) + dzial1.get("jedynyAkcjonariusz", []):
+        # A person comes masked, as a surname and first names, never a `nazwa`
+        if "nazwisko" in w or "imiona" in w:
+            return True
+        if "nazwa" not in w:
+            continue
+        krs = (w.get("krs") or {}).get("krs")
+        if krs and krs != "0000000000":
+            return True
+        if jst is not None and jst.resolve(w["nazwa"], seat_wojewodztwo):
+            return True
+    return False
 
 
 def parse_activity_from_api_krs(dzial3: dict) -> list[str]:

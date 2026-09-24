@@ -1,16 +1,20 @@
 import pandas as pd
 from pandas import DataFrame
 
+from entities.company import KRS
 from entities.company import Company as KrsCompany
 from entities.company_categories import SPZOZ
+from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP
 from scrapers.krs.list import (
     CompaniesKRS,
     company_from_api_krs,
     company_from_rejestrio,
     get_teryt,
+    names_an_owner,
     normalize_city,
     parse_activity_from_api_krs,
 )
+from scrapers.map.jst import JstIndex
 
 
 class StubTeryt:
@@ -488,3 +492,152 @@ def test_a_later_blob_without_them_does_not_clear_them():
     merged = pipeline.companies["0000000110"]
     assert merged.form == SPZOZ
     assert merged.supervisory_organ == "rada_spoleczna"
+
+
+# ─── when the register says nothing about the owner ────────
+#
+# KRS publishes the shareholders of a spolka akcyjna only when there is exactly
+# one, so for most SAs dzial 1 has no owner in it at all, and `is_public`, which
+# is read off that section, came out false. REGON's ownership code is the only
+# other machine-readable answer, and it is allowed to speak only there.
+
+SA = "SPÓŁKA AKCYJNA"
+SPZOO = "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ"
+
+# Rows as the register writes them. A person arrives masked.
+A_PERSON = {
+    "nazwisko": {"nazwiskoICzlon": "W****"},
+    "imiona": {"imie": "Z****"},
+    "identyfikator": {"pesel": "5**********"},
+    "posiadaneUdzialy": "7596 UDZIAŁÓW O ŁĄCZNEJ WYSOKOŚCI 379800,00 ZŁ",
+}
+GPW = {
+    "nazwa": "GÓRNOŚLĄSKIE PRZEDSIĘBIORSTWO WODOCIĄGÓW SPÓŁKA AKCYJNA",
+    "krs": {"krs": "0000247533"},
+}
+GZM = {"nazwa": '"GÓRNOŚLĄSKO - ZAGŁĘBIOWSKA METROPOLIA"', "krs": {"krs": "0000000000"}}
+BIELSKO = {"nazwa": "GMINA BIELSKO-BIAŁA", "krs": {"krs": "0000000000"}}
+
+
+def owned(krs, forma, wspolnicy=(), akcjonariusz=()):
+    """An odpis of `krs` whose dzial 1 names these owners and no others."""
+    dzial1 = {"danePodmiotu": {"nazwa": f"SPÓŁKA {krs}", "formaPrawna": forma}}
+    if wspolnicy:
+        dzial1["wspolnicySpzoo"] = list(wspolnicy)
+    if akcjonariusz:
+        dzial1["jedynyAkcjonariusz"] = list(akcjonariusz)
+    return {
+        "odpis": {
+            "naglowekA": {"numerKRS": krs, "rejestr": "RejP"},
+            "dane": {"dzial1": dzial1, "dzial3": HOSPITAL_PKD},
+        }
+    }
+
+
+def bielsko_biala() -> JstIndex:
+    rows = [
+        ("24", None, None, None, "ŚLĄSKIE"),
+        ("24", "61", None, None, "Bielsko-Biała"),
+        ("24", "61", "01", "1", "Bielsko-Biała"),
+    ]
+    return JstIndex.from_terc(
+        pd.DataFrame(rows, columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"])
+    )
+
+
+def test_an_sa_with_several_shareholders_names_no_owner():
+    # Karkonoska Agencja Rozwoju Regionalnego: no shareholder section at all
+    assert not names_an_owner(owned("0000073772", SA))
+
+
+def test_a_person_is_an_owner_on_record():
+    assert names_an_owner(owned("0000687765", SPZOO, wspolnicy=[A_PERSON]))
+
+
+def test_a_company_named_by_its_krs_is_an_owner_on_record():
+    # EKOENERGIA SILESIA, wholly owned by GPW
+    assert names_an_owner(owned("0000408185", SPZOO, wspolnicy=[GPW]))
+    assert names_an_owner(owned("0000408185", SA, akcjonariusz=[GPW]))
+
+
+def test_a_government_is_an_owner_on_record():
+    # PK "THERMA", owned by the city
+    assert names_an_owner(
+        owned("0000081135", SPZOO, wspolnicy=[BIELSKO]), bielsko_biala()
+    )
+
+
+def test_a_name_nothing_here_can_place_is_not():
+    # PKM Swierklaniec belongs to the metropolitan union, which is neither a
+    # gmina, a powiat, a wojewodztwo nor a company with a KRS number.
+    assert not names_an_owner(
+        owned("0000019110", SPZOO, wspolnicy=[GZM]), bielsko_biala()
+    )
+
+
+def public_after(odpisy: list[dict], regon_public: set[str]) -> set[str]:
+    """Which KRS numbers `CompaniesKRS` marks public, for these odpisy.
+
+    `regon_public` are the companies REGON records as publicly owned. Every
+    company is in the catalogue, the way a private one providing a public
+    service is too.
+    """
+    pipeline = CompaniesKRS()
+    pipeline.teryt = NO_TERYT  # type: ignore[assignment]
+    pipeline.jst_index = None
+    for data in odpisy:
+        krs = data["odpis"]["naglowekA"]["numerKRS"]
+        pipeline.process_api_krs_blob(
+            f"gs://koryta-pl-crawled/hostname=api-krs.ms.gov.pl/api/krs/"
+            f"OdpisAktualny/{krs}/date=2026-05-27",
+            data,
+            NO_POSTAL_CODES,
+        )
+    hardcoded = {
+        krs: KRS(
+            krs,
+            {"PUBLIC_COMPANIES_KRS"}
+            | ({REGON_PUBLIC_OWNERSHIP} if krs in regon_public else set()),
+        )
+        for krs in pipeline.companies
+    }
+    public = pipeline.compute_public_krss(hardcoded)
+    pipeline.propagate_is_public(public, pipeline.build_parent_to_children())
+    return {krs for krs, company in pipeline.companies.items() if company.is_public}
+
+
+def test_regon_answers_for_an_sa_the_register_is_silent_about():
+    public = public_after([owned("0000073772", SA)], regon_public={"0000073772"})
+
+    assert public == {"0000073772"}
+
+
+def test_an_owner_in_the_register_outranks_the_regon_code():
+    # GERMANIA MINT STORE: REGON still files it under local government, while
+    # the register shows it owned by people.
+    public = public_after(
+        [owned("0000687765", SPZOO, wspolnicy=[A_PERSON])],
+        regon_public={"0000687765"},
+    )
+
+    assert public == set()
+
+
+def test_being_in_the_catalogue_alone_is_not_public_ownership():
+    public = public_after([owned("0000073772", SA)], regon_public=set())
+
+    assert public == set()
+
+
+def test_a_subsidiary_inherits_what_regon_said_of_its_parent():
+    # GPW is an SA with several shareholders; EKOENERGIA SILESIA names it as
+    # its owner, so it goes public with it rather than on its own evidence.
+    public = public_after(
+        [
+            owned("0000247533", SA),
+            owned("0000408185", SPZOO, wspolnicy=[GPW]),
+        ],
+        regon_public={"0000247533"},
+    )
+
+    assert public == {"0000247533", "0000408185"}
