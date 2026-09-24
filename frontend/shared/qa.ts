@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "opis-w-wyszukiwarce",
+    title: "Google i podgląd linku opisują osobę albo spółkę konkretnie",
+    description:
+      "Opis strony był tym samym zdaniem na każdej stronie, więc Google pokazywał zamiast niego sklejony tekst strony („Zarząd1 osoba. RB. Romuald BosakowskiPO.”). " +
+      "Teraz spółka wymienia obecny zarząd i radę z partiami, osoba swoje obecne i dawne stanowiska, a tekst strony czyta się poprawnie.",
+    steps: [
+      "Wklej link do /instytucja/bionanopark-lodz-xkbMYbTDimmGKKmPMsdZ w komunikatorze - podgląd ma zaczynać się od „BIONANOPARK (Łódź). Zarząd: Romuald Bosakowski (PO), od 28 sierpnia 2026”.",
+    ],
+    link: "/instytucja/bionanopark-lodz-xkbMYbTDimmGKKmPMsdZ",
+    area: "public",
+  },
+  {
     id: "tabela-bez-opcji-wszystkie",
     title: "Tabela nie proponuje już pokazania wszystkich wierszy naraz",
     description:

@@ -344,7 +344,7 @@ const seoTitle = computed(
 );
 const seoDescription = computed(() =>
   seoCompany.value
-    ? entityDescription(seoCompany.value, edges.value.length)
+    ? entityDescription(seoCompany.value, edges.value.length, edges.value)
     : null,
 );
 
