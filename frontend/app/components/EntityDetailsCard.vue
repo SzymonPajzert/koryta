@@ -42,8 +42,9 @@
            without the claim is left with exactly the row that was there
            before - the vote pill stays on the right edge either way.
            `ms-auto` keeps it there when the row wraps and this block starts a
-           line of its own, past the spacer. -->
-      <div class="d-none d-md-flex align-center ga-2 ms-auto">
+           line of its own, past the spacer. Controls, not content, so kept out
+           of search snippets. -->
+      <div class="d-none d-md-flex align-center ga-2 ms-auto" data-nosnippet>
         <template v-if="isAdmin && entity?.id">
           <!-- The table's "Eksploruj" icon, for the reader who arrived on the
                page directly: the same rejestr.io, Wikipedia and Google queries
