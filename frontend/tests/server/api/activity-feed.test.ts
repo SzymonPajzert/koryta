@@ -406,7 +406,7 @@ describe("/api/activity/feed", () => {
         type: "person",
         name: "Jan Kowalski",
         href: "/entity/person/p1",
-        revisionHref: `/admin/rewizje/kolejka?rewizja=proposal_p1_${TRIAL}_abc`,
+        revisionHref: `/admin/rewizje?rewizja=proposal_p1_${TRIAL}_abc#kolejka`,
         selfApproved: true,
       });
       const removal = result.batches.find((b) => b.kind === "delete")!;

@@ -90,9 +90,12 @@
               title="Panel administracyjny"
             />
             <v-divider />
+            <!-- The queue is the first section of /admin/rewizje, which is
+                 open to every signed-in reader - so arriving there lights
+                 "Rewizje" rather than this menu. -->
             <v-list-item
               :prepend-icon="mdiInboxArrowDown"
-              to="/admin/rewizje/kolejka"
+              to="/admin/rewizje#kolejka"
               title="Kolejka zmian"
             />
             <v-list-item

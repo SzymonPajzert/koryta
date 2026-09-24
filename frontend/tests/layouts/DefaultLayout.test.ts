@@ -104,10 +104,12 @@ describe("DefaultLayout", () => {
   });
 
   // What makes a page the admin's is its middleware, as it is for the router:
-  // /admin/rewizje sits under /admin but takes any signed-in reader.
+  // /admin/rewizje sits under /admin but takes any signed-in reader - and that
+  // holds for the review queue too, now a section of it: "Kolejka zmian" in
+  // the menu lands on a page that lights "Rewizje", not this menu.
   it.each([
     ["/admin/notatki", "admin"],
-    ["/admin/rewizje/kolejka/", "admin"],
+    ["/admin/krawedzie/", "admin"],
     ["/admin/opinie", ["auth", "admin"]],
   ])("lights the Admin menu on %s", async (path, middleware) => {
     route.path = path;

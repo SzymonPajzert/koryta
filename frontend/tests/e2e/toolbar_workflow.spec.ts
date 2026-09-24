@@ -63,9 +63,12 @@ test.describe("User toolbar", () => {
       await page.waitForURL(/\/admin\/rewizje/, { timeout: 2000 });
     }).toPass({ timeout: 30_000 });
 
-    await expect(page.locator(".v-data-table")).toBeVisible({
+    // The entry list, which is all of the page a reader who is not an admin
+    // gets - the queue above it is an admin's.
+    await expect(page.locator("#wpisy")).toBeVisible({
       timeout: 30_000,
     });
+    await expect(page.locator("#kolejka")).toHaveCount(0);
   });
 
   test("hides the admin menu from a normal user", async ({ page }) => {
@@ -99,8 +102,8 @@ test.describe("User toolbar", () => {
       await expect(entries.getByRole("link", { name })).toBeVisible();
     }
 
-    await entries.getByRole("link", { name: "Kolejka zmian" }).click();
-    await page.waitForURL(/\/admin\/rewizje\/kolejka/, { timeout: 30_000 });
+    await entries.getByRole("link", { name: "Notatki" }).click();
+    await page.waitForURL(/\/admin\/notatki/, { timeout: 30_000 });
 
     // A closed menu has no `to` to light it, so it is lit by hand on the pages
     // it stands for - and "Rewizje", a different route, stays dark.
@@ -109,6 +112,33 @@ test.describe("User toolbar", () => {
     await expect(bar.getByRole("link", { name: "Rewizje" })).not.toHaveClass(
       /v-btn--active/,
     );
+  });
+
+  test("'Kolejka zmian' opens the queue on the revisions page", async ({
+    page,
+  }) => {
+    await logIn(page, USERS.admin);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    const bar = page.locator(toolbar).first();
+    const admin = bar.getByRole("button", { name: adminName });
+    await expect(admin).toBeVisible({ timeout: 30_000 });
+
+    await openMenu(page, admin, "Kolejka zmian");
+    await page
+      .locator(menu)
+      .getByRole("link", { name: "Kolejka zmian" })
+      .click();
+    await page.waitForURL(/\/admin\/rewizje#kolejka$/, { timeout: 30_000 });
+    await expect(page.locator("#kolejka")).toBeVisible({ timeout: 30_000 });
+
+    // The queue is a section of /admin/rewizje, a page every signed-in reader
+    // has, so arriving there lights "Rewizje" - not the Admin menu, which
+    // stands for the pages only an admin can open.
+    await expect(bar.getByRole("link", { name: "Rewizje" })).toHaveClass(
+      /v-btn--active/,
+    );
+    await expect(admin).not.toHaveClass(/v-btn--active/);
   });
 
   test("'Zespół' holds the links that leave the site", async ({ page }) => {

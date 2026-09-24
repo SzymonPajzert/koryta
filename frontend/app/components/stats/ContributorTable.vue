@@ -235,9 +235,10 @@ const chipUser = (row: ActivityContributor) => ({
 
 /** The review queue narrowed to one person, with both filters off: the
  * per-author path sees their whole history, including the older revisions that
- * carry no `update_automatic` flag and so never show up in the aggregate list. */
+ * carry no `update_automatic` flag and so never show up in the aggregate list.
+ * The queue is the first section of /admin/rewizje; the hash scrolls to it. */
 const proposalsTo = (uid: string) =>
-  `/admin/rewizje/kolejka?author=${encodeURIComponent(uid)}&status=all&automatic=all`;
+  `/admin/rewizje?author=${encodeURIComponent(uid)}&status=all&automatic=all#kolejka`;
 
 const mixLabel = (row: ActivityContributor) =>
   activityKinds
