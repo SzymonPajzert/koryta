@@ -39,8 +39,6 @@ def test_check_no_nulls(column, df):
         ("2001", "senat", "teryt_candidacy"),
         ("2005", "senat", "teryt_candidacy"),
         ("2009", "europarlament", "teryt_candidacy"),
-        ("2007", "sejm", "sex"),
-        ("2007", "senat", "sex"),
         ("2010", "samorząd", "sex"),
         ("2001", "sejm", "birth_year"),
         ("2001", "senat", "birth_year"),

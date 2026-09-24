@@ -131,22 +131,26 @@ sources.extend(
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
         ),
+        # PKW's candidate lists with the result, as for 1991-2005. The
+        # wybory2007.pkw.gov.pl lists read before are the same candidates
+        # without a result or their sex. Both are named anew, so that a copy
+        # of the old files cached under the old names cannot stand in.
         InputSource(
             FileSource(
-                "https://wybory2007.pkw.gov.pl/SJM/pliki/DOKUMENTY/dane_w_arkuszach/kandydaci_SJM.xls",
-                "2007_sejm_kandydaci.xls",
+                "https://danewyborcze.kbw.gov.pl/dane/2007/sejm/kandsejm2007.xls",
+                "2007_sejm_kandydaci_wyniki.xls",
             ),
-            XlsExtractor(header_rows=1, skip_rows=1),
+            XlsExtractor(header_rows=1),
             2007,
             PkwFormat.UNKNOWN,
             ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
-                "https://wybory2007.pkw.gov.pl/SNT/pliki/DOKUMENTY/dane_w_arkuszach/kandydaci_SNT.xls",
-                "2007_senat_kandydaci.xls",
+                "https://danewyborcze.kbw.gov.pl/dane/2007/senat/kandsen2007.xls",
+                "2007_senat_kandydaci_wyniki.xls",
             ),
-            XlsExtractor(header_rows=1, skip_rows=1),
+            XlsExtractor(header_rows=1),
             2007,
             PkwFormat.UNKNOWN,
             ElectionType.SENAT,
@@ -243,22 +247,26 @@ sources.extend(
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
         ),
+        # PKW's final lists with the result. parlament2015.pkw.gov.pl's
+        # kandydaci.zip, read before, is the register as it stood on
+        # 19 October, six days out: no result, and 31 Sejm candidates who
+        # are not on the final lists.
         InputSource(
-            FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
-            ZipExtractor(
-                "kandsejm2015-10-19-10-00.xls",
-                extractor=XlsExtractor(header_rows=1),
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2015/sejm/2015-kand-sejm.xls",
+                "2015_sejm_kandydaci_wyniki.xls",
             ),
+            XlsExtractor(header_rows=1),
             2015,
             PkwFormat.UNKNOWN,
             ElectionType.SEJM,
         ),
         InputSource(
-            FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
-            ZipExtractor(
-                "kandsen2015-10-19-10-00.xls",
-                extractor=XlsExtractor(header_rows=1),
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2015/senat/2015-kand-sen.xls",
+                "2015_senat_kandydaci_wyniki.xls",
             ),
+            XlsExtractor(header_rows=1),
             2015,
             PkwFormat.UNKNOWN,
             ElectionType.SENAT,
