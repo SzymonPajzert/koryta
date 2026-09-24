@@ -52,13 +52,13 @@ export type AdminSummary = {
   revisions: {
     // Nodes whose latest revision is not the approved one, plus edge revisions
     // nobody has settled. Counted per node but per *revision* for edges: an
-    // edge carries no `has_unapproved` flag, and /admin/rewizje-krawedzi - where
-    // this number sends a reviewer - lists one row per revision too.
+    // edge carries no `has_unapproved` flag, and /admin/rewizje#powiazania -
+    // where this number sends a reviewer - lists one row per revision too.
     unapproved: number;
     // Of those, the ones a human filed rather than an automatic import, and
     // which therefore need review. For edges that is a reader proposing a
     // relation; the ingest's own proposals are automatic and live at
-    // /admin/rewizje-krawedzi rather than being counted here.
+    // /admin/rewizje#powiazania rather than being counted here.
     unapprovedManual: number;
     inspected: number;
     // True when there was more of either kind than we inspected, so
@@ -344,7 +344,7 @@ async function summariseEdgeRevisions(db: Firestore): Promise<{
     const edgeId = String(doc.get("node_id") ?? "");
     const edge = edges.get(edgeId);
     // The edge was deleted after the proposal was filed. It still counts as
-    // waiting - /admin/rewizje-krawedzi is where that gets sorted out - but
+    // waiting - /admin/rewizje#powiazania is where that gets sorted out - but
     // there is no pair to name it by.
     const ends = edge
       ? [edge.source, edge.target].map((end) =>
