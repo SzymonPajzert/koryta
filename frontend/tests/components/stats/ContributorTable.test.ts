@@ -69,7 +69,11 @@ describe("StatsContributorTable", () => {
       contributors: [row({ uid: "anna-uid", name: "Anna Nowak", named: true })],
     });
 
-    expect(wrapper.find('a[href*="author=anna-uid"]').exists()).toBe(true);
+    // Straight to the queue's section of /admin/rewizje, with everything that
+    // person ever proposed rather than only what is still waiting.
+    expect(wrapper.get('a[href*="author=anna-uid"]').attributes("href")).toBe(
+      "/admin/rewizje?author=anna-uid&status=all&automatic=all#kolejka",
+    );
   });
 
   it("invites a signed-out reader to sign in", async () => {

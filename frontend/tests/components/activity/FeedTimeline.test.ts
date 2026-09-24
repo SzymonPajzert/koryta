@@ -169,7 +169,7 @@ describe("ActivityFeedTimeline", () => {
         kind: "delete",
         targets: [
           target("a", {
-            revisionHref: "/admin/rewizje/kolejka?rewizja=rev-1",
+            revisionHref: "/admin/rewizje?rewizja=rev-1#kolejka",
             selfApproved: true,
             reason: "duplikat strony",
           }),
@@ -181,7 +181,7 @@ describe("ActivityFeedTimeline", () => {
       "własna propozycja",
     );
     expect(linkTargets(wrapper)).toContain(
-      "/admin/rewizje/kolejka?rewizja=rev-1",
+      "/admin/rewizje?rewizja=rev-1#kolejka",
     );
     // One page, so the reason does not name it again.
     expect(wrapper.get('[data-testid="feed-item-reason"]').text()).toBe(
