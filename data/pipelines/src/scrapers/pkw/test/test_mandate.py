@@ -57,3 +57,18 @@ def test_mandate_column_reaches_candidacy_success():
         "FALSE",
         "FALSE",
     ]
+
+
+def test_the_1998_abbreviation_reaches_candidacy_success():
+    rows = [
+        ["Nazwisko", "Imiona", "Mand."],
+        ["KOWALSKI", "Jan", "W"],
+        ["NOWAK", "Anna", "P"],
+        ["WIŚNIEWSKI", "Piotr", "N"],
+    ]
+
+    people = list(
+        process_csv(rows, config(1998, ElectionType.SAMORZADOWE), CSV_HEADERS)
+    )
+
+    assert [p.candidacy_success for p in people] == ["TRUE", "TRUE", "FALSE"]

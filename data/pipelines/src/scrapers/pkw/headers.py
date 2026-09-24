@@ -83,9 +83,10 @@ def parse_mandate(s: str, _: Never) -> str:
     - `B` bez głosowania, where a district fielded no more candidates than it
       had seats, so nobody voted. These rows carry no vote count at all;
     - `L` w losowaniu, a tie broken by drawing lots;
-    - `P`, the last seat of a district taken out of a tie: all 27 rows in the
-      1998 council files are level on votes with a candidate the same file
-      marks `N`, and 20 of the 27 poll below every `W` around them;
+    - `P` pierwszeństwo, a tie settled before it came to lots - "wybrany w
+      drodze pierwszeństwa do uzyskania mandatu przy remisie", as PKW's page
+      for the 1998 workbook defines it. All 109 `P` rows there are level on
+      votes with a candidate in the same district marked `N`;
     - `O`/`K` z listy okręgowej / z listy krajowej, how the pre-2001 Sejm
       files distinguish the two halves of the chamber.
 
@@ -252,7 +253,8 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Liczba\ngłosów": None,
     "Lista": None,
     "Lp": None,
-    "Mand.": None,
+    # The same column abbreviated, as the 1998 council workbook heads it.
+    "Mand.": SetField("candidacy_success", parse_mandate),
     # Every candidate list that carries this column is a result file: the
     # winners are marked, everyone else is blank or `N`. See parse_mandate.
     "Mandat": SetField("candidacy_success", parse_mandate),
