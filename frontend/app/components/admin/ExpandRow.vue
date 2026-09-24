@@ -3,7 +3,6 @@
     :id="rowId"
     class="arow"
     :class="[
-      `arow--${variant}`,
       `arow--tone-${tone}`,
       {
         'arow--open': expanded,
@@ -68,15 +67,14 @@
  * - `summary` - the line itself, inside the toggle button, so inert content
  *   only. The `arow-*` helper classes below lay it out.
  * - `actions` - buttons at the end of the line that work without opening it.
- * - `meta` - who, when, what state: `AdminRowFact`s. Plain text, icons and
- *   `UserChip` only - variant `c` paints this pane in the row's ink, where a
- *   coloured chip would be unreadable.
+ * - `meta` - who, when, what state: `AdminRowFact`s, in a strip across the
+ *   top of the open row.
  * - default - the body of the open row.
  * - `footer` - the decisions available on it.
  */
 import { computed, useId } from "vue";
 import { mdiChevronRight } from "@mdi/js";
-import { useRowVariant, type RowTone } from "~/composables/rowVariant";
+import type { RowTone } from "~/composables/rowTone";
 
 withDefaults(
   defineProps<{
@@ -96,7 +94,6 @@ withDefaults(
 
 const expanded = defineModel<boolean>("expanded", { default: false });
 
-const variant = useRowVariant();
 const uid = useId();
 const panelId = computed(() => `arow-panel-${uid}`);
 </script>
@@ -111,6 +108,8 @@ const panelId = computed(() => `arow-panel-${uid}`);
   --arow-surface: var(--v-theme-surface-muted);
   position: relative;
   background: rgb(var(--v-theme-surface));
+  /* The rail: every row carries its colour down its left edge. */
+  box-shadow: inset 4px 0 0 rgb(var(--arow-ink));
   /* Clears the sticky toolbar when an anchor scrolls a row into view. */
   scroll-margin-top: 96px;
 }
@@ -153,7 +152,7 @@ const panelId = computed(() => `arow-panel-${uid}`);
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 2px 4px 2px 8px;
+  padding: 2px 4px 2px 12px;
   border: 0;
   background: none;
   color: inherit;
@@ -183,6 +182,10 @@ const panelId = computed(() => `arow-panel-${uid}`);
   transform: rotate(90deg);
 }
 
+.arow--open > .arow__head {
+  background: rgb(var(--arow-surface));
+}
+
 .arow__actions {
   flex: none;
   display: flex;
@@ -191,7 +194,7 @@ const panelId = computed(() => `arow-panel-${uid}`);
 }
 
 .arow__panel {
-  padding: 12px 16px 16px 36px;
+  padding: 12px 16px 16px 40px;
 }
 
 .arow__body {
@@ -204,6 +207,8 @@ const panelId = computed(() => `arow-panel-${uid}`);
   align-items: center;
   gap: 8px;
   margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 /* Greyed rather than hidden - see opinie's `feedback-settled`. */
@@ -261,10 +266,12 @@ const panelId = computed(() => `arow-panel-${uid}`);
 /* ---- facts (AdminRowFact) ---- */
 
 .arow__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px 24px;
   margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .afact {
@@ -280,131 +287,14 @@ const panelId = computed(() => `arow-panel-${uid}`);
 
 .afact__value {
   font-size: 0.875rem;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
-/* ================= a: "karta" ================= */
-
-.arow--a.arow--open > .arow__head {
-  font-weight: 500;
-}
-
-.arow--a > .arow__panel {
-  background: rgb(var(--v-theme-surface-muted));
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-.arow--a .arow__footer {
-  justify-content: flex-end;
-  padding-top: 12px;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-/* ================= b: "szyna" ================= */
-
-.arow--b {
-  box-shadow: inset 4px 0 0 rgb(var(--arow-ink));
-}
-
-.arow--b .arow__toggle {
-  padding-inline-start: 12px;
-}
-
-.arow--b.arow--open > .arow__head {
-  background: rgb(var(--arow-surface));
-}
-
-.arow--b > .arow__panel {
-  padding-inline-start: 40px;
-}
-
-.arow--b .arow__meta {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px 24px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-.arow--b .afact__value {
-  font-weight: 500;
-}
-
-.arow--b .arow__footer {
-  padding-top: 12px;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-/* ================= c: "podział" ================= */
-
-.arow--c.arow--open > .arow__head {
-  font-weight: 500;
-  box-shadow: inset 0 -3px 0 rgb(var(--arow-ink));
-}
-
-.arow--c > .arow__panel {
-  display: grid;
-  grid-template-columns: minmax(200px, 28%) 1fr;
-  padding: 0;
-}
-
-.arow--c > .arow__panel > .arow__meta {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  gap: 14px;
-  margin: 0;
-  padding: 16px 20px;
-  background: rgb(var(--arow-ink));
-  color: #fff;
-}
-
-.arow--c .arow__meta .afact__label {
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.arow--c .arow__meta .afact__value {
-  font-size: 1rem;
-  font-weight: 500;
-}
-
-.arow--c > .arow__panel > .arow__main {
-  padding: 16px 20px;
-  min-width: 0;
-}
-
-/* Without facts the body takes the whole width. */
-.arow--c > .arow__panel > .arow__main:only-child {
-  grid-column: 1 / -1;
-  padding-inline-start: 36px;
-}
-
-.arow--c .arow__footer {
-  padding-top: 12px;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-/* ================= phone ================= */
+/* ---- phone ---- */
 
 @media (max-width: 599.98px) {
-  .arow__panel,
-  .arow--b > .arow__panel {
-    padding: 12px;
-  }
-
-  .arow--c > .arow__panel {
-    grid-template-columns: 1fr;
-    padding: 0;
-  }
-
-  .arow--c > .arow__panel > .arow__meta {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px 20px;
-    padding: 12px;
-  }
-
-  .arow--c > .arow__panel > .arow__main,
-  .arow--c > .arow__panel > .arow__main:only-child {
+  .arow__panel {
     padding: 12px;
   }
 
