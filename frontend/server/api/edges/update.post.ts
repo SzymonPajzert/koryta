@@ -20,7 +20,7 @@ export type EdgeUpdated = {
    * nothing was written. */
   revision_id: string | null;
   /** Whether the site already says what the caller typed. False means it is a
-   * standing proposal in /admin/rewizje-krawedzi instead. */
+   * standing proposal in /admin/rewizje#powiazania instead. */
   applied: boolean;
   /** Nothing was written because the relation already said exactly this. */
   unchanged: boolean;
@@ -39,7 +39,8 @@ export type EdgeUpdated = {
  * Who may say it is settled the same way every other write here settles it. An
  * admin's edit is its own review and applies at once, like `/api/edges/delete`;
  * anybody else's is a proposal - the revision stands, the relation is untouched
- * and /admin/rewizje-krawedzi is where it waits. The two paths write the same
+ * and /admin/rewizje#powiazania is where it waits. The two paths write the
+ * same
  * revision, so a reviewer approving one through `/api/revisions/approve` gets
  * exactly what the admin path would have written.
  *
