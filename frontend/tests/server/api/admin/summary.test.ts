@@ -423,7 +423,7 @@ describe("GET /api/admin/summary", () => {
   it("leaves the pipeline's own proposals out of the manual count", async () => {
     // What the candidacy ingest files: a committee its curated table does not
     // recognise, proposed rather than applied. It belongs in
-    // /admin/rewizje-krawedzi, not in the count of work a human has queued.
+    // /admin/rewizje#powiazania, not in the count of work a human has queued.
     results.edgeRevisions = {
       count: 40,
       docs: [

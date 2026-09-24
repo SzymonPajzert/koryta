@@ -389,7 +389,7 @@ export function createRevisionTransaction(
   // be matched by any Firestore filter, so while this wrote nothing for a human
   // proposal, the relations readers add through the edge dialogs were invisible
   // to every query that asks for human work - including the review queue at
-  // /admin/rewizje/kolejka. Every reader of this field tests `=== true` or
+  // /admin/rewizje#kolejka. Every reader of this field tests `=== true` or
   // `!== true`, so writing `false` changes nothing for them.
   revision.update_automatic = automatic;
 
