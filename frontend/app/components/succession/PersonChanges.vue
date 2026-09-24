@@ -52,7 +52,12 @@
         <NuxtLink :to="change.companyUrl" class="link-plain succ__company">
           {{ change.companyName }}
         </NuxtLink>
-        <span class="succ__role">{{ change.role }}</span>
+        <!-- The comma is for a reader of the text, which ran the company
+             into the role - "ŁÓDŹRada Nadzorcza". Hidden, because this head
+             is a line of text rather than a flex row, so a space would show. -->
+        <span class="succ__role"
+          ><span class="visually-hidden">, </span>{{ change.role }}</span
+        >
       </div>
 
       <div class="succ__flow">
@@ -337,6 +342,18 @@ function gapClass(gapDays: number): string {
   color: rgba(var(--v-theme-on-surface), 0.87);
   font-size: 0.8125rem;
   font-weight: 700;
+}
+
+.visually-hidden {
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .succ__role {

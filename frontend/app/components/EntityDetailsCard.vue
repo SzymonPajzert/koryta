@@ -33,8 +33,9 @@
            gets, then the change anybody may propose, then how interesting the
            reader found the person. The admin pair sits first so that a reader
            without the claim is left with exactly the row that was there
-           before - the vote pill stays on the right edge either way. -->
-      <div class="d-none d-md-flex align-center ga-2">
+           before - the vote pill stays on the right edge either way.
+           Controls, not content, so kept out of search snippets. -->
+      <div class="d-none d-md-flex align-center ga-2" data-nosnippet>
         <template v-if="isAdmin && entity?.id">
           <!-- The table's "Eksploruj" icon, for the reader who arrived on the
                page directly: the same rejestr.io, Wikipedia and Google queries

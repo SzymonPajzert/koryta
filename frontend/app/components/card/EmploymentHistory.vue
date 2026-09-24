@@ -93,12 +93,15 @@
           <!-- Last, where the bar sits on a wide screen. On a phone the bar is
                a 200px track in a 210px column, clipped at both ends, and the
                dates it captions are the only part of it that survives the
-               width - so below md the row prints them and drops the track. -->
+               width - so below md the row prints them and drops the track.
+               The leading space is for a reader of the text, where the row
+               read "ZarządPO2026-08-28"; at the start of a flex item it is
+               never drawn. -->
           <span
             v-if="isDated(edge)"
             class="d-md-none text-caption text-medium-emphasis"
           >
-            {{ relationPeriodLabel(edge.start_date, edge.end_date) }}
+            {{ ` ${relationPeriodLabel(edge.start_date, edge.end_date)}` }}
           </span>
         </div>
 
@@ -136,18 +139,23 @@
                fragment, which split this row into three boxes. Clicking
                through to the predecessor is what „Zmiany na stanowisku" below
                is for. -->
+          <!-- Leading spaces, as in the dates above: the rail is a flex
+               row, so they are never drawn, but a snippet reads it as text. -->
           <span class="history-row__rail-name">
-            {{ predecessor.personName }}
+            {{ ` ${predecessor.personName}` }}
           </span>
           <PartyChip v-for="party in predecessor.parties" :key="party" :party />
           <span class="history-row__rail-gap">
-            {{ gapLabel(predecessor.gapDays) }}
+            {{ ` ${gapLabel(predecessor.gapDays)}` }}
           </span>
         </div>
 
         <template #append>
           <div class="d-flex align-center ga-2">
-            <div v-if="isDated(edge)" class="d-none d-md-flex">
+            <!-- `data-nosnippet`: the bar captions the same two dates the
+                 row prints below `md`, and the page's text carries both, so a
+                 search result read every period twice. -->
+            <div v-if="isDated(edge)" class="d-none d-md-flex" data-nosnippet>
               <ChipRelativeDuration
                 :start="edge.start_date"
                 :end="edge.end_date"

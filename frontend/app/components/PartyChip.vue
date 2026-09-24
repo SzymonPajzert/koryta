@@ -5,7 +5,12 @@
        chips stacked one per line above the chevron rather than sitting beside
        it. Every other caller drops the chip into a flex row, where a block
        root and an inline one lay out the same. -->
-  <span class="chip" :style>{{ party }}</span>
+  <!-- A space in front of the name, for whatever reads the page as text
+       rather than looking at it - a search engine building a snippet, a
+       screen reader, a copy and paste. Callers put the chip straight after a
+       name, and Google's snippet read "Romuald BosakowskiPO". It is never
+       drawn: a space at the start of the chip's own line collapses. -->
+  <span class="chip" :style>{{ ` ${party}` }}</span>
 </template>
 
 <script setup lang="ts">

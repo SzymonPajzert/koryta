@@ -56,7 +56,8 @@
         <ChipCompanyCategories :company="company" />
       </div>
 
-      <div class="d-flex flex-wrap ga-2">
+      <!-- Controls, not content - kept out of search snippets. -->
+      <div class="d-flex flex-wrap ga-2" data-nosnippet>
         <v-btn
           v-if="canEditNotes"
           variant="outlined"
