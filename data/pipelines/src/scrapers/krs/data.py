@@ -9,6 +9,28 @@ from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
 from scrapers.stores.file import DownloadableFile as FileSource
 
+#: The catalogue entries REGON records as publicly owned - see `publicly_owned`.
+#: Not a seed like `SPOLKI_SKARBU_PANSTWA`: `CompaniesKRS.compute_public_krss`
+#: consults it only for a company whose register entry names no owner.
+REGON_PUBLIC_OWNERSHIP = "REGON_PUBLIC_OWNERSHIP_KRS"
+
+
+def publicly_owned(catalogue: pd.DataFrame) -> pd.DataFrame:
+    """The rows of the public-entity catalogue that REGON says the public owns.
+
+    The catalogue lists whoever provides a public service, not who owns them:
+    1,425 of its 5,510 entries with a KRS number are private hospitals, schools
+    and bus operators, which is why nothing reads the list as a whole as saying
+    a company is public. What it does carry, for every entry, is REGON's own
+    `Forma własności`, and the first digit of that code is the sector: 1 is
+    public - 111 Skarb Panstwa, 112 panstwowe osoby prawne, 113 samorzad, 12x
+    and 13x mixed with a public majority - and 2 is private.
+
+    Withdrawn entries are kept. Most of them were liquidated or merged away,
+    and they were public while the people on the site worked there.
+    """
+    return catalogue[catalogue["Forma własności"].astype(str).str.startswith("1")]
+
 
 class CompaniesHardcoded(Pipeline[KRS]):
     filename = None
@@ -90,9 +112,15 @@ class CompaniesHardcoded(Pipeline[KRS]):
 
     def process(self, ctx: Context):
         self.teryt.process(ctx)
+        public_companies = self.read_public_companies(ctx)
         self.register_partials(
             "PUBLIC_COMPANIES_KRS",
-            data=self.read_public_companies(ctx),
+            data=public_companies,
+            map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
+        )
+        self.register_partials(
+            REGON_PUBLIC_OWNERSHIP,
+            data=publicly_owned(public_companies),
             map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
         )
         register_companies(self)

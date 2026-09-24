@@ -3,6 +3,7 @@ import pytest
 from entities.company import Company, Source
 from koryta import setup_context
 from pipelines import Companies
+from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP
 
 
 @pytest.fixture(scope="module")
@@ -56,6 +57,7 @@ EXPECTED_COMPANIES = {
         sources=[
             Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None),
             Source(source="hardcoded", source_krs=None, reason="PUBLIC_COMPANIES_KRS"),
+            Source(source="hardcoded", source_krs=None, reason=REGON_PUBLIC_OWNERSHIP),
             Source(source="rejestr-io", source_krs="rejestr.io", reason=None),
         ],
         activity=[
@@ -104,11 +106,14 @@ EXPECTED_COMPANIES = {
             "43.29.Z",
             "81.30.Z",
         ],
-        # The hardcoded PUBLIC_COMPANIES_KRS source below is what sets this.
+        # Its odpis names GMINA I MIASTO ODOLANOW as the owner, which is what sets
+        # this. Neither hardcoded source below does: the catalogue lists private
+        # companies too, and REGON is consulted only when the register is silent.
         is_public=True,
         sources=[
             Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None),
             Source(source="hardcoded", source_krs=None, reason="PUBLIC_COMPANIES_KRS"),
+            Source(source="hardcoded", source_krs=None, reason=REGON_PUBLIC_OWNERSHIP),
             Source(source="rejestr-io", source_krs="rejestr.io", reason=None),
         ],
     ),
@@ -122,7 +127,9 @@ EXPECTED_COMPANIES = {
 )
 def test_expected_output(companies_map, companies_df, expected_company):
     company = companies_map[expected_company.krs]
-    company.sources.sort(key=lambda x: x.source)
+    # `sources` comes out of a set, and a company can carry more than one
+    # hardcoded source, so the reason has to be part of the order too.
+    company.sources.sort(key=lambda x: (x.source, x.reason or ""))
     print(companies_df[companies_df["krs"] == expected_company.krs].iloc[0])
     print(company)
     print(expected_company)
