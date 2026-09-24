@@ -281,45 +281,8 @@ sources.extend(
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
         ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/wbp-wybrani.xls"
-            ),
-            XlsExtractor(header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-            ElectionType.SAMORZADOWE,
-        ),
     ]
 )
-
-for woj in [
-    "dolnoslaskie",
-    "kujawsko_pomorskie",
-    "lubelskie",
-    "lubuskie",
-    "lodzkie",
-    "malopolskie",
-    "mazowieckie",
-    "opolskie",
-    "podkarpackie",
-    "podlaskie",
-    "pomorskie",
-    "slaskie",
-    "swietokrzyskie",
-    "warminsko_mazurskie",
-    "wielkopolskie",
-    "zachodniopomorskie",
-]:
-    sources.append(
-        InputSource(
-            FileSource(f"https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/{woj}.xls"),
-            XlsExtractor(header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-            ElectionType.SAMORZADOWE,
-        )
-    )
 
 sources.extend(
     [
@@ -528,6 +491,35 @@ sources.extend(
                 extractor=XlsExtractor(header_rows=1),
             ),
             2002,
+            PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
+        ),
+        # 2006 is read from the same kind of files as 2002: every candidate,
+        # with the result. The wybory2006.pkw.gov.pl spreadsheets it used to
+        # come from list only the people who were elected - 45,997 rows with
+        # no result on any of them, and some 3,300 seats short of the 46,789
+        # radni this file holds.
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2006/2006-kand-rady-new.xlsx",
+                "2006_rady_kandydaci.xlsx",
+            ),
+            XlsExtractor(header_rows=1),
+            2006,
+            PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2006/wbp/wbp2006.zip",
+                "2006_wbp_kandydaci.zip",
+            ),
+            # One row per candidate per round, like wojt2002.xls.
+            ZipExtractor(
+                "wojt2006-zbiorówka.xls",
+                extractor=XlsExtractor(header_rows=1),
+            ),
+            2006,
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
         ),

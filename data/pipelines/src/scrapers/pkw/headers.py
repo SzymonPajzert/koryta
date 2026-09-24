@@ -90,6 +90,12 @@ def parse_mandate(s: str, _: Never) -> str:
     - `O`/`K` z listy okręgowej / z listy krajowej, how the pre-2001 Sejm
       files distinguish the two halves of the chamber.
 
+    `2` is not a letter but it is not a seat either: the 2006 wójt file gives
+    every candidate one row per round, and writes `2` into the first-round row
+    of anybody who went through to the second. Their result is on their
+    second-round row. The 2002 file writes `N` in the same place, so the
+    first-round row reads as not elected there too.
+
     A blank means a loss, not an unknown. In 2018 `T` (43,683) plus `B`
     (3,062) is exactly the 46,745 rows of `2018-radni.xlsx`, the separate
     list of who was elected, and every blank row is absent from it. The
@@ -103,7 +109,7 @@ def parse_mandate(s: str, _: Never) -> str:
     match str(s).strip():
         case "T" | "W" | "G" | "B" | "L" | "P" | "O" | "K":
             return "TRUE"
-        case "N" | "" | "nan":
+        case "N" | "" | "nan" | "2":
             return "FALSE"
 
     raise ValueError(f"Unknown mandate: {s!r}")
@@ -178,6 +184,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Drugie imię": SetField("middle_name"),
     "Dzielnica": SetField("position", const_processor("Rada dzielnicy")),
     "Frekw.": None,
+    "Frekwencja": None,
     "Glosy": None,
     "Gł. bez wyb.": None,
     "Gł. kand.": None,
@@ -198,6 +205,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Głosy": None,
     "Gm. zam.": None,
     "Gmina m. z.": None,
+    "Gmina m. zam.": None,
     "Gmina m.z.": None,
     "Gmina Mandat": None,
     "Gmina miejsca zamieszkania": None,
@@ -230,6 +238,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Imiona Mandat": SetField("first_name"),
     "Imiona": SetField("first_name"),
     "Jednostka": None,
+    "Kandydat": None,
     "Kod gminy": SetField("teryt_candidacy"),
     "Kod TERYT": SetField("teryt_candidacy"),
     "Komitet  wyborczy": SetField("party"),
@@ -314,6 +323,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Obwód": None,
     "Obywatelstwo": None,
     "Odd.": None,
+    "Oddane": None,
     "Okręg": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt),
     "Opis": None,
     "Oświadczenie": None,
@@ -366,6 +376,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "TERYT Dzielnicy": SetField("teryt_candidacy"),
     "TERYT Gminy": SetField("teryt_candidacy"),
     "Teryt m. z.": SetField("teryt_living"),
+    "Teryt m.z.": SetField("teryt_living"),
     "TERYT m. z.": SetField("teryt_living"),
     "TERYT Mandat": SetField("teryt_candidacy"),
     "TERYT Powiatu": SetField("teryt_candidacy"),
