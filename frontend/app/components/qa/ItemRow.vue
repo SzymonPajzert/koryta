@@ -156,7 +156,7 @@ import {
   mdiWrenchOutline,
 } from "@mdi/js";
 import { ref, watch } from "vue";
-import type { RowTone } from "~/composables/rowVariant";
+import type { RowTone } from "~/composables/rowTone";
 import {
   qaAreaConfig,
   qaStateConfig,

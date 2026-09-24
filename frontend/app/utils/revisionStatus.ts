@@ -4,7 +4,7 @@ import {
   mdiCloseCircleOutline,
   mdiHistory,
 } from "@mdi/js";
-import type { RowTone } from "~/composables/rowVariant";
+import type { RowTone } from "~/composables/rowTone";
 import type { ProposalStatus } from "~~/shared/proposals";
 
 /** The icon each proposal state is drawn with - on `ChipRevisionStatus`, and

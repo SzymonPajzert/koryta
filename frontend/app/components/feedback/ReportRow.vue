@@ -254,9 +254,8 @@ const statusOptions = Object.entries(feedbackStatusConfig).map(
   overflow-wrap: anywhere;
 }
 
-/* The facts pane is solid ink in one of the variants, where a link blue would
- * vanish: the date keeps the colour around it and says it is a link by its
- * underline. */
+/* The date is the report's permalink. It keeps the colour of the facts
+ * around it and says it is a link by its underline. */
 .fb-report__permalink {
   color: inherit;
   text-decoration: underline dotted;
