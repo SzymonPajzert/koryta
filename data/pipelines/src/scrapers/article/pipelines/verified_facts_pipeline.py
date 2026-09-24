@@ -28,7 +28,7 @@ from scrapers.article.pipelines.incremental import IncrementalJsonlPipeline
 from scrapers.article.pipelines.pipeline_utils import llm_model
 from scrapers.stores import LLM, VERSIONED_DIR, Context, LLMRequest
 
-VERIFY_VERSION = 10
+VERIFY_VERSION = 11
 MAX_TOKENS = 256
 TEMPERATURE = 0.0
 
@@ -45,7 +45,7 @@ _JSON_ANY_RE = re.compile(r"\{.*\}", flags=re.DOTALL)
 # The labeling rulebook is embedded here so the pipeline is self-contained (no
 # external file dependency). Keep it in sync with any labeling-policy changes.
 _RULES = """\
-# Facts Extraction — Labeling Rulebook (v9)
+# Facts Extraction — Labeling Rulebook (v10)
 
 Rules for labeling extracted facts (employment / party_membership /
 personal_relation / affair_involvement) as **correct / incorrect /
@@ -74,12 +74,21 @@ When several rules fire, precedence is **incorrect > insufficient > correct**
   - the proper name of an institution/company/agency: `Fight Impunity`, `SBU`,
     `Miedzi Copper Corporation`, `NABU` are all valid.
 
-## 2. Subject must be a real, full name
+## 2. Subject must be a real name
 
 - **Valid:**
   - `Imię Nazwisko` — full first + last name (Błażej Spychalski), or
   - `Imię N.` — first name + surname initial when the source anonymizes
     (Konrad R., Michał O.).
+  - **`Imię` alone — first name only — is acceptable WHEN the source names
+    the person only by first name and provides no surname anywhere in the
+    article** (e.g. a family member mentioned as "28-letni Łukasz"). A partial
+    name is better than dropping the fact. If the source gives both `Imię`
+    and `Nazwisko` anywhere, the extractor must use the full `Imię Nazwisko`
+    and the full form is what the judge checks against.
+  - If the article carries the full `Imię Nazwisko` the extractor must use it,
+    even where the justification span itself shows only `Imię` — that mismatch
+    between the subject and the span is NOT a defect.
 - **Invalid → incorrect:**
   - bare initial only: `M.`, `X.`
   - a role/title in the name slot: `prezes`, `wiceprezes`, `adwokat`
@@ -87,7 +96,9 @@ When several rules fire, precedence is **incorrect > insufficient > correct**
     `żona Marcina Liberackiego`, `syn X`
 - The subject's **name must appear in the justification span** (strict). If the
   span refers to them only by pronoun/relation and never names them
-  (span: *"został powołany…"*) → **insufficient**.
+  (span: *"został powołany…"*) → **insufficient**. A first-name-only subject
+  must still be *named* in the span — a pronoun or bare title is never
+  enough.
 - **Extractor contract:** the justification must be **big enough to name the
   subject** on its own. A justification that requires surrounding article
   context to know who it is about is too small — extend it until it contains
@@ -164,7 +175,9 @@ span. Judge form as well as grounding:
 - `subject` and `object` must be the **correct way round** per the span
   (*"X, znajomy Y"*).
 - Both endpoints must be valid names (§2); an endpoint that is only
-  `ojciec` / `żona` with no name → **incorrect**.
+  `ojciec` / `żona` with no name → **incorrect**. A first-name-only endpoint
+  (§2 "Imię alone") is **correct** when the span names the person that way
+  with no surname in the article.
 - Swapped / wrong direction → **incorrect**.
 
 ## 4.1 Affairs (affair_involvement)
@@ -188,8 +201,8 @@ span. Judge form as well as grounding:
 
 ## 5. Label definitions
 
-- **correct** — subject is a valid name, present in the span; every populated
-  field is Polish and supported by the span.
+- **correct** — subject is a valid name (incl. first-name-only per §2), present
+  in the span; every populated field is Polish and supported by the span.
 - **insufficient** — fields are plausible but the **span does not name the
   subject** (or is too fragmentary to verify the core claim). The fact may be
   true; it just cannot be confirmed from this span.
@@ -204,6 +217,8 @@ span. Judge form as well as grounding:
 | Subject valid name in span, all fields supported & Polish | correct |
 | Subject valid name but **not present** in span (pronoun only) | insufficient |
 | Span too fragmentary to verify the core claim | insufficient |
+| Subject is a first name only, no surname in the article | correct |
+| Subject is full `Imię Nazwisko` though the article had only `Imię` | correct |
 | Field in a non-Polish language | incorrect |
 | Subject is a bare initial / role / description | incorrect |
 | Attribute contradicted, absent (ungrounded), or garbled | incorrect |

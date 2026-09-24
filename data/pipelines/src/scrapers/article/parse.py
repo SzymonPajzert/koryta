@@ -19,6 +19,132 @@ _EMPTY_RESULT: dict[str, Any] = {
     "extraction_method": None,
 }
 
+#: Selector value meaning "this site has no usable DOM selector; read the body
+#: from the client-rendered `window.__newsData` payload instead". Stored in
+#: `verified_selectors.json` under the domain, which is just a JSON map -- so
+#: the sentinel is a reserved selector string rather than a real CSS selector.
+#: A domain carrying it goes straight to the `__newsData` reader; `select_one`
+#: is never called with it. See ``NEWS_DATA_BODY_KEYS``.
+NEWS_DATA_SELECTOR = "__news_data__"
+
+# The TVP regional CMS renders its articles client-side: the served HTML has
+# only empty containers, and the text lives in a `window.__newsData = {...}`
+# object literal that the browser executes. Every *_tvp.pl regional site
+# (bialystok, bydgoszcz, gdansk, gorzow, kielce, lodz, lublin, olsztyn, opole,
+# poznan, rzeszow, szczecin, wroclaw - and vod.tvp.pl) does this, so one
+# reader covers them all. No headless browser is needed: the payload is in the
+# bytes we already store.
+_NEWS_DATA_RE = re.compile(r"window\.__newsData\s*=\s*(\{.*?\})\s*;", re.DOTALL)
+
+
+def _extract_news_data(html_text: str) -> dict[str, Any] | None:
+    """The `window.__newsData` object, or None when the page has none.
+
+    The literal is a JS object literal with quoted keys and standard escapes,
+    so ``json.loads`` reads it as-is. Returns None on anything unexpected
+    rather than raising: the caller falls back to the selector path, and this
+    must never turn a parseable page into an error.
+    """
+    match = _NEWS_DATA_RE.search(html_text)
+    if match is None:
+        return None
+    raw = match.group(1)
+    # A single non-greedy match stops at the first `}`; rebalance braces so the
+    # whole object is captured even when it contains nested objects/arrays.
+    depth = 0
+    in_string = False
+    escaped = False
+    end = 0
+    for index, char in enumerate(raw):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                end = index + 1
+                break
+    raw = raw[:end] if end else raw
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+# The body fields, in reading order. TVP splits the article across four
+# keys rather than one array: the head/lead are the standfirst, `standard` is
+# the body, and `subtitle` is a mid-article heading.
+_NEWS_DATA_BODY_KEYS = (
+    "text_paragraph_head",
+    "text_paragraph_lead",
+    "text_paragraph_standard",
+    "text_paragraph_subtitle",
+)
+
+
+def _block_html(value: Any) -> str:
+    """The HTML of one paragraph block, whatever shape the CMS wrote it in.
+
+    A field is normally a string of HTML fragments, but the body
+    (`text_paragraph_standard`) arrives as a list whose items are dicts like
+    ``{"supertitle": ..., "text": "<p>...</p>"}``. Unwrapping `text`/`html`
+    keys first means both shapes reach BeautifulSoup as markup.
+    """
+    if isinstance(value, dict):
+        for key in ("text", "html", "content"):
+            inner = value.get(key)
+            if isinstance(inner, str) and inner.strip():
+                return inner
+        return ""
+    if isinstance(value, list):
+        return " ".join(_block_html(item) for item in value)
+    return value if isinstance(value, str) else ""
+
+
+def _html_fragments_to_text(value: Any) -> str:
+    """One `text_paragraph_*` field as plain text.
+
+    Tags are stripped and whitespace collapsed to match what the selector path
+    produces.
+    """
+    block = _block_html(value)
+    if not block.strip():
+        return ""
+    text = BeautifulSoup(block, "lxml").get_text(separator=" ")
+    text = html.unescape(text).replace("\xa0", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _text_from_news_data(data: dict[str, Any]) -> str:
+    """The article body from a `__newsData` object, as one plain-text string.
+
+    Prefers the four ``text_paragraph_*`` fields; falls back to ``lead`` so a
+    video-only page still yields its summary rather than nothing.
+    """
+    parts = [
+        text
+        for text in (
+            _html_fragments_to_text(data.get(key))
+            for key in _NEWS_DATA_BODY_KEYS
+        )
+        if text
+    ]
+    if not parts:
+        lead = data.get("lead")
+        if isinstance(lead, str) and lead.strip():
+            parts.append(re.sub(r"\s+", " ", lead).strip())
+    return re.sub(r"\s+", " ", " ".join(parts)).strip()
+
 
 def _iter_ld_json_documents(soup: BeautifulSoup) -> list[Any]:
     documents: list[Any] = []
@@ -197,7 +323,10 @@ def extract_article_content(
     # single picked metadata node, which often lacks the date.
     publication_date = _best_date_from_items(ld_json_items)
 
-    element = soup.select_one(selector)
+    # The sentinel means this site's body is client-rendered, so there is no
+    # DOM selector to try: go straight to the `__newsData` reader below. Any
+    # other value is a real selector.
+    element = None if selector == NEWS_DATA_SELECTOR else soup.select_one(selector)
 
     if element:
         content = element.get_text(separator=" ", strip=True)
@@ -211,6 +340,25 @@ def extract_article_content(
             "article_content": content,
             "extraction_method": "selector",
         }
+
+    # Client-rendered fallback, tried when the selector found nothing (or when
+    # the sentinel skipped the selector entirely). The selector stays the
+    # primary path, so a site that renders server-side is unaffected.
+    # `__newsData` is the TVP regional CMS and carries the body the DOM never
+    # gets.
+    html_text = html_bytes.decode("utf-8", errors="replace")
+    news = _extract_news_data(html_text)
+    if news is not None:
+        content = _text_from_news_data(news)
+        if content:
+            return {
+                "selector_matched": False,
+                "title": title or news.get("title") or None,
+                "publication_date": publication_date,
+                "ld_json": ld_json,
+                "article_content": content,
+                "extraction_method": "news_data",
+            }
 
     result = dict(_EMPTY_RESULT)
     result["title"] = title

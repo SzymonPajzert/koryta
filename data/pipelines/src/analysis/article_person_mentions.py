@@ -97,6 +97,52 @@ def _name_tuple(name: str) -> tuple[str, ...]:
     return tuple(normalize_text(t) for t in str(name).split())
 
 
+def _name_forms(display: str) -> list[tuple[str, ...]]:
+    """Every spelling of a name an article is likely to use.
+
+    Articles almost never write a second name: we hold "Tomasz Jerzy Kotajny"
+    and the text says "Tomasz Kotajny". Registering only the ``full_name``
+    therefore left every person with a middle name unmatchable, because
+    ``PersonNameIndex.find_in_text`` matches a contiguous run against a
+    *registered* form - ``max_len`` widens the window, it does not invent the
+    first+last form. The same holds for a hyphenated surname, where the article
+    may use either half ("Magdalena Zgiep-Porzucek" vs "Magdalena Porzucek").
+
+    First-name-only and last-name-only are deliberately NOT generated: a koryta
+    name is not unique enough for them (three people are called "Wolski"), and
+    every extra form is a candidate the proof filter and the judge then have to
+    deal with.
+    """
+    parts = str(display).split()
+    if not parts:
+        return []
+    forms = [_name_tuple(display)]
+    if len(parts) >= 3:
+        # "Tomasz Jerzy Kotajny" -> "Tomasz Kotajny".
+        forms.append(_name_tuple(f"{parts[0]} {parts[-1]}"))
+    surname = parts[-1]
+    if "-" in surname:
+        head, _, tail = surname.partition("-")
+        # The halves both keep the full prefix and drop the middle name, for the
+        # same reason the first+last form above exists: "Barbara Maria
+        # Gieroń-Piskorska" is written "Barbara Gieroń" in the article, and
+        # "Barbara Maria Gieron" matches it nowhere.
+        for half in (head, tail):
+            if not half:
+                continue
+            forms.append(_name_tuple(" ".join([*parts[:-1], half])))
+            if len(parts) >= 3:
+                forms.append(_name_tuple(f"{parts[0]} {half}"))
+    # Drop duplicates while keeping order, so the full name stays first.
+    seen: set[tuple[str, ...]] = set()
+    unique: list[tuple[str, ...]] = []
+    for form in forms:
+        if len(form) >= 2 and form not in seen:
+            seen.add(form)
+            unique.append(form)
+    return unique
+
+
 def _tags_from_ld_json(ld_json: Any) -> list[str]:
     """Keywords and article sections from a stored ld+json blob (incl. @graph)."""
     tags: list[str] = []
@@ -137,6 +183,12 @@ class PersonNameIndex:
 
     def __init__(self) -> None:
         self._by_tuple: dict[tuple[str, ...], dict[str, str]] = {}
+        # Hyphenated surnames, keyed by (given names, surname part): the site
+        # may hold "Magdalena Porzucek" while the article writes the married
+        # form "Magdalena Zgiep-Porzucek". We cannot invent the missing part,
+        # so the article's hyphenated token is matched against the parts we
+        # do hold. See find_in_text.
+        self._hyphen: dict[tuple[str, ...], dict[str, str]] = {}
         self.max_len = 0
         self.people = 0
         self.forms = 0
@@ -159,6 +211,14 @@ class PersonNameIndex:
             self._by_tuple.setdefault(form, {}).setdefault(norm_display, display)
             self.max_len = max(self.max_len, len(form))
             self.forms += 1
+            # Every distinct surname part we hold also matches the
+            # corresponding part of a hyphenated surname in the text
+            # ("porzucek" meets "zgiep-porzucek"). The full given+surname key
+            # covers the case where the article writes the hyphenated form and
+            # we hold the short one.
+            for key in {form, (*form[:-1], form[-1].split("-")[-1])}:
+                if "-" not in key[-1]:
+                    self._hyphen.setdefault(key, {}).setdefault(norm_display, display)
 
     def find_in_text(self, text: str) -> set[str]:
         """Return the display names of people mentioned in ``text``."""
@@ -173,7 +233,30 @@ class PersonNameIndex:
                     names = self._by_tuple.get(key)
                     if names:
                         found.update(names.values())
+                    # Only when the run's surname is hyphenated: try every way
+                    # of splitting it so "zgiep-porzucek" can meet a stored
+                    # "porzucek" (or vice versa, via the stored parts).
+                    if "-" in words[i + n - 1]:
+                        for alias_key in _hyphen_aliases(key):
+                            hyphen_names = self._hyphen.get(alias_key)
+                            if hyphen_names:
+                                found.update(hyphen_names.values())
         return found
+
+
+def _hyphen_aliases(key: tuple[str, ...]) -> list[tuple[str, ...]]:
+    """Surname tuple keys a hyphenated last token could also stand for.
+
+    "magdalena zgiep-porzucek" yields "magdalena zgiep" and "magdalena
+    porzucek", so it meets a stored "Magdalena Porzucek"; reversing the
+    direction is handled at registration time (see add).
+    """
+    last = key[-1]
+    if "-" not in last:
+        return []
+    return [
+        (*key[:-1], part) for part in last.split("-") if part
+    ]
 
 
 # National party abbreviations / names an article is likely to use, mapped
@@ -206,11 +289,22 @@ _PARTY_KEYS = (
 # committee names still resolve through the generic loop below.
 _KORYTA_PARTY_TERMS: dict[str, set[str]] = {
     "pis": {"pis", "prawo i sprawiedliwosc"},
-    "po": {"koalicja obywatelska"},
+    "po": {"koalicja obywatelska", "platforma obywatelska"},
     "psl": {"psl", "polskie stronnictwo ludowe"},
     "polska 2050": {"polska 2050", "pl2050"},
     "nowa lewica": {"nowa lewica"},
     "konfederacja": {"konfederacja"},
+}
+
+# A party under a newer name is still the same party: an article from before a
+# rename names it the old way. Platforma Obywatelska became Koalicja
+# Obywatelska, so a stored "koalicja obywatelska" has to match "Platforma
+# Obywatelska" too or every pre-2018 article about a PO person loses its only
+# party proof. "PO" itself stays out of the search terms - it is an ordinary
+# Polish word and would prove nothing.
+_PARTY_ALIASES: dict[str, set[str]] = {
+    "koalicja obywatelska": {"platforma obywatelska"},
+    "platforma obywatelska": {"koalicja obywatelska"},
 }
 
 
@@ -226,10 +320,16 @@ def _party_match_terms(party_norm: str) -> set[str]:
     if party_norm in _KORYTA_PARTY_TERMS:
         return set(_KORYTA_PARTY_TERMS[party_norm])
     terms: set[str] = set()
+    if party_norm in _PARTY_ALIASES:
+        # A stored name that is not a `_PARTY_KEYS` needle, e.g. a bare
+        # "platforma obywatelska", is still spelled a second way in older text.
+        terms.add(party_norm)
     for key, needle in _PARTY_KEYS:
         if needle in party_norm:
             terms.add(key)
             terms.add(needle)
+    for term in list(terms):
+        terms.update(_PARTY_ALIASES.get(term, ()))
     return terms
 
 
@@ -505,7 +605,7 @@ def _load_index_and_profiles(
         person_id = _person_id(row)
         if not person_id:
             continue
-        index.add(display, [_name_tuple(display)])
+        index.add(display, _name_forms(display))
 
         profile = PersonProfile()
         profile.woj = {
@@ -524,7 +624,9 @@ def _load_index_and_profiles(
         profiles.add(display, person_id, profile)
     for survivor_display, duplicates in aliases.items():
         for dup_display in duplicates:
-            index.add(survivor_display, [_name_tuple(dup_display)])
+            # The duplicate's own spellings, not the survivor's: a merged-away
+            # "Marian Uherek" has to keep matching "Marian Uherek" in the text.
+            index.add(survivor_display, _name_forms(dup_display))
     if merged:
         print(
             f"Aliased {merged:,} merged-away people onto their survivors "
