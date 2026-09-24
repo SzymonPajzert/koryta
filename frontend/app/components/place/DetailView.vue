@@ -63,7 +63,9 @@
              company, so a page nobody has touched looks exactly as it did. -->
         <RevisionNodeProposals ref="proposals" :node-id="nodeId" />
 
-        <div class="d-flex flex-wrap ga-2 mt-4">
+        <!-- Controls, not content: a snippet read "Graf połączeńEksploruj
+             powiązania". -->
+        <div class="d-flex flex-wrap ga-2 mt-4" data-nosnippet>
           <v-btn
             variant="outlined"
             :prepend-icon="mdiGraphOutline"

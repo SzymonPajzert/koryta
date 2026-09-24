@@ -148,7 +148,12 @@
          never reach this page. Blurring real text would put unverified claims
          about a named person into the html of their canonical, indexed url and
          call it hidden - `filter` is a paint instruction, not an access rule. -->
-    <div v-else class="locked" data-testid="person-extractions-locked">
+    <div
+      v-else
+      class="locked"
+      data-testid="person-extractions-locked"
+      data-nosnippet
+    >
       <div class="locked__blur" aria-hidden="true">
         <div v-for="i in 3" :key="i" class="locked__line">
           <div class="locked__bar locked__bar--icon" />

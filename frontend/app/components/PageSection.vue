@@ -15,14 +15,20 @@
       </template>
     </div>
 
-    <p v-if="lead" class="k-lead">{{ lead }}</p>
-    <!-- The slot form, for the sections that say more than one thing before
-         their entries - a coverage line and a "we are not showing you N of
-         these" line, each with its own testid. It renders the paragraphs
-         itself rather than being wrapped in one here: a `<p>` inside a `<p>`
-         is closed by the parser at the first opening tag, and the second half
-         of the lead would land outside the section's own markup. -->
-    <slot name="lead" />
+    <!-- How the section was put together rather than what it found, which
+         is no use in a search result: `data-nosnippet` keeps Google from
+         quoting it ahead of the names below. Honoured on a div, not a <p>. -->
+    <div v-if="lead || $slots.lead" data-nosnippet>
+      <p v-if="lead" class="k-lead">{{ lead }}</p>
+      <!-- The slot form, for the sections that say more than one thing
+           before their entries - a coverage line and a "we are not showing
+           you N of these" line, each with its own testid. It renders the
+           paragraphs itself rather than being wrapped in one here: a `<p>`
+           inside a `<p>` is closed by the parser at the first opening tag,
+           and the second half of the lead would land outside the section's
+           own markup. -->
+      <slot name="lead" />
+    </div>
 
     <slot />
   </section>

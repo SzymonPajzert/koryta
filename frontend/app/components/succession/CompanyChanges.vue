@@ -33,7 +33,9 @@
       <section class="mb-8" data-testid="successions-current">
         <div class="sec-head mb-1">
           <h2 class="text-h6 font-weight-bold">Obecny skład</h2>
-          <span class="text-caption text-medium-emphasis">
+          <!-- `data-nosnippet`: Google opened a company's search result on
+               this caption, which says nothing about the company. -->
+          <span class="text-caption text-medium-emphasis" data-nosnippet>
             wpisy bez daty zakończenia, stan na {{ longDate(today) }}
           </span>
         </div>
@@ -44,10 +46,14 @@
           class="mt-4"
           :data-testid="`current-role-${group.key}`"
         >
+          <!-- The leading spaces in this card are for a reader of the text
+               rather than of the layout: Google's snippet ran the role into
+               the count, "Zarząd1 osoba", and the date into the tenure. Each
+               sits at the start of a flex item, where it is never drawn. -->
           <div class="role-head">
             <v-icon :icon="mdiOfficeBuildingOutline" size="15" />{{ group.role
             }}<span class="count">{{
-              count(group.people.length, "osoba", "osoby", "osób")
+              ` ${count(group.people.length, "osoba", "osoby", "osób")}`
             }}</span>
           </div>
 
@@ -60,7 +66,11 @@
             >
               <div class="k-card k-card--accent pa-4 pl-5 h-100">
                 <div class="d-flex align-start ga-3">
-                  <div class="av av--in">{{ initials(post.personName) }}</div>
+                  <!-- A picture of the name printed beside it. Read as
+                       text it is noise - the snippet said "RB." -->
+                  <div class="av av--in" aria-hidden="true" data-nosnippet>
+                    {{ initials(post.personName) }}
+                  </div>
                   <div class="flex-grow-1 rl-txt">
                     <div class="d-flex align-center flex-wrap ga-2">
                       <NuxtLink
@@ -88,7 +98,7 @@
                         v-if="duration(post.start, null)"
                         class="text-caption text-medium-emphasis"
                       >
-                        {{ duration(post.start, null) }} na stanowisku
+                        {{ ` ${duration(post.start, null)}` }} na stanowisku
                       </span>
                     </div>
 
@@ -101,12 +111,12 @@
                       <span
                         v-if="predecessor.batchSize > 1"
                         :title="batchNote(predecessor.batchSize)"
-                        >m.in.</span
+                        >{{ " m.in." }}</span
                       >
                       <NuxtLink
                         :to="personUrl(predecessor)"
                         class="link-plain font-weight-medium"
-                        >{{ predecessor.personName }}</NuxtLink
+                        >{{ ` ${predecessor.personName}` }}</NuxtLink
                       >
                       <PartyChip
                         v-for="party in predecessor.parties"
@@ -153,12 +163,16 @@
             }}
           </span>
         </div>
-        <p class="text-caption text-medium-emphasis mb-6 relay-intro">
-          Pary dobrane 1:1 w obrębie tej spółki i tej samej funkcji: koniec
-          jednego wpisu i początek kolejnego w oknie od
-          {{ MAX_OVERLAP_DAYS }} dni przed do {{ MAX_GAP_DAYS }} dni po. Wpisy z
-          tego samego dnia zebrano w jedno zdarzenie.
-        </p>
+        <!-- How the pairs were made, not who they are: kept out of search
+             results, which honour `data-nosnippet` on a div but not a <p>. -->
+        <div data-nosnippet>
+          <p class="text-caption text-medium-emphasis mb-6 relay-intro">
+            Pary dobrane 1:1 w obrębie tej spółki i tej samej funkcji: koniec
+            jednego wpisu i początek kolejnego w oknie od
+            {{ MAX_OVERLAP_DAYS }} dni przed do {{ MAX_GAP_DAYS }} dni po. Wpisy
+            z tego samego dnia zebrano w jedno zdarzenie.
+          </p>
+        </div>
 
         <div
           v-for="section in roleSections"
@@ -170,10 +184,10 @@
             <v-icon :icon="mdiOfficeBuildingOutline" size="15" />{{
               section.role
             }}<span class="count">{{
-              count(section.count, "zmiana", "zmiany", "zmian")
+              ` ${count(section.count, "zmiana", "zmiany", "zmian")}`
             }}</span>
           </div>
-          <div class="rl-legend">
+          <div class="rl-legend" data-nosnippet>
             <span>Ustępuje</span><span /><span>Obejmuje stanowisko</span>
           </div>
 
@@ -215,7 +229,7 @@
                 <div class="rl-left">
                   <div class="rl-ovl">Ustępuje</div>
                   <div class="rl-p">
-                    <div class="av av--out">
+                    <div class="av av--out" aria-hidden="true" data-nosnippet>
                       {{ initials(pair.left.personName) }}
                     </div>
                     <div class="rl-txt">
@@ -254,7 +268,7 @@
                 <div class="rl-right">
                   <div class="rl-ovl">Obejmuje stanowisko</div>
                   <div class="rl-p">
-                    <div class="av av--in">
+                    <div class="av av--in" aria-hidden="true" data-nosnippet>
                       {{ initials(pair.joined.personName) }}
                     </div>
                     <div class="rl-txt">
