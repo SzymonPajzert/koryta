@@ -2,7 +2,7 @@
   <div class="d-flex flex-wrap align-center ga-1">
     <template v-if="reviewable">
       <v-btn
-        color="success"
+        color="ink-success"
         variant="tonal"
         size="small"
         :prepend-icon="mdiCheck"
@@ -32,7 +32,7 @@
           proposal.targetExists &&
           proposal.kind !== 'removal'
         "
-        color="success"
+        color="ink-success"
         variant="flat"
         size="small"
         :prepend-icon="mdiEarth"
@@ -44,7 +44,8 @@
       </v-btn>
 
       <v-btn
-        color="error"
+        v-if="rejectable"
+        color="ink-danger"
         variant="text"
         size="small"
         :prepend-icon="mdiClose"
@@ -88,8 +89,11 @@
  * Approving and publishing are offered separately because they are separate
  * things: approving settles what the entry says, publishing settles who can
  * read it, and a reviewer who wanted only the first would otherwise have to
- * remember that. The buttons keep the `data-testid`s the existing comparison
- * page uses, so a spec written against either reads the same.
+ * remember that. The buttons keep the `data-testid`s the comparison page used
+ * when it carried its own, so a spec written against either reads the same.
+ *
+ * The colours are ink tokens: Vuetify's `success` as the text of a tonal
+ * button is 2.5:1, and white on it as a filled one 2.8:1.
  */
 import {
   mdiCheck,
@@ -100,14 +104,23 @@ import {
 } from "@mdi/js";
 import type { Proposal } from "~~/shared/proposals";
 
-defineProps<{
-  proposal: Proposal;
-  /** Whether a decision is still open on this one. A settled proposal keeps its
-   * row - the permalink has to resolve after the fact - but not its buttons. */
-  reviewable: boolean;
-  loading?: boolean;
-  fullComparisonTo?: string | null;
-}>();
+withDefaults(
+  defineProps<{
+    proposal: Proposal;
+    /** Whether a decision is still open on this one. A settled proposal keeps
+     * its row - the permalink has to resolve after the fact - but not its
+     * buttons. */
+    reviewable: boolean;
+    /** Whether "Odrzuć" is among those decisions, when there are any. An
+     * entry's history lets a reviewer approve an older version back - the only
+     * way to undo a bad approval - and rejecting something that was once
+     * approved, or already rejected, would only overwrite the record of it. */
+    rejectable?: boolean;
+    loading?: boolean;
+    fullComparisonTo?: string | null;
+  }>(),
+  { rejectable: true, loading: false, fullComparisonTo: null },
+);
 
 const emit = defineEmits<{
   approve: [options: { publish: boolean }];

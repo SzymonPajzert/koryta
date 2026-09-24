@@ -119,15 +119,25 @@ test.describe("Comparing many revisions of one node", () => {
     test.setTimeout(120_000);
     await logIn(page, USERS.admin, `/admin/rewizje/${NODE}`);
     const headers = page.locator(".comparison-table thead th");
+    // The history list above the table shows the same revisions, and follows
+    // the same filter.
+    const rows = page.locator("[data-revision-row]");
     await expect(headers).toHaveCount(TOTAL, { timeout: 30_000 });
+    await expect(rows).toHaveCount(TOTAL);
 
     await page.getByTestId("revision-filter-manual").click();
     await expect(headers).toHaveCount(MANUAL);
+    await expect(rows).toHaveCount(MANUAL);
 
     // The approved one is the human revision this node is serving, so asking
     // for what is still waiting leaves the other.
     await page.getByTestId("revision-filter-pending").click();
     await expect(headers).toHaveCount(TOTAL - 1);
+    await expect(rows).toHaveCount(TOTAL - 1);
+
+    // And the other way round: the list's own filter moves the table.
+    await page.getByTestId("history-filter-all").click();
+    await expect(headers).toHaveCount(TOTAL);
   });
 
   test("a link to one revision shows it whatever the filter says", async ({
@@ -147,6 +157,11 @@ test.describe("Comparing many revisions of one node", () => {
       timeout: 30_000,
     });
 
+    // It is also the row of the history list that opens by itself.
+    await expect(
+      page.locator(`[data-revision-row="${automatic}"] [data-row-panel]`),
+    ).toBeVisible();
+
     await page.getByTestId("revision-filter-manual").click();
     await expect(
       page.locator(`[data-revision-header="${automatic}"]`),
@@ -154,5 +169,18 @@ test.describe("Comparing many revisions of one node", () => {
     await expect(page.locator(".comparison-table thead th")).toHaveCount(
       MANUAL + 1,
     );
+    await expect(page.locator("[data-revision-row]")).toHaveCount(MANUAL + 1);
+  });
+
+  test("the history names who filed each revision", async ({ page }) => {
+    // What the side-by-side table never showed at a glance: the author, on
+    // the line itself. Pipeline uploads say so instead of naming the account
+    // the ingest runs as.
+    test.setTimeout(120_000);
+    await logIn(page, USERS.admin, `/admin/rewizje/${NODE}`);
+    const authors = page.locator("[data-revision-row] [data-revision-author]");
+    await expect(authors).toHaveCount(TOTAL, { timeout: 30_000 });
+    await expect(authors.nth(0)).toHaveText("test_user");
+    await expect(authors.nth(MANUAL)).toHaveText("pipeline");
   });
 });

@@ -7,6 +7,7 @@ import {
   proposalStatuses,
   resolveProposalStatus,
 } from "../../shared/proposals";
+import { ink, meetsAaText, surface } from "../../shared/colors";
 
 const ID = "rev-2";
 
@@ -111,6 +112,17 @@ describe("proposalStatusLabels", () => {
       expect(proposalStatusLabels[status].label).toBeTruthy();
       expect(proposalStatusLabels[status].color).toBeTruthy();
       expect(proposalStatusHints[status]).toBeTruthy();
+    }
+  });
+
+  it("draws every state in an ink that reads as text", () => {
+    // A tonal chip paints its colour as the text and a bare icon carries it
+    // alone; Vuetify's own `warning`, `success` and `grey` are 2.1-2.5:1 there.
+    for (const status of proposalStatuses) {
+      const token = proposalStatusLabels[status].color;
+      expect(token).toMatch(/^ink-/);
+      const hex = ink[token.slice("ink-".length) as keyof typeof ink];
+      expect(meetsAaText(hex, surface.white)).toBe(true);
     }
   });
 
