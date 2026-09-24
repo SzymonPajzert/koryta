@@ -37,6 +37,10 @@
  * nobody can see is cheap, and approving one to a live page is not. A relation
  * and a deleted entry are called out because neither has a page to click
  * through to, so the missing link is the state of the data rather than a bug.
+ *
+ * Tonal chips paint their colour as the text, so the colours are the ink
+ * tokens: Vuetify's `success`, `grey` and `info` read at 2.4-2.7:1 there, and
+ * `secondary` - a pale pink - at barely more than 1.
  */
 import { computed } from "vue";
 import {
@@ -66,16 +70,16 @@ const chips = computed(() => {
     // chip beside it moot.
     chips.push({
       label: "Wpis nie istnieje",
-      color: "error",
+      color: "ink-danger",
       icon: mdiTrashCanOutline,
     });
   } else {
     chips.push(
       proposal.published
-        ? { label: "Opublikowana", color: "success", icon: mdiEarth }
+        ? { label: "Opublikowana", color: "ink-success", icon: mdiEarth }
         : {
             label: "Nieopublikowana",
-            color: "grey",
+            color: "ink-neutral",
             icon: mdiEyeOffOutline,
           },
     );
@@ -84,21 +88,21 @@ const chips = computed(() => {
   if (proposal.kind === "create") {
     chips.push({
       label: "Nowy wpis",
-      color: "info",
+      color: "ink-sage",
       icon: mdiPlusCircleOutline,
     });
   }
   if (proposal.kind === "removal") {
     chips.push({
       label: "Wniosek o usunięcie",
-      color: "error",
+      color: "ink-danger",
       icon: mdiDeleteOutline,
     });
   }
   if (proposal.targetCollection === "edges") {
     chips.push({
       label: "Powiązanie",
-      color: "secondary",
+      color: "ink-info",
       icon: mdiLinkVariant,
     });
   }
