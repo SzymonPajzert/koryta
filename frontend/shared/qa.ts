@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "google-widzi-strone-po-wdrozeniu",
+    title: "Google nie dostaje pustej strony po wdrożeniu",
+    description:
+      "Gdy Google renderował stronę pobraną przed wdrożeniem, jej skryptów już nie było i zostawała pusta strona " +
+      "z adresem kanonicznym strony głównej. Teraz zostaje strona taka, jaką wysłał serwer. Dla czytelnika nic się nie zmienia.",
+    steps: [
+      "Kilka dni po wdrożeniu, w Search Console → Sprawdzanie adresu URL, dla strony osoby lub spółki odwiedzonej po wdrożeniu „Strona kanoniczna zadeklarowana przez użytkownika” ma być adresem tej strony, a nie https://koryta.pl/.",
+    ],
+    area: "public",
+  },
+  {
     id: "opinie-poprawki-z-qa",
     title: "Wpis na tej liście może wskazać zgłoszenie, które poprawia",
     description:
