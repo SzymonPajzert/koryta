@@ -45,6 +45,12 @@ def index() -> JstIndex:
         # ...and in two different powiaty, which nothing can resolve
         ("14", "25", "01", "1", "Siedlce"),
         ("14", "34", "02", "2", "Siedlce"),
+        # A miasto na prawach powiatu next to a gmina wiejska of its name
+        ("04", "64", None, None, "Włocławek"),
+        ("04", "64", "01", "1", "Włocławek"),
+        ("04", "18", "13", "2", "Włocławek"),
+        ("08", "61", None, None, "Gorzów Wielkopolski"),
+        ("08", "61", "01", "1", "Gorzów Wielkopolski"),
     ]
     return JstIndex.from_terc(
         pd.DataFrame(rows, columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"])
@@ -106,6 +112,25 @@ class TestClassify(unittest.TestCase):
     def test_a_company_is_not_a_jst(self):
         level, _, _ = classify("POLSKIE KOLEJE PAŃSTWOWE SPÓŁKA AKCYJNA")
         self.assertIsNone(level)
+
+    def test_the_powiat_status_after_the_town_says_gmina_miejska(self):
+        # MPEC Wloclawek, KRS 0000048441, and "BAZA", the city's other company
+        self.assertEqual(
+            classify("WŁOCŁAWEK - MIASTO NA PRAWACH POWIATU"),
+            ("gmina", "1", "WLOCLAWEK"),
+        )
+        # CPK Czestochowa, KRS 0000051670 - no spaces round the hyphen
+        self.assertEqual(
+            classify("CZĘSTOCHOWA-MIASTO NA PRAWACH POWIATU"),
+            ("gmina", "1", "CZESTOCHOWA"),
+        )
+
+    def test_the_powiat_status_can_come_first(self):
+        # CSR Slowianka, KRS 0000051160
+        self.assertEqual(
+            classify("MIASTO NA PRAWACH POWIATU GORZÓW WIELKOPOLSKI"),
+            ("gmina", "1", "GORZOW WIELKOPOLSKI"),
+        )
 
     def test_skarb_panstwa_is_recognised_but_has_no_level(self):
         level, _, core = classify("SKARB PAŃSTWA")
@@ -171,6 +196,17 @@ class TestResolve(unittest.TestCase):
         # Giving the Treasury a code would put it in the running for a company's
         # seat, which is a territory and it is not one.
         self.assertEqual(self.index.resolve("SKARB PAŃSTWA"), SKARB_PANSTWA)
+
+    def test_a_miasto_na_prawach_powiatu_is_the_town_not_the_villages(self):
+        # Wloclawek is also a gmina wiejska in powiat wloclawski, which is a
+        # different owner altogether.
+        self.assertEqual(
+            self.index.resolve("WŁOCŁAWEK - MIASTO NA PRAWACH POWIATU"), "0464011"
+        )
+        self.assertEqual(
+            self.index.resolve("MIASTO NA PRAWACH POWIATU GORZÓW WIELKOPOLSKI"),
+            "0861011",
+        )
 
     def test_a_company_shareholder_resolves_to_nothing(self):
         self.assertIsNone(self.index.resolve("POLSKIE KOLEJE PAŃSTWOWE SPÓŁKA AKCYJNA"))
