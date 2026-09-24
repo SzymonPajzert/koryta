@@ -126,7 +126,7 @@ import {
   mdiHistory,
   mdiVectorPolyline,
 } from "@mdi/js";
-import type { RowTone } from "~/composables/rowVariant";
+import type { RowTone } from "~/composables/rowTone";
 import { entityIcon } from "~/utils/entityIcon";
 import { formatDaysAgo } from "~/utils/chartTheme";
 import {

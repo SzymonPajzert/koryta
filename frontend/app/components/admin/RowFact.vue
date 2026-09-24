@@ -7,6 +7,6 @@
 
 <script setup lang="ts">
 /** One fact about an open row - "Autor", "Kiedy", "Status" - for the `meta`
- * slot of `AdminExpandRow`. Styled there, by variant. */
+ * slot of `AdminExpandRow`. Styled there. */
 defineProps<{ label: string }>();
 </script>

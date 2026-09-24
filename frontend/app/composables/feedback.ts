@@ -14,7 +14,7 @@ import {
 import { parseEntityUrlSlug, seoTypes, type SeoType } from "./slugs";
 import { anonymousRequest, authRequest } from "./auth";
 import { feedbackKindLabels } from "~~/shared/model";
-import type { RowTone } from "./rowVariant";
+import type { RowTone } from "./rowTone";
 import type { FixState } from "~~/shared/feedbackFixes";
 import type {
   FeedbackContext,
