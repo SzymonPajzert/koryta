@@ -531,6 +531,11 @@ sources.extend(
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
         ),
+        # Every level of the 1998 councils, the small gminas included. PKW
+        # also publishes those small gminas polling station by polling station
+        # (dane/1998/rada_gminy/1998_rady_gmin.zip), which is the same
+        # candidacies again - 121,069 of its 121,072 candidates are here, every
+        # one with the same result - so it is not read.
         InputSource(
             FileSource(
                 "https://danewyborcze.kbw.gov.pl/dane/1998/1998-kand-rady.xlsx",
@@ -543,23 +548,6 @@ sources.extend(
         ),
     ]
 )
-
-for index in range(0, 16):
-    sources.append(
-        InputSource(
-            FileSource(
-                "https://danewyborcze.kbw.gov.pl/dane/1998/rada_gminy/1998_rady_gmin.zip",
-                "1998_rady_gmin.zip",
-            ),
-            # One workbook per województwo, and the loop variable is which.
-            # Pinned at 0 this read dolnośląskie sixteen times and the other
-            # fifteen not at all; all sixteen carry the same header.
-            ZipExtractor(None, XlsExtractor(header_rows=1), index=index),
-            1998,
-            PkwFormat.UNKNOWN,
-            ElectionType.SAMORZADOWE,
-        )
-    )
 
 for old_woj in range(1, 50):
     sources.append(
