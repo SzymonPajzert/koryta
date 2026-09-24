@@ -86,7 +86,7 @@
               size="x-small"
               label
               :color="blocksClosing(followUp) ? 'ink-danger' : undefined"
-              :to="{ hash: `#fb-${followUp.id}` }"
+              :to="reportLink(followUp.id!)"
               :title="followUp.message"
             >
               {{ qaStatusLabels[followUp.context.qa!.status] }} ·
@@ -113,15 +113,19 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { mdiAlertCircleOutline, mdiCheck, mdiWrenchOutline } from "@mdi/js";
-import { feedbackStatusConfig, fixStateConfig } from "~/composables/feedback";
+import {
+  feedbackReportLink,
+  feedbackStatusConfig,
+  fixStateConfig,
+} from "~/composables/feedback";
 import { blocksClosing, type FixState } from "~~/shared/feedbackFixes";
 import type { Feedback } from "~~/shared/model";
 import { qaStatusLabels, type QaCheck, type QaItem } from "~~/shared/qa";
 
 /** The QA entry that says it fixes a report, and what the people who checked
- * it found - folded into one chip, because on most cards the colour is all
+ * it found - folded into one chip, because on most reports the colour is all
  * there is to read. The rest opens on a click. The page works out the state,
- * since it also decides the "Zamknij" button and the icon in ordering mode;
+ * since it also decides the "Zamknij" button and the icon on the row's line;
  * this only shows it. */
 const props = defineProps<{
   /** Entries claiming the report, newest first. The newest one decides:
@@ -137,9 +141,13 @@ const props = defineProps<{
   /** Who wrote the report, so their own verdict can be told apart. */
   reporterUid?: string;
   /** The fix works, the report is still open, and a problem reported against
-   * the fix is too - what keeps "Zamknij jako załatwione" off the card. */
+   * the fix is too - what keeps "Zamknij jako załatwione" off the row. */
   blocked?: boolean;
+  /** The page the follow-up reports are opened on - see `feedbackReportLink`. */
+  reportPage?: string;
 }>();
 
 const latest = computed(() => props.entries[0]!);
+
+const reportLink = (id: string) => feedbackReportLink(id, props.reportPage);
 </script>

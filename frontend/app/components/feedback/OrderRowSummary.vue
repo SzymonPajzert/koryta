@@ -3,7 +3,7 @@
     class="flex-0-0"
     size="small"
     :icon="feedbackKindConfig[item.kind].icon"
-    :color="kindInk[item.kind]"
+    :color="`ink-${feedbackKindTone[item.kind]}`"
     :title="feedbackKindConfig[item.kind].title"
   />
   <span
@@ -34,13 +34,20 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { feedbackKindConfig, fixStateConfig } from "~/composables/feedback";
+import {
+  feedbackKindConfig,
+  feedbackKindTone,
+  fixStateConfig,
+} from "~/composables/feedback";
 import type { FixState } from "~~/shared/feedbackFixes";
-import type { Feedback, FeedbackKind } from "~~/shared/model";
+import type { Feedback } from "~~/shared/model";
 
-/** What a report is, in one line - enough to tell reports apart while
- * ordering them. The full text is in the tooltip and on the card in the other
- * mode. */
+/** What a report is, in one line - enough to tell reports apart in a list:
+ * the rows of ordering mode, and the line of a report row that opens. The
+ * full text is in the tooltip and in the open row.
+ *
+ * The kind's colour is ink rather than fill: a bare icon on white has to carry
+ * it alone, and the fills the chips use are too pale for that. */
 const props = defineProps<{
   item: Feedback;
   /** Where a fix claimed on the QA list stands, when there is one. */
@@ -55,15 +62,6 @@ const where = computed(() =>
     ? `QA: ${props.item.context.qa.title}`
     : props.item.context.pageTitle || props.item.context.route,
 );
-
-/** The kind's colour as ink rather than fill: a bare icon on white has to
- * carry it alone, and the fills the chips use are too pale for that. */
-const kindInk: Record<FeedbackKind, string> = {
-  bug: "ink-danger",
-  data: "ink-warning",
-  idea: "ink-sage",
-  other: "ink-neutral",
-};
 </script>
 
 <style scoped>

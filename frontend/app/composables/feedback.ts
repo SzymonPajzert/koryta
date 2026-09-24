@@ -1,4 +1,7 @@
-import type { RouteLocationNormalizedLoaded } from "vue-router";
+import type {
+  RouteLocationNormalizedLoaded,
+  RouteLocationRaw,
+} from "vue-router";
 import {
   mdiAlertCircleOutline,
   mdiBug,
@@ -11,6 +14,7 @@ import {
 import { parseEntityUrlSlug, seoTypes, type SeoType } from "./slugs";
 import { anonymousRequest, authRequest } from "./auth";
 import { feedbackKindLabels } from "~~/shared/model";
+import type { RowTone } from "./rowVariant";
 import type { FixState } from "~~/shared/feedbackFixes";
 import type {
   FeedbackContext,
@@ -50,6 +54,16 @@ export const feedbackKindConfig: Record<
   },
 };
 
+/** The kind as one of the ink/surface pairs in shared/colors.ts, for the
+ * admin rows: `ink-<tone>` for a bare icon, the pair for the row itself. The
+ * `color`s above are Vuetify's, which are too pale to be read as text. */
+export const feedbackKindTone: Record<FeedbackKind, RowTone> = {
+  bug: "danger",
+  data: "warning",
+  idea: "sage",
+  other: "neutral",
+};
+
 export const feedbackStatusConfig: Record<
   FeedbackStatus,
   { title: string; color: string }
@@ -79,6 +93,15 @@ export const fixStateConfig: Record<
     color: "ink-danger",
   },
 };
+
+/** Where a link to one report leads. On the page that lists every report it
+ * is the hash alone, which that page follows by opening and outlining the row
+ * (/admin/opinie); from a page showing only some of them, `page` is where the
+ * rest are, and the link goes there with the same hash. */
+export const feedbackReportLink = (
+  id: string,
+  page?: string,
+): RouteLocationRaw => (page ? `${page}#fb-${id}` : { hash: `#fb-${id}` });
 
 /** The node the route is about, when it is about one.
  *
