@@ -8,6 +8,8 @@
       </p>
     </div>
 
+    <ActivityMonthChart class="mb-6" />
+
     <div class="mb-6">
       <!-- The kinds wrap rather than slide: a sideways-scrolling row on a phone
            cut the last chip in half with nothing to say more were there. -->

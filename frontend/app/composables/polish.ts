@@ -10,8 +10,9 @@ export interface PolishNoun {
 /** Which of the three nominative forms a count takes. Split out of
  * `polishCounting` so that the grouped variant below picks the noun by the
  * same rule; two copies of it would answer „1 284 osoba” the first time one of
- * them was corrected and the other was not. */
-function nominativeNoun(
+ * them was corrected and the other was not. Exported for a figure set apart
+ * from its noun, like a large number over its caption. */
+export function nominativeNoun(
   number: number,
   form_singular: string,
   form_plural: string,

@@ -10,6 +10,7 @@ import type {
   FeedBatch,
   FeedRange,
 } from "../../shared/activityFeed";
+import type { ActivityStats } from "../../server/api/stats/activity.get";
 
 const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
 
@@ -130,6 +131,34 @@ const adminFeed = () =>
     ],
   });
 
+const FEED_URL = "/api/activity/feed";
+const STATS_URL = "/api/stats/activity";
+
+/** The month the chart over the feed draws: two busy days, the rest quiet. */
+const monthStats = (): ActivityStats => {
+  const daily = Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(Date.UTC(2026, 7, 24 + index));
+    const vote = index === 27 ? 12 : index === 29 ? 5 : 0;
+    return {
+      date: date.toISOString().slice(0, 10),
+      counts: { vote, revision: 0, noteSource: 0, publication: 0 },
+      total: vote,
+    };
+  });
+  return {
+    window: { since: daily[0]!.date, until: daily[29]!.date, days: 30 },
+    identified: false,
+    totals: { vote: 17, revision: 0, noteSource: 0, publication: 0 },
+    total: 17,
+    daily,
+    contributorCount: 2,
+    contributors: [],
+    namedCount: 0,
+    self: null,
+    truncated: [],
+  };
+};
+
 /** Requests the page has sent and not yet had answered. */
 let inFlight = 0;
 
@@ -143,12 +172,14 @@ let widens = false;
  * rejection exists only once the page has asked and is there to catch it. */
 type Answer = ActivityFeed | (() => Promise<ActivityFeed>);
 
-/** Serves `byDays[days]`, so a test can tell the week from the month. */
+/** Serves `byDays[days]`, so a test can tell the week from the month. The
+ * chart over the feed gets the same month every time. */
 function serve(byDays: Partial<Record<FeedRange, Answer>>) {
   const week = byDays[7];
   widens = typeof week !== "function" && (week?.batches.length ?? 0) < 10;
   mockAuthRequest.mockImplementation(
-    async (_url: string, options: { query: { days: FeedRange } }) => {
+    async (url: string, options: { query: { days: FeedRange } }) => {
+      if (url === STATS_URL) return monthStats();
       inFlight++;
       try {
         await Promise.resolve();
@@ -162,23 +193,28 @@ function serve(byDays: Partial<Record<FeedRange, Answer>>) {
   );
 }
 
+/** The windows the feed was asked for, in order - not the chart's month. */
 const askedDays = () =>
-  mockAuthRequest.mock.calls.map(
-    ([, options]) => (options as { query: { days: FeedRange } }).query.days,
-  );
+  mockAuthRequest.mock.calls
+    .filter(([url]) => url === FEED_URL)
+    .map(
+      ([, options]) => (options as { query: { days: FeedRange } }).query.days,
+    );
 
 const mounted: { unmount: () => void }[] = [];
 
 async function mountPage(query: Record<string, string> = {}) {
   // Through `route`, not a `replace` beforehand: mountSuspended navigates to
   // its own `route` - "/" unless told otherwise - before it mounts.
+  // apexcharts measures a real element on mount, which jsdom does not have.
   const wrapper = await mountSuspended(AktywnoscPage, {
     route: { path: "/", query },
+    global: { stubs: { apexchart: true } },
   });
   mounted.push(wrapper);
   await vi.waitUntil(
     () =>
-      mockAuthRequest.mock.calls.length > 0 &&
+      askedDays().length > 0 &&
       inFlight === 0 &&
       (!widens || askedDays().includes(30)),
     { timeout: 2000 },
@@ -211,7 +247,7 @@ afterEach(async () => {
   while (mounted.length) mounted.pop()!.unmount();
   // One Nuxt app serves the whole file: the previous test's feed would
   // otherwise be the next mount's first answer.
-  clearNuxtData("activity-feed");
+  clearNuxtData(["activity-feed", "activity-month-chart"]);
   vi.useRealTimers();
   await useRouter().replace({ query: {} });
 });
@@ -226,6 +262,16 @@ describe("/aktywnosc", () => {
       .map((heading) => heading.text());
     expect(headings).toEqual(["Dzisiaj", "Wczoraj", "Niedziela, 20 września"]);
     expect(itemTexts(wrapper)[0]).toContain("ocenił/a 1 osobę");
+  });
+
+  it("opens with the month's chart, linked to the full statistics", async () => {
+    serve({ 7: contributorFeed() });
+    const wrapper = await mountPage();
+
+    const card = wrapper.find('[data-testid="activity-month-chart"]');
+    await vi.waitUntil(() => card.text().includes("17"), { timeout: 2000 });
+    expect(card.text()).toContain("od 2 osób");
+    expect(card.find('a[href="/eksploruj/statystyki"]').exists()).toBe(true);
   });
 
   it("widens a quiet week to a month on its own", async () => {
