@@ -182,6 +182,9 @@ def read_xls(
                 header_counts[col_name] = 1
                 processed_header.append(col_name)
             yield processed_header
+            # This is the first data row, not part of the header: every PKW
+            # workbook lost its first candidate while it went unyielded.
+            yield row
             count += 1
         else:
             yield row
