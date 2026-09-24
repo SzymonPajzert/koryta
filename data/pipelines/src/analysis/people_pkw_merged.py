@@ -116,10 +116,22 @@ def drop_contradictory_candidacies(con):
             e.election_type AS election_type,
             coalesce(e.teryt_candidacy_powiat, e.teryt_powiat[1]) AS teryt
         FROM (SELECT rowid, unnest(elections) AS e FROM people_pkw_merged)
+    ),
+    -- A sejmik candidacy is filed under the województwo's own code, XX0000,
+    -- which cut to powiat depth is XX00 - a prefix of no powiat, so every
+    -- other candidacy in the region read as a second place. At its real
+    -- depth, XX, it is a prefix of all of them.
+    placed AS (
+        SELECT
+            person_row,
+            election_year,
+            election_type,
+            CASE WHEN teryt LIKE '__00' THEN teryt[:2] ELSE teryt END AS teryt
+        FROM candidacies
     )
     SELECT DISTINCT a.person_row
-    FROM candidacies a
-    JOIN candidacies b
+    FROM placed a
+    JOIN placed b
         ON a.person_row = b.person_row
         AND a.election_year = b.election_year
         AND a.election_type = b.election_type
