@@ -23,6 +23,12 @@ def test_blank_is_a_loss_not_an_unknown(value):
     assert parse_mandate(value, None) == "FALSE"
 
 
+def test_through_to_the_second_round_is_not_a_seat():
+    # The 2006 wójt file's first-round row for a finalist; the result is on
+    # the same candidate's second-round row.
+    assert parse_mandate("2", None) == "FALSE"
+
+
 def test_unknown_letter_raises():
     with pytest.raises(ValueError):
         parse_mandate("X", None)
