@@ -167,9 +167,9 @@ const SnackbarStub = defineComponent({
  * route. */
 const mounted: { unmount: () => void }[] = [];
 
-const mount = async (hash = "") => {
+const mount = async (hash = "", query: Record<string, string> = {}) => {
   const wrapper = await mountSuspended(OpiniePage, {
-    route: { path: "/", hash },
+    route: { path: "/", hash, query },
     global: { stubs: { UserChip: true, VSnackbar: SnackbarStub } },
   });
   mounted.push(wrapper);
@@ -180,14 +180,19 @@ const mount = async (hash = "") => {
 
 type Wrapper = Awaited<ReturnType<typeof mount>>;
 
-/** The card for one report, found by the id the Slack link also uses. */
-const card = (wrapper: Wrapper, id: string) => wrapper.get(`#fb-${id}`);
+/** The row for one report, found by the id the Slack link also uses. */
+const row = (wrapper: Wrapper, id: string) => wrapper.get(`#fb-${id}`);
 
-/** Report ids in the order the cards are on the page. */
-const cardIds = (wrapper: Wrapper) =>
+/** Report ids in the order the rows that open are on the page. */
+const listIds = (wrapper: Wrapper) =>
   wrapper
-    .findAll(".v-card[data-feedback-id]")
+    .findAll("[data-report-row]")
     .map((node) => node.attributes("data-feedback-id"));
+
+/** Whether a report's row is open - the only time its select, note and
+ * links are in the page at all. */
+const isOpen = (wrapper: Wrapper, id: string) =>
+  row(wrapper, id).find("[data-row-panel]").exists();
 
 /** Report ids in the order the one-line rows are, in ordering mode. */
 const rowIds = (wrapper: Wrapper, kind: "queue" | "inbox" = "queue") =>
@@ -207,6 +212,22 @@ const click = async (target: { trigger: (event: string) => Promise<void> }) => {
   await target.trigger("click");
   await flushPromises();
 };
+
+/** Opens the rows of these reports, as a click on each line does. */
+const open = async (wrapper: Wrapper, ...ids: string[]) => {
+  for (const id of ids) {
+    if (!isOpen(wrapper, id)) {
+      await click(row(wrapper, id).get("[data-row-toggle]"));
+    }
+  }
+};
+
+/** Opens every row on the page. */
+const openAll = (wrapper: Wrapper) =>
+  open(
+    wrapper,
+    ...listIds(wrapper).filter((id): id is string => id !== undefined),
+  );
 
 /** Switches to ordering mode and waits for the reload it makes. */
 const startOrdering = async (wrapper: Wrapper) => {
@@ -241,13 +262,11 @@ describe("admin feedback queue", () => {
     await click(wrapper.get("[data-toggle-closed]"));
 
     // "W trakcie" is still somebody's job, so it reads like a new report.
-    expect(card(wrapper, "new-one").classes()).not.toContain(
-      "feedback-settled",
-    );
-    expect(card(wrapper, "doing").classes()).not.toContain("feedback-settled");
+    expect(row(wrapper, "new-one").classes()).not.toContain("arow--dimmed");
+    expect(row(wrapper, "doing").classes()).not.toContain("arow--dimmed");
 
-    expect(card(wrapper, "done").classes()).toContain("feedback-settled");
-    expect(card(wrapper, "wont").classes()).toContain("feedback-settled");
+    expect(row(wrapper, "done").classes()).toContain("arow--dimmed");
+    expect(row(wrapper, "wont").classes()).toContain("arow--dimmed");
   });
 
   it("shows what is not queued newest first, then the queue by rank, closed folded", async () => {
@@ -260,18 +279,21 @@ describe("admin feedback queue", () => {
     expect(wrapper.text()).not.toContain("niepełne");
 
     // What arrived since the queue was last ordered is what somebody coming
-    // from Slack or the dashboard is here to look at, so it comes first.
+    // from Slack or the dashboard is here to look at, so it comes first. The
+    // closed ones keep their heading, folded, with the way to unfold them.
     expect(
       wrapper
         .findAll("[data-section]")
         .map((node) => node.attributes("data-section")),
-    ).toEqual(["inbox", "queue"]);
-    expect(cardIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
+    ).toEqual(["inbox", "queue", "closed"]);
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
+    // One line each until asked for more.
+    expect(wrapper.find("[data-row-panel]").exists()).toBe(false);
 
     // The number is the place in the queue, not anything stored.
-    expect(card(wrapper, "q1").get("[data-queue-position]").text()).toBe("#1");
-    expect(card(wrapper, "q3").get("[data-queue-position]").text()).toBe("#3");
-    expect(card(wrapper, "in-new").find("[data-queue-position]").exists()).toBe(
+    expect(row(wrapper, "q1").get("[data-queue-position]").text()).toBe("#1");
+    expect(row(wrapper, "q3").get("[data-queue-position]").text()).toBe("#3");
+    expect(row(wrapper, "in-new").find("[data-queue-position]").exists()).toBe(
       false,
     );
 
@@ -284,7 +306,7 @@ describe("admin feedback queue", () => {
     expect(wrapper.find("#fb-wont").exists()).toBe(false);
 
     await click(wrapper.get("[data-toggle-closed]"));
-    expect(cardIds(wrapper)).toEqual([
+    expect(listIds(wrapper)).toEqual([
       "in-new",
       "in-old",
       "q1",
@@ -293,17 +315,18 @@ describe("admin feedback queue", () => {
       "done",
       "wont",
     ]);
-    expect(card(wrapper, "done").find("[data-queue-position]").exists()).toBe(
+    expect(row(wrapper, "done").find("[data-queue-position]").exists()).toBe(
       false,
     );
     expect(wrapper.get("[data-toggle-closed]").text()).toBe("Ukryj zamknięte");
   });
 
-  it("puts a report at the end of the queue from its card", async () => {
+  it("puts a report at the end of the queue from its line, without opening it", async () => {
     serve(board());
     const wrapper = await mount();
 
-    await click(button(card(wrapper, "in-old"), "Do kolejki"));
+    await click(row(wrapper, "in-old").get('button[aria-label="Do kolejki"]'));
+    expect(isOpen(wrapper, "in-old")).toBe(false);
 
     expect(posts()).toHaveLength(1);
     const body = posts()[0]![1].body;
@@ -311,15 +334,13 @@ describe("admin feedback queue", () => {
     // After the last rank in the queue, whatever the gap.
     expect(body.queueRank).toBeGreaterThan(3072);
 
-    expect(cardIds(wrapper)).toEqual(["in-new", "q1", "q2", "q3", "in-old"]);
-    expect(card(wrapper, "in-old").get("[data-queue-position]").text()).toBe(
+    expect(listIds(wrapper)).toEqual(["in-new", "q1", "q2", "q3", "in-old"]);
+    expect(row(wrapper, "in-old").get("[data-queue-position]").text()).toBe(
       "#4",
     );
     // In the queue now, so there is no queue left to put it in.
     expect(
-      card(wrapper, "in-old")
-        .findAll("button")
-        .some((node) => node.text().includes("Do kolejki")),
+      row(wrapper, "in-old").find('button[aria-label="Do kolejki"]').exists(),
     ).toBe(false);
   });
 
@@ -332,7 +353,9 @@ describe("admin feedback queue", () => {
     );
     serve(board(), later);
     const wrapper = await mount();
-    // What the mode below has to take away is there to begin with.
+    // What the mode below has to take away is there to begin with, in an
+    // open row.
+    await open(wrapper, "in-new");
     expect(wrapper.find("textarea").exists()).toBe(true);
     expect(wrapper.find(".v-select").exists()).toBe(true);
 
@@ -342,8 +365,9 @@ describe("admin feedback queue", () => {
     expect(rowIds(wrapper)).toEqual(["q1", "in-new", "q2", "q3"]);
     expect(rowIds(wrapper, "inbox")).toEqual(["in-old"]);
 
-    // Nothing to answer with in this mode: no cards, no status, no note.
-    expect(wrapper.findAll(".v-card[data-feedback-id]")).toHaveLength(0);
+    // Nothing to answer with in this mode: no rows that open, no status, no
+    // note.
+    expect(wrapper.findAll("[data-report-row]")).toHaveLength(0);
     expect(wrapper.find("textarea").exists()).toBe(false);
     expect(wrapper.find(".v-select").exists()).toBe(false);
     expect(
@@ -624,7 +648,8 @@ describe("admin feedback queue", () => {
             }),
     );
 
-    card(wrapper, "in-new")
+    await open(wrapper, "in-new");
+    row(wrapper, "in-new")
       .findComponent({ name: "VSelect" })
       .vm.$emit("update:modelValue", "in_progress");
     await flushPromises();
@@ -646,7 +671,7 @@ describe("admin feedback queue", () => {
     ).toContain("W trakcie");
   });
 
-  it("goes back to cards on Gotowe, in the new order", async () => {
+  it("goes back to the rows that open on Gotowe, in the new order", async () => {
     serve(board());
     const wrapper = await mount();
     await startOrdering(wrapper);
@@ -656,9 +681,10 @@ describe("admin feedback queue", () => {
     await click(button(wrapper, "Gotowe"));
 
     expect(wrapper.find("[data-queue-row]").exists()).toBe(false);
-    expect(cardIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q3", "q2"]);
-    expect(card(wrapper, "q3").get("[data-queue-position]").text()).toBe("#2");
-    expect(card(wrapper, "q3").find("textarea").exists()).toBe(true);
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q3", "q2"]);
+    expect(row(wrapper, "q3").get("[data-queue-position]").text()).toBe("#2");
+    await open(wrapper, "q3");
+    expect(row(wrapper, "q3").find("textarea").exists()).toBe(true);
     // Leaving writes nothing and reloads nothing of its own.
     expect(posts()).toHaveLength(1);
     expect(gets()).toHaveLength(2);
@@ -671,23 +697,24 @@ describe("admin feedback queue", () => {
       feedback("noted", "new", { adminNote: "już wiemy" }),
     ]);
     const wrapper = await mount();
+    await open(wrapper, "fresh", "noted");
 
     // Tabbing through the page is not an edit.
-    await card(wrapper, "fresh").get("textarea").trigger("focus");
-    await card(wrapper, "fresh").get("textarea").trigger("blur");
-    await card(wrapper, "noted").get("textarea").trigger("focus");
-    await card(wrapper, "noted").get("textarea").trigger("blur");
+    await row(wrapper, "fresh").get("textarea").trigger("focus");
+    await row(wrapper, "fresh").get("textarea").trigger("blur");
+    await row(wrapper, "noted").get("textarea").trigger("focus");
+    await row(wrapper, "noted").get("textarea").trigger("blur");
     await flushPromises();
     expect(posts()).toHaveLength(0);
 
     // Typing the note back to what it already was is not one either.
-    await card(wrapper, "noted").get("textarea").setValue("już wiemy");
-    await card(wrapper, "noted").get("textarea").trigger("blur");
+    await row(wrapper, "noted").get("textarea").setValue("już wiemy");
+    await row(wrapper, "noted").get("textarea").trigger("blur");
     await flushPromises();
     expect(posts()).toHaveLength(0);
 
-    await card(wrapper, "fresh").get("textarea").setValue("sprawdzić w piątek");
-    await card(wrapper, "fresh").get("textarea").trigger("blur");
+    await row(wrapper, "fresh").get("textarea").setValue("sprawdzić w piątek");
+    await row(wrapper, "fresh").get("textarea").trigger("blur");
     await flushPromises();
 
     expect(posts()).toHaveLength(1);
@@ -697,25 +724,26 @@ describe("admin feedback queue", () => {
     });
 
     // Saved, so leaving the field again says nothing new.
-    await card(wrapper, "fresh").get("textarea").trigger("blur");
+    await row(wrapper, "fresh").get("textarea").trigger("blur");
     await flushPromises();
     expect(posts()).toHaveLength(1);
   });
 
-  it("keeps a report closed from its card where it was until the next load", async () => {
+  it("keeps a report closed from its row where it was until the next load", async () => {
     serve(board());
     const wrapper = await mount();
 
-    card(wrapper, "q2")
+    await open(wrapper, "q2");
+    row(wrapper, "q2")
       .findComponent({ name: "VSelect" })
       .vm.$emit("update:modelValue", "resolved");
     await flushPromises();
 
     expect(posts()[0]![1].body).toEqual({ id: "q2", adminStatus: "resolved" });
     // Jumping into the folded section would take it from under the cursor.
-    expect(cardIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
-    expect(card(wrapper, "q2").get("[data-queue-position]").text()).toBe("#2");
-    expect(card(wrapper, "q2").classes()).toContain("feedback-settled");
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
+    expect(row(wrapper, "q2").get("[data-queue-position]").text()).toBe("#2");
+    expect(row(wrapper, "q2").classes()).toContain("arow--dimmed");
   });
 
   it("asks for the report a link points at and unfolds it if it is closed", async () => {
@@ -728,8 +756,10 @@ describe("admin feedback queue", () => {
       query: { include: "wont" },
     });
 
-    expect(card(wrapper, "wont").isVisible()).toBe(true);
-    expect(card(wrapper, "wont").classes()).toContain("feedback-target");
+    expect(row(wrapper, "wont").isVisible()).toBe(true);
+    expect(row(wrapper, "wont").classes()).toContain("arow--target");
+    // Opened: the link was followed to read it.
+    expect(isOpen(wrapper, "wont")).toBe(true);
     expect(wrapper.get("[data-toggle-closed]").text()).toBe("Ukryj zamknięte");
     expect(wrapper.text()).not.toContain("Nie ma takiego zgłoszenia.");
   });
@@ -738,7 +768,10 @@ describe("admin feedback queue", () => {
     serve(board());
     const wrapper = await mount("#fb-in-old");
 
-    expect(card(wrapper, "in-old").classes()).toContain("feedback-target");
+    expect(row(wrapper, "in-old").classes()).toContain("arow--target");
+    expect(isOpen(wrapper, "in-old")).toBe(true);
+    // Only that one.
+    expect(isOpen(wrapper, "in-new")).toBe(false);
     expect(wrapper.find("#fb-done").exists()).toBe(false);
     expect(wrapper.get("[data-toggle-closed]").text()).toBe(
       "Pokaż zamknięte (2)",
@@ -746,8 +779,8 @@ describe("admin feedback queue", () => {
   });
 
   it("follows a hash that changes while the page is open", async () => {
-    // The date on every card links to the card itself, so the hash can move
-    // without the page loading again.
+    // The date in every open row links to the row itself, so the hash can
+    // move without the page loading again.
     const late = feedback("late", "new", {
       createdAt: "2026-08-25T10:00:00.000Z",
     });
@@ -758,7 +791,8 @@ describe("admin feedback queue", () => {
     await useRouter().push({ path: "/", hash: "#fb-done" });
     await flushPromises();
 
-    expect(card(wrapper, "done").classes()).toContain("feedback-target");
+    expect(row(wrapper, "done").classes()).toContain("arow--target");
+    expect(isOpen(wrapper, "done")).toBe(true);
     expect(wrapper.get("[data-toggle-closed]").text()).toBe("Ukryj zamknięte");
     // Already on the page, so there was nothing to ask for.
     expect(gets()).toHaveLength(1);
@@ -770,7 +804,8 @@ describe("admin feedback queue", () => {
 
     expect(gets()).toHaveLength(2);
     expect(gets()[1]![1].query).toEqual({ include: "late" });
-    expect(card(wrapper, "late").classes()).toContain("feedback-target");
+    expect(row(wrapper, "late").classes()).toContain("arow--target");
+    expect(isOpen(wrapper, "late")).toBe(true);
     expect(wrapper.text()).not.toContain("Nie ma takiego zgłoszenia.");
   });
 
@@ -794,7 +829,7 @@ describe("admin feedback queue", () => {
     expect(gets()[0]![1].query).toEqual({ include: "gone" });
     expect(wrapper.text()).toContain("Nie ma takiego zgłoszenia.");
     // The rest of the page is still there to work with.
-    expect(cardIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
   });
 
   it("decodes the hash once, as the router hands it over already decoded", async () => {
@@ -814,8 +849,135 @@ describe("admin feedback queue", () => {
 
     expect(gets()).toHaveLength(1);
     expect(gets()[0]![1].query).toEqual({ include: "100%" });
-    expect(cardIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
     error.mockRestore();
+  });
+});
+
+describe("where a report came from", () => {
+  /** A verdict from /qa, filed the way `saveCheck` files one. */
+  const fromQa = (id: string, fields: Partial<Feedback> = {}) =>
+    feedback(id, "new", {
+      context: {
+        route: "/qa",
+        qa: {
+          itemId: "fix-works",
+          title: "Poprawka fix-works",
+          status: "issue",
+        },
+      },
+      ...fields,
+    });
+
+  /** The board, with two verdicts from /qa outside the queue - one open, one
+   * closed. Nothing in the queue came from /qa. */
+  const mixed = (): Feedback[] => [
+    ...board(),
+    fromQa("qa-new", { createdAt: "2026-08-24T10:00:00.000Z" }),
+    fromQa("qa-done", { adminStatus: "resolved" }),
+  ];
+
+  const currentRoute = () => useRouter().currentRoute.value;
+  const chip = (wrapper: Wrapper, value: string) =>
+    wrapper.get(`[data-filter="${value}"]`);
+  /** Picks a view and waits for the url to say so - the router navigates
+   * asynchronously, and the page reads the view back from the url. */
+  const pick = async (wrapper: Wrapper, value: string) => {
+    await click(chip(wrapper, value));
+    await vi.waitUntil(
+      () => (currentRoute().query.zrodlo ?? "wszystkie") === value,
+      { timeout: 2000 },
+    );
+    await flushPromises();
+  };
+  const sectionKeys = (wrapper: Wrapper) =>
+    wrapper
+      .findAll("[data-section]")
+      .map((node) => node.attributes("data-section"));
+
+  it("narrows the list to one source, counting what is open in each", async () => {
+    serve(mixed());
+    const wrapper = await mount();
+
+    expect(chip(wrapper, "wszystkie").attributes("aria-pressed")).toBe("true");
+    expect(chip(wrapper, "wszystkie").text()).toBe("Wszystkie 6");
+    expect(chip(wrapper, "zgloszenia").text()).toBe("Zgłoszenia 5");
+    expect(chip(wrapper, "qa").text()).toBe("Z QA 1");
+    expect(listIds(wrapper)).toEqual([
+      "qa-new",
+      "in-new",
+      "in-old",
+      "q1",
+      "q2",
+      "q3",
+    ]);
+
+    await pick(wrapper, "qa");
+    // In the url, so the view survives a reload and can be linked to.
+    expect(currentRoute().query).toEqual({ zrodlo: "qa" });
+    expect(chip(wrapper, "qa").attributes("aria-pressed")).toBe("true");
+    expect(listIds(wrapper)).toEqual(["qa-new"]);
+    // Nothing queued came from /qa, so there is no queue to show.
+    expect(sectionKeys(wrapper)).toEqual(["inbox", "closed"]);
+    expect(wrapper.get("[data-toggle-closed]").text()).toBe(
+      "Pokaż zamknięte (1)",
+    );
+
+    await pick(wrapper, "zgloszenia");
+    expect(currentRoute().query).toEqual({ zrodlo: "zgloszenia" });
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
+
+    // The default leaves nothing behind.
+    await pick(wrapper, "wszystkie");
+    expect(currentRoute().query).toEqual({});
+  });
+
+  it("takes a view it does not know for all of them", async () => {
+    serve(mixed());
+    const wrapper = await mount("", { zrodlo: "cokolwiek" });
+
+    expect(chip(wrapper, "wszystkie").attributes("aria-pressed")).toBe("true");
+    expect(listIds(wrapper)).toHaveLength(6);
+  });
+
+  it("puts a report on the end of the whole queue while the view shows none of it", async () => {
+    serve(mixed());
+    const wrapper = await mount("", { zrodlo: "qa" });
+    expect(listIds(wrapper)).toEqual(["qa-new"]);
+
+    await click(row(wrapper, "qa-new").get('button[aria-label="Do kolejki"]'));
+
+    // After q3, which is not on screen - not at the top of an empty queue.
+    expect(posts()).toHaveLength(1);
+    const body = posts()[0]![1].body;
+    expect(body.id).toBe("qa-new");
+    expect(body.queueRank).toBeGreaterThan(3072);
+    expect(row(wrapper, "qa-new").get("[data-queue-position]").text()).toBe(
+      "#4",
+    );
+  });
+
+  it("drops a view that hides the report a link points at, and keeps the link", async () => {
+    serve(mixed());
+    const wrapper = await mount("#fb-in-old", { zrodlo: "qa" });
+    await vi.waitUntil(() => currentRoute().query.zrodlo === undefined, {
+      timeout: 2000,
+    });
+    await flushPromises();
+
+    expect(currentRoute().query).toEqual({});
+    expect(currentRoute().hash).toBe("#fb-in-old");
+    expect(chip(wrapper, "wszystkie").attributes("aria-pressed")).toBe("true");
+    expect(isOpen(wrapper, "in-old")).toBe(true);
+    expect(row(wrapper, "in-old").classes()).toContain("arow--target");
+  });
+
+  it("leaves the view alone when it already shows the report", async () => {
+    serve(mixed());
+    const wrapper = await mount("#fb-qa-new", { zrodlo: "qa" });
+
+    expect(currentRoute().query).toEqual({ zrodlo: "qa" });
+    expect(isOpen(wrapper, "qa-new")).toBe(true);
   });
 });
 
@@ -864,10 +1026,10 @@ describe("fixes claimed on the QA list", () => {
   ];
 
   const fixChip = (wrapper: Wrapper, id: string) =>
-    card(wrapper, id).find("[data-fix-state]");
+    row(wrapper, id).find("[data-fix-state]");
 
   const hasCloseButton = (wrapper: Wrapper, id: string) =>
-    card(wrapper, id)
+    row(wrapper, id)
       .findAll("button")
       .some((node) => node.text().trim() === "Zamknij jako załatwione");
 
@@ -875,6 +1037,7 @@ describe("fixes claimed on the QA list", () => {
     qaChecks.checks.value = verdicts();
     serve(reports());
     const wrapper = await mount();
+    await openAll(wrapper);
 
     // Asked for once the page is up.
     expect(qaChecks.load).toHaveBeenCalledTimes(1);
@@ -907,11 +1070,12 @@ describe("fixes claimed on the QA list", () => {
     qaChecks.checks.value = verdicts();
     serve(reports());
     const wrapper = await mount();
+    await openAll(wrapper);
 
-    // Where each "dotyczy zgłoszenia" chip on a card leads. Asked of the chip
+    // Where each "dotyczy zgłoszenia" chip in a row leads. Asked of the chip
     // rather than read off an href: there is no router link to render one here.
     const targets = (id: string) =>
-      card(wrapper, id)
+      row(wrapper, id)
         .findAllComponents({ name: "VChip" })
         .filter((chip) => chip.attributes("data-fix-target") !== undefined)
         .map((chip) => ({ text: chip.text(), to: chip.props("to") }));
@@ -932,6 +1096,7 @@ describe("fixes claimed on the QA list", () => {
     qaChecks.checks.value = verdicts();
     serve(reports());
     const wrapper = await mount();
+    await openAll(wrapper);
 
     // "works" has a problem reported against it too, but it is closed.
     expect(hasCloseButton(wrapper, claimed.works)).toBe(true);
@@ -944,18 +1109,14 @@ describe("fixes claimed on the QA list", () => {
     expect(hasCloseButton(wrapper, claimed.awaiting)).toBe(false);
     expect(hasCloseButton(wrapper, "plain")).toBe(false);
 
-    await click(
-      button(card(wrapper, claimed.works), "Zamknij jako załatwione"),
-    );
+    await click(button(row(wrapper, claimed.works), "Zamknij jako załatwione"));
 
     expect(posts()).toHaveLength(1);
     expect(posts()[0]![1].body).toEqual({
       id: claimed.works,
       adminStatus: "resolved",
     });
-    expect(card(wrapper, claimed.works).classes()).toContain(
-      "feedback-settled",
-    );
+    expect(row(wrapper, claimed.works).classes()).toContain("arow--dimmed");
     // Closed, so there is nothing left to offer.
     expect(hasCloseButton(wrapper, claimed.works)).toBe(false);
   });
@@ -967,6 +1128,7 @@ describe("fixes claimed on the QA list", () => {
     qaChecks.load.mockReturnValueOnce(new Promise(() => {}));
     serve(reports());
     const wrapper = await mount();
+    await openAll(wrapper);
 
     expect(fixChip(wrapper, claimed.works).attributes("data-fix-state")).toBe(
       "loading",

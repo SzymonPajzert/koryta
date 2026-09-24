@@ -161,10 +161,12 @@ test.describe("Kolejka zgłoszeń", () => {
     // What Slack's "Otwórz w panelu" button opens.
     await page.goto(`/admin/opinie#fb-${id}`);
 
-    const card = page.locator(`#fb-${id}`);
-    await expect(card).toBeVisible({ timeout: 60_000 });
-    await expect(card).toContainText(`kolejka ${stamp} stary`);
-    await expect(card).toBeInViewport();
+    const row = page.locator(`#fb-${id}`);
+    await expect(row).toBeVisible({ timeout: 60_000 });
+    await expect(row).toContainText(`kolejka ${stamp} stary`);
+    await expect(row).toBeInViewport();
+    // Opened, since the link was followed to read it.
+    await expect(row.locator("[data-row-panel]")).toBeVisible();
     await expect(page.locator("[data-toggle-closed]")).toContainText(
       "Ukryj zamknięte",
     );
@@ -203,10 +205,12 @@ test.describe("Kolejka zgłoszeń", () => {
       });
 
     await logIn(page, USERS.admin, "/admin/opinie");
-    const card = page.locator(`#fb-${id}`);
-    await expect(card).toBeVisible({ timeout: 60_000 });
+    const row = page.locator(`#fb-${id}`);
+    await expect(row).toBeVisible({ timeout: 60_000 });
+    // The chip is in the open row; the line has only its icon.
+    await row.locator("[data-row-toggle]").click();
 
-    const chip = card.locator("[data-fix-state]");
+    const chip = row.locator("[data-fix-state]");
     await expect(chip).not.toHaveAttribute("data-fix-state", "loading", {
       timeout: 30_000,
     });

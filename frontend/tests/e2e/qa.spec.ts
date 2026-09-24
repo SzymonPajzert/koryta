@@ -21,12 +21,18 @@ test.describe("QA changelog", () => {
     const card = page.locator(`[data-qa-item="${NEWEST.id}"]`);
     await expect(card).toBeVisible({ timeout: 30_000 });
     await expect(card).toContainText(NEWEST.title);
-    // An unchecked entry opens with its instructions showing.
+    // One line until it is opened; open, the instructions are there.
+    await expect(card).not.toContainText(NEWEST.steps[0]!);
+    await card.locator("[data-row-toggle]").click();
     await expect(card).toContainText(NEWEST.steps[0]!);
 
     const feedback = `nie działa ${Date.now()}`;
     await card.getByLabel("Uwagi", { exact: false }).fill(feedback);
-    await card.getByRole("button", { name: "Coś nie działa" }).click();
+    // Exact: the line is a button too, and it names the verdict already given
+    // - "Coś nie działa", after an earlier run against the same emulator.
+    await card
+      .getByRole("button", { name: "Coś nie działa", exact: true })
+      .click();
 
     await expect(
       page.getByText("Zgłoszone - problem trafił do zespołu"),
@@ -47,6 +53,8 @@ test.describe("QA changelog", () => {
     });
 
     await page.getByRole("button", { name: "Problemy" }).click();
+    // A reload closes every row again.
+    await card.locator("[data-row-toggle]").click();
     await expect(card).toContainText("Twoja ocena: Coś nie działa", {
       timeout: 60_000,
     });
@@ -76,17 +84,16 @@ test.describe("QA changelog", () => {
 
     const card = page.locator(`[data-qa-item="${SECOND.id}"]`);
     await expect(card).toBeVisible({ timeout: 30_000 });
-    // A settled entry keeps its instructions folded away and the note field
-    // with them, while an unchecked one opens on them - so this unfolds only
-    // when it needs to, rather than toggling whatever state it found.
+    // Every row starts as one line, whatever its state; the note field is in
+    // the open one.
+    await card.locator("[data-row-toggle]").click();
     const note = card.getByLabel("Uwagi", { exact: false });
-    if (!(await note.isVisible())) {
-      await card.getByRole("button", { name: "Jak sprawdzić" }).click();
-    }
 
     const feedback = `zgłoszenie z QA ${Date.now()}`;
     await note.fill(feedback);
-    await card.getByRole("button", { name: "Coś nie działa" }).click();
+    await card
+      .getByRole("button", { name: "Coś nie działa", exact: true })
+      .click();
     await expect(
       page.getByText("Zgłoszone - problem trafił do zespołu"),
     ).toBeVisible({ timeout: 30_000 });
@@ -103,12 +110,17 @@ test.describe("QA changelog", () => {
       const adminPage = await adminContext.newPage();
       await logIn(adminPage, USERS.admin, "/admin/opinie");
 
+      // Found by its message, which is on the line; the verdict is in the
+      // open row.
       const report = adminPage
-        .locator(".v-card", { hasText: feedback })
+        .locator("[data-feedback-id]", { hasText: feedback })
         .first();
       await expect(report).toBeVisible({ timeout: 60_000 });
+      await report.locator("[data-row-toggle]").click();
       await expect(report).toContainText(`QA: ${SECOND.title}`);
-      await expect(report).toContainText("Coś nie działa");
+      await expect(report.locator("[data-row-panel]")).toContainText(
+        "Coś nie działa",
+      );
     } finally {
       await adminContext.close();
     }

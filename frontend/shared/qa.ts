@@ -59,6 +59,31 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "opinie-linijki-i-problemy-qa",
+    title:
+      "Zgłoszenia to linijki, a „Problemy” na /qa zbierają zgłoszenia z QA",
+    description:
+      "Na /admin/opinie każde zgłoszenie to linijka, która rozwija się po kliknięciu, a chipy „Wszystkie”, „Zgłoszenia” i „Z QA” zawężają listę. " +
+      "Zakładka „Problemy” na /qa pokazuje administratorom wszystkie otwarte zgłoszenia z QA, które można rozpatrzyć na miejscu.",
+    steps: [
+      "Na /admin/opinie kliknij chip „Z QA” i rozwiń zgłoszenie - ma pokazać rodzaj, datę, autora, status i notatkę.",
+      "Na /qa otwórz „Problemy” i zmień status któregoś zgłoszenia - ta sama zmiana ma być widoczna na /admin/opinie.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+  },
+  {
+    id: "qa-wpisy-jako-linijki",
+    title: "Wpisy na tej liście to linijki, które rozwijają się po kliknięciu",
+    description:
+      "Każdy wpis był kartą z pełnym opisem, więc lista zajmowała wiele ekranów. Teraz to linijka z tytułem i Twoją oceną, a opis, kroki i przyciski oceny pokazują się po kliknięciu.",
+    steps: [
+      "Na /qa kliknij dowolny wpis - ma się rozwinąć z opisem, krokami, polem na uwagi i przyciskami „Działa” i „Coś nie działa”.",
+    ],
+    link: "/qa",
+    area: "contributor",
+  },
+  {
     id: "rewizje-jedna-strona",
     title: "Kolejka zmian i zmiany powiązań są teraz na stronie Rewizje",
     description:
