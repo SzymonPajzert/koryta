@@ -9,13 +9,14 @@
       :change-count="proposal.changeCount"
       :max="max"
       :full-comparison-to="fullComparisonTo"
+      :wide="wide"
     />
 
     <!-- Inline, not a tooltip: this is the one warning on the page that stands
          between a reviewer and silently undoing somebody else's work. -->
     <div
       v-if="proposal.stale"
-      class="d-flex align-start ga-1 text-caption text-warning"
+      class="d-flex align-start ga-1 text-caption text-ink-warning"
     >
       <v-icon :icon="mdiAlertOutline" size="x-small" class="mt-1" />
       <span>
@@ -42,5 +43,7 @@ defineProps<{
   proposal: Proposal;
   max?: number;
   fullComparisonTo?: string | null;
+  /** See `RevisionDiff`: outside a table cell a long value gets the line. */
+  wide?: boolean;
 }>();
 </script>

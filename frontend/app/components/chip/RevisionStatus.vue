@@ -47,14 +47,9 @@
  * than each choosing a label, because a contributor told `Zatwierdzona` while
  * the reviewer reads `Zastąpiona` has been misled by a rendering difference.
  */
-import {
-  mdiCheckDecagramOutline,
-  mdiClockOutline,
-  mdiCloseCircleOutline,
-  mdiHelpCircleOutline,
-  mdiHistory,
-} from "@mdi/js";
+import { mdiHelpCircleOutline } from "@mdi/js";
 import { computed } from "vue";
+import { revisionStatusIcons } from "~/utils/revisionStatus";
 import {
   proposalStatusHints,
   proposalStatusLabels,
@@ -71,15 +66,8 @@ const props = withDefaults(
   { derived: false, size: "small" },
 );
 
-const statusIcons: Record<ProposalStatus, string> = {
-  pending: mdiClockOutline,
-  approved: mdiCheckDecagramOutline,
-  superseded: mdiHistory,
-  rejected: mdiCloseCircleOutline,
-};
-
 const tone = computed(() => proposalStatusLabels[props.status]);
-const icon = computed(() => statusIcons[props.status]);
+const icon = computed(() => revisionStatusIcons[props.status]);
 
 /** A status nobody recorded is a reading of the data, and a reviewer deciding
  * on it should know which of the two they have. The marker itself is visible

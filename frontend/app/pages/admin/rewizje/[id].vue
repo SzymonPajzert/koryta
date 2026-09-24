@@ -1,24 +1,24 @@
 <template>
   <div class="pa-4 revision-compare">
-    <div class="d-flex align-center mb-4">
+    <div class="d-flex flex-wrap align-center ga-2 mb-4">
       <v-btn
         :icon="mdiArrowLeft"
         variant="text"
-        class="mr-2"
-        to="/admin/rewizje"
+        to="/admin/rewizje#wpisy"
+        aria-label="Wróć do listy wpisów"
       ></v-btn>
-      <div>
-        <h1 class="text-h4">
+      <div class="revision-title">
+        <h1 class="text-h5 text-sm-h4">
           Szczegóły rewizji: {{ nodeName || route.params.id }}
         </h1>
-        <div v-if="nodeName" class="text-caption text-grey-darken-1">
+        <div v-if="nodeName" class="text-caption text-medium-emphasis">
           Węzeł {{ route.params.id }}
         </div>
       </div>
       <v-spacer />
       <div v-if="!pending" class="d-flex align-center ga-2">
         <v-chip
-          :color="published ? 'success' : 'grey'"
+          :color="published ? 'ink-success' : 'ink-neutral'"
           size="small"
           :prepend-icon="published ? mdiEarth : mdiEyeOffOutline"
         >
@@ -26,7 +26,7 @@
         </v-chip>
         <v-btn
           v-if="isAdmin"
-          :color="published ? 'grey' : 'success'"
+          :color="published ? 'ink-neutral' : 'ink-success'"
           size="small"
           :loading="publishPending"
           :disabled="!published && !canPublish"
@@ -56,258 +56,195 @@
       </div>
     </div>
 
-    <!-- One column per revision, so a company the pipelines have re-uploaded
-         forty times is forty screens wide. The filter is what makes that
-         readable; the scrolling below it is what makes it reachable. -->
-    <div
-      v-if="!pending && allRevisions.length > 0"
-      class="d-flex flex-wrap ga-3 align-center mb-4"
-    >
-      <v-btn-toggle
-        v-model="columnFilter"
-        density="compact"
-        variant="outlined"
-        divided
-        mandatory
+    <!-- Who proposed what, a line each, and where the decisions are taken.
+         Above the table because it is what a reviewer arriving from a link
+         came for; the table below is for reading whole versions. -->
+    <section class="history-section mb-6">
+      <AdminSectionHead
+        title="Historia zmian"
+        :count="pending ? undefined : allRevisions.length"
+        info="Każda rewizja to pełna wersja wpisu, zapisana przez człowieka albo przez pipeline. Kliknij wiersz, żeby zobaczyć, kto ją zgłosił i co zmienia względem zatwierdzonej wersji - i tam ją rozpatrzyć."
+      />
+      <RevisionHistoryList
+        ref="history"
+        v-model:filter="columnFilter"
+        :node-id="nodeId"
+        :highlight-id="highlightId"
+        @changed="refresh"
+      />
+    </section>
+
+    <section>
+      <!-- One column per revision, so a company the pipelines have
+           re-uploaded forty times is forty screens wide. The filter is what
+           makes that readable; the scrolling below it is what makes it
+           reachable. It is the list's filter too - both show the same
+           revisions - and drawn the same way: chips wrap on a phone, where
+           the three-button toggle this used to be was wider than the screen
+           and clipped its last button. -->
+      <AdminSectionHead
+        title="Porównanie obok siebie"
+        info="Te same rewizje w kolumnach, pole pod polem, do czytania całych wersji. Pola, które różnią się od zatwierdzonej wersji, są podświetlone."
       >
-        <v-btn
-          v-for="option in filterOptions"
-          :key="option.value"
-          :value="option.value"
-          size="small"
-          :data-testid="`revision-filter-${option.value}`"
-        >
-          {{ option.title }} ({{ option.count }})
-        </v-btn>
-      </v-btn-toggle>
-      <span class="text-caption text-medium-emphasis">
-        Pokazano {{ shownRevisions.length }} z {{ allRevisions.length }}.
-      </span>
-    </div>
-
-    <v-card v-if="pending" class="pa-4 text-center">
-      <v-progress-circular indeterminate></v-progress-circular>
-    </v-card>
-    <div v-else class="comparison-scroll pb-4">
-      <client-only>
-        <table v-if="shownRevisions.length > 0" class="comparison-table">
-          <thead>
-            <tr>
-              <th
-                v-for="rev in shownRevisions"
-                :key="'h-' + rev.id"
-                :data-revision-header="rev.id"
-                class="card-header text-left"
-                :class="{
-                  'highlighted-revision': rev.id === route.query.revisionId,
-                }"
-              >
-                <div class="d-flex justify-space-between align-start mb-2">
-                  <div>
-                    <div class="text-h6 font-weight-medium">
-                      {{ formatDate(rev.update_time) }}
-                    </div>
-                    <div class="mt-1">
-                      <UserChip :uid="revisionUser(rev)" />
-                    </div>
-                  </div>
-                  <div class="d-flex flex-column align-end ga-1">
-                    <v-chip
-                      v-if="rev.id === approvedRevisionId"
-                      color="success"
-                      size="x-small"
-                      :prepend-icon="mdiCheckDecagramOutline"
-                    >
-                      Zatwierdzona
-                      <v-tooltip
-                        activator="parent"
-                        location="bottom"
-                        max-width="280"
-                      >
-                        Ta wersja jest zatwierdzoną rewizją węzła (pole
-                        revision_id). Widoczna publicznie tylko jeśli węzeł jest
-                        opublikowany.
-                      </v-tooltip>
-                    </v-chip>
-                    <v-chip
-                      v-else-if="rev.status === 'rejected'"
-                      color="error"
-                      size="x-small"
-                      :prepend-icon="mdiCloseCircleOutline"
-                    >
-                      Odrzucona
-                      <v-tooltip
-                        v-if="rev.reject_reason"
-                        activator="parent"
-                        location="bottom"
-                        max-width="280"
-                      >
-                        {{ rev.reject_reason }}
-                      </v-tooltip>
-                    </v-chip>
-                    <v-chip
-                      v-else
-                      color="warning"
-                      size="x-small"
-                      :prepend-icon="mdiClockOutline"
-                    >
-                      Oczekuje
-                    </v-chip>
-                    <v-chip
-                      :color="rev.update_automatic ? 'info' : 'secondary'"
-                      size="x-small"
-                    >
-                      {{ rev.update_automatic ? "Auto" : "Ręczna" }}
-                    </v-chip>
-                  </div>
-                </div>
-
-                <div
-                  v-if="isAdmin && rev.id !== approvedRevisionId"
-                  class="d-flex ga-2 mb-2"
-                >
-                  <v-btn
-                    color="success"
-                    size="small"
-                    variant="tonal"
-                    :loading="reviewPendingId === rev.id"
-                    :prepend-icon="mdiCheck"
-                    :data-testid="`approve-${rev.id}`"
-                    @click="approve(String(rev.id))"
-                  >
-                    Zatwierdź
-                  </v-btn>
-                  <v-btn
-                    v-if="rev.status !== 'rejected'"
-                    color="error"
-                    size="small"
-                    variant="text"
-                    :prepend-icon="mdiClose"
-                    :data-testid="`reject-${rev.id}`"
-                    @click="openReject(String(rev.id))"
-                  >
-                    Odrzuć
-                  </v-btn>
-                </div>
-                <div class="mt-1">
-                  <nuxt-link
-                    v-if="getRevisionData(rev.data)['type']"
-                    :to="`/entity/${getRevisionData(rev.data)['type']}/${nodeId}?revisionId=${rev.id}`"
-                    class="text-decoration-none text-primary font-weight-bold d-inline-flex align-center ga-1"
-                    target="_blank"
-                  >
-                    <v-icon :icon="mdiEyeOutline" size="small" />
-                    Podgląd tej wersji strony
-                    <v-tooltip
-                      activator="parent"
-                      location="bottom"
-                      max-width="300"
-                    >
-                      Kliknij, aby zobaczyć, jak wyglądałaby strona po
-                      opublikowaniu tej wersji.
-                    </v-tooltip>
-                  </nuxt-link>
-                  <!-- Full id on hover only: spelled out it is ~60
-                       monospace characters, which widened the column past the
-                       350px the comparison table gives it and pushed the
-                       header controls out of view. -->
-                  <div
-                    class="text-caption font-weight-mono text-grey mt-1 revision-id"
-                    :title="String(rev.id)"
-                  >
-                    ID: {{ shortRevisionId(rev.id) }}
-                  </div>
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="key in allKeys" :key="key">
-              <td
-                v-for="rev in shownRevisions"
-                :key="key + '-' + rev.id"
-                class="card-cell"
-                :class="{
-                  'highlighted-revision': rev.id === route.query.revisionId,
-                  'changed-field': differsFromApproved(rev, key),
-                }"
-              >
-                <div
-                  class="field-label text-caption text-primary font-weight-bold mb-1"
-                >
-                  {{ key }}
-                </div>
-                <div class="field-value text-body-2">
-                  <template
-                    v-if="
-                      rev.data && getRevisionData(rev.data)[key] !== undefined
-                    "
-                  >
-                    <pre
-                      class="mb-0"
-                      style="white-space: pre-wrap; font-family: inherit"
-                      >{{
-                        typeof getRevisionData(rev.data)[key] === "object"
-                          ? JSON.stringify(
-                              getRevisionData(rev.data)[key],
-                              null,
-                              2,
-                            )
-                          : getRevisionData(rev.data)[key]
-                      }}</pre>
-                  </template>
-                  <template v-else>
-                    <span class="text-grey-lighten-1 font-italic"
-                      >- brak -</span
-                    >
-                  </template>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <v-card v-else class="pa-6 text-center text-grey">
-          {{
-            allRevisions.length > 0
-              ? "Żadna rewizja nie pasuje do wybranego filtra."
-              : "Brak rewizji dla tego węzła."
-          }}
-        </v-card>
-      </client-only>
-    </div>
-
-    <v-dialog v-model="rejectDialog" max-width="480">
-      <v-card>
-        <v-card-title>Odrzuć rewizję</v-card-title>
-        <v-card-text>
-          <p class="mb-3 text-body-2">
-            Rewizja zostaje zachowana wraz z powodem - to jedyne, co wróci do
-            osoby, która ją zgłosiła.
-          </p>
-          <v-textarea
-            v-model="rejectReason"
-            label="Powód odrzucenia"
-            placeholder="np. brak źródła, dane niezgodne z KRS"
-            rows="3"
-            auto-grow
-            data-testid="reject-reason"
-          />
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="rejectDialog = false">Anuluj</v-btn>
-          <v-btn
-            color="error"
-            :disabled="!rejectReason.trim()"
-            :loading="reviewPendingId === rejectTarget"
-            data-testid="reject-confirm"
-            @click="reject()"
+        <template v-if="!pending && allRevisions.length > 0">
+          <v-chip-group
+            v-model="columnFilter"
+            mandatory
+            column
+            color="ink-sage"
+            class="py-0"
           >
-            Odrzuć
-          </v-btn>
-        </v-card-actions>
+            <v-chip
+              v-for="option in filterOptions"
+              :key="option.value"
+              :value="option.value"
+              size="small"
+              variant="outlined"
+              filter
+              :disabled="option.count === 0 && columnFilter !== option.value"
+              :data-testid="`revision-filter-${option.value}`"
+            >
+              {{ option.title }} ({{ option.count }})
+            </v-chip>
+          </v-chip-group>
+          <span class="text-caption text-medium-emphasis">
+            Pokazano {{ shownRevisions.length }} z {{ allRevisions.length }}.
+          </span>
+        </template>
+      </AdminSectionHead>
+
+      <v-card v-if="pending" class="pa-4 text-center">
+        <v-progress-circular indeterminate></v-progress-circular>
       </v-card>
-    </v-dialog>
+      <div v-else class="comparison-scroll pb-4">
+        <client-only>
+          <table v-if="shownRevisions.length > 0" class="comparison-table">
+            <thead>
+              <tr>
+                <th
+                  v-for="rev in shownRevisions"
+                  :key="'h-' + rev.id"
+                  :data-revision-header="rev.id"
+                  class="card-header text-left"
+                  :class="{
+                    'highlighted-revision': rev.id === highlightId,
+                  }"
+                >
+                  <div class="d-flex justify-space-between align-start mb-2">
+                    <div>
+                      <div class="text-h6 font-weight-medium">
+                        {{ formatDate(rev.update_time) }}
+                      </div>
+                      <div class="mt-1">
+                        <UserChip :uid="revisionUser(rev)" />
+                      </div>
+                    </div>
+                    <div class="d-flex flex-column align-end ga-1">
+                      <!-- The same resolution the list above and the queue
+                           make: an approval a newer one overtook is
+                           `Zastąpiona`, where this used to say `Oczekuje`. -->
+                      <ChipRevisionStatus
+                        :status="statusOf(rev)"
+                        size="x-small"
+                      />
+                      <v-chip
+                        :color="
+                          rev.update_automatic ? 'ink-neutral' : 'ink-sage'
+                        "
+                        size="x-small"
+                      >
+                        {{ rev.update_automatic ? "Auto" : "Ręczna" }}
+                      </v-chip>
+                    </div>
+                  </div>
+
+                  <div class="mt-1">
+                    <nuxt-link
+                      v-if="getRevisionData(rev.data)['type']"
+                      :to="`/entity/${getRevisionData(rev.data)['type']}/${nodeId}?revisionId=${rev.id}`"
+                      class="text-decoration-none text-ink-info font-weight-bold d-inline-flex align-center ga-1"
+                      target="_blank"
+                    >
+                      <v-icon :icon="mdiEyeOutline" size="small" />
+                      Podgląd tej wersji strony
+                      <v-tooltip
+                        activator="parent"
+                        location="bottom"
+                        max-width="300"
+                      >
+                        Kliknij, aby zobaczyć, jak wyglądałaby strona po
+                        opublikowaniu tej wersji.
+                      </v-tooltip>
+                    </nuxt-link>
+                    <!-- Full id on hover only: spelled out it is ~60
+                         monospace characters, which widened the column past the
+                         350px the comparison table gives it and pushed the
+                         header controls out of view. -->
+                    <div
+                      class="text-caption font-weight-mono text-medium-emphasis mt-1 revision-id"
+                      :title="String(rev.id)"
+                    >
+                      ID: {{ shortRevisionId(rev.id) }}
+                    </div>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="key in allKeys" :key="key">
+                <td
+                  v-for="rev in shownRevisions"
+                  :key="key + '-' + rev.id"
+                  class="card-cell"
+                  :class="{
+                    'highlighted-revision': rev.id === highlightId,
+                    'changed-field': differsFromApproved(rev, key),
+                  }"
+                >
+                  <div
+                    class="field-label text-caption text-ink-sage font-weight-bold mb-1"
+                  >
+                    {{ key }}
+                  </div>
+                  <div class="field-value text-body-2">
+                    <template
+                      v-if="
+                        rev.data && getRevisionData(rev.data)[key] !== undefined
+                      "
+                    >
+                      <pre
+                        class="mb-0"
+                        style="white-space: pre-wrap; font-family: inherit"
+                        >{{
+                          typeof getRevisionData(rev.data)[key] === "object"
+                            ? JSON.stringify(
+                                getRevisionData(rev.data)[key],
+                                null,
+                                2,
+                              )
+                            : getRevisionData(rev.data)[key]
+                        }}</pre>
+                    </template>
+                    <template v-else>
+                      <span class="text-medium-emphasis font-italic"
+                        >- brak -</span
+                      >
+                    </template>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <v-card v-else class="pa-6 text-center text-medium-emphasis">
+            {{
+              allRevisions.length > 0
+                ? "Żadna rewizja nie pasuje do wybranego filtra."
+                : "Brak rewizji dla tego węzła."
+            }}
+          </v-card>
+        </client-only>
+      </div>
+    </section>
 
     <AdminPublishNodeDialog
       v-model="publishDialog"
@@ -334,15 +271,14 @@ import { ClientOnly } from "#components";
 import { relationsPlural } from "~/composables/edges";
 import { latestPublishableRevision } from "~~/shared/revisions";
 import {
+  resolveProposalStatus,
+  type ProposalStatus,
+} from "~~/shared/proposals";
+import {
   mdiArrowLeft,
   mdiEyeOutline,
   mdiEyeOffOutline,
   mdiEarth,
-  mdiCheck,
-  mdiCheckDecagramOutline,
-  mdiClockOutline,
-  mdiClose,
-  mdiCloseCircleOutline,
 } from "@mdi/js";
 
 definePageMeta({
@@ -357,6 +293,14 @@ useHead({
 const route = useRoute();
 const nodeId = route.params.id as string;
 
+/** The revision a link arrived for: the queue, an entity page's "Zobacz
+ * historię zmian", a "Porównanie" button on the review list. */
+const highlightId = computed(() =>
+  typeof route.query.revisionId === "string" && route.query.revisionId
+    ? route.query.revisionId
+    : null,
+);
+
 const { isAdmin } = useAuthState();
 
 const revisions = ref<Record<string, unknown>[]>([]);
@@ -364,15 +308,12 @@ const approvedRevisionId = ref<string | null>(null);
 const published = ref(false);
 const pending = ref(true);
 const publishPending = ref(false);
-const reviewPendingId = ref<string | null>(null);
 const error = ref<string | null>(null);
 const errorShown = ref(false);
 const notice = ref<string | null>(null);
 const noticeShown = ref(false);
 const publishDialog = ref(false);
-const rejectDialog = ref(false);
-const rejectReason = ref("");
-const rejectTarget = ref<string | null>(null);
+const history = ref<{ reload: () => Promise<void> } | null>(null);
 
 async function load() {
   const data = await $fetch<{
@@ -394,6 +335,22 @@ onMounted(async () => {
     pending.value = false;
   }
 });
+
+/** A decision taken in the list redraws the table: the approved column moves,
+ * and with it every "changed" tint. */
+async function refresh() {
+  try {
+    await load();
+  } catch (err) {
+    report(err);
+  }
+}
+
+/** Publishing moves the other way: the list's "Zatwierdź i opublikuj" depends
+ * on whether the page is live, and publishing can approve a revision. */
+async function reloadAll() {
+  await Promise.all([load(), history.value?.reload()]);
+}
 
 /** Surfaces the server's message rather than a generic failure - the two that
  * matter both say something the reviewer has to act on (a page needs an
@@ -424,6 +381,7 @@ async function setPublished(value: boolean) {
       notice.value = `Ukryto stronę i ${hidden} ${relationsPlural(hidden)}.`;
       noticeShown.value = true;
     }
+    await history.value?.reload();
   } catch (err) {
     report(err);
   } finally {
@@ -444,7 +402,7 @@ async function onPublishFailed({
   report(err);
   if (nodePublished) {
     error.value = `Strona została opublikowana, ale powiązania nie: ${error.value}`;
-    await load();
+    await reloadAll();
   }
 }
 
@@ -466,59 +424,30 @@ async function onPublished({
     ? `${page} Zatwierdzono przy tym jej najnowszą rewizję.`
     : page;
   noticeShown.value = true;
-  await load();
-}
-
-async function approve(revisionId: string) {
-  reviewPendingId.value = revisionId;
-  try {
-    await authRequest("/api/revisions/approve", {
-      body: { revision_id: revisionId },
-    });
-    await load();
-  } catch (err) {
-    report(err);
-  } finally {
-    reviewPendingId.value = null;
-  }
-}
-
-function openReject(revisionId: string) {
-  rejectTarget.value = revisionId;
-  rejectReason.value = "";
-  rejectDialog.value = true;
-}
-
-async function reject() {
-  const revisionId = rejectTarget.value;
-  if (!revisionId) return;
-  reviewPendingId.value = revisionId;
-  try {
-    await authRequest("/api/revisions/reject", {
-      body: { revision_id: revisionId, reason: rejectReason.value.trim() },
-    });
-    rejectDialog.value = false;
-    await load();
-  } catch (err) {
-    report(err);
-  } finally {
-    reviewPendingId.value = null;
-  }
+  await reloadAll();
 }
 
 /** The review queue links here naming one revision, and the tint that marks it
  * is worth nothing if it is off to the right of a table wide enough to scroll.
- * Scrolled once the columns exist, `inline: "center"` so the neighbours it is
- * being compared against come with it, and `block: "nearest"` so the page does
- * not jump away from the publish controls above. */
+ * Scrolled once the columns exist, centred so the neighbours it is being
+ * compared against come with it - and only sideways, inside the table's own
+ * scroller: the history list above is where the link lands now, with that
+ * revision open, and moving the page down to the table would carry the
+ * reviewer straight past it. */
 const scrollToHighlighted = async () => {
   if (import.meta.server) return;
-  const id = route.query.revisionId;
-  if (typeof id !== "string" || !id) return;
+  const id = highlightId.value;
+  if (!id) return;
   await nextTick();
-  document
-    .querySelector(`[data-revision-header="${id}"]`)
-    ?.scrollIntoView({ block: "nearest", inline: "center" });
+  const header = document.querySelector<HTMLElement>(
+    `[data-revision-header="${id}"]`,
+  );
+  const scroller = header?.closest<HTMLElement>(".comparison-scroll");
+  if (!header || !scroller) return;
+  const offset =
+    header.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
+  scroller.scrollLeft +=
+    offset - (scroller.clientWidth - header.offsetWidth) / 2;
 };
 
 const allRevisions = computed(() => {
@@ -556,10 +485,21 @@ type ColumnFilter = "all" | "manual" | "pending";
 
 const columnFilter = ref<ColumnFilter>("all");
 
-/** The three states the header chips already name, worked out the same way so
- * that the filter and the chip on a column cannot disagree. */
+/** Where a revision stands, worked out the way the queue and the history list
+ * work it out - so a column header, the filter and the row above it cannot
+ * disagree. */
+function statusOf(rev: Record<string, unknown>): ProposalStatus {
+  return resolveProposalStatus({
+    id: String(rev.id),
+    status: rev.status,
+    approvedId: approvedRevisionId.value ?? undefined,
+  }).status;
+}
+
+/** Still waiting for a decision. Not an approval a newer one overtook, which
+ * this used to count - and label `Oczekuje` - because it only compared ids. */
 function isPendingRevision(rev: Record<string, unknown>) {
-  return rev.id !== approvedRevisionId.value && rev.status !== "rejected";
+  return statusOf(rev) === "pending";
 }
 
 const filterOptions = computed(() => [
@@ -589,9 +529,8 @@ const filterOptions = computed(() => [
  * that link with a table the reviewer has to guess their way back out of.
  */
 const shownRevisions = computed(() => {
-  const highlighted = route.query.revisionId;
   return allRevisions.value.filter((rev) => {
-    if (rev.id === highlighted) return true;
+    if (rev.id === highlightId.value) return true;
     if (columnFilter.value === "manual") return rev.update_automatic !== true;
     if (columnFilter.value === "pending") return isPendingRevision(rev);
     return true;
@@ -599,7 +538,7 @@ const shownRevisions = computed(() => {
 });
 
 watch(
-  () => [shownRevisions.value.length, route.query.revisionId] as const,
+  () => [shownRevisions.value.length, highlightId.value] as const,
   scrollToHighlighted,
   { immediate: true },
 );
@@ -713,6 +652,21 @@ function differsFromApproved(rev: Record<string, unknown>, key: string) {
   min-width: 0;
 }
 
+/* A node id has no spaces to break at, and on a phone the heading is the
+   widest thing on the page. The basis is what sends the publish controls to
+   a line of their own there rather than squeezing the heading beside them. */
+.revision-title {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The page is as wide as the window for the table's sake; a line of the list
+   stretched across 1900px puts the date and the change a head-turn apart. */
+.history-section {
+  max-width: 1200px;
+}
+
 .comparison-scroll {
   overflow: auto;
   /* The sideways scrollbar belongs at the bottom of the window. Left to the
@@ -764,11 +718,11 @@ function differsFromApproved(rev: Record<string, unknown>, key: string) {
   background: rgba(var(--v-theme-primary), 0.1) !important;
 }
 /* What this revision would change, so a reviewer reads the diff rather than
-   the whole snapshot. */
+   the whole snapshot. The label in ink: Vuetify's `warning` as text is 2.4:1. */
 .changed-field {
   background: rgba(var(--v-theme-warning), 0.12) !important;
 }
 .changed-field .field-label {
-  color: rgb(var(--v-theme-warning)) !important;
+  color: rgb(var(--v-theme-ink-warning)) !important;
 }
 </style>

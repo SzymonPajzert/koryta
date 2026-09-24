@@ -1,5 +1,9 @@
 <template>
-  <div class="revision-diff" data-testid="revision-diff">
+  <div
+    class="revision-diff"
+    :class="{ 'revision-diff--wide': wide }"
+    data-testid="revision-diff"
+  >
     <p v-if="unchanged" class="text-caption text-medium-emphasis mb-0">
       Wpis już to zawiera.
     </p>
@@ -33,7 +37,7 @@
         <NuxtLink
           v-if="fullComparisonTo"
           :to="fullComparisonTo"
-          class="text-primary ml-1"
+          class="text-ink-info ml-1"
         >
           Pełne porównanie
         </NuxtLink>
@@ -65,8 +69,10 @@ const props = withDefaults(
     max?: number;
     /** Route to the side-by-side view, when the caller has one to offer. */
     fullComparisonTo?: string | null;
+    /** Not squeezed into a table cell: let a long value take the line. */
+    wide?: boolean;
   }>(),
-  { max: MAX_INLINE_CHANGES, fullComparisonTo: null },
+  { max: MAX_INLINE_CHANGES, fullComparisonTo: null, wide: false },
 );
 
 const shown = computed(() => props.changes.slice(0, props.max));
@@ -111,6 +117,15 @@ function valueClass(value: string | null, side: "from" | "to"): string {
 .revision-diff__value {
   max-width: 220px;
   overflow-wrap: anywhere;
+}
+
+/* In an open history row there is no cell to protect, and a description held
+   to 220px turned into a column a few words wide and a screen tall. Given the
+   whole line, a long value wraps as prose and the arrow and the new value
+   follow it on the next line. */
+.revision-diff--wide .revision-diff__value {
+  max-width: 100%;
+  white-space: pre-line;
 }
 
 .revision-diff__from {
