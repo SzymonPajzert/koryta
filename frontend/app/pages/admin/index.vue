@@ -285,14 +285,15 @@
             </template>
             <template v-else-if="summary">
               <v-list density="compact" class="py-0">
-                <!-- An edge revision has no page of its own, so it links to the
-                     queue that lists it rather than to a detail view. -->
+                <!-- An edge revision has no page of its own, so it opens pinned
+                     in the review queue - the id is the revision's - where it
+                     can be decided on, rather than in a detail view. -->
                 <v-list-item
                   v-for="item in summary.revisions.sample"
                   :key="`${item.kind}-${item.id}`"
                   :to="
                     item.kind === 'edge'
-                      ? '/admin/rewizje-krawedzi'
+                      ? `/admin/rewizje?rewizja=${encodeURIComponent(item.id)}#kolejka`
                       : `/admin/rewizje/${item.id}`
                   "
                   :title="item.name ?? item.id"
@@ -315,22 +316,24 @@
             </template>
           </v-card-text>
 
-          <v-card-actions>
+          <!-- Both into /admin/rewizje, at the section each half of the count
+               above is decided in. -->
+          <v-card-actions class="flex-wrap">
             <v-btn
               variant="text"
               color="primary"
-              to="/admin/rewizje"
+              to="/admin/rewizje#kolejka"
               :append-icon="mdiChevronRight"
             >
-              Przejdź do rewizji
+              Przejdź do kolejki
             </v-btn>
             <v-btn
               variant="text"
               color="primary"
-              to="/admin/rewizje-krawedzi"
+              to="/admin/rewizje#powiazania"
               :append-icon="mdiChevronRight"
             >
-              Rewizje krawędzi
+              Zmiany powiązań
             </v-btn>
           </v-card-actions>
         </v-card>
@@ -381,7 +384,6 @@ import { computedAsync } from "@vueuse/core";
 import {
   mdiGraphOutline,
   mdiHistory,
-  mdiInboxArrowDown,
   mdiVectorPolyline,
   mdiNoteEditOutline,
   mdiTextBoxSearchOutline,
@@ -407,29 +409,19 @@ useHead({
 });
 
 const subpages = [
-  {
-    title: "Kolejka zmian",
-    to: "/admin/rewizje/kolejka",
-    icon: mdiInboxArrowDown,
-    desc: "Propozycje od ludzi czekające na decyzję — wpisy i powiązania razem.",
-  },
+  // One tile where there were three: "Kolejka zmian", "Rewizje" and "Rewizje
+  // krawędzi" are the sections of one page now.
   {
     title: "Rewizje",
     to: "/admin/rewizje",
     icon: mdiHistory,
-    desc: "Przeglądaj i akceptuj rewizje węzłów.",
+    desc: "Propozycje czekające na decyzję, zmiany powiązań i historia każdego wpisu.",
   },
   {
     title: "Powiązania",
     to: "/admin/krawedzie",
     icon: mdiGraphOutline,
     desc: "Powiązania gotowe do publikacji - obie strony już opublikowane.",
-  },
-  {
-    title: "Rewizje krawędzi",
-    to: "/admin/rewizje-krawedzi",
-    icon: mdiVectorPolyline,
-    desc: "Zmiany krawędzi zaproponowane przez pipeline, jeszcze nierozpatrzone.",
   },
   {
     title: "Notatki",

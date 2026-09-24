@@ -47,10 +47,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const CLOCK_SKEW_MS = 10 * 60 * 1000;
 
 /** Where an established administrator opens the revision behind a line. The
- * queue permalink, not /admin/rewizje/<id>: that page is for nodes only, and a
- * line can just as well be about a relation. */
+ * queue permalink, not /admin/rewizje/<node id>: that page is for nodes only,
+ * and a line can just as well be about a relation. */
 const revisionHref = (revisionId: string) =>
-  `/admin/rewizje/kolejka?rewizja=${encodeURIComponent(revisionId)}`;
+  `/admin/rewizje?rewizja=${encodeURIComponent(revisionId)}#kolejka`;
 
 /** What people did to the data recently, one line per person per sitting.
  *
