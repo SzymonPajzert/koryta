@@ -96,6 +96,19 @@ env:
       - BUILD
       - RUNTIME
 
+  # The build's heap, and only the build's. `nuxt build` peaks at ~1.95 GB of
+  # heap bundling the Nitro server (measured 2026-09-24 against a 2048 MB cap),
+  # and node on App Hosting's builder stops at ~2 GB by default: six of the
+  # seven builds from 2026-09-23 20:10 to 2026-09-24 16:37 UTC died with
+  # "JavaScript heap out of memory", both backends, and the one that got through
+  # was luck. Not RUNTIME: there the buildpack's heapsize.sh sizes the heap to
+  # the instance, and a 4 GB heap in a 1 GiB instance would be killed before it
+  # ever collected.
+  - variable: NODE_OPTIONS
+    value: --max-old-space-size=4096
+    availability:
+      - BUILD
+
 # Grant access to secrets in Cloud Secret Manager.
 # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
 # - variable: MY_SECRET
