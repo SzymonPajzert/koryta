@@ -165,7 +165,9 @@ test.describe("Kolejka zgłoszeń", () => {
     await expect(row).toBeVisible({ timeout: 60_000 });
     await expect(row).toContainText(`kolejka ${stamp} stary`);
     await expect(row).toBeInViewport();
-    // Opened, since the link was followed to read it.
+    // Marked among the rest, and opened, since the link was followed to read
+    // it.
+    await expect(row).toHaveClass(/arow--target/);
     await expect(row.locator("[data-row-panel]")).toBeVisible();
     await expect(page.locator("[data-toggle-closed]")).toContainText(
       "Ukryj zamknięte",

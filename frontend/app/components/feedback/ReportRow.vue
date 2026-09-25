@@ -224,7 +224,7 @@ defineProps<{
   canQueue?: boolean;
   /** A status or note of this report is being written. */
   saving?: boolean;
-  /** Where a link just landed. */
+  /** The report the url points at. */
   highlighted?: boolean;
   /** The page that lists every report, when this one does not - links to
    * other reports go there. See `feedbackReportLink`. */
