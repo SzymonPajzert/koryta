@@ -161,6 +161,25 @@ describe("ExtractionPersonFacts", () => {
     expect(links[0]!.attributes("href")).toBe("/entity/article/art1");
   });
 
+  it("says in the open that the facts may be wrong, and the rest behind the (i)", async () => {
+    // „Ten tekst podobnie jak w notatce powinien być domyślnie schowany bo
+    // robi bloat” - four sentences stood between the heading and the cards.
+    // The warning is the half a reader needs before trusting a card, so it
+    // stays; how to judge one is a click away.
+    response = { facts: [fact()], total: 1 };
+    const section = await mount();
+
+    expect(section.get("[data-testid='person-extractions-lead']").text()).toBe(
+      "Automatycznie wyszukane w prasie - mogą być błędne.",
+    );
+    expect(section.text()).not.toContain("po imieniu i nazwisku");
+
+    await section.get("[data-testid='section-info']").trigger("click");
+    await flushPromises();
+    expect(document.body.textContent).toContain("po imieniu i nazwisku");
+    expect(document.body.textContent).toContain("„To nie ta osoba”");
+  });
+
   it("renders nothing at all when the person has no matched facts", async () => {
     response = { facts: [], total: 0 };
     const section = await mount();
@@ -353,6 +372,13 @@ describe("ExtractionPersonFacts", () => {
         section.find("[data-testid='person-extractions-locked']").exists(),
       ).toBe(true);
       expect(section.text()).toContain("Zaloguj się lub załóż konto");
+    });
+
+    it("has no (i) to open, since it explains cards they are not shown", async () => {
+      response = { facts: [], total: 3 };
+      const section = await mount();
+
+      expect(section.find("[data-testid='section-info']").exists()).toBe(false);
     });
 
     it("declines the Polish plural properly", async () => {
