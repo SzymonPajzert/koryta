@@ -209,6 +209,32 @@ export const GOALS = {
     props: [],
   },
 
+  // --- The contracts findings, and the account they ask for ---------------
+  // /eksploruj/umowy names its strongest checked findings to everybody and
+  // shows the rest as teasers. Whether that converts is the question: shown
+  // against clicked, and clicked against accounts actually created.
+  "powiazania:gate-shown": {
+    description:
+      "An ask on /eksploruj/umowy came into view, once per page view per `surface`: `hero`, `teaser` (the first teaser in the list) or `koniec-listy`. A page view as Plausible counts one - a new path, not a mode switch on the same one. The denominator for `powiazania:gate-click` with the same `surface`.",
+    props: ["surface"],
+    passive: true,
+  },
+  "powiazania:gate-click": {
+    description:
+      "Reader clicked a lock on /eksploruj/umowy. `surface` is `hero`, `teaser`, `koniec-listy`, `koniec-listy-logowanie` (the sign-in button beside the end-of-list ask, i.e. a returning reader rather than a new one), `przypiete` (a permalinked finding the reader may not see), `karta` (the „more people after signing in” line on a public card, whose link carries `powod=powiazania-osoby`) or `tryb-ludzie` (the locked people chip). On a teaser or a card, `strength` is its class and `position` where it sat (`positionBucket`); elsewhere both are `none`.",
+    props: ["surface", "strength", "position"],
+  },
+  "powiazania:open": {
+    description:
+      "Reader opened a finding's contracts. `strength` is the finding's class (A-D), for whether the strong ones are the ones read.",
+    props: ["strength"],
+  },
+  "konto:utworzone": {
+    description:
+      "An account was created, by email or through Google. `from` is the `powod` the login link carried (`powiazania` for the contracts findings, `powiazania-osoby` for the hidden people on a public finding, `ludzie` for the people beside the contracts), or `inne`.",
+    props: ["from"],
+  },
+
   // --- Experiments -------------------------------------------------------
   "experiment:assigned": {
     description:
@@ -330,6 +356,20 @@ export function resultBucket(count: number): string {
   if (count <= 4) return "1-4";
   if (count <= 20) return "5-20";
   return "21+";
+}
+
+// --- /eksploruj/umowy ----------------------------------------------------
+
+/** Where in the findings list a teaser sat, 1-based, for `gate-click`'s
+ * `position`: the first screen or so, the rest of the first page, and the
+ * pages „Pokaż kolejne" loaded. `pinned` is the one a permalink put above the
+ * list. Bucketed for the reason `resultBucket` is. */
+export function positionBucket(position: number | "pinned"): string {
+  if (position === "pinned") return "pinned";
+  if (position <= 3) return "1-3";
+  if (position <= 12) return "4-12";
+  if (position <= 24) return "13-24";
+  return "25+";
 }
 
 // --- /eksploruj/tabela filters -------------------------------------------

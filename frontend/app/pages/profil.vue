@@ -212,10 +212,10 @@
 
 <script lang="ts" setup>
 import { mdiCheckCircle, mdiAlertCircle } from "@mdi/js";
-import { updateProfile, sendEmailVerification } from "firebase/auth";
+import { updateProfile } from "firebase/auth";
 import { doc, getFirestore, setDoc } from "firebase/firestore";
 import { useFirebaseApp } from "vuefire";
-import { useAuthState } from "@/composables/auth";
+import { sendVerificationEmail, useAuthState } from "@/composables/auth";
 import {
   notificationDefaults,
   notificationEnabled,
@@ -450,7 +450,7 @@ const sendVerification = async () => {
   if (!user.value) return;
   sendingVerification.value = true;
   try {
-    await sendEmailVerification(user.value);
+    await sendVerificationEmail(user.value, "/profil");
     notify("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
   } catch (err) {
     console.error("Failed to send verification email:", err);

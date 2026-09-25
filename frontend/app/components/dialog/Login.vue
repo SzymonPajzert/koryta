@@ -25,7 +25,7 @@
             }}
           </a>
         </div>
-        <FormLoginForm :is-login="isLogin" @success="onLoginSuccess" />
+        <FormLoginForm v-model:is-login="isLogin" @success="onLoginSuccess" />
         <div class="mt-4 text-center text-caption">
           {{ isLogin ? "Logowanie się" : "Rejestracja" }} oznacza zgodę z
           <a href="/plik/regulamin">regulaminem</a> oraz

@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "rejestracja-bez-przerw",
+    title: "Zakładanie konta bez okienka i odliczania",
+    description:
+      "Po założeniu konta albo zalogowaniu strona od razu wraca tam, skąd otwarto logowanie - bez okienka o mailu i bez pięciu sekund czekania. Logowanie przez Google jest też w trybie rejestracji.",
+    steps: [
+      "Po wylogowaniu kliknij na /eksploruj/umowy „Załóż konto i zobacz wszystkie” - pod hasłem ma być podpowiedź „Co najmniej 6 znaków”, a nad formularzem „Kontynuuj z Google”.",
+      "Załóż konto nowym adresem - bez okienka masz od razu wrócić na listę, a „Wstecz” w przeglądarce ma ominąć stronę logowania.",
+      "Spróbuj założyć konto adresem, który już ma konto - ma się pojawić przycisk „Zaloguj się tym adresem”, który przełącza na logowanie i zostawia wpisany adres.",
+    ],
+    link: "/login?konto=nowe",
+    area: "public",
+  },
+  {
     id: "umowy-publiczne",
     title: "Umowy publiczne z Centralnego Rejestru Umów",
     description:
