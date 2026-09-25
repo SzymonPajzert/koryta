@@ -87,14 +87,56 @@ describe("PomocPage", () => {
   it("says which of the checking tasks need an account", async () => {
     const wrapper = await mount();
 
-    const section = wrapper.get("section#sprawdzanie");
-    const chips = section.findAll(".v-chip").map((chip) => chip.text());
+    // The four tasks, and the three difficulty tiers the page opens with -
+    // every door out of either is the queue or a vote, and none of those can
+    // be cast without a name attached.
+    for (const [selector, count] of [
+      ["section#wiecej-sprawdzania", 4],
+      ["section#sprawdzanie", 3],
+    ] as const) {
+      const chips = wrapper
+        .get(selector)
+        .findAll(".v-chip")
+        .map((chip) => chip.text());
+      expect(chips, selector).toHaveLength(count);
+      for (const chip of chips) expect(chip).toBe("po zalogowaniu");
+    }
+  });
 
-    // Four tasks, and the three difficulty tiers under them - every door out
-    // of this section is the queue or a vote, and none of those can be cast
-    // without a name attached.
-    expect(chips).toHaveLength(7);
-    for (const chip of chips) expect(chip).toBe("po zalogowaniu");
+  // The owner's report: the tiers sat inside the third section, under two
+  // others and four cards of their own, where „możesz sprawdzać osoby” should
+  // be the first thing a visitor meets.
+  it("opens with checking people, in the three tiers, before any other way to help", async () => {
+    const wrapper = await mount();
+
+    expect(wrapper.findAll("h2")[0]!.text()).toBe("Możesz sprawdzać osoby");
+
+    const tiers = wrapper.get('[data-testid="queue-tiers"]');
+    expect(tiers.element.closest("section")?.id).toBe("sprawdzanie");
+    const firstTile = wrapper.get("a[href^='#']").element;
+    expect(
+      tiers.element.compareDocumentPosition(firstTile) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  // Moving the tiers up left the rest of the page pointing past them: „Chcę
+  // sprawdzać dane” scrolled to the old section below the tiers, which opened
+  // with a second introduction to the same work.
+  it("sends a reader who picks checking to the tiers, and follows them with the rest of the work", async () => {
+    const wrapper = await mount();
+
+    expect(wrapper.find("a[href='#sprawdzanie']").exists()).toBe(true);
+    expect(
+      wrapper
+        .get("section#sprawdzanie")
+        .find('[data-testid="queue-tiers"]')
+        .exists(),
+    ).toBe(true);
+
+    expect(wrapper.get("section#wiecej-sprawdzania h2").text()).toBe(
+      "Więcej do sprawdzania",
+    );
   });
 
   it("hands out the three difficulty tiers, with what is left in each", async () => {

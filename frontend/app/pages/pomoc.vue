@@ -26,9 +26,38 @@
       miejsce, z którego klikasz.
     </p>
 
+    <!-- Checking people first, ahead of the cost order the rest of the page
+         keeps: it is the work the project is shortest of hands for, and the
+         owner asked for „możesz sprawdzać osoby” to be the first thing a
+         visitor sees. It used to sit inside the third section, under two
+         others and four cards of its own. The tiers are the way in because
+         they say what one person costs to check, so a first-time reader picks
+         something they can finish tonight rather than whoever tops a queue
+         ordered by another question. `sprawdzanie` because that is the anchor
+         the „Chcę sprawdzać dane” tile scrolls to - a reader who picks checking
+         there should land on the tiers, not below them. -->
+    <section id="sprawdzanie" class="pomoc__section">
+      <div class="sec-head">
+        <h2 class="text-h6">Możesz sprawdzać osoby</h2>
+        <span class="text-caption text-medium-emphasis">Od kwadransa</span>
+        <InfoBubble label="Możesz sprawdzać osoby">
+          Oceniasz w skali od -5 do +5, na ile posada wygląda na nagrodę za
+          politykę. Nie musisz mieć pewności - liczy się kilka niezależnych
+          ocen, nie jedna. Niczego tym nie publikujesz: oceny układają kolejkę,
+          a publikuje redakcja.
+        </InfoBubble>
+      </div>
+      <p class="text-body-2 text-medium-emphasis pomoc__measure mb-4">
+        Wiemy, kto ma posadę w spółce albo instytucji publicznej. To, czy dostał
+        ją po znajomości, musi sprawdzić człowiek - i takie osoby czekają w
+        kolejce.
+      </p>
+      <PomocQueueTiers />
+    </section>
+
     <!-- Six self-sort tiles. Nothing on the page is hidden behind them - a
          reader who ignores them and scrolls still meets every option. -->
-    <h2 class="text-h6 mb-3">Wybierz swoją drogę</h2>
+    <h2 class="text-h6 mt-10 mb-3">Wybierz swoją drogę</h2>
     <v-row class="mb-4">
       <v-col v-for="tile in tiles" :key="tile.path" cols="6" sm="4">
         <v-card
@@ -174,21 +203,25 @@
       </v-card>
     </section>
 
-    <!-- Sprawdzaj razem z nami -->
-    <section id="sprawdzanie" class="pomoc__section">
+    <!-- The rest of the checking work, as the follow-on to the tiers the page
+         opens with rather than a second introduction to it. What checking is,
+         the -5 to +5 scale and „niczego nie publikujesz” are said once, up
+         there; this section used to say them again under its own heading and
+         call itself „główna praca projektu”, which read as two sections asking
+         for the same thing. -->
+    <section id="wiecej-sprawdzania" class="pomoc__section">
       <div class="sec-head">
-        <h2 class="text-h6">Sprawdzaj razem z nami</h2>
+        <h2 class="text-h6">Więcej do sprawdzania</h2>
         <span class="text-caption text-medium-emphasis">Kwadrans</span>
-        <InfoBubble label="Sprawdzaj razem z nami">
-          Kolejka pokazuje osoby, o których wiemy tylko tyle, że mają posadę w
-          spółce albo instytucji publicznej. Twoje zadanie: sprawdzić, czy tę
-          posadę tłumaczy polityka - partia, kampania, rodzina, znajomość z
-          ratusza - i ocenić ją w skali od -5 do +5. Niczego tym nie
-          publikujesz: oceny i notatki układają kolejkę, a publikuje redakcja.
+        <InfoBubble label="Więcej do sprawdzania">
+          W całej kolejce są też osoby spoza trzech poziomów - takie, przy
+          których nie ma pod ręką żadnego z tamtych źródeł, więc trzeba je
+          znaleźć samemu. Jeśli sprawdzasz pierwszy raz, zacznij od poziomów.
         </InfoBubble>
       </div>
       <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
-        To jest główna praca projektu i tu najbardziej brakuje rąk.
+        Poza poziomami: cała kolejka naraz, pojedyncze fakty z artykułów i
+        nowości na stronie do przeklikania.
       </p>
       <div class="k-note mb-4 d-flex flex-wrap align-center ga-3">
         <span class="text-body-2">
@@ -223,11 +256,6 @@
           />
         </v-col>
       </v-row>
-
-      <!-- Which of those people to take first, and what each kind costs. The
-           cards above say what the tasks are; this says which of them a reader
-           with one free evening can actually finish. -->
-      <PomocQueueTiers class="mt-4" />
     </section>
 
     <!-- Dołącz do zespołu -->
@@ -480,7 +508,8 @@ import type { HelpTask } from "~~/shared/analytics";
 import type { ProposableNodeType } from "~~/shared/api";
 
 /** Every way a person can help, on one page, in the order of what it costs
- * them.
+ * them - after the one the project needs most, checking people, which opens
+ * it.
  *
  * The page it replaces listed six things, three of which were an outbound link
  * to somebody else's site, and it opened with „Nie potrzebujesz konta ani
@@ -537,7 +566,7 @@ const tiles = [
   {
     path: "sprawdzanie",
     title: "Chcę sprawdzać dane",
-    desc: "Przejrzyj kolejkę i oceniaj, czy posadę tłumaczy polityka.",
+    desc: "Wybierz poziom trudności i oceniaj, czy posadę tłumaczy polityka.",
     icon: mdiLayersSearchOutline,
     ink: "ink-info",
   },
