@@ -102,6 +102,24 @@ const props = defineProps<{
   loading?: boolean;
 }>();
 
+/** How much of a bucket's slot its column fills. At the 62% this chart had,
+ * five buckets on a half-width card were ~58px columns with ~35px of white
+ * between them - the gaps the activity chart above had before it went to 90%,
+ * reported here the same way. 85% leaves the separating gap and a little air,
+ * which is what five named buckets want rather than a series of days. */
+const COLUMN_WIDTH = "85%";
+
+/** The surface-coloured line between a column's blue and green segments.
+ *
+ * apexcharts insets every segment by half its stroke and paints the stroke
+ * inside it, so a stroke of `s` takes `s` off both ends of each segment: the
+ * gap between two of them is 2s, and a segment shorter than 2s does not show
+ * at all. At the shared 2px that was a 4px gap and 4px off every green
+ * segment, and on production's numbers the tallest of them is about 6px:
+ * published people are a few percent of a bucket. 1px is the method's 2px
+ * gap, as on the activity chart. */
+const SEGMENT_GAP_PX = 1;
+
 const bucketLabel = (bucket: PublicationBucket) =>
   bucket.open ? `+${bucket.floor} i więcej` : `+${bucket.floor}`;
 
@@ -141,10 +159,11 @@ const options = computed(() => {
     ...base,
     chart: { ...base.chart, type: "bar", stacked: true },
     ...barPlotOptions(),
+    stroke: { ...barPlotOptions().stroke, width: SEGMENT_GAP_PX },
     plotOptions: {
       bar: {
         ...barPlotOptions().plotOptions.bar,
-        columnWidth: "62%",
+        columnWidth: COLUMN_WIDTH,
         // Five columns, so the running total fits on every cap.
         dataLabels: {
           total: {
