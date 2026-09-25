@@ -146,6 +146,21 @@ describe("ExtractionPersonFacts", () => {
     expect(buttons[0]!.text()).toContain("Dodaj do notatki");
   });
 
+  it("leads from each fact to its article's page on the site", async () => {
+    // The quote goes out to the newspaper; the article's page here - its
+    // topics, who else it names, the other facts in it - was reachable from
+    // nowhere on a person's page.
+    response = {
+      facts: [fact({ articleNodeId: "art1" }), fact({ id: "fact-2" })],
+      total: 2,
+    };
+    const section = await mount();
+
+    const links = section.findAll("[data-testid='extraction-article-page']");
+    expect(links).toHaveLength(1);
+    expect(links[0]!.attributes("href")).toBe("/entity/article/art1");
+  });
+
   it("renders nothing at all when the person has no matched facts", async () => {
     response = { facts: [], total: 0 };
     const section = await mount();

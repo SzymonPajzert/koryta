@@ -130,6 +130,22 @@
             }}
           </v-tooltip>
         </v-btn>
+
+        <!-- The other way out of the quote: to the article's page here rather
+             than to the newspaper. „Jak przejść do widoku artykułu?” was asked
+             from a person's page, where the quote was the only link and led
+             off the site. Outside the `<a>` for the same reason as the button
+             above; worded like the card's own „osoba w bazie”. -->
+        <div v-if="articlePage" class="source-article">
+          <NuxtLink
+            :to="articlePage"
+            class="link-plain text-caption d-inline-flex align-center ga-1"
+            data-testid="extraction-article-page"
+          >
+            <v-icon :icon="mdiFileDocumentOutline" size="13" />
+            Artykuł w bazie
+          </NuxtLink>
+        </div>
       </div>
     </template>
 
@@ -178,6 +194,7 @@ import {
   mdiCheck,
   mdiContentCopy,
   mdiDomain,
+  mdiFileDocumentOutline,
   mdiOpenInNew,
   mdiVectorLink,
 } from "@mdi/js";
@@ -198,7 +215,7 @@ import {
   ExtractionWrongPersonButton,
 } from "#components";
 
-const { fact, canPromote } = defineProps<{
+const { fact, canPromote, linkArticle } = defineProps<{
   fact: ExtractionFact;
   /** Whether to offer turning this fact into a relation. Off by default: the
    * card is also rendered in places that are a reading surface rather than a
@@ -209,6 +226,11 @@ const { fact, canPromote } = defineProps<{
    * quote is already at 0.7 of the body colour and fading the whole card would
    * take it under AA - `surface.muted` keeps the measured pair. */
   muted?: boolean;
+  /** Link the fact to its article's page on this site, when ingest matched
+   * the article to one (`articleNodeId`). Off by default because the article's
+   * own page draws these cards too, and there the link would lead back to
+   * where the reader already is. */
+  linkArticle?: boolean;
 }>();
 
 defineEmits<{ promoted: [edgeId: string] }>();
@@ -223,6 +245,16 @@ const rule = computed(() => factEdgeRule(fact));
 const promotable = computed(() => !!rule.value && !!canPromote);
 
 const sourceName = computed(() => factSubject(fact));
+
+/** The article's page here. By id alone, like a note's source links to it: the
+ * fact carries no title to build the readable slug from, and `/entity/` sends
+ * the reader on to it. Only signed-in readers are ever shown a fact, so no
+ * crawler follows this through the redirect. */
+const articlePage = computed(() =>
+  linkArticle && fact.articleNodeId
+    ? generateEntityUrl("article", fact.articleNodeId)
+    : undefined,
+);
 
 /** The graph person this fact was matched to, when it was matched to one.
  *
@@ -522,6 +554,12 @@ async function copyQuote() {
 
 .source-block--link {
   cursor: pointer;
+}
+
+/* Under the quote and in line with it - the quote's bar starts at the card's
+   own 16px padding. */
+.source-article {
+  padding: 4px 16px 0;
 }
 
 /* Room for the copy button that floats over this row's right end. */
