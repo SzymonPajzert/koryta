@@ -52,13 +52,20 @@ const registerTotal =
     ? undefined
     : Number(process.argv[registerTotalAt + 1] ?? "");
 
+// Against an emulator, the caller's `GCLOUD_PROJECT` picks the project:
+// `npm run dev:local` keeps its data under demo-koryta-pl, and the emulator
+// keeps projects apart, so the koryta-pl default (what `dev:prod-data` uses)
+// would read and write a namespace the local server never looks at.
+const projectId = isProd
+  ? "koryta-pl"
+  : (process.env.GCLOUD_PROJECT ?? "koryta-pl");
 if (!isProd) {
   process.env.FIRESTORE_EMULATOR_HOST =
     process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8080";
-  process.env.GCLOUD_PROJECT = "koryta-pl";
+  process.env.GCLOUD_PROJECT = projectId;
 }
 
-const app = initializeApp({ projectId: "koryta-pl" });
+const app = initializeApp({ projectId });
 
 /** Firestore takes 500 operations per batch; `contractStats` is one each. */
 const BATCH_SIZE = 400;
