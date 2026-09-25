@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Wszystkie fakty osoby są dostępne na stronach - po 24 na komputerze i po 6 na telefonie - z przełącznikiem stron pod kartami.",
+    fixes: ["Rcw5yR84JN2HCFlS5Jcx", "YpElsRKBCFJ188IrOnXu"],
+  },
+  {
+    change:
       "Nad „Fakty z artykułów” zostało jedno zdanie, a reszta objaśnienia jest pod ikonką (i) przy nagłówku.",
     fixes: ["Ezv02GiJCB8H0LysCf0O"],
   },
