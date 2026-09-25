@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W „Notatki wymagające działania” na /admin każdy wiersz otwiera swoją notatkę w kolejce notatek.",
+    fixes: ["OaW6NI6Acm7wpXWtcTCD"],
+  },
+  {
+    change:
       "„Artykuł stanowi źródło dla” pokazuje każdą relację w jednej linijce, z chipami zamiast niebieskich linków, a artykuł, który potwierdza relację, jest w „Artykuły, które o tym wspominają” na stronach obu jej końców.",
     fixes: ["wEGUmip1NzOZtA3dPaM5"],
   },
