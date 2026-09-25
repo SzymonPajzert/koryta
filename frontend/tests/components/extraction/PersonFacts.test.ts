@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ref } from "vue";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
@@ -341,6 +341,167 @@ describe("ExtractionPersonFacts", () => {
         .findAll("[data-testid='person-extractions-filter'] .v-chip")[0]!
         .trigger("click");
       await flushPromises();
+      expect(section.findAll(".extraction-card")).toHaveLength(3);
+    });
+  });
+
+  describe("paging", () => {
+    // „Pokazujemy 24 najnowszych z 66 -> dlaczego tylko 24? Nie ma sposobu na
+    // przejrzenie wszystkiego”, and from a phone: „max 6 było i dalej już
+    // strony, inaczej ciężko dojść do sekcji dyskusja”.
+
+    /** `count` facts, newest first, as the endpoint sends them. */
+    function many(count: number, fields: Partial<ExtractionFact> = {}) {
+      return Array.from({ length: count }, (_, index) =>
+        fact({ id: `fact-${index}`, party: `Partia ${index}`, ...fields }),
+      );
+    }
+
+    function setWidth(width: number) {
+      window.innerWidth = width;
+      window.dispatchEvent(new Event("resize"));
+    }
+
+    const pager = (section: Awaited<ReturnType<typeof mount>>) =>
+      section.find("[data-testid='person-extractions-pages']");
+
+    async function goToPage(
+      section: Awaited<ReturnType<typeof mount>>,
+      page: number,
+    ) {
+      await pager(section)
+        .find(`[aria-label='Przejdź do strony ${page}']`)
+        .trigger("click");
+      await flushPromises();
+    }
+
+    afterEach(() => setWidth(1024));
+
+    it("asks for every fact at once, so the rest is a page away", async () => {
+      // The page is cut here rather than by the endpoint - see the component
+      // for why. What the request must not do any more is stop at 24.
+      response = { facts: many(3), total: 3 };
+      await mount();
+
+      expect(Number(lastQuery.limit)).toBeGreaterThanOrEqual(100);
+      expect(lastQuery.page).toBeUndefined();
+    });
+
+    it("shows 24 on a desktop and pages to the rest", async () => {
+      response = { facts: many(30), total: 30 };
+      const section = await mount();
+
+      expect(section.findAll(".extraction-card")).toHaveLength(24);
+      expect(pager(section).exists()).toBe(true);
+      // The whole set came back, so there is nothing withheld to own up to.
+      expect(
+        section.find("[data-testid='person-extractions-hidden']").exists(),
+      ).toBe(false);
+
+      await goToPage(section, 2);
+      const cards = section.findAll(".extraction-card");
+      expect(cards).toHaveLength(6);
+      expect(cards[0]!.text()).toContain("Partia 24");
+    });
+
+    it("shows six at a time on a phone", async () => {
+      setWidth(393);
+      response = { facts: many(14), total: 14 };
+      const section = await mount();
+
+      expect(section.findAll(".extraction-card")).toHaveLength(6);
+      await goToPage(section, 3);
+      expect(section.findAll(".extraction-card")).toHaveLength(2);
+    });
+
+    it("keeps the card being read on screen when the window crosses md", async () => {
+      // Page five of six-a-page is facts 24-29, which is page two of
+      // 24-a-page - not page five clamped to the two pages there now are.
+      setWidth(393);
+      response = { facts: many(30), total: 30 };
+      const section = await mount();
+
+      await goToPage(section, 5);
+      expect(section.findAll(".extraction-card")[0]!.text()).toContain(
+        "Partia 24",
+      );
+
+      setWidth(1024);
+      await flushPromises();
+      let cards = section.findAll(".extraction-card");
+      expect(cards).toHaveLength(6);
+      expect(cards[0]!.text()).toContain("Partia 24");
+
+      setWidth(393);
+      await flushPromises();
+      cards = section.findAll(".extraction-card");
+      expect(cards).toHaveLength(6);
+      expect(cards[0]!.text()).toContain("Partia 24");
+    });
+
+    it("offers no pager when everything fits on one page", async () => {
+      response = { facts: many(6), total: 6 };
+      const section = await mount();
+
+      expect(pager(section).exists()).toBe(false);
+    });
+
+    it("pages over the chosen kind alone, starting from its first page", async () => {
+      setWidth(393);
+      response = {
+        facts: [
+          ...many(10),
+          ...many(4, { fact_type: "personal_relation" }).map((each, index) => ({
+            ...each,
+            id: `relation-${index}`,
+          })),
+        ],
+        total: 14,
+      };
+      const section = await mount();
+
+      await goToPage(section, 2);
+      await section
+        .find("[data-testid='person-extractions-filter-personal_relation']")
+        .trigger("click");
+      await flushPromises();
+
+      // Four of them, all on page one: a reader left on page two of the
+      // unfiltered list would be looking at an empty grid.
+      expect(section.findAll(".extraction-card")).toHaveLength(4);
+      expect(pager(section).exists()).toBe(false);
+    });
+
+    it("puts the confirmed ones on the first page, wherever they arrived", async () => {
+      setWidth(393);
+      response = {
+        facts: [
+          ...many(8),
+          fact({
+            id: "confirmed",
+            party: "Partia Potwierdzona",
+            stats: {
+              votes: { correct: 2, humanVoted: true, humanCount: 2 },
+            } as ExtractionFact["stats"],
+          }),
+        ],
+        total: 9,
+      };
+      const section = await mount();
+
+      expect(section.findAll(".extraction-card")[0]!.text()).toContain(
+        "Partia Potwierdzona",
+      );
+
+      // Page two is all unchecked: it says so, and has no empty confirmed
+      // heading over nothing.
+      await goToPage(section, 2);
+      expect(
+        section.find("[data-testid='person-extractions-confirmed']").exists(),
+      ).toBe(false);
+      expect(
+        section.find("[data-testid='person-extractions-open']").exists(),
+      ).toBe(true);
       expect(section.findAll(".extraction-card")).toHaveLength(3);
     });
   });
