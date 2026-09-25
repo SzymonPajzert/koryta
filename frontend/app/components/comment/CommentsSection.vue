@@ -1,6 +1,9 @@
 <template>
   <div class="comments-section">
-    <div class="d-flex align-center justify-space-between mb-4">
+    <div
+      class="d-flex align-center justify-space-between"
+      :class="{ 'mb-4': leadMode }"
+    >
       <h3 class="text-h6">Dyskusja ({{ comments.length }})</h3>
       <v-btn
         v-if="!showForm && user"
@@ -12,6 +15,16 @@
         Dodaj komentarz
       </v-btn>
     </div>
+
+    <!-- „Sam nawet do końca nie rozumiem jaka jest różnica pomiędzy
+         komentarzem i notatka”, from a reader who had just posted a test
+         comment. A note is what the site is built from - public, with a
+         source, and the thing relations are made out of; this is the talk
+         about it. Not on the leads page, which has no notes to point at. -->
+    <p v-if="!leadMode" class="k-lead" data-testid="comments-lead">
+      Pytania i uwagi do innych czytelników - informację ze źródłem zapisz w
+      notatce wyżej.
+    </p>
 
     <div v-if="!user" class="text-caption text-grey mb-4">
       <router-link to="/login">Zaloguj się</router-link>, aby dodać komentarz.

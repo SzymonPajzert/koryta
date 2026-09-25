@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Nowy komentarz widać od razu po dodaniu, a pod „Dyskusja” jedno zdanie mówi, do czego służą komentarze, a co wpisać do notatki.",
+    fixes: ["ETKk2tRaOZef2UhAb2NV"],
+  },
+  {
+    change:
       "Wszystkie fakty osoby są dostępne na stronach - po 24 na komputerze i po 6 na telefonie - z przełącznikiem stron pod kartami.",
     fixes: ["Rcw5yR84JN2HCFlS5Jcx", "YpElsRKBCFJ188IrOnXu"],
   },
