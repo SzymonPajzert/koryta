@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Nad „Fakty z artykułów” zostało jedno zdanie, a reszta objaśnienia jest pod ikonką (i) przy nagłówku.",
+    fixes: ["Ezv02GiJCB8H0LysCf0O"],
+  },
+  {
+    change:
       "Karta faktu na stronie osoby ma pod cytatem link „Artykuł w bazie”, który prowadzi na stronę artykułu w serwisie.",
     fixes: ["s6LJDRorb8Cq9woLl0JM"],
     link: "/osoba/rafal-trzaskowski-8rg6MrDfdiRR7YaAvE5O",
