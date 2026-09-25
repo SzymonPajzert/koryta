@@ -8,6 +8,7 @@ import {
   barPlotOptions,
   baseChartOptions,
   categorical,
+  everyNthDayLabel,
   formatCount,
   formatDayLabel,
   ink,
@@ -45,15 +46,6 @@ export function niceAxisMax(max: number): number {
     (value) => value >= max && value % 2 === 0,
   );
   return top ?? 100 * unit;
-}
-
-/** Week-spaced labels counted back from today, so the last column is always
- * one of them. */
-function weeklyLabel(daily: MonthDay[]) {
-  return (value: string, _raw: unknown, opts?: { i?: number }) => {
-    const index = opts?.i ?? -1;
-    return index >= 0 && (daily.length - 1 - index) % 7 === 0 ? value : "";
-  };
 }
 
 /** Columns fill most of their day, as on the full chart on
@@ -133,7 +125,9 @@ export function monthChartOptions(daily: MonthDay[]) {
         style: { ...base.xaxis.labels.style, ...AXIS_TEXT },
         rotate: 0,
         hideOverlappingLabels: false,
-        formatter: weeklyLabel(daily),
+        // A week apart at every width: the card is always 30 days, and a
+        // week of a 375px phone's columns is still room for a date.
+        formatter: everyNthDayLabel(daily.length, 7),
       },
     },
     yaxis: {

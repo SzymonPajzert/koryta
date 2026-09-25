@@ -5,21 +5,23 @@
     :loading="loading"
   >
     <template #chart>
-      <ClientOnly>
-        <apexchart
-          v-if="hasData"
-          type="bar"
-          height="340"
-          :options="options"
-          :series="series"
-        />
-        <div v-else class="text-body-2 text-medium-emphasis py-8 text-center">
-          W tym okresie nikt nic nie zmieniał.
-        </div>
-        <template #fallback>
-          <v-skeleton-loader type="image" height="340" />
-        </template>
-      </ClientOnly>
+      <div ref="chartBox">
+        <ClientOnly>
+          <apexchart
+            v-if="hasData"
+            type="bar"
+            height="340"
+            :options="options"
+            :series="series"
+          />
+          <div v-else class="text-body-2 text-medium-emphasis py-8 text-center">
+            W tym okresie nikt nic nie zmieniał.
+          </div>
+          <template #fallback>
+            <v-skeleton-loader type="image" height="340" />
+          </template>
+        </ClientOnly>
+      </div>
     </template>
 
     <template #table>
@@ -54,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   activityKinds,
   activityKindLabels,
@@ -64,6 +66,8 @@ import {
   activityColors,
   barPlotOptions,
   baseChartOptions,
+  dayLabelStep,
+  everyNthDayLabel,
   formatDayLabel,
   ink,
 } from "~/utils/chartTheme";
@@ -111,6 +115,42 @@ const MAX_COLUMN_PX = 48;
  * palette needs it for: two of these four hues are only allowed adjacent
  * because a gap keeps them apart. Zero is not an option for that reason. */
 const SEGMENT_GAP_PX = 1;
+
+/** What the value axis and its title take off the left of the chart, so that
+ * the rest is the width the columns share. */
+const VALUE_AXIS_PX = 50;
+
+/** How wide the chart is drawn, which is what decides how many dates fit under
+ * it. Measured rather than read off `useDisplay()`: the window is not the
+ * chart - on a desktop the page stops at 1200px, and on a phone the layout's,
+ * the page's and the card's padding take a quarter of it. A zero is the table
+ * view hiding the chart, and keeps the last real width. */
+const chartBox = ref<HTMLElement | null>(null);
+const chartWidth = ref(0);
+let resizeObserver: ResizeObserver | undefined;
+
+const measure = (width: number) => {
+  if (width > 0) chartWidth.value = width;
+};
+
+onMounted(() => {
+  if (!chartBox.value) return;
+  measure(chartBox.value.clientWidth);
+  resizeObserver = new ResizeObserver(([entry]) => {
+    if (entry) measure(entry.contentRect.width);
+  });
+  resizeObserver.observe(chartBox.value);
+});
+
+onBeforeUnmount(() => resizeObserver?.disconnect());
+
+/** Every other day on a desktop's month, once a week on a phone's - reported
+ * from a 375px screen, where fifteen dates ran into each other. A number, so
+ * the chart is redrawn when the step changes and not on every pixel of a
+ * resize. */
+const labelStep = computed(() =>
+  dayLabelStep(props.daily.length, chartWidth.value - VALUE_AXIS_PX),
+);
 
 const hasData = computed(() => props.daily.some((day) => day.total > 0));
 
@@ -161,8 +201,13 @@ const options = computed(() => {
     xaxis: {
       ...base.xaxis,
       categories: props.daily.map((day) => formatDayLabel(day.date)),
-      tickAmount: Math.min(props.daily.length, 12),
-      labels: { ...base.xaxis.labels, rotate: 0, hideOverlappingLabels: true },
+      // Not `tickAmount`, which thinned the labels by count alone - every
+      // other day of a month whether the chart was 1100px wide or 230px.
+      labels: {
+        ...base.xaxis.labels,
+        rotate: 0,
+        formatter: everyNthDayLabel(props.daily.length, labelStep.value),
+      },
     },
     yaxis: {
       ...base.yaxis,
@@ -174,7 +219,13 @@ const options = computed(() => {
         formatter: (value: number) => String(Math.round(value)),
       },
     },
-    tooltip: { ...base.tooltip, shared: true, intersect: false },
+    tooltip: {
+      ...base.tooltip,
+      shared: true,
+      intersect: false,
+      // The day under the pointer, labelled on the axis or not.
+      x: { formatter: (value: string) => value },
+    },
   };
 });
 </script>
