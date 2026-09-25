@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "„Czeka na decyzję” na /admin/rewizje ma przełącznik „Wszystkie · Bez moich”, który chowa Twoje propozycje - działa dopiero po wdrożeniu czterech nowych indeksów z firestore.indexes.json.",
+    fixes: ["xAOt17Oj1PJB6t34O9if"],
+  },
+  {
+    change:
       "W „Obecnym składzie” Przedsiębiorstwa Zagospodarowania Odpadów w Gliwicach osoba ze zgłoszenia jest raz, pod „Prokurent”, a nie drugi raz pod „Funkcja niepodana w rejestrze”. Wpis bez funkcji znika też z historii powiązań instytucji i osoby, gdy ta sama osoba ma w tym samym czasie wpis z funkcją; osobny, wcześniejszy okres bez funkcji zostaje.",
     fixes: ["NBIpuzJnWjqUuExe9rHR"],
     link: "/instytucja/przedsiebiorstwo-zagospodarowania-odpadow-gliwice-7KybWxBJfAIMWwq3md3g",
