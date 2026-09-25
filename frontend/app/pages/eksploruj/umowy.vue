@@ -19,30 +19,91 @@
     </div>
 
     <template v-else>
-      <!-- Offered to a signed-in reader only, and not because the labels are
-           secret: „Ludzie" and „Obie strony" are the two modes whose rows name
-           people we have not published, so to everybody else they are three
-           chips of which two lead nowhere. Rendering it on `signedIn` is not a
-           hydration mismatch - firebase restores the session a tick *after*
-           hydration, so the first client render agrees with the server's, where
-           there is no reader at all. -->
-      <v-chip-group
-        v-if="signedIn"
-        v-model="mode"
-        mandatory
-        class="mb-1"
-        data-testid="umowy-tryb"
-      >
-        <v-chip value="umowy" size="small">Umowy</v-chip>
-        <v-chip value="ludzie" size="small">Ludzie</v-chip>
-        <v-chip value="obie" size="small">
-          Obie strony<template v-if="coverage">
-            ({{ polishNumber(coverage.bothLinked) }})</template
-          >
-        </v-chip>
-      </v-chip-group>
+      <!-- Offered to everybody. „Ludzie" and „Obie strony" name people we have
+           not published, so a logged out reader gets them as one locked chip
+           that leads to an account rather than as two that lead nowhere.
+           `signedIn` is false until hydration is over (`useRenderedUser`): the
+           server rendered for nobody, and a session firebase restored before
+           hydration finished used to hydrate these chips - and the list under
+           them - as a signed-in reader's, which ended on the 500 page.
 
-      <template v-if="view === 'umowy'">
+           `column`, so the chips wrap: as a slide group „Obie strony" was cut
+           off at a phone's right edge with nothing to say there was more.
+
+           A radio group by hand: Vuetify marks the chosen chip with a class
+           and gives the chips no role, so a screen reader heard two lines of
+           text and no control. -->
+      <div class="umowy__modes d-flex flex-wrap align-center column-gap-2 mb-2">
+        <v-chip-group
+          v-model="mode"
+          mandatory
+          column
+          role="radiogroup"
+          aria-label="Tryb"
+          data-testid="umowy-tryb"
+        >
+          <v-chip
+            value="powiazania"
+            size="small"
+            role="radio"
+            :aria-checked="String(mode === 'powiazania')"
+          >
+            Powiązania
+          </v-chip>
+          <v-chip
+            value="umowy"
+            size="small"
+            role="radio"
+            :aria-checked="String(mode === 'umowy')"
+          >
+            Wszystkie umowy
+          </v-chip>
+          <template v-if="signedIn">
+            <v-chip
+              value="ludzie"
+              size="small"
+              role="radio"
+              :aria-checked="String(mode === 'ludzie')"
+            >
+              Ludzie
+            </v-chip>
+            <v-chip
+              value="obie"
+              size="small"
+              role="radio"
+              :aria-checked="String(mode === 'obie')"
+            >
+              Obie strony<template v-if="coverage">
+                ({{ polishNumber(coverage.bothLinked) }})</template
+              >
+            </v-chip>
+          </template>
+        </v-chip-group>
+        <!-- Not while a session this browser had is being restored
+             (`useLikelyReader`): a signed-in reader was shown the lock for the
+             second before the real chips arrived. -->
+        <v-chip
+          v-if="!signedIn && !likelyReader"
+          size="small"
+          variant="outlined"
+          :prepend-icon="mdiLockOutline"
+          :to="peopleLoginLink"
+          data-testid="umowy-tryb-zablokowany"
+          @click="
+            trackGoal('powiazania:gate-click', {
+              surface: 'tryb-ludzie',
+              strength: 'none',
+              position: 'none',
+            })
+          "
+        >
+          Ludzie we władzach — po zalogowaniu
+        </v-chip>
+      </div>
+
+      <ContractLinkView v-if="view === 'powiazania'" />
+
+      <template v-else-if="view === 'umowy'">
         <p class="text-body-2 text-ink-neutral mb-3">
           Umowy z Centralnego Rejestru Umów — wszystkie, które pobraliśmy. Przy
           części z nich umiemy dopisać instytucję albo spółkę opisaną na
@@ -111,12 +172,28 @@
           <!-- „instytucji" in both halves of the sentence: after „z" and after
                „ze wszystkich" Polish takes the genitive, where the numeral stops
                choosing a noun form altogether. `polishCounting` would write „z 30
-               instytucje". -->
-          Pokazujemy ludzi z
-          <strong>{{ polishNumber(shownInstitutions) }} instytucji</strong>
-          o największej liczbie umów w tym okresie — nie ze wszystkich
-          <strong>{{ polishNumber(coverage.companies) }}</strong
-          >. «Pokaż kolejne instytucje» dobiera następne trzydzieści.
+               instytucje".
+
+               The cap and the button are named only while there is a next
+               window: „nie ze wszystkich 3" over all three, beside a button
+               that is not there, reads as a bug. -->
+          <template v-if="nextCursor">
+            Pokazujemy ludzi z
+            <strong>{{ polishNumber(shownInstitutions) }} instytucji</strong>
+            o największej liczbie umów w tym okresie — nie ze wszystkich
+            <strong>{{ polishNumber(coverage.companies) }}</strong
+            >. «Pokaż kolejne instytucje» dobiera następne trzydzieści.
+          </template>
+          <template v-else>
+            Pokazujemy ludzi ze wszystkich
+            <strong
+              >{{
+                polishNumber(Math.min(shownInstitutions, coverage.companies))
+              }}
+              instytucji</strong
+            >
+            z umowami w tym okresie.
+          </template>
         </div>
 
         <div
@@ -256,10 +333,15 @@
         </p>
       </ClientOnly>
 
-      <!-- Outside the mode branches, because it says where the whole page's
-           numbers come from and every mode prints them from the same
-           `coverage`. -->
-      <ContractSourceNote v-if="coverage" :coverage="coverage" class="mt-6" />
+      <!-- Outside the mode branches, because it says where the numbers of
+           every mode but „Powiązania" come from, and all of them print them
+           from the same `coverage`. The findings carry their own note on
+           method and period. -->
+      <ContractSourceNote
+        v-if="coverage && view !== 'powiazania'"
+        :coverage="coverage"
+        class="mt-6"
+      />
     </template>
   </div>
 </template>
@@ -267,9 +349,13 @@
 <script setup lang="ts">
 /** Umowy: the public register, and - for a signed-in reader - the people behind it.
  *
- * Three modes on one url, `?tryb=umowy|ludzie|obie`:
+ * Four modes on one url, `?tryb=powiazania|umowy|ludzie|obie`:
  *
- * - **umowy**, the default, is the public list of contracts. Server rendered,
+ * - **powiazania**, the default, is the findings: a person in power, the firm
+ *   tied to them and the institution that paid it (`contract/link/View.vue`).
+ *   The strongest checked ones are named to everybody; the rest are teasers
+ *   that ask for an account.
+ * - **umowy** is the public list of contracts. Server rendered,
  *   indexable, phone first, and with no `<ClientOnly>` anywhere in it - the
  *   whole point of the feature is that a stranger arriving from a search reads
  *   the register without an account. Nothing in it is gated, because
@@ -295,13 +381,22 @@
  * coverage.
  */
 import { computed, ref, watch } from "vue";
+import { mdiLockOutline } from "@mdi/js";
 import { useIsCurrentUserLoaded } from "vuefire";
 import { polishNumber } from "~/composables/polish";
-import { authRequest, useAuthState } from "~/composables/auth";
+import { trackGoal } from "~/composables/analytics";
+import { authRequest } from "~/composables/auth";
+import { useHydrated, useRenderedUser } from "~/composables/hydrated";
+import {
+  CONTRACT_LINK_PARAM,
+  useLikelyReader,
+} from "~/composables/contractLinks";
+import { SOCIAL_CARD } from "~/composables/entitySeo";
+import type { QueryPatch } from "~/composables/queryFilters";
 import {
   CONTRACTS_ENDPOINT,
   CONTRACT_PARAM,
-  useContractList,
+  type ContractListResponse,
   type ContractPeopleResponse,
   type ContractScope,
   type ContractSort,
@@ -317,12 +412,20 @@ import type {
  * result for a contract must not be bounced to /login. */
 definePageMeta({ maxWidth: 1200 });
 
-const MODES = ["umowy", "ludzie", "obie"] as const;
+const MODES = ["powiazania", "umowy", "ludzie", "obie"] as const;
+/** What a logged out reader may open. The findings gate per row on the
+ * server; the contract list names nobody. */
+const PUBLIC_MODES: readonly Mode[] = ["powiazania", "umowy"];
 type Mode = (typeof MODES)[number];
 
-const { user } = useAuthState();
+const route = useRoute();
 const authReady = useIsCurrentUserLoaded();
+const hydrated = useHydrated();
+/** Nobody until the server's html is hydrated, whatever firebase restored by
+ * then - see the mode chips in the template. */
+const user = useRenderedUser();
 const signedIn = computed(() => !!user.value);
+const likelyReader = useLikelyReader();
 
 const { choiceFilter, setQuery } = useQueryFilters({
   // Changing a filter re-orders the list, so the row a `?umowa=` link pointed
@@ -334,7 +437,7 @@ const { choiceFilter, setQuery } = useQueryFilters({
 /** All three live in the url, because a filtered list is a link somebody sends.
  * The cursor does not: it would make a shared link point at page four of an
  * ordering that has since moved. */
-const tryb = choiceFilter<Mode>("tryb", "umowy");
+const tryb = choiceFilter<Mode>("tryb", "powiazania");
 const sort = choiceFilter<ContractSort>("sort", "data");
 const zakres = choiceFilter<ContractScope>("zakres", "wszystkie");
 
@@ -347,38 +450,69 @@ const zakres = choiceFilter<ContractScope>("zakres", "wszystkie");
  * broken one.
  */
 const view = computed<Mode>(() => {
-  if (!signedIn.value) return "umowy";
-  return (MODES as readonly string[]).includes(tryb.value)
+  const asked = (MODES as readonly string[]).includes(tryb.value)
     ? tryb.value
-    : "umowy";
+    : "powiazania";
+  if (!signedIn.value && !PUBLIC_MODES.includes(asked)) return "powiazania";
+  return asked;
 });
 
-/** The mode switch writes here, so that picking „Umowy" drops `?tryb` instead
- * of spelling the default out. */
+/** The locked chip: create an account, then come back to the people. Its
+ * own `powod`, so the accounts it brings are not counted as the findings'. */
+const peopleLoginLink =
+  "/login?konto=nowe&powod=ludzie&redirect=" +
+  encodeURIComponent("/eksploruj/umowy?tryb=ludzie");
+
+/** The url parameters each public mode owns. Leaving a mode drops them:
+ * „?woj=mazowieckie" carried into the contract list, which has no such
+ * filter, is a parameter the page silently ignores. */
+const MODE_PARAMS: Partial<Record<Mode, string[]>> = {
+  powiazania: ["kolejnosc", "status", "woj", "klasa", CONTRACT_LINK_PARAM],
+  umowy: ["sort", "zakres", CONTRACT_PARAM],
+};
+
+/** The mode switch writes here, so that picking „Powiązania" drops `?tryb`
+ * instead of spelling the default out. */
 const mode = computed<Mode>({
   get: () => view.value,
   set: (value) => {
-    tryb.value = value;
+    const patch: QueryPatch = {
+      tryb: value === "powiazania" ? undefined : value,
+    };
+    for (const [owner, keys] of Object.entries(MODE_PARAMS)) {
+      if (owner === value) continue;
+      for (const key of keys) patch[key] = undefined;
+    }
+    void setQuery(patch);
   },
 });
 
-// `authReady` is the whole point of the guard: vuefire leaves `user` undefined
-// until firebase has restored (or ruled out) the session, which is a tick after
-// hydration, so a correction that read it any earlier would strip `?tryb=ludzie`
-// out of the url of a signed-in reader's very first render. Client only on top
-// of that, to keep a router write off the SSR path altogether.
+// `authReady` and `hydrated` are the whole point of the guard: `signedIn` is
+// false until firebase has restored (or ruled out) the session *and* the
+// server's html has been hydrated, so a correction that read it any earlier
+// would strip `?tryb=ludzie` out of the url of a signed-in reader's very first
+// render. Client only on top of that, to keep a router write off the SSR path
+// altogether.
+//
+// The query is a source too. `ContractLinkView` writes its own correction -
+// „?woj=Podlaskie" to „podlaskie" - from the same `route.query` in the same
+// tick, and the later of two replaces wins: this one's lost, and an anonymous
+// reader was left on „Powiązania" under a url saying `tryb=ludzie`, which the
+// register links then carried into the new account. Re-run once the other
+// lands, it finds the `tryb` still wrong and corrects it; the second pass of
+// either is a no-op.
 //
 // `replace` and not `push`, because a correction the back button walks back
 // into gets corrected again - that is the trap this avoids rather than a style
 // preference.
 if (import.meta.client) {
   watch(
-    [authReady, view, tryb],
+    [authReady, hydrated, view, tryb, () => route.query],
     () => {
-      if (!authReady.value) return;
+      if (!authReady.value || !hydrated.value) return;
       if (tryb.value === view.value) return;
       void setQuery(
-        { tryb: view.value === "umowy" ? undefined : view.value },
+        { tryb: view.value === "powiazania" ? undefined : view.value },
         { replace: true },
       );
     },
@@ -388,22 +522,49 @@ if (import.meta.client) {
 
 const query = computed(() => ({ sort: sort.value, zakres: zakres.value }));
 
-// The same key `ContractFeed` builds from the same query, so the page and the
-// feed inside it share one async-data entry and therefore one request. The page
-// wants the coverage half of the answer - it renders above the feed, so it
-// cannot wait for a child to hand it over - and the feed wants the rows.
+/** Whether this mode prints the register's figures - every mode but the
+ * findings, which carry their own. */
+const needsCoverage = computed(() => view.value !== "powiazania");
+
+// The register's coverage figures, and nothing else, and only in the modes
+// that print them. This used to be the contract list itself, fetched in every
+// mode to share `ContractFeed`'s request - which put twenty contracts into the
+// payload of the findings page, the one most readers open, where nothing shows
+// them. Now „Powiązania" asks for no contracts at all.
 //
-// Fetched in every mode, and it is the one place the page reads `coverage`
-// from: `/api/contracts` and `/api/contracts/people` both build theirs from the
-// same `readCoverage`, so taking it from the request that is made anyway saves
-// the signed-in modes from printing nothing until their own answer lands.
-const { data } = useContractList(query);
-const coverage = computed(() => data.value?.coverage ?? null);
+// One row is the smallest page the route serves; `pick` keeps even that out of
+// the payload. The feed asks for its own rows. `/api/contracts/people` carries
+// the same figures (both build them with `readCoverage`), but they are fetched
+// here in the signed-in modes too, so those print them before their own, much
+// slower answer lands.
+//
+// `enabled` turns the request off in „Powiązania" - on the server too - but
+// does not turn it back on; the watcher below does, when the reader switches.
+const { data: coverageAnswer, refresh: refreshCoverage } =
+  useFetch<ContractListResponse>(CONTRACTS_ENDPOINT, {
+    key: "contracts-coverage",
+    query: { limit: 1 },
+    pick: ["coverage"],
+    enabled: needsCoverage,
+    watch: false,
+  });
+if (import.meta.client) {
+  watch(needsCoverage, (needed) => {
+    if (needed && !coverageAnswer.value) void refreshCoverage();
+  });
+}
+
+const coverage = computed(
+  () => coverageAnswer.value?.coverage ?? peopleData.value?.coverage ?? null,
+);
 
 /** Nothing ingested at all, as distinct from nothing matching a filter. Only
  * ever true against a fresh stack; `coverage` is null until the first response
- * lands, and a null one is not an empty one. */
-const empty = computed(() => coverage.value?.total === 0);
+ * lands, and a null one is not an empty one. „Powiązania" has no `coverage`
+ * and says so in its own list. */
+const empty = computed(
+  () => needsCoverage.value && coverage.value?.total === 0,
+);
 
 const peopleSort = ref<"umowy" | "suma" | "ostatnia">("umowy");
 const stan = ref<"all" | "opublikowane" | "nasze">("all");
@@ -447,7 +608,9 @@ let inFlight = 0;
  * answer is never the anonymous one - three counts with every name withheld.
  */
 async function loadPeople() {
-  if (view.value === "umowy") return;
+  // Only the two people modes load people; the other two are public lists
+  // with requests of their own.
+  if (view.value !== "ludzie" && view.value !== "obie") return;
   const request = ++inFlight;
   peoplePending.value = true;
   try {
@@ -482,7 +645,7 @@ async function loadPeople() {
 
 // A different question is a different list. Resetting the cursor here and not
 // in the click handler keeps the two from disagreeing after a filter change
-// mid-page. `view` is in the list because the session restores a tick after
+// mid-page. `view` is in the list because the reader is only read after
 // hydration: the reader who arrived on `?tryb=ludzie` is anonymous at setup and
 // signed in immediately afterwards, and that transition is what fetches for
 // them.
@@ -582,14 +745,20 @@ function bothSidesNames(row: ContractRowData): string[] {
   return [...seen.values()].filter((e) => e.sides > 1).map((e) => e.name);
 }
 
+/** About the findings, because they are what the bare url opens on and what
+ * a shared link previews - the raw register is one chip away. The brand is
+ * left to the site's title template, which adds it once. */
 const description =
-  "Umowy z Centralnego Rejestru Umów - wszystkie, które pobraliśmy. Przy części z nich umiemy dopisać instytucję albo spółkę opisaną na koryta.pl i powiedzieć, kto w niej zasiada.";
+  "Firmy, które według KRS prowadzą albo współposiadają radni, wójtowie, kandydaci w wyborach samorządowych lub ich bliscy, i instytucje publiczne, które im zapłaciły. Dane z Centralnego Rejestru Umów, KRS i PKW.";
 
 useSeoMeta({
-  title: "Umowy publiczne: kto komu zapłacił - koryta.pl",
+  title: "Umowy publiczne: kto komu zapłacił",
   description,
   ogTitle: "Umowy publiczne: kto komu zapłacił",
   ogDescription: description,
+  ogImage: SOCIAL_CARD,
+  twitterCard: "summary_large_image",
+  twitterImage: SOCIAL_CARD,
 });
 
 // Always the bare `/eksploruj/umowy`, whatever `?tryb`, `?sort`, `?zakres` or
@@ -626,6 +795,14 @@ useHead({
   border-radius: 10px;
   max-width: 900px;
   padding: 12px;
+}
+
+/* A thumb's worth on a phone: at 26px the mode chips - the locked one is the
+   first ask on the page - were the most mis-tapped thing on it. */
+@media (max-width: 599.98px) {
+  .umowy__modes :deep(.v-chip) {
+    --v-chip-height: 44px;
+  }
 }
 
 @media (max-width: 599.98px) {

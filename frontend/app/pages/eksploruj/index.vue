@@ -181,8 +181,12 @@ const ways = computed<Way[]>(() => {
       to: "/eksploruj/umowy",
       icon: mdiCashMultiple,
       title: "Umowy publiczne",
+      // The scope the page's own meta description gives. „Radni i ich firmy,
+      // którym płaci ich samorząd" fitted about a third of the findings: half
+      // are about candidates who never won, and many are paid from outside
+      // the territory of the office.
       description:
-        "Kto komu zapłacił z publicznych pieniędzy. Umowy z Centralnego Rejestru Umów, powiązane z instytucjami, które opisujemy.",
+        "Firmy radnych, wójtów, kandydatów w wyborach samorządowych i ich bliskich — i instytucje publiczne, które im zapłaciły. Obok wszystkie umowy z rejestru.",
       // No count: the number of contracts is not in `/api/stats/database` and
       // a second request for one figure is exactly what this page is not going
       // to do. The chip is the density instead.

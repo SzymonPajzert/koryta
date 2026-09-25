@@ -151,7 +151,7 @@ function contractQueryParams(query: ContractQuery): Record<string, string> {
  * name on `/api/graph/local`. It selects a cache key, it does not prove
  * anything. The gate is `event.context.hasUser`, server side.
  */
-function readerKey(user: Ref<unknown>): string {
+export function readerKey(user: Ref<unknown>): string {
   return user.value ? "auth" : "anon";
 }
 

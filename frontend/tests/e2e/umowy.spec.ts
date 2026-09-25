@@ -15,9 +15,18 @@ import { logIn, USERS } from "./helpers/auth";
  * „Firma Pusta" is deliberately left off every one of them, because „an
  * institution with no contracts renders no section at all" is 4 103 of the
  * site's 4 928 company pages and it needs a page to be asserted on.
+ *
+ * The findings' own contracts are not among them. They are in
+ * `scripts/contract_link_contracts.json`, seeded into the closed
+ * `contractLinkContracts` collection, and reach a reader only through a
+ * finding's detail, behind its gate.
  */
 
 const PHONE = { width: 375, height: 667 };
+
+/** The contract list, which since the findings became the default mode is
+ * `?tryb=umowy` rather than the bare path. */
+const CONTRACT_LIST = "/eksploruj/umowy?tryb=umowy";
 
 /** One contract card. `ContractRow` carries no testid of its own - the class is
  * what it does carry, and it is on the root `<article>`. */
@@ -49,6 +58,16 @@ const COMPANY_WITHOUT_CONTRACTS = "/instytucja/firma-pusta-companyempty";
  * edge, which is the pair `attachPeople` checks. */
 const PUBLISHED_PERSON = "Jan Kowalski";
 
+/** The subjects of the findings' contracts, `scripts/contract_link_contracts.json`. */
+const FINDING_CONTRACT_SUBJECTS = [
+  "Przebudowa drogi powiatowej",
+  "Remont chodnika przy ul. Szkolnej",
+  "Dostawa materiałów biurowych dla Urzędu Gminy Testowo",
+];
+
+/** The largest public contract's subject, `scripts/contracts.json`. */
+const PUBLIC_CONTRACT_SUBJECT = "Dostawa paliw płynnych";
+
 /** Published page, unpublished employment - the (edge false, person true)
  * corner, 252 edges of it graph-wide. Our opinion, so never sent to a logged
  * out reader. */
@@ -61,7 +80,7 @@ test.describe("/eksploruj/umowy on a phone", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
+    await page.goto(CONTRACT_LIST, { waitUntil: "load" });
 
     await expect(page.getByTestId("umowy-headline")).toBeVisible({
       timeout: 60_000,
@@ -114,7 +133,7 @@ test.describe("/eksploruj/umowy", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
+    await page.goto(CONTRACT_LIST, { waitUntil: "load" });
     await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
       timeout: 60_000,
     });
@@ -165,9 +184,25 @@ test.describe("/eksploruj/umowy", () => {
     );
   });
 
+  test("lists none of the findings' contracts", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto(CONTRACT_LIST, { waitUntil: "load" });
+    await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // A finding's contracts in the public list named its firm, its NIP and
+    // its exact total to everybody - for a gated finding, everything the
+    // teaser holds back - and ordered by money, tied each teaser to its firm.
+    const html = await page.content();
+    for (const subject of FINDING_CONTRACT_SUBJECTS) {
+      expect(html).not.toContain(subject);
+    }
+  });
+
   test("appends rows rather than replacing them", async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
+    await page.goto(CONTRACT_LIST, { waitUntil: "load" });
     await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
       timeout: 60_000,
     });
@@ -281,46 +316,64 @@ test.describe("the Umowy publiczne section on an institution", () => {
   });
 });
 
-test.describe("/eksploruj/umowy and its signed-in modes", () => {
-  // This assertion is the inverse of the one it replaces. Until 2026-09-14 this
-  // url was the signed-in view alone and `middleware: "auth"` bounced everybody
-  // else to /login; the public list then moved onto it as the default mode, and
-  // the whole point of the feature is that a stranger arriving from a search
-  // result reads the register without an account.
-  test("serves a logged out visitor the register rather than the login page", async ({
+test.describe("/eksploruj/umowy and its modes", () => {
+  test("serves a logged out visitor the findings rather than the login page", async ({
     page,
   }) => {
     test.setTimeout(120_000);
     await page.goto("/eksploruj/umowy", { waitUntil: "load" });
 
-    await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
+    await expect(page.getByTestId("powiazania-hero")).toBeVisible({
       timeout: 60_000,
     });
     await expect(page).not.toHaveURL(/\/login/);
-    // No mode switch either: „Ludzie" and „Obie strony" name people we have not
-    // published, so to a logged out reader they are two chips leading nowhere.
-    await expect(page.getByTestId("umowy-tryb")).toHaveCount(0);
+    // The two public modes are offered to everybody; the people modes appear
+    // as one locked chip that leads to an account.
+    await expect(page.getByTestId("umowy-tryb")).toBeVisible();
+    await expect(page.getByTestId("umowy-tryb-zablokowany")).toHaveAttribute(
+      "href",
+      /\/login\?konto=nowe/,
+    );
+    // A radio group to assistive technology, with the mode it is in: Vuetify
+    // alone gives the chips no role and the chosen one only a class.
+    const modes = page.getByTestId("umowy-tryb");
+    await expect(modes).toHaveAttribute("role", "radiogroup");
+    await expect(
+      modes.getByRole("radio", { name: "Powiązania" }),
+    ).toHaveAttribute("aria-checked", "true");
+    await expect(
+      modes.getByRole("radio", { name: "Wszystkie umowy" }),
+    ).toHaveAttribute("aria-checked", "false");
   });
 
-  test("answers a logged out ?tryb=ludzie with the public list, and corrects the url", async ({
+  test("sends no contract list with the findings", async ({ page }) => {
+    test.setTimeout(120_000);
+    // The bytes of both halves of a server render, the html and the payload
+    // Nuxt fetches for a client-side visit. „Powiązania" shows no contract
+    // list, so it has no business carrying one: it used to embed twenty rows
+    // of the register on the page most readers open.
+    for (const url of ["/eksploruj/umowy", "/eksploruj/umowy/_payload.json"]) {
+      const response = await page.request.get(url, { timeout: 60_000 });
+      expect(response.ok(), url).toBe(true);
+      expect(await response.text(), url).not.toContain(PUBLIC_CONTRACT_SUBJECT);
+    }
+  });
+
+  test("answers a logged out ?tryb=ludzie with the findings, and corrects the url", async ({
     page,
   }) => {
     test.setTimeout(120_000);
     await page.goto("/eksploruj/umowy?tryb=ludzie", { waitUntil: "load" });
 
-    // The contract list, not an empty page and not /login. A typed or shared
-    // `?tryb=` is somebody who wanted contracts either way.
-    await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
+    await expect(page.getByTestId("powiazania-lista")).toBeVisible({
       timeout: 60_000,
     });
-    // Corrected back to the default rather than left saying „ludzie" over a
-    // list of contracts. `replace`, so the back button leaves the page instead
-    // of walking into the correction again.
+    // Corrected back to the default rather than left saying „ludzie" over
+    // somebody else's list. `replace`, so the back button leaves the page.
     await expect(page).toHaveURL(/\/eksploruj\/umowy$/, { timeout: 30_000 });
 
-    // On `page.content()` and deliberately not on visibility, for the reason
-    // the company-page case gives: a name withheld by CSS is still a name in a
-    // response this repo cannot purge from the CDN.
+    // On `page.content()` and deliberately not on visibility: a name withheld
+    // by CSS is still a name in a response this repo cannot purge from the CDN.
     expect(await page.content()).not.toContain(DRAFT_LINK_PERSON);
   });
 
@@ -328,8 +381,6 @@ test.describe("/eksploruj/umowy and its signed-in modes", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    // Straight into the mode, because „umowy" is now what this url renders by
-    // default to everybody.
     await logIn(page, USERS.normal, "/eksploruj/umowy?tryb=ludzie");
 
     // A truncated list that prints a register-wide total without saying it is
@@ -347,27 +398,291 @@ test.describe("/eksploruj/umowy and its signed-in modes", () => {
     test.setTimeout(120_000);
     await logIn(page, USERS.normal, "/eksploruj/umowy");
 
-    // The chip group exists only once firebase has restored the session, so by
-    // the time it is visible Vue is running and a single click takes - unlike
-    // the sort toggle above, which is in the server's html and inert until
-    // hydration.
     const modes = page.getByTestId("umowy-tryb");
-    await expect(modes).toBeVisible({ timeout: 60_000 });
+    await expect(modes.locator(".v-chip", { hasText: "Ludzie" })).toBeVisible({
+      timeout: 60_000,
+    });
 
     await modes.locator(".v-chip", { hasText: "Ludzie" }).click();
-
-    // A mode is a view somebody sends to somebody else, so it lives in the url -
-    // and the default stays out of it, which is why this is the only one of the
-    // three that can be asserted on.
     await expect(page).toHaveURL(/[?&]tryb=ludzie/, { timeout: 30_000 });
     await expect(page.getByTestId("umowy-osoby-legend")).toBeVisible({
       timeout: 60_000,
     });
 
-    await modes.locator(".v-chip", { hasText: "Umowy" }).click();
-    await expect(page).toHaveURL(/\/eksploruj\/umowy$/, { timeout: 30_000 });
+    await modes.locator(".v-chip", { hasText: "Wszystkie umowy" }).click();
+    await expect(page).toHaveURL(/[?&]tryb=umowy/, { timeout: 30_000 });
     await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
       timeout: 60_000,
     });
+
+    // The default stays out of the url.
+    await modes.locator(".v-chip", { hasText: "Powiązania" }).click();
+    await expect(page).toHaveURL(/\/eksploruj\/umowy$/, { timeout: 30_000 });
+    await expect(page.getByTestId("powiazania-lista")).toBeVisible();
+  });
+});
+
+/** The findings fixtures in `scripts/contract_links.json`: two public (ranks 2
+ * and 3), three gated (ranks 1, 4 and 5) - so an anonymous reader's list opens
+ * on a teaser, `ukryte_1`, and holds three. */
+const PUBLIC_FINDING_PERSON = "Tomasz Testowy";
+const PUBLIC_FINDING_TIE = "Anna Testowa";
+const GATED_FINDING_NAMES = [
+  "Marek Przykładowy",
+  "PRZYKŁAD SPÓŁKA",
+  "Ewa Kandydatka",
+  "SPÓŁDZIELNIA TESTOWA",
+  "Piotr Urzędnik",
+  "Krystyna Urzędnik",
+  "DALEKO SPÓŁKA",
+  "GMINA PRZYKŁADOWO",
+  "GMINA PRÓBNA",
+  "KOMENDA WOJEWÓDZKA PAŃSTWOWEJ STRAŻY POŻARNEJ W TESTOWIE",
+  "9990000033",
+  "9990000044",
+  "9990000055",
+];
+const TEASER_COUNT = 3;
+
+/** Rank 2, public: Tomasz Testowy, with his firm's co-owner behind the gate. */
+const PUBLIC_FINDING = "cru_9990000011";
+
+/** Rank 1, gated: Marek Przykładowy. */
+const GATED_FINDING = "cru_9990000033";
+const GATED_TEASER = "ukryte_1";
+/** A NIP no fixture has. */
+const MISSING_FINDING = "cru_9990000099";
+
+test.describe("the findings on /eksploruj/umowy", () => {
+  test("name the public findings and send no name for the gated ones", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
+
+    await expect(
+      page.getByTestId("powiazania-lista").getByText(PUBLIC_FINDING_PERSON),
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("powiazanie-ukryte")).toHaveCount(
+      TEASER_COUNT,
+    );
+
+    // The page's bytes, not its paint: the teaser blurs placeholder bars, and
+    // the gated names must never have been sent at all. Nor the researched
+    // relative on a public finding, who is a private person.
+    const html = await page.content();
+    for (const name of [...GATED_FINDING_NAMES, PUBLIC_FINDING_TIE]) {
+      expect(html).not.toContain(name);
+    }
+  });
+
+  test("send a reader who unlocks a teaser straight to registration", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
+
+    const unlock = page.getByTestId("powiazanie-odblokuj").first();
+    await expect(unlock).toBeVisible({ timeout: 60_000 });
+    // The teaser's rank rides inside the redirect, so the reader comes back
+    // to that finding - pinned and open - and not to the top of the list.
+    await expect(unlock).toHaveAttribute(
+      "href",
+      new RegExp(
+        "/login\\?konto=nowe&powod=powiazania&redirect=" +
+          "%2Feksploruj%2Fumowy%3Fpowiazanie%3D" +
+          GATED_TEASER +
+          "$",
+      ),
+    );
+
+    await page.goto(
+      "/login?konto=nowe&powod=powiazania&redirect=%2Feksploruj%2Fumowy",
+      { waitUntil: "load" },
+    );
+    await expect(page.getByText("Rejestracja")).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(page.getByTestId("login-powod-powiazania")).toBeVisible();
+  });
+
+  test("send a reader who wants a public card's hidden people to registration, for them", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
+
+    const card = page.getByTestId(`powiazanie-${PUBLIC_FINDING}`);
+    const hidden = card.getByTestId("powiazanie-ukryte-osoby");
+    await expect(hidden).toBeVisible({ timeout: 60_000 });
+    // Its own `powod`: the reader already sees the name, the firm and the
+    // contracts, and /login should not promise them those.
+    const link = hidden.getByRole("link", { name: "Załóż konto" });
+    await expect(link).toHaveAttribute(
+      "href",
+      new RegExp(
+        "/login\\?konto=nowe&powod=powiazania-osoby&redirect=" +
+          "%2Feksploruj%2Fumowy%3Fpowiazanie%3D" +
+          PUBLIC_FINDING +
+          "$",
+      ),
+    );
+
+    await page.goto((await link.getAttribute("href"))!, { waitUntil: "load" });
+    await expect(
+      page.getByTestId("login-powod-powiazania-osoby"),
+    ).toContainText("osoby powiązane z tą firmą", { timeout: 60_000 });
+  });
+
+  test("render a permalinked card with its contracts already in the html", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    // The server's answer for the permalink carries the contracts; the card
+    // used to drop them, render a progress bar and ask again after hydration.
+    const response = await page.request.get(
+      `/eksploruj/umowy?powiazanie=${PUBLIC_FINDING}`,
+      { timeout: 60_000 },
+    );
+    expect(await response.text()).toContain(FINDING_CONTRACT_SUBJECTS[0]);
+  });
+
+  test("show a signed-in reader every finding, with its ties and contracts", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await logIn(page, USERS.normal, "/eksploruj/umowy");
+
+    const list = page.getByTestId("powiazania-lista");
+    await expect(list.getByText("Marek Przykładowy")).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(page.getByTestId("powiazanie-ukryte")).toHaveCount(0);
+
+    const card = page.getByTestId(`powiazanie-${PUBLIC_FINDING}`);
+    await card.getByTestId("powiazanie-rozwin").click();
+    await expect(card.getByTestId("powiazanie-osoby")).toContainText(
+      PUBLIC_FINDING_TIE,
+    );
+    await expect(card.getByTestId("powiazanie-umowy")).toContainText(
+      "Przebudowa drogi powiatowej",
+      { timeout: 30_000 },
+    );
+  });
+
+  test("pin a gated finding for a logged out reader as the card a missing one gets", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const locked = page.getByTestId("powiazania-przypiete-zablokowane");
+
+    await page.goto(`/eksploruj/umowy?powiazanie=${GATED_FINDING}`, {
+      waitUntil: "load",
+    });
+    await expect(locked).toBeVisible({ timeout: 60_000 });
+    await expect(locked).toContainText(
+      "To powiązanie widzą zalogowani albo go już nie ma",
+    );
+    const gatedText = await locked.innerText();
+    // Its way in brings the reader back to the same finding.
+    await expect(
+      page.getByTestId("powiazania-przypiete-rejestracja"),
+    ).toHaveAttribute("href", /redirect=.*powiazanie%3Dcru_9990000033/);
+    // Nothing about the finding beyond the NIP the reader typed into the url.
+    const html = await page.content();
+    for (const name of GATED_FINDING_NAMES) {
+      if (GATED_FINDING.endsWith(name)) continue;
+      expect(html).not.toContain(name);
+    }
+
+    // Word for word what a NIP with no finding gets: anything else would
+    // say which NIPs are behind the gate.
+    await page.goto(`/eksploruj/umowy?powiazanie=${MISSING_FINDING}`, {
+      waitUntil: "load",
+    });
+    await expect(locked).toBeVisible({ timeout: 60_000 });
+    expect(await locked.innerText()).toBe(gatedText);
+
+    // „Wszystkie powiązania" drops the pin and leaves the list.
+    await page.getByTestId("powiazania-wszystkie").click();
+    await expect(page).toHaveURL(/\/eksploruj\/umowy$/, { timeout: 30_000 });
+    await expect(page.getByTestId("powiazania-przypiete")).toHaveCount(0);
+    await expect(page.getByTestId("powiazania-lista")).toBeVisible();
+  });
+
+  test("pin a teaser by its rank for a logged out reader", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto(`/eksploruj/umowy?powiazanie=${GATED_TEASER}`, {
+      waitUntil: "load",
+    });
+
+    const pinned = page.getByTestId("powiazania-przypiete");
+    await expect(pinned.getByTestId("powiazanie-ukryte")).toBeVisible({
+      timeout: 60_000,
+    });
+    const html = await page.content();
+    for (const name of GATED_FINDING_NAMES) {
+      expect(html).not.toContain(name);
+    }
+  });
+
+  test("show a reader who signed up from a teaser that finding, pinned and open", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    // Where the teaser's register link returns to: the same url, now with a
+    // session behind it.
+    await logIn(
+      page,
+      USERS.normal,
+      `/eksploruj/umowy?powiazanie=${GATED_TEASER}`,
+    );
+
+    const pinned = page.getByTestId("powiazania-przypiete");
+    const card = pinned.getByTestId(`powiazanie-${GATED_FINDING}`);
+    await expect(card).toBeVisible({ timeout: 60_000 });
+    await expect(card).toContainText("Marek Przykładowy");
+    await expect(card.getByTestId("powiazanie-rozwin")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(pinned.getByTestId("powiazanie-ukryte")).toHaveCount(0);
+  });
+});
+
+test.describe("a signed-in reader reloading /eksploruj/umowy", () => {
+  test("gets the findings every time, never the error page", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    // Firebase restores a session whenever IndexedDB answers, and nothing
+    // orders that after hydration. When it came first the page hydrated as a
+    // signed-in reader over html rendered for nobody, an IntersectionObserver
+    // was handed a comment node, and Nuxt replaced the page with
+    // „Coś poszło nie tak" - about one reload in three on the dev server. A
+    // race, so several reloads, both shapes of the page.
+    const warnings: string[] = [];
+    page.on("console", (message) => {
+      if (/hydration/i.test(message.text())) warnings.push(message.text());
+    });
+    await logIn(page, USERS.normal, "/eksploruj/umowy");
+
+    for (const path of [
+      "/eksploruj/umowy",
+      `/eksploruj/umowy?powiazanie=${GATED_TEASER}`,
+      "/eksploruj/umowy",
+      `/eksploruj/umowy?powiazanie=${GATED_TEASER}`,
+    ]) {
+      await page.goto(path, { waitUntil: "load" });
+      // Pinned above the list on the permalink, in the list otherwise: a
+      // gated finding, so only a signed-in render names him at all.
+      await expect(
+        page.getByTestId("powiazania").getByText("Marek Przykładowy").first(),
+      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+        "Umowy publiczne: kto komu zapłacił",
+      );
+    }
+    expect(warnings).toEqual([]);
   });
 });

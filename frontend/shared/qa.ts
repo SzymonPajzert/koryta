@@ -59,6 +59,25 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "umowy-powiazania",
+    title:
+      "Powiązania: osoba z władz albo kandydatura, firma i instytucja, która jej płaci",
+    description:
+      "/eksploruj/umowy otwiera się na powiązaniach z rejestru umów: osoba z władz samorządu albo kandydująca do nich, firma, którą kieruje albo współposiada, i instytucja, która tej firmie zapłaciła. " +
+      "Sprawdzone najmocniejsze powiązania widzą wszyscy; resztę niezalogowani widzą jako zamazane karty z prośbą o założenie konta.",
+    steps: [
+      "Wyloguj się i otwórz /eksploruj/umowy - na górze ma być suma powiązań klas A–C, zdanie o słabszych D i przycisk „Załóż konto i zobacz wszystkie”; na telefonie legenda chowa się pod „Jak czytać listę”.",
+      "Wybierz województwo - na górze ma się pojawić linijka o tym województwie, strona ma przewinąć do listy, a nad listą ma być „Pokazujemy X z Y”. Po dodaniu klasy linijka to już tylko „Pokazujemy X powiązań”.",
+      "Po wylogowaniu wybierz województwo i przewiń do końca listy - ramka z prośbą o konto ma mówić o tym województwie, bez liczb dla całego kraju.",
+      "Na zamazanej karcie kliknij „Załóż konto” i załóż konto - masz wrócić na listę z tym powiązaniem przypiętym na górze i rozwiniętym.",
+      "Po wylogowaniu na karcie z nazwiskami, pod którą jest „Z firmą jest powiązana jeszcze …”, kliknij „Załóż konto” - nad formularzem ma być zdanie o osobach powiązanych z tą firmą, a nie obietnica samego powiązania, które już widać.",
+      "Po wylogowaniu otwórz /eksploruj/umowy?powiazanie=cru_0000000000 - nad listą ma być karta „To powiązanie widzą zalogowani albo go już nie ma” (tak samo dla ukrytego powiązania), a z ?powiazanie=ukryte_2 zamazana karta z prośbą o konto; „Wszystkie powiązania” zdejmuje przypięcie.",
+      "Zaloguj się i odśwież kilka razy /eksploruj/umowy i /eksploruj/umowy?powiazanie=ukryte_2 - za każdym razem ma się pokazać lista (nigdy „Coś poszło nie tak”), przypięte powiązanie ma być na ekranie, nie powinno mignąć „Załóż konto” ani zamazane karty, a nagłówek ma być jedną linijką.",
+    ],
+    link: "/eksploruj/umowy",
+    area: "public",
+  },
+  {
     id: "rejestracja-bez-przerw",
     title: "Zakładanie konta bez okienka i odliczania",
     description:
