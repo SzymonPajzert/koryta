@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W „Notatki wymagające działania” na /admin każdy wiersz otwiera swoją notatkę w kolejce notatek.",
+    fixes: ["OaW6NI6Acm7wpXWtcTCD"],
+  },
+  {
+    change:
       "Na grafie osoba bez partii jest szara, a nie niebieska, więc nie myli się już z granatem PiS i Konfederacji. Legenda podpisuje ją „Osoba: brak partii”; jaśniejsza szarość to nadal „Inne”.",
     fixes: ["wg0ZscDcClubfyTEn5pB"],
   },
