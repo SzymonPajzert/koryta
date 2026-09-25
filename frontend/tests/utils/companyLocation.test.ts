@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   employmentPlaceIds,
+  employmentTowns,
   regionNamesByPlaceId,
   regionsByPlaceId,
+  townInCompanyName,
   workLocationNames,
   workLocationRegions,
 } from "~/utils/companyLocation";
@@ -115,6 +117,67 @@ describe("employmentPlaceIds", () => {
 
   it("ignores employment edges that do not lead to a place", () => {
     expect(employmentPlaceIds([edge("employed", "jan", "person")])).toEqual([]);
+  });
+});
+
+describe("townInCompanyName", () => {
+  it("reads the town the pipelines put after a company's name", () => {
+    expect(
+      townInCompanyName(
+        "WOJEWÓDZKIE CENTRUM SZPITALNE KOTLINY JELENIOGÓRSKIEJ (Jelenia Góra)",
+      ),
+    ).toBe("Jelenia Góra");
+    expect(townInCompanyName("PKP CARGO (Kędzierzyn-Koźle)")).toBe(
+      "Kędzierzyn-Koźle",
+    );
+    expect(townInCompanyName("ZGK (Nowe Miasto nad Pilicą)")).toBe(
+      "Nowe Miasto nad Pilicą",
+    );
+  });
+
+  it("leaves a name with no town after it alone", () => {
+    expect(townInCompanyName("MIEJSKIE WODOCIĄGI W OLSZTYNIE")).toBeUndefined();
+    expect(townInCompanyName(undefined)).toBeUndefined();
+    // A bracket in the middle is part of the name.
+    expect(townInCompanyName("SPÓŁKA (Kraków) S.A.")).toBeUndefined();
+  });
+
+  it("does not take a bracket that is part of the name for a town", () => {
+    // Names are in capitals and towns are not, so an abbreviation or a
+    // lower-case remark cannot be a town the pipelines added.
+    expect(
+      townInCompanyName("POLSKA GRUPA ENERGETYCZNA (PGE)"),
+    ).toBeUndefined();
+    expect(
+      townInCompanyName("ZAKŁAD KOMUNALNY (w likwidacji)"),
+    ).toBeUndefined();
+  });
+});
+
+describe("employmentTowns", () => {
+  const edge = (type: string, name: string, nodeType = "place") => ({
+    type,
+    richNode: { id: name, type: nodeType, name },
+  });
+
+  it("names the town of every employer, once each", () => {
+    expect(
+      employmentTowns([
+        edge("employed", "WOJEWÓDZKIE CENTRUM SZPITALNE (Jelenia Góra)"),
+        edge("employed", "KARKONOSKIE CENTRUM MEDYCZNE (Jelenia Góra)"),
+        edge("employed", "POLSKIE KOLEJE PAŃSTWOWE (Warszawa)"),
+      ]),
+    ).toEqual(["Jelenia Góra", "Warszawa"]);
+  });
+
+  it("reads employment only, as employmentPlaceIds does", () => {
+    expect(
+      employmentTowns([
+        edge("owns", "ORLEN (Płock)"),
+        edge("election", "Powiat lwówecki", "region"),
+        edge("employed", "Jan (Kraków)", "person"),
+      ]),
+    ).toEqual([]);
   });
 });
 
