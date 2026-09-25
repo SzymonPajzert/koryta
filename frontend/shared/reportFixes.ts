@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Odpowiedź na „Co liczą Wasze modele?” w FAQ na /pomoc wymienia wszystkie modele oceny i co każdy z nich nagradza.",
+    fixes: ["cEF1Mg7xRtR2iWuyyC70"],
+    link: "/pomoc",
+  },
+  {
+    change:
       "W „Notatki wymagające działania” na /admin każdy wiersz otwiera swoją notatkę w kolejce notatek.",
     fixes: ["OaW6NI6Acm7wpXWtcTCD"],
   },
