@@ -53,6 +53,18 @@
           <span class="text-caption text-medium-emphasis text-wrap">
             {{ edgeLabel(edge) }}
           </span>
+          <!-- What the candidacy was for. The ingest names every one of them
+               „kandydatura", so a run for the Senate and one for a gmina
+               council read alike without it. Bold, as `ShortNode` prints it:
+               it is the word on the row that says which kind of election this
+               was. -->
+          <span
+            v-if="officeOf(edge)"
+            class="text-caption font-weight-bold"
+            :data-testid="`edge-office-${edge.id}`"
+          >
+            {{ officeOf(edge) }}
+          </span>
           <!-- Whose party the person at the other end is in. Never collides
                with the candidacy chip below: that one only shows on `election`
                rows, whose far end is a place. -->
@@ -349,6 +361,15 @@ function roleOwner(edge: EdgeNode): Company | undefined {
  */
 function edgeLabel(edge: EdgeNode) {
   return displayRole(edge.label, roleOwner(edge)) ?? edge.label;
+}
+
+/** The office a candidacy was for - "Sejm", "Senat", "Rada gminy", or
+ * "Samorząd" for a local election where the pipeline did not keep which seat
+ * (see the `election` entry in server/utils/edges.ts).
+ *
+ * Guarded on the type for the reason `partyOf` is. */
+function officeOf(edge: EdgeNode): string | undefined {
+  return edge.type === "election" ? edge.position || undefined : undefined;
 }
 
 /** The party a candidacy was run for, on the edges that assert one.
