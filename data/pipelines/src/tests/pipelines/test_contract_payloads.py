@@ -17,6 +17,7 @@ the ones with tests:
 
 import collections
 import json
+import typing
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -76,7 +77,7 @@ UMOWA = {
 }
 
 #: One of the 42 contracts the register indexes but will not serve details for.
-WYNIK = {
+WYNIK: dict[str, typing.Any] = {
     "id_umowy": "ff9a7a0e-0000-4000-8000-000000000042",
     "zrodlo": "wynik",
     "status_umowy": "Aktywna",

@@ -45,9 +45,11 @@ be a third copy of the same six weeks of the register.
 """
 
 import typing
+from functools import cached_property
 
 import pandas as pd
 
+from analysis.payloads.contract_link import contract_ids_from, parse_args
 from scrapers.cru.umowy import CruUmowy
 from scrapers.stores import Context, Pipeline
 from scrapers.stores.file import LocalFile
@@ -225,10 +227,26 @@ class ContractsPayloads(Pipeline):
             LocalFile(self.umowy.output_path(), "versioned")
         ).read_jsonl()
 
+    @cached_property
+    def only_ids(self) -> set[str] | None:
+        """`--contract-ids-from`: the contracts the findings name, and no others.
+
+        The findings join to ~1,600 of the register's contracts, and those go
+        to the findings' own closed collection (`koryta_uploader --type
+        contract-link-contract`), never to the public one. Uploading the whole
+        mirror to put them there is 737k documents; this is the same payload
+        for just the ones a finding reads.
+        """
+        path = parse_args().contract_ids_from
+        return contract_ids_from(path) if path else None
+
     def process(self, ctx: Context) -> pd.DataFrame:
         payloads: list[dict] = []
         without_id = 0
+        only = self.only_ids
         for record in self.contracts(ctx):
+            if only is not None and record.get("id_umowy") not in only:
+                continue
             payload = contract_payload(record)
             if payload is None:
                 without_id += 1

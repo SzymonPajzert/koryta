@@ -1,6 +1,7 @@
 import argparse
 import collections
 import json
+import os
 import sys
 import time
 import typing
@@ -41,6 +42,11 @@ CONTRACT_BATCH = 200
 #: enough to act on, short enough to read at the end of a 749-request run.
 UNRESOLVED_NIPS_REPORTED = 20
 
+#: Findings per request to `/api/ingest/contracts/powiazania`. A finding is a
+#: few KB (people, candidacies, up to 12 buyers, every contract id), and the
+#: ingest caps a batch at 100; 50 keeps a failed batch readable.
+CONTRACT_LINK_BATCH = 50
+
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, o):
@@ -53,7 +59,14 @@ class Args:
     endpoint: str
     submit: bool
     type: typing.Literal[
-        "person", "company", "region", "score", "extraction", "contract"
+        "person",
+        "company",
+        "region",
+        "score",
+        "extraction",
+        "contract",
+        "contract-link",
+        "contract-link-contract",
     ]
     database: str
     limit: int | None
@@ -79,6 +92,8 @@ def parse_args() -> Args:
             "score",
             "extraction",
             "contract",
+            "contract-link",
+            "contract-link-contract",
             "computeNodes",
         ],
         help="Entity type to query",
@@ -141,7 +156,13 @@ class Uploader:
                 args, login=lambda: authenticate_user(args.endpoint)
             )
         else:
-            token = authenticate_user(args.endpoint)
+            # A token handed over in the environment skips the browser round
+            # trip - what a headless run against a local stack needs, where the
+            # auth emulator hands one out for a password. The score path above
+            # reads the same variable (`util/firestore.py`).
+            token = os.environ.get("KORYTA_ID_TOKEN") or authenticate_user(
+                args.endpoint
+            )
             self.headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {token}",
@@ -157,6 +178,10 @@ class Uploader:
             return ExtractionUploader(args)
         if args.type == "contract":
             return ContractUploader(args)
+        if args.type == "contract-link":
+            return ContractLinkUploader(args)
+        if args.type == "contract-link-contract":
+            return ContractLinkContractUploader(args)
         if args.type == "score":
             return ScoreUploader(args)
         if args.type == "computeNodes":
@@ -250,6 +275,25 @@ class Uploader:
 
     def report(self) -> None:
         """Anything the run should say beyond how many requests succeeded."""
+
+    def partial(self) -> bool:
+        """Whether `--limit` or `--offset` cut the input short. An uploader
+        that prunes whatever its run did not send must not do it after one of
+        these: what the run did not see is not what the source dropped."""
+        return bool(self.args.limit or self.args.offset)
+
+    def post(self, url: str, body: dict) -> dict:
+        """POST `body` as JSON and return the answer, `{}` when it is not
+        JSON; anything but a 200 or 201 raises."""
+        resp = requests.post(
+            url, data=json.dumps(body, cls=NumpyEncoder), headers=self.headers
+        )
+        if resp.status_code not in [200, 201]:
+            raise Exception(f"API error: {resp.status_code} - {resp.text[:1000]}")
+        try:
+            return resp.json()
+        except ValueError:
+            return {}
 
     def check_success(self, resp):
         self.total += 1
@@ -464,9 +508,8 @@ class ScoreUploader(Uploader):
         model = self.model_of(rows)
         # Only part of the run reached us, so a person missing from it may
         # simply have been cut off rather than dropped by the model.
-        partial = bool(self.args.limit or self.args.offset)
         written, retracted = self.firestore.replace_scores(
-            model, rows, retract=not partial
+            model, rows, retract=not self.partial()
         )
 
         self.total = len(rows)
@@ -574,6 +617,9 @@ class ContractUploader(Uploader):
     nothing.
     """
 
+    #: Where the batches go, under `--endpoint`.
+    route = "/api/ingest/contracts"
+
     def __init__(self, args: Args):
         super().__init__(args)
         #: `written`/`skipped`/`linked`/`bothLinked`, summed over every batch.
@@ -586,7 +632,7 @@ class ContractUploader(Uploader):
 
     @typing.override
     def submit_results(self, entities):
-        url = f"{self.args.endpoint}/api/ingest/contracts"
+        url = f"{self.args.endpoint}{self.route}"
         # Cleaned, unlike `ExtractionUploader`'s articles, which cannot be:
         # `cruContractSchema` is `nullish` throughout, so a key that is absent
         # and a key that is null mean the same thing to it. The payload carries
@@ -627,15 +673,19 @@ class ContractUploader(Uploader):
             f"in failed batches: {failures}",
             file=sys.stderr,
         )
+        self.finish(url, contracts)
         self.report()
+
+    def batch_body(self, batch: list[dict]) -> dict:
+        return {"contracts": batch, "skipUnlinked": self.args.skip_unlinked}
+
+    def finish(self, url: str, contracts: list[dict]) -> None:
+        """Anything the run does once every batch has been sent."""
 
     def submit_batch(self, url: str, batch: list[dict]) -> None:
         resp = requests.post(
             url,
-            data=json.dumps(
-                {"contracts": batch, "skipUnlinked": self.args.skip_unlinked},
-                cls=NumpyEncoder,
-            ),
+            data=json.dumps(self.batch_body(batch), cls=NumpyEncoder),
             headers=self.headers,
         )
         if resp.status_code not in [200, 201]:
@@ -679,6 +729,7 @@ class ContractUploader(Uploader):
         too, so that the day the endpoint starts counting properly this file
         does not have to be the thing that notices.
         """
+        items: typing.Iterable[tuple[typing.Any, typing.Any]]
         if isinstance(unresolved, dict):
             items = unresolved.items()
         elif isinstance(unresolved, list):
@@ -719,6 +770,123 @@ class ContractUploader(Uploader):
         )
         for nip, count in self.unresolved.most_common(UNRESOLVED_NIPS_REPORTED):
             print(f"  {count:6d}  {nip}", file=sys.stderr)
+
+
+class ContractLinkUploader(Uploader):
+    """Uploads the CRU findings from `ContractLinkPayloads`.
+
+    In batches of `CONTRACT_LINK_BATCH`, then one closing request that carries
+    every id the run wrote as `final.keep`. That closing call is what makes a
+    run authoritative: the ingest deletes the findings it does not name - a
+    supplier the review has since rejected has to stop being served, not
+    linger from an older run - and recomputes `stats/powiazania`. It is only
+    sent when the run saw every finding and every batch went through: a run
+    that pruned after a failed batch would delete the findings of that batch,
+    and one cut by `--limit` or `--offset` every finding outside the cut.
+    """
+
+    @typing.override
+    def submit_results(self, entities):
+        url = f"{self.args.endpoint}/api/ingest/contracts/powiazania"
+        links = [clean_payload(e) for e in entities if e is not None]
+        batches = [
+            links[start : start + CONTRACT_LINK_BATCH]
+            for start in range(0, len(links), CONTRACT_LINK_BATCH)
+        ]
+        self.total = len(links)
+        self.success_count = 0
+        print(
+            f"Uploading {self.total} findings to {url} in {len(batches)} batches",
+            file=sys.stderr,
+        )
+        for batch in tqdm(batches):
+            try:
+                self.post(url, {"links": batch})
+                self.success_count += len(batch)
+            except Exception as error:
+                print(f"Batch starting {batch[0].get('nip')}: {error}", file=sys.stderr)
+
+        if self.success_count != self.total:
+            print(
+                f"\n{self.total - self.success_count} findings failed; not pruning "
+                "or recomputing the summary. Re-run once they go through.",
+                file=sys.stderr,
+            )
+            return
+        if self.partial():
+            print(
+                f"\nUploaded {self.success_count} findings. --limit/--offset "
+                "sent only part of the run, so not pruning or recomputing the "
+                "summary: every finding outside it would be deleted.",
+                file=sys.stderr,
+            )
+            return
+        keep = [f"cru_{link['nip']}" for link in links]
+        body = self.post(url, {"links": [], "final": {"keep": keep}})
+        summary = body.get("summary") or {}
+        print(
+            f"\nUpload complete. Findings: {self.success_count}, deleted as stale: "
+            f"{body.get('deleted', 0)}; "
+            f"public {summary.get('public', '?')}, gated {summary.get('gated', '?')}",
+            file=sys.stderr,
+        )
+
+
+class ContractLinkContractUploader(ContractUploader):
+    """Uploads the contracts the CRU findings join to, into their own closed
+    collection rather than the public `contracts` one.
+
+    A finding's contracts are mostly between a gmina and a small firm, and in
+    the public list they would name the firm of every gated finding, with its
+    NIP and its money, to anybody. So `/api/ingest/contracts/powiazania/umowy`
+    stores them where only the finding's own route reads them, and only for a
+    reader past the gate.
+
+    The same payloads and batches as `ContractUploader`, without
+    `skipUnlinked`: the route keeps every contract it is sent, since a finding
+    needs all of its own and neither end of most of them is a page here. Then,
+    as `ContractLinkUploader` does, one closing request whose `final.keep`
+    names every contract the run wrote by its `id_umowy`, and the route deletes
+    the rest - a contract no finding names any more is no longer anybody's to
+    read. Not sent after a failed batch or a `--limit`/`--offset` run, for the
+    same reason as there.
+    """
+
+    route = "/api/ingest/contracts/powiazania/umowy"
+
+    @typing.override
+    def batch_body(self, batch: list[dict]) -> dict:
+        return {"contracts": batch}
+
+    @typing.override
+    def finish(self, url: str, contracts: list[dict]) -> None:
+        if self.success_count != self.total:
+            print(
+                f"\n{self.total - self.success_count} contracts failed; not "
+                "pruning. Re-run once they go through.",
+                file=sys.stderr,
+            )
+            return
+        if self.partial():
+            print(
+                "\n--limit/--offset sent only part of the run, so not pruning: "
+                "every contract outside it would be deleted.",
+                file=sys.stderr,
+            )
+            return
+        keep = list(dict.fromkeys(contract["id_umowy"] for contract in contracts))
+        body = self.post(url, {"contracts": [], "final": {"keep": keep}})
+        print(
+            f"Kept {len(keep)} contracts, deleted as stale: {body.get('deleted', 0)}",
+            file=sys.stderr,
+        )
+
+    @typing.override
+    def report(self) -> None:
+        # Only what was written: the route skips nothing, and a NIP it cannot
+        # place is a gmina or a small firm, not a page the site is missing.
+        if self.counters["written"]:
+            print(f"\nwritten: {self.counters['written']}", file=sys.stderr)
 
 
 class ComputeNodesUploader(Uploader):
