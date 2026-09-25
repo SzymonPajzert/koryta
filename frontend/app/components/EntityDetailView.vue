@@ -239,11 +239,18 @@
 
         <!-- Notes on a person are unreviewed claims about a named individual,
              so a reader has to be logged in to see them. Everything else -
-             companies, regions, topics - stays open. -->
+             companies, regions, topics - stays open.
+             `columns`: two notes to a row on a desktop, where one full-width
+             column left half the screen empty beside each of them. A person's
+             page only - that is where it was asked for; a region's is drawn by
+             this component too and was not part of the request, and the
+             table's side panel mounts the same editor and was asked to stay a
+             single stack. -->
         <NoteEditor
           v-if="user || entity?.type !== 'person'"
           :node-id="node"
           :node-type="type"
+          :columns="type === 'person'"
           class="mt-4"
         />
 

@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na stronie osoby na szerokim ekranie notatki stoją w dwóch kolumnach, a w panelu bocznym tabeli nadal w jednej.",
+    fixes: ["0B2U7Uvnv84fGNwd8cG3"],
+  },
+  {
+    change:
       "Chipy partii, które nie mieszczą się obok imienia w nagłówku osoby, przechodzą w całości do następnej linii zamiast się ucinać.",
     fixes: ["b4frZNziUAygE6pbFPCm", "Azu0VckVrSGG7Hyi1kuY"],
   },
