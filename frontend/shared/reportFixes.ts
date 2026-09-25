@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na telefonie pływający przycisk zgłoszeń ma ikonę i napis „Zgłoś” zamiast pustej kropki.",
+    fixes: ["3WbbJZv1qumO87LDCMQb"],
+  },
+  {
+    change:
       "„Artykuł stanowi źródło dla” pokazuje każdą relację w jednej linijce, z chipami zamiast niebieskich linków, a artykuł, który potwierdza relację, jest w „Artykuły, które o tym wspominają” na stronach obu jej końców.",
     fixes: ["wEGUmip1NzOZtA3dPaM5"],
   },
