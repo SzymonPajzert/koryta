@@ -26,9 +26,9 @@ import {
  *
  * 60 seconds and not the six hours `authCachedEventHandler` defaults to.
  * Cloud CDN keeps an /api response for the full `s-maxage` and nothing in this
- * repo can purge it - `useStorage("cache").clear("nitro:handlers")` reaches
- * only the local container - so the cache lifetime is the delay between a
- * contract being submitted and it being public. `nuxt.config.ts` gives /eksploruj/umowy
+ * repo can purge it - `purgeHandlerCache` (server/utils/cache.ts) reaches only
+ * the memory of the instance that took the write - so the cache lifetime is the
+ * delay between a contract being submitted and it being public. `nuxt.config.ts` gives /eksploruj/umowy
  * the matching `swr: 60`, so the SSR html that embeds the headline cannot
  * outlive the rows under it.
  */

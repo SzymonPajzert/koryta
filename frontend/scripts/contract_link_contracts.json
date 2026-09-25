@@ -1,0 +1,110 @@
+[
+  {
+    "id_umowy": "a1b2c3d4-0008-4aaa-9bbb-000000000008",
+    "zrodlo": "umowa",
+    "status_umowy": "Aktywna",
+    "numer_umowy": "ZDP.272.14.2026",
+    "brak_numeru_umowy": false,
+    "data_zawarcia_umowy": "2026-08-12",
+    "data_zakonczenia_umowy": "2026-12-31",
+    "umowa_na_czas_nieoznaczony": false,
+    "przedmiot_umowy": "Przebudowa drogi powiatowej nr 1234O w miejscowości Testowo",
+    "wartosc_przedmiotu": 850000,
+    "zamawiajacy_nazwa": "STAROSTWO POWIATOWE W TESTOWIE",
+    "zamawiajacy_nip": "9990000001",
+    "liczba_stron": 2,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": ["9990000001", "9990000011"],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "STAROSTWO POWIATOWE W TESTOWIE",
+        "nip": "9990000001",
+        "kraj": "PL",
+        "miejscowosc": "Testowo"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "BUDTEST SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        "nip": "9990000011",
+        "kraj": "PL",
+        "miejscowosc": "Testowo"
+      }
+    ],
+    "data_publikacji": "2026-08-12"
+  },
+  {
+    "id_umowy": "a1b2c3d4-0009-4aaa-9bbb-000000000009",
+    "zrodlo": "umowa",
+    "status_umowy": "Aktywna",
+    "numer_umowy": "RI.272.3.2026",
+    "brak_numeru_umowy": false,
+    "data_zawarcia_umowy": "2026-09-02",
+    "data_zakonczenia_umowy": "2026-12-31",
+    "umowa_na_czas_nieoznaczony": false,
+    "przedmiot_umowy": "Remont chodnika przy ul. Szkolnej w Testowie",
+    "wartosc_przedmiotu": 120000,
+    "zamawiajacy_nazwa": "GMINA TESTOWO",
+    "zamawiajacy_nip": "9990000002",
+    "liczba_stron": 2,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": ["9990000002", "9990000011"],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "GMINA TESTOWO",
+        "nip": "9990000002",
+        "kraj": "PL",
+        "miejscowosc": "Testowo"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "BUDTEST SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        "nip": "9990000011",
+        "kraj": "PL",
+        "miejscowosc": "Testowo"
+      }
+    ],
+    "data_publikacji": "2026-09-02"
+  },
+  {
+    "id_umowy": "a1b2c3d4-0010-4aaa-9bbb-000000000010",
+    "zrodlo": "umowa",
+    "status_umowy": "Aktywna",
+    "numer_umowy": "OR.272.8.2026",
+    "brak_numeru_umowy": false,
+    "data_zawarcia_umowy": "2026-07-15",
+    "data_zakonczenia_umowy": "2026-12-31",
+    "umowa_na_czas_nieoznaczony": false,
+    "przedmiot_umowy": "Dostawa materiałów biurowych dla Urzędu Gminy Testowo",
+    "wartosc_przedmiotu": 64000,
+    "zamawiajacy_nazwa": "GMINA TESTOWO",
+    "zamawiajacy_nip": "9990000002",
+    "liczba_stron": 2,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": ["9990000002", "9990000022"],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "GMINA TESTOWO",
+        "nip": "9990000002",
+        "kraj": "PL",
+        "miejscowosc": "Testowo"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "HANDEL-TEST SPÓŁKA JAWNA BARBARA PRÓBNA",
+        "nip": "9990000022",
+        "kraj": "PL",
+        "miejscowosc": "Testowo"
+      }
+    ],
+    "data_publikacji": "2026-07-15"
+  }
+]

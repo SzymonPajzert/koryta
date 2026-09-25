@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { z } from "zod";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
+import { purgeHandlerCache } from "~~/server/utils/cache";
 import {
   cruContractSchema,
   resolveNodeIds,
@@ -110,7 +111,7 @@ async function publishRecipients(
   // The public list of contracts is cached for 60 s and the company pages are
   // cached for six hours; a page that has just become reachable should not
   // 404 for the rest of the afternoon.
-  await useStorage("cache").clear("nitro:handlers");
+  await purgeHandlerCache();
 
   return toPublish.length;
 }

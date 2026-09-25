@@ -24,6 +24,8 @@ import edges from "./edges.json";
 import revisions from "./revisions.json";
 import extractions from "./extractions.json";
 import contractPayloads from "./contracts.json";
+import contractLinkPayloads from "./contract_links.json";
+import contractLinkContractPayloads from "./contract_link_contracts.json";
 
 /** Let this script `import()` a module from `server/`, which the Nuxt build
  * resolves `~~/` for and `tsx` does not.
@@ -327,6 +329,71 @@ async function seedContracts(
   await batch.commit();
 }
 
+/** The findings behind /eksploruj/umowy's „Powiązania", through the same
+ * `toContractLinkDoc` the ingest uses - so the seed cannot store a shape the
+ * pipeline could not - and the summary through the same function the ingest's
+ * final call runs. Two public fixtures and three gated ones, so a logged out
+ * page shows both the named cards and the teasers.
+ *
+ * Their contracts (`contract_link_contracts.json`) go where
+ * /api/ingest/contracts/powiazania/umowy puts them, `contractLinkContracts`,
+ * through the same `toContractDoc` and `resolveNodeIds` - and not into
+ * `contracts` with the seven above, where the public list would show them. */
+async function seedContractLinks(db: FirebaseFirestore.Firestore) {
+  const {
+    CONTRACT_LINK_CONTRACT_COLLECTION,
+    contractLinkPayloadSchema,
+    toContractLinkDoc,
+    computeContractLinkSummary,
+  } = createRequire(import.meta.url)(
+    "../server/utils/contractLinks",
+  ) as typeof import("../server/utils/contractLinks");
+  const { toContractDoc, resolveNodeIds } = createRequire(import.meta.url)(
+    "../server/utils/contracts",
+  ) as typeof import("../server/utils/contracts");
+  const { contractLinkDocumentId } = createRequire(import.meta.url)(
+    "../shared/contractLinks",
+  ) as typeof import("../shared/contractLinks");
+
+  const now = new Date().toISOString();
+  const docs = contractLinkPayloads.map((payload) =>
+    toContractLinkDoc(contractLinkPayloadSchema.parse(payload), now),
+  );
+  const contracts = (
+    contractLinkContractPayloads as unknown as Parameters<
+      typeof toContractDoc
+    >[0][]
+  ).map((payload) => toContractDoc(payload));
+  await resolveNodeIds(db, contracts);
+
+  const batch = db.batch();
+  for (const doc of docs) {
+    batch.set(
+      db.collection("contractLinks").doc(contractLinkDocumentId(doc.nip)),
+      doc,
+    );
+  }
+  for (const contract of contracts) {
+    batch.set(
+      db
+        .collection(CONTRACT_LINK_CONTRACT_COLLECTION)
+        .doc(contractDocumentId(contract.source, contract.sourceId)),
+      contract,
+    );
+  }
+  batch.set(
+    db.collection("stats").doc("powiazania"),
+    computeContractLinkSummary(docs, now),
+  );
+  await batch.commit();
+  console.log(
+    docs.length,
+    "contract links,",
+    contracts.length,
+    "contracts behind them",
+  );
+}
+
 async function seedDatabase() {
   await waitOn({
     resources: ["tcp:127.0.0.1:8080"],
@@ -358,6 +425,11 @@ async function seedDatabase() {
     // `contracts.json` would otherwise keep being counted forever.
     "contracts",
     "contractStats",
+    // Keyed on the NIP, so re-seeding overwrites; cleared so a fixture dropped
+    // from `contract_links.json` stops being listed.
+    "contractLinks",
+    // And the contracts behind them, for the same reason.
+    "contractLinkContracts",
   ];
   for (const col of collections) {
     const docs = await db.collection(col).listDocuments();
@@ -504,6 +576,7 @@ async function seedDatabase() {
   // alongside the nodes in one batch would resolve to nothing and the whole
   // feature would be seeded unlinked.
   await seedContracts(db, seededEdges);
+  await seedContractLinks(db);
 
   console.log("Database seeded successfully!");
 
