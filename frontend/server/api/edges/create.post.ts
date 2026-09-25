@@ -63,8 +63,10 @@ export default defineEventHandler(async (event) => {
     // Null rather than false for a box nobody ticked. `false` is the one
     // value here that would read as a claim - "stood and did not take the
     // seat" - about a named person, made by a form the contributor never
-    // touched, and 15 stored candidacies say it for that reason alone.
-    elected: body.elected === true ? true : null,
+    // touched, and 15 stored candidacies say it for that reason alone. And
+    // only on a candidacy: the dialog keeps a ticked box across a change of
+    // mind, so a win can arrive riding on the employment picked after it.
+    elected: body.type === "election" && body.elected === true ? true : null,
     term: body.term || "",
     by_election: !!body.by_election,
     update_automatic: body.update_automatic || undefined,

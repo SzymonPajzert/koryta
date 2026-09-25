@@ -175,6 +175,29 @@ describe("POST /api/edges/create", () => {
     });
   });
 
+  it("records a win on a candidacy and nowhere else", async () => {
+    body = {
+      source: "person-1",
+      target: "region-1",
+      type: "election",
+      elected: true,
+    };
+    await handler({} as never);
+    expect(edgeWrites()[0]?.data.elected).toBe(true);
+
+    // The dialog keeps its fields across a change of mind, so a box ticked on
+    // a region can still be riding along once the reader has picked a company.
+    writes = [];
+    body = {
+      source: "person-1",
+      target: "place-1",
+      type: "employed",
+      elected: true,
+    };
+    await handler({} as never);
+    expect(edgeWrites()[0]?.data).not.toHaveProperty("elected");
+  });
+
   it("keeps the cited article on the relation", async () => {
     body = {
       source: "person-1",

@@ -55,6 +55,18 @@
           :data-testid="`${prefix}-committee`"
         />
       </v-col>
+      <!-- A win only. Unticked is "nobody said", not "lost": the server stores
+           nothing for it, and the page draws „Wybrany" for a win and nothing
+           otherwise - see `elected` in shared/api.ts. -->
+      <v-col cols="12">
+        <v-checkbox
+          v-model="details.elected"
+          label="Uzyskano mandat"
+          density="compact"
+          hide-details
+          :data-testid="`${prefix}-elected`"
+        />
+      </v-col>
     </template>
     <slot />
   </v-row>
@@ -62,7 +74,7 @@
 
 <script setup lang="ts">
 /** What a relation says, as fields: the role or the name, when it ran, and for
- * a candidacy the party and the committee.
+ * a candidacy the party, the committee and whether it won.
  *
  * Shared by the dialog that adds a relation and the one that corrects an
  * existing one, because they are the same claim typed twice - the only
@@ -81,6 +93,7 @@ export type RelationDetails = {
   end_date: string;
   party: string;
   committee: string;
+  elected: boolean;
 };
 
 const props = defineProps<{

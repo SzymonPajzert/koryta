@@ -78,9 +78,16 @@ export default defineEventHandler(async (event): Promise<EdgeUpdated> => {
   // `/api/revisions/create` does through `baseNodeFields`. Only the keys the
   // caller actually sent are overlaid: zod leaves an omitted optional field
   // undefined, and spreading that over the stored value would blank it.
-  const edited = Object.fromEntries(
+  const edited: Record<string, unknown> = Object.fromEntries(
     Object.entries(fields).filter(([, value]) => value !== undefined),
   );
+  // An unticked „Uzyskano mandat" says nobody recorded a win, not that the
+  // person lost, so it is stored as nothing rather than as `false` - see
+  // `elected` in shared/api.ts, and /api/edges/create, which does the same.
+  // Null rather than a dropped key, so that unticking takes a win back off the
+  // relation instead of leaving the stored `true` under the overlay;
+  // `sanitizeFirestoreData` drops the null on the way to Firestore.
+  if (edited.elected === false) edited.elected = null;
   const data = { ...withoutInternalFields(stored), ...edited };
 
   const isAdmin = user.admin === true;

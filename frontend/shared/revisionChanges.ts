@@ -194,7 +194,14 @@ export function revisionChanges(
     // partial data reaches `revisions/create` layered over `baseNodeFields`,
     // but the ingest endpoints write whatever the scrapers found. Only fields
     // the proposal actually states are read as claims about them.
-    if (!(field in proposed)) continue;
+    //
+    // Except a win. `elected` is stored as `true` or not at all - an unticked
+    // „Uzyskano mandat” is written as nothing, never as `false`, see `elected`
+    // in shared/api.ts - so a correction that takes a win back off a candidacy
+    // says it by leaving the key out. Approving is a `set` and does delete the
+    // win, and skipped here that proposal read as an empty diff.
+    const winTakenBack = field === "elected" && baseline.elected === true;
+    if (!(field in proposed) && !winTakenBack) continue;
 
     // Compared after rendering rather than by identity: `["PiS"]` and
     // `{ 0: "PiS" }` are the same claim written two ways, and a revision that
