@@ -115,7 +115,7 @@
           :key="sourcePath"
           :entity="entity"
           :type="type"
-          :extra-locations="electionLocations"
+          :extra-locations="searchLocations"
           @published="refreshNode()"
         />
 
@@ -462,6 +462,7 @@ import type {
   Revision,
 } from "~~/shared/model";
 import { predecessorsByEdge } from "~/utils/succession";
+import { employmentTowns } from "~/utils/companyLocation";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
@@ -589,6 +590,19 @@ const electionLocations = computed(() =>
     .filter((edge) => edge.type === "election" && edge.richNode?.name)
     .map((edge) => edge.richNode.name),
 );
+
+/** Where to search the person in: the election towns, then the towns their
+ * employers sit in - the order `usePersonSearch` documents. Without the second
+ * half the menu searched Rafał Dyjur in „Powiat lwówecki", where he stood, and
+ * not in Jelenia Góra, where the hospital he works for is and which his own
+ * page printed beside its name. The table's drawer gets them from
+ * `useCompanyLocations`, which fetches every region there is - well over a
+ * megabyte that each reader of this page would pay for a menu only an admin
+ * sees - while the employers' names already carry them. */
+const searchLocations = computed(() => [
+  ...electionLocations.value,
+  ...employmentTowns(edges.value),
+]);
 
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");

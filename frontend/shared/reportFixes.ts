@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Menu „Eksploruj” na stronie osoby szuka jej też w miastach jej pracodawców, więc Rafała Dyjura także w Jeleniej Górze.",
+    fixes: ["1PNZiixNoTWmoIm28Aq2"],
+  },
+  {
+    change:
       "Na stronie osoby na szerokim ekranie notatki stoją w dwóch kolumnach, a w panelu bocznym tabeli nadal w jednej.",
     fixes: ["0B2U7Uvnv84fGNwd8cG3"],
   },

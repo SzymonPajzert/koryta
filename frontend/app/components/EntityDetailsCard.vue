@@ -174,9 +174,9 @@ const props = withDefaults(
     entity: Company | Person | Article | Region;
     type: string;
     /** Places to search the person in besides the ones the node carries.
-     * A node fetched by id has no `elections` - only the table builds those,
-     * from the subgraph it fetches - so the page derives them from its edges
-     * and hands them down. */
+     * A node fetched by id has no `elections` or `workLocations` - only the
+     * table builds those, from what it fetches - so the page derives both
+     * from its edges and hands them down. */
     extraLocations?: string[];
   }>(),
   { extraLocations: undefined },
