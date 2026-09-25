@@ -19,6 +19,12 @@ test.describe("Home", () => {
   // the call to action now. The table has no card of its own on the home page
   // any more - the search box's „Lista wszystkich osób” is its entry point, and
   // that belongs to OmniSearch's own specs.
+  //
+  // The whole queue rather than tier 1's: the button only narrows to the
+  // easiest tier once tier 1 is counted with somebody in it, and nothing in the
+  // seed has been filed under a tier - `stats.queueTier` is written by
+  // /api/stats/computeNodes alone. tests/components/card/CallToAction.test.ts
+  // covers the other branch.
   test("the call to action leads to the queue", async ({ page }) => {
     const cta = page
       .getByTestId("home-help-cta")
