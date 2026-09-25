@@ -174,8 +174,6 @@ const {
 
 const ordering = ref(false);
 const showClosed = ref(false);
-/** The report a `#fb-<id>` link pointed at, outlined for a moment. */
-const targetId = ref<string | null>(null);
 const missingTarget = ref(false);
 /** Rows that are open. Kept here rather than in each row so a link can open
  * the one it points at, and so a row stays open while the sections around it
@@ -260,6 +258,12 @@ const openShown = computed(
  * decoded the hash. */
 const hashTarget = () => /^#fb-(.+)$/.exec(route.hash)?.[1] ?? null;
 
+/** The report the url points at, marked for as long as it does rather than
+ * for a moment: the link is followed to find one report among the rest and
+ * settle it, which can take scrolling away and back, and a mark that fades
+ * leaves nothing to find it by. */
+const targetId = computed(hashTarget);
+
 /** A link from Slack can point at a report too old to be in the list. */
 const load = () => loadReports(hashTarget());
 
@@ -284,15 +288,11 @@ async function focusTarget() {
   }
   if (sectionOf(item) === "closed") showClosed.value = true;
   openRows.add(id);
-  targetId.value = id;
   // The open row has to exist, at its full height, before it is centred.
   await nextTick();
   document
     .getElementById(`fb-${id}`)
     ?.scrollIntoView({ block: "center", behavior: "smooth" });
-  setTimeout(() => {
-    if (targetId.value === id) targetId.value = null;
-  }, 2000);
 }
 
 // A link followed while the page is open can name a report that arrived after

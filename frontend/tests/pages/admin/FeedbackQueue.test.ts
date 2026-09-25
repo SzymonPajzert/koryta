@@ -809,6 +809,33 @@ describe("admin feedback queue", () => {
     expect(wrapper.text()).not.toContain("Nie ma takiego zgłoszenia.");
   });
 
+  it("keeps the report a link points at marked until the link moves on", async () => {
+    serve(board());
+    // Faked from before the page loads, so that a timer it starts to take
+    // the mark off again is one this test can run out.
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout"],
+      shouldAdvanceTime: true,
+    });
+    try {
+      const wrapper = await mount("#fb-in-old");
+      vi.advanceTimersByTime(60_000);
+      await flushPromises();
+
+      expect(row(wrapper, "in-old").classes()).toContain("arow--target");
+
+      // Following the date in another open row moves the mark there rather
+      // than adding a second one.
+      await useRouter().push({ path: "/", hash: "#fb-in-new" });
+      await flushPromises();
+
+      expect(row(wrapper, "in-new").classes()).toContain("arow--target");
+      expect(row(wrapper, "in-old").classes()).not.toContain("arow--target");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("warns when the server cut the open reports short", async () => {
     mockAuthRequest.mockResolvedValue({
       feedback: board(),

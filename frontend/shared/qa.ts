@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "opinie-zgloszenie-z-linku-podswietlone",
+    title: "Zgłoszenie, do którego prowadzi link, zostaje podświetlone",
+    description:
+      "Link do zgłoszenia rozwijał je, ale obwódka znikała po dwóch sekundach. Teraz zgłoszenie ma zielone tło i obwódkę tak długo, jak adres na nie wskazuje.",
+    steps: [
+      "Na /admin/opinie rozwiń zgłoszenie i kliknij jego datę (albo „Otwórz w panelu” na Slacku) - ma być rozwinięte i podświetlone także po przewinięciu strony i powrocie.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+  },
+  {
     id: "opinie-linijki-i-problemy-qa",
     title:
       "Zgłoszenia to linijki, a „Problemy” na /qa zbierają zgłoszenia z QA",

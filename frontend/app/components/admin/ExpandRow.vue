@@ -83,7 +83,7 @@ withDefaults(
     tone?: RowTone;
     /** Settled and kept for the record: greyed until hovered or focused. */
     dimmed?: boolean;
-    /** Where a link just landed. */
+    /** The row a link points at. Stays marked for as long as it does. */
     highlighted?: boolean;
     /** Accessible name for the toggle, when the summary alone is too terse
      * to be one (an icon and a date, say). */
@@ -221,8 +221,13 @@ const panelId = computed(() => `arow-panel-${uid}`);
   opacity: 1;
 }
 
-/* Where a link landed. Inside the row, because the list clips its corners. */
+/* The row a link points at, tinted as well as ringed: an outline alone is one
+ * thin line among the rules between rows, and a list of a hundred has to show
+ * which one the link meant at a glance. The ring is an outline rather than a
+ * shadow so it is drawn over the open header's tint, and it sits inside the
+ * row because the list clips its corners. */
 .arow--target {
+  background: rgb(var(--v-theme-surface-sage));
   outline: 2px solid rgb(var(--v-theme-ink-sage));
   outline-offset: -2px;
 }
