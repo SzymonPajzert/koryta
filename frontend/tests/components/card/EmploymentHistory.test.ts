@@ -406,6 +406,24 @@ describe("EmploymentHistory", () => {
     expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
   });
 
+  it("names the office a candidacy was for", () => {
+    // The report: a 2023 row read „kandydatura", the region and the committee,
+    // and nothing on it said that the run was for the Senate.
+    const wrapper = mountHistory([
+      candidacy({ label: "kandydatura", position: "Senat" }),
+    ]);
+
+    expect(wrapper.find('[data-testid="edge-office-e1"]').text()).toBe("Senat");
+  });
+
+  it("names no office on a relation that is not a candidacy", () => {
+    const wrapper = mountHistory([
+      candidacy({ type: "employed", label: "Prezes", position: "Senat" }),
+    ]);
+
+    expect(wrapper.find('[data-testid="edge-office-e1"]').exists()).toBe(false);
+  });
+
   it("shows no party chip for an employment that carries one", () => {
     const wrapper = mountHistory([
       candidacy({ type: "employed", label: "Prezes", party: "PiS" }),
