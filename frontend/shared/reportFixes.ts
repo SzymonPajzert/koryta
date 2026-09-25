@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Karta faktu na stronie osoby ma pod cytatem link „Artykuł w bazie”, który prowadzi na stronę artykułu w serwisie.",
+    fixes: ["s6LJDRorb8Cq9woLl0JM"],
+    link: "/osoba/rafal-trzaskowski-8rg6MrDfdiRR7YaAvE5O",
+  },
+  {
+    change:
       "„Artykuł stanowi źródło dla” pokazuje każdą relację w jednej linijce, z chipami zamiast niebieskich linków, a artykuł, który potwierdza relację, jest w „Artykuły, które o tym wspominają” na stronach obu jej końców.",
     fixes: ["wEGUmip1NzOZtA3dPaM5"],
   },

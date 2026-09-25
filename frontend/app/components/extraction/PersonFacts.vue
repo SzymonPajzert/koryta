@@ -95,7 +95,12 @@
                  every card - this person's notes, which `NoteEditor` above has
                  open anyway - so it is one target for the page rather than one
                  per fact. -->
-            <ExtractionCard :fact="fact" class="h-100" :muted="bucket.muted">
+            <ExtractionCard
+              :fact="fact"
+              class="h-100"
+              :muted="bucket.muted"
+              link-article
+            >
               <template #actions>
                 <ExtractionAddToNoteButton :fact="fact" :node-id="nodeId" />
                 <ExtractionQuickVerdict

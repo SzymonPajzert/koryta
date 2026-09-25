@@ -234,4 +234,52 @@ describe("ExtractionCard", () => {
       );
     });
   });
+
+  describe("the way to the article's own page", () => {
+    // „jak przejść do widoku artykułu tak jak tutaj?” - asked by a reader who
+    // had found /artykul/... once and could not get back to it from the facts
+    // on a person's page, where the quote leads only out to the newspaper.
+    it("links a fact to the article page it came from, when asked to", async () => {
+      const card = await mountSuspended(Card, {
+        props: {
+          fact: fact({ articleNodeId: "g1Pr5yFTQJcyCdtiHKGk" }),
+          linkArticle: true,
+        },
+      });
+
+      const link = card.find("[data-testid='extraction-article-page']");
+      expect(link.exists()).toBe(true);
+      expect(link.attributes("href")).toBe(
+        "/entity/article/g1Pr5yFTQJcyCdtiHKGk",
+      );
+      expect(link.text()).toContain("Artykuł w bazie");
+      // Beside the quote's link rather than inside it: an anchor inside an
+      // anchor is invalid html, and the parser closes the outer one early.
+      expect(
+        card
+          .find("a.source-block [data-testid='extraction-article-page']")
+          .exists(),
+      ).toBe(false);
+    });
+
+    it("offers no such link for a fact no article page was matched to", async () => {
+      const card = await mountSuspended(Card, {
+        props: { fact: fact(), linkArticle: true },
+      });
+
+      expect(
+        card.find("[data-testid='extraction-article-page']").exists(),
+      ).toBe(false);
+    });
+
+    it("leaves it off by default, for the article's own page", async () => {
+      const card = await mountSuspended(Card, {
+        props: { fact: fact({ articleNodeId: "g1Pr5yFTQJcyCdtiHKGk" }) },
+      });
+
+      expect(
+        card.find("[data-testid='extraction-article-page']").exists(),
+      ).toBe(false);
+    });
+  });
 });
