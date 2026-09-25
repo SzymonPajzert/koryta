@@ -9,7 +9,16 @@ let latest = false;
 
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: vi.fn(() => ({
-    collection: vi.fn(() => ({ doc: (id: string) => ({ id }) })),
+    collection: vi.fn(() => ({
+      // Refuses what the real `doc()` refuses, synchronously and before any
+      // read: an id that is not a string, is empty, or has a `/` in it.
+      doc: (id: unknown) => {
+        if (typeof id !== "string" || id === "" || id.includes("/")) {
+          throw new Error(`not a valid document id: ${String(id)}`);
+        }
+        return { id };
+      },
+    })),
     getAll: async (...refs: { id: string }[]) =>
       refs.map((ref) => ({ id: ref.id, data: () => nodes[ref.id] })),
   })),
@@ -167,6 +176,111 @@ describe("GET /api/nodes/[id]/mentions", () => {
     };
 
     expect((await call()).mentions).toEqual([]);
+  });
+
+  describe("an article one of the node's relations cites", () => {
+    beforeEach(() => {
+      nodes["place-1"] = { type: "place", name: "Spółka", published: true };
+    });
+
+    const job = (extra: Record<string, unknown> = {}) => ({
+      source: "person-1",
+      target: "place-1",
+      type: "employed",
+      published: true,
+      references: ["article-1"],
+      ...extra,
+    });
+
+    it("counts as mentioning both ends of the relation", async () => {
+      // An article that is the evidence for "A works at B" names A and B, even
+      // where nobody recorded a `mentions` edge for either of them.
+      edges.e1 = job();
+
+      const fromPerson = await call();
+      expect(fromPerson.mentions).toHaveLength(1);
+      expect(fromPerson.mentions[0]).toMatchObject({
+        nodeId: "article-1",
+        name: "a",
+        published: true,
+      });
+
+      globalThis.getRouterParam = vi.fn(() => "place-1");
+      expect((await call()).mentions.map((m) => m.nodeId)).toEqual([
+        "article-1",
+      ]);
+    });
+
+    it("reads a list the sanitizer stored as a map", async () => {
+      edges.e1 = job({ references: { 0: "article-1", 1: "article-2" } });
+
+      expect((await call()).mentions.map((m) => m.nodeId).sort()).toEqual([
+        "article-1",
+        "article-2",
+      ]);
+    });
+
+    it("is listed once when it also mentions the node", async () => {
+      edges.m1 = {
+        source: "article-1",
+        target: "person-1",
+        type: "mentions",
+        published: true,
+      };
+      edges.e1 = job();
+      edges.e2 = job({ target: "place-2" });
+
+      expect((await call()).mentions.map((m) => m.nodeId)).toEqual([
+        "article-1",
+      ]);
+    });
+
+    it("follows the relation's publication, not only the article's", async () => {
+      edges.e1 = job({ published: false });
+
+      expect((await call()).mentions).toEqual([]);
+      latest = true;
+      const { mentions } = await call();
+      expect(mentions).toHaveLength(1);
+      expect(mentions[0]!.published).toBe(false);
+    });
+
+    it("withholds a draft article even when the relation is live", async () => {
+      nodes["article-1"] = article("a", { published: false });
+      edges.e1 = job();
+
+      expect((await call()).mentions).toEqual([]);
+    });
+
+    it("skips a cited id that is not an article, or not there at all", async () => {
+      edges.e1 = job({ references: ["place-1", "gone"] });
+
+      expect((await call()).mentions).toEqual([]);
+    });
+
+    it("skips a deleted relation", async () => {
+      edges.e1 = job({ deleted: true });
+
+      expect((await call()).mentions).toEqual([]);
+    });
+
+    it("gets past a cited id that could name no document", async () => {
+      // `create.post.ts` asks only for a non-empty string, and older documents
+      // hold whatever they were written with. One bad citation on one relation
+      // must not take the node's whole list down with it.
+      edges.m1 = {
+        source: "article-2",
+        target: "person-1",
+        type: "mentions",
+        published: true,
+      };
+      edges.e1 = job({ references: [42, "", "a/b", null, "article-1"] });
+
+      expect((await call()).mentions.map((m) => m.nodeId).sort()).toEqual([
+        "article-1",
+        "article-2",
+      ]);
+    });
   });
 
   it("puts the newest first and the undated last", async () => {

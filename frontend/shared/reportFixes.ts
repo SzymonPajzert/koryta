@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "„Artykuł stanowi źródło dla” pokazuje każdą relację w jednej linijce, z chipami zamiast niebieskich linków, a artykuł, który potwierdza relację, jest w „Artykuły, które o tym wspominają” na stronach obu jej końców.",
+    fixes: ["wEGUmip1NzOZtA3dPaM5"],
+  },
+  {
+    change:
       "Ołówek przy kandydaturze otwiera okno z polem „Uzyskano mandat”, więc wygraną można oznaczyć bez starego formularza.",
     fixes: ["ZASMgbwZm0hewxZ8wLBL"],
     link: "/osoba/kamil-sebastian-barczyk-qFxOI9faG9y0TuYuJAMc",
