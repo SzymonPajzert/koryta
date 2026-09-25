@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Odpowiedź na „Co liczą Wasze modele?” w FAQ na /pomoc wymienia wszystkie modele oceny i co każdy z nich nagradza.",
+    fixes: ["cEF1Mg7xRtR2iWuyyC70"],
+    link: "/pomoc",
+  },
+  {
+    change:
       "„Sprawdź pierwszą osobę” na stronie głównej otwiera kolejkę najłatwiejszego poziomu (tier=1) - dopiero gdy poziomy są policzone, czyli po wdrożeniu ich indeksów.",
     fixes: ["crR0DWk9Y1gTfy0vp2Mg"],
     link: "/",
