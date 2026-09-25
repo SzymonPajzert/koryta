@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler, {
   AUTHOR_SCAN_CAP,
@@ -43,10 +45,14 @@ function documentAt(path: string): Data | undefined {
   return collection === "revisions" ? revisions[id!] : targets[path];
 }
 
-/** Firestore's `==`, including the half of it this endpoint turns on: a
- * document that does not carry the field at all matches no equality. */
-function equals(data: Data, field: string, value: unknown): boolean {
-  return field in data && data[field] === value;
+/** Firestore's `==` and `!=`, including the half of them this endpoint turns
+ * on: a document that does not carry the field at all matches neither, and
+ * `!=` leaves out a null too. */
+function matches(data: Data, field: string, op: string, value: unknown) {
+  if (op === "==") return field in data && data[field] === value;
+  if (op === "!=")
+    return field in data && data[field] !== null && data[field] !== value;
+  throw new Error(`the fake only knows "==" and "!=", not "${op}"`);
 }
 
 /** A query over `docs`, recorded so a test can assert the clause and applied
@@ -55,9 +61,8 @@ function queryOver(docs: Snapshot[]) {
   return {
     where(field: string, op: string, value: unknown) {
       mockWhere(field, op, value);
-      if (op !== "==") throw new Error(`the fake only knows "==", not "${op}"`);
       return queryOver(
-        docs.filter((doc) => equals(doc.data() ?? {}, field, value)),
+        docs.filter((doc) => matches(doc.data() ?? {}, field, op, value)),
       );
     },
     orderBy(field: string, direction: "asc" | "desc") {
@@ -283,6 +288,120 @@ describe("api/revisions/queue", () => {
     // Newest first, so page two of five is the third and fourth newest.
     expect(ids(result.revisions)).toEqual(["rev-3", "rev-2"]);
     expect(result.total).toBe(5);
+  });
+
+  describe("everybody's but one person's", () => {
+    // What the owner opens the queue for: the proposals somebody else filed,
+    // with his own edits - the bulk of the human ones - out of the way.
+    const interleave = () => {
+      addRevision("theirs-1", { update_time: "2026-08-01T09:00:00.000Z" });
+      addRevision("mine-1", {
+        update_user: "admin-uid",
+        update_time: "2026-08-02T09:00:00.000Z",
+      });
+      addRevision("theirs-2", { update_time: "2026-08-03T09:00:00.000Z" });
+      addRevision("mine-2", {
+        update_user: "admin-uid",
+        update_time: "2026-08-04T09:00:00.000Z",
+      });
+      addRevision("theirs-3", {
+        update_user: "other-uid",
+        update_time: "2026-08-05T09:00:00.000Z",
+      });
+    };
+
+    it("leaves them out in the query, so the pages and the count stay exact", async () => {
+      interleave();
+
+      const first = await call({ excludeAuthor: "admin-uid", limit: 2 });
+
+      expect(mockWhere).toHaveBeenCalledWith("update_user", "!=", "admin-uid");
+      expect(mockWhere).toHaveBeenCalledWith("update_automatic", "==", false);
+      expect(mockWhere).toHaveBeenCalledWith("status", "==", "pending");
+      expect(mockOrderBy).toHaveBeenCalledWith("update_time", "desc");
+      expect(ids(first.revisions)).toEqual(["theirs-3", "theirs-2"]);
+      // Counted by Firestore over the same clauses - not the page's length,
+      // and not everything less what one page happened to drop.
+      expect(first.total).toBe(3);
+
+      vi.clearAllMocks();
+      const second = await call({
+        excludeAuthor: "admin-uid",
+        limit: 2,
+        page: 2,
+      });
+
+      expect(mockOffset).toHaveBeenCalledWith(2);
+      expect(ids(second.revisions)).toEqual(["theirs-1"]);
+      expect(second.total).toBe(3);
+    });
+
+    it("answers nothing for the one person it was asked to leave out", async () => {
+      interleave();
+
+      const result = await call({
+        author: "admin-uid",
+        excludeAuthor: "admin-uid",
+        status: "all",
+      });
+
+      expect(result.revisions).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it("has an index for every combination of clauses it can send", async () => {
+      // The emulator needs none, so nothing but production would notice one
+      // missing - and there the queue would fail to load.
+      const indexes = (
+        JSON.parse(
+          readFileSync(
+            // At the root of the repo, whether the tests run from there or
+            // from frontend/.
+            existsSync(resolve(process.cwd(), "firestore.indexes.json"))
+              ? resolve(process.cwd(), "firestore.indexes.json")
+              : resolve(process.cwd(), "..", "firestore.indexes.json"),
+            "utf8",
+          ),
+        ).indexes as {
+          collectionGroup: string;
+          fields: { fieldPath: string; order: string }[];
+        }[]
+      )
+        .filter((index) => index.collectionGroup === "revisions")
+        .map((index) =>
+          index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", "),
+        );
+
+      for (const automatic of ["false", "true", "all"]) {
+        for (const status of ["pending", "all"]) {
+          mockWhere.mockClear();
+          await call({ automatic, status, excludeAuthor: "admin-uid" });
+          const equalities = mockWhere.mock.calls
+            .filter(([, op]) => op === "==")
+            .map(([field]) => `${field} ASCENDING`);
+          // Firestore orders by the inequality after the explicit order, in
+          // the same direction, so that is where the index has it.
+          expect(indexes).toContain(
+            [
+              ...equalities,
+              "update_time DESCENDING",
+              "update_user DESCENDING",
+            ].join(", "),
+          );
+        }
+      }
+    });
+
+    it("does not narrow one person's history by somebody else's exclusion", async () => {
+      interleave();
+
+      const result = await call({
+        author: "volunteer-uid",
+        excludeAuthor: "admin-uid",
+      });
+
+      expect(ids(result.revisions)).toEqual(["theirs-2", "theirs-1"]);
+    });
   });
 
   describe("one person's history", () => {

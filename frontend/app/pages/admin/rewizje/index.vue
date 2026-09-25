@@ -36,6 +36,16 @@
           class="rev-filter"
           data-filter="automatic"
         />
+        <!-- One click to what somebody else proposed. An admin's own edits
+             are filed as proposals too and wait here like anybody's, so
+             without this a volunteer's suggestion sits among them. Put away
+             while one author is picked, which leaves everybody else out
+             already. -->
+        <FeedbackFilterChips
+          v-if="!author"
+          v-model="mine"
+          :options="mineOptions"
+        />
         <!-- No dropdown of people: there is no client-side list of uids, and
              the way in is a click from "Najaktywniejsi" on /eksploruj/statystyki
              or from an open row below. -->
@@ -416,7 +426,7 @@ const SMALLEST_PAGE_SIZE = Math.min(...PAGE_SIZES);
 /** How many edge revisions one page holds - the endpoint's own default. */
 const EDGE_PAGE_SIZE = 25;
 
-const { isAdmin } = useAuthState();
+const { isAdmin, user } = useAuthState();
 /** `isAdmin` is undefined until the token has been read; only a definite yes
  * shows the admin sections, and only a definite answer either way lets the page
  * decide it has finished loading (see `scrollTarget`). */
@@ -577,6 +587,17 @@ const author = computed<string | null>({
   get: () => readQuery("author"),
   set: (value) => writeQuery("kolejka", { author: value }, ["page"]),
 });
+/** Whether the reader's own proposals are left out. In the url as a switch
+ * rather than as their uid, so a link to it means the same to whoever opens
+ * it: "without mine". */
+const mine = choiceFilter(
+  "kolejka",
+  "mine",
+  ["show", "hide"] as const,
+  "show",
+  "page",
+);
+const hidesMine = computed(() => mine.value === "hide");
 /** Not a filter but a selector: it names one proposal to answer with, and the
  * endpoint returns it whether or not the current filters would have. */
 const permalinked = computed(() => readQuery("rewizja"));
@@ -595,6 +616,11 @@ const automaticOptions = [
   { title: "Od ludzi", value: "false" },
   { title: "Z pipeline'u", value: "true" },
   { title: "Wszystko", value: "all" },
+];
+
+const mineOptions: { title: string; value: "show" | "hide" }[] = [
+  { title: "Wszystkie", value: "show" },
+  { title: "Bez moich", value: "hide" },
 ];
 
 const queue = ref<RevisionQueue | null>(null);
@@ -635,6 +661,9 @@ const queueQuery = computed(() => ({
   status: status.value,
   automatic: automatic.value,
   author: author.value || undefined,
+  // Left out by the endpoint's query rather than dropped from the page it
+  // answers, so the pages and the count are of what is left.
+  excludeAuthor: hidesMine.value ? user.value?.uid : undefined,
   revision: permalinked.value || undefined,
 }));
 
@@ -683,7 +712,7 @@ const loadQueue = async () => {
 // every change to the url, the other sections' paging included, and the queue
 // would be read again each time.
 watch(
-  [page, itemsPerPage, status, automatic, author, permalinked, admin],
+  [page, itemsPerPage, status, automatic, author, mine, permalinked, admin],
   loadQueue,
   { immediate: true },
 );
@@ -709,18 +738,23 @@ const queueScope = computed(() => {
       : automatic.value === "true"
         ? "Zmiany dopisane przez pipeline."
         : "Wszystkie rewizje — i te od ludzi, i te z pipeline'u.";
-  return author.value
-    ? `${scope} Tylko jedna osoba, najnowsze na górze.`
+  if (author.value) return `${scope} Tylko jedna osoba, najnowsze na górze.`;
+  return hidesMine.value
+    ? `${scope} Bez twoich, najnowsze na górze.`
     : `${scope} Najnowsze na górze.`;
 });
 
 /** The empty list speaks for whichever filter emptied it; the success alert
- * owns the one case worth celebrating. */
-const queueEmptyText = computed(() =>
-  status.value === "pending" && automatic.value === "false" && !author.value
-    ? "Nic nie czeka na rozpatrzenie."
-    : "Brak zmian pasujących do filtrów.",
-);
+ * owns the one case worth celebrating. With the reader's own left out, an
+ * empty list says nothing about the rest of the queue, so it only speaks for
+ * everybody else. */
+const queueEmptyText = computed(() => {
+  if (status.value !== "pending" || automatic.value !== "false" || author.value)
+    return "Brak zmian pasujących do filtrów.";
+  return hidesMine.value
+    ? "Od innych osób nic nie czeka na rozpatrzenie."
+    : "Nic nie czeka na rozpatrzenie.";
+});
 
 const isEmptyDefaultQueue = computed(
   () =>
@@ -730,14 +764,19 @@ const isEmptyDefaultQueue = computed(
     queueTotal.value === 0 &&
     !pinned.value &&
     !author.value &&
+    !hidesMine.value &&
     status.value === "pending" &&
     automatic.value === "false",
 );
 
+/** One person's everything. "Bez moich" goes with it: that list leaves
+ * everybody else out already, and the switch is not shown beside it. */
 const focusAuthor = (uid: string) =>
-  writeQuery("kolejka", { author: uid, status: "all", automatic: "all" }, [
-    "page",
-  ]);
+  writeQuery(
+    "kolejka",
+    { author: uid, status: "all", automatic: "all", mine: undefined },
+    ["page"],
+  );
 
 const notice = ref("");
 const noticeShown = ref(false);

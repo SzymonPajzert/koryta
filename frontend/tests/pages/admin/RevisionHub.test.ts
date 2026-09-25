@@ -18,7 +18,7 @@ const { mockAuthRequest, auth } = vi.hoisted(() => ({
 vi.mock("~/composables/auth", () => ({
   authRequest: mockAuthRequest,
   useAuthState: () => ({
-    user: { value: null },
+    user: { value: { uid: "admin-uid" } },
     isAdmin: { value: auth.isAdmin },
   }),
 }));
@@ -332,6 +332,61 @@ describe("the review queue section", () => {
     const route = router.currentRoute.value;
     // Named in the hash, so the page lands on the section it just changed.
     expect(route.hash).toBe("#kolejka");
+  });
+
+  it("leaves the reader's own proposals out in one click", async () => {
+    // The report: "Mainly I'm interested to see any revision that is not from
+    // the admin / me, so I can see if someone has proposed something".
+    serve({ queue: { revisions: [proposal()] } });
+    const wrapper = await mount();
+    expect(callsTo("/api/revisions/queue")[0]![1].query.excludeAuthor).toBe(
+      undefined,
+    );
+
+    await wrapper.get('#kolejka [data-filter="hide"]').trigger("click");
+
+    const router = useRouter();
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.query).toMatchObject({ mine: "hide" }),
+    );
+    expect(router.currentRoute.value.hash).toBe("#kolejka");
+    await flushPromises();
+    // Left out by the endpoint, so its pages and its count are of the rest.
+    expect(callsTo("/api/revisions/queue").at(-1)![1].query).toMatchObject({
+      excludeAuthor: "admin-uid",
+      status: "pending",
+      automatic: "false",
+    });
+  });
+
+  it("says nothing is waiting from anybody else, not that the queue is empty", async () => {
+    serve();
+    const wrapper = await mount("/?mine=hide");
+
+    expect(callsTo("/api/revisions/queue")[0]![1].query.excludeAuthor).toBe(
+      "admin-uid",
+    );
+    const section = wrapper.get("#kolejka").text();
+    expect(section).toContain("Od innych osób nic nie czeka na rozpatrzenie.");
+    expect(section).not.toContain("Kolejka jest pusta");
+  });
+
+  it("puts the switch away while one author is picked, and drops it on picking", async () => {
+    // One author's list already leaves everybody else out; leaving the
+    // reader out on top would be a filter the page does not show.
+    serve({ queue: { revisions: [proposal()] } });
+    const wrapper = await mount("/?mine=hide");
+
+    await wrapper.get("[data-row-toggle]").trigger("click");
+    await wrapper.get("[data-focus-author]").trigger("click");
+
+    const router = useRouter();
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.query.author).toBe("user-a"),
+    );
+    expect(router.currentRoute.value.query).not.toHaveProperty("mine");
+    await flushPromises();
+    expect(wrapper.find('#kolejka [data-filter="hide"]').exists()).toBe(false);
   });
 
   it("celebrates an empty default queue instead of an empty list", async () => {

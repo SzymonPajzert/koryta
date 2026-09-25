@@ -777,6 +777,78 @@
       ]
     },
     {
+      "collectionGroup": "revisions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "update_automatic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "update_time",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "update_user",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "revisions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "update_automatic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "update_time",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "update_user",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "revisions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "update_time",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "update_user",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "revisions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "update_time",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "update_user",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "feedback",
       "queryScope": "COLLECTION",
       "fields": [

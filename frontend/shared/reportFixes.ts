@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "„Czeka na decyzję” na /admin/rewizje ma przełącznik „Wszystkie · Bez moich”, który chowa Twoje propozycje - działa dopiero po wdrożeniu czterech nowych indeksów z firestore.indexes.json.",
+    fixes: ["xAOt17Oj1PJB6t34O9if"],
+  },
+  {
+    change:
       "„Artykuł stanowi źródło dla” pokazuje każdą relację w jednej linijce, z chipami zamiast niebieskich linków, a artykuł, który potwierdza relację, jest w „Artykuły, które o tym wspominają” na stronach obu jej końców.",
     fixes: ["wEGUmip1NzOZtA3dPaM5"],
   },
