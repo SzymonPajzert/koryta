@@ -95,6 +95,28 @@ describe("EntityDetailsCard", () => {
     vi.unstubAllGlobals();
   });
 
+  it("lets a long name send the party chips to the next line rather than squeeze them", async () => {
+    // jsdom lays nothing out, so this pins the two things the row needs: it
+    // may wrap, and `v-card-title`'s `white-space: nowrap` is lifted. With the
+    // row on one line a long name kept its full width and the chip - the only
+    // item whose `overflow: hidden` lets it shrink - took all the squeeze: on a
+    // 393px phone „Wioletta Paprocka-Ślusarska” left her „PO” 13px of its 40.
+    const wrapper = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: {
+          ...person,
+          name: "Wioletta Paprocka-Ślusarska",
+          parties: ["PO"],
+        } as Person,
+        type: "person",
+      },
+    });
+    const title = wrapper.get(".v-card-title");
+    expect(title.find(".chip").text()).toBe("PO");
+    expect(title.classes()).toContain("flex-wrap");
+    expect(title.classes()).toContain("text-wrap");
+  });
+
   it("marks an unpublished page as a draft, and says nothing on a live one", async () => {
     const draft = await mountCard(false);
     expect(draft.text()).toContain("szkic");
