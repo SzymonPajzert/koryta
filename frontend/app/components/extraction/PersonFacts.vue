@@ -16,17 +16,26 @@
     class="mt-4"
     data-testid="person-extractions"
   >
+    <!-- How the cards are judged, behind the heading's „(i)” as the notes'
+         instructions are. „Ten tekst podobnie jak w notatce powinien być
+         domyślnie schowany bo robi bloat” was said of the four sentences that
+         stood here; none of them is deleted. Signed in only - it explains
+         buttons on cards a logged out reader is not shown. -->
+    <template v-if="user" #info>
+      Przypisane do tej osoby po imieniu i nazwisku. Oceń je przyciskami przy
+      każdej karcie, a jeśli fakt dotyczy kogoś innego, zgłoś to przyciskiem „To
+      nie ta osoba”. Fakt, który się potwierdza, możesz przenieść do swojej
+      notatki przyciskiem „Dodaj do notatki”.
+    </template>
+
     <template #lead>
       <!-- Said out loud, because the cards look like the rest of the page and
            are not the same kind of claim: the register above is sourced and
            reviewed, these are a model's reading of a newspaper, matched to
-           this person by name and not yet judged by anybody. -->
+           this person by name and not yet judged by anybody. That much stays
+           in the open; the how-to is in the bubble above. -->
       <p v-if="user" class="k-lead" data-testid="person-extractions-lead">
-        Automatycznie wyszukane w prasie i przypisane do tej osoby po imieniu i
-        nazwisku. Mogą być błędne - oceń je przyciskami przy każdej karcie, a
-        jeśli fakt dotyczy kogoś innego, zgłoś to przyciskiem „To nie ta osoba”.
-        Fakt, który się potwierdza, możesz przenieść do swojej notatki
-        przyciskiem „Dodaj do notatki”.
+        Automatycznie wyszukane w prasie - mogą być błędne.
       </p>
       <p v-else class="k-lead" data-testid="person-extractions-count">
         Znaleźliśmy
