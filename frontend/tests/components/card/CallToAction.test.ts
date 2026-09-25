@@ -21,6 +21,12 @@ global.IntersectionObserver = class {
 let stats = { total: 100, approved: 40, reviewed: 30, toCheck: 30 };
 registerEndpoint("/api/stats/progress", () => stats);
 
+// No tier counted by default - what production answers until the tiers'
+// index is deployed and /api/stats/computeNodes has filed people under them.
+type TierRow = { tier: number; toCheck: number | null; examples: never[] };
+let tiers: TierRow[] = [];
+registerEndpoint("/api/stats/queueTiers", () => ({ tiers }));
+
 // `useStats()` does not await its `useAsyncData` - it is documented as zero
 // until the request lands, which under SSR never shows and on a client-side
 // navigation is one frame. `mountSuspended` resolves before that, so the flush
@@ -91,6 +97,39 @@ describe("CardCallToAction", () => {
       .map((btn) => btn.props("to"));
     expect(destinations).toContain("/eksploruj/nowe");
     expect(destinations).toContain("/pomoc");
+  });
+
+  // The owner's idea: „Sprawdź pierwszą osobę” should open the easiest people
+  // rather than the head of the whole queue. Only once tier 1 is known to have
+  // somebody in it, though - before the tiers are computed that link would
+  // open an empty queue, which is a worse first check than the one the button
+  // gave before. The same link as tier 1's card on /pomoc, score order and
+  // all: that is the order in which the queue shows everybody the count
+  // gating it includes.
+  it("sends the first check to the easiest tier, once that tier has people in it", async () => {
+    const primary = async () =>
+      (await mount())
+        .findAllComponents({ name: "VBtn" })
+        .find((btn) => btn.text().includes("Sprawdź pierwszą osobę"))!
+        .props("to");
+
+    try {
+      for (const [toCheck, to] of [
+        [12, "/eksploruj/nowe?tier=1&order=votes"],
+        [0, "/eksploruj/nowe"],
+        [null, "/eksploruj/nowe"],
+      ] as const) {
+        tiers = [
+          { tier: 1, toCheck, examples: [] },
+          { tier: 2, toCheck: 40, examples: [] },
+        ];
+        clearNuxtData("queue-tiers");
+        expect(await primary(), `tier 1 at ${toCheck}`).toBe(to);
+      }
+    } finally {
+      tiers = [];
+      clearNuxtData("queue-tiers");
+    }
   });
 
   it("has dropped the two asks that competed with each other", async () => {
