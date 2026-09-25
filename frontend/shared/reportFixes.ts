@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na telefonie wykres „Co się działo w bazie” podpisuje mniej dat - co tydzień albo rzadziej - więc się nie zlewają.",
+    fixes: ["Bu83FlO639xnLO0ddmkc"],
+  },
+  {
+    change:
       "Na telefonie pływający przycisk zgłoszeń ma ikonę i napis „Zgłoś” zamiast pustej kropki.",
     fixes: ["3WbbJZv1qumO87LDCMQb"],
   },

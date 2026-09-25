@@ -197,3 +197,35 @@ export function formatDayLabel(date: string): string {
     timeZone: "UTC",
   }).format(parsed);
 }
+
+/** How far apart two dates under a column chart have to be. `30 wrz` is about
+ * 36px of apexcharts' 12px axis text; the rest is the air that makes two
+ * neighbours read as two dates rather than one run of text. */
+const DAY_LABEL_SPACING_PX = 48;
+
+/** Every day, every other day, or whole weeks - weeks rather than every third
+ * or fifth day, so that the labels all fall on one weekday. */
+const DAY_LABEL_STEPS = [1, 2, 7, 14, 28] as const;
+
+/** How many days apart to label `days` columns drawn across `plotWidthPx`: the
+ * shortest step that leaves each date its room. */
+export function dayLabelStep(days: number, plotWidthPx: number): number {
+  const column = plotWidthPx / Math.max(days, 1);
+  return (
+    DAY_LABEL_STEPS.find((step) => step * column >= DAY_LABEL_SPACING_PX) ??
+    DAY_LABEL_STEPS[DAY_LABEL_STEPS.length - 1]!
+  );
+}
+
+/** A category axis formatter that keeps every `step`-th day's label and blanks
+ * the rest, counted back from the last column so that today always has one.
+ *
+ * apexcharts hands the tooltip's title to this formatter too, without an
+ * index, and gets a blank back: a chart with a tooltip names the day there
+ * with a `tooltip.x.formatter` of its own. */
+export function everyNthDayLabel(days: number, step: number) {
+  return (value: string, _raw: unknown, opts?: { i?: number }) => {
+    const index = opts?.i ?? -1;
+    return index >= 0 && (days - 1 - index) % step === 0 ? value : "";
+  };
+}
