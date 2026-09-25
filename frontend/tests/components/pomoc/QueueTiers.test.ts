@@ -52,11 +52,15 @@ describe("PomocQueueTiers", () => {
     // Asserted on the prop rather than on an `href`: a `v-card` with `to`
     // renders no anchor under `mountSuspended`, which has no router to resolve
     // it against.
+    //
+    // In the score order rather than the queue's default: the default sorts on
+    // the latest job and so hides everybody without a dated one, whom the
+    // card's count includes. See `queueTierLink`.
     const cards = wrapper.findAllComponents({ name: "CardAction" });
     expect(cards.map((card) => card.props("to"))).toEqual([
-      "/eksploruj/nowe?tier=1",
-      "/eksploruj/nowe?tier=2",
-      "/eksploruj/nowe?tier=3",
+      "/eksploruj/nowe?tier=1&order=votes",
+      "/eksploruj/nowe?tier=2&order=votes",
+      "/eksploruj/nowe?tier=3&order=votes",
     ]);
     for (const tier of [1, 2, 3] as const) {
       expect(cards[tier - 1]!.text()).toContain(queueTierCopy[tier].title);

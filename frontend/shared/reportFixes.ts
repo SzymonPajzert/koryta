@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "/pomoc zaczyna się od „Możesz sprawdzać osoby” z trzema poziomami trudności, a karta poziomu mówi, ile osób zostało do sprawdzenia - licznik działa dopiero po wdrożeniu nowego indeksu z firestore.indexes.json.",
+    fixes: ["8fpBoHyw4dET45YMerEH"],
+    link: "/pomoc",
+  },
+  {
+    change:
       "Nowy komentarz widać od razu po dodaniu, a pod „Dyskusja” jedno zdanie mówi, do czego służą komentarze, a co wpisać do notatki.",
     fixes: ["ETKk2tRaOZef2UhAb2NV"],
   },

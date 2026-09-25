@@ -58,6 +58,22 @@ export const queueTierCopy: Record<
   },
 };
 
+/** Where a tier's card sends a reader: the queue narrowed to the tier, highest
+ * score first.
+ *
+ * In the score order because it is the one order in which the queue hands out
+ * everybody /api/stats/queueTiers counts for the card. The queue's default,
+ * `recent`, sorts on the latest job's start, and Firestore leaves out every
+ * document missing the field a query is ordered by - so the people with no
+ * dated job would be counted on the card and never shown, and a tier could
+ * promise „12 osób do sprawdzenia” over a queue with none of them in it. It
+ * also puts a score floor on the queue, which the count knows nothing about.
+ * `stats.votes.interesting`, which `votes` sorts on, is written for every
+ * person the tiers are computed for. */
+export function queueTierLink(tier: QueueTier): string {
+  return `/eksploruj/nowe?tier=${tier}&order=votes`;
+}
+
 /** A win older than this is not what the tier is about.
  *
  * The point of tier 2 is that a recent win leaves a paper trail a reader can
