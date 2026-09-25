@@ -64,9 +64,14 @@
            two-up grid this was is what made the section read as its own
            layout: every other section on a person's page stacks its entries,
            and three of the six places that draw these notes already passed
-           `single-column` to opt out of the columns. That prop is gone with
-           the grid. -->
-      <div class="note-entries">
+           `single-column` to opt out of the columns.
+
+           `columns` brings two back where a caller asks for them - the person
+           page, whose single column left half of a desktop screen empty beside
+           every note - and from `md` up only. Opt-in rather than opt-out this
+           time, so the side panel, the company card and the rest keep the
+           stack without having to say so. -->
+      <div class="note-entries" :class="{ 'note-entries--columns': columns }">
         <NoteSourceCard
           v-for="(source, index) in otherSources"
           :key="'other-' + index"
@@ -191,8 +196,11 @@ const props = withDefaults(
     nodeId: string;
     /** Kind of node the note hangs off, which the prompt refers to. */
     nodeType?: NodeType;
+    /** Two entries to a row on a wide screen. For a full page, whose width
+     * the notes have to themselves; the side panel and the cards leave it off. */
+    columns?: boolean;
   }>(),
-  { nodeType: "person" },
+  { nodeType: "person", columns: false },
 );
 
 /** The node kind in the genitive, to read as "Wiesz więcej na temat ...?". */
@@ -392,6 +400,16 @@ const save = async () => {
   flex-direction: column;
   gap: 8px;
   margin-top: 8px;
+}
+
+/* `md`, where the grid this replaced went to two columns. A grid rather than
+   a wrapping flex row so that two notes side by side stand as tall as each
+   other, and `minmax(0, 1fr)` so a long url in one cannot widen its column. */
+@media (min-width: 960px) {
+  .note-entries--columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* The three examples, as a list rather than as a sentence with semicolons in

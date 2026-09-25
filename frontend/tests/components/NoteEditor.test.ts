@@ -273,5 +273,37 @@ describe("NoteEditor", () => {
     expect(wrapper.find(".v-row").exists()).toBe(false);
     expect(wrapper.findAll(".note-entry")).toHaveLength(2);
     expect(wrapper.get(".note-entry").classes()).toContain("k-card");
+    expect(wrapper.get(".note-entries").classes()).not.toContain(
+      "note-entries--columns",
+    );
+  });
+
+  // „Kiedy jest dużo miejsca, to powinny być dwie kolumny (na stronie osoby na
+  // komputerze) ale nie w sidepanelu.” The side panel mounts this same
+  // component, so the columns are the caller's to ask for rather than the
+  // default; the breakpoint itself is CSS, which jsdom does not apply.
+  it("puts its entries in two columns only for a caller that asks", async () => {
+    (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
+    (useNotes as any).mockReturnValue({
+      userNote: ref(null),
+      otherNotes: ref([
+        {
+          sources: [
+            { note: "pierwsza", kind: "source" },
+            { note: "druga", kind: "missing" },
+          ],
+        },
+      ]),
+      saveNote: vi.fn(),
+    });
+
+    const wrapper = await mountSuspended(NoteEditor, {
+      props: { nodeId: "node-123", columns: true },
+    });
+
+    expect(wrapper.get(".note-entries").classes()).toContain(
+      "note-entries--columns",
+    );
+    expect(wrapper.findAll(".note-entry")).toHaveLength(2);
   });
 });
