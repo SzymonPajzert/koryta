@@ -44,7 +44,7 @@
           rounded="lg"
           height="44"
           class="text-none cta__btn"
-          to="/eksploruj/nowe"
+          :to="queueLink"
           text="Sprawdź pierwszą osobę"
           @click="trackGoal('cta:task', { task: 'kolejka', from: 'home-cta' })"
         />
@@ -163,6 +163,8 @@ import {
   mdiMessageAlertOutline,
 } from "@mdi/js";
 import { useStats } from "~/composables/stats/useStats";
+import { useQueueTiers } from "~/composables/stats/useQueueTiers";
+import { queueTierLink } from "~~/shared/queueTiers";
 import { useFeedbackDialog } from "~/composables/feedbackDialog";
 import { trackGoal } from "~/composables/analytics";
 import { polishCountingGenitive, polishNumber } from "~/composables/polish";
@@ -220,9 +222,37 @@ import { polishCountingGenitive, polishNumber } from "~/composables/polish";
  * somebody, not published yet”. That is the smallest of the three figures and
  * it *falls* every time somebody publishes one of them, so the sentence
  * „znaleźliśmy już N osób” went down as the project went forward.
+ *
+ * ## Where the primary button goes
+ *
+ * To the easiest of the three difficulty tiers - people whose Wikipedia
+ * biography sits beside their register entry - because the owner asked for
+ * „naprawdę szukanie po najłatwiejszej”: a first check should be one a
+ * newcomer can finish, not whoever tops the whole queue. See
+ * shared/queueTiers.ts.
  */
 const { total, approved, reviewed, toCheck } = useStats();
 const checked = computed(() => approved.value + reviewed.value);
+
+/** Tier 1's queue, but only while it is known to have somebody in it.
+ *
+ * Until the tiers are computed - and whenever the count could not be taken -
+ * tier 1 would open an empty queue, which is a worse first check than the
+ * whole queue the button always led to, so that is what it falls back to. The
+ * link is the one tier 1's card on /pomoc uses, score order and all, because
+ * that is the order in which the queue shows everybody the count includes -
+ * in the default one a tier with people left could still open empty.
+ *
+ * The count is /pomoc's own request under the same `useAsyncData` key, and
+ * /api/stats/queueTiers answers it from nitro's cache - a handful of
+ * aggregations every five minutes at most - so the home page pays no read of
+ * its own for it. */
+const { tiers } = useQueueTiers();
+const queueLink = computed(() =>
+  (tiers.value.find((row) => row.tier === 1)?.toCheck ?? 0) > 0
+    ? queueTierLink(1)
+    : "/eksploruj/nowe",
+);
 
 /** Whole percent, except at the two ends rounding would lie about: a first
  * handful of checks reads „<1%” rather than a discouraging „0%”, and the last
