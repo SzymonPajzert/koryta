@@ -75,6 +75,7 @@ import {
 import {
   queueTiers,
   queueTierCopy,
+  queueTierLink,
   type QueueTier,
 } from "~~/shared/queueTiers";
 import { polishCounting } from "~/composables/polish";
@@ -116,7 +117,7 @@ const cards = computed(() =>
     ...queueTierCopy[tier],
     icon: icons[tier],
     toCheck: byTier.value.get(tier)?.toCheck ?? null,
-    to: `/eksploruj/nowe?tier=${tier}`,
+    to: queueTierLink(tier),
   })),
 );
 
