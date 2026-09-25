@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na wykresie „Rozkład ocen” zielony pasek opublikowanych nie ginie już w odstępie, a kolumny są szersze - dwóch najmniejszych liczb nadal nie widać.",
+    fixes: ["hXMJb2JF9oLrwYCBR65D"],
+  },
+  {
+    change:
       "Na telefonie wykres „Co się działo w bazie” podpisuje mniej dat - co tydzień albo rzadziej - więc się nie zlewają.",
     fixes: ["Bu83FlO639xnLO0ddmkc"],
   },
