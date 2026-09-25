@@ -9,8 +9,15 @@
          same red - Nowa Lewica and SLD are the same party renamed - ran into
          one block with nothing between them. The gap is the same 8px `mr-2`
          was, which is why it comes off the h2 and off ChipDraftStatus here
-         rather than being added on top of them. -->
-    <v-card-title class="px-0 d-flex align-center ga-2">
+         rather than being added on top of them.
+
+         `flex-wrap` + `text-wrap`: on one line a long name kept its full width
+         (the title's `white-space: nowrap` made that its minimum) and the
+         chips - `overflow: hidden`, so free to shrink - took all the squeeze.
+         On a 393px phone „Wioletta Paprocka-Ślusarska” left her „PO” 13px of
+         its 40. Now whatever does not fit goes to the next line whole, and a
+         name too long for the line breaks between its words. -->
+    <v-card-title class="px-0 d-flex flex-wrap align-center ga-2 text-wrap">
       <h2 class="text-h5 font-weight-bold">
         {{ entity?.name }}
       </h2>
@@ -33,8 +40,10 @@
            gets, then the change anybody may propose, then how interesting the
            reader found the person. The admin pair sits first so that a reader
            without the claim is left with exactly the row that was there
-           before - the vote pill stays on the right edge either way. -->
-      <div class="d-none d-md-flex align-center ga-2">
+           before - the vote pill stays on the right edge either way.
+           `ms-auto` keeps it there when the row wraps and this block starts a
+           line of its own, past the spacer. -->
+      <div class="d-none d-md-flex align-center ga-2 ms-auto">
         <template v-if="isAdmin && entity?.id">
           <!-- The table's "Eksploruj" icon, for the reader who arrived on the
                page directly: the same rejestr.io, Wikipedia and Google queries

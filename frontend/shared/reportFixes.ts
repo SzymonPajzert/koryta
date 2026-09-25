@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Chipy partii, które nie mieszczą się obok imienia w nagłówku osoby, przechodzą w całości do następnej linii zamiast się ucinać.",
+    fixes: ["b4frZNziUAygE6pbFPCm", "Azu0VckVrSGG7Hyi1kuY"],
+  },
+  {
+    change:
       "„Sprawdź pierwszą osobę” na stronie głównej otwiera kolejkę najłatwiejszego poziomu (tier=1) - dopiero gdy poziomy są policzone, czyli po wdrożeniu ich indeksów.",
     fixes: ["crR0DWk9Y1gTfy0vp2Mg"],
     link: "/",
