@@ -1,7 +1,7 @@
 import type { QueueTierStats } from "~~/server/api/stats/queueTiers.get";
 
-/** How many unpublished people are in each difficulty tier, and a published
- * example or three of each.
+/** How many people nobody has checked yet are in each difficulty tier, and a
+ * published example or three of each.
  *
  * One `useAsyncData` key for the whole site, like `useStats`, so a page
  * rendering the three tiers in two places still asks once; /api/stats/queueTiers

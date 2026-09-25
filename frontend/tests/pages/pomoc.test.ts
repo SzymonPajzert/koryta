@@ -150,9 +150,9 @@ describe("PomocPage", () => {
         .map((card) => card.props("to"))
         .filter((to?: string) => to?.startsWith("/eksploruj/nowe?tier=")),
     ).toEqual([
-      "/eksploruj/nowe?tier=1",
-      "/eksploruj/nowe?tier=2",
-      "/eksploruj/nowe?tier=3",
+      "/eksploruj/nowe?tier=1&order=votes",
+      "/eksploruj/nowe?tier=2&order=votes",
+      "/eksploruj/nowe?tier=3&order=votes",
     ]);
   });
 
