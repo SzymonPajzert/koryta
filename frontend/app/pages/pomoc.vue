@@ -503,6 +503,7 @@ import { useStats } from "~/composables/stats/useStats";
 import { useFeedbackDialog } from "~/composables/feedbackDialog";
 import { trackGoal } from "~/composables/analytics";
 import { noteKindConfig } from "~/composables/notes";
+import { scoreModels } from "~/composables/votes";
 import { polishCountingGenitive, polishNumber } from "~/composables/polish";
 import type { HelpTask } from "~~/shared/analytics";
 import type { ProposableNodeType } from "~~/shared/api";
@@ -679,6 +680,13 @@ const inPlace = [
   },
 ];
 
+// One line per scoring model, off the same entries the score breakdown in the
+// table names them by - so the FAQ lists exactly the models a reader can meet
+// there, and a model added to that list turns up here too.
+const scoreModelLines = Object.values(scoreModels)
+  .map(({ label, what }) => `• ${label} - ${what}`)
+  .join("\n");
+
 const faq = [
   {
     q: "Czy muszę mieć konto?",
@@ -698,8 +706,10 @@ const faq = [
       "Trzy rzeczy - i żadna z nich niczego nie publikuje.\n\n" +
       "• Model czytający artykuły wyciąga z nich pojedyncze zdania o konkretnych osobach. To są „fakty”, które potem oceniają ludzie.\n" +
       "• Model dopasowania łączy nazwisko z artykułu z osobą w bazie. Dopasowuje po samym nazwisku, więc czasem trafi w imiennika - dlatego przy każdym fakcie jest przycisk „To nie ta osoba”.\n" +
-      "• Model oceny stawia przy osobie liczbę od -5 do +5 - tę samą, którą stawiają ludzie - i mówi tylko, jak bardzo warto się jej przyjrzeć. Ustawia kolejność w kolejce i nic poza tym.\n\n" +
-      "Publikuje zawsze człowiek.",
+      "• Modele oceny stawiają przy osobie liczbę w tej samej skali od -5 do +5, w której oceniają ludzie, i mówią tylko, jak bardzo warto się jej przyjrzeć. Ustawiają kolejność w kolejce i nic poza tym.\n\n" +
+      "Modeli oceny jest kilka i każdy patrzy na co innego. W tabeli osób kliknij liczbę w kolumnie „Oceny”, a zobaczysz, co powiedział każdy z nich - do wyniku liczy się tylko najwyższa z ich ocen.\n\n" +
+      scoreModelLines +
+      "\n\nPublikuje zawsze człowiek.",
   },
   {
     q: "Co się dzieje z tym, co zgłoszę?",

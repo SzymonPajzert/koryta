@@ -3,6 +3,7 @@ import { flushPromises } from "@vue/test-utils";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import PomocPage from "../../app/pages/pomoc.vue";
 import { HELP_PATHS, HELP_TASKS } from "../../shared/analytics";
+import { scoreModels } from "../../app/composables/votes";
 
 /** Mocked at the composable rather than at the tracker: the question is which
  * goal the page decided to fire, not whether the plausible plugin booted. */
@@ -204,6 +205,28 @@ describe("PomocPage", () => {
 
     expect(tasks.length).toBeGreaterThan(0);
     for (const task of tasks) expect(HELP_TASKS).toContain(task);
+  });
+
+  // The owner's report: „Przydałaby się sekcja FAQ w której między innymi
+  // wypisujemy nasze wszystkie modele i co dokładnie liczą.” The answer used to
+  // call scoring one model, while the score breakdown in the table names each
+  // of them - so a reader who met „Sieć powiązań” there had nowhere to look it
+  // up.
+  it("names every scoring model in the FAQ, with what it looks at", async () => {
+    const wrapper = await mount();
+
+    const panel = wrapper
+      .findAllComponents({ name: "VExpansionPanel" })
+      .find((p) => p.text().includes("Co liczą Wasze modele?"))!;
+    // The panel renders its text only once it has been opened.
+    await panel.get("button").trigger("click");
+    await flushPromises();
+
+    const models = Object.values(scoreModels);
+    expect(models.length).toBeGreaterThan(5);
+    for (const { label, what } of models) {
+      expect(panel.text()).toContain(`${label} - ${what}`);
+    }
   });
 
   it("names the report button, which is the cheapest way in and was never listed", async () => {
