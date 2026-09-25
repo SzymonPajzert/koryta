@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "„Obecny skład” spółki wymienia najpierw prezesa, potem jego zastępców, zarząd i radę nadzorczą, a dopiero dalej resztę.",
+    fixes: ["uIj31XYdsMVFjnqHArzX"],
+  },
+  {
+    change:
       "Menu „Eksploruj” na stronie osoby szuka jej też w miastach jej pracodawców, więc Rafała Dyjura także w Jeleniej Górze.",
     fixes: ["1PNZiixNoTWmoIm28Aq2"],
   },
