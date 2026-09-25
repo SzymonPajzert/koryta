@@ -13,12 +13,14 @@
     <template #lead>
       <p class="k-lead" data-testid="node-mentions-lead">
         Teksty prasowe, w których pada ta nazwa - z artykułów przeanalizowanych
-        przez model i ze źródeł dodanych w notatkach.
+        przez model i ze źródeł dodanych w notatkach oraz przy powiązaniach.
       </p>
     </template>
 
     <v-row dense>
-      <v-col v-for="mention in mentions" :key="mention.edgeId" cols="12" md="6">
+      <!-- Keyed on the article, which the endpoint lists once, not on the
+           edge: a relation citing two articles puts its id on both cards. -->
+      <v-col v-for="mention in mentions" :key="mention.nodeId" cols="12" md="6">
         <v-card
           variant="outlined"
           class="h-100"
@@ -71,7 +73,9 @@
  * Fed by `/api/nodes/[id]/mentions` rather than by `useEdges`, which cannot
  * carry it - the local graph drops every edge whose far end is an article. The
  * markup on `EntityDetailView` that filtered `useEdges` for `mentions` was
- * therefore never able to render anything, and this replaces it.
+ * therefore never able to render anything, and this replaces it. The endpoint
+ * also counts the articles this node's relations cite as their source: the
+ * piece that says who sits on which board names both of them.
  */
 import { computed } from "vue";
 import { mdiNewspaperVariantOutline } from "@mdi/js";

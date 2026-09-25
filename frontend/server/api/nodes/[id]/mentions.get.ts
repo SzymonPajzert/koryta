@@ -5,11 +5,12 @@ import {
   wantsLatest,
 } from "~~/server/utils/handlers";
 import { fetchEdgesForNode } from "~~/server/utils/edgePublication";
-import { pageIsPublic } from "~~/shared/model";
+import { asArray, pageIsPublic } from "~~/shared/model";
 
 /** One article that names this node. */
 export type NodeMention = {
-  /** The edge saying so, which is what a removal would act on. */
+  /** The edge saying so: a `mentions` edge, or a relation of this node that
+   * cites the article as its source. */
   edgeId: string;
   nodeId: string;
   name: string | null;
@@ -39,6 +40,15 @@ export type NodeMentions = { mentions: NodeMention[] };
  * article -> person, `ingest/person.post.ts` writes person -> article and
  * produced most of the ones in the database. Deduped per article, preferring the
  * published copy, since the two writers do not know about each other.
+ *
+ * An article one of this node's relations cites counts too. The piece that is
+ * the evidence for "A sits on B's board" names A and B, but it was recorded as
+ * `Edge.references` on that relation, and the `mentions` edges saying so were
+ * never written - so the article was listed on neither page. It costs no extra
+ * query: the relations are already read here, whole, to find the `mentions`
+ * among them, and their references go into the one `getAll` below. Only this
+ * app writes `references`, by hand, so that is a few documents a page, not a
+ * pipeline's worth.
  */
 export default editorFreshCachedEventHandler(async (event) => {
   const id = getRouterParam(event, "id");
@@ -48,32 +58,41 @@ export default editorFreshCachedEventHandler(async (event) => {
   const includeDrafts = wantsLatest(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
-  const edges = (await fetchEdgesForNode(db, id))
+  const visible = (await fetchEdgesForNode(db, id))
     .filter((edge) => edge.deleted !== true)
-    .filter((edge) => edge.type === "mentions")
     .filter((edge) => (includeDrafts ? true : pageIsPublic(edge)));
 
   /** The end of the edge that is not this node. */
-  const farId = (edge: (typeof edges)[number]) =>
+  const farId = (edge: (typeof visible)[number]) =>
     edge.source === id ? edge.target : edge.source;
 
-  const farIds = Array.from(new Set(edges.map(farId))).filter(
-    (farNodeId) => farNodeId !== id,
-  );
-  const snaps = farIds.length
+  /** Each article, and the edge that puts it on this page. The `mentions`
+   * come first, so that where a mention and a citation are both live the
+   * dedupe below keeps the edge that says exactly this. */
+  const found = [
+    ...visible
+      .filter((edge) => edge.type === "mentions")
+      .map((edge) => ({ edge, nodeId: farId(edge) })),
+    ...visible.flatMap((edge) =>
+      citedIds(edge.references).map((nodeId) => ({ edge, nodeId })),
+    ),
+  ].filter((entry) => entry.nodeId !== id);
+
+  const articleIds = Array.from(new Set(found.map((entry) => entry.nodeId)));
+  const snaps = articleIds.length
     ? await db.getAll(
-        ...farIds.map((nodeId) => db.collection("nodes").doc(nodeId)),
+        ...articleIds.map((nodeId) => db.collection("nodes").doc(nodeId)),
       )
     : [];
   const nodes = new Map(snaps.map((snap) => [snap.id, snap.data()]));
 
   const mentions: NodeMention[] = [];
-  for (const edge of edges) {
-    const nodeId = farId(edge);
+  for (const { edge, nodeId } of found) {
     const node = nodes.get(nodeId);
     // Only articles. A `mentions` edge should have one at one end, but the
     // ingest paths have written a few pointing elsewhere, and a card built from
-    // a person node would render as an article that is not one.
+    // a person node would render as an article that is not one. A reference to
+    // a page since deleted resolves to nothing and goes the same way.
     if (node?.type !== "article") continue;
     // A draft article is not something to show the public even when the edge
     // saying it is live.
@@ -89,8 +108,9 @@ export default editorFreshCachedEventHandler(async (event) => {
   }
 
   /** One card per article, whichever way round the edges saying so were
-   * stored, preferring the published one - it is what the public would be shown
-   * and what decides whether the card is drawn as a draft. */
+   * stored and however many relations cite it, preferring the published one -
+   * it is what the public would be shown and what decides whether the card is
+   * drawn as a draft. */
   const byNode = new Map<string, NodeMention>();
   for (const mention of mentions) {
     const seen = byNode.get(mention.nodeId);
@@ -112,6 +132,23 @@ export default editorFreshCachedEventHandler(async (event) => {
     }),
   } satisfies NodeMentions;
 });
+
+/** The ids in a relation's `references` that can name a document.
+ *
+ * Typed as strings, but `edges/create.post.ts` checks no more than that each is
+ * a non-empty one, and older documents hold whatever they were written with.
+ * `doc()` throws on an id that is not a string, is empty or has a `/` in it, and
+ * here that would be one bad citation on any of the node's relations answering
+ * with a 500 - the articles its `mentions` edges name gone with it.
+ */
+function citedIds(
+  value: unknown[] | Record<string, unknown> | undefined,
+): string[] {
+  return asArray(value).filter(
+    (ref): ref is string =>
+      typeof ref === "string" && ref !== "" && !ref.includes("/"),
+  );
+}
 
 /** A stored date as an ISO string, whatever shape it is in.
  *
