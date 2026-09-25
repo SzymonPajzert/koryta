@@ -25,6 +25,9 @@ const queryValidator = z.object({
   /** One person's proposals, whatever they are and whenever they were filed.
    * This is the mode the contributor table on /eksploruj/statystyki links to. */
   author: z.string().min(1).optional(),
+  /** Everybody's proposals but this person's - in practice the reviewer's own,
+   * so what somebody else filed is not buried under their edits. */
+  excludeAuthor: z.string().min(1).optional(),
   /** One proposal by id, answered alongside the page and independent of every
    * filter, so a permalink still resolves after the decision is made. */
   revision: z.string().min(1).optional(),
@@ -99,6 +102,11 @@ export type RevisionQueue = {
  *   which is the point of a per-person view, and why the contributor table
  *   links to this mode rather than to the aggregate one.
  *
+ * `excludeAuthor` is a clause of the query on the first path, not a filter
+ * over its answer: dropping one person's rows from a page Firestore already
+ * cut would leave short pages and a total that counts them anyway. On the
+ * second it is applied in memory with the rest, which it can only empty.
+ *
  * Backfilling the flag was considered and rejected. The uid that wrote 1,447 of
  * the 1,760 flagless revisions is both the owner's admin account and the
  * account the pipeline runs as, so nothing stored on the document tells an old
@@ -167,7 +175,11 @@ async function byAuthor(
     .limit(AUTHOR_SCAN_CAP)
     .get();
 
-  const docs = snapshot.docs.filter((doc) => matchesAutomatic(doc, query));
+  const docs = snapshot.docs.filter(
+    (doc) =>
+      matchesAutomatic(doc, query) &&
+      doc.get("update_user") !== query.excludeAuthor,
+  );
 
   // Status is resolved against the target, which needs the join, so the whole
   // scanned set is described before it can be filtered on status. The cap is
@@ -221,6 +233,13 @@ async function byFilter(
   }
   if (query.status !== "all") {
     base = base.where("status", "==", query.status);
+  }
+  // An inequality ordered by another field, which Firestore serves from an
+  // index with `update_user` after `update_time` - one per combination of the
+  // clauses above, in firestore.indexes.json. It also leaves out the few
+  // revisions written before `update_user` was, which name nobody to review.
+  if (query.excludeAuthor) {
+    base = base.where("update_user", "!=", query.excludeAuthor);
   }
 
   const ordered = base.orderBy("update_time", "desc");
