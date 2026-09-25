@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W /eksploruj/tabela na szerokim ekranie nazwiska, firmy i wybory wypełniają całe kolumny, a chipy firm nie urywają się w połowie.",
+    fixes: ["ybyB2AgoZH4qLzRsSv2w"],
+    link: "/eksploruj/tabela",
+  },
+  {
+    change:
       "Na wykresie „Rozkład ocen” zielony pasek opublikowanych nie ginie już w odstępie, a kolumny są szersze - dwóch najmniejszych liczb nadal nie widać.",
     fixes: ["hXMJb2JF9oLrwYCBR65D"],
   },

@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { nextTick } from "vue";
@@ -818,5 +820,121 @@ describe("ExploreTable's per-column sort menus", () => {
     expect(wrapper.emitted("update:sortBy")?.[0]?.[0]).toEqual([
       { key: "experience", order: "desc" },
     ]);
+  });
+});
+
+/** The column widths are the table's to decide; the stylesheet only says what
+ * a cell may ask for and whether it then fills what it was given. No
+ * stylesheet is applied in the test DOM, so the rules are read from the file,
+ * as in EksplorujTabelaFilterPanel.test.ts. `import.meta.url` is not a file url
+ * under the Nuxt test environment, hence cwd. */
+const TABLE_SOURCE = "app/components/explore/Table.vue";
+const tableStyle = (() => {
+  const path = existsSync(resolve(process.cwd(), TABLE_SOURCE))
+    ? resolve(process.cwd(), TABLE_SOURCE)
+    : resolve(process.cwd(), "frontend", TABLE_SOURCE);
+  const source = readFileSync(path, "utf8");
+  const style = source.slice(source.indexOf("<style scoped>"));
+  return style.replace(/\/\*[\s\S]*?\*\//g, "");
+})();
+
+/** The body of the one `@media` block with this query, braces matched. */
+function mediaBlock(query: string): string {
+  const start = tableStyle.indexOf(`@media ${query}`);
+  if (start < 0) return "";
+  const open = tableStyle.indexOf("{", start);
+  let depth = 0;
+  for (let i = open; i < tableStyle.length; i++) {
+    if (tableStyle[i] === "{") depth++;
+    if (tableStyle[i] === "}" && --depth === 0) {
+      return tableStyle.slice(open + 1, i);
+    }
+  }
+  return "";
+}
+
+/** Every declaration the rules of `block` give `selector`, in order. */
+function declarations(block: string, selector: string): string[] {
+  return [...block.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selectors]) =>
+      selectors!.split(",").some((s) => s.trim() === selector),
+    )
+    .flatMap(([, , body]) => body!.split(";"))
+    .map((declaration) => declaration.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+/** „Kolumny są teraz pełne pustej przestrzeni, bo chipy mają ograniczoną
+ * szerokość” - on /eksploruj/tabela at 1680px „Firmy” was 526px wide and its
+ * chips stopped at 300px, cut off with the rest of the column empty. */
+describe("ExploreTable's cells on a desktop", () => {
+  const WITH_ELECTIONS = [
+    { title: "Osoba", key: "name", sortable: true },
+    { title: "Firmy", key: "latestEmploymentStart", sortable: true },
+    { title: "Wybory", key: "elections", sortable: false },
+  ];
+
+  it("marks the cells that have a column to themselves", async () => {
+    const wrapper = await mountTable({ headers: WITH_ELECTIONS });
+
+    const cells = wrapper.findAll("tbody td");
+    expect(cells[0]!.find(".name-cell").exists()).toBe(true);
+    expect(cells[1]!.get(".companies-cell").classes()).toContain(
+      "companies-cell--fill",
+    );
+    expect(cells[2]!.get(".elections-cell").classes()).toContain(
+      "elections-column",
+    );
+    // The copy that stands in for the column below 960px is not the column.
+    expect(cells[1]!.get(".elections-cell").classes()).not.toContain(
+      "elections-column",
+    );
+  });
+
+  /** /eksploruj/nowe keeps the elections beside the companies in one cell,
+   * where a company cell as wide as the column would push them out of it. */
+  it("leaves the companies their cap where the elections share their cell", async () => {
+    const wrapper = await mountTable();
+
+    expect(wrapper.get(".companies-cell").classes()).not.toContain(
+      "companies-cell--fill",
+    );
+  });
+
+  /** A cap is two things to a table cell: how wide it asks its column to be,
+   * and how wide it then draws. Only the first is wanted - `min-width` in
+   * percent resolves against nothing while the column is being measured and
+   * against the column once it is laid out, so it lifts the second alone. */
+  it("fills the column from md up without asking it to be wider", () => {
+    const desktop = mediaBlock("(min-width: 960px)");
+
+    for (const cell of [
+      ".name-cell",
+      ".companies-cell--fill",
+      ".elections-column",
+    ])
+      expect(declarations(desktop, cell)).toContain("min-width: 100%");
+    expect(declarations(desktop, ".company-slot")).toContain("max-width: 100%");
+    expect(declarations(desktop, ".company-chip")).toContain("max-width: 100%");
+
+    // The caps stay: they are what the columns are measured by.
+    expect(declarations(tableStyle, ".name-cell")).toContain(
+      "max-width: 200px",
+    );
+    expect(declarations(tableStyle, ".companies-cell")).toContain(
+      "max-width: 300px",
+    );
+    expect(declarations(tableStyle, ".elections-cell")).toContain(
+      "max-width: 220px",
+    );
+  });
+
+  it("keeps the phone's budget as it was", () => {
+    const phone = mediaBlock("(max-width: 959.98px)");
+
+    expect(declarations(phone, ".name-cell")).toContain("max-width: 120px");
+    for (const cell of [".companies-cell", ".company-chip", ".elections-cell"])
+      expect(declarations(phone, cell)).toContain("max-width: 185px");
+    expect(phone).not.toContain("min-width: 100%");
   });
 });
