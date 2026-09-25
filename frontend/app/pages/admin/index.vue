@@ -169,9 +169,13 @@
             </template>
             <template v-else-if="summary">
               <v-list density="compact" class="py-0">
+                <!-- Opens the one entry in the queue rather than the person's
+                     page: that is where it gets resolved, with the whole note
+                     and a link on to the person beside it. -->
                 <v-list-item
-                  v-for="(item, i) in summary.notes.sample"
-                  :key="`${item.noteId}-${i}`"
+                  v-for="item in summary.notes.sample"
+                  :key="item.key"
+                  :to="{ path: '/admin/notatki', query: { note: item.key } }"
                   :title="item.name ?? item.nodeId"
                   :subtitle="item.note"
                   lines="two"

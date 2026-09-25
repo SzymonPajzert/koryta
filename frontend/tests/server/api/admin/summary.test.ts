@@ -244,6 +244,36 @@ describe("GET /api/admin/summary", () => {
     });
   });
 
+  it("addresses each sampled note the way the notes queue's permalink does", async () => {
+    // The dashboard links every row to /admin/notatki?note=<key>, which looks
+    // the entry up by `<noteId>:<sourceIndex>`. The index is the entry's place
+    // in the note's `sources`, not in the sample - the flagged entry below is
+    // fourth there, so a sample-order index would open the wrong one.
+    results.notes = [
+      doc("note-1", {
+        nodeId: "node-1",
+        sources: [
+          { note: "zła data urodzenia", kind: "change_request" },
+          { note: "ciekawy artykuł", url: "https://example.com" },
+          { note: "poprawione", kind: "missing", adminStatus: "resolved" },
+          { note: "do sprawdzenia", adminStatus: "unresolved" },
+        ],
+      }),
+      doc("note-2", {
+        nodeId: "node-2",
+        sources: [{ note: "brakuje zarządu", kind: "missing" }],
+      }),
+    ];
+
+    const summary = await handler({} as never);
+
+    expect(summary.notes.sample.map((item) => item.key)).toEqual([
+      "note-1:0",
+      "note-1:3",
+      "note-2:0",
+    ]);
+  });
+
   it("leaves a report somebody has put in the queue out of the untriaged count", async () => {
     results.feedback = [
       report("fb-unranked", "2026-09-20T10:00:00.000Z"),

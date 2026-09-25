@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W „Notatki wymagające działania” na /admin każdy wiersz otwiera swoją notatkę w kolejce notatek.",
+    fixes: ["OaW6NI6Acm7wpXWtcTCD"],
+  },
+  {
+    change:
       "„Czeka na decyzję” na /admin/rewizje ma przełącznik „Wszystkie · Bez moich”, który chowa Twoje propozycje - działa dopiero po wdrożeniu czterech nowych indeksów z firestore.indexes.json.",
     fixes: ["xAOt17Oj1PJB6t34O9if"],
   },
