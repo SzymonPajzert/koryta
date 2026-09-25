@@ -117,7 +117,14 @@ const error = ref<string | null>(null);
 const details = ref<RelationDetails>(emptyDetails());
 
 function emptyDetails(): RelationDetails {
-  return { name: "", start_date: "", end_date: "", party: "", committee: "" };
+  return {
+    name: "",
+    start_date: "",
+    end_date: "",
+    party: "",
+    committee: "",
+    elected: false,
+  };
 }
 
 /** The relation's own name, not the label the row prints.
@@ -133,6 +140,9 @@ function detailsOf(edge: EdgeNode | undefined): RelationDetails {
     end_date: edge.end_date ?? "",
     party: edge.party ?? "",
     committee: edge.committee ?? "",
+    // A stored `false` is a box somebody left unticked, not a defeat, so it
+    // reads as no answer - see `elected` in shared/api.ts.
+    elected: edge.elected === true,
   };
 }
 
@@ -167,9 +177,17 @@ async function submit() {
   if (!readyToSubmit.value) return;
   saving.value = true;
   error.value = null;
+  // The win only where the form showed the box. Anywhere else it is a `false`
+  // nobody saw, sent with every correction of a job title.
+  const { elected, ...fields } = details.value;
+  const candidacy = props.edge!.type === "election";
   try {
     const result = await authRequest<EdgeUpdated>("/api/edges/update", {
-      body: { edge_id: props.edge!.id, ...details.value },
+      body: {
+        edge_id: props.edge!.id,
+        ...fields,
+        ...(candidacy ? { elected } : {}),
+      },
     });
     open.value = false;
     emit("saved", result.applied);

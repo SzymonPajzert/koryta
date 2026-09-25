@@ -52,6 +52,23 @@ function employment(overrides: Partial<EdgeNode> = {}): EdgeNode {
   } as EdgeNode;
 }
 
+/** A candidacy as `useEdges` hands it over: the far end is the region the
+ * person stood in. */
+function candidacy(overrides: Partial<EdgeNode> = {}): EdgeNode {
+  return {
+    id: "e2",
+    type: "election",
+    label: "kandydatura",
+    name: "kandydatura",
+    source: "jan",
+    target: "krakow",
+    position: "Senat",
+    start_date: "2023-01-01",
+    richNode: { id: "krakow", type: "region", name: "Kraków" },
+    ...overrides,
+  } as EdgeNode;
+}
+
 function mountDialog(props: Record<string, unknown> = {}) {
   return mount(EditRelation, {
     props: {
@@ -130,6 +147,8 @@ describe("DialogEditRelation", () => {
     await flushPromises();
     await submit();
 
+    // No `elected`: the box is a candidacy's, and an employment's form does
+    // not show it, so it has nothing to say about one.
     expect(sent()).toEqual({
       edge_id: "e1",
       name: "czlonek rady nadzorczej",
@@ -138,6 +157,41 @@ describe("DialogEditRelation", () => {
       party: "",
       committee: "",
     });
+  });
+
+  it("offers no win on a relation that is not a candidacy", async () => {
+    mountDialog();
+    await flushPromises();
+
+    expect(
+      document.querySelector('[data-testid="edit-relation-elected"]'),
+    ).toBeNull();
+  });
+
+  it("shows a candidacy's win as ticked", async () => {
+    const wrapper = mountDialog({ edge: candidacy({ elected: true }) });
+    await flushPromises();
+
+    const box = byTestId("edit-relation-elected").querySelector("input");
+    expect(box?.checked).toBe(true);
+    expect(
+      wrapper.findComponent(RelationDetailFields).props("modelValue"),
+    ).toMatchObject({ elected: true });
+  });
+
+  it("marks a candidacy as won", async () => {
+    // The report: the edit view had no way to say a candidacy was won, which
+    // only the old full-page form could do.
+    mountDialog({ edge: candidacy() });
+    await flushPromises();
+
+    const box = byTestId("edit-relation-elected").querySelector("input")!;
+    expect(box.checked).toBe(false);
+    box.click();
+    await flushPromises();
+    await submit();
+
+    expect(sent()).toMatchObject({ edge_id: "e2", elected: true });
   });
 
   it("reports whether the change went live or into the queue", async () => {
@@ -180,6 +234,7 @@ describe("DialogEditRelation", () => {
         end_date: "",
         party: "",
         committee: "",
+        elected: false,
       });
     await flushPromises();
     await submit();

@@ -164,7 +164,14 @@ const error = ref<string | null>(null);
 const details = ref<RelationDetails>(emptyDetails());
 
 function emptyDetails(): RelationDetails {
-  return { name: "", start_date: "", end_date: "", party: "", committee: "" };
+  return {
+    name: "",
+    start_date: "",
+    end_date: "",
+    party: "",
+    committee: "",
+    elected: false,
+  };
 }
 
 const title = computed(() => props.title ?? "Dodaj powiązanie");
@@ -258,6 +265,7 @@ async function submit() {
   if (!readyToSubmit.value || saving.value) return;
   const picked = choice.value!;
   const outgoing = picked.direction === "outgoing";
+  const type = edgeTypeOptions[picked.edgeTypeExt].realType;
 
   saving.value = true;
   error.value = null;
@@ -267,12 +275,16 @@ async function submit() {
       body: {
         source: outgoing ? props.nodeId : other.value!.id,
         target: outgoing ? other.value!.id : props.nodeId,
-        type: edgeTypeOptions[picked.edgeTypeExt].realType,
+        type,
         name: details.value.name,
         start_date: details.value.start_date,
         end_date: details.value.end_date,
         party: details.value.party,
         committee: details.value.committee,
+        // Only a candidacy shows the box, and `details` is cleared only when
+        // the dialog opens - a tick on a region would otherwise ride along,
+        // unseen, onto the company picked after it.
+        elected: type === "election" && details.value.elected,
         references: reference.value ? [reference.value.id] : [],
       },
     });

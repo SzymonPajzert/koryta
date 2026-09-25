@@ -184,8 +184,9 @@ const FOLDED_FIELDS = new Set(["committee"]);
  * exactly the backfill this annotation exists for, blocked on the people it
  * would be most wrong about.
  *
- * `/api/edges/create` no longer writes one, so the set cannot grow. Whatever
- * starts meaning "lost" is what should make `false` an answer here. */
+ * Neither `/api/edges/create` nor `/api/edges/update` writes one any more, so
+ * the set cannot grow. Whatever starts meaning "lost" is what should make
+ * `false` an answer here. */
 
 /** One writer's "unset" has to equal another's.
  *

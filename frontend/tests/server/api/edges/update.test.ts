@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../../server/api/edges/update.post";
+import { withoutInternalFields } from "../../../../server/utils/revisions";
+import { revisionChanges } from "../../../../shared/revisionChanges";
 
 const mockBatchSet = vi.fn();
 const mockCommit = vi.fn();
@@ -200,6 +202,69 @@ describe("api/edges/update", () => {
 
     expect(result).toMatchObject({ unchanged: true, revision_id: null });
     expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  describe("the outcome of a candidacy", () => {
+    beforeEach(() => {
+      currentUser = { uid: "admin-uid", admin: true };
+      stored["edges/e1"] = {
+        source: "jan",
+        target: "krakow",
+        type: "election",
+        name: "kandydatura",
+        position: "Senat",
+        start_date: "2023-01-01",
+        published: true,
+        revision_id: { path: "revisions/old" },
+      };
+    });
+
+    it("records a win", async () => {
+      request({ edge_id: "e1", elected: true });
+      await handler({} as never);
+
+      expect(edgeWrite()).toMatchObject({ elected: true });
+    });
+
+    it("takes a win back without recording a defeat", async () => {
+      // An unticked box is "nobody said", not "lost" - see `elected` in
+      // shared/api.ts. Storing `false` would read as a claim about a named
+      // person that nobody made.
+      stored["edges/e1"] = { ...stored["edges/e1"], elected: true };
+      request({ edge_id: "e1", elected: false });
+      await handler({} as never);
+
+      const written = edgeWrite() as Record<string, unknown>;
+      expect(written).toBeDefined();
+      expect(written).not.toHaveProperty("elected");
+    });
+
+    it("shows the reviewer a contributor taking a win back", async () => {
+      // The proposal carries no `elected` at all - null is dropped on the way
+      // to Firestore - yet approving it, a `set`, deletes the stored win. The
+      // queue has to say so, or the reviewer approves an empty-looking diff.
+      currentUser = { uid: "reader-uid" };
+      stored["edges/e1"] = { ...stored["edges/e1"], elected: true };
+      request({ edge_id: "e1", elected: false });
+      await handler({} as never);
+
+      const proposed = revisionWrite()?.data as Record<string, unknown>;
+      expect(proposed).not.toHaveProperty("elected");
+      expect(
+        revisionChanges(proposed, withoutInternalFields(stored["edges/e1"]!)),
+      ).toEqual([
+        { field: "elected", label: "wybrany", from: "tak", to: null },
+      ]);
+    });
+
+    it("writes nothing for a box left unticked on a candidacy nobody marked", async () => {
+      request({ edge_id: "e1", elected: false });
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ unchanged: true, revision_id: null });
+      expect(mockCommit).not.toHaveBeenCalled();
+    });
   });
 
   it("rejects a date that is not a date", async () => {
