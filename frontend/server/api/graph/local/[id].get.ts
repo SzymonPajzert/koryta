@@ -1,17 +1,11 @@
 import { getLocalGraph } from "~~/server/utils/localGraph";
-import { authCachedEventHandler } from "~~/server/utils/handlers";
+import {
+  eventHasUser,
+  wantsLatest as callerWantsLatest,
+} from "~~/server/utils/handlers";
 import { getQuery, getRouterParam, type H3Event } from "h3";
 
-/** Whether the caller asked to be shown things that are not approved yet.
- *
- * `authFetch` sets it on every request a signed in reader makes, so it doubles
- * as "this is an editor", which is what decides the caching below. */
-function wantsLatest(event: H3Event): boolean {
-  const latest = getQuery(event).latest;
-  return latest !== undefined && latest !== "false";
-}
-
-async function localGraph(event: H3Event) {
+async function localGraph(event: H3Event, showUnapproved: boolean) {
   const query = getQuery(event);
   // Clamped: the url is the reader's to type, and every hop past the second
   // multiplies both the fetch and what lands on the canvas.
@@ -33,20 +27,60 @@ async function localGraph(event: H3Event) {
     expansions = (query.expand as string).split(",");
   }
 
-  // TODO actually propagate the information about the latest
-  return getLocalGraph(focusNodeId, wantsLatest(event), distance, expansions);
+  return getLocalGraph(focusNodeId, showUnapproved, distance, expansions);
 }
 
-const cachedLocalGraph = authCachedEventHandler(localGraph);
+/** The approved-only graph, which is what everybody without a token gets.
+ *
+ * Written out rather than reusing `authCachedEventHandler` so that
+ * `showUnapproved` is decided once, above, and cannot be re-read from the query
+ * string inside the cached path. `shouldBypassCache` is false because nothing
+ * reaches here that could want bypassing: this wrapper is only ever called for
+ * a caller with no verified user.
+ */
+const cachedLocalGraph = defineCachedEventHandler(
+  (event: H3Event) => localGraph(event, false),
+  {
+    swr: true,
+    maxAge: 21600, // 6 hours
+    shouldBypassCache: async () => false,
+  },
+);
 
 export default defineEventHandler(async (event) => {
-  // A signed in reader is the one who may have just added the edge they are
-  // looking for, and the cache below holds a response for six hours - long
-  // enough to convince somebody their relation was never written. So they read
-  // through to Firestore, while logged out traffic, which is nearly all of it,
-  // still gets the cache.
-  if (wantsLatest(event)) {
-    return localGraph(event);
+  // `latest` says what the caller *wants*; the token says what they may have.
+  //
+  // Both are needed, and conflating them was a hole. `authFetch` appends
+  // `latest=true` to every request a signed in reader makes, so it reads like
+  // "this is an editor" - but it is an ordinary query parameter that anybody
+  // can type, and `getLocalGraph`'s `showUnapproved` argument used to come
+  // straight from it. Measured against production on 2026-09-14 with no
+  // Authorization header at all: this route returned 63 nodes and no drafts,
+  // and `&latest=true` returned 76 nodes and 77 edges including thirteen
+  // unpublished people by name. `server/utils/handlers.ts` says the same thing
+  // in the abstract - "`latest=true` is a query flag any caller can set, so it
+  // is NOT an authorization signal" - and this is the route that was not
+  // obeying it.
+  //
+  // So the draft graph now costs a verified token. `eventHasUser` returns null
+  // without a round trip when there is no `Authorization: Bearer` header, and
+  // it is only reached when `latest` is present, so logged out traffic - which
+  // is nearly all of it - verifies nothing and still shares one cache entry.
+  // A logged out caller who asks for `latest` anyway gets the approved-only
+  // answer under its own cache key, which is the right thing to fill that key
+  // with.
+  //
+  // The freshness half of the old comment still holds: a signed in reader may
+  // have just added the edge they are looking for, and a six hour cache is long
+  // enough to convince them it was never written. They read through to
+  // Firestore; everybody else is served from the cache.
+  if (callerWantsLatest(event) && (await eventHasUser(event))) {
+    setResponseHeader(
+      event,
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate",
+    );
+    return localGraph(event, true);
   }
   return cachedLocalGraph(event);
 });

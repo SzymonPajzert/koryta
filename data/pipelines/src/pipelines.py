@@ -3,6 +3,8 @@ from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
 from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
+from analysis.payloads.contract import ContractsPayloads
+from analysis.payloads.contract_link import ContractLinkPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.scores import (
     CompanyScores,
@@ -67,6 +69,8 @@ PIPELINES = [
     CompaniesKMGP,
     CompaniesPayloads,
     CompanyScores,
+    ContractsPayloads,
+    ContractLinkPayloads,
     CruDump,
     CruUmowy,
     PeopleScores,

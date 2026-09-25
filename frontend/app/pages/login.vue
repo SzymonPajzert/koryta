@@ -1,6 +1,6 @@
 <template>
   <div class="login-page w-100 mx-auto">
-    <main v-if="user">
+    <main v-if="user && arrivedSignedIn">
       <v-card rounded="lg" class="pa-2">
         <v-card-title class="text-h5 text-wrap">
           Cześć {{ user?.displayName || user?.email }}!
@@ -8,20 +8,28 @@
         <v-card-text>
           <v-alert
             v-if="!user.emailVerified"
-            type="warning"
+            type="info"
             variant="tonal"
             density="compact"
             class="mb-4"
           >
             <div class="d-flex flex-column flex-sm-row align-sm-center ga-2">
-              <span class="flex-grow-1">Zweryfikuj swój adres email.</span>
+              <span class="flex-grow-1">
+                {{
+                  verificationSent
+                    ? "Wysłaliśmy link. Sprawdź swoją skrzynkę."
+                    : verificationError ||
+                      "Adres email nie jest jeszcze potwierdzony."
+                }}
+              </span>
               <v-btn
+                v-if="!verificationSent"
                 size="small"
                 variant="outlined"
                 :loading="loading"
                 @click="sendVerification"
               >
-                Wyślij ponownie
+                Wyślij link ponownie
               </v-btn>
             </div>
           </v-alert>
@@ -36,16 +44,33 @@
         </v-card-text>
       </v-card>
     </main>
-    <main v-if="!user">
+    <!-- Signed in here a moment ago: on the way to `redirect`. -->
+    <main v-else-if="user" class="d-flex justify-center py-8">
+      <v-progress-circular
+        indeterminate
+        color="primary"
+        aria-label="Przechodzę dalej"
+      />
+    </main>
+    <main v-else>
       <v-alert v-if="reason === 'unauthorized'" type="info" class="mb-4">
         Musisz być zalogowany, aby uzyskać dostęp do tej strony.
+      </v-alert>
+      <v-alert
+        v-else-if="powodText"
+        type="info"
+        class="mb-4"
+        :data-testid="`login-powod-${powod}`"
+      >
+        {{ isLogin ? "Po zalogowaniu" : "Po założeniu konta" }}
+        {{ powodText }}
       </v-alert>
       <v-card rounded="lg" class="pa-2">
         <v-card-title class="text-h5 text-center">
           {{ isLogin ? "Zaloguj się" : "Rejestracja" }}
         </v-card-title>
         <v-card-text>
-          <FormLoginForm :is-login="isLogin" @success="onLoginSuccess" />
+          <FormLoginForm v-model:is-login="isLogin" />
           <div class="text-center mt-4">
             <a href="javascript:void(0)" @click="isLogin = !isLogin">
               {{
@@ -55,8 +80,10 @@
               }}
             </a>
           </div>
+          <!-- Worded so that the register-mode title is the only element with
+               its word in it: the e2e spec finds the mode by that text. -->
           <div class="text-caption text-medium-emphasis text-center mt-4">
-            {{ isLogin ? "Logowanie się" : "Rejestracja" }} oznacza zgodę z
+            {{ isLogin ? "Logując się" : "Zakładając konto" }}, zgadzasz się z
             <a href="/plik/regulamin">regulaminem</a> oraz
             <a href="/plik/polityka_prywatnosci">polityką prywatności</a>.
           </div>
@@ -67,28 +94,67 @@
 </template>
 
 <script setup lang="ts">
-import { watch } from "vue";
+import { ref, watch } from "vue";
 import { useCountdown } from "@vueuse/core";
+import { type User, onAuthStateChanged } from "firebase/auth";
 import {
-  type User,
-  onAuthStateChanged,
-  sendEmailVerification,
-} from "firebase/auth";
+  redirectPath,
+  sendVerificationEmail,
+  useAuthState,
+} from "~/composables/auth";
+import { CONTRACT_LINK_ID_PATTERN } from "~~/shared/contractLinks";
 
 const loading = ref(false);
-const isLogin = ref(true);
-const error = ref<string | null>(null);
+// `?konto=nowe` opens the form on registration: a lock that says „załóż konto"
+// should not land the reader on a login form they have no account for.
+const isLogin = ref(useRoute().query.konto !== "nowe");
+const verificationSent = ref(false);
+const verificationError = ref<string | null>(null);
 
 const auth = useFirebaseAuth()!;
 const router = useRouter();
 const route = useRoute();
 
-const { redirect, reason } = route.query;
-const { logout, idToken } = useAuthState();
+const { reason, powod } = route.query;
+const destination = redirectPath(route.query.redirect);
+const { logout } = useAuthState();
 
+/** The finding the link names (`?powiazanie=` inside the redirect), so the
+ * ask can be about that one. */
+const findingId = (() => {
+  const id = new URL(destination, "http://koryta.invalid").searchParams.get(
+    "powiazanie",
+  );
+  return id && CONTRACT_LINK_ID_PATTERN.test(id) ? id : null;
+})();
+
+/** What the account gets the reader, for links that say why they came. Follows
+ * „Po założeniu konta" or „Po zalogowaniu".
+ *
+ * Only a teaser's `ukryte_<rank>` is promised outright: the reader has seen
+ * that finding exist. A `cru_<nip>` comes from the locked permalink, which
+ * cannot say whether the finding is gated or gone - and does not, on purpose -
+ * so this hedges as that card does. `powiazania-osoby` is the „jeszcze N
+ * osoby" line on a public card, whose name, firm and contracts the reader has
+ * already read. */
+const powodText =
+  powod === "powiazania"
+    ? findingId?.startsWith("ukryte_")
+      ? "zobaczysz, kogo dotyczy wybrane powiązanie — nazwisko, firmę i umowy — a także wszystkie pozostałe z rejestru umów."
+      : findingId
+        ? "zobaczysz wybrane powiązanie z nazwiskami, firmą i umowami — o ile nadal jest na liście — a także wszystkie pozostałe z rejestru umów."
+        : "zobaczysz wszystkie powiązania z rejestru umów — nazwiska, firmy i umowy — i od razu do nich wrócisz."
+    : powod === "powiazania-osoby"
+      ? "zobaczysz także osoby powiązane z tą firmą — ich nazwiska i role — oraz wszystkie pozostałe powiązania z rejestru umów."
+      : powod === "ludzie"
+        ? "zobaczysz osoby we władzach instytucji z rejestru umów."
+        : null;
+
+/** `replace`, not `push`: Back from where the reader was going must not land
+ * on /login again, which would only forward them once more. */
 const doRedirect = () => {
   pause();
-  router.push((redirect as string) || "/");
+  router.replace(destination);
 };
 
 const {
@@ -100,22 +166,29 @@ const {
 });
 
 const user = ref<User | null>();
+/** Whether somebody was signed in when /login opened; `null` until Firebase
+ * has restored or ruled out the session. Only they get the greeting above -
+ * somebody who signs in or makes an account here is sent on at once. */
+const arrivedSignedIn = ref<boolean | null>(null);
 if (auth) {
   onAuthStateChanged(auth, (userIn) => {
+    arrivedSignedIn.value ??= !!userIn;
     user.value = userIn;
-    if (userIn) {
-      console.log("User logged in:", userIn.uid, idToken.value, userIn.email);
-    }
   });
 }
 
+// Driven by the auth state rather than by the form's `success`: the form sits
+// under `v-else`, so the new user unmounts it before it can emit, and an emit
+// from an unmounted component goes nowhere.
 watch(
   user,
   (newUser) => {
-    if (newUser) {
+    if (!newUser) {
+      pause();
+    } else if (arrivedSignedIn.value) {
       resume();
     } else {
-      pause();
+      router.replace(destination);
     }
   },
   { immediate: true },
@@ -127,61 +200,22 @@ const logoutForced = async () => {
   window.location.reload();
 };
 
-const onLoginSuccess = async () => {
-  // Wait for auth state to propagate to Vuefire before router.push
-  if (!user.value) {
-    await new Promise<void>((resolve) => {
-      const unwatch = watch(user, (u) => {
-        if (u) {
-          unwatch();
-          resolve();
-        }
-      });
-      // Fallback timeout just in case
-      setTimeout(() => {
-        unwatch();
-        resolve();
-      }, 2000);
-    });
-  }
-
-  router.push((redirect as string) || "/");
-};
-
 const sendVerification = async () => {
   if (!user.value) return;
   loading.value = true;
+  verificationError.value = null;
   try {
-    await sendEmailVerification(user.value);
-    alert("Wysłano email weryfikacyjny.");
+    await sendVerificationEmail(user.value, destination);
+    verificationSent.value = true;
   } catch (err: unknown) {
-    const errorObj = err as { code: string; message: string };
-    error.value = getErrorMessage(errorObj.code);
+    const code = (err as { code?: string }).code;
+    console.error("Verification email error:", code);
+    verificationError.value =
+      code === "auth/too-many-requests"
+        ? "Link wysłaliśmy przed chwilą. Spróbuj ponownie za kilka minut."
+        : "Nie udało się wysłać linku. Spróbuj ponownie.";
   } finally {
     loading.value = false;
-  }
-};
-
-const getErrorMessage = (errorCode: string) => {
-  switch (errorCode) {
-    case "auth/user-disabled":
-      return "This user account has been disabled.";
-    case "auth/user-not-found":
-      return "User not found.";
-    case "auth/wrong-password":
-      return "Incorrect password.";
-    case "auth/popup-closed-by-user":
-      return "Login popup was closed by user.";
-    case "auth/cancelled-popup-request":
-      return "Login popup request was cancelled.";
-    case "auth/popup-blocked":
-      return "Login popup was blocked by the browser.";
-    case "auth/email-already-in-use":
-      return "Ten email jest już w użyciu.";
-    case "auth/weak-password":
-      return "Hasło jest zbyt słabe. Powinno mieć co najmniej 6 znaków.";
-    default:
-      return "An unexpected error occurred. Please try again.";
   }
 };
 </script>

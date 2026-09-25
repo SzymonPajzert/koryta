@@ -187,7 +187,7 @@
       "nodeGroupSize": 1
     }
   },
-  "company-empty": {
+  "companyempty": {
     "name": "Firma Pusta",
     "type": "place",
     "revision_id": "rev-company-empty",

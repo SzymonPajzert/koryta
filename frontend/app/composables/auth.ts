@@ -1,7 +1,9 @@
 import {
+  type User,
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
 } from "firebase/auth";
 import { computedAsync } from "@vueuse/core";
@@ -53,6 +55,11 @@ export function useAuthState() {
   );
   const idToken = computed(() => user.value?.getIdToken());
   const auth = useFirebaseAuth()!;
+  // Firebase writes its own mail (the address confirmation, the password
+  // reset) and the Google window in this language; unset, all of it comes in
+  // English. The layout calls this composable, so every page sets it. `auth`
+  // is null during SSR, whatever the `!` says, and SSR sends none of that.
+  if (import.meta.client) auth.languageCode = "pl";
 
   const userConfigRef = computed(() =>
     user.value ? doc(collection(db, "users"), user.value.uid) : null,
@@ -97,6 +104,45 @@ export function useAuthState() {
     register,
     resetPassword,
   };
+}
+
+/** A /login `?redirect=` if it is a path on this site, otherwise "/".
+ *
+ * The query is anybody's to write, and both the navigation after signing in
+ * and the continue link in the verification mail are built from it: a
+ * protocol-relative "//elsewhere" would make either a way off the site. */
+export function redirectPath(redirect: unknown): string {
+  return typeof redirect === "string" &&
+    redirect.startsWith("/") &&
+    !redirect.startsWith("//") &&
+    !redirect.startsWith("/\\")
+    ? redirect
+    : "/";
+}
+
+/** Sends the link that confirms `user`'s address, leading back to `redirect`.
+ *
+ * That is where the reader was headed when they made the account - often the
+ * one finding they made it to see - so the mail, opened later or in another
+ * browser, returns them there instead of to Firebase's bare "verified" page.
+ * Firebase refuses a continue URL on a domain the project has not authorised
+ * (a preview host, say); a mail with no way back beats no mail, so that
+ * refusal is retried without one.
+ */
+export async function sendVerificationEmail(user: User, redirect?: unknown) {
+  const url = window.location.origin + redirectPath(redirect);
+  try {
+    await sendEmailVerification(user, { url });
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (
+      code !== "auth/unauthorized-continue-uri" &&
+      code !== "auth/invalid-continue-uri"
+    ) {
+      throw err;
+    }
+    await sendEmailVerification(user);
+  }
 }
 
 /** Resolves once firebase has restored (or ruled out) the signed in user. */

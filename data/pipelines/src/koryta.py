@@ -5,6 +5,7 @@ import sys
 
 import pandas as pd
 
+from analysis.payloads import contract_link as contract_link_args
 from conductor import setup_context
 from pipelines import PIPELINES
 from scrapers.article.pipelines import pipeline_utils as article_args
@@ -110,6 +111,7 @@ def get_args():
     article_args.add_arguments(parser)
     wiki_dump_args.add_arguments(parser)
     cru_args.add_arguments(parser)
+    contract_link_args.add_arguments(parser)
     args, _ = parser.parse_known_args()
     return args
 

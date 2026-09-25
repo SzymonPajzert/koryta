@@ -8,6 +8,7 @@ import {
   TABELA_FILTER_NAMES,
   activeTabelaFilters,
   isPassiveGoal,
+  positionBucket,
   resultBucket,
   searchPickKind,
   tabelaFiltersChanged,
@@ -58,6 +59,8 @@ describe("the goal vocabulary", () => {
     expect(passive).toEqual([
       "cta:shown",
       "experiment:assigned",
+      // Fires when the ask at the end of the findings scrolls into view.
+      "powiazania:gate-shown",
       "tabela:no-results",
       "tabela:open",
     ]);
@@ -99,6 +102,42 @@ describe("resultBucket", () => {
       Array.from({ length: 500 }, (_, i) => resultBucket(i)),
     );
     expect(buckets.size).toBeLessThanOrEqual(4);
+  });
+});
+
+describe("positionBucket", () => {
+  it("separates the first screen, the first page and the pages loaded later", () => {
+    expect(positionBucket(1)).toBe("1-3");
+    expect(positionBucket(3)).toBe("1-3");
+    expect(positionBucket(4)).toBe("4-12");
+    expect(positionBucket(24)).toBe("13-24");
+    // The list's page size is 24, so anything past it was loaded by „Pokaż
+    // kolejne" - a reader who went looking, not one who glanced.
+    expect(positionBucket(25)).toBe("25+");
+  });
+
+  it("names the permalinked teaser apart from the list", () => {
+    expect(positionBucket("pinned")).toBe("pinned");
+  });
+
+  it("buckets rather than counts", () => {
+    const buckets = new Set(
+      Array.from({ length: 500 }, (_, i) => positionBucket(i + 1)),
+    );
+    expect(buckets.size).toBeLessThanOrEqual(4);
+  });
+});
+
+describe("powiazania:gate-click", () => {
+  it("carries the teaser's class and position, so the asks can be compared", () => {
+    // `trackGoal` requires exactly these keys, so every lock on the page -
+    // hero, end of list, the people chip - has to say `none` for the two a
+    // teaser alone can fill, rather than leave them out.
+    expect([...GOALS["powiazania:gate-click"].props].sort()).toEqual([
+      "position",
+      "strength",
+      "surface",
+    ]);
   });
 });
 

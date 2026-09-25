@@ -1,0 +1,351 @@
+[
+  {
+    "nip": "9990000033",
+    "krs": ["0000999033"],
+    "company": "PRZYKŁAD SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "status": "plausible",
+    "strength": "A",
+    "visibility": "gated",
+    "rank": 1,
+    "inOfficeNow": true,
+    "controlNow": true,
+    "people": [
+      {
+        "name": "Marek Przykładowy",
+        "kind": "politician",
+        "roles": ["prezes zarządu"],
+        "controlNow": true,
+        "candidacies": [
+          {
+            "year": 2024,
+            "office": "wójt Przykładowo",
+            "result": "won"
+          }
+        ],
+        "wonYears": [2024],
+        "inOfficeNow": true,
+        "committees": ["komitet lokalny"]
+      }
+    ],
+    "ties": [],
+    "total": 2400000,
+    "ownAreaTotal": 2400000,
+    "firmTotal": 2400000,
+    "firmContracts": 3,
+    "deals": 3,
+    "basis": "own_territory",
+    "dateFrom": "2026-07-03",
+    "dateTo": "2026-08-30",
+    "buyers": [
+      {
+        "name": "GMINA PRZYKŁADOWO",
+        "gmina": "Przykładowo",
+        "powiat": "przykładowski",
+        "wojewodztwo": "mazowieckie",
+        "value": 2400000,
+        "contracts": 3,
+        "ownArea": true
+      }
+    ],
+    "contractSourceIds": [],
+    "flags": ["ownership_open"]
+  },
+  {
+    "nip": "9990000011",
+    "krs": ["0000999011"],
+    "company": "BUDTEST SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "companySeat": "gmina Testowo, powiat testowski",
+    "status": "verified",
+    "strength": "A",
+    "visibility": "public",
+    "rank": 2,
+    "inOfficeNow": true,
+    "controlNow": true,
+    "people": [
+      {
+        "name": "Tomasz Testowy",
+        "kind": "politician",
+        "roles": ["prezes zarządu", "udziałowiec"],
+        "sharePct": 60,
+        "controlNow": true,
+        "controlSince": "2019-03-01",
+        "candidacies": [
+          {
+            "year": 2018,
+            "office": "rada powiatu testowskiego",
+            "result": "won"
+          },
+          {
+            "year": 2024,
+            "office": "rada powiatu testowskiego",
+            "result": "won"
+          }
+        ],
+        "wonYears": [2018, 2024],
+        "inOfficeNow": true,
+        "committees": ["komitet lokalny"]
+      }
+    ],
+    "ties": [
+      {
+        "name": "Anna Testowa",
+        "tie": "wspólniczka (40%)",
+        "confirmed": true
+      }
+    ],
+    "why": "Radny powiatu testowskiego kieruje firmą, którą współprowadzi z Anną Testową; starostwo i gmina z jego powiatu to jej jedyni płatnicy.",
+    "total": 970000,
+    "ownAreaTotal": 970000,
+    "firmTotal": 970000,
+    "firmContracts": 2,
+    "deals": 2,
+    "basis": "own_territory",
+    "dateFrom": "2026-08-12",
+    "dateTo": "2026-09-02",
+    "buyers": [
+      {
+        "name": "STAROSTWO POWIATOWE W TESTOWIE",
+        "gmina": "Testowo",
+        "powiat": "testowski",
+        "wojewodztwo": "opolskie",
+        "value": 850000,
+        "contracts": 1,
+        "ownArea": true
+      },
+      {
+        "name": "GMINA TESTOWO",
+        "gmina": "Testowo",
+        "powiat": "testowski",
+        "wojewodztwo": "opolskie",
+        "value": 120000,
+        "contracts": 1,
+        "ownArea": true
+      }
+    ],
+    "topContract": {
+      "sourceId": "a1b2c3d4-0008-4aaa-9bbb-000000000008",
+      "subject": "Przebudowa drogi powiatowej nr 1234O w miejscowości Testowo",
+      "value": 850000,
+      "signedAt": "2026-08-12",
+      "suppliers": 1,
+      "buyer": {
+        "name": "STAROSTWO POWIATOWE W TESTOWIE",
+        "gmina": "Testowo",
+        "powiat": "testowski",
+        "wojewodztwo": "opolskie"
+      }
+    },
+    "contractSourceIds": [
+      "a1b2c3d4-0008-4aaa-9bbb-000000000008",
+      "a1b2c3d4-0009-4aaa-9bbb-000000000009"
+    ],
+    "flags": []
+  },
+  {
+    "nip": "9990000022",
+    "krs": [],
+    "company": "HANDEL-TEST SPÓŁKA JAWNA BARBARA PRÓBNA",
+    "status": "verified",
+    "strength": "B",
+    "visibility": "public",
+    "rank": 3,
+    "inOfficeNow": false,
+    "controlNow": true,
+    "people": [
+      {
+        "name": "Barbara Próbna",
+        "kind": "politician",
+        "roles": ["wspólnik"],
+        "controlNow": true,
+        "candidacies": [
+          {
+            "year": 2014,
+            "office": "rada gminy Testowo",
+            "result": "won"
+          },
+          {
+            "year": 2018,
+            "office": "rada gminy Testowo",
+            "result": "lost"
+          }
+        ],
+        "wonYears": [2014],
+        "inOfficeNow": false,
+        "committees": ["PSL"]
+      }
+    ],
+    "ties": [],
+    "total": 64000,
+    "ownAreaTotal": 64000,
+    "firmTotal": 64000,
+    "firmContracts": 1,
+    "deals": 1,
+    "basis": "own_territory",
+    "dateFrom": "2026-07-15",
+    "dateTo": "2026-07-15",
+    "buyers": [
+      {
+        "name": "GMINA TESTOWO",
+        "gmina": "Testowo",
+        "powiat": "testowski",
+        "wojewodztwo": "opolskie",
+        "value": 64000,
+        "contracts": 1,
+        "ownArea": true
+      }
+    ],
+    "topContract": {
+      "sourceId": "a1b2c3d4-0010-4aaa-9bbb-000000000010",
+      "subject": "Dostawa materiałów biurowych dla Urzędu Gminy Testowo",
+      "value": 64000,
+      "signedAt": "2026-07-15",
+      "suppliers": 1,
+      "buyer": {
+        "name": "GMINA TESTOWO",
+        "gmina": "Testowo",
+        "powiat": "testowski",
+        "wojewodztwo": "opolskie"
+      }
+    },
+    "contractSourceIds": ["a1b2c3d4-0010-4aaa-9bbb-000000000010"],
+    "flags": []
+  },
+  {
+    "nip": "9990000055",
+    "krs": ["0000999055"],
+    "company": "DALEKO SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "status": "verified",
+    "strength": "C",
+    "visibility": "gated",
+    "rank": 4,
+    "inOfficeNow": true,
+    "controlNow": true,
+    "people": [
+      {
+        "name": "Piotr Urzędnik",
+        "kind": "official",
+        "roles": ["prezes zarządu, 50% udziałów"],
+        "controlNow": true,
+        "office": "radny Rady Miasta Testowo 2024-2029 (jeśli to ta sama osoba)",
+        "candidacies": [],
+        "wonYears": [],
+        "inOfficeNow": true,
+        "committees": []
+      }
+    ],
+    "ties": [
+      {
+        "name": "Krystyna Urzędnik",
+        "tie": "wspólniczka (50%)",
+        "confirmed": false
+      },
+      {
+        "name": "Piotr  Urzędnik",
+        "tie": "członek zarządu",
+        "confirmed": true
+      }
+    ],
+    "why": "Obecny radny miasta kieruje firmą, której płacą jednostki spoza jego miasta.",
+    "total": 5300000,
+    "ownAreaTotal": 0,
+    "firmTotal": 5300000,
+    "firmContracts": 12,
+    "deals": 12,
+    "basis": "all",
+    "buyers": [
+      {
+        "name": "KOMENDA WOJEWÓDZKA PAŃSTWOWEJ STRAŻY POŻARNEJ W TESTOWIE",
+        "gmina": "Kraków",
+        "powiat": "Kraków",
+        "wojewodztwo": "małopolskie",
+        "value": 3900000,
+        "contracts": 9,
+        "ownArea": false
+      },
+      {
+        "name": "SZPITAL WOJEWÓDZKI W PRÓBNEJ",
+        "gmina": "Próbna",
+        "powiat": "próbny",
+        "wojewodztwo": "śląskie",
+        "value": 1200000,
+        "contracts": 1,
+        "ownArea": false
+      }
+    ],
+    "buyerCount": 5,
+    "contractSourceIds": [],
+    "flags": [
+      "payer_outside_territory",
+      "tie_unconfirmed",
+      "identity_unconfirmed"
+    ],
+    "topContract": {
+      "sourceId": "a1b2c3d4-0011-4aaa-9bbb-000000000011",
+      "subject": "Dostawa aparatu RTG dla Szpitala Wojewódzkiego w Próbnej",
+      "value": 1200000,
+      "signedAt": "2026-08-20",
+      "suppliers": 1,
+      "buyer": {
+        "name": "SZPITAL WOJEWÓDZKI W PRÓBNEJ",
+        "gmina": "Próbna",
+        "powiat": "próbny",
+        "wojewodztwo": "śląskie"
+      }
+    }
+  },
+  {
+    "nip": "9990000044",
+    "krs": ["0000999044"],
+    "company": "SPÓŁDZIELNIA TESTOWA",
+    "status": "unreviewed",
+    "strength": "D",
+    "visibility": "gated",
+    "rank": 5,
+    "inOfficeNow": false,
+    "controlNow": false,
+    "people": [
+      {
+        "name": "Ewa Kandydatka",
+        "kind": "politician",
+        "roles": ["prezes zarządu"],
+        "controlNow": false,
+        "controlUntil": "2016-05-31",
+        "candidacies": [
+          {
+            "year": 2014,
+            "office": "rada gminy Próbna",
+            "result": "lost"
+          },
+          {
+            "year": 2018,
+            "office": "rada gminy Próbna",
+            "result": "lost"
+          }
+        ],
+        "wonYears": [],
+        "inOfficeNow": false,
+        "committees": ["komitet lokalny"]
+      }
+    ],
+    "ties": [],
+    "total": 15000,
+    "ownAreaTotal": 15000,
+    "firmTotal": 15000,
+    "firmContracts": 1,
+    "deals": 1,
+    "basis": "own_territory",
+    "buyers": [
+      {
+        "name": "GMINA PRÓBNA",
+        "gmina": "Próbna",
+        "powiat": "próbny",
+        "wojewodztwo": "śląskie",
+        "value": 15000,
+        "contracts": 1,
+        "ownArea": true
+      }
+    ],
+    "contractSourceIds": [],
+    "flags": ["unreviewed", "never_elected", "former_control"]
+  }
+]

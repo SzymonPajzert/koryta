@@ -157,6 +157,13 @@ export const scheduledFirestoreExport = onSchedule(
           "votes",
           "extractions",
           "feedback",
+          // The contracts mirror and the per-company aggregate computed from
+          // it. Neither is derivable from anything else in the export - the
+          // register is a six-week window that the source will not serve
+          // again - so without these two lines a restore comes back with the
+          // whole feature missing and no way to notice but opening /umowy.
+          "contracts",
+          "contractStats",
         ],
       });
 

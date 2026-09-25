@@ -103,8 +103,24 @@ function entityIdFromRoute(
   return undefined;
 }
 
+/** One thing on a page a report is about, when that is narrower than the
+ * page - a finding among the 420 on /eksploruj/umowy, whose url is the same
+ * for all of them.
+ *
+ * `route` is the thing's own address, which the admin queue turns into a link
+ * (so site-relative, as the API insists), and `title` is what the dialog shows
+ * beside it. */
+export type FeedbackSubject = { route: string; title: string };
+
+/** Set by a „Zgłoś błąd" button just before it opens the dialog, and taken by
+ * `captureFeedbackContext`, so the next report from the floating „Zgłoś" is
+ * about the page again. `useState` for the reason `useFeedbackDialog` gives. */
+export const useFeedbackSubject = () =>
+  useState<FeedbackSubject | null>("feedback-subject", () => null);
+
 /** What the reporter was looking at. Called when the dialog opens, so the
- * title and viewport are the ones they actually had in front of them. */
+ * title and viewport are the ones they actually had in front of them - or,
+ * when the dialog was opened from one item's own button, that item. */
 export function captureFeedbackContext(
   route: RouteLocationNormalizedLoaded,
 ): FeedbackContext {
@@ -119,6 +135,15 @@ export function captureFeedbackContext(
       width: window.innerWidth,
       height: window.innerHeight,
     };
+
+    // Client only: a subject is set by a click, and there are no clicks on
+    // the server.
+    const subject = useFeedbackSubject();
+    if (subject.value) {
+      context.route = subject.value.route.slice(0, 500);
+      context.pageTitle = subject.value.title.slice(0, 300);
+      subject.value = null;
+    }
   }
 
   return context;

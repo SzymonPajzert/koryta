@@ -59,6 +59,21 @@ export default defineEventHandler(async (event) => {
   if (body.activity && body.activity.length > 0) {
     revisionData.activity = body.activity;
   }
+  // The identifiers every register of public spending keys on. KRS is what this
+  // site looks a company up by and it is the one number CRU does not carry, so
+  // without these a contract has no way to reach the company that signed it -
+  // see `shared/contracts.ts` and `scripts/migrate/backfill-company-nip.ts`,
+  // which supplied them for the 4,701 companies that were already here.
+  //
+  // Written like `supervisoryOrgan` above and for the same reason: the register
+  // is the answer, so there is no human value to protect, but the revision is
+  // written to the node wholesale and a payload from a pipeline that predates
+  // the field has to leave what is stored alone rather than clear it. The zod
+  // schema has already normalised these to bare digits and checked their check
+  // digit - a wrong NIP here would silently attach another company's contracts
+  // to this one, which is the one failure this feature cannot have.
+  if (body.nip) revisionData.nipNumber = body.nip;
+  if (body.regon) revisionData.regonNumber = body.regon;
   // Worked out by the pipelines rather than here - see
   // `data/pipelines/src/entities/company_categories.py`. An empty array is a
   // real answer ("this company is in no sector we track") and is written; an

@@ -24,6 +24,26 @@ import { type NodeType, pageIsPublic } from "~~/shared/model";
  */
 const SITEMAP_NODE_TYPES: readonly NodeType[] = ["person", "article", "place"];
 
+/** Hand-written pages worth advertising, as opposed to one per node.
+ *
+ * Two entries, and between them they still carry every bit of SEO the public
+ * contracts feature has: `/instytucja/` is in `SITEMAP_NODE_TYPES` above on
+ * main but is still absent from the live sitemap - prod runs code older than
+ * this - so the per-company „Umowy publiczne" section has no indexed home yet.
+ *
+ * `/eksploruj/umowy` is where the public contract list moved on 2026-09-14,
+ * from `/umowy`, which now 301s into it. `/eksploruj` is the index above it and
+ * the natural parent of every explore route - the one url from which a crawler
+ * reaches the table, the hospital boards, the internships and the contracts.
+ *
+ * The list's `?sort` and `?zakres` variants are deliberately not here. They are
+ * six orderings of the same rows, the page canonicals every one of them to the
+ * bare path, and the Search Console export of 2026-09-10 already shows 6 465
+ * urls discovered and not indexed - adding five near-duplicates to that queue
+ * would cost more than it could win.
+ */
+const STATIC_URLS: readonly string[] = ["/eksploruj", "/eksploruj/umowy"];
+
 /** Six hours because this reads every person and every article node - 4,919
  * documents a call, measured - and it is crawlers that ask for it. Uncached it
  * was 118,055 Firestore reads in 28 hours across 24 requests, 6% of everything
@@ -36,6 +56,11 @@ const SITEMAP_NODE_TYPES: readonly NodeType[] = ["person", "article", "place"];
 export default defineCachedEventHandler(
   async () => {
     const urls: { loc: string; lastmod?: string }[] = [];
+
+    // First, so that the two urls a crawler can reach the explore surface and
+    // the whole contracts feature through are not buried behind ~4 900 entity
+    // pages.
+    STATIC_URLS.forEach((loc) => urls.push({ loc }));
 
     const nodesSnapshots = await Promise.all(
       SITEMAP_NODE_TYPES.map((type) => fetchNodes(type)),

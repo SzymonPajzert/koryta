@@ -59,6 +59,61 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "umowy-powiazania",
+    title:
+      "Powiązania: osoba z władz albo kandydatura, firma i instytucja, która jej płaci",
+    description:
+      "/eksploruj/umowy otwiera się na powiązaniach z rejestru umów: osoba z władz samorządu albo kandydująca do nich, firma, którą kieruje albo współposiada, i instytucja, która tej firmie zapłaciła. " +
+      "Sprawdzone najmocniejsze powiązania widzą wszyscy; resztę niezalogowani widzą jako zamazane karty z prośbą o założenie konta.",
+    steps: [
+      "Wyloguj się i otwórz /eksploruj/umowy - na górze ma być suma powiązań klas A–C, zdanie o słabszych D i przycisk „Załóż konto i zobacz wszystkie”; na telefonie legenda chowa się pod „Jak czytać listę”.",
+      "Wybierz województwo - na górze ma się pojawić linijka o tym województwie, strona ma przewinąć do listy, a nad listą ma być „Pokazujemy X z Y”. Po dodaniu klasy linijka to już tylko „Pokazujemy X powiązań”.",
+      "Po wylogowaniu wybierz województwo i przewiń do końca listy - ramka z prośbą o konto ma mówić o tym województwie, bez liczb dla całego kraju.",
+      "Na zamazanej karcie kliknij „Załóż konto” i załóż konto - masz wrócić na listę z tym powiązaniem przypiętym na górze i rozwiniętym.",
+      "Po wylogowaniu na karcie z nazwiskami, pod którą jest „Z firmą jest powiązana jeszcze …”, kliknij „Załóż konto” - nad formularzem ma być zdanie o osobach powiązanych z tą firmą, a nie obietnica samego powiązania, które już widać.",
+      "Po wylogowaniu otwórz /eksploruj/umowy?powiazanie=cru_0000000000 - nad listą ma być karta „To powiązanie widzą zalogowani albo go już nie ma” (tak samo dla ukrytego powiązania), a z ?powiazanie=ukryte_2 zamazana karta z prośbą o konto; „Wszystkie powiązania” zdejmuje przypięcie.",
+      "Zaloguj się i odśwież kilka razy /eksploruj/umowy i /eksploruj/umowy?powiazanie=ukryte_2 - za każdym razem ma się pokazać lista (nigdy „Coś poszło nie tak”), przypięte powiązanie ma być na ekranie, nie powinno mignąć „Załóż konto” ani zamazane karty, a nagłówek ma być jedną linijką.",
+    ],
+    link: "/eksploruj/umowy",
+    area: "public",
+  },
+  {
+    id: "rejestracja-bez-przerw",
+    title: "Zakładanie konta bez okienka i odliczania",
+    description:
+      "Po założeniu konta albo zalogowaniu strona od razu wraca tam, skąd otwarto logowanie - bez okienka o mailu i bez pięciu sekund czekania. Logowanie przez Google jest też w trybie rejestracji.",
+    steps: [
+      "Po wylogowaniu kliknij na /eksploruj/umowy „Załóż konto i zobacz wszystkie” - pod hasłem ma być podpowiedź „Co najmniej 6 znaków”, a nad formularzem „Kontynuuj z Google”.",
+      "Załóż konto nowym adresem - bez okienka masz od razu wrócić na listę, a „Wstecz” w przeglądarce ma ominąć stronę logowania.",
+      "Spróbuj założyć konto adresem, który już ma konto - ma się pojawić przycisk „Zaloguj się tym adresem”, który przełącza na logowanie i zostawia wpisany adres.",
+    ],
+    link: "/login?konto=nowe",
+    area: "public",
+  },
+  {
+    id: "umowy-publiczne",
+    title: "Umowy publiczne z Centralnego Rejestru Umów",
+    description:
+      "Umowy z CRU na /eksploruj/umowy - dla wszystkich lista samych umów, a " +
+      "dla zalogowanych dodatkowo widok osób, czyli kogo znamy we władzach " +
+      "instytucji z tych umów. Do tego sekcja «Umowy publiczne» na stronie " +
+      "instytucji i nowa strona /eksploruj, która zbiera wszystkie sposoby " +
+      "przeglądania danych w jednym miejscu.",
+    steps: [
+      "Wejdź na /eksploruj i sprawdź, że są tam odnośniki do wszystkich sposobów przeglądania danych - tabeli, statystyk, rad szpitali, okrągłego stażu i umów.",
+      "Wejdź na /eksploruj/umowy i sprawdź, że nad listą jest liczba umów i okres, z którego pochodzą.",
+      "Przełącz «Największe kwoty» i sprawdź, że kolejność się zmienia, a adres strony zapamiętuje wybór.",
+      "Kliknij «Szczegóły umowy» w dowolnym wierszu - powinien rozwinąć się numer, pełny przedmiot i strony.",
+      "Wyloguj się i wejdź na /eksploruj/umowy: ma się otworzyć lista umów, bez przełącznika «Ludzie» i «Obie strony».",
+      "Zaloguj się, wróć na /eksploruj/umowy i przełącz na «Ludzie», a potem na «Obie strony» - przy osobach nieopublikowanych powinien być chip «szkic» i przerywana ramka.",
+      "Zwęź okno do szerokości telefonu (375px) i przewiń /eksploruj/umowy do końca: strona nie może dać się przesuwać na boki, nawet przy nazwach instytucji pisanych wielkimi literami.",
+      "Otwórz stronę instytucji, która ma umowy, i sprawdź sekcję «Umowy publiczne»; na instytucji bez umów sekcji nie powinno być wcale.",
+      "Wyloguj się i na stronie instytucji sprawdź, że pod umowami są tylko osoby opublikowane, a resztę zapowiada baner «Zaloguj się».",
+    ],
+    link: "/eksploruj/umowy",
+    area: "public",
+  },
+  {
     id: "aktywnosc-wykres-30-dni",
     title: "Na górze Aktywności jest wykres ostatnich 30 dni",
     description:
