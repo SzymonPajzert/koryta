@@ -91,9 +91,16 @@ has been submitted before takes an hour and leaves the site as it was.
 `--only-changed` drops those payloads:
 
 ```bash
-uv run koryta PeoplePayloads --region 14 --only-changed |
-  uv run koryta_uploader --type person --submit
+uv run koryta PeoplePayloads --region 14 --only-changed --output stderr 2> people.jsonl
+uv run koryta_uploader --type person --submit < people.jsonl
 ```
+
+`--output stderr` is what puts the payloads anywhere the uploader can read
+them. The default, `--output file`, prints nothing but "Finished processing",
+and piped into the uploader that comes out as "No results." -- the same words a
+day with nothing to upload gets. A file rather than a pipe leaves the report
+below on the terminal, to be read before anything is posted; the uploader
+skips, with a complaint each, the lines on stderr that are not payloads.
 
 It decides by replaying the ingest's own matching offline, against the nightly
 Firestore export in `gs://koryta-pl-crawled` -- the same dumps `KorytaPeople`
@@ -113,9 +120,15 @@ What the rest would write:
 emits is one the site already has, so a quiet day is almost all no-ops.
 
 ```bash
-uv run koryta CompaniesPayloads --only-changed |
-  uv run koryta_uploader --type company --submit
+uv run koryta CompaniesPayloads --only-changed --refresh CompaniesKRS \
+  --output stderr 2> companies.jsonl
+uv run koryta_uploader --type company --submit < companies.jsonl
 ```
+
+`--refresh CompaniesKRS` is what lets the run see a change to how the register
+is read. Without it `company_krs` comes from `versioned/` or the shared cache,
+built by the code as it stood when it last ran, and `--only-changed` then
+reports -- correctly -- that nothing differs from the site.
 
 The comparison is a transcription of `frontend/server/utils/edges.ts` and the
 matching helpers in `frontend/server/api/ingest/person.post.ts` and
