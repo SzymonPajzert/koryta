@@ -6,10 +6,12 @@ import {
   fixState,
   fixTargetsOf,
   followUpsOf,
+  judgeFix,
   suggestClose,
 } from "../../shared/feedbackFixes";
 import type { Feedback, FeedbackStatus } from "../../shared/model";
 import type { QaCheck, QaCheckStatus, QaItem } from "../../shared/qa";
+import type { ReportFix } from "../../shared/reportFixes";
 
 /** A well-formed feedback id: Firestore auto-ids are 20 alphanumerics. */
 const fid = (tag: string) => tag.padEnd(20, "0");
@@ -28,6 +30,12 @@ function entry(id: string, fixes?: string[]): QaItem {
     ...(fixes ? { fixes } : {}),
   };
 }
+
+/** A change that claims reports with no QA entry of its own. */
+const change = (text: string, fixes: string[]): ReportFix => ({
+  change: text,
+  fixes,
+});
 
 const check = (
   itemId: string,
@@ -131,6 +139,15 @@ describe("fixIndex", () => {
     expect(fixIndex([entry("plain"), fix, entry("empty", [])]).get(R1)).toEqual(
       [fix],
     );
+  });
+
+  it("indexes changes with no entry the same way", () => {
+    const newer = change("druga poprawka", [R1]);
+    const older = change("pierwsza poprawka", [R1, R2, "short"]);
+    const index = fixIndex([newer, older]);
+    expect(index.get(R1)).toEqual([newer, older]);
+    expect(index.get(R2)).toEqual([older]);
+    expect(index.size).toBe(2);
   });
 });
 
@@ -327,6 +344,88 @@ describe("suggestClose", () => {
     // An open report saying it works is a comment, not a problem.
     const praise = followUp(fid("praise"), "fix", "ok");
     expect(suggestClose(open, "works", [praise])).toBe(true);
+  });
+});
+
+describe("judgeFix", () => {
+  const byCode = change("poprawione w kodzie", [R1]);
+
+  it("says nothing about a report nothing claims", () => {
+    expect(judgeFix(report(R1), [], [], [], [])).toBeUndefined();
+    expect(judgeFix(report(R1), [], [], null, [])).toBeUndefined();
+  });
+
+  it("leaves a change with no entry to the admin, who may close it while it is open", () => {
+    // Nobody checks it on /qa, so there is no verdict to wait for - or to
+    // wait on while they load.
+    for (const verdicts of [[], null]) {
+      expect(judgeFix(report(R1), [], [byCode], verdicts, [])).toEqual({
+        followUps: [],
+        state: "awaiting",
+        close: true,
+        blocked: false,
+      });
+    }
+    for (const adminStatus of ["resolved", "wont_fix"] as const) {
+      const settled = report(R1, { adminStatus });
+      expect(judgeFix(settled, [], [byCode], [], [])!.close).toBe(false);
+    }
+  });
+
+  it("goes by the verdicts on the entry when an entry claims it too", () => {
+    const fix = entry("fix", [R1]);
+    const target = report(R1);
+
+    const unchecked = judgeFix(target, [fix], [byCode], [], [target])!;
+    expect(unchecked.state).toBe("awaiting");
+    // Somebody is to check the entry on /qa first.
+    expect(unchecked.close).toBe(false);
+
+    const works = judgeFix(
+      target,
+      [fix],
+      [byCode],
+      [check("fix", "ok")],
+      [target],
+    )!;
+    expect(works).toMatchObject({ state: "works", close: true });
+
+    const broken = judgeFix(
+      target,
+      [fix],
+      [byCode],
+      [check("fix", "ok"), check("fix", "issue", "u2")],
+      [target],
+    )!;
+    expect(broken).toMatchObject({ state: "broken", close: false });
+  });
+
+  it("has no state for an entry's fix until the verdicts are in", () => {
+    const fix = entry("fix", [R1]);
+    expect(judgeFix(report(R1), [fix], [], null, [])).toMatchObject({
+      state: null,
+      close: false,
+      blocked: false,
+    });
+  });
+
+  it("is held back by a problem found checking the entry that is still open", () => {
+    const fix = entry("fix", [R1]);
+    const target = report(R1);
+    const problem = followUp(fid("problem"), "fix", "issue");
+    const judged = judgeFix(
+      target,
+      [fix],
+      [],
+      [check("fix", "ok")],
+      [target, problem],
+    )!;
+    expect(ids(judged.followUps)).toEqual([problem.id]);
+    expect(judged).toMatchObject({
+      state: "works",
+      close: false,
+      blocked: true,
+    });
   });
 });
 

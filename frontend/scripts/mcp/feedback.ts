@@ -2,19 +2,16 @@
  * anything that says who wrote a report.
  *
  * It answers the way the page does - the same open and settled split, the same
- * queue order, the same "Poprawka" judgement from `shared/feedbackFixes.ts` -
- * so an agent reads the list the admin sees. Reporters' `contact` and
+ * queue order, the same judgement of the fixes the code claims, from
+ * `shared/feedbackFixes.ts` - so an agent reads the list the admin sees. Reporters' `contact` and
  * `context.userAgent` stay in Firestore, and so does the raw `userUid`, which
  * is read only to become one of the labels in `Reporter`.
  */
 import {
   FEEDBACK_ID_PATTERN,
-  blocksClosing,
   fixIndex,
-  fixState,
-  followUpsOf,
-  suggestClose,
-  type FixState,
+  judgeFix,
+  type FixJudgement,
 } from "../../shared/feedbackFixes";
 import {
   OPEN_CAP,
@@ -31,6 +28,7 @@ import type {
   FeedbackStatus,
 } from "../../shared/model";
 import { QA_ITEMS, type QaCheck, type QaItem } from "../../shared/qa";
+import { REPORT_FIXES, type ReportFix } from "../../shared/reportFixes";
 import type { Doc, FirestoreReader } from "./firestore-reader";
 
 /** Every field of a report the tools read. Not `contact`, an address the
@@ -109,11 +107,13 @@ export function toReport({ id, data }: Doc): Report {
 }
 
 type FixIndex = ReadonlyMap<string, readonly QaItem[]>;
+type ChangeIndex = ReadonlyMap<string, readonly ReportFix[]>;
 type Verdict = Pick<QaCheck, "itemId" | "status">;
 
-/** From the changelog in this checkout rather than the deployed one, so a
- * claim made on a branch shows here before it shows on the page. */
+/** From the lists in this checkout rather than the deployed ones, so a claim
+ * made on a branch shows here before it shows on the page. */
 const FIXES: FixIndex = fixIndex(QA_ITEMS);
+const CHANGES: ChangeIndex = fixIndex(REPORT_FIXES);
 
 async function openReports(db: FirestoreReader) {
   // The list endpoint's query: no orderBy, so the `in` needs no index.
@@ -168,33 +168,23 @@ async function verdictsOn(
 const claimedEntries = (reports: readonly Report[], fixes: FixIndex) =>
   reports.flatMap((report) => fixes.get(report.id)?.[0]?.id ?? []);
 
-type Fix = {
+type Fix = FixJudgement & {
   entries: readonly QaItem[];
-  state: FixState;
-  followUps: Feedback[];
-  close: boolean;
-  blocked: boolean;
+  changes: readonly ReportFix[];
 };
 
-/** What the "Poprawka" chip on the page says about a report. */
+/** What the page says about a fix the code claims for a report. */
 function fixOf(
   report: Report,
   fixes: FixIndex,
+  changes: ChangeIndex,
   verdicts: readonly Verdict[],
   all: readonly Report[],
 ): Fix | undefined {
-  const entries = fixes.get(report.id);
-  if (!entries?.length) return undefined;
-  const followUps = followUpsOf(report, entries, all);
-  const state = fixState(entries[0]!, verdicts);
-  return {
-    entries,
-    state,
-    followUps,
-    close: suggestClose(report, state, followUps),
-    blocked:
-      !isSettled(report) && state === "works" && followUps.some(blocksClosing),
-  };
+  const entries = fixes.get(report.id) ?? [];
+  const claimed = changes.get(report.id) ?? [];
+  const judged = judgeFix(report, entries, claimed, verdicts, all);
+  return judged && { ...judged, entries, changes: claimed };
 }
 
 const LINK = "https://koryta.pl/admin/opinie#fb-";
@@ -211,7 +201,11 @@ function fixLabel(fix: Fix): string {
     : fix.blocked
       ? ", but a problem found checking it is still open"
       : "";
-  return `fix: ${fix.entries[0]!.id} (${fix.state}${advice})`;
+  const entry = fix.entries[0];
+  // A QA entry's verdicts decide the state, so it is the one named.
+  return entry
+    ? `fix: ${entry.id} (${fix.state}${advice})`
+    : `fix in code: "${fix.changes[0]!.change}" (${fix.state}${advice})`;
 }
 
 function row(
@@ -259,6 +253,7 @@ export async function feedbackQueue(
   db: FirestoreReader,
   args: QueueArgs = {},
   fixes: FixIndex = FIXES,
+  changes: ChangeIndex = CHANGES,
 ): Promise<string> {
   const section = args.section ?? "open";
   const length = args.preview ?? 160;
@@ -284,7 +279,7 @@ export async function feedbackQueue(
         row(
           report,
           ranked ? position : undefined,
-          fixOf(report, fixes, verdicts, all),
+          fixOf(report, fixes, changes, verdicts, all),
           length,
         ),
       ),
@@ -361,7 +356,15 @@ function describe(
     writtenOnQa: qa,
     adminNote: report.adminNote,
     fix: fix && {
-      claimedBy: fix.entries.map(({ id, title }) => ({ id, title })),
+      claimedBy:
+        fix.entries.length > 0
+          ? fix.entries.map(({ id, title }) => ({ id, title }))
+          : undefined,
+      // Changes with no QA entry: nobody checks them on /qa, an admin does.
+      claimedInCode:
+        fix.changes.length > 0
+          ? fix.changes.map(({ change, link }) => ({ change, link }))
+          : undefined,
       state: fix.state,
       followUps: fix.followUps.map(({ id }) => id),
       canBeClosed: fix.close,
@@ -377,6 +380,7 @@ export async function feedbackGet(
   db: FirestoreReader,
   refs: readonly string[],
   fixes: FixIndex = FIXES,
+  changes: ChangeIndex = CHANGES,
 ): Promise<string> {
   const ids = [...new Set(refs.map(idFrom))];
   const invalid = ids.filter((id) => !FEEDBACK_ID_PATTERN.test(id));
@@ -409,7 +413,7 @@ export async function feedbackGet(
         describe(
           report,
           positions.get(report.id),
-          fixOf(report, fixes, verdicts, all),
+          fixOf(report, fixes, changes, verdicts, all),
           fixes,
         ),
       ),

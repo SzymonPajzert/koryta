@@ -183,7 +183,7 @@ const props = defineProps<{
   queue: Feedback[];
   /** Open reports nobody has put in the queue yet, newest first. */
   inbox: Feedback[];
-  /** Where the fix a QA entry claims for a report stands, if one does. */
+  /** Where the fix the code claims for a report stands, if it claims one. */
   fixStates?: ReadonlyMap<string, FixState | null>;
 }>();
 

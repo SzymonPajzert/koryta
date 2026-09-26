@@ -11,30 +11,28 @@ import {
   slotHasRoom,
 } from "~~/shared/feedbackQueue";
 import {
-  blocksClosing,
   fixIndex,
-  fixState,
   fixTargetsOf,
-  followUpsOf,
-  suggestClose,
-  type FixState,
+  judgeFix,
+  type FixJudgement,
 } from "~~/shared/feedbackFixes";
 import { QA_ITEMS, type QaCheck, type QaItem } from "~~/shared/qa";
+import { REPORT_FIXES, type ReportFix } from "~~/shared/reportFixes";
 import type { Feedback, FeedbackStatus } from "~~/shared/model";
 
-/** Which reports the QA list says it fixes. Built once: the list is code. */
+/** Which reports the QA list says it fixes, and which the changes without an
+ * entry do. Built once: both lists are code. */
 const fixes = fixIndex(QA_ITEMS);
+const changeFixes = fixIndex(REPORT_FIXES);
 
-/** What the QA list says about a report it claims to fix: the entries (newest
- * first), the reports written while checking them, where the fix stands, and
- * whether to offer closing the report. */
-export type FixInfo = {
+/** What the code says about a report it claims to fix: the QA entries (newest
+ * first) and the changes without one, the reports written while checking the
+ * entries, where the fix stands, and whether to offer closing the report. */
+export type FixInfo = FixJudgement & {
   entries: QaItem[];
-  followUps: Feedback[];
-  state: FixState | null;
+  changes: ReportFix[];
+  /** Everybody's verdicts on the newest entry; none when no entry claims it. */
   verdicts: QaCheck[];
-  close: boolean;
-  blocked: boolean;
 };
 
 /** Reports are written by anyone, including signed-out visitors, so the route
@@ -50,14 +48,14 @@ export const formatFeedbackDate = (iso: string) =>
   });
 
 /** The admin's side of user feedback: the list, where each report sits (in
- * the queue, outside it, closed), what the QA list says about it, and the
+ * the queue, outside it, closed), what the code says about fixing it, and the
  * writes that triage it - status, note and place in the queue.
  *
- * /admin/opinie is built on it, and so is the "Problemy" tab of /qa, which
- * shows an admin the reports that came from the QA list and lets them be dealt
- * with there. Every call has its own list and its own write queue: two pages
- * are never open at once, and a list shared across navigations would be one
- * that nobody reloaded.
+ * /admin/opinie is built on it, and so is /qa, which shows an admin the
+ * reports this build says it fixes and the ones that came from the QA list,
+ * and lets them be dealt with there. Every call has its own list and its own
+ * write queue: two pages are never open at once, and a list shared across
+ * navigations would be one that nobody reloaded.
  *
  * The list endpoint is admin-only. Nothing here calls it until `load` is
  * called, so a page may set this up for a reader who is not an admin as long
@@ -112,26 +110,25 @@ export function useFeedbackAdmin() {
     () => new Map(queue.value.map((item, index) => [item.id!, index + 1])),
   );
 
-  /** For each report a QA entry claims to fix - see `FixInfo`. */
+  /** For each report the code claims to fix - see `FixInfo`. */
   const fixInfo = computed(() => {
     const info = new Map<string, FixInfo>();
     for (const item of items.value) {
-      const entries = fixes.get(item.id!);
-      if (!entries) continue;
-      const followUps = followUpsOf(item, entries, items.value);
-      const state = checksLoaded.value
-        ? fixState(entries[0]!, checks.value)
-        : null;
-      info.set(item.id!, {
+      const entries = fixes.get(item.id!) ?? [];
+      const changes = changeFixes.get(item.id!) ?? [];
+      const judged = judgeFix(
+        item,
         entries,
-        followUps,
-        state,
-        verdicts: checksFor(entries[0]!.id),
-        close: !!state && suggestClose(item, state, followUps),
-        blocked:
-          !isSettled(item) &&
-          state === "works" &&
-          followUps.some(blocksClosing),
+        changes,
+        checksLoaded.value ? checks.value : null,
+        items.value,
+      );
+      if (!judged) continue;
+      info.set(item.id!, {
+        ...judged,
+        entries,
+        changes,
+        verdicts: entries[0] ? checksFor(entries[0].id) : [],
       });
     }
     return info;

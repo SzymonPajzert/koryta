@@ -13,6 +13,7 @@ import type {
   ReadQuery,
 } from "../../scripts/mcp/firestore-reader";
 import type { QaItem } from "../../shared/qa";
+import type { ReportFix } from "../../shared/reportFixes";
 
 const OWNER = "of0BKlwqWLX21Cuml4NMHZ18xoC3";
 const TRUSTED = "REdyYP4uvMSgCEjdSoiEHqy360G3";
@@ -111,6 +112,17 @@ const entry = (id: string, fixes: string[]): QaItem => ({
 });
 
 const FIXES = new Map([[QUEUE_FIRST, [entry("wykres-osoby", [QUEUE_FIRST])]]]);
+
+/** A change with no QA entry, claiming an open report and a closed one. */
+const IN_CODE: ReportFix = {
+  change: "Wykres nie nachodzi już na tabelę.",
+  fixes: [INBOX_OLD, CLOSED_NEW],
+  link: "/osoba/jan",
+};
+const CHANGES = new Map([
+  [INBOX_OLD, [IN_CODE]],
+  [CLOSED_NEW, [IN_CODE]],
+]);
 
 type Stored = Record<string, Record<string, Record<string, unknown>>>;
 
@@ -253,6 +265,32 @@ describe("feedbackQueue", () => {
     expect(byId(FOLLOW_UP)).toContain("on /qa: wykres-osoby (issue)");
   });
 
+  it("quotes a change with no QA entry, which an admin may close while open", async () => {
+    const open = await feedbackQueue(
+      everything().db,
+      { preview: 0 },
+      FIXES,
+      CHANGES,
+    );
+    expect(rows(open).find((row) => row.includes(INBOX_OLD))).toContain(
+      'fix in code: "Wykres nie nachodzi już na tabelę." (awaiting, can be closed)',
+    );
+    // The entry decides where an entry claims it; nothing else changed.
+    expect(rows(open).find((row) => row.includes(QUEUE_FIRST))).toContain(
+      "fix: wykres-osoby (works, but a problem found checking it is still open)",
+    );
+
+    const closed = await feedbackQueue(
+      everything().db,
+      { section: "closed" },
+      FIXES,
+      CHANGES,
+    );
+    expect(rows(closed).find((row) => row.includes(CLOSED_NEW))).toContain(
+      'fix in code: "Wykres nie nachodzi już na tabelę." (awaiting)',
+    );
+  });
+
   it("offers closing a fix that works once nothing about it is open", async () => {
     const { [FOLLOW_UP]: _, ...rest } = FEEDBACK;
     const { db } = fakeDb({ feedback: rest, qaChecks: QA_CHECKS });
@@ -338,6 +376,25 @@ describe("feedbackGet", () => {
     expect(closed).toMatchObject({ place: "closed", status: "resolved" });
     // Open reports are all read anyway; only the closed one is fetched by id.
     expect(gets).toEqual([[CLOSED_OLD]]);
+  });
+
+  it("gives a change with no QA entry as it is written", async () => {
+    const { db } = everything();
+    const answer = JSON.parse(
+      await feedbackGet(db, [INBOX_OLD, CLOSED_NEW], FIXES, CHANGES),
+    );
+    const [open, closed] = answer.reports;
+
+    expect(open.fix).toEqual({
+      claimedInCode: [
+        { change: "Wykres nie nachodzi już na tabelę.", link: "/osoba/jan" },
+      ],
+      state: "awaiting",
+      followUps: [],
+      canBeClosed: true,
+      blockedByOpenFollowUp: false,
+    });
+    expect(closed.fix).toMatchObject({ canBeClosed: false });
   });
 
   it("never passes on who wrote a report", async () => {
