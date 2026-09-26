@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./test";
+import { pageTag } from "./pageTags";
 
 /** The bar above the graph: the legend, and the controls that change what the
  * canvas says.
@@ -29,7 +30,7 @@ import { test, expect } from "@playwright/test";
  * draw more than one row. */
 const COMPANY = "/instytucja/wojewodzki-zaklad-testowy-sukspolka";
 
-test.describe("Graf - pasek", () => {
+test.describe("Graf - pasek", { tag: pageTag("[seoType]/[slug]") }, () => {
   test("graf-pasek", async ({ page }, testInfo) => {
     // In the body, the way pages.spec.ts does it: a describe-level `test.skip`
     // has to take the fixtures argument as a destructuring pattern, and the

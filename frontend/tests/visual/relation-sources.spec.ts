@@ -1,4 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./test";
+import { pageTag } from "./pageTags";
 import { logIn, USERS } from "../e2e/helpers/auth";
 
 /** Citing a relation, captured at each place a reader meets it.
@@ -35,7 +37,7 @@ async function choose(page: Page, field: string, name: string) {
   await option.click();
 }
 
-test.describe("Citing a relation", () => {
+test.describe("Citing a relation", { tag: pageTag("[seoType]/[slug]") }, () => {
   test("powiazania-zrodla-lista", async ({ page }) => {
     test.setTimeout(120_000);
     await logIn(page, USERS.normal, "/entity/person/4");

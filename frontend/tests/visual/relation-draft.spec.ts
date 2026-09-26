@@ -1,4 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./test";
+import { pageTag } from "./pageTags";
 import { logIn, USERS } from "../e2e/helpers/auth";
 import { draftRelationsGraph } from "./fixtures/draftRelations";
 import { expectFitsThePhone } from "./phoneWidth";
@@ -61,7 +63,7 @@ async function openWithFixture(page: Page) {
   return relations;
 }
 
-test.describe("Szkic powiązania", () => {
+test.describe("Szkic powiązania", { tag: pageTag("[seoType]/[slug]") }, () => {
   test("powiazanie-szkic", async ({ page }, testInfo) => {
     test.setTimeout(120_000);
     const relations = await openWithFixture(page);
