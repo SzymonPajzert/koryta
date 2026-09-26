@@ -246,3 +246,46 @@ rest of the app uses — they are not the defaults:
 `firestore.rules` denies every client read and write on `mail`; the documents
 pair an address with a message and only the admin SDK and the extension have
 any business there.
+
+## Agent tools
+
+Claude sessions in this repo can read production data through an MCP server,
+`scripts/mcp/server.ts`, which `/.mcp.json` registers as `koryta`. Today it has
+the feedback queue from `/admin/opinie`:
+
+- `feedback_queue` — open reports in the page's order (not yet in the queue,
+  then the queue from the top), or the newest closed ones; one line each.
+- `feedback_get` — whole reports by id or `#fb-<id>` link, with their place in
+  the queue and what the `fixes` claims in `shared/qa.ts` say.
+
+It can only read. Reads go out as `firestore-reader@koryta-pl.iam.gserviceaccount.com`,
+which holds `roles/datastore.viewer` and nothing else, and gcloud impersonates
+it, so no key file exists. Every read names its fields, so reporters' `contact`,
+user agents and uids never leave Firestore.
+
+Once, as a project owner (Cloud Shell will do):
+
+```bash
+gcloud services enable iamcredentials.googleapis.com --project=koryta-pl
+gcloud iam service-accounts create firestore-reader --project=koryta-pl \
+  --display-name="Agents: read-only Firestore"
+gcloud projects add-iam-policy-binding koryta-pl --condition=None \
+  --member=serviceAccount:firestore-reader@koryta-pl.iam.gserviceaccount.com \
+  --role=roles/datastore.viewer
+gcloud iam service-accounts add-iam-policy-binding \
+  firestore-reader@koryta-pl.iam.gserviceaccount.com --project=koryta-pl \
+  --member=serviceAccount:dev-workflow@koryta-pl.iam.gserviceaccount.com \
+  --role=roles/iam.serviceAccountTokenCreator
+```
+
+The last binding names whoever gcloud is logged in as on the machine the agents
+run on. Claude Code asks before starting a server from `.mcp.json`; to approve
+it for sessions that cannot ask, add to `~/.claude/settings.json`:
+
+```json
+"enabledMcpjsonServers": ["koryta"],
+"permissions": { "allow": ["mcp__koryta"] }
+```
+
+With `FIRESTORE_EMULATOR_HOST` set the server reads that emulator instead.
+Every answer says which database it came from.

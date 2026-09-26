@@ -72,6 +72,7 @@
   "devDependencies": {
     "@cypress/vite-dev-server": "^7.3.4",
     "@cypress/vue": "^6.0.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@nuxt/test-utils": "^4.1.0",
     "@nuxtjs/seo": "^5.3.6",
     "@plausible-analytics/tracker": "^0.4.5",
