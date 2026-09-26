@@ -4,6 +4,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getUser } from "~~/server/utils/auth";
 import { buildActivityFeed } from "~~/server/utils/activityFeed";
+import { qaReleases, type QaRelease } from "~~/server/utils/qaReleases";
 import {
   identify,
   isEstablishedAdmin,
@@ -22,6 +23,7 @@ import {
   type FeedTarget,
   type RawFeed,
   type RawFeedTarget,
+  type SiteChange,
 } from "~~/shared/activityFeed";
 
 const queryValidator = z.object({
@@ -64,6 +66,9 @@ const revisionHref = (revisionId: string) =>
  * every name and uid, the reasons, the revision links and which people are on
  * trial - that is the monitoring the page exists for. An administrator on trial
  * gets what any contributor gets: they are the ones being watched.
+ *
+ * Alongside the people, what changed on the site itself: the QA changelog's
+ * entries that went live in the window, dated by `server/utils/qaReleases.ts`.
  */
 export default defineEventHandler(async (event): Promise<ActivityFeed> => {
   const caller = await getUser(event);
@@ -85,7 +90,12 @@ export default defineEventHandler(async (event): Promise<ActivityFeed> => {
     caller.newAdmin !== true &&
     (await isEstablishedAdmin(caller.uid));
 
-  return present(await cachedFeed(days), caller.uid, identified);
+  return present(await cachedFeed(days), caller.uid, identified, {
+    // Off the token, trial administrators included: which changes are worth
+    // telling somebody about is what they can open, not what they are trusted
+    // with, and a stale claim costs no more than a line about the admin panel.
+    adminChanges: caller.admin === true,
+  });
 });
 
 type MemoizedFeed = {
@@ -98,6 +108,9 @@ type MemoizedFeed = {
   /** Which actors agreed to be named in public. */
   public: Record<string, boolean>;
   newAdminUids: string[];
+  /** Every change to the site that went live in the window, whatever its
+   * area. */
+  siteChanges: SiteChange[];
 };
 
 /** The feed as this caller may see it.
@@ -110,6 +123,7 @@ function present(
   memo: MemoizedFeed,
   callerUid: string,
   identified: boolean,
+  { adminChanges }: { adminChanges: boolean },
 ): ActivityFeed {
   const actors = new Map<string, FeedActor>();
   let namedCount = 0;
@@ -206,6 +220,9 @@ function present(
         }))
       : [],
     truncated: [...memo.raw.truncated],
+    siteChanges: memo.siteChanges
+      .filter((change) => adminChanges || change.area !== "admin")
+      .map((change) => ({ ...change })),
   };
 }
 
@@ -277,6 +294,32 @@ function presentTargets(
   });
 }
 
+/** The changelog entries that went live on this backend since `sinceIso`.
+ *
+ * A record that cannot be read costs the feed its site changes, not the
+ * people's lines: an entry with no date to put it under is better left out
+ * than filed under today, which is what "not recorded" would otherwise read
+ * as. */
+async function siteChangesSince(sinceIso: string): Promise<SiteChange[]> {
+  let releases: QaRelease[];
+  try {
+    releases = await qaReleases();
+  } catch (error) {
+    console.error("[qaReleases] could not read the record", error);
+    return [];
+  }
+  return releases
+    .filter((release) => release.at >= sinceIso)
+    .map(({ item, at }) => ({
+      id: item.id,
+      at,
+      title: item.title,
+      description: item.description,
+      ...(item.link ? { link: item.link } : {}),
+      area: item.area,
+    }));
+}
+
 /** The whole scan, memoized per window length and shared by every caller.
  *
  * Five minutes is how long a new line may take to appear, and the memo is also
@@ -301,9 +344,10 @@ const cachedFeed = defineCachedFunction(
     });
 
     const actorUids = [...new Set(raw.batches.map((batch) => batch.uid))];
-    const [identities, publicProfiles] = await Promise.all([
+    const [identities, publicProfiles, siteChanges] = await Promise.all([
       identify([...new Set([...actorUids, ...newAdminUids])]),
       readPublicProfiles(db, actorUids),
+      siteChangesSince(since.toISOString()),
     ]);
 
     return {
@@ -324,6 +368,7 @@ const cachedFeed = defineCachedFunction(
       identities,
       public: publicProfiles,
       newAdminUids,
+      siteChanges,
     };
   },
   {

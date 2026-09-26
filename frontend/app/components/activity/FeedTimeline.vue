@@ -9,177 +9,197 @@
       <h2 class="ft-day__label">{{ section.label }}</h2>
 
       <ol class="ft-rail">
-        <li
-          v-for="row in section.rows"
-          :key="row.batch.id"
-          class="ft-item"
-          data-testid="feed-item"
-        >
-          <!-- The kind, before a word is read: a rating and a removal differ
-               in glyph and in hue. Its name is the tooltip, not more text. -->
-          <span
-            class="ft-badge"
-            :class="row.tone.surface"
-            role="img"
-            :aria-label="row.style.label"
-            :title="row.style.label"
+        <template v-for="row in section.rows" :key="row.key">
+          <!-- A rollout on the rail, by the time it went live: the same
+               shape as a line, on a filled badge, since it is the one entry
+               that is not somebody's. -->
+          <li
+            v-if="row.type === 'release'"
+            class="ft-item"
+            data-testid="feed-release"
           >
-            <v-icon :icon="row.style.icon" size="16" :class="row.tone.ink" />
-          </span>
+            <span
+              class="ft-badge ft-badge--release"
+              role="img"
+              aria-label="Nowa wersja strony"
+              title="Nowa wersja strony"
+            >
+              <v-icon :icon="mdiCreationOutline" size="16" />
+            </span>
+            <ActivitySiteRelease
+              :at="row.release.at"
+              :changes="row.release.changes"
+            />
+          </li>
+          <li v-else class="ft-item" data-testid="feed-item">
+            <!-- The kind, before a word is read: a rating and a removal differ
+               in glyph and in hue. Its name is the tooltip, not more text. -->
+            <span
+              class="ft-badge"
+              :class="row.tone.surface"
+              role="img"
+              :aria-label="row.style.label"
+              :title="row.style.label"
+            >
+              <v-icon :icon="row.style.icon" size="16" :class="row.tone.ink" />
+            </span>
 
-          <div class="ft-head">
-            <p class="ft-line">
-              <!-- Only a name that means the same person in the next response
+            <div class="ft-head">
+              <p class="ft-line">
+                <!-- Only a name that means the same person in the next response
                    can be filtered on: a mask is one of several people. No eye
                    glyph in front of either: "Anonim 3" already says it, and
                    the glyph pushed those names off the column every other
                    name starts on. The tooltip says who sees what. -->
-              <button
-                v-if="row.clickable"
-                type="button"
-                class="ft-actor ft-actor--button"
-                :aria-label="`Pokaż tylko: ${row.actor.name}`"
-                data-testid="feed-item-actor"
-                @click="emit('select-actor', row.actor)"
-              >
-                <span class="ft-actor__name">{{ row.actor.name }}</span>
-                <span
-                  v-if="row.actor.isSelf"
-                  class="ft-tag bg-surface-sage text-ink-sage"
+                <button
+                  v-if="row.clickable"
+                  type="button"
+                  class="ft-actor ft-actor--button"
+                  :aria-label="`Pokaż tylko: ${row.actor.name}`"
+                  data-testid="feed-item-actor"
+                  @click="emit('select-actor', row.actor)"
                 >
-                  Ty
+                  <span class="ft-actor__name">{{ row.actor.name }}</span>
+                  <span
+                    v-if="row.actor.isSelf"
+                    class="ft-tag bg-surface-sage text-ink-sage"
+                  >
+                    Ty
+                  </span>
+                  <v-tooltip
+                    activator="parent"
+                    location="bottom"
+                    :text="row.explanation"
+                  />
+                </button>
+                <span v-else class="ft-actor ft-actor--masked">
+                  <span class="ft-actor__name">{{ row.actor.name }}</span>
+                  <v-tooltip
+                    activator="parent"
+                    location="bottom"
+                    :text="row.explanation"
+                  />
                 </span>
-                <v-tooltip
-                  activator="parent"
-                  location="bottom"
-                  :text="row.explanation"
-                />
-              </button>
-              <span v-else class="ft-actor ft-actor--masked">
-                <span class="ft-actor__name">{{ row.actor.name }}</span>
-                <v-tooltip
-                  activator="parent"
-                  location="bottom"
-                  :text="row.explanation"
-                />
-              </span>
-              <!-- Next to the person, not after the sentence: it says who they
+                <!-- Next to the person, not after the sentence: it says who they
                    are, and there it stays on the first line at every width. -->
-              <template v-if="row.actor.newAdmin">
-                {{ " " }}
-                <span class="ft-tag bg-surface-warning text-ink-warning">
-                  <v-icon :icon="mdiAccountClockOutline" size="12" />
-                  okres próbny
-                </span>
-              </template>
-              <!-- Interpolated, never v-html: the name beside it and every
+                <template v-if="row.actor.newAdmin">
+                  {{ " " }}
+                  <span class="ft-tag bg-surface-warning text-ink-warning">
+                    <v-icon :icon="mdiAccountClockOutline" size="12" />
+                    okres próbny
+                  </span>
+                </template>
+                <!-- Interpolated, never v-html: the name beside it and every
                    page name below are text somebody typed. The spaces are
                    real ones, so the line copies and reads aloud as a
                    sentence rather than "Anna Nowakoceniła". -->
-              {{ " " }}
-              <span class="ft-sentence">{{ row.sentence }}</span>
-            </p>
-            <time class="ft-time" :datetime="row.batch.lastAt">
-              {{ row.time }}
-            </time>
-          </div>
+                {{ " " }}
+                <span class="ft-sentence">{{ row.sentence }}</span>
+              </p>
+              <time class="ft-time" :datetime="row.batch.lastAt">
+                {{ row.time }}
+              </time>
+            </div>
 
-          <ul
-            v-if="row.batch.targets.length > 0 || row.batch.moreTargets > 0"
-            class="ft-targets"
-          >
-            <li
-              v-for="target in shownTargets(row.batch)"
-              :key="target.key"
-              class="ft-target-group"
-              data-testid="feed-item-target"
+            <ul
+              v-if="row.batch.targets.length > 0 || row.batch.moreTargets > 0"
+              class="ft-targets"
             >
-              <!-- The pill is the name and nothing else, so it stays one
+              <li
+                v-for="target in shownTargets(row.batch)"
+                :key="target.key"
+                class="ft-target-group"
+                data-testid="feed-item-target"
+              >
+                <!-- The pill is the name and nothing else, so it stays one
                    shape; what an administrator is told about it sits beside
                    it and wraps as its own unit. -->
-              <component
-                :is="target.href ? NuxtLink : 'span'"
-                :to="target.href ?? undefined"
-                class="ft-target"
-                :class="{
-                  'ft-target--link': !!target.href,
-                  'ft-target--deleted': target.deleted,
-                }"
-                :title="target.name"
-              >
-                <v-icon
-                  :icon="targetIcon(target.type)"
-                  size="14"
-                  class="ft-target__icon"
-                />
-                <span class="ft-target__name">
-                  {{ nameParts(target).main
-                  }}<span
-                    v-if="nameParts(target).rest"
-                    class="ft-target__rest"
-                    >{{ nameParts(target).rest }}</span
-                  >
+                <component
+                  :is="target.href ? NuxtLink : 'span'"
+                  :to="target.href ?? undefined"
+                  class="ft-target"
+                  :class="{
+                    'ft-target--link': !!target.href,
+                    'ft-target--deleted': target.deleted,
+                  }"
+                  :title="target.name"
+                >
+                  <v-icon
+                    :icon="targetIcon(target.type)"
+                    size="14"
+                    class="ft-target__icon"
+                  />
+                  <span class="ft-target__name">
+                    {{ nameParts(target).main
+                    }}<span
+                      v-if="nameParts(target).rest"
+                      class="ft-target__rest"
+                      >{{ nameParts(target).rest }}</span
+                    >
+                  </span>
+                  <span v-if="target.deleted" class="ft-target__note">
+                    (usunięte)
+                  </span>
+                </component>
+                <span
+                  v-if="target.selfApproved"
+                  class="ft-tag bg-surface-warning text-ink-warning"
+                  data-testid="feed-item-self-approved"
+                >
+                  <v-icon :icon="mdiAlertOutline" size="12" />
+                  własna propozycja
                 </span>
-                <span v-if="target.deleted" class="ft-target__note">
-                  (usunięte)
-                </span>
-              </component>
-              <span
-                v-if="target.selfApproved"
-                class="ft-tag bg-surface-warning text-ink-warning"
-                data-testid="feed-item-self-approved"
-              >
-                <v-icon :icon="mdiAlertOutline" size="12" />
-                własna propozycja
-              </span>
-              <NuxtLink
-                v-if="target.revisionHref"
-                :to="target.revisionHref"
-                class="ft-revision text-ink-info"
-                data-testid="feed-item-revision"
-              >
-                <v-icon :icon="mdiFileCompare" size="12" />
-                zmiana
-              </NuxtLink>
-            </li>
+                <NuxtLink
+                  v-if="target.revisionHref"
+                  :to="target.revisionHref"
+                  class="ft-revision text-ink-info"
+                  data-testid="feed-item-revision"
+                >
+                  <v-icon :icon="mdiFileCompare" size="12" />
+                  zmiana
+                </NuxtLink>
+              </li>
 
-            <li v-if="hiddenListed(row.batch) > 0" class="ft-targets__tail">
-              <button
-                type="button"
-                class="ft-more text-ink-info"
-                data-testid="feed-item-expand"
-                @click="expanded.add(row.batch.id)"
-              >
-                {{ moreTargetsLabel(hiddenListed(row.batch)) }}
-                <v-icon :icon="mdiChevronDown" size="14" />
-              </button>
-            </li>
-            <!-- Past the listed ones there is nothing to expand into, so this
+              <li v-if="hiddenListed(row.batch) > 0" class="ft-targets__tail">
+                <button
+                  type="button"
+                  class="ft-more text-ink-info"
+                  data-testid="feed-item-expand"
+                  @click="expanded.add(row.batch.id)"
+                >
+                  {{ moreTargetsLabel(hiddenListed(row.batch)) }}
+                  <v-icon :icon="mdiChevronDown" size="14" />
+                </button>
+              </li>
+              <!-- Past the listed ones there is nothing to expand into, so this
                  is words rather than a button - and held back while the
                  button shows, since two "i jeszcze" read as a stutter. -->
-            <li
-              v-else-if="row.batch.moreTargets > 0"
-              class="ft-targets__tail ft-rest text-ink-neutral"
-            >
-              {{ moreTargetsLabel(row.batch.moreTargets) }}
-            </li>
-          </ul>
+              <li
+                v-else-if="row.batch.moreTargets > 0"
+                class="ft-targets__tail ft-rest text-ink-neutral"
+              >
+                {{ moreTargetsLabel(row.batch.moreTargets) }}
+              </li>
+            </ul>
 
-          <p
-            v-for="target in reasons(row.batch)"
-            :key="target.key"
-            class="ft-reason"
-            :title="target.reason"
-            data-testid="feed-item-reason"
-          >
-            <!-- Which page, only where there is a choice: under a single pill
+            <p
+              v-for="target in reasons(row.batch)"
+              :key="target.key"
+              class="ft-reason"
+              :title="target.reason"
+              data-testid="feed-item-reason"
+            >
+              <!-- Which page, only where there is a choice: under a single pill
                  the name would just repeat it. -->
-            <span v-if="row.batch.targets.length > 1" class="ft-reason__name">{{
-              `${target.name}:`
-            }}</span>
-            {{ target.reason }}
-          </p>
-        </li>
+              <span
+                v-if="row.batch.targets.length > 1"
+                class="ft-reason__name"
+                >{{ `${target.name}:` }}</span
+              >
+              {{ target.reason }}
+            </p>
+          </li>
+        </template>
       </ol>
     </section>
   </div>
@@ -193,6 +213,7 @@ import {
   mdiAccountClockOutline,
   mdiAlertOutline,
   mdiChevronDown,
+  mdiCreationOutline,
   mdiFileCompare,
   mdiLightbulbOutline,
   mdiLinkVariant,
@@ -204,6 +225,7 @@ import {
   type FeedBatch,
   type FeedTarget,
   type FeedTargetType,
+  type SiteChange,
 } from "~~/shared/activityFeed";
 import { contributorNameExplanation } from "~/utils/contributorName";
 import { entityIcon } from "~/utils/entityIcon";
@@ -216,12 +238,21 @@ import { feedKindStyle, feedToneClasses } from "~/utils/feedKindStyle";
  * pills, each its own link with its type's icon, so two names can never run
  * together into one and neither can be mistaken for the sentence.
  *
+ * A rollout of the site itself sits on the same rail, at the time it went
+ * live, on the one filled badge - see `ActivitySiteRelease`.
+ *
  * Renders only what arrived: the revision link, the self-approval flag and the
  * reason are on a target only when the server decided this reader is an
  * established administrator, so there is no role check here to get wrong.
  */
 const props = defineProps<{
-  groups: { day: string; label: string; batches: FeedBatch[] }[];
+  groups: {
+    day: string;
+    label: string;
+    batches: FeedBatch[];
+    /** The rollouts of the site that went live on the day, newest first. */
+    releases?: { at: string; changes: SiteChange[] }[];
+  }[];
   actorOf: (batch: FeedBatch) => FeedActor;
 }>();
 
@@ -285,13 +316,14 @@ function timeOf(batch: FeedBatch): string {
 /** Everything a line draws that does not change when it is expanded, worked
  * out once per render of the list rather than once per binding. */
 const sections = computed(() =>
-  props.groups.map((group) => ({
-    day: group.day,
-    label: group.label,
-    rows: group.batches.map((batch) => {
+  props.groups.map((group) => {
+    const lines = group.batches.map((batch) => {
       const actor = props.actorOf(batch);
       const style = feedKindStyle[batch.kind];
       return {
+        type: "batch" as const,
+        key: batch.id,
+        at: batch.lastAt,
         batch,
         actor,
         style,
@@ -302,8 +334,22 @@ const sections = computed(() =>
         // Only an established administrator is ever sent a uid.
         explanation: contributorNameExplanation(actor, actor.uid !== null),
       };
-    }),
-  })),
+    });
+    const releases = (group.releases ?? []).map((release) => ({
+      type: "release" as const,
+      key: `release:${release.at}`,
+      at: release.at,
+      release,
+    }));
+    return {
+      day: group.day,
+      label: group.label,
+      // Newest first, a rollout where it went live among the lines: pinned to
+      // the top of its day instead, a morning rollout sat over the evening's
+      // work.
+      rows: [...lines, ...releases].sort((a, b) => b.at.localeCompare(a.at)),
+    };
+  }),
 );
 
 /** Batches whose whole listed slice is out. Keyed by batch id, so paging the
@@ -411,6 +457,14 @@ function reasons(batch: FeedBatch) {
   position: absolute;
   top: 0;
   width: var(--ft-badge);
+}
+
+/* Filled where every other badge is a tint: the site itself, not a person,
+   and the line a reader coming back after a few days should not scroll past.
+   White on ink-sage is 6.43:1. */
+.ft-badge--release {
+  background: rgb(var(--v-theme-ink-sage));
+  color: #ffffff;
 }
 
 /* ---- the line ---- */
