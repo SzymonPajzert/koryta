@@ -191,9 +191,17 @@ class FirestoreCollection(Pipeline):
         List the objects from the specified Firestore collection and output entities.
         """
         output = []
-        blobs = ctx.io.list_files(
-            CloudStorage(prefix="hostname=koryta.pl", binary=True)
-        )
+        # Every export sits under its own `date=<timestamp>/`, so naming the day
+        # in the prefix lists that day's exports and nothing else. Listing the
+        # whole host meant every export ever taken - ~290 of them at ~500
+        # objects each - to keep one day's worth in `wanted_blobs`, and it took
+        # a quarter of an hour per collection read, per day
+        # `latest_on_or_before` walks back. Without a date the caller wants
+        # every export, so there the whole host is still listed.
+        prefix = "hostname=koryta.pl"
+        if self.date:
+            prefix += f"/date={self.date}"
+        blobs = ctx.io.list_files(CloudStorage(prefix=prefix, binary=True))
         for blob_ref in tqdm(self.wanted_blobs(blobs)):
             date = export_timestamp(blob_ref)
             content = ctx.io.read_data(blob_ref).read_file()
