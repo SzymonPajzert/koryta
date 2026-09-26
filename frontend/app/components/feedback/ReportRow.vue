@@ -74,6 +74,41 @@
 
     <p class="fb-report__message text-body-1 mb-3">{{ item.message }}</p>
 
+    <!-- A change with no QA entry says it fixes this report. What it did is
+         the only description there is of it, so it is written out here rather
+         than folded into a chip; newest first, as the claims are listed. -->
+    <div
+      v-for="(change, index) in fix?.changes ?? []"
+      :key="index"
+      class="d-flex align-start ga-2 mb-3 text-body-2"
+      data-fix-change
+    >
+      <v-icon
+        size="small"
+        class="mt-1"
+        color="ink-sage"
+        :icon="mdiWrenchOutline"
+      />
+      <div>
+        <span class="text-medium-emphasis">
+          {{ index === 0 ? "Poprawka:" : "Wcześniejsza poprawka:" }}
+        </span>
+        {{ change.change }}
+        <!-- A chip, as the report's own page is in the line below: a bare
+             link would be the browser's blue, alone on the row. -->
+        <v-chip
+          v-if="change.link"
+          size="x-small"
+          label
+          class="ms-1"
+          :to="change.link"
+        >
+          <v-icon start :icon="mdiLinkVariant" />
+          Gdzie sprawdzić
+        </v-chip>
+      </div>
+    </div>
+
     <div class="d-flex align-center flex-wrap ga-2">
       <!-- A verdict left on a QA changelog entry arrives here like any other
            report; what it needs is the entry it was about, not the /qa route
@@ -105,7 +140,7 @@
       </v-chip>
       <!-- A change on the QA list says it fixes this report. -->
       <FeedbackFixChip
-        v-if="fix"
+        v-if="fix && fix.entries.length > 0"
         :entries="fix.entries"
         :state="fix.state"
         :verdicts="fix.verdicts"
@@ -187,6 +222,7 @@ import {
   mdiClipboardCheckOutline,
   mdiLinkVariant,
   mdiPlaylistPlus,
+  mdiWrenchOutline,
 } from "@mdi/js";
 import {
   feedbackKindConfig,
@@ -205,8 +241,8 @@ import type { Feedback, FeedbackStatus } from "~~/shared/model";
 
 /** One report in an admin list: a line to tell it from the others, and in
  * the open row everything there is to know about it and to decide on it -
- * who wrote it and where, the whole message, what the QA list says about it,
- * its status and the team's note.
+ * who wrote it and where, the whole message, what the code says about fixing
+ * it, its status and the team's note.
  *
  * The row decides nothing itself. Every change is an event, and the page
  * makes it through `useFeedbackAdmin`, which is what keeps the writes in
@@ -215,7 +251,7 @@ defineProps<{
   item: Feedback;
   /** Place in the whole queue, when the report is in it. */
   position?: number;
-  /** What the QA list says about a fix for this report, if it claims one. */
+  /** What the code says about a fix for this report, if it claims one. */
   fix?: FixInfo;
   /** The reports this one was written about, when it came from checking a
    * fix for them. */

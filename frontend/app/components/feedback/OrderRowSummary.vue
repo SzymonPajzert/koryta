@@ -50,7 +50,7 @@ import type { Feedback } from "~~/shared/model";
  * it alone, and the fills the chips use are too pale for that. */
 const props = defineProps<{
   item: Feedback;
-  /** Where a fix claimed on the QA list stands, when there is one. */
+  /** Where a fix the code claims for it stands, when there is one. */
   fixState?: FixState | null;
 }>();
 
