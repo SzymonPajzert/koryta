@@ -2,6 +2,13 @@ import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
 
+/** The visual projects draw dates and times as a reader in Poland sees them,
+ * wherever the suite runs. Left to the machine, a `toLocaleString()` prints
+ * in the runner's own zone - UTC on the server that takes the baselines and in
+ * CI, but not on a laptop in Warsaw, where the same shot would come out an
+ * hour or two different. */
+const readerClock = { locale: "pl-PL", timezoneId: "Europe/Warsaw" };
+
 export default defineConfig({
   testDir: "./tests",
   // Compiles the dev server's routes before the first test, so no spec spends
@@ -53,6 +60,7 @@ export default defineConfig({
       testMatch: "visual/**/*.spec.ts",
       use: {
         ...devices["Desktop Chrome"],
+        ...readerClock,
         viewport: { width: 1280, height: 800 },
       },
     },
@@ -61,6 +69,7 @@ export default defineConfig({
       testMatch: "visual/**/*.spec.ts",
       use: {
         ...devices["Desktop Chrome"],
+        ...readerClock,
         viewport: { width: 375, height: 667 },
       },
     },
