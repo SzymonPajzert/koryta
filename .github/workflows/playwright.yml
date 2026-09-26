@@ -67,3 +67,62 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 30
+
+  # Every visual test against its baseline under
+  # frontend/tests/visual/__screenshots__/linux. On a failure the artifact holds
+  # each shot as it came out, next to the baseline and the diff.
+  visual:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Functions Dependencies
+        working-directory: frontend/functions
+        run: npm ci
+
+      - name: Build Functions
+        working-directory: frontend/functions
+        run: npm run build
+
+      - name: Install Java (for Emulators)
+        uses: actions/setup-java@v5.6.0
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Cache Firebase emulators
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: ${{ runner.os }}-firebase-emulators-${{ hashFiles('firebase.json') }}
+          restore-keys: |
+            ${{ runner.os }}-firebase-emulators-
+
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run visual regression tests
+        working-directory: frontend
+        run: npm run test:visual
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-visual-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14
