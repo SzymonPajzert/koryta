@@ -9,6 +9,7 @@ import type {
   FeedActor,
   FeedBatch,
   FeedRange,
+  SiteChange,
 } from "../../shared/activityFeed";
 import type { ActivityStats } from "../../server/api/stats/activity.get";
 
@@ -76,6 +77,20 @@ const feed = (overrides: Partial<ActivityFeed> = {}): ActivityFeed => ({
   batches: [],
   newAdmins: [],
   truncated: [],
+  siteChanges: [],
+  ...overrides,
+});
+
+const change = (
+  id: string,
+  at: string,
+  overrides: Partial<SiteChange> = {},
+): SiteChange => ({
+  id,
+  at,
+  title: `Zmiana ${id}`,
+  description: `Opis ${id}`,
+  area: "public",
   ...overrides,
 });
 
@@ -227,6 +242,22 @@ type Wrapper = Awaited<ReturnType<typeof mountPage>>;
 
 const itemTexts = (wrapper: Wrapper) =>
   wrapper.findAll('[data-testid="feed-item"]').map((item) => item.text());
+
+const releaseTexts = (wrapper: Wrapper) =>
+  wrapper
+    .findAll('[data-testid="activity-release"]')
+    .map((release) => release.text());
+
+/** Each day's heading with what is under it: how many lines, and the titles
+ * of the site's changes. */
+const days = (wrapper: Wrapper) =>
+  wrapper.findAll('[data-testid="activity-day"]').map((day) => ({
+    label: day.get("h2").text(),
+    lines: day.findAll('[data-testid="feed-item"]').length,
+    changes: day
+      .findAll('[data-testid="activity-site-change"]')
+      .map((node) => node.text()),
+  }));
 
 const button = (wrapper: Wrapper, label: string) =>
   wrapper.findAll("button").find((node) => node.text() === label)!;
@@ -749,5 +780,124 @@ describe("/aktywnosc", () => {
     const wrapper = await mountPage();
 
     expect(wrapper.text()).toContain("Nie udało się pobrać aktywności.");
+  });
+
+  describe("changes to the site", () => {
+    /** The contributor week with a rollout on Monday among its lines, and
+     * one on Friday, a day nobody did anything. */
+    const withReleases = () =>
+      feed({
+        ...contributorFeed(),
+        siteChanges: [
+          change("tabela", "2026-09-21T13:45:00.000Z"),
+          change("szukanie", "2026-09-21T13:45:00.000Z", {
+            area: "contributor",
+          }),
+          change("mapa", "2026-09-18T19:30:00.000Z"),
+        ],
+      });
+
+    it("files each rollout under the day it went live, among the lines", async () => {
+      serve({ 7: withReleases() });
+      const wrapper = await mountPage();
+
+      expect(days(wrapper)).toEqual([
+        { label: "Dzisiaj", lines: 2, changes: [] },
+        {
+          label: "Wczoraj",
+          lines: 1,
+          changes: [
+            expect.stringContaining("Zmiana tabela"),
+            expect.stringContaining("Zmiana szukanie"),
+          ],
+        },
+        { label: "Niedziela, 20 września", lines: 1, changes: [] },
+        {
+          label: "Piątek, 18 września",
+          lines: 0,
+          changes: [expect.stringContaining("Zmiana mapa")],
+        },
+      ]);
+      expect(releaseTexts(wrapper)[0]).toContain("2 zmiany");
+      expect(releaseTexts(wrapper)[1]).toContain("1 zmiana");
+    });
+
+    it("shows the site's changes alone on their own chip", async () => {
+      serve({ 7: withReleases() });
+      const wrapper = await mountPage();
+
+      await chip(wrapper, "Zmiany na stronie").trigger("click");
+      await vi.waitUntil(() => itemTexts(wrapper).length === 0, {
+        timeout: 2000,
+      });
+
+      expect(releaseTexts(wrapper)).toHaveLength(2);
+      expect(useRouter().currentRoute.value.query.rodzaj).toBe("zmiany");
+    });
+
+    it("leaves them out once a kind of line or a person is picked", async () => {
+      // A rollout is not a vote, and nobody in particular did it.
+      serve({ 7: withReleases() });
+      const byKind = await mountPage({ rodzaj: "oceny" });
+      expect(itemTexts(byKind).length).toBeGreaterThan(0);
+      expect(releaseTexts(byKind)).toEqual([]);
+      byKind.unmount();
+      mounted.pop();
+      clearNuxtData("activity-feed");
+
+      serve({ 7: withReleases() });
+      const byPerson = await mountPage({ kto: "ja" });
+      expect(itemTexts(byPerson)).toHaveLength(1);
+      expect(releaseTexts(byPerson)).toEqual([]);
+    });
+
+    it("lists a quiet week's rollouts rather than calling it empty", async () => {
+      serve({
+        7: feed({
+          siteChanges: [change("tabela", "2026-09-21T13:45:00.000Z")],
+        }),
+      });
+      const wrapper = await mountPage();
+
+      expect(releaseTexts(wrapper)).toHaveLength(1);
+      expect(wrapper.text()).not.toContain(
+        "W tym okresie nikt nic nie zrobił.",
+      );
+    });
+
+    it("says so when the site did not change", async () => {
+      serve({ 7: contributorFeed() });
+      const wrapper = await mountPage({ rodzaj: "zmiany" });
+
+      await vi.waitUntil(
+        () =>
+          wrapper
+            .text()
+            .includes("W tym okresie nic się na stronie nie zmieniło."),
+        { timeout: 2000 },
+      );
+    });
+
+    it("holds back a rollout older than the lines still to page through", async () => {
+      // Shown straight away it would sit under a line from the last hour,
+      // with a week of lines yet to come above it.
+      const long = withReleases();
+      long.batches = Array.from({ length: 35 }, (_, index) =>
+        batch(
+          "named-1",
+          new Date(NOW.getTime() - index * 30 * 60_000).toISOString(),
+        ),
+      );
+      serve({ 7: long });
+      const wrapper = await mountPage();
+
+      expect(itemTexts(wrapper)).toHaveLength(30);
+      expect(releaseTexts(wrapper)).toEqual([]);
+
+      await button(wrapper, "Pokaż więcej").trigger("click");
+
+      expect(itemTexts(wrapper)).toHaveLength(35);
+      expect(releaseTexts(wrapper)).toHaveLength(2);
+    });
   });
 });
