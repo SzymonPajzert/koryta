@@ -27,4 +27,11 @@ export type ReportFix = {
 /** Newest first: prepend, in the commit that makes the change. An entry stays
  * after its reports are closed - a closed report on /admin/opinie still shows
  * what fixed it. */
-export const REPORT_FIXES: ReportFix[] = [];
+export const REPORT_FIXES: ReportFix[] = [
+  {
+    change:
+      "Ołówek przy kandydaturze otwiera okno z polem „Uzyskano mandat”, więc wygraną można oznaczyć bez starego formularza.",
+    fixes: ["ZASMgbwZm0hewxZ8wLBL"],
+    link: "/osoba/kamil-sebastian-barczyk-qFxOI9faG9y0TuYuJAMc",
+  },
+];
