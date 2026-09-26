@@ -1,5 +1,6 @@
 import { test, expect } from "./test";
 import type { Page } from "@playwright/test";
+import { freezeClock } from "./clock";
 import { expectFitsThePhone } from "./phoneWidth";
 import { pageTag } from "./pageTags";
 
@@ -10,7 +11,9 @@ import { pageTag } from "./pageTags";
  * rather than from the document the server sent. `viewports` narrows a page to
  * some of the projects, for the ones a phone-sized shot says nothing about.
  * `act` is for state a visitor reaches by clicking rather than by url - it
- * runs once the page has settled and before the capture. */
+ * runs once the page has settled and before the capture. `inApp` opens the
+ * path the way a link inside the site would, under the frozen clock, for a
+ * page that prints dates counted from today. */
 const pages: {
   name: string;
   path: string;
@@ -18,6 +21,7 @@ const pages: {
   settled?: (string | RegExp)[];
   viewports?: string[];
   act?: (page: Page) => Promise<void>;
+  inApp?: boolean;
 }[] = [
   { name: "home", path: "/", file: "index" },
   { name: "login", path: "/login", file: "login" },
@@ -82,6 +86,12 @@ const pages: {
     // renders, so capturing before it lands catches a page with two empty
     // headings on it.
     settled: ["Kto kogo zastąpił", "2 zmiany tego samego dnia"],
+    // „stan na” over the current board, and every open post's „2 lata na
+    // stanowisku”, count from a today that CompanyChanges.vue fixes at render
+    // - on the server, for a page the server sends. So the shot changed every
+    // day, and on a phone the caption's wrap moved everything below it. Drawn
+    // in the browser instead, they count from ./clock.ts.
+    inApp: true,
   },
   {
     // The table filtered to a place, which is no longer what a place's page
@@ -135,14 +145,45 @@ const pages: {
   },
 ];
 
-for (const { name, path, file, settled, viewports, act } of pages) {
+type MountPoint = Element & {
+  __vue_app__?: {
+    config: {
+      globalProperties: {
+        $router: { push: (to: string) => Promise<unknown> };
+      };
+    };
+  };
+};
+
+/** Open `path` the way a link inside the site would: land on /o-nas, then hand
+ * the path to the router. The page is then drawn in the browser, under the
+ * clock ./clock.ts stops, rather than arriving drawn by the server, whose
+ * clock nothing here can stop. */
+async function openInApp(page: Page, path: string) {
+  await freezeClock(page);
+  await page.goto("/o-nas");
+  // Vue sets `__vue_app__` on the mount point when it mounts - hydration
+  // included - so from then on the router takes a push.
+  await page.waitForFunction(
+    () =>
+      !!(document.querySelector("#__nuxt") as MountPoint | null)?.__vue_app__,
+  );
+  await page.evaluate(async (to) => {
+    const root = document.querySelector("#__nuxt") as MountPoint;
+    await root.__vue_app__!.config.globalProperties.$router.push(to);
+  }, path);
+  await page.waitForURL(`**${path}`);
+}
+
+for (const { name, path, file, settled, viewports, act, inApp } of pages) {
   const tag = file ? [pageTag(file)] : [];
   test(name, { tag }, async ({ page }, testInfo) => {
     test.skip(
       !!viewports && !viewports.includes(testInfo.project.name),
       `captured only in ${viewports?.join(", ")}`,
     );
-    await page.goto(path);
+    if (inApp) await openInApp(page, path);
+    else await page.goto(path);
     await page.locator(".v-main").waitFor();
     for (const text of settled ?? []) {
       await page.getByText(text).first().waitFor({ timeout: 30_000 });
