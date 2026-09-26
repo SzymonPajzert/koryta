@@ -1,6 +1,8 @@
-import { test, expect, type Page, type TestInfo } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
+import { test, expect } from "./test";
 import type { ProgressStats } from "../../server/utils/progressStats";
 import { expectFitsThePhone } from "./phoneWidth";
+import { pageTag } from "./pageTags";
 
 /** The home page's call to action, on its own.
  *
@@ -108,7 +110,9 @@ const desktopOnly = (testInfo: TestInfo) =>
     "a desktop layout; the phone has its own shot",
   );
 
-test.describe("Wezwanie do pomocy na stronie głównej", () => {
+const HOME = { tag: pageTag("index") };
+
+test.describe("Wezwanie do pomocy na stronie głównej", HOME, () => {
   // Both projects: 1280px on the desktop one, 375px on the phone one.
   test("wezwanie-do-pomocy", async ({ page }, testInfo) => {
     test.setTimeout(120_000);

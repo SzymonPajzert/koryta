@@ -1,25 +1,29 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./test";
 import type { Page } from "@playwright/test";
 import { expectFitsThePhone } from "./phoneWidth";
+import { pageTag } from "./pageTags";
 
-/** `settled` is what has to be on the page before it is worth capturing, for
- * the pages that draw themselves from an api response rather than from the
- * document the server sent. `viewports` narrows a page to some of the projects,
- * for the ones a phone-sized shot says nothing about. `act` is for state a
- * visitor reaches by clicking rather than by url - it runs once the page has
- * settled and before the capture. */
+/** `file` is the page under app/pages that the path renders, for the test's
+ * `@page:` tag (see ./pageTags.ts); only not-found goes without, since what it
+ * renders is app/error.vue. `settled` is what has to be on the page before it
+ * is worth capturing, for the pages that draw themselves from an api response
+ * rather than from the document the server sent. `viewports` narrows a page to
+ * some of the projects, for the ones a phone-sized shot says nothing about.
+ * `act` is for state a visitor reaches by clicking rather than by url - it
+ * runs once the page has settled and before the capture. */
 const pages: {
   name: string;
   path: string;
+  file?: string;
   settled?: (string | RegExp)[];
   viewports?: string[];
   act?: (page: Page) => Promise<void>;
 }[] = [
-  { name: "home", path: "/" },
-  { name: "login", path: "/login" },
-  { name: "zrodla", path: "/zrodla" },
-  { name: "o-nas", path: "/o-nas" },
-  { name: "pomoc", path: "/pomoc" },
+  { name: "home", path: "/", file: "index" },
+  { name: "login", path: "/login", file: "login" },
+  { name: "zrodla", path: "/zrodla", file: "zrodla" },
+  { name: "o-nas", path: "/o-nas", file: "o-nas" },
+  { name: "pomoc", path: "/pomoc", file: "pomoc" },
   // The two legal documents, which had no baseline at all. Their content is
   // markdown in frontend/content, so these are the most deterministic shots in
   // the suite - no seed, no dates, no counts - and they are the only cover the
@@ -29,8 +33,12 @@ const pages: {
   // the same document for a while, because every /plik/* route shared one
   // async-data key, and a single capture cannot tell that apart from working.
   // tests/e2e/legal_pages.spec.ts is what guards the navigation itself.
-  { name: "plik-regulamin", path: "/plik/regulamin" },
-  { name: "plik-polityka-prywatnosci", path: "/plik/polityka_prywatnosci" },
+  { name: "plik-regulamin", path: "/plik/regulamin", file: "plik/[name]" },
+  {
+    name: "plik-polityka-prywatnosci",
+    path: "/plik/polityka_prywatnosci",
+    file: "plik/[name]",
+  },
   // Not a page: the path is deliberately unroutable, so this captures
   // app/error.vue's 404 branch. Keep it single-segment - two segments would
   // match pages/[seoType]/[slug].vue and render an entity instead.
@@ -38,6 +46,7 @@ const pages: {
   {
     name: "statystyki",
     path: "/eksploruj/statystyki",
+    file: "eksploruj/statystyki",
     // Two fetches feed this page and only one of them is server rendered. The
     // state of the base arrives with the document; the activity section is
     // fetched from the browser, because it carries names for admins and so has
@@ -58,6 +67,7 @@ const pages: {
     // including the same-day batch, which is the layout most likely to break.
     name: "instytucja-strona",
     path: "/instytucja/wojewodzki-zaklad-testowy-sukspolka",
+    file: "[seoType]/[slug]",
     // Both sections are filled from /api/edges/successions after the page
     // renders, so capturing before it lands catches a page with two empty
     // headings on it.
@@ -69,6 +79,7 @@ const pages: {
     // place the identifiers a ministry or an urząd does have get drawn.
     name: "instytucja",
     path: "/eksploruj/tabela?place=chain-company",
+    file: "eksploruj/tabela",
     // Rendered entirely client side, so none of it exists until two separate
     // responses have arrived: the place list the card is drawn from, and the
     // people the table is filtered to. Capturing before both leaves a card
@@ -91,6 +102,7 @@ const pages: {
     // The seed has exactly three places, which is the threshold.
     name: "instytucje-zwiniete",
     path: "/eksploruj/tabela?place=2&place=company-empty&place=chain-company",
+    file: "eksploruj/tabela",
     settled: ["Wybrane firmy (3)"],
     // Desktop only, for the reason the single institution above is.
     viewports: ["visual-desktop"],
@@ -100,6 +112,7 @@ const pages: {
     // all until this button puts them there.
     name: "instytucje-rozwiniete",
     path: "/eksploruj/tabela?place=2&place=company-empty&place=chain-company",
+    file: "eksploruj/tabela",
     settled: ["Wybrane firmy (3)"],
     act: async (page) => {
       await page.getByRole("button", { name: "Pokaż szczegóły" }).click();
@@ -112,8 +125,9 @@ const pages: {
   },
 ];
 
-for (const { name, path, settled, viewports, act } of pages) {
-  test(name, async ({ page }, testInfo) => {
+for (const { name, path, file, settled, viewports, act } of pages) {
+  const tag = file ? [pageTag(file)] : [];
+  test(name, { tag }, async ({ page }, testInfo) => {
     test.skip(
       !!viewports && !viewports.includes(testInfo.project.name),
       `captured only in ${viewports?.join(", ")}`,

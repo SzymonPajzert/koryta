@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./test";
+import { pageTag } from "./pageTags";
 import { logIn, USERS } from "../e2e/helpers/auth";
 
 /** „Fakty z artykułów" on a person's page - the whole section, which nothing
@@ -26,7 +27,7 @@ import { logIn, USERS } from "../e2e/helpers/auth";
  * feature this shot is largely here for. */
 const PERSON = "/entity/person/3";
 
-test.describe("Fakty osoby", () => {
+test.describe("Fakty osoby", { tag: pageTag("[seoType]/[slug]") }, () => {
   test("fakty-osoby", async ({ page }) => {
     test.setTimeout(120_000);
     await logIn(page, USERS.normal, PERSON);
