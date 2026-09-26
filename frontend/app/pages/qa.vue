@@ -33,67 +33,72 @@
     <v-progress-linear v-if="!loaded" indeterminate class="mb-4" />
 
     <template v-else>
-      <template v-if="filter === 'issue'">
-        <!-- A problem found here reaches the team as a report on
-             /admin/opinie, and there it is somebody's to deal with. An admin
-             gets every open one here too, from every checker, with what the
-             panel has to decide on them - so that "Problemy" is one list of
-             what is wrong, not two that have to be read side by side. -->
-        <template v-if="isAdmin">
-          <AdminSectionHead
-            title="Zgłoszenia z QA"
-            :count="reportsReady ? qaReports.length : undefined"
-            info="Otwarte zgłoszenia wysłane z tej listy, od wszystkich sprawdzających. Status, notatka i kolejka działają tu tak samo jak w panelu zgłoszeń."
-            data-section="qa-reports"
-          >
-            <NuxtLink to="/admin/opinie?zrodlo=qa" class="text-body-2">
-              Wszystkie w panelu zgłoszeń
-            </NuxtLink>
-          </AdminSectionHead>
-          <v-progress-linear v-if="reportsPending" indeterminate class="mb-4" />
-          <v-alert
-            v-else-if="reportsError"
-            type="error"
-            variant="tonal"
-            density="compact"
-            class="mb-6"
-          >
-            {{ reportsError }}
-          </v-alert>
-          <p
-            v-else-if="qaReports.length === 0"
-            class="text-body-2 text-medium-emphasis mb-6"
-          >
-            Nie ma otwartych zgłoszeń z QA.
-          </p>
-          <AdminRowList v-else class="mb-6">
-            <FeedbackReportRow
-              v-for="report in qaReports"
-              :key="report.id"
-              :item="report"
-              :position="positions.get(report.id!)"
-              :fix="fixInfo.get(report.id!)"
-              :fix-targets="fixTargets.get(report.id!)"
-              :can-queue="sectionOf(report) === 'inbox'"
-              :saving="reportSaving[report.id!]"
-              report-page="/admin/opinie"
-              :expanded="openRows.has(`fb-${report.id}`)"
-              @update:expanded="(open) => setOpen(`fb-${report.id}`, open)"
-              @queue="moveTo(report, queue.length)"
-              @status="(adminStatus) => updateAdmin(report, { adminStatus })"
-              @draft="(note) => (draftNotes[report.id!] = note)"
-              @save-note="saveNote(report)"
-            />
-          </AdminRowList>
-        </template>
-
+      <!-- An admin gets the team's side of the tab above their own: on "Do
+           sprawdzenia" the open reports this build says it fixes, to check
+           and close; on "Problemy" every open report sent from this list,
+           from every checker - a problem found here reaches the team as a
+           report on /admin/opinie, and this makes "Problemy" one list of what
+           is wrong rather than two to read side by side. Either way they are
+           the panel's rows, dealt with here as they are there. -->
+      <template v-if="teamSection">
         <AdminSectionHead
-          title="Twoje zgłoszone problemy"
-          :count="visibleItems.length"
-          info="Wpisy z Twoją oceną „Coś nie działa”. Zostają tutaj, dopóki nie zmienisz jej na „Działa”."
-          data-section="my-issues"
-        />
+          :title="teamSection.title"
+          :count="reportsReady ? teamSection.reports.length : undefined"
+          :info="teamSection.info"
+          :data-section="teamSection.id"
+        >
+          <NuxtLink
+            v-if="teamSection.link"
+            :to="teamSection.link.to"
+            class="text-body-2"
+          >
+            {{ teamSection.link.text }}
+          </NuxtLink>
+        </AdminSectionHead>
+        <v-progress-linear v-if="reportsPending" indeterminate class="mb-4" />
+        <v-alert
+          v-else-if="reportsError"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mb-6"
+        >
+          {{ reportsError }}
+        </v-alert>
+        <p
+          v-else-if="teamSection.reports.length === 0"
+          class="text-body-2 text-medium-emphasis mb-6"
+        >
+          {{ teamSection.empty }}
+        </p>
+        <AdminRowList v-else class="mb-6">
+          <FeedbackReportRow
+            v-for="report in teamSection.reports"
+            :key="report.id"
+            :item="report"
+            :position="positions.get(report.id!)"
+            :fix="fixInfo.get(report.id!)"
+            :fix-targets="fixTargets.get(report.id!)"
+            :can-queue="sectionOf(report) === 'inbox'"
+            :saving="reportSaving[report.id!]"
+            report-page="/admin/opinie"
+            :expanded="openRows.has(`fb-${report.id}`)"
+            @update:expanded="(open) => setOpen(`fb-${report.id}`, open)"
+            @queue="moveTo(report, queue.length)"
+            @status="(adminStatus) => updateAdmin(report, { adminStatus })"
+            @draft="(note) => (draftNotes[report.id!] = note)"
+            @save-note="saveNote(report)"
+          />
+        </AdminRowList>
       </template>
+
+      <AdminSectionHead
+        v-if="ownSection"
+        :title="ownSection.title"
+        :count="visibleItems.length"
+        :info="ownSection.info"
+        :data-section="ownSection.id"
+      />
 
       <v-alert
         v-if="visibleItems.length === 0"
@@ -161,9 +166,9 @@ const {
   saveCheck,
 } = useQaChecks();
 
-/** The reports sent from this list, for an admin's "Problemy". Nothing is
- * read until an admin opens that tab: the list is admin-only, and it is the
- * whole of /admin/opinie's. */
+/** /admin/opinie's reports, for an admin: the ones this build says it fixes,
+ * on the first tab, and the ones sent from this list, on "Problemy". The list
+ * is admin-only, so nobody else ever asks for it. */
 const {
   pending: reportsPending,
   loadError: reportsError,
@@ -200,27 +205,90 @@ const setOpen = (rowId: string, open: boolean) =>
 
 onMounted(() => load());
 
-/** Asked for the first time an admin opens "Problemy", and not again on the
- * way back to it: status and queue changes made here are applied in place,
- * as on /admin/opinie. */
+/** Asked for as soon as the page knows it has an admin, since the tab it opens
+ * on lists some of them; and not again on the way between tabs: status and
+ * queue changes made here are applied in place, as on /admin/opinie. */
 const reportsAsked = ref(false);
 
-watch([filter, () => isAdmin.value], ([current, admin]) => {
-  if (current !== "issue" || !admin || reportsAsked.value) return;
-  reportsAsked.value = true;
-  loadReports();
-});
+watch(
+  () => isAdmin.value,
+  (admin) => {
+    if (!admin || reportsAsked.value) return;
+    reportsAsked.value = true;
+    loadReports();
+  },
+  { immediate: true },
+);
 
 const reportsReady = computed(
   () => reportsAsked.value && !reportsPending.value && !reportsError.value,
 );
 
-/** Open reports that came from this list, in the order /admin/opinie lists
- * them: the ones nobody has placed yet, newest first, then the queue. One
- * closed from here stays, dimmed, until the next load, as it does there. */
+/** Open reports, in the order /admin/opinie lists them: the ones nobody has
+ * placed yet, newest first, then the queue. One closed from here stays,
+ * dimmed, until the next load, as it does there. */
+const openReports = computed(() => [...inbox.value, ...queue.value]);
+
+/** The ones that came from this list. */
 const qaReports = computed(() =>
-  [...inbox.value, ...queue.value].filter((report) => !!report.context.qa),
+  openReports.value.filter((report) => !!report.context.qa),
 );
+
+/** The ones this build says it fixes: named in a QA entry's `fixes`, or by a
+ * change with no entry of its own (`shared/reportFixes.ts`). A branch's
+ * claims show on that branch's /qa, and here once it is rolled out. */
+const fixedReports = computed(() =>
+  openReports.value.filter((report) => fixInfo.value.has(report.id!)),
+);
+
+/** The admin's list above the tab's own entries, if the tab has one. */
+const teamSection = computed(() => {
+  if (!isAdmin.value) return null;
+  if (filter.value === "unchecked") {
+    return {
+      id: "fixed-reports",
+      title: "Zgłoszenia do zamknięcia",
+      info: "Otwarte zgłoszenia, które zmiany w tej wersji strony mają poprawiać - wpisem z tej listy albo samą zmianą w kodzie. Sprawdź każde tam, gdzie je zgłoszono, i zamknij, jeśli działa.",
+      reports: fixedReports.value,
+      empty: "Żadne otwarte zgłoszenie nie czeka na sprawdzenie poprawki.",
+      link: undefined,
+    };
+  }
+  if (filter.value === "issue") {
+    return {
+      id: "qa-reports",
+      title: "Zgłoszenia z QA",
+      info: "Otwarte zgłoszenia wysłane z tej listy, od wszystkich sprawdzających. Status, notatka i kolejka działają tu tak samo jak w panelu zgłoszeń.",
+      reports: qaReports.value,
+      empty: "Nie ma otwartych zgłoszeń z QA.",
+      link: {
+        to: "/admin/opinie?zrodlo=qa",
+        text: "Wszystkie w panelu zgłoszeń",
+      },
+    };
+  }
+  return null;
+});
+
+/** The head over the reader's own entries: wherever an admin's list sits
+ * above them, and on "Problemy" for everybody. */
+const ownSection = computed(() => {
+  if (filter.value === "issue") {
+    return {
+      id: "my-issues",
+      title: "Twoje zgłoszone problemy",
+      info: "Wpisy z Twoją oceną „Coś nie działa”. Zostają tutaj, dopóki nie zmienisz jej na „Działa”.",
+    };
+  }
+  if (filter.value === "unchecked" && isAdmin.value) {
+    return {
+      id: "my-unchecked",
+      title: "Twoje wpisy do sprawdzenia",
+      info: "Wpisy bez Twojej oceny. Zostają tutaj, dopóki nie powiesz, czy działają.",
+    };
+  }
+  return null;
+});
 
 /** For an admin, "Problemy" counts what the team has to deal with - once it
  * is known; for anybody else, the entries they reported themselves. */

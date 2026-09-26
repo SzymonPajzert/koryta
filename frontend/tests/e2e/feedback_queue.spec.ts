@@ -5,6 +5,7 @@ import { logIn, USERS } from "./helpers/auth";
 import { FEEDBACK_ID_PATTERN } from "../../shared/feedbackFixes";
 import type { Feedback } from "../../shared/model";
 import { QA_ITEMS } from "../../shared/qa";
+import { REPORT_FIXES } from "../../shared/reportFixes";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -51,6 +52,12 @@ async function orderOf(page: Page, ids: string[]) {
  * report it names. */
 const CLAIM = QA_ITEMS.find((item) =>
   item.fixes?.some((id) => FEEDBACK_ID_PATTERN.test(id)),
+);
+
+/** A change with no QA entry that says it fixes a report, borrowed the same
+ * way. */
+const CODE_CLAIM = REPORT_FIXES.find((fix) =>
+  fix.fixes.some((id) => FEEDBACK_ID_PATTERN.test(id)),
 );
 
 const rankOf = async (id: string) =>
@@ -220,5 +227,37 @@ test.describe("Kolejka zgłoszeń", () => {
     const details = page.locator("[data-fix-details]");
     await expect(details).toContainText(entry.title);
     await expect(details).toContainText(`sprawdzone ${stamp}`);
+  });
+
+  test("zgłoszenie poprawione bez wpisu QA czeka na /qa na zamknięcie", async ({
+    page,
+  }) => {
+    test.skip(
+      !CODE_CLAIM,
+      "Nic w shared/reportFixes.ts nie wskazuje jeszcze zgłoszenia.",
+    );
+    test.setTimeout(120_000);
+
+    const claim = CODE_CLAIM!;
+    const id = claim.fixes.find((fix) => FEEDBACK_ID_PATTERN.test(fix))!;
+    await db()
+      .collection("feedback")
+      .doc(id)
+      .set(report(Date.now(), "poprawione w kodzie", 0));
+
+    await logIn(page, USERS.admin, "/qa");
+    const row = page.locator(`[data-section="fixed-reports"] ~ * #fb-${id}`);
+    await expect(row).toBeVisible({ timeout: 60_000 });
+    await row.locator("[data-row-toggle]").click();
+    await expect(row.locator("[data-fix-change]")).toContainText(claim.change);
+
+    await row.getByRole("button", { name: "Zamknij jako załatwione" }).click();
+    await expect
+      .poll(
+        async () =>
+          (await db().collection("feedback").doc(id).get()).data()?.adminStatus,
+        { timeout: 30_000 },
+      )
+      .toBe("resolved");
   });
 });

@@ -11,6 +11,23 @@ import type { QaCheck, QaItem, QaItemState } from "../../shared/qa";
 
 const vuetify = createVuetify({ components, directives });
 
+/** Reports that a change with no QA entry says it fixes - one still open when
+ * served below, one already closed. */
+const { FIXED_OPEN, FIXED_CLOSED } = vi.hoisted(() => ({
+  FIXED_OPEN: "FixedOpen00000000001",
+  FIXED_CLOSED: "FixedClosed000000001",
+}));
+
+vi.mock("../../shared/reportFixes", () => ({
+  REPORT_FIXES: [
+    {
+      change: "Wykres nie nachodzi już na tabelę.",
+      fixes: [FIXED_OPEN, FIXED_CLOSED],
+      link: "/osoba/jan",
+    },
+  ],
+}));
+
 const items: QaItem[] = [
   {
     id: "new-thing",
@@ -162,6 +179,9 @@ describe("QA page", () => {
     expect(wrapper.text()).not.toContain("Zepsuta rzecz");
     // One line each, until one is asked for.
     expect(wrapper.find("[data-row-panel]").exists()).toBe(false);
+    // The team's reports are an admin's; nobody else's page asks for them.
+    expect(wrapper.find("[data-section]").exists()).toBe(false);
+    expect(authRequest).not.toHaveBeenCalled();
   });
 
   it("loads the verdicts when it opens", async () => {
@@ -308,11 +328,13 @@ describe("QA page", () => {
       isAdmin.value = true;
       serveReports();
       const wrapper = await mountPage();
+      await flushPromises();
 
-      // Not read for the default tab: nothing there needs it.
-      expect(listCalls()).toHaveLength(0);
-      // Not known yet, so not counted.
-      expect(button(wrapper, "Problemy").text()).toBe("Problemy");
+      // Read as soon as the page knows it has an admin - the tab it opens on
+      // lists the reports this build says it fixes - so this tab is counted
+      // before it is opened.
+      expect(listCalls()).toHaveLength(1);
+      expect(button(wrapper, "Problemy").text()).toMatch(/^Problemy\s*2$/);
 
       await openProblems(wrapper);
 
@@ -375,6 +397,115 @@ describe("QA page", () => {
       });
       // Closed, and still there until the next load, as on /admin/opinie.
       expect(wrapper.get("#fb-qa-open").classes()).toContain("arow--dimmed");
+    });
+  });
+
+  describe("Zgłoszenia do zamknięcia", () => {
+    const report = (
+      id: string,
+      adminStatus: FeedbackStatus,
+      context: Feedback["context"] = { route: "/osoba/jan", pageTitle: "Jan" },
+    ): Feedback => ({
+      id,
+      kind: "bug",
+      message: `zgłoszenie ${id}`,
+      createdAt: "2026-09-20T10:00:00.000Z",
+      adminStatus,
+      userUid: "other",
+      context,
+    });
+
+    const serve = (served: Feedback[]) =>
+      authRequest.mockImplementation(
+        async (_url: string, opts: { method: string }) =>
+          opts.method === "GET"
+            ? { feedback: served.map((item) => structuredClone(item)) }
+            : { ok: true },
+      );
+
+    const mountAdmin = async () => {
+      isAdmin.value = true;
+      const wrapper = await mountPage();
+      await flushPromises();
+      return wrapper;
+    };
+
+    it("opens an admin's page on the open reports this build says it fixes", async () => {
+      serve([
+        report(FIXED_OPEN, "new"),
+        report(FIXED_CLOSED, "resolved"),
+        report("unclaimed", "new"),
+        report("from-qa", "new", {
+          route: "/qa",
+          qa: {
+            itemId: "broken-thing",
+            title: "Zepsuta rzecz",
+            status: "issue",
+          },
+        }),
+      ]);
+      const wrapper = await mountAdmin();
+
+      expect(
+        wrapper
+          .findAll("[data-section]")
+          .map((n) => n.attributes("data-section")),
+      ).toEqual(["fixed-reports", "my-unchecked"]);
+      // Open and claimed only: not the closed one, nor anything unclaimed.
+      expect(
+        wrapper
+          .findAll("[data-report-row]")
+          .map((n) => n.attributes("data-feedback-id")),
+      ).toEqual([FIXED_OPEN]);
+      // The line says a fix is waiting to be checked.
+      expect(
+        wrapper.find(`#fb-${FIXED_OPEN} [data-fix-state-icon]`).exists(),
+      ).toBe(true);
+      // And the reader's own entries follow, as for anybody.
+      expect(wrapper.text()).toContain("Nowa rzecz");
+    });
+
+    it("says what changed and where to look, and closes the report from there", async () => {
+      serve([report(FIXED_OPEN, "new")]);
+      const wrapper = await mountAdmin();
+
+      await wrapper.get(`#fb-${FIXED_OPEN} [data-row-toggle]`).trigger("click");
+      const change = wrapper.get(`#fb-${FIXED_OPEN} [data-fix-change]`);
+      expect(change.text()).toContain("Wykres nie nachodzi już na tabelę.");
+      const where = change.findComponent({ name: "VChip" });
+      expect(where.text()).toBe("Gdzie sprawdzić");
+      expect(where.props("to")).toBe("/osoba/jan");
+      // No QA entry claims it, so there is no entry's chip to open.
+      expect(wrapper.find(`#fb-${FIXED_OPEN} [data-fix-state]`).exists()).toBe(
+        false,
+      );
+
+      await button(
+        wrapper.get(`#fb-${FIXED_OPEN}`),
+        "Zamknij jako załatwione",
+      ).trigger("click");
+      await flushPromises();
+
+      const posts = authRequest.mock.calls.filter(
+        ([, opts]) => opts.method === "POST",
+      );
+      expect(posts.map(([, opts]) => opts.body)).toEqual([
+        { id: FIXED_OPEN, adminStatus: "resolved" },
+      ]);
+      // Closed, and still there until the next load, as on /admin/opinie.
+      expect(wrapper.get(`#fb-${FIXED_OPEN}`).classes()).toContain(
+        "arow--dimmed",
+      );
+    });
+
+    it("says so when nothing it claims is still open", async () => {
+      serve([report(FIXED_CLOSED, "resolved")]);
+      const wrapper = await mountAdmin();
+
+      expect(wrapper.find("[data-report-row]").exists()).toBe(false);
+      expect(wrapper.text()).toContain(
+        "Żadne otwarte zgłoszenie nie czeka na sprawdzenie poprawki.",
+      );
     });
   });
 
