@@ -43,6 +43,16 @@ const pages: {
   // app/error.vue's 404 branch. Keep it single-segment - two segments would
   // match pages/[seoType]/[slug].vue and render an entity instead.
   { name: "not-found", path: "/nie-ma-takiej-strony" },
+  // Where an /entity/ url of the old scheme lands when it is not a type and an
+  // id: pages/entity/[...path].vue, a line of text rather than the 404 above.
+  {
+    name: "entity-nieznana",
+    path: "/entity/nieznana",
+    file: "entity/[...path]",
+  },
+  // For the owners of the sites the article crawler reads: its user agent is
+  // `KorytaCrawler/0.1 (+http://koryta.pl/crawler)`.
+  { name: "crawler", path: "/crawler", file: "crawler" },
   {
     name: "statystyki",
     path: "/eksploruj/statystyki",
