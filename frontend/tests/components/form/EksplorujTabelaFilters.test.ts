@@ -185,7 +185,7 @@ describe("the table's query bar", () => {
     // Grouped, and with the non-breaking space `Intl` puts there: the work
     // row a line below says „sprawdzono ... z 1 284 osób”, so the same total
     // spelled „1284” above it read as a second, different number.
-    expect(wrapper.text()).toContain("1284 osoby");
+    expect(wrapper.text()).toContain("1\u00a0284 osoby");
   });
 
   /** /eksploruj/autograf/[type] mounts this bar over a chart, with no table
