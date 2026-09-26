@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "aktywnosc-zmiany-na-stronie",
+    title: "Aktywność mówi też, co zmieniło się na stronie",
+    description:
+      "Wpisy z tej listy pojawiają się na /aktywnosc pod dniem, w którym zmiana weszła na koryta.pl, obok tego, co zrobili inni. " +
+      "Z każdej można przejść do strony, której dotyczy, i do jej wpisu tutaj.",
+    steps: [
+      "Otwórz /aktywnosc - pod dniem ostatniej wersji strony ma być zielona linijka „Nowa wersja strony” z tytułami wpisów z /qa. Kliknij tytuł - ma pokazać opis i dwa linki.",
+      "Kliknij „Zmiany na stronie” wśród filtrów nad listą - mają zostać same zmiany, po dniach.",
+    ],
+    link: "/aktywnosc",
+    area: "contributor",
+  },
+  {
     id: "aktywnosc-wykres-30-dni",
     title: "Na górze Aktywności jest wykres ostatnich 30 dni",
     description:

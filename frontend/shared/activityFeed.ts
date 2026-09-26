@@ -3,6 +3,7 @@ import {
   polishCountingGenitive,
 } from "../app/composables/polish";
 import type { NodeType } from "./model";
+import type { QaArea } from "./qa";
 
 /** What `/aktywnosc` lists: the things people did to the data, one line per
  * person per sitting.
@@ -295,6 +296,21 @@ export type FeedActor = {
   newAdmin: boolean;
 };
 
+/** A change to the site itself: an entry of the QA changelog (`shared/qa.ts`)
+ * with the instant it went live on the backend answering. Just what the feed
+ * shows of it - the steps are /qa's, and importing the changelog would put
+ * 70 kB of it, compressed, in the page for the handful of entries a month
+ * holds. */
+export type SiteChange = {
+  /** The entry's id, what `/qa#qa-<id>` opens. */
+  id: string;
+  at: string;
+  title: string;
+  description: string;
+  link?: string;
+  area: QaArea;
+};
+
 export type ActivityFeed = {
   window: { since: string; until: string; days: FeedRange };
   /** The caller is an established administrator (admin, not on trial), and so
@@ -309,6 +325,10 @@ export type ActivityFeed = {
   newAdmins: FeedActor[];
   /** Sources whose scan hit its cap, so the window is a lower bound for them. */
   truncated: string[];
+  /** What changed on the site in the window, newest first. The admin panel's
+   * changes only for an administrator: to anybody else they are news about
+   * pages they cannot open. */
+  siteChanges: SiteChange[];
 };
 
 // ---------------------------------------------------------------------------

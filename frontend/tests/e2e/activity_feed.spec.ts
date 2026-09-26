@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore, FieldPath } from "firebase-admin/firestore";
 import { logIn, USERS } from "./helpers/auth";
+import { QA_ITEMS } from "../../shared/qa";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -124,4 +125,27 @@ test("an administrator sees names and the filter for administrators on trial", a
   await expect(page.getByTestId("activity-new-admin-list")).toContainText(
     "Nikt nie ma teraz statusu nowego administratora.",
   );
+});
+
+test("the newest change to the site is under the day this server started", async ({
+  page,
+}) => {
+  // No rollout before the record shipped the newest entry, so the server
+  // dated it itself as it started - which is today, on a fresh emulator. As
+  // an administrator, who is told about every area of the site.
+  const newest = QA_ITEMS[0]!;
+  await logIn(page, USERS.admin, "/aktywnosc");
+
+  const today = page
+    .getByTestId("activity-day")
+    .filter({ has: page.getByRole("heading", { name: "Dzisiaj" }) });
+  const change = today
+    .getByTestId("activity-site-change")
+    .filter({ hasText: newest.title });
+  await expect(change).toBeVisible({ timeout: 30_000 });
+
+  await change.getByTestId("activity-site-change-toggle").click();
+  await expect(change).toContainText(newest.description);
+  await change.getByTestId("activity-site-change-qa").click();
+  await expect(page).toHaveURL(new RegExp(`/qa#qa-${newest.id}$`));
 });

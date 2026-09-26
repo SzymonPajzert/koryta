@@ -5,6 +5,8 @@ import type {
   RawFeedBatch,
 } from "../../../shared/activityFeed";
 import { feedRanges } from "../../../shared/activityFeed";
+import type { QaItem } from "../../../shared/qa";
+import type { QaRelease } from "../../../server/utils/qaReleases";
 import handler from "../../../server/api/activity/feed.get";
 
 const {
@@ -13,6 +15,7 @@ const {
   mockGetUsers,
   mockListUsers,
   mockBuild,
+  mockReleases,
   userDocs,
   headers,
   memo,
@@ -49,6 +52,7 @@ const {
     mockGetUsers: vi.fn(),
     mockListUsers: vi.fn(),
     mockBuild: vi.fn(),
+    mockReleases: vi.fn(),
     userDocs: new Map<string, Record<string, unknown>>(),
     headers: new Map<string, string>(),
     memo,
@@ -97,6 +101,10 @@ vi.mock("~~/server/utils/auth", () => ({ getUser: mockGetUser }));
 
 vi.mock("~~/server/utils/activityFeed", () => ({
   buildActivityFeed: mockBuild,
+}));
+
+vi.mock("~~/server/utils/qaReleases", () => ({
+  qaReleases: mockReleases,
 }));
 
 const call = (query: Record<string, unknown> = {}) =>
@@ -241,6 +249,30 @@ const rawFeed = (): RawFeed => ({
   truncated: ["votes"],
 });
 
+/** What the site's own changelog dates, newest first, the way the util hands
+ * it over: one change from this morning's rollout per area, one from last
+ * week's, and one from before the month. */
+const releases = (): QaRelease[] => {
+  const entry = (id: string, area: QaItem["area"], link?: string): QaItem => ({
+    id,
+    title: `Tytuł ${id}`,
+    description: `Opis ${id}`,
+    steps: ["Krok, którego feed nie wysyła"],
+    ...(link ? { link } : {}),
+    area,
+  });
+  return [
+    {
+      item: entry("nowa-tabela", "public", "/eksploruj/tabela"),
+      at: hoursAgo(3),
+    },
+    { item: entry("nowy-panel", "admin", "/admin/opinie"), at: hoursAgo(3) },
+    { item: entry("nowa-aktywnosc", "contributor"), at: hoursAgo(3) },
+    { item: entry("stara-zmiana", "public", "/"), at: hoursAgo(8 * 24) },
+    { item: entry("bardzo-stara", "public", "/"), at: hoursAgo(40 * 24) },
+  ];
+};
+
 const established = { uid: ESTABLISHED, admin: true };
 const trial = { uid: TRIAL, admin: true, newAdmin: true };
 const reader = { uid: READER };
@@ -259,6 +291,7 @@ beforeEach(() => {
   userDocs.set(BARTEK, { publicProfile: false });
 
   mockBuild.mockImplementation(async () => rawFeed());
+  mockReleases.mockImplementation(async () => releases());
   // The account as it is now, which a token can lag behind.
   mockAuthGetUser.mockImplementation(async (uid: string) => {
     const account = directory.get(uid);
@@ -704,5 +737,78 @@ describe("/api/activity/feed", () => {
     mockGetUser.mockResolvedValue(reader);
 
     expect((await call()).truncated).toEqual(["votes"]);
+  });
+
+  describe("changes to the site", () => {
+    it("lists what went live in the window, newest first, without the steps", async () => {
+      mockGetUser.mockResolvedValue(reader);
+
+      const week = await call();
+
+      expect(week.siteChanges).toEqual([
+        {
+          id: "nowa-tabela",
+          at: hoursAgo(3),
+          title: "Tytuł nowa-tabela",
+          description: "Opis nowa-tabela",
+          link: "/eksploruj/tabela",
+          area: "public",
+        },
+        {
+          id: "nowa-aktywnosc",
+          at: hoursAgo(3),
+          title: "Tytuł nowa-aktywnosc",
+          description: "Opis nowa-aktywnosc",
+          area: "contributor",
+        },
+      ]);
+      expect(JSON.stringify(week)).not.toContain("Krok");
+
+      const month = await call({ days: "30" });
+
+      expect(month.siteChanges.map((change) => change.id)).toEqual([
+        "nowa-tabela",
+        "nowa-aktywnosc",
+        "stara-zmiana",
+      ]);
+    });
+
+    it("keeps the admin panel's changes to administrators, on trial or not", async () => {
+      for (const caller of [established, trial]) {
+        mockGetUser.mockResolvedValue(caller);
+        expect((await call()).siteChanges.map((change) => change.id)).toContain(
+          "nowy-panel",
+        );
+      }
+
+      mockGetUser.mockResolvedValue(reader);
+      expect(
+        (await call()).siteChanges.map((change) => change.id),
+      ).not.toContain("nowy-panel");
+    });
+
+    it("still lists the people when the changelog's dates cannot be read", async () => {
+      mockReleases.mockRejectedValue(new Error("UNAVAILABLE"));
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockGetUser.mockResolvedValue(reader);
+
+      const result = await call();
+
+      expect(result.siteChanges).toEqual([]);
+      expect(result.batches.length).toBeGreaterThan(0);
+      expect(error).toHaveBeenCalled();
+      error.mockRestore();
+    });
+
+    it("hands each caller a copy, not the memo's own", async () => {
+      mockGetUser.mockResolvedValue(established);
+
+      const first = await call();
+      first.siteChanges[0]!.title = "Zmienione";
+      const second = await call();
+
+      expect(second.siteChanges[0]!.title).toBe("Tytuł nowa-tabela");
+      expect(memo.get("7")).toEqual(computed.get("7"));
+    });
   });
 });
