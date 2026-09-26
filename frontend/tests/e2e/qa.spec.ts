@@ -1,6 +1,13 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { logIn, USERS } from "./helpers/auth";
 import { QA_ITEMS } from "../../shared/qa";
+
+/** A filter chip, by the filter it sets rather than by its name. Every row is
+ * a button too, named after its entry, so the entry about „Problemy” on /qa
+ * matched the chip's name - and the chip's own name gains a count once
+ * something has been reported. */
+const filterChip = (page: Page, value: "issue" | "all") =>
+  page.locator(`[data-filter="${value}"]`);
 
 /** The newest entry is the one the page opens on, whatever it happens to be. */
 const NEWEST = QA_ITEMS[0]!;
@@ -40,7 +47,7 @@ test.describe("QA changelog", () => {
 
     // Reported problems leave the default list and turn up under "Problemy".
     await expect(card).toBeHidden({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Problemy" }).click();
+    await filterChip(page, "issue").click();
     await expect(card).toBeVisible();
 
     // The verdict is stored, not just held on the page. Reading it back waits
@@ -52,7 +59,7 @@ test.describe("QA changelog", () => {
       timeout: 60_000,
     });
 
-    await page.getByRole("button", { name: "Problemy" }).click();
+    await filterChip(page, "issue").click();
     // A reload closes every row again.
     await card.locator("[data-row-toggle]").click();
     await expect(card).toContainText("Twoja ocena: Coś nie działa", {
@@ -80,7 +87,7 @@ test.describe("QA changelog", () => {
     await expect(page.locator('[data-qa-loaded="true"]')).toBeVisible({
       timeout: 60_000,
     });
-    await page.getByRole("button", { name: "Wszystkie" }).click();
+    await filterChip(page, "all").click();
 
     const card = page.locator(`[data-qa-item="${SECOND.id}"]`);
     await expect(card).toBeVisible({ timeout: 30_000 });
