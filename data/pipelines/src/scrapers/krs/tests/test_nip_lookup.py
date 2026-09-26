@@ -1,0 +1,315 @@
+"""That NIP-to-KRS resolution reads the wykaz's real shape and respects its cap.
+
+The response shape here is the one the live service returned on 2026-09-13.
+Two details in it are easy to get wrong from the documentation alone: the
+people are under ``result.entries[].subjects[]`` rather than a flat
+``subjects``, and the entries **do not come back in the order they were asked
+for** -- so reading them positionally silently attributes each company's KRS to
+a different NIP.
+"""
+
+import json
+
+import pytest
+
+from scrapers.krs.nip_lookup import (
+    MF_BATCH_SIZE,
+    MfQuotaExhausted,
+    fetch_mf_batch,
+    known_from_companies_merged,
+    newest_first,
+    nip_valid,
+    parse_mf_response,
+    resolve,
+)
+
+
+def wykaz(entries):
+    return {"result": {"requestId": "x", "requestDateTime": "y", "entries": entries}}
+
+
+def subject(nip, krs, name="X", regon="150354701", status="Czynny"):
+    return {
+        "identifier": nip,
+        "subjects": [
+            {
+                "nip": nip,
+                "krs": krs,
+                "name": name,
+                "regon": regon,
+                "statusVat": status,
+                "representatives": [],
+            }
+        ],
+    }
+
+
+class FakeResponse:
+    """The parts of a `requests.Response` this module touches."""
+
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise AssertionError(f"unexpected status {self.status_code}")
+
+
+def opener_for(payload, status_code=200):
+    def opener(_url, headers=None, timeout=None):
+        return FakeResponse(payload, status_code)
+
+    return opener
+
+
+def test_reads_krs_out_of_the_nested_entries_shape():
+    payload = wykaz(
+        [
+            subject("5730003841", "0000057953", "PWIK CZĘSTOCHOWA"),
+            subject("6791862817", "0000006301", "KRAKOWSKI HOLDING"),
+        ]
+    )
+    out = parse_mf_response(payload)
+    assert out["5730003841"].krs == "0000057953"
+    assert out["6791862817"].krs == "0000006301"
+    assert out["5730003841"].name == "PWIK CZĘSTOCHOWA"
+    assert out["5730003841"].vat_status == "Czynny"
+    assert all(r.in_krs for r in out.values())
+
+
+def test_entries_are_keyed_by_nip_not_by_position():
+    """The live service returns them out of order, so position is meaningless."""
+    asked = ["6791862817", "5730003841"]
+    payload = wykaz(
+        [  # deliberately the reverse of `asked`
+            subject("5730003841", "0000057953"),
+            subject("6791862817", "0000006301"),
+        ]
+    )
+    out = fetch_mf_batch(asked, date="2026-09-13", opener=opener_for(payload))
+    assert out["6791862817"].krs == "0000006301"
+    assert out["5730003841"].krs == "0000057953"
+
+
+def test_an_entity_the_wykaz_does_not_hold_is_an_answer_not_a_gap():
+    """Only VAT-registered entities are in the wykaz.
+
+    A koło gospodyń or a gminna instytucja kultury gets an entry with an empty
+    ``subjects`` -- which means "not a registered VAT payer", and must not be
+    confused with "not asked yet".
+    """
+    payload = wykaz([{"identifier": "4960255468", "subjects": []}])
+    out = parse_mf_response(payload)
+    assert out["4960255468"].krs is None
+    assert out["4960255468"].source == "mf"
+    assert not out["4960255468"].in_krs
+
+
+def test_a_subject_with_no_krs_resolves_to_no_krs():
+    """A sole trader is in the wykaz but has no KRS, being in CEIDG."""
+    payload = wykaz([subject("1234563218", None)])
+    out = parse_mf_response(payload)
+    assert out["1234563218"].krs is None
+    assert out["1234563218"].name == "X"
+
+
+def test_krs_is_zero_filled_to_ten_digits():
+    payload = wykaz([subject("5730003841", "57953")])
+    assert parse_mf_response(payload)["5730003841"].krs == "0000057953"
+
+
+def test_a_batch_over_the_published_limit_is_refused():
+    with pytest.raises(ValueError, match=str(MF_BATCH_SIZE)):
+        fetch_mf_batch(["1234567890"] * (MF_BATCH_SIZE + 1), date="2026-09-13")
+
+
+def test_a_429_is_reported_as_the_daily_quota():
+    with pytest.raises(MfQuotaExhausted, match="today"):
+        fetch_mf_batch(
+            ["5730003841"], date="2026-09-13", opener=opener_for({}, 429)
+        )
+
+
+def test_a_400_names_the_malformed_nips_in_the_batch():
+    # 1111111112: the weighted sum of the first nine digits is 45, so the check
+    # digit must be 1. (1111111111 is a *valid* NIP, which is why it makes a
+    # poor fixture for this.)
+    with pytest.raises(ValueError, match="1111111112"):
+        fetch_mf_batch(
+            ["5730003841", "1111111112"],
+            date="2026-09-13",
+            opener=opener_for({}, 400),
+        )
+
+
+def test_known_pairs_are_taken_free_and_never_asked():
+    """Every cached hit is a request not spent against the 100-a-day cap."""
+    calls = []
+
+    def opener(url, headers=None, timeout=None):
+        calls.append(url)
+        return FakeResponse(wykaz([subject("5730003841", "0000057953")]))
+
+    out = resolve(
+        ["6791862817", "5730003841"],
+        date="2026-09-13",
+        known={"6791862817": "6301"},
+        opener=opener,
+    )
+    assert out["6791862817"].source == "cache"
+    assert out["6791862817"].krs == "0000006301"
+    assert len(calls) == 1
+    assert "6791862817" not in calls[0]
+
+
+def test_a_malformed_nip_is_rejected_before_a_request_is_spent():
+    out = resolve(["12345"], date="2026-09-13", known={}, opener=None)
+    assert out["12345"].source == "invalid"
+    assert out["12345"].krs is None
+
+
+def test_the_request_cap_stops_the_run_rather_than_overrunning():
+    """Overrunning locks the IP out until midnight, costing the next run too."""
+    nips = [f"{i:010d}" for i in range(MF_BATCH_SIZE * 3)]
+    calls = []
+
+    def opener(url, headers=None, timeout=None):
+        calls.append(url)
+        return FakeResponse(wykaz([]))
+
+    # Every fixture NIP is checksum-invalid, so give the resolver real ones.
+    valid = [n for n in nips if nip_valid(n)]
+    out = resolve(valid, date="2026-09-13", max_requests=1, opener=opener)
+    assert len(calls) <= 1
+    # What was not reached simply has no entry, so a later run picks it up.
+    assert len(out) <= len(valid)
+
+
+@pytest.mark.parametrize(
+    "nip, expected",
+    [
+        ("5730003841", True),
+        ("6791862817", True),
+        ("5231844247", False),  # from the sponsorship list; fails its check digit
+        ("821268376", False),  # nine digits, truncated in the source
+        ("", False),
+        ("abcdefghij", False),
+    ],
+)
+def test_nip_validity(nip, expected):
+    assert nip_valid(nip) is expected
+
+
+def merged(tmp_path, *rows):
+    path = tmp_path / "companies_merged.jsonl"
+    path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_pairs_we_already_hold_are_read_back(tmp_path):
+    path = merged(
+        tmp_path,
+        {"nip": "5262557278", "krs": "123456", "name": "POLREGIO"},
+    )
+    known, names = known_from_companies_merged(path)
+    # Zero-filled, because that is how every other KRS in this pipeline is
+    # written and a half-padded key never matches.
+    assert known == {"5262557278": ("0000123456",)}
+    assert names == {"0000123456": "POLREGIO"}
+
+
+def test_a_row_with_no_krs_or_a_short_nip_is_skipped(tmp_path):
+    path = merged(
+        tmp_path,
+        {"nip": "5262557278", "krs": None, "name": "no krs"},
+        {"nip": "12345", "krs": "1", "name": "short nip"},
+        {"krs": "2", "name": "no nip"},
+    )
+    assert known_from_companies_merged(path) == ({}, {})
+
+
+def test_every_entry_of_one_taxpayer_is_kept_newest_first(tmp_path):
+    """`setdefault` kept whichever row came first, and said nothing about it.
+
+    294 of the 15,402 NIPs in the real artifact carry more than one KRS --
+    ORLEN LABORATORIUM, ENEA ELEKTROWNIA POŁANIEC, SODA POLSKA CIECH -- and
+    they are one company's successive register entries, not two companies. The
+    open one is the higher number; the rest hold the board of the years before
+    a transformation, which is what the odpis chain is reading them for.
+    """
+    path = merged(
+        tmp_path,
+        {"nip": "5262557278", "krs": "111", "name": "first"},
+        {"nip": "5262557278", "krs": "222", "name": "second"},
+    )
+    known, _ = known_from_companies_merged(path)
+    assert known == {"5262557278": ("0000000222", "0000000111")}
+
+
+def test_a_repeated_row_does_not_duplicate_an_entry(tmp_path):
+    path = merged(
+        tmp_path,
+        {"nip": "5262557278", "krs": "111", "name": "once"},
+        {"nip": "5262557278", "krs": "0000000111", "name": "again, padded"},
+    )
+    known, _ = known_from_companies_merged(path)
+    assert known == {"5262557278": ("0000000111",)}
+
+
+def test_a_missing_artifact_is_not_an_error(tmp_path):
+    # The file is a pipeline output; a checkout that has not built it should
+    # fall back to asking, not crash.
+    assert known_from_companies_merged(tmp_path / "nope.jsonl") == ({}, {})
+    assert known_from_companies_merged(None) == ({}, {})
+
+
+def test_the_result_keeps_the_order_the_caller_asked_in():
+    """Callers truncate this, so the order has to be theirs, not the sources'.
+
+    `resolve` fills its dict in two passes -- cached and invalid NIPs first,
+    then whatever the wykaz answered -- and `nip_board_people --limit-companies`
+    slices the result. Left in fill order, a capped run covers every company we
+    already held plus a prefix of the rest, rather than the head of the
+    population the caller ordered by contract value.
+    """
+    asked = ["5260005468", "5730003841", "8262224957"]
+    out = resolve(
+        asked,
+        date="2026-09-14",
+        known={"5730003841": "0000000002"},
+        opener=opener_for(
+            wykaz(
+                [
+                    subject("5260005468", "0000000001"),
+                    subject("8262224957", "0000000003"),
+                ]
+            )
+        ),
+    )
+    assert list(out) == asked
+    assert [out[nip].source for nip in asked] == ["mf", "cache", "mf"]
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, ()),
+        ("", ()),
+        ("123456", ("0000123456",)),
+        # A stored search answer has carried `krs` as a number as well as a
+        # string; iterating the number raises mid-run.
+        (123456, ("0000123456",)),
+        (["222", "111", "222"], ("0000000222", "0000000111")),
+        ((n for n in ("111", "222")), ("0000000222", "0000000111")),
+        (["0000000111", "111"], ("0000000111",)),
+    ],
+)
+def test_newest_first(value, expected):
+    assert newest_first(value) == expected

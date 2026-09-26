@@ -42,6 +42,7 @@ from scrapers.koryta.download import (
 from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.nip_resolutions import KrsNipResolutions
 from scrapers.krs.scrape import KRSAlreadyScraped, KRSNeedsRefresh, ScrapeRejestrIO
 from scrapers.krs.updates import KRSUpdates
 from scrapers.map.postal_codes import PostalCodes
@@ -78,6 +79,7 @@ PIPELINES = [
     PeopleScoresTurnover,
     Extract,
     KRSAlreadyScraped,
+    KrsNipResolutions,
     KRSCensoredPeople,
     KRSNeedsRefresh,
     KRSUpdates,

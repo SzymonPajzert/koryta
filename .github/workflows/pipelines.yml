@@ -192,10 +192,23 @@ jobs:
           # failure: it answers with zero done URLs, and all eight go green
           # having processed nothing.
           #
-          # This leaves 40 of the 51 pipelines running, and drops the only
-          # ContextResource the nightly was asking for -- the article branch is
-          # what pulled in an LLM client. To put the branch back, give the
-          # runner a reachable crawl queue rather than deleting lines here.
+          # KrsNipResolutions is excluded for a different reason: it is free,
+          # but the answer it wants is in each blob's body rather than its key,
+          # so it reads 17,008 objects one at a time. Warm off the local mirror
+          # that is 2.2s; on a runner with a cold cache it is the same
+          # one-GET-at-a-time shape that made the nightly invariants run take
+          # 100 minutes. It is built on demand instead, which is also why
+          # `--resolutions` is opt-in everywhere it is read.
+          #
+          # This leaves 42 running -- 54 in `PIPELINES`, less ScrapeRejestrIO
+          # which --all-pipelines never includes because it bills per query,
+          # less the eleven below -- and drops the only ContextResource the
+          # nightly was asking for, since the article branch is what pulled in
+          # an LLM client. The arithmetic is spelled out because this comment
+          # is the only place the intended coverage is written down, and a
+          # count on its own goes stale the next time a pipeline is added. To
+          # put the branch back, give the runner a reachable crawl queue rather
+          # than deleting lines here.
           if [ "$TIER" = "full" ]; then
             excluded=(
               ProcessWikiNer
@@ -208,6 +221,7 @@ jobs:
               ArticleFactsVerified
               ArticleKoryciarskiScores
               PeopleAffairTags
+              KrsNipResolutions
             )
             selection="--all-pipelines"
             for pipeline in "${excluded[@]}"; do

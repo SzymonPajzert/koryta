@@ -108,6 +108,7 @@ dependencies = [
     "matplotlib (>=3.10.6,<4.0.0)",
     "xlrd (>=2.0.2,<3.0.0)",
     "pyarrow>=25.0.0,<26.0.0",
+    "pypdf (>=6.18.1,<7.0.0)",
     "openpyxl (>=3.1.5,<4.0.0)",
     "nbconvert (>=7.17.1,<8.0.0)",
     "memoized-property (>=1.0.3,<2.0.0)",
@@ -234,6 +235,10 @@ max-branches = 15
 "src/scripts/text_gemini_on_ner.py" = ["PLR0402"]
 "src/scrapers/article/hardcoded/listawstydupo.py" = ["E501"]
 "src/scrapers/article/hardcoded/kazdymusigdziespracowac.py" = ["E501"]
+# The `ODPIS` fixture is a register document reproduced verbatim, and one of
+# its rows is a prokura clause that names a second person. Wrapping it would
+# make the fixture a document the register never prints.
+"src/scrapers/krs/tests/test_odpis_pdf.py" = ["E501"]
 "src/stores/storage.py" = ["PLR0402"]
 
 [tool.pytest.ini_options]
@@ -307,6 +312,10 @@ ignore_imports = [
     # In-memory tar extraction of GCS blobs and URL joining for link discovery
     "scrapers.article.pipelines.pipeline_utils -> io",
     "scrapers.article.crawler -> urllib",
+    # pypdf reads a seekable stream and will not take bytes, so an odpis
+    # fetched into memory has to be wrapped before it can be parsed. No file is
+    # opened here -- the PDF never touches disk, which is the point.
+    "scrapers.krs.odpis_pdf -> io",
     # Created a quick export of library util.firestore
     "util.firestore -> firebase_admin",
     "util.firestore -> os",
