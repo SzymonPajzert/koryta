@@ -123,7 +123,8 @@ npm run quick-check:failsafe
 ## QA changelog
 
 Every user visible change gets an entry at the top of `shared/qa.ts`, in the
-same commit as the change itself:
+same commit as the change itself - unless all it does is what a report asked
+for, which can be claimed in `shared/reportFixes.ts` instead (see below):
 
 ```ts
 {
@@ -172,6 +173,26 @@ entries. When the chip is green and none of those reports is an open "Coś nie
 działa", the card offers "Zamknij jako załatwione" - nothing closes a report by
 itself. The joins live in `shared/feedbackFixes.ts`; ids that are not Firestore
 auto-ids fail `tests/shared/qa.test.ts`.
+
+A change that does what a report asked and no more needs no entry of its own:
+the report already says what to check and where. Claim it with a line at the
+top of `shared/reportFixes.ts`, in the same commit:
+
+```ts
+{
+  change: "Okno edycji relacji ma pole „Uzyskano mandat” przy kandydaturze.",
+  fixes: ["Qm4ZtR8vLp2XnB6cWy1D"], // as in an entry's `fixes`
+  link: "/osoba/…", // optional - where to look, when not the report's own page
+}
+```
+
+Only an admin checks those. For an admin, `/qa` opens on "Zgłoszenia do
+zamknięcia": every open report the build claims to fix, by an entry or by one of
+these lines, with the change written out under the message and "Zamknij jako
+załatwione" in the row. A branch's claims can be checked on the branch, and a
+rollout's on koryta.pl. `/admin/opinie` shows the same line on the report, and
+the report's line carries the "czeka na sprawdzenie" icon until it is closed.
+`tests/shared/reportFixes.test.ts` checks the ids and links.
 
 ## Scripts reference
 
@@ -256,7 +277,8 @@ the feedback queue from `/admin/opinie`:
 - `feedback_queue` — open reports in the page's order (not yet in the queue,
   then the queue from the top), or the newest closed ones; one line each.
 - `feedback_get` — whole reports by id or `#fb-<id>` link, with their place in
-  the queue and what the `fixes` claims in `shared/qa.ts` say.
+  the queue and what the claims in `shared/qa.ts` and `shared/reportFixes.ts`
+  say.
 
 It can only read. Reads go out as `firestore-reader@koryta-pl.iam.gserviceaccount.com`,
 which holds `roles/datastore.viewer` and nothing else, and gcloud impersonates
