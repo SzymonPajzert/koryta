@@ -36,7 +36,10 @@ export function fixIndex(items: readonly QaItem[]): Map<string, QaItem[]> {
  * thing to look at before anything else. */
 export type FixState = "awaiting" | "works" | "broken";
 
-export function fixState(entry: QaItem, checks: readonly QaCheck[]): FixState {
+export function fixState(
+  entry: QaItem,
+  checks: readonly Pick<QaCheck, "itemId" | "status">[],
+): FixState {
   const verdicts = checks.filter((check) => check.itemId === entry.id);
   if (verdicts.some((check) => check.status === "issue")) return "broken";
   if (verdicts.some((check) => check.status === "ok")) return "works";
