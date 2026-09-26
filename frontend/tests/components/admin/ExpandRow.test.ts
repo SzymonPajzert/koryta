@@ -56,9 +56,9 @@ describe("AdminExpandRow", () => {
     const wrapper = await mountSuspended(Harness);
     // A button inside a button is invalid, and a click on "Do kolejki" must
     // not open the row.
-    expect(wrapper.get("[data-row-toggle]").find("[data-action]").exists()).toBe(
-      false,
-    );
+    expect(
+      wrapper.get("[data-row-toggle]").find("[data-action]").exists(),
+    ).toBe(false);
     await wrapper.get("[data-action]").trigger("click");
     expect(wrapper.find("[data-row-panel]").exists()).toBe(false);
   });
