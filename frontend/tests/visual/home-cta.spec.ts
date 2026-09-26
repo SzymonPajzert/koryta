@@ -83,8 +83,9 @@ async function openCta(page: Page, figures: ProgressStats | null) {
   });
   if (figures) {
     // Printed only once the fixture's figures are in, and nothing else on the
-    // page produces them.
-    await expect(cta.getByText(/1\s709 z 6\s412/).first()).toBeVisible();
+    // page produces them. Four digits go ungrouped, as polishNumber writes
+    // them: „1709”, not „1 709”.
+    await expect(cta.getByText(/1709 z 6412/).first()).toBeVisible();
   } else {
     await expect(cta).not.toContainText(/\d\s?z\s\d/);
   }
