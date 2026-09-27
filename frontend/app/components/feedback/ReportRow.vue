@@ -13,9 +13,14 @@
     :tone="feedbackKindTone[item.kind]"
     :dimmed="isSettled(item)"
     :highlighted="highlighted"
+    :draggable="draggable"
     :data-feedback-id="item.id"
     data-report-row
   >
+    <template v-if="draggable" #lead>
+      <v-icon :icon="mdiDragVertical" size="small" class="fb-report__handle" />
+    </template>
+
     <template #summary>
       <span
         v-if="position"
@@ -29,9 +34,12 @@
 
     <!-- Deciding that a report is worth doing should not take opening it: the
          line is usually enough to judge by, and the end of the queue always
-         has room, whatever the rows around it say. -->
-    <template v-if="canQueue" #actions>
+         has room, whatever the rows around it say. A list that places
+         reports its own way - the queue's arrows - puts its buttons here. -->
+    <template v-if="canQueue || $slots.actions" #actions>
+      <slot name="actions" />
       <v-btn
+        v-if="canQueue"
         icon
         size="small"
         variant="text"
@@ -220,6 +228,7 @@ import {
   mdiArrowULeftTop,
   mdiCheckAll,
   mdiClipboardCheckOutline,
+  mdiDragVertical,
   mdiLinkVariant,
   mdiPlaylistPlus,
   mdiWrenchOutline,
@@ -265,6 +274,9 @@ defineProps<{
   /** The page that lists every report, when this one does not - links to
    * other reports go there. See `feedbackReportLink`. */
   reportPage?: string;
+  /** Picked up by its line and dropped somewhere else in the queue - see
+   * `FeedbackOrderList`, which listens for the drag on the row. */
+  draggable?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -296,6 +308,10 @@ const statusOptions = Object.entries(feedbackStatusConfig).map(
   color: inherit;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+}
+
+.fb-report__handle {
+  opacity: 0.6;
 }
 
 .fb-report__status {

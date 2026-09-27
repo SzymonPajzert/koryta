@@ -11,7 +11,13 @@
       },
     ]"
   >
-    <div class="arow__head">
+    <!-- A row that can be dragged is dragged by this line only: set on the
+         whole row, it would turn every drag across the open row into a drag
+         of the row, and nobody could select its text any more. -->
+    <div class="arow__head" :draggable="draggable || undefined">
+      <div v-if="$slots.lead" class="arow__lead">
+        <slot name="lead" />
+      </div>
       <!-- One button for the whole line, so a click anywhere on it opens the
            row and a keyboard gets Enter and Space for free. Whatever goes in
            `summary` therefore has to be inert: no links, no buttons - those
@@ -57,13 +63,14 @@
 <script setup lang="ts">
 /** One line of an admin list that opens in place.
  *
- * The one-line rows of the "Ułóż kolejkę" mode on /admin/opinie turned out to
- * be the easiest way to read a long list, and every list that has to be
+ * The one-line rows the queue on /admin/opinie was first ordered in turned out
+ * to be the easiest way to read a long list, and every list that has to be
  * worked through - reports, proposals, an entry's history - now uses them: a
  * line to tell entries apart, and everything else one click away instead of on
  * a card that makes the list ten screens long.
  *
  * Slots:
+ * - `lead` - before the line and outside its button: a drag handle.
  * - `summary` - the line itself, inside the toggle button, so inert content
  *   only. The `arow-*` helper classes below lay it out.
  * - `actions` - buttons at the end of the line that work without opening it.
@@ -88,6 +95,12 @@ withDefaults(
     /** Accessible name for the toggle, when the summary alone is too terse
      * to be one (an icon and a date, say). */
     label?: string;
+    /** The line can be picked up and dragged. The drag events bubble to the
+     * root, which is where a list listens for them - and where it listens for
+     * the drop too, so the open part of a row takes one as well. A drag of a
+     * link or of selected text in the open part bubbles there the same way,
+     * so a list checks that a dragstart began on `.arow__head`. */
+    draggable?: boolean;
   }>(),
   { rowId: undefined, tone: "neutral", label: undefined },
 );
@@ -143,6 +156,20 @@ const panelId = computed(() => `arow-panel-${uid}`);
   display: flex;
   align-items: center;
   min-height: 44px;
+}
+
+.arow__lead {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding-inline-start: 10px;
+  cursor: grab;
+}
+
+/* The lead already keeps the line clear of the rail. */
+.arow__lead + .arow__toggle {
+  padding-inline-start: 4px;
 }
 
 .arow__toggle {
