@@ -13,9 +13,14 @@
     :tone="feedbackKindTone[item.kind]"
     :dimmed="isSettled(item)"
     :highlighted="highlighted"
+    :draggable="draggable"
     :data-feedback-id="item.id"
     data-report-row
   >
+    <template v-if="draggable" #lead>
+      <v-icon :icon="mdiDragVertical" size="small" class="fb-report__handle" />
+    </template>
+
     <template #summary>
       <span
         v-if="position"
@@ -223,6 +228,7 @@ import {
   mdiArrowULeftTop,
   mdiCheckAll,
   mdiClipboardCheckOutline,
+  mdiDragVertical,
   mdiLinkVariant,
   mdiPlaylistPlus,
   mdiWrenchOutline,
@@ -268,6 +274,9 @@ defineProps<{
   /** The page that lists every report, when this one does not - links to
    * other reports go there. See `feedbackReportLink`. */
   reportPage?: string;
+  /** Picked up by its line and dropped somewhere else in the queue - see
+   * `FeedbackOrderList`, which listens for the drag on the row. */
+  draggable?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -299,6 +308,10 @@ const statusOptions = Object.entries(feedbackStatusConfig).map(
   color: inherit;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+}
+
+.fb-report__handle {
+  opacity: 0.6;
 }
 
 .fb-report__status {
