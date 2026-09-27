@@ -57,6 +57,18 @@ function mountLayout(isAdmin = false) {
         "v-main": { template: "<div><slot /></div>" },
         "v-toolbar": { template: "<div><slot /></div>" },
         "v-container": { template: "<div><slot /></div>" },
+        // Open, in place: the real menu draws its list only once clicked,
+        // and then outside the toolbar.
+        "v-menu": {
+          template:
+            "<div data-menu><slot name='activator' :props='{}' /><div data-menu-list><slot /></div></div>",
+        },
+        "v-list": { template: "<div><slot /></div>" },
+        "v-list-item": {
+          template:
+            "<a :data-to='typeof to === \"string\" ? to : JSON.stringify(to)' :href='href'>{{ title }}</a>",
+          props: ["to", "href", "title"],
+        },
       },
     },
   });
@@ -69,6 +81,21 @@ async function toolbarButton(
 ) {
   await flushPromises();
   return wrapper.findAll("button").find((b) => b.text() === label);
+}
+
+/** The entries of the menu under `label`, in order. */
+async function menuEntries(
+  wrapper: ReturnType<typeof mountLayout>,
+  label: string,
+) {
+  await flushPromises();
+  const menu = wrapper
+    .findAll("[data-menu]")
+    .find((node) => node.find("button").text() === label);
+  return (menu?.findAll("[data-menu-list] a") ?? []).map((entry) => ({
+    title: entry.text(),
+    to: entry.attributes("data-to"),
+  }));
 }
 
 describe("DefaultLayout", () => {
@@ -103,6 +130,48 @@ describe("DefaultLayout", () => {
     }
   });
 
+  it("puts QA and its problems in the Zespół menu, for everybody", async () => {
+    const wrapper = mountLayout();
+
+    const titles = (await menuEntries(wrapper, "Zespół")).map((e) => e.title);
+    expect(titles).toEqual([
+      "QA - zmiany do sprawdzenia",
+      "Problemy z QA",
+      "Nowy bug w GitHubie",
+    ]);
+  });
+
+  it("links the menu's problems to the tab that shows them", async () => {
+    const wrapper = mountLayout();
+
+    const problems = (await menuEntries(wrapper, "Zespół")).find(
+      (entry) => entry.title === "Problemy z QA",
+    );
+    expect(JSON.parse(problems!.to!)).toEqual({
+      path: "/qa",
+      query: { widok: "problemy" },
+    });
+  });
+
+  // One place for what is wrong: the reports sit beside the QA problems they
+  // include, not in a second menu.
+  it("gives an admin the reports beside them, and not under Admin", async () => {
+    const wrapper = mountLayout(true);
+
+    expect(await menuEntries(wrapper, "Zespół")).toEqual([
+      { title: "QA - zmiany do sprawdzenia", to: "/qa" },
+      { title: "Problemy z QA", to: expect.stringContaining("problemy") },
+      { title: "Zgłoszenia", to: "/admin/opinie" },
+      { title: "Nowy bug w GitHubie", to: undefined },
+    ]);
+    const admin = (await menuEntries(wrapper, "Admin")).map((e) => e.title);
+    expect(admin).toEqual([
+      "Panel administracyjny",
+      "Kolejka zmian",
+      "Notatki",
+    ]);
+  });
+
   // What makes a page the admin's is its middleware, as it is for the router:
   // /admin/rewizje sits under /admin but takes any signed-in reader - and that
   // holds for the review queue too, now a section of it: "Kolejka zmian" in
@@ -110,7 +179,7 @@ describe("DefaultLayout", () => {
   it.each([
     ["/admin/notatki", "admin"],
     ["/admin/krawedzie/", "admin"],
-    ["/admin/opinie", ["auth", "admin"]],
+    ["/admin/krawedzie", ["auth", "admin"]],
   ])("lights the Admin menu on %s", async (path, middleware) => {
     route.path = path;
     route.meta = { middleware };
@@ -121,10 +190,12 @@ describe("DefaultLayout", () => {
     expect(admin?.attributes("aria-current")).toBe("true");
   });
 
+  // /admin/opinie is an admin's page, but its entry is under "Zespół" now.
   it.each([
     ["/admin/rewizje", "auth"],
     ["/admin/rewizje/abc123", "auth"],
     ["/", undefined],
+    ["/admin/opinie", "admin"],
   ])("leaves the Admin menu dark on %s", async (path, middleware) => {
     route.path = path;
     route.meta = { middleware };
@@ -133,5 +204,34 @@ describe("DefaultLayout", () => {
     const admin = await toolbarButton(wrapper, "Admin");
     expect(admin?.attributes("data-active")).toBe("false");
     expect(admin?.attributes("aria-current")).toBeUndefined();
+  });
+
+  // Like "Admin", the menu has no `to` of its own to light it.
+  it.each([
+    ["/qa", "auth"],
+    ["/qa/", "auth"],
+    ["/admin/opinie", "admin"],
+  ])("lights the Zespół menu on %s", async (path, middleware) => {
+    route.path = path;
+    route.meta = { middleware };
+    const wrapper = mountLayout(true);
+
+    const team = await toolbarButton(wrapper, "Zespół");
+    expect(team?.attributes("data-active")).toBe("true");
+    expect(team?.attributes("aria-current")).toBe("true");
+  });
+
+  it.each([
+    ["/", undefined],
+    ["/admin/notatki", "admin"],
+    ["/qa-cos-innego", undefined],
+  ])("leaves the Zespół menu dark on %s", async (path, middleware) => {
+    route.path = path;
+    route.meta = { middleware };
+    const wrapper = mountLayout(true);
+
+    const team = await toolbarButton(wrapper, "Zespół");
+    expect(team?.attributes("data-active")).toBe("false");
+    expect(team?.attributes("aria-current")).toBeUndefined();
   });
 });
