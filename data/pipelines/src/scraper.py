@@ -93,7 +93,12 @@ def query_krs_api(url, verbose=True) -> str | None:
         dzial1 = result["odpis"]["dane"]["dzial1"]
         dane = dzial1.get("danePodmiotu", {})
         if "siedzibaIAdres" in dzial1:
-            miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
+            adres = dzial1["siedzibaIAdres"]["adres"]
+            # An OdpisPelny keeps every address the company has had, as a list
+            # in the order they were entered.
+            if isinstance(adres, list):
+                adres = adres[-1] if adres else {}
+            miasto = adres.get("miejscowosc")
             print_filtered(f"{dane.get('nazwa', dane)} - {miasto}")
     return json.dumps(result)
 

@@ -388,6 +388,16 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     ) -> None:
         if "Biuletyn" in blob_name:
             return
+        if is_odpis_pelny(data):
+            # Only ever asked for a company with no name from anything else,
+            # and read only for what names and places it. Not for its owners:
+            # a struck-off company's shareholders are history, so `names_an_-
+            # owner` does not get to overrule what REGON says of it either.
+            c = company_from_odpis_pelny(postal_codes, self.teryt, data)
+            if c is not None:
+                self.add_company(c)
+                self.add_company_source(c.krs, blob_name)
+            return
         c = company_from_api_krs(postal_codes, self.teryt, data, self.jst_index)
         if c is None:
             return
@@ -756,6 +766,125 @@ def company_from_api_krs(  # noqa: PLR0915
     except TypeError as e:
         print(data)
         raise ValueError(f"Wrong data: {data}") from e
+
+
+def is_odpis_pelny(data) -> bool:
+    """Whether a parsed api-krs response is a full extract.
+
+    Told by its header, which is `naglowekP` where an OdpisAktualny has
+    `naglowekA`, rather than by the URL it was fetched from: the fields below
+    it are shaped differently, and reading one as the other either raises or
+    reads a list of every address a company has had as if it were one.
+    """
+    if not isinstance(data, dict):
+        return False
+    odpis = data.get("odpis")
+    return isinstance(odpis, dict) and "naglowekP" in odpis
+
+
+def newest(versions) -> dict:
+    """The value an OdpisPelny field held last.
+
+    A full extract keeps every value a field has ever had, each tagged with the
+    register entry that introduced it (`nrWpisuWprow`) and the one that struck
+    it (`nrWpisuWykr`). For a company still in the register the current value
+    is the one nothing has struck; for one struck off, every value was struck
+    by the entry that removed the company - so it is the one introduced last.
+    """
+    if isinstance(versions, dict):
+        return versions
+    if not isinstance(versions, list):
+        return {}
+    entries = [v for v in versions if isinstance(v, dict)]
+    if not entries:
+        return {}
+
+    def introduced(entry: dict) -> int:
+        try:
+            return int(entry.get("nrWpisuWprow") or 0)
+        except ValueError:
+            return 0
+
+    # Of two introduced by the same entry, the one listed later: max() keeps
+    # the first of equals it meets, hence reversed.
+    return max(reversed(entries), key=introduced)
+
+
+#: What the register appends to a company's name while proceedings against it
+#: run: liquidation, bankruptcy - "W UPADŁOŚCI LIKWIDACYJNEJ" and "W UPADŁOŚCI
+#: UKŁADOWEJ" are the two kinds before 2016 - and restructuring. Taken off the
+#: end, possibly more than one, so the legal form is last again and
+#: `remove_company_suffix` can take that off too.
+IN_PROCEEDINGS = re.compile(
+    r"(?:\s+W\s+(?:LIKWIDACJI|UPADŁOŚCI(?:\s+(?:LIKWIDACYJNEJ|UKŁADOWEJ))?"
+    r"|RESTRUKTURYZACJI))+\s*$",
+    re.IGNORECASE,
+)
+
+
+def company_from_odpis_pelny(
+    pcs: DataFrame, teryt: Teryt, data: dict
+) -> KrsCompany | None:
+    """A company as its full extract last described it.
+
+    This is for companies struck off the register, which api-krs no longer
+    serves an OdpisAktualny for: it answers 204 with no body, in the register
+    they were in, and 404 in the other. Three companies on koryta.pl were in
+    that state with nothing else to name them. We hold rejestr.io's
+    krs-powiazania for each, but that lists who a company is tied to, not what
+    it is called; its own record, /org/{krs}, which carries the name, was
+    never fetched for them. The site had named them from Wikipedia, which
+    `Companies` stopped reading on 2026-06-25, so it held no name at all.
+
+    Only what names and places the company is read: its name, legal form,
+    identifiers and seat. Not its PKD codes or owners, which for a company that
+    no longer exists are history, and not its organs, for the same reason.
+
+    The name loses "W LIKWIDACJI", "W UPADŁOŚCI" and the rest of
+    `IN_PROCEEDINGS`. A company that has been struck off is no longer being
+    wound up, and it is how rejestr.io's short name reads too: "MIEJSKIE
+    INWESTYCJE KIELCE" for 0000304050, whose last entry in the register was
+    "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA W LIKWIDACJI".
+    """
+    odpis = data.get("odpis") or {}
+    krs = (odpis.get("naglowekP") or {}).get("numerKRS")
+    if not krs:
+        return None
+    dzial1 = (odpis.get("dane") or {}).get("dzial1") or {}
+    dane_podmiotu = dzial1.get("danePodmiotu") or {}
+
+    nazwa = newest(dane_podmiotu.get("nazwa")).get("nazwa")
+    if isinstance(nazwa, str):
+        nazwa = IN_PROCEEDINGS.sub("", nazwa)
+    form = newest(dane_podmiotu.get("formaPrawna")).get("formaPrawna")
+    identyfikatory = (
+        newest(dane_podmiotu.get("identyfikatory")).get("identyfikatory") or {}
+    )
+
+    siedziba_i_adres = dzial1.get("siedzibaIAdres") or {}
+    adres = newest(siedziba_i_adres.get("adres"))
+    siedziba = newest(siedziba_i_adres.get("siedziba"))
+    miejscowosc = (adres.get("miejscowosc") or "").lower()
+    teryt_code = get_teryt(
+        pcs,
+        miejscowosc,
+        adres.get("kodPocztowy"),
+        fallback=teryt.parse_siedziba(
+            siedziba.get("wojewodztwo", ""),
+            siedziba.get("powiat", ""),
+            siedziba.get("gmina", ""),
+        ),
+    )
+
+    return KrsCompany(
+        krs=krs,
+        name=nazwa,
+        city=miejscowosc,
+        teryt_code=teryt_code,
+        nip=identyfikatory.get("nip"),
+        regon=identyfikatory.get("regon"),
+        form=form,
+    )
 
 
 def names_an_owner(data: dict, jst: "JstIndex | None" = None) -> bool:

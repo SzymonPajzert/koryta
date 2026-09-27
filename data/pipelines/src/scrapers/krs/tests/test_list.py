@@ -1,6 +1,8 @@
 import pandas as pd
+import pytest
 from pandas import DataFrame
 
+from analysis.interesting import remove_company_suffix
 from entities.company import KRS
 from entities.company import Company as KrsCompany
 from entities.company_categories import SPZOZ
@@ -8,9 +10,12 @@ from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP
 from scrapers.krs.list import (
     CompaniesKRS,
     company_from_api_krs,
+    company_from_odpis_pelny,
     company_from_rejestrio,
     get_teryt,
+    is_odpis_pelny,
     names_an_owner,
+    newest,
     normalize_city,
     parse_activity_from_api_krs,
 )
@@ -641,3 +646,203 @@ def test_a_subsidiary_inherits_what_regon_said_of_its_parent():
     )
 
     assert public == {"0000247533", "0000408185"}
+
+
+# ─── a company struck off the register ────────
+#
+# api-krs answers OdpisAktualny for one with an empty 204, so the full extract
+# is the only thing that still names it. Trimmed from the real OdpisPelny of
+# Port Lotniczy Kielce, later Miejskie Inwestycje Kielce, struck off in 2023.
+
+
+def struck_off(krs="0000304050"):
+    return {
+        "odpis": {
+            "rodzaj": "Pełny",
+            "naglowekP": {"rejestr": "RejP", "numerKRS": krs},
+            "dane": {
+                "dzial1": {
+                    "danePodmiotu": {
+                        "formaPrawna": [
+                            {
+                                "formaPrawna": SA,
+                                "nrWpisuWykr": "43",
+                                "nrWpisuWprow": "1",
+                            }
+                        ],
+                        "identyfikatory": [
+                            {
+                                "identyfikatory": {
+                                    "regon": "26022523000000",
+                                    "nip": "6572782107",
+                                },
+                                "nrWpisuWykr": "43",
+                                "nrWpisuWprow": "3",
+                            }
+                        ],
+                        "nazwa": [
+                            {
+                                "nazwa": "PORT LOTNICZY KIELCE SPÓŁKA AKCYJNA",
+                                "nrWpisuWykr": "27",
+                                "nrWpisuWprow": "1",
+                            },
+                            {
+                                "nazwa": "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA W LIKWIDACJI",  # noqa: E501
+                                "nrWpisuWykr": "43",
+                                "nrWpisuWprow": "32",
+                            },
+                            {
+                                "nazwa": "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA",
+                                "nrWpisuWykr": "32",
+                                "nrWpisuWprow": "27",
+                            },
+                        ],
+                    },
+                    "siedzibaIAdres": {
+                        "siedziba": [
+                            {
+                                "wojewodztwo": "ŚWIĘTOKRZYSKIE",
+                                "powiat": "KIELCE",
+                                "gmina": "KIELCE",
+                                "miejscowosc": "KIELCE",
+                                "nrWpisuWykr": "43",
+                                "nrWpisuWprow": "22",
+                            }
+                        ],
+                        "adres": [
+                            {
+                                "miejscowosc": "KIELCE",
+                                "kodPocztowy": "25-405",
+                                "nrWpisuWykr": "22",
+                                "nrWpisuWprow": "1",
+                            },
+                            {
+                                "miejscowosc": "KIELCE",
+                                "kodPocztowy": "25-303",
+                                "nrWpisuWykr": "43",
+                                "nrWpisuWprow": "27",
+                            },
+                        ],
+                    },
+                }
+            },
+        }
+    }
+
+
+KIELCE_POSTAL_CODES = DataFrame(
+    {
+        "city": ["kielce", "kielce"],
+        "postal_code": ["25-405", "25-303"],
+        "teryt": ["266101", "266102"],
+    }
+)
+
+
+def test_a_struck_off_company_is_named_by_its_full_extract():
+    company = company_from_odpis_pelny(KIELCE_POSTAL_CODES, NO_TERYT, struck_off())
+
+    assert company is not None
+    assert company.krs == "0000304050"
+    # The name it held last, however the register listed the versions - but
+    # no longer being wound up, which is over once the company is gone.
+    assert company.name == "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA"
+    assert company.form == SA
+    assert company.nip == "6572782107"
+    assert company.regon == "26022523000000"
+    # The last address, not the first.
+    assert company.city == "kielce"
+    assert company.teryt_code == "266102"
+
+
+@pytest.mark.parametrize(
+    "last_name",
+    [
+        "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA W LIKWIDACJI",
+        "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA W UPADŁOŚCI",
+        "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA W UPADŁOŚCI LIKWIDACYJNEJ",
+        "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA W UPADŁOŚCI UKŁADOWEJ",
+        "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA W RESTRUKTURYZACJI",
+        "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA W RESTRUKTURYZACJI W LIKWIDACJI",
+        "Miejskie Inwestycje Kielce Spółka Akcyjna w upadłości ",
+    ],
+)
+def test_a_struck_off_company_is_in_no_proceedings_any_more(last_name):
+    """Whichever it was in when it went - and then the legal form is last
+    again, so `Companies` can take that off as it does for any other name."""
+    data = struck_off()
+    data["odpis"]["dane"]["dzial1"]["danePodmiotu"]["nazwa"] = [
+        {"nazwa": last_name, "nrWpisuWykr": "43", "nrWpisuWprow": "32"}
+    ]
+
+    company = company_from_odpis_pelny(KIELCE_POSTAL_CODES, NO_TERYT, data)
+
+    assert company is not None and company.name is not None
+    assert company.name.upper() == "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA"
+    assert remove_company_suffix(company.name).upper() == ("MIEJSKIE INWESTYCJE KIELCE")
+
+
+def test_proceedings_are_only_taken_off_the_end_of_a_name():
+    """Where they are words of the name itself, not the register's note."""
+    name = (
+        "CENTRUM DORADZTWA W RESTRUKTURYZACJI I UPADŁOŚCI "
+        "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ"
+    )
+    data = struck_off()
+    data["odpis"]["dane"]["dzial1"]["danePodmiotu"]["nazwa"] = [
+        {"nazwa": name, "nrWpisuWykr": "43", "nrWpisuWprow": "32"}
+    ]
+
+    company = company_from_odpis_pelny(KIELCE_POSTAL_CODES, NO_TERYT, data)
+
+    assert company is not None
+    assert company.name == name
+
+
+def test_the_pipeline_reads_a_full_extract_for_what_the_current_one_lacks():
+    """Through the same door as an OdpisAktualny, and REGON still counts.
+
+    All five companies this was written for are in the public-entity catalogue
+    with a public ownership code, and none of them was ever in `companies`, so
+    none of them could be marked public either.
+    """
+    pipeline = CompaniesKRS()
+    pipeline.teryt = NO_TERYT  # type: ignore[assignment]
+    pipeline.jst_index = None
+    pipeline.process_api_krs_blob(
+        "gs://koryta-pl-crawled/hostname=api-krs.ms.gov.pl/api/krs/OdpisPelny/"
+        "0000304050/?rejestr=P/date=2026-09-28",
+        struck_off(),
+        NO_POSTAL_CODES,
+    )
+
+    assert pipeline.companies["0000304050"].name == (
+        "MIEJSKIE INWESTYCJE KIELCE SPÓŁKA AKCYJNA"
+    )
+    hardcoded = {
+        "0000304050": KRS(
+            "0000304050", {"PUBLIC_COMPANIES_KRS", REGON_PUBLIC_OWNERSHIP}
+        )
+    }
+    assert pipeline.compute_public_krss(hardcoded) == {"0000304050"}
+
+
+def test_a_current_extract_is_not_read_as_a_full_one():
+    assert is_odpis_pelny(struck_off())
+    assert not is_odpis_pelny(odpis())
+    assert not is_odpis_pelny({"title": "Not Found", "status": 404})
+    assert not is_odpis_pelny(None)
+
+
+def test_the_newest_version_is_the_one_introduced_last():
+    assert newest(
+        [
+            {"nazwa": "A", "nrWpisuWprow": "1", "nrWpisuWykr": "8"},
+            {"nazwa": "C", "nrWpisuWprow": "29", "nrWpisuWykr": "40"},
+            {"nazwa": "B", "nrWpisuWprow": "8", "nrWpisuWykr": "29"},
+        ]
+    ) == {"nazwa": "C", "nrWpisuWprow": "29", "nrWpisuWykr": "40"}
+    assert newest([]) == {}
+    assert newest(None) == {}
+    # An OdpisAktualny field is one value, not a list of them.
+    assert newest({"nazwa": "A"}) == {"nazwa": "A"}

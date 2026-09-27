@@ -35,6 +35,11 @@ from scrapers.stores.file import DownloadableFile
 class QueryType(Enum):
     API_KRS_ODPIS_AKTUALNY_P = "api_krs_odpis_aktualny_p"
     API_KRS_ODPIS_AKTUALNY_S = "api_krs_odpis_aktualny_s"
+    #: The full extract, every value a field has ever had. Asked only for a
+    #: company there is still no name for, once its current extract has come
+    #: back empty - see `full_extracts_owed`.
+    API_KRS_ODPIS_PELNY_P = "api_krs_odpis_pelny_p"
+    API_KRS_ODPIS_PELNY_S = "api_krs_odpis_pelny_s"
     REJESTRIO_ORG = "rejestrio_org"
     REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE = "rejestrio_org_krs_powiazania_aktualne"
     REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE = (
@@ -133,6 +138,12 @@ class RejestrIOQuery:
         if QueryType.API_KRS_ODPIS_AKTUALNY_S in self.queries:
             assert self.krs is not None
             yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=S&format=json"
+        if QueryType.API_KRS_ODPIS_PELNY_P in self.queries:
+            assert self.krs is not None
+            yield f"https://api-krs.ms.gov.pl/api/krs/OdpisPelny/{self.krs}?rejestr=P&format=json"
+        if QueryType.API_KRS_ODPIS_PELNY_S in self.queries:
+            assert self.krs is not None
+            yield f"https://api-krs.ms.gov.pl/api/krs/OdpisPelny/{self.krs}?rejestr=S&format=json"
         if QueryType.REJESTRIO_ORG in self.queries and not only_free:
             assert self.krs is not None
             yield f"https://rejestr.io/api/v2/org/{self.krs}"
@@ -199,7 +210,7 @@ class KRSSet:
 
 
 def api_krs_register(url: str) -> QueryType:
-    """Which register an api-krs OdpisAktualny query asked for.
+    """Which register, and which extract, an api-krs odpis query asked for.
 
     A company is in one register and not the other, so both are asked and one
     answers 404. Recording both as the P query left the S query looking
@@ -207,11 +218,19 @@ def api_krs_register(url: str) -> QueryType:
     run - and stored another empty object each time.
 
     The oldest blobs carry no ``?rejestr=`` at all, from before the parameter
-    was sent; P is what those were.
+    was sent; P is what those were. They are all OdpisAktualny: OdpisPelny was
+    first asked long after the parameter.
     """
+    register_s = "rejestr=S" in url
+    if "OdpisPelny/" in url:
+        return (
+            QueryType.API_KRS_ODPIS_PELNY_S
+            if register_s
+            else QueryType.API_KRS_ODPIS_PELNY_P
+        )
     return (
         QueryType.API_KRS_ODPIS_AKTUALNY_S
-        if "rejestr=S" in url
+        if register_s
         else QueryType.API_KRS_ODPIS_AKTUALNY_P
     )
 
@@ -226,6 +245,14 @@ class KRSScraped:
     #: said so: a crawl that did not come back leaves it False, because that
     #: says nothing about the company and is worth repeating.
     not_found: bool = False
+    #: The stored object is zero bytes: the query was asked and nothing came
+    #: back. That is a crawl that failed, or api-krs's empty 204 for a company
+    #: struck off the register, and the listing cannot tell which. Not an
+    #: answer - `KRSAlreadyScraped.answered` leaves these rows out - but the
+    #: record that the question was put, which is what makes a full extract
+    #: worth asking for (see `full_extracts_owed`). Kept for the OdpisAktualny
+    #: queries only.
+    empty: bool = False
 
     @staticmethod
     def parse(url: str) -> typing.Optional["KRSScraped"]:
@@ -246,7 +273,8 @@ class KRSScraped:
         elif "api-krs.ms.gov.pl" in url:
             if "Biuletyn" in url:
                 return None
-            krs = url.split("OdpisAktualny/", 1)[1].split("/", 1)[0]
+            endpoint = "OdpisPelny/" if "OdpisPelny/" in url else "OdpisAktualny/"
+            krs = url.split(endpoint, 1)[1].split("/", 1)[0]
             return KRSScraped(krs, api_krs_register(url), date)
         else:
             return None
@@ -257,11 +285,18 @@ class KRSScraped:
 #: crawl is 1,784, which leaves the bound a lot of room to be wrong in.
 NOT_FOUND_SIZE_BOUND = 1024
 
-#: The two free queries, the only ones a 404 can come back from.
+#: The two OdpisAktualny queries: the free ones every company is asked, and
+#: the ones whose 404 settles a register - see `settled_registers`.
 API_KRS_METHODS = (
     QueryType.API_KRS_ODPIS_AKTUALNY_P,
     QueryType.API_KRS_ODPIS_AKTUALNY_S,
 )
+
+#: Each register's full extract, keyed by its current one.
+FULL_EXTRACT = {
+    QueryType.API_KRS_ODPIS_AKTUALNY_P: QueryType.API_KRS_ODPIS_PELNY_P,
+    QueryType.API_KRS_ODPIS_AKTUALNY_S: QueryType.API_KRS_ODPIS_PELNY_S,
+}
 
 
 def _read_json(ctx: Context, blob_ref: DownloadableFile):
@@ -306,6 +341,12 @@ class KRSAlreadyScraped(Pipeline):
 
         Told apart by the size the listing already carries, so no body is read
         here. A reference whose size is unknown is kept: unknown is not empty.
+
+        An empty OdpisAktualny still leaves a row, flagged `empty`: not as an
+        answer - `answered` and `latest_scrapes` leave those rows out - but as
+        the record that the question was put. That is what a company struck
+        off the register looks like, since api-krs answers its current extract
+        with an empty 204 for ever, and it is when its full extract is owed.
         """
         output = []
         success, fail, empty = 0, 0, 0
@@ -318,6 +359,11 @@ class KRSAlreadyScraped(Pipeline):
                 assert isinstance(blob_name, DownloadableFile)
                 if blob_name.size == 0:
                     empty += 1
+                    if "api-krs.ms.gov.pl" in blob_name.url:
+                        r = KRSScraped.parse(blob_name.url)
+                        if r is not None and r.method in API_KRS_METHODS:
+                            r.empty = True
+                            output.append(r)
                     continue
                 r = KRSScraped.parse(blob_name.url)
                 if r:
@@ -368,19 +414,41 @@ class KRSAlreadyScraped(Pipeline):
             f"(read {len(candidates)} of {len(newest)} newest responses)"
         )
 
+    def answered(self, ctx: Context) -> pd.DataFrame:
+        """Every response that came back with something in it.
+
+        The output less its `empty` rows, which say only that a question was
+        asked. Whatever reads this pipeline as "what we hold" wants this; only
+        `came_back_empty` wants the rest. An output written before the column
+        existed has no such rows to leave out.
+        """
+        df = self.read_or_process(ctx)
+        if "empty" not in df.columns:
+            return df
+        return df[~df["empty"].eq(True)].drop(columns="empty").reset_index(drop=True)
+
     def latest_scrapes(self, ctx: Context):
         """The most recent response for each (krs, method), as it came back.
 
         The whole row rather than the maximum of each column: `not_found` is
         the answer the register gave on one date, and maximising it would
         carry a 404 forward past a later response that did find the company.
+        Answers only: a later crawl that came back empty does not stand in for
+        the entry an earlier one returned.
         """
-        df = normalise(self.read_or_process(ctx), "date")
+        df = normalise(self.answered(ctx), "date")
         return (
             df.sort_values("date")
             .drop_duplicates(subset=["krs", "method"], keep="last")
             .reset_index(drop=True)
         )
+
+    def came_back_empty(self, ctx: Context) -> dict[str, set[QueryType]]:
+        """The current extracts whose newest crawl was empty, per company.
+
+        See `current_extracts_empty`.
+        """
+        return current_extracts_empty(normalise(self.read_or_process(ctx), "date"))
 
 
 # The results from analysis/update_rate suggest 4 days is enough for 90% success rate
@@ -407,11 +475,13 @@ def compute_refresh_cutoff_date(today: date, skip_days: int) -> str:
     return current.isoformat()
 
 
-#: The api-krs pair, which costs nothing. Everything else a needs-refresh
+#: The api-krs queries, which cost nothing. Everything else a needs-refresh
 #: frame can name is a rejestr.io call, and `RejestrIOQuery.cost` bills it.
 FREE_METHODS = (
     QueryType.API_KRS_ODPIS_AKTUALNY_P.value,
     QueryType.API_KRS_ODPIS_AKTUALNY_S.value,
+    QueryType.API_KRS_ODPIS_PELNY_P.value,
+    QueryType.API_KRS_ODPIS_PELNY_S.value,
 )
 
 
@@ -631,6 +701,103 @@ def settled_registers(already_scraped_krs: pd.DataFrame) -> dict[str, set[QueryT
     return settled
 
 
+def current_extracts_empty(
+    already_scraped_krs: pd.DataFrame,
+) -> dict[str, set[QueryType]]:
+    """The registers whose current extract of a company came back empty.
+
+    Decided by the newest OdpisAktualny per (krs, register), the `empty` rows
+    included: a company struck off the register gets an empty 204 in the
+    register it was in, run after run, and that is what makes its full extract
+    worth asking for. An empty crawl followed by one that returned the entry
+    was a crawl that failed once; on the same date, the entry wins.
+
+    A register never asked is not in here, which is the point: a company that
+    comes up for the first time is asked for its current extracts and nothing
+    else, and most of them answer. So is an output written before the column
+    existed - nothing in it says a question came back empty.
+    """
+    if already_scraped_krs.empty or "empty" not in already_scraped_krs.columns:
+        return {}
+    current = already_scraped_krs[
+        already_scraped_krs["method"].isin([q.value for q in API_KRS_METHODS])
+    ].assign(empty=lambda df: df["empty"].eq(True))
+    newest = current.sort_values(
+        ["date", "empty"], ascending=[True, False]
+    ).drop_duplicates(subset=["krs", "method"], keep="last")
+    nothing = newest[newest["empty"]]
+    result: dict[str, set[QueryType]] = {}
+    for krs, method in zip(nothing["krs"], nothing["method"]):
+        result.setdefault(str(krs), set()).add(QueryType(method))
+    return result
+
+
+def full_extracts_owed(
+    asked: typing.Iterable[QueryType],
+    came_back_empty: typing.Collection[QueryType],
+    fetched: typing.Iterable[str],
+) -> list[QueryType]:
+    """The full extracts to ask for a company we still have no name for.
+
+    One per current extract being asked whose last crawl came back empty -
+    `came_back_empty`, from `current_extracts_empty`. A company struck off the
+    register gets an empty 204 for its current extract, on every run, so
+    asking only that is how "Grupowa Oczyszczalnia Ścieków w Łodzi" was asked
+    for its name at least six times between July and September and never got
+    it. OdpisPelny is the one endpoint that still describes such a company.
+
+    Not before that: a company asked about for the first time gets its
+    current extracts alone, and a full extract is a far longer answer to a
+    question most of them settle. Not from a register that has said 404,
+    which `asked` already leaves out. And only once: `fetched` are the
+    methods already on file for the company, so a full extract that itself
+    came back empty is not among them and is asked again.
+    """
+    have = {QueryType(q) for q in fetched}
+    return [
+        FULL_EXTRACT[q]
+        for q in asked
+        if q in came_back_empty and FULL_EXTRACT[q] not in have
+    ]
+
+
+def register_queries(
+    names: typing.Iterable[KRS],
+    entries: typing.Iterable[KRS],
+    settled: dict[str, set[QueryType]],
+    came_back_empty: dict[str, set[QueryType]],
+    fetched: pd.Series,
+    company_reasons: dict[str, set[str]],
+) -> typing.Iterator[RejestrIOQuery]:
+    """The api-krs queries for companies missing a name or a register entry.
+
+    Asked regardless of what has been asked before - the name or the entry is
+    still missing - but a register that has answered still has nothing more
+    to say. Only a company missing its name can be owed a full extract: one
+    missing only its entry has a name, and the current extract is the entry.
+    `fetched` is the methods already on file, per KRS.
+    """
+    names = list(names)
+    nameless = {krs.id for krs in names}
+    entries = [krs for krs in entries if krs.id not in nameless]
+    print(f"len(entries), besides the names: {len(entries)}")
+    for krs in names + entries:
+        answered = settled.get(krs.id, set())
+        queries = [q for q in API_KRS_METHODS if q not in answered]
+        if krs.id in nameless:
+            queries += full_extracts_owed(
+                queries,
+                came_back_empty.get(krs.id, set()),
+                fetched.get(krs.id, []),
+            )
+        if queries:
+            yield RejestrIOQuery(
+                krs=krs,
+                queries=queries,
+                reasons=sorted(company_reasons.get(krs.id, set())),
+            )
+
+
 def save_org_connections(
     already_scraped_krs: pd.DataFrame,
     needs_refresh_krs: pd.DataFrame,
@@ -640,14 +807,22 @@ def save_org_connections(
     people: typing.Iterable[RejestrIOKey],
     company_reasons: dict[str, set[str]] | None = None,
     person_reasons: dict[str, set[str]] | None = None,
+    entries: typing.Iterable[KRS] = (),
+    came_back_empty: dict[str, set[QueryType]] | None = None,
 ) -> typing.Iterable[RejestrIOQuery]:
     """Every query owed, each carrying why it is owed.
 
     The reasons come from the caller because that is where they are known:
-    this function is handed four sets of subjects and nothing that says which
+    this function is handed five sets of subjects and nothing that says which
     door any of them came through. Passing none leaves the queries unexplained
     rather than unissued - `cost_breakdown` files those under
     `REASON_UNRECORDED` so the bill still adds up.
+
+    `names` are companies we hold no name for and `entries` companies we hold
+    no register entry for. Both are asked for their current extracts; only a
+    company in `names` is asked for a full extract too, and only once
+    `came_back_empty` - see `current_extracts_empty` - says its current one had
+    nothing to give. A company with a name has no use for one.
     """
     company_reasons = company_reasons or {}
     person_reasons = person_reasons or {}
@@ -729,18 +904,14 @@ def save_org_connections(
             # If there's nothing to query, don't send it
             yield query
 
-    for krs in names:
-        # This loop asks regardless of what has been asked before - the name
-        # is still missing - but a register that has answered still has
-        # nothing more to say.
-        answered = settled.get(krs.id, set())
-        queries = [q for q in API_KRS_METHODS if q not in answered]
-        if queries:
-            yield RejestrIOQuery(
-                krs=krs,
-                queries=queries,
-                reasons=sorted(company_reasons.get(krs.id, set())),
-            )
+    yield from register_queries(
+        names=names,
+        entries=entries,
+        settled=settled,
+        came_back_empty=came_back_empty or {},
+        fetched=already_scraped["method"],
+        company_reasons=company_reasons,
+    )
 
     people_to_fetch = 0
     for person in people:
@@ -1110,10 +1281,12 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                 ctx, self.person_coverage.people_to_refetch(ctx)
             ),
             connections=connections,
-            names=missing_names | missing_entries,
+            names=missing_names,
             people=people,
             company_reasons=self.company_reasons,
             person_reasons=self.person_reasons,
+            entries=missing_entries,
+            came_back_empty=self.already_scraped.came_back_empty(ctx),
         ):
             ctx.io.output_entity(url)
 

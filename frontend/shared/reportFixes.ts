@@ -30,6 +30,15 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Pięć spółek wykreślonych z KRS, które od 22 lipca nazywały się swoim numerem KRS, ma z powrotem nazwę z rejestru, wielkimi literami - 0000069597 to „GRUPOWA OCZYSZCZALNIA ŚCIEKÓW W ŁODZI (Łódź)”, a 0000304050 „MIEJSKIE INWESTYCJE KIELCE” (dawniej Port Lotniczy Kielce) - ale dopiero po wgraniu przygotowanego pliku companies-names.jsonl.",
+    fixes: [
+      "d22TAxj5BSDCdlMVipxn",
+      "j7DmESIdwgNha0OzVDjx",
+      "VBwJOcp8NUWq4NSytWwo",
+    ],
+  },
+  {
+    change:
       "„Właściciele” PKP SKM wymieniają każdego właściciela raz, także po załadowaniu strony - Gmina Gdańsk, POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Województwo pomorskie i Gdynia, a gmina, która jest i siedzibą, i właścicielem spółki, ma jeden wiersz.",
     fixes: ["SLaYgF7oCq9VV1fpU08t"],
   },
