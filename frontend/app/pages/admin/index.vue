@@ -112,11 +112,13 @@
             </template>
           </v-card-text>
 
+          <!-- To the ones counted here: the page opens on the queue, and
+               these are under it. -->
           <v-card-actions>
             <v-btn
               variant="text"
               color="primary"
-              to="/admin/opinie"
+              :to="`/admin/opinie#${FEEDBACK_INBOX_ANCHOR}`"
               :append-icon="mdiChevronRight"
             >
               Przejdź do zgłoszeń
@@ -396,6 +398,7 @@ import {
   mdiMessageAlertOutline,
 } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
+import { FEEDBACK_INBOX_ANCHOR } from "~/composables/feedback";
 import { noteAdminTypeLabel, noteKindConfig } from "~/composables/notes";
 import type { AdminSummary } from "~~/server/api/admin/summary.get";
 import type { ActivityStats } from "~~/server/api/stats/activity.get";

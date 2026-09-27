@@ -1,4 +1,5 @@
 import type {
+  LocationQueryRaw,
   RouteLocationNormalizedLoaded,
   RouteLocationRaw,
 } from "vue-router";
@@ -75,8 +76,8 @@ export const feedbackStatusConfig: Record<
 };
 
 /** How a fix claimed on the QA list reads on a report (`shared/feedbackFixes.ts`).
- * Ink colours: the chip is tonal and the icon stands alone in the ordering
- * rows, so the colour has to be readable as text. */
+ * Ink colours: the chip is tonal and the icon stands alone on a report's
+ * line, so the colour has to be readable as text. */
 export const fixStateConfig: Record<
   FixState,
   { label: string; icon: string; color: string }
@@ -95,13 +96,24 @@ export const fixStateConfig: Record<
 };
 
 /** Where a link to one report leads. On the page that lists every report it
- * is the hash alone, which that page follows by opening and outlining the row
- * (/admin/opinie); from a page showing only some of them, `page` is where the
+ * is the hash, which that page follows by opening and outlining the row
+ * (/admin/opinie) - with `query`, the one the page is on. That query is the
+ * view and the filter being looked at, and a location of a hash alone has
+ * none: from the full list (?widok=lista) it would go back to the queue, and
+ * to a closed report the page would then turn round and go to the full list
+ * again. From a page showing only some of the reports, `page` is where the
  * rest are, and the link goes there with the same hash. */
 export const feedbackReportLink = (
   id: string,
   page?: string,
-): RouteLocationRaw => (page ? `${page}#fb-${id}` : { hash: `#fb-${id}` });
+  query?: LocationQueryRaw,
+): RouteLocationRaw =>
+  page ? `${page}#fb-${id}` : { query, hash: `#fb-${id}` };
+
+/** The id of "Poza kolejką" in the queue on /admin/opinie: the reports nobody
+ * has placed yet, which the dashboard counts and links to. The page opens on
+ * the queue, with those under it - a screen down, once the queue is long. */
+export const FEEDBACK_INBOX_ANCHOR = "poza-kolejka";
 
 /** The node the route is about, when it is about one.
  *

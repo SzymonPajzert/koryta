@@ -134,14 +134,6 @@ export function useFeedbackAdmin() {
     return info;
   });
 
-  /** The same, reduced to the state, for the one-line rows of ordering mode. */
-  const fixStates = computed(
-    () =>
-      new Map(
-        [...fixInfo.value].map(([id, { state }]) => [id, state] as const),
-      ),
-  );
-
   /** For a report written while checking a fix: the reports it was a fix for. */
   const fixTargets = computed(() => {
     const targets = new Map<string, Feedback[]>();
@@ -309,12 +301,9 @@ export function useFeedbackAdmin() {
     return setRank(item, rankForSlot(spaced, index), renumber);
   }
 
-  /** Settles once every rank write made so far has been answered. None of
-   * them rejects: a refusal is handled where it lands. */
-  const rankWritesSettled = () => rankWrites;
-
   /** Settles once every write made so far - ranks, statuses, notes - has been
-   * answered, for a reload that must not read from before them. */
+   * answered, for a reload that must not read from before them. None of them
+   * rejects: a refusal is handled where it lands. */
   const writesSettled = () => Promise.allSettled([rankWrites, ...saves]);
 
   return {
@@ -329,7 +318,6 @@ export function useFeedbackAdmin() {
     closed,
     positions,
     fixInfo,
-    fixStates,
     fixTargets,
     saving,
     draftNotes,
@@ -337,7 +325,6 @@ export function useFeedbackAdmin() {
     saveNote,
     setRank,
     moveTo,
-    rankWritesSettled,
     writesSettled,
     snackbar,
     snackbarText,

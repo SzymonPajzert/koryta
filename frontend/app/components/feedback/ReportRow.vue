@@ -165,7 +165,7 @@
         size="x-small"
         label
         variant="outlined"
-        :to="feedbackReportLink(target.id!, reportPage)"
+        :to="feedbackReportLink(target.id!, reportPage, route.query)"
         :title="target.message"
         data-fix-target
       >
@@ -290,6 +290,10 @@ const emit = defineEmits<{
 }>();
 
 const expanded = defineModel<boolean>("expanded", { default: false });
+
+/** For the links to other reports: on the page that lists them all, they
+ * keep the view and the filter it is on. */
+const route = useRoute();
 
 const statusOptions = Object.entries(feedbackStatusConfig).map(
   ([value, { title }]) => ({ title, value }),

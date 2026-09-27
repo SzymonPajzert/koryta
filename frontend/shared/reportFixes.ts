@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "/admin/opinie otwiera się na kolejce, w której kliknięte zgłoszenie rozwija się w miejscu z notatką i statusem, więc można mu tam odpisać albo je zamknąć, a otwarte nadal przesuwa się strzałkami i przeciąganiem - zamknięte i filtr „Z QA” są w widoku „Pełna lista”.",
+    fixes: ["OuTEaTzI6TvvMyPerpYl"],
+    link: "/admin/opinie",
+  },
+  {
+    change:
       "„Obecny skład” spółki wymienia najpierw prezesa, potem jego zastępców, zarząd i radę nadzorczą, a dopiero dalej resztę.",
     fixes: ["uIj31XYdsMVFjnqHArzX"],
   },
