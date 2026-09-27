@@ -52,6 +52,7 @@ from scrapers.krs.public_owners import CompaniesPublicByRegister
 from scrapers.krs.register import KRSRegisterEntries, KRSRegisterQueue
 from scrapers.krs.scrape import KRSAlreadyScraped, KRSNeedsRefresh, ScrapeRejestrIO
 from scrapers.krs.updates import KRSUpdates
+from scrapers.map.offices import LocalGovernmentOffices
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
 from scrapers.pkw.process import PeoplePKW
@@ -93,6 +94,7 @@ PIPELINES = [
     KRSRegisterEntries,
     KRSRegisterQueue,
     KRSUpdates,
+    LocalGovernmentOffices,
     KrsOdpisAttempts,
     KrsOdpisEntries,
     KrsOdpisSeats,

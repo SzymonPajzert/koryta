@@ -9,6 +9,14 @@ from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
 from scrapers.stores.file import DownloadableFile as FileSource
 
+#: The Katalog Podmiotów Publicznych: who provides a public service, with their
+#: REGON, NIP and seat. Read here for the KRS numbers in it and by
+#: `LocalGovernmentOffices` for the urzędy, which have none.
+public_catalogue = FileSource(
+    "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file",
+    "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv",
+)
+
 #: The catalogue entries REGON records as publicly owned - see `publicly_owned`.
 #: Not a seed like `SPOLKI_SKARBU_PANSTWA`: `CompaniesKRS.compute_public_krss`
 #: consults it only for a company whose register entry names no owner.
@@ -96,14 +104,8 @@ class CompaniesHardcoded(Pipeline[KRS]):
     def read_public_companies(
         self, ctx: Context
     ):  # Public companies, from data.gov.pl:
-        _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
-        public_companies = FileSource(
-            _PUBLIC_COMPANIES_SOURCE,
-            "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv",
-        )
-
         df = pd.read_csv(
-            ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
+            ctx.io.read_data(public_catalogue).read_file(), sep=";", low_memory=False
         )
         df = df[~df["KRS"].isna()]
         df["teryt"] = df.apply(self.parse_teryt_from_row, axis=1)
