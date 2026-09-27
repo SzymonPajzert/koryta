@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W kategoryzacji notatek nazwa osoby nad notatką jest prawdziwym linkiem: kliknięta, także z ctrl albo środkowym przyciskiem, otwiera stronę tej osoby w nowej karcie.",
+    fixes: ["g29Mn5m5y6EKQegAviQn"],
+  },
+  {
+    change:
       "„Obecny skład” spółki wymienia najpierw prezesa, potem jego zastępców, zarząd i radę nadzorczą, a dopiero dalej resztę.",
     fixes: ["uIj31XYdsMVFjnqHArzX"],
   },
