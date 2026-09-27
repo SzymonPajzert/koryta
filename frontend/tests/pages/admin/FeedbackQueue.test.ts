@@ -1,9 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from "vitest";
 import { defineComponent, h, ref } from "vue";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { useRouter } from "#app";
+import type { RouteLocationRaw } from "vue-router";
 import OpiniePage from "../../../app/pages/admin/opinie.vue";
+import { FEEDBACK_INBOX_ANCHOR } from "~/composables/feedback";
 import type { Feedback, FeedbackStatus } from "~~/shared/model";
 import type { QaCheck, QaCheckStatus, QaItem } from "~~/shared/qa";
 
@@ -167,9 +177,19 @@ const SnackbarStub = defineComponent({
  * route. */
 const mounted: { unmount: () => void }[] = [];
 
-const mount = async (hash = "", query: Record<string, string> = {}) => {
+/** The full list, with the closed reports and the filter by source. The page
+ * opens on the queue; `mountQueue` mounts that. */
+const FULL_LIST = { widok: "lista" };
+
+const mount = async (
+  hash = "",
+  query: Record<string, string> = FULL_LIST,
+  /** Only a page in the document has anything to scroll to. */
+  attachTo?: HTMLElement,
+) => {
   const wrapper = await mountSuspended(OpiniePage, {
     route: { path: "/", hash, query },
+    attachTo,
     global: { stubs: { UserChip: true, VSnackbar: SnackbarStub } },
   });
   mounted.push(wrapper);
@@ -177,6 +197,9 @@ const mount = async (hash = "", query: Record<string, string> = {}) => {
   await flushPromises();
   return wrapper;
 };
+
+/** The page as it opens, with nothing in the url but perhaps a link. */
+const mountQueue = (hash = "") => mount(hash, {});
 
 type Wrapper = Awaited<ReturnType<typeof mount>>;
 
@@ -194,7 +217,7 @@ const listIds = (wrapper: Wrapper) =>
 const isOpen = (wrapper: Wrapper, id: string) =>
   row(wrapper, id).find("[data-row-panel]").exists();
 
-/** Report ids in the order the one-line rows are, in ordering mode. */
+/** Report ids in the order the queue view has them, in its queue or under it. */
 const rowIds = (wrapper: Wrapper, kind: "queue" | "inbox" = "queue") =>
   wrapper
     .findAll(`[data-${kind}-row]`)
@@ -229,11 +252,23 @@ const openAll = (wrapper: Wrapper) =>
     ...listIds(wrapper).filter((id): id is string => id !== undefined),
   );
 
-/** Switches to ordering mode and waits for the reload it makes. */
-const startOrdering = async (wrapper: Wrapper) => {
+const currentRoute = () => useRouter().currentRoute.value;
+
+/** Switches from the full list to the queue and waits for the reload it
+ * makes. */
+const showQueue = async (wrapper: Wrapper) => {
   const before = gets().length;
-  await click(button(wrapper, "Ułóż kolejkę"));
+  await click(button(wrapper, "Kolejka"));
   await vi.waitUntil(() => gets().length > before, { timeout: 2000 });
+  await flushPromises();
+};
+
+/** Switches from the queue to the full list, which the url then says. */
+const showList = async (wrapper: Wrapper) => {
+  await click(button(wrapper, "Pełna lista"));
+  await vi.waitUntil(() => currentRoute().query.widok === "lista", {
+    timeout: 2000,
+  });
   await flushPromises();
 };
 
@@ -344,7 +379,108 @@ describe("admin feedback queue", () => {
     ).toBe(false);
   });
 
-  it("orders in one-line rows, starting from a fresh list", async () => {
+  it("opens on the queue, with the reports nobody has placed under it", async () => {
+    serve(board());
+    const wrapper = await mountQueue();
+
+    expect(gets()).toHaveLength(1);
+    expect(rowIds(wrapper)).toEqual(["q1", "q2", "q3"]);
+    expect(rowIds(wrapper, "inbox")).toEqual(["in-new", "in-old"]);
+    // The rows of the full list, one line each until asked for more.
+    expect(listIds(wrapper)).toEqual(["q1", "q2", "q3", "in-new", "in-old"]);
+    expect(wrapper.find("[data-row-panel]").exists()).toBe(false);
+    expect(row(wrapper, "q2").get("[data-queue-position]").text()).toBe("#2");
+    // Nothing that belongs to the full list: no closed reports, no filter.
+    expect(wrapper.find("#fb-done").exists()).toBe(false);
+    expect(wrapper.find("[data-toggle-closed]").exists()).toBe(false);
+    expect(wrapper.find("[data-filter]").exists()).toBe(false);
+    expect(
+      wrapper
+        .findAll("[data-view-toggle] button")
+        .map((node) => [node.text(), node.classes().includes("v-btn--active")]),
+    ).toEqual([
+      ["Kolejka", true],
+      ["Pełna lista", false],
+    ]);
+  });
+
+  it("answers and closes a report from its row in the queue", async () => {
+    // The point of opening a row in the queue: the report is settled where it
+    // is being read, without a trip to the full list.
+    serve(board());
+    const wrapper = await mountQueue();
+    await open(wrapper, "q2");
+
+    await row(wrapper, "q2").get("textarea").setValue("zrobione w piątek");
+    await row(wrapper, "q2").get("textarea").trigger("blur");
+    row(wrapper, "q2")
+      .findComponent({ name: "VSelect" })
+      .vm.$emit("update:modelValue", "resolved");
+    await flushPromises();
+
+    expect(posts().map(([, opts]) => opts.body)).toEqual([
+      { id: "q2", adminNote: "zrobione w piątek" },
+      { id: "q2", adminStatus: "resolved" },
+    ]);
+    // Where it was, greyed, until the next load - as in the full list - and
+    // still open, so what was just done can be read back.
+    expect(rowIds(wrapper)).toEqual(["q1", "q2", "q3"]);
+    expect(row(wrapper, "q2").classes()).toContain("arow--dimmed");
+    expect(isOpen(wrapper, "q2")).toBe(true);
+  });
+
+  it("opens the report a link points at where the queue has it", async () => {
+    serve(board());
+    const wrapper = await mountQueue("#fb-q2");
+
+    expect(currentRoute().query).toEqual({});
+    expect(row(wrapper, "q2").attributes()).toHaveProperty("data-queue-row");
+    expect(row(wrapper, "q2").classes()).toContain("arow--target");
+    expect(isOpen(wrapper, "q2")).toBe(true);
+    expect(isOpen(wrapper, "q1")).toBe(false);
+  });
+
+  it("scrolls a link to the reports nobody has placed down to them", async () => {
+    // The dashboard's link: the reports its card counts are under the queue,
+    // a screen down once it is long. The router looks for their heading
+    // before there are any rows, and finds nothing.
+    serve(board());
+    const scrolled: string[] = [];
+    const spy = vi
+      .spyOn(Element.prototype, "scrollIntoView")
+      .mockImplementation(function (this: Element) {
+        scrolled.push(this.id);
+      });
+    onTestFinished(() => spy.mockRestore());
+    const wrapper = await mount(`#${FEEDBACK_INBOX_ANCHOR}`, {}, document.body);
+
+    expect(
+      wrapper.get(`#${FEEDBACK_INBOX_ANCHOR}`).attributes("data-section"),
+    ).toBe("inbox");
+    expect(scrolled).toEqual([FEEDBACK_INBOX_ANCHOR]);
+    // Not a report: none is opened, and none is missing.
+    expect(currentRoute().query).toEqual({});
+    expect(wrapper.find("[data-row-panel]").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Nie ma takiego zgłoszenia.");
+  });
+
+  it("takes a link to a closed report to the full list, unfolded", async () => {
+    serve(board());
+    const wrapper = await mountQueue("#fb-wont");
+    await vi.waitUntil(() => currentRoute().query.widok === "lista", {
+      timeout: 2000,
+    });
+    await flushPromises();
+
+    // Replaced, with the link kept: the queue has no closed reports.
+    expect(currentRoute().hash).toBe("#fb-wont");
+    expect(wrapper.find("[data-queue-row]").exists()).toBe(false);
+    expect(row(wrapper, "wont").classes()).toContain("arow--target");
+    expect(isOpen(wrapper, "wont")).toBe(true);
+    expect(wrapper.get("[data-toggle-closed]").text()).toBe("Ukryj zamknięte");
+  });
+
+  it("goes back to the queue from a fresh list, with what was open still open", async () => {
     // Somebody else queued a report between this page's load and the switch:
     // ranks are computed from the neighbours on screen, so the rows have to
     // be the database's, not what the page loaded a while ago.
@@ -353,34 +489,29 @@ describe("admin feedback queue", () => {
     );
     serve(board(), later);
     const wrapper = await mount();
-    // What the mode below has to take away is there to begin with, in an
-    // open row.
     await open(wrapper, "in-new");
-    expect(wrapper.find("textarea").exists()).toBe(true);
-    expect(wrapper.find(".v-select").exists()).toBe(true);
 
-    await startOrdering(wrapper);
+    await showQueue(wrapper);
 
     expect(gets()).toHaveLength(2);
+    // The queue is the page's own view, so it leaves nothing in the url.
+    expect(currentRoute().query).toEqual({});
     expect(rowIds(wrapper)).toEqual(["q1", "in-new", "q2", "q3"]);
     expect(rowIds(wrapper, "inbox")).toEqual(["in-old"]);
 
-    // Nothing to answer with in this mode: no rows that open, no status, no
-    // note.
-    expect(wrapper.findAll("[data-report-row]")).toHaveLength(0);
-    expect(wrapper.find("textarea").exists()).toBe(false);
-    expect(wrapper.find(".v-select").exists()).toBe(false);
-    expect(
-      wrapper.findAll("label").some((node) => node.text() === "Status"),
-    ).toBe(false);
+    // The same row, open where it was left, with the status and the note.
+    expect(isOpen(wrapper, "in-new")).toBe(true);
+    expect(row(wrapper, "in-new").find("textarea").exists()).toBe(true);
+    expect(row(wrapper, "in-new").find(".v-select").exists()).toBe(true);
+    expect(isOpen(wrapper, "q1")).toBe(false);
     // Closed reports have no place in an order.
     expect(wrapper.find("#fb-done").exists()).toBe(false);
+    expect(wrapper.find("[data-toggle-closed]").exists()).toBe(false);
   });
 
   it("moves a row up between the two above it", async () => {
     serve(board());
-    const wrapper = await mount();
-    await startOrdering(wrapper);
+    const wrapper = await mountQueue();
     expect(rowIds(wrapper)).toEqual(["q1", "q2", "q3"]);
 
     const third = wrapper.findAll("[data-queue-row]")[2]!;
@@ -399,8 +530,7 @@ describe("admin feedback queue", () => {
 
   it("puts a row back where it was when the server refuses the move", async () => {
     serve(board());
-    const wrapper = await mount();
-    await startOrdering(wrapper);
+    const wrapper = await mountQueue();
 
     let refuse: (error: Error) => void = () => {};
     mockAuthRequest.mockImplementation(
@@ -433,8 +563,7 @@ describe("admin feedback queue", () => {
 
   it("sends rank writes one at a time, in the order they were made", async () => {
     serve(board());
-    const wrapper = await mount();
-    await startOrdering(wrapper);
+    const wrapper = await mountQueue();
 
     const answers: (() => void)[] = [];
     mockAuthRequest.mockImplementation(
@@ -479,8 +608,7 @@ describe("admin feedback queue", () => {
     "ends showing what was saved when an earlier move of the same row is refused and the later one is $later",
     async ({ accept, rows }) => {
       serve(board());
-      const wrapper = await mount();
-      await startOrdering(wrapper);
+      const wrapper = await mountQueue();
 
       // A fake of the one field the server keeps, so the screen can be held
       // against it once everything has settled.
@@ -546,8 +674,7 @@ describe("admin feedback queue", () => {
 
   it("spaces the queue out again, in the same write, before a move into a slot with no room", async () => {
     serve(crowded());
-    const wrapper = await mount();
-    await startOrdering(wrapper);
+    const wrapper = await mountQueue();
     expect(rowIds(wrapper)).toEqual(["a", "b", "c", "d"]);
 
     // d up one: between b and c.
@@ -575,8 +702,7 @@ describe("admin feedback queue", () => {
 
   it("puts the whole queue back when the server refuses a move that spaced it out", async () => {
     serve(crowded());
-    const wrapper = await mount();
-    await startOrdering(wrapper);
+    const wrapper = await mountQueue();
 
     let refuse: (error: Error) => void = () => {};
     mockAuthRequest.mockImplementation(
@@ -653,7 +779,10 @@ describe("admin feedback queue", () => {
       .findComponent({ name: "VSelect" })
       .vm.$emit("update:modelValue", "in_progress");
     await flushPromises();
-    await click(button(wrapper, "Ułóż kolejkę"));
+    await click(button(wrapper, "Kolejka"));
+    await vi.waitUntil(() => wrapper.find(".fb-order").exists(), {
+      timeout: 2000,
+    });
 
     // Asked for now, the list would come back from before the save. The rows
     // are up, but nothing can be moved until they are the fresh ones.
@@ -671,24 +800,25 @@ describe("admin feedback queue", () => {
     ).toContain("W trakcie");
   });
 
-  it("goes back to the rows that open on Gotowe, in the new order", async () => {
+  it("shows the full list in the new order, without loading it again", async () => {
     serve(board());
-    const wrapper = await mount();
-    await startOrdering(wrapper);
+    const wrapper = await mountQueue();
 
     const third = wrapper.findAll("[data-queue-row]")[2]!;
     await click(third.get('button[aria-label="Wyżej"]'));
-    await click(button(wrapper, "Gotowe"));
+    await showList(wrapper);
 
     expect(wrapper.find("[data-queue-row]").exists()).toBe(false);
     expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q3", "q2"]);
     expect(row(wrapper, "q3").get("[data-queue-position]").text()).toBe("#2");
-    await open(wrapper, "q3");
-    expect(row(wrapper, "q3").find("textarea").exists()).toBe(true);
-    // Leaving writes nothing and reloads nothing of its own.
+    // With what the queue has no room for: the closed ones, and the filter.
+    expect(wrapper.get("[data-toggle-closed]").text()).toBe(
+      "Pokaż zamknięte (2)",
+    );
+    expect(wrapper.find('[data-filter="qa"]').exists()).toBe(true);
+    // Switching writes nothing and reloads nothing of its own.
     expect(posts()).toHaveLength(1);
-    expect(gets()).toHaveLength(2);
-    expect(button(wrapper, "Ułóż kolejkę").exists()).toBe(true);
+    expect(gets()).toHaveLength(1);
   });
 
   it("saves the note on blur only when it was changed", async () => {
@@ -780,7 +910,8 @@ describe("admin feedback queue", () => {
 
   it("follows a hash that changes while the page is open", async () => {
     // The date in every open row links to the row itself, so the hash can
-    // move without the page loading again.
+    // move without the page loading again. A link to a fragment keeps the
+    // query, and with it the view.
     const late = feedback("late", "new", {
       createdAt: "2026-08-25T10:00:00.000Z",
     });
@@ -788,7 +919,7 @@ describe("admin feedback queue", () => {
     const wrapper = await mount();
     expect(wrapper.find("#fb-done").exists()).toBe(false);
 
-    await useRouter().push({ path: "/", hash: "#fb-done" });
+    await useRouter().push({ query: currentRoute().query, hash: "#fb-done" });
     await flushPromises();
 
     expect(row(wrapper, "done").classes()).toContain("arow--target");
@@ -799,7 +930,7 @@ describe("admin feedback queue", () => {
 
     // A link from Slack followed with the page open can name a report that
     // arrived after it loaded.
-    await useRouter().push({ path: "/", hash: "#fb-late" });
+    await useRouter().push({ query: currentRoute().query, hash: "#fb-late" });
     await flushPromises();
 
     expect(gets()).toHaveLength(2);
@@ -826,7 +957,10 @@ describe("admin feedback queue", () => {
 
       // Following the date in another open row moves the mark there rather
       // than adding a second one.
-      await useRouter().push({ path: "/", hash: "#fb-in-new" });
+      await useRouter().push({
+        query: currentRoute().query,
+        hash: "#fb-in-new",
+      });
       await flushPromises();
 
       expect(row(wrapper, "in-new").classes()).toContain("arow--target");
@@ -868,7 +1002,7 @@ describe("admin feedback queue", () => {
     const wrapper = await mountSuspended(OpiniePage, {
       // As a string, so the router parses and decodes it the way it does the
       // address bar.
-      route: "/#fb-100%25",
+      route: "/?widok=lista#fb-100%25",
       global: { stubs: { UserChip: true, VSnackbar: SnackbarStub } },
     });
     mounted.push(wrapper);
@@ -904,7 +1038,6 @@ describe("where a report came from", () => {
     fromQa("qa-done", { adminStatus: "resolved" }),
   ];
 
-  const currentRoute = () => useRouter().currentRoute.value;
   const chip = (wrapper: Wrapper, value: string) =>
     wrapper.get(`[data-filter="${value}"]`);
   /** Picks a view and waits for the url to say so - the router navigates
@@ -941,7 +1074,7 @@ describe("where a report came from", () => {
 
     await pick(wrapper, "qa");
     // In the url, so the view survives a reload and can be linked to.
-    expect(currentRoute().query).toEqual({ zrodlo: "qa" });
+    expect(currentRoute().query).toEqual({ ...FULL_LIST, zrodlo: "qa" });
     expect(chip(wrapper, "qa").attributes("aria-pressed")).toBe("true");
     expect(listIds(wrapper)).toEqual(["qa-new"]);
     // Nothing queued came from /qa, so there is no queue to show.
@@ -951,17 +1084,20 @@ describe("where a report came from", () => {
     );
 
     await pick(wrapper, "zgloszenia");
-    expect(currentRoute().query).toEqual({ zrodlo: "zgloszenia" });
+    expect(currentRoute().query).toEqual({
+      ...FULL_LIST,
+      zrodlo: "zgloszenia",
+    });
     expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
 
-    // The default leaves nothing behind.
+    // The default filter leaves nothing of its own behind.
     await pick(wrapper, "wszystkie");
-    expect(currentRoute().query).toEqual({});
+    expect(currentRoute().query).toEqual(FULL_LIST);
   });
 
   it("takes a view it does not know for all of them", async () => {
     serve(mixed());
-    const wrapper = await mount("", { zrodlo: "cokolwiek" });
+    const wrapper = await mount("", { ...FULL_LIST, zrodlo: "cokolwiek" });
 
     expect(chip(wrapper, "wszystkie").attributes("aria-pressed")).toBe("true");
     expect(listIds(wrapper)).toHaveLength(6);
@@ -969,7 +1105,7 @@ describe("where a report came from", () => {
 
   it("puts a report on the end of the whole queue while the view shows none of it", async () => {
     serve(mixed());
-    const wrapper = await mount("", { zrodlo: "qa" });
+    const wrapper = await mount("", { ...FULL_LIST, zrodlo: "qa" });
     expect(listIds(wrapper)).toEqual(["qa-new"]);
 
     await click(row(wrapper, "qa-new").get('button[aria-label="Do kolejki"]'));
@@ -986,13 +1122,13 @@ describe("where a report came from", () => {
 
   it("drops a view that hides the report a link points at, and keeps the link", async () => {
     serve(mixed());
-    const wrapper = await mount("#fb-in-old", { zrodlo: "qa" });
+    const wrapper = await mount("#fb-in-old", { ...FULL_LIST, zrodlo: "qa" });
     await vi.waitUntil(() => currentRoute().query.zrodlo === undefined, {
       timeout: 2000,
     });
     await flushPromises();
 
-    expect(currentRoute().query).toEqual({});
+    expect(currentRoute().query).toEqual(FULL_LIST);
     expect(currentRoute().hash).toBe("#fb-in-old");
     expect(chip(wrapper, "wszystkie").attributes("aria-pressed")).toBe("true");
     expect(isOpen(wrapper, "in-old")).toBe(true);
@@ -1001,9 +1137,9 @@ describe("where a report came from", () => {
 
   it("leaves the view alone when it already shows the report", async () => {
     serve(mixed());
-    const wrapper = await mount("#fb-qa-new", { zrodlo: "qa" });
+    const wrapper = await mount("#fb-qa-new", { ...FULL_LIST, zrodlo: "qa" });
 
-    expect(currentRoute().query).toEqual({ zrodlo: "qa" });
+    expect(currentRoute().query).toEqual({ ...FULL_LIST, zrodlo: "qa" });
     expect(isOpen(wrapper, "qa-new")).toBe(true);
   });
 });
@@ -1107,12 +1243,24 @@ describe("fixes claimed on the QA list", () => {
         .filter((chip) => chip.attributes("data-fix-target") !== undefined)
         .map((chip) => ({ text: chip.text(), to: chip.props("to") }));
 
+    // In the view the page is on - the full list here. A location of the hash
+    // alone has no query, and went back to the queue.
     expect(targets("blocked-issue")).toEqual([
-      { text: "dotyczy zgłoszenia", to: { hash: `#fb-${claimed.blocked}` } },
+      {
+        text: "dotyczy zgłoszenia",
+        to: { query: FULL_LIST, hash: `#fb-${claimed.blocked}` },
+      },
     ]);
     expect(targets("works-ok")).toEqual([
-      { text: "dotyczy zgłoszenia", to: { hash: `#fb-${claimed.works}` } },
+      {
+        text: "dotyczy zgłoszenia",
+        to: { query: FULL_LIST, hash: `#fb-${claimed.works}` },
+      },
     ]);
+    expect(
+      useRouter().resolve(targets("works-ok")[0]!.to as RouteLocationRaw)
+        .fullPath,
+    ).toBe(`/?widok=lista#fb-${claimed.works}`);
     // Neither the report being fixed nor one about something else points
     // anywhere.
     expect(targets(claimed.blocked)).toEqual([]);
@@ -1174,7 +1322,7 @@ describe("fixes claimed on the QA list", () => {
     expect(hasCloseButton(wrapper, claimed.works)).toBe(true);
   });
 
-  it("marks a claimed report in the one-line rows of ordering mode", async () => {
+  it("marks a claimed report on its line in the queue", async () => {
     qaChecks.checks.value = verdicts();
     serve([
       feedback(claimed.broken, "new", { queueRank: 1024 }),
@@ -1182,8 +1330,7 @@ describe("fixes claimed on the QA list", () => {
       feedback(claimed.works, "new"),
       feedback("plain", "new"),
     ]);
-    const wrapper = await mount();
-    await startOrdering(wrapper);
+    const wrapper = await mountQueue();
 
     const tag = (kind: "queue" | "inbox", id: string) =>
       wrapper

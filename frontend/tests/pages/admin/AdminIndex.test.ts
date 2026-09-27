@@ -51,6 +51,20 @@ describe("/admin", () => {
     );
   });
 
+  it("takes the link to the reports to the ones it counts", async () => {
+    // The card counts the reports nobody has placed in the queue yet. The
+    // page opens on the queue, and they are under it - a screen down, once
+    // the queue is long.
+    claims.current = { admin: true };
+    const wrapper = await mountSuspended(AdminPage);
+    await flushPromises();
+
+    const link = wrapper
+      .findAllComponents({ name: "VBtn" })
+      .find((node) => node.text() === "Przejdź do zgłoszeń");
+    expect(link?.props("to")).toBe("/admin/opinie#poza-kolejka");
+  });
+
   it("does not link an administrator on trial to a filter they are refused", async () => {
     // The middleware lets them in on `admin` alone; /aktywnosc then ignored
     // the filter for them and said nothing, so the link was a dead end.

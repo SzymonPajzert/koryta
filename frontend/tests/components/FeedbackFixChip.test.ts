@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { nextTick } from "vue";
+import { useRouter } from "#app";
 import FeedbackFixChip from "../../app/components/feedback/FixChip.vue";
 import type { FixState } from "~~/shared/feedbackFixes";
 import type { Feedback } from "~~/shared/model";
@@ -68,6 +69,9 @@ type Props = {
   followUps?: Feedback[];
   reporterUid?: string;
   blocked?: boolean;
+  reportPage?: string;
+  /** The page the chip is on, when its query matters. */
+  query?: Record<string, string>;
 };
 
 const mountChip = ({
@@ -77,9 +81,20 @@ const mountChip = ({
   followUps = [],
   reporterUid = REPORTER,
   blocked = false,
+  reportPage,
+  query = {},
 }: Props = {}) =>
   mountSuspended(FeedbackFixChip, {
-    props: { entries, state, verdicts, followUps, reporterUid, blocked },
+    props: {
+      entries,
+      state,
+      verdicts,
+      followUps,
+      reporterUid,
+      blocked,
+      reportPage,
+    },
+    route: { path: "/", query },
     global: { stubs: { UserChip: true } },
   });
 
@@ -244,7 +259,7 @@ describe("FeedbackFixChip", () => {
 
       expect(details.textContent).toContain("Zgłoszenia po poprawce");
       // With no router mounted a v-chip's `to` renders an <a> with no href,
-      // so the target is read off the prop. The hash alone keeps the admin on
+      // so the target is read off the prop. The hash keeps the admin on
       // /admin/opinie, where the follow-up's own card is.
       expect(
         followUpChips(wrapper).map((c) => ({
@@ -254,9 +269,48 @@ describe("FeedbackFixChip", () => {
       ).toEqual([
         {
           text: "Coś nie działa · Nowe",
-          to: { hash: "#fb-followupissue" },
+          to: { query: {}, hash: "#fb-followupissue" },
         },
-        { text: "Działa · Załatwione", to: { hash: "#fb-followupok" } },
+        {
+          text: "Działa · Załatwione",
+          to: { query: {}, hash: "#fb-followupok" },
+        },
+      ]);
+    });
+
+    it("keeps the view the page is on in a link to a follow-up", async () => {
+      // From the full list, a location of the hash alone has no query, and
+      // took the admin back to the queue.
+      const wrapper = await mount({
+        followUps: [followUp("followupissue", "issue")],
+        query: { widok: "lista", zrodlo: "qa" },
+      });
+
+      await openDetails(wrapper);
+
+      const [link] = followUpChips(wrapper).map((c) => c.props("to"));
+      expect(link).toEqual({
+        query: { widok: "lista", zrodlo: "qa" },
+        hash: "#fb-followupissue",
+      });
+      expect(useRouter().resolve(link!).fullPath).toBe(
+        "/?widok=lista&zrodlo=qa#fb-followupissue",
+      );
+    });
+
+    it("does not take the query of another page to the reports", async () => {
+      // /qa links to /admin/opinie; whatever the page the chip is on has in
+      // its query means nothing there.
+      const wrapper = await mount({
+        followUps: [followUp("followupissue", "issue")],
+        reportPage: "/admin/opinie",
+        query: { q: "coś" },
+      });
+
+      await openDetails(wrapper);
+
+      expect(followUpChips(wrapper).map((c) => c.props("to"))).toEqual([
+        "/admin/opinie#fb-followupissue",
       ]);
     });
 
@@ -341,13 +395,13 @@ describe("FeedbackFixChip", () => {
       // VChip is tonal by default, and a tonal colour is the text colour.
       expect(
         followUpChips(wrapper).map((c) => ({
-          to: c.props("to"),
+          hash: (c.props("to") as { hash: string }).hash,
           red: c.classes().includes("text-ink-danger"),
         })),
       ).toEqual([
-        { to: { hash: "#fb-open-issue" }, red: true },
-        { to: { hash: "#fb-closed-issue" }, red: false },
-        { to: { hash: "#fb-open-ok" }, red: false },
+        { hash: "#fb-open-issue", red: true },
+        { hash: "#fb-closed-issue", red: false },
+        { hash: "#fb-open-ok", red: false },
       ]);
     });
   });

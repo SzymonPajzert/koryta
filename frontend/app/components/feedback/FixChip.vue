@@ -149,5 +149,9 @@ const props = defineProps<{
 
 const latest = computed(() => props.entries[0]!);
 
-const reportLink = (id: string) => feedbackReportLink(id, props.reportPage);
+/** On the page that lists every report, a follow-up opens in the view and
+ * with the filter that page is on. */
+const route = useRoute();
+const reportLink = (id: string) =>
+  feedbackReportLink(id, props.reportPage, route.query);
 </script>

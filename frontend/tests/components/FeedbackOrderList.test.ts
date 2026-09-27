@@ -35,20 +35,28 @@ const C = report("c", { queueRank: 3000 });
 const X = report("x");
 const Y = report("y");
 
+type RowProps = ReturnType<
+  InstanceType<typeof FeedbackOrderList>["$props"]["row"]
+>;
+
 type MountOptions = {
   /** Only a list in the document can hold focus. */
   attachTo?: HTMLElement;
   onMove?: (item: Feedback, index: number) => void;
+  /** What the page gives each row. By default only its report: its fix and
+   * its saves are the page's, and it opens and closes by itself. */
+  row?: (item: Feedback) => RowProps;
 };
 
 const mountList = (
   queue: Feedback[],
   inbox: Feedback[] = [],
-  { attachTo, onMove }: MountOptions = {},
+  { attachTo, onMove, row = (item) => ({ item }) }: MountOptions = {},
 ) =>
   mountSuspended(FeedbackOrderList, {
-    props: { queue, inbox, onMove },
+    props: { queue, inbox, onMove, row },
     attachTo,
+    global: { stubs: { UserChip: true } },
   });
 
 type Wrapper = Awaited<ReturnType<typeof mountList>>;
@@ -114,6 +122,14 @@ const rowOf = (wrapper: Wrapper, id: string) =>
 
 const button = (row: DOMWrapper<Element>, label: string) =>
   row.get(`button[aria-label="${label}"]`);
+
+/** Picks a row up the way a mouse does: by its line, where a drag of the row
+ * starts. One that starts anywhere else in the row is not a drag of it. */
+const pickUp = (
+  wrapper: Wrapper,
+  id: string,
+  options: Record<string, unknown> = {},
+) => rowOf(wrapper, id).get(".arow__head").trigger("dragstart", options);
 
 /** What a keyboard user does next: Enter on whatever has focus. happy-dom
  * turns no Enter into a click the way a browser does for a button, so both go
@@ -195,6 +211,26 @@ const dragOverInbox = async (wrapper: Wrapper) => {
   return event.defaultPrevented;
 };
 
+/** Drags something over an element and lets it go there, and says which of
+ * the two the list cancelled: a cancelled dragover says "drop here", and a
+ * cancelled drop is one the element itself - a note, say - never gets. */
+const dropOn = async (element: Element, clientY = 0) => {
+  const over = new MouseEvent("dragover", {
+    bubbles: true,
+    cancelable: true,
+    clientY,
+  });
+  element.dispatchEvent(over);
+  const drop = new MouseEvent("drop", {
+    bubbles: true,
+    cancelable: true,
+    clientY,
+  });
+  element.dispatchEvent(drop);
+  await nextTick();
+  return { over: over.defaultPrevented, drop: drop.defaultPrevented };
+};
+
 describe("FeedbackOrderList", () => {
   it("lists the queue in the order it is given, numbered from 1", async () => {
     const wrapper = await mount([A, B, C]);
@@ -205,10 +241,11 @@ describe("FeedbackOrderList", () => {
       "b",
       "c",
     ]);
-    expect(rows.map((row) => row.get(".fb-pos").text())).toEqual([
-      "1.",
-      "2.",
-      "3.",
+    // Numbered here whatever the page says: the queue arrives whole.
+    expect(rows.map((row) => row.get("[data-queue-position]").text())).toEqual([
+      "#1",
+      "#2",
+      "#3",
     ]);
     expect(rows[0]!.text()).toContain("zgłoszenie a");
     expect(rows[2]!.text()).toContain("zgłoszenie c");
@@ -223,7 +260,7 @@ describe("FeedbackOrderList", () => {
       "y",
     ]);
     for (const row of inboxRows) {
-      expect(row.find(".fb-pos").exists()).toBe(false);
+      expect(row.find("[data-queue-position]").exists()).toBe(false);
     }
   });
 
@@ -259,10 +296,7 @@ describe("FeedbackOrderList", () => {
     );
   });
 
-  it("offers nothing to answer a report with", async () => {
-    // This mode is for deciding what comes next; the status and the note stay
-    // on the cards of the other mode. A status select here would be a second
-    // place to change a status from, with none of the card around it.
+  it("keeps every report to one line until it is opened", async () => {
     const wrapper = await mount(
       [A, report("doing", { adminStatus: "in_progress", queueRank: 4000 })],
       [report("noted", { adminNote: "notatka zespołu" })],
@@ -271,14 +305,150 @@ describe("FeedbackOrderList", () => {
     // wrapper, so it is opened and searched too.
     await openMenu(wrapper, "a");
 
-    expect(wrapper.find("textarea").exists()).toBe(false);
-    expect(wrapper.find("select").exists()).toBe(false);
-    expect(wrapper.find(".v-select").exists()).toBe(false);
-    expect(wrapper.find("input").exists()).toBe(false);
+    expect(wrapper.find("[data-row-panel]").exists()).toBe(false);
     expect(
       document.querySelector("textarea, select, input, .v-select"),
     ).toBeNull();
     expect(wrapper.text()).not.toContain("notatka zespołu");
+  });
+
+  it("opens a report in place, to be answered and closed there", async () => {
+    // Working through the queue should not take a trip to the full list: the
+    // open row is that list's row, and what is decided in it goes to the page
+    // the same way.
+    const decided: [string, string][] = [];
+    const wrapper = await mount(
+      [A, B],
+      [report("noted", { adminNote: "notatka zespołu" })],
+      {
+        row: (item) => ({
+          item,
+          onStatus: (status) => decided.push([item.id!, status]),
+          onSaveNote: () => decided.push([item.id!, "note"]),
+        }),
+      },
+    );
+
+    await rowOf(wrapper, "noted").get("[data-row-toggle]").trigger("click");
+
+    const open = rowOf(wrapper, "noted");
+    expect(open.find("[data-row-panel]").exists()).toBe(true);
+    expect((open.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "notatka zespołu",
+    );
+    expect(open.find(".v-select").exists()).toBe(true);
+    // Only the one that was clicked.
+    expect(rowOf(wrapper, "a").find("[data-row-panel]").exists()).toBe(false);
+
+    wrapper
+      .findComponent({ name: "VSelect" })
+      .vm.$emit("update:modelValue", "resolved");
+    await open.get("textarea").trigger("blur");
+    expect(decided).toEqual([
+      ["noted", "resolved"],
+      ["noted", "note"],
+    ]);
+  });
+
+  it("keeps a row open while the arrows move it", async () => {
+    const wrapper = await mountOnPage([A, B, C]);
+    await rowOf(wrapper, "a").get("[data-row-toggle]").trigger("click");
+
+    await button(rowOf(wrapper, "a"), "Niżej").trigger("click");
+    await nextTick();
+
+    expect(queueOrder(wrapper)).toEqual(["b", "a", "c"]);
+    expect(rowOf(wrapper, "a").find("[data-row-panel]").exists()).toBe(true);
+    expect(rowOf(wrapper, "a").get("[data-queue-position]").text()).toBe("#2");
+    // Still movable from its line, open or not.
+    expect(
+      button(rowOf(wrapper, "a"), "Wyżej").attributes(),
+    ).not.toHaveProperty("disabled");
+  });
+
+  it("is picked up by its line, not by its open part", async () => {
+    // A drag started anywhere in an open row would be a drag of the row, and
+    // its text could not be selected.
+    const wrapper = await mount([A, B, C]);
+    layOut(wrapper);
+    await rowOf(wrapper, "c").get("[data-row-toggle]").trigger("click");
+
+    const row = rowOf(wrapper, "c");
+    expect(row.get(".arow__head").attributes("draggable")).toBe("true");
+    expect(row.attributes()).not.toHaveProperty("draggable");
+    expect(row.get("[data-row-panel]").attributes()).not.toHaveProperty(
+      "draggable",
+    );
+
+    // The drag starts on the line and reaches the row, which is what knows
+    // the report.
+    await row.get(".arow__head").trigger("dragstart");
+    await rowOf(wrapper, "a").trigger("dragover", { clientY: upperHalf(0) });
+    await rowOf(wrapper, "a").trigger("drop");
+    expect(moves(wrapper)).toEqual([[C, 0]]);
+  });
+
+  it("leaves a drag that starts in an open row's open part to the browser", async () => {
+    // A link or some selected text dragged out of the open part reaches the
+    // row as a dragstart too. Taken for the row, letting it go over another
+    // one moved the report.
+    const wrapper = await mount([A, B, C]);
+    layOut(wrapper);
+    await rowOf(wrapper, "c").get("[data-row-toggle]").trigger("click");
+    const panel = rowOf(wrapper, "c").get("[data-row-panel]");
+
+    const starts = [
+      // The report's permalink, the date among its facts.
+      panel.get("a.fb-report__permalink").element,
+      // Selected text: the drag can start on the text node itself.
+      panel.get(".fb-report__message").element.firstChild!,
+    ];
+    for (const start of starts) {
+      start.dispatchEvent(new MouseEvent("dragstart", { bubbles: true }));
+      await nextTick();
+      expect(rowOf(wrapper, "c").classes()).not.toContain("fb-row--dragging");
+
+      // Let go over A: nothing lights up, and A does not take the drop.
+      expect(await dropOn(rowOf(wrapper, "a").element, upperHalf(0))).toEqual({
+        over: false,
+        drop: false,
+      });
+      expect(rowOf(wrapper, "a").classes()).not.toContain(
+        "fb-row--drop-before",
+      );
+    }
+
+    expect(moves(wrapper)).toEqual([]);
+  });
+
+  it("leaves text let go over an open row's note to the note", async () => {
+    // A drop the list cancels never reaches the textarea, so text dragged
+    // onto the note of an open row - in the queue or under it - would not
+    // land in it.
+    const wrapper = await mount([A, B], [X]);
+    layOut(wrapper);
+    await rowOf(wrapper, "a").get("[data-row-toggle]").trigger("click");
+    await rowOf(wrapper, "x").get("[data-row-toggle]").trigger("click");
+
+    for (const id of ["a", "x"]) {
+      const note = rowOf(wrapper, id).get("textarea").element;
+      expect(await dropOn(note, upperHalf(0))).toEqual({
+        over: false,
+        drop: false,
+      });
+    }
+    expect(moves(wrapper)).toEqual([]);
+    expect(removals(wrapper)).toEqual([]);
+
+    // A row let go there is still a move - and its id, the drag's text, is
+    // kept out of the note.
+    await pickUp(wrapper, "b");
+    const note = rowOf(wrapper, "a").get("textarea").element;
+    expect(await dropOn(note, upperHalf(0))).toEqual({
+      over: true,
+      drop: true,
+    });
+    expect(moves(wrapper)).toEqual([[B, 0]]);
   });
 
   describe("arrows", () => {
@@ -579,7 +749,7 @@ describe("FeedbackOrderList", () => {
     it("starts the queue with a report dropped on it", async () => {
       const wrapper = await mount([], [X, Y]);
 
-      await rowOf(wrapper, "y").trigger("dragstart");
+      await pickUp(wrapper, "y");
       await wrapper.get("[data-queue-empty]").trigger("dragover", {
         clientY: 5,
       });
@@ -594,7 +764,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "c").trigger("dragstart");
+      await pickUp(wrapper, "c");
       await rowOf(wrapper, "a").trigger("dragover", { clientY: upperHalf(0) });
       await rowOf(wrapper, "a").trigger("drop");
 
@@ -605,7 +775,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "c").trigger("dragstart");
+      await pickUp(wrapper, "c");
       await rowOf(wrapper, "a").trigger("dragover", { clientY: lowerHalf(0) });
       await rowOf(wrapper, "a").trigger("drop");
 
@@ -618,7 +788,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "a").trigger("dragstart");
+      await pickUp(wrapper, "a");
       await rowOf(wrapper, "b").trigger("dragover", { clientY: lowerHalf(1) });
       await rowOf(wrapper, "b").trigger("drop");
 
@@ -629,7 +799,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "c").trigger("dragstart");
+      await pickUp(wrapper, "c");
       expect(rowOf(wrapper, "c").classes()).toContain("fb-row--dragging");
 
       await rowOf(wrapper, "a").trigger("dragover", { clientY: upperHalf(0) });
@@ -653,7 +823,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C], [X]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "x").trigger("dragstart");
+      await pickUp(wrapper, "x");
       await rowOf(wrapper, "b").trigger("dragover", { clientY: upperHalf(1) });
       await rowOf(wrapper, "b").trigger("drop");
 
@@ -664,7 +834,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C], [X]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "x").trigger("dragstart");
+      await pickUp(wrapper, "x");
       await rowOf(wrapper, "c").trigger("dragover", { clientY: lowerHalf(2) });
       await rowOf(wrapper, "c").trigger("drop");
 
@@ -675,7 +845,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C], [X]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "b").trigger("dragstart");
+      await pickUp(wrapper, "b");
       expect(await dragOverInbox(wrapper)).toBe(true);
       expect(wrapper.get("[data-inbox-list]").classes()).toContain(
         "fb-list--target",
@@ -694,7 +864,7 @@ describe("FeedbackOrderList", () => {
     it("does nothing with an inbox row dropped back on the inbox", async () => {
       const wrapper = await mount([A], [X, Y]);
 
-      await rowOf(wrapper, "x").trigger("dragstart");
+      await pickUp(wrapper, "x");
       // The inbox has no order of its own, so it neither accepts the drag -
       // the browser shows no drop cursor - nor lights up as if it did.
       expect(await dragOverInbox(wrapper)).toBe(false);
@@ -711,7 +881,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "b").trigger("dragstart");
+      await pickUp(wrapper, "b");
       await rowOf(wrapper, "b").trigger("dragover", { clientY: lowerHalf(1) });
       await rowOf(wrapper, "b").trigger("drop");
 
@@ -725,7 +895,7 @@ describe("FeedbackOrderList", () => {
       const wrapper = await mount([A, B, C], [X]);
       layOut(wrapper);
 
-      await rowOf(wrapper, "c").trigger("dragstart");
+      await pickUp(wrapper, "c");
       await rowOf(wrapper, "a").trigger("dragover", { clientY: upperHalf(0) });
       await rowOf(wrapper, "a").trigger("drop");
       expect(moves(wrapper)).toEqual([[C, 0]]);
@@ -747,7 +917,7 @@ describe("FeedbackOrderList", () => {
       const setData = vi.fn();
       const dataTransfer = { setData, effectAllowed: "all" };
 
-      await rowOf(wrapper, "b").trigger("dragstart", { dataTransfer });
+      await pickUp(wrapper, "b", { dataTransfer });
 
       expect(setData).toHaveBeenCalledWith("text/plain", "b");
       expect(dataTransfer.effectAllowed).toBe("move");

@@ -416,7 +416,8 @@ describe("QA page", () => {
       const all = wrapper
         .findAllComponents({ name: "NuxtLink" })
         .find((link) => link.text() === "Wszystkie w panelu zgłoszeń");
-      expect(all?.props("to")).toBe("/admin/opinie?zrodlo=qa");
+      // The full list: the queue has no filter by source.
+      expect(all?.props("to")).toBe("/admin/opinie?widok=lista&zrodlo=qa");
 
       // Asked for once, not on every visit to the tab.
       await pick(wrapper, "Wszystkie");

@@ -43,7 +43,7 @@ import type { FixState } from "~~/shared/feedbackFixes";
 import type { Feedback } from "~~/shared/model";
 
 /** What a report is, in one line - enough to tell reports apart in a list:
- * the rows of ordering mode, and the line of a report row that opens. The
+ * the line of a report row, in the queue and in the full list. The
  * full text is in the tooltip and in the open row.
  *
  * The kind's colour is ink rather than fill: a bare icon on white has to carry
@@ -88,7 +88,7 @@ const where = computed(() =>
   white-space: nowrap;
 }
 
-/* The row wraps on a phone (see `OrderList`); the text takes a full line of
+/* The row wraps on a phone (see `ReportRow`); the text takes a full line of
  * its own under everything else, two lines at most. */
 @media (max-width: 599.98px) {
   .fb-where {
