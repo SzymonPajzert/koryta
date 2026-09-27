@@ -38,6 +38,26 @@ def add_register_fields(payload: dict, form: str | None, organ) -> None:
         payload["supervisory_organ"] = organ.strip()
 
 
+def payload_name(row: dict) -> str | None:
+    """What a company payload calls the company, or None for no payload at all.
+
+    None rather than the KRS number, which is what this used to fall back to.
+    That fallback renamed five companies on 2026-07-22 - "Polskie LNG",
+    "Grupowa Oczyszczalnia Ścieków w Łodzi" and three more became "0000345690"
+    and the like - because the site had a name for them and the register data
+    here did not: they had been struck off, so api-krs answers their
+    OdpisAktualny with an empty 204, and of rejestr.io we held only their
+    krs-powiazania, never their own /org/{krs} record, which is what carries
+    the name. Every other field of such a row is a default for the same
+    reason, so there is nothing else worth sending either.
+    """
+    name = row.get("name")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    city = row.get("city")
+    return display_name(name, city if isinstance(city, str) else None)
+
+
 class CompaniesPayloads(Pipeline):
     """Emits ingest payloads for companies already submitted to koryta.pl.
 
@@ -153,6 +173,7 @@ class CompaniesPayloads(Pipeline):
         companies_df = self.companies.read_or_process(ctx)
 
         payloads = []
+        unnamed = []
         for row in companies_df.to_dict(orient="records"):
             krs = row.get("krs")
             if krs is None or (isinstance(krs, float) and np.isnan(krs)):
@@ -161,12 +182,10 @@ class CompaniesPayloads(Pipeline):
             if krs not in submitted_krs:
                 continue
 
-            name = row.get("name")
-            if not isinstance(name, str) or not name:
-                name = krs
-            else:
-                city = row.get("city")
-                name = display_name(name, city if isinstance(city, str) else None)
+            name = payload_name(row)
+            if name is None:
+                unnamed.append(krs)
+                continue
 
             activity = row.get("activity")
             if not isinstance(activity, (list, np.ndarray)):
@@ -220,6 +239,13 @@ class CompaniesPayloads(Pipeline):
                 payload["teryt_code"] = teryt_code.strip()
 
             payloads.append(payload)
+
+        if unnamed:
+            print(
+                f"Skipping {len(unnamed)} companies the register data gives no "
+                f"name for, rather than renaming them to their KRS number: "
+                f"{', '.join(sorted(unnamed))}"
+            )
 
         if self.args.only_changed:
             payloads = self.only_changed(ctx, payloads)
