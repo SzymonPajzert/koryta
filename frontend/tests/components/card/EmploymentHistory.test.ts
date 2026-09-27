@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { mountSuspended } from "@nuxt/test-utils/runtime";
+import { describe, it, expect, vi } from "vitest";
+import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
 import { mount } from "@vue/test-utils";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
@@ -11,6 +11,9 @@ import ChipRelativeDuration from "../../../app/components/chip/RelativeDuration.
 import type { EdgeNode } from "../../../app/composables/edges";
 
 const vuetify = createVuetify({ components, directives });
+
+const { navigateTo } = vi.hoisted(() => ({ navigateTo: vi.fn() }));
+mockNuxtImport("navigateTo", () => navigateTo);
 
 function edge(fields: Partial<EdgeNode>): EdgeNode {
   return {
@@ -183,8 +186,15 @@ describe("EmploymentHistory sectors", () => {
     expect(wrapper.text()).toContain("Koleje");
     const chip = wrapper
       .findAllComponents({ name: "VChip" })
-      .find((c) => c.text() === "Koleje");
-    expect(chip?.props("to")).toBe("/eksploruj/tabela?category=koleje");
+      .find((c) => c.text() === "Koleje")!;
+    // Not a link of its own: the row already is one, to the employer, and a
+    // link inside a link is what the browser's parser takes apart.
+    expect(chip.element.tagName).not.toBe("A");
+    navigateTo.mockClear();
+    await chip.trigger("click");
+    expect(navigateTo).toHaveBeenCalledWith(
+      "/eksploruj/tabela?category=koleje",
+    );
   });
 
   it("says nothing for an employer filed under no sector", async () => {
