@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "/admin/opinie otwiera się na kolejce, w której kliknięte zgłoszenie rozwija się w miejscu z notatką i statusem, więc można mu tam odpisać albo je zamknąć, a otwarte nadal przesuwa się strzałkami i przeciąganiem - zamknięte i filtr „Z QA” są w widoku „Pełna lista”.",
+    fixes: ["OuTEaTzI6TvvMyPerpYl"],
+    link: "/admin/opinie",
+  },
+  {
+    change:
       "Na szerokim ekranie linijka propozycji w „Czeka na decyzję” zaczyna się od tego, kto ją zgłosił i kiedy, a dopiero po nich mówi, czego dotyczy - tak jak pierwsza kolumna „Zgłoszenie” w dawnej tabeli.",
     fixes: ["YsFCMqAsj9YIEQM2CKAr"],
     link: "/admin/rewizje#kolejka",

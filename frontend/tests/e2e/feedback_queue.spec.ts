@@ -90,15 +90,14 @@ test.describe("Kolejka zgłoszeń", () => {
     batch.set(db().collection("feedback").doc(d!), report(stamp, "D", 1));
     await batch.commit();
 
+    // The page opens on the queue.
     await logIn(page, USERS.admin, "/admin/opinie");
-    await expect(page.locator(`[data-feedback-id="${d}"]`)).toBeVisible({
-      timeout: 60_000,
-    });
-
-    await page.getByRole("button", { name: "Ułóż kolejkę" }).click();
+    await expect(
+      page.locator(`[data-inbox-row][data-feedback-id="${d}"]`),
+    ).toBeVisible({ timeout: 60_000 });
     const rowC = page.locator(`[data-queue-row][data-feedback-id="${c}"]`);
-    await expect(rowC).toBeVisible({ timeout: 30_000 });
-    // Ordering is not answering: nothing to reply or triage with here.
+    await expect(rowC).toBeVisible();
+    // One line each: the note and the status are in a row once it is opened.
     await expect(page.getByLabel("Notatka")).toHaveCount(0);
     await expect(page.getByLabel("Status")).toHaveCount(0);
 
@@ -116,7 +115,6 @@ test.describe("Kolejka zgłoszeń", () => {
       .click();
 
     await expect.poll(() => orderOf(page, ours)).toEqual([c, a, b, d]);
-    await page.getByRole("button", { name: "Gotowe" }).click();
 
     // What the page showed reached Firestore, rather than living in its
     // optimistic state.
@@ -134,7 +132,6 @@ test.describe("Kolejka zgłoszeń", () => {
     await expect(
       page.locator(`[data-feedback-id="${c}"] [data-queue-position]`),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Ułóż kolejkę" }).click();
     await expect.poll(() => orderOf(page, ours)).toEqual([c, a, b, d]);
 
     // And by dragging: B onto the upper half of C puts it first.
@@ -145,6 +142,72 @@ test.describe("Kolejka zgłoszeń", () => {
     await expect
       .poll(async () => (await rankOf(b!))! < (await rankOf(c!))!)
       .toBe(true);
+  });
+
+  test("admin rozwija zgłoszenie w kolejce, odpowiada notatką i zamyka je", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000); // Seeds, logs in, then writes twice
+
+    const stamp = Date.now();
+    const [first, second] = ["x", "y"].map((x) => `kolejka${stamp}${x}`);
+    // Ranked past anything another spec leaves in the queue, next to each
+    // other, so "Niżej" on the first swaps the two.
+    const rank = 1e12 + stamp;
+    const batch = db().batch();
+    batch.set(
+      db().collection("feedback").doc(first!),
+      report(stamp, "X", 2, { queueRank: rank }),
+    );
+    batch.set(
+      db().collection("feedback").doc(second!),
+      report(stamp, "Y", 1, { queueRank: rank + 1 }),
+    );
+    await batch.commit();
+
+    await logIn(page, USERS.admin, "/admin/opinie");
+    const row = page.locator(`[data-queue-row][data-feedback-id="${first}"]`);
+    await expect(row).toBeVisible({ timeout: 60_000 });
+    await row.locator("[data-row-toggle]").click();
+    await expect(row.locator("[data-row-panel]")).toBeVisible();
+
+    // The answer is the note: saved when the field is left.
+    const note = row.getByLabel("Notatka");
+    await note.fill(`odpowiedź ${stamp}`);
+    await note.blur();
+    await expect
+      .poll(
+        async () =>
+          (await db().collection("feedback").doc(first!).get()).data()
+            ?.adminNote,
+        { timeout: 30_000 },
+      )
+      .toBe(`odpowiedź ${stamp}`);
+
+    // Done: closed from the same row. Opened by clicking the whole field -
+    // see admin_notes.spec for why not the input.
+    await row.locator(".v-select").click();
+    const option = page.getByRole("option", { name: "Załatwione" });
+    await expect(option).toBeVisible({ timeout: 5000 });
+    await option.click();
+    await expect
+      .poll(
+        async () =>
+          (await db().collection("feedback").doc(first!).get()).data()
+            ?.adminStatus,
+        { timeout: 30_000 },
+      )
+      .toBe("resolved");
+    // Greyed where it was until the next load, not whisked away.
+    await expect(row).toHaveClass(/arow--dimmed/);
+
+    // Still in its place in the queue, and still moved by its line while
+    // open.
+    await row.getByRole("button", { name: "Niżej" }).click();
+    await expect
+      .poll(() => orderOf(page, [first!, second!]))
+      .toEqual([second, first]);
+    await expect(row.locator("[data-row-panel]")).toBeVisible();
   });
 
   test("link do zamkniętego zgłoszenia rozwija zamknięte i pokazuje je", async ({
@@ -171,6 +234,8 @@ test.describe("Kolejka zgłoszeń", () => {
     const row = page.locator(`#fb-${id}`);
     await expect(row).toBeVisible({ timeout: 60_000 });
     await expect(row).toContainText(`kolejka ${stamp} stary`);
+    // The queue has no closed reports, so the link takes the full list.
+    await expect(page).toHaveURL(/[?&]widok=lista.*#fb-/);
     await expect(row).toBeInViewport();
     // Marked among the rest, and opened, since the link was followed to read
     // it.

@@ -369,7 +369,7 @@ const teamSection = computed(() => {
       reports: qaReports.value,
       empty: "Nie ma otwartych zgłoszeń z QA.",
       link: {
-        to: "/admin/opinie?zrodlo=qa",
+        to: "/admin/opinie?widok=lista&zrodlo=qa",
         text: "Wszystkie w panelu zgłoszeń",
       },
     };

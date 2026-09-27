@@ -1,53 +1,51 @@
 <template>
-  <!-- One line per report and nothing to answer with: this is the mode for
-       deciding what comes next, so the status, the note and the links stay on
-       the cards of the other mode. -->
+  <!-- One line per report, and each opens in place into the row of the full
+       list, status and note included, so the queue is worked through here as
+       well as ordered. -->
   <div ref="root" class="fb-order">
-    <div class="d-flex align-center ga-2 mb-2">
-      <h2 class="text-subtitle-1 font-weight-bold">Kolejka</h2>
-      <v-chip size="x-small" label>{{ queue.length }}</v-chip>
-      <span class="text-caption text-medium-emphasis ms-auto">
+    <AdminSectionHead
+      title="Kolejka"
+      :count="queue.length"
+      info="Od góry: co robimy najpierw. Kliknij zgłoszenie, żeby je rozwinąć, odpowiedzieć notatką albo zamknąć."
+      data-section="queue"
+    >
+      <span class="text-caption text-medium-emphasis">
         Przeciągnij albo użyj strzałek.
       </span>
-    </div>
+    </AdminSectionHead>
 
     <div
       v-if="queue.length === 0"
       class="fb-drop-empty text-body-2 text-medium-emphasis mb-6"
       :class="{ 'fb-drop-empty--active': hint?.id === EMPTY }"
       data-queue-empty
-      @dragover.prevent="onDragOver($event, EMPTY)"
+      @dragover="onDragOver($event, EMPTY)"
       @dragleave="onDragLeave(EMPTY)"
-      @drop.prevent="onDropEmpty"
+      @drop="onDropEmpty"
     >
       Kolejka jest pusta. Przeciągnij tu zgłoszenie albo kliknij przy nim +.
     </div>
 
-    <div v-else class="fb-list mb-6" data-queue-list>
-      <div
+    <AdminRowList v-else class="mb-6" data-queue-list>
+      <!-- The row is its own drop target, open part and all; its line is
+           what picks it up. The place is the row's index: the queue arrives
+           whole. No `.prevent` on the drag events: whether one is the list's
+           to take depends on whether a row is being dragged. -->
+      <FeedbackReportRow
         v-for="(item, index) in queue"
-        :id="`fb-${item.id}`"
         :key="item.id"
-        class="fb-row"
+        v-bind="row(item)"
+        :position="index + 1"
+        draggable
         :class="rowClasses(item)"
-        draggable="true"
         data-queue-row
-        :data-feedback-id="item.id"
         @dragstart="onDragStart($event, item)"
-        @dragover.prevent="onDragOver($event, item.id!)"
+        @dragover="onDragOver($event, item.id!)"
         @dragleave="onDragLeave(item.id!)"
-        @drop.prevent="onDropOnQueueRow(item)"
+        @drop="onDropOnQueueRow($event, item)"
         @dragend="onDragEnd"
       >
-        <v-icon :icon="mdiDragVertical" class="fb-handle" size="small" />
-        <span class="fb-pos text-body-2 font-weight-bold"
-          >{{ index + 1 }}.</span
-        >
-        <FeedbackOrderRowSummary
-          :item="item"
-          :fix-state="fixStates?.get(item.id!)"
-        />
-        <div class="fb-actions">
+        <template #actions>
           <v-btn
             icon
             size="x-small"
@@ -100,43 +98,41 @@
               />
             </v-list>
           </v-menu>
-        </div>
-      </div>
-    </div>
+        </template>
+      </FeedbackReportRow>
+    </AdminRowList>
 
     <template v-if="inbox.length > 0">
-      <div class="d-flex align-center ga-2 mb-2">
-        <h2 class="text-subtitle-1 font-weight-bold">Poza kolejką</h2>
-        <v-chip size="x-small" label>{{ inbox.length }}</v-chip>
-      </div>
+      <!-- What the dashboard's "Przejdź do zgłoszeń" counts, so where it
+           lands. -->
+      <AdminSectionHead
+        :id="FEEDBACK_INBOX_ANCHOR"
+        class="fb-anchor"
+        title="Poza kolejką"
+        :count="inbox.length"
+        info="Jeszcze bez miejsca w kolejce, od najnowszych. + dopisuje zgłoszenie na koniec kolejki."
+        data-section="inbox"
+      />
       <!-- Dropping a queued report anywhere here takes it out of the queue,
            the same as "Wyjmij z kolejki". -->
-      <div
-        class="fb-list"
+      <AdminRowList
         :class="{ 'fb-list--target': hint?.id === INBOX }"
         data-inbox-list
         @dragover="onDragOverInbox"
         @dragleave="onDragLeave(INBOX)"
-        @drop.prevent="onDropOnInbox"
+        @drop="onDropOnInbox"
       >
-        <div
+        <FeedbackReportRow
           v-for="item in inbox"
-          :id="`fb-${item.id}`"
           :key="item.id"
-          class="fb-row"
+          v-bind="row(item)"
+          draggable
           :class="{ 'fb-row--dragging': draggingId === item.id }"
-          draggable="true"
           data-inbox-row
-          :data-feedback-id="item.id"
           @dragstart="onDragStart($event, item)"
           @dragend="onDragEnd"
         >
-          <v-icon :icon="mdiDragVertical" class="fb-handle" size="small" />
-          <FeedbackOrderRowSummary
-            :item="item"
-            :fix-state="fixStates?.get(item.id!)"
-          />
-          <div class="fb-actions">
+          <template #actions>
             <v-btn
               icon
               size="x-small"
@@ -158,9 +154,9 @@
             >
               <v-icon :icon="mdiArrowCollapseUp" />
             </v-btn>
-          </div>
-        </div>
-      </div>
+          </template>
+        </FeedbackReportRow>
+      </AdminRowList>
     </template>
   </div>
 </template>
@@ -172,19 +168,24 @@ import {
   mdiArrowDown,
   mdiArrowUp,
   mdiDotsVertical,
-  mdiDragVertical,
   mdiPlus,
 } from "@mdi/js";
-import type { FixState } from "~~/shared/feedbackFixes";
+import type FeedbackReportRow from "./ReportRow.vue";
+import { FEEDBACK_INBOX_ANCHOR } from "~/composables/feedback";
 import type { Feedback } from "~~/shared/model";
+
+type ReportRowProps = InstanceType<typeof FeedbackReportRow>["$props"];
 
 const props = defineProps<{
   /** Queued open reports, in queue order. */
   queue: Feedback[];
   /** Open reports nobody has put in the queue yet, newest first. */
   inbox: Feedback[];
-  /** Where the fix the code claims for a report stands, if it claims one. */
-  fixStates?: ReadonlyMap<string, FixState | null>;
+  /** Everything else a report's row takes - its fix, its status and note and
+   * their saves, whether it is open - from the page, which wires the rows of
+   * its full list the same way. A report opened here is that row, not a copy
+   * of it. */
+  row: (item: Feedback) => ReportRowProps;
 }>();
 
 /** `index` is the slot among the queue *without* the moved report - "third"
@@ -264,7 +265,19 @@ const hint = ref<{ id: string; after: boolean } | null>(null);
 const dragged = () =>
   [...props.queue, ...props.inbox].find((item) => item.id === draggingId.value);
 
+/** A row is picked up by its own line only. The open part has links, chips
+ * and text to select, and a drag of any of them - a link pulled into another
+ * tab, say - bubbles up to the row as a dragstart too: taken for the row,
+ * letting it go over another one would move the report. That drag is the
+ * browser's, and the list stays out of it. A drag of selected text can start
+ * on a text node, so the element is looked up from the node. */
 function onDragStart(event: DragEvent, item: Feedback) {
+  const from =
+    event.target instanceof Element
+      ? event.target
+      : ((event.target as Node | null)?.parentElement ?? null);
+  const head = from?.closest(".arow__head");
+  if (!head || head.parentElement !== event.currentTarget) return;
   draggingId.value = item.id ?? null;
   if (event.dataTransfer) {
     // Firefox starts no drag at all without some data set.
@@ -273,8 +286,12 @@ function onDragStart(event: DragEvent, item: Feedback) {
   }
 }
 
+/** Taken only while a row is dragged. Cancelling a dragover is how a page
+ * says "drop here", and said for anything else - some text dragged across an
+ * open row - it would take a drop meant for that row's note. */
 function onDragOver(event: DragEvent, id: string) {
   if (!draggingId.value) return;
+  event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
   const target = event.currentTarget as HTMLElement | null;
   const rect = target?.getBoundingClientRect();
@@ -289,7 +306,6 @@ function onDragOver(event: DragEvent, id: string) {
  * nothing to do here, and the list should not light up as if it had. */
 function onDragOverInbox(event: DragEvent) {
   if (!props.queue.some((entry) => entry.id === draggingId.value)) return;
-  event.preventDefault();
   onDragOver(event, INBOX);
 }
 
@@ -302,7 +318,12 @@ function onDragEnd() {
   hint.value = null;
 }
 
-function onDropOnQueueRow(target: Feedback) {
+/** A drop, like a dragover, is the list's only while a row is dragged: text
+ * let go over an open row's note goes into the note. A row let go there is
+ * still a move, and its id stays out of the note. */
+function onDropOnQueueRow(event: DragEvent, target: Feedback) {
+  if (!draggingId.value) return;
+  event.preventDefault();
   const item = dragged();
   const over = hint.value;
   const after = !!over && over.id === target.id && over.after;
@@ -315,13 +336,17 @@ function onDropOnQueueRow(target: Feedback) {
   emit("move", item, after ? at + 1 : at);
 }
 
-function onDropEmpty() {
+function onDropEmpty(event: DragEvent) {
+  if (!draggingId.value) return;
+  event.preventDefault();
   const item = dragged();
   onDragEnd();
   if (item) emit("move", item, 0);
 }
 
-function onDropOnInbox() {
+function onDropOnInbox(event: DragEvent) {
+  if (!draggingId.value) return;
+  event.preventDefault();
   const item = dragged();
   onDragEnd();
   if (item && props.queue.some((entry) => entry.id === item.id)) {
@@ -343,9 +368,10 @@ const rowClasses = (item: Feedback) => {
 </script>
 
 <style scoped>
-.fb-list {
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 4px;
+/* Clears the sticky toolbar when a link scrolls the heading into view, as a
+ * row does (see `AdminExpandRow`). */
+.fb-anchor {
+  scroll-margin-top: 96px;
 }
 
 .fb-list--target {
@@ -353,48 +379,22 @@ const rowClasses = (item: Feedback) => {
   outline-offset: 2px;
 }
 
-.fb-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 2px 4px 2px 8px;
-  background: rgb(var(--v-theme-surface));
-  cursor: grab;
-}
-
-.fb-row + .fb-row {
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
 .fb-row--dragging {
   opacity: 0.4;
 }
 
-/* The line a drop would land on, drawn inside the row so it moves nothing. */
+/* The line a drop would land on, drawn inside the row so it moves nothing -
+ * and beside the row's rail, which is an inset shadow as well. */
 .fb-row--drop-before {
-  box-shadow: inset 0 2px 0 rgb(var(--v-theme-ink-sage));
+  box-shadow:
+    inset 4px 0 0 rgb(var(--arow-ink)),
+    inset 0 2px 0 rgb(var(--v-theme-ink-sage));
 }
 
 .fb-row--drop-after {
-  box-shadow: inset 0 -2px 0 rgb(var(--v-theme-ink-sage));
-}
-
-.fb-handle {
-  flex: none;
-  opacity: 0.6;
-}
-
-.fb-pos {
-  flex: none;
-  min-width: 2ch;
-  text-align: end;
-}
-
-.fb-actions {
-  flex: none;
-  display: flex;
-  align-items: center;
+  box-shadow:
+    inset 4px 0 0 rgb(var(--arow-ink)),
+    inset 0 -2px 0 rgb(var(--v-theme-ink-sage));
 }
 
 .fb-drop-empty {
@@ -406,19 +406,5 @@ const rowClasses = (item: Feedback) => {
 
 .fb-drop-empty--active {
   border-color: rgb(var(--v-theme-ink-sage));
-}
-
-/* On a phone the buttons leave the text a dozen characters, and a tooltip is
- * no help without a pointer - so the text gets a line of its own, under the
- * handle and the buttons (see `OrderRowSummary`). */
-@media (max-width: 599.98px) {
-  .fb-row {
-    flex-wrap: wrap;
-    row-gap: 0;
-  }
-
-  .fb-actions {
-    margin-inline-start: auto;
-  }
 }
 </style>

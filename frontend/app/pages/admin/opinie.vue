@@ -9,15 +9,26 @@
           <NuxtLink to="/qa">liście zmian do sprawdzenia</NuxtLink>.
         </p>
       </div>
-      <v-btn
-        :prepend-icon="ordering ? mdiCheck : mdiSort"
-        :color="ordering ? 'primary' : undefined"
-        :variant="ordering ? 'flat' : 'outlined'"
-        :disabled="pending && !ordering"
-        @click="toggleOrdering"
+      <v-btn-toggle
+        v-model="view"
+        mandatory
+        divided
+        variant="outlined"
+        density="comfortable"
+        :disabled="pending"
+        data-view-toggle
       >
-        {{ ordering ? "Gotowe" : "Ułóż kolejkę" }}
-      </v-btn>
+        <v-btn value="kolejka" class="text-none" :prepend-icon="mdiSort">
+          Kolejka
+        </v-btn>
+        <v-btn
+          value="lista"
+          class="text-none"
+          :prepend-icon="mdiFormatListBulleted"
+        >
+          Pełna lista
+        </v-btn>
+      </v-btn-toggle>
     </div>
 
     <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
@@ -39,15 +50,19 @@
 
     <v-progress-linear v-if="pending" indeterminate class="mb-4" />
 
-    <FeedbackOrderList
-      v-if="ordering"
-      :inert="pending"
-      :queue="queue"
-      :inbox="inbox"
-      :fix-states="fixStates"
-      @move="moveTo"
-      @remove="(item) => setRank(item, null)"
-    />
+    <template v-if="queueView">
+      <!-- Not before the first answer: an empty queue says to drop a report
+           on it, which is not what a page still loading should say. -->
+      <FeedbackOrderList
+        v-if="items.length > 0"
+        :inert="pending"
+        :queue="queue"
+        :inbox="inbox"
+        :row="reportRow"
+        @move="moveTo"
+        @remove="(item) => setRank(item, null)"
+      />
+    </template>
 
     <template v-else>
       <!-- What it shows, not what it counts: the numbers, the "#1" on a row
@@ -91,19 +106,9 @@
             <FeedbackReportRow
               v-for="item in section.items"
               :key="item.id"
-              :item="item"
-              :position="positions.get(item.id!)"
-              :fix="fixInfo.get(item.id!)"
-              :fix-targets="fixTargets.get(item.id!)"
+              v-bind="reportRow(item)"
               :can-queue="section.key === 'inbox'"
-              :saving="saving[item.id!]"
-              :highlighted="targetId === item.id"
-              :expanded="openRows.has(item.id!)"
-              @update:expanded="(open) => setOpen(item.id!, open)"
               @queue="moveTo(item, queue.length)"
-              @status="(adminStatus) => updateAdmin(item, { adminStatus })"
-              @draft="(note) => (draftNotes[item.id!] = note)"
-              @save-note="saveNote(item)"
             />
           </AdminRowList>
         </template>
@@ -129,11 +134,16 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
-import { mdiCheck, mdiChevronDown, mdiChevronUp, mdiSort } from "@mdi/js";
+import {
+  mdiChevronDown,
+  mdiChevronUp,
+  mdiFormatListBulleted,
+  mdiSort,
+} from "@mdi/js";
 import { useFeedbackAdmin } from "~/composables/feedbackAdmin";
-import { useQueryFilters } from "~/composables/queryFilters";
+import { sameQuery, useQueryFilters } from "~/composables/queryFilters";
 import { OPEN_CAP } from "~~/shared/feedbackQueue";
-import type { Feedback } from "~~/shared/model";
+import type { Feedback, FeedbackStatus } from "~~/shared/model";
 
 definePageMeta({
   middleware: "admin",
@@ -158,7 +168,6 @@ const {
   closed,
   positions,
   fixInfo,
-  fixStates,
   fixTargets,
   saving,
   draftNotes,
@@ -166,22 +175,40 @@ const {
   saveNote,
   setRank,
   moveTo,
-  rankWritesSettled,
   writesSettled,
   snackbar,
   snackbarText,
 } = useFeedbackAdmin();
 
-const ordering = ref(false);
 const showClosed = ref(false);
 const missingTarget = ref(false);
 /** Rows that are open. Kept here rather than in each row so a link can open
  * the one it points at, and so a row stays open while the sections around it
- * are re-sorted. */
+ * are re-sorted - or while the page switches to the other view. */
 const openRows = reactive(new Set<string>());
 
 const setOpen = (id: string, open: boolean) =>
   open ? openRows.add(id) : openRows.delete(id);
+
+/** How the page lists the reports.
+ *
+ * The queue is where the work gets done, so the page opens on it: what comes
+ * next, in order, with what nobody has placed yet under it, and every report
+ * a line that opens in place to be answered with a note or closed - as the
+ * rows of the full list do. The full list adds what an order has no use for:
+ * the closed reports, and the filter by where a report came from - a move is
+ * counted among the whole queue, so the queue cannot be ordered through a
+ * filter. */
+type View = "kolejka" | "lista";
+
+const { choiceFilter } = useQueryFilters();
+const viewParam = choiceFilter<View>("widok", "kolejka");
+const view = computed<View>({
+  // Anything the url says that is not the full list is the queue.
+  get: () => (viewParam.value === "lista" ? "lista" : "kolejka"),
+  set: (value) => (viewParam.value = value),
+});
+const queueView = computed(() => view.value === "kolejka");
 
 /** Which reports to show: all of them, only the ones sent with the „Zgłoś”
  * button, or only the verdicts from /qa. The two arrive through one intake
@@ -189,7 +216,6 @@ const setOpen = (id: string, open: boolean) =>
 type Source = "wszystkie" | "zgloszenia" | "qa";
 const SOURCES: readonly Source[] = ["wszystkie", "zgloszenia", "qa"];
 
-const { choiceFilter } = useQueryFilters();
 const sourceParam = choiceFilter<Source>("zrodlo", "wszystkie");
 /** Anything the url says that is not a view is the default one. */
 const source = computed<Source>({
@@ -235,7 +261,7 @@ const sections = computed(() => [
   {
     key: "queue",
     title: "Kolejka",
-    info: "Od góry: co robimy najpierw. Kolejność zmienia się przyciskiem „Ułóż kolejkę”.",
+    info: "Od góry: co robimy najpierw. Kolejność zmienia się w widoku „Kolejka”.",
     items: shownQueue.value,
     count: shownQueue.value.length,
   },
@@ -267,26 +293,65 @@ const targetId = computed(hashTarget);
 /** A link from Slack can point at a report too old to be in the list. */
 const load = () => loadReports(hashTarget());
 
+/** Everything a report's row takes from the page, in either view: a report
+ * opened in the queue is the same row the full list opens, answered and
+ * closed the same way. */
+const reportRow = (item: Feedback) => {
+  const id = item.id!;
+  return {
+    item,
+    position: positions.value.get(id),
+    fix: fixInfo.value.get(id),
+    fixTargets: fixTargets.value.get(id),
+    saving: saving.value[id],
+    highlighted: targetId.value === id,
+    expanded: openRows.has(id),
+    "onUpdate:expanded": (open: boolean) => setOpen(id, open),
+    onStatus: (adminStatus: FeedbackStatus) =>
+      updateAdmin(item, { adminStatus }),
+    onDraft: (note: string) => (draftNotes.value[id] = note),
+    onSaveNote: () => saveNote(item),
+  };
+};
+
+/** A link to a part of the page rather than to one report: the dashboard's,
+ * to the reports nobody has placed yet (`FEEDBACK_INBOX_ANCHOR`). That part
+ * is drawn with the rows, after the router has looked for it and found
+ * nothing, so the page scrolls there itself once they are in. */
+async function scrollToAnchor() {
+  if (!route.hash) return;
+  await nextTick();
+  document
+    .getElementById(route.hash.slice(1))
+    ?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
 /** Bring the report a link points at into view, open: the rows arrive after
- * the router has already tried to scroll to it, a closed one is folded away,
- * and a filter may be hiding it. */
+ * the router has already tried to scroll to it, a closed one is folded away -
+ * and only the full list has the closed ones at all - and a filter may be
+ * hiding it. */
 async function focusTarget() {
   const id = hashTarget();
   missingTarget.value = false;
-  if (!id || ordering.value) return;
+  if (!id) {
+    await scrollToAnchor();
+    return;
+  }
   const item = items.value.find((entry) => entry.id === id);
   if (!item) {
     missingTarget.value = !pending.value && !loadError.value;
     return;
   }
-  if (!shows(item)) {
-    // Replaced rather than pushed, and with the hash kept: the link is where
-    // the reader went, the filter is only in its way.
-    const query = { ...route.query };
-    delete query.zrodlo;
+  const isClosed = sectionOf(item) === "closed";
+  // Replaced rather than pushed, and with the hash kept: the link is where
+  // the reader went, the view and the filter are only in its way.
+  const query = { ...route.query };
+  if (isClosed) query.widok = "lista";
+  if (!shows(item)) delete query.zrodlo;
+  if (!sameQuery(query, route.query)) {
     await router.replace({ query, hash: route.hash });
   }
-  if (sectionOf(item) === "closed") showClosed.value = true;
+  if (isClosed) showClosed.value = true;
   openRows.add(id);
   // The open row has to exist, at its full height, before it is centred.
   await nextTick();
@@ -297,32 +362,30 @@ async function focusTarget() {
 
 // A link followed while the page is open can name a report that arrived after
 // it loaded, or a closed one older than the list goes back - so look again
-// before saying there is no such report.
+// before saying there is no such report. After the writes already made, as
+// for the queue below.
 watch(
   () => route.hash,
   async () => {
     const id = hashTarget();
-    if (id && !ordering.value && !items.value.some((e) => e.id === id)) {
+    if (id && !items.value.some((e) => e.id === id)) {
+      await writesSettled();
       await load();
     }
     await focusTarget();
   },
 );
 
-/** Ordering starts from a fresh list: a rank is computed from the neighbours
- * on screen, so they had better be the ones in the database. The list stays
- * inert until they are. */
-async function toggleOrdering() {
-  if (ordering.value) {
-    ordering.value = false;
-    await rankWritesSettled();
-    return;
-  }
-  ordering.value = true;
+// Back to the queue from the full list, it starts from a fresh list: a rank
+// is computed from the neighbours on screen, so they had better be the ones
+// in the database. The list stays inert until they are. The first load is
+// fresh already.
+watch(queueView, async (toQueue) => {
+  if (!toQueue) return;
   pending.value = true;
   await writesSettled();
   await load();
-}
+});
 
 onMounted(async () => {
   await load();
