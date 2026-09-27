@@ -88,6 +88,43 @@ export function edgePerson(edge: EdgeNode): Person | undefined {
     : undefined;
 }
 
+/** One row per node at the other end, for a list whose rows name nodes rather
+ * than relations - „Właściciele" on a company's page, „Spółki zależne" on a
+ * region's.
+ *
+ * Two relations between the same pair are ordinary there, and each used to be
+ * a row: a gmina that both owns a company and is where it is registered holds a
+ * `seat` and an `owns` edge, and was listed twice - 131 companies in the
+ * 2026-09-27 export. 62 more carry a second copy of their seat from before
+ * edge ids were derived. `CardConnectionList` keys its rows by the node, so the
+ * two rows also shared a key.
+ *
+ * `preferred` says which relation stands for the node, most wanted first: the
+ * row's remove button and its draft chip act on that edge, so under an owners
+ * heading it is the `owns` one. Among equals a published copy wins, so a draft
+ * duplicate does not mark a live relation „szkic". Order of first appearance is
+ * kept; the list sorts its rows anyway.
+ */
+export function onePerNode(
+  edges: EdgeNode[],
+  preferred: EdgeType[] = [],
+): EdgeNode[] {
+  const rank = (edge: EdgeNode) => {
+    const at = preferred.indexOf(edge.type);
+    return (
+      (at === -1 ? preferred.length : at) * 2 +
+      (edge.visibility === false ? 1 : 0)
+    );
+  };
+  const chosen = new Map<string, EdgeNode>();
+  for (const edge of edges) {
+    const key = edge.richNode.id ?? edge.id ?? `${edge.source}|${edge.target}`;
+    const held = chosen.get(key);
+    if (!held || rank(edge) < rank(held)) chosen.set(key, edge);
+  }
+  return Array.from(chosen.values());
+}
+
 /** "1 powiązanie", "2 powiązania", "5 powiązań".
  *
  * Polish counts three ways, and the admin surfaces report counts often enough
