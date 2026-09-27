@@ -102,6 +102,9 @@ const props = defineProps<{
   /** What the enclosing dialog names its controls, so a test can tell the add
    * form's fields from the edit form's. */
   prefix: string;
+  /** An example role that fits where the post was held better than the
+   * default, which is a company's. */
+  rolePlaceholder?: string;
 }>();
 
 const details = defineModel<RelationDetails>({ required: true });
@@ -117,7 +120,9 @@ const nameLabel = computed(() => {
   return "Nazwa powiązania";
 });
 
-const namePlaceholder = computed(() =>
-  props.realType === "employed" ? "np. prezes zarządu" : "",
+const namePlaceholder = computed(
+  () =>
+    props.rolePlaceholder ??
+    (props.realType === "employed" ? "np. prezes zarządu" : ""),
 );
 </script>

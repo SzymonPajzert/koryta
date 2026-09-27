@@ -96,6 +96,43 @@ test.describe("Add a relation", () => {
     });
   });
 
+  test("a post in a region is filed under the region's urząd", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    // Piotr Wiśniewski (4). Opole is seeded as a region with its TERYT code
+    // and no place for its urząd, so saving proposes one from the register.
+    await logIn(page, USERS.normal, "/entity/person/4");
+
+    const dialog = await compose(page, "add-relation-employment", "Opole");
+
+    // Beside the candidacy that used to be the only way to join the two.
+    await expect(
+      dialog.getByTestId("add-relation-verb-election-outgoing"),
+    ).toBeVisible();
+    await dialog.getByTestId("add-relation-verb-office").click();
+    await expect(dialog.getByTestId("region-workplace")).toContainText(
+      "URZĄD MIASTA OPOLA",
+      { timeout: 30_000 },
+    );
+
+    await dialog
+      .getByTestId("add-relation-name")
+      .locator("input")
+      .fill("zastępca prezydenta miasta");
+    await dialog.getByTestId("add-relation-submit").click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+
+    await page.reload();
+    await expect(page.getByTestId("relations-history")).toContainText(
+      "URZĄD MIASTA OPOLA",
+      { timeout: 30_000 },
+    );
+    await expect(page.locator("body")).toContainText(
+      "zastępca prezydenta miasta",
+    );
+  });
+
   test("a logged out reader is sent to sign in", async ({ page }) => {
     await page.goto("/entity/person/1");
     // The section is there to read; adding is what needs an account.
