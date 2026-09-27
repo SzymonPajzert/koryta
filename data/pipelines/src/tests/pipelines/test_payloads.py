@@ -515,3 +515,42 @@ def test_upload_payloads_carry_the_organ_the_register_names(mock_ctx, monkeypatc
     # an earlier run stored. NaN is how `from_records` fills a column a row
     # never set; `clean_payload` is not what drops it, `submit_payload` is.
     assert pd.isna(by_krs["0000076705"]["supervisory_organ"])
+
+
+def test_a_company_the_register_gives_no_name_is_not_renamed(mock_ctx, monkeypatch):
+    """No payload at all, rather than one named after the KRS number.
+
+    The fallback that used to stand here renamed five companies on the site -
+    "Grupowa Oczyszczalnia Ścieków w Łodzi" became "0000069597" - because the
+    site knew their names and this run did not: they had been struck off the
+    register, so every other field of the row was a default too.
+    """
+    pipeline = Pipeline.create(CompaniesPayloads)
+    pipeline.companies = MockPipeline(
+        [
+            {
+                "krs": "0000069597",
+                "name": None,
+                "city": None,
+                "activity": [],
+                "is_public": False,
+            },
+            {
+                "krs": "0000076705",
+                "name": "PKP Szybka Kolej Miejska w Trojmiescie",
+                "city": "Gdynia",
+                "activity": ["49.12.Z"],
+                "is_public": True,
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [{"krs": krs} for krs in ("0000069597", "0000076705")]
+        ),
+    )
+
+    payloads = pipeline.process(mock_ctx).to_dict(orient="records")
+
+    assert [p["krs"] for p in payloads] == ["0000076705"]
