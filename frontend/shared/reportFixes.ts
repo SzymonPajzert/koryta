@@ -30,6 +30,15 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Pięć spółek wykreślonych z KRS, które od 22 lipca nazywały się swoim numerem KRS, ma z powrotem nazwę z rejestru, wielkimi literami - 0000069597 to „GRUPOWA OCZYSZCZALNIA ŚCIEKÓW W ŁODZI (Łódź)”, a 0000304050 „MIEJSKIE INWESTYCJE KIELCE” (dawniej Port Lotniczy Kielce) - ale dopiero po wgraniu przygotowanego pliku companies-names.jsonl.",
+    fixes: [
+      "d22TAxj5BSDCdlMVipxn",
+      "j7DmESIdwgNha0OzVDjx",
+      "VBwJOcp8NUWq4NSytWwo",
+    ],
+  },
+  {
+    change:
       "„Obecny skład” spółki wymienia najpierw prezesa, potem jego zastępców, zarząd i radę nadzorczą, a dopiero dalej resztę.",
     fixes: ["uIj31XYdsMVFjnqHArzX"],
   },

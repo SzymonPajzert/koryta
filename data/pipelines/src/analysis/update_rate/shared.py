@@ -28,9 +28,10 @@ def make_context():
 
 
 def load_already_scraped(ctx) -> pd.DataFrame:
-    """Load the krs_already_scraped pipeline output."""
+    """Load the krs_already_scraped pipeline output, the responses that came
+    back with something in them - not the rows marking an empty one."""
     pipeline = Pipeline.create(KRSAlreadyScraped)
-    df = pipeline.read_or_process(ctx)
+    df = pipeline.answered(ctx)
     df["date"] = df["date"].astype(str)
     return df
 
