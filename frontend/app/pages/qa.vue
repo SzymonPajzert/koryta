@@ -13,15 +13,26 @@
       trzeba pisać drugi raz.
     </p>
 
+    <!-- On an admin's "Problemy" a problem with an open report is that
+         report's row, which has no verdict buttons: the way to say it works
+         is the entry its "QA: …" chip leads to. -->
     <v-alert
       v-if="counts.issue > 0"
       class="mb-4"
       type="error"
       variant="tonal"
       density="compact"
+      data-issue-banner
     >
-      Zgłosiłeś problem w {{ counts.issue }} wpisach. Wpis zostaje w zakładce
-      „Problemy”, dopóki nie napiszesz, że już działa.
+      Zgłosiłeś problem w {{ counts.issue }} wpisach.
+      <template v-if="ownProblemsAsReports">
+        Tutaj problem z otwartym zgłoszeniem jest tym zgłoszeniem - gdy już
+        działa, zmień ocenę we wpisie, do którego prowadzi „QA: …” przy
+        zgłoszeniu.
+      </template>
+      <template v-else>
+        Wpis zostaje w zakładce „Problemy”, dopóki nie napiszesz, że już działa.
+      </template>
     </v-alert>
 
     <FeedbackFilterChips
@@ -36,10 +47,10 @@
       <!-- An admin gets the team's side of the tab above their own: on "Do
            sprawdzenia" the open reports this build says it fixes, to check
            and close; on "Problemy" every open report sent from this list,
-           from every checker - a problem found here reaches the team as a
-           report on /admin/opinie, and this makes "Problemy" one list of what
-           is wrong rather than two to read side by side. Either way they are
-           the panel's rows, dealt with here as they are there. -->
+           from every checker, theirs included - a problem found here reaches
+           the team as a report on /admin/opinie, so that is what it is shown
+           as, with the entry it is about on its line. Either way they are the
+           panel's rows, dealt with here as they are there. -->
       <template v-if="teamSection">
         <AdminSectionHead
           :title="teamSection.title"
@@ -55,7 +66,12 @@
             {{ teamSection.link.text }}
           </NuxtLink>
         </AdminSectionHead>
-        <v-progress-linear v-if="reportsPending" indeterminate class="mb-4" />
+        <v-progress-linear
+          v-if="!reportsLoadedOnce"
+          indeterminate
+          class="mb-4"
+          data-reports-loading
+        />
         <v-alert
           v-else-if="reportsError"
           type="error"
@@ -92,25 +108,29 @@
         </AdminRowList>
       </template>
 
-      <AdminSectionHead
-        v-if="ownSection"
-        :title="ownSection.title"
-        :count="visibleItems.length"
-        :info="ownSection.info"
-        :data-section="ownSection.id"
-      />
+      <!-- Nothing at all when an admin's own problems are all in the list
+           above: an empty section under it would read as a second list. -->
+      <template v-if="!(ownProblemsAsReports && visibleItems.length === 0)">
+        <AdminSectionHead
+          v-if="ownSection"
+          :title="ownSection.title"
+          :count="visibleItems.length"
+          :info="ownSection.info"
+          :data-section="ownSection.id"
+        />
 
-      <v-alert
-        v-if="visibleItems.length === 0"
-        type="success"
-        color="ink-success"
-        variant="tonal"
-        density="compact"
-      >
-        {{ emptyText }}
-      </v-alert>
+        <v-alert
+          v-if="visibleItems.length === 0"
+          type="success"
+          color="ink-success"
+          variant="tonal"
+          density="compact"
+        >
+          {{ emptyText }}
+        </v-alert>
+      </template>
 
-      <AdminRowList v-else>
+      <AdminRowList v-if="visibleItems.length > 0">
         <QaItemRow
           v-for="item in visibleItems"
           :key="item.id"
@@ -171,7 +191,6 @@ const {
  * on the first tab, and the ones sent from this list, on "Problemy". The list
  * is admin-only, so nobody else ever asks for it. */
 const {
-  pending: reportsPending,
   loadError: reportsError,
   load: loadReports,
   sectionOf,
@@ -185,6 +204,7 @@ const {
   updateAdmin,
   saveNote,
   moveTo,
+  writesSettled,
   snackbar: rankSnackbar,
   snackbarText: rankSnackbarText,
 } = useFeedbackAdmin();
@@ -234,19 +254,25 @@ onMounted(() => load());
  * on lists some of them; and not again on the way between tabs: status and
  * queue changes made here are applied in place, as on /admin/opinie. */
 const reportsAsked = ref(false);
+/** Whether the first load is over, well or not. Only that one shows as
+ * loading: a later one - after a verdict here sends a report - leaves the
+ * list it replaces on screen until the new one is in, rather than dropping
+ * every row for a progress bar and, with them, a note half-typed in one. */
+const reportsLoadedOnce = ref(false);
 
 watch(
   () => isAdmin.value,
   (admin) => {
     if (!admin || reportsAsked.value) return;
     reportsAsked.value = true;
-    loadReports();
+    loadReports().then(() => (reportsLoadedOnce.value = true));
   },
   { immediate: true },
 );
 
+/** A list in hand, and the last load did not fail. */
 const reportsReady = computed(
-  () => reportsAsked.value && !reportsPending.value && !reportsError.value,
+  () => reportsLoadedOnce.value && !reportsError.value,
 );
 
 /** Open reports, in the order /admin/opinie lists them: the ones nobody has
@@ -257,6 +283,37 @@ const openReports = computed(() => [...inbox.value, ...queue.value]);
 /** The ones that came from this list. */
 const qaReports = computed(() =>
   openReports.value.filter((report) => !!report.context.qa),
+);
+
+/** An admin's own problems, as the reports they went out as, on "Problemy" -
+ * unless the list is not there to show them, which leaves the entries to
+ * stand for themselves as they do for everybody else. */
+const ownProblemsAsReports = computed(
+  () => isAdmin.value && filter.value === "issue" && !reportsError.value,
+);
+
+/** The entries this reader has an open report about, filed as a problem - on
+ * "Problemy" that report is the entry, so the entry is not listed again. */
+const reportedByMe = computed(
+  () =>
+    new Set(
+      qaReports.value
+        .filter(
+          (report) =>
+            report.userUid === user.value?.uid &&
+            report.context.qa?.status === "issue",
+        )
+        .map((report) => report.context.qa!.itemId),
+    ),
+);
+
+/** An admin's problems no open report stands for: the report was closed
+ * while they still say the entry does not work, or it never reached the
+ * team. Those stay entries, below the reports. */
+const unreportedIssues = computed(() =>
+  items.filter(
+    (item) => stateOf(item.id) === "issue" && !reportedByMe.value.has(item.id),
+  ),
 );
 
 /** The ones this build says it fixes: named in a QA entry's `fixes`, or by a
@@ -283,7 +340,7 @@ const teamSection = computed(() => {
     return {
       id: "qa-reports",
       title: "Zgłoszenia z QA",
-      info: "Otwarte zgłoszenia wysłane z tej listy, od wszystkich sprawdzających. Status, notatka i kolejka działają tu tak samo jak w panelu zgłoszeń.",
+      info: "Każdy problem zgłoszony na tej liście trafia do panelu jako zgłoszenie. Tu są otwarte, od wszystkich sprawdzających - Twoje też - z wpisem, którego dotyczą. Status, notatka i kolejka działają tu tak samo jak w panelu zgłoszeń.",
       reports: qaReports.value,
       empty: "Nie ma otwartych zgłoszeń z QA.",
       link: {
@@ -298,6 +355,13 @@ const teamSection = computed(() => {
 /** The head over the reader's own entries: wherever an admin's list sits
  * above them, and on "Problemy" for everybody. */
 const ownSection = computed(() => {
+  if (ownProblemsAsReports.value) {
+    return {
+      id: "my-issues",
+      title: "Twoje problemy bez otwartego zgłoszenia",
+      info: "Wpisy, które wciąż oceniasz jako „Coś nie działa”, choć zgłoszenie z tą oceną zostało zamknięte albo nie dotarło do zespołu. Jeśli już działa, zmień ocenę; jeśli nie, opisz, co wciąż jest nie tak.",
+    };
+  }
   if (filter.value === "issue") {
     return {
       id: "my-issues",
@@ -315,11 +379,14 @@ const ownSection = computed(() => {
   return null;
 });
 
-/** For an admin, "Problemy" counts what the team has to deal with - once it
- * is known; for anybody else, the entries they reported themselves. */
+/** For an admin, "Problemy" counts what the team has to deal with and what
+ * of their own is left besides - once it is known; for anybody else, the
+ * entries they reported themselves. */
 const problemCount = computed(() => {
   if (!isAdmin.value) return counts.value.issue;
-  return reportsReady.value ? qaReports.value.length : undefined;
+  return reportsReady.value
+    ? qaReports.value.length + unreportedIssues.value.length
+    : undefined;
 });
 
 /** A count only above zero, as the badges these replaced had it. */
@@ -349,9 +416,14 @@ const matches = (state: QaItemState) =>
   filter.value === "all" ||
   (filter.value === "issue" ? state === "issue" : state === "unchecked");
 
-const visibleItems = computed(() =>
-  items.filter((item) => matches(stateOf(item.id))),
-);
+/** Nothing of an admin's own until the reports are in: listing every problem
+ * first and taking most of them away a moment later would be a flicker. */
+const visibleItems = computed(() => {
+  if (!ownProblemsAsReports.value) {
+    return items.filter((item) => matches(stateOf(item.id)));
+  }
+  return reportsReady.value ? unreportedIssues.value : [];
+});
 
 const emptyText = computed(
   () =>
@@ -370,7 +442,9 @@ const emptyText = computed(
 async function focusHashItem() {
   const id = /^#qa-(.+)$/.exec(route.hash)?.[1];
   if (!id || !loaded.value || !items.some((item) => item.id === id)) return;
-  if (!matches(stateOf(id))) {
+  // Not rendered is not only another tab's: on an admin's "Problemy" their own
+  // problem is the report it went out as, and the entry is not listed.
+  if (!visibleItems.value.some((item) => item.id === id)) {
     // Replaced rather than pushed, and with the hash kept: the link is where
     // the reader went, the tab is only in its way.
     await router.replace({
@@ -411,6 +485,14 @@ async function save(itemId: string, status: QaCheckStatus, feedback: string) {
     snackbarColor.value =
       forwarded || !reported ? "ink-success" : "ink-warning";
     snackbar.value = true;
+    // The report just sent is on the team's list now, and on "Problemy" it is
+    // what stands for this entry - so an admin's copy of the list is read
+    // again rather than leaving the entry to look like a problem the team was
+    // never told about. After the triage still being written, as on
+    // /admin/opinie.
+    if (forwarded && isAdmin.value) {
+      writesSettled().then(() => loadReports());
+    }
   } catch (error) {
     console.error("Nie udało się zapisać oceny QA", error);
     snackbarText.value = "Nie udało się zapisać";

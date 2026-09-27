@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from "vitest";
 import { computed, defineComponent, h, nextTick, ref } from "vue";
 import { flushPromises } from "@vue/test-utils";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
@@ -169,6 +177,22 @@ const isOpen = (wrapper: Wrapper, rowId: string) =>
 const listCalls = () =>
   authRequest.mock.calls.filter(([url]) => url === "/api/feedback/list");
 
+/** Serves the reports `serving()` names when asked, and holds every read after
+ * the first until the function returned is called - so a test can look at the
+ * page while it reads the list again. */
+const holdRereads = (serving: () => Feedback[]) => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  authRequest.mockImplementation(
+    async (_url: string, opts: { method: string }) => {
+      if (opts.method !== "GET") return { ok: true };
+      if (listCalls().length > 1) await held;
+      return { feedback: serving().map((item) => structuredClone(item)) };
+    },
+  );
+  return () => release();
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   loaded.value = true;
@@ -285,9 +309,10 @@ describe("QA page", () => {
     });
 
     /** Open and closed reports from /qa, one queued, and one sent with the
-     * "Zgłoś" button. */
+     * "Zgłoś" button. The open one not in the queue is this reader's own,
+     * about the entry they flagged. */
     const reports = (): Feedback[] => [
-      report("qa-open", "new"),
+      report("qa-open", "new", { userUid: "me" }),
       report("qa-queued", "in_progress", { queueRank: 1024 }),
       report("qa-closed", "resolved"),
       report("plain", "new", {
@@ -299,11 +324,11 @@ describe("QA page", () => {
       }),
     ];
 
-    const serveReports = () =>
+    const serveReports = (served = reports()) =>
       authRequest.mockImplementation(
         async (_url: string, opts: { method: string }) =>
           opts.method === "GET"
-            ? { feedback: reports().map((item) => structuredClone(item)) }
+            ? { feedback: served.map((item) => structuredClone(item)) }
             : { ok: true },
       );
 
@@ -332,12 +357,16 @@ describe("QA page", () => {
       expect(wrapper.get("[data-qa-item]").attributes("data-qa-item")).toBe(
         "broken-thing",
       );
+      // The entry is here, with its buttons.
+      expect(wrapper.get("[data-issue-banner]").text()).toContain(
+        "dopóki nie napiszesz, że już działa",
+      );
       expect(wrapper.text()).not.toContain("Zgłoszenia z QA");
       // The list is admin-only: asking would be a 403 at best.
       expect(authRequest).not.toHaveBeenCalled();
     });
 
-    it("gives an admin every open report from the list above their own", async () => {
+    it("gives an admin every open report from the list, their own problems as the reports they are", async () => {
       isAdmin.value = true;
       serveReports();
       const wrapper = await mountPage();
@@ -352,17 +381,19 @@ describe("QA page", () => {
       await openProblems(wrapper);
 
       expect(listCalls()).toHaveLength(1);
-      expect(sections(wrapper)).toEqual(["qa-reports", "my-issues"]);
+      // One list: the entry this admin flagged went out as "qa-open", and is
+      // that row rather than a second one under it.
+      expect(sections(wrapper)).toEqual(["qa-reports"]);
+      expect(wrapper.find("[data-qa-item]").exists()).toBe(false);
       // Open ones only, from /qa only, in the order the panel has them: not
       // placed yet first, then the queue.
       expect(reportIds(wrapper)).toEqual(["qa-open", "qa-queued"]);
+      expect(wrapper.get("#fb-qa-open").text()).toContain("QA: Zepsuta rzecz");
       expect(button(wrapper, "Problemy").text()).toMatch(/^Problemy\s*2$/);
       // The place in the whole queue, "Zgłoś" reports included.
       expect(wrapper.get("#fb-qa-queued [data-queue-position]").text()).toBe(
         "#1",
       );
-      // And the entry this admin reported themselves, as for anybody.
-      expect(wrapper.find('[data-qa-item="broken-thing"]').exists()).toBe(true);
 
       const all = wrapper
         .findAllComponents({ name: "NuxtLink" })
@@ -373,6 +404,188 @@ describe("QA page", () => {
       await pick(wrapper, "Wszystkie");
       await openProblems(wrapper);
       expect(listCalls()).toHaveLength(1);
+    });
+
+    // The report's row has no "Działa" to press, so the banner cannot send
+    // them to one.
+    it("tells an admin where to say a problem shown as its report works", async () => {
+      isAdmin.value = true;
+      serveReports();
+      const wrapper = await mountPage();
+      await flushPromises();
+      const banner = () => wrapper.get("[data-issue-banner]").text();
+
+      // On any other tab the entries are the rows, as for anybody.
+      expect(banner()).toContain("dopóki nie napiszesz, że już działa");
+
+      await openProblems(wrapper);
+      expect(banner()).toContain("jest tym zgłoszeniem");
+      expect(banner()).toContain("do którego prowadzi „QA: …”");
+      expect(banner()).not.toContain("dopóki nie napiszesz");
+    });
+
+    // /qa?widok=problemy#qa-… lands on a tab that does not list the entry.
+    it("lands a link to an admin's own problem on the entry, not on its report", async () => {
+      isAdmin.value = true;
+      serveReports();
+      const wrapper = await mountPage("/?widok=problemy");
+      await flushPromises();
+      expect(wrapper.find('[data-qa-item="broken-thing"]').exists()).toBe(
+        false,
+      );
+
+      await useRouter().push({
+        path: "/",
+        query: { widok: "problemy" },
+        hash: "#qa-broken-thing",
+      });
+      await settlesOn(wrapper, "Wszystkie");
+
+      expect(scrolled).toEqual(["qa-broken-thing"]);
+      expect(isOpen(wrapper, "qa-broken-thing")).toBe(true);
+      expect(useRouter().currentRoute.value.hash).toBe("#qa-broken-thing");
+    });
+
+    it("keeps an admin's problem whose report was closed, as the entry, under the reports", async () => {
+      isAdmin.value = true;
+      // Their report about it is settled; somebody else's is still open.
+      serveReports([
+        report("qa-closed-mine", "resolved", { userUid: "me" }),
+        report("qa-open-theirs", "new"),
+      ]);
+      const wrapper = await mountPage();
+      await openProblems(wrapper);
+
+      expect(sections(wrapper)).toEqual(["qa-reports", "my-issues"]);
+      expect(reportIds(wrapper)).toEqual(["qa-open-theirs"]);
+      expect(wrapper.text()).toContain(
+        "Twoje problemy bez otwartego zgłoszenia",
+      );
+      expect(wrapper.find('[data-qa-item="broken-thing"]').exists()).toBe(true);
+      // Somebody else's report does not stand for this admin's verdict.
+      expect(button(wrapper, "Problemy").text()).toMatch(/^Problemy\s*2$/);
+    });
+
+    it("reads the reports again once a problem found here has gone out, and shows it as one", async () => {
+      isAdmin.value = true;
+      serveReports([report("qa-open-theirs", "new")]);
+      const wrapper = await mountPage();
+      await openProblems(wrapper);
+      // Nothing of theirs is open yet, so the entry stands for itself.
+      expect(wrapper.find('[data-qa-item="broken-thing"]').exists()).toBe(true);
+
+      saveCheck.mockResolvedValueOnce({ reported: true, forwarded: true });
+      serveReports([
+        report("qa-open-theirs", "new"),
+        report("qa-mine", "new", { userUid: "me" }),
+      ]);
+      await wrapper.get("#qa-broken-thing [data-row-toggle]").trigger("click");
+      await button(wrapper.get("#qa-broken-thing"), "Coś nie działa").trigger(
+        "click",
+      );
+      await flushPromises();
+
+      // Left alone, the entry would go on saying the team was never told.
+      expect(listCalls()).toHaveLength(2);
+      expect(reportIds(wrapper)).toContain("qa-mine");
+      expect(wrapper.find("[data-qa-item]").exists()).toBe(false);
+    });
+
+    it("keeps the list on screen while it reads it again, and a note typed in another row with it", async () => {
+      isAdmin.value = true;
+      // A second problem of theirs no report stands for, to write in.
+      states["new-thing"] = "issue";
+      onTestFinished(() => {
+        states["new-thing"] = "unchecked";
+      });
+      let served = [report("qa-open-theirs", "new")];
+      const release = holdRereads(() => served);
+      const wrapper = await mountPage();
+      await openProblems(wrapper);
+      const note = () =>
+        wrapper.get<HTMLTextAreaElement>("#qa-new-thing textarea").element
+          .value;
+
+      await wrapper.get("#qa-new-thing [data-row-toggle]").trigger("click");
+      await wrapper
+        .get("#qa-new-thing textarea")
+        .setValue("wciąż się nie ładuje");
+
+      // The other one goes out as a report, and the list is read again.
+      saveCheck.mockResolvedValueOnce({ reported: true, forwarded: true });
+      served = [
+        report("qa-open-theirs", "new"),
+        report("qa-mine", "new", { userUid: "me" }),
+      ];
+      await wrapper.get("#qa-broken-thing [data-row-toggle]").trigger("click");
+      await button(wrapper.get("#qa-broken-thing"), "Coś nie działa").trigger(
+        "click",
+      );
+      await flushPromises();
+      expect(listCalls()).toHaveLength(2);
+
+      // Until it is in, everything stays as it was: no progress bar in place
+      // of the rows, and the note is still there to be sent.
+      expect(wrapper.find("[data-reports-loading]").exists()).toBe(false);
+      expect(reportIds(wrapper)).toEqual(["qa-open-theirs"]);
+      expect(sections(wrapper)).toEqual(["qa-reports", "my-issues"]);
+      expect(note()).toBe("wciąż się nie ładuje");
+      expect(button(wrapper, "Problemy").text()).toMatch(/^Problemy\s*3$/);
+
+      release();
+      await flushPromises();
+
+      // Then the new report stands for its entry, and the row being written
+      // in was never taken down.
+      expect(reportIds(wrapper)).toContain("qa-mine");
+      expect(wrapper.find('[data-qa-item="broken-thing"]').exists()).toBe(
+        false,
+      );
+      expect(note()).toBe("wciąż się nie ładuje");
+    });
+
+    it("does not ask a reader's page for the reports after a problem goes out", async () => {
+      saveCheck.mockResolvedValueOnce({ reported: true, forwarded: true });
+      const wrapper = await mountPage();
+      await openProblems(wrapper);
+
+      await wrapper.get("#qa-broken-thing [data-row-toggle]").trigger("click");
+      await button(wrapper.get("#qa-broken-thing"), "Coś nie działa").trigger(
+        "click",
+      );
+      await flushPromises();
+
+      expect(saveCheck).toHaveBeenCalled();
+      expect(authRequest).not.toHaveBeenCalled();
+    });
+
+    it("lists none of an admin's own entries until the reports are in", async () => {
+      isAdmin.value = true;
+      authRequest.mockImplementation(() => new Promise(() => {}));
+      const wrapper = await mountPage();
+      await openProblems(wrapper);
+
+      // Showing all of them first and taking them away when the reports
+      // arrive would be a flicker.
+      expect(wrapper.find("[data-qa-item]").exists()).toBe(false);
+      expect(sections(wrapper)).toEqual(["qa-reports"]);
+      expect(wrapper.find("[data-reports-loading]").exists()).toBe(true);
+    });
+
+    it("falls back to an admin's own entries when the reports do not load", async () => {
+      isAdmin.value = true;
+      authRequest.mockRejectedValue(new Error("403"));
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const wrapper = await mountPage();
+      await openProblems(wrapper);
+
+      expect(sections(wrapper)).toEqual(["qa-reports", "my-issues"]);
+      expect(wrapper.text()).toContain("Nie udało się wczytać zgłoszeń.");
+      expect(wrapper.text()).toContain("Twoje zgłoszone problemy");
+      expect(wrapper.find('[data-qa-item="broken-thing"]').exists()).toBe(true);
+      expect(wrapper.get("[data-issue-banner]").text()).toContain(
+        "dopóki nie napiszesz, że już działa",
+      );
     });
 
     it("lets an admin triage a report where it is", async () => {
@@ -509,6 +722,26 @@ describe("QA page", () => {
       expect(wrapper.get(`#fb-${FIXED_OPEN}`).classes()).toContain(
         "arow--dimmed",
       );
+    });
+
+    it("keeps the reports to close on screen while a verdict's report is read in", async () => {
+      const release = holdRereads(() => [report(FIXED_OPEN, "new")]);
+      saveCheck.mockResolvedValueOnce({ reported: true, forwarded: true });
+      const wrapper = await mountAdmin();
+
+      await wrapper.get("#qa-new-thing [data-row-toggle]").trigger("click");
+      await button(wrapper.get("#qa-new-thing"), "Coś nie działa").trigger(
+        "click",
+      );
+      await flushPromises();
+      expect(listCalls()).toHaveLength(2);
+
+      expect(wrapper.find("[data-reports-loading]").exists()).toBe(false);
+      expect(wrapper.find(`#fb-${FIXED_OPEN}`).exists()).toBe(true);
+
+      release();
+      await flushPromises();
+      expect(wrapper.find(`#fb-${FIXED_OPEN}`).exists()).toBe(true);
     });
 
     it("says so when nothing it claims is still open", async () => {
