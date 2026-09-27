@@ -4,9 +4,11 @@ import { logIn, USERS } from "./helpers/auth";
 /** The Cypress specs this replaces drove a "Dodaj nowe" menu in the signed in
  * toolbar - "Dodaj artykuł", "Dodaj osobę", "Audyt". None of those entries
  * exist any more; the toolbar in layouts/default.vue offers Rewizje, Aktywność
- * and a "Zespół" menu to everyone, and an "Admin" menu with the panel and its
- * three inboxes to admins. The intent - the toolbar is for signed in users,
- * and it takes them where it says - ports over; the entries themselves do not.
+ * and a "Zespół" menu to everyone - the QA list, its problems, and for an admin
+ * every report, then the links that leave the site - and an "Admin" menu with
+ * the panel and two of its inboxes to admins. The intent - the toolbar is for
+ * signed in users, and it takes them where it says - ports over; the entries
+ * themselves do not.
  *
  * A menu's entries are teleported out of the toolbar, into the overlay
  * container, so they are looked up under `.user-toolbar-menu` rather than
@@ -98,9 +100,13 @@ test.describe("User toolbar", () => {
 
     await openMenu(page, admin, "Panel administracyjny");
     const entries = page.locator(menu);
-    for (const name of ["Kolejka zmian", "Notatki", "Zgłoszenia"]) {
+    for (const name of ["Kolejka zmian", "Notatki"]) {
       await expect(entries.getByRole("link", { name })).toBeVisible();
     }
+    // The reports are under "Zespół", beside the QA problems they include.
+    await expect(entries.getByRole("link", { name: "Zgłoszenia" })).toHaveCount(
+      0,
+    );
 
     await entries.getByRole("link", { name: "Notatki" }).click();
     await page.waitForURL(/\/admin\/notatki/, { timeout: 30_000 });
@@ -141,7 +147,38 @@ test.describe("User toolbar", () => {
     await expect(admin).not.toHaveClass(/v-btn--active/);
   });
 
-  test("'Zespół' holds the links that leave the site", async ({ page }) => {
+  test("'Zespół' puts QA, its problems and the reports in one place", async ({
+    page,
+  }) => {
+    await logIn(page, USERS.admin);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    const bar = page.locator(toolbar).first();
+    const team = bar.getByRole("button", { name: "Zespół" });
+    await expect(team).toBeVisible({ timeout: 30_000 });
+
+    await openMenu(page, team, "QA - zmiany do sprawdzenia");
+    const entries = page.locator(menu);
+    await expect(
+      entries.getByRole("link", { name: "Zgłoszenia" }),
+    ).toHaveAttribute("href", "/admin/opinie");
+
+    // Straight to the tab where a problem found on /qa is the report it went
+    // out as - for an admin, the reports from every checker.
+    await entries.getByRole("link", { name: "Problemy z QA" }).click();
+    await page.waitForURL(/\/qa\?widok=problemy$/, { timeout: 30_000 });
+    await expect(page.locator('[data-filter="issue"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.locator('[data-section="qa-reports"]')).toBeVisible({
+      timeout: 30_000,
+    });
+  });
+
+  test("'Zespół' gives a reader QA and the links that leave the site", async ({
+    page,
+  }) => {
     // The home page has an affine board; /aktywnosc does not.
     await logIn(page, USERS.normal);
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -158,6 +195,17 @@ test.describe("User toolbar", () => {
     await expect(
       entries.getByRole("link", { name: "Dyskusja w affine" }),
     ).toHaveAttribute("href", /app\.affine\.pro/);
+    // Above them, QA and its problems, which /qa opens to everybody signed
+    // in - and not the reports, which are an admin's.
+    await expect(
+      entries.getByRole("link", { name: "QA - zmiany do sprawdzenia" }),
+    ).toHaveAttribute("href", "/qa");
+    await expect(
+      entries.getByRole("link", { name: "Problemy z QA" }),
+    ).toHaveAttribute("href", "/qa?widok=problemy");
+    await expect(entries.getByRole("link", { name: "Zgłoszenia" })).toHaveCount(
+      0,
+    );
 
     await page.keyboard.press("Escape");
     await expect(team).toHaveAttribute("aria-expanded", "false");
