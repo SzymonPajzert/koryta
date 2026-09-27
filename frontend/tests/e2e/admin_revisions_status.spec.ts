@@ -62,7 +62,10 @@ test("the status filter narrows the list to what is still waiting", async ({
   page,
 }) => {
   test.setTimeout(120_000);
-  await logIn(page, USERS.admin, "/admin/rewizje");
+  // A hundred rows a page: other specs add entries with fresh revisions too -
+  // add_relation's urząd proposes a new place - and at the default ten these
+  // two can land on the second page.
+  await logIn(page, USERS.admin, "/admin/rewizje?nodePerPage=100");
   await page.waitForURL(/\/admin\/rewizje/, { timeout: 30_000 });
   const entries = page.locator("#wpisy");
   await expect(entries.getByText(WAITING).first()).toBeVisible({

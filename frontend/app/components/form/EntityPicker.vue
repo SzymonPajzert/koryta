@@ -81,6 +81,13 @@ const props = defineProps<{
 
 const model = defineModel<Link<NodeType> | undefined>();
 
+const emit = defineEmits<{
+  /** A new entry was proposed from the picker and picked. Said separately from
+   * the pick itself for a caller that has to finish what the proposal cannot
+   * say - where a new place is seated, say. */
+  created: [link: Link<NodeType>];
+}>();
+
 const search = ref("");
 const debouncedSearch = refDebounced(search, 300);
 const loading = ref(false);
@@ -328,5 +335,6 @@ function onCreated(id: string) {
   }
   model.value = created;
   search.value = pendingCreateName.value;
+  emit("created", created);
 }
 </script>
