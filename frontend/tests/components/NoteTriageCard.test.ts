@@ -48,6 +48,25 @@ describe("NoteTriageCard", () => {
     expect(link.text()).toContain("example.com");
   });
 
+  it("links the node's name to its page, in a tab of its own", async () => {
+    // No hyphen in the id: the page's route reads the id off after the last
+    // one, and the url asserted here should be one that resolves.
+    const wrapper = await mount({ nodeId: "node1" });
+
+    // A real anchor, so a click, a ctrl-click and a middle-click all reach the
+    // page - the name once rendered as an unresolved <nuxtlink> tag with the
+    // right url on it and nothing to follow it.
+    const link = wrapper.get("a.node-name");
+    expect(link.attributes("href")).toBe("/osoba/jan-testowy-node1");
+    expect(link.attributes("target")).toBe("_blank");
+    expect(link.text()).toBe("Jan Testowy");
+    expect(wrapper.find("nuxtlink").exists()).toBe(false);
+    // The open-in-new icon is part of the same anchor: drawn beside it, it
+    // was a second thing that looked like a link and did nothing.
+    expect(link.find(".v-icon").exists()).toBe(true);
+    expect(wrapper.findAll(".node-name ~ .v-icon")).toHaveLength(0);
+  });
+
   it("says so when there is no source to read", async () => {
     const wrapper = await mount({ url: null });
 
@@ -62,6 +81,8 @@ describe("NoteTriageCard", () => {
 
     expect(wrapper.text()).toContain("node-1");
     expect(wrapper.text()).toContain("brakuje spółki");
+    expect(wrapper.find("a.node-name").exists()).toBe(false);
+    expect(wrapper.find(".node-name .v-icon").exists()).toBe(false);
   });
 
   it("shows something readable for a url that is not one", async () => {

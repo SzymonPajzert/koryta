@@ -13,7 +13,8 @@ test.describe("Kategoryzacja notatek", () => {
   test("classifies one entry and hands the next to the table", async ({
     page,
   }) => {
-    test.setTimeout(90000); // Seeds, logs in and works through a queue
+    // Seeds, logs in, opens a person's page and works through a queue
+    test.setTimeout(120000);
 
     const app =
       getApps().length === 0
@@ -22,7 +23,9 @@ test.describe("Kategoryzacja notatek", () => {
     const db = getFirestore(app, "koryta-pl");
 
     const stamp = Date.now();
-    const personId = `triage-person-${stamp}`;
+    // No hyphen: the person's page reads the id off after the last one, and
+    // the spec follows the card's link to it.
+    const personId = `triageperson${stamp}`;
     const noteId = `${personId}_test-user`;
 
     await db
@@ -65,6 +68,21 @@ test.describe("Kategoryzacja notatek", () => {
     const card = page.locator(".triage-card");
     await expect(card).toBeVisible({ timeout: 30000 });
     await expect(card).toContainText(`Bogdan Kategoria ${stamp}`);
+
+    // The name opens the person's page, in a tab of its own so the queue keeps
+    // its place. It once drew as an inert <nuxtlink> tag that went nowhere.
+    const [personPage] = await Promise.all([
+      page.context().waitForEvent("page"),
+      card.getByRole("link", { name: `Bogdan Kategoria ${stamp}` }).click(),
+    ]);
+    await personPage.waitForURL(
+      `**/osoba/bogdan-kategoria-${stamp}-${personId}`,
+    );
+    await expect(
+      personPage.getByRole("heading", { name: `Bogdan Kategoria ${stamp}` }),
+    ).toBeVisible({ timeout: 30000 });
+    await personPage.close();
+
     const first = await card.locator(".note-text").innerText();
 
     await page.getByText("Brakujące dane / Błąd").click();
