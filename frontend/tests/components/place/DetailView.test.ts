@@ -3,6 +3,8 @@ import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { ref } from "vue";
 import PlaceDetailView from "../../../app/components/place/DetailView.vue";
 import CompanySummary from "../../../app/components/card/CompanySummary.vue";
+import ConnectionList from "../../../app/components/card/ConnectionList.vue";
+import EmploymentHistory from "../../../app/components/card/EmploymentHistory.vue";
 import { authFetch } from "~/composables/auth";
 import { useEdges, type EdgeNode } from "~/composables/edges";
 import type { EdgeType, Node } from "../../../shared/model";
@@ -82,6 +84,24 @@ describe("place/DetailView", () => {
       into("seat1", "seat", GDYNIA),
     ]);
     expect(page.findComponent(CompanySummary).props("location")).toBe("Gdynia");
+  });
+
+  it("lists a gmina that both owns and seats the company once", async () => {
+    const page = await mountWith([
+      into("seat1", "seat", GDANSK),
+      into("edge_teryt2261011_skm_owns", "owns", GDANSK),
+      into("seat2", "seat", GDYNIA),
+    ]);
+    const owners = page
+      .findAllComponents(ConnectionList)
+      .find((list) => list.props("title") === "Właściciele")!;
+    expect(owners.props("edges").map((e: EdgeNode) => e.id)).toEqual([
+      "edge_teryt2261011_skm_owns",
+      "seat2",
+    ]);
+    // The seat folded into the owner's row is not a relation the reader has
+    // not seen, so it does not come back in the history underneath.
+    expect(page.findComponent(EmploymentHistory).props("edges")).toEqual([]);
   });
 
   it("prints no location for a company with a gmina owner and no seat", async () => {
