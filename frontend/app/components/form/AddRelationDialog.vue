@@ -43,15 +43,26 @@
           >
             <v-chip
               v-for="(choice, index) in choices"
-              :key="choice.edgeTypeExt + '-' + choice.direction"
+              :key="verbKey(choice)"
               :value="index"
               filter
               variant="tonal"
-              :data-testid="`add-relation-verb-${choice.edgeTypeExt}-${choice.direction}`"
+              class="relation-verb"
+              :data-testid="`add-relation-verb-${verbKey(choice)}`"
             >
               {{ choice.verb }}
             </v-chip>
           </v-chip-group>
+
+          <!-- A region is not an employer, so a post "in" one needs the
+               institution it was held in before anything can be stored. -->
+          <FormRegionWorkplace
+            v-if="choice?.viaOffice"
+            v-model="workplace"
+            :region-id="other.id"
+            :region-name="other.name"
+            class="mt-2 mb-2"
+          />
 
           <v-alert
             v-if="choices.length === 0"
@@ -68,6 +79,9 @@
             v-if="choice"
             v-model="details"
             :real-type="option?.realType"
+            :role-placeholder="
+              choice.viaOffice ? 'np. zastępca prezydenta miasta' : undefined
+            "
             prefix="add-relation"
             class="mt-1"
           >
@@ -127,12 +141,16 @@ import { mdiArrowRight } from "@mdi/js";
 import type { Link, NodeType } from "~~/shared/model";
 import {
   edgeTypeOptions,
+  officeChoice,
   relationChoices,
+  type RelationChoice,
   type edgeTypeExt,
 } from "~/composables/useEdgeTypes";
 import { authRequest } from "~/composables/auth";
 import type { RelationDetails } from "~/components/form/RelationDetailFields.vue";
+import type { RegionWorkplace } from "~/components/form/RegionWorkplace.vue";
 import { relationDateRule } from "~/utils/relationDate";
+import { officeProposal } from "~~/shared/offices";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -162,6 +180,14 @@ const choiceIndex = ref<number | undefined>(undefined);
 const saving = ref(false);
 const error = ref<string | null>(null);
 const details = ref<RelationDetails>(emptyDetails());
+/** The institution a post "in" a region was held in, once one is chosen. */
+const workplace = ref<RegionWorkplace | undefined>(undefined);
+/** Places this dialog has proposed for an urząd, by REGON.
+ *
+ * Proposing a place is not idempotent the way adding a relation is - each
+ * proposal is a new node - so a second press after the relation itself failed
+ * would otherwise put a second copy of the office in the queue. */
+const proposedOffices = new Map<string, string>();
 
 function emptyDetails(): RelationDetails {
   return {
@@ -220,11 +246,23 @@ const pickerLabel = computed(() => {
     : `Wyszukaj ${last}`;
 });
 
-const choices = computed(() =>
-  other.value
-    ? relationChoices(props.nodeType, other.value.type, props.types)
-    : [],
-);
+const choices = computed<RelationChoice[]>(() => {
+  if (!other.value) return [];
+  const office = officeChoice(props.nodeType, other.value.type, props.types);
+  return [
+    ...relationChoices(props.nodeType, other.value.type, props.types),
+    ...(office ? [office] : []),
+  ];
+});
+
+/** Unique among the chips, and what their test ids are made of. The office
+ * choice stores `employed` outwards like the choice for a company does, so the
+ * pair alone would not tell them apart. */
+function verbKey(choice: RelationChoice) {
+  return choice.viaOffice
+    ? "office"
+    : `${choice.edgeTypeExt}-${choice.direction}`;
+}
 
 const choice = computed(() =>
   choiceIndex.value === undefined
@@ -240,6 +278,7 @@ const readyToSubmit = computed(
   () =>
     !!other.value &&
     !!choice.value &&
+    (!choice.value.viaOffice || !!workplace.value) &&
     other.value.id !== props.nodeId &&
     relationDateRule(details.value.start_date) === true &&
     relationDateRule(details.value.end_date) === true,
@@ -254,13 +293,55 @@ watch(open, (isOpen) => {
   choiceIndex.value = undefined;
   error.value = null;
   details.value = emptyDetails();
+  workplace.value = undefined;
+  proposedOffices.clear();
 });
 
 // Picking a different entity can change which verbs apply, and an index into
 // the old list means something else in the new one.
 watch(other, () => {
   choiceIndex.value = choices.value.length > 0 ? 0 : undefined;
+  workplace.value = undefined;
 });
+
+/** The place a post "in" a region is stored against, proposing it first where
+ * the site has none.
+ *
+ * A place proposed on the way - the urząd from the register, or a unit the
+ * contributor added from the search - is seated in the region it was reached
+ * through, which is the one thing about it the proposal form cannot say. For
+ * an urząd the server says which region that is - its own gmina where the
+ * site has a node for it, so that one picked out of a powiat's list lands in
+ * its gmina, and the region picked where the site has none. The urząd goes in
+ * under the register's name and numbers, so the next person to be given a
+ * post in the same town finds it by its REGON rather than adding it again. */
+async function workplaceId(pick: RegionWorkplace, regionId: string) {
+  if ("place" in pick) {
+    if (pick.created) await seat(regionId, pick.place.id);
+    return pick.place.id;
+  }
+  if (pick.office.node) return pick.office.node.id;
+
+  let id = proposedOffices.get(pick.office.regon);
+  if (!id) {
+    const proposed = await authRequest<{ node_id: string }>(
+      "/api/revisions/create",
+      { method: "POST", body: officeProposal(pick.office) },
+    );
+    id = proposed.node_id;
+    proposedOffices.set(pick.office.regon, id);
+  }
+  await seat(pick.office.seatId, id);
+  return id;
+}
+
+/** Safe to repeat: /api/edges/create hands back a relation it already has. */
+async function seat(regionId: string, placeId: string) {
+  await authRequest("/api/edges/create", {
+    method: "POST",
+    body: { type: "seat", source: regionId, target: placeId },
+  });
+}
 
 async function submit() {
   if (!readyToSubmit.value || saving.value) return;
@@ -271,11 +352,14 @@ async function submit() {
   saving.value = true;
   error.value = null;
   try {
+    const far = picked.viaOffice
+      ? await workplaceId(workplace.value!, other.value!.id)
+      : other.value!.id;
     await authRequest<{ id: string }>("/api/edges/create", {
       method: "POST",
       body: {
-        source: outgoing ? props.nodeId : other.value!.id,
-        target: outgoing ? other.value!.id : props.nodeId,
+        source: outgoing ? props.nodeId : far,
+        target: outgoing ? far : props.nodeId,
         type,
         name: details.value.name,
         start_date: details.value.start_date,
@@ -304,3 +388,16 @@ async function submit() {
   }
 }
 </script>
+
+<style scoped>
+/* A verb longer than a phone is wide - "pracował/a w urzędzie lub jednostce
+   podległej" is one - wraps inside its chip rather than out of it. A chip is
+   one line tall and clips the second, which left half of it on the dialog
+   below the chip. One-line chips keep their height. */
+.v-chip.relation-verb {
+  height: auto;
+  min-height: var(--v-chip-height);
+  padding-block: 4px;
+  white-space: normal;
+}
+</style>

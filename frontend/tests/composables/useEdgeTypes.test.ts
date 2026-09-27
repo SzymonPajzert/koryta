@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   relationChoices,
   edgeTypeOptions,
+  officeChoice,
 } from "../../app/composables/useEdgeTypes";
 
 /** Just the verbs, which is what the composer actually renders. */
@@ -75,5 +76,38 @@ describe("relationChoices", () => {
         }
       }
     }
+  });
+});
+
+describe("officeChoice", () => {
+  it("offers a post in the urząd between a person and a region", () => {
+    expect(officeChoice("person", "region")).toMatchObject({
+      edgeTypeExt: "employed",
+      direction: "outgoing",
+      viaOffice: true,
+    });
+  });
+
+  it("is never among the relations a pair can have directly", () => {
+    // What it stores is a job at a place the region only points to. Offered by
+    // `relationChoices`, the article dialog would take it at face value and
+    // store the gmina as the employer.
+    for (const nodeType of ["person", "place", "region", "article"] as const) {
+      for (const other of ["person", "place", "region", "article"] as const) {
+        expect(
+          relationChoices(nodeType, other).some((choice) => choice.viaOffice),
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("is only for a person and a region", () => {
+    expect(officeChoice("region", "person")).toBeUndefined();
+    expect(officeChoice("person", "place")).toBeUndefined();
+  });
+
+  it("follows the section's narrowing, as employment", () => {
+    expect(officeChoice("person", "region", ["election"])).toBeUndefined();
+    expect(officeChoice("person", "region", ["employed"])).toBeDefined();
   });
 });
