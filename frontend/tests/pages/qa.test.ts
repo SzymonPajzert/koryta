@@ -147,6 +147,22 @@ const button = (wrapper: Pick<Wrapper, "findAll">, label: string) =>
 const activeFilter = (wrapper: Wrapper) =>
   wrapper.get('[data-filter][aria-pressed="true"]').text();
 
+/** Once the page is on `label`'s tab and has done what it does there: it
+ * reads the tab back from the url, and the router navigates asynchronously. */
+const settlesOn = async (wrapper: Wrapper, label: string) => {
+  await vi.waitUntil(() => activeFilter(wrapper).startsWith(label), {
+    timeout: 2000,
+  });
+  await flushPromises();
+  await nextTick();
+};
+
+/** Picks a tab by its chip. */
+const pick = async (wrapper: Wrapper, label: string) => {
+  await button(wrapper, label).trigger("click");
+  await settlesOn(wrapper, label);
+};
+
 const isOpen = (wrapper: Wrapper, rowId: string) =>
   wrapper.get(`#${rowId}`).find("[data-row-panel]").exists();
 
@@ -203,11 +219,11 @@ describe("QA page", () => {
   it("lists reported problems separately, and everything on demand", async () => {
     const wrapper = await mountPage();
 
-    await button(wrapper, "Problemy").trigger("click");
+    await pick(wrapper, "Problemy");
     expect(wrapper.text()).toContain("Zepsuta rzecz");
     expect(wrapper.text()).not.toContain("Nowa rzecz");
 
-    await button(wrapper, "Wszystkie").trigger("click");
+    await pick(wrapper, "Wszystkie");
     expect(wrapper.text()).toContain("Sprawdzona rzecz");
     expect(wrapper.text()).toContain("Nowa rzecz");
   });
@@ -215,7 +231,7 @@ describe("QA page", () => {
   it("flags an entry somebody else has reported, without checking it off", async () => {
     const wrapper = await mountPage();
 
-    await button(wrapper, "Wszystkie").trigger("click");
+    await pick(wrapper, "Wszystkie");
 
     expect(wrapper.text()).toContain("Ktoś zgłosił problem");
   });
@@ -301,10 +317,7 @@ describe("QA page", () => {
         .findAll("[data-section]")
         .map((node) => node.attributes("data-section"));
 
-    const openProblems = async (wrapper: Wrapper) => {
-      await button(wrapper, "Problemy").trigger("click");
-      await flushPromises();
-    };
+    const openProblems = (wrapper: Wrapper) => pick(wrapper, "Problemy");
 
     it("shows a reader the entries they reported, and never asks for the team's reports", async () => {
       serveReports();
@@ -357,7 +370,7 @@ describe("QA page", () => {
       expect(all?.props("to")).toBe("/admin/opinie?zrodlo=qa");
 
       // Asked for once, not on every visit to the tab.
-      await button(wrapper, "Wszystkie").trigger("click");
+      await pick(wrapper, "Wszystkie");
       await openProblems(wrapper);
       expect(listCalls()).toHaveLength(1);
     });
@@ -523,6 +536,7 @@ describe("QA page", () => {
 
     it("switches to every entry for one this reader has already checked", async () => {
       const wrapper = await follow("#qa-done-thing");
+      await settlesOn(wrapper, "Wszystkie");
 
       // "Do sprawdzenia" does not render it, so there would be nothing to
       // scroll to.
@@ -547,6 +561,7 @@ describe("QA page", () => {
     it("shows the entry when the verdicts were in before the page opened", async () => {
       // Back from /admin/opinie, which loads them too.
       const wrapper = await mountPage("/#qa-done-thing");
+      await settlesOn(wrapper, "Wszystkie");
 
       expect(activeFilter(wrapper)).toBe("Wszystkie");
       expect(wrapper.find('[data-qa-item="done-thing"]').exists()).toBe(true);
@@ -578,12 +593,74 @@ describe("QA page", () => {
       expect(activeFilter(wrapper)).toMatch(/^Do sprawdzenia/);
 
       await useRouter().push({ path: "/", hash: "#qa-done-thing" });
-      await flushPromises();
-      await nextTick();
+      await settlesOn(wrapper, "Wszystkie");
 
       expect(activeFilter(wrapper)).toBe("Wszystkie");
       expect(scrolled).toEqual(["qa-done-thing"]);
       expect(isOpen(wrapper, "qa-done-thing")).toBe(true);
+    });
+
+    it("keeps the hash in the url when it changes the tab to show the entry", async () => {
+      const wrapper = await follow("#qa-done-thing");
+      await settlesOn(wrapper, "Wszystkie");
+
+      expect(useRouter().currentRoute.value.query.widok).toBe("wszystkie");
+      expect(useRouter().currentRoute.value.hash).toBe("#qa-done-thing");
+    });
+
+    // "QA: …" on a report in "Problemy" links to the entry without `?widok`,
+    // so the tab and the hash change at once.
+    it("lands on an entry linked from another tab", async () => {
+      const wrapper = await mountPage("/?widok=problemy");
+      expect(activeFilter(wrapper)).toMatch(/^Problemy/);
+
+      await useRouter().push({ path: "/", hash: "#qa-broken-thing" });
+      await settlesOn(wrapper, "Wszystkie");
+
+      expect(activeFilter(wrapper)).toBe("Wszystkie");
+      expect(scrolled).toEqual(["qa-broken-thing"]);
+      expect(isOpen(wrapper, "qa-broken-thing")).toBe(true);
+    });
+  });
+
+  describe("the tab in the url", () => {
+    const currentQuery = () => useRouter().currentRoute.value.query;
+
+    it("opens on the tab the url names", async () => {
+      const wrapper = await mountPage("/?widok=problemy");
+
+      expect(activeFilter(wrapper)).toMatch(/^Problemy/);
+      expect(wrapper.find('[data-qa-item="broken-thing"]').exists()).toBe(true);
+      expect(wrapper.text()).not.toContain("Nowa rzecz");
+    });
+
+    it("opens on the default tab for a name it does not know", async () => {
+      const wrapper = await mountPage("/?widok=cos-innego");
+
+      expect(activeFilter(wrapper)).toMatch(/^Do sprawdzenia/);
+    });
+
+    it("puts the tab picked into the url, and leaves the default one out", async () => {
+      const wrapper = await mountPage("/#qa-new-thing");
+
+      await pick(wrapper, "Wszystkie");
+      expect(currentQuery().widok).toBe("wszystkie");
+      // Picked by hand, the tab leaves the linked entry behind.
+      expect(useRouter().currentRoute.value.hash).toBe("");
+
+      await pick(wrapper, "Do sprawdzenia");
+      expect(currentQuery()).not.toHaveProperty("widok");
+    });
+
+    // The toolbar's link to "Problemy" is the same url every time: it can
+    // switch back to that tab only because a chip moves the url along too.
+    it("follows a link to a tab while the page is open", async () => {
+      const wrapper = await mountPage("/?widok=problemy");
+      await pick(wrapper, "Wszystkie");
+      expect(currentQuery().widok).toBe("wszystkie");
+
+      await useRouter().push({ path: "/", query: { widok: "problemy" } });
+      await settlesOn(wrapper, "Problemy");
     });
   });
 });

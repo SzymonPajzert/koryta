@@ -142,6 +142,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useQaChecks } from "~/composables/qa";
 import { useAuthState } from "~/composables/auth";
 import { useFeedbackAdmin } from "~/composables/feedbackAdmin";
+import { useQueryFilters } from "~/composables/queryFilters";
 import type { QaCheckStatus, QaItemState } from "~~/shared/qa";
 
 definePageMeta({
@@ -188,8 +189,32 @@ const {
   snackbarText: rankSnackbarText,
 } = useFeedbackAdmin();
 
+const route = useRoute();
+const router = useRouter();
+
 type Filter = "unchecked" | "issue" | "all";
-const filter = ref<Filter>("unchecked");
+
+/** The tab, as the url names it: `/qa?widok=problemy` is where "Problemy z
+ * QA" in the toolbar's "Zespół" menu leads, and the url always says which tab
+ * is showing, so that link switches back to it from this page too. The first
+ * one stays out of the url. */
+const TAB_PARAMS: Record<Filter, string> = {
+  unchecked: "do-sprawdzenia",
+  issue: "problemy",
+  all: "wszystkie",
+};
+
+const { choiceFilter } = useQueryFilters();
+const tabParam = choiceFilter("widok", TAB_PARAMS.unchecked);
+/** Anything the url says that is not a tab is the first one. */
+const filter = computed<Filter>({
+  get: () =>
+    (Object.keys(TAB_PARAMS) as Filter[]).find(
+      (key) => TAB_PARAMS[key] === tabParam.value,
+    ) ?? "unchecked",
+  set: (value) => (tabParam.value = TAB_PARAMS[value]),
+});
+
 const savingId = ref<string | null>(null);
 const snackbar = ref(false);
 const snackbarText = ref("");
@@ -337,8 +362,6 @@ const emptyText = computed(
     })[filter.value],
 );
 
-const route = useRoute();
-
 /** Where a link to one entry lands - the "QA: …" chip and the "Poprawka" menu
  * on /admin/opinie, Slack's "Otwórz wpis QA". The list opens on what this
  * reader has not checked, and an entry they have is not rendered under that
@@ -347,7 +370,14 @@ const route = useRoute();
 async function focusHashItem() {
   const id = /^#qa-(.+)$/.exec(route.hash)?.[1];
   if (!id || !loaded.value || !items.some((item) => item.id === id)) return;
-  if (!matches(stateOf(id))) filter.value = "all";
+  if (!matches(stateOf(id))) {
+    // Replaced rather than pushed, and with the hash kept: the link is where
+    // the reader went, the tab is only in its way.
+    await router.replace({
+      query: { ...route.query, widok: TAB_PARAMS.all },
+      hash: route.hash,
+    });
+  }
   openRows.add(`qa-${id}`);
   await nextTick();
   document.getElementById(`qa-${id}`)?.scrollIntoView({ block: "start" });
