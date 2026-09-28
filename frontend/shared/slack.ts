@@ -1,5 +1,5 @@
 import type { Feedback } from "./model";
-import { feedbackKindLabels } from "./model";
+import { feedbackKindLabels, feedbackScreenshotsLabel } from "./model";
 import { qaStatusLabels } from "./qa";
 
 /** Block Kit is structural JSON; typing it properly would mean pulling
@@ -105,6 +105,13 @@ export function buildFeedbackBlocks(
     meta.push(
       `${feedback.context.viewport.width}×${feedback.context.viewport.height}`,
     );
+  }
+  // Said, not shown. Slack could only show an image from a public url, and
+  // its history outlives our own retention - the reason the reporter's address
+  // is not copied here either. "Otwórz w panelu" is one click away.
+  const screenshots = feedback.screenshots?.length ?? 0;
+  if (screenshots > 0) {
+    meta.push(`📎 ${feedbackScreenshotsLabel(screenshots)} w panelu`);
   }
 
   const blocks: SlackBlock[] = [

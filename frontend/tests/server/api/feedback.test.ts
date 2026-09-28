@@ -1,22 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../server/api/feedback/create.post";
 
-const { mockAdd, mockVerifyIdToken, dailyCount } = vi.hoisted(() => {
-  const g = globalThis as Record<string, unknown>;
-  g.createError = (opts: { statusCode: number; message?: string }) =>
-    Object.assign(new Error(opts.message), opts);
-  g.getRequestHeader = (
-    event: { headers?: Record<string, string> },
-    name: string,
-  ) => event.headers?.[name.toLowerCase()];
+const { mockSet, mockCommit, mockTxSet, mockVerifyIdToken, daily } = vi.hoisted(
+  () => {
+    const g = globalThis as Record<string, unknown>;
+    g.createError = (opts: { statusCode: number; message?: string }) =>
+      Object.assign(new Error(opts.message), opts);
+    g.getRequestHeader = (
+      event: { headers?: Record<string, string> },
+      name: string,
+    ) => event.headers?.[name.toLowerCase()];
 
-  return {
-    mockAdd: vi.fn(),
-    mockVerifyIdToken: vi.fn(),
-    // How many reports today's counter already holds, for the daily-cap tests.
-    dailyCount: { value: 0 },
-  };
-});
+    return {
+      // Every write of a submission goes through one batch.
+      mockSet: vi.fn(),
+      mockCommit: vi.fn(),
+      // The day's counter, as the transaction leaves it.
+      mockTxSet: vi.fn(),
+      mockVerifyIdToken: vi.fn(),
+      // What today's counter already holds, for the daily-cap tests.
+      daily: { count: 0, screenshots: 0 },
+    };
+  },
+);
 
 vi.mock("h3", async (importOriginal) => {
   const actual = await importOriginal<typeof import("h3")>();
@@ -30,18 +36,33 @@ vi.mock("h3", async (importOriginal) => {
   };
 });
 
+/** A document reference that knows its path, so a test can tell the report
+ * from its images. */
+const docRef = (path: string) => ({
+  id: path.split("/").pop(),
+  path,
+  collection: (name: string) => ({
+    doc: (id: string) => docRef(`${path}/${name}/${id}`),
+  }),
+});
+
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: () => ({
-    collection: () => ({ add: mockAdd, doc: () => ({}) }),
+    collection: (name: string) => ({
+      doc: (id?: string) => docRef(`${name}/${id ?? "fb-1"}`),
+    }),
+    batch: () => ({ set: mockSet, commit: mockCommit }),
     runTransaction: (
       fn: (tx: {
-        get: () => Promise<{ get: () => number }>;
-        set: () => void;
-      }) => Promise<boolean>,
+        get: () => Promise<{ get: (field: string) => number }>;
+        set: (ref: unknown, data: unknown) => void;
+      }) => Promise<unknown>,
     ) =>
       fn({
-        get: async () => ({ get: () => dailyCount.value }),
-        set: () => {},
+        get: async () => ({
+          get: (field: string) => daily[field as keyof typeof daily],
+        }),
+        set: (_ref, data) => mockTxSet(data),
       }),
   }),
 }));
@@ -53,7 +74,11 @@ vi.mock("firebase-admin/auth", () => ({
 type Event = { body: unknown; headers?: Record<string, string> };
 
 const callHandler = (event: Event) =>
-  (handler as unknown as (e: Event) => Promise<{ id: string | null }>)(event);
+  (
+    handler as unknown as (
+      e: Event,
+    ) => Promise<{ id: string | null; screenshotsDropped?: number }>
+  )(event);
 
 const validBody = {
   kind: "bug",
@@ -61,13 +86,19 @@ const validBody = {
   context: { route: "/osoba/jan-testowy", nodeId: "node-1" },
 };
 
-const written = () => mockAdd.mock.calls[0]?.[0];
+/** What the batch wrote at `path`. */
+const writtenAt = (path: string) =>
+  mockSet.mock.calls.find(([ref]) => ref.path === path)?.[1];
+
+/** The report itself. */
+const written = () => writtenAt("feedback/fb-1");
 
 describe("/api/feedback/create", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dailyCount.value = 0;
-    mockAdd.mockResolvedValue({ id: "fb-1" });
+    daily.count = 0;
+    daily.screenshots = 0;
+    mockCommit.mockResolvedValue(undefined);
   });
 
   it("accepts a report from a signed-out visitor", async () => {
@@ -126,7 +157,7 @@ describe("/api/feedback/create", () => {
       callHandler({ body: { ...validBody, kind: "spam" } }),
     ).rejects.toThrow();
 
-    expect(mockAdd).not.toHaveBeenCalled();
+    expect(mockCommit).not.toHaveBeenCalled();
   });
 
   // The admin panel renders the route as a link, so anything that is not a
@@ -141,7 +172,7 @@ describe("/api/feedback/create", () => {
       callHandler({ body: { ...validBody, context: { route } } }),
     ).rejects.toThrow();
 
-    expect(mockAdd).not.toHaveBeenCalled();
+    expect(mockCommit).not.toHaveBeenCalled();
   });
 
   it("keeps the QA entry a verdict was written about", async () => {
@@ -182,7 +213,7 @@ describe("/api/feedback/create", () => {
       ).rejects.toThrow();
     }
 
-    expect(mockAdd).not.toHaveBeenCalled();
+    expect(mockCommit).not.toHaveBeenCalled();
   });
 
   it("drops a submission that filled the honeypot, without saying so", async () => {
@@ -191,25 +222,192 @@ describe("/api/feedback/create", () => {
     });
 
     expect(result).toEqual({ id: null });
-    expect(mockAdd).not.toHaveBeenCalled();
+    expect(mockCommit).not.toHaveBeenCalled();
   });
 
   it("still saves past the daily cap, but marks it not to reach Slack", async () => {
-    dailyCount.value = 500;
+    daily.count = 500;
 
     await callHandler({ body: validBody });
 
     // The report is kept - /admin/opinie stays authoritative - and only the
     // forward is suppressed, so one abuser cannot silence real reporters.
-    expect(mockAdd).toHaveBeenCalled();
+    expect(mockCommit).toHaveBeenCalled();
     expect(written().slack).toEqual({ state: "failed", error: "daily_cap" });
   });
 
   it("leaves the Slack state alone under the cap", async () => {
-    dailyCount.value = 3;
+    daily.count = 3;
 
     await callHandler({ body: validBody });
 
     expect(written()).not.toHaveProperty("slack");
+  });
+  describe("with screenshots", () => {
+    /** The header of a PNG, which is all the server reads of one. */
+    const png = (width: number, height: number, padTo = 0) => {
+      const header = [
+        0x89,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a,
+        0,
+        0,
+        0,
+        13,
+        ...Buffer.from("IHDR"),
+        width >>> 24,
+        (width >>> 16) & 255,
+        (width >>> 8) & 255,
+        width & 255,
+        height >>> 24,
+        (height >>> 16) & 255,
+        (height >>> 8) & 255,
+        height & 255,
+        8,
+        6,
+        0,
+        0,
+        0,
+      ];
+      return Buffer.concat([
+        Buffer.from(header),
+        Buffer.alloc(Math.max(0, padTo - header.length)),
+      ]);
+    };
+    const dataUrl = (bytes: Buffer, type = "image/png") =>
+      `data:${type};base64,${bytes.toString("base64")}`;
+
+    it("keeps each one as a document under the report, in the same batch", async () => {
+      const first = png(1920, 1080);
+      const second = png(390, 844);
+
+      const result = await callHandler({
+        body: {
+          ...validBody,
+          screenshots: [dataUrl(first), dataUrl(second)],
+        },
+      });
+
+      expect(result).toEqual({ id: "fb-1" });
+      expect(written().screenshots).toEqual([
+        {
+          contentType: "image/png",
+          width: 1920,
+          height: 1080,
+          bytes: first.length,
+        },
+        {
+          contentType: "image/png",
+          width: 390,
+          height: 844,
+          bytes: second.length,
+        },
+      ]);
+      // The bytes are never in the report, which the admin list reads whole.
+      expect(JSON.stringify(written())).not.toContain(first.toString("base64"));
+
+      const image = writtenAt("feedback/fb-1/screenshots/0");
+      expect(image.contentType).toBe("image/png");
+      expect(Buffer.compare(image.data, first)).toBe(0);
+      expect(
+        Buffer.compare(writtenAt("feedback/fb-1/screenshots/1").data, second),
+      ).toBe(0);
+
+      // One commit: the report never exists without its images.
+      expect(mockCommit).toHaveBeenCalledTimes(1);
+      expect(mockTxSet).toHaveBeenCalledWith(
+        expect.objectContaining({ count: 1, screenshots: 2 }),
+      );
+    });
+
+    // The panel serves an image back as the type it was stored as, so a type
+    // the client chose could turn an upload into a page.
+    it.each([
+      [
+        "an SVG",
+        dataUrl(
+          Buffer.from("<svg><script>alert(1)</script></svg>"),
+          "image/svg+xml",
+        ),
+      ],
+      [
+        "HTML called a PNG",
+        dataUrl(Buffer.from("<html><body>hi</body></html>")),
+      ],
+      ["a PNG called a WebP", dataUrl(png(10, 10), "image/webp")],
+      ["something that is not a data url", "https://example.com/a.png"],
+      ["a canvas larger than the dialog sends", dataUrl(png(9000, 9000))],
+    ])("refuses the whole report for %s", async (_, screenshot) => {
+      await expect(
+        callHandler({ body: { ...validBody, screenshots: [screenshot] } }),
+      ).rejects.toThrow();
+
+      expect(mockCommit).not.toHaveBeenCalled();
+    });
+
+    it("refuses an image over the size limit", async () => {
+      const heavy = png(100, 100, 1_000_001);
+
+      await expect(
+        callHandler({ body: { ...validBody, screenshots: [dataUrl(heavy)] } }),
+      ).rejects.toThrow();
+      expect(mockCommit).not.toHaveBeenCalled();
+    });
+
+    it("refuses more than three", async () => {
+      const four = Array.from({ length: 4 }, () => dataUrl(png(10, 10)));
+
+      await expect(
+        callHandler({ body: { ...validBody, screenshots: four } }),
+      ).rejects.toThrow();
+      expect(mockCommit).not.toHaveBeenCalled();
+    });
+
+    it("saves the report without them once the day's allowance is spent", async () => {
+      daily.screenshots = 99;
+
+      const result = await callHandler({
+        body: {
+          ...validBody,
+          screenshots: [dataUrl(png(10, 10)), dataUrl(png(20, 20))],
+        },
+      });
+
+      // The reporter is told, and so is the admin reading the report.
+      expect(result).toEqual({ id: "fb-1", screenshotsDropped: 2 });
+      expect(written()).not.toHaveProperty("screenshots");
+      expect(written().screenshotsDropped).toBe(2);
+      expect(mockSet).toHaveBeenCalledTimes(1);
+      // Images not kept are not counted against the allowance.
+      expect(mockTxSet).toHaveBeenCalledWith(
+        expect.not.objectContaining({ screenshots: expect.anything() }),
+      );
+    });
+
+    it("drops them with a submission that filled the honeypot", async () => {
+      const result = await callHandler({
+        body: {
+          ...validBody,
+          website: "http://spam.example",
+          screenshots: [dataUrl(png(10, 10))],
+        },
+      });
+
+      expect(result).toEqual({ id: null });
+      expect(mockCommit).not.toHaveBeenCalled();
+    });
+
+    it("writes nothing extra for a report without any", async () => {
+      await callHandler({ body: validBody });
+
+      expect(mockSet).toHaveBeenCalledTimes(1);
+      expect(written()).not.toHaveProperty("screenshots");
+      expect(written()).not.toHaveProperty("screenshotsDropped");
+    });
   });
 });

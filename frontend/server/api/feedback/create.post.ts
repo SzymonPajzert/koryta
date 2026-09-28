@@ -2,6 +2,14 @@ import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, readValidatedBody } from "h3";
 import { getOptionalUser } from "~~/server/utils/auth";
+import {
+  decodeScreenshot,
+  feedbackScreenshotRef,
+} from "~~/server/utils/feedbackScreenshots";
+import {
+  MAX_FEEDBACK_SCREENSHOTS,
+  MAX_FEEDBACK_SCREENSHOT_DATA_URL_LENGTH,
+} from "~~/shared/feedbackScreenshots";
 import type { Feedback } from "~~/shared/model";
 
 const bodyValidator = z.object({
@@ -40,6 +48,29 @@ const bodyValidator = z.object({
       })
       .optional(),
   }),
+  // Images the dialog has already re-encoded, as `data:` urls - see
+  // shared/feedbackScreenshots.ts. Each is decoded and checked here, so a
+  // report with one that is not an image is refused whole, like any other
+  // field that fails.
+  screenshots: z
+    .array(
+      z
+        .string()
+        .max(MAX_FEEDBACK_SCREENSHOT_DATA_URL_LENGTH)
+        .transform((dataUrl, ctx) => {
+          const screenshot = decodeScreenshot(dataUrl);
+          if (!screenshot) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Zrzut ekranu nie jest obrazem, który przyjmujemy.",
+            });
+            return z.NEVER;
+          }
+          return screenshot;
+        }),
+    )
+    .max(MAX_FEEDBACK_SCREENSHOTS)
+    .optional(),
 });
 
 /** Ceiling on reports accepted in a day, far above any plausible real volume.
@@ -48,17 +79,36 @@ const bodyValidator = z.object({
  * team's channel, and a real reporter is never turned away. */
 const DAILY_SLACK_CAP = 500;
 
-async function slackForwardAllowed(
+/** Ceiling on screenshots kept in a day, on the same terms: past it a report
+ * is still saved, without its images, so a flood of them cannot fill the
+ * database. A megabyte each, a hundred a day, is far more than people send. */
+const DAILY_SCREENSHOT_CAP = 100;
+
+/** Counts the report, and its screenshots if they fit, against the day's
+ * allowances. */
+async function claimDailyAllowance(
   db: ReturnType<typeof getFirestore>,
-): Promise<boolean> {
+  screenshots: number,
+): Promise<{ forwardToSlack: boolean; keepScreenshots: boolean }> {
   const day = new Date().toISOString().slice(0, 10);
   const ref = db.collection("feedbackLimits").doc(day);
 
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const count = (snap.get("count") as number | undefined) ?? 0;
-    tx.set(ref, { count: count + 1, day }, { merge: true });
-    return count < DAILY_SLACK_CAP;
+    const kept = (snap.get("screenshots") as number | undefined) ?? 0;
+    const keepScreenshots =
+      screenshots > 0 && kept + screenshots <= DAILY_SCREENSHOT_CAP;
+    tx.set(
+      ref,
+      {
+        count: count + 1,
+        day,
+        ...(keepScreenshots ? { screenshots: kept + screenshots } : {}),
+      },
+      { merge: true },
+    );
+    return { forwardToSlack: count < DAILY_SLACK_CAP, keepScreenshots };
   });
 }
 
@@ -78,7 +128,13 @@ export default defineEventHandler(async (event) => {
   if (body.website) return { id: null };
 
   const db = getFirestore("koryta-pl");
-  const forwardToSlack = await slackForwardAllowed(db);
+  const attached = body.screenshots ?? [];
+  const { forwardToSlack, keepScreenshots } = await claimDailyAllowance(
+    db,
+    attached.length,
+  );
+  const screenshots = keepScreenshots ? attached : [];
+  const dropped = attached.length - screenshots.length;
 
   const doc: Feedback = {
     kind: body.kind,
@@ -93,13 +149,38 @@ export default defineEventHandler(async (event) => {
     adminStatus: "new",
     ...(user ? { userUid: user.uid } : {}),
     ...(body.contact ? { contact: body.contact } : {}),
+    ...(screenshots.length > 0
+      ? {
+          screenshots: screenshots.map(({ data, info }) => ({
+            ...info,
+            bytes: data.length,
+          })),
+        }
+      : {}),
+    ...(dropped > 0 ? { screenshotsDropped: dropped } : {}),
     // Marking it already-handled is what stops the trigger forwarding it.
     ...(forwardToSlack
       ? {}
       : { slack: { state: "failed" as const, error: "daily_cap" } }),
   };
 
-  const ref = await db.collection("feedback").add(doc);
+  // One batch, so a report and its images are saved together or not at all:
+  // the trigger that forwards the report fires as soon as it exists, and the
+  // panel must never list an image that is not there.
+  const ref = db.collection("feedback").doc();
+  const batch = db.batch();
+  batch.set(ref, doc);
+  screenshots.forEach(({ data, info }, index) => {
+    batch.set(feedbackScreenshotRef(db, ref.id, index), {
+      data,
+      contentType: info.contentType,
+      createdAt: doc.createdAt,
+    });
+  });
+  await batch.commit();
 
-  return { id: ref.id };
+  return {
+    id: ref.id,
+    ...(dropped > 0 ? { screenshotsDropped: dropped } : {}),
+  };
 });
