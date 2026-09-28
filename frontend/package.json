@@ -36,6 +36,7 @@
     "quick-check:failsafe": "npx prettier --write . || true && npx prettier --check . || true && npm run test:ci || true && npm run typecheck || true && npx eslint || true && npm run check:duplication || true && npm run test:playwright:ci || true"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
     "@firebase/app-types": "^0.9.5",
     "@mdi/js": "^7.4.47",
     "@nuxt/content": "^3.15.2",
@@ -46,6 +47,7 @@
     "@pinia/nuxt": "^0.11.2",
     "@sentry/nuxt": "^10.68.0",
     "@unhead/vue": "^3.2.3",
+    "@vue-flow/core": "^1.48.2",
     "@vueuse/firebase": "^14.3.0",
     "better-sqlite3": "^12.11.1",
     "cac": "^7.0.0",
