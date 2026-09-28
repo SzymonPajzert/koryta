@@ -1,4 +1,8 @@
-from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
+from scrapers.krs.data import (
+    REGON_PUBLIC_OWNERSHIP,
+    WOJEWODZTWA_SPOLKI,
+    CompaniesHardcoded,
+)
 from scrapers.stores import Pipeline, ProcessPolicy
 from scrapers.tests.mocks import get_test_context, setup_test_context
 
@@ -99,3 +103,17 @@ def test_only_a_public_ownership_code_says_the_public_owns_it():
         "0000073772",
         "0000247533",
     }
+
+
+def test_a_voivodeship_seeds_the_companies_it_lists_as_its_own():
+    """Pomorski Fundusz Pożyczkowy: 90.55% Pomorskie, and in no other seed."""
+    data = hardcoded(SEJM)
+
+    assert "0000225512" in data.from_source("WOJEWODZTWO_POMORSKIE")
+
+
+def test_every_voivodeship_list_holds_krs_numbers_once():
+    assert len(WOJEWODZTWA_SPOLKI) == 16
+    for wojewodztwo, krss in WOJEWODZTWA_SPOLKI.items():
+        assert len(set(krss)) == len(krss), wojewodztwo
+        assert all(len(krs) == 10 and krs.isdigit() for krs in krss), wojewodztwo
