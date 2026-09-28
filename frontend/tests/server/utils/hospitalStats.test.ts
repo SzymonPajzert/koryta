@@ -214,6 +214,35 @@ describe("buildHospitalStats", () => {
     ]);
   });
 
+  /** „Inne” is a tie to some party the site does not name, so it is counted as
+   * attributed - but drawn grey, and a bar reads the parties it names first
+   * and its greys side by side at the end, however big „Inne” gets. */
+  it("puts „Inne” after the parties it names and before the sentinel", () => {
+    const stats = build({
+      places: [
+        place("h1", { supervisoryOrgan: "rada_nadzorcza", regionTeryt: "14" }),
+      ],
+      edges: ["a", "b", "c", "d", "e"].map((id) => seat(id, "h1")),
+      people: [
+        person("a", ["Inne"]),
+        person("b", ["Inne"]),
+        person("c", ["Inne"]),
+        person("d", ["PiS"]),
+        person("e", []),
+      ],
+    });
+
+    expect(stats.paid.seatsWithParty).toBe(4);
+    const order = [
+      { party: "PiS", seats: 1, people: 1, hospitals: 1 },
+      { party: "Inne", seats: 3, people: 3, hospitals: 1 },
+      { party: NO_PARTY, seats: 1, people: 1, hospitals: 1 },
+    ];
+    expect(stats.paid.byParty).toEqual(order);
+    expect(stats.paid.byRegion[0]!.byParty).toEqual(order);
+    expect(stats.paid.rows[0]!.parties).toEqual(["PiS", "Inne", NO_PARTY]);
+  });
+
   it("reads parties stored as a numbered-key object", () => {
     const stats = build({
       places: [place("h1", { supervisoryOrgan: "rada_nadzorcza" })],

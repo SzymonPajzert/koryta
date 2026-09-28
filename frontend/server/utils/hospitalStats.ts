@@ -40,7 +40,7 @@
  */
 
 import { asArray, pageIsPublic } from "~~/shared/model";
-import { canonicalParty } from "~~/shared/misc";
+import { canonicalParty, OTHER_PARTY } from "~~/shared/misc";
 import {
   supervisoryOrgans,
   type SupervisoryOrgan,
@@ -91,6 +91,14 @@ export type BoardPersonRow = {
  * built out of this response lands on the filter the table understands - see
  * `applyPartiesFilter` in server/utils/fetch.ts. */
 export const NO_PARTY = "__NONE__";
+
+/** What a breakdown sorts parties on first, ahead of their seats: the parties
+ * the site names, then „Inne”, then the sentinel. The last two are the
+ * breakdown's greys - a tie to some party, and none on record - so a chart
+ * drawn straight off the list opens with the parties it names and ends with
+ * its greys side by side, whatever their sizes. */
+const partyTail = (party: string) =>
+  party === NO_PARTY ? 2 : party === OTHER_PARTY ? 1 : 0;
 
 /** Where a hospital goes when the register does not place it in any region.
  *
@@ -546,10 +554,10 @@ export function buildHospitalStats(input: {
       }))
       // The sentinel sorts last whatever its size, so that a chart drawn
       // straight off this list opens with parties rather than with the bucket
-      // for everyone we could not place.
+      // for everyone we could not place - and „Inne” just before it.
       .sort(
         (a, b) =>
-          Number(a.party === NO_PARTY) - Number(b.party === NO_PARTY) ||
+          partyTail(a.party) - partyTail(b.party) ||
           b.seats - a.seats ||
           a.party.localeCompare(b.party),
       );
@@ -564,7 +572,7 @@ export function buildHospitalStats(input: {
     }
     const ordered = [...rowParties.get(place.id)!.entries()].sort(
       (a, b) =>
-        Number(a[0] === NO_PARTY) - Number(b[0] === NO_PARTY) ||
+        partyTail(a[0]) - partyTail(b[0]) ||
         b[1] - a[1] ||
         a[0].localeCompare(b[0]),
     );
@@ -606,7 +614,7 @@ export function buildHospitalStats(input: {
           }))
           .sort(
             (a, b) =>
-              Number(a.party === NO_PARTY) - Number(b.party === NO_PARTY) ||
+              partyTail(a.party) - partyTail(b.party) ||
               b.seats - a.seats ||
               a.party.localeCompare(b.party),
           ),
