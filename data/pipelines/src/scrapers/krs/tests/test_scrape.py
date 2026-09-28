@@ -343,3 +343,72 @@ def test_a_company_due_a_refresh_says_so():
 
     assert [query.reasons for query in queries] == [[REASON_OWNED, REASON_REFRESH]]
     assert queries[0].primary_reason == REASON_REFRESH
+
+
+class _Frame:
+    """Stands in for a pipeline source by handing back a fixed frame."""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+
+    def read_or_process(self, ctx):
+        return self.df
+
+
+class _NoSeeds:
+    all_companies_krs: dict = {}
+
+    def process(self, ctx):
+        pass
+
+
+class _NoPersonFeeds:
+    """A context whose bucket holds no person feeds."""
+
+    class io:
+        @staticmethod
+        def read_many(ref):
+            return []
+
+
+def _queue(companies=None, scraped=None):
+    scraper = ScrapeRejestrIO()
+    scraper.__dict__["hardcoded_companies"] = _NoSeeds()
+    scraper.__dict__["already_scraped"] = _StubScraped(
+        scraped if scraped is not None else _scraped()
+    )
+    scraper.__dict__["companies"] = _Frame(
+        companies
+        if companies is not None
+        else pd.DataFrame(columns=["krs", "is_public"])
+    )
+    return scraper, scraper.companies_to_scrape(_NoPersonFeeds())  # type: ignore[arg-type]
+
+
+def test_a_public_subsidiary_known_only_from_a_feed_is_queued():
+    """The ownership door used to walk an empty graph and add nothing.
+
+    ENEA ELEKTROWNIA POŁANIEC is in the crawl only because a parent's feed
+    lists it, and `CompaniesKRS` carried the parent's public ownership down to
+    it. A private company beside it stays out.
+    """
+    scraper, queue = _queue(
+        companies=pd.DataFrame(
+            {"krs": ["0001251428", "0000010120"], "is_public": [True, False]}
+        )
+    )
+
+    assert "0001251428" in queue
+    assert "0000010120" not in queue
+    assert REASON_OWNED in scraper.company_reasons["0001251428"]
+
+
+def test_a_public_company_with_its_connections_is_not_bought_again():
+    _, queue = _queue(
+        companies=pd.DataFrame({"krs": ["0001251428"], "is_public": [True]}),
+        scraped=_scraped(
+            ("0001251428", QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE.value)
+        ),
+    )
+
+    assert "0001251428" not in queue
