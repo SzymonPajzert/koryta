@@ -22,9 +22,14 @@ import {
   isQueued,
   isSettled,
 } from "../../shared/feedbackQueue";
+import {
+  isFeedbackScreenshotType,
+  type FeedbackScreenshotType,
+} from "../../shared/feedbackScreenshots";
 import type {
   Feedback,
   FeedbackKind,
+  FeedbackScreenshot,
   FeedbackStatus,
 } from "../../shared/model";
 import { QA_ITEMS, type QaCheck, type QaItem } from "../../shared/qa";
@@ -48,6 +53,8 @@ export const FEEDBACK_FIELDS = [
   "context.pageTitle",
   "context.viewport",
   "context.qa",
+  "screenshots",
+  "screenshotsDropped",
 ] as const;
 
 /** Whose report it is, as much as an agent needs to know. */
@@ -74,6 +81,26 @@ export type Report = Omit<Feedback, "userUid" | "contact" | "slack"> & {
 
 const text = (value: unknown): string | undefined =>
   typeof value === "string" && value !== "" ? value : undefined;
+
+const positiveInt = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+
+/** A report's list of its images, keeping only entries that describe one. */
+function screenshotsFrom(value: unknown): FeedbackScreenshot[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry: Partial<FeedbackScreenshot> | null) => {
+    const width = positiveInt(entry?.width);
+    const height = positiveInt(entry?.height);
+    const bytes = positiveInt(entry?.bytes);
+    const contentType = entry?.contentType;
+    if (!width || !height || !bytes || !isFeedbackScreenshotType(contentType)) {
+      return [];
+    }
+    return [{ contentType, width, height, bytes }];
+  });
+}
 
 /** Built field by field, so that nothing the mask let through by mistake
  * travels any further. */
@@ -103,6 +130,10 @@ export function toReport({ id, data }: Doc): Report {
     const { itemId, title, status } = context.qa;
     report.context.qa = { itemId, title, status };
   }
+  const screenshots = screenshotsFrom(data.screenshots);
+  if (screenshots.length > 0) report.screenshots = screenshots;
+  const dropped = positiveInt(data.screenshotsDropped);
+  if (dropped) report.screenshotsDropped = dropped;
   return report;
 }
 
@@ -195,6 +226,8 @@ function preview(message: string, length: number): string {
   return line.length > length ? `${line.slice(0, length).trimEnd()}…` : line;
 }
 
+const screenshotsLabel = (n: number) => `${n} screenshot${n === 1 ? "" : "s"}`;
+
 function fixLabel(fix: Fix): string {
   const advice = fix.close
     ? ", can be closed"
@@ -224,6 +257,7 @@ function row(
     report.reporter,
     route,
     qa && `on /qa: ${qa.itemId} (${qa.status})`,
+    report.screenshots && screenshotsLabel(report.screenshots.length),
     fix && fixLabel(fix),
   ].filter(Boolean);
   const lines = [`- ${facts.join(" · ")}`];
@@ -371,6 +405,11 @@ function describe(
       blockedByOpenFollowUp: fix.blocked,
     },
     verdictOnFixFor: verdictOn.length > 0 ? verdictOn : undefined,
+    screenshots: report.screenshots?.map(({ width, height }, index) => ({
+      n: index + 1,
+      size: `${width}×${height}`,
+    })),
+    screenshotsNotKept: report.screenshotsDropped,
     message: report.message,
   };
 }
@@ -423,4 +462,60 @@ export async function feedbackGet(
     null,
     2,
   );
+}
+
+/** One image attached to a report, as the tool hands it on. */
+export type ReportScreenshot = {
+  id: string;
+  /** From 1, of `of`. */
+  n: number;
+  of: number;
+  width: number;
+  height: number;
+  mimeType: FeedbackScreenshotType;
+  /** Base64, as Firestore's REST API sends bytes and MCP takes an image. */
+  data: string;
+};
+
+/** The images attached to these reports, report by report in the order asked.
+ *
+ * What the reporter saw is often the point of a report, and a description of
+ * a screenshot is no substitute for it. Each image is its own document under
+ * the report (`feedback/<id>/screenshots/<n>`), so the reports are read again
+ * for how many there are - a field, not an image - and only those are fetched.
+ */
+export async function feedbackScreenshots(
+  db: FirestoreReader,
+  refs: readonly string[],
+): Promise<ReportScreenshot[]> {
+  const ids = [...new Set(refs.map(idFrom))].filter((id) =>
+    FEEDBACK_ID_PATTERN.test(id),
+  );
+  const reports = await db.get("feedback", ids, ["screenshots"]);
+  const listed = new Map(
+    reports.map(({ id, data }) => [id, screenshotsFrom(data.screenshots)]),
+  );
+
+  const perReport = await Promise.all(
+    ids.map(async (id) => {
+      const shots = listed.get(id) ?? [];
+      if (shots.length === 0) return [];
+      const docs = await db.get(
+        `feedback/${id}/screenshots`,
+        shots.map((_, index) => String(index)),
+        ["data", "contentType"],
+      );
+      const byIndex = new Map(docs.map((doc) => [doc.id, doc.data]));
+      return shots.flatMap(({ width, height }, index): ReportScreenshot[] => {
+        const doc = byIndex.get(String(index));
+        const data = text(doc?.data);
+        const mimeType = doc?.contentType;
+        if (!data || !isFeedbackScreenshotType(mimeType)) return [];
+        return [
+          { id, n: index + 1, of: shots.length, width, height, mimeType, data },
+        ];
+      });
+    }),
+  );
+  return perReport.flat();
 }

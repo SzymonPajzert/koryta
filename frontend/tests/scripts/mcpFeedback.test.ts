@@ -4,6 +4,7 @@ import {
   FEEDBACK_FIELDS,
   feedbackGet,
   feedbackQueue,
+  feedbackScreenshots,
   idFrom,
   reporterOf,
 } from "../../scripts/mcp/feedback";
@@ -400,5 +401,115 @@ describe("feedbackGet", () => {
   it("never passes on who wrote a report", async () => {
     const { db } = everything();
     expectNothingPersonal(await feedbackGet(db, Object.keys(FEEDBACK), FIXES));
+  });
+});
+
+describe("screenshots", () => {
+  const WITH_TWO = fid("withTwo");
+  const WITH_ONE = fid("withOne");
+  const shot = (width: number, height: number) => ({
+    contentType: "image/webp",
+    width,
+    height,
+    bytes: 1234,
+  });
+  const reports = {
+    ...FEEDBACK,
+    [WITH_TWO]: stored({
+      createdAt: "2026-09-07T10:00:00.000Z",
+      screenshots: [shot(1920, 1080), shot(390, 844)],
+    }),
+    [WITH_ONE]: stored({
+      createdAt: "2026-09-08T10:00:00.000Z",
+      screenshots: [shot(800, 600)],
+      screenshotsDropped: 2,
+    }),
+  };
+  /** As the REST API hands bytes over: base64. */
+  const images = {
+    [`feedback/${WITH_TWO}/screenshots`]: {
+      "0": { data: "Zmlyc3Q=", contentType: "image/webp" },
+      "1": { data: "c2Vjb25k", contentType: "image/webp" },
+    },
+    [`feedback/${WITH_ONE}/screenshots`]: {
+      "0": { data: "b25seQ==", contentType: "image/webp" },
+    },
+  };
+  const db = () =>
+    fakeDb({ feedback: reports, qaChecks: QA_CHECKS, ...images });
+
+  it("lists how many a report has", async () => {
+    const listing = await feedbackQueue(db().db, {}, FIXES);
+    const line = rows(listing).find((row) => row.includes(WITH_TWO));
+
+    expect(line).toContain("2 screenshots");
+    expect(rows(listing).find((row) => row.includes(WITH_ONE))).toContain(
+      "1 screenshot",
+    );
+  });
+
+  it("describes them in the report, and the ones not kept", async () => {
+    const answer = JSON.parse(await feedbackGet(db().db, [WITH_ONE], FIXES));
+
+    expect(answer.reports[0]).toMatchObject({
+      screenshots: [{ n: 1, size: "800×600" }],
+      screenshotsNotKept: 2,
+    });
+  });
+
+  it("hands them on report by report, in the order asked", async () => {
+    const found = await feedbackScreenshots(db().db, [
+      WITH_ONE,
+      `https://koryta.pl/admin/opinie#fb-${WITH_TWO}`,
+    ]);
+
+    expect(found).toEqual([
+      {
+        id: WITH_ONE,
+        n: 1,
+        of: 1,
+        width: 800,
+        height: 600,
+        mimeType: "image/webp",
+        data: "b25seQ==",
+      },
+      {
+        id: WITH_TWO,
+        n: 1,
+        of: 2,
+        width: 1920,
+        height: 1080,
+        mimeType: "image/webp",
+        data: "Zmlyc3Q=",
+      },
+      {
+        id: WITH_TWO,
+        n: 2,
+        of: 2,
+        width: 390,
+        height: 844,
+        mimeType: "image/webp",
+        data: "c2Vjb25k",
+      },
+    ]);
+  });
+
+  // An image is a megabyte; only the ones a report lists are fetched.
+  it("reads images only for the reports that have them", async () => {
+    const { db: reader, gets } = db();
+    await feedbackScreenshots(reader, [WITH_ONE, INBOX_OLD, "nope"]);
+
+    expect(gets).toEqual([[WITH_ONE, INBOX_OLD], ["0"]]);
+  });
+
+  it("passes over an image that is missing or not an image", async () => {
+    const { db: reader } = fakeDb({
+      feedback: reports,
+      [`feedback/${WITH_TWO}/screenshots`]: {
+        "1": { data: "PGh0bWw+", contentType: "text/html" },
+      },
+    });
+
+    expect(await feedbackScreenshots(reader, [WITH_TWO])).toEqual([]);
   });
 });
