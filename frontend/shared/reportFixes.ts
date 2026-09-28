@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na szerokim ekranie /eksploruj/tabela nie rozciąga się już na całe okno, tylko stoi pośrodku w kolumnie o szerokości 1200px, a pasek filtrów i przełącznik stron zaczynają się i kończą razem z tabelą.",
+    fixes: ["ybyB2AgoZH4qLzRsSv2w"],
+    link: "/eksploruj/tabela",
+  },
+  {
+    change:
       "„Właściciele” PKP SKM wymieniają każdego właściciela raz, także po załadowaniu strony - Gmina Gdańsk, POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Województwo pomorskie i Gdynia, a gmina, która jest i siedzibą, i właścicielem spółki, ma jeden wiersz.",
     fixes: ["SLaYgF7oCq9VV1fpU08t"],
   },
