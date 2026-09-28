@@ -47,6 +47,15 @@ export const formatFeedbackDate = (iso: string) =>
     timeStyle: "short",
   });
 
+/** The `index`th image attached to a report. Through the admin's token, which
+ * the route requires and an `<img src>` could not send. */
+export const fetchFeedbackScreenshot = (id: string, index: number) =>
+  authRequest<Blob>("/api/feedback/screenshot", {
+    method: "GET",
+    query: { id, n: index },
+    responseType: "blob",
+  });
+
 /** The admin's side of user feedback: the list, where each report sits (in
  * the queue, outside it, closed), what the code says about fixing it, and the
  * writes that triage it - status, note and place in the queue.

@@ -19,6 +19,18 @@
     {{ item.message }}
   </span>
   <v-icon
+    v-if="item.screenshots?.length"
+    class="flex-0-0"
+    size="small"
+    color="ink-neutral"
+    :icon="mdiImageOutline"
+    :title="feedbackScreenshotsLabel(item.screenshots.length)"
+    :aria-label="feedbackScreenshotsLabel(item.screenshots.length)"
+    role="img"
+    aria-hidden="false"
+    data-screenshots-icon
+  />
+  <v-icon
     v-if="fixState"
     class="flex-0-0"
     size="small"
@@ -34,13 +46,14 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { mdiImageOutline } from "@mdi/js";
 import {
   feedbackKindConfig,
   feedbackKindTone,
   fixStateConfig,
 } from "~/composables/feedback";
 import type { FixState } from "~~/shared/feedbackFixes";
-import type { Feedback } from "~~/shared/model";
+import { feedbackScreenshotsLabel, type Feedback } from "~~/shared/model";
 
 /** What a report is, in one line - enough to tell reports apart in a list:
  * the rows of ordering mode, and the line of a report row that opens. The

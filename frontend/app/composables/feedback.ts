@@ -157,6 +157,16 @@ export type FeedbackDraft = {
   /** The dialog's honeypot. Never set anywhere a person types. */
   website?: string;
   context: FeedbackContext;
+  /** Images as `data:` urls, already re-encoded by `prepareScreenshot`. */
+  screenshots?: string[];
+};
+
+export type FeedbackSubmitted = {
+  /** Null when the server took the report for a bot's and dropped it. */
+  id: string | null;
+  /** Images that came with the report and were not kept - see
+   * `Feedback.screenshotsDropped`. */
+  screenshotsDropped?: number;
 };
 
 /** The one way a report reaches the server, wherever on the site it was
@@ -173,17 +183,20 @@ export type FeedbackDraft = {
 export async function submitFeedback(
   draft: FeedbackDraft,
   options: { attribute: boolean },
-): Promise<{ id: string | null }> {
+): Promise<FeedbackSubmitted> {
   const body = {
     kind: draft.kind,
     message: draft.message,
     ...(draft.contact ? { contact: draft.contact } : {}),
     ...(draft.website ? { website: draft.website } : {}),
     context: draft.context,
+    // In the same request as the report, whichever of the two carries it, so
+    // an anonymous report's images are exactly as anonymous as its text.
+    ...(draft.screenshots?.length ? { screenshots: draft.screenshots } : {}),
   };
 
   if (options.attribute) {
-    return await authRequest<{ id: string | null }>("/api/feedback/create", {
+    return await authRequest<FeedbackSubmitted>("/api/feedback/create", {
       method: "POST",
       body,
     });
@@ -191,7 +204,7 @@ export async function submitFeedback(
 
   // Deliberately not authRequest: it would attach the ID token, and the server
   // attributes any report that carries one.
-  return await anonymousRequest<{ id: string | null }>("/api/feedback/create", {
+  return await anonymousRequest<FeedbackSubmitted>("/api/feedback/create", {
     method: "POST",
     body,
   });

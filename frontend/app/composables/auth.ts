@@ -129,7 +129,13 @@ async function waitForAuthReady() {
  */
 export async function authRequest<T>(
   url: string,
-  options: { method?: string; body?: unknown; query?: unknown } = {},
+  options: {
+    method?: string;
+    body?: unknown;
+    query?: unknown;
+    /** `blob` for a route that answers with a file rather than JSON. */
+    responseType?: "json" | "blob";
+  } = {},
 ): Promise<T> {
   await waitForAuthReady();
 
@@ -144,6 +150,7 @@ export async function authRequest<T>(
     body: options.body as Record<string, unknown>,
     query: options.query as Record<string, unknown>,
     headers,
+    ...(options.responseType ? { responseType: options.responseType } : {}),
   });
 }
 
