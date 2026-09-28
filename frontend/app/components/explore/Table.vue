@@ -835,10 +835,13 @@ a.person-name:focus-visible {
 
 /* The caps above say how wide a cell may ask its column to be, and they stay:
  * they are what keeps one long company or town from setting the width of the
- * column for every other row. But a cap is also how wide the cell draws, and
- * on /eksploruj/tabela, which takes the whole window, the table hands out more
- * than the caps asked for - at 1680px „Firmy” came to 526px with its chips
- * stopping at 300 and cut off, and the rest of the column empty.
+ * column for every other row. But a cap is also how wide the cell draws, and a
+ * table as wide as its card hands out whatever its columns did not ask for.
+ * While /eksploruj/tabela took the whole window that was most of every column
+ * - at 1680px „Firmy” came to 526px with its chips stopping at 300 and cut
+ * off, and the rest of the column empty. In the page's 1200px column it is
+ * less, but not nothing: on the first page of live rows „Firmy” is 340px
+ * inside, and chips stopping at 300 left the last 40 of them empty.
  *
  * `min-width: 100%` lifts the second without the first. A percentage in a min
  * size resolves against nothing while the table measures its columns, and

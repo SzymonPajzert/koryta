@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na szerokim ekranie /eksploruj/tabela nie rozciąga się już na całe okno, tylko stoi pośrodku w kolumnie o szerokości 1200px, a pasek filtrów i przełącznik stron zaczynają się i kończą razem z tabelą.",
+    fixes: ["ybyB2AgoZH4qLzRsSv2w"],
+    link: "/eksploruj/tabela",
+  },
+  {
+    change:
       "Zgłoszenie z kolejki wyjmuje się jednym kliknięciem ikony „Wyjmij z kolejki” na jego linii - w kolejce i w pełnej liście - a „Cofnij” w komunikacie, który się wtedy pojawia, odstawia je na to samo miejsce.",
     fixes: ["Km0Pw1iizx8scxv2RbXR"],
   },

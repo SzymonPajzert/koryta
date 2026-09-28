@@ -60,4 +60,52 @@ test.describe("the table on a wide screen", () => {
     // must not have made the table any wider than the window.
     expect(measured.scrollWidth).toBeLessThanOrEqual(measured.clientWidth);
   });
+
+  /** „Może być wyśrodkowana po prostu a nie z lewej strony” - the report's
+   * second round. Filling the cells could not help a column two and a half
+   * times as wide as anything in it, which is what the whole window made of
+   * every column at 2844px. The page is the layout's 1200px column now,
+   * centred, and the query bar spans exactly the table under it.
+   *
+   * The scrim is the reason the page caps its own column rather than dropping
+   * `fullWidth`: it is `position: absolute` against the layout's container,
+   * and a 1200px container dimmed a 1200px strip with the sides left white. */
+  test("sits in the middle of the window, its drawer dimming all of it", async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await page.goto("/eksploruj/tabela?place=chain-company", {
+      waitUntil: "load",
+    });
+    const firstName = page
+      .locator("tbody tr:first-child .text-primary.cursor-pointer")
+      .first();
+    await expect(firstName).toBeVisible({ timeout: 60000 });
+
+    const box = (selector: string) =>
+      page.evaluate((selector) => {
+        const { left, right } = document
+          .querySelector(selector)!
+          .getBoundingClientRect();
+        return {
+          left: Math.round(left),
+          right: Math.round(right),
+          window: document.documentElement.clientWidth,
+        };
+      }, selector);
+
+    const card = await box(".table-card");
+    // 1200px less the page's own 16px on either side.
+    expect(card.right - card.left).toBe(1168);
+    expect(
+      Math.abs(card.left - (card.window - card.right)),
+    ).toBeLessThanOrEqual(1);
+    const bar = await box("[data-testid=tabela-query-bar]");
+    expect([bar.left, bar.right]).toEqual([card.left, card.right]);
+
+    await firstName.click();
+    await expect(page.locator(".v-navigation-drawer--active")).toBeVisible();
+    const scrim = await box(".v-navigation-drawer__scrim");
+    expect([scrim.left, scrim.right]).toEqual([0, scrim.window]);
+  });
 });
