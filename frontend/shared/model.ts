@@ -772,6 +772,20 @@ export const feedbackKindLabels: Record<FeedbackKind, string> = {
   other: "Coś innego",
 };
 
+/** "1 zrzut ekranu", "2 zrzuty ekranu", "5 zrzutów ekranu". Here beside the
+ * kind labels for the same reason: the Slack card says it too. */
+export function feedbackScreenshotsLabel(count: number): string {
+  const last = count % 10;
+  const lastTwo = count % 100;
+  const noun =
+    count === 1
+      ? "zrzut"
+      : last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)
+        ? "zrzuty"
+        : "zrzutów";
+  return `${count} ${noun} ekranu`;
+}
+
 export type FeedbackStatus = "new" | "in_progress" | "resolved" | "wont_fix";
 
 /** How far the Slack forward got. Absent on documents written before
@@ -822,10 +836,25 @@ export type FeedbackContext = {
   qa?: FeedbackQaContext;
 };
 
+/** An image attached to a report, as the report records it. The bytes are a
+ * document of their own, `feedback/<id>/screenshots/<n>` where `n` is the
+ * position here - see `shared/feedbackScreenshots.ts`. */
+export type FeedbackScreenshot = {
+  contentType: "image/webp" | "image/jpeg" | "image/png";
+  width: number;
+  height: number;
+  bytes: number;
+};
+
 export type Feedback = {
   id?: string;
   kind: FeedbackKind;
   message: string;
+  /** Images the reporter attached, in the order they added them. */
+  screenshots?: FeedbackScreenshot[];
+  /** How many images came with the report and were not kept, because the day's
+   * allowance for them had run out. The reporter was told. */
+  screenshotsDropped?: number;
   /** Absent when the reporter was not signed in. Anonymous reports are allowed
    * on purpose — the point is to lower the bar for telling us something. */
   userUid?: string;

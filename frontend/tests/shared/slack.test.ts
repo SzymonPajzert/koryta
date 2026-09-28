@@ -180,6 +180,25 @@ describe("buildFeedbackBlocks", () => {
       undefined,
     );
   });
+
+  // The images stay in the panel: Slack could only show them from a public
+  // url, and its history outlives our retention.
+  it("says a report has screenshots, without showing them", () => {
+    const withShots: Feedback = {
+      ...base,
+      screenshots: [
+        { contentType: "image/webp", width: 1920, height: 1080, bytes: 1 },
+        { contentType: "image/jpeg", width: 800, height: 600, bytes: 1 },
+      ],
+    };
+    const blocks = buildFeedbackBlocks(withShots, opts);
+    const context = blockOfType(blocks, "context") as {
+      elements: { text: string }[];
+    };
+
+    expect(context.elements[0]?.text).toContain("📎 2 zrzuty ekranu w panelu");
+    expect(blocks.some((block) => block.type === "image")).toBe(false);
+  });
 });
 
 describe("buildFeedbackBlocks for a QA verdict", () => {
