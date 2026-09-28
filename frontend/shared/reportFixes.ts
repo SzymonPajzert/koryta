@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W „Kto kogo zastąpił” chip „zmiana afiliacji” nazywa się teraz „inna partia”, a najechany albo stuknięty mówi, z której partii do której przeszło stanowisko, np. „PiS → PO”.",
+    fixes: ["w2IOzxln1HiguDBFzIpG"],
+  },
+  {
+    change:
       "Odpowiedź na „Co liczą Wasze modele?” w FAQ na /pomoc wymienia wszystkie modele oceny i co każdy z nich nagradza.",
     fixes: ["cEF1Mg7xRtR2iWuyyC70"],
     link: "/pomoc",
