@@ -12,24 +12,24 @@
   >
     W trakcie
   </span>
+  <!-- Written out beside the status rather than an icon at the end of the
+       line: that the code says it fixes the report, and whether /qa found it
+       working, is what decides whether to open the report at all. -->
+  <span
+    v-if="fixState"
+    class="fb-tag d-inline-flex align-center ga-1 text-caption"
+    :class="`bg-${fixStateConfig[fixState].surface} text-${fixStateConfig[fixState].color}`"
+    data-fix-state-tag
+  >
+    <v-icon size="x-small" :icon="fixStateConfig[fixState].icon" />
+    {{ fixStateConfig[fixState].tag }}
+  </span>
   <span class="fb-where text-caption text-medium-emphasis" :title="where">
     {{ where }}
   </span>
   <span class="fb-message text-body-2" :title="item.message">
     {{ item.message }}
   </span>
-  <v-icon
-    v-if="fixState"
-    class="flex-0-0"
-    size="small"
-    :icon="fixStateConfig[fixState].icon"
-    :color="fixStateConfig[fixState].color"
-    :title="`Poprawka: ${fixStateConfig[fixState].label}`"
-    :aria-label="`Poprawka: ${fixStateConfig[fixState].label}`"
-    role="img"
-    aria-hidden="false"
-    data-fix-state-icon
-  />
 </template>
 
 <script setup lang="ts">

@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "dziala-zamyka-zgloszenie",
+    title: "„Działa” na /qa zamyka zgłoszenie, które poprawka naprawia",
+    description:
+      "Poprawkę trzeba było potwierdzić na /qa, a jej zgłoszenie zamknąć jeszcze raz na /admin/opinie. " +
+      "Teraz „Działa” administratora - przy wpisie albo w linijce zgłoszenia w „Zgłoszenia do zamknięcia” - od razu zamyka zgłoszenie, a w kolejce na /admin/opinie linijka zgłoszenia z poprawką mówi, czy poprawka czeka na sprawdzenie, działa, czy nie działa.",
+    steps: [
+      "Na /qa kliknij „Działa” w linijce zgłoszenia w „Zgłoszenia do zamknięcia” - na /admin/opinie ma być już zamknięte.",
+      "Na /admin/opinie sprawdź, że zgłoszenie z poprawką ma w linijce napis „poprawka …”.",
+    ],
+    link: "/qa",
+    area: "admin",
+  },
+  {
     id: "zespol-qa-i-problemy",
     title: "Lista QA, jej problemy i zgłoszenia są w menu „Zespół”",
     description:
