@@ -79,18 +79,36 @@ export const feedbackStatusConfig: Record<
  * rows, so the colour has to be readable as text. */
 export const fixStateConfig: Record<
   FixState,
-  { label: string; icon: string; color: string }
+  {
+    label: string;
+    /** What the state says on a report's line, where it is a tag. */
+    tag: string;
+    icon: string;
+    color: string;
+    /** That tag's fill; `color` is its ink. */
+    surface: string;
+  }
 > = {
   awaiting: {
     label: "czeka na sprawdzenie",
+    tag: "poprawka do sprawdzenia",
     icon: mdiProgressClock,
     color: "ink-neutral",
+    surface: "surface-muted",
   },
-  works: { label: "działa", icon: mdiCheckCircleOutline, color: "ink-success" },
+  works: {
+    label: "działa",
+    tag: "poprawka działa",
+    icon: mdiCheckCircleOutline,
+    color: "ink-success",
+    surface: "surface-success",
+  },
   broken: {
     label: "nie działa",
+    tag: "poprawka nie działa",
     icon: mdiAlertCircleOutline,
     color: "ink-danger",
+    surface: "surface-danger",
   },
 };
 

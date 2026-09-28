@@ -1185,18 +1185,15 @@ describe("fixes claimed on the QA list", () => {
     const wrapper = await mount();
     await startOrdering(wrapper);
 
-    const icon = (kind: "queue" | "inbox", id: string) =>
+    const tag = (kind: "queue" | "inbox", id: string) =>
       wrapper
         .get(`[data-${kind}-row][data-feedback-id="${id}"]`)
-        .find("[data-fix-state-icon]");
+        .find("[data-fix-state-tag]");
 
-    expect(icon("queue", claimed.broken).attributes("aria-label")).toBe(
-      "Poprawka: nie działa",
-    );
-    expect(icon("inbox", claimed.works).attributes("aria-label")).toBe(
-      "Poprawka: działa",
-    );
-    expect(icon("queue", "queued").exists()).toBe(false);
-    expect(icon("inbox", "plain").exists()).toBe(false);
+    // Written out on the line, not left to an icon's tooltip.
+    expect(tag("queue", claimed.broken).text()).toBe("poprawka nie działa");
+    expect(tag("inbox", claimed.works).text()).toBe("poprawka działa");
+    expect(tag("queue", "queued").exists()).toBe(false);
+    expect(tag("inbox", "plain").exists()).toBe(false);
   });
 });

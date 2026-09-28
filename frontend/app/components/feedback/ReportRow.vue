@@ -29,9 +29,12 @@
 
     <!-- Deciding that a report is worth doing should not take opening it: the
          line is usually enough to judge by, and the end of the queue always
-         has room, whatever the rows around it say. -->
-    <template v-if="canQueue" #actions>
+         has room, whatever the rows around it say. A list that places
+         reports its own way - the queue's arrows - puts its buttons here. -->
+    <template v-if="canQueue || $slots.actions" #actions>
+      <slot name="actions" />
       <v-btn
+        v-if="canQueue"
         icon
         size="small"
         variant="text"

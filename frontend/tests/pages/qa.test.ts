@@ -14,8 +14,14 @@ import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import QaPage from "../../app/pages/qa.vue";
+import { FEEDBACK_ID_PATTERN } from "../../shared/feedbackFixes";
 import type { Feedback, FeedbackStatus } from "../../shared/model";
-import type { QaCheck, QaItem, QaItemState } from "../../shared/qa";
+import {
+  QA_ITEMS,
+  type QaCheck,
+  type QaItem,
+  type QaItemState,
+} from "../../shared/qa";
 
 const vuetify = createVuetify({ components, directives });
 
@@ -25,6 +31,9 @@ const { FIXED_OPEN, FIXED_CLOSED } = vi.hoisted(() => ({
   FIXED_OPEN: "FixedOpen00000000001",
   FIXED_CLOSED: "FixedClosed000000001",
 }));
+
+/** A report the entry "fix-thing" says it fixes. */
+const FIXED_BY_ENTRY = "FixedByEntry00000001";
 
 vi.mock("../../shared/reportFixes", () => ({
   REPORT_FIXES: [
@@ -58,12 +67,21 @@ const items: QaItem[] = [
     steps: ["Kliknij sprawdzoną rzecz"],
     area: "public",
   },
+  {
+    id: "fix-thing",
+    title: "Poprawiona rzecz",
+    description: "Poprawia zgłoszenie.",
+    steps: ["Kliknij poprawioną rzecz"],
+    area: "public",
+    fixes: [FIXED_BY_ENTRY],
+  },
 ];
 
 const states: Record<string, QaItemState> = {
   "new-thing": "unchecked",
   "broken-thing": "issue",
   "done-thing": "ok",
+  "fix-thing": "unchecked",
 };
 
 const checks: QaCheck[] = [
@@ -684,9 +702,9 @@ describe("QA page", () => {
           .map((n) => n.attributes("data-feedback-id")),
       ).toEqual([FIXED_OPEN]);
       // The line says a fix is waiting to be checked.
-      expect(
-        wrapper.find(`#fb-${FIXED_OPEN} [data-fix-state-icon]`).exists(),
-      ).toBe(true);
+      expect(wrapper.get(`#fb-${FIXED_OPEN} [data-fix-state-tag]`).text()).toBe(
+        "poprawka do sprawdzenia",
+      );
       // And the reader's own entries follow, as for anybody.
       expect(wrapper.text()).toContain("Nowa rzecz");
     });
@@ -752,6 +770,121 @@ describe("QA page", () => {
       expect(wrapper.text()).toContain(
         "Żadne otwarte zgłoszenie nie czeka na sprawdzenie poprawki.",
       );
+    });
+
+    const posted = () =>
+      authRequest.mock.calls
+        .filter(([, opts]) => opts.method === "POST")
+        .map(([, opts]) => opts.body);
+
+    it("closes a report from its line when the fix works", async () => {
+      serve([report(FIXED_OPEN, "new")]);
+      const wrapper = await mountAdmin();
+
+      // On the line: checking it should not take opening it.
+      await wrapper
+        .get(`#fb-${FIXED_OPEN} [data-confirm-fix]`)
+        .trigger("click");
+      await flushPromises();
+
+      expect(posted()).toEqual([{ id: FIXED_OPEN, adminStatus: "resolved" }]);
+      // No QA entry claims it, so there is no verdict to give.
+      expect(saveCheck).not.toHaveBeenCalled();
+      expect(wrapper.get("[data-snackbar]").text()).toBe(
+        "Zamknięte: poprawka działa",
+      );
+      expect(wrapper.get(`#fb-${FIXED_OPEN}`).classes()).toContain(
+        "arow--dimmed",
+      );
+      expect(
+        wrapper.find(`#fb-${FIXED_OPEN} [data-confirm-fix]`).exists(),
+      ).toBe(false);
+    });
+
+    /** A real entry that claims a report: /admin/opinie reads claims off the
+     * changelog itself, so the page's own list of entries cannot stand in. */
+    const CLAIM = QA_ITEMS.find((item) =>
+      item.fixes?.some((id) => FEEDBACK_ID_PATTERN.test(id)),
+    );
+
+    it.skipIf(!CLAIM)(
+      "gives a report's entry the verdict, so both are done in one click",
+      async () => {
+        const id = CLAIM!.fixes!.find((fix) => FEEDBACK_ID_PATTERN.test(fix))!;
+        serve([report(id, "new")]);
+        const wrapper = await mountAdmin();
+
+        await wrapper.get(`#fb-${id} [data-confirm-fix]`).trigger("click");
+        await flushPromises();
+
+        expect(saveCheck).toHaveBeenCalledWith(CLAIM!.id, "ok", "");
+        expect(posted()).toEqual([{ id, adminStatus: "resolved" }]);
+      },
+    );
+
+    describe("an admin's „Działa” on an entry", () => {
+      const giveVerdict = async (wrapper: Wrapper) => {
+        await wrapper.get("#qa-fix-thing [data-row-toggle]").trigger("click");
+        await button(wrapper.get("#qa-fix-thing"), "Działa").trigger("click");
+        await flushPromises();
+      };
+
+      it("closes the reports the entry says it fixes", async () => {
+        serve([report(FIXED_BY_ENTRY, "new")]);
+        const wrapper = await mountAdmin();
+
+        await giveVerdict(wrapper);
+
+        expect(saveCheck).toHaveBeenCalledWith("fix-thing", "ok", "");
+        expect(posted()).toEqual([
+          { id: FIXED_BY_ENTRY, adminStatus: "resolved" },
+        ]);
+        expect(wrapper.get("[data-snackbar]").text()).toBe(
+          "Zapisane: działa · zamknięto zgłoszenie",
+        );
+      });
+
+      it("leaves one open while a problem reported against the fix is", async () => {
+        serve([
+          report(FIXED_BY_ENTRY, "new"),
+          report("followup", "new", {
+            route: "/qa",
+            qa: {
+              itemId: "fix-thing",
+              title: "Poprawiona rzecz",
+              status: "issue",
+            },
+          }),
+        ]);
+        const wrapper = await mountAdmin();
+
+        await giveVerdict(wrapper);
+
+        expect(posted()).toEqual([]);
+        expect(wrapper.get("[data-snackbar]").text()).toContain(
+          "nie zamknięto zgłoszenia - problem zgłoszony przy tej poprawce jest wciąż otwarty",
+        );
+      });
+
+      it("closes nothing already closed, and nothing for anybody else", async () => {
+        serve([report(FIXED_BY_ENTRY, "resolved")]);
+        const admin = await mountAdmin();
+        await giveVerdict(admin);
+        expect(posted()).toEqual([]);
+
+        admin.unmount();
+        mounted.pop();
+        vi.clearAllMocks();
+        isAdmin.value = false;
+        serve([report(FIXED_BY_ENTRY, "new")]);
+        const reader = await mountPage();
+        await flushPromises();
+        await giveVerdict(reader);
+
+        expect(saveCheck).toHaveBeenCalledWith("fix-thing", "ok", "");
+        // Closing is an admin's, and the list is theirs to read.
+        expect(authRequest).not.toHaveBeenCalled();
+      });
     });
   });
 

@@ -193,12 +193,14 @@ export function useFeedbackAdmin() {
    * than reading the report from before the save. */
   const saves = new Set<Promise<unknown>>();
 
+  /** Resolves to whether the server took it, for a page that says what it
+   * closed. */
   const updateAdmin = async (
     item: Feedback,
     patch: { adminStatus?: FeedbackStatus; adminNote?: string },
-  ) => {
+  ): Promise<boolean> => {
     const id = item.id;
-    if (!id) return;
+    if (!id) return false;
     saving.value[id] = true;
     const request = authRequest("/api/feedback/admin", {
       method: "POST",
@@ -212,8 +214,10 @@ export function useFeedbackAdmin() {
         items.value.find((entry) => entry.id === id) ?? item,
         patch,
       );
+      return true;
     } catch (error) {
       console.error("Failed to update feedback", error);
+      return false;
     } finally {
       saves.delete(request);
       saving.value[id] = false;
