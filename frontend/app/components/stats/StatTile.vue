@@ -1,6 +1,10 @@
 <template>
+  <!-- The imported NuxtLink, not the string 'NuxtLink': a string handed to
+       `:is` is looked up at render time among the globally registered
+       components, which NuxtLink is not, so a tile with a `to` rendered as an
+       inert <nuxtlink> tag with no href. -->
   <component
-    :is="to ? 'NuxtLink' : 'div'"
+    :is="to ? NuxtLink : 'div'"
     :to="to"
     class="stat-tile d-block text-decoration-none"
     :class="{ 'stat-tile--link': to }"
@@ -27,6 +31,7 @@
 </template>
 
 <script setup lang="ts">
+import { NuxtLink } from "#components";
 import { formatCompact } from "~/utils/chartTheme";
 
 /** A single headline number. The method's answer to a one-bar bar chart: when
