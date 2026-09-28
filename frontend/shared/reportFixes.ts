@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Kolejka najłatwiejszego poziomu, posortowana po głosach, zaczyna się od osoby do sprawdzenia: strony scalone z inną (jak Geblewicz czy Pasoń) nie zajmują już w kolejkach miejsc, na których nic się nie pokazywało - od najbliższego przeliczenia statystyk (/api/stats/computeNodes).",
+    fixes: ["crR0DWk9Y1gTfy0vp2Mg"],
+    link: "/eksploruj/nowe?tier=1&order=votes",
+  },
+  {
+    change:
       "„Właściciele” PKP SKM wymieniają każdego właściciela raz, także po załadowaniu strony - Gmina Gdańsk, POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Województwo pomorskie i Gdynia, a gmina, która jest i siedzibą, i właścicielem spółki, ma jeden wiersz.",
     fixes: ["SLaYgF7oCq9VV1fpU08t"],
   },

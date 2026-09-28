@@ -1,7 +1,8 @@
-import type {
-  DocumentSnapshot,
-  Firestore,
-  WriteBatch,
+import {
+  FieldValue,
+  type DocumentSnapshot,
+  type Firestore,
+  type WriteBatch,
 } from "firebase-admin/firestore";
 import {
   edgeIdentity,
@@ -613,13 +614,17 @@ export function applyNodeMerge(
   // The duplicate keeps its document, and keeps pointing at the survivor. Its
   // url still resolves, its votes and revisions still have something to hang
   // off, and `pageIsPublic` already reads `deleted` - so it leaves the public
-  // site on the next read without anything else learning a new rule.
+  // site on the next read without anything else learning a new rule. Its stats
+  // go with it, as /api/stats/computeNodes leaves them off every tombstone:
+  // kept, they would hold its place in every list and queue queried on them
+  // until the next recount.
   const duplicateRef = db.collection("nodes").doc(plan.duplicate_id);
   batch.update(duplicateRef, {
     deleted: true,
     delete_reason: reason,
     merged_into: plan.survivor_id,
     published: false,
+    stats: FieldValue.delete(),
   });
 
   recordAudit(
