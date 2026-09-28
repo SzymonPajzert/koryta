@@ -20,6 +20,7 @@ from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.people_parsing import is_not_found
+from scrapers.krs.public_owners import CompaniesPublicByRegister
 from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import (
     CloudStorage,
@@ -49,6 +50,8 @@ class QueryType(Enum):
 #: query itself does not say which, so `cost_breakdown` cannot group by
 #: anything but this.
 REASON_HARDCODED = "hardcoded"
+#: The register itself names a public owner: `CompaniesPublicByRegister`.
+REASON_PUBLIC_OWNER = "public_owner"
 REASON_PERSON_FEED = "person_feed"
 REASON_OWNED = "owned"
 REASON_REFRESH = "refresh"
@@ -65,6 +68,7 @@ REASON_UNRECORDED = "unrecorded"
 REASON_PRECEDENCE = (
     REASON_REFRESH,
     REASON_HARDCODED,
+    REASON_PUBLIC_OWNER,
     REASON_PERSON_FEED,
     REASON_OWNED,
     REASON_MISSING_NAME,
@@ -856,6 +860,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
+    public_by_register: CompaniesPublicByRegister
     already_scraped: KRSAlreadyScraped
     needs_refresh: KRSNeedsRefresh
     companies_all: Companies
@@ -956,6 +961,20 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         public = companies.loc[is_public(companies["is_public"]), "krs"]
         return KRSSet(KRS(id=str(krs).zfill(10)) for krs in public)
 
+    def owned_per_the_register(self, ctx: Context) -> KRSSet:
+        """Companies the register names a public owner for, crawled or not.
+
+        The door for the companies no other door knows: one a gmina or a
+        województwo owns sits in no seed list unless somebody put it there,
+        and has no KRS-numbered owner for `owned_by_the_public` to reach it
+        from. `KRSRegisterOwners` reads the register for every entity in the
+        bulletin, and `CompaniesPublicByRegister` picks out the public ones.
+        """
+        found = self.public_by_register.read_or_process(ctx)
+        if found is None or found.empty:
+            return KRSSet()
+        return KRSSet(KRS(id=str(krs).zfill(10)) for krs in found["krs"])
+
     def companies_to_scrape(self, ctx: Context) -> KRSSet:
         """The companies worth a rejestr.io query, and why each one is here.
 
@@ -972,6 +991,10 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         starters = KRSSet(self.hardcoded_companies.all_companies_krs.values())
         for krs in starters:
             self._record_reason(krs.id, REASON_HARDCODED)
+
+        for krs in self.owned_per_the_register(ctx):
+            starters.add(krs)
+            self._record_reason(krs.id, REASON_PUBLIC_OWNER)
 
         for blob_name, blob in ctx.io.read_many(
             CloudStorage(prefix="hostname=rejestr.io")

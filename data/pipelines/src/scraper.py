@@ -178,9 +178,12 @@ def scrape_krs_paid(sleep_time=0.2):
     # the reason it exists, and the reasons are not worth the same money: a
     # refresh re-buys a company we already hold, a person feed is one name, and
     # a newly discovered public company is the thing the site is for.
-    print(
-        cost_breakdown(queries, public_krs_ids(pipeline.companies.read_or_process(ctx)))
-    )
+    # The register's own public verdicts count too: a company found that way
+    # is not in `CompaniesKRS` until its odpis has been crawled.
+    public = public_krs_ids(pipeline.companies.read_or_process(ctx)) | {
+        krs.id for krs in pipeline.owned_per_the_register(ctx)
+    }
+    print(cost_breakdown(queries, public))
 
     cost = sum(q.cost() for q in queries)
     print(f"Will cost: {cost} PLN")

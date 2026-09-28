@@ -10,6 +10,7 @@ from scrapers.krs.scrape import (
     REASON_MISSING_NAME,
     REASON_OWNED,
     REASON_PERSON_FEED,
+    REASON_PUBLIC_OWNER,
     REASON_REFRESH,
     REASON_UNRECORDED,
     KRSScraped,
@@ -371,7 +372,7 @@ class _NoPersonFeeds:
             return []
 
 
-def _queue(companies=None, scraped=None):
+def _queue(companies=None, by_register=None, scraped=None):
     scraper = ScrapeRejestrIO()
     scraper.__dict__["hardcoded_companies"] = _NoSeeds()
     scraper.__dict__["already_scraped"] = _StubScraped(
@@ -382,7 +383,18 @@ def _queue(companies=None, scraped=None):
         if companies is not None
         else pd.DataFrame(columns=["krs", "is_public"])
     )
+    scraper.__dict__["public_by_register"] = _Frame(
+        by_register if by_register is not None else pd.DataFrame(columns=["krs"])
+    )
     return scraper, scraper.companies_to_scrape(_NoPersonFeeds())  # type: ignore[arg-type]
+
+
+def test_a_company_only_the_register_knows_is_queued():
+    """Pomorski Fundusz Pożyczkowy: no seed, no feed, no KRS-numbered owner."""
+    scraper, queue = _queue(by_register=pd.DataFrame({"krs": ["0000225512"]}))
+
+    assert "0000225512" in queue
+    assert scraper.company_reasons["0000225512"] == {REASON_PUBLIC_OWNER}
 
 
 def test_a_public_subsidiary_known_only_from_a_feed_is_queued():
