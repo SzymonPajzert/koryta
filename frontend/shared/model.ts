@@ -335,7 +335,23 @@ export interface Person extends Omit<Node, "type"> {
   rejestrIo?: string;
   /** Profile on ktomaco.pl, another public registry of company connections. */
   ktomaco?: string;
+  /** A picture of the person. Proposed and approved like any other field; the
+   * image is public exactly while it is the photo of a published page. */
+  photo?: PersonPhoto;
 }
+
+/** A photo of a person and where it came from. The image fields are copied
+ * from the stored image when the photo is proposed, never taken from the
+ * proposal. */
+export type PersonPhoto = ImageRef & {
+  /** The page the picture was found on, which a reviewer opens to check that
+   * it may be used. */
+  source: string;
+  /** Who took it, when its licence asks for them to be credited. */
+  author?: string;
+  /** The licence it is published under, e.g. "CC BY-SA 4.0". */
+  license?: string;
+};
 
 export interface ElectionRich {
   year?: string;

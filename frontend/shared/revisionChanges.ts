@@ -13,6 +13,7 @@
  */
 
 import { editSchemas } from "./api";
+import type { PersonPhoto } from "./model";
 
 /** One field a revision would change.
  *
@@ -91,6 +92,7 @@ export const revisionFieldLabels: Record<string, string> = {
   wikipedia: "Wikipedia",
   rejestrIo: "rejestr.io",
   ktomaco: "ktomaco",
+  photo: "zdjęcie",
   // place
   krsNumber: "KRS",
   regonNumber: "REGON",
@@ -148,10 +150,24 @@ export function renderFieldValue(value: unknown): string | null {
     return items.length > 0 ? items.join(", ") : "";
   }
   if (typeof value === "object") {
+    // A person's photo, the one proposable field that is an object, reads as
+    // what a reviewer decides on: where the picture is from and under what
+    // licence. The image id is kept, so swapping one photo for another from
+    // the same page still reads as a change.
+    const photo = value as Partial<PersonPhoto>;
+    if (typeof photo.imageId === "string" && typeof photo.source === "string") {
+      return [
+        `${photo.width}×${photo.height}, źródło: ${photo.source}`,
+        ...(photo.author ? [`autor: ${photo.author}`] : []),
+        ...(photo.license ? [`licencja: ${photo.license}`] : []),
+      ]
+        .join(", ")
+        .concat(` (obraz ${photo.imageId})`);
+    }
     // A map keyed by index is the sanitized form of an array; anything else is
-    // a real nested object, which no proposable field is, and which is more
-    // honestly shown as JSON than flattened into something that reads like
-    // prose but is not.
+    // a real nested object, which no other proposable field is, and which is
+    // more honestly shown as JSON than flattened into something that reads
+    // like prose but is not.
     const entries = Object.entries(value as Record<string, unknown>);
     if (entries.length > 0 && entries.every(([key]) => /^\d+$/.test(key))) {
       return renderFieldValue(
@@ -201,7 +217,10 @@ export function revisionChanges(
     // says it by leaving the key out. Approving is a `set` and does delete the
     // win, and skipped here that proposal read as an empty diff.
     const winTakenBack = field === "elected" && baseline.elected === true;
-    if (!(field in proposed) && !winTakenBack) continue;
+    // A photo taken off, likewise: `photo: null` in a proposal leaves the key
+    // out of the snapshot, and approving it deletes the photo from the page.
+    const photoTakenOff = field === "photo" && baseline.photo != null;
+    if (!(field in proposed) && !winTakenBack && !photoTakenOff) continue;
 
     // Compared after rendering rather than by identity: `["PiS"]` and
     // `{ 0: "PiS" }` are the same claim written two ways, and a revision that

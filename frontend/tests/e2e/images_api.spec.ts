@@ -9,6 +9,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { USERS } from "./helpers/auth";
 import { sniffImage } from "../../shared/images";
+import type { PersonPhoto } from "../../shared/model";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -116,5 +117,89 @@ test.describe("Obrazy przez API", () => {
     expect(removed.status()).toBe(200);
     expect((await request.get(secondPath)).status()).toBe(404);
     expect((await account()).photoURL).toBeUndefined();
+  });
+
+  test("zdjęcie osoby: widać je dopiero po zatwierdzeniu, i tylko na opublikowanej stronie", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/o-nas");
+    const stamp = Date.now();
+    // No hyphens in the id: other specs' seeds parse the last dash segment.
+    const nodeId = `zdjecie${stamp}`;
+    const name = `Osoba Ze Zdjęciem ${stamp}`;
+    await db()
+      .collection("nodes")
+      .doc(nodeId)
+      .set({ type: "person", name, published: true });
+
+    const [user, admin] = await Promise.all([
+      idToken(request, USERS.normal.email),
+      idToken(request, USERS.admin.email),
+    ]);
+
+    const uploaded = await request.post("/api/images/person", {
+      headers: bearer(user),
+      data: { nodeId, image: await webp(page, 600, 800) },
+    });
+    expect(uploaded.status()).toBe(200);
+    const { image } = (await uploaded.json()) as {
+      image: { imageId: string };
+    };
+    const path = `/api/images/${image.imageId}`;
+
+    // Uploaded, not approved: reviewers only.
+    expect((await request.get(path)).status()).toBe(404);
+    expect((await request.get(path, { headers: bearer(user) })).status()).toBe(
+      404,
+    );
+    const forReviewer = await request.get(path, { headers: bearer(admin) });
+    expect(forReviewer.status()).toBe(200);
+    expect(forReviewer.headers()["cache-control"]).toMatch(/^private/);
+
+    const source = "https://commons.wikimedia.org/wiki/File:Test.jpg";
+    const proposed = await request.post("/api/revisions/create", {
+      headers: bearer(user),
+      data: {
+        node_id: nodeId,
+        name,
+        photo: { imageId: image.imageId, source, license: "CC BY-SA 4.0" },
+      },
+    });
+    expect(proposed.status()).toBe(200);
+    const { id: revisionId } = (await proposed.json()) as { id: string };
+
+    // Proposed, not approved: still reviewers only.
+    expect((await request.get(path)).status()).toBe(404);
+
+    const approved = await request.post("/api/revisions/approve", {
+      headers: bearer(admin),
+      data: { revision_id: revisionId },
+    });
+    expect(approved.status()).toBe(200);
+
+    // The page now shows it, and so anybody may load it.
+    const photo = (await db().collection("nodes").doc(nodeId).get()).get(
+      "photo",
+    ) as PersonPhoto;
+    expect(photo).toMatchObject({
+      imageId: image.imageId,
+      contentType: "image/webp",
+      width: 600,
+      height: 800,
+      source,
+      license: "CC BY-SA 4.0",
+    });
+    const published = await request.get(path);
+    expect(published.status()).toBe(200);
+    expect(published.headers()["cache-control"]).toMatch(/^public/);
+
+    // Taken down with its page, with nothing else to remember.
+    await db()
+      .collection("nodes")
+      .doc(nodeId)
+      .set({ published: false }, { merge: true });
+    expect((await request.get(path)).status()).toBe(404);
   });
 });

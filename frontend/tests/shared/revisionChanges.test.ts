@@ -66,6 +66,49 @@ describe("revisionChanges", () => {
     );
   });
 
+  describe("a person's photo", () => {
+    const photo = {
+      imageId: "img1",
+      contentType: "image/webp",
+      width: 600,
+      height: 800,
+      bytes: 81234,
+      source: "https://commons.wikimedia.org/wiki/File:Jan.jpg",
+      license: "CC BY-SA 4.0",
+    };
+
+    it("reads as where it is from and under what licence", () => {
+      expect(revisionChanges({ ...stored, photo }, stored)).toEqual([
+        {
+          field: "photo",
+          label: "zdjęcie",
+          from: null,
+          to:
+            "600×800, źródło: https://commons.wikimedia.org/wiki/File:Jan.jpg, " +
+            "licencja: CC BY-SA 4.0 (obraz img1)",
+        },
+      ]);
+    });
+
+    it("tells one photo from another taken from the same page", () => {
+      const withPhoto = { ...stored, photo };
+      expect(
+        revisionChanges(
+          { ...withPhoto, photo: { ...photo, imageId: "img2" } },
+          withPhoto,
+        ),
+      ).toHaveLength(1);
+    });
+
+    // `photo: null` leaves the key out of the snapshot, and approving it takes
+    // the photo off the page - so it cannot pass for an empty proposal.
+    it("reports a photo taken off, which the proposal says by leaving it out", () => {
+      expect(revisionChanges({ ...stored }, { ...stored, photo })).toEqual([
+        expect.objectContaining({ field: "photo", to: null }),
+      ]);
+    });
+  });
+
   it("tells a field that was never there from one holding an empty value", () => {
     expect(
       revisionChanges({ wikipedia: "https://pl.wikipedia.org/wiki/X" }, stored),
