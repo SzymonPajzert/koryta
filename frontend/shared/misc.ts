@@ -1,4 +1,5 @@
 import type { Article, ElectionPosition } from "./model";
+import { asArray } from "./model";
 import { readableInkOn } from "./colors";
 
 /** „Inne”: a political tie we found that is not to one of the parties named
@@ -152,6 +153,31 @@ export function partyChipPaint(
   return fill
     ? { backgroundColor: fill, color: readableInkOn(fill) }
     : undefined;
+}
+
+/** The party whose colour a person is drawn in - on the graph, where the dot's
+ * colour is all a reader has to go on.
+ *
+ * The first party with a colour of its own, passing over `OTHER_PARTY`: a
+ * person's parties are stored in the order somebody picked them, or sorted by
+ * name where `ingest/person` merged them - either way „Inne” can come ahead of
+ * PiS - and a named party says more than the remainder does.
+ * Failing that `OTHER_PARTY` - also for a party with no colour of its own,
+ * Razem among them, because from the reader's side that is exactly what it
+ * is: a tie to a party the site does not paint. Undefined only for somebody
+ * with no party at all, who is then the plain person blue and nothing else. */
+export function paintedParty(
+  held: string[] | Record<string, string> | undefined | null,
+  colors: Record<string, string> = partyColors,
+): string | undefined {
+  // Blank entries are a form's leftovers, not a tie to anybody.
+  const all = asArray(held).filter(
+    (party) => typeof party === "string" && party.trim() !== "",
+  );
+  if (all.length === 0) return undefined;
+  return (
+    all.find((party) => party !== OTHER_PARTY && colors[party]) ?? OTHER_PARTY
+  );
 }
 
 export const electionPositions: ElectionPosition[] = [

@@ -175,7 +175,7 @@ import { entityGlyph } from "~/utils/entityIcon";
 import { graphNodeDestination, readableInk } from "~/utils/graphNode";
 import { edgeLegend } from "~~/shared/graph/edges";
 import { NODE_COLORS } from "~~/shared/graph/nodes";
-import { parties, partyColors } from "~~/shared/misc";
+import { paintedParty, parties, partyColors } from "~~/shared/misc";
 
 const props = withDefaults(
   defineProps<{
@@ -247,9 +247,9 @@ const edgeLabels = useState("graph-edge-labels", () => false);
 const partyKeys = computed(() => {
   const present = new Set<string>();
   for (const node of Object.values(nodesFiltered.value)) {
-    // The node builder paints a person with the first of their parties, so
-    // that is the one the legend has to account for.
-    const party = node.parties?.[0];
+    // The one the node builder painted them with, so that the legend accounts
+    // for the colour on the canvas and not for a party it passed over.
+    const party = paintedParty(node.parties);
     if (party && partyColors[party]) present.add(party);
   }
 
@@ -283,12 +283,12 @@ const legend = computed(() => [
     key: "person",
     entity: "person",
     // Said in full as soon as anybody on the canvas is coloured by party:
-    // this blue is not "a person", it is a person whose party we do not paint,
-    // and that is exactly what a reader looking at a blue dot next to a navy
-    // one is trying to work out. The wording is the statistics' own bucket,
-    // because it holds the same people - no party, and the parties
-    // `shared/misc` gives no colour.
-    label: partyKeys.value.length > 0 ? "Osoba: inne / brak partii" : "Osoba",
+    // this blue is not "a person", it is a person with no party, and that is
+    // exactly what a reader looking at a blue dot next to a navy one is trying
+    // to work out. It used to say „inne / brak partii”, because a party
+    // `shared/misc` gives no colour was blue too; that is „Inne” now, grey and
+    // named on a line of its own, so the blue is left with no party alone.
+    label: partyKeys.value.length > 0 ? "Osoba: brak partii" : "Osoba",
     shape: "circle",
     color: NODE_COLORS.person as string,
   },

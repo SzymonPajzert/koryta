@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   OTHER_PARTY,
+  paintedParty,
   parties,
   partyChipPaint,
   partyColors,
@@ -89,5 +90,34 @@ describe("partyChipPaint", () => {
 
   it("leaves a party with no colour to the caller", () => {
     expect(partyChipPaint("Razem")).toBeUndefined();
+  });
+});
+
+describe("paintedParty", () => {
+  it("is nothing for somebody with no party", () => {
+    expect(paintedParty(undefined)).toBeUndefined();
+    expect(paintedParty([])).toBeUndefined();
+    expect(paintedParty([""])).toBeUndefined();
+  });
+
+  it("is the first party with a colour", () => {
+    expect(paintedParty(["PiS", "PO"])).toBe("PiS");
+    expect(paintedParty(["Razem", "PO"])).toBe("PO");
+  });
+
+  /** Parties are stored in the order they were picked, or sorted by name by
+   * `ingest/person`, so „Inne” can come ahead of PiS - and a named party says
+   * more than the remainder does. */
+  it("passes over „Inne” for a party it names", () => {
+    expect(paintedParty(["Inne", "PiS"])).toBe("PiS");
+  });
+
+  it("is „Inne” for „Inne”, and for a party the site has no colour for", () => {
+    expect(paintedParty(["Inne"])).toBe(OTHER_PARTY);
+    expect(paintedParty(["Razem"])).toBe(OTHER_PARTY);
+  });
+
+  it("reads parties stored as a numbered-key object", () => {
+    expect(paintedParty({ "0": "Inne", "1": "PSL" })).toBe("PSL");
   });
 });
