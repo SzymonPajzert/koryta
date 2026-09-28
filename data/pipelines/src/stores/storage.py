@@ -170,7 +170,15 @@ class Client:
 
         # Now list all blobs recursively under the chosen prefix
         print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
-        blobs = bucket.list_blobs(prefix=prefix, match_glob=glob)
+        # Only the two fields read below. Unmasked, every item carries the
+        # object's whole metadata: 83 s against 55 s for the 32k api-krs
+        # objects, and listings egressed 2.7x what reads did in the 30 days
+        # to 2026-09-11.
+        blobs = bucket.list_blobs(
+            prefix=prefix,
+            match_glob=glob,
+            fields="items(name,size),nextPageToken",
+        )
         for blob in blobs:
             # blob.size comes from the listing response, so carrying it here
             # costs no extra request and saves a caller a download each time
