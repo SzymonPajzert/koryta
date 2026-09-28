@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore, FieldPath } from "firebase-admin/firestore";
 import { logIn, USERS } from "./helpers/auth";
@@ -6,8 +6,9 @@ import { logIn, USERS } from "./helpers/auth";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 
-/** That /aktywnosc shows a reader their own work named and an administrator's
- * decision masked, and that only an administrator gets the filter for the
+/** That /aktywnosc keeps a reader's own work out of the list until they untick
+ * "Ukryj moje zmiany" and then shows it named, masks an administrator's
+ * decision, and that only an administrator gets the filter for the
  * administrators on trial.
  *
  * The emulator fixtures seed no votes and no audit rows - the stats page's
@@ -82,25 +83,34 @@ test.afterAll(async () => {
   await clearPreviousRuns();
 });
 
-test("a reader sees their own vote named and an admin's publication masked", async ({
+/** This spec's line of one kind: another spec's vote or publication, left in
+ * the emulator, says the same words about a different page. */
+const lineOf = (page: Page, sentence: string) =>
+  page
+    .getByTestId("feed-item")
+    .filter({ hasText: sentence })
+    .filter({ has: page.getByRole("link", { name: personName }) });
+
+test("a reader sees an admin's publication masked, and their own vote once they ask", async ({
   page,
 }) => {
   await logIn(page, USERS.normal, "/aktywnosc");
   await expect(page.getByRole("heading", { name: "Aktywność" })).toBeVisible();
 
-  const own = page
-    .getByTestId("feed-item")
-    .filter({ hasText: "ocenił/a 1 osobę" });
-  await expect(own).toBeVisible({ timeout: 30_000 });
-  await expect(own).toContainText("Ty");
-  await expect(own.getByRole("link", { name: personName })).toBeVisible();
-
-  const published = page
-    .getByTestId("feed-item")
-    .filter({ hasText: "opublikował/a 1 osobę" });
-  await expect(published).toBeVisible();
+  const published = lineOf(page, "opublikował/a 1 osobę");
+  await expect(published).toBeVisible({ timeout: 30_000 });
   await expect(published).toContainText("Anonim");
   await expect(published).not.toContainText("Admin User");
+
+  // Loaded with the publication, and hidden until the box is unticked.
+  const own = lineOf(page, "ocenił/a 1 osobę");
+  await expect(own).toHaveCount(0);
+  const hideMine = page.getByRole("checkbox", { name: "Ukryj moje zmiany" });
+  await expect(hideMine).toHaveAttribute("aria-checked", "true");
+  await hideMine.click();
+  await expect(page).toHaveURL(/moje=tak/);
+  await expect(own).toBeVisible();
+  await expect(own).toContainText("Ty");
 
   await expect(page.getByTestId("activity-new-admins")).toHaveCount(0);
 });
@@ -110,14 +120,15 @@ test("an administrator sees names and the filter for administrators on trial", a
 }) => {
   await logIn(page, USERS.admin, "/aktywnosc");
 
-  const published = page
-    .getByTestId("feed-item")
-    .filter({ hasText: "opublikował/a 1 osobę" });
-  await expect(published).toBeVisible({ timeout: 30_000 });
+  await expect(lineOf(page, "ocenił/a 1 osobę")).toContainText("Normal User", {
+    timeout: 30_000,
+  });
+  // The publication is the administrator's own, so it waits for the box.
+  const published = lineOf(page, "opublikował/a 1 osobę");
+  await expect(published).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Ukryj moje zmiany" }).click();
+  await expect(published).toBeVisible();
   await expect(published).toContainText("Admin User");
-  await expect(
-    page.getByTestId("feed-item").filter({ hasText: "Normal User" }),
-  ).toBeVisible();
 
   await page.getByTestId("activity-new-admins").click();
   await expect(page).toHaveURL(/kto=nowi-admini/);

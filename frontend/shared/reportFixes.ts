@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Aktywność domyślnie nie pokazuje Twoich własnych zmian: przy filtrach jest zaznaczone „Ukryj moje zmiany”, a po odznaczeniu Twoje linijki wracają z oznaczeniem „Ty”.",
+    fixes: ["DdO2vUMtncE6f1lfRtvH"],
+  },
+  {
+    change:
       "„Właściciele” PKP SKM wymieniają każdego właściciela raz, także po załadowaniu strony - Gmina Gdańsk, POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Województwo pomorskie i Gdynia, a gmina, która jest i siedzibą, i właścicielem spółki, ma jeden wiersz.",
     fixes: ["SLaYgF7oCq9VV1fpU08t"],
   },
