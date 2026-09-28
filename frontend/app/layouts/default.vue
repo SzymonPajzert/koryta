@@ -65,6 +65,7 @@
         <!-- The panel and two of the inboxes it lists, under the panel's own
              names; the third, "Zgłoszenia", is under "Zespół" with the QA list
              and its problems, since a problem found there is a report too.
+             "Zadania" is the owner's own list, shown to him alone.
              The activator has no `to` of its own - it would navigate and open
              the menu at once - so it is lit by hand instead. -->
         <v-menu
@@ -104,6 +105,12 @@
               :prepend-icon="mdiNoteEditOutline"
               to="/admin/notatki"
               title="Notatki"
+            />
+            <v-list-item
+              v-if="isOwner"
+              :prepend-icon="mdiSitemapOutline"
+              to="/admin/zadania"
+              title="Zadania"
             />
           </v-list>
         </v-menu>
@@ -211,6 +218,7 @@ import {
   mdiViewList,
   mdiNoteEditOutline,
   mdiMessageAlertOutline,
+  mdiSitemapOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
@@ -219,7 +227,7 @@ import { APP_BAR_HEIGHT, useSsrLayoutTop } from "~/composables/appBar";
 
 const ssrLayoutTop = useSsrLayoutTop();
 const { mdAndUp } = useDisplay();
-const { user, userConfig, logout, isAdmin } = useAuthState();
+const { user, userConfig, logout, isAdmin, isOwner } = useAuthState();
 const route = useRoute();
 const loginDialog = ref(false);
 const maxWidth = computed(() =>
