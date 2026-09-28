@@ -153,7 +153,10 @@ fetching each object. GCS gives about 5-7 small objects a second, so the ~29k
 rejestr.io responses took most of an hour; the same data is one 18 MB archive
 that reads in seconds. Each run prints which archives it used, dates included.
 
-That archive is a snapshot. To rebuild it for one host:
+That archive is a snapshot, so the read also lists the bucket and fetches
+whatever the archive lacks, 32 objects at a time. The result is the same set
+of objects as a plain listing; only the part written since the last rebuild is
+slow, and it grows until someone rebuilds. To rebuild for one host:
 
 ```bash
 cd ../compressor
@@ -162,13 +165,8 @@ go run ./cmd/compressor \
   -incremental -hostname rejestr.io
 ```
 
-Pass `--no-mirror` to skip it and read the bucket object by object instead.
-That is much slower, but it sees everything written since the last rebuild,
-which is what you want when iterating on a scrape:
-
-```bash
-uv run koryta ScrapeRejestrIO --no-mirror
-```
+Pass `--no-mirror` to skip the archive and read the bucket object by object
+instead -- the same objects, only slower.
 
 ## The nightly pipeline run
 
