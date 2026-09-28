@@ -107,6 +107,40 @@ def _normalize_person_name(value: str | None) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
 
 
+def _person_name_forms(value: str | None) -> set[str]:
+    """The spellings of one name a fact may use, normalized for comparison.
+
+    A fact writes the name as the article spelled it - "Barbara Gieroń" - while
+    the koryta row may carry the register's fuller form, "Barbara Maria
+    Gieroń-Piskorska". Comparing the two normalizePersonName strings alone
+    therefore dropped every fact about such a person, relations included. This
+    mirrors the name forms the mention index registers (see
+    ``analysis.article_person_mentions._name_forms``): the full name, first +
+    last when a middle name is present, and - for a hyphenated surname - each
+    half, with and without the middle name.
+
+    Candidates are built from the raw words and normalized whole, so the
+    normalized token count never has to agree with the raw one (a hyphenated
+    surname is one raw word but two normalized tokens).
+    """
+    norm = _normalize_person_name(value)
+    if not norm:
+        return set()
+    raw_parts = (value or "").split()
+    forms = {norm}
+    if len(raw_parts) >= 2:
+        head, last = raw_parts[0], raw_parts[-1]
+        if len(raw_parts) >= 3:
+            forms.add(_normalize_person_name(f"{head} {last}"))
+        for half in last.split("-"):
+            if not half:
+                continue
+            forms.add(_normalize_person_name(" ".join([*raw_parts[:-1], half])))
+            if len(raw_parts) >= 3:
+                forms.add(_normalize_person_name(f"{head} {half}"))
+    return {form for form in forms if form}
+
+
 def _canonical_party(party: str | None) -> str:
     """Map a party spelling to its canonical name, else the normalized value.
 
@@ -1574,15 +1608,21 @@ def _fact_matches_koryta(
     koryta_name_by_id: dict[str, str],
 ) -> bool:
     """Whether a fact's person (subject for relations) matches one of the
-    article's confirmed koryta people by normalized name — the same match the
-    website ingest uses to link a fact to a person page.
+    article's confirmed koryta people by name — the same match the website
+    ingest uses to link a fact to a person page.
+
+    The names are compared by their spellings, not their raw normalized forms:
+    the article's "Barbara Gieroń" is the koryta "Barbara Maria
+    Gieroń-Piskorska" written the way an article writes it.
     """
     subject = fact.get("person") or fact.get("subject")
     if not subject or not koryta_ids:
         return False
-    normed = _normalize_person_name(subject)
+    subject_forms = _person_name_forms(subject)
+    if not subject_forms:
+        return False
     return any(
-        _normalize_person_name(koryta_name_by_id.get(pid)) == normed
+        subject_forms & _person_name_forms(koryta_name_by_id.get(pid))
         for pid in koryta_ids
     )
 

@@ -836,6 +836,38 @@ def test_fact_matches_koryta_subject_for_relation():
     assert not _fact_matches_koryta(fact, "a.pl/1", [], names)
 
 
+def test_fact_matches_koryta_when_the_article_drops_a_middle_name():
+    # The article says "Tomasz Kotajny"; the register holds the middle name.
+    # An exact normalized comparison dropped every such fact.
+    names = {"idA": "Tomasz Jerzy Kotajny"}
+    fact = employment("Tomasz Kotajny", "Orlen", "prezes")
+    assert _fact_matches_koryta(fact, "a.pl/1", ["idA"], names)
+
+
+def test_fact_matches_koryta_when_a_middle_name_and_hyphen_are_dropped():
+    # Both at once, the Barbara Gieroń case: the article writes "Barbara
+    # Gieroń" and the register holds "Barbara Maria Gieroń-Piskorska".
+    names = {"idA": "Barbara Maria Gieroń-Piskorska"}
+    fact = {
+        "fact_type": "personal_relation",
+        "subject": "Barbara Gieroń",
+        "object": "Łukasz",
+        "relation": "syn",
+    }
+    assert _fact_matches_koryta(fact, "a.pl/1", ["idA"], names)
+    # A different person is still not matched.
+    assert not _fact_matches_koryta(fact, "a.pl/1", ["idB"], {"idB": "Jan Kowalski"})
+
+
+def test_fact_matches_koryta_does_not_match_a_lone_surname_or_first_name():
+    # Variants never invent a bare surname or first name: "Gieroń" alone is not
+    # the registered "Barbara Maria Gieroń-Piskorska".
+    names = {"idA": "Barbara Maria Gieroń-Piskorska"}
+    assert not _fact_matches_koryta(
+        employment("Gieroń", "Orlen", "prezes"), "a.pl/1", ["idA"], names
+    )
+
+
 def test_fact_person_uses_person_then_subject():
     assert _fact_person(
         employment("Jan Kowalski", "Orlen", "prezes"), {"jan kowalski": "k1"}
