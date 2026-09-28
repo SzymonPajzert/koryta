@@ -86,6 +86,30 @@ export function newImage(
   return { ref, doc, imageRef };
 }
 
+/** The ids of the images `subject` owns for `purpose`. Read without the
+ * bytes, and on one field, which needs no composite index. */
+export async function imagesOf(
+  db: Firestore,
+  subject: string,
+  purpose: ImagePurpose,
+): Promise<string[]> {
+  const snap = await db
+    .collection("images")
+    .where("subject", "==", subject)
+    .select("purpose")
+    .get();
+  return snap.docs
+    .filter((doc) => doc.get("purpose") === purpose)
+    .map((doc) => doc.id);
+}
+
+export async function deleteImages(db: Firestore, ids: readonly string[]) {
+  if (ids.length === 0) return;
+  const batch = db.batch();
+  for (const id of ids) batch.delete(db.collection("images").doc(id));
+  await batch.commit();
+}
+
 /** Whether anybody may be handed this image, admin or not - see
  * `IMAGE_ACCESS`. A person's photo is public while its page is, and while it
  * is still the photo that page shows: both read off the node, which only ever
