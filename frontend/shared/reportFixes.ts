@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
+    fixes: ["g29Mn5m5y6EKQegAviQn"],
+  },
+  {
+    change:
       "„Właściciele” PKP SKM wymieniają każdego właściciela raz, także po załadowaniu strony - Gmina Gdańsk, POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Województwo pomorskie i Gdynia, a gmina, która jest i siedzibą, i właścicielem spółki, ma jeden wiersz.",
     fixes: ["SLaYgF7oCq9VV1fpU08t"],
   },
