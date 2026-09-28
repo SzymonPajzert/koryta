@@ -49,6 +49,18 @@ def scraped(blobs) -> pd.DataFrame:
     return KRSAlreadyScraped().process(ctx)
 
 
+def over(df: pd.DataFrame) -> KRSAlreadyScraped:
+    """The pipeline, reading `df` as its output."""
+    pipeline = KRSAlreadyScraped()
+    pipeline.read_or_process = lambda _ctx: df  # type: ignore[assignment]
+    return pipeline
+
+
+def answered(blobs) -> pd.DataFrame:
+    """What the pipeline holds as answers: its output less the empty crawls."""
+    return over(scraped(blobs)).answered(None)  # type: ignore[arg-type]
+
+
 # ─── which register was asked ─────────────────────────────
 
 
@@ -77,26 +89,61 @@ def test_both_registers_reach_the_output():
     }
 
 
+def test_a_full_extract_is_its_own_query():
+    """Asked only for a company with no name, and only once - which is what
+    recording it here is for. It used to raise instead: the parser looked for
+    "OdpisAktualny/" in every api-krs path."""
+    full = odpis("P", "2026-09-28").replace("OdpisAktualny", "OdpisPelny")
+
+    assert api_krs_register(full) == QueryType.API_KRS_ODPIS_PELNY_P
+    df = answered({full: 180_000, odpis("P", "2026-07-18"): 0})
+
+    assert list(df["krs"]) == [KRS]
+    assert list(df["method"]) == [QueryType.API_KRS_ODPIS_PELNY_P.value]
+
+
 # ─── a failed crawl is not a scrape ───────────────────────
 
 
 def test_a_zero_byte_failure_marker_is_not_a_scrape():
     """The bug this guards: 1,052 subjects looked done and were never retried."""
-    df = scraped({odpis("P", "2026-07-18"): 0})
+    df = answered({odpis("P", "2026-07-18"): 0})
 
     assert df.empty
 
 
-def test_a_company_whose_only_crawl_failed_is_not_recorded():
-    df = scraped({odpis("P", "2026-07-18"): 0, odpis("S", "2026-07-18"): 0})
+def test_a_company_whose_only_crawl_failed_is_not_recorded_as_answered():
+    df = answered({odpis("P", "2026-07-18"): 0, odpis("S", "2026-07-18"): 0})
 
     assert df.empty
 
 
 def test_a_later_good_crawl_still_counts():
-    df = scraped({odpis("P", "2026-07-18"): 0, odpis("P", "2026-07-19"): 4096})
+    df = answered({odpis("P", "2026-07-18"): 0, odpis("P", "2026-07-19"): 4096})
 
     assert list(df["date"]) == ["2026-07-19"]
+    assert "empty" not in df.columns
+
+
+def test_an_empty_current_extract_is_kept_as_the_record_that_it_was_asked():
+    """What a company struck off the register gets, run after run - and what
+    makes its full extract worth asking for. A full extract that came back
+    empty leaves no such record: nothing is owed on the strength of it."""
+    full = odpis("S", "2026-09-28").replace("OdpisAktualny", "OdpisPelny")
+    df = scraped({odpis("P", "2026-09-21"): 0, full: 0})
+
+    assert df.to_dict(orient="records") == [
+        {
+            "krs": KRS,
+            "method": QueryType.API_KRS_ODPIS_AKTUALNY_P.value,
+            "date": "2026-09-21",
+            "not_found": False,
+            "empty": True,
+        }
+    ]
+    assert over(df).came_back_empty(None) == {  # type: ignore[arg-type]
+        KRS: {QueryType.API_KRS_ODPIS_AKTUALNY_P}
+    }
 
 
 def test_a_reference_whose_size_is_unknown_is_kept():

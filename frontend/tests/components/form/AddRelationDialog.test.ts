@@ -6,6 +6,7 @@ import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import AddRelationDialog from "../../../app/components/form/AddRelationDialog.vue";
 import type { Link, NodeType } from "~~/shared/model";
+import type { RegionOfficeOption } from "~~/shared/offices";
 
 const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
 
@@ -262,6 +263,277 @@ describe("AddRelationDialog", () => {
 
     expect(wrapper.emitted("added")).toHaveLength(1);
     expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([false]);
+  });
+
+  describe("a post in a region's urząd", () => {
+    const wejherowo: Link<NodeType> = {
+      id: "teryt2215031",
+      type: "region",
+      name: "Gmina Wejherowo",
+    };
+    const powiat: Link<NodeType> = {
+      id: "teryt2215",
+      type: "region",
+      name: "Powiat wejherowski",
+    };
+    const urzad: RegionOfficeOption = {
+      teryt: "2215031",
+      region: "Wejherowo",
+      name: "Urząd Miejski w Wejherowie",
+      regon: "000526251",
+      nip: "5882155172",
+      node: null,
+      gmina: null,
+      seatId: "teryt2215031",
+    };
+    /** Wejherowo's offices as its powiat lists them: the starostwo, then the
+     * town's urząd - which has a region node to be seated in - and the
+     * villages', which has none and is seated in the powiat. */
+    const powiatOffices: RegionOfficeOption[] = [
+      {
+        teryt: "2215",
+        region: "wejherowski",
+        name: "Starostwo Powiatowe w Wejherowie",
+        regon: "191686414",
+        nip: "5881831062",
+        node: null,
+        gmina: null,
+        seatId: "teryt2215",
+      },
+      { ...urzad, gmina: "Gmina miejska Wejherowo" },
+      {
+        teryt: "2215102",
+        region: "Wejherowo",
+        name: "Urząd Gminy Wejherowo",
+        regon: "000545113",
+        nip: "5881007736",
+        node: null,
+        gmina: "Gmina wiejska Wejherowo",
+        seatId: "teryt2215",
+      },
+    ];
+
+    /** The server, as far as this flow talks to it: the offices of the
+     * region, a proposal for a new place, and relations. */
+    function serve(node: { id: string; name: string } | null) {
+      mockAuthRequest.mockImplementation(async (url: string) => {
+        if (url === "/api/nodes/teryt2215031/offices") {
+          return { offices: [{ ...urzad, node }] };
+        }
+        if (url === "/api/nodes/teryt2215/offices") {
+          return { offices: powiatOffices };
+        }
+        if (url === "/api/revisions/create") {
+          return { id: "rev-1", node_id: "urzad-new" };
+        }
+        return { id: "edge-new" };
+      });
+    }
+
+    /** Every call after the offices were read, as url and body. */
+    function writes() {
+      return mockAuthRequest.mock.calls
+        .filter(([url]) => !String(url).endsWith("/offices"))
+        .map(([url, options]) => [url, options?.body]);
+    }
+
+    async function chooseOffice(
+      wrapper: ReturnType<typeof mountDialog>,
+      region: Link<NodeType> = wejherowo,
+    ) {
+      await pick(wrapper, region);
+      (
+        document.querySelector(
+          '[data-testid="add-relation-verb-office"]',
+        ) as HTMLElement
+      ).click();
+      await flushPromises();
+      const role = document.querySelector(
+        '[data-testid="add-relation-name"] input',
+      ) as HTMLInputElement;
+      role.value = "zastępca prezydenta";
+      role.dispatchEvent(new Event("input"));
+      await flushPromises();
+    }
+
+    function officeOption(regon: string): HTMLInputElement {
+      const input = document.querySelector(
+        `[data-testid="region-workplace-office-${regon}"] input`,
+      ) as HTMLInputElement | null;
+      if (!input) throw new Error(`no option for REGON ${regon}`);
+      return input;
+    }
+
+    it("is offered beside the candidacy once a region is picked", async () => {
+      serve(null);
+      const wrapper = mountDialog();
+      await pick(wrapper, wejherowo);
+
+      expect(document.body.textContent).toContain("kandydował/a w");
+      expect(document.body.textContent).toContain(
+        "pracował/a w urzędzie lub jednostce podległej",
+      );
+    });
+
+    it("is not offered by a section about something else", async () => {
+      serve(null);
+      const wrapper = mountDialog({ types: ["election"] });
+      await pick(wrapper, wejherowo);
+
+      expect(
+        document.querySelector('[data-testid="add-relation-verb-office"]'),
+      ).toBeNull();
+    });
+
+    it("files the post under the urząd the site already has", async () => {
+      serve({ id: "urzad-1", name: "Urząd Miejski w Wejherowie" });
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper);
+
+      expect(document.body.textContent).toContain("już jest w bazie");
+      await submit();
+
+      expect(writes()).toEqual([
+        [
+          "/api/edges/create",
+          expect.objectContaining({
+            source: "node-1",
+            target: "urzad-1",
+            type: "employed",
+            name: "zastępca prezydenta",
+          }),
+        ],
+      ]);
+    });
+
+    it("proposes the urząd from the register, seated in the region", async () => {
+      serve(null);
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper);
+      await submit();
+
+      expect(writes()).toEqual([
+        [
+          "/api/revisions/create",
+          {
+            type: "place",
+            name: "Urząd Miejski w Wejherowie",
+            regonNumber: "000526251",
+            nipNumber: "5882155172",
+            isPublic: true,
+          },
+        ],
+        [
+          "/api/edges/create",
+          { type: "seat", source: "teryt2215031", target: "urzad-new" },
+        ],
+        [
+          "/api/edges/create",
+          expect.objectContaining({
+            source: "node-1",
+            target: "urzad-new",
+            type: "employed",
+          }),
+        ],
+      ]);
+      expect(wrapper.emitted("added")).toHaveLength(1);
+    });
+
+    it("does not propose the urząd twice when the post fails to save", async () => {
+      serve(null);
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper);
+      const server = mockAuthRequest.getMockImplementation()!;
+      mockAuthRequest.mockImplementation(async (url: string, options) => {
+        if (url === "/api/edges/create" && options?.body?.type === "employed") {
+          throw { data: { message: "Chwilowy błąd." } };
+        }
+        return server(url, options);
+      });
+      await submit();
+      expect(document.body.textContent).toContain("Chwilowy błąd.");
+
+      mockAuthRequest.mockImplementation(server);
+      await submit();
+
+      const proposals = writes().filter(
+        ([url]) => url === "/api/revisions/create",
+      );
+      expect(proposals).toHaveLength(1);
+      expect(wrapper.emitted("added")).toHaveLength(1);
+    });
+
+    it("says a gmina missing from the regions is reached through its powiat", async () => {
+      serve(null);
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper);
+
+      expect(
+        document.querySelector('[data-testid="region-workplace-powiat-hint"]')
+          ?.textContent,
+      ).toContain("Wybierz jej powiat");
+    });
+
+    it("lists a powiat's gminy by name after its starostwo, picking none", async () => {
+      // Most gminy have no region node, so the powiat is the way to them -
+      // and the starostwo is not where a wójt or a burmistrz works.
+      serve(null);
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper, powiat);
+
+      const list = document.querySelector(
+        '[data-testid="region-workplace-options"]',
+      )!.textContent!;
+      const order = [
+        "Starostwo Powiatowe w Wejherowie",
+        "Urzędy gmin w tym powiecie",
+        "Gmina miejska Wejherowo",
+        "Gmina wiejska Wejherowo",
+      ].map((text) => list.indexOf(text));
+      expect(order.every((at) => at >= 0)).toBe(true);
+      expect(order).toEqual([...order].sort((a, b) => a - b));
+      expect(
+        powiatOffices.map((office) => officeOption(office.regon).checked),
+      ).toEqual([false, false, false]);
+      expect(submitButton().disabled).toBe(true);
+      // The list already is what the hint would send them to.
+      expect(
+        document.querySelector('[data-testid="region-workplace-powiat-hint"]'),
+      ).toBeNull();
+    });
+
+    it("seats a gmina's urząd picked from the powiat where the server says", async () => {
+      serve(null);
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper, powiat);
+      officeOption("000526251").click();
+      await flushPromises();
+      await submit();
+
+      expect(writes()).toEqual([
+        [
+          "/api/revisions/create",
+          expect.objectContaining({
+            name: "Urząd Miejski w Wejherowie",
+            regonNumber: "000526251",
+          }),
+        ],
+        // In the town's own region rather than in the powiat it was picked
+        // from, since the site has one.
+        [
+          "/api/edges/create",
+          { type: "seat", source: "teryt2215031", target: "urzad-new" },
+        ],
+        [
+          "/api/edges/create",
+          expect.objectContaining({
+            source: "node-1",
+            target: "urzad-new",
+            type: "employed",
+          }),
+        ],
+      ]);
+    });
   });
 
   it("forgets the last relation when it reopens", async () => {

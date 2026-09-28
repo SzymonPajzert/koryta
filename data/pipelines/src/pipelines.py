@@ -44,6 +44,7 @@ from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.scrape import KRSAlreadyScraped, KRSNeedsRefresh, ScrapeRejestrIO
 from scrapers.krs.updates import KRSUpdates
+from scrapers.map.offices import LocalGovernmentOffices
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
 from scrapers.pkw.process import PeoplePKW
@@ -81,6 +82,7 @@ PIPELINES = [
     KRSCensoredPeople,
     KRSNeedsRefresh,
     KRSUpdates,
+    LocalGovernmentOffices,
     PersonFeedCoverage,
     RejestrIOCoverage,
     KorytaCompanies,
