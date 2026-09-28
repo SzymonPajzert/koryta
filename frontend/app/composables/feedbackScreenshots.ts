@@ -1,22 +1,22 @@
 import { computed, ref } from "vue";
 import {
-  ScreenshotError,
-  prepareScreenshot,
-  type PreparedScreenshot,
-} from "~/utils/screenshotImage";
-import { MAX_FEEDBACK_SCREENSHOTS } from "~~/shared/feedbackScreenshots";
+  ImageUploadError,
+  prepareImage,
+  type PreparedImage,
+} from "~/utils/imageUpload";
+import { MAX_FEEDBACK_SCREENSHOTS } from "~~/shared/images";
 import { feedbackScreenshotsLabel } from "~~/shared/model";
 
 /** One image in the dialog: being prepared until `screenshot` is set. */
 export type AttachedScreenshot = {
   key: number;
-  screenshot?: PreparedScreenshot;
+  screenshot?: PreparedImage;
 };
 
 /** The images a report is about to go out with, however they came in - picked,
  * pasted or dropped on the dialog.
  *
- * Each is prepared in the background (`prepareScreenshot`), so the list holds
+ * Each is prepared in the background (`prepareImage`), so the list holds
  * it from the moment it is added and fills it in once it is ready. One removed,
  * or a list cleared, while still being prepared is simply not found when it is
  * done. */
@@ -40,14 +40,14 @@ export function useFeedbackScreenshots() {
 
   async function prepare(key: number, file: File) {
     try {
-      const screenshot = await prepareScreenshot(file);
+      const screenshot = await prepareImage(file, "feedback");
       attached.value = attached.value.map((item) =>
         item.key === key ? { ...item, screenshot } : item,
       );
     } catch (err) {
       if (!has(key)) return;
       attached.value = attached.value.filter((item) => item.key !== key);
-      if (err instanceof ScreenshotError) {
+      if (err instanceof ImageUploadError) {
         error.value = err.message;
       } else {
         console.error("Failed to prepare a screenshot", err);

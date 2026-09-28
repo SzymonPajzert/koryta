@@ -157,7 +157,7 @@ export type FeedbackDraft = {
   /** The dialog's honeypot. Never set anywhere a person types. */
   website?: string;
   context: FeedbackContext;
-  /** Images as `data:` urls, already re-encoded by `prepareScreenshot`. */
+  /** Images as `data:` urls, already re-encoded by `prepareImage`. */
   screenshots?: string[];
 };
 

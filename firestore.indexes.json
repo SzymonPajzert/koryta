@@ -961,5 +961,11 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "images",
+      "fieldPath": "data",
+      "indexes": []
+    }
+  ]
 }

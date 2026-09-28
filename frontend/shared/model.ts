@@ -836,15 +836,19 @@ export type FeedbackContext = {
   qa?: FeedbackQaContext;
 };
 
-/** An image attached to a report, as the report records it. The bytes are a
- * document of their own, `feedback/<id>/screenshots/<n>` where `n` is the
- * position here - see `shared/feedbackScreenshots.ts`. */
-export type FeedbackScreenshot = {
+/** An image as a document that shows it records it: which one, and enough to
+ * lay it out before it loads. The bytes are `images/<imageId>`, served at
+ * `/api/images/<imageId>` - see `shared/images.ts`. */
+export type ImageRef = {
+  imageId: string;
   contentType: "image/webp" | "image/jpeg" | "image/png";
   width: number;
   height: number;
   bytes: number;
 };
+
+/** An image attached to a report. Only admins can open one. */
+export type FeedbackScreenshot = ImageRef;
 
 export type Feedback = {
   id?: string;

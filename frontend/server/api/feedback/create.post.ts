@@ -2,14 +2,8 @@ import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, readValidatedBody } from "h3";
 import { getOptionalUser } from "~~/server/utils/auth";
-import {
-  decodeScreenshot,
-  feedbackScreenshotRef,
-} from "~~/server/utils/feedbackScreenshots";
-import {
-  MAX_FEEDBACK_SCREENSHOTS,
-  MAX_FEEDBACK_SCREENSHOT_DATA_URL_LENGTH,
-} from "~~/shared/feedbackScreenshots";
+import { imageField, newImage } from "~~/server/utils/images";
+import { MAX_FEEDBACK_SCREENSHOTS } from "~~/shared/images";
 import type { Feedback } from "~~/shared/model";
 
 const bodyValidator = z.object({
@@ -49,25 +43,13 @@ const bodyValidator = z.object({
       .optional(),
   }),
   // Images the dialog has already re-encoded, as `data:` urls - see
-  // shared/feedbackScreenshots.ts. Each is decoded and checked here, so a
-  // report with one that is not an image is refused whole, like any other
-  // field that fails.
+  // shared/images.ts.
   screenshots: z
     .array(
-      z
-        .string()
-        .max(MAX_FEEDBACK_SCREENSHOT_DATA_URL_LENGTH)
-        .transform((dataUrl, ctx) => {
-          const screenshot = decodeScreenshot(dataUrl);
-          if (!screenshot) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: "Zrzut ekranu nie jest obrazem, który przyjmujemy.",
-            });
-            return z.NEVER;
-          }
-          return screenshot;
-        }),
+      imageField(
+        "feedback",
+        "Zrzut ekranu nie jest obrazem, który przyjmujemy.",
+      ),
     )
     .max(MAX_FEEDBACK_SCREENSHOTS)
     .optional(),
@@ -136,6 +118,15 @@ export default defineEventHandler(async (event) => {
   const screenshots = keepScreenshots ? attached : [];
   const dropped = attached.length - screenshots.length;
 
+  const ref = db.collection("feedback").doc();
+  const images = screenshots.map((screenshot) =>
+    newImage(db, screenshot, {
+      purpose: "feedback",
+      subject: `feedback/${ref.id}`,
+      ...(user ? { uploadedBy: user.uid } : {}),
+    }),
+  );
+
   const doc: Feedback = {
     kind: body.kind,
     message: body.message,
@@ -149,13 +140,8 @@ export default defineEventHandler(async (event) => {
     adminStatus: "new",
     ...(user ? { userUid: user.uid } : {}),
     ...(body.contact ? { contact: body.contact } : {}),
-    ...(screenshots.length > 0
-      ? {
-          screenshots: screenshots.map(({ data, info }) => ({
-            ...info,
-            bytes: data.length,
-          })),
-        }
+    ...(images.length > 0
+      ? { screenshots: images.map(({ imageRef }) => imageRef) }
       : {}),
     ...(dropped > 0 ? { screenshotsDropped: dropped } : {}),
     // Marking it already-handled is what stops the trigger forwarding it.
@@ -167,16 +153,9 @@ export default defineEventHandler(async (event) => {
   // One batch, so a report and its images are saved together or not at all:
   // the trigger that forwards the report fires as soon as it exists, and the
   // panel must never list an image that is not there.
-  const ref = db.collection("feedback").doc();
   const batch = db.batch();
   batch.set(ref, doc);
-  screenshots.forEach(({ data, info }, index) => {
-    batch.set(feedbackScreenshotRef(db, ref.id, index), {
-      data,
-      contentType: info.contentType,
-      createdAt: doc.createdAt,
-    });
-  });
+  for (const image of images) batch.set(image.ref, image.doc);
   await batch.commit();
 
   return {

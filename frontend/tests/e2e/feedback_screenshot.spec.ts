@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { logIn, USERS } from "./helpers/auth";
-import { sniffImage } from "../../shared/feedbackScreenshots";
+import { sniffImage } from "../../shared/images";
 import type { Feedback } from "../../shared/model";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
@@ -59,6 +59,7 @@ async function pasteImage(page: Page, selector: string, png: Buffer) {
 test.describe("Zrzut ekranu w zgłoszeniu", () => {
   test("wysłany anonimowo zrzut trafia do panelu, bez niczego poza obrazem", async ({
     page,
+    request,
   }) => {
     test.setTimeout(180_000);
     const message = `Zgłoszenie ze zrzutem ${Date.now()}`;
@@ -110,11 +111,10 @@ test.describe("Zrzut ekranu w zgłoszeniu", () => {
       [1600, 900],
       [390, 844],
     ]);
-    for (const [index, listed] of report.screenshots!.entries()) {
-      const image = await reportDoc.ref
-        .collection("screenshots")
-        .doc(String(index))
-        .get();
+    for (const listed of report.screenshots!) {
+      const image = await db().collection("images").doc(listed.imageId).get();
+      expect(image.get("purpose")).toBe("feedback");
+      expect(image.get("subject")).toBe(`feedback/${reportDoc.id}`);
       const data = image.get("data") as Buffer;
       // What left the browser is what the canvas wrote - pixels, re-encoded -
       // not the file that was picked.
@@ -124,6 +124,10 @@ test.describe("Zrzut ekranu w zgłoszeniu", () => {
         height: listed.height,
       });
       expect(data.length).toBe(listed.bytes);
+
+      // Nobody but an admin gets it back - not even told it exists.
+      const anonymous = await request.get(`/api/images/${listed.imageId}`);
+      expect(anonymous.status()).toBe(404);
     }
 
     // The admin sees them on the report: marked on its line, loaded when the
@@ -147,13 +151,5 @@ test.describe("Zrzut ekranu w zgłoszeniu", () => {
     await expect
       .poll(() => full.evaluate((img: HTMLImageElement) => img.naturalHeight))
       .toBe(900);
-  });
-
-  // Refused before anything is read, so not even whether the report has an
-  // image gets out. A signed-in reader who is not an admin is refused the same
-  // way - see tests/server/api/feedback-screenshot.test.ts.
-  test("bez logowania zrzutu nie da się pobrać", async ({ request }) => {
-    const anonymous = await request.get("/api/feedback/screenshot?id=x&n=0");
-    expect(anonymous.status()).toBe(401);
   });
 });

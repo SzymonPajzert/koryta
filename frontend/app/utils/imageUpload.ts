@@ -1,43 +1,61 @@
-import {
-  MAX_FEEDBACK_SCREENSHOT_BYTES,
-  MAX_FEEDBACK_SCREENSHOT_PIXELS,
-  MAX_FEEDBACK_SCREENSHOT_SIDE,
-} from "~~/shared/feedbackScreenshots";
+import { IMAGE_LIMITS, type ImagePurpose } from "~~/shared/images";
 
-/** An image ready to go with a report. */
-export type PreparedScreenshot = {
-  /** What is sent, and what the dialog previews: a `data:` url. */
+/** An image ready to be sent for one purpose. */
+export type PreparedImage = {
+  /** What is sent, and what a form can preview: a `data:` url. */
   dataUrl: string;
   width: number;
   height: number;
   bytes: number;
 };
 
-/** A reason the reporter can act on - the dialog shows the message as is. */
-export class ScreenshotError extends Error {}
+/** A reason the person uploading can act on - forms show the message as is. */
+export class ImageUploadError extends Error {}
 
-/** The size to draw an image at: within the limits, the same shape, and
- * `shrink` times smaller again when an attempt came out too heavy. */
-export function fitScreenshot(
+/** The part of an image that is kept: all of it, or for a purpose that wants a
+ * square, the largest one in its middle. */
+export function cropFor(
   width: number,
   height: number,
-  shrink = 1,
-): { width: number; height: number } {
-  const scale =
-    Math.min(
-      1,
-      MAX_FEEDBACK_SCREENSHOT_SIDE / Math.max(width, height),
-      Math.sqrt(MAX_FEEDBACK_SCREENSHOT_PIXELS / (width * height)),
-    ) * shrink;
+  purpose: ImagePurpose,
+): { x: number; y: number; width: number; height: number } {
+  if (!IMAGE_LIMITS[purpose].square) return { x: 0, y: 0, width, height };
+  const side = Math.min(width, height);
   return {
-    width: Math.max(1, Math.floor(width * scale)),
-    height: Math.max(1, Math.floor(height * scale)),
+    x: Math.floor((width - side) / 2),
+    y: Math.floor((height - side) / 2),
+    width: side,
+    height: side,
   };
 }
 
+/** The size to draw a crop at: within the purpose's limits, the same shape,
+ * and `shrink` times smaller again when an attempt came out too heavy. */
+export function fitImage(
+  width: number,
+  height: number,
+  purpose: ImagePurpose,
+  shrink = 1,
+): { width: number; height: number } {
+  const limits = IMAGE_LIMITS[purpose];
+  const scale =
+    Math.min(
+      1,
+      limits.maxSide / Math.max(width, height),
+      Math.sqrt(limits.maxPixels / (width * height)),
+    ) * shrink;
+  const fitted = {
+    width: Math.max(1, Math.floor(width * scale)),
+    height: Math.max(1, Math.floor(height * scale)),
+  };
+  // Rounding each side on its own could leave a square a pixel off one.
+  if (limits.square) fitted.height = fitted.width;
+  return fitted;
+}
+
 /** Each attempt draws the image this much smaller than it may be, until one
- * fits in `MAX_FEEDBACK_SCREENSHOT_BYTES`. A screenshot fits on the first; a
- * photo from a phone takes a step or two. */
+ * fits in the purpose's `maxBytes`. A screenshot fits on the first; a photo
+ * from a phone takes a step or two. */
 const SHRINK_STEPS = [1, 0.8, 0.64, 0.5, 0.4, 0.3];
 
 type Decoded = { source: CanvasImageSource; width: number; height: number };
@@ -55,7 +73,7 @@ async function decode(file: Blob): Promise<{
     await element.decode();
   } catch {
     URL.revokeObjectURL(url);
-    throw new ScreenshotError(
+    throw new ImageUploadError(
       "Nie udało się odczytać tego pliku jako obrazu. Spróbuj PNG albo JPG.",
     );
   }
@@ -72,10 +90,11 @@ async function decode(file: Blob): Promise<{
 const toBlob = (canvas: HTMLCanvasElement, type: string, quality: number) =>
   new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
 
-/** The image drawn at `size`, as WebP, or as JPEG where the browser cannot
- * write WebP. */
+/** `crop` of the image drawn at `size`, as WebP, or as JPEG where the browser
+ * cannot write WebP. */
 async function encode(
   image: Decoded,
+  crop: ReturnType<typeof cropFor>,
   size: { width: number; height: number },
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
@@ -84,7 +103,7 @@ async function encode(
   try {
     const context = canvas.getContext("2d");
     if (!context) {
-      throw new ScreenshotError(
+      throw new ImageUploadError(
         "Ta przeglądarka nie potrafi zmniejszyć obrazu.",
       );
     }
@@ -93,14 +112,24 @@ async function encode(
     context.fillStyle = "#fff";
     context.fillRect(0, 0, size.width, size.height);
     context.imageSmoothingQuality = "high";
-    context.drawImage(image.source, 0, 0, size.width, size.height);
+    context.drawImage(
+      image.source,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      size.width,
+      size.height,
+    );
 
     const webp = await toBlob(canvas, "image/webp", 0.9);
     // Safari hands back a PNG when asked for WebP, several times the size of
     // a JPEG of the same picture.
     if (webp?.type === "image/webp") return webp;
     const jpeg = await toBlob(canvas, "image/jpeg", 0.9);
-    if (!jpeg) throw new ScreenshotError("Nie udało się zapisać obrazu.");
+    if (!jpeg) throw new ImageUploadError("Nie udało się zapisać obrazu.");
     return jpeg;
   } finally {
     // Safari caps the memory all canvases may hold; let this one go now.
@@ -117,26 +146,30 @@ const readAsDataUrl = (blob: Blob) =>
     reader.readAsDataURL(blob);
   });
 
-/** An image the reporter picked, pasted or dropped, made fit to send.
+/** An image somebody picked, pasted or dropped, made fit to send for
+ * `purpose` - see `IMAGE_LIMITS`.
  *
- * Drawn onto a canvas and encoded again, which is what keeps the reporter's
+ * Drawn onto a canvas and encoded again, which is what keeps the sender's
  * metadata at home: a canvas holds pixels and nothing else, so the EXIF block
  * of a phone photo - the place it was taken among it - is not in what leaves.
- * It is also what brings the image under the size one Firestore document can
- * hold, scaling it down a step at a time until it fits.
+ * It is also what brings the image to the size its purpose allows, cropping it
+ * to a square where that is wanted and scaling it down a step at a time until
+ * it fits.
  */
-export async function prepareScreenshot(
+export async function prepareImage(
   file: Blob,
-): Promise<PreparedScreenshot> {
+  purpose: ImagePurpose,
+): Promise<PreparedImage> {
   const { image, release } = await decode(file);
   try {
     if (image.width === 0 || image.height === 0) {
-      throw new ScreenshotError("Ten obraz jest pusty.");
+      throw new ImageUploadError("Ten obraz jest pusty.");
     }
+    const crop = cropFor(image.width, image.height, purpose);
     for (const shrink of SHRINK_STEPS) {
-      const size = fitScreenshot(image.width, image.height, shrink);
-      const blob = await encode(image, size);
-      if (blob.size <= MAX_FEEDBACK_SCREENSHOT_BYTES) {
+      const size = fitImage(crop.width, crop.height, purpose, shrink);
+      const blob = await encode(image, crop, size);
+      if (blob.size <= IMAGE_LIMITS[purpose].maxBytes) {
         return {
           dataUrl: await readAsDataUrl(blob),
           ...size,
@@ -144,7 +177,9 @@ export async function prepareScreenshot(
         };
       }
     }
-    throw new ScreenshotError("Ten obraz jest za duży, nawet po zmniejszeniu.");
+    throw new ImageUploadError(
+      "Ten obraz jest za duży, nawet po zmniejszeniu.",
+    );
   } finally {
     release();
   }
