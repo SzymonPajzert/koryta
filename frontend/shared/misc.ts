@@ -1,4 +1,13 @@
 import type { Article, ElectionPosition } from "./model";
+import { readableInkOn } from "./colors";
+
+/** „Inne”: a political tie we found that is not to one of the parties named
+ * below - a small party, a local one, a list outside the national ones. Stored
+ * on a person like any other party and filtered on like one, so the table can
+ * answer "who is political at all", but drawn greyed out wherever a party is
+ * drawn: it says that there is a tie, not whose, and must not read as one more
+ * party beside PiS and PO. */
+export const OTHER_PARTY = "Inne";
 
 /** The parties a person can be filtered by, and the only strings that get a
  * chip. Anything else is stored and then invisible: no colour, no dropdown
@@ -22,7 +31,9 @@ import type { Article, ElectionPosition } from "./model";
  *
  * Order is the graph legend's rank - `graph/Container.vue` sorts by
  * `parties.indexOf` - so a name goes on the end rather than in its historical
- * place. */
+ * place. `OTHER_PARTY` stays last of all, behind any party added later: it is
+ * the remainder, and the legend and every dropdown list it after the parties
+ * it is the remainder of. */
 export const parties = [
   "PO",
   "PiS",
@@ -34,6 +45,7 @@ export const parties = [
   "Razem",
   "Nowoczesna",
   "Bezpartyjni Samorządowcy",
+  OTHER_PARTY,
 ];
 
 /** Party names that stand for the same thing, folded to one key.
@@ -76,17 +88,20 @@ export function partyAliasesOf(canonical: string): string[] {
  * without a fill here is drawn flat and never named in the graph legend, which
  * only admits a party it has a colour for.
  *
- * `PartyChip` labels these with `readableInkOn`, which picks between black and
- * white and nothing in between, so a fill has to clear AA against one of those
- * two poles - tests/components/PartyChip.test.ts measures every entry here so
- * that a new colour cannot arrive unreadable.
+ * `partyChipPaint` labels these with `readableInkOn`, which picks between
+ * black and white and nothing in between, so a fill has to clear AA against one
+ * of those two poles - tests/components/PartyChip.test.ts measures every entry
+ * here so that a new colour cannot arrive unreadable.
  *
  * The keys are kept in the order `parties` uses. Nothing now pairs the two by
  * index - `chart/TreemapParty.vue` did, and went with the home page's party
  * panel - so a fill out of order no longer puts one party's name on another's
  * colour. It stays a lookup keyed by name, and the order stays tidy: that is
  * why the two names below sit after Razem's commented-out line rather than in
- * front of it. */
+ * front of it.
+ *
+ * `OTHER_PARTY` is the one entry whose chip is not its fill - see
+ * `partyChipPaint`. */
 export const partyColors: Record<string, string> = {
   PO: "#fca241",
   PiS: "#073b76",
@@ -106,7 +121,38 @@ export const partyColors: Record<string, string> = {
   // of Razem's wine above should that line ever be uncommented. White on it:
   // 7.64:1.
   "Bezpartyjni Samorządowcy": "#6A3D9A",
+  // The chart palette's axis grey (`ink.axis` in app/utils/chartTheme.ts), the
+  // colour /eksploruj/szpitale already gave a party the site has no colour
+  // for - which is what this is. Lighter than the #898781 that stands for
+  // „bez partii” there and for „pozostałe” on the timeline, 2.00:1 apart, so
+  // the two greys stay tellable apart in one bar. As a graph dot it is about
+  // as faint as Polska 2050's yellow: greyed out, and still there.
+  [OTHER_PARTY]: "#c3c2b7",
 };
+
+/** „Inne” as a chip: a pale grey pill in grey ink, so that it reads as greyed
+ * out rather than as one more party. On #c3c2b7 the chart palette's secondary
+ * ink, #52514e, measures 4.43:1 - under AA - and a grey pill in black ink is
+ * just a grey party, so the chip takes the chart palette's gridline grey
+ * instead, where that ink measures 6.00:1. The dot and the bar keep #c3c2b7,
+ * which a fill this pale would leave invisible on a white canvas. */
+const OTHER_PARTY_CHIP = { backgroundColor: "#e1e0d9", color: "#52514e" };
+
+/** How a party chip is painted: its own fill in whichever of black and white
+ * reads on it, `OTHER_PARTY` greyed out, and nothing for a party with no
+ * colour - the caller decides what that looks like on its own surface.
+ *
+ * One function for every chip, so a party reads the same in the table's rows,
+ * the filter that picks it and the chip in the query bar. */
+export function partyChipPaint(
+  party: string,
+): { backgroundColor: string; color: string } | undefined {
+  if (party === OTHER_PARTY) return { ...OTHER_PARTY_CHIP };
+  const fill = partyColors[party];
+  return fill
+    ? { backgroundColor: fill, color: readableInkOn(fill) }
+    : undefined;
+}
 
 export const electionPositions: ElectionPosition[] = [
   "Samorząd", // TODO remove it

@@ -391,8 +391,7 @@ import {
 } from "@mdi/js";
 import { computed, ref } from "vue";
 import type { Query } from "~~/server/api/nodes/index.get";
-import { readableInkOn } from "~~/shared/colors";
-import { partyColors } from "~~/shared/misc";
+import { partyChipPaint } from "~~/shared/misc";
 import {
   describeQuery,
   queryChips,
@@ -605,14 +604,15 @@ interface ChipLook {
   style?: { backgroundColor: string; color: string };
 }
 
-/** The party's own colour, when the filter names exactly one party the site
- * has a colour for. `queryChips` merges `?party` and `?parties` into a single
- * chip; this bar only ever binds `party`, so one value there is the whole
- * filter. „Partie: 3” and „Brak partii” have no colour to take and stay grey.
+/** The party's own chip, when the filter names exactly one party the site
+ * has a colour for - „Inne” greyed out, as PartyChip draws it. `queryChips`
+ * merges `?party` and `?parties` into a single chip; this bar only ever binds
+ * `party`, so one value there is the whole filter. „Partie: 3” and „Brak
+ * partii” have no colour to take and stay grey.
  */
-const partyFill = computed(() => {
+const partyPaint = computed(() => {
   const chosen = party.value;
-  return chosen?.length === 1 ? partyColors[chosen[0]!] : undefined;
+  return chosen?.length === 1 ? partyChipPaint(chosen[0]!) : undefined;
 });
 
 /** How one chip is painted, given what it is filtering on.
@@ -623,7 +623,7 @@ const partyFill = computed(() => {
  * either list is reworded.
  */
 function chipLook(chip: QueryChip): ChipLook {
-  if (chip.key === "party" && partyFill.value) {
+  if (chip.key === "party" && partyPaint.value) {
     // The label sits on a fill that runs from #f5c400 to near-black, so the
     // ink is measured against it rather than fixed: black on Konfederacja's
     // navy is 1.29:1, and this is the same call PartyChip makes on the row
@@ -631,10 +631,7 @@ function chipLook(chip: QueryChip): ChipLook {
     return {
       surface: "",
       icon: undefined,
-      style: {
-        backgroundColor: partyFill.value,
-        color: readableInkOn(partyFill.value),
-      },
+      style: partyPaint.value,
     };
   }
   if (chip.key === "category") {
