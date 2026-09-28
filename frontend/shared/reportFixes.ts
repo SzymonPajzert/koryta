@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W „Kto kogo zastąpił” chip „zmiana afiliacji” nazywa się teraz „inna partia”, a najechany albo stuknięty mówi, z której partii do której przeszło stanowisko, np. „PiS → PO”.",
+    fixes: ["w2IOzxln1HiguDBFzIpG"],
+  },
+  {
+    change:
       "„Właściciele” PKP SKM wymieniają każdego właściciela raz, także po załadowaniu strony - Gmina Gdańsk, POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Województwo pomorskie i Gdynia, a gmina, która jest i siedzibą, i właścicielem spółki, ma jeden wiersz.",
     fixes: ["SLaYgF7oCq9VV1fpU08t"],
   },

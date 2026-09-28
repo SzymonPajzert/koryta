@@ -159,6 +159,39 @@ describe("SuccessionCompanyChanges", () => {
     );
   });
 
+  it("says a seat went to another party, and which, on a tap", async () => {
+    const [handover] = turnover("2024-04-12", [
+      ["Tomasz Jachna", "Marcin Marzyński"],
+    ]);
+    handover!.left.parties = ["PiS"];
+    handover!.joined.parties = ["KO"];
+
+    response = { successions: [handover!], current: [], hidden: 0 };
+
+    const wrapper = await mountChanges();
+    const chip = wrapper.get('[data-testid="party-switch"]');
+
+    expect(chip.text()).toBe("inna partia");
+    // A phone has no hover, so the tooltip opens on a tap as well.
+    await chip.trigger("click");
+    await vi.waitUntil(() => document.body.textContent.includes("PiS → KO"), {
+      timeout: 2000,
+    });
+  });
+
+  it("claims no change of party when a side has none recorded", async () => {
+    const [handover] = turnover("2024-04-12", [
+      ["Tomasz Jachna", "Marcin Marzyński"],
+    ]);
+    handover!.left.parties = ["PiS"];
+
+    response = { successions: [handover!], current: [], hidden: 0 };
+
+    const wrapper = await mountChanges();
+
+    expect(wrapper.find('[data-testid="party-switch"]').exists()).toBe(false);
+  });
+
   it("splits the relay by role, Zarząd before Rada Nadzorcza", async () => {
     response = {
       successions: [
