@@ -1009,7 +1009,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         return to_scrape
 
     def companies_without_register_entry(self, ctx: Context) -> KRSSet:
-        """Companies we hold rejestr.io connections for and no api-krs entry.
+        """Companies the crawl knows and holds no api-krs entry for.
 
         `companies_to_scrape` subtracts every company that has any blob at all,
         so a company first met through a rejestr.io response - the usual way,
@@ -1024,15 +1024,34 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         reverse - buying rejestr.io connections for every company we happen to
         have a register entry for - is 1,642 companies and 164 PLN, and is a
         decision rather than a repair.
+
+        A company a feed only names is in the same state, with less excuse. A
+        rejestr.io response lists the organisations tied to the one asked
+        about - its subsidiaries, its owners, companies sharing a board member
+        - and `CompaniesKRS` keeps each by name and number and nothing else,
+        so nothing about who owns it. That was 6,853 of the 17,629 companies
+        in the 2026-09-28 `company_krs`. Only the odpis says a gmina or a
+        state fund owns one, and once `CompaniesKRS` has read it,
+        `owned_by_the_public` buys its connections.
         """
         scraped = self.already_scraped.latest_scrapes(ctx)
-        if scraped.empty:
-            return KRSSet()
-        method = scraped["method"].astype(str)
-        from_rejestrio = set(scraped.loc[method.str.startswith("rejestrio_org"), "krs"])
-        from_register = set(scraped.loc[method.str.startswith("api_krs"), "krs"])
-        missing = from_rejestrio - from_register
-        print(f"Companies with connections but no register entry: {len(missing)}")
+        from_rejestrio: set[str] = set()
+        from_register: set[str] = set()
+        if not scraped.empty:
+            method = scraped["method"].astype(str)
+            from_rejestrio = set(
+                scraped.loc[method.str.startswith("rejestrio_org"), "krs"]
+            )
+            from_register = set(scraped.loc[method.str.startswith("api_krs"), "krs"])
+        companies = self.companies.read_or_process(ctx)
+        named = set()
+        if companies is not None and "krs" in companies:
+            named = {str(krs).zfill(10) for krs in companies["krs"]}
+        missing = (from_rejestrio | named) - from_register
+        print(
+            f"Companies with no register entry: {len(missing)} "
+            f"({len(from_rejestrio - from_register)} with connections)"
+        )
         return KRSSet(KRS(id=str(krs).zfill(10)) for krs in missing)
 
     def companies_without_names(self, ctx: Context) -> KRSSet:
