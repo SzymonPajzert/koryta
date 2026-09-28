@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// The owner's task list (frontend/shared/tasks.ts). Nothing reaches it from a
+// browser: the page reads and writes it through /api/ops/tasks/*, with the
+// admin SDK, and agents through the `koryta` MCP server as `ops-writer`, whose
+// IAM grant covers this database alone. Neither is subject to these rules.
+//
+// Deployed on its own, from firebase.ops.json - see frontend/README.md,
+// "Agent tools".
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

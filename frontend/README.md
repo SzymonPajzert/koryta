@@ -271,8 +271,8 @@ any business there.
 ## Agent tools
 
 Claude sessions in this repo can read production data through an MCP server,
-`scripts/mcp/server.ts`, which `/.mcp.json` registers as `koryta`. Today it has
-the feedback queue from `/admin/opinie`:
+`scripts/mcp/server.ts`, which `/.mcp.json` registers as `koryta`. It has the
+feedback queue from `/admin/opinie`:
 
 - `feedback_queue` — open reports in the page's order (not yet in the queue,
   then the queue from the top), or the newest closed ones; one line each.
@@ -311,3 +311,56 @@ it for sessions that cannot ask, add to `~/.claude/settings.json`:
 
 With `FIRESTORE_EMULATOR_HOST` set the server reads that emulator instead.
 Every answer says which database it came from.
+
+### The owner's task list
+
+The same server keeps the owner's task list, `/admin/zadania`: what is left to
+deploy, run, decide or build, and what has to happen before what
+(`shared/tasks.ts`). An agent that leaves something behind - "deploy the
+indexes once this merges" - adds it there instead of only to its notes:
+
+- `tasks_list` — the page's lists: ready for the owner, ready for an agent,
+  blocked (with what each waits on), ideas, parked, closed.
+- `task_get` — whole tasks by id or `#t-<id>` link, with their history and
+  what they unblock.
+- `task_add` — a new task, one step each, with the commands in its body and
+  `dependsOn` for what has to happen first. An open task that looks like the
+  same thing is shown instead of a duplicate being added.
+- `task_update` — close, start or park a task, change what it waits on, or add
+  a line to its history. A dependency that would close a loop is refused.
+
+This is the one thing agents write to production, and it lives in its own
+database, `ops`, so that the account they write as cannot touch the site's
+data: `ops-writer` holds `roles/datastore.user` under an IAM condition naming
+that database alone. It is also out of the nightly export. The page reads the
+same documents through `/api/ops/tasks/*`, which only the `owner` claim opens
+(`data/pipelines/src/set_auth_claims.py`); other administrators get a 403.
+
+Once, as a project owner:
+
+```bash
+gcloud firestore databases create --database=ops --project=koryta-pl \
+  --location=europe-central2 --delete-protection
+gcloud iam service-accounts create ops-writer --project=koryta-pl \
+  --display-name="Agents: the owner's task list"
+gcloud projects add-iam-policy-binding koryta-pl \
+  --member=serviceAccount:ops-writer@koryta-pl.iam.gserviceaccount.com \
+  --role=roles/datastore.user \
+  --condition='expression=resource.name=="projects/koryta-pl/databases/ops",title=ops-only'
+gcloud iam service-accounts add-iam-policy-binding \
+  ops-writer@koryta-pl.iam.gserviceaccount.com --project=koryta-pl \
+  --member=serviceAccount:dev-workflow@koryta-pl.iam.gserviceaccount.com \
+  --role=roles/iam.serviceAccountTokenCreator
+# From the repo root: rules that shut the browser out of `ops` entirely.
+frontend/node_modules/.bin/firebase deploy --only firestore --config firebase.ops.json
+# And the `owner` claim, with application default credentials:
+(cd data/pipelines && uv run set_auth_claims)
+```
+
+`firebase.ops.json` is separate from `firebase.json` because the Firestore
+emulator loads no rules at all once `firebase.json` names two databases.
+
+To load a list of tasks - the harvest of open items from the agents' notes,
+say - `scripts/ops/import-tasks.ts <file.json>` writes each task that is not
+there yet, as `ops-writer`, or into the emulator when `FIRESTORE_EMULATOR_HOST`
+is set. It never changes a task that exists.

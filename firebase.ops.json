@@ -1,0 +1,7 @@
+{
+  "firestore": {
+    "database": "ops",
+    "location": "europe-central2",
+    "rules": "firestore.ops.rules"
+  }
+}
