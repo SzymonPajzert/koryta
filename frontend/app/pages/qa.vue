@@ -104,7 +104,27 @@
             @status="(adminStatus) => updateAdmin(report, { adminStatus })"
             @draft="(note) => (draftNotes[report.id!] = note)"
             @save-note="saveNote(report)"
-          />
+          >
+            <!-- The check this list is here for, on the line and in the word
+                 an entry uses for it: finding the fix working closes the
+                 report, with no second trip to /admin/opinie. -->
+            <template
+              v-if="teamSection.id === 'fixed-reports' && !isSettled(report)"
+              #actions
+            >
+              <v-btn
+                size="small"
+                variant="text"
+                color="ink-success"
+                :prepend-icon="mdiCheck"
+                :loading="confirming === report.id"
+                data-confirm-fix
+                @click="confirmFix(report)"
+              >
+                Działa
+              </v-btn>
+            </template>
+          </FeedbackReportRow>
         </AdminRowList>
       </template>
 
@@ -159,11 +179,15 @@
 
 <script lang="ts" setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
+import { mdiCheck } from "@mdi/js";
 import { useQaChecks } from "~/composables/qa";
 import { useAuthState } from "~/composables/auth";
 import { useFeedbackAdmin } from "~/composables/feedbackAdmin";
 import { useQueryFilters } from "~/composables/queryFilters";
-import type { QaCheckStatus, QaItemState } from "~~/shared/qa";
+import { blocksClosing, followUpsOf } from "~~/shared/feedbackFixes";
+import { isSettled } from "~~/shared/feedbackQueue";
+import type { Feedback } from "~~/shared/model";
+import type { QaCheckStatus, QaItem, QaItemState } from "~~/shared/qa";
 
 definePageMeta({
   middleware: "auth",
@@ -191,6 +215,7 @@ const {
  * on the first tab, and the ones sent from this list, on "Problemy". The list
  * is admin-only, so nobody else ever asks for it. */
 const {
+  items: reports,
   loadError: reportsError,
   load: loadReports,
   sectionOf,
@@ -330,7 +355,7 @@ const teamSection = computed(() => {
     return {
       id: "fixed-reports",
       title: "Zgłoszenia do zamknięcia",
-      info: "Otwarte zgłoszenia, które zmiany w tej wersji strony mają poprawiać - wpisem z tej listy albo samą zmianą w kodzie. Sprawdź każde tam, gdzie je zgłoszono, i zamknij, jeśli działa.",
+      info: "Otwarte zgłoszenia, które zmiany w tej wersji strony mają poprawiać - wpisem z tej listy albo samą zmianą w kodzie. Sprawdź każde tam, gdzie je zgłoszono, i kliknij „Działa” - to zamyka zgłoszenie.",
       reports: fixedReports.value,
       empty: "Żadne otwarte zgłoszenie nie czeka na sprawdzenie poprawki.",
       link: undefined,
@@ -373,7 +398,7 @@ const ownSection = computed(() => {
     return {
       id: "my-unchecked",
       title: "Twoje wpisy do sprawdzenia",
-      info: "Wpisy bez Twojej oceny. Zostają tutaj, dopóki nie powiesz, czy działają.",
+      info: "Wpisy bez Twojej oceny. Zostają tutaj, dopóki nie powiesz, czy działają. „Działa” przy wpisie, który poprawia zgłoszenie, zamyka też to zgłoszenie.",
     };
   }
   return null;
@@ -464,16 +489,87 @@ watch([loaded, () => route.hash], focusHashItem, { immediate: true });
 const otherChecks = (itemId: string) =>
   checksFor(itemId).filter((check) => check.userUid !== user.value?.uid);
 
-async function save(itemId: string, status: QaCheckStatus, feedback: string) {
+/** What an admin's "Działa" did to the reports a fix is for. */
+type Closing = {
+  closed: number;
+  /** Left open because a problem reported against the fix still is. */
+  held: number;
+  failed: number;
+  /** The list of reports never arrived, so none could be looked at. */
+  unread: boolean;
+};
+
+/** An admin's "Działa" on an entry is the check the reports it fixes were
+ * waiting for, so it closes them there and then - checking a fix here and
+ * closing its report again on /admin/opinie was doing the same thing twice.
+ * The one exception is a report a problem reported against the fix still
+ * holds open (`blocksClosing`), which is not done whatever the verdicts say.
+ * Anybody else's verdict closes nothing; closing is an admin's. */
+async function closeFixedBy(entry: QaItem): Promise<Closing> {
+  if (!reportsReady.value) {
+    return { closed: 0, held: 0, failed: 0, unread: true };
+  }
+  const claims = new Set(entry.fixes);
+  const open = reports.value.filter(
+    (report) => claims.has(report.id!) && !isSettled(report),
+  );
+  const held = open.filter((report) =>
+    followUpsOf(report, [entry], reports.value).some(blocksClosing),
+  );
+  const closing = open.filter((report) => !held.includes(report));
+  const results = await Promise.all(
+    closing.map((report) => updateAdmin(report, { adminStatus: "resolved" })),
+  );
+  const closed = results.filter(Boolean).length;
+  return {
+    closed,
+    held: held.length,
+    failed: closing.length - closed,
+    unread: false,
+  };
+}
+
+/** "zgłoszenie", "2 zgłoszenia", "5 zgłoszeń" - after "zamknięto". */
+function reportCount(n: number): string {
+  if (n === 1) return "zgłoszenie";
+  const few = n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14);
+  return `${n} ${few ? "zgłoszenia" : "zgłoszeń"}`;
+}
+
+function closingText({ closed, held, failed, unread }: Closing): string {
+  if (unread) return "zgłoszeń nie zamknięto - nie wczytała się ich lista";
+  return [
+    closed && `zamknięto ${reportCount(closed)}`,
+    held &&
+      `nie zamknięto ${held === 1 ? "zgłoszenia" : `${held} zgłoszeń`} - problem zgłoszony przy tej poprawce jest wciąż otwarty`,
+    failed &&
+      `nie udało się zamknąć ${failed === 1 ? "zgłoszenia" : `${failed} zgłoszeń`}`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** `entry` is passed by a caller that already has it - the entry claiming a
+ * report, from `fixInfo` - and otherwise looked up on this list. */
+async function save(
+  itemId: string,
+  status: QaCheckStatus,
+  feedback: string,
+  entry: QaItem | undefined = items.find((item) => item.id === itemId),
+) {
   savingId.value = itemId;
   try {
     const { reported, forwarded } = await saveCheck(itemId, status, feedback);
+    const closing =
+      status === "ok" && isAdmin.value && entry?.fixes?.length
+        ? await closeFixedBy(entry)
+        : null;
     // Four outcomes worth telling apart: the tick alone, the same verdict
     // saved again with nothing new to send, the tick plus a report that
     // reached the team, and the tick with a report that did not. The last one
     // is not an error - the verdict is saved either way - but somebody who
     // wrote out a problem should know it is still only here.
-    snackbarText.value = !reported
+    const verdict = !reported
       ? status === "ok"
         ? "Zapisane: działa"
         : "Zapisane. Bez zmian, więc nie wysłano ponownie."
@@ -482,8 +578,15 @@ async function save(itemId: string, status: QaCheckStatus, feedback: string) {
           ? "Zapisane i wysłane do zespołu"
           : "Zgłoszone - problem trafił do zespołu"
         : "Zapisane, ale nie udało się wysłać do zespołu";
+    const closingSaid = closing ? closingText(closing) : "";
+    snackbarText.value = closingSaid ? `${verdict} · ${closingSaid}` : verdict;
     snackbarColor.value =
-      forwarded || !reported ? "ink-success" : "ink-warning";
+      (forwarded || !reported) &&
+      !closing?.failed &&
+      !closing?.held &&
+      !closing?.unread
+        ? "ink-success"
+        : "ink-warning";
     snackbar.value = true;
     // The report just sent is on the team's list now, and on "Problemy" it is
     // what stands for this entry - so an admin's copy of the list is read
@@ -500,6 +603,32 @@ async function save(itemId: string, status: QaCheckStatus, feedback: string) {
     snackbar.value = true;
   } finally {
     savingId.value = null;
+  }
+}
+
+/** Which report's "Działa" is being written, for its spinner. */
+const confirming = ref<string | null>(null);
+
+/** "Działa" on a report this build says it fixes. Where a QA entry claims it,
+ * that is the entry's verdict - the same click as on the entry, so the entry
+ * leaves this reader's list as well, and it closes whatever the entry fixes.
+ * A change with no entry has no verdict to take, and closes the report. */
+async function confirmFix(report: Feedback) {
+  confirming.value = report.id!;
+  try {
+    const entry = fixInfo.value.get(report.id!)?.entries[0];
+    if (entry) {
+      await save(entry.id, "ok", "", entry);
+      return;
+    }
+    const closed = await updateAdmin(report, { adminStatus: "resolved" });
+    snackbarText.value = closed
+      ? "Zamknięte: poprawka działa"
+      : "Nie udało się zamknąć zgłoszenia";
+    snackbarColor.value = closed ? "ink-success" : "error";
+    snackbar.value = true;
+  } finally {
+    confirming.value = null;
   }
 }
 </script>
