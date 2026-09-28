@@ -12,7 +12,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { feedbackGet, feedbackQueue } from "./feedback";
+import { feedbackGet, feedbackQueue, feedbackScreenshots } from "./feedback";
 import { connect } from "./firestore-reader";
 
 const db = connect();
@@ -30,9 +30,19 @@ const REPORTERS_EXPLAINED =
   "from the owner; `trusted` is a reviewer whose reports the owner wants " +
   "worked before the rest; `signed-in` and `anonymous` are everybody else.";
 
-async function answer(read: () => Promise<string>) {
+type Content =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string };
+
+async function answer(read: () => Promise<string | Content[]>) {
   try {
-    return { content: [{ type: "text" as const, text: await read() }] };
+    const result = await read();
+    return {
+      content:
+        typeof result === "string"
+          ? [{ type: "text" as const, text: result }]
+          : result,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
@@ -100,6 +110,8 @@ server.registerTool(
       "the admin's note, and - when a frontend/shared/qa.ts entry or a " +
       "frontend/shared/reportFixes.ts change claims to fix it - the claim, " +
       "what checkers found and whether the page would offer closing it. " +
+      "Screenshots the reporter attached come after the reports, as images, " +
+      "each introduced by the report it belongs to. " +
       REPORTERS_EXPLAINED +
       " Read-only; reporters' contact details and user ids never leave the database.",
     inputSchema: {
@@ -110,10 +122,33 @@ server.registerTool(
         .describe(
           "Report ids, or links to them (https://koryta.pl/admin/opinie#fb-<id>)",
         ),
+      screenshots: z
+        .boolean()
+        .default(true)
+        .describe(
+          "Attach the reports' screenshots as images; false for the text alone",
+        ),
     },
     annotations: READ_ONLY,
   },
-  ({ ids }) => answer(() => feedbackGet(db, ids)),
+  ({ ids, screenshots }) =>
+    answer(async () => {
+      const [reports, images] = await Promise.all([
+        feedbackGet(db, ids),
+        screenshots ? feedbackScreenshots(db, ids) : [],
+      ]);
+      if (images.length === 0) return reports;
+      return [
+        { type: "text" as const, text: reports },
+        ...images.flatMap(({ id, n, of, width, height, mimeType, data }) => [
+          {
+            type: "text" as const,
+            text: `Screenshot ${n} of ${of} on report ${id} (${width}×${height}):`,
+          },
+          { type: "image" as const, data, mimeType },
+        ]),
+      ];
+    }),
 );
 
 await server.connect(new StdioServerTransport());
