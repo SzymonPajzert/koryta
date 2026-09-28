@@ -198,9 +198,9 @@ class CompressedMirror:
             "--no-mirror",
             action="store_true",
             help="Read whole prefixes object by object from the source bucket "
-            "instead of from the compressed mirror. Far slower, but it sees "
-            "objects written since the last archive was built -- which is what "
-            "an iterative scrape wants.",
+            "instead of from the compressed mirror. Sees the same objects -- "
+            "the mirror path fetches whatever its archive lacks from the "
+            "bucket -- only slower; for a mirror you suspect is wrong.",
         )
         return parser.parse_known_args()[0]
 
