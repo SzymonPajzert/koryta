@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import PartyChip from "../../app/components/PartyChip.vue";
-import { partyColors } from "../../shared/misc";
-import { AA_TEXT, contrastRatio, surface } from "../../shared/colors";
+import { OTHER_PARTY, partyColors } from "../../shared/misc";
+import { AA_TEXT, contrastRatio, ink, surface } from "../../shared/colors";
 
 /** The ink the chip settled on. jsdom keeps a hex colour verbatim, which is
  * the form `contrastRatio` takes; the assertion is here so that a colour it
@@ -12,6 +12,16 @@ const inkOf = (party: string): string => {
   const color = (chip.element as HTMLElement).style.color;
   expect(color).toMatch(/^#[0-9a-f]{6}$/i);
   return color;
+};
+
+/** The fill the chip settled on, read back the same way. Not `partyColors`:
+ * „Inne” is painted paler than its dot, and the ink has to read on what is
+ * actually behind it. */
+const fillOf = (party: string): string => {
+  const chip = mount(PartyChip, { props: { party } }).get(".chip");
+  const fill = (chip.element as HTMLElement).style.backgroundColor;
+  expect(fill).toMatch(/^#[0-9a-f]{6}$/i);
+  return fill;
 };
 
 describe("PartyChip", () => {
@@ -74,11 +84,31 @@ describe("PartyChip", () => {
   it.each(Object.keys(partyColors))(
     "gives %s ink that clears AA on its own fill",
     (party) => {
-      expect(
-        contrastRatio(inkOf(party), partyColors[party]!),
-      ).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(contrastRatio(inkOf(party), fillOf(party))).toBeGreaterThanOrEqual(
+        AA_TEXT,
+      );
     },
   );
+
+  /** „Inne” names no party, so it is drawn greyed out - neither black nor
+   * white ink, and not the #c3c2b7 its graph dot is - and says on hover what
+   * it stands for. No other chip carries a title. */
+  it("greys „Inne” out, and explains it", () => {
+    expect(fillOf(OTHER_PARTY)).not.toBe(partyColors[OTHER_PARTY]);
+    expect(inkOf(OTHER_PARTY)).not.toBe(surface.white);
+    expect(inkOf(OTHER_PARTY)).not.toBe(ink.strong);
+
+    const chip = mount(PartyChip, { props: { party: OTHER_PARTY } }).get(
+      ".chip",
+    );
+    expect(chip.text()).toBe("Inne");
+    expect(chip.attributes("title")).toContain("spoza głównych partii");
+    expect(
+      mount(PartyChip, { props: { party: "PiS" } })
+        .get(".chip")
+        .attributes("title"),
+    ).toBeUndefined();
+  });
 
   /** The reported chip: near-black ink on near-black navy. White is the only
    * one of the two inks that reads on it. */
