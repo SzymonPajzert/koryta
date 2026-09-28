@@ -9,14 +9,13 @@ from functools import cached_property
 import pandas as pd
 from tqdm import tqdm
 
-from analysis.extract import is_public
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
 from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.censored import KRSCensoredPeople
-from scrapers.krs.columns import normalise
+from scrapers.krs.columns import is_public, normalise
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
