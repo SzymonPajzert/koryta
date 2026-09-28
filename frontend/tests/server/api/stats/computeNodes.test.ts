@@ -32,6 +32,7 @@ const mockDb = {
 
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: vi.fn(() => mockDb),
+  FieldValue: { delete: () => "<delete>" },
 }));
 
 // Faked at the token, not at the gate: `requireAdmin` and the `getUser` it
@@ -135,5 +136,40 @@ describe("POST /api/stats/computeNodes", () => {
       ]),
     );
     expect(written).toEqual({ "person-1": 2, "person-2": 0 });
+  });
+
+  /** A merged-away page keeps its document, and with it its wikipedia and
+   * rejestr.io links - enough for tier 1. Given stats, it sat in the checking
+   * queue as an unpublished, unvoted person that /api/nodes then dropped from
+   * the page it was queried for, so a one-person page came back empty. */
+  it("leaves a merged-away page without stats", async () => {
+    const links = {
+      wikipedia: "https://pl.wikipedia.org/wiki/Jan_Kowalski",
+      rejestrIo: "https://rejestr.io/osoby/1/jan-kowalski",
+    };
+    collections.nodes = [
+      {
+        id: "survivor",
+        data: () => ({ type: "person", name: "Jan Kowalski", ...links }),
+      },
+      {
+        id: "tombstone",
+        data: () => ({
+          type: "person",
+          name: "Jan Kowalski",
+          ...links,
+          deleted: true,
+          merged_into: "survivor",
+        }),
+      },
+    ];
+
+    await handler({} as never);
+
+    const [[, survivor], [, tombstone]] = batchUpdate.mock.calls;
+    expect(survivor.stats).toMatchObject({ isApproved: false, queueTier: 1 });
+    expect(tombstone.stats).toBe("<delete>");
+    // Its revisions are still counted: they are filed against its id.
+    expect(tombstone).toHaveProperty("revisions");
   });
 });
