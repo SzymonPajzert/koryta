@@ -246,8 +246,24 @@
                     /></span>
                   </div>
                   <div class="rl-gap">{{ gapLabel(pair.gapDays) }}</div>
-                  <div v-if="switchesParty(pair)" class="rl-flip">
-                    zmiana afiliacji
+                  <!-- Focusable and opened by a tap too: the parties it is
+                       about are only named in the tooltip, and a phone has
+                       no hover. -->
+                  <div
+                    v-if="switchesParty(pair)"
+                    class="rl-flip"
+                    tabindex="0"
+                    data-testid="party-switch"
+                  >
+                    inna partia
+                    <v-tooltip
+                      activator="parent"
+                      location="bottom"
+                      max-width="280"
+                      open-on-click
+                    >
+                      {{ partySwitchHint(pair) }}
+                    </v-tooltip>
                   </div>
                 </div>
 
@@ -325,6 +341,7 @@ import { useCurrentUser } from "vuefire";
 import { authFetch } from "~/composables/auth";
 import { createSlug, generateEntityUrl } from "~/composables/slugs";
 import { gapLabel, MAX_GAP_DAYS, MAX_OVERLAP_DAYS } from "~~/shared/succession";
+import { OTHER_PARTY } from "~~/shared/misc";
 import { isoDay, longDate, shortDate } from "~~/shared/dates";
 import type {
   CompanySuccessions,
@@ -475,13 +492,36 @@ function personUrl(who: { personId: string; personName: string }): string {
   return generateEntityUrl("person", who.personId, who.personName);
 }
 
+/** The party one side of a handover is known by: its first named one, and
+ * „Inne” only when that is all it has. „Inne” is where the parties with no
+ * colour of their own go, so a list holding it next to PiS is a PiS person,
+ * not a swing between the two. */
+function sideParty(parties: string[]): string | undefined {
+  return parties.find((party) => party !== OTHER_PARTY) ?? parties[0];
+}
+
 /** Whether the seat changed party with its holder. Only claimed when both
  * sides are known: an empty `parties` means "not recorded", not
- * "bezpartyjny", and reading it as a swing would invent one. */
+ * "bezpartyjny", and reading it as a swing would invent one. Two sides that
+ * are both „Inne” are unknown to each other too: two different small parties
+ * and one and the same look alike there. */
 function switchesParty(pair: Succession): boolean {
-  const left = pair.left.parties;
-  const joined = pair.joined.parties;
-  return left.length > 0 && joined.length > 0 && left[0] !== joined[0];
+  const left = sideParty(pair.left.parties);
+  const joined = sideParty(pair.joined.parties);
+  return left !== undefined && joined !== undefined && left !== joined;
+}
+
+/** A side's party as the tooltip says it: „Inne” is not a party's name. */
+function partyLabel(parties: string[]): string {
+  const party = sideParty(parties);
+  return party === OTHER_PARTY ? "inna, mniejsza partia" : (party ?? "");
+}
+
+/** What the chip claims, with the parties it compared. It used to say
+ * „zmiana afiliacji”, which named neither and read as if the person had
+ * switched parties. */
+function partySwitchHint(pair: Succession): string {
+  return `Stanowisko objęła osoba z innej partii niż ta, która je zwolniła: ${partyLabel(pair.left.parties)} → ${partyLabel(pair.joined.parties)}.`;
 }
 
 /* ---------- grouping ---------- */
@@ -865,6 +905,7 @@ const roleSections = computed(() => {
   background: rgb(var(--v-theme-secondary));
   border-radius: 999px;
   color: rgba(var(--v-theme-on-surface), 0.87);
+  cursor: help;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.04em;
