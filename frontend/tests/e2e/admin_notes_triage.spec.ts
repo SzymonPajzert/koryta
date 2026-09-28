@@ -13,8 +13,9 @@ test.describe("Kategoryzacja notatek", () => {
   test("classifies one entry and hands the next to the table", async ({
     page,
   }) => {
-    // Seeds, logs in, opens a person's page and works through a queue
-    test.setTimeout(120000);
+    // Seeds, logs in, opens a person's page and a company's, and works through
+    // a queue
+    test.setTimeout(150000);
 
     const app =
       getApps().length === 0
@@ -24,14 +25,34 @@ test.describe("Kategoryzacja notatek", () => {
 
     const stamp = Date.now();
     // No hyphen: the person's page reads the id off after the last one, and
-    // the spec follows the card's link to it.
+    // the spec follows the card's link to it. The company's likewise, which
+    // the spec reaches through the record under the choices.
     const personId = `triageperson${stamp}`;
+    const companyId = `triagecompany${stamp}`;
     const noteId = `${personId}_test-user`;
+    const companyNoteId = `${companyId}_test-user`;
 
+    // Something for the record under the choices to show: a party, and a post
+    // at a company that has a note of its own further down the queue.
     await db
       .collection("nodes")
       .doc(personId)
-      .set({ name: `Bogdan Kategoria ${stamp}`, type: "person" });
+      .set({
+        name: `Bogdan Kategoria ${stamp}`,
+        type: "person",
+        parties: ["PiS"],
+      });
+    await db
+      .collection("nodes")
+      .doc(companyId)
+      .set({ name: `Wodociagi Kategoria ${stamp}`, type: "place" });
+    await db.collection("edges").doc(`triage-edge-job-${stamp}`).set({
+      source: personId,
+      target: companyId,
+      type: "employed",
+      name: "Prezes zarzadu",
+      start_date: "2021-05-01",
+    });
 
     // The queue is newest first, so the first entry seeded is the second one
     // judged. Both are untyped, which is what puts them in the queue at all.
@@ -51,6 +72,17 @@ test.describe("Kategoryzacja notatek", () => {
           { note: `bez kontekstu ${stamp}`, kind: "missing" },
         ],
       });
+    // A millisecond older, so it is the entry right after both of those, and
+    // about another node - which is what the record has to follow.
+    await db
+      .collection("notes")
+      .doc(companyNoteId)
+      .set({
+        nodeId: companyId,
+        userUid: "test-user",
+        createdAt: new Date(stamp - 1).toISOString(),
+        sources: [{ note: `o spolce ${stamp}`, kind: "change_request" }],
+      });
 
     const target = "/admin/notatki/kategoryzacja";
     await page.goto(`/login?redirect=${encodeURIComponent(target)}`);
@@ -68,6 +100,28 @@ test.describe("Kategoryzacja notatek", () => {
     const card = page.locator(".triage-card");
     await expect(card).toBeVisible({ timeout: 30000 });
     await expect(card).toContainText(`Bogdan Kategoria ${stamp}`);
+
+    // Under the choices, who the note is about - the party and the post a
+    // verdict is weighed against - so a phone need not switch to the table.
+    const subject = page.getByTestId("triage-subject");
+    await expect(subject).toBeVisible({ timeout: 30000 });
+    await expect(subject).toContainText("Kogo dotyczy notatka");
+    await expect(subject).toContainText(`Bogdan Kategoria ${stamp}`);
+    await expect(subject.locator(".chip", { hasText: "PiS" })).toBeVisible();
+    const job = subject
+      .locator("a.history-row")
+      .filter({ hasText: `Wodociagi Kategoria ${stamp}` });
+    await expect(job).toContainText("Prezes zarzadu");
+
+    // A relation opens in a tab of its own too: leaving the queue would take
+    // its undo history with it.
+    const [companyPage] = await Promise.all([
+      page.context().waitForEvent("page"),
+      job.click(),
+    ]);
+    await companyPage.waitForURL(`**/instytucja/*-${companyId}`);
+    await companyPage.close();
+    await expect(page).toHaveURL(/\/admin\/notatki\/kategoryzacja/);
 
     // The name opens the person's page, in a tab of its own so the queue keeps
     // its place. It once drew as an inert <nuxtlink> tag that went nowhere.
@@ -105,6 +159,9 @@ test.describe("Kategoryzacja notatek", () => {
       )
       .toBe("missing_data");
 
+    // The second entry is on the same person, so the record stays as drawn.
+    await expect(subject).toContainText(`Bogdan Kategoria ${stamp}`);
+
     // The escape hatch: what this view cannot classify goes to the table.
     const second = await card.locator(".note-text").innerText();
     await page.getByText("Nie da się ocenić tutaj").click();
@@ -132,13 +189,38 @@ test.describe("Kategoryzacja notatek", () => {
       )
       .toBe(true);
 
-    // A reload starts a fresh queue: neither entry may come back, because one
-    // is classified and the other is waiting for the table view. What is left
-    // in the queue is the seed's own notes, so the card is still there - it
-    // just must not be showing either of these two again.
+    // Next is the note on the company, and the record follows it: the
+    // company's relations now, with the person among them, rather than the
+    // person left over from the last card.
+    await expect(card).toContainText(`o spolce ${stamp}`, { timeout: 15000 });
+    await expect(subject).toContainText("Czego dotyczy notatka", {
+      timeout: 30000,
+    });
+    await expect(subject).not.toContainText("Kogo dotyczy notatka");
+    await expect(
+      subject.locator("a.history-row").filter({
+        hasText: `Bogdan Kategoria ${stamp}`,
+      }),
+    ).toContainText("Prezes zarzadu");
+
+    // Judged too, so the spec leaves nothing of its own in the queue.
+    await page.getByText("Ciekawostka / Kontekst").click();
+    await expect
+      .poll(
+        async () =>
+          (await db.collection("notes").doc(companyNoteId).get()).data()
+            ?.sources?.[0]?.adminType,
+        { timeout: 15000 },
+      )
+      .toBe("context");
+
+    // A reload starts a fresh queue: no entry may come back, because two are
+    // classified and one is waiting for the table view. What is left in the
+    // queue is the seed's own notes, so the card is still there - it just must
+    // not be showing any of these again.
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(card).toBeVisible({ timeout: 30000 });
-    for (const judged of [first, second]) {
+    for (const judged of [first, second, `o spolce ${stamp}`]) {
       await expect(page.getByText(judged.trim(), { exact: false })).toHaveCount(
         0,
       );

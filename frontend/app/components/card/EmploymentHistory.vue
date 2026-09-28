@@ -32,6 +32,7 @@
         v-for="edge in edgesSorted"
         :key="edge.id"
         :to="nodeLinkUrl(edge.richNode)"
+        :target="newTab ? '_blank' : undefined"
         class="history-row mt-1"
         rounded
       >
@@ -296,6 +297,12 @@ const props = defineProps<{
    * The endpoint answers per post rather than per edge, so a caller builds this
    * with `predecessorsByEdge` (app/utils/succession.ts) rather than by hand. */
   predecessors?: Record<string, Predecessor>;
+  /** Whether a row opens the page at its far end in a tab of its own rather
+   * than in place of this one. For a host whose place is worth keeping: the
+   * note queue, whose „Cofnij" only reaches the verdicts given since the page
+   * was opened. The router's own navigation stands aside for `_blank`, so the
+   * browser opens the tab. */
+  newTab?: boolean;
 }>();
 
 const emit = defineEmits<{

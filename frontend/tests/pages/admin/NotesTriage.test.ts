@@ -11,6 +11,15 @@ vi.mock("~/composables/auth", () => ({
   useAuthState: () => ({ user: { value: null } }),
 }));
 
+/** The record under the choices, which reads the node and its relations for
+ * itself - what it draws is NoteTriageCard.test.ts. Here it only says which
+ * node it was mounted for, so that when the page mounts one can be asserted
+ * without a server behind it. */
+const SubjectStub = {
+  props: { nodeId: { type: String, required: true } },
+  template: '<div class="subject-stub" :data-node-id="nodeId" />',
+};
+
 vi.mock("@plausible-analytics/tracker", () => ({
   init: vi.fn(),
   track: vi.fn(),
@@ -48,7 +57,13 @@ const serveQueue = (notes: NoteRow[]) => {
 // queue below instead.
 const mount = () =>
   mountSuspended(KategoryzacjaPage, {
-    global: { stubs: { UserChip: true, VSnackbar: true } },
+    global: {
+      stubs: {
+        UserChip: true,
+        VSnackbar: true,
+        NoteTriageSubject: SubjectStub,
+      },
+    },
   });
 
 /** The tap target for one of the options under the card. */
@@ -143,6 +158,55 @@ describe("/admin/notatki/kategoryzacja", () => {
 
     expect(wrapper.text()).toContain("druga notatka");
     expect(wrapper.text()).toContain("Pozostało do oceny: 2");
+  });
+
+  it("draws who the note is about for a person or a company, not a region", async () => {
+    serveQueue([
+      row(),
+      row({
+        key: "note-2:0",
+        noteId: "note-2",
+        nodeId: "region-1",
+        nodeType: "region",
+        note: "o regionie",
+      }),
+      row({
+        key: "note-3:0",
+        noteId: "note-3",
+        nodeId: "company-1",
+        nodeType: "place",
+        note: "o spółce",
+      }),
+    ]);
+    const subject = (wrapper: Awaited<ReturnType<typeof mount>>) =>
+      wrapper.find(".subject-stub");
+
+    const wrapper = await mount();
+    await flushPromises();
+    // Loaded lazily, so it arrives after the card rather than with it.
+    await vi.waitFor(
+      () => expect(subject(wrapper).attributes("data-node-id")).toBe("node-1"),
+      { timeout: 5000 },
+    );
+
+    // A region's relations are every institution in it, so nothing is read
+    // for one - not even a loading line.
+    await option(wrapper, "Inne")?.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("o regionie");
+    expect(subject(wrapper).exists()).toBe(false);
+    expect(
+      wrapper.find("[data-testid='triage-subject-loading']").exists(),
+    ).toBe(false);
+
+    // The next note's node, not the last one's.
+    await option(wrapper, "Inne")?.trigger("click");
+    await flushPromises();
+    await vi.waitFor(
+      () =>
+        expect(subject(wrapper).attributes("data-node-id")).toBe("company-1"),
+      { timeout: 5000 },
+    );
   });
 
   it("hands an entry it cannot judge to the table view", async () => {
