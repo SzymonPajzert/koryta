@@ -57,6 +57,27 @@ describe("entityDescription", () => {
     expect(text).toContain("Jan Kowalski (PSL, PiS)");
   });
 
+  /** „Inne” says there is a political tie and not whose - in a search result
+   * „(Inne)” reads as a typo, so it is named on the page and not here. */
+  it("leaves „Inne” out of the parties it names", () => {
+    expect(
+      entityDescription(
+        node({
+          type: "person",
+          name: "Jan Kowalski",
+          parties: ["Inne", "PiS"],
+        }),
+        3,
+      ),
+    ).toContain("Jan Kowalski (PiS) w bazie");
+    expect(
+      entityDescription(
+        node({ type: "person", name: "Jan Kowalski", parties: ["Inne"] }),
+        3,
+      ),
+    ).toContain("Jan Kowalski w bazie");
+  });
+
   it("promises nothing about a page with no relations yet", () => {
     const text = entityDescription(
       node({ type: "person", name: "Jan Kowalski" }),
