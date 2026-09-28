@@ -16,6 +16,7 @@ import {
 } from "./identifiers";
 import { z } from "zod";
 import { companyCategoryValues } from "./companyCategories";
+import { IMAGE_ID_PATTERN } from "./images";
 
 export const companyRequestSchema = z.object({
   krs: z.string(),
@@ -293,6 +294,36 @@ export type UnplacedElection = {
   expected: boolean;
 };
 
+const isHttpUrl = (value: string) => {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
+/** A photo proposed for a person: an image uploaded through
+ * `/api/images/person`, and where the picture was found.
+ *
+ * The source is required and has to be a web page, because it is what a
+ * reviewer opens to decide whether the photo may be used at all - and it is
+ * rendered as a link, so nothing but http(s) gets through. `null` in its place
+ * proposes taking the photo off.
+ */
+function personPhotoProposal() {
+  return z.object({
+    imageId: z.string().regex(IMAGE_ID_PATTERN, "Nieznane zdjęcie"),
+    source: z
+      .string()
+      .trim()
+      .max(2000)
+      .refine(isHttpUrl, "Podaj adres strony, z której pochodzi zdjęcie"),
+    author: z.string().trim().max(200).optional(),
+    license: z.string().trim().max(100).optional(),
+  });
+}
+
 /** Fields a user may propose for a person node, whether creating a new one
  * or editing an existing one.
  *
@@ -313,6 +344,9 @@ export const personEditSchema = z.object({
   wikipedia: z.string().optional(),
   rejestrIo: z.string().optional(),
   ktomaco: z.string().optional(),
+  // Not in the `Pick` below: a proposal names the image and says where it is
+  // from, and `/api/revisions/create` fills in the rest from the stored image.
+  photo: personPhotoProposal().nullable().optional(),
 }) satisfies z.ZodType<
   Pick<
     Person,

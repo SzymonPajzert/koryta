@@ -8,9 +8,12 @@ const mockDoc = vi.fn();
 /** What `revisions/<deterministic id>` holds. Empty unless a test says the
  * caller has proposed this before. */
 const mockGet = vi.fn();
+/** What `images/<id>` holds for a proposed photo, read without its bytes. */
+const mockGetAll = vi.fn();
 const mockDb = {
   collection: vi.fn(() => ({ doc: mockDoc })),
   batch: vi.fn(() => ({ set: mockSet, commit: mockCommit })),
+  getAll: mockGetAll,
 };
 
 vi.mock("firebase-admin/firestore", () => ({
@@ -677,5 +680,171 @@ describe("api/revisions/create, the same change twice", () => {
 
     expect(proposedRevisionId()).toBeUndefined();
     expect(result.id).toBe("generated-id");
+  });
+});
+
+describe("api/revisions/create, a person's photo", () => {
+  const source = "https://commons.wikimedia.org/wiki/File:Jan_Testowy.jpg";
+  const person = { type: "person", name: "Jan Testowy" };
+
+  /** The image a proposal names, as `/api/images/person` stored it. */
+  const storedImage = (fields: Record<string, unknown> = {}) =>
+    mockGetAll.mockResolvedValue([
+      {
+        data: () => ({
+          purpose: "person",
+          subject: "nodes/jan",
+          contentType: "image/webp",
+          width: 900,
+          height: 1200,
+          bytes: 81234,
+          ...fields,
+        }),
+      },
+    ]);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockResolvedValue({ exists: false });
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      get: mockGet,
+    }));
+  });
+
+  it("proposes the photo with what the stored image says about itself", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce(person);
+    storedImage();
+    mockReadBody.mockResolvedValue({
+      node_id: "jan",
+      name: "Jan Testowy",
+      photo: {
+        imageId: "img1",
+        source,
+        author: "Anna Fotograf",
+        license: "CC BY-SA 4.0",
+        // Whatever the proposal claims about the image is not what is kept.
+        width: 1,
+        bytes: 1,
+      },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data.photo).toEqual({
+      imageId: "img1",
+      contentType: "image/webp",
+      width: 900,
+      height: 1200,
+      bytes: 81234,
+      source,
+      author: "Anna Fotograf",
+      license: "CC BY-SA 4.0",
+    });
+    // Read without the bytes: the revision records the image, not its pixels.
+    expect(mockGetAll.mock.calls[0]![1]).toEqual({
+      fieldMask: expect.not.arrayContaining(["data"]),
+    });
+  });
+
+  // Approving the proposal is what makes the image public, so it has to be a
+  // photo uploaded for this very page.
+  it.each([
+    ["uploaded for somebody else", { subject: "nodes/someone-else" }],
+    ["that is a report's screenshot", { purpose: "feedback" }],
+    ["that is somebody's profile picture", { purpose: "avatar" }],
+  ])("refuses an image %s", async (_, fields) => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce(person);
+    storedImage(fields);
+    mockReadBody.mockResolvedValue({
+      node_id: "jan",
+      name: "Jan Testowy",
+      photo: { imageId: "img1", source },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("refuses an image that does not exist", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce(person);
+    mockGetAll.mockResolvedValue([{ data: () => undefined }]);
+    mockReadBody.mockResolvedValue({
+      node_id: "jan",
+      name: "Jan Testowy",
+      photo: { imageId: "img1", source },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  // The source is rendered as a link and is what a reviewer opens to check the
+  // photo may be used at all.
+  it.each([
+    ["no source at all", undefined],
+    ["a script for a source", "javascript:alert(1)"],
+    ["a source that is not an address", "zdjęcie z internetu"],
+  ])("refuses a photo with %s", async (_, badSource) => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce(person);
+    storedImage();
+    mockReadBody.mockResolvedValue({
+      node_id: "jan",
+      name: "Jan Testowy",
+      photo: { imageId: "img1", source: badSource },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 });
+    expect(mockGetAll).not.toHaveBeenCalled();
+  });
+
+  it("proposes taking the photo off", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      ...person,
+      photo: { imageId: "img1", source },
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "jan",
+      name: "Jan Testowy",
+      photo: null,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).not.toHaveProperty("photo");
+  });
+
+  it("keeps the photo through an edit that does not mention it", async () => {
+    const photo = { imageId: "img1", source, contentType: "image/webp" };
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({ ...person, photo });
+    mockReadBody.mockResolvedValue({
+      node_id: "jan",
+      name: "Jan Testowy",
+      education: "magister prawa",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data.photo).toEqual(photo);
+    expect(mockGetAll).not.toHaveBeenCalled();
+  });
+
+  // An image is uploaded for a page, and a new entry has none yet.
+  it("refuses a photo on an entry proposed from scratch", async () => {
+    storedImage();
+    mockReadBody.mockResolvedValue({
+      type: "person",
+      name: "Nowa Osoba",
+      photo: { imageId: "img1", source },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 });
+    expect(mockCommit).not.toHaveBeenCalled();
   });
 });

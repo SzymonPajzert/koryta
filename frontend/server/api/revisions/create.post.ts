@@ -8,6 +8,7 @@ import {
   sanitizeFirestoreData,
   withSeededNodeStats,
 } from "~~/server/utils/revisions";
+import { photoFromUpload, type PhotoProposal } from "~~/server/utils/images";
 import { revisionIsPending } from "~~/shared/model";
 import {
   editSchemas,
@@ -92,6 +93,17 @@ export default defineEventHandler(async (event) => {
     // firmly as a list does.
     if (dataFields.parties !== undefined) {
       dataFields.partiesSource = "manual";
+    }
+
+    // A photo has to be one uploaded for this page, and what it records about
+    // the image is read off the image. `null` stays as it is: it proposes
+    // taking the photo off, and the merge below drops the field.
+    if (dataFields.photo) {
+      dataFields.photo = await photoFromUpload(
+        db,
+        dataFields.photo as PhotoProposal,
+        isNewNode ? undefined : nodeRef.id,
+      );
     }
   }
 

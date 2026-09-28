@@ -4,13 +4,14 @@ import {
   IMAGE_ACCESS,
   IMAGE_LIMITS,
   fitsImageLimits,
+  isImageType,
   maxDataUrlLength,
   sniffImage,
   type ImageInfo,
   type ImagePurpose,
   type StoredImage,
 } from "~~/shared/images";
-import { pageIsPublic, type ImageRef } from "~~/shared/model";
+import { pageIsPublic, type ImageRef, type PersonPhoto } from "~~/shared/model";
 
 export type DecodedImage = { data: Buffer; info: ImageInfo };
 
@@ -108,6 +109,69 @@ export async function deleteImages(db: Firestore, ids: readonly string[]) {
   const batch = db.batch();
   for (const id of ids) batch.delete(db.collection("images").doc(id));
   await batch.commit();
+}
+
+/** A photo as a proposal names it, before it is checked. */
+export type PhotoProposal = Pick<
+  PersonPhoto,
+  "imageId" | "source" | "author" | "license"
+>;
+
+/** A proposed photo, checked against the image it names and completed from it.
+ *
+ * The image has to be a photo uploaded for this very page. Approving the
+ * proposal is what makes it public, so a report's screenshot or somebody's
+ * avatar named here would be published by a reviewer who only meant to accept
+ * a portrait - and a photo uploaded for one person must not turn up on
+ * another's page. Its type and size come from the stored image, never from the
+ * proposal. */
+export async function photoFromUpload(
+  db: Firestore,
+  proposal: PhotoProposal,
+  nodeId: string | undefined,
+): Promise<PersonPhoto> {
+  if (!nodeId) {
+    throw createError({
+      statusCode: 400,
+      message: "Zdjęcie można dodać do wpisu, który już istnieje.",
+    });
+  }
+  // Without the bytes: only what the photo records about the image is needed.
+  const [snap] = await db.getAll(
+    db.collection("images").doc(proposal.imageId),
+    {
+      fieldMask: [
+        "purpose",
+        "subject",
+        "contentType",
+        "width",
+        "height",
+        "bytes",
+      ],
+    },
+  );
+  const image = snap?.data() as Partial<StoredImage> | undefined;
+  if (
+    !image ||
+    image.purpose !== "person" ||
+    image.subject !== `nodes/${nodeId}` ||
+    !isImageType(image.contentType)
+  ) {
+    throw createError({
+      statusCode: 400,
+      message: "To zdjęcie nie zostało dodane do tej osoby.",
+    });
+  }
+  return {
+    imageId: proposal.imageId,
+    contentType: image.contentType,
+    width: image.width ?? 0,
+    height: image.height ?? 0,
+    bytes: image.bytes ?? 0,
+    source: proposal.source,
+    ...(proposal.author ? { author: proposal.author } : {}),
+    ...(proposal.license ? { license: proposal.license } : {}),
+  };
 }
 
 /** Whether anybody may be handed this image, admin or not - see
