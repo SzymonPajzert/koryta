@@ -74,6 +74,12 @@
 
     <p class="fb-report__message text-body-1 mb-3">{{ item.message }}</p>
 
+    <FeedbackScreenshots
+      v-if="item.id && item.screenshots?.length"
+      :report-id="item.id"
+      :screenshots="item.screenshots"
+    />
+
     <!-- A change with no QA entry says it fixes this report. What it did is
          the only description there is of it, so it is written out here rather
          than folded into a chip; newest first, as the claims are listed. -->
@@ -173,6 +179,18 @@
       >
         nie trafiło na Slacka
       </v-chip>
+      <!-- The day's allowance for images had run out: the reporter attached
+           these and was told they were not kept. -->
+      <v-chip
+        v-if="item.screenshotsDropped"
+        size="x-small"
+        label
+        color="ink-warning"
+        variant="tonal"
+        :title="`Nie zapisano: ${feedbackScreenshotsLabel(item.screenshotsDropped)}`"
+      >
+        bez zrzutów ekranu (limit dzienny)
+      </v-chip>
     </div>
 
     <template #footer>
@@ -237,7 +255,11 @@ import {
 } from "~/composables/feedbackAdmin";
 import { isSettled } from "~~/shared/feedbackQueue";
 import { qaStatusLabels } from "~~/shared/qa";
-import type { Feedback, FeedbackStatus } from "~~/shared/model";
+import {
+  feedbackScreenshotsLabel,
+  type Feedback,
+  type FeedbackStatus,
+} from "~~/shared/model";
 
 /** One report in an admin list: a line to tell it from the others, and in
  * the open row everything there is to know about it and to decide on it -

@@ -1,6 +1,8 @@
 <template>
   <v-dialog v-model="open" max-width="560" scrollable>
-    <v-card>
+    <!-- A screenshot can be pasted or dropped anywhere on the form, not only
+         on the button that picks one. -->
+    <v-card @paste="onPaste" @dragover="onDragOver" @drop="onDrop">
       <v-card-title class="d-flex align-center">
         Powiedz nam, co jest nie tak
         <v-spacer />
@@ -10,6 +12,11 @@
       <v-card-text v-if="sent" class="text-center py-8">
         <v-icon :icon="mdiCheckCircleOutline" color="success" size="48" />
         <p class="text-body-1 mt-4">Dzięki! Zgłoszenie do nas dotarło.</p>
+        <p v-if="screenshotsDropped" class="text-body-2 mt-2">
+          Zrzutów ekranu nie zapisaliśmy — na dziś przyjęliśmy ich już tyle, ile
+          możemy. Jeśli było na nich coś ważnego, opisz to w kolejnym
+          zgłoszeniu.
+        </p>
       </v-card-text>
 
       <v-card-text v-else>
@@ -35,6 +42,14 @@
           counter="4000"
           :error-messages="error ? [error] : []"
           autofocus
+        />
+
+        <FeedbackScreenshotPicker
+          :attached="screenshots.attached.value"
+          :error="screenshots.error.value"
+          :full="screenshots.full.value"
+          @add="screenshots.add"
+          @remove="screenshots.remove"
         />
 
         <v-text-field
@@ -86,7 +101,8 @@
           </v-chip>
           <div class="mt-2">
             Zgłoszenia trzymamy tak długo, jak są nam potrzebne do poprawek. Nie
-            podawaj w treści danych, których nie chcesz nam zostawiać.
+            podawaj w treści ani na zrzutach ekranu danych, których nie chcesz
+            nam zostawiać.
           </div>
         </div>
       </v-card-text>
@@ -98,7 +114,7 @@
           color="primary"
           variant="flat"
           :loading="sending"
-          :disabled="!message.trim()"
+          :disabled="!message.trim() || screenshots.preparing.value"
           @click="submit"
         >
           Wyślij
@@ -117,6 +133,10 @@ import {
   captureFeedbackContext,
   submitFeedback,
 } from "~/composables/feedback";
+import {
+  filesIn,
+  useFeedbackScreenshots,
+} from "~/composables/feedbackScreenshots";
 import { useAuthState } from "~/composables/auth";
 import type { FeedbackContext, FeedbackKind } from "~~/shared/model";
 
@@ -140,6 +160,37 @@ const context = ref<FeedbackContext>({ route: "" });
 const sending = ref(false);
 const sent = ref(false);
 const error = ref("");
+const screenshots = useFeedbackScreenshots();
+/** The report went, but the images it came with were not kept. */
+const screenshotsDropped = ref(false);
+
+const onPaste = (event: ClipboardEvent) => {
+  if (sent.value) return;
+  const data = event.clipboardData;
+  // Copying from a spreadsheet or a document puts a picture of the selection
+  // on the clipboard beside its text, and pasting that is pasting text.
+  if (data && Array.from(data.types).includes("text/plain")) return;
+  const images = filesIn(data).filter((file) => file.type.startsWith("image/"));
+  if (images.length === 0) return;
+  event.preventDefault();
+  screenshots.add(images);
+};
+
+// Only a drag carrying files is taken over: text dragged into the message
+// still lands there.
+const carriesFiles = (event: DragEvent) =>
+  Array.from(event.dataTransfer?.types ?? []).includes("Files");
+
+const onDragOver = (event: DragEvent) => {
+  if (!sent.value && carriesFiles(event)) event.preventDefault();
+};
+
+const onDrop = (event: DragEvent) => {
+  if (sent.value || !carriesFiles(event)) return;
+  // Otherwise the browser leaves the page to show the file.
+  event.preventDefault();
+  screenshots.add(filesIn(event.dataTransfer));
+};
 
 // Snapshot on open, so the report describes the page the reporter was looking
 // at even if they navigate while the dialog is up.
@@ -147,6 +198,7 @@ watch(open, (isOpen) => {
   if (!isOpen) return;
   context.value = captureFeedbackContext(route);
   sent.value = false;
+  screenshotsDropped.value = false;
   error.value = "";
   // Prefill from the account, but never over a choice already made: someone
   // who cleared the field and then reopened the dialog meant it.
@@ -167,22 +219,28 @@ const submit = async () => {
     // The same call the QA page makes - see composables/feedback.ts. Sending
     // without a token is what makes "anonimowo" true rather than a promise we
     // are keeping.
-    await submitFeedback(
+    const result = await submitFeedback(
       {
         kind: kind.value,
         message: message.value,
         contact: trimmedContact || undefined,
         website: website.value || undefined,
         context: context.value,
+        screenshots: screenshots.ready.value.map(({ dataUrl }) => dataUrl),
       },
       { attribute: signed.value },
     );
 
     sent.value = true;
+    screenshotsDropped.value = Boolean(result.screenshotsDropped);
     message.value = "";
-    setTimeout(() => {
-      if (sent.value) close();
-    }, 1800);
+    screenshots.clear();
+    // Left open when there is more to read than the thanks.
+    if (!screenshotsDropped.value) {
+      setTimeout(() => {
+        if (sent.value) close();
+      }, 1800);
+    }
   } catch (err) {
     console.error("Failed to send feedback", err);
     error.value = "Nie udało się wysłać. Spróbuj jeszcze raz.";

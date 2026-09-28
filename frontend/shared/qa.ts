@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zgloszenie-ze-zrzutem-ekranu",
+    title: "Do zgłoszenia można dołączyć zrzut ekranu",
+    description:
+      "W okienku „Zgłoś” da się dołączyć do trzech obrazów: przyciskiem, wklejając ze schowka albo przeciągając plik. " +
+      "Administrator widzi je w zgłoszeniu na liście zgłoszeń, a zdjęcie z telefonu dociera bez zapisanych w nim danych, np. miejsca zrobienia.",
+    steps: [
+      "Kliknij „Zgłoś” w rogu dowolnej strony, zrób zrzut ekranu i wklej go w okienko (Ctrl+V) albo dołącz przyciskiem „Dołącz zrzut ekranu” - pod treścią ma się pojawić miniatura, a „×” na niej ma ją usuwać.",
+      "Wyślij zgłoszenie z treścią i zrzutem.",
+      "Z konta administratora otwórz „Zgłoszenia” - przy tym zgłoszeniu ma być ikonka obrazka, a po rozwinięciu miniatura, która po kliknięciu pokazuje cały obraz.",
+    ],
+    area: "public",
+  },
+  {
     id: "admin-procesy-datascience",
     title: "Procesy dla zespołu danych",
     description:
