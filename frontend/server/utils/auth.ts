@@ -62,6 +62,24 @@ export async function getUser(event: H3Event) {
   }
 }
 
+/** The signed in user, refused unless they are the site's owner.
+ *
+ * Narrower than `requireAdmin`: the owner's task list (/admin/zadania) names
+ * rules holes, prod credentials to set up and research about people, and the
+ * other administrators, trial ones included, have no business reading it. The
+ * claim is set by data/pipelines/src/set_auth_claims.py.
+ */
+export async function requireOwner(event: H3Event) {
+  const user = await getUser(event);
+  if (user.owner !== true) {
+    throw createError({
+      statusCode: 403,
+      message: "Ta strona jest dostępna tylko dla właściciela serwisu.",
+    });
+  }
+  return user;
+}
+
 /** The signed in user, refused unless they carry the `admin` claim.
  *
  * Deciding what the public sees - approving a revision, publishing a page - is

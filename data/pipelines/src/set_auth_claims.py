@@ -76,17 +76,33 @@ NEW_ADMINS = {
     "WpuDVVsjUpOVOoCbnCfzIve2xMh1",
 }
 
+# The site's owner. `owner` is what opens his task list, /admin/zadania, and
+# the routes behind it - narrower than `admin` on purpose: the list names
+# rules holes, credentials to set up and research about people, and the other
+# administrators have no business reading it. Like `newAdmin`, it is granted
+# only alongside `admin`.
+OWNERS = {"of0BKlwqWLX21Cuml4NMHZ18xoC3"}
+
 PROJECT_ID = "koryta-pl"
 
 
 def get_claims(uid: str, level: Level) -> dict:
     """The whole claims dict `uid` should hold at `level`.
 
-    `set_custom_user_claims` replaces every claim at once, so `newAdmin` has to
-    be part of the same dict or each run would drop it. It means nothing
-    without `admin`, so it is left out, with a warning, at any other level.
+    `set_custom_user_claims` replaces every claim at once, so `newAdmin` and
+    `owner` have to be part of the same dict or each run would drop them. They
+    mean nothing without `admin`, so they are left out, with a warning, at any
+    other level.
     """
     claims = get_custom_claims_dict(level)
+    if uid in OWNERS:
+        if level == Level.ADMIN:
+            claims["owner"] = True
+        else:
+            print(
+                f"Warning: {uid} is in OWNERS but its level is {level.name}, "
+                "not ADMIN - not marking it as the owner."
+            )
     if uid in NEW_ADMINS:
         if level == Level.ADMIN:
             claims["newAdmin"] = True
