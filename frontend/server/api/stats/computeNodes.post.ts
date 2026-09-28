@@ -1,4 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { requireAdmin } from "~~/server/utils/auth";
 import type {
   Edge,
@@ -361,17 +361,34 @@ export default defineEventHandler(async (event) => {
       factTypesByNode[node.id] ?? noFactTypes,
     );
 
-    if (node.data.type === "region") {
-      regionRows.push(
-        regionStat(node.id, {
-          ...(node.data as Region),
-          stats: updateData.stats,
-        }),
-      );
-    }
-
     const nodeRef = db.collection("nodes").doc(node.id);
-    currentBatch.update(nodeRef, updateData);
+
+    // A page merged into another keeps its document, so that its url and the
+    // revisions filed against it still resolve (server/utils/merge.ts) - but
+    // it is not a page, and it gets no stats. Every listing and queue is a
+    // query on them: `visibility=private` is `stats.isApproved == false`,
+    // which is what a tombstone computes to, and its difficulty tier is the one
+    // its wikipedia and rejestr.io links still earn. So with stats it took
+    // slots nobody could see - /api/nodes drops it only after the query - and
+    // the one-person pages of /eksploruj/nowe?tier=1&order=votes came back
+    // empty, four tombstones deep. Without stats it matches no filter, no
+    // sort and no count.
+    if (node.data.deleted === true) {
+      currentBatch.update(nodeRef, {
+        stats: FieldValue.delete(),
+        revisions: updateData.revisions,
+      });
+    } else {
+      if (node.data.type === "region") {
+        regionRows.push(
+          regionStat(node.id, {
+            ...(node.data as Region),
+            stats: updateData.stats,
+          }),
+        );
+      }
+      currentBatch.update(nodeRef, updateData);
+    }
     operationCount++;
 
     if (operationCount === 400) {

@@ -174,6 +174,9 @@ describe("api/nodes/merge", () => {
       delete_reason: "Jedna osoba, dwie strony",
       merged_into: "surv",
       published: false,
+      // Off every list and queue queried on stats at once, not at the next
+      // recount - see /api/stats/computeNodes.
+      stats: "<delete>",
     });
     expect(mockCommit).toHaveBeenCalledTimes(1);
     expect(result.plan).toMatchObject({
