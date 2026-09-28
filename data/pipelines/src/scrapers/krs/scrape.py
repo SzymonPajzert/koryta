@@ -18,7 +18,6 @@ from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.columns import is_public, normalise
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
-from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.people_parsing import is_not_found
 from scrapers.krs.updates import KRSUpdates
@@ -932,6 +931,31 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         connections = scraped[scraped["method"].isin(ORG_CONNECTION_METHODS)]
         return KRSSet(KRS(id=str(krs).zfill(10)) for krs in connections["krs"].unique())
 
+    def owned_by_the_public(self, ctx: Context) -> KRSSet:
+        """Every company `CompaniesKRS` says the public owns.
+
+        This is what the ownership door was for and never did: it built an
+        empty `CompanyGraph` and asked it for descendants, so it only ever
+        handed back the starters it was given. Measured on the 2026-09-28
+        `company_krs`, 360 of the 5,238 companies marked public had no
+        connections bought, 266 of them known only because a crawled
+        company's feed named them - ENEA ELEKTROWNIA POŁANIEC, PGE EC
+        OPERATOR, NASK, OTWOCKIE PRZEDSIĘBIORSTWO KOMUNALNE.
+
+        `CompaniesKRS` already walks the ownership it knows from both ends -
+        the subsidiaries a rejestr.io feed lists and the wspólnik an odpis
+        names - and `propagate_is_public` carries a public parent down to every
+        child. Its verdict is that walk, done once, and done from public owners
+        only. Walking down from every seed instead would follow the private
+        companies the public-service catalogue also lists - Górażdże Cement,
+        PCC Rokita - into their own subsidiaries.
+        """
+        companies = self.companies.read_or_process(ctx)
+        if companies is None or companies.empty or "is_public" not in companies:
+            return KRSSet()
+        public = companies.loc[is_public(companies["is_public"]), "krs"]
+        return KRSSet(KRS(id=str(krs).zfill(10)) for krs in public)
+
     def companies_to_scrape(self, ctx: Context) -> KRSSet:
         """The companies worth a rejestr.io query, and why each one is here.
 
@@ -968,16 +992,12 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
         print("Starters: ", starters)
 
-        graph = CompanyGraph()
-
         if self.args.children:
-            children = KRSSet(
-                KRS(krs) for krs in graph.all_descendants(set(s.id for s in starters))
-            )
+            children = self.owned_by_the_public(ctx)
             for krs in children:
                 self._record_reason(krs.id, REASON_OWNED)
         else:
-            children = starters
+            children = KRSSet()
 
         to_scrape = (starters | children) - already_scraped
         print(f"Starters: {len(starters)} {get_head(starters, 10)}")
