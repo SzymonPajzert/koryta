@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Kolejka najłatwiejszego poziomu, posortowana po głosach, zaczyna się od osoby do sprawdzenia: strony scalone z inną (jak Geblewicz czy Pasoń) nie zajmują już w kolejkach miejsc, na których nic się nie pokazywało - od najbliższego przeliczenia statystyk (/api/stats/computeNodes).",
+    fixes: ["crR0DWk9Y1gTfy0vp2Mg"],
+    link: "/eksploruj/nowe?tier=1&order=votes",
+  },
+  {
+    change:
       "W „Kto kogo zastąpił” chip „zmiana afiliacji” nazywa się teraz „inna partia”, a najechany albo stuknięty mówi, z której partii do której przeszło stanowisko, np. „PiS → PO”.",
     fixes: ["w2IOzxln1HiguDBFzIpG"],
   },

@@ -263,8 +263,11 @@ export default defineEventHandler(async (event) => {
     // every structural filter out of their indexes - reading all 8,277
     // unpublished people to serve a page of ten. The price is that when the
     // query did run indexed, the page can come back a row short and `total`
-    // still counts the tombstones. That is 171 in 8,277, which is the cheaper
-    // of the two errors by a wide margin.
+    // still counts the tombstones - and a one-person page of /eksploruj/nowe
+    // comes back empty. So a tombstone carries no stats (see
+    // /api/stats/computeNodes and server/utils/merge.ts), which keeps it out
+    // of every query that filters or sorts on them; this catches the ones
+    // nothing has recounted yet, and a listing that touches no stats at all.
     nodesArray = nodesArray.filter(
       (node) => (node as { deleted?: boolean }).deleted !== true,
     );
