@@ -4,19 +4,19 @@ import {
   useFeedbackScreenshots,
 } from "../../app/composables/feedbackScreenshots";
 import {
-  ScreenshotError,
-  prepareScreenshot,
-  type PreparedScreenshot,
-} from "~/utils/screenshotImage";
+  ImageUploadError,
+  prepareImage,
+  type PreparedImage,
+} from "~/utils/imageUpload";
 
 // Drawing on a canvas is the browser's; here each file resolves when the test
 // says so, which is what the ordering cases need.
-vi.mock("~/utils/screenshotImage", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("~/utils/screenshotImage")>()),
-  prepareScreenshot: vi.fn(),
+vi.mock("~/utils/imageUpload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/utils/imageUpload")>()),
+  prepareImage: vi.fn(),
 }));
 
-const prepared = (name: string): PreparedScreenshot => ({
+const prepared = (name: string): PreparedImage => ({
   dataUrl: `data:image/webp;base64,${btoa(name)}`,
   width: 10,
   height: 10,
@@ -29,9 +29,9 @@ const image = (name: string) => new File(["x"], name, { type: "image/png" });
 function deferPreparation() {
   const pending = new Map<
     string,
-    { resolve: (s: PreparedScreenshot) => void; reject: (e: unknown) => void }
+    { resolve: (s: PreparedImage) => void; reject: (e: unknown) => void }
   >();
-  vi.mocked(prepareScreenshot).mockImplementation(
+  vi.mocked(prepareImage).mockImplementation(
     (file) =>
       new Promise((resolve, reject) =>
         pending.set((file as File).name, { resolve, reject }),
@@ -62,6 +62,8 @@ describe("useFeedbackScreenshots", () => {
 
     expect(shots.preparing.value).toBe(false);
     expect(shots.ready.value).toEqual([prepared("a")]);
+    // Prepared to a screenshot's limits, not an avatar's or a portrait's.
+    expect(prepareImage).toHaveBeenCalledWith(expect.any(File), "feedback");
   });
 
   it("keeps the order they were added in, whichever is ready first", async () => {
@@ -77,7 +79,7 @@ describe("useFeedbackScreenshots", () => {
   });
 
   it("takes three at most, and says so", async () => {
-    vi.mocked(prepareScreenshot).mockImplementation(async (file) =>
+    vi.mocked(prepareImage).mockImplementation(async (file) =>
       prepared((file as File).name),
     );
     const shots = useFeedbackScreenshots();
@@ -94,7 +96,7 @@ describe("useFeedbackScreenshots", () => {
   });
 
   it("takes the images from a drop that also held other files", async () => {
-    vi.mocked(prepareScreenshot).mockResolvedValue(prepared("a"));
+    vi.mocked(prepareImage).mockResolvedValue(prepared("a"));
     const shots = useFeedbackScreenshots();
 
     shots.add([
@@ -108,8 +110,8 @@ describe("useFeedbackScreenshots", () => {
   });
 
   it("drops an image it could not read, with the reason", async () => {
-    vi.mocked(prepareScreenshot).mockRejectedValue(
-      new ScreenshotError("Ten obraz jest pusty."),
+    vi.mocked(prepareImage).mockRejectedValue(
+      new ImageUploadError("Ten obraz jest pusty."),
     );
     const shots = useFeedbackScreenshots();
 
@@ -121,7 +123,7 @@ describe("useFeedbackScreenshots", () => {
   });
 
   it("names the file when something unexpected went wrong", async () => {
-    vi.mocked(prepareScreenshot).mockRejectedValue(new Error("boom"));
+    vi.mocked(prepareImage).mockRejectedValue(new Error("boom"));
     const shots = useFeedbackScreenshots();
 
     shots.add([image("zrzut.png")]);
@@ -151,7 +153,7 @@ describe("useFeedbackScreenshots", () => {
 
     shots.add([image("a.png")]);
     shots.clear();
-    pending.get("a.png")!.reject(new ScreenshotError("Ten obraz jest pusty."));
+    pending.get("a.png")!.reject(new ImageUploadError("Ten obraz jest pusty."));
     await settle();
 
     expect(shots.attached.value).toEqual([]);

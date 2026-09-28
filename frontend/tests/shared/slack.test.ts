@@ -187,8 +187,20 @@ describe("buildFeedbackBlocks", () => {
     const withShots: Feedback = {
       ...base,
       screenshots: [
-        { contentType: "image/webp", width: 1920, height: 1080, bytes: 1 },
-        { contentType: "image/jpeg", width: 800, height: 600, bytes: 1 },
+        {
+          imageId: "img1",
+          contentType: "image/webp",
+          width: 1920,
+          height: 1080,
+          bytes: 1,
+        },
+        {
+          imageId: "img2",
+          contentType: "image/jpeg",
+          width: 800,
+          height: 600,
+          bytes: 1,
+        },
       ],
     };
     const blocks = buildFeedbackBlocks(withShots, opts);

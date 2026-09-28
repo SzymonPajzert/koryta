@@ -1,11 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import {
-  MAX_FEEDBACK_SCREENSHOT_BYTES,
-  MAX_FEEDBACK_SCREENSHOT_DATA_URL_LENGTH,
-  fitsFeedbackScreenshotLimits,
+  IMAGE_LIMITS,
+  fitsImageLimits,
+  maxDataUrlLength,
   sniffImage,
-} from "../../shared/feedbackScreenshots";
+  type ImagePurpose,
+} from "../../shared/images";
 import { feedbackScreenshotsLabel } from "../../shared/model";
 
 const bytes = (...parts: (number[] | string)[]) =>
@@ -130,35 +131,66 @@ describe("sniffImage", () => {
   });
 });
 
-describe("fitsFeedbackScreenshotLimits", () => {
+describe("fitsImageLimits", () => {
   it("takes a screenshot at twice its CSS size, and a long capture", () => {
-    expect(fitsFeedbackScreenshotLimits({ width: 3840, height: 2160 })).toBe(
+    expect(fitsImageLimits({ width: 3840, height: 2160 }, "feedback")).toBe(
       true,
     );
-    expect(fitsFeedbackScreenshotLimits({ width: 1000, height: 8000 })).toBe(
+    expect(fitsImageLimits({ width: 1000, height: 8000 }, "feedback")).toBe(
       true,
     );
   });
 
-  // A few kilobytes can declare a canvas the admin's browser would choke on.
-  it("refuses what the dialog would have scaled down", () => {
-    expect(fitsFeedbackScreenshotLimits({ width: 8001, height: 10 })).toBe(
+  // A few kilobytes can declare a canvas the browser opening it would choke on.
+  it("refuses what the browser would have scaled down", () => {
+    expect(fitsImageLimits({ width: 8001, height: 10 }, "feedback")).toBe(
       false,
     );
-    expect(fitsFeedbackScreenshotLimits({ width: 4000, height: 4000 })).toBe(
+    expect(fitsImageLimits({ width: 4000, height: 4000 }, "feedback")).toBe(
       false,
     );
-    expect(fitsFeedbackScreenshotLimits({ width: 0, height: 10 })).toBe(false);
+    expect(fitsImageLimits({ width: 0, height: 10 }, "feedback")).toBe(false);
+  });
+
+  it("takes an avatar only as a square", () => {
+    expect(fitsImageLimits({ width: 512, height: 512 }, "avatar")).toBe(true);
+    expect(fitsImageLimits({ width: 96, height: 96 }, "avatar")).toBe(true);
+    expect(fitsImageLimits({ width: 512, height: 511 }, "avatar")).toBe(false);
+    expect(fitsImageLimits({ width: 1024, height: 1024 }, "avatar")).toBe(
+      false,
+    );
+  });
+
+  it("takes a portrait of a person up to 1600 px a side", () => {
+    expect(fitsImageLimits({ width: 1200, height: 1600 }, "person")).toBe(true);
+    expect(fitsImageLimits({ width: 1200, height: 1601 }, "person")).toBe(
+      false,
+    );
+    // A screenshot's size is not a portrait's.
+    expect(fitsImageLimits({ width: 3840, height: 2160 }, "person")).toBe(
+      false,
+    );
   });
 });
 
 describe("limits", () => {
-  it("leaves room in the data url for the largest image allowed", () => {
-    const base64 = Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4;
-    expect(MAX_FEEDBACK_SCREENSHOT_DATA_URL_LENGTH).toBeGreaterThanOrEqual(
-      "data:image/webp;base64,".length + base64,
-    );
-  });
+  it.each(["feedback", "avatar", "person"] as ImagePurpose[])(
+    "leave room in a %s data url for the largest image allowed",
+    (purpose) => {
+      const base64 = Math.ceil(IMAGE_LIMITS[purpose].maxBytes / 3) * 4;
+      expect(maxDataUrlLength(purpose)).toBeGreaterThanOrEqual(
+        "data:image/webp;base64,".length + base64,
+      );
+    },
+  );
+
+  // A Firestore document holds 1 MiB, name and other fields included.
+  it.each(["feedback", "avatar", "person"] as ImagePurpose[])(
+    "keep a %s image within one document",
+    (purpose) => {
+      expect(IMAGE_LIMITS[purpose].maxBytes).toBeLessThanOrEqual(1_000_000);
+    },
+  );
 });
 
 describe("feedbackScreenshotsLabel", () => {

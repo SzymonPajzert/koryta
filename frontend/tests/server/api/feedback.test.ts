@@ -38,18 +38,18 @@ vi.mock("h3", async (importOriginal) => {
 
 /** A document reference that knows its path, so a test can tell the report
  * from its images. */
-const docRef = (path: string) => ({
-  id: path.split("/").pop(),
-  path,
-  collection: (name: string) => ({
-    doc: (id: string) => docRef(`${path}/${name}/${id}`),
-  }),
-});
+const docRef = (path: string) => ({ id: path.split("/").pop(), path });
+
+/** Ids Firestore would make up: the report is always `fb-1`, and images are
+ * numbered in the order they are created. */
+let imageCount = 0;
+const autoId = (collection: string) =>
+  collection === "images" ? `img${++imageCount}` : "fb-1";
 
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: () => ({
     collection: (name: string) => ({
-      doc: (id?: string) => docRef(`${name}/${id ?? "fb-1"}`),
+      doc: (id?: string) => docRef(`${name}/${id ?? autoId(name)}`),
     }),
     batch: () => ({ set: mockSet, commit: mockCommit }),
     runTransaction: (
@@ -98,6 +98,7 @@ describe("/api/feedback/create", () => {
     vi.clearAllMocks();
     daily.count = 0;
     daily.screenshots = 0;
+    imageCount = 0;
     mockCommit.mockResolvedValue(undefined);
   });
 
@@ -296,12 +297,14 @@ describe("/api/feedback/create", () => {
       expect(result).toEqual({ id: "fb-1" });
       expect(written().screenshots).toEqual([
         {
+          imageId: "img1",
           contentType: "image/png",
           width: 1920,
           height: 1080,
           bytes: first.length,
         },
         {
+          imageId: "img2",
           contentType: "image/png",
           width: 390,
           height: 844,
@@ -311,12 +314,21 @@ describe("/api/feedback/create", () => {
       // The bytes are never in the report, which the admin list reads whole.
       expect(JSON.stringify(written())).not.toContain(first.toString("base64"));
 
-      const image = writtenAt("feedback/fb-1/screenshots/0");
-      expect(image.contentType).toBe("image/png");
+      // Kept in `images` with every other upload, as the report's and for
+      // admins' eyes only.
+      const image = writtenAt("images/img1");
+      expect(image).toMatchObject({
+        contentType: "image/png",
+        width: 1920,
+        height: 1080,
+        bytes: first.length,
+        purpose: "feedback",
+        subject: "feedback/fb-1",
+      });
+      // Nobody signed this report, so nothing says who sent the image either.
+      expect(image).not.toHaveProperty("uploadedBy");
       expect(Buffer.compare(image.data, first)).toBe(0);
-      expect(
-        Buffer.compare(writtenAt("feedback/fb-1/screenshots/1").data, second),
-      ).toBe(0);
+      expect(Buffer.compare(writtenAt("images/img2").data, second)).toBe(0);
 
       // One commit: the report never exists without its images.
       expect(mockCommit).toHaveBeenCalledTimes(1);
@@ -400,6 +412,19 @@ describe("/api/feedback/create", () => {
 
       expect(result).toEqual({ id: null });
       expect(mockCommit).not.toHaveBeenCalled();
+    });
+
+    it("records who sent the images of a signed report", async () => {
+      mockVerifyIdToken.mockResolvedValue({ uid: "user-a" });
+
+      await callHandler({
+        body: { ...validBody, screenshots: [dataUrl(png(10, 10))] },
+        headers: { authorization: "Bearer good-token" },
+      });
+
+      expect(writtenAt("images/img1")).toMatchObject({
+        uploadedBy: "user-a",
+      });
     });
 
     it("writes nothing extra for a report without any", async () => {

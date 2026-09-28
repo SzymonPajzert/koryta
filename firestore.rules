@@ -99,12 +99,15 @@ service cloud.firestore {
     // clear this is deliberate.
     match /feedback/{feedbackId} {
       allow read, write: if false;
+    }
 
-      // Images attached to a report. Rules do not reach down into a
-      // subcollection, so this says the same again for them.
-      match /screenshots/{index} {
-        allow read, write: if false;
-      }
+    // Every uploaded image - a report's screenshot, a profile picture, a photo
+    // of a person - with who may see it decided per image by
+    // /api/images/<id>, which reads this with the admin SDK. A client that
+    // could read here would see screenshots and unreviewed photos; one that
+    // could write would skip the checks every upload goes through.
+    match /images/{imageId} {
+      allow read, write: if false;
     }
 
     // Daily counters bounding how much feedback gets forwarded to Slack, and

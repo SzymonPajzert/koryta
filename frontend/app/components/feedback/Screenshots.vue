@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import { mdiImageBrokenVariant, mdiOpenInNew } from "@mdi/js";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { fetchFeedbackScreenshot } from "~/composables/feedbackAdmin";
+import { fetchImage } from "~/composables/feedbackAdmin";
 import type { FeedbackScreenshot } from "~~/shared/model";
 
 /** The images attached to a report, in the open row of the admin list: small
@@ -74,7 +74,6 @@ import type { FeedbackScreenshot } from "~~/shared/model";
  * hundred reports should not download every screenshot in it - and let go when
  * it closes. */
 const props = defineProps<{
-  reportId: string;
   screenshots: FeedbackScreenshot[];
 }>();
 
@@ -90,9 +89,9 @@ const shownUrl = computed(() =>
 let unmounted = false;
 
 onMounted(() => {
-  props.screenshots.forEach(async (_, index) => {
+  props.screenshots.forEach(async ({ imageId }, index) => {
     try {
-      const blob = await fetchFeedbackScreenshot(props.reportId, index);
+      const blob = await fetchImage(imageId);
       const url = URL.createObjectURL(blob);
       if (unmounted) URL.revokeObjectURL(url);
       else urls.value[index] = url;

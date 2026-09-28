@@ -407,7 +407,8 @@ describe("feedbackGet", () => {
 describe("screenshots", () => {
   const WITH_TWO = fid("withTwo");
   const WITH_ONE = fid("withOne");
-  const shot = (width: number, height: number) => ({
+  const shot = (imageId: string, width: number, height: number) => ({
+    imageId,
     contentType: "image/webp",
     width,
     height,
@@ -417,26 +418,21 @@ describe("screenshots", () => {
     ...FEEDBACK,
     [WITH_TWO]: stored({
       createdAt: "2026-09-07T10:00:00.000Z",
-      screenshots: [shot(1920, 1080), shot(390, 844)],
+      screenshots: [shot("first", 1920, 1080), shot("second", 390, 844)],
     }),
     [WITH_ONE]: stored({
       createdAt: "2026-09-08T10:00:00.000Z",
-      screenshots: [shot(800, 600)],
+      screenshots: [shot("only", 800, 600)],
       screenshotsDropped: 2,
     }),
   };
   /** As the REST API hands bytes over: base64. */
   const images = {
-    [`feedback/${WITH_TWO}/screenshots`]: {
-      "0": { data: "Zmlyc3Q=", contentType: "image/webp" },
-      "1": { data: "c2Vjb25k", contentType: "image/webp" },
-    },
-    [`feedback/${WITH_ONE}/screenshots`]: {
-      "0": { data: "b25seQ==", contentType: "image/webp" },
-    },
+    first: { data: "Zmlyc3Q=", contentType: "image/webp" },
+    second: { data: "c2Vjb25k", contentType: "image/webp" },
+    only: { data: "b25seQ==", contentType: "image/webp" },
   };
-  const db = () =>
-    fakeDb({ feedback: reports, qaChecks: QA_CHECKS, ...images });
+  const db = () => fakeDb({ feedback: reports, qaChecks: QA_CHECKS, images });
 
   it("lists how many a report has", async () => {
     const listing = await feedbackQueue(db().db, {}, FIXES);
@@ -499,17 +495,26 @@ describe("screenshots", () => {
     const { db: reader, gets } = db();
     await feedbackScreenshots(reader, [WITH_ONE, INBOX_OLD, "nope"]);
 
-    expect(gets).toEqual([[WITH_ONE, INBOX_OLD], ["0"]]);
+    expect(gets).toEqual([[WITH_ONE, INBOX_OLD], ["only"]]);
   });
 
   it("passes over an image that is missing or not an image", async () => {
     const { db: reader } = fakeDb({
       feedback: reports,
-      [`feedback/${WITH_TWO}/screenshots`]: {
-        "1": { data: "PGh0bWw+", contentType: "text/html" },
-      },
+      images: { second: { data: "PGh0bWw+", contentType: "text/html" } },
     });
 
     expect(await feedbackScreenshots(reader, [WITH_TWO])).toEqual([]);
+  });
+
+  it("ignores an image id that could name another collection", async () => {
+    const { db: reader, gets } = fakeDb({
+      feedback: {
+        [WITH_ONE]: stored({ screenshots: [shot("../users/x", 10, 10)] }),
+      },
+    });
+
+    expect(await feedbackScreenshots(reader, [WITH_ONE])).toEqual([]);
+    expect(gets).toEqual([[WITH_ONE]]);
   });
 });

@@ -23,9 +23,10 @@ import {
   isSettled,
 } from "../../shared/feedbackQueue";
 import {
-  isFeedbackScreenshotType,
-  type FeedbackScreenshotType,
-} from "../../shared/feedbackScreenshots";
+  IMAGE_ID_PATTERN,
+  isImageType,
+  type ImageType,
+} from "../../shared/images";
 import type {
   Feedback,
   FeedbackKind,
@@ -91,14 +92,22 @@ const positiveInt = (value: unknown): number | undefined =>
 function screenshotsFrom(value: unknown): FeedbackScreenshot[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry: Partial<FeedbackScreenshot> | null) => {
+    const imageId = entry?.imageId;
     const width = positiveInt(entry?.width);
     const height = positiveInt(entry?.height);
     const bytes = positiveInt(entry?.bytes);
     const contentType = entry?.contentType;
-    if (!width || !height || !bytes || !isFeedbackScreenshotType(contentType)) {
+    if (
+      typeof imageId !== "string" ||
+      !IMAGE_ID_PATTERN.test(imageId) ||
+      !width ||
+      !height ||
+      !bytes ||
+      !isImageType(contentType)
+    ) {
       return [];
     }
-    return [{ contentType, width, height, bytes }];
+    return [{ imageId, contentType, width, height, bytes }];
   });
 }
 
@@ -472,7 +481,7 @@ export type ReportScreenshot = {
   of: number;
   width: number;
   height: number;
-  mimeType: FeedbackScreenshotType;
+  mimeType: ImageType;
   /** Base64, as Firestore's REST API sends bytes and MCP takes an image. */
   data: string;
 };
@@ -480,9 +489,9 @@ export type ReportScreenshot = {
 /** The images attached to these reports, report by report in the order asked.
  *
  * What the reporter saw is often the point of a report, and a description of
- * a screenshot is no substitute for it. Each image is its own document under
- * the report (`feedback/<id>/screenshots/<n>`), so the reports are read again
- * for how many there are - a field, not an image - and only those are fetched.
+ * a screenshot is no substitute for it. The reports are read again for which
+ * images they have - a field, not an image - and only those are fetched, from
+ * `images`, where every uploaded image is kept.
  */
 export async function feedbackScreenshots(
   db: FirestoreReader,
@@ -495,27 +504,27 @@ export async function feedbackScreenshots(
   const listed = new Map(
     reports.map(({ id, data }) => [id, screenshotsFrom(data.screenshots)]),
   );
+  const imageIds = ids.flatMap((id) =>
+    (listed.get(id) ?? []).map(({ imageId }) => imageId),
+  );
+  const found =
+    imageIds.length > 0
+      ? await db.get("images", imageIds, ["data", "contentType"])
+      : [];
+  const images = new Map(found.map(({ id, data }) => [id, data]));
 
-  const perReport = await Promise.all(
-    ids.map(async (id) => {
-      const shots = listed.get(id) ?? [];
-      if (shots.length === 0) return [];
-      const docs = await db.get(
-        `feedback/${id}/screenshots`,
-        shots.map((_, index) => String(index)),
-        ["data", "contentType"],
-      );
-      const byIndex = new Map(docs.map((doc) => [doc.id, doc.data]));
-      return shots.flatMap(({ width, height }, index): ReportScreenshot[] => {
-        const doc = byIndex.get(String(index));
-        const data = text(doc?.data);
-        const mimeType = doc?.contentType;
-        if (!data || !isFeedbackScreenshotType(mimeType)) return [];
+  return ids.flatMap((id) => {
+    const shots = listed.get(id) ?? [];
+    return shots.flatMap(
+      ({ imageId, width, height }, index): ReportScreenshot[] => {
+        const image = images.get(imageId);
+        const data = text(image?.data);
+        const mimeType = image?.contentType;
+        if (!data || !isImageType(mimeType)) return [];
         return [
           { id, n: index + 1, of: shots.length, width, height, mimeType, data },
         ];
-      });
-    }),
-  );
-  return perReport.flat();
+      },
+    );
+  });
 }

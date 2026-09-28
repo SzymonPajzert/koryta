@@ -75,8 +75,7 @@
     <p class="fb-report__message text-body-1 mb-3">{{ item.message }}</p>
 
     <FeedbackScreenshots
-      v-if="item.id && item.screenshots?.length"
-      :report-id="item.id"
+      v-if="item.screenshots?.length"
       :screenshots="item.screenshots"
     />
 

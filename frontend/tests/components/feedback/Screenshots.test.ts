@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import FeedbackScreenshots from "../../../app/components/feedback/Screenshots.vue";
-import { fetchFeedbackScreenshot } from "~/composables/feedbackAdmin";
+import { fetchImage } from "~/composables/feedbackAdmin";
 import type { FeedbackScreenshot } from "~~/shared/model";
 
 vi.mock("~/composables/feedbackAdmin", () => ({
-  fetchFeedbackScreenshot: vi.fn(),
+  fetchImage: vi.fn(),
 }));
 
 // Vuetify's overlay measures the viewport and observes resizes; neither exists
@@ -16,7 +16,12 @@ global.ResizeObserver = class {
   disconnect() {}
 } as never;
 
-const shot = (width: number, height: number): FeedbackScreenshot => ({
+const shot = (
+  imageId: string,
+  width: number,
+  height: number,
+): FeedbackScreenshot => ({
+  imageId,
   contentType: "image/webp",
   width,
   height,
@@ -50,23 +55,19 @@ describe("FeedbackScreenshots", () => {
   });
 
   it("loads each image through the admin route, and says which failed", async () => {
-    vi.mocked(fetchFeedbackScreenshot).mockImplementation(async (_, index) => {
-      if (index === 1) throw new Error("404");
+    vi.mocked(fetchImage).mockImplementation(async (imageId) => {
+      if (imageId === "img2") throw new Error("404");
       return new Blob(["x"], { type: "image/webp" });
     });
 
     const wrapper = await mountSuspended(FeedbackScreenshots, {
       props: {
-        reportId: "fb-1",
-        screenshots: [shot(1920, 1080), shot(390, 844)],
+        screenshots: [shot("img1", 1920, 1080), shot("img2", 390, 844)],
       },
     });
     await settle();
 
-    expect(vi.mocked(fetchFeedbackScreenshot).mock.calls).toEqual([
-      ["fb-1", 0],
-      ["fb-1", 1],
-    ]);
+    expect(vi.mocked(fetchImage).mock.calls).toEqual([["img1"], ["img2"]]);
     const thumbs = wrapper.findAll("[data-report-screenshot]");
     expect(thumbs).toHaveLength(2);
     expect(thumbs[0]!.find("img").attributes("src")).toBe("blob:test/0");
@@ -78,11 +79,11 @@ describe("FeedbackScreenshots", () => {
   });
 
   it("opens an image whole on a click", async () => {
-    vi.mocked(fetchFeedbackScreenshot).mockResolvedValue(
+    vi.mocked(fetchImage).mockResolvedValue(
       new Blob(["x"], { type: "image/webp" }),
     );
     const wrapper = await mountSuspended(FeedbackScreenshots, {
-      props: { reportId: "fb-1", screenshots: [shot(1920, 1080)] },
+      props: { screenshots: [shot("img1", 1920, 1080)] },
     });
     await settle();
 
@@ -97,11 +98,11 @@ describe("FeedbackScreenshots", () => {
   });
 
   it("lets go of the images when the row closes", async () => {
-    vi.mocked(fetchFeedbackScreenshot).mockResolvedValue(
+    vi.mocked(fetchImage).mockResolvedValue(
       new Blob(["x"], { type: "image/webp" }),
     );
     const wrapper = await mountSuspended(FeedbackScreenshots, {
-      props: { reportId: "fb-1", screenshots: [shot(10, 10), shot(20, 20)] },
+      props: { screenshots: [shot("img1", 10, 10), shot("img2", 20, 20)] },
     });
     await settle();
 

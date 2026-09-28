@@ -16,6 +16,7 @@ import {
   judgeFix,
   type FixJudgement,
 } from "~~/shared/feedbackFixes";
+import { imagePath } from "~~/shared/images";
 import { QA_ITEMS, type QaCheck, type QaItem } from "~~/shared/qa";
 import { REPORT_FIXES, type ReportFix } from "~~/shared/reportFixes";
 import type { Feedback, FeedbackStatus } from "~~/shared/model";
@@ -47,12 +48,12 @@ export const formatFeedbackDate = (iso: string) =>
     timeStyle: "short",
   });
 
-/** The `index`th image attached to a report. Through the admin's token, which
- * the route requires and an `<img src>` could not send. */
-export const fetchFeedbackScreenshot = (id: string, index: number) =>
-  authRequest<Blob>("/api/feedback/screenshot", {
+/** An image only admins may see - a report's screenshot, a photo waiting for
+ * review. Through the admin's token, which the route asks for and an
+ * `<img src>` could not send. */
+export const fetchImage = (imageId: string) =>
+  authRequest<Blob>(imagePath(imageId), {
     method: "GET",
-    query: { id, n: index },
     responseType: "blob",
   });
 

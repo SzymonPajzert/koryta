@@ -7,10 +7,7 @@ import {
   authRequest,
   anonymousRequest,
 } from "~/composables/auth";
-import {
-  prepareScreenshot,
-  type PreparedScreenshot,
-} from "~/utils/screenshotImage";
+import { prepareImage, type PreparedImage } from "~/utils/imageUpload";
 
 // The two transports the dialog picks between. Which one carries the report is
 // the whole subject of this file: `authRequest` attaches an ID token,
@@ -23,9 +20,9 @@ vi.mock("~/composables/auth", () => ({
 
 // A canvas draws nothing in the test DOM; what the dialog does with the result
 // is the subject here, not the drawing.
-vi.mock("~/utils/screenshotImage", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("~/utils/screenshotImage")>()),
-  prepareScreenshot: vi.fn(async (file: File) => ({
+vi.mock("~/utils/imageUpload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/utils/imageUpload")>()),
+  prepareImage: vi.fn(async (file: File) => ({
     dataUrl: `data:image/webp;base64,${btoa(file.name)}`,
     width: 10,
     height: 10,
@@ -199,7 +196,7 @@ describe("FeedbackDialog screenshots", () => {
     input.dispatchEvent(new Event("change"));
     await settle();
 
-    expect(prepareScreenshot).toHaveBeenCalledTimes(1);
+    expect(prepareImage).toHaveBeenCalledTimes(1);
     expect(document.querySelectorAll("[data-screenshot-preview]")).toHaveLength(
       1,
     );
@@ -242,13 +239,13 @@ describe("FeedbackDialog screenshots", () => {
     await settle();
 
     expect(event.defaultPrevented).toBe(false);
-    expect(prepareScreenshot).not.toHaveBeenCalled();
+    expect(prepareImage).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
   it("waits for an image being prepared before it can send", async () => {
-    let finish: (value: PreparedScreenshot) => void = () => {};
-    vi.mocked(prepareScreenshot).mockImplementationOnce(
+    let finish: (value: PreparedImage) => void = () => {};
+    vi.mocked(prepareImage).mockImplementationOnce(
       () => new Promise((resolve) => (finish = resolve)),
     );
     const wrapper = await openDialog();
