@@ -9,6 +9,7 @@ from analysis.utils import as_sequence, drop_duplicates, empty_list_if_nan
 from analysis.utils.elections import candidacy_teryt
 from entities.company_bodies import RADA_SPOLECZNA, supervisory_body
 from entities.company_categories import CATEGORY_VALUES, categories_for
+from scrapers.krs.columns import is_public
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import KRS_RELATION_ROLES, CompaniesKRS
 from scrapers.map.teryt import Teryt
@@ -27,25 +28,6 @@ def iso_date(value: str) -> str:
     narrow the run by a single person and said nothing about it.
     """
     return date.fromisoformat(value).isoformat()
-
-
-def is_public(flags: pd.Series) -> pd.Series:
-    """A column of "is this company publicly owned" as actual booleans.
-
-    `astype(bool)` is not that. A column that came back as text - a frame read
-    without `CompaniesKRS`'s pinned dtypes, a hand-made CSV - has `astype(bool)`
-    call the string "False" true, and every company in the register would then
-    be public, so `--public-employer` would filter nothing while looking like it
-    had. Missing reads as false: not knowing who owns a company is not knowing
-    that the public does.
-    """
-    if pd.api.types.is_bool_dtype(flags) or pd.api.types.is_numeric_dtype(flags):
-        return flags.fillna(False).astype(bool)
-    # Anything else is read as text, which on this pandas is the dtype a column
-    # of Python strings gets - `object` is not the only way text arrives.
-    return flags.map(
-        lambda value: value is True or str(value).strip().lower() in {"true", "1"}
-    ).astype(bool)
 
 
 #: What every supervisory seat is called by the time it reaches here.
