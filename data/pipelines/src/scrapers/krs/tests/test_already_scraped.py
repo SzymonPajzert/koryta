@@ -136,7 +136,12 @@ def rejestrio(krs: str, day: str, kind: str = "aktualne") -> str:
     )
 
 
-def missing_register_entries(blobs) -> set[str]:
+def missing_register_entries(blobs, named: tuple[str, ...] = ()) -> set[str]:
+    """What `companies_without_register_entry` asks for, given these blobs.
+
+    `named` are the companies `CompaniesKRS` knows, blob or not - a feed
+    naming a company is enough to put it there.
+    """
     ctx = Context(
         io=ListingIO(blobs),
         rejestr_io=MockRejestrIO(),
@@ -150,6 +155,10 @@ def missing_register_entries(blobs) -> set[str]:
     pipeline = ScrapeRejestrIO()
     already = pipeline.already_scraped
     already.read_or_process = lambda _ctx: scraped  # type: ignore[assignment]
+    companies = pipeline.companies
+    companies.read_or_process = lambda _ctx: pd.DataFrame(  # type: ignore[assignment]
+        {"krs": list(named)}, dtype=str
+    )
     return {krs.id for krs in pipeline.companies_without_register_entry(ctx)}
 
 
@@ -177,3 +186,17 @@ def test_a_company_whose_entry_query_only_ever_failed_is_asked_again():
 def test_a_company_with_only_a_register_entry_is_not_queued_for_a_paid_query():
     """That direction is 1,642 companies and 164 PLN - a decision, not a fix."""
     assert missing_register_entries({odpis("P", "2026-07-18"): 4096}) == set()
+
+
+def test_a_company_a_feed_only_names_is_asked_for_its_entry():
+    """No blob of its own, so nothing says who owns it until the odpis does."""
+    another = odpis("P", "2026-07-18").replace(KRS, "0000000111")
+
+    assert missing_register_entries({another: 4096}, named=(KRS,)) == {KRS}
+
+
+def test_a_named_company_with_an_entry_is_not_asked_again():
+    assert (
+        missing_register_entries({odpis("P", "2026-07-18"): 4096}, named=(KRS,))
+        == set()
+    )
