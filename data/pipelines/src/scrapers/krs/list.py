@@ -18,7 +18,7 @@ from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Jst, Teryt, normalize_unit_name
 from scrapers.stores import CloudStorage, Context, Pipeline
-from scrapers.stores.file import DownloadableFile, latest_crawls, split_crawl_date
+from scrapers.stores.file import split_crawl_date
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -336,28 +336,47 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         older crawls is not harmful the way it is for people - but it is not
         free either, and the ownership edges it replays are the *old* ones. The
         newest crawl is the answer to "who owns this company", so read that.
+
+        Read through `read_many`, as `extract_people` is and for the same
+        reason: a listing read one object at a time is ~3 objects a second on
+        a fresh runner, and the nightly spent its whole two hours here. So the
+        newest crawl is picked from what arrives rather than from a listing,
+        and the choice has to be complete before anything is yielded - unlike
+        `extract_people`, `add_company` merges, so a crawl yielded cannot be
+        taken back when a newer one turns up. What is held until then is the
+        newest crawl of each query, ~180 MB for rejestr.io.
         """
-        listing = [
-            blob_ref
-            for blob_ref in ctx.io.list_files(
-                CloudStorage(prefix=f"hostname={hostname}")
-            )
-            # A crawl that failed is stored as a zero-byte object, and dropping
-            # it here rather than after `latest_crawls` is the whole point: the
-            # newest crawl of a company may be the failed one, and taking it
-            # and then skipping it loses the company altogether instead of
-            # falling back to the last crawl that worked. `extract_people`
-            # makes the same choice, for the same reason.
-            if isinstance(blob_ref, DownloadableFile) and blob_ref.size != 0
-        ]
-        for blob_ref in latest_crawls(listing, lambda ref: ref.url):
-            blob = ctx.io.read_data(blob_ref)
+        newest: dict[str, tuple[str, str, str]] = {}
+        # Where a listing first meets each query: the smallest name among its
+        # crawls that are not empty. Yielding in that order is yielding in the
+        # order this used to, when it walked a listing, and the order matters -
+        # `add_company` keeps the first non-empty value of each field, so it
+        # decides between two crawls that disagree. Arrival order will not do,
+        # it moves with the mirror's age; nor will the newest crawl's own name,
+        # as the `date=` segment has moved within the path (see
+        # `split_crawl_date`) and a query crawled under both layouts sorts
+        # under each in a different place.
+        listed_at: dict[str, str] = {}
+        for url, blob in ctx.io.read_many(CloudStorage(prefix=f"hostname={hostname}")):
+            subject, date = split_crawl_date(url)
+            seen = newest.get(subject)
+            # Same day under both layouts: the one a listing meets first wins.
+            if seen is not None and (date, seen[1]) <= (seen[0], url):
+                if url < listed_at[subject] and blob.read_string() != "":
+                    listed_at[subject] = url
+                continue
             content = blob.read_string()
             if content == "":
-                # Still checked: a listing that carries no sizes cannot say.
+                # A crawl that failed is stored as a zero-byte object. Nothing
+                # is recorded for it, so the crawl before it stands: the newest
+                # crawl of a company may be the failed one, and taking it and
+                # then skipping it loses the company altogether.
                 continue
-            data = json.loads(content)
-            yield blob_ref.url, data
+            newest[subject] = (date, url, content)
+            listed_at[subject] = min(listed_at.get(subject, url), url)
+        for subject in sorted(newest, key=listed_at.__getitem__):
+            _, url, content = newest[subject]
+            yield url, json.loads(content)
 
     def process_rejestrio_blob(
         self, blob_name: str, data, postal_codes: DataFrame

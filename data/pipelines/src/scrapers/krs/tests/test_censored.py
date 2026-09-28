@@ -12,7 +12,6 @@ from scrapers.krs.censored import (
 )
 from scrapers.krs.people_parsing import CensoredPerson
 from scrapers.stores import Context, ProcessPolicy
-from scrapers.stores.file import DownloadableFile
 from scrapers.test_tree import MockIO, MockNLP, MockRejestrIO, MockUtils, MockWeb
 
 KRS_1 = "0000000001"
@@ -298,12 +297,9 @@ class OdpisIO(MockIO):
     def __init__(self, blobs: dict[str, object]):
         self.blobs = blobs
 
-    def list_files(self, path):
-        for name in self.blobs:
-            yield DownloadableFile(f"{BUCKET}/{name}")
-
-    def read_data(self, fs):
-        return OdpisFile(self.blobs[fs.url.removeprefix(f"{BUCKET}/")])
+    def read_many(self, path):
+        for name, body in self.blobs.items():
+            yield f"{BUCKET}/{name}", OdpisFile(body)
 
 
 def odpis_blob(krs: str, register: str, day: str) -> str:
