@@ -5,6 +5,7 @@
       `task-node--${taskSectionConfig[section].tone}`,
       {
         'task-node--goal': task.kind === 'goal',
+        'task-node--stacked': (stacked ?? 0) > 0,
         'task-node--selected': selected,
         'task-node--faded': faded,
       },
@@ -36,10 +37,29 @@
       <template v-else>
         <span>{{ taskSectionConfig[section].short }}</span>
         <span v-if="task.status === 'doing'">· w toku</span>
-        <span v-if="state.blockers.length > 0">
+        <span v-if="state.blockers.length > 0 && !stacked">
           · czeka na {{ state.blockers.length }}
         </span>
       </template>
+      <!-- Folds the card together with everything that leads only to it, or
+           spreads it out again. A button of its own, so that it neither
+           picks the card nor starts an arrow. -->
+      <button
+        v-if="stacked || foldable"
+        type="button"
+        class="task-node__fold nodrag nopan"
+        :class="{ 'task-node__fold--stacked': stacked }"
+        :title="foldLabel"
+        :aria-label="foldLabel"
+        data-task-fold
+        @click.stop="stacked ? emit('unfold') : emit('fold')"
+      >
+        <span v-if="stacked">+{{ stacked }}</span>
+        <v-icon
+          size="14"
+          :icon="stacked ? mdiArrowExpandLeft : mdiArrowCollapseRight"
+        />
+      </button>
     </div>
     <div class="task-node__title">{{ task.title }}</div>
     <Handle
@@ -55,6 +75,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Handle, Position, type ValidConnectionFunc } from "@vue-flow/core";
+import { mdiArrowCollapseRight, mdiArrowExpandLeft } from "@mdi/js";
+import { polishCounting } from "~/composables/polish";
 import { TASK_NODE_HEIGHT, TASK_NODE_WIDTH } from "~/utils/taskGraph";
 import { taskKindConfig, taskSectionConfig } from "~/utils/taskStyle";
 import type { Task, TaskSection, TaskState } from "~~/shared/tasks";
@@ -73,7 +95,22 @@ const props = defineProps<{
   faded?: boolean;
   /** Whether an arrow being drawn onto one of this card's edges may land. */
   validConnection?: ValidConnectionFunc;
+  /** How many tasks folding this card would hide. */
+  foldable?: number;
+  /** How many tasks are folded into it: it is drawn as a stack. */
+  stacked?: number;
 }>();
+
+const emit = defineEmits<{ fold: []; unfold: [] }>();
+
+const tasksWord = (count: number) =>
+  polishCounting(count, "zadanie", "zadania", "zadań");
+
+const foldLabel = computed(() =>
+  props.stacked
+    ? `Rozwiń: ${tasksWord(props.stacked)} prowadzi tylko tutaj`
+    : `Zwiń ${tasksWord(props.foldable ?? 0)}, które prowadzą tylko tutaj`,
+);
 
 const goalWord = computed(() =>
   props.task.status === "done"
@@ -154,6 +191,36 @@ const goalWord = computed(() =>
   background: rgb(var(--task-surface));
 }
 
+/* A folded card: two more cards behind it, up and to the right, for the
+ * tasks it stands for. Behind the card's own background, since the card
+ * makes no stacking context of its own and the node around it does. */
+.task-node--stacked::before,
+.task-node--stacked::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 1px solid rgba(var(--v-border-color), 0.28);
+  border-radius: inherit;
+  background: rgb(var(--v-theme-surface));
+  pointer-events: none;
+}
+
+.task-node--stacked::before {
+  transform: translate(5px, -5px);
+  z-index: -1;
+}
+
+.task-node--stacked::after {
+  transform: translate(10px, -10px);
+  z-index: -2;
+}
+
+.task-node--goal.task-node--stacked::before,
+.task-node--goal.task-node--stacked::after {
+  border-color: rgb(var(--v-theme-surface));
+  background: rgb(var(--v-theme-ink-strong));
+}
+
 .task-node--selected {
   outline: 2px solid rgb(var(--task-ink));
   outline-offset: 1px;
@@ -169,6 +236,36 @@ const goalWord = computed(() =>
   text-transform: uppercase;
   color: rgb(var(--task-ink));
   white-space: nowrap;
+}
+
+.task-node__fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: auto;
+  padding: 0 4px;
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Hidden until wanted, except on a stack, where it says how many there are. */
+.task-node:hover .task-node__fold,
+.task-node--selected .task-node__fold,
+.task-node__fold:focus-visible,
+.task-node__fold--stacked {
+  opacity: 1;
+}
+
+.task-node__fold:hover {
+  background: rgba(var(--task-ink), 0.12);
+}
+
+.task-node--goal .task-node__fold:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .task-node__title {

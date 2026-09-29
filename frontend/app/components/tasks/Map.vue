@@ -14,7 +14,9 @@
       :default-edge-options="{ type: 'default' }"
       @connect="onConnect"
       @node-click="({ node }) => node.type === 'task' && pick(node.id)"
-      @edge-click="({ edge }) => (selectedEdge = edge.id)"
+      @edge-click="
+        ({ edge }) => !edge.data?.intoFold && (selectedEdge = edge.id)
+      "
       @pane-click="selectedEdge = null"
     >
       <template #node-task="{ data }">
@@ -25,13 +27,28 @@
           :progress="data.progress"
           :selected="data.task.id === selected"
           :faded="data.faded"
+          :foldable="data.foldable"
+          :stacked="data.stacked"
           :valid-connection="isValidConnection"
+          @fold="fold(data.task.id)"
+          @unfold="unfold(data.task.id)"
         />
       </template>
       <template #node-label="{ data }">
         <div class="task-map__label">{{ data.text }}</div>
       </template>
     </VueFlow>
+
+    <TasksMapBar
+      :marks="marks"
+      :dragging="!!dragFrom"
+      :drop="drop"
+      :can-fold-all="unfoldedEnds.length > 0"
+      :can-unfold-all="folds.stacks.size > 0"
+      @pick="pickMark"
+      @fold-all="foldAll"
+      @unfold-all="unfoldAll"
+    />
 
     <div class="task-map__tools">
       <v-btn
@@ -120,7 +137,10 @@ import {
 import {
   TASK_NODE_HEIGHT,
   TASK_NODE_WIDTH,
+  foldSizes,
+  foldTasks,
   placeTasks,
+  terminalTasks,
 } from "~/utils/taskGraph";
 import {
   dependencyProblem,
@@ -130,6 +150,7 @@ import {
   type Task,
   type TaskState,
 } from "~~/shared/tasks";
+import type { TaskMark } from "./MapBar.vue";
 
 /** The task list as a flowchart: an arrow from each task to what waits on it,
  * laid out left to right so the first column is what can be started.
@@ -138,7 +159,11 @@ import {
  * the map out again, and a hand-placed card would be moved anyway. What the
  * map is for is joining tasks - drag from the right edge of the task that has
  * to happen first to the left edge of the one that waits (or tap one edge,
- * then the other) - and seeing the chains that come out of it. */
+ * then the other) - and seeing the chains that come out of it.
+ *
+ * A task can be folded: drawn as a stack of cards that stands for it and for
+ * everything that leads only to it. Arrows still reach it, and new ones can be
+ * drawn to it; which tasks are folded is kept in the browser. */
 
 const FLOW_ID = "tasks-map";
 
@@ -159,8 +184,20 @@ const emit = defineEmits<{
   disconnect: [prerequisite: string, dependent: string];
 }>();
 
-const { fitBounds, zoomIn, zoomOut, setCenter, viewport, onPaneReady } =
-  useVueFlow(FLOW_ID);
+const {
+  fitBounds,
+  zoomIn,
+  zoomOut,
+  setCenter,
+  setViewport,
+  viewport,
+  onPaneReady,
+  onConnectStart,
+  onConnectEnd,
+  connectionClickStartHandle,
+  endConnection,
+  autoPanOnConnect,
+} = useVueFlow(FLOW_ID);
 
 /** The task last clicked on the map itself: it is in view already, so
  * picking it must not move the map from under the pointer. */
@@ -181,11 +218,117 @@ const pairs = computed(() => {
   );
 });
 
-const placement = computed(() => placeTasks(shownIds.value, pairs.value));
+// ---- folding ----
+
+const FOLDED_KEY = "koryta:zadania:zwiniete";
+
+function readFolded(): Set<string> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? "[]");
+    return new Set(
+      Array.isArray(saved)
+        ? saved.filter((id): id is string => typeof id === "string")
+        : [],
+    );
+  } catch {
+    // Nothing kept, a broken entry or no storage at all: nothing folded.
+    return new Set();
+  }
+}
+
+/** The tasks folded, as asked for - whether or not anything leads to them
+ * alone right now, which a filter or a closed task can change. */
+const folded = ref<Set<string>>(import.meta.client ? readFolded() : new Set());
+
+function setFolded(next: Set<string>) {
+  folded.value = next;
+  // Only tasks that still exist, so that the list does not grow for ever.
+  const known = new Set(props.all.map((task) => task.id));
+  try {
+    localStorage.setItem(
+      FOLDED_KEY,
+      JSON.stringify([...next].filter((id) => known.has(id))),
+    );
+  } catch {
+    // Storage refused (a private window, say): the folds last as long as
+    // the page does.
+  }
+}
+
+const folds = computed(() =>
+  foldTasks(shownIds.value, pairs.value, folded.value),
+);
+/** How many tasks folding each card would hide; its button shows for any. */
+const sizes = computed(() => foldSizes(shownIds.value, pairs.value));
+/** The ends of the chains that „Zwiń wszystkie” would still fold. */
+const unfoldedEnds = computed(() =>
+  terminalTasks(shownIds.value, pairs.value).filter(
+    (id) => (sizes.value.get(id) ?? 0) > 0 && !folds.value.stacks.has(id),
+  ),
+);
+
+const placement = computed(() =>
+  placeTasks(
+    folds.value.ids,
+    folds.value.edges.map((edge) => [edge.source, edge.target] as const),
+    new Set(folds.value.stacks.keys()),
+  ),
+);
+
+/** Folding or unfolding a card lays the map out again; the card itself is
+ * kept where it was on the screen, so it stays under the pointer. */
+async function keepInPlace(id: string, change: () => void) {
+  const before = placement.value.positions.get(id);
+  change();
+  await nextTick();
+  const after = placement.value.positions.get(id);
+  if (!before || !after) return;
+  const { x, y, zoom } = viewport.value;
+  void setViewport({
+    x: x + (before.x - after.x) * zoom,
+    y: y + (before.y - after.y) * zoom,
+    zoom,
+  });
+}
+
+const fold = (id: string) =>
+  keepInPlace(id, () => setFolded(new Set([...folded.value, id])));
+
+const unfold = (id: string) =>
+  keepInPlace(id, () => {
+    const next = new Set(folded.value);
+    next.delete(id);
+    setFolded(next);
+  });
+
+async function foldAll() {
+  setFolded(new Set([...folded.value, ...unfoldedEnds.value]));
+  await nextTick();
+  fit(200);
+}
+
+async function unfoldAll() {
+  setFolded(new Set());
+  await nextTick();
+  fit(200);
+}
+
+/** Unfolds whatever hides `id`, so that a task picked from a link or from
+ * beside the map can be shown. Folds inside it stay folded. */
+function reveal(id: string) {
+  if (!folds.value.hiddenIn.has(id)) return false;
+  const next = new Set(folded.value);
+  for (const [foldedId, group] of folds.value.groups) {
+    if (group.includes(id)) next.delete(foldedId);
+  }
+  setFolded(next);
+  return true;
+}
 
 const nodes = computed<Node[]>(() => {
   const { positions, gridTop } = placement.value;
-  const cards: Node[] = props.tasks.map((task) => {
+  const drawn = props.tasks.filter((task) => positions.has(task.id));
+  const cards: Node[] = drawn.map((task) => {
     const state = props.states.get(task.id)!;
     return {
       id: task.id,
@@ -201,10 +344,13 @@ const nodes = computed<Node[]>(() => {
         progress:
           task.kind === "goal" ? goalProgress(props.all, task.id) : null,
         faded: props.faded?.has(task.id) ?? false,
+        foldable: sizes.value.get(task.id) ?? 0,
+        stacked: folds.value.stacks.get(task.id) ?? 0,
       },
     };
   });
-  if (gridTop !== null && pairs.value.length > 0) {
+  // Named only when chains or stacks sit above the loose tasks.
+  if (gridTop !== null && gridTop > 0) {
     cards.push({
       id: "__loose",
       type: "label",
@@ -223,22 +369,28 @@ const byId = computed(() => new Map(props.all.map((t) => [t.id, t])));
 const selectedEdge = ref<string | null>(null);
 
 const edges = computed<Edge[]>(() =>
-  pairs.value.map(([prerequisite, dependent]) => {
-    const id = `${prerequisite}->${dependent}`;
-    const done = isClosed(byId.value.get(prerequisite)!);
+  folds.value.edges.map(({ source, target, pairs: stands }) => {
+    const id = `${source}->${target}`;
+    const done = isClosed(byId.value.get(source)!);
+    // An arrow into a folded card may stand for what a task folded inside it
+    // waits on. Taking it away here would take away a different dependency
+    // from the one it looks like, so it is only drawn.
+    const intoFold = stands.some(([, dependent]) => dependent !== target);
     return {
       id,
-      source: prerequisite,
-      target: dependent,
+      source,
+      target,
       markerEnd: MarkerType.ArrowClosed,
       // A dependency already met is drawn but out of the way: it is the
       // record of the order, not something still in anybody's path.
       class: [
         "task-edge",
         done ? "task-edge--met" : "task-edge--open",
+        intoFold ? "task-edge--into-fold" : "",
         id === selectedEdge.value ? "task-edge--selected" : "",
       ].join(" "),
-      interactionWidth: 18,
+      interactionWidth: intoFold ? 0 : 18,
+      data: { intoFold },
     };
   }),
 );
@@ -271,6 +423,9 @@ function isValidConnection(connection: Connection) {
 }
 
 function onConnect(connection: Connection) {
+  // Dropped on the bar over the map: the mark there is what was meant, not a
+  // card that happens to lie under it. `onConnectEnd` makes that one.
+  if (dragFrom.value && markAt(lastPoint)) return;
   if (connection.source && connection.target) {
     emit("connect", connection.source, connection.target);
   }
@@ -285,21 +440,23 @@ function disconnect() {
 
 /** Everything on the map, from the layout rather than from Vue Flow's
  * measurements: those arrive a frame or more after the cards do, and a fit
- * made before them misses. */
+ * made before them misses. With room above it for the bar over the map. */
 const bounds = computed(() => {
   const points = [...placement.value.positions.values()];
   if (points.length === 0) return null;
   const x = Math.min(...points.map((p) => p.x));
-  const y = Math.min(
+  const top = Math.min(
     ...points.map((p) => p.y),
     // The label over the loose tasks sits above the first of them.
     placement.value.gridTop !== null ? placement.value.gridTop - 36 : Infinity,
   );
+  const bottom = Math.max(...points.map((p) => p.y)) + TASK_NODE_HEIGHT;
+  const room = Math.max(60, (bottom - top) * 0.1);
   return {
     x,
-    y,
+    y: top - room,
     width: Math.max(...points.map((p) => p.x)) + TASK_NODE_WIDTH - x,
-    height: Math.max(...points.map((p) => p.y)) + TASK_NODE_HEIGHT - y,
+    height: bottom - top + room,
   };
 });
 
@@ -323,22 +480,160 @@ watch(
   },
 );
 
+/** Brings a task into the middle, close enough to read, out of any fold it
+ * was in. */
+async function bringIntoView(id: string) {
+  if (reveal(id)) await nextTick();
+  const position = placement.value.positions.get(id);
+  if (!position) return;
+  setCenter(
+    position.x + TASK_NODE_WIDTH / 2,
+    position.y + TASK_NODE_HEIGHT / 2,
+    { zoom: Math.max(viewport.value.zoom, 0.8), duration: 300 },
+  );
+}
+
 // A task picked elsewhere - a link, or "Blokuje" beside the map - is brought
-// into the middle, close enough to read.
+// into view.
 watch(
   () => props.selected,
   (id) => {
     const fromMap = id === clicked;
     clicked = null;
-    const position = id ? placement.value.positions.get(id) : undefined;
-    if (!position || fromMap) return;
-    setCenter(
-      position.x + TASK_NODE_WIDTH / 2,
-      position.y + TASK_NODE_HEIGHT / 2,
-      { zoom: Math.max(viewport.value.zoom, 0.8), duration: 300 },
-    );
+    if (id && !fromMap) void bringIntoView(id);
   },
 );
+
+// ---- the bar over the map ----
+
+/** The goals on the map and the folded cards, to drop an arrow on from
+ * anywhere: the goals first, then the folds, each by name. */
+const marks = computed<TaskMark[]>(() => {
+  const byTitle = (a: Task, b: Task) => a.title.localeCompare(b.title, "pl");
+  const goals = props.tasks
+    .filter((task) => task.kind === "goal")
+    .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)) || byTitle(a, b));
+  const stacked = [...folds.value.stacks.keys()]
+    .flatMap((id) => byId.value.get(id) ?? [])
+    .filter((task) => task.kind !== "goal")
+    .sort(byTitle);
+  return [
+    ...goals.map((task) => {
+      const { closed, total } = goalProgress(props.all, task.id);
+      return {
+        id: task.id,
+        title: task.title,
+        kind: "goal" as const,
+        count: `${closed}/${total}`,
+        stacked: folds.value.stacks.has(task.id),
+        closed: isClosed(task),
+      };
+    }),
+    ...stacked.map((task) => ({
+      id: task.id,
+      title: task.title,
+      kind: "fold" as const,
+      count: `+${folds.value.stacks.get(task.id)}`,
+      stacked: true,
+      closed: isClosed(task),
+    })),
+  ];
+});
+
+/** Where an arrow being drawn started: which card, and which edge of it - the
+ * right edge says "this first", the left "this waits on". */
+const dragFrom = ref<{
+  nodeId: string;
+  handleType: "source" | "target";
+} | null>(null);
+/** The mark under the arrow's end, if it is over one. */
+const drop = ref<{ id: string; valid: boolean } | null>(null);
+
+type Point = { x: number; y: number };
+
+function pointOf(event: MouseEvent | TouchEvent): Point | null {
+  if ("clientX" in event) return { x: event.clientX, y: event.clientY };
+  const touch = event.touches[0] ?? event.changedTouches[0];
+  return touch ? { x: touch.clientX, y: touch.clientY } : null;
+}
+
+/** The mark at a point on the screen. */
+function markAt(point: Point | null): string | null {
+  if (!point) return null;
+  const element = document.elementFromPoint(point.x, point.y);
+  return (
+    element?.closest<HTMLElement>("[data-task-mark]")?.dataset.taskMark ?? null
+  );
+}
+
+/** The dependency dropping an arrow from `from` on `mark` would make. */
+const linkTo = (
+  from: { nodeId: string; handleType: "source" | "target" },
+  mark: string,
+) =>
+  from.handleType === "source"
+    ? { source: from.nodeId, target: mark }
+    : { source: mark, target: from.nodeId };
+
+let lastPoint: Point | null = null;
+
+function trackDrag(event: MouseEvent | TouchEvent) {
+  lastPoint = pointOf(event);
+  const mark = markAt(lastPoint);
+  // Near the edge of the map Vue Flow moves the map along to where the arrow
+  // is going; over the bar that is not where it is going.
+  if (mark) autoPanOnConnect.value = false;
+  drop.value =
+    mark && dragFrom.value
+      ? {
+          id: mark,
+          valid: isValidConnection({
+            ...linkTo(dragFrom.value, mark),
+            sourceHandle: null,
+            targetHandle: null,
+          }),
+        }
+      : null;
+}
+
+onConnectStart(({ nodeId, handleType }) => {
+  if (!nodeId || !handleType) return;
+  dragFrom.value = { nodeId, handleType };
+  lastPoint = null;
+  document.addEventListener("mousemove", trackDrag);
+  document.addEventListener("touchmove", trackDrag);
+});
+
+onConnectEnd((event) => {
+  document.removeEventListener("mousemove", trackDrag);
+  document.removeEventListener("touchmove", trackDrag);
+  const mark = markAt((event && pointOf(event)) ?? lastPoint);
+  if (dragFrom.value && mark) {
+    const { source, target } = linkTo(dragFrom.value, mark);
+    emit("connect", source, target);
+  }
+  dragFrom.value = null;
+  drop.value = null;
+  lastPoint = null;
+  autoPanOnConnect.value = true;
+});
+
+/** A mark clicked: the end of an arrow started by tapping a card's edge, or
+ * otherwise the task, brought into view and opened. */
+function pickMark(id: string) {
+  const start = connectionClickStartHandle.value;
+  if (start?.nodeId) {
+    const { source, target } = linkTo(
+      { nodeId: start.nodeId, handleType: start.type },
+      id,
+    );
+    endConnection(undefined, true);
+    emit("connect", source, target);
+    return;
+  }
+  if (id === props.selected) void bringIntoView(id);
+  else emit("select", id);
+}
 </script>
 
 <style>
@@ -383,6 +678,11 @@ watch(
   opacity: 1;
 }
 
+/* Drawn only: see `edges`. */
+.task-map .task-edge--into-fold {
+  pointer-events: none;
+}
+
 .task-map__tools {
   position: absolute;
   inset-block-end: 12px;
@@ -393,10 +693,12 @@ watch(
   z-index: 5;
 }
 
+/* At the bottom, where the bar over the map leaves room: clear of the zoom
+ * buttons on the right. */
 .task-map__edge-bar {
   position: absolute;
-  inset-block-start: 12px;
-  inset-inline: 12px;
+  inset-block-end: 12px;
+  inset-inline: 12px 64px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

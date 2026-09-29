@@ -227,7 +227,9 @@
             Strzałka prowadzi od tego, co najpierw, do tego, co czeka.
             Przeciągnij od prawej krawędzi jednego zadania do lewej drugiego
             (albo stuknij w jedną, potem w drugą), żeby je połączyć; stuknij w
-            strzałkę, żeby ją usunąć.
+            strzałkę, żeby ją usunąć. Przycisk w rogu karty zwija w stos
+            wszystko, co prowadzi tylko do niej. Cele i stosy są też na pasku
+            nad mapą - strzałkę można upuścić tam.
           </span>
         </div>
       </div>
