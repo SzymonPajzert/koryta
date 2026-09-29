@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Regulamin i polityka prywatności stoją w białym arkuszu z ramką na szarym tle, jak /o-nas i /pomoc, a adres e-mail i link do polityki są ciemnozielone zamiast bladozielonych.",
+    fixes: ["3MWd21zn85kJO5T13eNP"],
+  },
+  {
+    change:
       "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
     fixes: ["g29Mn5m5y6EKQegAviQn"],
   },
