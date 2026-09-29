@@ -10,6 +10,7 @@ import requests
 from scrapers.stores import Context
 
 
+# TODO move this to stores - this is a generic utility, not KRS-specific.
 def query_krs_api(url, verbose=True) -> str | None:
     def print_filtered(*args, **kwargs):
         if verbose:
@@ -50,6 +51,10 @@ def upload_result(ctx: Context, url, result, verbose=True):
     url = url.replace("&format=json", "")
     ctx.io.upload(url, result, "application/json", verbose=verbose, include_query=True)
 
+
+# TODO This should be calculated by which job updates which pipeline and which pipelines
+# are read by which jobs, not hardcoded here. It requires further utility, so it's
+# left as a future development.
 
 #: The pipelines every KRS scrape rebuilds before it reads its queue, whatever
 #: is on disk: each one's inputs change with every crawl.
