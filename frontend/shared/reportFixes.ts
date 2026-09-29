@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Zgłoszenie z kolejki wyjmuje się jednym kliknięciem ikony „Wyjmij z kolejki” na jego linii - w kolejce i w pełnej liście - a „Cofnij” w komunikacie, który się wtedy pojawia, odstawia je na to samo miejsce.",
+    fixes: ["Km0Pw1iizx8scxv2RbXR"],
+  },
+  {
+    change:
       "/admin/opinie otwiera się na kolejce, w której kliknięte zgłoszenie rozwija się w miejscu z notatką i statusem, więc można mu tam odpisać albo je zamknąć, a otwarte nadal przesuwa się strzałkami i przeciąganiem - zamknięte i filtr „Z QA” są w widoku „Pełna lista”.",
     fixes: ["OuTEaTzI6TvvMyPerpYl"],
     link: "/admin/opinie",

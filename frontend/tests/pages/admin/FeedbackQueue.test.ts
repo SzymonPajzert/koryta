@@ -159,15 +159,22 @@ const gets = () =>
 const posts = () =>
   mockAuthRequest.mock.calls.filter(([, opts]) => opts.method === "POST");
 
+/** How many "wyjęte z kolejki" notices have been put up, each one anew. */
+let unqueueNotices = 0;
+
 /** Renders what the page tells the snackbar, in place. The real one is an
  * overlay teleported out of the wrapper and closed on a timer; what matters
  * here is only whether the page raised it and with which words. */
 const SnackbarStub = defineComponent({
   props: { modelValue: Boolean },
-  setup(props, { slots }) {
+  setup(props, { slots, attrs }) {
+    if ("data-unqueued" in attrs) unqueueNotices++;
     return () =>
       props.modelValue
-        ? h("div", { "data-snackbar": "" }, slots.default?.())
+        ? h("div", { "data-snackbar": "" }, [
+            slots.default?.(),
+            slots.actions?.(),
+          ])
         : null;
   },
 });
@@ -377,6 +384,207 @@ describe("admin feedback queue", () => {
     expect(
       row(wrapper, "in-old").find('button[aria-label="Do kolejki"]').exists(),
     ).toBe(false);
+  });
+
+  it("takes a report out of the queue from its line, without opening it", async () => {
+    serve(board());
+    const wrapper = await mount();
+    // Only a queued report has a place to leave.
+    expect(
+      row(wrapper, "in-new")
+        .find('button[aria-label="Wyjmij z kolejki"]')
+        .exists(),
+    ).toBe(false);
+
+    await click(
+      row(wrapper, "q2").get('button[aria-label="Wyjmij z kolejki"]'),
+    );
+    expect(isOpen(wrapper, "q2")).toBe(false);
+
+    expect(posts().map(([, opts]) => opts.body)).toEqual([
+      { id: "q2", queueRank: null },
+    ]);
+    // Under the queue, among the reports nobody has placed, newest first.
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q2", "q1", "q3"]);
+    expect(row(wrapper, "q2").find("[data-queue-position]").exists()).toBe(
+      false,
+    );
+    expect(row(wrapper, "q3").get("[data-queue-position]").text()).toBe("#2");
+    // And from there it can go back in, the usual way.
+    expect(
+      row(wrapper, "q2").find('button[aria-label="Do kolejki"]').exists(),
+    ).toBe(true);
+    expect(wrapper.get("[data-unqueued]").text()).toContain(
+      "Zgłoszenie #2 wyjęte z kolejki.",
+    );
+  });
+
+  it("puts a report taken out back in the place it left, not at the end", async () => {
+    serve(board());
+    const wrapper = await mount();
+    await click(
+      row(wrapper, "q2").get('button[aria-label="Wyjmij z kolejki"]'),
+    );
+
+    await click(button(wrapper.get("[data-unqueued]"), "Cofnij"));
+
+    const [, back] = posts().map(([, opts]) => opts.body);
+    expect(back.id).toBe("q2");
+    expect(back.queueRank).toBeGreaterThan(1024);
+    expect(back.queueRank).toBeLessThan(3072);
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
+    expect(row(wrapper, "q2").get("[data-queue-position]").text()).toBe("#2");
+    // Done with: nothing left to undo.
+    expect(wrapper.find("[data-unqueued]").exists()).toBe(false);
+  });
+
+  it("takes a report out of the queue from its line in the queue", async () => {
+    serve(board());
+    const wrapper = await mountQueue();
+
+    const first = wrapper.findAll("[data-queue-row]")[0]!;
+    await click(first.get('button[aria-label="Wyjmij z kolejki"]'));
+
+    expect(posts().map(([, opts]) => opts.body)).toEqual([
+      { id: "q1", queueRank: null },
+    ]);
+    expect(rowIds(wrapper)).toEqual(["q2", "q3"]);
+    expect(rowIds(wrapper, "inbox")).toEqual(["in-new", "in-old", "q1"]);
+    expect(wrapper.get("[data-unqueued]").text()).toContain(
+      "Zgłoszenie #1 wyjęte z kolejki.",
+    );
+
+    await click(button(wrapper.get("[data-unqueued]"), "Cofnij"));
+    expect(rowIds(wrapper)).toEqual(["q1", "q2", "q3"]);
+    expect(posts()[1]![1].body.queueRank).toBeLessThan(2048);
+  });
+
+  it("offers no undo for a report the server kept in the queue", async () => {
+    serve(board());
+    const wrapper = await mount();
+    let refuse: (error: Error) => void = () => {};
+    mockAuthRequest.mockImplementation(
+      (_url: string, opts: { method: string }) =>
+        opts.method === "POST"
+          ? new Promise((_resolve, reject) => {
+              refuse = reject;
+            })
+          : Promise.resolve({ feedback: board() }),
+    );
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await click(
+      row(wrapper, "q2").get('button[aria-label="Wyjmij z kolejki"]'),
+    );
+    expect(wrapper.find("[data-unqueued]").exists()).toBe(true);
+
+    refuse(new Error("403"));
+    await flushPromises();
+
+    // Back where it was, and the error says why; there is nothing to undo.
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
+    expect(wrapper.find("[data-unqueued]").exists()).toBe(false);
+    expect(wrapper.get("[data-snackbar]").text()).toBe(
+      "Nie udało się zapisać kolejności.",
+    );
+    error.mockRestore();
+  });
+
+  it("puts up a notice of its own for each report taken out", async () => {
+    // Vuetify restarts a notice's timer only when it opens, so a second
+    // removal inside the first one's six seconds would get what was left of
+    // them - unless the notice is a new one.
+    serve(board());
+    const wrapper = await mount();
+    const before = unqueueNotices;
+
+    await click(
+      row(wrapper, "q1").get('button[aria-label="Wyjmij z kolejki"]'),
+    );
+    await click(
+      row(wrapper, "q3").get('button[aria-label="Wyjmij z kolejki"]'),
+    );
+
+    expect(unqueueNotices - before).toBe(2);
+    // The last one taken out, counted where it was: second of q2 and q3.
+    expect(wrapper.get("[data-unqueued]").text()).toContain(
+      "Zgłoszenie #2 wyjęte z kolejki.",
+    );
+  });
+
+  it("hands the keyboard to „Cofnij” once the line it was on has moved", async () => {
+    serve(board());
+    const wrapper = await mount("", FULL_LIST, document.body);
+
+    const out = row(wrapper, "q2").get('button[aria-label="Wyjmij z kolejki"]');
+    (out.element as HTMLElement).focus();
+    await click(out);
+
+    expect(document.activeElement?.hasAttribute("data-undo-unqueue")).toBe(
+      true,
+    );
+  });
+
+  it("waits with „Cofnij” until a reload is in, so the page and the database agree", async () => {
+    // Pressed while the list is out, the place would be counted among rows
+    // about to be replaced by the ones the load brings - which were read
+    // before the undo was written, so the report would sit in the queue on
+    // the page and under it in the database.
+    serve(board());
+    const wrapper = await mount();
+    await click(
+      row(wrapper, "q2").get('button[aria-label="Wyjmij z kolejki"]'),
+    );
+    // The server's copy, after that write.
+    const stored = board().map((item) => {
+      if (item.id !== "q2") return item;
+      const { queueRank: _gone, ...rest } = item;
+      return rest as Feedback;
+    });
+    let answer = () => {};
+    mockAuthRequest.mockImplementation(
+      (
+        _url: string,
+        opts: {
+          method: string;
+          body: { id: string; queueRank?: number | null };
+        },
+      ) => {
+        if (opts.method === "GET") {
+          // Read now, answered later.
+          const snapshot = stored.map((item) => structuredClone(item));
+          return new Promise((resolve) => {
+            answer = () => resolve({ feedback: snapshot });
+          });
+        }
+        const { id, queueRank } = opts.body;
+        const item = stored.find((entry) => entry.id === id)!;
+        if (queueRank === null) delete item.queueRank;
+        else item.queueRank = queueRank!;
+        return Promise.resolve({ ok: true });
+      },
+    );
+    await click(button(wrapper, "Kolejka"));
+    await vi.waitUntil(() => gets().length > 1, { timeout: 2000 });
+
+    // The notice is still up while the list is out, and waits.
+    const undo = button(wrapper.get("[data-unqueued]"), "Cofnij");
+    expect(undo.attributes()).toHaveProperty("disabled");
+    await click(undo);
+    answer();
+    await flushPromises();
+
+    expect(posts()).toHaveLength(1);
+    expect(rowIds(wrapper)).toEqual(["q1", "q3"]);
+    expect(rowIds(wrapper, "inbox")).toEqual(["in-new", "in-old", "q2"]);
+
+    // Once it is in, "Cofnij" puts the report back - on the page and in the
+    // database alike.
+    await click(button(wrapper.get("[data-unqueued]"), "Cofnij"));
+    expect(rowIds(wrapper)).toEqual(["q1", "q2", "q3"]);
+    const rank = stored.find((item) => item.id === "q2")!.queueRank!;
+    expect(rank).toBeGreaterThan(1024);
+    expect(rank).toBeLessThan(3072);
   });
 
   it("opens on the queue, with the reports nobody has placed under it", async () => {
