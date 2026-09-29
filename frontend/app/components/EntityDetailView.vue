@@ -174,7 +174,7 @@
               :person-id="node"
               :person-name="entity.name"
               :person-parties="(entity as Person).parties"
-              :relation-count="edges.length"
+              :relation-count="listedRelationCount"
               class="mt-4"
             />
           </template>
@@ -443,7 +443,12 @@ import {
   mdiHome,
   mdiRefresh,
 } from "@mdi/js";
-import { onePerNode, useEdges, type EdgeNode } from "~/composables/edges";
+import {
+  employmentSpell,
+  onePerNode,
+  useEdges,
+  type EdgeNode,
+} from "~/composables/edges";
 import { edgeSentence } from "~/utils/edgeSentence";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
 import { useEdgeEditing } from "~/composables/edgeEditing";
@@ -461,6 +466,7 @@ import type {
   NodeType,
   Revision,
 } from "~~/shared/model";
+import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { predecessorsByEdge } from "~/utils/succession";
 import { employmentTowns } from "~/utils/companyLocation";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
@@ -556,6 +562,14 @@ const {
   refresh: refreshEdges,
 } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
+
+/** How many rows the relation history lists, for the coverage line of
+ * „Zmiany na stanowisku" - which says "2 z 8" and should not count a row the
+ * card above it leaves out. The card drops the role-less copy of a post this
+ * person also holds under its name; see `withoutRedundantRoleless`. */
+const listedRelationCount = computed(
+  () => withoutRedundantRoleless(edges.value, employmentSpell).length,
+);
 
 /** Who held each of this person's seats before them, keyed by the relation it
  * is a hint on.

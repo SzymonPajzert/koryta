@@ -250,6 +250,7 @@ import { relationPeriodLabel } from "~/utils/relationPeriod";
 import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
 import { asArray, type Company } from "~~/shared/model";
+import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~/composables/slugs";
 
@@ -328,8 +329,24 @@ function sourceCount(edge: EdgeNode) {
   return edge.references?.length ?? 0;
 }
 
+/** The rows this card lists: every relation it was handed, less the role-less
+ * copy of a prokura the same person also holds under its name over the same
+ * time. PZO Gliwice listed one of its prokurents as „Prokurent" and again as
+ * „Zatrudniony/a w", both from 2026-07-14 - one appointment, stored twice. See
+ * `withoutRedundantRoleless`, which is also why a role-less row beside a
+ * zarząd seat stays: that one is a different post.
+ *
+ * Here rather than in each host, so the person's page, the company's,
+ * `/eksploruj/nowe` and the drawer cannot disagree about it. The row is only
+ * left out of the list; the stored copy is still there, and taking the 35 such
+ * copies out of the database is a job for a migration rather than for 35
+ * clicks on a bin. */
+const listedEdges = computed(() =>
+  withoutRedundantRoleless(props.edges, employmentSpell),
+);
+
 const edgesSorted = computed(() => {
-  return props.edges.toSorted((a, b) => {
+  return listedEdges.value.toSorted((a, b) => {
     if (!a.start_date) return -1;
     if (!b.start_date) return 1;
 

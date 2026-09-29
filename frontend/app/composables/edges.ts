@@ -7,6 +7,7 @@ import type {
   Person,
 } from "~~/shared/model";
 import type { TraversePolicy } from "~~/shared/graph/model";
+import type { RoleSpell } from "~~/shared/rolelessSpells";
 
 export type EdgeNode = {
   richNode: Node;
@@ -123,6 +124,26 @@ export function onePerNode(
     if (!held || rank(edge) < rank(held)) chosen.set(key, edge);
   }
   return Array.from(chosen.values());
+}
+
+/** An employment row as `withoutRedundantRoleless` reads it, or nothing for a
+ * row of any other kind - which the rule then leaves alone.
+ *
+ * `name` and not `label`: a row whose role nobody recorded is labelled with the
+ * edge type's own phrase, „Zatrudniony/a w", and that is not a role. Source and
+ * target as stored, whichever page the row is drawn on - an employment runs
+ * person -> place, so the person is the source on the company's page and on
+ * their own alike.
+ */
+export function employmentSpell(edge: EdgeNode): RoleSpell | undefined {
+  if (edge.type !== "employed") return undefined;
+  return {
+    personId: edge.source,
+    companyId: edge.target,
+    role: edge.name,
+    start: edge.start_date,
+    end: edge.end_date,
+  };
 }
 
 /** "1 powiązanie", "2 powiązania", "5 powiązań".

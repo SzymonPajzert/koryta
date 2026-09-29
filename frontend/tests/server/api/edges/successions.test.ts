@@ -166,3 +166,82 @@ describe("api/edges/successions supervisory seats", () => {
     expect(current[0]?.role).toBeNull();
   });
 });
+
+/** The report on PZO Gliwice: one prokurent listed under „Funkcja niepodana w
+ * rejestrze" and again as „Prokurent", for one appointment uploaded once before
+ * the pipeline named prokura and once after. See shared/rolelessSpells.ts. */
+describe("api/edges/successions role-less posts", () => {
+  function post(fields: Record<string, unknown>) {
+    return { target: "pzo", type: "employed", published: true, ...fields };
+  }
+
+  /** "who: role" for each current post, which is what the section prints. */
+  async function board(): Promise<string[]> {
+    const { current } = await call<CompanySuccessions>({ companyId: "pzo" });
+    return current.map((post) => `${post.personName}: ${post.role}`);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nodes = {
+      janina: { name: "Janina Podwójna", type: "person", published: true },
+      karol: { name: "Karol Później", type: "person", published: true },
+      pzo: { name: "PZO Gliwice", type: "place", published: true },
+    };
+  });
+
+  it("lists a prokurent once, not again without a role", async () => {
+    edges = {
+      bez_funkcji: post({ source: "janina", start_date: "2026-07-14" }),
+      prokurent: post({
+        source: "janina",
+        name: "Prokurent",
+        start_date: "2026-07-14",
+      }),
+    };
+
+    expect(await board()).toEqual(["Janina Podwójna: Prokurent"]);
+  });
+
+  it("keeps a role-less post whose named neighbour ended years before", async () => {
+    // A different post, not the same one twice: the prokura ended in 2014,
+    // and all anybody knows about the one held since 2025 is that it is held.
+    edges = {
+      prokurent: post({
+        source: "karol",
+        name: "Prokurent",
+        start_date: "2009-03-02",
+        end_date: "2014-10-31",
+      }),
+      bez_funkcji: post({ source: "karol", start_date: "2025-11-17" }),
+    };
+
+    expect(await board()).toEqual(["Karol Później: null"]);
+  });
+
+  it("keeps a prokura that followed a zarząd seat stored twice", async () => {
+    // ESV9's shape: the seat stored closed and again still open, and the
+    // prokura from the day it ended stored with no role. Both stay listed -
+    // the stale seat is a data problem of its own, not a reason to drop the
+    // one record of the current post.
+    edges = {
+      zarzad: post({
+        source: "karol",
+        name: "Zarząd",
+        start_date: "2014-09-25",
+        end_date: "2026-06-19",
+      }),
+      zarzad_nieaktualny: post({
+        source: "karol",
+        name: "Zarząd",
+        start_date: "2014-09-25",
+      }),
+      prokura: post({ source: "karol", start_date: "2026-06-19" }),
+    };
+
+    expect((await board()).sort()).toEqual([
+      "Karol Później: Zarząd",
+      "Karol Później: null",
+    ]);
+  });
+});

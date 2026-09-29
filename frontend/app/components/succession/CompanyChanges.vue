@@ -362,7 +362,11 @@ const ROLE_ORDER: RegExp[] = [
 ];
 
 /** What a role with no name is called on screen. The pairing drops spells
- * whose role nobody recorded, so this only ever labels a current post. */
+ * whose role nobody recorded, so this only ever labels a current post. The
+ * endpoint leaves out a role-less copy of a prokura that also arrived as
+ * „Prokurent" (see `withoutRedundantRoleless`), which used to put one person
+ * under both headings; a role-less post beside a zarząd seat is a different
+ * post, and keeps this label. */
 const NO_ROLE = "Funkcja niepodana w rejestrze";
 
 const route = useRoute();
