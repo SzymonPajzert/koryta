@@ -1,4 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
 import {
@@ -97,6 +97,19 @@ export default defineEventHandler(async (event): Promise<EdgeDeleted> => {
     },
     batch,
   );
+
+  // A fact promoted into this relation says so on its card („Powiązanie
+  // utworzone”, pointing at „Historia powiązań”), which stops being true now.
+  // Taken off in the same batch, so the fact offers the promotion again.
+  const promotedFrom = await db
+    .collection("extractions")
+    .where("promotedEdgeIds", "array-contains", edgeRef.id)
+    .get();
+  for (const fact of promotedFrom.docs) {
+    batch.update(fact.ref, {
+      promotedEdgeIds: FieldValue.arrayRemove(edgeRef.id),
+    });
+  }
 
   await batch.commit();
 

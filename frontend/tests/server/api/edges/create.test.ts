@@ -4,17 +4,23 @@ import handler from "../../../../server/api/edges/create.post";
 /** Every document, keyed by `collection/id`. */
 let stored: Record<string, Record<string, unknown> | undefined> = {};
 let writes: { path: string; data: Record<string, unknown> }[] = [];
+/** Partial updates, which is how a fact is told what it became. */
+let updates: { path: string; data: Record<string, unknown> }[] = [];
 
 function docRef(collection: string, id: string) {
+  const path = `${collection}/${id}`;
   return {
     id,
-    path: `${collection}/${id}`,
+    path,
     parent: { id: collection },
     get: vi.fn(async () => ({
       id,
-      exists: stored[`${collection}/${id}`] !== undefined,
-      data: () => stored[`${collection}/${id}`],
+      exists: stored[path] !== undefined,
+      data: () => stored[path],
     })),
+    update: vi.fn(async (data: Record<string, unknown>) => {
+      updates.push({ path, data });
+    }),
   };
 }
 
@@ -31,6 +37,9 @@ const mockDb = {
       writes.push({ path: ref.path, data });
       stored[ref.path] = data;
     }),
+    update: vi.fn((ref: { path: string }, data: Record<string, unknown>) => {
+      updates.push({ path: ref.path, data });
+    }),
     commit: vi.fn(async () => {}),
   })),
 };
@@ -45,7 +54,10 @@ vi.mock("firebase-admin/firestore", () => ({
       return new this();
     }
   },
-  FieldValue: { delete: () => "delete" },
+  FieldValue: {
+    delete: () => "delete",
+    arrayUnion: (...values: unknown[]) => ({ arrayUnion: values }),
+  },
 }));
 vi.mock("firebase-admin/app", () => ({ getApp: vi.fn() }));
 vi.mock("../../../../server/utils/auth", () => ({
@@ -71,6 +83,7 @@ describe("POST /api/edges/create", () => {
     vi.clearAllMocks();
     generated = 0;
     writes = [];
+    updates = [];
     stored = {};
     body = {};
   });
@@ -208,5 +221,153 @@ describe("POST /api/edges/create", () => {
     await handler({} as never);
 
     expect(edgeWrites()[0]?.data.references).toEqual(["article-1"]);
+  });
+
+  describe("made from an extracted fact", () => {
+    // „Utwórz powiązanie” names the fact it was clicked on, so every card that
+    // draws the fact can say it is already in the graph rather than offer it
+    // to the next reader, who picks the far end afresh.
+    const promotion = {
+      source: "person-1",
+      target: "place-1",
+      type: "employed",
+      name: "prezes",
+      extraction: "fact-1",
+    };
+
+    beforeEach(() => {
+      // An employment matched to person-1, and the company it is promoted to.
+      stored["extractions/fact-1"] = {
+        fact_type: "employment",
+        personNodeId: "person-1",
+      };
+      stored["nodes/place-1"] = { type: "place", name: "Spółka Wodna" };
+    });
+
+    it("tells the fact which relation it became", async () => {
+      body = promotion;
+      const result = await handler({} as never);
+
+      expect(result.created).toBe(true);
+      expect(updates).toEqual([
+        {
+          path: "extractions/fact-1",
+          data: { promotedEdgeIds: { arrayUnion: [result.id] } },
+        },
+      ]);
+    });
+
+    it("tells it too when the relation was already there", async () => {
+      // Somebody's „Dodaj” on the person's page, or an earlier promotion:
+      // nothing new is written, but the fact does stand for that relation.
+      body = promotion;
+      const first = await handler({} as never);
+      writes = [];
+      updates = [];
+
+      const second = await handler({} as never);
+
+      expect(second).toEqual({ id: first.id, created: false });
+      expect(edgeWrites()).toHaveLength(0);
+      expect(updates).toEqual([
+        {
+          path: "extractions/fact-1",
+          data: { promotedEdgeIds: { arrayUnion: [first.id] } },
+        },
+      ]);
+    });
+
+    it("leaves the fact alone when that relation was removed, and says so", async () => {
+      // An administrator took it off the graph. Marking the fact would have
+      // its card point at a relation that is not there, and writing it again
+      // would undo the removal with nobody reviewing it.
+      body = promotion;
+      const first = await handler({} as never);
+      stored[`edges/${first.id}`] = {
+        ...stored[`edges/${first.id}`],
+        deleted: true,
+      };
+      writes = [];
+      updates = [];
+
+      const second = await handler({} as never);
+
+      expect(second).toEqual({ id: first.id, created: false, deleted: true });
+      expect(edgeWrites()).toHaveLength(0);
+      expect(updates).toHaveLength(0);
+    });
+
+    it("refuses a fact about somebody else, and writes nothing", async () => {
+      stored["extractions/fact-1"] = {
+        fact_type: "employment",
+        personNodeId: "person-2",
+      };
+      body = promotion;
+
+      await expect(handler({} as never)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+      expect(edgeWrites()).toHaveLength(0);
+      expect(updates).toHaveLength(0);
+    });
+
+    it("refuses a relation of another kind than the fact becomes", async () => {
+      // An employment becomes `employed`; a `connection` to whatever id a
+      // request names would mark it by a relation it could never have been.
+      body = { ...promotion, type: "connection", target: "person-9" };
+      stored["nodes/person-9"] = { type: "person" };
+
+      await expect(handler({} as never)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+      expect(edgeWrites()).toHaveLength(0);
+      expect(updates).toHaveLength(0);
+    });
+
+    it("refuses a fact of a kind that becomes no relation", async () => {
+      stored["extractions/fact-1"] = {
+        fact_type: "party_membership",
+        personNodeId: "person-1",
+      };
+      body = promotion;
+
+      await expect(handler({} as never)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+      expect(updates).toHaveLength(0);
+    });
+
+    it("refuses a far end that is not in the graph, or not of the kind asked for", async () => {
+      body = { ...promotion, target: "does-not-exist" };
+      await expect(handler({} as never)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+
+      stored["nodes/person-9"] = { type: "person" };
+      body = { ...promotion, target: "person-9" };
+      await expect(handler({} as never)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+
+      expect(edgeWrites()).toHaveLength(0);
+      expect(updates).toHaveLength(0);
+    });
+
+    it("refuses a fact that is not there", async () => {
+      delete stored["extractions/fact-1"];
+      body = promotion;
+
+      await expect(handler({} as never)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+      expect(edgeWrites()).toHaveLength(0);
+    });
+
+    it("touches no fact when none is named", async () => {
+      body = { ...promotion, extraction: undefined };
+      await handler({} as never);
+
+      expect(updates).toHaveLength(0);
+    });
   });
 });

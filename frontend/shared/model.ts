@@ -890,4 +890,9 @@ export interface ExtractionFact {
    * /api/extractions: a human (not the pipeline) has reviewed this fact, so the
    * review flow hands it to no one else. */
   reviewed?: boolean;
+  /** The relations somebody made of this fact with „Utwórz powiązanie”, by
+   * edge id. Written by /api/edges/create, so a card can say the fact is
+   * already in the graph rather than offer to put it there again. Absent on
+   * every fact nobody has promoted. */
+  promotedEdgeIds?: string[];
 }

@@ -146,6 +146,30 @@ describe("ExtractionPersonFacts", () => {
     expect(buttons[0]!.text()).toContain("Dodaj do notatki");
   });
 
+  it("offers to make a relation of each fact that can become one", async () => {
+    // „Brakuje chyba jeszcze promocji do krawędzi” - the queue and the
+    // article's page could turn a fact into a relation, the person's own page
+    // could only file it in a note. A party membership has no relation to
+    // become (a party is not a node), so its card has no such button.
+    response = {
+      facts: [
+        fact({
+          id: "job",
+          fact_type: "employment",
+          organization: "Spółka Wodna",
+          role: "prezes zarządu",
+        }),
+        fact({ id: "party" }),
+      ],
+      total: 2,
+    };
+    const section = await mount();
+
+    const buttons = section.findAll("[data-testid='extraction-promote']");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.text()).toContain("Utwórz powiązanie");
+  });
+
   it("leads from each fact to its article's page on the site", async () => {
     // The quote goes out to the newspaper; the article's page here - its
     // topics, who else it names, the other facts in it - was reachable from

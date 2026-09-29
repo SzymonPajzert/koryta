@@ -92,6 +92,40 @@ test("a signed in reader gets the cards, two to a row", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("a fact that can become a relation offers to, where it stands", async ({
+  page,
+}) => {
+  // „Brakuje chyba jeszcze promocji do krawędzi” - the queue and the article's
+  // page could turn a fact into a relation, the person's own page could not.
+  // The dialog is opened and cancelled rather than sent: a relation written
+  // here would be a new draft on Anna Nowak's page, which half the suite
+  // reads.
+  test.setTimeout(120_000);
+
+  await logIn(page, USERS.normal, PERSON);
+
+  const section = page.locator("[data-testid='person-extractions']");
+  const cards = section.locator(".extraction-card");
+  await expect(cards).toHaveCount(2, { timeout: 30_000 });
+
+  // The employment can become one; a party membership has no relation to
+  // become - a party is not a node.
+  const job = cards.filter({ hasText: "Spolka Nieoceniona" });
+  const party = cards.filter({ hasText: "Partia Testowa" });
+  await expect(job.getByTestId("extraction-promote")).toBeVisible();
+  await expect(party.getByTestId("extraction-promote")).toHaveCount(0);
+
+  await job.getByTestId("extraction-promote").click();
+  const dialog = page.getByTestId("promote-fact-dialog");
+  await expect(dialog).toBeVisible();
+  // The subject is the person whose page this is, and the far end is asked
+  // for with what the article called it.
+  await expect(dialog).toContainText("Anna Nowak");
+  await expect(dialog).toContainText("Spolka Nieoceniona");
+  await dialog.getByRole("button", { name: "Anuluj" }).click();
+  await expect(dialog).toBeHidden();
+});
+
 test("a person nobody wrote about gets no section either way", async ({
   page,
 }) => {
