@@ -271,6 +271,17 @@ const panelId = computed(() => `arow-panel-${uid}`);
   white-space: nowrap;
 }
 
+/* ---- links inside an open row ---- */
+
+/* The small text links an open row leads elsewhere with - a date that is a
+ * permalink, "Pełne porównanie", "Wszystko od tej osoby" - share one focus
+ * ring, the toggle's, so a keyboard sees each of them the same way. */
+.arow-link:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-ink-info));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* ---- facts (AdminRowFact) ---- */
 
 .arow__meta {

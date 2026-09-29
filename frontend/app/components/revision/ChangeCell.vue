@@ -1,8 +1,19 @@
 <template>
   <div class="d-flex flex-column ga-1 py-1">
-    <div v-if="proposal.kind === 'removal'" class="text-body-2">
-      Powód usunięcia: {{ proposal.deleteReason || "nie podano" }}
-    </div>
+    <template v-if="proposal.kind === 'removal'">
+      <div class="text-body-2">
+        Powód usunięcia: {{ proposal.deleteReason || "nie podano" }}
+      </div>
+      <!-- The same way to the comparison `RevisionDiff` offers under a diff,
+           so a removal is not the one proposal of an entry without it. -->
+      <NuxtLink
+        v-if="fullComparisonTo"
+        :to="fullComparisonTo"
+        class="arow-link text-caption text-ink-info align-self-start"
+      >
+        Pełne porównanie
+      </NuxtLink>
+    </template>
     <RevisionDiff
       v-else
       :changes="proposal.changes"
@@ -42,6 +53,8 @@ import type { Proposal } from "~~/shared/proposals";
 defineProps<{
   proposal: Proposal;
   max?: number;
+  /** The side-by-side comparison with this revision picked out, linked under
+   * what it would change. Only an entry has one; a relation does not. */
   fullComparisonTo?: string | null;
   /** See `RevisionDiff`: outside a table cell a long value gets the line. */
   wide?: boolean;

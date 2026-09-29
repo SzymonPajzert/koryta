@@ -34,10 +34,13 @@
         <span v-if="hidden > 0" class="text-medium-emphasis">
           …i jeszcze {{ polishCounting(hidden, "pole", "pola", "pól") }}
         </span>
+        <!-- Spaced off "…i jeszcze" when it follows it, and flush with the
+             diff when it stands alone. -->
         <NuxtLink
           v-if="fullComparisonTo"
           :to="fullComparisonTo"
-          class="text-ink-info ml-1"
+          class="arow-link text-ink-info"
+          :class="{ 'ml-1': hidden > 0 }"
         >
           Pełne porównanie
         </NuxtLink>
