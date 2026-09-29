@@ -641,6 +641,17 @@ onMounted(async () => {
   background: rgb(var(--v-theme-surface));
 }
 
+/* The panel scrolls on its own; what can be done with the task stays at its
+ * bottom edge, however long the task is. */
+.tasks-page__panel :deep(.task-details__footer) {
+  position: sticky;
+  bottom: 0;
+  /* Over the panel's own padding, so nothing scrolls by under it. */
+  margin-bottom: -16px;
+  padding-bottom: 16px;
+  background: rgb(var(--v-theme-surface));
+}
+
 .tasks-page__legend {
   display: flex;
   flex-wrap: wrap;
@@ -675,6 +686,10 @@ onMounted(async () => {
   .tasks-page__panel {
     position: static;
     max-height: none;
+  }
+
+  .tasks-page__panel :deep(.task-details__footer) {
+    position: static;
   }
 }
 </style>
