@@ -285,6 +285,58 @@ describe("DialogEditRelation", () => {
     });
   });
 
+  describe("a candidacy's dates", () => {
+    /** A candidacy the way the page hands it over: the pipeline stored
+     * „2024-01-01", and `edgeFromDB` turned that into the day of the 2024
+     * election and made the end the same day. */
+    const shown = () =>
+      candidacy({
+        position: "Samorząd",
+        start_date: "2024-04-07",
+        end_date: "2024-04-07",
+      });
+
+    it("are not written back when the reader corrects something else", async () => {
+      // They are not what is stored, so restating them would move the stored
+      // date - and with it which candidacy the pipeline recognises this as.
+      const wrapper = mountDialog({ edge: shown() });
+      await flushPromises();
+      kindSelect(wrapper).vm.$emit("update:modelValue", "Rada gminy");
+      await flushPromises();
+      await submit();
+
+      expect(sent()).toMatchObject({ edge_id: "e2", position: "Rada gminy" });
+      expect(sent()).not.toHaveProperty("start_date");
+      expect(sent()).not.toHaveProperty("end_date");
+    });
+
+    it("are sent once the reader changes them", async () => {
+      const wrapper = mountDialog({ edge: shown() });
+      await flushPromises();
+      await wrapper
+        .findComponent(RelationDetailFields)
+        .vm.$emit("update:modelValue", {
+          ...wrapper.findComponent(RelationDetailFields).props("modelValue"),
+          start_date: "2018-10-21",
+        });
+      await flushPromises();
+      await submit();
+
+      expect(sent()).toMatchObject({ start_date: "2018-10-21" });
+      expect(sent()).not.toHaveProperty("end_date");
+    });
+
+    it("leave an employment's dates as they always went", async () => {
+      // An employment's dates are the stored ones, so the dialog sends them
+      // whether or not they changed - see the first test in this file.
+      mountDialog();
+      await flushPromises();
+      await submit();
+
+      expect(sent()).toMatchObject({ start_date: "2019-01-01", end_date: "" });
+    });
+  });
+
   it("reports whether the change went live or into the queue", async () => {
     mockAuthRequest.mockResolvedValue({
       edge_id: "e1",
