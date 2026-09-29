@@ -218,9 +218,14 @@ def amount(text: str | None) -> float | None:
 
 #: The value an owner's shares are worth, as the register words it:
 #: "23.086 UDZIAŁÓW O ŁĄCZNEJ WARTOŚCI 23.247.602,00 ZŁ." The total comes after
-#: "ŁĄCZNEJ WARTOŚCI"; a bare "WARTOŚCI" can be the value of one share, so it
-#: is read only when no total is given.
-_TOTAL_VALUE = re.compile(r"LACZNEJ WARTOSCI\s*(?:NOMINALNEJ\s*)?(\d[\d .]*(?:,\d+)?)")
+#: "ŁĄCZNEJ", and the noun after that varies: of 5,215 owners in odpisy read
+#: 2026-09-28, 345 wrote "O ŁĄCZNEJ WYSOKOŚCI" and a few "ŁĄCZNA WYSOKOŚĆ",
+#: "NA ŁĄCZNĄ KWOTĘ" or "W ŁĄCZNEJ KWOCIE". A bare "WARTOŚCI" can be the value
+#: of one share, so it is read only when no total is given.
+_TOTAL_VALUE = re.compile(
+    r"LACZN\w*\s*(?:WARTOSC|WYSOKOSC|KWOT|KWOC)\w*\s*(?:NOMINALN\w*\s*)?"
+    r"(\d[\d .]*(?:,\d+)?)"
+)
 _ANY_VALUE = re.compile(r"WARTOSCI\s*(?:NOMINALNEJ\s*)?(\d[\d .]*(?:,\d+)?)")
 
 

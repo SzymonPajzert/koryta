@@ -161,6 +161,26 @@ def test_a_share_given_as_one_shares_value_is_not_taken_for_the_total():
     assert owner_share(gdansk, 206373000.0) == 0.1714
 
 
+def test_a_total_is_read_however_the_register_words_it():
+    """Zabrzańska Agencja Realizacji Inwestycji, PAZIM and three more ways."""
+    zabrze = {"shares": "293.479 UDZIAŁÓW O ŁĄCZNEJ WARTOŚCI 14.673.950,00 ZŁ"}
+    pzm = {
+        "shares": "34338 (TRZYDZIEŚCI CZTERY TYSIĄCE TRZYSTA TRZYDZIEŚCI OSIEM) "
+        "UDZIAŁÓW O ŁĄCZNEJ WYSOKOŚCI 70135365,00 (SIEDEMDZIESIĄT MILIONÓW) ZŁ"
+    }
+    joined = {"shares": "40701 UDZIAŁÓW OŁĄCZNEJ WYSOKOŚCI 83131792,50ZŁ"}
+    kwota = {"shares": "95 UDZIAŁÓW NA ŁACZNĄ KWOTĘ 95.000 ZŁ"}
+    wysokosc = {"shares": "100 UDZIAŁÓW, ŁĄCZNA WYSOKOŚĆ 50.000,00 ZŁ."}
+    kwocie = {"shares": "500 UDZIAŁÓW W ŁĄCZNEJ KWOCIE 750.000,00 ZŁ"}
+
+    assert owner_share(zabrze, 14678950.0) == 0.9997
+    assert owner_share(pzm, 153267157.5) == 0.4576
+    assert owner_share(joined, 153267157.5) == 0.5424
+    assert owner_share(kwota, 880000.0) == 0.108
+    assert owner_share(wysokosc, 100000.0) == 0.5
+    assert owner_share(kwocie, 2295000.0) == 0.3268
+
+
 def test_a_sole_owner_is_the_whole_company_whatever_the_text():
     assert owner_share({"shares": None, "whole": True}, None) == 1.0
     assert owner_share({"shares": "100 UDZIAŁÓW"}, 5000.0) is None
