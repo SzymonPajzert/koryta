@@ -83,6 +83,16 @@ def test_a_not_found_body_on_a_200_is_a_miss_too():
     assert ask(session).status == STATUS_NOT_FOUND
 
 
+@pytest.mark.parametrize("body", [{"title": "Service Unavailable"}, [], None])
+def test_a_200_that_is_neither_an_odpis_nor_a_miss_is_a_failure(body):
+    session = Session(P=[Response(200, body)])
+
+    read = ask(session)
+
+    assert (read.status, read.rejestr) == (STATUS_FAILED, "P")
+    assert read.error is not None and read.error.startswith("200: ")
+
+
 def test_a_server_error_is_a_failure_to_ask_again():
     session = Session(P=[Response(503), Response(503), Response(503)])
 
