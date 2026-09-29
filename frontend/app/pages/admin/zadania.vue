@@ -77,6 +77,32 @@
         clearable
         class="tasks-page__tag"
       />
+      <v-btn-toggle
+        v-if="view === 'lista'"
+        v-model="order"
+        mandatory
+        density="compact"
+        variant="outlined"
+        divided
+        data-task-order
+      >
+        <v-btn
+          value="najstarsze"
+          size="small"
+          :prepend-icon="mdiSortClockAscendingOutline"
+          title="Najpierw te z ustaloną kolejnością, potem od najstarszych"
+        >
+          Najstarsze
+        </v-btn>
+        <v-btn
+          value="najnowsze"
+          size="small"
+          :prepend-icon="mdiSortClockDescendingOutline"
+          title="Ostatnio dodane na górze każdej listy"
+        >
+          Najnowsze
+        </v-btn>
+      </v-btn-toggle>
       <template v-if="view === 'mapa'">
         <v-switch
           v-model="showClosed"
@@ -133,6 +159,7 @@
               :tasks="tasks"
               :saving="saving[task.id]"
               :highlighted="targetId === task.id"
+              :when="order === 'najnowsze' ? rowWhen(task) : undefined"
               :expanded="openRows.has(task.id)"
               @update:expanded="(open) => setOpen(task.id, open)"
               @update="(patch) => update(task.id, patch)"
@@ -256,11 +283,14 @@ import {
   mdiMagnify,
   mdiPlus,
   mdiSitemapOutline,
+  mdiSortClockAscendingOutline,
+  mdiSortClockDescendingOutline,
 } from "@mdi/js";
 import { useOpsTasks } from "~/composables/opsTasks";
 import { useQueryFilters } from "~/composables/queryFilters";
 import { taskSectionConfig } from "~/utils/taskStyle";
 import {
+  compareNewest,
   foldWords,
   isClosed,
   taskAnchor,
@@ -315,6 +345,12 @@ const who = computed<Who>({
   set: (value) => (whoParam.value = value),
 });
 const tag = stringFilter("tag");
+type Order = "najstarsze" | "najnowsze";
+const orderParam = choiceFilter<Order>("kolejnosc", "najstarsze");
+const order = computed<Order>({
+  get: () => (orderParam.value === "najnowsze" ? "najnowsze" : "najstarsze"),
+  set: (value) => (orderParam.value = value),
+});
 /** Typed, so kept out of the url: a history entry per keystroke is noise. */
 const search = ref<string | null>("");
 
@@ -350,6 +386,10 @@ const SECTION_ORDER: TaskSection[] = [
 const shownSections = computed(() =>
   SECTION_ORDER.map((key) => {
     const items = sections.value[key].filter(matches);
+    // The closed list is newest first either way: by when it was closed.
+    if (order.value === "najnowsze" && key !== "closed") {
+      items.sort(compareNewest);
+    }
     return {
       key,
       count: items.length,
@@ -360,6 +400,13 @@ const shownSections = computed(() =>
 const shownCount = computed(() =>
   shownSections.value.reduce((sum, s) => sum + s.count, 0),
 );
+
+/** What a row sorted newest first says at its end: how long ago it was added,
+ * or - on the closed list, which is sorted by that - closed. */
+const rowWhen = (task: Task) =>
+  isClosed(task)
+    ? { at: task.closedAt ?? task.updatedAt, label: "Zamknięte" }
+    : { at: task.createdAt, label: "Dodane" };
 
 // ---- the map ----
 
@@ -449,8 +496,9 @@ async function focusTarget() {
       : matches(task);
   if (!onScreen) {
     search.value = "";
+    // The view and the order stay: neither hides anything.
     await router.replace({
-      query: { widok: route.query.widok },
+      query: { widok: route.query.widok, kolejnosc: route.query.kolejnosc },
       hash: route.hash,
     });
   }

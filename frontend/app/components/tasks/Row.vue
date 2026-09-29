@@ -45,6 +45,14 @@
       >
         {{ task.tags.map((tag) => `#${tag}`).join(" ") }}
       </span>
+      <span
+        v-if="when"
+        class="arow-fixed text-caption text-medium-emphasis"
+        :title="`${when.label} ${formatTaskDate(when.at)}`"
+        data-task-when
+      >
+        {{ formatDaysAgo(when.at) }}
+      </span>
     </template>
 
     <!-- Closing is the one thing done without reading the rest: the line is
@@ -80,7 +88,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { mdiCheck } from "@mdi/js";
-import { taskKindConfig, taskSectionConfig } from "~/utils/taskStyle";
+import { formatDaysAgo } from "~/utils/chartTheme";
+import {
+  formatTaskDate,
+  taskKindConfig,
+  taskSectionConfig,
+} from "~/utils/taskStyle";
 import {
   isClosed,
   taskAnchor,
@@ -100,6 +113,9 @@ const props = defineProps<{
   tasks: readonly Task[];
   saving?: boolean;
   highlighted?: boolean;
+  /** How long ago the moment the list is sorted by was, at the end of the
+   * line: when it was added, or closed. */
+  when?: { at: string; label: string };
 }>();
 
 const emit = defineEmits<{
