@@ -1,5 +1,7 @@
 """Which register entries `CompaniesPublicByRegister` calls publicly owned."""
 
+import io
+
 import pandas as pd
 
 from scrapers.krs.public_owners import (
@@ -10,6 +12,7 @@ from scrapers.krs.public_owners import (
     REASON_SKARB_PANSTWA,
     classify,
     direct_public_owner,
+    ledger_records,
     public_body,
 )
 from scrapers.krs.register import STATUS_OK, STATUS_STRUCK_OFF
@@ -159,3 +162,35 @@ def test_an_entry_struck_off_is_left_out():
     )
 
     assert found == []
+
+
+def test_a_ledger_read_back_from_jsonl_is_classified():
+    """What the pipeline reads is a jsonl round trip, where a missing seat is NaN.
+
+    FH ORTHO's Polish branch (KRS 0000016486) has no seat at all, and
+    `CompaniesPublicByRegister` stopped on it the first time it read a real
+    ledger.
+    """
+    written = pd.DataFrame(
+        [
+            entry(
+                "0000225512",
+                owner(
+                    "WOJEWÓDZTWO POMORSKIE",
+                    shares="23.086 UDZIAŁÓW O ŁĄCZNEJ WARTOŚCI 23.247.602,00 ZŁ.",
+                ),
+                capital=25673465.0,
+            ),
+            entry("0000016486", name=None, wojewodztwo=None, capital=None),
+        ]
+    )
+    buffer = io.StringIO()
+    written.to_json(buffer, orient="records", lines=True)
+    buffer.seek(0)
+    read_back = pd.read_json(buffer, lines=True, dtype={"krs": str})
+
+    found = classify(ledger_records(read_back), pomorskie(), known_public=set())
+
+    assert [(row.krs, row.reason, row.share) for row in found] == [
+        ("0000225512", REASON_JST, 0.9055)
+    ]

@@ -30,6 +30,7 @@ listed at all.
 import typing
 from dataclasses import asdict, dataclass
 
+import numpy as np
 import pandas as pd
 
 from scrapers.krs.columns import is_public, padded_krs
@@ -200,6 +201,19 @@ def classify(
     return sorted(found.values(), key=lambda row: row.krs)
 
 
+def ledger_records(ledger: pd.DataFrame) -> list[dict]:
+    """The ledger as `classify` reads it: one dict per entry, KRS padded.
+
+    Read back from jsonl, a value the register left out is NaN rather than
+    None, and NaN is truthy - so a seat that is not there reached `JstIndex`
+    as if it were a name, and the run stopped on it. A foreign company's
+    branch has no seat; 25 of the 20,162 entries read on 2026-09-28 were one.
+    """
+    ledger = ledger.copy()
+    ledger["krs"] = padded_krs(ledger["krs"])
+    return ledger.replace({np.nan: None}).to_dict("records")
+
+
 class CompaniesPublicByRegister(Pipeline[PublicOwnership]):
     """The register ledger's publicly owned companies. See the module doc."""
 
@@ -219,9 +233,6 @@ class CompaniesPublicByRegister(Pipeline[PublicOwnership]):
         columns = list(PublicOwnership.__dataclass_fields__)
         if ledger is None or ledger.empty:
             return pd.DataFrame(columns=columns)
-        ledger = ledger.copy()
-        ledger["krs"] = padded_krs(ledger["krs"])
-
         self.jst.read_or_process(ctx)
         index = getattr(self.jst, "index", None)
 
@@ -230,7 +241,7 @@ class CompaniesPublicByRegister(Pipeline[PublicOwnership]):
             padded_krs(companies.loc[is_public(companies["is_public"]), "krs"])
         )
 
-        found = classify(ledger.to_dict("records"), index, known_public)
+        found = classify(ledger_records(ledger), index, known_public)
         df = pd.DataFrame([asdict(row) for row in found], columns=columns)
         print(
             f"Publicly owned by the register: {len(df)} of {len(ledger)} entries; "
