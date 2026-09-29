@@ -29,9 +29,13 @@
           :faded="data.faded"
           :foldable="data.foldable"
           :stacked="data.stacked"
+          :focusable="data.focusable"
+          :focused="data.task.id === focused"
           :valid-connection="isValidConnection"
           @fold="fold(data.task.id)"
           @unfold="unfold(data.task.id)"
+          @focus="emit('focus', data.task.id)"
+          @unfocus="unfocus"
         />
       </template>
       <template #node-label="{ data }">
@@ -43,9 +47,11 @@
       :marks="marks"
       :dragging="!!dragFrom"
       :drop="drop"
+      :focused="focused ? byId.get(focused)?.title : null"
       :can-fold-all="unfoldedEnds.length > 0"
       :can-unfold-all="folds.stacks.size > 0"
       @pick="pickMark"
+      @unfocus="unfocus"
       @fold-all="foldAll"
       @unfold-all="unfoldAll"
     />
@@ -163,9 +169,15 @@ import type { TaskMark } from "./MapBar.vue";
  *
  * A task can be folded: drawn as a stack of cards that stands for it and for
  * everything that leads only to it. Arrows still reach it, and new ones can be
- * drawn to it; which tasks are folded is kept in the browser. */
+ * drawn to it; which tasks are folded is kept in the browser.
+ *
+ * And the map can be focused on a task, to show only it and what it waits on.
+ * The page keeps that in the url and hands over only those tasks; the map
+ * asks for it and draws the way back. */
 
 const FLOW_ID = "tasks-map";
+
+type Point = { x: number; y: number };
 
 const props = defineProps<{
   /** The tasks on the map. */
@@ -173,13 +185,18 @@ const props = defineProps<{
   /** Every task, for judging a new arrow against the whole list. */
   all: readonly Task[];
   states: Map<string, TaskState>;
-  /** Shown only for context - joined to a task the filter kept. */
+  /** Shown only for context - joined to a task the filter kept, or on a
+   * focused map, which a filter only fades. */
   faded?: ReadonlySet<string>;
   selected?: string | null;
+  /** The task the map is focused on: `tasks` are it and what it waits on. */
+  focused?: string | null;
 }>();
 
 const emit = defineEmits<{
   select: [id: string];
+  /** Show only this task and what it waits on; null for the whole map. */
+  focus: [id: string | null];
   connect: [prerequisite: string, dependent: string];
   disconnect: [prerequisite: string, dependent: string];
 }>();
@@ -255,11 +272,25 @@ function setFolded(next: Set<string>) {
   }
 }
 
-const folds = computed(() =>
-  foldTasks(shownIds.value, pairs.value, folded.value),
-);
+// The card the map is focused on is never folded, and has no button for it:
+// everything else on the map leads to it alone, so its stack would stand for
+// all of it. Folded before, it is folded again once the focus is left.
+const folds = computed(() => {
+  const asked = new Set(folded.value);
+  if (props.focused) asked.delete(props.focused);
+  return foldTasks(shownIds.value, pairs.value, asked);
+});
 /** How many tasks folding each card would hide; its button shows for any. */
-const sizes = computed(() => foldSizes(shownIds.value, pairs.value));
+const sizes = computed(() => {
+  const sizes = foldSizes(shownIds.value, pairs.value);
+  if (props.focused) sizes.delete(props.focused);
+  return sizes;
+});
+/** The tasks that wait on another one on the map, whether the arrow is drawn
+ * or folded into their stack: focusing on one shows more than its card. */
+const waiting = computed(
+  () => new Set(pairs.value.map(([, dependent]) => dependent)),
+);
 /** The ends of the chains that „Zwiń wszystkie” would still fold. */
 const unfoldedEnds = computed(() =>
   terminalTasks(shownIds.value, pairs.value).filter(
@@ -275,6 +306,17 @@ const placement = computed(() =>
   ),
 );
 
+/** Moves the view with a card the layout moved from `before` to `after`, so
+ * that on the screen it stays where it was. */
+function holdStill(before: Point, after: Point) {
+  const { x, y, zoom } = viewport.value;
+  void setViewport({
+    x: x + (before.x - after.x) * zoom,
+    y: y + (before.y - after.y) * zoom,
+    zoom,
+  });
+}
+
 /** Folding or unfolding a card lays the map out again; the card itself is
  * kept where it was on the screen, so it stays under the pointer. */
 async function keepInPlace(id: string, change: () => void) {
@@ -282,13 +324,21 @@ async function keepInPlace(id: string, change: () => void) {
   change();
   await nextTick();
   const after = placement.value.positions.get(id);
-  if (!before || !after) return;
-  const { x, y, zoom } = viewport.value;
-  void setViewport({
-    x: x + (before.x - after.x) * zoom,
-    y: y + (before.y - after.y) * zoom,
-    zoom,
-  });
+  if (before && after) holdStill(before, after);
+}
+
+/** The card whose focus was left from the map, and where it was: the rest of
+ * the map comes back around it rather than all of it being fitted in, as
+ * after a fold. The page hands over the tasks only once the url has changed,
+ * so this waits for them in the watcher below. */
+let leaving: { id: string; at: Point } | null = null;
+
+function unfocus() {
+  const id = props.focused;
+  if (!id) return;
+  const at = placement.value.positions.get(id);
+  leaving = at ? { id, at } : null;
+  emit("focus", null);
 }
 
 const fold = (id: string) =>
@@ -346,6 +396,7 @@ const nodes = computed<Node[]>(() => {
         faded: props.faded?.has(task.id) ?? false,
         foldable: sizes.value.get(task.id) ?? 0,
         stacked: folds.value.stacks.get(task.id) ?? 0,
+        focusable: waiting.value.has(task.id),
       },
     };
   });
@@ -470,13 +521,27 @@ const fit = (duration = 0) => {
 
 onPaneReady(() => fit());
 
-// A different set of tasks - another filter - is looked at whole again. An
+/** A task picked while the map did not draw it: a filter or a focus left it
+ * out. The page clears those to show it, and it is brought into view once it
+ * is drawn. */
+let awaited: string | null = null;
+
+// A different set of tasks - another filter, or a focus - is looked at whole
+// again, unless it came to show a task picked from outside the map, or it is
+// the rest of the map coming back around a card whose focus was left. An
 // arrow drawn or taken away keeps the view where it is.
 watch(
-  () => [...shownIds.value].sort().join(","),
+  [() => [...shownIds.value].sort().join(","), () => props.focused],
   async () => {
+    const wanted = awaited;
+    const from = leaving;
+    awaited = null;
+    leaving = null;
     await nextTick();
-    fit();
+    const to = from && placement.value.positions.get(from.id);
+    if (wanted && shownIds.value.includes(wanted)) void bringIntoView(wanted);
+    else if (from && to) holdStill(from.at, to);
+    else fit();
   },
 );
 
@@ -485,7 +550,10 @@ watch(
 async function bringIntoView(id: string) {
   if (reveal(id)) await nextTick();
   const position = placement.value.positions.get(id);
-  if (!position) return;
+  if (!position) {
+    awaited = id;
+    return;
+  }
   setCenter(
     position.x + TASK_NODE_WIDTH / 2,
     position.y + TASK_NODE_HEIGHT / 2,
@@ -500,6 +568,7 @@ watch(
   (id) => {
     const fromMap = id === clicked;
     clicked = null;
+    awaited = null;
     if (id && !fromMap) void bringIntoView(id);
   },
 );
@@ -548,8 +617,6 @@ const dragFrom = ref<{
 } | null>(null);
 /** The mark under the arrow's end, if it is over one. */
 const drop = ref<{ id: string; valid: boolean } | null>(null);
-
-type Point = { x: number; y: number };
 
 function pointOf(event: MouseEvent | TouchEvent): Point | null {
   if ("clientX" in event) return { x: event.clientX, y: event.clientY };
