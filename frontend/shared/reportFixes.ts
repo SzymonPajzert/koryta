@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na szerokim ekranie linijka propozycji w „Czeka na decyzję” zaczyna się od tego, kto ją zgłosił i kiedy, a dopiero po nich mówi, czego dotyczy - tak jak pierwsza kolumna „Zgłoszenie” w dawnej tabeli.",
+    fixes: ["YsFCMqAsj9YIEQM2CKAr"],
+    link: "/admin/rewizje#kolejka",
+  },
+  {
+    change:
       "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
     fixes: ["g29Mn5m5y6EKQegAviQn"],
   },

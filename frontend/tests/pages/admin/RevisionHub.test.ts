@@ -311,6 +311,24 @@ describe("the review queue section", () => {
     expect(row.find(".arow__footer").exists()).toBe(false);
   });
 
+  it("keeps who filed a proposal and when together, ahead of the fields", async () => {
+    // "Kolumny autor i zgłoszono powinny być połączone jako pierwsza kolumna
+    // - zgłoszenie." The pair opens the second half of the line, which is the
+    // second line on a phone; on a wide screen the stylesheet moves it up to
+    // the status, which jsdom does not lay out - the visual test shows it.
+    serve({ queue: { revisions: [proposal()] } });
+    const wrapper = await mount();
+
+    const rest = wrapper
+      .get('[data-proposal-id="rev-1"] .rev-line__rest')
+      .findAll("span")
+      .map((span) => span.classes()[0]);
+    expect(rest).toEqual(["queue-row__who", "queue-row__when", "arow-side"]);
+    expect(
+      wrapper.get('[data-proposal-id="rev-1"] [data-proposal-author]').text(),
+    ).toBe("Autor Testowy");
+  });
+
   it("names what kind of change a line is when it is not an edit", async () => {
     serve({
       queue: {
