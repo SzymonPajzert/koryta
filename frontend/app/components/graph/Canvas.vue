@@ -62,7 +62,7 @@
     <!-- v-network-graph decides its layer list in a computed whose only test
          is `"edge-label" in $slots`, and that computed does not track the
          slots object - so a `v-if` here decided the question once, at first
-         mount, when the toggle is off. Switching "Opisy powiązań" on then
+         mount, when the toggle is off. Ticking "Opisy na liniach" then
          flipped a prop over a layer that had never been mounted, and no text
          ever appeared.
 
