@@ -283,6 +283,106 @@ describe("GET /api/nodes/[id]/mentions", () => {
     });
   });
 
+  describe("an article stored as more than one node", () => {
+    const mentioning = (articleId: string, published = true) => ({
+      source: articleId,
+      target: "person-1",
+      type: "mentions",
+      published,
+    });
+
+    it("is one card when the two share an address", async () => {
+      // `normalizeUrl` calls these one page: `www.`, the trailing slash and
+      // the fragment all go.
+      nodes["article-1"] = article("Radni o spółce", {
+        sourceURL: "https://www.example.pl/radni/",
+      });
+      nodes["article-2"] = article("Radni o spółce", {
+        sourceURL: "https://example.pl/radni#komentarze",
+      });
+      edges.m1 = mentioning("article-1", false);
+      edges.m2 = mentioning("article-2");
+      latest = true;
+
+      const { mentions } = await call();
+      // The published one, as for one node named twice.
+      expect(mentions.map((m) => m.nodeId)).toEqual(["article-2"]);
+    });
+
+    it("is one card for an article and a page of its comments", async () => {
+      // Dariusz Bielski's page listed this one twice.
+      const title =
+        "Świnoujście - iswinoujscie.pl » Dariusz Bielski dziękuje wszystkim wyborcom, którzy oddali na niego swój głos";
+      nodes["article-1"] = article(title, {
+        sourceURL:
+          "https://www.iswinoujscie.pl/artykuly/56911/?page=1#komentarz",
+      });
+      nodes["article-2"] = article(title, {
+        sourceURL: "https://www.iswinoujscie.pl/artykuly/56911/",
+      });
+      edges.m1 = mentioning("article-1");
+      edges.m2 = mentioning("article-2");
+
+      const { mentions } = await call();
+      // The article's own address, though the comments came first.
+      expect(mentions.map((m) => m.nodeId)).toEqual(["article-2"]);
+    });
+
+    it("keeps two numbered pages apart that share a title", async () => {
+      // Two pages of a list of news, not one article: neither is the
+      // article's own address.
+      nodes["article-1"] = article("Aktualności", {
+        sourceURL: "https://gmina.pl/aktualnosci?page=2",
+      });
+      nodes["article-2"] = article("Aktualności", {
+        sourceURL: "https://gmina.pl/aktualnosci?page=3",
+      });
+      edges.m1 = mentioning("article-1");
+      edges.m2 = mentioning("article-2");
+
+      expect((await call()).mentions).toHaveLength(2);
+    });
+
+    it("keeps pages apart that only share a title", async () => {
+      // How three different Facebook pages are stored.
+      nodes["article-1"] = article("Facebook", {
+        sourceURL: "https://www.facebook.com/tomek.mikolaj",
+      });
+      nodes["article-2"] = article("Facebook", {
+        sourceURL: "https://www.facebook.com/profile.php?id=61559805901378",
+      });
+      nodes["article-3"] = article("Facebook", {
+        sourceURL: "https://www.facebook.com/profile.php?id=587531424",
+      });
+      for (const id of ["article-1", "article-2", "article-3"]) {
+        edges[`m-${id}`] = mentioning(id);
+      }
+
+      expect((await call()).mentions).toHaveLength(3);
+    });
+
+    it("keeps pages a page number apart when their titles differ or are missing", async () => {
+      // A site that numbers its pages with `page`.
+      nodes["article-1"] = article("Sesja rady 12 maja", {
+        sourceURL: "https://gmina.pl/index.php?page=12",
+      });
+      nodes["article-2"] = article("Sesja rady 13 maja", {
+        sourceURL: "https://gmina.pl/index.php?page=13",
+      });
+      nodes["article-3"] = article("", {
+        sourceURL: "https://gmina.pl/index.php?page=14",
+      });
+      nodes["article-4"] = article("", {
+        sourceURL: "https://gmina.pl/index.php?page=15",
+      });
+      for (const id of ["article-1", "article-2", "article-3", "article-4"]) {
+        edges[`m-${id}`] = mentioning(id);
+      }
+
+      expect((await call()).mentions).toHaveLength(4);
+    });
+  });
+
   it("puts the newest first and the undated last", async () => {
     nodes["article-1"] = article("a", {
       publishedDate: { toDate: () => new Date("2024-01-01") },
