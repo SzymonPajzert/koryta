@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zadania-blokuje-do-wyboru",
+    title: "Zadania: „Blokuje” do wybrania, tak jak „Czeka na”",
+    description:
+      "W szczegółach zadania można teraz wskazać nie tylko, na co ono czeka, ale też co ma czekać na nie. Kliknięcie zadania na którejś z tych dwóch list otwiera je. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania otwórz zadanie i w „Blokuje” wybierz inne - tamto ma przejść do „Czekają”, z tym zadaniem w swoim „Czeka na”.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
     id: "zadania-kopiuj-dla-czatu",
     title: "Zadania: „Kopiuj dla czatu”",
     description:

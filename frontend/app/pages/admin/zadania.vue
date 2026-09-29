@@ -181,6 +181,8 @@
               @edit="openDialog(task)"
               @select="goTo"
               @show-goal="showGoal"
+              @connect="(a, b) => connect(a, b)"
+              @disconnect="(a, b) => disconnect(a, b)"
             />
           </AdminRowList>
         </template>
@@ -261,6 +263,8 @@
             @edit="openDialog(selectedTask)"
             @select="select"
             @show-goal="showGoal(selectedTask!.id)"
+            @connect="(a, b) => connect(a, b)"
+            @disconnect="(a, b) => disconnect(a, b)"
           />
         </template>
         <p v-else class="text-body-2 text-medium-emphasis">
