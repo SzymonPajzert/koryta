@@ -267,6 +267,61 @@ describe("api/edges/update", () => {
     });
   });
 
+  describe("which election a candidacy was for", () => {
+    beforeEach(() => {
+      stored["edges/e1"] = {
+        source: "jan",
+        target: "dolnoslaskie",
+        type: "election",
+        name: "kandydatura",
+        position: "Samorząd",
+        start_date: "2024-01-01",
+        published: true,
+        revision_id: { path: "revisions/old" },
+      };
+      request({ edge_id: "e1", position: "Sejmik" });
+    });
+
+    it("waits for a reviewer, who is shown it under its own name", async () => {
+      // „Samorząd” is all the pipeline keeps of a local election, so narrowing
+      // it down is the correction this field exists for.
+      await handler({} as never);
+
+      const proposed = revisionWrite()?.data as Record<string, unknown>;
+      expect(edgeWrite()).toBeUndefined();
+      expect(revisionWrite()).toMatchObject({ status: "pending" });
+      expect(
+        revisionChanges(proposed, withoutInternalFields(stored["edges/e1"]!)),
+      ).toEqual([
+        {
+          field: "position",
+          label: "typ wyborów",
+          from: "Samorząd",
+          to: "Sejmik",
+        },
+      ]);
+    });
+
+    it("is written at once when an admin says it", async () => {
+      currentUser = { uid: "admin-uid", admin: true };
+      await handler({} as never);
+
+      expect(edgeWrite()).toMatchObject({
+        position: "Sejmik",
+        // The rest of the candidacy rides along unchanged.
+        start_date: "2024-01-01",
+        published: true,
+      });
+    });
+
+    it("refuses a kind the site does not have", async () => {
+      request({ edge_id: "e1", position: "Rada osiedla" });
+      await expect(handler({} as never)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+    });
+  });
+
   it("rejects a date that is not a date", async () => {
     request({ edge_id: "e1", start_date: "styczeń 2019" });
     await expect(handler({} as never)).rejects.toMatchObject({

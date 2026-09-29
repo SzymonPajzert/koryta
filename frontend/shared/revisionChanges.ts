@@ -110,7 +110,11 @@ export const revisionFieldLabels: Record<string, string> = {
   // edges, which a reader can propose through the relation dialogs
   start_date: "data od",
   end_date: "data do",
-  position: "stanowisko",
+  // Only a candidacy carries one - an employment's role is its `name` - and
+  // it is the election the run was for: „Sejm", „Senat", „Samorząd". The
+  // dialogs call it that too, so the reviewer reads the word the contributor
+  // picked it under.
+  position: "typ wyborów",
   party: "partia",
   committee: "komitet",
   references: "źródła",
