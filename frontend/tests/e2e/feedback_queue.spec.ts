@@ -371,7 +371,9 @@ test.describe("Kolejka zgłoszeń", () => {
     const row = page.locator(`[data-section="fixed-reports"] ~ * #fb-${id}`);
     await expect(row).toBeVisible({ timeout: 60_000 });
     await row.locator("[data-row-toggle]").click();
-    await expect(row.locator("[data-fix-change]")).toContainText(claim.change);
+    await expect(row.locator("[data-fix-change]").first()).toContainText(
+      claim.change,
+    );
 
     await row.getByRole("button", { name: "Zamknij jako załatwione" }).click();
     await expect

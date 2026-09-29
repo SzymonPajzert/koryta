@@ -217,7 +217,7 @@ import {
   mdiRefresh,
 } from "@mdi/js";
 import { useDisplay } from "vuetify";
-import { useEdges, type EdgeNode } from "~/composables/edges";
+import { onePerNode, useEdges, type EdgeNode } from "~/composables/edges";
 import { edgeSentence } from "~/utils/edgeSentence";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
 import { useEdgeEditing } from "~/composables/edgeEditing";
@@ -297,9 +297,13 @@ const { sources, targets, refresh: refreshEdges } = await useEdges(nodeId);
 const edges = computed(() => [...sources.value, ...targets.value]);
 // Shareholders, and the seat while the migration is still running - once no
 // region->place `owns` edge is left, `seat` here can become its own row.
-const owners = computed(() =>
+const ownerEdges = computed(() =>
   sources.value.filter((e) => e.type === "owns" || e.type === "seat"),
 );
+/** One row per owner. A gmina that owns the company it seats has both edges,
+ * and the row is its `owns` one - the seat is still what „Lokalizacja" is read
+ * from. See `onePerNode`. */
+const owners = computed(() => onePerNode(ownerEdges.value, ["owns", "seat"]));
 const subsidiaries = computed(() =>
   targets.value.filter((e) => e.type === "owns" && e.richNode.type === "place"),
 );
@@ -315,23 +319,34 @@ const subsidiaries = computed(() =>
  * so dropping `owns` wholesale would take an outgoing `owns` to something that
  * is not a place off the page altogether. Identity works as the key because
  * both lists and `edges` read the same cached `sources`/`targets` computeds
- * from `useEdges`, so they hold the same objects. */
+ * from `useEdges`, so they hold the same objects. Every owner edge counts as
+ * drawn, the ones `owners` folded into another row included: the seat of a
+ * gmina already listed as an owner would otherwise turn up again down here. */
 const listedAbove = computed(
-  () => new Set([...owners.value, ...subsidiaries.value]),
+  () => new Set([...ownerEdges.value, ...subsidiaries.value]),
 );
 const historyEdges = computed(() =>
   edges.value.filter((e) => !listedAbove.value.has(e)),
 );
 
-/** Where the institution sits, read off the region that owns it.
+/** Where the institution sits: the region at the other end of its `seat`.
  *
  * `useCompanyLocations` answers the same question for the table, and does it by
  * fetching every region there is - worth it for a page listing hundreds of
  * companies, and absurd for one. The local graph is already loaded and the seat
- * is one of its `owns` edges.
+ * is one of its edges.
+ *
+ * The seat and nothing else. This used to take the first region among the
+ * owners, which was the seat for as long as the seat was the only region edge a
+ * company had. Since the register's shareholder lists were ingested it is as
+ * often a shareholder: PKP SKM, registered in Gdynia, read „Lokalizacja: Gmina
+ * Gdańsk", and 1,437 companies in the 2026-09-27 export have a region owner
+ * that is not their seat. The table, which reads `seatNodeIds`, already said
+ * Gdynia. Twelve companies have a gmina owner and no seat edge at all; they
+ * print no location, as they do in the table, rather than their owner's.
  */
 const location = computed(
-  () => owners.value.find((e) => e.richNode.type === "region")?.richNode.name,
+  () => sources.value.find((e) => e.type === "seat")?.richNode.name,
 );
 
 const seoCompany = computed(() =>

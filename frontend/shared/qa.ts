@@ -59,6 +59,115 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zadania-blokuje-do-wyboru",
+    title: "Zadania: „Blokuje” do wybrania, tak jak „Czeka na”",
+    description:
+      "W szczegółach zadania można teraz wskazać nie tylko, na co ono czeka, ale też co ma czekać na nie. Kliknięcie zadania na którejś z tych dwóch list otwiera je. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania otwórz zadanie i w „Blokuje” wybierz inne - tamto ma przejść do „Czekają”, z tym zadaniem w swoim „Czeka na”.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "zadania-kopiuj-dla-czatu",
+    title: "Zadania: „Kopiuj dla czatu”",
+    description:
+      "Przycisk w szczegółach zadania kopiuje je razem z tym, skąd się wzięło - notatką w pamięci, sesją agenta, zgłoszeniami - z zależnościami i historią, do wklejenia w rozmowie z agentem. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania otwórz zadanie dodane przez agenta, kliknij „Kopiuj dla czatu” i wklej tekst - ma być w nim tytuł, link, notatka albo sesja, z której zadanie pochodzi, i jego historia.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "zadania-zwijanie-mapy",
+    title: "Zadania: zwijanie łańcuchów na mapie i pasek celów nad nią",
+    description:
+      "Kartę na mapie zadań można zwinąć razem ze wszystkim, co prowadzi tylko do niej - zostaje z niej stos kart. Cele i stosy są też na pasku nad mapą, więc strzałkę można upuścić na nie z każdego miejsca mapy. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania?widok=mapa kliknij „Zwiń wszystkie” - każdy łańcuch ma się zwinąć w stos na swoim końcu, z liczbą schowanych zadań, a stosy mają się pojawić na pasku nad mapą.",
+      "Przeciągnij od prawej krawędzi dowolnej karty na cel albo stos na pasku - ma się pojawić strzałka do niego.",
+      "Kliknij „Rozwiń wszystkie” - mapa ma wrócić do stanu sprzed zwinięcia.",
+    ],
+    link: "/admin/zadania?widok=mapa",
+    area: "admin",
+  },
+  {
+    id: "zadania-cele",
+    title: "Zadania: cele, które grupują zadania",
+    description:
+      "Nowy rodzaj zadania - cel. Cel czeka na zadania, które do niego prowadzą, i tak się je grupuje: cele mają własną listę na górze, z tym, ile z tych zadań już zamknięto, a filtr „Cel” zostawia tylko jego zadania. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania dodaj zadanie rodzaju „Cel” i w „Prowadzą do niego” wybierz dwa zadania - cel ma się pojawić na liście „Cele” z „0/2”.",
+      "Otwórz cel i kliknij „Pokaż jego zadania” - na liście i na mapie mają zostać tylko on i te dwa zadania, a na mapie cel ma być ciemną kartą.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "zadania-najnowsze",
+    title: "Zadania: najnowsze na górze listy",
+    description:
+      "Listy na /admin/zadania można ułożyć od najnowszych, żeby nic świeżo dodanego nie utonęło w starszych. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania wybierz „Najnowsze” - ostatnio dodane zadania mają być na górze każdej listy, z „dzisiaj”, „wczoraj” albo „N dni temu” na końcu wiersza.",
+    ],
+    link: "/admin/zadania?kolejnosc=najnowsze",
+    area: "admin",
+  },
+  {
+    id: "zadania-lista-i-mapa",
+    title: "Zadania właściciela: lista i mapa tego, co na co czeka",
+    description:
+      "Nowa strona /admin/zadania zbiera to, co zostało do wdrożenia, uruchomienia, zdecydowania i zbudowania - także to, co agenci zostawiają po sesji. Na mapie widać, co na co czeka, a zadania łączy się strzałkami. Stronę widzi tylko właściciel serwisu, więc tylko on może to sprawdzić - pozostali mogą ten wpis pominąć.",
+    steps: [
+      "Na /admin/zadania otwórz zadanie z listy „Czekają” - ma pokazać, na co czeka, co po nim odblokuje i jego historię.",
+      "Przełącz na „Mapa” i przeciągnij od prawej krawędzi jednego zadania do lewej krawędzi drugiego - ma pojawić się strzałka, a drugie zadanie ma przejść do „Czekają”.",
+      "Kliknij tę strzałkę i „Usuń zależność” - strzałka ma zniknąć, a zadanie wrócić na swoją listę.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "partia-inne",
+    title: "Partia „Inne” dla powiązań politycznych spoza głównych partii",
+    description:
+      "Osobie można teraz przypisać partię „Inne”, gdy znaleźliśmy jej powiązanie polityczne, ale nie z żadną z głównych partii. " +
+      "Wszędzie, gdzie widać partię, „Inne” jest wyszarzone - bladoszary chip z szarym napisem, szara kropka na grafie - żeby nie wyglądało jak kolejna partia.",
+    steps: [
+      "Na stronie dowolnej osoby kliknij „Zaproponuj zmianę” - na końcu listy „Przynależność partyjna” ma być „Inne”.",
+      "Otwórz tabelę z filtrem „Inne” - chip filtra nad tabelą ma być bladoszary z szarym napisem, a nie w kolorze którejś partii.",
+    ],
+    link: "/eksploruj/tabela?party=Inne",
+    area: "contributor",
+  },
+  {
+    id: "zespol-qa-i-problemy",
+    title: "Lista QA, jej problemy i zgłoszenia są w menu „Zespół”",
+    description:
+      "Menu „Zespół” na pasku prowadzi teraz do listy QA i do jej „Problemów”, a administratora także do zgłoszeń, które zeszły z menu „Admin”. " +
+      "Na „Problemach” administrator widzi swój problem raz - jako zgłoszenie z wpisem, którego dotyczy - a nie drugi raz jako wpis pod listą zgłoszeń.",
+    steps: [
+      "Kliknij „Zespół” na pasku - mają tam być „QA - zmiany do sprawdzenia” i „Problemy z QA”, a z konta administratora także „Zgłoszenia”.",
+      "Z konta administratora kliknij „Problemy z QA” - problem, który sam zgłosiłeś, ma być tylko linijką zgłoszenia z „QA: …”, bez listy wpisów pod spodem.",
+    ],
+    link: "/qa?widok=problemy",
+    area: "contributor",
+    fixes: ["tWVaktgCDV4CvKn5tb3B"],
+  },
+  {
+    id: "statystyki-kafelki-i-paski-to-linki",
+    title: "Kafelki i paski na stronie statystyk prowadzą tam, gdzie wskazują",
+    description:
+      "Kafelek „Fakty z ekstrakcji” i części paska „Postęp weryfikacji osób” wyglądały na linki, ale kliknięte nic nie robiły. Teraz to zwykłe linki, które otworzysz też z ctrl albo środkowym przyciskiem w nowej karcie.",
+    steps: [
+      "Na /eksploruj/statystyki kliknij kafelek „Fakty z ekstrakcji”, a potem zieloną część paska „Postęp weryfikacji osób” - mają przenieść na /ekstrakcje i do tabeli opublikowanych osób.",
+    ],
+    link: "/eksploruj/statystyki",
+    area: "public",
+  },
+  {
     id: "qa-zgloszenia-do-zamkniecia",
     title: "Na /qa są zgłoszenia, które ta wersja strony poprawia",
     description:

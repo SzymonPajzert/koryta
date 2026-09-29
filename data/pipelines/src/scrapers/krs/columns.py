@@ -71,3 +71,22 @@ def normalise(df: pd.DataFrame, *date_columns: str) -> pd.DataFrame:
         if column in result.columns:
             result[column] = iso_dates(result[column])
     return result
+
+
+def is_public(flags: pd.Series) -> pd.Series:
+    """A column of "is this company publicly owned" as actual booleans.
+
+    `astype(bool)` is not that. A column that came back as text - a frame read
+    without `CompaniesKRS`'s pinned dtypes, a hand-made CSV - has `astype(bool)`
+    call the string "False" true, and every company in the register would then
+    be public, so `--public-employer` would filter nothing while looking like it
+    had. Missing reads as false: not knowing who owns a company is not knowing
+    that the public does.
+    """
+    if pd.api.types.is_bool_dtype(flags) or pd.api.types.is_numeric_dtype(flags):
+        return flags.fillna(False).astype(bool)
+    # Anything else is read as text, which on this pandas is the dtype a column
+    # of Python strings gets - `object` is not the only way text arrives.
+    return flags.map(
+        lambda value: value is True or str(value).strip().lower() in {"true", "1"}
+    ).astype(bool)

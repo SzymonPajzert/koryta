@@ -62,9 +62,12 @@
       >
         <v-spacer />
 
-        <!-- The panel and the three inboxes it lists, under the panel's own
-             names. The activator has no `to` of its own - it would navigate
-             and open the menu at once - so it is lit by hand instead. -->
+        <!-- The panel and two of the inboxes it lists, under the panel's own
+             names; the third, "Zgłoszenia", is under "Zespół" with the QA list
+             and its problems, since a problem found there is a report too.
+             "Zadania" is the owner's own list, shown to him alone.
+             The activator has no `to` of its own - it would navigate and open
+             the menu at once - so it is lit by hand instead. -->
         <v-menu
           v-if="isAdmin"
           location="bottom start"
@@ -104,9 +107,10 @@
               title="Notatki"
             />
             <v-list-item
-              :prepend-icon="mdiMessageAlertOutline"
-              to="/admin/opinie"
-              title="Zgłoszenia"
+              v-if="isOwner"
+              :prepend-icon="mdiSitemapOutline"
+              to="/admin/zadania"
+              title="Zadania"
             />
           </v-list>
         </v-menu>
@@ -120,21 +124,50 @@
         >
           Aktywność
         </v-btn>
-        <!-- Both leave the site. It stays a menu on pages with no affine board
-             too, so the strip is the same shape on every page rather than
-             growing a button a tick after the route changes. -->
+        <!-- What there is to check and what is wrong, in one place: the QA
+             list, its "Problemy" and, for an admin, every report - a problem
+             found on /qa is one of those, and an admin's "Problemy" shows it
+             as that report; then the two links that leave the site. A menu,
+             so there is no QA button with a count on the strip again (a
+             standing alarm on every page, taken off on purpose), and so the
+             strip keeps one shape on pages with no affine board rather than
+             growing a button a tick after the route changes. Lit by hand on
+             the pages it lists, as "Admin" is. -->
         <v-menu location="bottom start" content-class="user-toolbar-menu">
           <template #activator="{ props: menu }">
             <v-btn
               v-bind="menu"
               :prepend-icon="mdiAccountGroupOutline"
               :append-icon="mdiChevronDown"
+              :active="onTeamPage"
+              :aria-current="onTeamPage || undefined"
               variant="text"
             >
               Zespół
             </v-btn>
           </template>
           <v-list density="compact" min-width="220">
+            <!-- Exact, query included, so only the tab that is showing is lit:
+                 both are /qa to the router. -->
+            <v-list-item
+              :prepend-icon="mdiClipboardCheckOutline"
+              to="/qa"
+              exact
+              title="QA - zmiany do sprawdzenia"
+            />
+            <v-list-item
+              :prepend-icon="mdiAlertCircleOutline"
+              :to="{ path: '/qa', query: { widok: 'problemy' } }"
+              exact
+              title="Problemy z QA"
+            />
+            <v-list-item
+              v-if="isAdmin"
+              :prepend-icon="mdiMessageAlertOutline"
+              to="/admin/opinie"
+              title="Zgłoszenia"
+            />
+            <v-divider />
             <v-list-item
               :prepend-icon="mdiGithub"
               :append-icon="mdiOpenInNew"
@@ -173,7 +206,9 @@
 import {
   mdiAccount,
   mdiAccountGroupOutline,
+  mdiAlertCircleOutline,
   mdiChevronDown,
+  mdiClipboardCheckOutline,
   mdiCommentTextOutline,
   mdiGithub,
   mdiInboxArrowDown,
@@ -183,6 +218,7 @@ import {
   mdiViewList,
   mdiNoteEditOutline,
   mdiMessageAlertOutline,
+  mdiSitemapOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
@@ -191,7 +227,7 @@ import { APP_BAR_HEIGHT, useSsrLayoutTop } from "~/composables/appBar";
 
 const ssrLayoutTop = useSsrLayoutTop();
 const { mdAndUp } = useDisplay();
-const { user, userConfig, logout, isAdmin } = useAuthState();
+const { user, userConfig, logout, isAdmin, isOwner } = useAuthState();
 const route = useRoute();
 const loginDialog = ref(false);
 const maxWidth = computed(() =>
@@ -199,13 +235,22 @@ const maxWidth = computed(() =>
 );
 const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const affineLink = computed(() => route?.meta?.affineLink);
+/** The pages the "Zespół" menu leads to on this site, which light it while it
+ * is closed, as "Admin" is lit by hand below. /qa is one page whichever tab is
+ * showing; the router serves a path with a trailing slash as the same page. */
+const TEAM_PAGES = ["/qa", "/admin/opinie"];
+const onTeamPage = computed(() =>
+  TEAM_PAGES.includes(route?.path?.replace(/\/+$/, "") ?? ""),
+);
 /** Whether the page is admin-only, which is what the "Admin" menu stands for
  * while it is closed - the panel's pages without an entry of their own too.
  * Read off the page's middleware rather than its path: /admin/rewizje and a
  * single revision live under /admin but are open to every signed-in reader,
- * and the router serves /admin/notatki/ as the same page as /admin/notatki. */
-const onAdminPage = computed(() =>
-  [route?.meta?.middleware].flat().includes("admin"),
+ * and the router serves /admin/notatki/ as the same page as /admin/notatki.
+ * /admin/opinie is admin-only too, but it is listed under "Zespół", which is
+ * lit there instead - two buttons lit for one page would say neither. */
+const onAdminPage = computed(
+  () => [route?.meta?.middleware].flat().includes("admin") && !onTeamPage.value,
 );
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>

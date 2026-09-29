@@ -53,7 +53,8 @@
           <strong>Lokalizacja:</strong> {{ location }}
         </span>
         <ChipPublicCompany :company="company" show-unknown />
-        <ChipCompanyCategories :company="company" />
+        <!-- The one caller whose chips are not inside another link. -->
+        <ChipCompanyCategories :company="company" as-links />
       </div>
 
       <div class="d-flex flex-wrap ga-2">

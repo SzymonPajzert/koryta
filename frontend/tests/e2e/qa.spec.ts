@@ -133,21 +133,23 @@ test.describe("QA changelog", () => {
     }
   });
 
-  test("QA is reached from the admin panel, not from the toolbar", async ({
+  test("QA is reached from the admin panel and a menu, never a button on the strip", async ({
     page,
   }) => {
     test.setTimeout(120_000);
 
     await logIn(page, USERS.admin, "/admin");
 
-    // The panel is the one place that links to the changelog now.
+    // The panel's tile; the menu's entry is not drawn until it opens.
     await expect(page.locator('a[href="/qa"]').first()).toBeVisible({
       timeout: 30_000,
     });
 
     // The contributor toolbar used to carry a QA button with a badge that
     // turned red for any reported problem, on every page of the site. Both are
-    // gone deliberately, so a link reappearing there is a regression.
+    // gone deliberately, so a link reappearing on the strip is a regression -
+    // the way in from there is the "Zespół" menu, which is drawn outside it.
     await expect(page.locator('.user-toolbar a[href="/qa"]')).toHaveCount(0);
+    await expect(page.locator(".user-toolbar .v-badge")).toHaveCount(0);
   });
 });

@@ -261,7 +261,138 @@ describe("/aktywnosc", () => {
       .findAll('[data-testid="activity-day"] h2')
       .map((heading) => heading.text());
     expect(headings).toEqual(["Dzisiaj", "Wczoraj", "Niedziela, 20 września"]);
-    expect(itemTexts(wrapper)[0]).toContain("ocenił/a 1 osobę");
+    // The reader's own vote, newest of all, is hidden by default.
+    expect(itemTexts(wrapper)[0]).toContain("dodał/a 2 notatki");
+  });
+
+  it("hides the reader's own lines until the box is unticked", async () => {
+    serve({ 7: contributorFeed() });
+    const wrapper = await mountPage();
+
+    expect(itemTexts(wrapper)).toHaveLength(3);
+    expect(itemTexts(wrapper).some((text) => text.includes("Ja Sam"))).toBe(
+      false,
+    );
+    expect(
+      wrapper.get('[data-testid="activity-hide-mine"]').attributes(),
+    ).toMatchObject({ role: "checkbox", "aria-checked": "true" });
+    // How the page opens, so the url says nothing of it.
+    expect(useRouter().currentRoute.value.query.moje).toBeUndefined();
+
+    await wrapper.get('[data-testid="activity-hide-mine"]').trigger("click");
+    await vi.waitUntil(() => itemTexts(wrapper).length === 4, {
+      timeout: 2000,
+    });
+    expect(itemTexts(wrapper)[0]).toContain("Ja Sam");
+    expect(useRouter().currentRoute.value.query.moje).toBe("tak");
+    expect(
+      wrapper
+        .get('[data-testid="activity-hide-mine"]')
+        .attributes("aria-checked"),
+    ).toBe("false");
+
+    await wrapper.get('[data-testid="activity-hide-mine"]').trigger("click");
+    await vi.waitUntil(() => itemTexts(wrapper).length === 3, {
+      timeout: 2000,
+    });
+    expect(useRouter().currentRoute.value.query.moje).toBeUndefined();
+  });
+
+  it("opens with the reader's own lines on ?moje=tak", async () => {
+    serve({ 7: contributorFeed() });
+    const wrapper = await mountPage({ moje: "tak" });
+
+    expect(itemTexts(wrapper)).toHaveLength(4);
+    expect(itemTexts(wrapper)[0]).toContain("Ja Sam");
+    expect(
+      wrapper
+        .get('[data-testid="activity-hide-mine"]')
+        .attributes("aria-checked"),
+    ).toBe("false");
+  });
+
+  it("hides the reader's own lines when they have no name to show", async () => {
+    // A reader without a display name is "Bez nazwy" to themselves, unnamed
+    // like a mask - and the lines are still theirs.
+    const unnamed = contributorFeed();
+    unnamed.actors[0] = actor("self", {
+      name: "Bez nazwy",
+      named: false,
+      isSelf: true,
+    });
+    serve({ 7: unnamed });
+    const wrapper = await mountPage();
+
+    expect(itemTexts(wrapper)).toHaveLength(3);
+    expect(itemTexts(wrapper).some((text) => text.includes("Bez nazwy"))).toBe(
+      false,
+    );
+  });
+
+  it("hides an administrator's own lines, and shows them to a pick by uid", async () => {
+    serve({ 7: adminFeed() });
+    const wrapper = await mountPage();
+
+    expect(itemTexts(wrapper)).toHaveLength(2);
+    expect(itemTexts(wrapper).some((text) => text.includes("Szymon"))).toBe(
+      false,
+    );
+
+    // A link naming the reader by uid picks them as surely as "Tylko Twoje".
+    await useRouter().push({ query: { kto: "uid-me" } });
+    await vi.waitUntil(() => itemTexts(wrapper).length === 1, {
+      timeout: 2000,
+    });
+    expect(itemTexts(wrapper)[0]).toContain("Szymon");
+  });
+
+  it("widens a week that is mostly the reader's own", async () => {
+    // Twelve lines is not a quiet week, but with eleven of them the reader's
+    // and hidden it is one line on screen.
+    const week = contributorFeed();
+    week.batches = [
+      ...Array.from({ length: 11 }, (_, index) =>
+        batch("self", new Date(NOW.getTime() - index * 60_000).toISOString()),
+      ),
+      batch("named-1", "2026-09-21T10:00:00.000Z"),
+    ];
+    serve({ 7: week });
+    const hiding = await mountPage();
+    await vi.waitUntil(() => askedDays().includes(30) && inFlight === 0, {
+      timeout: 2000,
+    });
+    expect(askedDays()).toEqual([7, 30]);
+    hiding.unmount();
+    mounted.pop();
+    clearNuxtData("activity-feed");
+
+    // With them shown, twelve lines are enough.
+    mockAuthRequest.mockClear();
+    serve({ 7: week });
+    await mountPage({ moje: "tak" });
+    expect(askedDays()).toEqual([7]);
+  });
+
+  it("says why the list is empty when only the reader's own lines are left", async () => {
+    const mine = contributorFeed();
+    mine.batches = [
+      batch("self", "2026-09-22T09:00:00.000Z"),
+      batch("named-1", "2026-09-22T07:00:00.000Z", { kind: "note" }),
+    ];
+    serve({ 7: mine });
+    const wrapper = await mountPage({ rodzaj: "oceny" });
+
+    expect(itemTexts(wrapper)).toHaveLength(0);
+    expect(wrapper.get('[data-testid="activity-empty"]').text()).toBe(
+      "Są tu tylko Twoje zmiany, a te są ukryte. Odznacz „Ukryj moje zmiany”, żeby je zobaczyć.",
+    );
+
+    await wrapper.get('[data-testid="activity-hide-mine"]').trigger("click");
+    await vi.waitUntil(() => itemTexts(wrapper).length === 1, {
+      timeout: 2000,
+    });
+    expect(itemTexts(wrapper)[0]).toContain("Ja Sam");
+    expect(wrapper.find('[data-testid="activity-empty"]').exists()).toBe(false);
   });
 
   it("opens with the month's chart, linked to the full statistics", async () => {
@@ -298,11 +429,26 @@ describe("/aktywnosc", () => {
     serve({ 7: contributorFeed() });
     const wrapper = await mountPage({ kto: "ja" });
 
+    // Hidden by default everywhere else, but asked for by name here - and
+    // hiding them too would leave nothing at all.
     expect(itemTexts(wrapper)).toHaveLength(1);
     expect(itemTexts(wrapper)[0]).toContain("Ja Sam");
     expect(
       wrapper.get('[data-testid="activity-person-filter"]').text(),
     ).toContain("Tylko Twoje");
+    expect(wrapper.find('[data-testid="activity-hide-mine"]').exists()).toBe(
+      false,
+    );
+
+    await useRouter().push({ query: {} });
+    await vi.waitUntil(() => itemTexts(wrapper).length === 3, {
+      timeout: 2000,
+    });
+    expect(
+      wrapper
+        .get('[data-testid="activity-hide-mine"]')
+        .attributes("aria-checked"),
+    ).toBe("true");
   });
 
   it("filters on a named person in the page, never in the url", async () => {
@@ -384,8 +530,9 @@ describe("/aktywnosc", () => {
     expect(
       wrapper.find('[data-testid="activity-new-admin-list"]').exists(),
     ).toBe(false);
-    // Not honoured, so nothing is filtered away either.
-    expect(itemTexts(wrapper)).toHaveLength(4);
+    // Not honoured, so nothing is filtered away either - bar the reader's own
+    // line, which no filter hides by default.
+    expect(itemTexts(wrapper)).toHaveLength(3);
   });
 
   it("takes a filter it does not honour out of the url", async () => {
@@ -449,7 +596,8 @@ describe("/aktywnosc", () => {
     serve({ 7: adminFeed() });
     const wrapper = await mountPage();
 
-    expect(itemTexts(wrapper)).toHaveLength(3);
+    // The administrator's own line is hidden.
+    expect(itemTexts(wrapper)).toHaveLength(2);
     await wrapper.get('[data-testid="activity-new-admins"]').trigger("click");
     await vi.waitUntil(() => itemTexts(wrapper).length === 1, {
       timeout: 2000,
@@ -557,7 +705,7 @@ describe("/aktywnosc", () => {
         return { ...contributorFeed(), window: { ...week.window, days: 30 } };
       },
     });
-    const wrapper = await mountPage();
+    const wrapper = await mountPage({ moje: "tak" });
 
     expect(askedDays()).toEqual([7, 30]);
     expect(itemTexts(wrapper)).toHaveLength(3);

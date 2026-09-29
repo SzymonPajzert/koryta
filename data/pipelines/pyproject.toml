@@ -130,9 +130,10 @@ koryta_pipelines = "pipelines:main"
 koryta_crawl = "crawl_cli:main"
 koryta_scraper = "scraper:main"
 koryta_scrape_krs = "scraper:scrape_krs"
-koryta_scrape_krs_free = "scraper:scrape_krs_free"
-koryta_scrape_krs_paid = "scraper:scrape_krs_paid"
-koryta_scrape_krs_updates = "scraper:scrape_updates_by_dates"
+koryta_scrape_krs_free = "jobs.krs_scrape_free:main"
+koryta_scrape_krs_paid = "jobs.krs_scrape_paid:main"
+koryta_scrape_krs_updates = "jobs.krs_bulletin:main"
+koryta_krs_register_owners = "jobs.krs_register_owners:main"
 set_auth_claims = "set_auth_claims:main"
 
 
@@ -245,7 +246,7 @@ markers = [
 addopts = "--durations=5 --ff-group-by-module -m 'not e2e'"
 
 [tool.importlinter]
-root_packages = ["analysis", "stores", "scrapers", "util", "entities"]
+root_packages = ["jobs", "analysis", "stores", "scrapers", "util", "entities"]
 
 exclude_type_checking_imports = true
 include_external_packages = true
@@ -253,7 +254,9 @@ include_external_packages = true
 [[tool.importlinter.contracts]]
 name = "Clean architecture"
 type = "layers"
-layers = ["analysis", "stores", "scrapers", "util", "entities"]
+# `jobs` on top: a job may read any pipeline, and no pipeline may reach a job.
+# See src/jobs/__init__.py for what makes something a job.
+layers = ["jobs", "analysis", "stores", "scrapers", "util", "entities"]
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.*",
     "scrapers.stores -> stores.config",
@@ -261,6 +264,15 @@ ignore_imports = [
     # source instead of hardcoding its jsonl path.
     "scrapers.article.pipelines.people_affair_tags_pipeline -> analysis.article_person_mentions",
 ]
+
+[[tool.importlinter.contracts]]
+# Asking an upstream API is a job's work (see src/jobs/__init__.py): a pipeline
+# reads what a job wrote. The article crawler predates the split.
+name = "Pipelines do not fetch"
+type = "forbidden"
+source_modules = ["scrapers", "analysis"]
+forbidden_modules = ["requests", "curl_cffi"]
+ignore_imports = ["scrapers.article.crawler -> curl_cffi"]
 
 [[tool.importlinter.contracts]]
 name = "Do not import external packages"

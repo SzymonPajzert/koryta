@@ -156,6 +156,10 @@ class CloudStorage(DataRef):
     max_namespaces: list[str] = field(default_factory=list)
     namespace_values: dict[str, str] = field(default_factory=dict)
     binary: bool = False
+    #: The bucket to list, by name. None is the crawl bucket, which is where
+    #: every crawl lives; a job keeps its own state elsewhere - see `jobs`.
+    #: The compressed mirror only ever covers the crawl bucket.
+    bucket: str | None = None
 
 
 @dataclass

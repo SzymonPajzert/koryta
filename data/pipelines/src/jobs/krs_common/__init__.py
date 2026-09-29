@@ -1,0 +1,73 @@
+"""What the KRS jobs share: the api-krs client, the crawl layout, the refresh set.
+
+Moved from `scraper.py`, unchanged, when the KRS scrape became jobs.
+"""
+
+import json
+
+import requests
+
+from scrapers.stores import Context
+
+
+# TODO move this to stores - this is a generic utility, not KRS-specific.
+def query_krs_api(url, verbose=True) -> str | None:
+    def print_filtered(*args, **kwargs):
+        if verbose:
+            print(*args, **kwargs)
+
+    print_filtered(f"Requesting: {url}")
+    response = None
+    result = {}
+    try:
+        response = requests.get(url)
+        if response.text == "":
+            return None
+        result = response.json()
+    except requests.exceptions.JSONDecodeError:
+        print_filtered(f"Failed to decode JSON from {url}, skipping")
+        if response is not None:
+            print(f"Response: '{response.text}'")
+            raise ValueError("Failed to decode non-empty response")
+        return None
+
+    # either expect odpis or title == Not Found
+    if not ("odpis" in result or result.get("title", "") == "Not Found"):
+        raise ValueError(f"Unexpected response for {url}: {result}, skipping this KRS")
+
+    if "odpis" in result:
+        # Printing data about the company
+        dzial1 = result["odpis"]["dane"]["dzial1"]
+        dane = dzial1.get("danePodmiotu", {})
+        if "siedzibaIAdres" in dzial1:
+            miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
+            print_filtered(f"{dane.get('nazwa', dane)} - {miasto}")
+    return json.dumps(result)
+
+
+def upload_result(ctx: Context, url, result, verbose=True):
+    # We're discarding query params, so it's a hotfix for this
+    url = url.replace("?aktualnosc=", "/aktualnosc_")
+    url = url.replace("&format=json", "")
+    ctx.io.upload(url, result, "application/json", verbose=verbose, include_query=True)
+
+
+# TODO This should be calculated by which job updates which pipeline and which pipelines
+# are read by which jobs, not hardcoded here. It requires further utility, so it's
+# left as a future development.
+
+#: The pipelines every KRS scrape rebuilds before it reads its queue, whatever
+#: is on disk: each one's inputs change with every crawl.
+REFRESH_PIPELINES = {
+    "ScrapeRejestrIO",
+    "KRSAlreadyScraped",
+    "KRSCensoredPeople",
+    "KRSNeedsRefresh",
+    "CompaniesKRS",
+    "KRSUpdates",
+    # The fold of the register job's log. Nothing it depends on changes when
+    # the log grows, so without this a scrape queues from an old ledger.
+    "KRSRegisterEntries",
+    "RejestrIOCoverage",
+    "PersonFeedCoverage",
+}

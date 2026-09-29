@@ -41,6 +41,26 @@ export const REPORT_FIXES: ReportFix[] = [
   },
   {
     change:
+      "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
+    fixes: ["g29Mn5m5y6EKQegAviQn"],
+  },
+  {
+    change:
+      "Aktywność domyślnie nie pokazuje Twoich własnych zmian: przy filtrach jest zaznaczone „Ukryj moje zmiany”, a po odznaczeniu Twoje linijki wracają z oznaczeniem „Ty”.",
+    fixes: ["DdO2vUMtncE6f1lfRtvH"],
+  },
+  {
+    change:
+      "„Właściciele” PKP SKM wymieniają każdego właściciela raz, także po załadowaniu strony - Gmina Gdańsk, POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Województwo pomorskie i Gdynia, a gmina, która jest i siedzibą, i właścicielem spółki, ma jeden wiersz.",
+    fixes: ["SLaYgF7oCq9VV1fpU08t"],
+  },
+  {
+    change:
+      "W kategoryzacji notatek nazwa osoby nad notatką jest prawdziwym linkiem: kliknięta, także z ctrl albo środkowym przyciskiem, otwiera stronę tej osoby w nowej karcie.",
+    fixes: ["g29Mn5m5y6EKQegAviQn"],
+  },
+  {
+    change:
       "„Obecny skład” spółki wymienia najpierw prezesa, potem jego zastępców, zarząd i radę nadzorczą, a dopiero dalej resztę.",
     fixes: ["uIj31XYdsMVFjnqHArzX"],
   },

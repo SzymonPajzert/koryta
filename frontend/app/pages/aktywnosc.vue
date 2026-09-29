@@ -37,7 +37,7 @@
       <!-- Who, rather than what: a row of its own under the kinds, so it never
            wraps behind a divider that has nothing left of it. -->
       <div
-        v-if="feed?.identified || personLabel"
+        v-if="feed || personLabel"
         class="d-flex flex-wrap align-center ga-2 mt-1"
       >
         <!-- Off the response, not off `isAdmin`: the claim says "admin", and a
@@ -54,6 +54,24 @@
           @click="toggleNewAdmins"
         >
           Nowi administratorzy
+        </v-chip>
+        <!-- A box to untick, quiet either way: ticked is how the page opens,
+             and a filled chip there would be the loudest thing on it. Gone
+             while a person is picked, since the pick alone says whose lines
+             to show (`hidingMine`), and after "Nowi administratorzy" so that
+             chip stays under the pointer when a click on it takes this one
+             away. -->
+        <v-chip
+          v-if="feed && !personFilter"
+          variant="outlined"
+          class="activity__kind"
+          :prepend-icon="hideMine ? mdiCheckboxMarked : mdiCheckboxBlankOutline"
+          role="checkbox"
+          :aria-checked="hideMine"
+          data-testid="activity-hide-mine"
+          @click="hideMine = !hideMine"
+        >
+          Ukryj moje zmiany
         </v-chip>
         <!-- The label truncates rather than the chip: an administrator's label
              can be a whole email address, and at 375px that pushed the close
@@ -151,11 +169,8 @@
         v-else-if="filtered.length === 0"
         type="info"
         variant="tonal"
-        :text="
-          feed?.batches.length
-            ? 'Nic nie pasuje do wybranych filtrów.'
-            : 'W tym okresie nikt nic nie zrobił.'
-        "
+        data-testid="activity-empty"
+        :text="emptyText"
       />
 
       <ActivityFeedTimeline
@@ -186,7 +201,12 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { mdiAccountClockOutline, mdiFilterVariant } from "@mdi/js";
+import {
+  mdiAccountClockOutline,
+  mdiCheckboxBlankOutline,
+  mdiCheckboxMarked,
+  mdiFilterVariant,
+} from "@mdi/js";
 import {
   defaultFeedRange,
   feedKindGroupLabels,
@@ -224,6 +244,10 @@ const SELF = "ja";
 /** `?kto=` for everybody on trial. Honoured only for an established
  * administrator, the one reader the server tells who that is. */
 const NEW_ADMINS = "nowi-admini";
+
+/** `?moje=` while the reader's own lines are shown. Hidden is how the page
+ * opens, and that stays out of the url. */
+const SHOW_MINE = "tak";
 
 /** Lines the list shows at a time, and how many more each click reveals. */
 const PAGE_SIZE = 30;
@@ -284,6 +308,7 @@ const {
 const { stringFilter, setQuery } = useQueryFilters();
 const rodzaj = stringFilter("rodzaj");
 const kto = stringFilter("kto");
+const moje = stringFilter("moje");
 
 /** A named person picked by a reader who is given no uids. Page state only:
  * their key is numbered per response, so in a url - or across the next
@@ -355,7 +380,31 @@ function matchesPerson(batch: FeedBatch, filter: PersonFilter): boolean {
   }
 }
 
-const filtered = computed(() => {
+/** The reader's own lines are left out unless they ask for them: the page is
+ * for what everybody else did - the line under its heading says so - and your
+ * own sittings are the ones you least need to be told about. */
+const hideMine = computed<boolean>({
+  get: () => moje.value !== SHOW_MINE,
+  set: (hide) => {
+    moje.value = hide ? null : SHOW_MINE;
+  },
+});
+
+/** Whether the reader's own lines are left out right now. Not while a person
+ * is picked: the pick says whose lines to show, and "Tylko Twoje" with the
+ * reader's own lines hidden would be an empty list whatever they had done. */
+const hidingMine = computed(() => hideMine.value && !personFilter.value);
+
+/** The test "Tylko Twoje" filters on, and so the same answer: `isSelf`, which
+ * the server sets on the caller's own actor whether or not it has a name to
+ * show - a reader with none is "Bez nazwy" to themselves, and still theirs. */
+function isMine(batch: FeedBatch): boolean {
+  return matchesPerson(batch, { kind: "self" });
+}
+
+/** What the kind and the person filters leave, the reader's own lines
+ * included. */
+const matching = computed(() => {
   const batches = feed.value?.batches ?? [];
   const group = kindGroup.value;
   const kinds: readonly FeedKind[] | null =
@@ -366,6 +415,25 @@ const filtered = computed(() => {
       (!kinds || kinds.includes(batch.kind)) &&
       (!person || matchesPerson(batch, person)),
   );
+});
+
+const filtered = computed(() =>
+  hidingMine.value
+    ? matching.value.filter((batch) => !isMine(batch))
+    : matching.value,
+);
+
+/** Why the list is empty, read only while it is. A line the filters left is
+ * then one the hiding took away, and a reader who is the only one at work
+ * would otherwise be told that nothing matches, with no word of the box above
+ * that is hiding their lines. */
+const emptyText = computed(() => {
+  if (matching.value.length > 0) {
+    return "Są tu tylko Twoje zmiany, a te są ukryte. Odznacz „Ukryj moje zmiany”, żeby je zobaczyć.";
+  }
+  return feed.value?.batches.length
+    ? "Nic nie pasuje do wybranych filtrów."
+    : "W tym okresie nikt nic nie zrobił.";
 });
 
 /** What the closable chip says. The new-admin filter has a chip of its own. */
@@ -422,7 +490,7 @@ const newAdminRows = computed(() => {
 
 const shown = ref(PAGE_SIZE);
 
-watch([kindGroup, kto, pickedActorKey], () => {
+watch([kindGroup, kto, pickedActorKey, hideMine], () => {
   shown.value = PAGE_SIZE;
 });
 
@@ -456,12 +524,14 @@ watch(
 
 watch(feed, (value) => {
   pickedActorKey.value = null;
+  if (!value) return;
+  // Counted without the reader's own lines while those are hidden: a week of
+  // twenty lines, eighteen of them the reader's, is two lines on screen.
+  const lines = hidingMine.value
+    ? value.batches.filter((batch) => !isMine(batch)).length
+    : value.batches.length;
   // Once: the month is the widest window there is, so this cannot fire twice.
-  if (
-    value &&
-    days.value === defaultFeedRange &&
-    value.batches.length < WIDEN_BELOW
-  ) {
+  if (days.value === defaultFeedRange && lines < WIDEN_BELOW) {
     days.value = WIDE_RANGE;
   }
 });

@@ -147,6 +147,9 @@ const panelId = computed(() => `arow-panel-${uid}`);
   --arow-ink: var(--v-theme-ink-info);
   --arow-surface: var(--v-theme-surface-info);
 }
+.arow--tone-strong {
+  --arow-ink: var(--v-theme-ink-strong);
+}
 
 .arow + .arow {
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));

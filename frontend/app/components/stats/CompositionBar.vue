@@ -8,8 +8,11 @@
         location="bottom"
       >
         <template #activator="{ props: tooltipProps }">
+          <!-- The imported NuxtLink, not the string 'NuxtLink', which `:is`
+               looks up among globally registered components and does not
+               find: a segment with a `to` drew as an inert <nuxtlink> tag. -->
           <component
-            :is="segment.to ? 'NuxtLink' : 'div'"
+            :is="segment.to ? NuxtLink : 'div'"
             v-bind="tooltipProps"
             :to="segment.to"
             class="composition-bar__segment"
@@ -54,6 +57,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { NuxtLink } from "#components";
 import { formatCount, formatPercent } from "~/utils/chartTheme";
 
 export type CompositionSegment = {

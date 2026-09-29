@@ -88,9 +88,12 @@ describe("GraphContainer unit tests", () => {
       // Same red as Nowa Lewica - the same party renamed - so the legend has
       // to say so on one line rather than draw the swatch twice.
       "4": { name: "Piotr Wójcik", type: "circle", parties: ["SLD"] },
-      // No colour of its own, so it is drawn as a person with no party and
-      // must not get a line here.
+      // No colour of its own, so it is drawn as „Inne” - a tie to a party the
+      // site does not paint - and is counted on that line, not on its own.
       "5": { name: "Ewa Lis", type: "circle", parties: ["Razem"] },
+      // „Inne” is passed over for the party that is named, so this is one
+      // more PiS and no second „Inne”.
+      "6": { name: "Adam Nowicki", type: "circle", parties: ["Inne", "PiS"] },
     };
 
     const component = await mountSuspended(Container, {
@@ -102,15 +105,19 @@ describe("GraphContainer unit tests", () => {
     expect(legend.text()).toContain("PiS");
     expect(legend.text()).toContain("Nowa Lewica / SLD");
     expect(legend.text()).not.toContain("Razem");
+    expect(legend.text()).toContain("Inne");
     // PO is nobody's here, and a legend listing all eight parties would be
     // longer than the graph it explains.
     expect(legend.text()).not.toContain("PO");
-    // The plain blue stops being "a person" once a colour means something.
-    expect(legend.text()).toContain("Osoba: inne / brak partii");
+    // The plain blue stops being "a person" once a colour means something -
+    // and with „Inne” on a line of its own, what it means is no party at all.
+    expect(legend.text()).toContain("Osoba: brak partii");
+    expect(legend.text()).not.toContain("inne / brak partii");
 
     const swatches = legend.findAll("circle").map((c) => c.attributes("fill"));
     expect(swatches).toContain("#073b76");
     expect(swatches).toContain("#D40E20");
+    expect(swatches.filter((fill) => fill === "#c3c2b7")).toHaveLength(1);
   });
 
   it("stands the legend in the bar with nothing to fold it away", async () => {

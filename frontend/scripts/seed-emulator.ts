@@ -320,11 +320,13 @@ async function seedAuth() {
       await auth.createUser(user);
       if (user.uid === "test-admin") {
         // datascience: allows uploading extractions via /api/ingest/extraction
+        // owner: opens the owner's task list, /admin/zadania
         await auth.setCustomUserClaims(user.uid, {
           admin: true,
           datascience: true,
+          owner: true,
         });
-        console.log(`Set admin + datascience claim for ${user.email}`);
+        console.log(`Set admin + datascience + owner claim for ${user.email}`);
       }
       console.log(`User created: ${user.email} / ${user.password}`);
     }

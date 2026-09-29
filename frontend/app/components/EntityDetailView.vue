@@ -443,7 +443,7 @@ import {
   mdiHome,
   mdiRefresh,
 } from "@mdi/js";
-import { useEdges, type EdgeNode } from "~/composables/edges";
+import { onePerNode, useEdges, type EdgeNode } from "~/composables/edges";
 import { edgeSentence } from "~/utils/edgeSentence";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
 import { useEdgeEditing } from "~/composables/edgeEditing";
@@ -612,12 +612,18 @@ const subregions = computed(() => {
     (e) => e.type === "owns" && e.richNode.type === "region",
   );
 });
-const subsidiaries = computed(() => {
-  return targets.value.filter(
-    (e) =>
-      (e.type === "owns" || e.type === "seat") && e.richNode.type == "place",
-  );
-});
+/** The companies a region seats or holds shares in, once each: a gmina that
+ * does both has two edges to the company, and the row is its `owns` one. See
+ * `onePerNode`. */
+const subsidiaries = computed(() =>
+  onePerNode(
+    targets.value.filter(
+      (e) =>
+        (e.type === "owns" || e.type === "seat") && e.richNode.type == "place",
+    ),
+    ["owns", "seat"],
+  ),
+);
 
 /** An entity page is the thing a reader actually shares, so it carries its own
  * card: the entity's own description rather than the site tagline, and an image,
