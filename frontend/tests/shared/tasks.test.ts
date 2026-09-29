@@ -9,9 +9,11 @@ import {
   dependencyCycle,
   dependencyProblem,
   foldWords,
+  goalProgress,
   newTask,
   patchedDependsOn,
   similarTasks,
+  taskAncestors,
   taskCreateSchema,
   taskEditPatch,
   taskPatchSchema,
@@ -148,6 +150,51 @@ describe("dependencies", () => {
       }),
     ).toEqual(["a", "c"]);
     expect(patchedDependsOn(["a"], { dependsOn: ["x", "x"] })).toEqual(["x"]);
+  });
+});
+
+describe("goals", () => {
+  const tasks = [
+    task("merge", { status: "done" }),
+    task("deploy", { dependsOn: ["merge"] }),
+    task("upload", { dependsOn: ["deploy", "gone"] }),
+    task("milestone", { kind: "goal", dependsOn: ["deploy"] }),
+    task("live", { kind: "goal", dependsOn: ["upload", "milestone"] }),
+    task("other"),
+  ];
+
+  it("finds everything a task waits on, through the chain", () => {
+    expect([...taskAncestors(tasks, "live")].sort()).toEqual([
+      "deploy",
+      "merge",
+      "milestone",
+      "upload",
+    ]);
+    expect(taskAncestors(tasks, "merge").size).toBe(0);
+  });
+
+  it("counts what leads to a goal, and not the goals on the way", () => {
+    expect(goalProgress(tasks, "live")).toEqual({ closed: 1, total: 3 });
+    expect(goalProgress(tasks, "other")).toEqual({ closed: 0, total: 0 });
+  });
+
+  it("keeps goals on a list of their own until they are closed", () => {
+    const states = taskStates(tasks);
+    const section = (id: string) =>
+      taskSection(
+        tasks.find((t) => t.id === id)!,
+        states.get(id)!,
+      );
+    expect(section("live")).toBe("goals");
+    expect(section("milestone")).toBe("goals");
+    expect(
+      taskSection(
+        task("reached", { kind: "goal", status: "done" }),
+        taskStates([task("reached", { kind: "goal", status: "done" })]).get(
+          "reached",
+        )!,
+      ),
+    ).toBe("closed");
   });
 });
 

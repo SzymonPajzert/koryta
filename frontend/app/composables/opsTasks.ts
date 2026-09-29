@@ -40,6 +40,7 @@ export function useOpsTasks() {
 
   const sections = computed(() => {
     const lists: Record<TaskSection, Task[]> = {
+      goals: [],
       mine: [],
       agents: [],
       blocked: [],

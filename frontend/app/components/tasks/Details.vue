@@ -5,7 +5,8 @@
         <span class="task-fact__label">Rodzaj</span>
         {{ taskKindConfig[task.kind].title }}
       </div>
-      <div class="task-fact">
+      <!-- A goal is nobody's to do: whoever does what leads to it. -->
+      <div v-if="!isGoal" class="task-fact">
         <span class="task-fact__label">Kto</span>
         {{ taskWhoConfig[task.who].title }}
       </div>
@@ -48,7 +49,7 @@
       :items="candidates"
       item-title="title"
       item-value="id"
-      label="Czeka na"
+      :label="isGoal ? 'Prowadzą do niego' : 'Czeka na'"
       :hint="waitingHint"
       persistent-hint
       multiple
@@ -88,6 +89,9 @@
         label
         variant="outlined"
         class="task-details__chip"
+        :prepend-icon="
+          dependent.kind === 'goal' ? taskKindConfig.goal.icon : undefined
+        "
         :title="dependent.title"
         @click="emit('select', dependent.id)"
       >
@@ -195,6 +199,16 @@
       </v-btn>
       <v-spacer />
       <v-btn
+        v-if="isGoal && task.dependsOn.length > 0"
+        size="small"
+        variant="text"
+        :prepend-icon="mdiFilterOutline"
+        data-task-show-goal
+        @click="emit('show-goal')"
+      >
+        Pokaż jego zadania
+      </v-btn>
+      <v-btn
         size="small"
         variant="text"
         :prepend-icon="mdiPencilOutline"
@@ -211,6 +225,7 @@
 import { computed, ref, watch } from "vue";
 import {
   mdiCheck,
+  mdiFilterOutline,
   mdiLinkVariant,
   mdiPencilOutline,
   mdiSourceBranch,
@@ -219,12 +234,14 @@ import {
   formatTaskDate,
   linkify,
   taskActorLabel,
+  taskChoices,
   taskKindConfig,
   taskStatusConfig,
   taskWhoConfig,
 } from "~/utils/taskStyle";
 import {
   dependencyChange,
+  goalProgress,
   isClosed,
   taskAnchor,
   type Task,
@@ -251,15 +268,14 @@ const emit = defineEmits<{
   edit: [];
   /** Another task was clicked, to be opened instead. */
   select: [id: string];
+  /** Show only what leads to this goal. */
+  "show-goal": [];
 }>();
 
+const isGoal = computed(() => props.task.kind === "goal");
+
 const candidates = computed(() =>
-  props.tasks
-    .filter((t) => t.id !== props.task.id)
-    // Closed ones stay pickable - a dependency on something done is a record
-    // of the order things happened in - but after the open ones.
-    .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)))
-    .map((t) => ({ id: t.id, title: t.title })),
+  taskChoices(props.tasks.filter((t) => t.id !== props.task.id)),
 );
 
 const blockerIds = computed(
@@ -267,6 +283,13 @@ const blockerIds = computed(
 );
 
 const waitingHint = computed(() => {
+  if (isGoal.value) {
+    // Counted through the whole chain, not only the tasks named here: the
+    // last step of a long chain would otherwise say the goal is one away.
+    const { closed, total } = goalProgress(props.tasks, props.task.id);
+    if (total === 0) return "Dodaj zadania, które prowadzą do tego celu.";
+    return `Zamknięte ${closed} z ${total} zadań, które do niego prowadzą.`;
+  }
   const open = props.state.blockers.length;
   if (props.task.dependsOn.length === 0) return "Nic - można zaczynać.";
   if (open === 0) return "Wszystko, na co czekało, jest zamknięte.";
@@ -320,7 +343,7 @@ const history = computed(() => {
 const actions = computed(() => {
   const all: Record<TaskStatus, { title: string; primary?: boolean }> = {
     doing: { title: "Zaczynam" },
-    done: { title: "Zrobione", primary: true },
+    done: { title: isGoal.value ? "Osiągnięty" : "Zrobione", primary: true },
     parked: { title: "Odłóż" },
     dropped: { title: "Porzuć" },
     open: { title: isClosed(props.task) ? "Otwórz ponownie" : "Wznów" },
@@ -332,7 +355,11 @@ const actions = computed(() => {
     done: ["open"],
     dropped: ["open"],
   };
-  return offered[props.task.status].map((status) => ({
+  // Nobody works on a goal itself, so it is never started.
+  const statuses = offered[props.task.status].filter(
+    (status) => !(isGoal.value && status === "doing"),
+  );
+  return statuses.map((status) => ({
     status,
     ...all[status],
     // Back from "w toku" to the list is a step back, not a reopening.

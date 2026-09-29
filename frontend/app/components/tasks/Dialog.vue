@@ -46,7 +46,7 @@
               </v-btn>
             </v-btn-toggle>
           </div>
-          <div>
+          <div v-if="form.kind !== 'goal'">
             <div class="text-caption text-medium-emphasis mb-1">Kto</div>
             <v-btn-toggle
               v-model="form.who"
@@ -72,7 +72,12 @@
           :items="candidates"
           item-title="title"
           item-value="id"
-          label="Czeka na"
+          :label="form.kind === 'goal' ? 'Prowadzą do niego' : 'Czeka na'"
+          :hint="
+            form.kind === 'goal'
+              ? 'Zadania, które trzeba zrobić, żeby osiągnąć ten cel.'
+              : undefined
+          "
           multiple
           chips
           closable-chips
@@ -128,9 +133,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
-import { taskKindConfig, taskWhoConfig } from "~/utils/taskStyle";
+import { taskChoices, taskKindConfig, taskWhoConfig } from "~/utils/taskStyle";
 import {
-  isClosed,
   taskEditPatch,
   type Task,
   type TaskCreate,
@@ -190,10 +194,7 @@ watch(open, (isOpen) => {
 });
 
 const candidates = computed(() =>
-  props.tasks
-    .filter((t) => t.id !== props.task?.id)
-    .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)))
-    .map((t) => ({ id: t.id, title: t.title })),
+  taskChoices(props.tasks.filter((t) => t.id !== props.task?.id)),
 );
 
 const trimmed = (values: string[]) => [

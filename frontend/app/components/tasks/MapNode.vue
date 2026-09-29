@@ -3,7 +3,11 @@
     class="task-node"
     :class="[
       `task-node--${taskSectionConfig[section].tone}`,
-      { 'task-node--selected': selected, 'task-node--faded': faded },
+      {
+        'task-node--goal': task.kind === 'goal',
+        'task-node--selected': selected,
+        'task-node--faded': faded,
+      },
     ]"
     :style="{ width: `${TASK_NODE_WIDTH}px`, height: `${TASK_NODE_HEIGHT}px` }"
     :data-task-node="task.id"
@@ -21,11 +25,21 @@
     />
     <div class="task-node__head">
       <v-icon size="x-small" :icon="taskKindConfig[task.kind].icon" />
-      <span>{{ taskSectionConfig[section].short }}</span>
-      <span v-if="task.status === 'doing'">· w toku</span>
-      <span v-if="state.blockers.length > 0">
-        · czeka na {{ state.blockers.length }}
-      </span>
+      <!-- A goal says how far what leads to it has got, rather than what it
+           waits on: it waits on all of it. -->
+      <template v-if="progress">
+        <span>{{ goalWord }}</span>
+        <span v-if="progress.total > 0">
+          · {{ progress.closed }}/{{ progress.total }}
+        </span>
+      </template>
+      <template v-else>
+        <span>{{ taskSectionConfig[section].short }}</span>
+        <span v-if="task.status === 'doing'">· w toku</span>
+        <span v-if="state.blockers.length > 0">
+          · czeka na {{ state.blockers.length }}
+        </span>
+      </template>
     </div>
     <div class="task-node__title">{{ task.title }}</div>
     <Handle
@@ -39,23 +53,37 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { Handle, Position, type ValidConnectionFunc } from "@vue-flow/core";
 import { TASK_NODE_HEIGHT, TASK_NODE_WIDTH } from "~/utils/taskGraph";
 import { taskKindConfig, taskSectionConfig } from "~/utils/taskStyle";
 import type { Task, TaskSection, TaskState } from "~~/shared/tasks";
 
 /** A task's card on the map: its list's colour down the side, what it is,
- * whether it waits, and its title. */
-defineProps<{
+ * whether it waits, and its title. A goal is a dark card instead: it is where
+ * the arrows lead. */
+const props = defineProps<{
   task: Task;
   state: TaskState;
   section: TaskSection;
+  /** For a goal: of the tasks that lead to it, how many are closed. */
+  progress?: { closed: number; total: number } | null;
   selected?: boolean;
   /** Shown only because it is joined to a task the filter kept. */
   faded?: boolean;
   /** Whether an arrow being drawn onto one of this card's edges may land. */
   validConnection?: ValidConnectionFunc;
 }>();
+
+const goalWord = computed(() =>
+  props.task.status === "done"
+    ? "Cel osiągnięty"
+    : props.task.status === "dropped"
+      ? "Cel porzucony"
+      : props.task.status === "parked"
+        ? "Cel odłożony"
+        : "Cel",
+);
 </script>
 
 <style>
@@ -96,6 +124,29 @@ defineProps<{
 
 .task-node--faded {
   opacity: 0.45;
+}
+
+/* A goal: the one dark card, so that where the chains lead is what the eye
+ * finds first. Its colour is kept for the handles and the outline. */
+.task-node--goal {
+  --task-ink: var(--v-theme-ink-strong);
+  border-color: rgb(var(--v-theme-ink-strong));
+  background: rgb(var(--v-theme-ink-strong));
+  box-shadow: none;
+}
+
+.task-node--goal .task-node__head,
+.task-node--goal .task-node__title {
+  color: #fff;
+}
+
+.task-node--goal .task-node__title {
+  font-weight: 600;
+}
+
+.task-node--goal.task-node:hover,
+.task-node--goal.task-node--selected {
+  background: rgb(var(--v-theme-ink-neutral));
 }
 
 .task-node:hover,

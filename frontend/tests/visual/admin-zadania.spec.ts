@@ -53,8 +53,8 @@ test("zadania-mapa", ZADANIA, async ({ page }, testInfo) => {
 
   const deploy = page.locator('[data-task-node="deploy-indeksow"]');
   await expect(deploy).toBeVisible({ timeout: 30_000 });
-  // Both chains are drawn: two arrows in the first, one in the second.
-  await expect(page.locator(".task-edge")).toHaveCount(3);
+  // Both chains are drawn: two arrows in each, the second ending in a goal.
+  await expect(page.locator(".task-edge")).toHaveCount(4);
 
   await deploy.click();
   await expect(

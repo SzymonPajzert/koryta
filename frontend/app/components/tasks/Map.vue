@@ -22,6 +22,7 @@
           :task="data.task"
           :state="data.state"
           :section="data.section"
+          :progress="data.progress"
           :selected="data.task.id === selected"
           :faded="data.faded"
           :valid-connection="isValidConnection"
@@ -123,6 +124,7 @@ import {
 } from "~/utils/taskGraph";
 import {
   dependencyProblem,
+  goalProgress,
   isClosed,
   taskSection,
   type Task,
@@ -195,6 +197,9 @@ const nodes = computed<Node[]>(() => {
         task,
         state,
         section: taskSection(task, state),
+        // Over the whole list, closed tasks included: they are the progress.
+        progress:
+          task.kind === "goal" ? goalProgress(props.all, task.id) : null,
         faded: props.faded?.has(task.id) ?? false,
       },
     };
