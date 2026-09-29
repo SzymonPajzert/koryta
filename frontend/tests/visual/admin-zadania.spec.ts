@@ -6,8 +6,9 @@ import { readyForFullPage } from "./fullPage";
 import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
 
-/** /admin/zadania, the owner's task list: the lists with one task open, and
- * the map of what waits on what with one task picked.
+/** /admin/zadania, the owner's task list: the lists with one task open, the
+ * map of what waits on what with one task picked, and the map with every
+ * chain folded.
  *
  * The tasks live in their own database, which the seed leaves empty, so the
  * list is answered from ./fixtures/opsTasks.ts. The page is rendered in the
@@ -63,6 +64,33 @@ test("zadania-mapa", ZADANIA, async ({ page }, testInfo) => {
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("zadania-mapa.png", { fullPage: true });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+test("zadania-mapa-zwiniete", ZADANIA, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await logIn(page, USERS.admin, "/admin/zadania?widok=mapa");
+
+  await expect(page.locator('[data-task-node="deploy-indeksow"]')).toBeVisible({
+    timeout: 30_000,
+  });
+  // Each chain into the task it ends in: the upload with the deploy and the
+  // merge under it, the goal with the decision and the upload of links.
+  await page.locator("[data-task-fold-all]").click();
+  await expect(page.locator('[data-task-node="deploy-indeksow"]')).toHaveCount(
+    0,
+  );
+  await expect(
+    page.locator('[data-task-node="upload-nazw-spolek"] [data-task-fold]'),
+  ).toHaveText("+2");
+  // Both stacks float over the map too, the goal first.
+  await expect(page.locator("[data-task-mark]")).toHaveCount(2);
+
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("zadania-mapa-zwiniete.png", {
+    fullPage: true,
+  });
 
   await expectFitsThePhone(page, testInfo);
 });
