@@ -8,9 +8,11 @@ turns a visible 500 into a silent omission is not a fix.
 """
 
 import collections
+import json
 from unittest.mock import MagicMock
 
-from uploader import PersonUploader
+import uploader as uploader_module
+from uploader import PersonUploader, sendable_elections
 
 
 def uploader() -> PersonUploader:
@@ -107,3 +109,61 @@ def test_the_report_names_what_was_dropped(capsys):
     err = capsys.readouterr().err
     assert "2 candidacies were not placed" in err
     assert "Samorząd 2010 (no-teryt)" in err
+
+
+def candidacy(year: str | None, **fields) -> dict:
+    election = {"election_type": "Samorząd", **fields}
+    if year is not None:
+        election["election_year"] = year
+    return election
+
+
+def test_1998_is_sent_and_the_old_voivodeships_are_not():
+    # 1998's local elections were fought in the powiaty the site has nodes for;
+    # 1994's in the 49 voivodeships the 1999 reform abolished, whose codes name
+    # no region, and the parliamentary lists of the 1990s name none at all.
+    elections = [
+        candidacy("1994", teryt="4368"),
+        candidacy("1998", teryt="1463"),
+        candidacy("1997", election_type="Sejm"),
+        candidacy("2002", teryt="1463"),
+    ]
+
+    assert [e["election_year"] for e in sendable_elections(elections)] == [
+        "1998",
+        "2002",
+    ]
+
+
+def test_a_candidacy_without_a_year_is_not_sent():
+    # An empty string used to raise out of `int()` and end the person's upload.
+    assert sendable_elections([candidacy(None), candidacy("")]) == []
+
+
+def test_the_request_carries_the_1998_candidacy(monkeypatch):
+    sent = {}
+
+    def post(url, data, headers):
+        sent["body"] = json.loads(data)
+        return response(personId="NaL8BaRWt3EaLMN6sxaq")
+
+    monkeypatch.setattr(uploader_module.requests, "post", post)
+
+    uploader().submit_payload(
+        "http://localhost:3000/api/ingest/person",
+        {
+            "name": "Adam Jan Kosior",
+            "korytaId": "NaL8BaRWt3EaLMN6sxaq",
+            "companies": [],
+            "elections": [
+                candidacy("2002", teryt="1463", committee="KWW PRAWY RADOM"),
+                candidacy("1998", teryt="1463", committee=None),
+                candidacy("1994", teryt="4368"),
+            ],
+        },
+    )
+
+    assert sent["body"]["elections"] == [
+        candidacy("2002", teryt="1463", committee="KWW PRAWY RADOM"),
+        candidacy("1998", teryt="1463"),
+    ]
