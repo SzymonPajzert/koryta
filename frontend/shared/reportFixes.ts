@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na pasku nad grafem przycisk „Opisy na liniach” ma zawsze ten sam napis, a pole wyboru przy napisie pokazuje, czy opisy są włączone. Kliknięcie nie zmienia już jego szerokości, więc przyciski nie przeskakują między rzędami, a na telefonie „2 kroki” mieści się w pasku zamiast być uciętym.",
+    fixes: ["60beJLEWtp6lNuWyz15L"],
+  },
+  {
+    change:
       "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
     fixes: ["g29Mn5m5y6EKQegAviQn"],
   },

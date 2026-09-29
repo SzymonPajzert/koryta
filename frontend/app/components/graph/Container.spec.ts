@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
+import type { VueWrapper } from "@vue/test-utils";
+import { clearNuxtState } from "#app";
 import { ref, computed } from "vue";
+import { mdiCheckboxBlankOutline, mdiCheckboxMarked } from "@mdi/js";
 import Container from "./Container.vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
+import { brand, contrastRatio, themeColors } from "~~/shared/colors";
 
 const vuetify = createVuetify({ components, directives });
 
@@ -38,6 +42,9 @@ describe("GraphContainer unit tests", () => {
     asked.length = 0;
     nodes = { "2": { name: "Orlen", type: "rect", color: "#6b7a83" } };
     edges = [];
+    // Shared state, so that a reader keeps the descriptions across pages -
+    // and so across tests too, which all run in one Nuxt app. Each starts off.
+    clearNuxtState("graph-edge-labels");
   });
 
   it("names what the reader picked, and offers its page", async () => {
@@ -186,10 +193,78 @@ describe("GraphContainer unit tests", () => {
 
     // Off to begin with: at two hops there are more labels than there is room.
     expect(canvas.props("edgeLabels")).toBe(false);
-    expect(toggle.text()).toContain("Opisy powiązań");
+    expect(toggle.attributes("aria-checked")).toBe("false");
 
     await toggle.trigger("click");
     expect(canvas.props("edgeLabels")).toBe(true);
-    expect(toggle.text()).toContain("Ukryj opisy");
+    expect(toggle.attributes("aria-checked")).toBe("true");
+  });
+
+  it("says whether the descriptions are on with its box, not its words", async () => {
+    const component = await mountSuspended(Container, {
+      global: { plugins: [vuetify], stubs: { GraphCanvas: true } },
+      props: { focusNodeId: "1" },
+    });
+
+    const button = edgeLabelsButton(component);
+    const off = {
+      text: button.text(),
+      box: boxOf(button),
+    };
+
+    await button.trigger("click");
+
+    // The same words either way. They used to swap for „Ukryj opisy”, 29px
+    // narrower, which was enough to move the controls to the other row of the
+    // bar on every click and the canvas up or down with them.
+    expect(off.text).toContain("Opisy na liniach");
+    expect(button.text()).toBe(off.text);
+    // So it is the box that says which way it is set.
+    expect(off.box).toBe(mdiCheckboxBlankOutline);
+    expect(boxOf(button)).toBe(mdiCheckboxMarked);
+  });
+
+  it("draws the ticked toggle in an ink that can be read", async () => {
+    const component = await mountSuspended(Container, {
+      global: { plugins: [vuetify], stubs: { GraphCanvas: true } },
+      props: { focusNodeId: "1" },
+    });
+
+    const button = edgeLabelsButton(component);
+    await button.trigger("click");
+
+    // It used to be `primary`, the pale sage fill: 1.85:1 on white, so the
+    // label looked switched off at the moment it had been switched on. A
+    // property rather than a hex, as in the home explorer's tab strip.
+    const token = button
+      .classes()
+      .find((name: string) => name.startsWith("text-") && name !== "text-none")
+      ?.replace(/^text-/, "");
+    expect(token, "the ticked toggle carries no colour class").toBeDefined();
+    const palette: Record<string, string> = { ...themeColors, ...brand };
+    const hex = palette[token!];
+    expect(hex, `${token} is not a colour this test knows`).toBeDefined();
+    expect(contrastRatio(hex!, "#ffffff")).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+/** The descriptions toggle as a component, for its props: see `boxOf`. */
+function edgeLabelsButton(
+  component: Awaited<ReturnType<typeof mountSuspended>>,
+): VueWrapper {
+  const button = component
+    .findAllComponents({ name: "VBtn" })
+    .find(
+      (btn: VueWrapper) =>
+        btn.attributes("data-testid") === "graph-edge-labels-toggle",
+    );
+  if (!button) throw new Error("no descriptions toggle in the bar");
+  return button;
+}
+
+/** The box the toggle is drawn with, read off its props rather than its
+ * markup: this spec's Vuetify has no svg icon set, so it draws an mdi path as a
+ * class name. */
+function boxOf(button: VueWrapper): string | undefined {
+  return (button.props() as { prependIcon?: string }).prependIcon;
+}
