@@ -840,9 +840,9 @@ export const QA_ITEMS: QaItem[] = [
       "prostu nic w niej nie rysuje.",
     steps: [
       "Otwórz stronę osoby z grafem, np. /osoba/boguslaw-nadolnik-aiEctjVbbp5CngABStah.",
-      "Kliknij „Opisy powiązań”.",
+      "Zaznacz „Opisy na liniach”.",
       "Nad liniami mają pojawić się podpisy, np. „Zatrudniony” albo „Startował w wyborach”.",
-      "Kliknij „Ukryj opisy” - podpisy znikają, a graf się nie przeładowuje.",
+      "Odznacz „Opisy na liniach” - podpisy znikają, a graf się nie przeładowuje.",
     ],
     link: "/osoba/boguslaw-nadolnik-aiEctjVbbp5CngABStah",
     area: "public",
@@ -1356,8 +1356,8 @@ export const QA_ITEMS: QaItem[] = [
       "przechodzeniu między stronami.",
     steps: [
       "Wejdź na stronę osoby z grafem i sprawdź, że linie są bez podpisów.",
-      "Kliknij „Opisy powiązań” na pasku nad grafem - przy liniach mają pojawić się napisy typu „pracuje” czy „kandydował”.",
-      "Przejdź na stronę innej osoby: podpisy mają zostać włączone, a przycisk ma mówić „Ukryj opisy”.",
+      "Zaznacz „Opisy na liniach” na pasku nad grafem - przy liniach mają pojawić się napisy typu „pracuje” czy „kandydował”.",
+      "Przejdź na stronę innej osoby: podpisy mają zostać włączone, a pole przy „Opisy na liniach” zaznaczone.",
     ],
     area: "public",
   },

@@ -84,17 +84,31 @@
         <!-- Off by default: at two hops there are more labels than there is
              room for them, and the legend to the left already names every line
              style on the canvas. This is for the reader who wants a particular
-             line spelled out - an employment's job title, say. -->
+             line spelled out - an employment's job title, say.
+
+             One label whichever way it is set, and a box that says which. It
+             used to swap „Opisy powiązań” for „Ukryj opisy”, 29px narrower, so
+             every click could move these controls to the other row of the bar
+             and the canvas up or down with them. Nor did either wording say
+             whether the descriptions were on: a reader asked what the button
+             does at all. The box is the one „Ukryj moje zmiany” has on
+             /aktywnosc. Ticked, it is ink-sage rather than `primary`, which
+             painted „Ukryj opisy” in the pale sage fill at 1.85:1 - a label
+             that looked switched off at the moment it was switched on. -->
         <v-btn
           class="text-none"
           data-testid="graph-edge-labels-toggle"
           size="small"
           variant="text"
           density="comfortable"
-          :prepend-icon="mdiTagTextOutline"
-          :color="edgeLabels ? 'primary' : undefined"
-          :aria-pressed="edgeLabels"
-          :text="edgeLabels ? 'Ukryj opisy' : 'Opisy powiązań'"
+          role="checkbox"
+          :aria-checked="edgeLabels"
+          :prepend-icon="
+            edgeLabels ? mdiCheckboxMarked : mdiCheckboxBlankOutline
+          "
+          :color="edgeLabels ? 'ink-sage' : undefined"
+          title="Pokaż przy każdej linii, co to za powiązanie"
+          text="Opisy na liniach"
           @click="edgeLabels = !edgeLabels"
         />
         <!-- Only a neighbourhood has a reach to choose. A topic's or an
@@ -166,9 +180,10 @@
 import { ref } from "vue";
 import {
   mdiArrowRight,
+  mdiCheckboxBlankOutline,
+  mdiCheckboxMarked,
   mdiFitToScreenOutline,
   mdiPlusCircleOutline,
-  mdiTagTextOutline,
 } from "@mdi/js";
 import { useGraph } from "~/composables/graph";
 import { entityGlyph } from "~/utils/entityIcon";
@@ -395,8 +410,13 @@ const selectedHref = computed(() => {
   flex: 0 0 auto;
 }
 
+/* Wrapping, for a phone. The three controls need about 340px in one line and a
+   393px phone gives the bar 303px, so unwrapped „2 kroki” ran past the bar's
+   edge and was clipped by the panel. The line breaks the same way whichever
+   way the descriptions are set, because the toggle no longer changes width. */
 .graph-panel__controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
