@@ -42,6 +42,17 @@
     <div class="task-bar__actions">
       <!-- Each only while there is something for it to do. -->
       <v-btn
+        v-if="focused"
+        size="small"
+        variant="flat"
+        :prepend-icon="mdiArrowExpandAll"
+        :title="`Pokaż znów całą mapę, nie tylko „${focused}” i to, na co czeka`"
+        data-task-unfocus
+        @click="emit('unfocus')"
+      >
+        Cała mapa
+      </v-btn>
+      <v-btn
         v-if="canFoldAll"
         size="small"
         variant="flat"
@@ -68,6 +79,7 @@
 <script setup lang="ts">
 import {
   mdiArrowCollapseRight,
+  mdiArrowExpandAll,
   mdiArrowExpandLeft,
   mdiCardMultipleOutline,
 } from "@mdi/js";
@@ -77,7 +89,8 @@ import { taskKindConfig } from "~/utils/taskStyle";
  * that an arrow can be drawn to one of them from anywhere on the map without
  * finding it first - drop it on the name here - and a click brings it into
  * view. Beside them, folding every chain into the task it ends in, or
- * spreading all of it out again. */
+ * spreading all of it out again, and the way back from a map focused on one
+ * task. */
 
 export type TaskMark = {
   id: string;
@@ -96,12 +109,15 @@ defineProps<{
   dragging?: boolean;
   /** The mark under the arrow's end, and whether it may land there. */
   drop?: { id: string; valid: boolean } | null;
+  /** The title of the task the map is focused on, if it is. */
+  focused?: string | null;
   canFoldAll?: boolean;
   canUnfoldAll?: boolean;
 }>();
 
 const emit = defineEmits<{
   pick: [id: string];
+  unfocus: [];
   "fold-all": [];
   "unfold-all": [];
 }>();

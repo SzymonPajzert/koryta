@@ -41,25 +41,49 @@
           · czeka na {{ state.blockers.length }}
         </span>
       </template>
-      <!-- Folds the card together with everything that leads only to it, or
-           spreads it out again. A button of its own, so that it neither
-           picks the card nor starts an arrow. -->
-      <button
-        v-if="stacked || foldable"
-        type="button"
-        class="task-node__fold nodrag nopan"
-        :class="{ 'task-node__fold--stacked': stacked }"
-        :title="foldLabel"
-        :aria-label="foldLabel"
-        data-task-fold
-        @click.stop="stacked ? emit('unfold') : emit('fold')"
-      >
-        <span v-if="stacked">+{{ stacked }}</span>
-        <v-icon
-          size="14"
-          :icon="stacked ? mdiArrowExpandLeft : mdiArrowCollapseRight"
-        />
-      </button>
+      <span class="task-node__actions">
+        <!-- Leaves on the map only this card and what it waits on, or brings
+             the rest back. -->
+        <button
+          v-if="focused || focusable"
+          type="button"
+          class="task-node__focus nodrag nopan"
+          :class="{ 'task-node__focus--on': focused }"
+          :title="focusLabel"
+          :aria-label="focusLabel"
+          :aria-pressed="focused"
+          data-task-focus
+          @click.stop="focused ? emit('unfocus') : emit('focus')"
+        >
+          <v-icon
+            size="14"
+            :icon="
+              focused
+                ? mdiImageFilterCenterFocus
+                : mdiImageFilterCenterFocusWeak
+            "
+          />
+        </button>
+        <!-- Folds the card together with everything that leads only to it,
+             or spreads it out again. Buttons of their own, so that neither
+             picks the card nor starts an arrow. -->
+        <button
+          v-if="stacked || foldable"
+          type="button"
+          class="task-node__fold nodrag nopan"
+          :class="{ 'task-node__fold--stacked': stacked }"
+          :title="foldLabel"
+          :aria-label="foldLabel"
+          data-task-fold
+          @click.stop="stacked ? emit('unfold') : emit('fold')"
+        >
+          <span v-if="stacked">+{{ stacked }}</span>
+          <v-icon
+            size="14"
+            :icon="stacked ? mdiArrowExpandLeft : mdiArrowCollapseRight"
+          />
+        </button>
+      </span>
     </div>
     <div class="task-node__title">{{ task.title }}</div>
     <Handle
@@ -75,7 +99,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Handle, Position, type ValidConnectionFunc } from "@vue-flow/core";
-import { mdiArrowCollapseRight, mdiArrowExpandLeft } from "@mdi/js";
+import {
+  mdiArrowCollapseRight,
+  mdiArrowExpandLeft,
+  mdiImageFilterCenterFocus,
+  mdiImageFilterCenterFocusWeak,
+} from "@mdi/js";
 import { polishCounting } from "~/composables/polish";
 import { TASK_NODE_HEIGHT, TASK_NODE_WIDTH } from "~/utils/taskGraph";
 import { taskKindConfig, taskSectionConfig } from "~/utils/taskStyle";
@@ -91,7 +120,8 @@ const props = defineProps<{
   /** For a goal: of the tasks that lead to it, how many are closed. */
   progress?: { closed: number; total: number } | null;
   selected?: boolean;
-  /** Shown only because it is joined to a task the filter kept. */
+  /** Shown only because it is joined to a task the filter kept, or because it
+   * is on a focused map, which a filter only fades. */
   faded?: boolean;
   /** Whether an arrow being drawn onto one of this card's edges may land. */
   validConnection?: ValidConnectionFunc;
@@ -99,9 +129,19 @@ const props = defineProps<{
   foldable?: number;
   /** How many tasks are folded into it: it is drawn as a stack. */
   stacked?: number;
+  /** Whether an arrow on the map leads into it, so that focusing on it would
+   * leave something beside the card itself. */
+  focusable?: boolean;
+  /** The map shows only this task and what it waits on. */
+  focused?: boolean;
 }>();
 
-const emit = defineEmits<{ fold: []; unfold: [] }>();
+const emit = defineEmits<{
+  fold: [];
+  unfold: [];
+  focus: [];
+  unfocus: [];
+}>();
 
 const tasksWord = (count: number) =>
   polishCounting(count, "zadanie", "zadania", "zadań");
@@ -110,6 +150,12 @@ const foldLabel = computed(() =>
   props.stacked
     ? `Rozwiń: ${tasksWord(props.stacked)} prowadzi tylko tutaj`
     : `Zwiń ${tasksWord(props.foldable ?? 0)}, które prowadzą tylko tutaj`,
+);
+
+const focusLabel = computed(() =>
+  props.focused
+    ? "Pokaż znów całą mapę"
+    : "Pokaż tylko to zadanie i to, na co czeka",
 );
 
 const goalWord = computed(() =>
@@ -238,11 +284,18 @@ const goalWord = computed(() =>
   white-space: nowrap;
 }
 
-.task-node__fold {
+.task-node__actions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   margin-inline-start: auto;
+}
+
+.task-node__fold,
+.task-node__focus {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   padding: 0 4px;
   border-radius: 4px;
   font: inherit;
@@ -252,19 +305,28 @@ const goalWord = computed(() =>
   transition: opacity 0.15s ease;
 }
 
-/* Hidden until wanted, except on a stack, where it says how many there are. */
+/* Hidden until wanted, except on a stack, where it says how many there are,
+ * and on the card the map is focused on, where it is the way back. */
 .task-node:hover .task-node__fold,
+.task-node:hover .task-node__focus,
 .task-node--selected .task-node__fold,
+.task-node--selected .task-node__focus,
 .task-node__fold:focus-visible,
-.task-node__fold--stacked {
+.task-node__focus:focus-visible,
+.task-node__fold--stacked,
+.task-node__focus--on {
   opacity: 1;
 }
 
-.task-node__fold:hover {
+.task-node__fold:hover,
+.task-node__focus:hover,
+.task-node__focus--on {
   background: rgba(var(--task-ink), 0.12);
 }
 
-.task-node--goal .task-node__fold:hover {
+.task-node--goal .task-node__fold:hover,
+.task-node--goal .task-node__focus:hover,
+.task-node--goal .task-node__focus--on {
   background: rgba(255, 255, 255, 0.2);
 }
 

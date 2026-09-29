@@ -203,7 +203,9 @@
           :all="tasks"
           :states="states"
           :selected="selectedId"
+          :focused="focusedTask?.id ?? null"
           @select="select"
+          @focus="(id) => (focus = id)"
           @connect="
             (prerequisite, dependent) => connect(prerequisite, dependent)
           "
@@ -230,8 +232,9 @@
             Przeciągnij od prawej krawędzi jednego zadania do lewej drugiego
             (albo stuknij w jedną, potem w drugą), żeby je połączyć; stuknij w
             strzałkę, żeby ją usunąć. Przycisk w rogu karty zwija w stos
-            wszystko, co prowadzi tylko do niej. Cele i stosy są też na pasku
-            nad mapą - strzałkę można upuścić tam.
+            wszystko, co prowadzi tylko do niej, a ten obok zostawia na mapie
+            tylko ją i to, na co czeka. Cele i stosy są też na pasku nad mapą -
+            strzałkę można upuścić tam.
           </span>
         </div>
       </div>
@@ -374,6 +377,8 @@ const who = computed<Who>({
 });
 const tag = stringFilter("tag");
 const goal = stringFilter("cel");
+/** The task the map is focused on, from a card's button. */
+const focus = stringFilter("skupienie");
 type Order = "najstarsze" | "najnowsze";
 const orderParam = choiceFilter<Order>("kolejnosc", "najstarsze");
 const order = computed<Order>({
@@ -475,10 +480,29 @@ const LEGEND: TaskSection[] = [
 const showClosed = ref(false);
 const onlyJoined = ref(false);
 
+/** The task the map is focused on, if the one the url names exists. */
+const focusedTask = computed(() =>
+  focus.value ? (byId.value.get(focus.value) ?? null) : null,
+);
+
 /** What the map draws: the tasks the filters keep, plus - faded - the ones
- * they are joined to, so that a chain cut by a filter still reads as one. */
+ * they are joined to, so that a chain cut by a filter still reads as one.
+ *
+ * Focused on a task, it draws that task and what it waits on instead, all of
+ * it: the filters fade what they would have left out. */
 const mapTasks = computed(() => {
   const visible = (task: Task) => showClosed.value || !isClosed(task);
+  const focused = focusedTask.value;
+  if (focused) {
+    // Walked over the tasks the map draws, so that each one shown leads to
+    // the focused task by arrows: a closed task on the way ends the walk
+    // unless closed tasks are drawn too.
+    const drawn = tasks.value.filter((t) => t.id === focused.id || visible(t));
+    const group = taskAncestors(drawn, focused.id);
+    const shown = drawn.filter((t) => t.id === focused.id || group.has(t.id));
+    const faded = new Set(shown.filter((t) => !matches(t)).map((t) => t.id));
+    return { tasks: shown, faded };
+  }
   const kept = tasks.value.filter((t) => visible(t) && matches(t));
   const keptIds = new Set(kept.map((t) => t.id));
   const faded = new Set<string>();
