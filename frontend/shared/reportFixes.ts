@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na „Problemach” w /qa wpis, który wciąż oceniasz jako „Coś nie działa”, choć jego zgłoszenie zostało już zamknięte, stoi pod nagłówkiem „Twoje problemy bez otwartego zgłoszenia”, a (i) przy nagłówku mówi, że zgłoszenie zamknięto: jeśli już działa, zmień ocenę, a jeśli nie - opisz, co wciąż jest nie tak, a opis trafi do zespołu jako nowe zgłoszenie.",
+    fixes: ["2cPCvvILR0TpRna7Y0Ie"],
+    link: "/qa?widok=problemy",
+  },
+  {
+    change:
       "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
     fixes: ["g29Mn5m5y6EKQegAviQn"],
   },
