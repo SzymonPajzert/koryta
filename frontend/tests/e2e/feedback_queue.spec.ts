@@ -210,6 +210,63 @@ test.describe("Kolejka zgłoszeń", () => {
     await expect(row.locator("[data-row-panel]")).toBeVisible();
   });
 
+  test("admin wyjmuje zgłoszenie z kolejki z jego linii i może to cofnąć", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000); // Seeds, logs in, then writes four times
+
+    const stamp = Date.now();
+    const ours = ["p", "q", "r"].map((x) => `kolejka${stamp}${x}`);
+    const [first, second, third] = ours as [string, string, string];
+    // Ranked past anything another spec leaves in the queue, next to each
+    // other, so the three keep their order among themselves.
+    const rank = 2e12 + stamp;
+    const batch = db().batch();
+    ours.forEach((id, index) =>
+      batch.set(
+        db().collection("feedback").doc(id),
+        report(stamp, `W${index}`, 3 - index, { queueRank: rank + index }),
+      ),
+    );
+    await batch.commit();
+
+    await logIn(page, USERS.admin, "/admin/opinie");
+    const middle = page.locator(
+      `[data-queue-row][data-feedback-id="${second}"]`,
+    );
+    await expect(middle).toBeVisible({ timeout: 60_000 });
+
+    // Out in one click on its line, to the reports under the queue.
+    await middle.getByRole("button", { name: "Wyjmij z kolejki" }).click();
+    await expect(
+      page.locator(`[data-inbox-row][data-feedback-id="${second}"]`),
+    ).toBeVisible();
+    await expect.poll(() => orderOf(page, ours)).toEqual([first, third]);
+    await expect.poll(() => rankOf(second)).toBeUndefined();
+
+    // And back in the place it left rather than at the end.
+    await page.getByRole("button", { name: "Cofnij" }).click();
+    await expect
+      .poll(() => orderOf(page, ours))
+      .toEqual([first, second, third]);
+    await expect
+      .poll(async () => {
+        const [a, b, c] = await Promise.all(ours.map(rankOf));
+        return a! < b! && b! < c!;
+      })
+      .toBe(true);
+
+    // The full list has the same button on a queued report's line.
+    await page.getByRole("button", { name: "Pełna lista" }).click();
+    const listed = page.locator(`#fb-${third}`);
+    await listed.getByRole("button", { name: "Wyjmij z kolejki" }).click();
+    await expect(
+      listed.getByRole("button", { name: "Do kolejki" }),
+    ).toBeVisible();
+    await expect(listed.locator("[data-queue-position]")).toHaveCount(0);
+    await expect.poll(() => rankOf(third)).toBeUndefined();
+  });
+
   test("link do zamkniętego zgłoszenia rozwija zamknięte i pokazuje je", async ({
     page,
   }) => {

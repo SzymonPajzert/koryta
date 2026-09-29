@@ -650,15 +650,32 @@ describe("FeedbackOrderList", () => {
       expect(moves(wrapper)).toEqual([[A, 2]]);
     });
 
-    it("takes a row out of the queue", async () => {
+    it("takes a row out of the queue from its line, not from the menu", async () => {
       const wrapper = await mount([A, B, C]);
 
-      const menu = await openMenu(wrapper, "b");
-      menuEntry(menu, "Wyjmij z kolejki").click();
-      await nextTick();
+      // As "+" puts a report in from its line under the queue, this takes one
+      // out from its own: a menu entry was a click too far to find.
+      await button(rowOf(wrapper, "b"), "Wyjmij z kolejki").trigger("click");
 
       expect(removals(wrapper)).toEqual([[B]]);
       expect(moves(wrapper)).toEqual([]);
+      // Once on the line is enough: the menu keeps the moves to either end.
+      const menu = await openMenu(wrapper, "b");
+      expect(
+        [...menu.querySelectorAll(".v-list-item")].map((el) =>
+          el.textContent.trim(),
+        ),
+      ).toEqual(["Na początek", "Na koniec"]);
+    });
+
+    it("has nothing to take out of the queue under it", async () => {
+      const wrapper = await mount([A], [X]);
+
+      expect(
+        rowOf(wrapper, "x")
+          .find('button[aria-label="Wyjmij z kolejki"]')
+          .exists(),
+      ).toBe(false);
     });
 
     it("greys out the end a row is already at", async () => {

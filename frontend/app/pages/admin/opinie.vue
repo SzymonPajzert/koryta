@@ -60,7 +60,7 @@
         :inbox="inbox"
         :row="reportRow"
         @move="moveTo"
-        @remove="(item) => setRank(item, null)"
+        @remove="takeOut"
       />
     </template>
 
@@ -108,7 +108,9 @@
               :key="item.id"
               v-bind="reportRow(item)"
               :can-queue="section.key === 'inbox'"
+              :can-unqueue="section.key === 'queue'"
               @queue="moveTo(item, queue.length)"
+              @unqueue="takeOut(item)"
             />
           </AdminRowList>
         </template>
@@ -128,6 +130,29 @@
 
     <v-snackbar v-model="snackbar" :timeout="4000" color="error">
       {{ snackbarText }}
+    </v-snackbar>
+    <!-- Taking a report out of the queue loses its place, which "Do kolejki"
+         would not give back - it puts a report at the end. One notice per
+         removal, keyed, so a second one gets its six seconds too: Vuetify
+         restarts the timer only when the notice opens. "Cofnij" waits out a
+         reload - see `undoUnqueue`. -->
+    <v-snackbar
+      :key="lastUnqueued.serial"
+      v-model="unqueuedShown"
+      :timeout="6000"
+      data-unqueued
+    >
+      Zgłoszenie #{{ lastUnqueued.index + 1 }} wyjęte z kolejki.
+      <template #actions>
+        <v-btn
+          variant="text"
+          :disabled="pending"
+          data-undo-unqueue
+          @click="undoUnqueue"
+        >
+          Cofnij
+        </v-btn>
+      </template>
     </v-snackbar>
   </div>
 </template>
@@ -173,12 +198,42 @@ const {
   draftNotes,
   updateAdmin,
   saveNote,
-  setRank,
   moveTo,
+  unqueued,
+  unqueue,
+  undoUnqueue,
   writesSettled,
   snackbar,
   snackbarText,
 } = useFeedbackAdmin();
+
+/** "Cofnij" is on offer for as long as the notice is up; once it goes, the
+ * place is forgotten. */
+const unqueuedShown = computed({
+  get: () => !!unqueued.value,
+  set: (shown: boolean) => {
+    if (!shown) unqueued.value = null;
+  },
+});
+
+/** What the notice says, kept past the moment the place is forgotten: it is
+ * still on screen while it fades, and would read "#1" there. */
+const lastUnqueued = ref({ index: 0, serial: 0 });
+watch(unqueued, (taken) => {
+  if (taken) lastUnqueued.value = { index: taken.index, serial: taken.serial };
+});
+
+/** Out of the queue, from a line or a drop. The line the click came from is
+ * drawn again elsewhere - under the queue - and the focus went with it, so a
+ * keyboard lands on "Cofnij": the one thing that click may need next. */
+async function takeOut(item: Feedback) {
+  const done = unqueue(item);
+  await nextTick();
+  document
+    .querySelector<HTMLElement>("[data-undo-unqueue]")
+    ?.focus({ preventScroll: true });
+  await done;
+}
 
 const showClosed = ref(false);
 const missingTarget = ref(false);

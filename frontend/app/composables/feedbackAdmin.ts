@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, ref, shallowRef } from "vue";
 import { authRequest } from "~/composables/auth";
 import { useQaChecks } from "~/composables/qa";
 import {
@@ -305,6 +305,48 @@ export function useFeedbackAdmin() {
     return setRank(item, rankForSlot(spaced, index), renumber);
   }
 
+  /** The report last taken out of the queue and the place it had there, while
+   * that can still be undone, numbered so a page can tell one removal from the
+   * next. Shallow, so that `unqueue` can tell its own entry from a later one
+   * by identity. */
+  const unqueued = shallowRef<{
+    item: Feedback;
+    index: number;
+    serial: number;
+  } | null>(null);
+  let unqueues = 0;
+
+  /** Take a report out of the queue, as one click does on its line. Nothing
+   * asks first - no other click on a line does - but this one is the only
+   * one that loses something: putting the report back in puts it at the end,
+   * not where it was. So its place is kept for `undoUnqueue`. */
+  async function unqueue(item: Feedback) {
+    const index = queue.value.findIndex((entry) => entry.id === item.id);
+    if (index < 0) return;
+    const taken = { item, index, serial: ++unqueues };
+    unqueued.value = taken;
+    await setRank(item, null);
+    // Refused: the report is back where it was, and the error says so.
+    if (unqueued.value === taken && item.queueRank !== undefined) {
+      unqueued.value = null;
+    }
+  }
+
+  /** Put the report last taken out back in the place it left. Counted among
+   * the queue as it is now, so what moved meanwhile stays moved - which is why
+   * it waits out a reload: counted among a list about to be replaced, the
+   * place would be computed from reports that are no longer where the page
+   * shows them. */
+  function undoUnqueue() {
+    const taken = unqueued.value;
+    if (!taken || pending.value) return;
+    unqueued.value = null;
+    // Onto the report as it is now: a reload may have replaced `item`.
+    const item =
+      items.value.find((entry) => entry.id === taken.item.id) ?? taken.item;
+    return moveTo(item, Math.min(taken.index, queue.value.length));
+  }
+
   /** Settles once every write made so far - ranks, statuses, notes - has been
    * answered, for a reload that must not read from before them. None of them
    * rejects: a refusal is handled where it lands. */
@@ -329,6 +371,9 @@ export function useFeedbackAdmin() {
     saveNote,
     setRank,
     moveTo,
+    unqueued,
+    unqueue,
+    undoUnqueue,
     writesSettled,
     snackbar,
     snackbarText,
