@@ -574,6 +574,12 @@ export function compareTasks(a: Task, b: Task): number {
   return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 }
 
+/** The newest task first, whatever its rank: for going through what was
+ * added lately and seeing that each one is acted on or closed. */
+export function compareNewest(a: Task, b: Task): number {
+  return b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id);
+}
+
 export type TaskSection =
   "mine" | "agents" | "blocked" | "ideas" | "parked" | "closed";
 

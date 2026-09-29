@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zadania-najnowsze",
+    title: "Zadania: najnowsze na górze listy",
+    description:
+      "Listy na /admin/zadania można ułożyć od najnowszych, żeby nic świeżo dodanego nie utonęło w starszych. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania wybierz „Najnowsze” - ostatnio dodane zadania mają być na górze każdej listy, z „dzisiaj”, „wczoraj” albo „N dni temu” na końcu wiersza.",
+    ],
+    link: "/admin/zadania?kolejnosc=najnowsze",
+    area: "admin",
+  },
+  {
     id: "zadania-lista-i-mapa",
     title: "Zadania właściciela: lista i mapa tego, co na co czeka",
     description:

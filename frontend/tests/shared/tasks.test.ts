@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   LOG_KEEP,
   applyTaskPatch,
+  compareNewest,
   compareTasks,
   dependencyChange,
   dependencyCycle,
@@ -337,6 +338,21 @@ describe("sections and order", () => {
       task("first", { rank: -5, createdAt: T1 }),
     ].sort(compareTasks);
     expect(sorted.map((t) => t.id)).toEqual(["first", "ranked", "old", "new"]);
+  });
+
+  it("puts the newest first when asked, rank or not", () => {
+    const sorted = [
+      task("old", { createdAt: T0 }),
+      task("ranked", { rank: -5, createdAt: T0 }),
+      task("b-new", { createdAt: T1 }),
+      task("a-new", { createdAt: T1 }),
+    ].sort(compareNewest);
+    expect(sorted.map((t) => t.id)).toEqual([
+      "a-new",
+      "b-new",
+      "old",
+      "ranked",
+    ]);
   });
 
   it("links to a task's row", () => {
