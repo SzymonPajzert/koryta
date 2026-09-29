@@ -43,7 +43,9 @@ does not. That is the whole reason to fetch an odpis *pełny* rather than an
 odpis *aktualny* -- it keeps the struck-out rows, so a board member who left in
 2019 is still in the document, marked. A pattern that requires ``-`` in that
 position quietly narrows the output to people serving today. On KRS 0000006301
-that is the difference between 11 people and 50.
+that is the difference between 11 people and 50. The document opens with the
+register's own list of those entries and the day the court made each one
+(`parse_entries`), which is what turns a seat's two numbers into dates.
 
 **One label carries many values.** A funkcja that changed from wiceprezes to
 prezes is two triples under one label, and concatenating them yields
@@ -271,6 +273,10 @@ class OdpisPerson:
     is_company: bool
     entry_added: str | None
     entry_removed: str | None
+    #: The days the court made those two entries, from the document's own list
+    #: of entries (`parse_entries`); None where the entry is not on it.
+    date_added: str | None = None
+    date_removed: str | None = None
 
     @property
     def current(self) -> bool:
@@ -286,6 +292,112 @@ def extract_text(source: bytes | typing.BinaryIO) -> str:
     handle = io.BytesIO(source) if isinstance(source, bytes) else source
     reader = PdfReader(handle)
     return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+@dataclass(frozen=True)
+class RegisterEntry:
+    """One entry of the register's list at the head of an odpis pełny.
+
+    Every value further down carries the numbers of the entries that
+    introduced and struck it out; this list is where those numbers get a day.
+    It names no person -- a number, a date, what the entry did, the court's case
+    number and the court -- so it is company history that is safe to share.
+    """
+
+    #: As a `Field` carries it, so the two join without a conversion.
+    number: str
+    #: The day the court made the entry ("Data dokonania wpisu"), ISO.
+    date: str
+    #: "REJESTRACJA W KRAJOWYM REJESTRZE SĄDOWYM", "ZMIANA DANYCH W REJESTRZE".
+    description: str
+    #: "Sygnatura akt", e.g. "WA.XII NS-REJ.KRS/86699/19/614".
+    case_number: str | None
+    #: "Oznaczenie sądu", unwrapped onto one line.
+    court: str | None
+
+
+#: The cells of one entry, folded, in the order the list prints them.
+_ENTRY_CELLS = {
+    "nr wpisu": "number",
+    "data dokonania wpisu": "date",
+    "opis": "description",
+    "sygnatura akt": "case_number",
+    "oznaczenie sadu": "court",
+}
+_DATE_RE = re.compile(r"^(\d{2})\.(\d{2})\.(\d{4})$")
+#: An empty cell, which the list prints as a run of dashes.
+_EMPTY_CELL_RE = re.compile(r"^-+$")
+_STATED_ON_RE = re.compile(r"Stan na dzie[ńn]\s+(\d{2})\.(\d{2})\.(\d{4})")
+
+
+def _iso(day: str) -> str | None:
+    match = _DATE_RE.match(day)
+    return f"{match[3]}-{match[2]}-{match[1]}" if match else None
+
+
+def _cell(lines: list[str]) -> str | None:
+    value = " ".join(lines)
+    return None if not value or _EMPTY_CELL_RE.match(value) else value
+
+
+def parse_entries(text: str) -> tuple[RegisterEntry, ...]:
+    """The register's list of entries, from the head of an odpis pełny.
+
+    The list comes before ``Dział 1`` and nothing else there is shaped like it;
+    after ``Dział 1``, ``Nr wpisu`` is a column header and never followed by
+    a number and a date, which is why reading stops at the first Dział. Page
+    footers interrupt the list the way they interrupt everything else, so they
+    go first, as a unit (`_PAGE_FOOTER_RE`). An entry whose number or date does
+    not read is left out rather than guessed, and a number listed twice keeps
+    its first reading.
+    """
+    normalised = _PAGE_FOOTER_RE.sub("\n", text.replace(SOFT_HYPHEN, "-"))
+    cells: list[dict[str, list[str]]] = []
+    cell: str | None = None
+    for raw in normalised.splitlines():
+        line = raw.strip()
+        if _DZIAL_RE.match(line):
+            break
+        name = _ENTRY_CELLS.get(fold(line))
+        if name == "number":
+            cells.append({})
+        if name is not None and cells:
+            cell = name
+            cells[-1].setdefault(cell, [])
+        elif cell is not None and line:
+            cells[-1][cell].append(line)
+
+    entries: dict[str, RegisterEntry] = {}
+    for found in cells:
+        number = " ".join(found.get("number", []))
+        date = _iso(" ".join(found.get("date", [])))
+        if not number.isdigit() or date is None or number in entries:
+            continue
+        case_number = _cell(found.get("case_number", []))
+        court = _cell(found.get("court", []))
+        entries[number] = RegisterEntry(
+            number=number,
+            date=date,
+            description=" ".join(found.get("description", [])),
+            case_number=case_number,
+            court=court,
+        )
+    return tuple(entries.values())
+
+
+def entry_dates(text: str) -> dict[str, str]:
+    """Entry number -> the day it was made, for dating a `Field` or a seat."""
+    return {entry.number: entry.date for entry in parse_entries(text)}
+
+
+def stated_on(text: str) -> str | None:
+    """The day the odpis speaks for ("Stan na dzień"), ISO.
+
+    A seat still open in the document is open as of this day, not as of the
+    day anybody reads the file.
+    """
+    match = _STATED_ON_RE.search(text)
+    return f"{match[3]}-{match[2]}-{match[1]}" if match else None
 
 
 def _split_versions(region: list[str]) -> tuple[Field, ...]:
@@ -513,6 +625,7 @@ def parse_people(
         an `OdpisPerson`; whatever a caller does with it must stay local.
     """
     people: list[OdpisPerson] = []
+    dates = entry_dates(text)
 
     for section in iter_sections(text):
         role = role_of(section.rubryka)
@@ -579,6 +692,8 @@ def parse_people(
                     is_company=is_company,
                     entry_added=surname.added,
                     entry_removed=surname.removed,
+                    date_added=dates.get(surname.added or ""),
+                    date_removed=dates.get(surname.removed or ""),
                 )
             )
             current = {}
