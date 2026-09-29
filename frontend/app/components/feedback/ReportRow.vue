@@ -30,6 +30,20 @@
         #{{ position }}
       </span>
       <FeedbackOrderRowSummary :item="item" :fix-state="fix?.state" />
+      <!-- On the owner's task list, in the colour of the list it is on
+           there: planned on that page, triaged on this one. -->
+      <v-icon
+        v-if="tasks?.length"
+        class="arow-fixed"
+        size="small"
+        :icon="mdiSitemapOutline"
+        :color="`ink-${taskSectionConfig[tasks[0]!.section].tone}`"
+        :title="taskLabel(tasks[0]!)"
+        :aria-label="taskLabel(tasks[0]!)"
+        role="img"
+        aria-hidden="false"
+        data-report-task-icon
+      />
     </template>
 
     <!-- Deciding that a report is worth doing should not take opening it: the
@@ -187,6 +201,25 @@
         <v-icon start :icon="mdiArrowULeftTop" />
         dotyczy zgłoszenia
       </v-chip>
+      <!-- The owner's tasks that name this report, each where it stands on
+           his list, under the icon of the list itself - the wrench a task
+           has there is this row's „Poprawka”. The report keeps its own
+           status and place here. -->
+      <v-chip
+        v-for="entry in tasks ?? []"
+        :key="entry.task.id"
+        size="x-small"
+        label
+        variant="tonal"
+        :color="`ink-${taskSectionConfig[entry.section].tone}`"
+        :to="`/admin/zadania#${taskAnchor(entry.task.id)}`"
+        :title="taskLabel(entry)"
+        :data-report-task="entry.task.id"
+      >
+        <v-icon start :icon="mdiSitemapOutline" />
+        Zadanie:
+        {{ taskStatusConfig[entry.task.status].title.toLowerCase() }}
+      </v-chip>
       <v-chip
         v-if="item.slack?.state === 'failed'"
         size="x-small"
@@ -234,6 +267,17 @@
         @update:model-value="(value: string) => emit('draft', value)"
         @blur="emit('saveNote')"
       />
+      <!-- Planned on the owner's list from now on, and triaged here still. -->
+      <v-btn
+        v-if="canAddTask"
+        size="small"
+        variant="text"
+        :prepend-icon="mdiSitemapOutline"
+        data-add-task
+        @click="emit('addTask')"
+      >
+        Dodaj do zadań
+      </v-btn>
     </template>
   </AdminExpandRow>
 </template>
@@ -247,6 +291,7 @@ import {
   mdiLinkVariant,
   mdiPlaylistPlus,
   mdiPlaylistRemove,
+  mdiSitemapOutline,
   mdiWrenchOutline,
 } from "@mdi/js";
 import {
@@ -255,6 +300,13 @@ import {
   feedbackReportLink,
   feedbackStatusConfig,
 } from "~/composables/feedback";
+import type { ReportTask } from "~/composables/reportTasks";
+import {
+  taskKindConfig,
+  taskSectionConfig,
+  taskStatusConfig,
+} from "~/utils/taskStyle";
+import { taskAnchor } from "~~/shared/tasks";
 import {
   feedbackPageLink,
   formatFeedbackDate,
@@ -296,6 +348,11 @@ defineProps<{
   /** Picked up by its line and dropped somewhere else in the queue - see
    * `FeedbackOrderList`, which listens for the drag on the row. */
   draggable?: boolean;
+  /** The tasks on the owner's list that name this report, open ones first -
+   * see `useReportTasks`. The owner's alone: nobody else is given any. */
+  tasks?: ReportTask[];
+  /** Offer "Dodaj do zadań" - to the owner, once his list is in. */
+  canAddTask?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -308,7 +365,15 @@ const emit = defineEmits<{
   draft: [note: string];
   /** The note field was left: save it if it changed. */
   saveNote: [];
+  /** Make a task of it on the owner's list. */
+  addTask: [];
 }>();
+
+/** What a task says about itself when hovered: which it is, of what kind,
+ * and where it stands - "pomysł, w toku", say. */
+const taskLabel = ({ task }: ReportTask) =>
+  `Na liście zadań (${taskKindConfig[task.kind].title.toLowerCase()}, ` +
+  `${taskStatusConfig[task.status].title.toLowerCase()}): ${task.title}`;
 
 const expanded = defineModel<boolean>("expanded", { default: false });
 

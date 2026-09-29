@@ -34,6 +34,17 @@
     <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
       {{ loadError }}
     </v-alert>
+    <!-- The owner's alone, and only a warning: the reports are all here, they
+         only cannot say which of them are on his task list. -->
+    <v-alert
+      v-if="taskLoadError"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="mb-4"
+    >
+      {{ taskLoadError }}
+    </v-alert>
     <v-alert v-if="openTruncated" type="warning" variant="tonal" class="mb-4">
       Otwartych zgłoszeń jest ponad {{ OPEN_CAP }} - lista i kolejka są
       niepełne.
@@ -154,6 +165,27 @@
         </v-btn>
       </template>
     </v-snackbar>
+
+    <!-- The form /admin/zadania adds a task with, filled in from the report,
+         with what the list has like it under the title. -->
+    <TasksDialog
+      v-if="taskListReady"
+      v-model="taskDialogOpen"
+      :draft="taskDraft"
+      :tasks="tasks"
+      :submit="submitTask"
+    >
+      <template #after-title="{ title, branches }">
+        <FeedbackTaskMatches
+          :tasks="taskMatches(title, branches)"
+          :report-id="taskReport?.id"
+          :attach-report="attachTask"
+        />
+      </template>
+    </TasksDialog>
+    <v-snackbar v-model="taskSnackbar" :timeout="6000" color="error">
+      {{ taskSnackbarText }}
+    </v-snackbar>
   </div>
 </template>
 
@@ -167,6 +199,7 @@ import {
 } from "@mdi/js";
 import { useFeedbackAdmin } from "~/composables/feedbackAdmin";
 import { sameQuery, useQueryFilters } from "~/composables/queryFilters";
+import { useReportTasks } from "~/composables/reportTasks";
 import { OPEN_CAP } from "~~/shared/feedbackQueue";
 import type { Feedback, FeedbackStatus } from "~~/shared/model";
 
@@ -234,6 +267,25 @@ async function takeOut(item: Feedback) {
     ?.focus({ preventScroll: true });
   await done;
 }
+
+/** The owner's task list, for him alone: which reports are on it, and a
+ * report made into a task there - to be planned with the rest, while the
+ * report is still worked through here. */
+const {
+  tasks,
+  ready: taskListReady,
+  loadError: taskLoadError,
+  byReport: reportTasks,
+  reportFor: taskReport,
+  dialogOpen: taskDialogOpen,
+  draft: taskDraft,
+  open: openTask,
+  submit: submitTask,
+  attach: attachTask,
+  matches: taskMatches,
+  snackbar: taskSnackbar,
+  snackbarText: taskSnackbarText,
+} = useReportTasks();
 
 const showClosed = ref(false);
 const missingTarget = ref(false);
@@ -366,6 +418,9 @@ const reportRow = (item: Feedback) => {
       updateAdmin(item, { adminStatus }),
     onDraft: (note: string) => (draftNotes.value[id] = note),
     onSaveNote: () => saveNote(item),
+    tasks: reportTasks.value.get(id),
+    canAddTask: taskListReady.value,
+    onAddTask: () => openTask(item),
   };
 };
 

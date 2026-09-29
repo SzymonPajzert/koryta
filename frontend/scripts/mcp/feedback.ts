@@ -30,6 +30,7 @@ import type {
 import { QA_ITEMS, type QaCheck, type QaItem } from "../../shared/qa";
 import { REPORT_FIXES, type ReportFix } from "../../shared/reportFixes";
 import type { Doc, FirestoreReader } from "./firestore-reader";
+import { reporterOf, type Reporter } from "../../shared/reporters";
 
 /** Every field of a report the tools read. Not `contact`, an address the
  * reporter volunteered so that we could reply; not `context.userAgent`; not
@@ -50,21 +51,10 @@ export const FEEDBACK_FIELDS = [
   "context.qa",
 ] as const;
 
-/** Whose report it is, as much as an agent needs to know. */
-export type Reporter = "owner" | "trusted" | "signed-in" | "anonymous";
-
-/** The site owner, whose reports are requests to act on, and a reviewer whose
- * reports the owner wants worked before the rest. Both are admins in
- * data/pipelines/src/set_auth_claims.py. */
-const REPORTERS: Readonly<Record<string, Reporter>> = {
-  of0BKlwqWLX21Cuml4NMHZ18xoC3: "owner",
-  REdyYP4uvMSgCEjdSoiEHqy360G3: "trusted",
-};
-
-export function reporterOf(uid: unknown): Reporter {
-  if (typeof uid !== "string" || uid === "") return "anonymous";
-  return REPORTERS[uid] ?? "signed-in";
-}
+/** Whose report it is, as much as an agent needs to know: in
+ * `shared/reporters.ts`, since a task made from a report on /admin/opinie
+ * says it too. */
+export { reporterOf, type Reporter };
 
 /** A report as the tools hand it on: no `userUid`, no `contact`. */
 export type Report = Omit<Feedback, "userUid" | "contact" | "slack"> & {
