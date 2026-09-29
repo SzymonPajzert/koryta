@@ -123,6 +123,7 @@ function emptyDetails(): RelationDetails {
     end_date: "",
     party: "",
     committee: "",
+    position: "",
     elected: false,
   };
 }
@@ -140,6 +141,7 @@ function detailsOf(edge: EdgeNode | undefined): RelationDetails {
     end_date: edge.end_date ?? "",
     party: edge.party ?? "",
     committee: edge.committee ?? "",
+    position: edge.position ?? "",
     // A stored `false` is a box somebody left unticked, not a defeat, so it
     // reads as no answer - see `elected` in shared/api.ts.
     elected: edge.elected === true,
@@ -177,9 +179,10 @@ async function submit() {
   if (!readyToSubmit.value) return;
   saving.value = true;
   error.value = null;
-  // The win only where the form showed the box. Anywhere else it is a `false`
-  // nobody saw, sent with every correction of a job title.
-  const { elected, ...fields } = details.value;
+  // The win and the kind of election only where the form showed them.
+  // Anywhere else the win is a `false` nobody saw, sent with every correction
+  // of a job title.
+  const { elected, position, ...fields } = details.value;
   const candidacy = props.edge!.type === "election";
   try {
     const result = await authRequest<EdgeUpdated>("/api/edges/update", {
@@ -187,6 +190,14 @@ async function submit() {
         edge_id: props.edge!.id,
         ...fields,
         ...(candidacy ? { elected } : {}),
+        // Only once the reader picks a different one. `edgeEditSchema` takes
+        // nothing but a kind from the list, so restating the stored value
+        // would fail every correction of a row that holds anything else - an
+        // empty kind, or „Rada sejmiku”, which the PKW headers map „Sejmik”
+        // to - over a field nobody touched.
+        ...(candidacy && position && position !== (props.edge!.position ?? "")
+          ? { position }
+          : {}),
       },
     });
     open.value = false;

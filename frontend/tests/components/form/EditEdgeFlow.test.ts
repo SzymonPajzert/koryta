@@ -72,7 +72,7 @@ describe.todo("Election Edge Form Flow", () => {
     );
 
     expect(wrapper.text()).toContain("Komitet");
-    expect(wrapper.text()).toContain("Stanowisko");
+    expect(wrapper.text()).toContain("Typ wyborów");
   });
 
   it("can fill all election details and they are correctly bound", async () => {
