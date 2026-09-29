@@ -51,6 +51,21 @@
         <v-icon :icon="mdiPlaylistPlus" />
       </v-btn>
     </template>
+    <template v-else-if="canUnqueue" #actions>
+      <!-- And the way back out, in the same place: a report that turns out
+           not to be worth its place goes back under the queue. A list with
+           buttons of its own - the queue's - puts this one among them. -->
+      <v-btn
+        icon
+        size="small"
+        variant="text"
+        aria-label="Wyjmij z kolejki"
+        title="Wyjmij z kolejki"
+        @click="emit('unqueue')"
+      >
+        <v-icon :icon="mdiPlaylistRemove" />
+      </v-btn>
+    </template>
 
     <template #meta>
       <AdminRowFact label="Rodzaj">
@@ -231,6 +246,7 @@ import {
   mdiDragVertical,
   mdiLinkVariant,
   mdiPlaylistPlus,
+  mdiPlaylistRemove,
   mdiWrenchOutline,
 } from "@mdi/js";
 import {
@@ -267,6 +283,9 @@ defineProps<{
   fixTargets?: Feedback[];
   /** Offer "Do kolejki" on the line - for a report outside the queue. */
   canQueue?: boolean;
+  /** Offer "Wyjmij z kolejki" on the line - for a report in the queue, in a
+   * list that has no buttons of its own for it. */
+  canUnqueue?: boolean;
   /** A status or note of this report is being written. */
   saving?: boolean;
   /** The report the url points at. */
@@ -282,6 +301,8 @@ defineProps<{
 const emit = defineEmits<{
   /** Put it at the end of the queue. */
   queue: [];
+  /** Take it out of the queue. */
+  unqueue: [];
   status: [status: FeedbackStatus];
   /** The note as typed so far. */
   draft: [note: string];

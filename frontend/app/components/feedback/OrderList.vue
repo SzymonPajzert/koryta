@@ -68,6 +68,18 @@
           >
             <v-icon :icon="mdiArrowDown" />
           </v-btn>
+          <!-- On the line, as "+" is on the lines under the queue: the way
+               out was a menu entry, a click too far for anybody to find. -->
+          <v-btn
+            icon
+            size="x-small"
+            variant="text"
+            aria-label="Wyjmij z kolejki"
+            title="Wyjmij z kolejki"
+            @click="emit('remove', item)"
+          >
+            <v-icon :icon="mdiPlaylistRemove" />
+          </v-btn>
           <v-menu location="bottom end">
             <template #activator="{ props: menu }">
               <v-btn
@@ -91,10 +103,6 @@
                 :disabled="index === queue.length - 1"
                 title="Na koniec"
                 @click="emit('move', item, queue.length - 1)"
-              />
-              <v-list-item
-                title="Wyjmij z kolejki"
-                @click="emit('remove', item)"
               />
             </v-list>
           </v-menu>
@@ -168,6 +176,7 @@ import {
   mdiArrowDown,
   mdiArrowUp,
   mdiDotsVertical,
+  mdiPlaylistRemove,
   mdiPlus,
 } from "@mdi/js";
 import type FeedbackReportRow from "./ReportRow.vue";
