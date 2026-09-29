@@ -15,6 +15,13 @@
           :counter="200"
           data-task-title
         />
+        <!-- What the page that opened the form has to say about the title as
+             it is typed - on /admin/opinie, the tasks that look like it. -->
+        <slot
+          name="after-title"
+          :title="form.title"
+          :branches="form.branches"
+        />
         <v-textarea
           v-model="form.body"
           label="Szczegóły"
@@ -138,6 +145,7 @@ import {
   taskEditPatch,
   type Task,
   type TaskCreate,
+  type TaskEdit,
   type TaskKind,
   type TaskPatch,
   type TaskWho,
@@ -148,6 +156,9 @@ import {
 const props = defineProps<{
   /** The task being changed; none to add one. */
   task?: Task | null;
+  /** What a new task starts as, when it is made from something else - a
+   * report on /admin/opinie. Ignored when a task is being changed. */
+  draft?: Partial<TaskEdit> | null;
   tasks: readonly Task[];
   /** Resolves true once saved, so the dialog knows to close. */
   submit: (value: TaskCreate | TaskPatch) => Promise<boolean>;
@@ -176,6 +187,7 @@ const form = reactive(empty());
 watch(open, (isOpen) => {
   if (!isOpen) return;
   const task = props.task;
+  const draft = props.draft;
   Object.assign(
     form,
     task
@@ -189,7 +201,17 @@ watch(open, (isOpen) => {
           links: [...task.links],
           branches: [...task.branches],
         }
-      : empty(),
+      : draft
+        ? {
+            ...empty(),
+            ...draft,
+            // Copies, so what is typed stays out of the draft it came from.
+            dependsOn: [...(draft.dependsOn ?? [])],
+            tags: [...(draft.tags ?? [])],
+            links: [...(draft.links ?? [])],
+            branches: [...(draft.branches ?? [])],
+          }
+        : empty(),
   );
 });
 

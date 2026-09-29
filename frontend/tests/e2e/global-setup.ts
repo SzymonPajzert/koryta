@@ -47,6 +47,10 @@ const LOGGED_IN_ROUTES = [
   // first few seconds.
   "/admin/krawedzie",
   "/admin/opinie",
+  // The owner's task list, which the opinie spec follows a report's task to.
+  // Its map pulls in vue-flow, which vite optimizes on first sight and
+  // reloads the page for - under a spec that has just arrived there.
+  "/admin/zadania",
   // The jobs overview, whose spec checks the rows as soon as it lands.
   "/admin/procesy",
   // The id does not have to resolve; the route's own chunk is what we want
