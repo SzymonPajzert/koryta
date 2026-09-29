@@ -261,8 +261,11 @@ def due_for_a_read(ledger: pd.DataFrame, updates: pd.DataFrame) -> list[str]:
 
     - a read that failed, because it is a known gap and is usually cheap to
       close;
-    - an answer the register has moved on from - named in the bulletin after
-      the day it was read - since an owner may be what changed;
+    - an answer the register has moved on from - named in the bulletin on or
+      after the day it was read, since the bulletin gives only the day and an
+      entry made that afternoon is invisible to a read that morning. An owner
+      may be what changed. The re-read carries a later date, so it cannot
+      loop: the bulletin for a day is only fetched once the day is over;
     - a number never read, **oldest first**. The queue is 700k long and the
       prize is sparse, and the prize is old: 53% of the publicly owned spółki
       in the public-service catalogue have a KRS number under 200,000 and 86%
@@ -280,7 +283,7 @@ def due_for_a_read(ledger: pd.DataFrame, updates: pd.DataFrame) -> list[str]:
     failed = sorted(status[status == STATUS_FAILED].index, key=int)
 
     known = changed[changed.index.isin(swept.index)]
-    moved = known[known > swept.reindex(known.index)]
+    moved = known[known >= swept.reindex(known.index)]
     moved_ids = sorted(set(moved.index) - set(failed), key=int)
 
     never = sorted(set(changed.index) - set(swept.index), key=int)
