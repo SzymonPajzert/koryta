@@ -6,6 +6,7 @@ import {
 } from "~~/server/utils/handlers";
 import { fetchEdgesForNode } from "~~/server/utils/edgePublication";
 import { asArray, pageIsPublic } from "~~/shared/model";
+import { normalizeUrl, normalizeUrlIgnoringPage } from "~~/shared/url";
 
 /** One article that names this node. */
 export type NodeMention = {
@@ -107,22 +108,41 @@ export default editorFreshCachedEventHandler(async (event) => {
     });
   }
 
-  /** One card per article, whichever way round the edges saying so were
-   * stored and however many relations cite it, preferring the published one -
-   * it is what the public would be shown and what decides whether the card is
-   * drawn as a draft. */
-  const byNode = new Map<string, NodeMention>();
-  for (const mention of mentions) {
-    const seen = byNode.get(mention.nodeId);
-    if (!seen || (!seen.published && mention.published)) {
-      byNode.set(mention.nodeId, mention);
-    }
-  }
+  /** One card per article. The same article reaches this list more than once
+   * in three ways, and each pass folds one of them:
+   *
+   * - one node, named by edges stored both ways round, or cited by several of
+   *   this node's relations;
+   * - two nodes for one url, which `normalizeUrl` calls the same address -
+   *   the 2026-09-29 export holds five such pairs;
+   * - a node at a numbered page of an article that is on the list at its own
+   *   address, under the same title: `/artykuly/56911/?page=1#komentarz`
+   *   folds into `/artykuly/56911/` on Dariusz Bielski's page - the second
+   *   page of its comments, and the article. The title has to be there and
+   *   agree, and one of the two has to have no `page` at all, because a site
+   *   may number its pages with `page`: „Aktualności” at `?page=2` and at
+   *   `?page=3` are two lists of news. The title could not decide on its own
+   *   either - five different Facebook pages are all stored as "Facebook",
+   *   and two PKW candidates' pages share a title too.
+   */
+  const byNode = collapse(mentions, (mention) => `id:${mention.nodeId}`);
+  const byAddress = collapse(byNode, (mention) =>
+    mention.sourceURL
+      ? `url:${normalizeUrl(mention.sourceURL)}`
+      : `id:${mention.nodeId}`,
+  );
+  const unpaged = new Set(
+    byAddress.filter((mention) => !paged(mention)).map(titleKey),
+  );
+  const cards = collapse(byAddress, (mention) => {
+    const key = titleKey(mention);
+    return key && unpaged.has(key) ? `title:${key}` : `id:${mention.nodeId}`;
+  });
 
   // Newest first, undated last: this reads as a press cuttings file, so recency
   // is the order somebody wants it in.
   return {
-    mentions: Array.from(byNode.values()).sort((a, b) => {
+    mentions: cards.sort((a, b) => {
       if (a.publishedDate === b.publishedDate) {
         return (a.name ?? "").localeCompare(b.name ?? "", "pl");
       }
@@ -132,6 +152,49 @@ export default editorFreshCachedEventHandler(async (event) => {
     }),
   } satisfies NodeMentions;
 });
+
+/** `mentions` with one card for each `key`: of the cards that share one, the
+ * preferred, in the place of the first. */
+function collapse(
+  mentions: NodeMention[],
+  key: (mention: NodeMention) => string,
+): NodeMention[] {
+  const kept = new Map<string, NodeMention>();
+  for (const mention of mentions) {
+    const card = key(mention);
+    const seen = kept.get(card);
+    if (!seen || preferred(mention, seen)) kept.set(card, mention);
+  }
+  return Array.from(kept.values());
+}
+
+/** Whether `candidate` is the better card of two for one article.
+ *
+ * The published one first - it is what the public would be shown, and what
+ * decides whether the card is drawn as a draft. Then the one at the article's
+ * own address rather than at a page of its comments. */
+function preferred(candidate: NodeMention, kept: NodeMention): boolean {
+  if (candidate.published !== kept.published) return candidate.published;
+  return paged(kept) && !paged(candidate);
+}
+
+/** The article's address without its page number, and its title - or
+ * undefined for a card that lacks either, which is folded by address alone. */
+function titleKey(mention: NodeMention): string | undefined {
+  if (!mention.sourceURL || !mention.name) return undefined;
+  return JSON.stringify([
+    normalizeUrlIgnoringPage(mention.sourceURL),
+    mention.name,
+  ]);
+}
+
+function paged(mention: NodeMention): boolean {
+  return (
+    !!mention.sourceURL &&
+    normalizeUrl(mention.sourceURL) !==
+      normalizeUrlIgnoringPage(mention.sourceURL)
+  );
+}
 
 /** The ids in a relation's `references` that can name a document.
  *
