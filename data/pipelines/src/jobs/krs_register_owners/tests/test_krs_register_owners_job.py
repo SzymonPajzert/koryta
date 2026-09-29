@@ -188,3 +188,24 @@ def test_the_jobs_flags_never_reach_the_pipelines(monkeypatch):
 def test_an_unknown_flag_is_refused_rather_than_passed_on():
     with pytest.raises(SystemExit):
         job.parser().parse_args(["--lim", "5"])
+
+
+def test_a_retried_flush_sends_the_same_bytes(monkeypatch):
+    """So `create_object` can tell its own landed write from a reused name."""
+    ticks = iter([1_800_000_000.0, 1_800_000_060.0])
+    monkeypatch.setattr(gzip.time, "time", lambda: next(ticks))  # gzip stamps it
+    sent: list[bytes] = []
+
+    def put(name: str, data: bytes) -> str:
+        sent.append(data)
+        if len(sent) == 1:
+            raise OSError("response lost")
+        return name
+
+    log = ResponseLog(put, "run-1")
+    log.add(a_read("1"))
+    with pytest.raises(OSError):
+        log.flush()
+    log.flush()
+
+    assert sent[0] == sent[1]

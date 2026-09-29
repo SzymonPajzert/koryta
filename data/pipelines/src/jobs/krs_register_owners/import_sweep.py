@@ -120,7 +120,7 @@ def reads_in_dir(root: str) -> Iterator[RegisterRead]:
     for folder, _, files in sorted(os.walk(root)):
         for name in sorted(files):
             with open(os.path.join(folder, name), "rb") as f:
-                for line in gzip.decompress(f.read()).decode("utf-8").splitlines():
+                for line in gzip.decompress(f.read()).decode("utf-8").split("\n"):
                     if line.strip():
                         yield RegisterRead.from_line(line)
 
