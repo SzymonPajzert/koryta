@@ -1,12 +1,12 @@
 /** The owner's task list (`shared/tasks.ts`), read and written by agents.
  *
  * The one place agent tooling may write to production, and only here: the
- * list lives in its own database, `ops`, and the account the writes go out as,
- * `ops-writer`, holds `roles/datastore.user` on that database alone - an IAM
- * condition on the database name - so it cannot touch the site's data whatever
- * the code here asks for. As with `firestore-reader`, gcloud impersonates it
- * and no key file exists. The one-time setup is in frontend/README.md, "Agent
- * tools".
+ * list lives in its own database, `agent-tasks`, and the account the writes
+ * go out as, `ops-writer`, holds `roles/datastore.user` on that database
+ * alone - an IAM condition on the database name - so it cannot touch the
+ * site's data whatever the code here asks for. As with `firestore-reader`,
+ * gcloud impersonates it and no key file exists. The one-time setup is in
+ * frontend/README.md, "Agent tools".
  *
  * REST, for the reason firestore-reader.ts gives. A change is made in a
  * transaction that reads the whole list, so what it checks - that a new

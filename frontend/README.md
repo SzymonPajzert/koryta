@@ -330,11 +330,12 @@ indexes once this merges" - adds it there instead of only to its notes:
   a line to its history. A dependency that would close a loop is refused.
 
 This is the one thing agents write to production, and it lives in its own
-database, `ops`, so that the account they write as cannot touch the site's
-data: `ops-writer` holds `roles/datastore.user` under an IAM condition naming
-that database alone. It is also out of the nightly export. The page reads the
-same documents through `/api/ops/tasks/*`, which only the `owner` claim opens
-(`data/pipelines/src/set_auth_claims.py`); other administrators get a 403.
+database, `agent-tasks`, so that the account they write as cannot touch the
+site's data: `ops-writer` holds `roles/datastore.user` under an IAM condition
+naming that database alone. It is also out of the nightly export. The page
+reads the same documents through `/api/ops/tasks/*`, which only the `owner`
+claim opens (`data/pipelines/src/set_auth_claims.py`); other administrators
+get a 403.
 
 Once, as a project owner:
 
@@ -351,7 +352,7 @@ gcloud iam service-accounts add-iam-policy-binding \
   ops-writer@koryta-pl.iam.gserviceaccount.com --project=koryta-pl \
   --member=serviceAccount:dev-workflow@koryta-pl.iam.gserviceaccount.com \
   --role=roles/iam.serviceAccountTokenCreator
-# From the repo root: rules that shut the browser out of `ops` entirely.
+# From the repo root: rules that shut the browser out of `agent-tasks` entirely.
 frontend/node_modules/.bin/firebase deploy --only firestore --config firebase.ops.json
 # And the `owner` claim, with application default credentials:
 (cd data/pipelines && uv run set_auth_claims)

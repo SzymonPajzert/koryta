@@ -127,12 +127,12 @@ describe("/api/ops/tasks", () => {
     expect(mockGetFirestore).not.toHaveBeenCalled();
   });
 
-  it("lists the tasks from the ops database, times as ISO strings", async () => {
+  it("lists the tasks from the agent-tasks database, times as ISO strings", async () => {
     stored("merge-x", {
       log: [{ at: at("2026-09-28T09:00:00Z"), by: "owner", text: "Hi." }],
     });
     const { tasks } = await call(listHandler);
-    expect(mockGetFirestore).toHaveBeenCalledWith("ops");
+    expect(mockGetFirestore).toHaveBeenCalledWith("agent-tasks");
     expect(tasks).toEqual([
       expect.objectContaining({
         id: "merge-x",
