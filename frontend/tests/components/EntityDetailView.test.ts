@@ -3,6 +3,7 @@ import { mountSuspended, mockNuxtImport } from "@nuxt/test-utils/runtime";
 import { ref } from "vue";
 import EntityDetailView from "../../app/components/EntityDetailView.vue";
 import NoteEditor from "../../app/components/note/Editor.vue";
+import PersonChanges from "../../app/components/succession/PersonChanges.vue";
 import { authFetch } from "~/composables/auth";
 
 // Signed in, so the notes on a person are on the page at all - logged out, a
@@ -15,11 +16,15 @@ vi.mock("~/composables/auth", () => ({
   authFetch: vi.fn(),
 }));
 
+/** The page's own relations, running from it: what a person's employments are
+ * to the local graph. Empty unless a test says otherwise. */
+const outgoing = vi.hoisted(() => ({ edges: [] as unknown[] }));
+
 vi.mock("~/composables/edges", async (importOriginal) => ({
   ...(await importOriginal<typeof import("~/composables/edges")>()),
   useEdges: vi.fn(async () => ({
     sources: ref([]),
-    targets: ref([]),
+    targets: ref(outgoing.edges),
     referencedIn: ref([]),
     refresh: vi.fn(),
   })),
@@ -60,5 +65,30 @@ describe("EntityDetailView", () => {
     const region = await mountFor("region");
     expect(region.findComponent(NoteEditor).exists()).toBe(true);
     expect(region.findComponent(NoteEditor).props("columns")).toBe(false);
+  });
+
+  it("counts the relations the history lists, not the copy it leaves out", async () => {
+    // One post at PZO Gliwice, stored once without a role and once as
+    // „Prokurent": the history lists it once, so „Zmiany na stanowisku" must
+    // say "z 1 powiązania", not "z 2".
+    const post = {
+      type: "employed",
+      source: "n1",
+      target: "pzo",
+      start_date: "2026-07-14",
+      richNode: { id: "pzo", type: "place", name: "PZO Gliwice" },
+    };
+    outgoing.edges = [
+      { ...post, id: "bez-funkcji", label: "Zatrudniony/a w" },
+      { ...post, id: "prokurent", name: "Prokurent", label: "Prokurent" },
+    ];
+    try {
+      const person = await mountFor("person");
+      expect(person.findComponent(PersonChanges).props("relationCount")).toBe(
+        1,
+      );
+    } finally {
+      outgoing.edges = [];
+    }
   });
 });

@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "W „Obecnym składzie” Przedsiębiorstwa Zagospodarowania Odpadów w Gliwicach osoba ze zgłoszenia jest raz, pod „Prokurent”, a nie drugi raz pod „Funkcja niepodana w rejestrze”. Wpis bez funkcji znika też z historii powiązań instytucji i osoby, gdy ta sama osoba ma w tym samym czasie wpis z funkcją; osobny, wcześniejszy okres bez funkcji zostaje.",
+    fixes: ["NBIpuzJnWjqUuExe9rHR"],
+    link: "/instytucja/przedsiebiorstwo-zagospodarowania-odpadow-gliwice-7KybWxBJfAIMWwq3md3g",
+  },
+  {
+    change:
       "Na „Problemach” w /qa wpis, który wciąż oceniasz jako „Coś nie działa”, choć jego zgłoszenie zostało już zamknięte, stoi pod nagłówkiem „Twoje problemy bez otwartego zgłoszenia”, a (i) przy nagłówku mówi, że zgłoszenie zamknięto: jeśli już działa, zmień ocenę, a jeśli nie - opisz, co wciąż jest nie tak, a opis trafi do zespołu jako nowe zgłoszenie.",
     fixes: ["2cPCvvILR0TpRna7Y0Ie"],
     link: "/qa?widok=problemy",

@@ -585,3 +585,51 @@ describe("EmploymentHistory sources", () => {
     ).toBe(true);
   });
 });
+
+/** The report on PZO Gliwice's page: one prokurent listed as „Prokurent" and
+ * again without a role, for one appointment stored twice. The row with no role
+ * reads „Zatrudniony/a w", the edge type's phrase, which `useEdges` puts in
+ * `label` when the edge has no `name`. See shared/rolelessSpells.ts. */
+describe("EmploymentHistory role-less copies", () => {
+  function janina(fields: Partial<EdgeNode>): EdgeNode {
+    return edge({
+      source: "janina",
+      target: "pzo",
+      label: "Zatrudniony/a w",
+      richNode: { id: "janina", type: "person", name: "Janina Podwójna" },
+      ...fields,
+    } as Partial<EdgeNode>);
+  }
+
+  const prokura = janina({
+    id: "prokurent",
+    name: "Prokurent",
+    label: "Prokurent",
+    start_date: "2026-07-14",
+  });
+
+  it("lists a prokura once, not again without its role", async () => {
+    const wrapper = await render([
+      janina({ id: "bez-funkcji", start_date: "2026-07-14" }),
+      prokura,
+    ]);
+
+    expect(wrapper.findAll(".history-row")).toHaveLength(1);
+    expect(wrapper.text()).toContain("Prokurent");
+    expect(wrapper.text()).not.toContain("Zatrudniony/a w");
+  });
+
+  it("keeps a role-less stint from years before the prokura", async () => {
+    const wrapper = await render([
+      janina({
+        id: "wczesniej",
+        start_date: "2012-03-01",
+        end_date: "2015-06-30",
+      }),
+      prokura,
+    ]);
+
+    expect(wrapper.findAll(".history-row")).toHaveLength(2);
+    expect(wrapper.text()).toContain("Zatrudniony/a w");
+  });
+});
