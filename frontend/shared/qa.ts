@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "artykul-raz-mimo-dwoch-adresow",
+    title: "Artykuł zapisany pod dwoma adresami jest na liście raz",
+    description:
+      "„Artykuły, które o tym wspominają” pokazywały dwa razy artykuł dodany raz ze swojego adresu, a raz ze strony z komentarzami pod nim. Teraz jest jedna karta, o ile oba wpisy mają ten sam tytuł.",
+    steps: [
+      "Na stronie Dariusza Bielskiego artykuł z iswinoujscie.pl o podziękowaniu wyborcom ma być w sekcji „Artykuły, które o tym wspominają” tylko raz.",
+    ],
+    link: "/osoba/dariusz-bielski-WQgJ49xVVGnKQnlCoDCK",
+    area: "public",
+  },
+  {
     id: "admin-procesy-rejestr-nowe-spolki",
     title: "Procesy: nowo zarejestrowane spółki czytane co noc",
     description:
