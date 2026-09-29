@@ -35,11 +35,33 @@ const proposal = (over: Partial<Proposal> = {}): Proposal => ({
 
 const mountActions = (over: Partial<Proposal> = {}) =>
   mount(ReviewActions, {
-    props: { proposal: proposal(over), reviewable: true },
+    props: { proposal: proposal(over) },
     global: { plugins: [vuetify] },
   });
 
 describe("RevisionReviewActions", () => {
+  it("offers the decisions and nothing else", () => {
+    // It used to end in "Porównanie" and a copy-link icon too, and the owner
+    // asked why a row had two kinds of button - one deciding here, one going
+    // somewhere else, present on some rows and not on others.
+    const wrapper = mountActions();
+
+    expect(
+      wrapper.findAll("button, a").map((el) => el.text().replace(/\s+/g, " ")),
+    ).toEqual(["Zatwierdź", "Zatwierdź i opublikuj", "Odrzuć"]);
+    expect(wrapper.find("a").exists()).toBe(false);
+  });
+
+  it("leaves rejecting out where it would only overwrite the record", () => {
+    const wrapper = mount(ReviewActions, {
+      props: { proposal: proposal({ status: "approved" }), rejectable: false },
+      global: { plugins: [vuetify] },
+    });
+
+    expect(wrapper.find('[data-testid="reject-rev1"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="approve-rev1"]').exists()).toBe(true);
+  });
+
   it("offers to publish an unpublished page along with the approval", async () => {
     const wrapper = mountActions();
 

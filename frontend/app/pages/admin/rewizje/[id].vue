@@ -294,7 +294,7 @@ const route = useRoute();
 const nodeId = route.params.id as string;
 
 /** The revision a link arrived for: the queue, an entity page's "Zobacz
- * historię zmian", a "Porównanie" button on the review list. */
+ * historię zmian", a "Pełne porównanie" under a proposal's diff. */
 const highlightId = computed(() =>
   typeof route.query.revisionId === "string" && route.query.revisionId
     ? route.query.revisionId

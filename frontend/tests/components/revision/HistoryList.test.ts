@@ -319,16 +319,60 @@ describe("RevisionHistoryList", () => {
     );
   });
 
-  it("offers the comparison page from an embedded row", async () => {
+  it("offers the comparison page from an embedded row, under its diff", async () => {
     const wrapper = await mountList({ embedded: true });
     await row(wrapper, "rev-new").get("[data-row-toggle]").trigger("click");
 
+    // A link where the diff is, not a button among the decisions - the
+    // buttons of a row are the decisions and nothing else.
     const compare = row(wrapper, "rev-new")
-      .findAllComponents({ name: "VBtn" })
-      .find((btn) => btn.text().includes("Porównanie"));
+      .findAllComponents({ name: "NuxtLink" })
+      .find((link) => link.text() === "Pełne porównanie");
     expect(compare?.props("to")).toBe(
       "/admin/rewizje/node-1?revisionId=rev-new",
     );
+    expect(
+      row(wrapper, "rev-new")
+        .get(".arow__footer")
+        .findAll("button")
+        .map((button) => button.text().trim()),
+    ).toEqual(["Zatwierdź", "Odrzuć"]);
+  });
+
+  it("puts a revision's address on its date, for an admin", async () => {
+    // Inside an entry's row on /admin/rewizje: the review queue's address.
+    const wrapper = await mountList({ embedded: true });
+    await row(wrapper, "rev-new").get("[data-row-toggle]").trigger("click");
+
+    const permalink = row(wrapper, "rev-new")
+      .findAllComponents({ name: "NuxtLink" })
+      .find((link) => link.attributes("data-testid") === "permalink-rev-new");
+    expect(permalink?.text()).toBe("20.09.2026 12:00");
+    expect(permalink?.props("to")).toMatchObject({
+      path: "/admin/rewizje",
+      query: { rewizja: "rev-new" },
+      hash: "#kolejka",
+    });
+  });
+
+  it("keeps the entry page's date on the entry page", async () => {
+    // Its own history, with this revision picked out - not the queue, which
+    // would leave the page the reader was on.
+    const wrapper = await mountList();
+
+    const permalink = row(wrapper, "rev-new")
+      .findAllComponents({ name: "NuxtLink" })
+      .find((link) => link.attributes("data-testid") === "permalink-rev-new");
+    expect(permalink?.props("to")).toBe(
+      "/admin/rewizje/node-1?revisionId=rev-new",
+    );
+  });
+
+  it("draws no row of buttons under the version the entry serves", async () => {
+    const wrapper = await mountList({ highlightId: "rev-live" });
+
+    expect(isOpen(wrapper, "rev-live")).toBe(true);
+    expect(row(wrapper, "rev-live").find(".arow__footer").exists()).toBe(false);
   });
 
   it("re-reads the history after an approval and tells the page", async () => {

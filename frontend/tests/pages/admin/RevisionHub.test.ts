@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
-import { flushPromises } from "@vue/test-utils";
+import { flushPromises, type DOMWrapper } from "@vue/test-utils";
 import { useRouter } from "#app";
 import RewizjePage from "../../../app/pages/admin/rewizje/index.vue";
 import type { Proposal } from "~~/shared/proposals";
@@ -195,12 +195,120 @@ describe("the review queue section", () => {
 
     expect(wrapper.find('[data-testid="approve-rev-1"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="reject-rev-1"]').exists()).toBe(true);
+  });
+
+  /** The labels of the buttons in an open row - links are anchors, and are
+   * left out. */
+  const buttonsIn = (row: DOMWrapper<Element>) =>
+    row.findAll("[data-row-panel] button").map((el) => el.text().trim());
+
+  it("gives every proposal the same buttons, and they are the decisions", async () => {
+    // The owner asked why the queue had two kinds of button: one row's went
+    // to the comparison page and another's elsewhere. A relation has no
+    // comparison page, so the way to it cannot be one of the buttons.
+    serve({
+      queue: {
+        revisions: [
+          proposal(),
+          proposal({
+            id: "rev-edge",
+            targetId: "edge-1",
+            targetCollection: "edges",
+            targetType: null,
+          }),
+        ],
+      },
+    });
+    const wrapper = await mount();
+
+    for (const id of ["rev-1", "rev-edge"]) {
+      const row = wrapper.get(`[data-proposal-id="${id}"]`);
+      await row.get("[data-row-toggle]").trigger("click");
+      expect(
+        buttonsIn(row).filter((label) => label !== "Wszystko od tej osoby"),
+      ).toEqual(["Zatwierdź", "Odrzuć"]);
+    }
+  });
+
+  it("links the comparison from the diff and the proposal from its date", async () => {
+    serve({ queue: { revisions: [proposal()] } });
+    const wrapper = await mount();
+    const row = wrapper.get('[data-proposal-id="rev-1"]');
+    await row.get("[data-row-toggle]").trigger("click");
+
     // The href the anchor ends up with is the test router's business; what
-    // this page decides is the target it hands the button.
-    const compare = wrapper
-      .findAllComponents({ name: "VBtn" })
-      .find((button) => button.text().includes("Porównanie"));
+    // the row decides is the target it hands the link.
+    const links = row.findAllComponents({ name: "NuxtLink" });
+    const compare = links.find((link) => link.text() === "Pełne porównanie");
     expect(compare?.props("to")).toBe("/admin/rewizje/node-1?revisionId=rev-1");
+    const permalink = links.find(
+      (link) => link.attributes("data-testid") === "permalink-rev-1",
+    );
+    expect(permalink?.props("to")).toEqual({
+      path: "/admin/rewizje",
+      query: { rewizja: "rev-1" },
+      hash: "#kolejka",
+    });
+  });
+
+  it("keeps the queue's filters when a proposal's date is followed", async () => {
+    // Pinned whatever the filters say, so there is no reason to drop them -
+    // clicking a date used to put the queue back to „Oczekujące”.
+    serve({ queue: { revisions: [proposal()] } });
+    const wrapper = await mount("/?status=all&automatic=all&page=2");
+    const row = wrapper.get('[data-proposal-id="rev-1"]');
+    await row.get("[data-row-toggle]").trigger("click");
+
+    const permalink = row
+      .findAllComponents({ name: "NuxtLink" })
+      .find((link) => link.attributes("data-testid") === "permalink-rev-1");
+    expect(permalink?.props("to")).toEqual({
+      path: "/admin/rewizje",
+      query: { status: "all", automatic: "all", page: "2", rewizja: "rev-1" },
+      hash: "#kolejka",
+    });
+  });
+
+  it("links a removal to the comparison too, under its reason", async () => {
+    serve({
+      queue: {
+        revisions: [
+          proposal({
+            id: "rev-gone",
+            kind: "removal",
+            changes: [],
+            changeCount: 0,
+            deleteReason: "duplikat",
+          }),
+        ],
+      },
+    });
+    const wrapper = await mount();
+    const row = wrapper.get('[data-proposal-id="rev-gone"]');
+    await row.get("[data-row-toggle]").trigger("click");
+
+    expect(row.text()).toContain("Powód usunięcia: duplikat");
+    const compare = row
+      .findAllComponents({ name: "NuxtLink" })
+      .find((link) => link.text() === "Pełne porównanie");
+    expect(compare?.props("to")).toBe(
+      "/admin/rewizje/node-1?revisionId=rev-gone",
+    );
+  });
+
+  it("leaves a settled proposal nothing to press", async () => {
+    serve({
+      queue: {
+        revisions: [],
+        pinned: proposal({ id: "rev-9", status: "approved" }),
+      },
+    });
+    const wrapper = await mount("/?rewizja=rev-9#kolejka");
+
+    const row = wrapper.get('[data-pinned] [data-proposal-id="rev-9"]');
+    expect(row.find("[data-row-panel]").exists()).toBe(true);
+    expect(buttonsIn(row)).toEqual(["Wszystko od tej osoby"]);
+    expect(row.find(".arow__footer").exists()).toBe(false);
   });
 
   it("names what kind of change a line is when it is not an edit", async () => {

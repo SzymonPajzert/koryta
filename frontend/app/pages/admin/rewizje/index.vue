@@ -104,7 +104,6 @@
             @update:expanded="setOpen(queueKey(pinned.id), $event)"
             @approve="approve(pinned!, $event)"
             @reject="openReject(pinned!)"
-            @permalink="copyPermalink(pinned!)"
             @focus-author="focusAuthor"
           />
         </AdminRowList>
@@ -137,7 +136,6 @@
             @update:expanded="setOpen(queueKey(proposal.id), $event)"
             @approve="approve(proposal, $event)"
             @reject="openReject(proposal)"
-            @permalink="copyPermalink(proposal)"
             @focus-author="focusAuthor"
           />
         </AdminRowList>
@@ -834,19 +832,6 @@ const reject = async (reason: string) => {
     report(err);
   } finally {
     deciding.value = null;
-  }
-};
-
-const copyPermalink = async (proposal: Proposal) => {
-  const link = `${window.location.origin}/admin/rewizje?rewizja=${encodeURIComponent(proposal.id)}#kolejka`;
-  try {
-    await navigator.clipboard.writeText(link);
-    announce("Skopiowano link do propozycji.");
-  } catch {
-    // A browser that refuses the clipboard (no permission, or an insecure
-    // origin) still has to leave the reviewer with the link somehow.
-    error.value = link;
-    errorShown.value = true;
   }
 };
 

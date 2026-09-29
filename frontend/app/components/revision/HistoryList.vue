@@ -116,8 +116,18 @@
                 <UserChip :uid="row.updateUser || null" :user="row.author" />
               </AdminRowFact>
               <AdminRowFact label="Kiedy">
-                {{ formatMoment(row.updateTime) }} ·
-                {{ formatDaysAgo(row.updateTime) }}
+                <!-- Inside /admin/rewizje, the review queue's address, which
+                     only an admin can open. On the entry's own page it stays
+                     there: the page with this revision picked out, which is
+                     what a reader of one history wants to hand on. -->
+                <RevisionPermalink
+                  v-if="isAdmin"
+                  :revision-id="row.id"
+                  :to="embedded ? undefined : comparisonTo(row)"
+                  >{{ formatMoment(row.updateTime) }}</RevisionPermalink
+                >
+                <template v-else>{{ formatMoment(row.updateTime) }}</template>
+                · {{ formatDaysAgo(row.updateTime) }}
               </AdminRowFact>
               <AdminRowFact label="Rodzaj">
                 {{ row.automatic ? "Pipeline" : "Od człowieka" }}
@@ -148,7 +158,14 @@
             >
               {{ baselineNote(row) }}
             </p>
-            <RevisionChangeCell :proposal="row" :max="row.changeCount" wide />
+            <!-- On the comparison page the table is right below, so the way to
+                 it is only offered inside another list. -->
+            <RevisionChangeCell
+              :proposal="row"
+              :max="row.changeCount"
+              wide
+              :full-comparison-to="embedded ? comparisonTo(row) : null"
+            />
             <NuxtLink
               v-if="row.targetType"
               :to="previewTo(row)"
@@ -160,16 +177,16 @@
               Podgląd tej wersji strony
             </NuxtLink>
 
-            <template v-if="isAdmin" #footer>
+            <!-- Decisions only, as in the review queue - see
+                 `RevisionReviewActions`. The version the entry serves has
+                 none left. -->
+            <template v-if="isAdmin && row.status !== 'approved'" #footer>
               <RevisionReviewActions
                 :proposal="row"
-                :reviewable="row.status !== 'approved'"
                 :rejectable="row.status === 'pending'"
                 :loading="deciding === row.id"
-                :full-comparison-to="embedded ? comparisonTo(row) : null"
                 @approve="(options) => approve(row, options)"
                 @reject="openReject(row)"
-                @permalink="copyPermalink(row)"
               />
             </template>
           </AdminExpandRow>
@@ -536,21 +553,6 @@ async function reject(reason: string) {
     report(err);
   } finally {
     deciding.value = null;
-  }
-}
-
-/** The review list's permalink, which resolves a revision whatever its
- * filters say - pasted into a chat, it has to open the same thing tomorrow. */
-async function copyPermalink(row: Proposal) {
-  const link = `${window.location.origin}/admin/rewizje?rewizja=${encodeURIComponent(row.id)}`;
-  try {
-    await navigator.clipboard.writeText(link);
-    announce("Skopiowano link do propozycji.");
-  } catch {
-    // A browser that refuses the clipboard still has to leave the reviewer
-    // with the link somehow.
-    error.value = link;
-    errorShown.value = true;
   }
 }
 </script>
