@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "temat-edycja-nazwy-i-opisu",
+    title: "Temat można poprawić z jego strony",
+    description:
+      "Obok nazwy tematu jest ołówek: zalogowany może nim zaproponować inną nazwę albo opis pod nią, a zmiana administratora wchodzi od razu. Dotąd tematu nie dało się poprawić w ogóle.",
+    steps: [
+      "Otwórz temat z /tematy, kliknij ołówek obok nazwy, popraw opis i zapisz - administrator ma go od razu zobaczyć na stronie, a każdy inny dostać komunikat, że propozycja czeka na zatwierdzenie.",
+    ],
+    link: "/tematy",
+    area: "contributor",
+    fixes: ["bGXER4fJLzd0c1coLbUw"],
+  },
+  {
     id: "rewizje-przyciski-tylko-do-decyzji",
     title: "Rewizje: przyciski w rozwiniętej propozycji służą tylko do decyzji",
     description:
