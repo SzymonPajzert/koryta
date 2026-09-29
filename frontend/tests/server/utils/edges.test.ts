@@ -214,6 +214,31 @@ describe("edgeRelation", () => {
       ),
     ).toBe("same");
   });
+
+  it("reads an office a reviewer narrowed down as the pipeline's candidacy", () => {
+    // The pipeline sends „Samorząd" for every local candidacy. A reader who
+    // has since said which council it was has not contradicted that, and a
+    // conflict here would store the pipeline's row beside theirs on the next
+    // run - the vague candidacy back, as a duplicate.
+    const narrowed = { ...candidacy, position: "Rada gminy" } as EdgeLike;
+    expect(edgeRelation(narrowed, candidacy)).toBe("same");
+    expect(edgeRelation(narrowed, withCommittee)).toBe("enriches");
+  });
+
+  it("still tells a national office from the pipeline's local one", () => {
+    expect(edgeRelation({ ...candidacy, position: "Senat" }, candidacy)).toBe(
+      "conflict",
+    );
+  });
+
+  it("does not read a vague office as a narrower one", () => {
+    // Only the stored side may be the more precise: a „Samorząd" on the site is
+    // not the same candidacy as some particular council, as far as anything
+    // here can tell.
+    expect(
+      edgeRelation(candidacy, { ...candidacy, position: "Rada gminy" }),
+    ).toBe("conflict");
+  });
 });
 
 describe("the result of a candidacy", () => {
@@ -254,6 +279,14 @@ describe("enrichedEdge", () => {
       ...stored,
       committee: withCommittee.committee,
       party: "PiS",
+    });
+  });
+
+  it("keeps an office a reviewer narrowed down", () => {
+    const stored = { ...candidacy, position: "Rada powiatu" };
+    expect(enrichedEdge(stored, withCommittee)).toMatchObject({
+      position: "Rada powiatu",
+      committee: withCommittee.committee,
     });
   });
 });
@@ -337,6 +370,15 @@ describe("findEdgeMatches", () => {
       start_date: "2010-03-01",
     });
     expect(same).toEqual([]);
+    expect(enrichable).toEqual([]);
+  });
+
+  it("finds the pipeline's candidacy in one a reviewer narrowed down", async () => {
+    const { same, enrichable } = await findEdgeMatches(
+      dbWith([{ ...candidacy, position: "Sejmik" } as EdgeLike]),
+      candidacy,
+    );
+    expect(same).toEqual(["stored-0"]);
     expect(enrichable).toEqual([]);
   });
 
