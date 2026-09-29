@@ -29,20 +29,23 @@ import { longDate } from "./dates";
 export type TableQueryValue =
   string | number | null | undefined | readonly (string | null)[];
 
-/** Every parameter that narrows or orders the table, in the order a shared
- * link spells them out.
+/** Every parameter that picks, narrows or orders the table, in the order a
+ * shared link spells them out.
  *
- * The list is exactly the filter half of the validator in
+ * Past `view`, the list is exactly the filter half of the validator in
  * `server/api/nodes/index.get.ts`. That validator is a plain `z.object`, so it
  * strips any parameter not named there before the query reaches Firestore -
  * which is why dropping an unrecognised key below can only shorten a link, it
  * can never change what the recipient sees.
  *
- * `type` is deliberately absent: the link always points at the people table,
- * so writing `type=person` into it would be noise and writing anything else
- * would be a lie.
+ * `view` is first because it says what the rest of the link is about - see
+ * `tableView`. It never reaches the api: it decides whether the page asks for
+ * people at all. `type` is deliberately absent for the same reason: which
+ * nodes the table lists is `view`'s to say, and `type=person` in a link would
+ * be noise.
  */
 const SHARE_KEYS = [
+  "view",
   "category",
   "teryt",
   "companyTeryt",
@@ -83,6 +86,67 @@ const NEUTRAL: Partial<Record<ShareKey, string>> = {
 };
 
 const TABLE_PATH = "/eksploruj/tabela";
+
+/** What the table lists: the people, or the institutions they work in.
+ *
+ * `people` is the table as it always was and never appears in a url. The
+ * companies view answers two reports of the owner's - „W tym widoku brakuje
+ * jeszcze spółek” on the rail filter, „Przydałby się teraz po prostu widok i
+ * filtr dla spółek” on the sector filter - that the page could say which people
+ * work in a sector but not which companies are in it, and so not whether the
+ * sector was right.
+ */
+export const tableViews = ["people", "companies"] as const;
+
+export type TableView = (typeof tableViews)[number];
+
+/** Which list a query asks for. Anything but `companies` - no parameter, or a
+ * value from some later version of the site - is the people table, which is
+ * what every link minted before the parameter existed meant. */
+export function tableView(query: TableQuery): TableView {
+  return values(query.view)[0] === "companies" ? "companies" : "people";
+}
+
+/** The parameters the companies view reads.
+ *
+ * A company has a sector, a seat and an identity, so `category`,
+ * `companyTeryt` - „Siedziba spółki”, the one control the companies view's
+ * panel offers for a region - and the employer pick apply to it. The rest - a
+ * person's region (`teryt`, „Region osoby”, any tie a person has to a
+ * region), a party, whether a post is still held, and the editors' four
+ * verification filters - describe a person and have nothing to say about an
+ * institution. They stay in the url, so switching back to
+ * people finds them as the reader left them, but they narrow nothing here: the
+ * bar greys their chips out, and a shared link leaves them behind.
+ */
+const COMPANY_VIEW_KEYS: ReadonlySet<ShareKey> = new Set<ShareKey>([
+  "view",
+  "category",
+  "companyTeryt",
+  "place",
+  "krs",
+  "sortBy",
+  "sortDesc",
+]);
+
+/** Whether a parameter does anything in the given view. */
+export function paramAppliesTo(key: ShareKey, view: TableView): boolean {
+  return view === "people" || COMPANY_VIEW_KEYS.has(key);
+}
+
+/** Whether the query asks the companies view for the order it opens in
+ * anyway. The page hands the bar that order spelled out - the view always has
+ * one, and the sort button names it - so without this every shared link to it
+ * would carry `sortBy=people&sortDesc=true` and every sentence „wg liczby
+ * osób”, to ask for what the recipient gets with neither. */
+function isDefaultCompanySort(query: TableQuery): boolean {
+  // `sortDesc=true` because DEFAULT_COMPANY_SORT runs most-first.
+  return (
+    tableView(query) === "companies" &&
+    values(query.sortBy)[0] === DEFAULT_COMPANY_SORT.key &&
+    values(query.sortDesc)[0] === "true"
+  );
+}
 
 /** Every value a parameter carries, as strings, without the empty ones.
  *
@@ -157,6 +221,55 @@ export const tableSortOptions = [
   adminOnly?: boolean;
 }[];
 
+/** The orders the companies view offers, as the bar's menu lists them. `short`
+ * is what the „Osoby” column's own menu prints beside its title.
+ *
+ * Not the hazard `tableSortOptions` is: this table is sorted in the browser
+ * (`app/utils/companyRows.ts`), and a key it does not know falls back to the
+ * default order rather than reaching a Firestore `orderBy`. The keys still go
+ * into `?sortBy=` verbatim, so they are not to be renamed once links carry
+ * them. What the page must never do is carry one of them into the people view,
+ * where `people` would reach that `orderBy` and empty the table - which is why
+ * switching views drops the sort.
+ */
+export const companySortOptions = [
+  {
+    key: "people",
+    title: "Liczba osób",
+    sentence: "liczby osób",
+    short: "liczba osób",
+  },
+  {
+    key: "current",
+    title: "Obecnie zatrudnieni",
+    sentence: "liczby obecnie zatrudnionych",
+    short: "obecnie zatrudnieni",
+  },
+  {
+    key: "latestStart",
+    title: "Najnowsze zatrudnienie",
+    sentence: "najnowszego zatrudnienia",
+    short: "najnowsze zatrudnienie",
+  },
+  { key: "name", title: "Nazwa", sentence: "nazwy", short: "nazwa" },
+] as const satisfies readonly {
+  key: string;
+  title: string;
+  sentence: string;
+  short: string;
+}[];
+
+export type CompanySortKey = (typeof companySortOptions)[number]["key"];
+
+/** The order the companies view opens in: the institutions with the most
+ * people on the site first. A sector read alphabetically opens on whichever
+ * zakład komunalny starts with an A, and the rows a reader came for - the ones
+ * with somebody in them - are spread across every page of it. */
+export const DEFAULT_COMPANY_SORT = {
+  key: "people",
+  order: "desc",
+} as const satisfies { key: CompanySortKey; order: "asc" | "desc" };
+
 /** The names of a filter's values, resolved by the page.
  *
  * Both are optional because the lists behind them arrive over the network: on
@@ -184,6 +297,9 @@ export interface QueryChip {
    * parameters name the same filter, and forgetting the second would leave the
    * table unchanged after a click that promised to widen it. */
   clears: readonly ShareKey[];
+  /** Whether the filter narrows the table being shown. False only for a filter
+   * about people while the table lists companies - see `paramAppliesTo`. */
+  applies: boolean;
 }
 
 const EMPLOYMENT_LABELS: Record<string, { label: string; short: string }> = {
@@ -252,7 +368,9 @@ export function queryChips(
   query: TableQuery,
   lookup: QueryLookup = {},
 ): QueryChip[] {
-  const chips: QueryChip[] = [];
+  // Filled in below without `applies`, which depends on the view rather than
+  // on the filter and is added to all of them at once on the way out.
+  const chips: Omit<QueryChip, "applies">[] = [];
 
   // `place` holds node ids and `krs` register numbers; both name employers,
   // and a link minted before the switch to node ids carries only the second.
@@ -420,7 +538,11 @@ export function queryChips(
     });
   }
 
-  return chips;
+  const view = tableView(query);
+  return chips.map((chip) => ({
+    ...chip,
+    applies: paramAppliesTo(chip.key, view),
+  }));
 }
 
 /** A sentence reads in a different order than the rail: what we are looking
@@ -449,13 +571,21 @@ const SENTENCE_ORDER: readonly ShareKey[] = [
  *
  * Admin filters are described like any other. The sentence has to match the
  * link, and the link carries them.
+ *
+ * A link to the companies view opens on the word „spółki”, since everything
+ * after it reads the same either way - „Koleje · Kraków” is a sector and a
+ * place whichever of the two lists they narrow. The filters that narrow
+ * nothing there are left out, as the link leaves them out.
  */
 export function describeQuery(
   query: TableQuery,
   lookup: QueryLookup = {},
 ): string {
+  const view = tableView(query);
   const byKey = new Map(
-    queryChips(query, lookup).map((chip) => [chip.key, chip.short]),
+    queryChips(query, lookup)
+      .filter((chip) => chip.applies)
+      .map((chip) => [chip.key, chip.short]),
   );
 
   const words: string[] = [];
@@ -465,12 +595,20 @@ export function describeQuery(
   }
 
   const sortBy = values(query.sortBy)[0];
-  const sort = tableSortOptions.find((option) => option.key === sortBy);
+  const sort = (
+    view === "companies" ? companySortOptions : tableSortOptions
+  ).find((option) => option.key === sortBy);
   // An unknown sort key is left out rather than printed: it is either a link
   // from a future version of the site or a typo, and neither has a Polish name
-  // to offer.
-  if (sort) words.push(`wg ${sort.sentence}`);
+  // to offer. So is the companies view's own default, which the link leaves
+  // out too.
+  if (sort && !isDefaultCompanySort(query)) words.push(`wg ${sort.sentence}`);
 
+  if (view === "companies") {
+    return words.length > 0
+      ? ["spółki", ...words].join(" · ")
+      : "wszystkie spółki w bazie";
+  }
   return words.length > 0 ? words.join(" · ") : "wszystkie osoby w bazie";
 }
 
@@ -486,8 +624,21 @@ export function shareQuery(
   query: TableQuery,
 ): Record<string, string | string[]> {
   const shared: Record<string, string | string[]> = {};
+  const view = tableView(query);
+  const defaultSort = isDefaultCompanySort(query);
 
   for (const key of SHARE_KEYS) {
+    if (defaultSort && (key === "sortBy" || key === "sortDesc")) continue;
+    // A party or a „Tylko szkice” left over from the people view narrows
+    // nothing in the companies one, so it is not part of what is being shared.
+    if (!paramAppliesTo(key, view)) continue;
+    // Written as it was read: a value `tableView` does not recognise opens the
+    // people table, which is what a link without the parameter does too.
+    if (key === "view") {
+      if (view !== "people") shared.view = view;
+      continue;
+    }
+
     // A direction with nothing to sort by. The table only reads `sortDesc`
     // when `sortBy` is set, so on its own it is a parameter that describes
     // nothing.

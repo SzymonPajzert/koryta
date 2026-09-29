@@ -701,3 +701,136 @@ describe("the filter panel's groups", () => {
     expect(contrastRatio(ink, background)).toBeGreaterThanOrEqual(AA_TEXT);
   });
 });
+
+/** The companies view: the owner asked for „widok i filtr dla spółek”, and the
+ * page shows it through this bar, which now says which list it is filtering. */
+describe("the query bar over the companies view", () => {
+  const viewSwitch = (wrapper: Wrapper) =>
+    wrapper.find("[data-testid='tabela-view']");
+
+  /** /eksploruj/autograf mounts this bar over a chart, where a switch to a
+   * list of companies would change nothing. */
+  it("draws the switch only for a page that binds a view", async () => {
+    expect(viewSwitch(await mount()).exists()).toBe(false);
+
+    const wrapper = await mount({ view: "people" });
+    expect(
+      viewSwitch(wrapper)
+        .findAll(".v-btn")
+        .map((button) => button.text()),
+    ).toEqual(["Osoby", "Spółki"]);
+  });
+
+  it("asks the page for the companies, and leaves the url to it", async () => {
+    const wrapper = await mount({ view: "people" });
+
+    const companies = viewSwitch(wrapper)
+      .findAll(".v-btn")
+      .find((button) => button.text() === "Spółki");
+    await companies!.trigger("click");
+
+    expect(wrapper.emitted("update:view")).toEqual([["companies"]]);
+  });
+
+  it("counts companies, and only the filters that narrow them", async () => {
+    const wrapper = await mount({
+      view: "companies",
+      totalItems: 103,
+      category: "koleje",
+      party: ["PiS"],
+      visibility: "private",
+      showVisibility: true,
+    });
+
+    expect(wrapper.find(".tabela-query-bar__count").text()).toBe("103 spółki");
+    // The sector narrows the list; a party and „Tylko szkice” narrow nothing
+    // here, so the button does not count them as reasons for a short list.
+    expect(toggle(wrapper).text()).toBe("Filtry (1)");
+
+    const [sector, party, drafts] = railChips(wrapper);
+    expect(sector!.text()).toBe("Koleje");
+    expect(sector!.classes()).not.toContain("tabela-query-bar__chip--idle");
+    for (const idle of [party!, drafts!]) {
+      expect(idle.classes()).toContain("tabela-query-bar__chip--idle");
+      // Grey rather than the party's navy or the drafts' amber, and as
+      // readable as any other chip - struck through, not faded out.
+      expect(idle.classes()).toContain("bg-surface-muted");
+      const [ink, background] = painted(idle);
+      expect(contrastRatio(ink, background)).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(idle.attributes("title")).toContain("dotyczy osób");
+    }
+    expect(party!.attributes("aria-label")).toBe("PiS (nie dotyczy spółek)");
+  });
+
+  it("still lets a reader drop a filter that is doing nothing here", async () => {
+    const wrapper = await mount({ view: "companies", party: ["PiS"] });
+
+    await railChips(wrapper)[0]!.get(".v-chip__close").trigger("click");
+
+    expect(wrapper.emitted("update:party")?.[0]).toEqual([null]);
+  });
+
+  it("calls the list unfiltered when only people filters are set", async () => {
+    const wrapper = await mount({ view: "companies", party: ["PiS"] });
+
+    expect(wrapper.text()).toContain("Wszystkie spółki w bazie");
+    expect(toggle(wrapper).text()).toBe("Filtry");
+  });
+
+  it("sorts the companies by keys of their own", async () => {
+    const wrapper = await mount({
+      view: "companies",
+      sortBy: [{ key: "people", order: "desc" }],
+    });
+
+    expect(sortButton(wrapper).text()).toBe("Osoby");
+    expect(sortButton(wrapper).attributes("aria-label")).toBe(
+      "Sortowanie: Liczba osób",
+    );
+
+    await sortButton(wrapper).trigger("click");
+    await nextTick();
+    const menu = openOverlayText();
+    expect(menu).toContain("Obecnie zatrudnieni");
+    expect(menu).toContain("Najnowsze zatrudnienie");
+    expect(menu).not.toContain("Suma ocen");
+  });
+
+  it("offers the panel's controls for an institution, and no others", async () => {
+    // An institution picked, so „Więcej filtrów” opens on its own and what it
+    // holds can be read; a party and a seat set on the people table, so their
+    // controls would be there to find if they were drawn.
+    const wrapper = await mount({
+      view: "companies",
+      totalItems: 1,
+      showVisibility: true,
+      place: ["company-1"],
+      party: ["PiS"],
+      companyTeryt: "teryt14",
+    });
+
+    await toggle(wrapper).trigger("click");
+    await nextTick();
+
+    const text = openOverlayText();
+    expect(text).toContain("Spółka");
+    expect(text).toContain("Typ podmiotu");
+    expect(text).toContain("Instytucje");
+    // The seat, once: it moves up into the first group, and its place under
+    // „Więcej filtrów” is not drawn as well. Counted by control, since a
+    // Vuetify field draws its label twice over.
+    const seatControls = [
+      ...document.querySelectorAll(".v-overlay--active .v-autocomplete"),
+    ].filter((control) => control.textContent.includes("Siedziba spółki"));
+    expect(seatControls).toHaveLength(1);
+    for (const person of [
+      "Region osoby",
+      "Zatrudnienie",
+      "Weryfikacja",
+      "Partia",
+    ]) {
+      expect(text).not.toContain(person);
+    }
+    expect(text).toContain("Pokaż 1 spółkę");
+  });
+});

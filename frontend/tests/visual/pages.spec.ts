@@ -143,6 +143,20 @@ const pages: {
     },
     viewports: ["visual-desktop"],
   },
+  {
+    // The companies view: every seeded institution, with the people on the
+    // site each has had. All four rows are in the frame - the one with a board
+    // history and its counts, the two with one person apiece, and the railway
+    // with nobody, whose sector chip and dash are the parts the seed has only
+    // there. Both widths: under this view the page mounts no drawer, so the
+    // phone shot is the list and nothing to the right of it.
+    name: "spolki",
+    path: "/eksploruj/tabela?view=companies",
+    file: "eksploruj/tabela",
+    // Three responses have to land before the rows are true - the places,
+    // their seats and the counts - and the count is the last of them.
+    settled: ["Wojewódzki Zakład Testowy", "7 osób", "Firma Pusta"],
+  },
 ];
 
 type MountPoint = Element & {
