@@ -237,6 +237,19 @@ def test_failures_then_moved_entries_then_new_ones():
     assert due == ["0000900000", "0000000400", "0000000200", "0000000300"]
 
 
+def test_an_entry_made_on_the_day_of_the_read_is_read_again():
+    """Read at 10:00, owners changed at 14:00: the bulletin says only the day."""
+    due = due_for_a_read(
+        ledger(
+            ("0000225512", "2026-09-28", STATUS_OK),
+            ("0000000500", "2026-09-29", STATUS_OK),
+        ),
+        bulletin(("0000225512", "2026-09-28"), ("0000000500", "2026-09-28")),
+    )
+
+    assert due == ["0000225512"]
+
+
 def test_the_reasons_follow_the_order():
     queue = queue_for_a_read(
         ledger(
