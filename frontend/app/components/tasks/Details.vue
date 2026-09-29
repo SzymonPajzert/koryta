@@ -217,14 +217,43 @@
       >
         Edytuj
       </v-btn>
+      <v-btn
+        size="small"
+        variant="text"
+        :prepend-icon="copied ? mdiCheck : mdiContentCopy"
+        :color="copied ? 'ink-success' : undefined"
+        title="Zadanie z tym, skąd się wzięło - notatką w pamięci, sesją, zgłoszeniami - z zależnościami i historią, do wklejenia w rozmowie z agentem"
+        data-task-copy
+        @click="copyContext"
+      >
+        {{ copied ? "Skopiowano" : "Kopiuj dla czatu" }}
+      </v-btn>
     </div>
+    <!-- The browser would not hand the text to the clipboard: here it is to
+         copy by hand, already selected. -->
+    <v-textarea
+      v-if="manualCopy"
+      :model-value="manualCopy"
+      label="Skopiuj ręcznie (Ctrl+C)"
+      readonly
+      auto-grow
+      rows="4"
+      max-rows="12"
+      density="compact"
+      variant="outlined"
+      hide-details
+      class="mt-2"
+      data-task-copy-text
+      @focus="($event.target as HTMLTextAreaElement).select()"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   mdiCheck,
+  mdiContentCopy,
   mdiFilterOutline,
   mdiLinkVariant,
   mdiPencilOutline,
@@ -249,6 +278,7 @@ import {
   type TaskState,
   type TaskStatus,
 } from "~~/shared/tasks";
+import { taskContext } from "~~/shared/taskContext";
 
 /** A task opened up: what it is, what it waits on and unblocks, its history,
  * and what can be done with it. Shown in a list row and beside the map. */
@@ -332,6 +362,32 @@ watch(
     }
   },
 );
+
+/** "Skopiowano" for a moment after a copy, so the click is seen to work. */
+const copied = ref(false);
+const manualCopy = ref("");
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function copyContext() {
+  const text = taskContext(props.task, props.tasks);
+  try {
+    // Inside the try: on an insecure origin `navigator.clipboard` is
+    // undefined, and reading it throws rather than rejects.
+    await navigator.clipboard.writeText(text);
+    manualCopy.value = "";
+    copied.value = true;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied.value = false), 2000);
+  } catch {
+    manualCopy.value = text;
+    await nextTick();
+    document
+      .querySelector<HTMLTextAreaElement>(
+        `[data-task-details="${props.task.id}"] [data-task-copy-text] textarea`,
+      )
+      ?.focus();
+  }
+}
 
 const showAll = ref(false);
 /** Newest first; the last ten unless asked for the rest. */
