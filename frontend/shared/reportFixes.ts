@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Artykuł dodany z linku do strony w starym kodowaniu (ISO-8859-2, windows-1250) ma w tytule polskie litery zamiast „�”. Trzy zapisane już tytuły na stronie Dariusza Bielskiego poprawią się dopiero po wdrożeniu funkcji getPageMeta i uruchomieniu migracji refetch-garbled-article-titles - niezalogowani zobaczą je do 6 godzin później, chyba że pamięć podręczna zostanie wyczyszczona.",
+    fixes: ["3qIISyfU0iXo0Sus5bgJ"],
+    link: "/osoba/dariusz-bielski-WQgJ49xVVGnKQnlCoDCK",
+  },
+  {
+    change:
       "Na pasku nad grafem przycisk „Opisy na liniach” ma zawsze ten sam napis, a pole wyboru przy napisie pokazuje, czy opisy są włączone. Kliknięcie nie zmienia już jego szerokości, więc przyciski nie przeskakują między rzędami, a na telefonie „2 kroki” mieści się w pasku zamiast być uciętym.",
     fixes: ["60beJLEWtp6lNuWyz15L"],
   },
