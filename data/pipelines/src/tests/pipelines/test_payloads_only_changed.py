@@ -433,6 +433,26 @@ def test_a_term_only_the_reviewer_knows_is_not_a_disagreement():
     assert snapshot.changes(payload(elections=[CANDIDACY])) == []
 
 
+def test_an_office_the_reviewer_narrowed_down_is_not_a_disagreement():
+    """The payload says "Samorząd" of every local candidacy.
+
+    A reader who has since told the site which council it was has not
+    contradicted it. Kept as a new candidacy, the upload would store the
+    vague row beside theirs.
+    """
+    stored = dict(STORED_CANDIDACY, position="Rada gminy")
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+
+    assert snapshot.changes(payload(elections=[CANDIDACY])) == []
+
+
+def test_a_national_office_is_still_not_the_local_one():
+    stored = dict(STORED_CANDIDACY, position="Senat")
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+
+    assert snapshot.changes(payload(elections=[CANDIDACY])) == [NEW_CANDIDACY]
+
+
 def test_a_candidacy_with_no_region_on_the_site_is_reported():
     snapshot = SiteSnapshot(nodes(), edges())
     elsewhere = dict(CANDIDACY, teryt="0201")

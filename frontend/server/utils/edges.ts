@@ -280,6 +280,52 @@ const ENRICH_FLOOR: Record<string, readonly string[]> = {
 
 export type EdgeRelation = "conflict" | "same" | "enriches";
 
+/** What the pipeline calls the office of every local candidacy.
+ *
+ * PKW does say which office a local candidate ran for, but the scrapers map
+ * all six 2024 candidate files onto this one word (see the `election` entry
+ * above), so it means "one of the local offices" rather than naming one. */
+const UNNAMED_LOCAL_OFFICE = "Samorząd";
+
+/** The offices a local election fills - everything in `electionPositions`
+ * but the unnamed one and the three national ones. Mirrored as
+ * `LOCAL_OFFICES` in `data/pipelines/src/analysis/payloads/site.py`.
+ *
+ * „Prezydent" here is a city's prezydent, which is where the site's list puts
+ * it. The pipeline maps a national presidential election to the same string
+ * (`get_election_type` in analysis/payloads/election.py), but no scraper
+ * produces one and none is stored; if that changes, a presidential candidacy
+ * stored as „Prezydent" would pass here for a local one. */
+const LOCAL_OFFICES: ReadonlySet<string> = new Set([
+  "Sejmik",
+  "Rada miasta",
+  "Rada gminy",
+  "Rada powiatu",
+  "Burmistrz",
+  "Wójt",
+  "Prezydent",
+]);
+
+/** Whether a stored value says what the incoming one says, only more
+ * precisely.
+ *
+ * The office is the one field with such a pair. The relation dialogs let a
+ * reader say which council a „Samorząd" candidacy was for, and a candidacy
+ * narrowed down to „Rada gminy" still asserts everything the pipeline's row
+ * does. Read as a disagreement, the next run would store that row beside it as
+ * a second candidacy - putting back, as a duplicate, the vague row the
+ * correction replaced. It only goes this way round: a stored „Samorząd" is not
+ * made more precise by anything here, and a national office is never a local
+ * one. */
+function narrows(name: string, stored: unknown, incoming: unknown): boolean {
+  return (
+    name === "position" &&
+    incoming === UNNAMED_LOCAL_OFFICE &&
+    typeof stored === "string" &&
+    LOCAL_OFFICES.has(stored)
+  );
+}
+
 /** How `incoming` stands to a stored edge of the same pair and type.
  *
  * This is what lets a pipeline that has started sending a field update the
@@ -299,7 +345,9 @@ export type EdgeRelation = "conflict" | "same" | "enriches";
  * is not the pipeline saying "none". Reading it as one would make every
  * hand-corrected edge permanently un-matchable, and an un-matchable edge is not
  * left alone: the caller creates a second document beside it, every run,
- * forever.
+ * forever. The office a reviewer has narrowed down is the same case, one step
+ * removed - the pipeline does send one, but "Samorząd" says less than the
+ * stored office rather than something else; see `narrows`.
  *
  * Only meaningful for an `enrichable` type, where a blank is known to mean "not
  * known yet" rather than "there was none"; callers must check that first.
@@ -319,6 +367,7 @@ export function edgeRelation(
       continue;
     }
     if (after !== null && JSON.stringify(before) !== JSON.stringify(after)) {
+      if (narrows(name, before, after)) continue;
       return "conflict";
     }
   }
