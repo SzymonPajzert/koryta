@@ -115,6 +115,9 @@ const saving = ref(false);
 const error = ref<string | null>(null);
 
 const details = ref<RelationDetails>(emptyDetails());
+/** What the form opened with, so that `submit` can tell the dates a reader
+ * typed from the ones the row showed. */
+const opened = ref<RelationDetails>(emptyDetails());
 
 function emptyDetails(): RelationDetails {
   return {
@@ -162,6 +165,7 @@ watch(
   ([isOpen]) => {
     if (!isOpen) return;
     details.value = detailsOf(props.edge);
+    opened.value = detailsOf(props.edge);
     error.value = null;
   },
   { immediate: true },
@@ -182,13 +186,28 @@ async function submit() {
   // The win and the kind of election only where the form showed them.
   // Anywhere else the win is a `false` nobody saw, sent with every correction
   // of a job title.
-  const { elected, position, ...fields } = details.value;
+  const { elected, position, start_date, end_date, ...fields } = details.value;
   const candidacy = props.edge!.type === "election";
+  // A candidacy's dates are the row's rather than the stored ones: `edgeFromDB`
+  // in server/utils/fetch.ts turns the year PKW gives („2024-01-01") into that
+  // election's day and makes the end the same day, so the bar has a day to
+  // draw. Sent back as shown, they moved the stored date and added an end date
+  // on every save - two lines in the reviewer's diff that nobody typed, and a
+  // start date the pipeline no longer knows the candidacy by, so its next run
+  // would store the candidacy a second time. They go only once the reader
+  // changes them.
+  const dates = {
+    ...(!candidacy || start_date !== opened.value.start_date
+      ? { start_date }
+      : {}),
+    ...(!candidacy || end_date !== opened.value.end_date ? { end_date } : {}),
+  };
   try {
     const result = await authRequest<EdgeUpdated>("/api/edges/update", {
       body: {
         edge_id: props.edge!.id,
         ...fields,
+        ...dates,
         ...(candidacy ? { elected } : {}),
         // Only once the reader picks a different one. `edgeEditSchema` takes
         // nothing but a kind from the list, so restating the stored value

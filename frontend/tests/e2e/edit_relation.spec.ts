@@ -288,6 +288,17 @@ test.describe("Correcting a relation", () => {
     await page.reload();
     await expect(office).toHaveText("Sejmik", { timeout: 30_000 });
     expect(await proposalsFor(edges.candidacy)).toHaveLength(0);
+
+    // With the date it was stored with, not the election day the row shows -
+    // which is what the pipeline knows this candidacy by.
+    const stored = (
+      await db.collection("edges").doc(edges.candidacy).get()
+    ).data();
+    expect(stored).toMatchObject({
+      position: "Sejmik",
+      start_date: "2024-01-01",
+    });
+    expect(stored).not.toHaveProperty("end_date");
   });
 
   test("a contributor's kind of election waits for a reviewer", async ({
@@ -317,10 +328,14 @@ test.describe("Correcting a relation", () => {
     expect(proposals).toHaveLength(1);
     expect(proposals[0]?.data).toMatchObject({
       position: "Rada gminy",
-      // The rest of the candidacy is restated, not dropped.
+      // The rest of the candidacy is restated, not dropped - and its date is
+      // the stored one. The row shows the day of the 2024 election, and the
+      // dialog used to write that back, with an end date to match.
       type: "election",
       target: ids.region,
+      start_date: "2024-01-01",
     });
+    expect(proposals[0]?.data).not.toHaveProperty("end_date");
 
     // The page keeps saying what it said until a reviewer approves.
     await page.reload();
