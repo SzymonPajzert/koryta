@@ -135,6 +135,7 @@ class Conductor(IO):
     def read_many(self, path: DataRef) -> typing.Iterable[tuple[str, File]]:
         if (
             isinstance(path, CloudStorage)
+            and path.bucket is None
             and not path.max_namespaces
             and self.mirror.bulk_reads_enabled
         ):

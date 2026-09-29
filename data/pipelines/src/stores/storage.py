@@ -71,7 +71,9 @@ class Client:
                 ) from e
             raise
 
-    def download_from_gcs(self, blob_name: str, filename: str, binary: bool):
+    def download_from_gcs(
+        self, blob_name: str, filename: str, binary: bool, bucket: str | None = None
+    ):
         """Downloads a blob from GCS to a local path.
 
         Written aside and renamed on success, as `stores.download` already does
@@ -82,8 +84,8 @@ class Client:
         silent, because half a JSON document raises a parse error somewhere
         else entirely.
         """
-        bucket = self.storage_client.bucket(CRAWLED_BUCKET)
-        blob = bucket.blob(blob_name)
+        bucket_name = bucket or CRAWLED_BUCKET
+        blob = self.storage_client.bucket(bucket_name).blob(blob_name)
         partial = f"{filename}.part"
         try:
             if not binary:
@@ -99,18 +101,26 @@ class Client:
             # Best effort: a leftover .part is inert, but it is still litter.
             with contextlib.suppress(OSError):
                 os.remove(partial)
-            print(f"Failed to download gs://{CRAWLED_BUCKET}/{blob_name}: {e}")
+            print(f"Failed to download gs://{bucket_name}/{blob_name}: {e}")
             raise
 
     def cached_storage(
-        self, blob_name: str, binary: bool, size: int | None = None
+        self,
+        blob_name: str,
+        binary: bool,
+        size: int | None = None,
+        bucket: str | None = None,
     ) -> DownloadableFile:
         filename = blob_name.replace("/", ".")
+        if bucket and bucket != CRAWLED_BUCKET:
+            # The local cache is one flat directory keyed by object name, and
+            # two buckets may hold the same name.
+            filename = f"bucket={bucket}.{filename}"
         return DownloadableFile(
-            f"gs://{CRAWLED_BUCKET}/{blob_name}",
+            f"gs://{bucket or CRAWLED_BUCKET}/{blob_name}",
             filename,
             download_lambda=lambda path: self.download_from_gcs(
-                blob_name, path, binary
+                blob_name, path, binary, bucket
             ),
             binary=binary,
             size=size,
@@ -118,7 +128,7 @@ class Client:
 
     def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
         """Lists blobs in a GCS bucket with a given prefix."""
-        bucket = self.storage_client.bucket(CRAWLED_BUCKET)
+        bucket = self.storage_client.bucket(ref.bucket or CRAWLED_BUCKET)
         prefix = ref.prefix
         glob = None
 
@@ -161,7 +171,9 @@ class Client:
             # blob.size comes from the listing response, so carrying it here
             # costs no extra request and saves a caller a download each time
             # it needs to tell a failed crawl from a real one.
-            yield self.cached_storage(blob.name, ref.binary, size=blob.size)
+            yield self.cached_storage(
+                blob.name, ref.binary, size=blob.size, bucket=ref.bucket
+            )
 
     def iterate_blobs(self, io: IO, ref: CloudStorage):
         """List blobs for a given hostname and yield their path and JSON data."""
@@ -230,6 +242,20 @@ class Client:
         verbose=True,
     ) -> str:
         raise NotImplementedError("Use BatchClient instead")
+
+    def create_object(
+        self, bucket: str, blob_name: str, data: bytes, content_type: str
+    ) -> str:
+        """Writes an object that must not exist yet, and raises if it cannot.
+
+        Unlike `upload`, which prints and carries on, and which takes an
+        existing object for success: a job writing its state has to know
+        that the write landed, and a name it reuses is a bug, not a retry.
+        Create-only, so a service account without delete can do it.
+        """
+        blob = self.storage_client.bucket(bucket).blob(blob_name)
+        blob.upload_from_string(data, content_type=content_type, if_generation_match=0)
+        return f"gs://{bucket}/{blob_name}"
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         """Lists available values for a given namespace (e.g. 'date')."""
