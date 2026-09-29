@@ -21,6 +21,8 @@ permanent from predator, whose service account cannot delete, so verify into a
 directory first.
 """
 
+# TODO remove it after the sweep is done.
+
 import argparse
 import gzip
 import hashlib

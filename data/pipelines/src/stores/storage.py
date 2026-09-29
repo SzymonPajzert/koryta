@@ -86,6 +86,8 @@ class Client:
         silent, because half a JSON document raises a parse error somewhere
         else entirely.
         """
+        # TODO remove the default and always set it in the caller
+        # Alternatively, make it receive an object configuring the read.
         bucket_name = bucket or CRAWLED_BUCKET
         blob = self.storage_client.bucket(bucket_name).blob(blob_name)
         partial = f"{filename}.part"
