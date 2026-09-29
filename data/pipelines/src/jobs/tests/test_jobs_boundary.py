@@ -9,6 +9,8 @@ runs from, and `koryta` itself - are top-level modules outside every contract.
 import ast
 import importlib
 import inspect
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -36,6 +38,21 @@ def test_the_pipeline_entry_points_do_not_import_jobs():
     for module in (pipelines, koryta):
         leaked = {m for m in imported_modules(module) if m.split(".")[0] == "jobs"}
         assert leaked == set(), module.__name__
+
+
+def test_importing_the_pipeline_entry_points_loads_no_job():
+    """Nor through what they import: `conductor` is outside every contract too.
+
+    In a fresh interpreter, because this test session has imported jobs itself.
+    """
+    code = (
+        "import sys, koryta, pipelines; "
+        "print(sorted(m for m in sys.modules if m.split('.')[0] == 'jobs'))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip().splitlines()[-1] == "[]"
 
 
 def test_every_console_script_names_a_callable():
