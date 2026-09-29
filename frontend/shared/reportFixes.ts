@@ -30,6 +30,15 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "„Co nowego” na stronie głównej zaczyna się od ośmiu rzędów kafelków - 16 na komputerze i 8 na telefonie, zamiast całej porcji naraz (29 września było ich 37) - więc do stopki jest ponad dwa razy bliżej, a na telefonie cztery razy. „Pokaż więcej” dokłada po osiem rzędów.",
+    fixes: [
+      "DodgLGSXSPlZjVnyeteO",
+      "3PCLXqLV0Kk177sHP6i9",
+      "aWb3jMKRKD3sK7VDVwwe",
+    ],
+  },
+  {
+    change:
       "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
     fixes: ["g29Mn5m5y6EKQegAviQn"],
   },

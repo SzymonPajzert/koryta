@@ -185,6 +185,40 @@ test.describe("Home - kanał wydarzeń", () => {
     );
   });
 
+  test("opens on eight rows, which on a phone is half the cards it was sent", async ({
+    page,
+  }) => {
+    const feed = page.getByTestId("home-event-feed");
+    await expect(feed).toBeVisible({ timeout: 30_000 });
+    const cards = feed.locator(".employment-card, .milestone-card");
+    const shown = cards.filter({ visible: true });
+
+    // Two columns: sixteen cards, although the first request brought twenty.
+    await expect(cards).toHaveCount(16);
+    await expect(shown).toHaveCount(16);
+
+    // One column. The same sixteen are in the document - the server has no
+    // width to ask, so every reader is sent the same page - and css shows
+    // eight of them.
+    await page.setViewportSize({ width: 393, height: 650 });
+    await expect(cards).toHaveCount(16);
+    await expect(shown).toHaveCount(8);
+
+    // Its first „Pokaż więcej” shows the other eight. Only once the page has
+    // hydrated: before that the button is markup nothing listens to.
+    await page.waitForFunction(
+      () =>
+        !!(
+          document.querySelector("#__nuxt") as {
+            __vue_app__?: unknown;
+          } | null
+        )?.__vue_app__,
+    );
+    await page.getByRole("button", { name: "Pokaż więcej" }).click();
+    await expect(shown).toHaveCount(16);
+    await expect(cards).toHaveCount(16);
+  });
+
   test("a card leads to the person, not the institution", async ({ page }) => {
     const card = page.getByTestId(`recent-employment-${edgeId(0)}`);
     await expect(card).toBeVisible({ timeout: 30_000 });
