@@ -34,7 +34,11 @@ export function useEntities<N extends NodeType>(
   filters: Filters | Ref<Filters> = {},
   options: UseEntitiesOptions = {},
 ) {
-  const { data: response, refresh } = authFetch<{
+  const {
+    data: response,
+    refresh,
+    status,
+  } = authFetch<{
     nodes: Record<string, NodeTypeMap[N]>;
     total?: number;
   }>(`/api/nodes?type=${nodeType}`, {
@@ -52,7 +56,20 @@ export function useEntities<N extends NodeType>(
    * for an anonymous reader by however many private rows the client then drops. */
   const total = computed(() => response?.value?.total ?? 0);
 
-  return { entities, total, refresh };
+  /** Whether the collection is still on its way. `entities` is an empty record
+   * both before the response and after an empty one, so a caller that draws a
+   * table from it - the companies view of /eksploruj/tabela - needs this to
+   * tell „loading” from „nothing matches”.
+   *
+   * Read off `status` rather than taken from `pending`, because with `server:
+   * false` the request has not started yet when the page hydrates: `status` is
+   * „idle” and `pending` false, which would draw that empty table for a
+   * moment before any request had gone out. */
+  const pending = computed(
+    () => status.value !== "success" && status.value !== "error",
+  );
+
+  return { entities, total, refresh, pending };
 }
 
 export interface EntityWithVisibility {

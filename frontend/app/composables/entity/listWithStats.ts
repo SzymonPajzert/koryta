@@ -15,6 +15,13 @@ export type UseListWithStatsOptions = {
    * so without this the cities they worked in cannot be worked out and
    * `workLocations` is left absent. */
   companyLocations?: MaybeRefOrGetter<Record<string, string>>;
+  /** Whether the people are wanted at all right now. /eksploruj/tabela keeps
+   * this composable mounted while it shows its companies view, and the query
+   * it watches still moves with every filter there - so without this each
+   * change of sector or region would page through /api/nodes, and count it,
+   * for a table nobody is looking at. While false, nothing is fetched and the
+   * list reads as empty. Defaults to always. */
+  enabled?: MaybeRefOrGetter<boolean>;
 };
 
 export async function useListWithStats(
@@ -24,10 +31,19 @@ export async function useListWithStats(
 ) {
   const user = useCurrentUser();
   const isAuthReady = useIsCurrentUserLoaded();
+  const enabled = computed(() => toValue(options.enabled ?? true));
 
   const { data: pageData, pending } = await useAsyncData(
     cacheKey,
     async () => {
+      if (!enabled.value) {
+        return {
+          nodes: [] as Person[],
+          total: 0,
+          subgraphEdges: [] as Edge[],
+          subgraphNodes: {} as Record<string, Node>,
+        };
+      }
       if (!isAuthReady.value) {
         await new Promise<void>((resolve) => {
           const unwatch = watch(
@@ -92,7 +108,7 @@ export async function useListWithStats(
       return { nodes, total, subgraphEdges: sEdges, subgraphNodes: sNodes };
     },
     {
-      watch: [apiQuery, user],
+      watch: [apiQuery, user, enabled],
       server: options.server ?? apiQuery.value.visibility !== "private",
       // Use cached payload only while hydrating
       // and always fetch fresh for client-side param changes.

@@ -1,8 +1,12 @@
 <template>
   <ClientOnly>
     <!-- Whatever this page can do to a person's relations, /eksploruj/nowe can
-         do too, in its own shape - see `.agent/skills/relation-surfaces.md`. -->
+         do too, in its own shape - see `.agent/skills/relation-surfaces.md`.
+         Not there at all under the companies view, where no row opens it: a
+         closed drawer still sits off the right edge of the page, and on a
+         phone that is width the list does not need. -->
     <ExploreNodeDrawer
+      v-if="!companiesView"
       v-model="openDrawer"
       :node="focusedPerson"
       :edges="focusedEdges"
@@ -50,25 +54,48 @@
         v-model:currently-employed="filterCurrentlyEmployed"
         v-model:min-employment-date="filterMinEmploymentDate"
         v-model:min-votes="filterMinVotes"
-        v-model:sort-by="sortBy"
+        v-model:sort-by="shownSort"
+        v-model:view="view"
         :available-parties="availableParties"
         :available-regions="availableRegions"
         :available-companies="availableCompanies"
         :show-visibility="!!user"
-        :total-items="totalItems"
+        :total-items="companiesView ? companyTotal : totalItems"
         :page="page"
         :items-per-page="
           itemsPerPage === DEFAULT_ITEMS_PER_PAGE ? undefined : itemsPerPage
         "
         :progress-query="apiQuery"
-        :show-progress="!!user"
+        :show-progress="!!user && !companiesView"
         show-share
         @clear="clearFilters"
         @share="trackGoal('tabela:shared')"
       />
 
       <v-card class="table-card">
+        <!-- The companies view: every institution the filters leave, with how
+             many people on the site each has had. Filtered, ordered and paged
+             in the browser over lists this page holds anyway - see
+             app/utils/companyRows.ts - so it costs one cached response, not a
+             query per filter. -->
+        <!-- No rows at all until the counts are in: drawn early, every row
+             of a freshly opened view said „—”, which in that column means
+             nobody, dimmed under the loading bar for as long as the response
+             took. -->
+        <ExploreCompanyTable
+          v-if="companiesView"
+          v-model:items-per-page="itemsPerPage"
+          v-model:page="page"
+          v-model:sort-by="shownSort"
+          :items="companiesPending ? [] : companyPageRows"
+          :total-items="companyTotal"
+          :pending="companiesPending"
+          :counts-unavailable="companyPeopleStatus === 'error'"
+          :draft-with-name="!!user"
+          @category="filterCategory = $event"
+        />
         <ExploreTable
+          v-else
           v-model:items-per-page="itemsPerPage"
           v-model:page="page"
           v-model:sort-by="sortBy"
@@ -93,7 +120,7 @@
            say. A reader who has read a screenful of rows is exactly the one
            who might log in or donate. -->
       <ExploreLoginBanner
-        v-if="!user"
+        v-if="!user && !companiesView"
         :hidden-count="hiddenCount"
         class="mt-6"
       />
@@ -134,7 +161,10 @@
         </div>
       </v-alert>
 
+      <!-- Not under the companies view, where the institutions picked are
+           the rows of the table above it. -->
       <ExploreSelectedCompanies
+        v-if="!companiesView"
         :companies="selectedCompaniesData"
         class="mt-4"
       />
@@ -148,10 +178,18 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { useQueryFilters } from "~/composables/queryFilters";
+import {
+  companyPage,
+  companyRows,
+  companySort,
+  sortCompanyRows,
+} from "~/utils/companyRows";
 import { parties } from "~~/shared/misc";
+import type { TableView } from "~~/shared/queryUrl";
 import { regionFilterOptions } from "~~/shared/teryt";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
+import type { CompanyPeopleStats } from "~~/server/api/stats/companies.get";
 import { useCurrentUser } from "vuefire";
 
 import { useEdges } from "~/composables/edges";
@@ -360,10 +398,19 @@ const hiddenCount = computed(() => {
 // it - but these two fetches still ran during SSR and their results were
 // serialised into __NUXT_DATA__, which is where most of an ~8 MB response came
 // from. Every reader waited on all of it before seeing anything.
-const { entities: places } = useEntities("place", {}, { server: false });
+const { entities: places, pending: placesPending } = useEntities(
+  "place",
+  {},
+  { server: false },
+);
 // Shared with the drawer and the table rows, which need the region each company
 // sits in rather than the region nodes themselves.
-const { regions, companyRegions, companyLocations } = useCompanyLocations();
+const {
+  regions,
+  companyRegions,
+  companyLocations,
+  pending: regionsPending,
+} = useCompanyLocations();
 
 const region = computed<[string, string] | undefined>(() => {
   const terytParam = route.query.teryt as string | undefined;
@@ -418,6 +465,114 @@ const filterHideVoted = choiceFilter<"all" | "no_votes" | "has_votes">(
 );
 const filterMinEmploymentDate = stringFilter("minEmploymentDate");
 const filterMinVotes = numberFilter("minVotes");
+
+/** Which list the table shows: the people, or the institutions they work in -
+ * see `tableViews` in shared/queryUrl.ts.
+ *
+ * Its own setter rather than `choiceFilter`'s, because a switch has to drop
+ * the sort as well as the page. The two lists order by different keys, and a
+ * companies key carried into the people table reaches a Firestore `orderBy`
+ * that drops every document without the field: `?sortBy=people` there is an
+ * empty table and no error. A people key means nothing to the companies view
+ * either, which would only fall back to its default.
+ *
+ * The filters stay. A sector and a region mean the same thing in both lists,
+ * which is what makes the switch worth having; the ones about people are left
+ * in the url, struck through on the bar, and apply again on the way back. */
+const viewParam = choiceFilter<TableView>("view", "people");
+const view = computed<TableView>({
+  get: () => (viewParam.value === "companies" ? "companies" : "people"),
+  set: (next) => {
+    if (next === view.value) return;
+    // Under the filter goal rather than one of its own, which would need
+    // registering on the dashboard before it counted: it is a change to what
+    // the table shows, the thing that goal is broken down by.
+    trackGoal("tabela:filter", { filter: "view" });
+    void setQuery({
+      view: next === "people" ? undefined : next,
+      sortBy: undefined,
+      sortDesc: undefined,
+      page: undefined,
+    });
+  },
+});
+const companiesView = computed(() => view.value === "companies");
+
+/** The order the table is drawn in, for whichever list is on screen. The
+ * people table's is the url's own, and empty for Firestore's order; the
+ * companies view always has one - `DEFAULT_COMPANY_SORT` when the url names
+ * none - and the bar's sort button and the „Osoby” header both show it.
+ * Written to the url either way. */
+const shownSort = computed<SortEntry[]>({
+  get: () =>
+    companiesView.value ? [companySort(sortBy.value[0])] : sortBy.value,
+  set: (value) => {
+    sortBy.value = value;
+  },
+});
+
+/** How many people each institution has had - the „Osoby” column. One cached
+ * response for every filter, fetched the first time the companies view is
+ * opened and kept after that. `useFetch` and not `authFetch`, which would add
+ * `latest=true` for a signed-in reader and send them past the cache; see
+ * server/api/stats/companies.get.ts for what that costs and why the answer is
+ * the same for them. */
+const {
+  data: companyPeople,
+  status: companyPeopleStatus,
+  execute: loadCompanyPeople,
+} = useFetch<CompanyPeopleStats>("/api/stats/companies", {
+  key: "tabela-company-people",
+  server: false,
+  immediate: false,
+});
+watch(
+  companiesView,
+  (on) => {
+    // The template is client-only, and so is the one thing that reads this.
+    if (!import.meta.client || !on) return;
+    if (
+      companyPeopleStatus.value === "idle" ||
+      companyPeopleStatus.value === "error"
+    ) {
+      void loadCompanyPeople();
+    }
+  },
+  { immediate: true },
+);
+
+/** Every institution the filters leave, in no order yet. Only „Siedziba
+ * spółki” narrows them by region; „Region osoby” is about people and is struck
+ * through on the bar here - see `COMPANY_VIEW_KEYS` in shared/queryUrl.ts. */
+const companyMatches = computed(() =>
+  companyRows(
+    places.value ?? {},
+    companyRegions.value,
+    companyPeople.value?.companies,
+    {
+      category: filterCategory.value,
+      regions: [filterCompanyTeryt.value],
+      places: filterPlace.value,
+    },
+  ),
+);
+const companyTotal = computed(() => companyMatches.value.length);
+const companyPageRows = computed(() =>
+  companyPage(
+    sortCompanyRows(companyMatches.value, shownSort.value[0]),
+    page.value,
+    itemsPerPage.value,
+  ),
+);
+/** Until the places, their seats and the counts are all in, the rows would be
+ * a guess: every institution unplaced, or everybody at zero. */
+const companiesPending = computed(
+  () =>
+    placesPending.value ||
+    regionsPending.value ||
+    companyPeopleStatus.value === "idle" ||
+    companyPeopleStatus.value === "pending",
+);
 
 /** Every filter dropped in one write, which is why the bar asks the page to do
  * it rather than doing it itself: each filter above is a writable computed
@@ -518,7 +673,9 @@ const apiQuery = computed(
 const { tableItems, totalItems, pending } = await useListWithStats(
   apiQuery,
   "eksploruj-tabela-data",
-  { server: false, companyLocations },
+  // Not while the companies view is up: every filter there would otherwise
+  // page and count the people for a table that is not drawn.
+  { server: false, companyLocations, enabled: () => !companiesView.value },
 );
 
 const openDrawer = shallowRef(false);
@@ -577,6 +734,9 @@ watch(
 // that found nobody. It does not fire while `pending` is still true, so the
 // empty table shown during a load is not counted as a dead end.
 watch(pending, (isPending, was) => {
+  // The people list reads as empty while the companies view is up, which is
+  // not a filter that found nobody.
+  if (companiesView.value) return;
   if (isPending || !was || totalItems.value !== 0) return;
   trackGoal("tabela:no-results", {
     filters: activeTabelaFilters(route.query).join(",") || "none",

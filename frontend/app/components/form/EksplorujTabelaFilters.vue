@@ -20,6 +20,30 @@
         {{ heading }}
       </h1>
 
+      <!-- What the table lists: the people, or the institutions they work in.
+           Beside the heading because it is the first choice the bar offers -
+           every filter after it narrows whichever of the two this picked - and
+           drawn only for a page that binds it, so /eksploruj/autograf, which
+           mounts this bar over a chart, does not grow a switch that would
+           change nothing there. 28px, the height of the `small` buttons
+           beside it: at its own compact density it stood 8px taller than
+           „Filtry”, which on a phone shares its line. -->
+      <v-btn-toggle
+        v-if="view !== undefined"
+        v-model="view"
+        mandatory
+        density="compact"
+        variant="outlined"
+        divided
+        class="flex-shrink-0 tabela-query-bar__view"
+        style="height: 28px"
+        aria-label="Co pokazuje tabela"
+        data-testid="tabela-view"
+      >
+        <v-btn value="people" size="small" class="text-none">Osoby</v-btn>
+        <v-btn value="companies" size="small" class="text-none"> Spółki </v-btn>
+      </v-btn-toggle>
+
       <!-- Two activators for one panel, sorted out by Vuetify's display
            classes rather than by `useDisplay()`: under SSR Vuetify builds its
            display state from a placeholder 1280px and corrects it only when
@@ -63,6 +87,7 @@
             :available-companies="availableCompanies"
             :show-visibility="showVisibility"
             :total-items="totalItems"
+            :subject="subject"
             show-header
             @close="menuOpen = false"
             @clear="clearAll"
@@ -119,6 +144,7 @@
               :available-companies="availableCompanies"
               :show-visibility="showVisibility"
               :total-items="totalItems"
+              :subject="subject"
               @close="dialogOpen = false"
               @clear="clearAll"
             />
@@ -150,6 +176,13 @@
              white sheet measured 1.85:1 against the 4.5:1 AA needs, which is
              the complaint that started this. The class carries its ink with
              it, so the pair cannot be split up later. -->
+        <!-- A filter about people, while the table lists companies, keeps its
+             chip - it is still in the url, and the switch back to people will
+             apply it - but struck through and in the grey of a filter that is
+             doing nothing, with the reason on hover. Hiding it would leave a
+             reader who switches back wondering where the short list came
+             from; leaving it looking live would claim it narrowed the
+             companies. -->
         <v-chip
           v-for="chip in railChips"
           :key="chip.key"
@@ -157,24 +190,36 @@
           variant="flat"
           border
           closable
-          :class="chip.look.surface"
+          :class="[
+            chip.look.surface,
+            { 'tabela-query-bar__chip--idle': !chip.applies },
+          ]"
           :style="chip.look.style"
           :prepend-icon="chip.look.icon"
           :close-icon="mdiClose"
-          :aria-label="chip.label"
+          :title="chip.applies ? undefined : IDLE_CHIP_TITLE"
+          :aria-label="
+            chip.applies ? chip.label : `${chip.label} (${IDLE_CHIP_ARIA})`
+          "
           :close-label="`Usuń filtr: ${chip.label}`"
           v-on="chipOpensPanel(chip) ? { click: () => openFilters() } : {}"
           @click:close="clearChip(chip)"
         >
           {{ chip.label }}
         </v-chip>
-        <!-- Only when nothing at all is set. With the work row carrying the
-             verification chips, an empty rail is not an unfiltered table. -->
+        <!-- Only when nothing is narrowing the table. With the work row
+             carrying the verification chips, an empty rail is not an
+             unfiltered table; in the companies view, a rail of struck-through
+             people filters is. -->
         <span
-          v-if="chips.length === 0"
+          v-if="activeChips.length === 0"
           class="text-body-2 text-ink-neutral d-none d-md-inline"
         >
-          Wszystkie osoby w bazie
+          {{
+            subject === "companies"
+              ? "Wszystkie spółki w bazie"
+              : "Wszystkie osoby w bazie"
+          }}
         </span>
         <v-btn
           v-if="chips.length >= 2"
@@ -195,7 +240,7 @@
         v-if="totalItems !== undefined"
         class="text-body-2 text-ink-neutral flex-shrink-0 tabela-query-bar__count"
       >
-        {{ polishCountingGrouped(totalItems, "osoba", "osoby", "osób") }}
+        {{ polishCountingGrouped(totalItems, ...COUNT_NOUNS[subject]) }}
       </span>
 
       <v-divider vertical class="mx-1 my-2 d-none d-md-block" />
@@ -215,7 +260,7 @@
             v-bind="activatorProps"
             variant="text"
             size="small"
-            class="text-none flex-shrink-0"
+            class="text-none flex-shrink-0 tabela-query-bar__sort"
             :aria-label="sortKey ? `Sortowanie: ${sortLabel}` : 'Sortowanie'"
             :prepend-icon="mdiSort"
             :append-icon="sortArrow"
@@ -247,6 +292,7 @@
 
       <ExploreShareQuery
         v-if="showShare"
+        class="tabela-query-bar__share"
         :query="query"
         :lookup="lookup"
         @copied="emit('share')"
@@ -393,6 +439,7 @@ import { computed, ref } from "vue";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { partyChipPaint } from "~~/shared/misc";
 import {
+  companySortOptions,
   describeQuery,
   queryChips,
   tableSortOptions,
@@ -400,6 +447,7 @@ import {
   type QueryLookup,
   type ShareKey,
   type TableQuery,
+  type TableView,
 } from "~~/shared/queryUrl";
 import { polishCountingGrouped } from "~/composables/polish";
 import FormEksplorujTabelaFilterPanel from "./EksplorujTabelaFilterPanel.vue";
@@ -488,6 +536,28 @@ const minVotes = defineModel<number | null>("minVotes");
  * get a control that writes `?sortBy=` into a url nothing reads. */
 const sortBy = defineModel<SortEntry[]>("sortBy");
 
+/** Which list the table shows. Without a default for the reason `sortBy` has
+ * none: only a page with both lists to show gets the switch. */
+const view = defineModel<TableView>("view");
+
+/** What is being counted, sorted and filtered. The people table wherever the
+ * page did not bind a view at all. */
+const subject = computed<TableView>(() =>
+  view.value === "companies" ? "companies" : "people",
+);
+
+/** The noun the row count is spelled with, in the three forms
+ * `polishCountingGrouped` picks from. */
+const COUNT_NOUNS: Record<TableView, [string, string, string]> = {
+  people: ["osoba", "osoby", "osób"],
+  companies: ["spółka", "spółki", "spółek"],
+};
+
+/** Why a chip is struck through, on hover and to a screen reader. */
+const IDLE_CHIP_TITLE =
+  "Ten filtr dotyczy osób, więc listy spółek nie zawęża. Zadziała znowu po powrocie do osób.";
+const IDLE_CHIP_ARIA = "nie dotyczy spółek";
+
 const menuOpen = ref(false);
 const dialogOpen = ref(false);
 
@@ -507,6 +577,8 @@ const lookup = computed<QueryLookup>(() => ({
  * as the company list arrives, so a chip for it would flicker rather than
  * inform. */
 const query = computed<TableQuery>(() => ({
+  // First, as in a shared link: it decides which of the filters below apply.
+  view: subject.value,
   category: category.value,
   teryt: teryt.value,
   companyTeryt: companyTeryt.value,
@@ -538,6 +610,12 @@ const query = computed<TableQuery>(() => ({
  * it - which is the failure the count on the „Filtry” button exists to
  * prevent. The x on the chip is the only way back. */
 const chips = computed(() => queryChips(query.value, lookup.value));
+
+/** The chips whose filter narrows the table on screen - all of them, unless the
+ * companies view is leaving the people filters idle. What the „Filtry” count
+ * and the „Wszystkie …” line go by: a struck-through chip is not a reason for
+ * a short list. */
+const activeChips = computed(() => chips.value.filter((chip) => chip.applies));
 
 /** The pale background each filter's chip is painted on.
  *
@@ -664,7 +742,12 @@ type DressedChip = QueryChip & { look: ChipLook };
 
 const dress = (chip: QueryChip): DressedChip => ({
   ...chip,
-  look: chipLook(chip),
+  // An idle chip gives up its hue along with its effect: a party in its own
+  // colour would still read as a filter at work, whatever the line through it
+  // says.
+  look: chip.applies
+    ? chipLook(chip)
+    : { surface: CHIP_FALLBACK, icon: undefined },
 });
 
 /** A chip only pretends to be a button where the control behind it exists: a
@@ -673,7 +756,9 @@ const dress = (chip: QueryChip): DressedChip => ({
  * with a panel that does not hold the filter that was clicked. Without a
  * click listener VChip drops its ripple, its tabindex and its pointer, so it
  * does not invite the click in the first place. */
-const chipOpensPanel = (chip: QueryChip) => props.showVisibility || !chip.admin;
+const chipOpensPanel = (chip: QueryChip) =>
+  // An idle chip's control is not in the companies view's panel either.
+  chip.applies && (props.showVisibility || !chip.admin);
 
 const queryDescription = computed(() =>
   describeQuery(query.value, lookup.value),
@@ -726,31 +811,44 @@ const workRowFilters = computed(() =>
  * that the number and the rail can never disagree - one chip per filter, which
  * is why `place` with three employers counts once. */
 const filtersLabel = computed(() =>
-  chips.value.length ? `Filtry (${chips.value.length})` : "Filtry",
+  activeChips.value.length ? `Filtry (${activeChips.value.length})` : "Filtry",
 );
 
 /** „Status” orders by `visibility`, which a reader who cannot see drafts has
- * no use for: it would sort every row into the one bucket they are allowed. */
-const sortOptions = computed(() =>
-  tableSortOptions.filter(
-    (option) => props.showVisibility || !("adminOnly" in option),
-  ),
+ * no use for: it would sort every row into the one bucket they are allowed.
+ *
+ * The companies view has orders of its own, and none of the people table's
+ * would mean anything there - see `companySortOptions`. */
+const sortOptions = computed<readonly { key: string; title: string }[]>(() =>
+  subject.value === "companies"
+    ? companySortOptions
+    : tableSortOptions.filter(
+        (option) => props.showVisibility || !("adminOnly" in option),
+      ),
 );
 
 /** Shorter names for the button, which shares a 390px line with „Filtry”, the
  * chip rail and the row count; the menu keeps the full ones. Only the ones that
- * do not fit - a key missing from here falls back to its own title. */
+ * do not fit - a key missing from here falls back to its own title. The two
+ * lists share no key but `name`, which fits under either title. */
 const SORT_SHORT_TITLES: Record<string, string> = {
   latestEmploymentStart: "Zatrudnienie",
   "stats.votes.interesting": "Oceny",
   notesCount: "Notatki",
   factsCount: "Fakty",
+  people: "Osoby",
+  current: "Obecnie",
+  latestStart: "Zatrudnienie",
 };
 
 const sortKey = computed(() => sortBy.value?.[0]?.key);
-const sortOption = computed(() =>
-  tableSortOptions.find((option) => option.key === sortKey.value),
-);
+// Looked up in the whole list rather than in `sortOptions`, so that a guest
+// arriving on a link sorted by „Status” still sees the button say so.
+const sortOption = computed(() => {
+  const all: readonly { key: string; title: string }[] =
+    subject.value === "companies" ? companySortOptions : tableSortOptions;
+  return all.find((option) => option.key === sortKey.value);
+});
 const sortDesc = computed(() => sortBy.value?.[0]?.order === "desc");
 const sortLabel = computed(() => sortOption.value?.title ?? "Sortowanie");
 const sortButtonLabel = computed(() =>
@@ -868,6 +966,14 @@ function clearAll() {
   min-width: 0;
 }
 
+/* A people filter while the table lists companies: still in the url, still
+   removable, doing nothing. The line is the whole signal - the grey surface it
+   sits on is the one every other idle-looking chip here uses, and keeps its
+   measured contrast, which fading the chip out would not. */
+.tabela-query-bar__chip--idle {
+  text-decoration: line-through;
+}
+
 /* Same width whatever the number is, so the count does not shove the sort
    button sideways every time a filter changes. */
 .tabela-query-bar__count {
@@ -885,6 +991,24 @@ function clearAll() {
   }
   .tabela-query-bar__count {
     min-width: 0;
+  }
+
+  /* The Osoby | Spółki switch takes the sort and the share link onto a line
+     of its own, under the heading, and „Filtry”, the chips and the count keep
+     the line above the table. Left beside „Filtry” the switch took 132px of
+     the chips' line, and at 393px that shrank a „Koleje” chip to its icon:
+     the chip rail starts from nothing (`flex-1-1-0`), so whatever else fits
+     on its line is paid for out of it. `order` rather than a second copy in
+     the markup, so there is one switch at every width; the heading goes
+     first explicitly, since the three below now sort before it. The share
+     button is ShareQuery's own element, which the scope does not reach. */
+  .tabela-query-bar__title {
+    order: -2;
+  }
+  .tabela-query-bar__view,
+  .tabela-query-bar__sort,
+  .tabela-query-bar__main :deep(.tabela-query-bar__share) {
+    order: -1;
   }
 }
 

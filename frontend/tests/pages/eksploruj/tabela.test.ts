@@ -1,22 +1,40 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { registerEndpoint } from "@nuxt/test-utils/runtime";
 import { computed, ref } from "vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import type { Query } from "~~/server/api/nodes/index.get";
+import type { CompanyPeopleStats } from "~~/server/api/stats/companies.get";
+import type { CompanyRow } from "../../../app/utils/companyRows";
 import TabelaPage from "../../../app/pages/eksploruj/tabela.vue";
 import ExploreTable from "../../../app/components/explore/Table.vue";
+import ExploreCompanyTable from "../../../app/components/explore/CompanyTable.vue";
 
 const vuetify = createVuetify({ components, directives });
 
 // Same shape as tests/pages/eksploruj/nowe.test.ts: live boxes the tests
 // rewrite between mounts, because `vi.mock` is hoisted above anything this
 // file defines.
-const { routeQuery, lastQuery, authUser } = vi.hoisted(() => ({
+const {
+  routeQuery,
+  lastQuery,
+  lastListOptions,
+  authUser,
+  routerPush,
+  placesBox,
+  seatsBox,
+} = vi.hoisted(() => ({
   routeQuery: { value: {} as Record<string, string> },
   lastQuery: { value: null as { value: Query } | null },
+  lastListOptions: { value: null as { enabled?: () => boolean } | null },
   authUser: { value: null as { getIdTokenResult: () => unknown } | null },
+  routerPush: vi.fn(),
+  // What the companies view is drawn from: the place list and the seat of
+  // each, both of which the page holds for the people table anyway.
+  placesBox: { value: {} as Record<string, unknown> },
+  seatsBox: { value: {} as Record<string, { name: string; teryt: string }> },
 }));
 
 // `mountSuspended` is not an option here: it brings Nuxt's own router, and the
@@ -31,7 +49,11 @@ vi.mock("vue-router", async (importOriginal) => {
       path: "/eksploruj/tabela",
       params: {},
     }),
-    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), afterEach: vi.fn() }),
+    useRouter: () => ({
+      push: routerPush,
+      replace: vi.fn(),
+      afterEach: vi.fn(),
+    }),
   };
 });
 
@@ -42,24 +64,38 @@ vi.mock("vue-router", async (importOriginal) => {
 // every declaration in this file - a named factory is still in its temporal
 // dead zone when the hoisted call runs.
 vi.mock("~/composables/entity/listWithStats", () => ({
-  useListWithStats: vi.fn((apiQuery: { value: Query }) => {
-    lastQuery.value = apiQuery;
-    return Promise.resolve({
-      tableItems: ref([]),
-      totalItems: ref(0),
-      pending: ref(false),
-    });
-  }),
+  useListWithStats: vi.fn(
+    (
+      apiQuery: { value: Query },
+      _key: string,
+      options: { enabled?: () => boolean },
+    ) => {
+      lastQuery.value = apiQuery;
+      lastListOptions.value = options;
+      return Promise.resolve({
+        tableItems: ref([]),
+        totalItems: ref(0),
+        pending: ref(false),
+      });
+    },
+  ),
 }));
 vi.mock("~~/app/composables/entity/listWithStats", () => ({
-  useListWithStats: vi.fn((apiQuery: { value: Query }) => {
-    lastQuery.value = apiQuery;
-    return Promise.resolve({
-      tableItems: ref([]),
-      totalItems: ref(0),
-      pending: ref(false),
-    });
-  }),
+  useListWithStats: vi.fn(
+    (
+      apiQuery: { value: Query },
+      _key: string,
+      options: { enabled?: () => boolean },
+    ) => {
+      lastQuery.value = apiQuery;
+      lastListOptions.value = options;
+      return Promise.resolve({
+        tableItems: ref([]),
+        totalItems: ref(0),
+        pending: ref(false),
+      });
+    },
+  ),
 }));
 
 vi.mock("~/composables/edges", () => ({
@@ -71,17 +107,19 @@ vi.mock("~/composables/edges", () => ({
 // Auto-imported, so the page reaches them through the module Nuxt resolved at
 // build time rather than through anything a `vi.stubGlobal` could reach.
 vi.mock("~/composables/entity", () => ({
-  useEntities: vi.fn(() => ({
-    entities: ref({}),
+  useEntities: vi.fn((type: string) => ({
+    entities: ref(type === "place" ? placesBox.value : {}),
     total: ref(0),
     refresh: vi.fn(),
+    pending: ref(false),
   })),
 }));
 vi.mock("~/composables/companyLocations", () => ({
   useCompanyLocations: vi.fn(() => ({
     regions: ref({}),
-    companyRegions: ref({}),
+    companyRegions: ref(seatsBox.value),
     companyLocations: ref({}),
+    pending: ref(false),
   })),
 }));
 
@@ -286,5 +324,130 @@ describe("/eksploruj/tabela's columns", () => {
         .find("form-eksploruj-tabela-filters-stub")
         .attributes("showvisibility"),
     ).toBe("true");
+  });
+});
+
+// Counts for two of the three places below: the third is a sector's company
+// nobody on the site is tied to, which is most of any sector.
+registerEndpoint("/api/stats/companies", (): CompanyPeopleStats => ({
+  generatedAt: "2026-09-29T02:00:00.000Z",
+  companies: {
+    board: { people: 7, current: 3, latestStart: "2024-04-12" },
+    hospital: { people: 2, current: 0, latestStart: "2019-01-01" },
+  },
+}));
+
+/** „W tym widoku brakuje jeszcze spółek” and „Przydałby się teraz po prostu
+ * widok i filtr dla spółek”: the owner's two reports, on the rail filter and
+ * the sector filter. The same page lists the institutions when asked to, from
+ * lists it already holds. */
+describe("/eksploruj/tabela's companies view", () => {
+  beforeEach(() => {
+    lastQuery.value = null;
+    lastListOptions.value = null;
+    authUser.value = null;
+    placesBox.value = {
+      empty: { name: "Firma Pusta", type: "place", categories: ["koleje"] },
+      board: {
+        name: "Wojewódzki Zakład Testowy",
+        type: "place",
+        categories: ["koleje"],
+        isPublic: true,
+      },
+      hospital: {
+        name: "Szpital Powiatowy",
+        type: "place",
+        categories: ["szpitale"],
+      },
+    };
+    seatsBox.value = {
+      board: { name: "Powiat Testowy", teryt: "0201" },
+      hospital: { name: "Kraków", teryt: "1261" },
+    };
+  });
+  afterEach(() => {
+    placesBox.value = {};
+    seatsBox.value = {};
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  const shownRows = (wrapper: ReturnType<typeof mount>) =>
+    (
+      wrapper.findComponent(ExploreCompanyTable).props("items") as CompanyRow[]
+    ).map((row) => [row.name, row.people]);
+
+  it("lists the sector's institutions in place of its people", async () => {
+    const wrapper = await mountPage({ view: "companies", category: "koleje" });
+    await flushPromises();
+
+    expect(wrapper.findComponent(ExploreTable).exists()).toBe(false);
+    // The one with people on the site first - the default order - and the
+    // other railway after it, at nobody: it is the company the people view
+    // could never show.
+    expect(shownRows(wrapper)).toEqual([
+      ["Wojewódzki Zakład Testowy", 7],
+      ["Firma Pusta", 0],
+    ]);
+    const bar = wrapper.find("form-eksploruj-tabela-filters-stub");
+    expect(bar.attributes("totalitems")).toBe("2");
+    expect(bar.attributes("view")).toBe("companies");
+    // No work row over a list of companies: its progress and its four
+    // verification shortcuts are about people.
+    expect(bar.attributes("showprogress")).toBe("false");
+  });
+
+  it("reads the seat filter as where the company is", async () => {
+    const wrapper = await mountPage({ view: "companies", companyTeryt: "12" });
+    await flushPromises();
+
+    expect(shownRows(wrapper)).toEqual([["Szpital Powiatowy", 2]]);
+  });
+
+  it("leaves a person's region to the people view", async () => {
+    // „Region osoby” is any tie a person has to a region; the companies view
+    // strikes it through rather than filtering by it.
+    const wrapper = await mountPage({ view: "companies", teryt: "12" });
+    await flushPromises();
+
+    expect(shownRows(wrapper)).toHaveLength(3);
+  });
+
+  it("asks for no people while it is up", async () => {
+    await mountPage({ view: "companies", category: "koleje" });
+    expect(lastListOptions.value?.enabled?.()).toBe(false);
+
+    await mountPage({ category: "koleje" });
+    expect(lastListOptions.value?.enabled?.()).toBe(true);
+  });
+
+  it("switches with the filters kept and the order and page dropped", async () => {
+    // A people sort carried into the companies view would order nothing, and a
+    // companies one carried back into /api/nodes would empty the table.
+    const wrapper = await mountPage({
+      category: "koleje",
+      sortBy: "latestEmploymentStart",
+      sortDesc: "true",
+      page: "3",
+    });
+
+    wrapper
+      .findComponent({ name: "FormEksplorujTabelaFilters" })
+      .vm.$emit("update:view", "companies");
+
+    expect(routerPush).toHaveBeenLastCalledWith({
+      query: { category: "koleje", view: "companies" },
+    });
+  });
+
+  it("narrows to a sector clicked in a row", async () => {
+    const wrapper = await mountPage({ view: "companies" });
+    await flushPromises();
+
+    wrapper.findComponent(ExploreCompanyTable).vm.$emit("category", "szpitale");
+
+    expect(routerPush).toHaveBeenLastCalledWith({
+      query: { view: "companies", category: "szpitale" },
+    });
   });
 });

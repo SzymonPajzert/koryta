@@ -59,6 +59,31 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "tabela-widok-spolek",
+    title: "Eksploruj → Tabela: spółki, nie tylko osoby",
+    description:
+      "Obok tytułu tabeli jest przełącznik „Osoby | Spółki”. „Spółki” " +
+      "pokazuje instytucje, które zostawiają filtry - branża, siedziba, " +
+      "wybrane instytucje - także te, z którymi nikt na stronie nie jest " +
+      "jeszcze powiązany. Przy każdej: branża, siedziba i ile osób z " +
+      "opublikowaną stroną w niej zasiadało, ile jest tam teraz i od kiedy " +
+      "najnowsze zatrudnienie - liczone w tej jednej instytucji, bez jej " +
+      "spółek zależnych. Filtry o osobach (region osoby, partia, " +
+      "zatrudnienie, weryfikacja) zostają w adresie, ale są przekreślone i spółek nie " +
+      "zawężają.",
+    steps: [
+      "Wejdź na /eksploruj/tabela?category=koleje i kliknij „Spółki” obok tytułu. Adres ma dostać `view=companies`, a tabela pokazać spółki kolejowe - najpierw te, w których zasiadało najwięcej osób (np. Polskie Koleje Państwowe).",
+      "Przewiń dalej: mają tam być też spółki z kreską w kolumnie „Osoby” - tych widok osób nie mógł pokazać wcale.",
+      "W „Filtry” wybierz „Siedziba spółki”, np. województwo mazowieckie - mają zostać spółki kolejowe z siedzibą w tym województwie.",
+      "Kliknij znacznik branży w wierszu, np. „Komunikacja miejska” - lista ma się zawęzić do tej branży i dalej pokazywać spółki.",
+      "Kliknij nazwę spółki - ma otworzyć się jej strona.",
+      "Wróć przełącznikiem do „Osoby” - branża i siedziba mają zostać, a tabela pokazać osoby z tych spółek.",
+    ],
+    link: "/eksploruj/tabela?view=companies&category=koleje",
+    area: "public",
+    fixes: ["32Ty8NbZrKGTfvYHdGP8", "gGr2peunBlhXwswCA7nb"],
+  },
+  {
     id: "opinie-do-zadan",
     title: "Zgłoszenie jako zadanie na liście właściciela",
     description:

@@ -23,15 +23,41 @@
          count here is how many of the block's filters are set, so that a panel
          opened from a shared link says which section is doing the narrowing
          before any of its controls has been read. -->
+    <!-- The companies view keeps the controls that describe an institution -
+         its sector, its seat, which ones - and drops those that describe a
+         person, whose chips it strikes through on the bar. The seat moves up
+         from „Więcej filtrów” into the place „Region osoby” leaves: it is the
+         one way an institution belongs to a region, and it is the same
+         `companyTeryt` in both views, so a seat picked over the companies is
+         still their seat when the reader switches back to their people.
+
+         One control to a line there (`colMd`). The desktop menu is as wide as
+         what it holds - Vuetify caps a menu's `min-width` at its activator's
+         width when it opens below it, so the bar's 760 never applies - and
+         without the people view's „Zatrudnienie” select to widen it, two
+         fields side by side came out 100px apiece: „Sie…” over „K”. -->
     <div class="d-flex align-center mb-1">
-      <span class="text-overline text-ink-neutral">Osoba i podmiot</span>
+      <span class="text-overline text-ink-neutral">
+        {{ companies ? "Spółka" : "Osoba i podmiot" }}
+      </span>
       <v-spacer />
       <span v-if="basicCount" class="text-caption text-ink-sage">
         {{ filtersSet(basicCount) }}
       </span>
     </div>
     <v-row dense>
-      <v-col cols="12" md="6">
+      <v-col v-if="companies" cols="12">
+        <v-autocomplete
+          v-model="companyTeryt"
+          :items="availableRegions"
+          label="Siedziba spółki"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+        />
+      </v-col>
+      <v-col v-else cols="12" md="6">
         <v-autocomplete
           v-model="teryt"
           :items="availableRegions"
@@ -42,7 +68,7 @@
           clearable
         />
       </v-col>
-      <v-col cols="12" md="6">
+      <v-col cols="12" :md="colMd">
         <v-select
           v-model="category"
           :items="availableCategories"
@@ -53,7 +79,7 @@
           clearable
         />
       </v-col>
-      <v-col cols="12" md="6">
+      <v-col v-if="!companies" cols="12" md="6">
         <v-select
           v-model="currentlyEmployed"
           :items="[
@@ -76,7 +102,7 @@
          and they wrapped the four filters the logs show are the most used on
          the site (minVotes 47 combinations, hideVoted 40, visibility 32,
          minEmploymentDate 31). The sentence survives as a tooltip. -->
-    <template v-if="showVisibility">
+    <template v-if="showVisibility && !companies">
       <v-divider class="my-4" />
       <div class="d-flex align-center ga-1 mb-2">
         <span class="text-overline text-ink-neutral">Weryfikacja</span>
@@ -129,7 +155,7 @@
         </v-expansion-panel-title>
         <v-expansion-panel-text>
           <v-row dense>
-            <v-col cols="12" md="6">
+            <v-col v-if="!companies" cols="12" md="6">
               <v-autocomplete
                 v-model="party"
                 :items="availableParties"
@@ -163,7 +189,7 @@
                 </template>
               </v-autocomplete>
             </v-col>
-            <v-col cols="12" md="6">
+            <v-col v-if="!companies" cols="12" md="6">
               <v-autocomplete
                 v-model="companyTeryt"
                 :items="availableRegions"
@@ -174,7 +200,7 @@
                 clearable
               />
             </v-col>
-            <v-col cols="12" md="6">
+            <v-col cols="12" :md="colMd">
               <v-autocomplete
                 v-model="place"
                 :items="availableCompanies"
@@ -222,6 +248,7 @@ import { computed, ref } from "vue";
 import { ink, surface } from "~~/shared/colors";
 import { companyCategories } from "~~/shared/companyCategories";
 import { partyChipPaint } from "~~/shared/misc";
+import type { TableView } from "~~/shared/queryUrl";
 import { polishCounting } from "~/composables/polish";
 import FormEksplorujTabelaVerificationFields from "./EksplorujTabelaVerificationFields.vue";
 
@@ -239,9 +266,20 @@ const props = withDefaults(
     /** The menu draws its own „Filtry / Wyczyść wszystkie” line; the dialog
      * has a toolbar for that. */
     showHeader?: boolean;
+    /** Which list the filters narrow. The companies view offers only the ones
+     * that say something about an institution - see the heading above. */
+    subject?: TableView;
   }>(),
-  { showVisibility: true, totalItems: undefined },
+  { showVisibility: true, totalItems: undefined, subject: "people" },
 );
+
+const companies = computed(() => props.subject === "companies");
+
+/** How many of the twelve grid columns a control takes from md up: half, two
+ * to a line, where the people view's controls make the menu wide enough for
+ * that; the whole line in the companies view, where they do not - see the
+ * note over the first group. */
+const colMd = computed(() => (companies.value ? 12 : 6));
 
 const emit = defineEmits<{ close: []; clear: [] }>();
 
@@ -264,11 +302,14 @@ const availableCategories = companyCategories.map((c) => ({
   value: c.value,
 }));
 
+/** Counted over the controls the section shows: a party chip struck through on
+ * the bar is not a filter this section is doing anything with. */
 const moreCount = computed(
   () =>
-    [party.value?.length, companyTeryt.value, place.value?.length].filter(
-      Boolean,
-    ).length,
+    (companies.value
+      ? [place.value?.length]
+      : [party.value?.length, companyTeryt.value, place.value?.length]
+    ).filter(Boolean).length,
 );
 
 /** How many of a group's filters are narrowing the table, for the count beside
@@ -283,11 +324,10 @@ const set = (value: string | null | undefined) => !!value && value !== "all";
 
 const basicCount = computed(
   () =>
-    [
-      set(teryt.value),
-      set(category.value),
-      set(currentlyEmployed.value),
-    ].filter(Boolean).length,
+    (companies.value
+      ? [set(companyTeryt.value), set(category.value)]
+      : [set(teryt.value), set(category.value), set(currentlyEmployed.value)]
+    ).filter(Boolean).length,
 );
 
 const verificationCount = computed(
@@ -323,11 +363,14 @@ const partyStyle = (party: string) =>
  * change of a filter they can see would be the panel arguing with them. */
 const morePanel = ref<number | undefined>(moreCount.value ? 0 : undefined);
 
-const doneLabel = computed(() =>
-  props.totalItems === undefined
-    ? "Gotowe"
-    : `Pokaż ${polishCounting(props.totalItems, "osobę", "osoby", "osób")}`,
-);
+const doneLabel = computed(() => {
+  if (props.totalItems === undefined) return "Gotowe";
+  // The accusative - „Pokaż 1 spółkę”, „Pokaż 1 osobę” - and the plural forms
+  // `polishCounting` picks for everything above one.
+  return companies.value
+    ? `Pokaż ${polishCounting(props.totalItems, "spółkę", "spółki", "spółek")}`
+    : `Pokaż ${polishCounting(props.totalItems, "osobę", "osoby", "osób")}`;
+});
 </script>
 
 <style scoped>
