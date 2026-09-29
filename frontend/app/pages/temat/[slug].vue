@@ -9,23 +9,73 @@
   </div>
 
   <div v-else>
+    <!-- Where /profil's „Podgląd tej wersji” and the history on /admin/rewizje
+         lead: the page as a proposal would leave it, said out loud so nobody
+         takes it for what the site shows. -->
+    <v-alert
+      v-if="preview"
+      type="info"
+      variant="tonal"
+      class="mb-4"
+      data-testid="topic-preview-notice"
+    >
+      Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
+      <br />
+      <nuxt-link :to="`/admin/rewizje/${topicId}?revisionId=${revisionId}`"
+        >Zobacz historię zmian</nuxt-link
+      >.
+    </v-alert>
+
     <v-card class="mb-4">
       <v-card-item>
         <template #prepend>
           <v-icon :icon="mdiTagOutline" size="large" color="primary" />
         </template>
-        <v-card-title class="text-h5 font-weight-bold text-wrap">
-          {{ topic?.name }}
+        <!-- The controls share the name's row rather than taking the card's
+             `#append` column. That column runs the height of the item, so on
+             a phone it would have held the lead under the name to a third of
+             the screen; here they wrap onto a line of their own instead, and
+             `ms-auto` keeps them at the right edge when they do. -->
+        <v-card-title
+          class="d-flex flex-wrap align-center ga-2 text-h5 font-weight-bold text-wrap"
+        >
+          <span data-testid="topic-name">{{ shown?.name }}</span>
           <ChipDraftStatus
             :published="topicPublished"
             :node-id="topicId"
             :node-name="topic?.name"
-            class="ml-2"
             @published="refresh()"
           />
+          <div v-if="topic" class="d-flex align-center ga-2 ms-auto">
+            <!-- Where the edits below are listed, and where one is taken back:
+                 an admin's is live as soon as it is saved, so the history is
+                 the only place its previous wording survives. -->
+            <ButtonIconAction
+              v-if="isAdmin"
+              :icon="mdiHistory"
+              label="Rewizje"
+              :to="`/admin/rewizje/${topicId}`"
+              data-testid="admin-revisions-link"
+            />
+            <!-- The name and the lead under it were editable nowhere, so a
+                 wrong case ending in a lead had to be corrected in the
+                 database by hand. Anybody may propose a change, as on any
+                 other page; an admin's goes live on saving. -->
+            <DialogProposeEditNode
+              :entity="topic"
+              :can-apply="isAdmin === true"
+              skip-redirect
+              data-testid="topic-edit"
+              @submitted="onEdited"
+            />
+          </div>
         </v-card-title>
-        <v-card-subtitle v-if="topic?.description" class="text-wrap">
-          {{ topic.description }}
+        <v-card-subtitle
+          v-if="shown?.description"
+          class="text-wrap"
+          data-testid="topic-description"
+        >
+          {{ shown.description }}
         </v-card-subtitle>
       </v-card-item>
       <v-card-text class="pt-0 text-caption text-medium-emphasis">
@@ -103,15 +153,28 @@
         ze strony artykułu.
       </v-card-text>
     </v-card>
+
+    <!-- What happened to the change, since the two outcomes look alike from
+         here: a proposal leaves the page as it was, exactly like a save that
+         failed silently would. -->
+    <v-snackbar
+      :model-value="!!editOutcome"
+      color="ink-info"
+      :timeout="6000"
+      data-testid="topic-edit-notice"
+      @update:model-value="editOutcome = undefined"
+    >
+      {{ editOutcome ? EDIT_NOTICES[editOutcome] : "" }}
+    </v-snackbar>
   </div>
 </template>
 
 <script setup lang="ts">
 /** One story: what it is about, who is in it, and what it rests on. */
-import { computed } from "vue";
-import { mdiTagOutline } from "@mdi/js";
+import { computed, ref } from "vue";
+import { mdiHistory, mdiTagOutline } from "@mdi/js";
 import { useCurrentUser } from "vuefire";
-import { authFetch } from "~/composables/auth";
+import { authFetch, useAuthState } from "~/composables/auth";
 import { useDomainIcon } from "~/composables/useDomainIcon";
 import { polishCounting } from "~/composables/polish";
 import {
@@ -120,6 +183,8 @@ import {
   SLUG_REDIRECT_CODE,
 } from "~/composables/slugs";
 import { entityDescription, SOCIAL_CARD } from "~/composables/entitySeo";
+import { topicPreview } from "~/utils/topicPreview";
+import type { Revision } from "~~/shared/model";
 import type { TopicArticle, TopicDetail } from "~~/server/api/topics/[id].get";
 
 // No `fullWidth`: that is for /graf, which is a canvas edge to edge. A story is
@@ -129,6 +194,7 @@ definePageMeta({ title: "Temat" });
 
 const route = useRoute();
 const user = useCurrentUser();
+const { isAdmin } = useAuthState();
 const { getDomainIcon } = useDomainIcon();
 
 const topicId = parseEntityUrlSlug(route.params.slug as string).id;
@@ -144,6 +210,29 @@ const { data, status, refresh } = await authFetch<TopicDetail>(
 );
 
 const topic = computed(() => data.value?.topic);
+
+const revisionId = computed(() =>
+  typeof route.query.revisionId === "string"
+    ? route.query.revisionId
+    : undefined,
+);
+
+const { data: revision } = await useAsyncData<Revision | null>(
+  () => `topic-revision-${revisionId.value ?? "none"}`,
+  () =>
+    revisionId.value
+      ? $fetch<Revision>(`/api/revisions/${revisionId.value}` as never)
+      : Promise.resolve(null),
+  { watch: [revisionId] },
+);
+
+/** A proposal's wording, where the url asks for one - see `topicPreview`. */
+const preview = computed(() => topicPreview(topicId, revision.value));
+
+/** The heading and the lead as drawn: a previewed proposal's, or the topic's
+ * own. Only these two - the dialog still edits the stored topic, and the
+ * title a search engine reads is never a proposal's. */
+const shown = computed(() => preview.value ?? topic.value);
 const topicPublished = computed(() => topic.value?.published === true);
 const articles = computed<TopicArticle[]>(() => data.value?.articles ?? []);
 
@@ -157,15 +246,46 @@ function articleUrl(article: TopicArticle) {
   return generateEntityUrl("article", article.id, article.name);
 }
 
+/** What a save from the header came to. */
+type EditOutcome = "applied" | "proposed" | "duplicate";
+
+const EDIT_NOTICES: Record<EditOutcome, string> = {
+  applied: "Zmiana zapisana.",
+  proposed: "Propozycja zapisana i czeka na zatwierdzenie.",
+  duplicate: "Tę zmianę już zgłosiłeś - czeka na zatwierdzenie.",
+};
+
+const editOutcome = ref<EditOutcome | undefined>(undefined);
+
+/** Only an applied edit changes anything on the page, so only that one reads
+ * the topic again - with `latest`, which is what an admin is signed in with,
+ * and which reads past the server's cache.
+ *
+ * A renamed topic keeps the address it was opened at until the next load
+ * redirects it, the way any out-of-date slug is: following it here would mount
+ * the page afresh and take this notice down with the old one. */
+async function onEdited(_id: string, duplicate?: boolean, applied?: boolean) {
+  editOutcome.value = applied
+    ? "applied"
+    : duplicate
+      ? "duplicate"
+      : "proposed";
+  if (applied) await refresh();
+}
+
 // A topic reached by an out-of-date slug keeps working - the id is what
-// resolves it - but the canonical url is the one worth sharing.
+// resolves it - but the canonical url is the one worth sharing. The query goes
+// along: a preview link built from the name its proposal gave the topic
+// arrives on exactly such a slug, and dropping `revisionId` on the way showed
+// the reader the current text and no trace of what they had proposed.
 if (status.value === "success" && topic.value?.name) {
   const expected = generateEntityUrl("topic", topicId, topic.value.name);
   if (route.path !== expected) {
+    const to = { path: expected, query: route.query };
     if (import.meta.server) {
-      await navigateTo(expected, { redirectCode: SLUG_REDIRECT_CODE });
+      await navigateTo(to, { redirectCode: SLUG_REDIRECT_CODE });
     } else {
-      await navigateTo(expected, { replace: true });
+      await navigateTo(to, { replace: true });
     }
   }
 }
