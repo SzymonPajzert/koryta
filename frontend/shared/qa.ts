@@ -950,6 +950,7 @@ export const QA_ITEMS: QaItem[] = [
     ],
     link: "/eksploruj/tabela",
     area: "contributor",
+    fixes: ["QUAuKkMLMc6N2OFxFXWl"],
   },
   {
     id: "ocena-faktow-na-stronie-osoby",
@@ -1040,6 +1041,7 @@ export const QA_ITEMS: QaItem[] = [
     ],
     link: "/ekstrakcje",
     area: "contributor",
+    fixes: ["pqJ2F41aikHuUFQd8WOK"],
   },
   {
     id: "regulamin-i-polityka-to-dwie-strony",
