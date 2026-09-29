@@ -22,7 +22,7 @@ import { regionsByPlaceId } from "~/utils/companyLocation";
 export function useCompanyLocations() {
   const { user } = useAuthState();
 
-  const { entities: regions } = useEntities(
+  const { entities: regions, pending } = useEntities(
     "region",
     {},
     { server: false, key: "company-locations-regions" },
@@ -44,5 +44,8 @@ export function useCompanyLocations() {
     return names;
   });
 
-  return { regions, companyRegions, companyLocations };
+  /** `pending` is the region list's: until it lands every company reads as
+   * seated nowhere, which a caller filtering by seat must not mistake for an
+   * answer. */
+  return { regions, companyRegions, companyLocations, pending };
 }

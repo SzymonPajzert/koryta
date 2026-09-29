@@ -191,6 +191,7 @@
     "name": "Firma Pusta",
     "type": "place",
     "revision_id": "rev-company-empty",
+    "categories": ["koleje"],
     "stats": {
       "nodeGroupSize": 1
     }

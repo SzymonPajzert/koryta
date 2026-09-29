@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  companySortOptions,
   describeQuery,
   hideVotedOptions,
   queryChips,
   shareQuery,
   shareUrl,
+  tableSortOptions,
+  tableView,
   visibilityOptions,
   type TableQuery,
 } from "../../shared/queryUrl";
@@ -282,5 +285,137 @@ describe("describeQuery", () => {
     expect(describeQuery({ sortBy: "stats.edges.all.experienceMonths" })).toBe(
       "wszystkie osoby w bazie",
     );
+  });
+});
+
+/** The companies view, from the owner's two reports: the table could say which
+ * people work in a sector but not which companies are in it. Everything here is
+ * about the same url, which now also says which of the two lists it means. */
+describe("the companies view", () => {
+  /** A reader who set a party and „Tylko szkice” on the people table, then
+   * switched to companies with the sector still set. */
+  const SWITCHED: TableQuery = {
+    view: "companies",
+    category: "koleje",
+    teryt: "teryt1465",
+    companyTeryt: "teryt1261",
+    party: ["PiS"],
+    visibility: "private",
+    currentlyEmployed: "any",
+  };
+
+  it("reads anything but companies as the people table", () => {
+    expect(tableView({})).toBe("people");
+    expect(tableView({ view: "people" })).toBe("people");
+    expect(tableView({ view: "spolki" })).toBe("people");
+    expect(tableView({ view: "companies" })).toBe("companies");
+  });
+
+  it("names the view first in a shared link, and never the default", () => {
+    expect(shareUrl({ category: "koleje", view: "companies" })).toBe(
+      "/eksploruj/tabela?view=companies&category=koleje",
+    );
+    expect(shareUrl({ category: "koleje", view: "people" })).toBe(
+      "/eksploruj/tabela?category=koleje",
+    );
+    // A value from nowhere opens the people table, so the link says nothing.
+    expect(shareQuery({ view: "spolki" })).toEqual({});
+  });
+
+  it("leaves the filters about people out of a link to companies", () => {
+    // They narrow nothing there. The recipient would see the same companies
+    // with or without them, and struck-through chips they never set.
+    expect(shareQuery(SWITCHED)).toEqual({
+      view: "companies",
+      category: "koleje",
+      companyTeryt: "teryt1261",
+    });
+  });
+
+  it("keeps every chip, and marks which ones narrow the companies", () => {
+    const chips = queryChips(SWITCHED, lookup);
+
+    expect(chips.map((chip) => [chip.key, chip.applies])).toEqual([
+      // A person's region is any tie a person has to one; the seat is the
+      // company's own.
+      ["teryt", false],
+      ["companyTeryt", true],
+      ["category", true],
+      ["party", false],
+      ["currentlyEmployed", false],
+      ["visibility", false],
+    ]);
+    // The same chips apply without exception on the people table.
+    expect(
+      queryChips({ ...SWITCHED, view: undefined }).every(
+        (chip) => chip.applies,
+      ),
+    ).toBe(true);
+  });
+
+  it("says it is a list of companies, and only what narrows it", () => {
+    expect(describeQuery(SWITCHED, lookup)).toBe(
+      "spółki · Koleje · siedziba: Kraków",
+    );
+    expect(describeQuery({ view: "companies" })).toBe(
+      "wszystkie spółki w bazie",
+    );
+    expect(describeQuery({ view: "companies", party: ["PiS"] })).toBe(
+      "wszystkie spółki w bazie",
+    );
+  });
+
+  it("leaves its default order out of the link and the sentence", () => {
+    // The page hands the bar the order the view opens in, spelled out, so the
+    // sort button can name it; a link that repeated it would ask for what the
+    // recipient gets anyway.
+    const opening: TableQuery = {
+      view: "companies",
+      category: "koleje",
+      sortBy: "people",
+      sortDesc: "true",
+    };
+    expect(shareUrl(opening)).toBe(
+      "/eksploruj/tabela?view=companies&category=koleje",
+    );
+    expect(describeQuery(opening)).toBe("spółki · Koleje");
+    // The same key the other way round is a choice, and is kept.
+    expect(shareQuery({ ...opening, sortDesc: "false" })).toMatchObject({
+      sortBy: "people",
+    });
+    expect(describeQuery({ ...opening, sortDesc: "false" })).toBe(
+      "spółki · Koleje · wg liczby osób",
+    );
+  });
+
+  it("names its own sorts, and not the people table's", () => {
+    expect(
+      describeQuery({
+        view: "companies",
+        category: "koleje",
+        sortBy: "people",
+      }),
+    ).toBe("spółki · Koleje · wg liczby osób");
+    // `latestEmploymentStart` orders nothing here.
+    expect(
+      describeQuery({
+        view: "companies",
+        sortBy: "latestEmploymentStart",
+      }),
+    ).toBe("wszystkie spółki w bazie");
+  });
+
+  it("shares no sort key with the people table but the name", () => {
+    // Switching views drops the sort. A key the two lists both used for
+    // different things would still be one link away from meaning the wrong
+    // one - `name` is shared because both read it as their subject's name.
+    const peopleKeys = new Set<string>(
+      tableSortOptions.map((option) => option.key),
+    );
+    expect(
+      companySortOptions
+        .map((option) => option.key)
+        .filter((key) => peopleKeys.has(key)),
+    ).toEqual(["name"]);
   });
 });

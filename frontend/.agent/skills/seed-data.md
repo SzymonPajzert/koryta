@@ -26,6 +26,13 @@ Seed data is loaded from JSON files in the `scripts/` directory:
   Łukasz Nieprzypisany, who has not. The two without a node are what
   `/api/search/facts` finds (`tests/e2e/omni_search_facts.spec.ts`).
 
+One seeded company is filed under a sector: `company-empty` („Firma Pusta”)
+carries `categories: ["koleje"]` and has nobody working there, which is what
+the companies view of `/eksploruj/tabela?category=koleje` is tested with. The
+other three are left without one on purpose - each is photographed on a page of
+its own, a person's page or the home feed, and a sector chip there would move
+those baselines for nothing.
+
 ## Running Seeds manually
 
 You can re-run the seed script manually if needed:
