@@ -1,6 +1,6 @@
 {
   "firestore": {
-    "database": "ops",
+    "database": "agent-tasks",
     "location": "europe-central2",
     "rules": "firestore.ops.rules"
   }

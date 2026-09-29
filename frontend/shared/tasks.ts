@@ -14,7 +14,7 @@
  */
 import { z } from "zod";
 
-export const OPS_DATABASE = "ops";
+export const OPS_DATABASE = "agent-tasks";
 export const TASKS_COLLECTION = "tasks";
 
 /** What sort of thing is to be done.
