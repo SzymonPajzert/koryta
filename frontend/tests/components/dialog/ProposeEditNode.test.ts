@@ -187,3 +187,67 @@ describe("DialogProposeEditNode, whether a change waits for review", () => {
     expect(sent()).not.toHaveProperty("apply");
   });
 });
+
+describe("DialogProposeEditNode, a topic", () => {
+  /** The topic from the report: the lead said „w Bielsko-Białej”. */
+  const topic = () => ({
+    id: "bb",
+    type: "topic",
+    name: "Bielsko Biała",
+    content: "",
+    description: "Przykłady koryciarstwa w Bielsko-Białej od lipca 2026 roku",
+  });
+
+  it("offers the two fields its page shows, under a topic's labels", async () => {
+    // The page says the name and the lead under it, and nothing else: a
+    // „Treść” typed for a topic would be stored where no reader ever sees it,
+    // and „Imię i nazwisko” is not what a story has.
+    const wrapper = await mount({ entity: topic() }, "/temat/bielsko-biala-bb");
+    await open(wrapper);
+
+    expect(fieldLabels()).toContain("Nazwa tematu");
+    expect(fieldLabels()).toContain("Opis tematu (opcjonalnie)");
+    expect(fieldLabels()).not.toContain("Treść (opcjonalnie)");
+    expect(fieldLabels()).not.toContain("Nazwa / Imię i nazwisko");
+    expect(field("Opis tematu (opcjonalnie)").value).toBe(
+      "Przykłady koryciarstwa w Bielsko-Białej od lipca 2026 roku",
+    );
+  });
+
+  it("leaves a person's form as it was", async () => {
+    const wrapper = await mount({ entity: person() });
+    await open(wrapper);
+
+    expect(fieldLabels()).toContain("Nazwa / Imię i nazwisko");
+    expect(fieldLabels()).toContain("Treść (opcjonalnie)");
+  });
+
+  it("corrects the name and the lead in one go, for an admin", async () => {
+    answers({ applied: true, id: "rev-3" });
+    const wrapper = await mount(
+      { entity: topic(), canApply: true, skipRedirect: true },
+      "/temat/bielsko-biala-bb",
+    );
+
+    expect(wrapper.text()).toContain("Edytuj temat");
+    await open(wrapper);
+
+    await type("Nazwa tematu", "Bielsko-Biała");
+    await type(
+      "Opis tematu (opcjonalnie)",
+      "Przykłady koryciarstwa w Bielsku-Białej od lipca 2026 roku",
+    );
+    await click("Zapisz zmianę");
+
+    // What the topic stores and was never shown - `content` - goes back as it
+    // was rather than being dropped from the snapshot.
+    expect(sent()).toEqual({
+      node_id: "bb",
+      name: "Bielsko-Biała",
+      content: "",
+      description: "Przykłady koryciarstwa w Bielsku-Białej od lipca 2026 roku",
+      apply: true,
+    });
+    expect(wrapper.emitted("submitted")).toEqual([["rev-3", false, true]]);
+  });
+});

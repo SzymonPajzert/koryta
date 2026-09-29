@@ -56,7 +56,7 @@
           <v-form ref="form" @submit.prevent="submit">
             <v-text-field
               v-model="editData.name"
-              label="Nazwa / Imię i nazwisko"
+              :label="nameLabel"
               required
               class="mb-2"
             />
@@ -177,7 +177,13 @@
                 class="mb-2"
               />
             </template>
+            <!-- Not for a topic, whose page shows its name and the description
+                 above and nothing else: a „Treść” typed here would be stored
+                 where no reader sees it, next to a field that is shown. What a
+                 topic already stores goes back unchanged, since
+                 `editData.content` is prefilled either way. -->
             <v-textarea
+              v-if="type !== 'topic'"
               v-model="editData.content"
               label="Treść (opcjonalnie)"
               auto-grow
@@ -267,9 +273,16 @@ const title = computed(() => {
     return createTitles[type.value] ?? "Zaproponuj dodanie wpisu";
   }
   // Not „Zaproponuj”: nothing is being put to anybody.
-  if (applies.value) return "Edytuj wpis";
+  if (applies.value) {
+    return type.value === "topic" ? "Edytuj temat" : "Edytuj wpis";
+  }
   return "Zaproponuj zmianę";
 });
+
+/** „Imię i nazwisko” is the one thing a topic's name can never be. */
+const nameLabel = computed(() =>
+  type.value === "topic" ? "Nazwa tematu" : "Nazwa / Imię i nazwisko",
+);
 
 const dialog = ref(false);
 const loginDialog = ref(false);
