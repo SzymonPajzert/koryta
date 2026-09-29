@@ -219,6 +219,42 @@ def clean_payload(payload):
         return payload
 
 
+#: The earliest election whose candidacies are sent to the site.
+#:
+#: 1998, not 2000. The cut-off went in at 2000 on 2026-08-24, when a candidacy
+#: the ingest could not place failed the whole person with a 500; the 1990s were
+#: where those came from. Since 2026-08-31 the ingest drops such a candidacy and
+#: says so in `unplacedElections` instead, so the cut-off no longer protects
+#: anything - and what it went on doing was keeping 1998 off the site.
+#:
+#: 1998's local elections were fought in the powiaty and województwa of the
+#: reform that took effect on 1 January 1999, so their codes are today's: 15,468
+#: of the 15,961 1998 candidacies in the 2026-09-29 `people_enriched` name a
+#: region the site has a node for. The site held 180 candidacies from 1998 that
+#: day, against 1,744 from 2002, and 34 pages with a party and no candidacy at
+#: all had a placeable one from 1998 and nothing placeable after it.
+#:
+#: Earlier years stay out, because nothing in them can be placed. 1994 was
+#: fought in the 49 old voivodeships and none of its 9,045 codes names a region
+#: node; the parliamentary lists of 1991, 1993 and 1997 carry no region at all.
+#: Sending them would only fill the run's report of unplaced candidacies.
+FIRST_SENT_ELECTION_YEAR = 1998
+
+
+def sendable_elections(elections: list[dict]) -> list[dict]:
+    """The candidacies of a payload worth sending. See `FIRST_SENT_ELECTION_YEAR`.
+
+    A candidacy with no year is left out, as it always has been: the ingest
+    dates an edge by it, and an undated candidacy is indistinguishable from
+    every other one in the same region.
+    """
+    return [
+        election
+        for election in elections
+        if int(election.get("election_year") or 0) >= FIRST_SENT_ELECTION_YEAR
+    ]
+
+
 class Uploader:
     # Per-type ingest URLs handled by the generic submit_entity path. Extraction
     # is handled by ExtractionUploader (batched), so it is intentionally absent.
@@ -332,11 +368,9 @@ class Uploader:
         cleaned_payload = clean_payload(payload)
 
         if "elections" in cleaned_payload:
-            cleaned_payload["elections"] = [
-                e
-                for e in cleaned_payload["elections"]
-                if int(e.get("election_year", "0")) > 1999
-            ]
+            cleaned_payload["elections"] = sendable_elections(
+                cleaned_payload["elections"]
+            )
 
         request = json.dumps(cleaned_payload, cls=NumpyEncoder)
         if verbose:
