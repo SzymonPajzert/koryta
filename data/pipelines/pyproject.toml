@@ -245,7 +245,7 @@ markers = [
 addopts = "--durations=5 --ff-group-by-module -m 'not e2e'"
 
 [tool.importlinter]
-root_packages = ["analysis", "stores", "scrapers", "util", "entities"]
+root_packages = ["jobs", "analysis", "stores", "scrapers", "util", "entities"]
 
 exclude_type_checking_imports = true
 include_external_packages = true
@@ -253,7 +253,9 @@ include_external_packages = true
 [[tool.importlinter.contracts]]
 name = "Clean architecture"
 type = "layers"
-layers = ["analysis", "stores", "scrapers", "util", "entities"]
+# `jobs` on top: a job may read any pipeline, and no pipeline may reach a job.
+# See src/jobs/__init__.py for what makes something a job.
+layers = ["jobs", "analysis", "stores", "scrapers", "util", "entities"]
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.*",
     "scrapers.stores -> stores.config",
