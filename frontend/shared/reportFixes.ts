@@ -30,6 +30,15 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "„Co nowego” na stronie głównej zaczyna się od ośmiu rzędów kafelków - 16 na komputerze i 8 na telefonie, zamiast całej porcji naraz (29 września było ich 37) - więc do stopki jest ponad dwa razy bliżej, a na telefonie cztery razy. „Pokaż więcej” dokłada po osiem rzędów.",
+    fixes: [
+      "DodgLGSXSPlZjVnyeteO",
+      "3PCLXqLV0Kk177sHP6i9",
+      "aWb3jMKRKD3sK7VDVwwe",
+    ],
+  },
+  {
+    change:
       "Kolejka najłatwiejszego poziomu, posortowana po głosach, zaczyna się od osoby do sprawdzenia: strony scalone z inną (jak Geblewicz czy Pasoń) nie zajmują już w kolejkach miejsc, na których nic się nie pokazywało - od najbliższego przeliczenia statystyk (/api/stats/computeNodes).",
     fixes: ["crR0DWk9Y1gTfy0vp2Mg"],
     link: "/eksploruj/nowe?tier=1&order=votes",
