@@ -339,14 +339,14 @@ same documents through `/api/ops/tasks/*`, which only the `owner` claim opens
 Once, as a project owner:
 
 ```bash
-gcloud firestore databases create --database=ops --project=koryta-pl \
+gcloud firestore databases create --database=agent-tasks --project=koryta-pl \
   --location=europe-central2 --delete-protection
 gcloud iam service-accounts create ops-writer --project=koryta-pl \
   --display-name="Agents: the owner's task list"
 gcloud projects add-iam-policy-binding koryta-pl \
   --member=serviceAccount:ops-writer@koryta-pl.iam.gserviceaccount.com \
   --role=roles/datastore.user \
-  --condition='expression=resource.name=="projects/koryta-pl/databases/ops",title=ops-only'
+  --condition='expression=resource.name=="projects/koryta-pl/databases/agent-tasks",title=ops-only'
 gcloud iam service-accounts add-iam-policy-binding \
   ops-writer@koryta-pl.iam.gserviceaccount.com --project=koryta-pl \
   --member=serviceAccount:dev-workflow@koryta-pl.iam.gserviceaccount.com \
