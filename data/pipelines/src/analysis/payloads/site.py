@@ -52,6 +52,27 @@ INTERNAL_FIELDS = frozenset(
 #: `frontend/server/utils/edges.ts`.
 FOLDED_FIELDS = frozenset({"committee"})
 
+#: What the payload calls the office of every local candidacy, having kept only
+#: that the election was local. See `UNNAMED_LOCAL_OFFICE` in
+#: `frontend/server/utils/edges.ts`.
+UNNAMED_LOCAL_OFFICE = "Samorząd"
+
+#: The offices a local election fills, which `UNNAMED_LOCAL_OFFICE` stands in
+#: for. Mirrors `LOCAL_OFFICES` in `frontend/server/utils/edges.ts`. "Prezydent"
+#: is a city's prezydent here, though `get_election_type` maps a national
+#: presidential election to the same string - no scraper produces one today.
+LOCAL_OFFICES = frozenset(
+    {
+        "Sejmik",
+        "Rada miasta",
+        "Rada gminy",
+        "Rada powiatu",
+        "Burmistrz",
+        "Wójt",
+        "Prezydent",
+    }
+)
+
 
 @dataclass(frozen=True)
 class EdgeSemantics:
@@ -191,6 +212,22 @@ def edge_identity(edge: typing.Mapping[str, typing.Any]) -> tuple:
     )
 
 
+def narrows(name: str, stored: typing.Any, incoming: typing.Any) -> bool:
+    """Whether the stored value says what the incoming one says, more precisely.
+
+    Only the office has such a pair: a reviewer who told the site which council
+    a "Samorząd" candidacy was for has not contradicted the payload's
+    "Samorząd". Never the other way round. See `narrows` in
+    `frontend/server/utils/edges.ts`.
+    """
+    return (
+        name == "position"
+        and incoming == UNNAMED_LOCAL_OFFICE
+        and isinstance(stored, str)
+        and stored in LOCAL_OFFICES
+    )
+
+
 def edge_relation(
     stored: typing.Mapping[str, typing.Any],
     incoming: typing.Mapping[str, typing.Any],
@@ -201,7 +238,8 @@ def edge_relation(
     "enriches" when the incoming edge fills in one the stored edge lacks, and
     "same" when there is nothing to add. Asymmetric on purpose: a discriminator
     only the *stored* edge knows - a `term` a reviewer typed in - is not a
-    disagreement, because the pipeline saying nothing is not saying "none".
+    disagreement, because the pipeline saying nothing is not saying "none". An
+    office a reviewer narrowed down is not one either; see `narrows`.
     """
     added = 0
     rules = semantics(incoming.get("type"))
@@ -213,6 +251,8 @@ def edge_relation(
                 added += 1
             continue
         if after is not None and before != after:
+            if narrows(name, before, after):
+                continue
             return "conflict"
     return "enriches" if added else "same"
 

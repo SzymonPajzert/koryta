@@ -795,6 +795,26 @@ describe("api/ingest/person", () => {
       expect(result.elections![1]!.edgeId).not.toBe(enrichedId);
     });
 
+    it("maps the pipeline's row onto a candidacy a reviewer narrowed down", async () => {
+      // A reader said which council the „Samorząd" candidacy was for, through
+      // the relation dialogs; the pipeline goes on sending „Samorząd". Read as
+      // a disagreement, the row would be written beside the corrected one - at
+      // the next id along, because the corrected one still holds the id the
+      // row hashes to - and the vague candidacy would be back as a duplicate.
+      const narrowedId = edgeDocumentId(storedCandidacy as EdgeLike, 0);
+      personWithStoredEdges(
+        [{ ...storedCandidacy, position: "Rada gminy" }],
+        [narrowedId],
+      );
+      mockReadBody.mockResolvedValue(payload({ election_year: "2024" }));
+
+      const result = await handler({} as any);
+
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+      expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+      expect(result.elections![0]!.edgeId).toBe(narrowedId);
+    });
+
     it("still creates a candidacy the database does not have", async () => {
       personWithStoredEdges([]);
       mockReadBody.mockResolvedValue(
