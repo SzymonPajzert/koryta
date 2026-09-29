@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { clearNuxtData } from "#app";
 import EventFeed from "../../../app/components/home/EventFeed.vue";
@@ -341,6 +341,147 @@ describe("HomeEventFeed", () => {
     const wrapper = await mountFeed();
 
     expect(wrapper.find(".milestone-card--festive").exists()).toBe(true);
+  });
+
+  describe("how much of it is on the page", () => {
+    /** A first page as long as the endpoint's: twenty employments, a day
+     * apart and newest first, with a cursor behind them. */
+    const twenty = (cursor: string | null = "c1") => ({
+      employments: Array.from({ length: 20 }, (_, i) =>
+        employment(`e${String(i).padStart(2, "0")}`, day(20 - i)),
+      ),
+      nextCursor: cursor,
+    });
+    const day = (n: number) => `2026-08-${String(n).padStart(2, "0")}`;
+
+    /** The cards a narrow screen keeps out of sight until „Pokaż więcej”. */
+    const folded = (wrapper: Awaited<ReturnType<typeof mountSuspended>>) =>
+      wrapper
+        .findAll(".event-feed__card--folded")
+        .map((card) => card.attributes("data-testid"));
+
+    /** One column, as a phone answers the component's media query. */
+    const onAPhone = () =>
+      vi
+        .spyOn(window, "matchMedia")
+        .mockImplementation(
+          (query) => ({ matches: true, media: query }) as MediaQueryList,
+        );
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("opens on eight rows of a desktop's two columns, not the whole first request", async () => {
+      // Twenty employments and every anniversary between them used to be
+      // drawn: 37 cards on 2026-09-29, twelve screens of a phone before the
+      // footer.
+      pages.first = twenty();
+
+      const wrapper = await mountFeed();
+
+      expect(cardIds(wrapper)).toHaveLength(16);
+      expect(cardIds(wrapper).at(-1)).toBe("recent-employment-e15");
+      expect(asked).toEqual([null]);
+    });
+
+    it("cuts the merged feed, so the anniversaries count towards the eight rows", async () => {
+      pages.first = twenty();
+      // Between the first and the second employment, and after the sixteenth.
+      milestones = [
+        milestone("early", "2026-08-19"),
+        milestone("late", "2026-08-04"),
+      ];
+
+      const wrapper = await mountFeed();
+
+      const ids = cardIds(wrapper);
+      expect(ids).toHaveLength(16);
+      expect(ids.slice(0, 3)).toEqual([
+        "recent-employment-e00",
+        "service-milestone-early",
+        "recent-employment-e01",
+      ]);
+      expect(ids.at(-1)).toBe("recent-employment-e14");
+      expect(ids).not.toContain("service-milestone-late");
+    });
+
+    it("sends every screen the same sixteen, and folds the second half away for one column", async () => {
+      // The server has no viewport to ask, so a count that depended on one
+      // would make the page jump as it hydrated. The fold is css, under
+      // Vuetify's md - the width the grid goes down to one column at.
+      pages.first = twenty();
+
+      const wrapper = await mountFeed();
+
+      expect(folded(wrapper)).toEqual(cardIds(wrapper).slice(8));
+    });
+
+    it("shows a phone the folded half before it asks for anything", async () => {
+      onAPhone();
+      pages.first = twenty();
+      pages.c1 = {
+        employments: [employment("next", "2026-07-01")],
+        nextCursor: null,
+      };
+
+      const wrapper = await mountFeed();
+
+      expect(await scrollToEnd(wrapper)).toBe("ok");
+      expect(folded(wrapper)).toEqual([]);
+      expect(cardIds(wrapper)).toHaveLength(16);
+      expect(asked).toEqual([null]);
+
+      // Then eight rows of its one column a click: the four employments still
+      // in hand, and the page behind them.
+      expect(await scrollToEnd(wrapper)).toBe("empty");
+      expect(cardIds(wrapper)).toHaveLength(21);
+      expect(cardIds(wrapper).at(-1)).toBe("recent-employment-next");
+      expect(asked).toEqual([null, "c1"]);
+    });
+
+    it("brings a desktop eight more rows a click, from the cards in hand first", async () => {
+      pages.first = twenty();
+      pages.c1 = {
+        employments: [employment("next", "2026-07-01")],
+        nextCursor: "c2",
+      };
+      milestones = Array.from({ length: 17 }, (_, i) =>
+        milestone(`m${i}`, day(20 - i)),
+      );
+
+      const wrapper = await mountFeed();
+      expect(cardIds(wrapper)).toHaveLength(16);
+
+      // 37 cards in hand - the first request and its anniversaries - so the
+      // next sixteen need no request.
+      expect(await scrollToEnd(wrapper)).toBe("ok");
+      expect(cardIds(wrapper)).toHaveLength(32);
+      expect(asked).toEqual([null]);
+
+      expect(await scrollToEnd(wrapper)).toBe("ok");
+      expect(cardIds(wrapper)).toHaveLength(38);
+      expect(asked).toEqual([null, "c1"]);
+    });
+
+    it("keeps what the last page brought past the cut for the next click", async () => {
+      // The endpoint has run out, but not the cards: saying "empty" here
+      // would have left eight employments fetched and never drawn.
+      pages.first = twenty();
+      pages.c1 = { ...twenty(null) };
+      pages.c1.employments = pages.c1.employments.map((row) =>
+        employment(`${row.id}b`, row.start_date.replace("2026-08", "2026-07")),
+      );
+
+      const wrapper = await mountFeed();
+
+      expect(await scrollToEnd(wrapper)).toBe("ok");
+      expect(cardIds(wrapper)).toHaveLength(32);
+
+      expect(await scrollToEnd(wrapper)).toBe("empty");
+      expect(cardIds(wrapper)).toHaveLength(40);
+      expect(asked).toEqual([null, "c1"]);
+    });
   });
 
   it("is still a feed of jobs when the anniversaries cannot be fetched", async () => {

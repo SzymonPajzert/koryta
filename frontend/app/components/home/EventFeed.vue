@@ -24,13 +24,22 @@
            the whole point of merging: the cards are in date order across the
            streams, so nothing can group them by type without also losing that
            order. A `template` here and not a wrapper div - the grid's items
-           have to be the cards themselves. -->
-      <template v-for="item in items" :key="item.key">
+           have to be the cards themselves.
+           `--folded` marks the second half of the first page, which a narrow
+           screen keeps out of sight until the first „Pokaż więcej” - see
+           `folded`. -->
+      <template v-for="(item, index) in shownItems" :key="item.key">
         <CardEmployment
           v-if="item.kind === 'employment'"
           :employment="item.employment"
+          :class="{ 'event-feed__card--folded': folded && index >= ROWS }"
         />
-        <CardServiceMilestone v-else :milestone="item.milestone" festive />
+        <CardServiceMilestone
+          v-else
+          :milestone="item.milestone"
+          festive
+          :class="{ 'event-feed__card--folded': folded && index >= ROWS }"
+        />
       </template>
     </div>
   </v-infinite-scroll>
@@ -82,9 +91,33 @@ type FeedItem = DatedEvent &
     | { kind: "milestone"; milestone: ServiceMilestone }
   );
 
-/** How many employments a page carries. Two columns on a desktop, so an even
- * number leaves no half row behind while the next one is loading. */
+/** How many employments one request asks for. More than the first page
+ * shows (`FIRST_PAGE`), so that the first page always has the cards to fill
+ * its rows whatever the milestones add, and a desktop's first „Pokaż więcej”
+ * has some in hand before it has to ask for more. */
 const PAGE_SIZE = 20;
+
+/** Rows of cards the feed opens on, and rows each „Pokaż więcej” adds - on a
+ * desktop's two columns and a phone's one alike.
+ *
+ * Counted in rows, because the length of the page is what readers asked about:
+ * the whole first request used to be drawn, 20 employments and every
+ * anniversary between them - 37 cards on 2026-09-29, over twelve screens on a
+ * 393x650 phone and four and a half on a 1440x795 desktop before the footer
+ * came into view. „Nie da się zobaczyć co jest na dole strony”, and from the
+ * phone „za dużo kandydatów pokazuje, zmniejszyłbym to 4 razy”. */
+const ROWS = 8;
+
+/** Cards on the first page: `ROWS` rows of the desktop's two columns. The
+ * server renders this many for every reader - it has no viewport to ask, and a
+ * count that depended on one would make the page jump as it hydrated - and a
+ * narrow screen folds the half it has no rows for out of sight. */
+const FIRST_PAGE = ROWS * 2;
+
+/** The width the grid below drops to one column at: under Vuetify's `md`, as
+ * in the style block, which has to say it again because css cannot read this.
+ * Only ever asked in the click handler, where there is a window to answer. */
+const ONE_COLUMN = "(max-width: 959.98px)";
 
 const EMPLOYMENTS_ENDPOINT = "/api/edges/recentEmployments";
 const MILESTONES_ENDPOINT = "/api/edges/serviceMilestones";
@@ -211,6 +244,33 @@ const items = computed(() =>
   }),
 );
 
+/** How many cards of the merged feed are in the grid. The same number on the
+ * server and in the browser until somebody clicks, so hydration finds the
+ * document it would have drawn itself.
+ *
+ * A cut through the merged list rather than a smaller `PAGE_SIZE`: the
+ * anniversaries are what makes a page long or short - none some months, 17 on
+ * 2026-09-29 - and eight employments would still have drawn nineteen cards
+ * that day. The cut is also always stable: the merge only ever adds below the
+ * last employment it has, so the top of the feed never moves under it. */
+const shown = ref(FIRST_PAGE);
+
+/** Whether a narrow screen still holds back the second half of the first page.
+ *
+ * Folded with css (`event-feed__card--folded`) rather than rendered short: a
+ * phone gets the same sixteen cards in its document as a desktop and shows the
+ * first `ROWS`, so the page it hydrates is the page it was sent, and nothing
+ * shifts when the script arrives. The first „Pokaż więcej” unfolds them, on
+ * any screen - on a wide one they were never hidden. */
+const folded = ref(true);
+
+const shownItems = computed(() => items.value.slice(0, shown.value));
+
+/** Nothing left to show or to ask for. The cursor alone is not enough, because
+ * cards can be in hand without being shown yet. */
+const exhausted = () =>
+  cursor.value === null && shown.value >= items.value.length;
+
 type LoadOptions = { done: (status: "ok" | "empty" | "error") => void };
 
 /** Requests one click is allowed to make before it gives up and returns.
@@ -222,11 +282,12 @@ type LoadOptions = { done: (status: "ok" | "empty" | "error") => void };
  * animation frame. */
 const MAX_REQUESTS_PER_LOAD = 3;
 
-/** The next page of employments, once the reader has asked for one.
+/** `ROWS` more rows, once the reader has asked for them: from the cards already
+ * in hand first, and from the next page of employments when those run short.
  *
- * Only the employments page. The milestones came whole and are already placed;
- * scrolling reaches further back in time, and there is nothing behind the
- * window they were computed over.
+ * Only the employments page is ever fetched. The milestones came whole and are
+ * already placed; scrolling reaches further back in time, and there is nothing
+ * behind the window they were computed over.
  *
  * Plain `$fetch` rather than `authFetch`, which is a `useFetch` and so cannot
  * be called for a page somebody asked for with a click. Nothing is lost by it:
@@ -234,8 +295,22 @@ const MAX_REQUESTS_PER_LOAD = 3;
  * would only skip the response cache.
  */
 async function loadMore({ done }: LoadOptions) {
-  if (!cursor.value) {
-    done("empty");
+  const oneColumn = window.matchMedia(ONE_COLUMN).matches;
+
+  // A phone's first click shows the half of the first page it folded away.
+  // Those are its next eight rows and already here - growing the cut as well
+  // would put sixteen more under a reader who asked for the next few.
+  if (folded.value) {
+    folded.value = false;
+    if (oneColumn && items.value.length > ROWS) {
+      done(exhausted() ? "empty" : "ok");
+      return;
+    }
+  }
+
+  shown.value += ROWS * (oneColumn ? 1 : 2);
+  if (items.value.length >= shown.value || !cursor.value) {
+    done(exhausted() ? "empty" : "ok");
     return;
   }
 
@@ -254,13 +329,11 @@ async function loadMore({ done }: LoadOptions) {
       );
       more.value.push(...next.employments);
       cursor.value = next.nextCursor;
-      if (!next.nextCursor) {
-        done("empty");
-        return;
-      }
-      if (next.employments.length > 0) break;
+      if (!next.nextCursor || next.employments.length > 0) break;
     }
-    done("ok");
+    // Not "empty" merely because the cursor ran out: the last page can bring
+    // more cards than this click shows, and those are the next click's.
+    done(exhausted() ? "empty" : "ok");
   } catch {
     done("error");
   }
@@ -284,6 +357,16 @@ async function loadMore({ done }: LoadOptions) {
 @media (min-width: 960px) {
   .event-feed__grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* One column: the first page's second half waits for „Pokaż więcej”, so a
+   phone opens on as many rows as a desktop does. Hidden here rather than left
+   out of the render, for the reason the columns above are a media query. The
+   width is `ONE_COLUMN` in the script. */
+@media (max-width: 959.98px) {
+  .event-feed__card--folded {
+    display: none;
   }
 }
 </style>
