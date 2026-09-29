@@ -7,7 +7,10 @@ runs from, and `koryta` itself - are top-level modules outside every contract.
 """
 
 import ast
+import importlib
 import inspect
+import tomllib
+from pathlib import Path
 
 import koryta
 import pipelines
@@ -33,3 +36,15 @@ def test_the_pipeline_entry_points_do_not_import_jobs():
     for module in (pipelines, koryta):
         leaked = {m for m in imported_modules(module) if m.split(".")[0] == "jobs"}
         assert leaked == set(), module.__name__
+
+
+def test_every_console_script_names_a_callable():
+    """A job that moves keeps its script name; the target must follow it."""
+    pyproject = Path(__file__).resolve().parents[3] / "pyproject.toml"
+    scripts = tomllib.loads(pyproject.read_text())["project"]["scripts"]
+    broken = []
+    for name, target in scripts.items():
+        module, _, attr = target.partition(":")
+        if not callable(getattr(importlib.import_module(module), attr, None)):
+            broken.append(name)
+    assert broken == []

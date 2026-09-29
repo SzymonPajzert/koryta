@@ -301,7 +301,7 @@ class KRSAlreadyScraped(Pipeline):
         """Lists krs numbers along with the method and the date it was ran on.
 
         A crawl that failed is stored as a zero-byte object rather than not
-        stored at all (see `scraper.scrape_krs_free`), so the object existing
+        stored at all (see `jobs.krs_scrape_free`), so the object existing
         is not the same as the query having been answered. Counting those as
         scraped left 1,052 api-krs subjects - 402 companies with nothing from
         either register - looking done and never retried.
