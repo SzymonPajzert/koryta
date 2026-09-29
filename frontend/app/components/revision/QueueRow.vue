@@ -46,10 +46,26 @@
     <template #meta>
       <AdminRowFact label="Autor">
         <UserChip :uid="proposal.updateUser" :user="proposal.author" />
+        <!-- Under the name it narrows the list to, rather than among the
+             buttons: it is a way to more of this person's proposals, not a
+             decision on this one. A pipeline uid has tens of thousands of
+             revisions, and the per-author scan stops at 500, so it is only
+             offered for a person. -->
+        <button
+          v-if="canFocusAuthor"
+          type="button"
+          class="queue-row__author-link arow-link"
+          data-focus-author
+          @click="emit('focus-author', proposal.updateUser)"
+        >
+          Wszystko od tej osoby
+        </button>
       </AdminRowFact>
       <AdminRowFact label="Kiedy">
-        {{ formatMoment(proposal.updateTime) }} ·
-        {{ formatDaysAgo(proposal.updateTime) }}
+        <RevisionPermalink :revision-id="proposal.id">{{
+          formatMoment(proposal.updateTime)
+        }}</RevisionPermalink>
+        · {{ formatDaysAgo(proposal.updateTime) }}
       </AdminRowFact>
       <AdminRowFact label="Rodzaj">
         {{ proposal.automatic ? "Pipeline" : "Od człowieka" }}
@@ -75,33 +91,22 @@
 
     <div class="d-flex flex-column ga-3">
       <RevisionTargetCell :proposal="proposal" />
-      <RevisionChangeCell :proposal="proposal" />
-      <!-- A pipeline uid has tens of thousands of revisions, and the per-author
-           scan stops at 500, so "everything from this author" is only offered
-           for a person. -->
-      <div v-if="canFocusAuthor">
-        <v-btn
-          variant="text"
-          size="small"
-          color="ink-sage"
-          :prepend-icon="mdiAccountSearchOutline"
-          data-focus-author
-          @click="emit('focus-author', proposal.updateUser)"
-        >
-          Wszystko od tej osoby
-        </v-btn>
-      </div>
+      <RevisionChangeCell
+        :proposal="proposal"
+        :full-comparison-to="comparisonTo"
+      />
     </div>
 
-    <template #footer>
+    <!-- The decisions and nothing else, the same ones on every proposal still
+         waiting for one, so the row has one kind of button - see
+         `RevisionReviewActions`. A settled proposal keeps its row, for its
+         permalink, but has nothing left to decide. -->
+    <template v-if="proposal.status === 'pending'" #footer>
       <RevisionReviewActions
         :proposal="proposal"
-        :reviewable="proposal.status === 'pending'"
         :loading="loading"
-        :full-comparison-to="comparisonTo"
         @approve="emit('approve', $event)"
         @reject="emit('reject')"
-        @permalink="emit('permalink')"
       />
     </template>
   </AdminExpandRow>
@@ -116,10 +121,14 @@
  * decisions themselves. The queue used to send every row to the comparison
  * page for that, one button per row, because a table cell had no room for five
  * buttons; an open row has.
+ *
+ * Its buttons are the decisions only. Everything else in it that goes
+ * somewhere is a link on the thing it is about: the author's other proposals
+ * under their name, this proposal's own address on its date, the comparison
+ * under the diff, the entry on its name.
  */
 import { computed } from "vue";
 import {
-  mdiAccountSearchOutline,
   mdiCheckDecagramOutline,
   mdiClockOutline,
   mdiCloseCircleOutline,
@@ -150,7 +159,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   approve: [options: { publish: boolean }];
   reject: [];
-  permalink: [];
   "focus-author": [uid: string];
 }>();
 
@@ -252,3 +260,22 @@ const comparisonTo = computed(() =>
 const formatMoment = (value: string | null) =>
   value ? new Date(value).toLocaleString("pl-PL") : "-";
 </script>
+
+<style scoped>
+/* A button, since it filters this page rather than going anywhere, drawn as
+ * the link it reads as - the one kind of button in the row is a decision. */
+.queue-row__author-link {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgb(var(--v-theme-ink-sage));
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+</style>

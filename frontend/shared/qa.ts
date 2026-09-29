@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "rewizje-przyciski-tylko-do-decyzji",
+    title: "Rewizje: przyciski w rozwiniętej propozycji służą tylko do decyzji",
+    description:
+      "Na dole rozwiniętej propozycji na /admin/rewizje są tylko „Zatwierdź”, „Odrzuć” i - gdy strona nie jest jeszcze opublikowana - „Zatwierdź i opublikuj”, tak samo przy zmianie wpisu i przy zmianie powiązania. " +
+      "Porównanie to teraz link „Pełne porównanie” pod zmianami, data zgłoszenia jest linkiem do samej propozycji, a „Wszystko od tej osoby” jest pod autorem.",
+    steps: [
+      "Na /admin/rewizje rozwiń zmianę wpisu w „Czeka na decyzję”, a potem kliknij „Rozpatrz” przy dowolnej pozycji w „Zmiany powiązań” - obie propozycje mają mieć na dole te same przyciski, a zmiana wpisu także link „Pełne porównanie”, który otwiera porównanie z tą propozycją podświetloną.",
+    ],
+    link: "/admin/rewizje#kolejka",
+    area: "admin",
+    fixes: ["YsFCMqAsj9YIEQM2CKAr"],
+  },
+  {
     id: "artykul-raz-mimo-dwoch-adresow",
     title: "Artykuł zapisany pod dwoma adresami jest na liście raz",
     description:
