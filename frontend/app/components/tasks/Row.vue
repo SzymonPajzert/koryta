@@ -92,6 +92,12 @@
       @edit="emit('edit')"
       @select="(id) => emit('select', id)"
       @show-goal="emit('show-goal', task.id)"
+      @connect="
+        (prerequisite, dependent) => emit('connect', prerequisite, dependent)
+      "
+      @disconnect="
+        (prerequisite, dependent) => emit('disconnect', prerequisite, dependent)
+      "
     />
   </AdminExpandRow>
 </template>
@@ -136,6 +142,8 @@ const emit = defineEmits<{
   select: [id: string];
   /** Show only what leads to this goal. */
   "show-goal": [id: string];
+  connect: [prerequisite: string, dependent: string];
+  disconnect: [prerequisite: string, dependent: string];
 }>();
 
 const expanded = defineModel<boolean>("expanded", { default: false });

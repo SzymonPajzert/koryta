@@ -62,13 +62,17 @@
       data-task-depends-on
       @update:model-value="changeDependencies"
     >
+      <!-- A click on a chip opens that task; its cross takes it away. -->
       <template #chip="{ props: chip, item }">
         <v-chip
           v-bind="chip"
           size="small"
           label
+          class="task-details__chip"
           :color="blockerIds.has(item.value) ? 'ink-warning' : 'ink-success'"
           :prepend-icon="blockerIds.has(item.value) ? undefined : mdiCheck"
+          :title="item.title"
+          @click.stop="emit('select', item.value)"
         />
       </template>
       <template #item="{ props: row, item }">
@@ -76,28 +80,47 @@
       </template>
     </v-autocomplete>
 
-    <div
-      v-if="state.dependents.length > 0"
-      class="d-flex align-center flex-wrap ga-1 mb-3 text-body-2"
+    <!-- And what waits on it, the other way round: a task picked here waits
+         on this one from now on. -->
+    <v-autocomplete
+      :model-value="dependentIds"
+      :items="candidates"
+      item-title="title"
+      item-value="id"
+      label="Blokuje"
+      :hint="blockingHint"
+      persistent-hint
+      multiple
+      chips
+      closable-chips
+      density="compact"
+      variant="outlined"
+      class="mb-2"
       data-task-dependents
+      @update:model-value="changeDependents"
     >
-      <span class="text-medium-emphasis me-1">Blokuje:</span>
-      <v-chip
-        v-for="dependent in state.dependents"
-        :key="dependent.id"
-        size="small"
-        label
-        variant="outlined"
-        class="task-details__chip"
-        :prepend-icon="
-          dependent.kind === 'goal' ? taskKindConfig.goal.icon : undefined
-        "
-        :title="dependent.title"
-        @click="emit('select', dependent.id)"
-      >
-        <span class="text-truncate">{{ dependent.title }}</span>
-      </v-chip>
-    </div>
+      <template #chip="{ props: chip, item }">
+        <v-chip
+          v-bind="chip"
+          size="small"
+          label
+          class="task-details__chip"
+          :color="waitingIds.has(item.value) ? 'ink-info' : 'ink-success'"
+          :prepend-icon="
+            goalIds.has(item.value)
+              ? taskKindConfig.goal.icon
+              : waitingIds.has(item.value)
+                ? undefined
+                : mdiCheck
+          "
+          :title="item.title"
+          @click.stop="emit('select', item.value)"
+        />
+      </template>
+      <template #item="{ props: row, item }">
+        <v-list-item v-bind="row" :subtitle="item.value" />
+      </template>
+    </v-autocomplete>
 
     <div
       v-if="
@@ -280,8 +303,9 @@ import {
 } from "~~/shared/tasks";
 import { taskContext } from "~~/shared/taskContext";
 
-/** A task opened up: what it is, what it waits on and unblocks, its history,
- * and what can be done with it. Shown in a list row and beside the map. */
+/** A task opened up: what it is, what it waits on and what waits on it -
+ * both editable - its history, and what can be done with it. Shown in a list
+ * row and beside the map. */
 
 const REPO = "https://github.com/SzymonPajzert/koryta";
 
@@ -300,6 +324,10 @@ const emit = defineEmits<{
   select: [id: string];
   /** Show only what leads to this goal. */
   "show-goal": [];
+  /** `dependent` waits on `prerequisite` from now on - picked under
+   * „Blokuje”, where the task being changed is the other one. */
+  connect: [prerequisite: string, dependent: string];
+  disconnect: [prerequisite: string, dependent: string];
 }>();
 
 const isGoal = computed(() => props.task.kind === "goal");
@@ -325,6 +353,43 @@ const waitingHint = computed(() => {
   if (open === 0) return "Wszystko, na co czekało, jest zamknięte.";
   return `Jeszcze ${open} z ${props.task.dependsOn.length} otwarte.`;
 });
+
+const dependentIds = computed(() => props.state.dependents.map((t) => t.id));
+/** What waits on it and has not been closed: it is still in their way. */
+const waitingIds = computed(
+  () =>
+    new Set(
+      props.state.dependents.filter((t) => !isClosed(t)).map((t) => t.id),
+    ),
+);
+const goalIds = computed(
+  () =>
+    new Set(
+      props.state.dependents.filter((t) => t.kind === "goal").map((t) => t.id),
+    ),
+);
+
+const blockingHint = computed(() => {
+  // „zadanie” is neuter and „cel” masculine: na nie, na niego.
+  const it = isGoal.value ? "niego" : "nie";
+  const all = props.state.dependents.length;
+  if (all === 0) return `Nic na ${it} nie czeka.`;
+  const open = waitingIds.value.size;
+  if (open === 0) return `Wszystko, co na ${it} czekało, jest zamknięte.`;
+  return `Czeka na ${it} ${open} z ${all}.`;
+});
+
+/** Picked under „Blokuje”: each task added waits on this one, each taken
+ * away no longer does. Those are changes to the other tasks. */
+function changeDependents(ids: string[]) {
+  const before = dependentIds.value;
+  for (const id of ids) {
+    if (!before.includes(id)) emit("connect", props.task.id, id);
+  }
+  for (const id of before) {
+    if (!ids.includes(id)) emit("disconnect", props.task.id, id);
+  }
+}
 
 const shortLink = (link: string) => {
   const fb = /#fb-(.+)$/.exec(link);
@@ -447,6 +512,17 @@ const actions = computed(() => {
 /* A title is long; a chip holding one must not stick out of the panel. */
 .task-details__chip {
   max-width: 100%;
+}
+
+/* A click on a chip opens its task, so a field full of one long title would
+ * leave nothing to click to add another: the chips stop short of the end,
+ * and what is left there takes the click and the typing. */
+.task-details :deep(.v-autocomplete__selection) {
+  max-width: calc(100% - 56px);
+}
+
+.task-details :deep(.v-autocomplete .v-field:not(.v-field--focused) input) {
+  min-width: 48px;
 }
 
 .task-details__permalink {
