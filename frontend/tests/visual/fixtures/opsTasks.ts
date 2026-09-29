@@ -11,10 +11,7 @@ import type { Task } from "../../../shared/tasks";
 
 const at = (day: string, time = "09:00") => `2026-09-${day}T${time}:00.000Z`;
 
-function task(
-  id: string,
-  fields: Partial<Task> & Pick<Task, "title">,
-): Task {
+function task(id: string, fields: Partial<Task> & Pick<Task, "title">): Task {
   return {
     id,
     body: "",
@@ -57,7 +54,11 @@ export const opsTasks: Task[] = [
     createdAt: at("27"),
     updatedAt: at("27", "10:30"),
     log: [
-      { at: at("27", "10:30"), by: "owner", text: "Plik sprawdzony, 5 spółek." },
+      {
+        at: at("27", "10:30"),
+        by: "owner",
+        text: "Plik sprawdzony, 5 spółek.",
+      },
     ],
   }),
   task("decyzja-widocznosc", {
@@ -90,7 +91,8 @@ export const opsTasks: Task[] = [
     tags: ["frontend"],
   }),
   task("stare-chunki-nuxt", {
-    title: "Serwuj stare pliki _nuxt po wdrożeniu, żeby Googlebot ich nie gubił",
+    title:
+      "Serwuj stare pliki _nuxt po wdrożeniu, żeby Googlebot ich nie gubił",
     kind: "task",
     status: "parked",
     tags: ["infra"],
