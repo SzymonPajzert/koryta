@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "typ-wyborow-przy-kandydaturze",
+    title: "Typ wyborów da się poprawić przy kandydaturze",
+    description:
+      "Wiersz kandydatury pokazuje, jakie to były wybory - Sejm, Senat albo „Samorząd” - ale okno pod ołówkiem nie pozwalało tego zmienić. Teraz jest w nim pole „Typ wyborów” (także przy dodawaniu kandydatury), więc „Samorząd” można zawęzić do sejmiku, rady albo wójta.",
+    steps: [
+      "Jako zwykły użytkownik kliknij ołówek przy kandydaturze, wybierz inny „Typ wyborów” i zaproponuj zmianę - ma pojawić się „czeka na zatwierdzenie”, a admin ma ją widzieć na /admin/rewizje jako „typ wyborów” ze starym i nowym typem.",
+      "Jako admin zrób to samo - wiersz ma od razu pokazać nowy typ, pogrubiony obok „kandydatura”.",
+    ],
+    link: "/osoba/kamil-sebastian-barczyk-qFxOI9faG9y0TuYuJAMc",
+    area: "contributor",
+    fixes: ["nA5jsYpXD9i8au8iLX10"],
+  },
+  {
     id: "drugie-imie-z-rejestru",
     title:
       "Drugie imię z rejestru na stronie osoby, w grafie samo imię i nazwisko",

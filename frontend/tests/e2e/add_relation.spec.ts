@@ -24,9 +24,9 @@ async function compose(page: Page, trigger: string, name: string) {
 
 /** Adding a relation, the way the composer asks for it: who first, then how.
  *
- * The node ids are the ones scripts/seed-emulator.ts writes. Both specs pick
- * pairs the seed leaves unconnected, so what the page shows afterwards can
- * only have come from the form. */
+ * The node ids are the ones scripts/seed-emulator.ts writes. Each spec picks a
+ * pair the seed leaves unconnected, so what the page shows afterwards can only
+ * have come from the form. */
 test.describe("Add a relation", () => {
   test("a reader connects two people from the relations section", async ({
     page,
@@ -66,6 +66,42 @@ test.describe("Add a relation", () => {
       { timeout: 30_000 },
     );
     await expect(page.locator("body")).toContainText("żona");
+  });
+
+  test("a candidacy says which election it was for", async ({ page }) => {
+    test.setTimeout(180_000);
+    // Krzysztof Wójcik (5) and Województwo Łódzkie, which the seed does not
+    // connect.
+    await logIn(page, USERS.normal, "/entity/person/5");
+
+    const dialog = await compose(
+      page,
+      "add-relation-employment",
+      "Województwo Łódzkie",
+    );
+    await expect(
+      dialog.getByTestId("add-relation-verb-election-outgoing"),
+    ).toBeVisible();
+
+    await dialog.getByTestId("add-relation-position").click();
+    await page.getByRole("option", { name: "Sejmik", exact: true }).click();
+    await expect(dialog.getByTestId("add-relation-position")).toContainText(
+      "Sejmik",
+    );
+    await dialog.getByTestId("add-relation-submit").click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+
+    // Printed on the row in bold, the way a stored candidacy's kind is - the
+    // report was a row that said „kandydatura” and a region, and nothing more.
+    await page.reload();
+    const row = page
+      .getByTestId("relations-history")
+      .locator(".history-row")
+      .filter({ hasText: "Województwo Łódzkie" });
+    await expect(row.locator('[data-testid^="edge-office-"]')).toHaveText(
+      "Sejmik",
+      { timeout: 30_000 },
+    );
   });
 
   test("the verb offered depends on what was picked", async ({ page }) => {

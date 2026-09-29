@@ -6,6 +6,7 @@ import * as directives from "vuetify/directives";
 import EditRelation from "../../../app/components/dialog/EditRelation.vue";
 import RelationDetailFields from "../../../app/components/form/RelationDetailFields.vue";
 import type { EdgeNode } from "../../../app/composables/edges";
+import { electionPositions } from "../../../shared/misc";
 
 const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
 
@@ -103,6 +104,17 @@ async function submit() {
   await flushPromises();
 }
 
+/** The „Typ wyborów" select. Its menu is teleported and jsdom has no layout
+ * to open it by, so a test picks through the component's own model event -
+ * which is what a click on an option ends in. */
+function kindSelect(wrapper: ReturnType<typeof mountDialog>) {
+  const select = wrapper
+    .findAllComponents(components.VSelect)
+    .find((candidate) => candidate.props("label") === "Typ wyborów");
+  if (!select) throw new Error("no „Typ wyborów” select");
+  return select;
+}
+
 describe("DialogEditRelation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -192,6 +204,85 @@ describe("DialogEditRelation", () => {
     await submit();
 
     expect(sent()).toMatchObject({ edge_id: "e2", elected: true });
+  });
+
+  describe("which election a candidacy was for", () => {
+    it("is offered as the relation stores it", async () => {
+      const wrapper = mountDialog({
+        edge: candidacy({ position: "Samorząd" }),
+      });
+      await flushPromises();
+
+      expect(
+        wrapper.findComponent(RelationDetailFields).props("modelValue"),
+      ).toMatchObject({ position: "Samorząd" });
+      expect(kindSelect(wrapper).props("modelValue")).toBe("Samorząd");
+    });
+
+    it("offers every kind the site stores, and nothing else", async () => {
+      // `edgeEditSchema` refuses anything off this list, so an option that is
+      // not on it would be a pick that can only fail to save.
+      const wrapper = mountDialog({ edge: candidacy() });
+      await flushPromises();
+
+      const offered = (
+        kindSelect(wrapper).props("items") as Array<{ value: string }>
+      ).map((item) => item.value);
+      expect(offered).toEqual(electionPositions);
+    });
+
+    it("sends the kind the reader picked", async () => {
+      // The report: the row said „Samorząd”, and the edit window had no field
+      // to say that the run was for the sejmik.
+      const wrapper = mountDialog({
+        edge: candidacy({ position: "Samorząd" }),
+      });
+      await flushPromises();
+      kindSelect(wrapper).vm.$emit("update:modelValue", "Sejmik");
+      await flushPromises();
+      await submit();
+
+      expect(sent()).toMatchObject({ edge_id: "e2", position: "Sejmik" });
+    });
+
+    it("is left out while nobody has picked one", async () => {
+      // A candidacy stored without a kind keeps having none when only its date
+      // is corrected - and the server takes no empty kind.
+      mountDialog({ edge: candidacy({ position: undefined }) });
+      await flushPromises();
+      await submit();
+
+      expect(sent()).toMatchObject({ edge_id: "e2" });
+      expect(sent()).not.toHaveProperty("position");
+    });
+
+    it("is not restated when the reader corrects something else", async () => {
+      // A kind off the list - „Rada sejmiku” is what the PKW headers map
+      // „Sejmik” to - would fail `edgeEditSchema` and the whole correction
+      // with it, over a field nobody touched.
+      mountDialog({
+        edge: candidacy({
+          position: "Rada sejmiku" as EdgeNode["position"],
+        }),
+      });
+      await flushPromises();
+      const box = byTestId("edit-relation-elected").querySelector("input")!;
+      box.click();
+      await flushPromises();
+      await submit();
+
+      expect(sent()).toMatchObject({ edge_id: "e2", elected: true });
+      expect(sent()).not.toHaveProperty("position");
+    });
+
+    it("is not asked of a relation that is not a candidacy", async () => {
+      mountDialog();
+      await flushPromises();
+
+      expect(
+        document.querySelector('[data-testid="edit-relation-position"]'),
+      ).toBeNull();
+    });
   });
 
   it("reports whether the change went live or into the queue", async () => {

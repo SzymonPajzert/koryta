@@ -144,7 +144,7 @@
           <v-select
             v-model="newEdge.position"
             :items="electionPositions"
-            label="Stanowisko"
+            label="Typ wyborów"
             density="compact"
             hide-details="auto"
             data-testid="edge-position-select"

@@ -22,10 +22,12 @@ const ids = {
   worker: `edworker${stamp}`,
   company: `edcompany${stamp}`,
   queued: `edqueued${stamp}`,
+  region: `edregion${stamp}`,
 };
 const edges = {
   job: `ed-edge-job-${stamp}`,
   queuedJob: `ed-edge-queued-job-${stamp}`,
+  candidacy: `ed-edge-candidacy-${stamp}`,
 };
 
 /** What /eksploruj/nowe is asked for, so the queue holds exactly one person.
@@ -82,6 +84,25 @@ async function seed() {
     type: "employed",
     name: "Czlonek rady",
     start_date: "2019-03-01",
+    published: true,
+  });
+
+  // A local candidacy the way the pipeline stores every one of them: as
+  // „Samorząd", because it does not keep which office the run was for. Saying
+  // which one it was is the correction the kind-of-election field is for.
+  batch.set(db.collection("nodes").doc(ids.region), {
+    name: `Gmina Poprawiana ${stamp}`,
+    type: "region",
+    revision_id: `rev-${stamp}`,
+    published: true,
+  });
+  batch.set(db.collection("edges").doc(edges.candidacy), {
+    source: ids.worker,
+    target: ids.region,
+    type: "election",
+    name: "kandydatura",
+    position: "Samorząd",
+    start_date: "2024-01-01",
     published: true,
   });
 
@@ -236,6 +257,77 @@ test.describe("Correcting a relation", () => {
     await expect(
       rows.filter({ hasText: `Spolka Poprawiana ${stamp}` }),
     ).toContainText("Czlonek rady", { timeout: 30_000 });
+  });
+
+  test("an admin says which election a candidacy was for", async ({ page }) => {
+    test.setTimeout(180_000);
+    await logIn(page, USERS.admin, `/entity/person/${ids.worker}`);
+
+    const rows = page.getByTestId("relations-history").locator(".history-row");
+    const candidacy = rows.filter({ hasText: `Gmina Poprawiana ${stamp}` });
+    const office = page.getByTestId(`edge-office-${edges.candidacy}`);
+    await expect(candidacy).toBeVisible({ timeout: 30_000 });
+    await expect(office).toHaveText("Samorząd");
+
+    await candidacy.getByTestId(`edge-edit-${edges.candidacy}`).click();
+    const dialog = page.getByTestId("edit-relation-dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+
+    // Prefilled with what the row says, so narrowing it down is one pick.
+    const kind = dialog.getByTestId("edit-relation-position");
+    await expect(kind).toContainText("Samorząd");
+    await kind.click();
+    await page.getByRole("option", { name: "Sejmik", exact: true }).click();
+    await expect(kind).toContainText("Sejmik");
+    await dialog.getByTestId("edit-relation-submit").click();
+
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+    await expect(office).toHaveText("Sejmik", { timeout: 30_000 });
+
+    // Stored, and applied rather than queued.
+    await page.reload();
+    await expect(office).toHaveText("Sejmik", { timeout: 30_000 });
+    expect(await proposalsFor(edges.candidacy)).toHaveLength(0);
+  });
+
+  test("a contributor's kind of election waits for a reviewer", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await logIn(page, USERS.normal, `/entity/person/${ids.worker}`);
+
+    const candidacy = page
+      .getByTestId("relations-history")
+      .locator(".history-row")
+      .filter({ hasText: `Gmina Poprawiana ${stamp}` });
+    await expect(candidacy).toBeVisible({ timeout: 30_000 });
+    await candidacy.getByTestId(`edge-edit-${edges.candidacy}`).click();
+
+    const dialog = page.getByTestId("edit-relation-dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await dialog.getByTestId("edit-relation-position").click();
+    await page.getByRole("option", { name: "Rada gminy", exact: true }).click();
+    await dialog.getByTestId("edit-relation-submit").click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByText("czeka na zatwierdzenie")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    const proposals = await proposalsFor(edges.candidacy);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]?.data).toMatchObject({
+      position: "Rada gminy",
+      // The rest of the candidacy is restated, not dropped.
+      type: "election",
+      target: ids.region,
+    });
+
+    // The page keeps saying what it said until a reviewer approves.
+    await page.reload();
+    await expect(page.getByTestId(`edge-office-${edges.candidacy}`)).toHaveText(
+      "Samorząd",
+      { timeout: 30_000 },
+    );
   });
 
   test("a correction can be made from the /eksploruj/nowe queue", async ({

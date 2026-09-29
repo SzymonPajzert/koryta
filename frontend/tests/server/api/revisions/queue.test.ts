@@ -621,14 +621,14 @@ describe("api/revisions/queue", () => {
           source: "node-1",
           target: "node-2",
           type: "employed",
-          position: "prezes",
+          start_date: "2019-03-01",
         },
       });
       targets["edges/edge-1"] = {
         source: "node-1",
         target: "node-2",
         type: "employed",
-        position: "członek zarządu",
+        start_date: "2018-01-01",
         published: true,
       };
       targets["nodes/node-2"] = { name: "Orlen", type: "place" };
@@ -646,10 +646,10 @@ describe("api/revisions/queue", () => {
       // The endpoints are what the relation is, not what is being proposed.
       expect(row!.changes).toEqual([
         {
-          field: "position",
-          label: "stanowisko",
+          field: "start_date",
+          label: "data od",
           from: null,
-          to: "prezes",
+          to: "2019-03-01",
         },
       ]);
     });

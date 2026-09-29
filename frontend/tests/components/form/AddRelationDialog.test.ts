@@ -106,6 +106,18 @@ function created() {
   return call?.[1]?.body as Record<string, unknown> | undefined;
 }
 
+/** Picks a kind of election in the „Typ wyborów" select, through the
+ * component's own model event: its menu is teleported, and jsdom has no layout
+ * to open it by. */
+async function pickKind(wrapper: ReturnType<typeof mountDialog>, kind: string) {
+  const select = wrapper
+    .findAllComponents(components.VSelect)
+    .find((candidate) => candidate.props("label") === "Typ wyborów");
+  if (!select) throw new Error("no „Typ wyborów” select");
+  select.vm.$emit("update:modelValue", kind);
+  await flushPromises();
+}
+
 describe("AddRelationDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -216,6 +228,30 @@ describe("AddRelationDialog", () => {
 
     expect(created()).toMatchObject({ type: "employed" });
     expect(created()?.elected).not.toBe(true);
+  });
+
+  it("records which election a candidacy was for", async () => {
+    // Typed in when the candidacy is, or the row it makes reads „kandydatura”
+    // and a region, which is the report this field answers.
+    const wrapper = mountDialog();
+    await pick(wrapper, { id: "krakow", type: "region", name: "Kraków" });
+    await pickKind(wrapper, "Senat");
+    await submit();
+
+    expect(created()).toMatchObject({ type: "election", position: "Senat" });
+  });
+
+  it("drops the kind of election when the reader switches to an employment", async () => {
+    // Kept across the switch like the win above, so it has to be dropped the
+    // same way - an employment with „Sejm” on it would be a claim nobody made.
+    const wrapper = mountDialog();
+    await pick(wrapper, { id: "krakow", type: "region", name: "Kraków" });
+    await pickKind(wrapper, "Sejm");
+
+    await pick(wrapper, orlen);
+    await submit();
+
+    expect(created()).toMatchObject({ type: "employed", position: "" });
   });
 
   it("says so when nothing can join the two", async () => {

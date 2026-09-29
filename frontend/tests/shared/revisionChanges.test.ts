@@ -5,6 +5,7 @@ import {
   revisionChanges,
   revisionFieldLabels,
 } from "../../shared/revisionChanges";
+import { edgeEditSchema } from "../../shared/api";
 
 /** A person node as the target reads today. */
 const stored = {
@@ -205,5 +206,34 @@ describe("revisionFieldLabels", () => {
       missing,
       `no Polish label in revisionFieldLabels for: ${missing.join(", ")}`,
     ).toEqual([]);
+  });
+
+  it("labels every field a relation can be corrected in", () => {
+    // The relation dialogs file their corrections as revisions too, and the
+    // reviewer reads them in the same diff - `proposableFieldNames` only walks
+    // the node schemas, so the edge one is checked here.
+    const missing = Object.keys(edgeEditSchema.shape).filter(
+      (field) => !(field in revisionFieldLabels),
+    );
+
+    expect(
+      missing,
+      `no Polish label in revisionFieldLabels for: ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("calls a candidacy's `position` the kind of election it was", () => {
+    // Only a candidacy carries one, and „stanowisko” read wrongly next to
+    // „Sejm” - a chamber is not a post.
+    expect(
+      revisionChanges({ position: "Sejmik" }, { position: "Samorząd" }),
+    ).toEqual([
+      {
+        field: "position",
+        label: "typ wyborów",
+        from: "Samorząd",
+        to: "Sejmik",
+      },
+    ]);
   });
 });
