@@ -9,7 +9,6 @@ from conductor import setup_context
 from pipelines import PIPELINES
 from scrapers.article.pipelines import pipeline_utils as article_args
 from scrapers.cru import config as cru_args
-from scrapers.krs import register as register_args
 from scrapers.stores import (
     ContextResource,
     Pipeline,
@@ -111,7 +110,6 @@ def get_args():
     article_args.add_arguments(parser)
     wiki_dump_args.add_arguments(parser)
     cru_args.add_arguments(parser)
-    register_args.add_arguments(parser)
     args, _ = parser.parse_known_args()
     return args
 

@@ -112,6 +112,9 @@ REFRESH_PIPELINES = {
     "KRSNeedsRefresh",
     "CompaniesKRS",
     "KRSUpdates",
+    # The fold of the register job's log. Nothing it depends on changes when
+    # the log grows, so without this a scrape queues from an old ledger.
+    "KRSRegisterEntries",
     "RejestrIOCoverage",
     "PersonFeedCoverage",
 }

@@ -1,6 +1,6 @@
 """Which companies in the register ledger the public owns, and through whom.
 
-`KRSRegisterOwners` keeps what the register says about who owns each company;
+`KRSRegisterEntries` holds what the register says about who owns each company;
 this decides which of those owners are the public. Five kinds of answer, most
 direct first, and a company carries the first one that fits:
 
@@ -35,7 +35,7 @@ import pandas as pd
 
 from scrapers.krs.columns import is_public, padded_krs
 from scrapers.krs.list import CompaniesKRS
-from scrapers.krs.register import STATUS_OK, KRSRegisterOwners, owner_share
+from scrapers.krs.register import STATUS_OK, KRSRegisterEntries, owner_share
 from scrapers.map.jst import SKARB_PANSTWA, JstIndex, normalise
 from scrapers.map.teryt import Jst
 from scrapers.stores import Context, Pipeline
@@ -220,7 +220,7 @@ class CompaniesPublicByRegister(Pipeline[PublicOwnership]):
     filename = "companies_public_by_register"
     dtype = {"krs": str, "owner_id": str}
 
-    ledger: KRSRegisterOwners
+    ledger: KRSRegisterEntries
     companies: CompaniesKRS
     jst: Jst
 

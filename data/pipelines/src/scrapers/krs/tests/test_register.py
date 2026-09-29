@@ -1,21 +1,28 @@
-"""What `KRSRegisterOwners` keeps of an odpis, and in which order it reads."""
+"""What the ledger keeps of an odpis, how the log folds into it, and read order."""
+
+import gzip
 
 import pandas as pd
 
-from scrapers.krs import register
 from scrapers.krs.register import (
+    REASON_FAILED,
+    REASON_MOVED,
+    REASON_NEVER,
+    RESPONSE_LOG,
     STATUS_FAILED,
     STATUS_NOT_FOUND,
     STATUS_OK,
     STATUS_STRUCK_OFF,
-    KRSRegisterOwners,
-    RegisterEntry,
+    KRSRegisterEntries,
+    RegisterRead,
     due_for_a_read,
-    fetch_entry,
+    fold,
     iso_date,
     owner_share,
+    queue_for_a_read,
     summarise_odpis,
 )
+from scrapers.tests.mocks import MockIO
 
 WOJEWODZTWO_POMORSKIE = {
     "nazwa": "WOJEWÓDZTWO POMORSKIE",
@@ -191,72 +198,6 @@ def test_the_registers_date_is_read_day_first():
     assert iso_date(None) is None
 
 
-class Response:
-    def __init__(self, status_code: int, body: dict | None = None):
-        self.status_code = status_code
-        self.body = body
-
-    def json(self):
-        return self.body
-
-
-class Session:
-    """Answers each register from a script, one response per request."""
-
-    def __init__(self, **by_register: list[Response]):
-        self.by_register = by_register
-        self.asked: list[str] = []
-
-    def get(self, url: str, timeout: float) -> Response:
-        rejestr = url.split("rejestr=")[1][0]
-        self.asked.append(rejestr)
-        return self.by_register[rejestr].pop(0)
-
-
-def fetch(session: Session, monkeypatch) -> RegisterEntry:
-    monkeypatch.setattr(register.time, "sleep", lambda seconds: None)
-    return fetch_entry(session, "0000225512", "2026-09-28", interval=0)  # type: ignore[arg-type]
-
-
-NOT_FOUND = {"title": "Not Found", "status": 404}
-
-
-def test_a_204_is_an_entry_that_was_struck_off(monkeypatch):
-    # 0000758251 answers 204 in P and 404 in S; S is never needed.
-    session = Session(P=[Response(204)])
-
-    entry = fetch(session, monkeypatch)
-
-    assert (entry.status, entry.rejestr) == (STATUS_STRUCK_OFF, "P")
-    assert session.asked == ["P"]
-
-
-def test_the_other_register_is_asked_when_the_first_has_nothing(monkeypatch):
-    session = Session(
-        P=[Response(404, NOT_FOUND)],
-        S=[Response(200, odpis(wspolnicySpzoo=[WOJEWODZTWO_POMORSKIE]))],
-    )
-
-    entry = fetch(session, monkeypatch)
-
-    assert (entry.status, entry.rejestr) == (STATUS_OK, "S")
-
-
-def test_a_not_found_body_on_a_200_is_a_miss_too(monkeypatch):
-    session = Session(P=[Response(200, NOT_FOUND)], S=[Response(404, NOT_FOUND)])
-
-    assert fetch(session, monkeypatch).status == STATUS_NOT_FOUND
-
-
-def test_a_server_error_is_a_failure_to_ask_again(monkeypatch):
-    session = Session(P=[Response(503), Response(503), Response(503)])
-
-    entry = fetch(session, monkeypatch)
-
-    assert entry.status == STATUS_FAILED
-    assert session.asked == ["P", "P", "P"]
-
-
 def bulletin(*rows: tuple[str, str]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["krs", "date"])
 
@@ -295,19 +236,149 @@ def test_failures_then_moved_entries_then_new_ones():
     assert due == ["0000900000", "0000000400", "0000000200", "0000000300"]
 
 
-def test_nothing_is_fetched_without_a_limit(monkeypatch):
-    """A refresh reached through a dependency must not start a 700k sweep."""
+def test_the_reasons_follow_the_order():
+    queue = queue_for_a_read(
+        ledger(
+            ("0000000400", "2026-07-01", STATUS_OK),
+            ("0000900000", "2026-09-10", STATUS_FAILED),
+        ),
+        bulletin(
+            ("0000000400", "2026-08-13"),
+            ("0000900000", "2026-08-13"),
+            ("0000000200", "2026-08-13"),
+        ),
+    )
+
+    assert [(q.krs, q.reason) for q in queue] == [
+        ("0000900000", REASON_FAILED),
+        ("0000000400", REASON_MOVED),
+        ("0000000200", REASON_NEVER),
+    ]
+
+
+def read(krs="0000225512", read_at="2026-09-28T16:41:18+02:00", status=STATUS_OK, **kw):
+    if status == STATUS_OK:
+        kw.setdefault("rejestr", "P")
+        kw.setdefault("body", odpis(krs, wspolnicySpzoo=[WOJEWODZTWO_POMORSKIE]))
+    return RegisterRead(krs=krs, read_at=read_at, status=status, **kw)
+
+
+def test_a_read_survives_a_line_of_the_log():
+    original = read(run="0192-run")
+
+    assert RegisterRead.from_line(original.to_line()) == original
+
+
+def test_a_line_from_a_newer_writer_still_reads():
+    line = read().to_line()[:-1] + ', "added_later": 1}'
+
+    assert RegisterRead.from_line(line).krs == "0000225512"
+
+
+def test_an_odpis_folds_into_the_entry_it_summarises():
+    [entry] = fold([read()])
+
+    assert entry == summarise_odpis(
+        "0000225512", "P", odpis(wspolnicySpzoo=[WOJEWODZTWO_POMORSKIE]), "2026-09-28"
+    )
+
+
+def test_a_failure_never_overwrites_an_answer():
+    """A read that did not come back says nothing about the company."""
+    [entry] = fold(
+        [read(), read(read_at="2026-10-02T09:00:00+02:00", status=STATUS_FAILED)]
+    )
+
+    assert (entry.status, entry.swept, entry.name) == (
+        STATUS_OK,
+        "2026-09-28",
+        "POMORSKI FUNDUSZ POŻYCZKOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    )
+
+
+def test_the_newest_answer_wins():
+    later = read(
+        read_at="2026-10-02T09:00:00+02:00", status=STATUS_STRUCK_OFF, rejestr="P"
+    )
+
+    [entry] = fold([later, read()])
+
+    assert (entry.status, entry.swept) == (STATUS_STRUCK_OFF, "2026-10-02")
+
+
+def test_at_the_same_moment_an_odpis_beats_a_miss():
+    same = "2026-09-28T00:00:00+02:00"
+
+    [entry] = fold([read(read_at=same, status=STATUS_NOT_FOUND), read(read_at=same)])
+
+    assert entry.status == STATUS_OK
+
+
+def test_only_failures_leave_a_failure_to_ask_again():
+    [entry] = fold([read(status=STATUS_FAILED, rejestr="P", error="HTTP 503")])
+
+    assert (entry.status, entry.rejestr) == (STATUS_FAILED, "P")
+
+
+def test_the_clocks_are_compared_as_moments_not_text():
+    """Across a DST change the offsets differ, and text order would lie."""
+    summer = read(
+        read_at="2026-10-25T02:30:00+02:00", status=STATUS_STRUCK_OFF, rejestr="P"
+    )
+    winter = read(read_at="2026-10-25T02:15:00+01:00")  # 45 minutes later
+
+    [entry] = fold([summer, winter])
+
+    assert entry.status == STATUS_OK
+
+
+class LogIO(MockIO):
+    """A MockIO whose bucket holds `RESPONSE_LOG` parts."""
+
+    def __init__(self, *parts: list[RegisterRead]):
+        super().__init__()
+        self.parts = {
+            f"part-{i}": gzip.compress(
+                "".join(r.to_line() + "\n" for r in reads).encode()
+            )
+            for i, reads in enumerate(parts)
+        }
+        self.asked: list = []
+
+    def list_files(self, path):
+        self.asked.append(path)
+        yield from self.parts
+
+    def read_data(self, fs):
+        data = self.parts[fs]
+
+        class Part:
+            def read_bytes(self):
+                return data
+
+        return Part()
+
+
+def test_the_ledger_is_a_fold_of_every_part_in_the_log():
+    io = LogIO(
+        [read(), read("0000000001", status=STATUS_FAILED, rejestr="P")],
+        [
+            read(
+                "0000000001",
+                read_at="2026-09-29T10:00:00+02:00",
+                status=STATUS_NOT_FOUND,
+            )
+        ],
+    )
 
     class Ctx:
         pass
 
-    carried = ledger(("0000225512", "2026-09-28", STATUS_OK))
-    pipeline = KRSRegisterOwners()
-    monkeypatch.setattr(pipeline, "ledger", lambda ctx: carried)
-    monkeypatch.setattr(
-        register.requests,
-        "Session",
-        lambda: (_ for _ in ()).throw(AssertionError("fetched")),
-    )
+    ctx = Ctx()
+    ctx.io = io  # type: ignore[attr-defined]
 
-    assert pipeline.process(Ctx()) is carried  # type: ignore[arg-type]
+    df = KRSRegisterEntries().process(ctx)  # type: ignore[arg-type]
+
+    assert io.asked == [RESPONSE_LOG]
+    assert list(df["krs"]) == ["0000000001", "0000225512"]
+    assert list(df["status"]) == [STATUS_NOT_FOUND, STATUS_OK]

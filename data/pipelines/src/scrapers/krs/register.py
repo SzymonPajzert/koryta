@@ -1,4 +1,4 @@
-"""What the register says about every company in the KRS bulletin.
+"""What the register says about who owns each company in the KRS bulletin.
 
 A company reaches `ScrapeRejestrIO` only through a door that already knows its
 number: a seed list, somebody's person feed, or an owner already in the crawl.
@@ -14,43 +14,38 @@ is named in the daily bulletin `KRSUpdates` reads: 716,744 distinct KRS numbers
 between 2025-06-01 and 2026-09-26, which is the whole living register, since a
 company that files its accounts changes. Its OdpisAktualny names the owners -
 every wspólnik of a spółka z o.o. with 10% or more, and an S.A.'s shareholder
-when there is only one. `KRSRegisterOwners` reads those odpisy, a bounded number
-per run, and keeps what each says; `CompaniesPublicByRegister` then decides
-which of them the public owns.
+when there is only one.
 
-It is a ledger, not a crawl. The bucket layout `CompaniesKRS` reads holds one
-object per response and every one of them is parsed on every run, which is right
-for the ~11k companies the site is about and wrong for 700k it mostly is not.
-Only the fields that answer "who owns this" are kept, one row per company, and
-a company the public turns out to own goes through the ordinary door from there:
-`scrape_krs_free` fetches its odpis into the crawl like any other starter's.
+Asking is a job, `jobs.krs_register_owners`: it reads the head of
+`KRSRegisterQueue` and appends every answer, verbatim, to `RESPONSE_LOG`. This
+module is the pipeline half. `KRSRegisterEntries` folds the log into the ledger,
+one row per company with the fields that answer "who owns this";
+`KRSRegisterQueue` says which numbers are owed a read; and
+`CompaniesPublicByRegister` decides which companies the public owns. None of
+them keeps anything between runs: delete their output and the next run builds
+the same from the log and the bulletin.
 
-Run it on its own; nothing else asks it to fetch:
-
-    koryta KRSRegisterOwners --refresh KRSRegisterOwners --register-sweep-limit 20000
+The log is not in the crawl bucket. `CompaniesKRS`, `KRSAlreadyScraped` and
+`KRSCensoredPeople` read everything under `hostname=api-krs.ms.gov.pl`, which is
+right for the ~11k companies the site is about and wrong for 700k it mostly is
+not: every odpis there becomes a company. A company the public turns out to own
+goes through the ordinary door instead - `scrape_krs_free` fetches its odpis
+into the crawl like any other starter's.
 """
 
-import argparse
+import gzip
+import json
 import re
-import time
+import typing
 from dataclasses import asdict, dataclass, field
-from datetime import date
-from functools import cache
+from datetime import datetime
 
 import pandas as pd
-import requests
-from tqdm import tqdm
 
 from scrapers.krs.columns import iso_dates, normalise, padded_krs
 from scrapers.krs.updates import KRSUpdates
 from scrapers.map.jst import normalise as normalise_name
-from scrapers.stores import Context, Pipeline
-
-ODPIS_URL = "https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr={rejestr}&format=json"
-
-#: The two registers, in the order they are asked. A company is in P, and so is
-#: most of what the bulletin names; S is associations, foundations and SPZOZ.
-REGISTERS = ("P", "S")
+from scrapers.stores import CloudStorage, Context, Pipeline
 
 #: What asking about a company came to.
 STATUS_OK = "ok"
@@ -62,41 +57,16 @@ STATUS_NOT_FOUND = "not_found"
 #: The request did not come back. Asked again on the next run, first.
 STATUS_FAILED = "failed"
 
-#: Consecutive failures after which a run stops rather than recording the rest
-#: of its queue as failed. The server is down or refusing, and a row per
-#: company saying so is worth nothing.
-MAX_CONSECUTIVE_FAILURES = 20
-
-
-def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """Registers the sweep's flags on a parser.
-
-    Called by `koryta.get_args` as well as here, for the reason
-    `scrapers.cru.config.add_arguments` gives: an unregistered flag's value
-    would be read as a pipeline name.
-    """
-    parser.add_argument(
-        "--register-sweep-limit",
-        type=int,
-        default=0,
-        help="How many register entries KRSRegisterOwners may fetch this run. "
-        "0, the default, fetches nothing and carries the ledger forward, so a "
-        "refresh reached through a dependency never starts a sweep.",
-    )
-    parser.add_argument(
-        "--register-sweep-interval",
-        type=float,
-        default=0.25,
-        help="Seconds between requests to api-krs. It is a government API "
-        "that asks for no key; keep it polite.",
-    )
-
-
-@cache
-def args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    add_arguments(parser)
-    return parser.parse_known_args()[0]
+#: Where `jobs.krs_register_owners` writes what the register answered, and where
+#: `KRSRegisterEntries` reads it back: gzipped jsonl parts, one `RegisterRead`
+#: per line, written once and never rewritten, under
+#: `date=<Warsaw date>/<run>-<seq>.jsonl.gz`. A part is immutable, which is what
+#: lets `downloaded/` - keyed by object name, never revalidated - cache it.
+RESPONSE_LOG = CloudStorage(
+    prefix="jobs/krs_register_owners/responses/",
+    bucket="koryta-pl-sharedcache",
+    binary=True,
+)
 
 
 @dataclass
@@ -248,44 +218,37 @@ def owner_share(owner: dict, capital: float | None) -> float | None:
     return round(share, 4) if 0 < share <= 1.0001 else None
 
 
-def fetch_entry(
-    session: requests.Session, krs: str, swept: str, interval: float
-) -> RegisterEntry:
-    """Ask both registers about one KRS number, P first.
+@dataclass
+class RegisterRead:
+    """One question put to the register about one KRS number, as it was logged.
 
-    A 404 moves on to the other register; a 204 is an answer - the entry is
-    there and has no current extract - and so is an odpis. Anything else is
-    retried a few times and then recorded as a failure, which the next run
-    asks again.
+    The unit of `RESPONSE_LOG`. The odpis is kept whole rather than summarised,
+    so that a new field or a parser fix is a fold of the log and not another
+    700k requests.
     """
-    for rejestr in REGISTERS:
-        response = None
-        for attempt in range(3):
-            try:
-                response = session.get(
-                    ODPIS_URL.format(krs=krs, rejestr=rejestr), timeout=30
-                )
-            except requests.RequestException:
-                response = None
-            if response is not None and response.status_code in (200, 204, 404):
-                break
-            time.sleep(5 * (attempt + 1))
-        if response is None or response.status_code not in (200, 204, 404):
-            return RegisterEntry(krs=krs, swept=swept, status=STATUS_FAILED)
-        if response.status_code == 204:
-            return RegisterEntry(
-                krs=krs, swept=swept, status=STATUS_STRUCK_OFF, rejestr=rejestr
-            )
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except ValueError:
-                return RegisterEntry(krs=krs, swept=swept, status=STATUS_FAILED)
-            if "odpis" in data:
-                return summarise_odpis(krs, rejestr, data, swept)
-        # A 404, or a 200 whose body says "Not Found": try the other register.
-        time.sleep(interval)
-    return RegisterEntry(krs=krs, swept=swept, status=STATUS_NOT_FOUND)
+
+    krs: str
+    #: When the answer came, as an ISO timestamp in Warsaw time - the clock the
+    #: crawl bucket's `date=` segments use. Its date is the ledger's `swept`.
+    read_at: str
+    status: str
+    #: The register that answered, P or S; None where neither did.
+    rejestr: str | None = None
+    #: The OdpisAktualny as api-krs sent it, for `STATUS_OK` only.
+    body: dict | None = None
+    error: str | None = None
+    #: Which run wrote it: a job run id, or the import of an earlier sweep.
+    run: str | None = None
+
+    def to_line(self) -> str:
+        return json.dumps(asdict(self), ensure_ascii=False)
+
+    @staticmethod
+    def from_line(line: str) -> "RegisterRead":
+        data = json.loads(line)
+        return RegisterRead(
+            **{k: v for k, v in data.items() if k in RegisterRead.__dataclass_fields__}
+        )
 
 
 COLUMNS = list(RegisterEntry.__dataclass_fields__)
@@ -324,65 +287,168 @@ def due_for_a_read(ledger: pd.DataFrame, updates: pd.DataFrame) -> list[str]:
     return failed + moved_ids + never
 
 
-class KRSRegisterOwners(Pipeline[RegisterEntry]):
-    """A ledger of who owns every company the bulletin names. See module doc."""
+#: How two answers about the same number compare when they came at the same
+#: moment: an odpis over a 204 or a 404, and any answer over a failure.
+_TIE_RANK = {STATUS_OK: 0, STATUS_STRUCK_OFF: 1, STATUS_NOT_FOUND: 1, STATUS_FAILED: 2}
 
-    filename = "krs_register_owners"
+
+def _later(read_at: str, other: str) -> bool:
+    return datetime.fromisoformat(read_at) > datetime.fromisoformat(other)
+
+
+class _Answer(typing.NamedTuple):
+    read_at: str
+    status: str
+    entry: RegisterEntry
+
+
+def _answer(read: RegisterRead) -> _Answer:
+    swept = read.read_at[:10]
+    if read.status == STATUS_OK and read.body is not None and read.rejestr:
+        entry = summarise_odpis(read.krs, read.rejestr, read.body, swept)
+    else:
+        entry = RegisterEntry(
+            krs=read.krs,
+            swept=swept,
+            status=STATUS_FAILED if read.status == STATUS_OK else read.status,
+            rejestr=read.rejestr,
+        )
+    return _Answer(read.read_at, entry.status, entry)
+
+
+def _replaces(new: _Answer, held: _Answer) -> bool:
+    """Whether `new` is the better answer about a number than `held`.
+
+    Any answer beats a failure, whenever it came: a read that did not come back
+    says nothing about the company, and must not overwrite one that did. Among
+    answers, the newest wins - a company struck off after it was read is struck
+    off.
+    """
+    new_failed = new.status == STATUS_FAILED
+    held_failed = held.status == STATUS_FAILED
+    if new_failed != held_failed:
+        return held_failed
+    if new.read_at != held.read_at:
+        return _later(new.read_at, held.read_at)
+    return _TIE_RANK[new.status] < _TIE_RANK[held.status]
+
+
+def fold(reads: typing.Iterable[RegisterRead]) -> list[RegisterEntry]:
+    """The ledger: the best answer about every number the log holds.
+
+    Each read is summarised as it comes, so what is held is one `RegisterEntry`
+    per company and not the 700k odpisy behind them.
+    """
+    best: dict[str, _Answer] = {}
+    for read in reads:
+        answer = _answer(read)
+        held = best.get(read.krs)
+        if held is None or _replaces(answer, held):
+            best[read.krs] = answer
+    return [best[krs].entry for krs in sorted(best)]
+
+
+def read_log(ctx: Context) -> typing.Iterator[RegisterRead]:
+    """Every read in `RESPONSE_LOG`, part by part."""
+    for ref in ctx.io.list_files(RESPONSE_LOG):
+        raw = ctx.io.read_data(ref).read_bytes()
+        for line in gzip.decompress(raw).decode("utf-8").splitlines():
+            if line.strip():
+                yield RegisterRead.from_line(line)
+
+
+@dataclass
+class QueuedRead:
+    """A KRS number owed a read, and why - see `queue_for_a_read`."""
+
+    krs: str
+    reason: str
+
+
+REASON_FAILED = "failed"
+REASON_MOVED = "moved"
+REASON_NEVER = "never"
+
+
+def queue_for_a_read(ledger: pd.DataFrame, updates: pd.DataFrame) -> list[QueuedRead]:
+    """`due_for_a_read`, with the reason each number is in it."""
+    due = due_for_a_read(ledger, updates)
+    if ledger.empty:
+        return [QueuedRead(krs, REASON_NEVER) for krs in due]
+    status = dict(zip(ledger["krs"], ledger["status"]))
+    return [
+        QueuedRead(
+            krs,
+            REASON_NEVER
+            if krs not in status
+            else REASON_FAILED
+            if status[krs] == STATUS_FAILED
+            else REASON_MOVED,
+        )
+        for krs in due
+    ]
+
+
+class KRSRegisterEntries(Pipeline[RegisterEntry]):
+    """The ledger: what the register last said about every number it was asked.
+
+    A fold of `RESPONSE_LOG` and nothing else. Nothing tells this pipeline the
+    log has grown, so a run that needs the latest answers - the register job,
+    the KRS scrape - names it in its refresh policy.
+    """
+
+    filename = "krs_register_entries"
     dtype = {"krs": str, "nip": str, "regon": str}
-
-    updates: KRSUpdates
 
     @property
     def output_class(self):
         return RegisterEntry
 
-    def ledger(self, ctx: Context) -> pd.DataFrame:
-        """What earlier runs found, or an empty ledger on the first one."""
-        try:
-            previous = self.read(ctx)
-        except Exception as e:  # missing locally and in the shared cache
-            print(f"No earlier register ledger ({e}); starting an empty one")
-            previous = None
-        if previous is None or previous.empty:
-            return pd.DataFrame(columns=COLUMNS)
-        previous["krs"] = padded_krs(previous["krs"])
-        return previous
+    def process(self, ctx: Context) -> pd.DataFrame:
+        reads = 0
+
+        def counted() -> typing.Iterator[RegisterRead]:
+            nonlocal reads
+            for read in read_log(ctx):
+                reads += 1
+                yield read
+
+        entries = fold(counted())
+        df = pd.DataFrame([asdict(e) for e in entries], columns=COLUMNS)
+        counts = df["status"].value_counts().to_dict() if len(df) else {}
+        print(f"Register log: {reads} reads, {len(df)} entries {counts}")
+        return df
+
+
+class KRSRegisterQueue(Pipeline[QueuedRead]):
+    """The KRS numbers owed a read, in the order to read them.
+
+    What `jobs.krs_register_owners` works through, a bounded number per run, as
+    `ScrapeRejestrIO` is what the KRS scrape works through.
+    """
+
+    filename = "krs_register_queue"
+    dtype = {"krs": str}
+    #: Most of the bulletin on a first run, and derived in seconds from its two
+    #: sources, so not worth a copy in the shared cache.
+    backup_to_shared_cache = False
+
+    entries: KRSRegisterEntries
+    updates: KRSUpdates
+
+    @property
+    def output_class(self):
+        return QueuedRead
 
     def process(self, ctx: Context) -> pd.DataFrame:
-        ledger = self.ledger(ctx)
-        limit = args().register_sweep_limit
-        if limit <= 0:
-            print(
-                f"Register ledger carried forward: {len(ledger)} entries, "
-                "nothing fetched (--register-sweep-limit is 0)"
-            )
-            return ledger
-
-        queue = due_for_a_read(ledger, self.updates.read_or_process(ctx))
-        print(f"Register entries owed a read: {len(queue)}, reading {limit}")
-        queue = queue[:limit]
-
-        swept = date.today().isoformat()
-        interval = args().register_sweep_interval
-        session = requests.Session()
-        rows: list[RegisterEntry] = []
-        failures = 0
-        try:
-            for krs in tqdm(queue, desc="Reading the register"):
-                entry = fetch_entry(session, krs, swept, interval)
-                rows.append(entry)
-                failures = failures + 1 if entry.status == STATUS_FAILED else 0
-                if failures >= MAX_CONSECUTIVE_FAILURES:
-                    print(f"{failures} reads in a row failed; stopping here")
-                    break
-                time.sleep(interval)
-        except KeyboardInterrupt:
-            # What was read is kept: the ledger is written on the way out.
-            print(f"Interrupted after {len(rows)} reads; keeping them")
-
-        fresh = pd.DataFrame([asdict(row) for row in rows], columns=COLUMNS)
-        kept = ledger[~ledger["krs"].isin(fresh["krs"])]
-        merged = pd.concat([kept, fresh], ignore_index=True)
-        counts = fresh["status"].value_counts().to_dict() if len(fresh) else {}
-        print(f"Read {len(fresh)} register entries: {counts}; ledger {len(merged)}")
-        return merged
+        ledger = self.entries.read_or_process(ctx)
+        if ledger is None or ledger.empty:
+            ledger = pd.DataFrame(columns=COLUMNS)
+        else:
+            ledger = ledger.copy()
+            ledger["krs"] = padded_krs(ledger["krs"])
+        queue = queue_for_a_read(ledger, self.updates.read_or_process(ctx))
+        df = pd.DataFrame([asdict(q) for q in queue], columns=["krs", "reason"])
+        counts = df["reason"].value_counts().to_dict() if len(df) else {}
+        print(f"Register entries owed a read: {len(df)} {counts}")
+        return df

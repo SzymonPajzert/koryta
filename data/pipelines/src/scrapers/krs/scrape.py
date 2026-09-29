@@ -967,8 +967,9 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         The door for the companies no other door knows: one a gmina or a
         województwo owns sits in no seed list unless somebody put it there,
         and has no KRS-numbered owner for `owned_by_the_public` to reach it
-        from. `KRSRegisterOwners` reads the register for every entity in the
-        bulletin, and `CompaniesPublicByRegister` picks out the public ones.
+        from. `jobs.krs_register_owners` reads the register for the entities
+        in the bulletin, `KRSRegisterEntries` folds what it read, and
+        `CompaniesPublicByRegister` picks out the public ones.
         """
         found = self.public_by_register.read_or_process(ctx)
         if found is None or found.empty:
