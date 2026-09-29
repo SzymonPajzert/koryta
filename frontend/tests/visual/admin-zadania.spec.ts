@@ -9,7 +9,7 @@ import { expectFitsThePhone } from "./phoneWidth";
 /** /admin/zadania, the owner's task list: the lists with one task open, and
  * the map of what waits on what with one task picked.
  *
- * The tasks live in the `ops` database, which the seed leaves empty, so the
+ * The tasks live in their own database, which the seed leaves empty, so the
  * list is answered from ./fixtures/opsTasks.ts. The page is rendered in the
  * browser only (`ssr: false` on /admin/**), which is what lets a route handler
  * answer it. The seeded admin carries the `owner` claim the page asks for. */

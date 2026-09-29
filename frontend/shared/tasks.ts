@@ -1,7 +1,7 @@
 /** The owner's own to-do list: what is left to deploy, run, decide or build,
  * and what has to happen before what.
  *
- * It lives in its own Firestore database, `ops`, next to the site's
+ * It lives in its own Firestore database, `agent-tasks`, next to the site's
  * `koryta-pl` rather than in it. Agents write to it (through the `koryta` MCP
  * server) and they may only read the site's data, and IAM can be narrowed to
  * a database but not to a collection. It also keeps the list out of the
@@ -14,6 +14,7 @@
  */
 import { z } from "zod";
 
+/** Not `ops`: Firestore refuses database ids shorter than four characters. */
 export const OPS_DATABASE = "agent-tasks";
 export const TASKS_COLLECTION = "tasks";
 

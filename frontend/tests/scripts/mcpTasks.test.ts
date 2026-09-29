@@ -291,7 +291,7 @@ describe("agentActor and taskIdFrom", () => {
 });
 
 describe("restTaskStore", () => {
-  const DOCUMENTS = "projects/koryta-pl/databases/ops/documents";
+  const DOCUMENTS = "projects/koryta-pl/databases/agent-tasks/documents";
 
   function fakeFetch(
     reply: (url: string) => { status?: number; body: unknown },
@@ -362,7 +362,7 @@ describe("restTaskStore", () => {
       return { body: {} };
     });
 
-  it("reads and writes the ops database in one transaction", async () => {
+  it("reads and writes the agent-tasks database in one transaction", async () => {
     const { fetch, calls } = transactionFetch(() => ({ body: {} }));
     const seen = await store(fetch).transaction((tasks, writes) => {
       writes.replace({ ...tasks[0]!, title: "New" });
@@ -451,6 +451,6 @@ describe("restTaskStore", () => {
   it("goes to the emulator when one is named", () => {
     expect(
       connectTasks({ FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080" }).source,
-    ).toBe("the Firestore emulator at 127.0.0.1:8080 (database ops)");
+    ).toBe("the Firestore emulator at 127.0.0.1:8080 (database agent-tasks)");
   });
 });

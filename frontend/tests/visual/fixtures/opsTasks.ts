@@ -2,7 +2,7 @@ import type { Task } from "../../../shared/tasks";
 
 /** /api/ops/tasks/list for /admin/zadania's visual tests.
  *
- * The tasks live in the `ops` database, which the seed does not fill, so the
+ * The tasks live in their own database, which the seed does not fill, so the
  * list is answered from here: something on every list the page has, and a
  * chain for the map to draw - a merge, the deploy waiting on it, and the
  * upload waiting on the deploy - beside a second chain with a decision at its
