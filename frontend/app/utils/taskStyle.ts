@@ -1,5 +1,6 @@
 import {
   mdiAccountOutline,
+  mdiFlagCheckered,
   mdiLightbulbOutline,
   mdiRobotOutline,
   mdiRocketLaunchOutline,
@@ -7,11 +8,13 @@ import {
   mdiWrenchOutline,
 } from "@mdi/js";
 import type { RowTone } from "~/composables/rowTone";
-import type {
-  TaskKind,
-  TaskSection,
-  TaskStatus,
-  TaskWho,
+import {
+  isClosed,
+  type Task,
+  type TaskKind,
+  type TaskSection,
+  type TaskStatus,
+  type TaskWho,
 } from "~~/shared/tasks";
 
 /** How /admin/zadania names and draws the kinds, lists and statuses of
@@ -24,6 +27,7 @@ export const taskKindConfig: Record<TaskKind, { title: string; icon: string }> =
     task: { title: "Zadanie", icon: mdiWrenchOutline },
     decision: { title: "Decyzja", icon: mdiScaleBalance },
     idea: { title: "Pomysł", icon: mdiLightbulbOutline },
+    goal: { title: "Cel", icon: mdiFlagCheckered },
   };
 
 export const taskWhoConfig: Record<TaskWho, { title: string; icon: string }> = {
@@ -40,11 +44,18 @@ export const taskStatusConfig: Record<TaskStatus, { title: string }> = {
 };
 
 /** One tone per list: what waits on the owner stands out, what waits on an
- * agent is calmer, and what cannot start yet is grey. */
+ * agent is calmer, and what cannot start yet is grey. Goals are the one dark
+ * thing on the page: where everything else leads. */
 export const taskSectionConfig: Record<
   TaskSection,
   { title: string; short: string; tone: RowTone; info: string }
 > = {
+  goals: {
+    title: "Cele",
+    short: "Cel",
+    tone: "strong",
+    info: "Dokąd prowadzą zadania. Cel czeka na zadania, które do niego prowadzą - tak się je grupuje - a filtr „Cel” pokazuje tylko je.",
+  },
   mine: {
     title: "Do zrobienia przez Ciebie",
     short: "Dla Ciebie",
@@ -82,6 +93,14 @@ export const taskSectionConfig: Record<
     info: "Zrobione albo porzucone.",
   },
 };
+
+/** Tasks to pick from in a field, as its items. Closed ones stay pickable -
+ * a dependency on something done is a record of the order things happened
+ * in - but after the open ones. */
+export const taskChoices = (tasks: readonly Task[]) =>
+  [...tasks]
+    .sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)))
+    .map((t) => ({ id: t.id, title: t.title }));
 
 export const formatTaskDate = (iso: string) =>
   new Date(iso).toLocaleString("pl-PL", {

@@ -23,8 +23,17 @@ export const TASKS_COLLECTION = "tasks";
  *   migration, grant a role, merge a branch.
  * - `task`: work in a checkout - code, a pipeline, research.
  * - `decision`: a question only the owner can answer.
- * - `idea`: worth doing some day, nobody committed to it. */
-export const TASK_KINDS = ["action", "task", "decision", "idea"] as const;
+ * - `idea`: worth doing some day, nobody committed to it.
+ * - `goal`: where a group of tasks leads - "contracts on production". Nothing
+ *   to do in itself: it depends on the tasks that lead to it, which is what
+ *   groups them, and is reached once they are done. */
+export const TASK_KINDS = [
+  "action",
+  "task",
+  "decision",
+  "idea",
+  "goal",
+] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 
 /** Who can do it: the owner (his credentials, access or judgement) or an agent
@@ -300,6 +309,42 @@ export function taskStates(tasks: readonly Task[]): Map<string, TaskState> {
     });
   }
   return states;
+}
+
+/** Every task `taskId` waits on, directly or through the ones it waits on -
+ * for a goal, the tasks that lead to it. Ids naming no task are left out. */
+export function taskAncestors(
+  tasks: readonly Pick<Task, "id" | "dependsOn">[],
+  taskId: string,
+): Set<string> {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const found = new Set<string>();
+  const queue = [...(byId.get(taskId)?.dependsOn ?? [])];
+  while (queue.length > 0) {
+    const id = queue.pop()!;
+    const task = byId.get(id);
+    if (!task || found.has(id) || id === taskId) continue;
+    found.add(id);
+    queue.push(...task.dependsOn);
+  }
+  return found;
+}
+
+/** How far a goal has got: of the tasks that lead to it, how many are
+ * closed. Goals among them are not counted - they are milestones on the way,
+ * with nothing to do in themselves. */
+export function goalProgress(
+  tasks: readonly Task[],
+  goalId: string,
+): { closed: number; total: number } {
+  const ancestors = taskAncestors(tasks, goalId);
+  const counted = tasks.filter(
+    (task) => ancestors.has(task.id) && task.kind !== "goal",
+  );
+  return {
+    closed: counted.filter(isClosed).length,
+    total: counted.length,
+  };
 }
 
 /** The chain of ids that `task` depending on `dependsOn` would close into a
@@ -581,15 +626,17 @@ export function compareNewest(a: Task, b: Task): number {
 }
 
 export type TaskSection =
-  "mine" | "agents" | "blocked" | "ideas" | "parked" | "closed";
+  "goals" | "mine" | "agents" | "blocked" | "ideas" | "parked" | "closed";
 
 /** Which list a task is shown in on /admin/zadania. Ideas get their own list
  * whatever they wait for: nobody committed to them, so they should not crowd
- * the lists of what is to be done. */
+ * the lists of what is to be done. Goals too: there is nothing to do in one,
+ * only in the tasks that lead to it. */
 export function taskSection(task: Task, state: TaskState): TaskSection {
   if (state.readiness === "closed") return "closed";
   if (state.readiness === "parked") return "parked";
   if (task.kind === "idea") return "ideas";
+  if (task.kind === "goal") return "goals";
   if (state.readiness === "blocked") return "blocked";
   return task.who === "owner" ? "mine" : "agents";
 }

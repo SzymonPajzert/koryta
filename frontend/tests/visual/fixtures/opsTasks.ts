@@ -6,8 +6,8 @@ import type { Task } from "../../../shared/tasks";
  * list is answered from here: something on every list the page has, and a
  * chain for the map to draw - a merge, the deploy waiting on it, and the
  * upload waiting on the deploy - beside a second chain with a decision at its
- * head. Times are fixed rather than relative, since the page prints them as
- * dates. */
+ * head and a goal at its end. Times are fixed rather than relative, since the
+ * page prints them as dates. */
 
 const at = (day: string, time = "09:00") => `2026-09-${day}T${time}:00.000Z`;
 
@@ -70,6 +70,12 @@ export const opsTasks: Task[] = [
     title: "Wgraj powiązania z umów po decyzji o widoczności",
     dependsOn: ["decyzja-widocznosc"],
     tags: ["umowy", "data"],
+  }),
+  task("umowy-na-produkcji", {
+    title: "Umowy i powiązania z nich widoczne na koryta.pl",
+    kind: "goal",
+    dependsOn: ["wgraj-powiazania"],
+    tags: ["umowy"],
   }),
   task("etykieta-rady-spolecznej", {
     title: "Nazywaj radę społeczną SPZOZ po imieniu, nie „Rada Nadzorcza”",

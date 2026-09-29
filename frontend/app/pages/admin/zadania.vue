@@ -77,6 +77,21 @@
         clearable
         class="tasks-page__tag"
       />
+      <v-select
+        v-if="goals.length > 0"
+        v-model="goal"
+        :items="goals"
+        item-title="title"
+        item-value="id"
+        placeholder="Cel"
+        :prepend-inner-icon="taskKindConfig.goal.icon"
+        density="compact"
+        variant="outlined"
+        hide-details
+        clearable
+        class="tasks-page__goal"
+        data-task-goal-filter
+      />
       <v-btn-toggle
         v-if="view === 'lista'"
         v-model="order"
@@ -165,6 +180,7 @@
               @update="(patch) => update(task.id, patch)"
               @edit="openDialog(task)"
               @select="goTo"
+              @show-goal="showGoal"
             />
           </AdminRowList>
         </template>
@@ -242,6 +258,7 @@
             @update="(patch) => update(selectedTask!.id, patch)"
             @edit="openDialog(selectedTask)"
             @select="select"
+            @show-goal="showGoal(selectedTask!.id)"
           />
         </template>
         <p v-else class="text-body-2 text-medium-emphasis">
@@ -288,11 +305,16 @@ import {
 } from "@mdi/js";
 import { useOpsTasks } from "~/composables/opsTasks";
 import { useQueryFilters } from "~/composables/queryFilters";
-import { taskSectionConfig } from "~/utils/taskStyle";
+import {
+  taskChoices,
+  taskKindConfig,
+  taskSectionConfig,
+} from "~/utils/taskStyle";
 import {
   compareNewest,
   foldWords,
   isClosed,
+  taskAncestors,
   taskAnchor,
   type Task,
   type TaskCreate,
@@ -345,6 +367,7 @@ const who = computed<Who>({
   set: (value) => (whoParam.value = value),
 });
 const tag = stringFilter("tag");
+const goal = stringFilter("cel");
 type Order = "najstarsze" | "najnowsze";
 const orderParam = choiceFilter<Order>("kolejnosc", "najstarsze");
 const order = computed<Order>({
@@ -358,7 +381,21 @@ const allTags = computed(() =>
   [...new Set(tasks.value.flatMap((t) => t.tags))].sort(),
 );
 
+/** The goals to filter by: open ones first, then the rest, which a link to a
+ * closed goal still needs to find. */
+const goals = computed(() =>
+  taskChoices(tasks.value.filter((t) => t.kind === "goal")),
+);
+
+/** The goal the filter picked, and everything that leads to it. */
+const goalGroup = computed(() =>
+  goal.value
+    ? new Set([goal.value, ...taskAncestors(tasks.value, goal.value)])
+    : null,
+);
+
 const matches = (task: Task) => {
+  if (goalGroup.value && !goalGroup.value.has(task.id)) return false;
   if (who.value === "ty" && task.who !== "owner") return false;
   if (who.value === "agent" && task.who !== "agent") return false;
   if (tag.value && !task.tags.includes(tag.value)) return false;
@@ -371,11 +408,22 @@ const matches = (task: Task) => {
 };
 
 const filtering = computed(
-  () => who.value !== "wszyscy" || !!tag.value || !!search.value?.trim(),
+  () =>
+    who.value !== "wszyscy" ||
+    !!tag.value ||
+    !!goal.value ||
+    !!search.value?.trim(),
 );
+
+/** Only what leads to `id`, from a goal's own "Pokaż jego zadania". */
+const showGoal = (id: string) => {
+  goal.value = id;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
 
 const showClosedList = ref(false);
 const SECTION_ORDER: TaskSection[] = [
+  "goals",
   "mine",
   "agents",
   "blocked",
@@ -410,7 +458,14 @@ const rowWhen = (task: Task) =>
 
 // ---- the map ----
 
-const LEGEND: TaskSection[] = ["mine", "agents", "blocked", "ideas", "parked"];
+const LEGEND: TaskSection[] = [
+  "goals",
+  "mine",
+  "agents",
+  "blocked",
+  "ideas",
+  "parked",
+];
 const showClosed = ref(false);
 const onlyJoined = ref(false);
 
@@ -560,6 +615,10 @@ onMounted(async () => {
 
 .tasks-page__tag {
   flex: 0 1 180px;
+}
+
+.tasks-page__goal {
+  flex: 0 1 240px;
 }
 
 .tasks-page__map {

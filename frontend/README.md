@@ -319,8 +319,9 @@ deploy, run, decide or build, and what has to happen before what
 (`shared/tasks.ts`). An agent that leaves something behind - "deploy the
 indexes once this merges" - adds it there instead of only to its notes:
 
-- `tasks_list` — the page's lists: ready for the owner, ready for an agent,
-  blocked (with what each waits on), ideas, parked, closed.
+- `tasks_list` — the page's lists: goals, ready for the owner, ready for an
+  agent, blocked (with what each waits on), ideas, parked, closed. `goal`
+  narrows it to one goal and the tasks that lead to it.
 - `task_get` — whole tasks by id or `#t-<id>` link, with their history and
   what they unblock.
 - `task_add` — a new task, one step each, with the commands in its body and
@@ -328,6 +329,10 @@ indexes once this merges" - adds it there instead of only to its notes:
   same thing is shown instead of a duplicate being added.
 - `task_update` — close, start or park a task, change what it waits on, or add
   a line to its history. A dependency that would close a loop is refused.
+
+A task of kind `goal` groups others: it depends on the tasks that lead to it,
+so a task is put under a goal by adding it to the goal's `dependsOn`. The page
+lists goals first, with how many of those tasks are closed, and filters by one.
 
 This is the one thing agents write to production, and it lives in its own
 database, `agent-tasks`, so that the account they write as cannot touch the

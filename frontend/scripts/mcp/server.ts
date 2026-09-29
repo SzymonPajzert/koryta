@@ -143,7 +143,9 @@ const TASKS_EXPLAINED =
   "deploys, uploads, migrations and merges only he can run (`who: owner`), " +
   "work an agent can do (`who: agent`), decisions and ideas. A task can " +
   "depend on others; it is `ready` once they are all done or dropped, and " +
-  "`blocked` until then. Link one as https://koryta.pl/admin/zadania#t-<id>.";
+  "`blocked` until then. A `goal` groups the tasks that lead to it by " +
+  "depending on them: to put a task under a goal, task_update the goal with " +
+  "`addDependsOn`. Link one as https://koryta.pl/admin/zadania#t-<id>.";
 
 const WRITES = {
   readOnlyHint: false,
@@ -162,7 +164,7 @@ server.registerTool(
     title: "Task list",
     description:
       "The owner's task list, one line per task, in the lists /admin/zadania " +
-      "shows: ready for the owner, ready for an agent, blocked, ideas, " +
+      "shows: goals, ready for the owner, ready for an agent, blocked, ideas, " +
       "parked, closed. Each line says what a task waits on and what waits on " +
       "it. Read it before task_add, and when a session starts on something " +
       "the list may already cover. " +
@@ -172,6 +174,7 @@ server.registerTool(
         .enum([
           "open",
           "ready",
+          "goals",
           "mine",
           "agents",
           "blocked",
@@ -183,9 +186,16 @@ server.registerTool(
         .default("open")
         .describe(
           "`open` is every list but closed; `ready` is what can be started " +
-            "now; `mine` what only the owner can do; `agents` what an agent can",
+            "now; `goals` the goals alone, with how far each has got; `mine` " +
+            "what only the owner can do; `agents` what an agent can",
         ),
       tag: z.string().optional().describe("Only tasks with this tag"),
+      goal: z
+        .string()
+        .optional()
+        .describe(
+          "A goal's id or link: only that goal and the tasks that lead to it",
+        ),
       search: z
         .string()
         .optional()
@@ -250,7 +260,8 @@ server.registerTool(
           "`action`: a step on production or infrastructure (deploy, upload, " +
             "migration, IAM, merge); `task`: work in a checkout; `decision`: " +
             "a question only the owner can answer; `idea`: nobody committed " +
-            "to it. Default `task`",
+            "to it; `goal`: where a group of tasks leads, with those tasks " +
+            "in `dependsOn`. Default `task`",
         ),
       who: z
         .enum(TASK_WHO)

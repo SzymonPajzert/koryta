@@ -24,8 +24,18 @@
       >
         W toku
       </span>
+      <!-- A goal waits on everything that leads to it; what it says instead
+           is how far that has got. -->
       <span
-        v-if="state.blockers.length > 0"
+        v-if="progress"
+        class="arow-tag bg-surface-muted"
+        :title="`Zamknięte ${progress.closed} z ${progress.total} zadań, które prowadzą do tego celu`"
+        data-goal-progress
+      >
+        {{ progress.closed }}/{{ progress.total }}
+      </span>
+      <span
+        v-else-if="state.blockers.length > 0"
         class="arow-tag bg-surface-muted"
         :title="state.blockers.map((t) => t.title).join('\n')"
       >
@@ -81,6 +91,7 @@
       @update="(patch) => emit('update', patch)"
       @edit="emit('edit')"
       @select="(id) => emit('select', id)"
+      @show-goal="emit('show-goal', task.id)"
     />
   </AdminExpandRow>
 </template>
@@ -95,6 +106,7 @@ import {
   taskSectionConfig,
 } from "~/utils/taskStyle";
 import {
+  goalProgress,
   isClosed,
   taskAnchor,
   type Task,
@@ -122,9 +134,15 @@ const emit = defineEmits<{
   update: [patch: TaskPatch];
   edit: [];
   select: [id: string];
+  /** Show only what leads to this goal. */
+  "show-goal": [id: string];
 }>();
 
 const expanded = defineModel<boolean>("expanded", { default: false });
+
+const progress = computed(() =>
+  props.task.kind === "goal" ? goalProgress(props.tasks, props.task.id) : null,
+);
 
 /** What cannot start until this one closes. */
 const openDependents = computed(

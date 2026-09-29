@@ -101,7 +101,7 @@ describe("tasksList", () => {
     ]);
     const text = await tasksList(store);
     expect(text).toContain(
-      "Open: ready for the owner 1, ready for an agent 1, blocked 1, ideas 1, parked 0. Closed: 1.",
+      "Open: goals 0, ready for the owner 1, ready for an agent 1, blocked 1, ideas 1, parked 0. Closed: 1.",
     );
     expect(text).toContain(
       "- merge-x · action/owner · Merge x - then: deploy-x",
@@ -115,6 +115,44 @@ describe("tasksList", () => {
     expect(filtered).toContain("fix-y");
     expect(filtered).not.toContain("merge-x");
     expect(filtered).toContain("Showing only tag frontend.");
+  });
+});
+
+describe("goals", () => {
+  const goalStore = () =>
+    memoryStore([
+      task("merge-x", { status: "done" }),
+      task("deploy-x", { dependsOn: ["merge-x"] }),
+      task("elsewhere"),
+      task("x-live", {
+        title: "X live",
+        kind: "goal",
+        dependsOn: ["deploy-x"],
+      }),
+    ]).store;
+
+  it("lists a goal on its own list, with how far it has got", async () => {
+    const text = await tasksList(goalStore());
+    expect(text).toContain("## Goals - where the tasks lead: 1");
+    expect(text).toContain(
+      "- x-live · goal/owner · X live - 1 of 2 tasks leading to it closed - waits on: deploy-x",
+    );
+  });
+
+  it("narrows the list to a goal and what leads to it", async () => {
+    const text = await tasksList(goalStore(), {
+      view: "all",
+      goal: "https://koryta.pl/admin/zadania#t-x-live",
+    });
+    expect(text).toContain("deploy-x");
+    expect(text).toContain("merge-x");
+    expect(text).not.toContain("elsewhere");
+    expect(text).toContain("Showing only goal x-live and what leads to it.");
+  });
+
+  it("gives a goal's progress with the whole goal", async () => {
+    const answer = JSON.parse(await taskGet(goalStore(), ["x-live"]));
+    expect(answer.tasks[0].goalProgress).toEqual({ closed: 1, total: 2 });
   });
 });
 
