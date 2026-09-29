@@ -225,16 +225,6 @@ describe("ExtractionCard", () => {
     });
   });
 
-  it("greys itself when asked to stand behind a confirmed one", async () => {
-    const card = await mountSuspended(Card, {
-      props: { fact: fact(), muted: true },
-    });
-
-    expect(card.find(".extraction-card").classes()).toContain(
-      "extraction-card--muted",
-    );
-  });
-
   describe("the link to the quoted passage", () => {
     function href(card: Awaited<ReturnType<typeof mountSuspended>>) {
       return card.find("a.source-block").attributes("href") ?? "";

@@ -1,16 +1,15 @@
 <template>
-  <v-card
-    variant="outlined"
-    class="extraction-card"
-    :class="{ 'extraction-card--muted': muted }"
-  >
+  <v-card variant="outlined" class="extraction-card">
     <v-card-text class="pb-3">
       <!-- What readers have made of this fact, off the aggregate it arrived
            with. In the body rather than in the actions row: it is the fact's
            state, not something to click, and the row underneath belongs to
            whoever is judging it. -->
       <div class="fact-status">
-        <ExtractionVoteCount :fact="fact" />
+        <ExtractionVoteCount
+          :state="factReviewState(fact)"
+          :voters="factVoterCount(fact)"
+        />
       </div>
 
       <div class="edge">
@@ -76,77 +75,12 @@
 
     <template v-if="fact.justification">
       <v-divider />
-      <!-- Quote links to the article, deep-linked to the passage via a text
-       fragment. Falls back to a plain block when there's no article URL. -->
-      <div class="source-block-wrap">
-        <component
-          :is="sourceHref ? 'a' : 'div'"
-          :href="sourceHref"
-          :target="sourceHref ? '_blank' : undefined"
-          :rel="sourceHref ? 'noopener noreferrer' : undefined"
-          class="source-block"
-          :class="{ 'source-block--link': sourceHref }"
-        >
-          <v-card-text class="pt-3" :class="$slots.actions ? 'pb-0' : 'pb-4'">
-            <div
-              class="source-caption text-caption mb-1 d-flex align-center ga-1"
-              :class="sourceHref ? 'text-primary' : 'text-medium-emphasis'"
-            >
-              <span>{{ sourceCaption }}</span>
-              <v-icon v-if="sourceHref" size="13">{{ mdiOpenInNew }}</v-icon>
-            </div>
-            <blockquote class="extraction-quote text-body-2">
-              {{ fact.justification }}
-            </blockquote>
-          </v-card-text>
-        </component>
-
-        <!-- The way back when the browser drops the highlight.
-             The `#:~:text=` fragment is in the href on every click path, but a
-             tab opened in the background - which is what ctrl+click does, and
-             how a reader checking sources actually clicks - is throttled by
-             the browser and often loads without ever applying it. Nothing in
-             the link can fix that, so the quote is offered as text to paste
-             into the article's own find bar. Outside the `<a>`, because a
-             button nested in an anchor is invalid html and swallows the
-             link. -->
-        <v-btn
-          v-if="sourceHref && quoteText"
-          icon
-          size="x-small"
-          variant="text"
-          density="comfortable"
-          class="source-copy"
-          :aria-label="copied ? 'Skopiowano cytat' : 'Kopiuj cytat'"
-          data-testid="extraction-copy-quote"
-          @click="copyQuote"
-        >
-          <v-icon size="16">{{ copied ? mdiCheck : mdiContentCopy }}</v-icon>
-          <v-tooltip activator="parent" location="top" max-width="260">
-            {{
-              copied
-                ? "Skopiowano"
-                : "Kopiuj cytat, żeby znaleźć go w artykule (Ctrl+F)"
-            }}
-          </v-tooltip>
-        </v-btn>
-
-        <!-- The other way out of the quote: to the article's page here rather
-             than to the newspaper. „Jak przejść do widoku artykułu?” was asked
-             from a person's page, where the quote was the only link and led
-             off the site. Outside the `<a>` for the same reason as the button
-             above; worded like the card's own „osoba w bazie”. -->
-        <div v-if="articlePage" class="source-article">
-          <NuxtLink
-            :to="articlePage"
-            class="link-plain text-caption d-inline-flex align-center ga-1"
-            data-testid="extraction-article-page"
-          >
-            <v-icon :icon="mdiFileDocumentOutline" size="13" />
-            Artykuł w bazie
-          </NuxtLink>
-        </div>
-      </div>
+      <ExtractionQuote
+        :fact="fact"
+        :link-article="linkArticle"
+        inset
+        :closing="!$slots.actions"
+      />
     </template>
 
     <!-- Actions row when the parent supplies vote buttons, or when this fact
@@ -176,17 +110,11 @@ import { computed } from "vue";
 import {
   mdiAccountCheckOutline,
   mdiAccountOutline,
-  mdiAccountGroupOutline,
   mdiArrowRight,
-  mdiBomb,
-  mdiCheck,
-  mdiContentCopy,
-  mdiDomain,
-  mdiFileDocumentOutline,
-  mdiOpenInNew,
 } from "@mdi/js";
 import type { ExtractionFact } from "~~/shared/model";
 import {
+  FACT_TYPE_ICONS,
   factTypeLabel,
   factTypeColor,
   factSubject,
@@ -194,10 +122,14 @@ import {
   factConnector,
   factTargetKind,
   factEdgeRule,
+  factReviewState,
+  factVoterCount,
+  factWrongPersonReports,
 } from "~/utils/extraction";
 import { generateEntityUrl } from "~/composables/slugs";
 import {
   ExtractionPromoteButton,
+  ExtractionQuote,
   ExtractionVoteCount,
   ExtractionWrongPersonButton,
 } from "#components";
@@ -209,15 +141,8 @@ const { fact, canPromote, linkArticle } = defineProps<{
    * and judged rather than acted on. The queue, the article's page and a
    * person's page ask for it. */
   canPromote?: boolean;
-  /** Draw the card back, for a listing that puts what nobody has confirmed
-   * under what readers have. A greyed background rather than `opacity`: the
-   * quote is already at 0.7 of the body colour and fading the whole card would
-   * take it under AA - `surface.muted` keeps the measured pair. */
-  muted?: boolean;
-  /** Link the fact to its article's page on this site, when ingest matched
-   * the article to one (`articleNodeId`). Off by default because the article's
-   * own page draws these cards too, and there the link would lead back to
-   * where the reader already is. */
+  /** Link the fact to its article's page on this site - see `ExtractionQuote`,
+   * which draws the link. */
   linkArticle?: boolean;
 }>();
 
@@ -231,16 +156,6 @@ defineEmits<{ promoted: [edgeId: string] }>();
 const promotable = computed(() => !!canPromote && !!factEdgeRule(fact));
 
 const sourceName = computed(() => factSubject(fact));
-
-/** The article's page here. By id alone, like a note's source links to it: the
- * fact carries no title to build the readable slug from, and `/entity/` sends
- * the reader on to it. Only signed-in readers are ever shown a fact, so no
- * crawler follows this through the redirect. */
-const articlePage = computed(() =>
-  linkArticle && fact.articleNodeId
-    ? generateEntityUrl("article", fact.articleNodeId)
-    : undefined,
-);
 
 /** The graph person this fact was matched to, when it was matched to one.
  *
@@ -258,131 +173,14 @@ const personNode = computed(() => {
 });
 
 // How many readers have already said the match is wrong, off the aggregate the
-// fact already carries. `computeVoteStats` only writes a category somebody has
-// voted in, so an unflagged fact has no field here at all.
-const reportedWrongPerson = computed(() => {
-  const votes = fact.stats?.votes as Record<string, unknown> | undefined;
-  const value = votes?.wrongPerson;
-  return typeof value === "number" ? value : 0;
-});
+// fact already carries.
+const reportedWrongPerson = computed(() => factWrongPersonReports(fact));
 const targetName = computed(() => factTarget(fact));
 const connectorLabel = computed(() => factConnector(fact));
 const connectorColor = computed(() => factTypeColor(fact));
 const typeLabel = computed(() => factTypeLabel(fact));
 const targetKind = computed(() => factTargetKind(fact));
-
-const targetIcon = computed(() => {
-  if (fact.fact_type === "employment") return mdiDomain;
-  if (fact.fact_type === "party_membership") return mdiAccountGroupOutline;
-  if (fact.fact_type === "affair_involvement") return mdiBomb;
-  return mdiAccountOutline; // personal_relation
-});
-
-// Encode for a URL text fragment (#:~:text=). Like encodeURIComponent, but
-// also encodes "-" since it's a delimiter in the text-fragment grammar.
-function encodeFragment(text: string): string {
-  return encodeURIComponent(text).replace(/-/g, "%2D");
-}
-
-/** The quote as the article actually renders it.
- *
- * `justification_in_text` is verbatim from the article, but it comes out of
- * the pipeline's tokeniser: it says "Gospodarki Komunalnej ." and "Piotr Breś
- * , pełnomocnik" where the page says "Komunalnej." and "Breś,". A text
- * fragment matches on rendered text, so that stray space is enough to lose the
- * highlight - it accounted for most of the misses in a run over the 200 newest
- * facts. Closing it up is safe for Polish; a language that sets a real space
- * before its punctuation would need this dropped. */
-function cleanQuote(quote: string): string {
-  return quote
-    .replace(/[„""»«]/g, "") // strip typographic quotes the extractor adds
-    .replace(/\s*(?:\.\.\.|…)\s*/g, " ") // truncation markers → space
-    .replace(/\s+/g, " ")
-    .replace(/\s+([,.;:!?%)\]])/g, "$1")
-    .replace(/([([])\s+/g, "$1")
-    .trim();
-}
-
-/** Sentence-sized runs of the quote: long enough not to match some other
- * paragraph of the same article, short enough to survive one word drifting. */
-function quoteRuns(cleaned: string): string[] {
-  return (cleaned.match(/[^.!?:]+[.!?:]*/g) ?? [])
-    .map((part) => part.trim().split(" ").slice(0, 8).join(" "))
-    .filter((part) => part.split(" ").length >= 5)
-    .slice(0, 4);
-}
-
-/** The "text=" directives of a scroll-to-text-fragment.
- *
- * A short quote is asked for whole. A long one is asked for as a
- * textStart,textEnd range *and*, after it, as its individual sentences: a
- * range is all-or-nothing and neither of its ends may cross a block boundary,
- * so wherever the scraper glued a subheading onto the paragraph under it - the
- * rmf24.pl case a reader reported - the five opening words straddle an `</h2>`
- * and the whole range fails silently, taking the tail with it. Every directive
- * is matched independently and the browser scrolls to the first one that hit,
- * so the sentences cost nothing while the range works and are the only thing
- * that lands when it does not. */
-function textFragment(quote: string): string | undefined {
-  const cleaned = cleanQuote(quote);
-  if (!cleaned) return undefined;
-
-  const words = cleaned.split(" ");
-  if (words.length <= 10) return `text=${encodeFragment(cleaned)}`;
-
-  const start = words.slice(0, 5).join(" ");
-  const end = words.slice(-5).join(" ");
-  return [
-    `text=${encodeFragment(start)},${encodeFragment(end)}`,
-    ...quoteRuns(cleaned).map((run) => `text=${encodeFragment(run)}`),
-  ].join("&");
-}
-
-/** What the link points at and what the copy button hands over, so the two can
- * never disagree about which passage is being talked about. */
-const quoteText = computed(
-  () => fact.justification_in_text || fact.justification,
-);
-
-// Link to the source article, deep-linked to the quoted passage. articleUrl is
-// stored without a protocol (e.g. "tvn24.pl/..."). Prefer justification_in_text
-// (verbatim from the article) so the highlight actually lands.
-const sourceHref = computed(() => {
-  const raw = fact.articleUrl;
-  if (!raw) return undefined;
-  const base = raw.includes("://") ? raw : `https://${raw}`;
-  const fragment = quoteText.value ? textFragment(quoteText.value) : undefined;
-  return fragment ? `${base}#:~:${fragment}` : base;
-});
-
-/** Names the destination, and promises the passage rather than the article: a
- * reader whose browser did not scroll should at least be able to tell that
- * something was supposed to happen. */
-const sourceCaption = computed(() => {
-  if (!sourceHref.value) return "Fragment artykułu";
-  return fact.articleDomain
-    ? `Zobacz cytat na ${fact.articleDomain}`
-    : "Zobacz cytat w artykule";
-});
-
-const copied = ref(false);
-
-/** Hands the quote to the clipboard, for the article's own find bar.
- *
- * The same normalised string the link is built from, rather than the sentence
- * rendered above: the find bar matches the article's own text just as a text
- * fragment does, so the tokeniser's „Komunalnej ." would come back empty. */
-async function copyQuote() {
-  if (!quoteText.value) return;
-  try {
-    await navigator.clipboard.writeText(cleanQuote(quoteText.value));
-    copied.value = true;
-    setTimeout(() => (copied.value = false), 2000);
-  } catch {
-    // An insecure origin or a refused permission throws here. Nothing to say
-    // about it: the quote is on screen a centimetre below, selectable by hand.
-  }
-}
+const targetIcon = computed(() => FACT_TYPE_ICONS[fact.fact_type]);
 </script>
 
 <style scoped>
@@ -390,14 +188,6 @@ async function copyQuote() {
    rather than the window's. */
 .extraction-card {
   container: extraction-card / inline-size;
-}
-
-/* Drawn back rather than faded: the quote already sits at 0.7 of the body
-   colour, and an `opacity` over the whole card would take it under AA. Greying
-   the fill keeps a measured pair - ink.neutral on surface.muted is 5.75:1, see
-   `shared/colors.ts`. */
-.extraction-card--muted {
-  background: rgb(var(--v-theme-surface-muted));
 }
 
 /* The vote chip sits over the right-hand entity, where the card has room. The
@@ -500,72 +290,16 @@ async function copyQuote() {
 }
 
 /* Narrow card: three columns don't fit, so stack into full-width rows.
-   Measured against the card rather than the viewport, because the card is no
-   longer always the width of the page - the person page puts two of them in a
-   `md="6"` row, where each is ~424px on a 960px screen and the three-column
-   edge would leave a Polish surname about 115px to wrap in. The threshold is
-   the phone one it replaces, so a full-width card behaves exactly as before. */
+   Measured against the card rather than the viewport, because a card need not
+   be the width of the page - the person page used to put two of them in a
+   `md="6"` row, where each was ~424px on a 960px screen and the three-column
+   edge left a Polish surname about 115px to wrap in. The threshold is the
+   phone one it replaced, so a full-width card behaves exactly as before. */
 @container extraction-card (max-width: 420px) {
   .edge {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
   }
-}
-
-.source-block-wrap {
-  position: relative;
-}
-
-.source-block {
-  display: block;
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Over the caption's right end, which is where the row runs out. It is a
-   fallback control, so it stays quiet until the card is hovered or it takes
-   keyboard focus. */
-.source-copy {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-  opacity: 0.55;
-}
-
-.source-block-wrap:hover .source-copy,
-.source-copy:focus-visible {
-  opacity: 1;
-}
-
-.source-block--link {
-  cursor: pointer;
-}
-
-/* Under the quote and in line with it - the quote's bar starts at the card's
-   own 16px padding. */
-.source-article {
-  padding: 4px 16px 0;
-}
-
-/* Room for the copy button that floats over this row's right end. */
-.source-caption {
-  padding-right: 28px;
-}
-
-.source-block--link:hover .extraction-quote {
-  color: rgba(var(--v-theme-primary), 1);
-  border-left-color: rgba(var(--v-theme-primary), 0.9);
-}
-
-.extraction-quote {
-  border-left: 3px solid rgba(var(--v-theme-primary), 0.4);
-  padding-left: 12px;
-  font-style: italic;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease;
 }
 
 /* Keep the domain row tight under the quote instead of floating far below. */
