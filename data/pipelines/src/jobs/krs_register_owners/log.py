@@ -43,7 +43,10 @@ class ResponseLog:
         if not self.pending:
             return None
         lines = "".join(read.to_line() + "\n" for read in self.pending)
-        url = self.put(self.part_name(), gzip.compress(lines.encode("utf-8")))
+        # mtime=0 so a retried flush sends the same bytes as the first try,
+        # which is how `create_object` recognises a write that did land.
+        data = gzip.compress(lines.encode("utf-8"), mtime=0)
+        url = self.put(self.part_name(), data)
         self.written.append(url)
         self.reads_written += len(self.pending)
         self.pending = []

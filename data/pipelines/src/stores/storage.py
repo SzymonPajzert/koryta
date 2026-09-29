@@ -1,6 +1,8 @@
 import argparse
 import atexit
+import base64
 import contextlib
+import hashlib
 import io
 import os
 import shutil
@@ -252,9 +254,20 @@ class Client:
         existing object for success: a job writing its state has to know
         that the write landed, and a name it reuses is a bug, not a retry.
         Create-only, so a service account without delete can do it.
+
+        One 412 is not a reused name: the library retries a request whose
+        response was lost, and the retry of a create that did land is refused.
+        The same bytes already under the name are that write.
         """
         blob = self.storage_client.bucket(bucket).blob(blob_name)
-        blob.upload_from_string(data, content_type=content_type, if_generation_match=0)
+        try:
+            blob.upload_from_string(
+                data, content_type=content_type, if_generation_match=0
+            )
+        except gcs_exceptions.PreconditionFailed:
+            blob.reload()
+            if blob.md5_hash != base64.b64encode(hashlib.md5(data).digest()).decode():
+                raise
         return f"gs://{bucket}/{blob_name}"
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:

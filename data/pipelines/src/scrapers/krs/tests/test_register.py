@@ -1,6 +1,7 @@
 """What the ledger keeps of an odpis, how the log folds into it, and read order."""
 
 import gzip
+import itertools
 
 import pandas as pd
 
@@ -382,3 +383,45 @@ def test_the_ledger_is_a_fold_of_every_part_in_the_log():
     assert io.asked == [RESPONSE_LOG]
     assert list(df["krs"]) == ["0000000001", "0000225512"]
     assert list(df["status"]) == [STATUS_NOT_FOUND, STATUS_OK]
+
+
+def test_the_ledger_does_not_depend_on_the_order_the_log_is_listed_in():
+    """GCS lists parts by name, and a name says nothing about when a read came."""
+    reads = [
+        read(read_at="2026-10-02T09:00:00+02:00", status=STATUS_FAILED, rejestr="P"),
+        read(),
+        read(read_at="2026-09-28T16:41:18+02:00", status=STATUS_NOT_FOUND),
+        read("0000000001", status=STATUS_FAILED, rejestr="P"),
+        read(
+            "0000000001",
+            read_at="2026-09-30T08:00:00+02:00",
+            status=STATUS_STRUCK_OFF,
+            rejestr="S",
+        ),
+    ]
+    ledgers = {tuple(map(repr, fold(order))) for order in itertools.permutations(reads)}
+
+    assert len(ledgers) == 1
+    first, second = fold(reads)
+    assert (first.status, second.status) == (STATUS_STRUCK_OFF, STATUS_OK)
+
+
+def test_a_line_separator_inside_an_odpis_does_not_split_its_line():
+    """U+2028 is written raw, and str.splitlines would break the line at it."""
+    body = odpis(
+        wspolnicySpzoo=[
+            {**WOJEWODZTWO_POMORSKIE, "nazwa": "WOJEWÓDZTWO\u2028POMORSKIE"}
+        ]
+    )
+    io = LogIO([read(body=body), read("0000000001", status=STATUS_NOT_FOUND)])
+
+    class Ctx:
+        pass
+
+    ctx = Ctx()
+    ctx.io = io  # type: ignore[attr-defined]
+
+    df = KRSRegisterEntries().process(ctx)  # type: ignore[arg-type]
+
+    assert list(df["status"]) == [STATUS_NOT_FOUND, STATUS_OK]
+    assert df["owners"].iloc[1][0]["name"] == "WOJEWÓDZTWO\u2028POMORSKIE"

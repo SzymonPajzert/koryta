@@ -352,7 +352,10 @@ def read_log(ctx: Context) -> typing.Iterator[RegisterRead]:
     """Every read in `RESPONSE_LOG`, part by part."""
     for ref in ctx.io.list_files(RESPONSE_LOG):
         raw = ctx.io.read_data(ref).read_bytes()
-        for line in gzip.decompress(raw).decode("utf-8").splitlines():
+        # "\n" only: `splitlines` also breaks at U+2028, U+2029 and U+0085,
+        # which `to_line` writes raw inside a string, and a part cannot be
+        # rewritten once one of them has split a line in two.
+        for line in gzip.decompress(raw).decode("utf-8").split("\n"):
             if line.strip():
                 yield RegisterRead.from_line(line)
 
