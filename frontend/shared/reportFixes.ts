@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na pasku nad grafem przycisk „Opisy na liniach” ma zawsze ten sam napis, a pole wyboru przy napisie pokazuje, czy opisy są włączone. Kliknięcie nie zmienia już jego szerokości, więc przyciski nie przeskakują między rzędami, a na telefonie „2 kroki” mieści się w pasku zamiast być uciętym.",
+    fixes: ["60beJLEWtp6lNuWyz15L"],
+  },
+  {
+    change:
       "Regulamin i polityka prywatności stoją w białym arkuszu z ramką na szarym tle, jak /o-nas i /pomoc, a adres e-mail i link do polityki są ciemnozielone zamiast bladozielonych.",
     fixes: ["3MWd21zn85kJO5T13eNP"],
   },
