@@ -78,8 +78,13 @@ def ask(
                 data = response.json()
             except ValueError as e:
                 return read(STATUS_FAILED, rejestr, error=f"not JSON: {e}")
-            if "odpis" in data:
+            if isinstance(data, dict) and "odpis" in data:
                 return read(STATUS_OK, rejestr, body=data)
+            if not (isinstance(data, dict) and data.get("title") == "Not Found"):
+                # Neither an odpis nor a miss. Logged as a miss it would be
+                # permanent - the fold keeps it and the queue never asks again
+                # - so it is a failure, asked again first next run.
+                return read(STATUS_FAILED, rejestr, error=f"200: {str(data)[:200]}")
         # A 404, or a 200 whose body says "Not Found": try the other register.
         time.sleep(interval)
     return read(STATUS_NOT_FOUND)
