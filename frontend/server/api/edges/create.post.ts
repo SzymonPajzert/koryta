@@ -1,11 +1,12 @@
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { z } from "zod";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { edgeDocumentId } from "~~/server/utils/edges";
 import { edgeTypes } from "~~/shared/model";
-import type { ElectionPosition } from "~~/shared/model";
+import type { ElectionPosition, ExtractionFact } from "~~/shared/model";
+import { factEdgeRule } from "~~/shared/factPromotion";
 import { electionPositions } from "~~/shared/misc";
 
 const bodyValidator = z.object({
@@ -39,6 +40,14 @@ const bodyValidator = z.object({
   term: z.string().optional(),
   by_election: z.boolean().optional(),
   update_automatic: z.boolean().optional(),
+  /** The extracted fact this relation is being made from, when it is one.
+   *
+   * The fact then records which relation it became, so every card that draws
+   * it - on the person's page, in the review queue, on the article's page -
+   * says so instead of offering the same promotion to the next reader, who
+   * would pick the far end afresh and could land a second relation beside the
+   * first. */
+  extraction: z.string().min(1).optional(),
 });
 
 export default defineEventHandler(async (event) => {
@@ -99,16 +108,65 @@ export default defineEventHandler(async (event) => {
     }),
   );
 
+  // A promotion is checked against the fact before anything is written: the
+  // relation has to be the one the fact's kind becomes (`factEdgeRule`, the
+  // rule the card offers the button by), from the person the fact was matched
+  // to, to a node of the kind that rule asks for that exists. What this stops
+  // is a fact marked by a relation it could not have become - a party
+  // membership, a relation from somebody else, or one to a made-up id. It does
+  // not stop a signed-in caller from tying a fact to another real relation of
+  // that person of the same kind, which costs nothing but the fact's button;
+  // a relation it creates is a draft an administrator reviews, as ever.
+  const factRef = body.extraction
+    ? db.collection("extractions").doc(body.extraction)
+    : undefined;
+  if (factRef) {
+    const fact = await factRef.get();
+    const factData = fact.data() as ExtractionFact | undefined;
+    const rule = factData ? factEdgeRule(factData) : undefined;
+    if (
+      !factData ||
+      !rule ||
+      factData.personNodeId !== body.source ||
+      rule.edgeType !== body.type
+    ) {
+      throw createError({
+        statusCode: 400,
+        message: "Z tego faktu nie powstanie takie powiązanie.",
+      });
+    }
+    const target = await db.collection("nodes").doc(body.target).get();
+    if (!target.exists || target.data()?.type !== rule.targetType) {
+      throw createError({
+        statusCode: 400,
+        message: "Nie ma w bazie takiej drugiej strony powiązania.",
+      });
+    }
+  }
+  // An array rather than one id: the reader picks the far end, so two readers
+  // can make two different relations of one fact, and each should be findable
+  // from it. /api/edges/delete takes an id back out when it removes the edge.
+  const promoted = { promotedEdgeIds: FieldValue.arrayUnion(edgeRef.id) };
+
   // Already there: hand back the id rather than writing over it. A `set`
   // through `createRevisionTransaction` would replace the stored document, and
   // with it whether the relation is published and everything counted on it - so
-  // re-adding a live relation would quietly take it off the site.
+  // re-adding a live relation would quietly take it off the site. The fact
+  // still records a live one: the relation it says is in the graph either way.
+  // One an administrator removed is not in the graph, so the fact is left as
+  // it was and the caller told why nothing happened - recreating it here would
+  // undo the removal without anybody reviewing it.
   const existing = await edgeRef.get();
   if (existing.exists) {
+    if (existing.data()?.deleted === true) {
+      return { id: edgeRef.id, created: false, deleted: true };
+    }
+    if (factRef) await factRef.update(promoted);
     return { id: edgeRef.id, created: false };
   }
 
   const batch = db.batch();
+  if (factRef) batch.update(factRef, promoted);
   // `published: false` said out loud rather than left off. Both readings hide
   // the relation - `pageIsPublic` wants the flag to be `true` - but Firestore
   // matches no filter against a field a document does not have, so an edge

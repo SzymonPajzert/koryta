@@ -155,31 +155,19 @@
       v-if="$slots.actions || promotable"
       class="extraction-actions pt-1"
     >
-      <!-- What a confirmed fact is *for*. Voting a fact correct used to lead
-           nowhere: nothing reads the verdict, and recording what the fact said
-           meant retyping it into the edge form on somebody else's page. -->
-      <v-btn
+      <ExtractionPromoteButton
         v-if="promotable"
-        size="small"
-        variant="text"
-        color="primary"
-        :prepend-icon="mdiVectorLink"
-        data-testid="extraction-promote"
-        @click="promoteOpen = true"
-      >
-        Utwórz powiązanie
-      </v-btn>
-      <v-spacer />
-      <slot name="actions" />
+        :fact="fact"
+        @promoted="$emit('promoted', $event)"
+      />
+      <!-- The caller's controls stay together at the end of the row, and go
+           under the button together when the card is too narrow for both: a
+           card on a phone is ~295px, and the button, „Dodaj do notatki” and
+           three verdicts in one unbroken row pushed the verdicts out of it. -->
+      <span class="extraction-actions__own">
+        <slot name="actions" />
+      </span>
     </v-card-actions>
-
-    <ExtractionPromoteDialog
-      v-if="rule"
-      v-model="promoteOpen"
-      :fact="fact"
-      :rule="rule"
-      @created="$emit('promoted', $event)"
-    />
   </v-card>
 </template>
 
@@ -196,7 +184,6 @@ import {
   mdiDomain,
   mdiFileDocumentOutline,
   mdiOpenInNew,
-  mdiVectorLink,
 } from "@mdi/js";
 import type { ExtractionFact } from "~~/shared/model";
 import {
@@ -210,16 +197,17 @@ import {
 } from "~/utils/extraction";
 import { generateEntityUrl } from "~/composables/slugs";
 import {
-  ExtractionPromoteDialog,
+  ExtractionPromoteButton,
   ExtractionVoteCount,
   ExtractionWrongPersonButton,
 } from "#components";
 
 const { fact, canPromote, linkArticle } = defineProps<{
   fact: ExtractionFact;
-  /** Whether to offer turning this fact into a relation. Off by default: the
-   * card is also rendered in places that are a reading surface rather than a
-   * review one, and on a person's own page every card would carry the button. */
+  /** Whether to offer turning this fact into a relation. Off by default, for
+   * the swipe deck and the related facts listed under it, where a card is read
+   * and judged rather than acted on. The queue, the article's page and a
+   * person's page ask for it. */
   canPromote?: boolean;
   /** Draw the card back, for a listing that puts what nobody has confirmed
    * under what readers have. A greyed background rather than `opacity`: the
@@ -235,14 +223,12 @@ const { fact, canPromote, linkArticle } = defineProps<{
 
 defineEmits<{ promoted: [edgeId: string] }>();
 
-const promoteOpen = ref(false);
-
-/** How this fact would become an edge, when it can become one at all.
+/** Whether this fact can become a relation here, which is what decides whether
+ * the card grows an actions row for the button.
  *
- * Undefined for a fact nobody was matched to, and for the two fact types with
- * no edge type to become - see `factEdgeRule`. */
-const rule = computed(() => factEdgeRule(fact));
-const promotable = computed(() => !!rule.value && !!canPromote);
+ * False for a fact nobody was matched to, and for the two fact types with no
+ * edge type to become - see `factEdgeRule`. */
+const promotable = computed(() => !!canPromote && !!factEdgeRule(fact));
 
 const sourceName = computed(() => factSubject(fact));
 
@@ -585,5 +571,15 @@ async function copyQuote() {
 /* Keep the domain row tight under the quote instead of floating far below. */
 .extraction-actions {
   min-height: 0;
+  flex-wrap: wrap;
+}
+
+/* The row's own gap, which its children had while they were children of the
+   row. */
+.extraction-actions__own {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 </style>

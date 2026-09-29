@@ -297,9 +297,13 @@
              named individual - so the section locks itself and shows a logged
              out reader only how many there are. That gate lives inside the
              component, because the count is public and the facts are not. -->
+        <!-- A fact turned into a relation is a new draft in „Historia
+             powiązań” above, so that list is read again, as it is after
+             „Dodaj”. -->
         <ExtractionPersonFacts
           v-if="entity?.type === 'person'"
           :node-id="node"
+          @promoted="refreshEdges()"
         />
 
         <FormAddRelationDialog

@@ -25,7 +25,8 @@
       Przypisane do tej osoby po imieniu i nazwisku. Oceń je przyciskami przy
       każdej karcie, a jeśli fakt dotyczy kogoś innego, zgłoś to przyciskiem „To
       nie ta osoba”. Fakt, który się potwierdza, możesz przenieść do swojej
-      notatki przyciskiem „Dodaj do notatki”.
+      notatki przyciskiem „Dodaj do notatki”, a zatrudnienie albo relację z
+      drugą osobą zapisać w grafie przyciskiem „Utwórz powiązanie”.
     </template>
 
     <template #lead>
@@ -109,12 +110,23 @@
                  „Dodaj do notatki” does read a collection, but the same one on
                  every card - this person's notes, which `NoteEditor` above has
                  open anyway - so it is one target for the page rather than one
-                 per fact. -->
+                 per fact.
+
+                 „Utwórz powiązanie” as well, on the cards it can do anything
+                 for: a note keeps the quote, a relation puts the fact in the
+                 graph, and „Brakuje chyba jeszcze promocji do krawędzi” was
+                 said of a page that offered the one and not the other. The
+                 same gate as the queue and the article's page - signed in,
+                 which every reader of these cards is - and the same draft: the
+                 relation waits for an administrator like one added with
+                 „Dodaj” above. -->
             <ExtractionCard
               :fact="fact"
               class="h-100"
               :muted="bucket.muted"
               link-article
+              can-promote
+              @promoted="emit('promoted', $event)"
             >
               <template #actions>
                 <ExtractionAddToNoteButton :fact="fact" :node-id="nodeId" />
@@ -204,6 +216,12 @@ const { nodeId } = defineProps<{
    * ingest, never on the name: two people share one often enough that a name
    * would hand this page somebody else's facts. */
   nodeId: string;
+}>();
+
+const emit = defineEmits<{
+  /** A fact became a relation of this person. The page owns the list of their
+   * relations, so re-reading it - to show the new draft - is its call. */
+  promoted: [edgeId: string];
 }>();
 
 /** How many of a person's facts are fetched: all of them for everybody
