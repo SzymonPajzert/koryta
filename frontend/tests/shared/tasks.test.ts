@@ -262,6 +262,22 @@ describe("applyTaskPatch", () => {
     expect(next.branches).toEqual(["b"]);
   });
 
+  it("adds links to the ones the task has now, once each", () => {
+    // What /admin/opinie sends to attach a report: the task on the server
+    // may have gained a link since the page read it, and keeps it.
+    const { task: next } = applyTaskPatch(
+      task("x", { links: ["https://example.com/a", "https://example.com/b"] }),
+      patch({ addLinks: ["https://example.com/b", "https://example.com/c"] }),
+      "owner",
+      T1,
+    );
+    expect(next.links).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+      "https://example.com/c",
+    ]);
+  });
+
   it("clears the closing stamp on reopening, and a rank on null", () => {
     const { task: reopened } = applyTaskPatch(
       task("x", { status: "done", closedAt: T0, rank: 5 }),

@@ -209,6 +209,10 @@ export const taskPatchSchema = z
     /** Or changes to it, as an agent says "this also waits for that". */
     addDependsOn: dependsOn.optional(),
     removeDependsOn: dependsOn.optional(),
+    /** Links to add to the ones the task has, as a report is attached to it
+     * from /admin/opinie: sent whole, `links` would drop any link added since
+     * the page read the task. */
+    addLinks: links.optional(),
     /** A line for the task's history. */
     note: z.string().trim().min(1).max(2000).optional(),
   })
@@ -492,6 +496,9 @@ export function applyTaskPatch(
   }
   for (const key of ["tags", "links", "branches"] as const) {
     if (patch[key] !== undefined) next[key] = unique(patch[key]);
+  }
+  if (patch.addLinks !== undefined) {
+    next.links = unique([...next.links, ...patch.addLinks]);
   }
   if (patch.title !== undefined && patch.title !== task.title) {
     log(`Tytuł: „${task.title}” → „${patch.title}”.`);

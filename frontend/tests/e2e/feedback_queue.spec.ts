@@ -6,17 +6,22 @@ import { FEEDBACK_ID_PATTERN } from "../../shared/feedbackFixes";
 import type { Feedback } from "../../shared/model";
 import { QA_ITEMS } from "../../shared/qa";
 import { REPORT_FIXES } from "../../shared/reportFixes";
+import { reportUrl } from "../../shared/reportTasks";
+import { OPS_DATABASE, TASKS_COLLECTION } from "../../shared/tasks";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 
-const db = () =>
-  getFirestore(
-    getApps().length === 0
-      ? initializeApp({ projectId: "demo-koryta-pl" })
-      : getApp(),
-    "koryta-pl",
-  );
+const app = () =>
+  getApps().length === 0
+    ? initializeApp({ projectId: "demo-koryta-pl" })
+    : getApp();
+
+const db = () => getFirestore(app(), "koryta-pl");
+
+/** The owner's task list, in a database of its own - which the emulator
+ * makes on the first write, and the seed leaves empty. */
+const tasksDb = () => getFirestore(app(), OPS_DATABASE);
 
 /** A report as `feedback/create` would have written it, dated `minutesAgo`
  * before `stamp` so the seeded ones keep a known age order. */
@@ -265,6 +270,82 @@ test.describe("Kolejka zgłoszeń", () => {
     ).toBeVisible();
     await expect(listed.locator("[data-queue-position]")).toHaveCount(0);
     await expect.poll(() => rankOf(third)).toBeUndefined();
+  });
+
+  test("właściciel dodaje zgłoszenie do swoich zadań, a zgłoszenie zostaje w kolejce", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000); // Seeds, logs in, writes, reloads, then leaves
+
+    const stamp = Date.now();
+    const id = `kolejka${stamp}zadanie`;
+    // Past anything another spec leaves in the queue.
+    const rank = 3e12 + stamp;
+    await db()
+      .collection("feedback")
+      .doc(id)
+      .set(
+        report(stamp, "zadanie", 1, {
+          kind: "idea",
+          message: `Pomysł ${stamp}: filtr po województwie w tabeli osób. Po powiecie też.`,
+          queueRank: rank,
+        }),
+      );
+
+    // The seeded admin carries the `owner` claim, which the list asks for.
+    await logIn(page, USERS.admin, "/admin/opinie");
+    const row = page.locator(`[data-queue-row][data-feedback-id="${id}"]`);
+    await expect(row).toBeVisible({ timeout: 60_000 });
+    await row.locator("[data-row-toggle]").click();
+
+    await row.getByRole("button", { name: "Dodaj do zadań" }).click();
+    const dialog = page.locator("[data-task-dialog]");
+    await expect(dialog.locator("[data-task-title] input")).toHaveValue(
+      `Pomysł ${stamp}: filtr po województwie w tabeli osób`,
+    );
+    await dialog.locator("[data-task-save]").click();
+    await expect(dialog).toBeHidden();
+
+    // The report shows its task, still open on the list.
+    const chip = row.locator("[data-report-task]");
+    await expect(chip).toHaveText("Zadanie: otwarte");
+    const taskId = (await chip.getAttribute("data-report-task"))!;
+
+    // Written to the task list's own database, with the report in it...
+    const task = (
+      await tasksDb().collection(TASKS_COLLECTION).doc(taskId).get()
+    ).data();
+    expect(task).toMatchObject({
+      title: `Pomysł ${stamp}: filtr po województwie w tabeli osób`,
+      kind: "idea",
+      who: "owner",
+      status: "open",
+      links: [reportUrl(id)],
+      source: `zgłoszenie ${id}`,
+      createdBy: "owner",
+    });
+    expect(task!.body).toContain(`Zgłoszenie: ${reportUrl(id)}`);
+    // ...and nothing written on the report: its place and status are its own.
+    expect(
+      (await db().collection("feedback").doc(id).get()).data(),
+    ).toMatchObject({ queueRank: rank, adminStatus: "new" });
+
+    // Read back off the list, not remembered by the page.
+    await page.reload();
+    const reloaded = page.locator(`[data-queue-row][data-feedback-id="${id}"]`);
+    await expect(reloaded.locator("[data-report-task-icon]")).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // The chip leads to the task on the list, open, with the report in it.
+    await reloaded.locator("[data-row-toggle]").click();
+    await reloaded.locator(`[data-report-task="${taskId}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/admin/zadania#t-${taskId}$`));
+    const listed = page.locator(`#t-${taskId}`);
+    await expect(listed.locator("[data-row-panel]")).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(listed).toContainText(`zgłoszenie ${id}`);
   });
 
   test("link do zamkniętego zgłoszenia rozwija zamknięte i pokazuje je", async ({

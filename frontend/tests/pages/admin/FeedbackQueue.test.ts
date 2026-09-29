@@ -7,7 +7,7 @@ import {
   afterEach,
   onTestFinished,
 } from "vitest";
-import { defineComponent, h, ref } from "vue";
+import { defineComponent, h, ref, type Ref } from "vue";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { useRouter } from "#app";
@@ -16,8 +16,18 @@ import OpiniePage from "../../../app/pages/admin/opinie.vue";
 import { FEEDBACK_INBOX_ANCHOR } from "~/composables/feedback";
 import type { Feedback, FeedbackStatus } from "~~/shared/model";
 import type { QaCheck, QaCheckStatus, QaItem } from "~~/shared/qa";
+import { reportUrl } from "~~/shared/reportTasks";
+import {
+  applyTaskPatch,
+  newTask,
+  taskCreateSchema,
+  taskPatchSchema,
+  taskSlug,
+  uniqueTaskId,
+  type Task,
+} from "~~/shared/tasks";
 
-const { mockAuthRequest, claimed, fixEntries } = vi.hoisted(() => {
+const { mockAuthRequest, claimed, fixEntries, auth } = vi.hoisted(() => {
   /** Reports a QA entry names in `fixes`. Only Firestore auto-ids count as
    * such, so these are 20 letters and digits where the rest are short. */
   const claimed = {
@@ -36,6 +46,9 @@ const { mockAuthRequest, claimed, fixEntries } = vi.hoisted(() => {
   });
   return {
     mockAuthRequest: vi.fn(),
+    /** Whether the reader carries the `owner` claim - set by the mock below,
+     * which is where Vue can be imported. */
+    auth: { isOwner: null as unknown as Ref<boolean> },
     claimed,
     fixEntries: [
       entry("fix-works", [claimed.works]),
@@ -46,10 +59,14 @@ const { mockAuthRequest, claimed, fixEntries } = vi.hoisted(() => {
   };
 });
 
-vi.mock("~/composables/auth", () => ({
-  authRequest: mockAuthRequest,
-  useAuthState: () => ({ user: { value: null } }),
-}));
+vi.mock("~/composables/auth", async () => {
+  const { ref } = await vi.importActual<typeof import("vue")>("vue");
+  auth.isOwner = ref(false);
+  return {
+    authRequest: mockAuthRequest,
+    useAuthState: () => ({ user: { value: null }, isOwner: auth.isOwner }),
+  };
+});
 
 vi.mock("@plausible-analytics/tracker", () => ({
   init: vi.fn(),
@@ -179,6 +196,18 @@ const SnackbarStub = defineComponent({
   },
 });
 
+/** Renders the task dialog in place, open or not at all - the real one is an
+ * overlay teleported out of the wrapper. */
+const DialogStub = defineComponent({
+  props: { modelValue: Boolean },
+  setup(props, { slots }) {
+    return () =>
+      props.modelValue
+        ? h("div", { "data-dialog": "" }, slots.default?.())
+        : null;
+  },
+});
+
 /** Every wrapper this file has mounted. The page watches the route hash, and
  * each mount navigates, so a page left mounted would react to the next test's
  * route. */
@@ -197,10 +226,16 @@ const mount = async (
   const wrapper = await mountSuspended(OpiniePage, {
     route: { path: "/", hash, query },
     attachTo,
-    global: { stubs: { UserChip: true, VSnackbar: SnackbarStub } },
+    global: {
+      stubs: { UserChip: true, VSnackbar: SnackbarStub, VDialog: DialogStub },
+    },
   });
   mounted.push(wrapper);
-  await vi.waitUntil(() => gets().length > 0, { timeout: 2000 });
+  // The reports, that is: for the owner the task list is asked for as well.
+  await vi.waitUntil(
+    () => gets().some(([url]) => url === "/api/feedback/list"),
+    { timeout: 2000 },
+  );
   await flushPromises();
   return wrapper;
 };
@@ -281,6 +316,7 @@ const showList = async (wrapper: Wrapper) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  auth.isOwner.value = false;
   qaChecks.checks.value = [];
   qaChecks.loaded.value = true;
 });
@@ -1550,5 +1586,256 @@ describe("fixes claimed on the QA list", () => {
     expect(tag("inbox", claimed.works).text()).toBe("poprawka działa");
     expect(tag("queue", "queued").exists()).toBe(false);
     expect(tag("inbox", "plain").exists()).toBe(false);
+  });
+});
+
+describe("the owner's task list", () => {
+  const NOW = "2026-09-29T12:00:00.000Z";
+
+  const listTask = (id: string, fields: Partial<Task> = {}): Task => ({
+    id,
+    title: `Zadanie ${id}`,
+    body: "",
+    kind: "task",
+    who: "owner",
+    status: "open",
+    dependsOn: [],
+    tags: [],
+    links: [],
+    branches: [],
+    createdAt: "2026-09-28T10:00:00.000Z",
+    updatedAt: "2026-09-28T10:00:00.000Z",
+    createdBy: "owner",
+    log: [],
+    ...fields,
+  });
+
+  /** The page as the owner has it: the reports as `serve` gives them, and
+   * his task list behind /api/ops/tasks/*, which adds and changes a task the
+   * way the routes do - by the same schemas and functions - and answers with
+   * the task as written. */
+  const serveTasks = (reports: Feedback[], tasks: Task[]) => {
+    const list = tasks.map((task) => structuredClone(task));
+    mockAuthRequest.mockImplementation(
+      async (url: string, opts: { method: string; body?: unknown }) => {
+        if (url === "/api/ops/tasks/list") {
+          return { tasks: list.map((task) => structuredClone(task)) };
+        }
+        if (url === "/api/ops/tasks/create") {
+          const input = taskCreateSchema.parse(opts.body);
+          const id = uniqueTaskId(
+            taskSlug(input.title),
+            new Set(list.map((task) => task.id)),
+          );
+          const task = newTask(input, id, "owner", NOW);
+          list.push(task);
+          return { task: structuredClone(task) };
+        }
+        if (url === "/api/ops/tasks/update") {
+          const { id, patch } = opts.body as { id: string; patch: unknown };
+          const at = list.findIndex((task) => task.id === id);
+          const { task } = applyTaskPatch(
+            list[at]!,
+            taskPatchSchema.parse(patch),
+            "owner",
+            NOW,
+          );
+          list.splice(at, 1, task);
+          return { task: structuredClone(task) };
+        }
+        if (opts.method !== "GET") return { ok: true };
+        return { feedback: reports.map((item) => structuredClone(item)) };
+      },
+    );
+  };
+
+  const calls = (url: string) =>
+    mockAuthRequest.mock.calls.filter(([called]) => called === url);
+
+  const taskChips = (wrapper: Wrapper, id: string) =>
+    row(wrapper, id)
+      .findAll("[data-report-task]")
+      .map((chip) => chip.attributes("data-report-task"));
+
+  it("reads and offers nothing to an admin who is not the owner", async () => {
+    serve(board());
+    const wrapper = await mount();
+    await open(wrapper, "q2");
+
+    expect(
+      mockAuthRequest.mock.calls.some(([url]) => url.startsWith("/api/ops/")),
+    ).toBe(false);
+    expect(row(wrapper, "q2").find("[data-add-task]").exists()).toBe(false);
+    expect(wrapper.find("[data-report-task-icon]").exists()).toBe(false);
+  });
+
+  it("shows the owner which reports are on his list, and where they stand", async () => {
+    auth.isOwner.value = true;
+    serveTasks(board(), [
+      listTask("stare", {
+        status: "done",
+        body: `Zgłoszenie: ${reportUrl("q2")}`,
+        createdAt: "2026-09-29T09:00:00.000Z",
+      }),
+      listTask("filtr", { status: "doing", links: [reportUrl("q2")] }),
+      listTask("obce", { links: [reportUrl("zupelnieinne")] }),
+    ]);
+    const wrapper = await mount();
+
+    // On the line already, only on the report a task names.
+    expect(
+      row(wrapper, "q2")
+        .get("[data-report-task-icon]")
+        .attributes("aria-label"),
+    ).toBe("Na liście zadań (zadanie, w toku): Zadanie filtr");
+    expect(row(wrapper, "q1").find("[data-report-task-icon]").exists()).toBe(
+      false,
+    );
+
+    // Open, each task is a link to where it is on the list, open ones first.
+    // Asked of the chip rather than read off an href, as for the chips above.
+    await open(wrapper, "q2");
+    expect(taskChips(wrapper, "q2")).toEqual(["filtr", "stare"]);
+    expect(
+      row(wrapper, "q2")
+        .findAllComponents({ name: "VChip" })
+        .filter((chip) => chip.attributes("data-report-task") !== undefined)
+        .map((chip) => ({ text: chip.text(), to: chip.props("to") })),
+    ).toEqual([
+      { text: "Zadanie: w toku", to: "/admin/zadania#t-filtr" },
+      { text: "Zadanie: zrobione", to: "/admin/zadania#t-stare" },
+    ]);
+  });
+
+  it("makes a report a task on the owner's list, and leaves the report be", async () => {
+    auth.isOwner.value = true;
+    serveTasks(board(), []);
+    const wrapper = await mount();
+    await open(wrapper, "q2");
+
+    await click(row(wrapper, "q2").get("[data-add-task]"));
+    const dialog = wrapper.get("[data-task-dialog]");
+    expect(
+      (dialog.get("[data-task-title] input").element as HTMLInputElement).value,
+    ).toBe("zgłoszenie q2");
+    // Nothing on the list is like it.
+    expect(dialog.find("[data-task-matches]").exists()).toBe(false);
+    await click(dialog.get("[data-task-save]"));
+
+    expect(calls("/api/ops/tasks/create").map(([, opts]) => opts.body)).toEqual(
+      [
+        {
+          title: "zgłoszenie q2",
+          body: [
+            "zgłoszenie q2",
+            "",
+            `Zgłoszenie: ${reportUrl("q2")}`,
+            "Zgłaszający: ktoś niezalogowany (anonymous)",
+            "Strona: https://koryta.pl/",
+          ].join("\n"),
+          kind: "task",
+          who: "owner",
+          dependsOn: [],
+          tags: ["opinie"],
+          links: [reportUrl("q2")],
+          branches: [],
+          source: "zgłoszenie q2",
+        },
+      ],
+    );
+    expect(wrapper.find("[data-task-dialog]").exists()).toBe(false);
+    // On the report from then on, without a reload...
+    expect(taskChips(wrapper, "q2")).toEqual(["zgloszenie-q2"]);
+    expect(row(wrapper, "q2").find("[data-report-task-icon]").exists()).toBe(
+      true,
+    );
+    // ...and the report is where it was, as it was: nothing was written on it.
+    expect(calls("/api/feedback/admin")).toEqual([]);
+    expect(row(wrapper, "q2").get("[data-queue-position]").text()).toBe("#2");
+  });
+
+  it("names the report on a task that looks the same instead of adding one", async () => {
+    auth.isOwner.value = true;
+    serveTasks(
+      [
+        ...board(),
+        feedback("filtr", "new", {
+          kind: "idea",
+          message: "Filtr po województwie w tabeli osób.",
+          queueRank: 4096,
+        }),
+      ],
+      [
+        listTask("filtr-wojewodztwa", {
+          title: "Filtr po województwie w tabeli osób",
+          links: ["https://example.com/makieta"],
+        }),
+      ],
+    );
+    const wrapper = await mount();
+    await open(wrapper, "filtr");
+    await click(row(wrapper, "filtr").get("[data-add-task]"));
+
+    const match = wrapper.get('[data-task-match="filtr-wojewodztwa"]');
+    await click(button(match, "Podepnij tu"));
+
+    expect(calls("/api/ops/tasks/update").map(([, opts]) => opts.body)).toEqual(
+      [
+        {
+          id: "filtr-wojewodztwa",
+          patch: {
+            addLinks: [reportUrl("filtr")],
+            note: `Podpięte zgłoszenie ${reportUrl("filtr")}`,
+          },
+        },
+      ],
+    );
+    expect(calls("/api/ops/tasks/create")).toEqual([]);
+    expect(wrapper.find("[data-task-dialog]").exists()).toBe(false);
+    expect(taskChips(wrapper, "filtr")).toEqual(["filtr-wojewodztwa"]);
+  });
+
+  it("says in the dialog which tasks have the report already", async () => {
+    auth.isOwner.value = true;
+    serveTasks(board(), [
+      listTask("filtr", {
+        title: "Coś zupełnie innego",
+        links: [reportUrl("q2")],
+      }),
+    ]);
+    const wrapper = await mount();
+    await open(wrapper, "q2");
+    await click(row(wrapper, "q2").get("[data-add-task]"));
+
+    const match = wrapper.get('[data-task-match="filtr"]');
+    expect(match.text()).toContain("ma już to zgłoszenie");
+    expect(match.find("button").exists()).toBe(false);
+  });
+
+  it("warns the owner when his list cannot be read, and offers no task", async () => {
+    auth.isOwner.value = true;
+    serve(board());
+    const reports = mockAuthRequest.getMockImplementation()!;
+    mockAuthRequest.mockImplementation(
+      async (url: string, opts: { method: string }) => {
+        if (url === "/api/ops/tasks/list") {
+          throw Object.assign(new Error("403"), {
+            data: {
+              message: "Ta strona jest dostępna tylko dla właściciela serwisu.",
+            },
+          });
+        }
+        return reports(url, opts);
+      },
+    );
+    const wrapper = await mount();
+    await open(wrapper, "q2");
+
+    expect(wrapper.text()).toContain(
+      "Nie udało się wczytać zadań: Ta strona jest dostępna tylko dla właściciela serwisu.",
+    );
+    expect(row(wrapper, "q2").find("[data-add-task]").exists()).toBe(false);
+    // The reports are all there.
+    expect(listIds(wrapper)).toEqual(["in-new", "in-old", "q1", "q2", "q3"]);
   });
 });

@@ -3,9 +3,11 @@ import { test, expect } from "./test";
 import { logIn, USERS } from "../e2e/helpers/auth";
 import { freezeClock } from "./clock";
 import { feedbackReports } from "./fixtures/feedbackReports";
+import { opsTasks } from "./fixtures/opsTasks";
 import { readyForFullPage } from "./fullPage";
 import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
+import type { Task } from "../../shared/tasks";
 
 /** /admin/opinie, the reports people sent, as the team works through them:
  * the queue the page opens on, with the ones nobody has placed yet under it,
@@ -16,9 +18,35 @@ import { expectFitsThePhone } from "./phoneWidth";
  * answered from ./fixtures/feedbackReports.ts. The page is rendered in the
  * browser only (`ssr: false` on /admin/**), which is what lets a route handler
  * answer it, and the clock is frozen so each row's age reads the same every
- * day. */
+ * day.
+ *
+ * The seeded admin is the owner, so the page reads his task list as well -
+ * /admin/zadania's fixture, where one task names wizfb1, and a task made of
+ * the open report, in progress - rather than whatever the emulator's task
+ * database holds by the time this runs. */
 
 const OPINIE = { tag: pageTag("admin/opinie") };
+
+const reportTasks: Task[] = [
+  ...opsTasks,
+  {
+    id: "przycisk-otworz-w-qa",
+    title: "Przycisk „Otwórz” we wpisie QA o kolejce rewizji",
+    body: "Zgłoszenie: https://koryta.pl/admin/opinie#fb-wizfb4",
+    kind: "task",
+    who: "owner",
+    status: "doing",
+    dependsOn: [],
+    tags: ["opinie"],
+    links: ["https://koryta.pl/admin/opinie#fb-wizfb4"],
+    branches: [],
+    source: "zgłoszenie wizfb4",
+    createdAt: "2026-09-27T09:00:00.000Z",
+    updatedAt: "2026-09-27T09:00:00.000Z",
+    createdBy: "owner",
+    log: [],
+  },
+];
 
 async function openReports(page: Page, path: string) {
   await freezeClock(page);
@@ -26,6 +54,12 @@ async function openReports(page: Page, path: string) {
     route.fulfill({
       json: { feedback: feedbackReports, openTruncated: false },
     }),
+  );
+  // Only a GET is answered, as by the real route.
+  await page.route("**/api/ops/tasks/list**", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: { tasks: reportTasks } })
+      : route.fulfill({ status: 404, json: { message: "Page not found" } }),
   );
   await logIn(page, USERS.admin, path);
 
@@ -39,6 +73,12 @@ async function openReports(page: Page, path: string) {
   // about, and the open row is where the status and the note are set.
   await report.locator("[data-row-toggle]").click();
   await expect(report.locator("[data-row-panel]")).toBeVisible();
+  // And, once the task list is in, the task made of it and the way to add
+  // another.
+  await expect(
+    report.locator('[data-report-task="przycisk-otworz-w-qa"]'),
+  ).toBeVisible();
+  await expect(report.locator("[data-add-task]")).toBeVisible();
 
   await readyForFullPage(page);
 }

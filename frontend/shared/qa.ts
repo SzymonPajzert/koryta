@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "opinie-do-zadan",
+    title: "Zgłoszenie jako zadanie na liście właściciela",
+    description:
+      "„Dodaj do zadań” w rozwiniętym zgłoszeniu na /admin/opinie dodaje je do /admin/zadania z jego treścią i linkiem, a zgłoszenie zostaje tam, gdzie było, ze swoim statusem i pokazuje, gdzie jest jego zadanie. Widzi to tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/opinie rozwiń pomysł, kliknij „Dodaj do zadań”, a potem „Dodaj” - przy zgłoszeniu ma się pojawić chip „Zadanie: otwarte”, który prowadzi do tego zadania na /admin/zadania.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+    fixes: ["Wii0ubWl6sMTMhsxpmvS"],
+  },
+  {
     id: "dziala-zamyka-zgloszenie",
     title: "„Działa” na /qa zamyka zgłoszenie, które poprawka naprawia",
     description:
