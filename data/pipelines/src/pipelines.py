@@ -43,7 +43,7 @@ from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.public_owners import CompaniesPublicByRegister
-from scrapers.krs.register import KRSRegisterOwners
+from scrapers.krs.register import KRSRegisterEntries, KRSRegisterQueue
 from scrapers.krs.scrape import KRSAlreadyScraped, KRSNeedsRefresh, ScrapeRejestrIO
 from scrapers.krs.updates import KRSUpdates
 from scrapers.map.postal_codes import PostalCodes
@@ -83,7 +83,8 @@ PIPELINES = [
     KRSAlreadyScraped,
     KRSCensoredPeople,
     KRSNeedsRefresh,
-    KRSRegisterOwners,
+    KRSRegisterEntries,
+    KRSRegisterQueue,
     KRSUpdates,
     PersonFeedCoverage,
     RejestrIOCoverage,

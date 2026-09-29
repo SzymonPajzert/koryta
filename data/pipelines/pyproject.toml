@@ -133,6 +133,7 @@ koryta_scrape_krs = "scraper:scrape_krs"
 koryta_scrape_krs_free = "scraper:scrape_krs_free"
 koryta_scrape_krs_paid = "scraper:scrape_krs_paid"
 koryta_scrape_krs_updates = "scraper:scrape_updates_by_dates"
+koryta_krs_register_owners = "jobs.krs_register_owners:main"
 set_auth_claims = "set_auth_claims:main"
 
 
@@ -263,6 +264,15 @@ ignore_imports = [
     # source instead of hardcoding its jsonl path.
     "scrapers.article.pipelines.people_affair_tags_pipeline -> analysis.article_person_mentions",
 ]
+
+[[tool.importlinter.contracts]]
+# Asking an upstream API is a job's work (see src/jobs/__init__.py): a pipeline
+# reads what a job wrote. The article crawler predates the split.
+name = "Pipelines do not fetch"
+type = "forbidden"
+source_modules = ["scrapers", "analysis"]
+forbidden_modules = ["requests", "curl_cffi"]
+ignore_imports = ["scrapers.article.crawler -> curl_cffi"]
 
 [[tool.importlinter.contracts]]
 name = "Do not import external packages"
