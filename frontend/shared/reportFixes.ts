@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na szerokim ekranie linijka propozycji w „Czeka na decyzję” zaczyna się od tego, kto ją zgłosił i kiedy, a dopiero po nich mówi, czego dotyczy - tak jak pierwsza kolumna „Zgłoszenie” w dawnej tabeli.",
+    fixes: ["YsFCMqAsj9YIEQM2CKAr"],
+    link: "/admin/rewizje#kolejka",
+  },
+  {
+    change:
       "Artykuł dodany z linku do strony w starym kodowaniu (ISO-8859-2, windows-1250) ma w tytule polskie litery zamiast „�”. Trzy zapisane już tytuły na stronie Dariusza Bielskiego poprawią się dopiero po wdrożeniu funkcji getPageMeta i uruchomieniu migracji refetch-garbled-article-titles - niezalogowani zobaczą je do 6 godzin później, chyba że pamięć podręczna zostanie wyczyszczona.",
     fixes: ["3qIISyfU0iXo0Sus5bgJ"],
     link: "/osoba/dariusz-bielski-WQgJ49xVVGnKQnlCoDCK",
