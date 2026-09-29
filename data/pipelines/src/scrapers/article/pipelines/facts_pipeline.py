@@ -32,7 +32,7 @@ from scrapers.article.pipelines.pipeline_utils import (
 )
 from scrapers.stores import LLM, VERSIONED_DIR, Context, LLMRequest
 
-PROMPT_VERSION = 26
+PROMPT_VERSION = 27
 TEXT_LIMIT = 100000
 MAX_TOKENS = 20000
 TEMPERATURE = 0.1
@@ -99,8 +99,13 @@ _PROMPT = (
     "anonimizuje (np. Konrad R.). Nie zwracaj faktu, gdy osoba jest opisana "
     "tylko rolą (urzędnik, dyrektor, prezes, wiceprezes, podejrzany, biznesmen), "
     "zaimkiem, samym inicjałem (np. M.) albo opisem relacyjnym (np. żona Jana K., "
-    "syn burmistrza, jego ojciec). W personal_relation zarówno subject, jak "
-    "i object muszą być nazwanymi osobami.\n"
+    "syn burmistrza, jego ojciec). W personal_relation subject MUSI być nazwaną "
+    "osobą (imię i nazwisko, albo imię i inicjał). Object w personal_relation "
+    "może być podany samym imieniem, gdy artykuł nie podaje nigdzie jego "
+    "nazwiska (np. 'matka dwóch synów, 28-letniego Łukasza'): pełne imię i "
+    "nazwisko jest ZAWSZE preferowane, ale samo imię jest dopuszczalne, gdy "
+    "nazwiska nie ma — lepiej taki fakt zwrócić niż go pominąć. Nie zwracaj "
+    "object jako samego imienia, gdy nazwisko osoby pojawia się w artykule.\n"
     "Nie traktuj kandydowania w wyborach, poparcia wyborczego, głosowania na kogoś, "
     "udziału w spotkaniu, wystąpienia publicznego ani przynależności do komitetu "
     "wyborczego jako employment.\n"
@@ -129,11 +134,12 @@ _PROMPT = (
     "(lepiej pusty justification niż przepisany własnymi słowami).\n"
     "GRUNTOWANIE (najważniejsza zasada): sam cytat justification — bez reszty "
     "artykułu i bez wiedzy ogólnej — musi (a) zawierać PEŁNE imię i nazwisko "
-    "osoby (dla personal_relation imiona i nazwiska OBU osób) oraz (b) "
+    "subject (a w personal_relation — pełne imię i nazwisko subjectu; object "
+    "może być samym imieniem, gdy artykuł nie podaje jego nazwiska) oraz (b) "
     "potwierdzać KAŻDE pole, które podajesz (organization, role, party, object, "
     "relation).\n"
-    "- Jeśli w cytacie osoba występuje tylko jako zaimek lub opis ('jego brat', "
-    "'jej mąż', 'były burmistrz') i nie pada jej nazwisko — rozszerz cytat przez "
+    "- Jeśli w cytacie subject występuje tylko jako zaimek lub opis ('jego brat', "
+    "'jej mąż', 'były burmistrz') i nie pada jego nazwisko — rozszerz cytat przez "
     "[...], aż nazwisko znajdzie się w cytacie, albo pomiń ten fakt.\n"
     "- role i party MUSZĄ być tym, co mówi ten cytat: gdy cytat nazywa osobę "
     "'posłem', role='poseł', a nie 'minister' z Twojej wiedzy; gdy cytat nie "
@@ -231,6 +237,18 @@ _PROMPT = (
     "- justification=Firmę prowadzi Marek Zieliński wraz z żoną Ewą Zielińską "
     "| personal_relation | subject=Marek Zieliński | object=Ewa Zielińska "
     "| relation=żona\n\n"
+    "Artykuł: Radna Barbara Gieroń jest matką dwóch synów, 28-letniego Łukasza "
+    "i 31-letniego Grzegorza. W Radzie zasiada od 2012 roku.\n"
+    " thinking\n"
+    "- Barbara Gieroń: radna (employment)\n"
+    "- matka Łukasza i Grzegorza: personal_relation; subject nazwana pełnym "
+    "imieniem i nazwiskiem, a synowie są podani tylko imieniem, bo artykuł nie "
+    "podaje nigdzie ich nazwiska → object=Łukasz (samo imię jest dopuszczalne)\n"
+    "</think>\n"
+    "facts:\n"
+    "- justification=Radna Barbara Gieroń jest matką dwóch synów, 28-letniego "
+    "Łukasza | personal_relation | subject=Barbara Gieroń | object=Łukasz "
+    "| relation=syn\n\n"
     "Artykuł: Były burmistrz Paczkowa Bogdan W. usłyszał zarzuty. Wcześniej "
     "pracował w pewnej firmie zajmującej się kredytami.\n"
     "<think>\n"

@@ -108,11 +108,25 @@ def test_party_match_terms_include_short_and_full():
 def test_party_match_terms_koryta_short_labels():
     assert _party_match_terms("pis") == {"pis", "prawo i sprawiedliwosc"}
     assert _party_match_terms("psl") == {"psl", "polskie stronnictwo ludowe"}
-    # PO is an ordinary Polish word, so only the coalition name is searched.
-    assert _party_match_terms("po") == {"koalicja obywatelska"}
+    # PO is an ordinary Polish word, so the party is searched by name - and by
+    # both its names, because an article from before the KO rename says
+    # "Platforma Obywatelska".
+    assert _party_match_terms("po") == {
+        "koalicja obywatelska",
+        "platforma obywatelska",
+    }
     assert _party_match_terms("polska 2050") == {"polska 2050", "pl2050"}
     assert _party_match_terms("nowa lewica") == {"nowa lewica"}
     assert _party_match_terms("konfederacja") == {"konfederacja"}
+
+
+def test_party_match_terms_fold_a_renamed_party_both_ways():
+    # A stored full committee name resolves to both spellings too, so a pre-2018
+    # article about a PO person still yields party proof.
+    ko = _party_match_terms("koalicja obywatelska")
+    assert "platforma obywatelska" in ko
+    po = _party_match_terms("platforma obywatelska")
+    assert "koalicja obywatelska" in po
 
 
 def test_rejestr_io_id_extraction():
@@ -369,6 +383,55 @@ def test_load_index_aliases_merged_name_onto_the_survivor():
     assert index.find_in_text("Marian Antoni Uherek") == {"Marian Antoni Uherek"}
     candidates = profiles.candidates("Marian Antoni Uherek")
     assert [pid for pid, _ in candidates] == ["p1"]
+
+
+def test_load_index_matches_when_article_drops_the_middle_name():
+    # The article says "Tomasz Kotajny"; we hold the register's full name.
+    # Registering only full_name left every middle-name person unmatchable.
+    index, _ = _load_index_and_profiles(
+        [_person_row("p1", "Tomasz Jerzy Kotajny")], {}, {}
+    )
+    assert index.find_in_text("dyrektor Tomasz Kotajny odszedł") == {
+        "Tomasz Jerzy Kotajny"
+    }
+
+
+def test_load_index_matches_a_hyphenated_half_when_a_middle_name_is_dropped():
+    # Both at once: we hold "Barbara Maria Gieroń-Piskorska" and the article
+    # writes "Barbara Gieroń". Generating the hyphen halves from the full prefix
+    # alone produced "barbara maria gieron", which matches nothing.
+    index, _ = _load_index_and_profiles(
+        [_person_row("p1", "Barbara Maria Gieroń-Piskorska")], {}, {}
+    )
+    assert index.find_in_text("radna Barbara Gieroń pod lupą") == {
+        "Barbara Maria Gieroń-Piskorska"
+    }
+
+
+def test_load_index_matches_a_hyphenated_surname_in_the_article():
+    # We hold the shorter form; the article uses the married hyphenated one.
+    index, _ = _load_index_and_profiles(
+        [_person_row("p1", "Magdalena Porzucek")], {}, {}
+    )
+    assert index.find_in_text("jego żona Magdalena Zgiep-Porzucek") == {
+        "Magdalena Porzucek"
+    }
+
+
+def test_load_index_matches_when_article_uses_the_shorter_surname():
+    # The mirror case: we hold the hyphenated form, the article uses one half.
+    index, _ = _load_index_and_profiles(
+        [_person_row("p1", "Magdalena Zgiep-Porzucek")], {}, {}
+    )
+    assert index.find_in_text("radna Magdalena Porzucek") == {
+        "Magdalena Zgiep-Porzucek"
+    }
+
+
+def test_load_index_does_not_match_a_lone_surname():
+    # Last-name-only is deliberately not a form: "Wolski" alone is three people.
+    index, _ = _load_index_and_profiles([_person_row("p1", "Piotr Wolski")], {}, {})
+    assert index.find_in_text("Wolski powiedział, że") == set()
 
 
 def test_load_index_keeps_unmerged_people_when_column_absent():

@@ -52,10 +52,10 @@ def _mswia_forms(n: str) -> str:
 def _fold(value: str | None) -> str:
     """Fold Polish diacritics to ASCII (incl. ``ł``) for canonical keys.
 
-    Deliberately *not* applied to person names: spelling variants of the same
-    person are still meant to stay apart in dedup keys. Org, role and party
-    canonicals fold so that "smoleńska" ≡ "smolenska", "panstwowy" ≡
-    "państwowy", etc.
+    Person names are not folded here; their dedup key goes through
+    ``_canonical_person_name``, which folds diacritics *and* reduces spelling
+    variants to one form. Org, role and party canonicals fold so that
+    "smoleńska" ≡ "smolenska", "panstwowy" ≡ "państwowy", etc.
     """
     text = unicodedata.normalize("NFD", value or "")
     text = "".join(c for c in text if not unicodedata.combining(c))
@@ -75,21 +75,41 @@ _PARTY_ALIASES_RAW: dict[str, str] = {
     "polskie stronnictwo ludowe": "Polskie Stronnictwo Ludowe",
     "psl-koalicja polska": "Polskie Stronnictwo Ludowe",
     "po": "Platforma Obywatelska",
+    "platforma": "Platforma Obywatelska",
     "platforma obywatelska": "Platforma Obywatelska",
     "platforma obywatelska rp": "Platforma Obywatelska",
-    "ko": "Koalicja Obywatelska",
-    "koalicja obywatelska": "Koalicja Obywatelska",
+    # "Koalicja Obywatelska" is the committee PO runs as; articles use the two
+    # names interchangeably for the same membership, so they share a key.
+    "ko": "Platforma Obywatelska",
+    "koalicja obywatelska": "Platforma Obywatelska",
+    "po-ko": "Platforma Obywatelska",
     "sld": "Sojusz Lewicy Demokratycznej",
     "sojusz lewicy demokratycznej": "Sojusz Lewicy Demokratycznej",
     "razem": "Razem",
     "partia razem": "Razem",
     "nowoczesna": "Nowoczesna",
     ".nowoczesna": "Nowoczesna",
+    "polska 2050 szymona holowni": "Polska 2050",
+    "porozumienie jaroslawa gowina": "Porozumienie",
 }
 
 _PARTY_ALIASES: dict[str, str] = {
     _fold(k).lower(): _fold(v).lower() for k, v in _PARTY_ALIASES_RAW.items()
 }
+
+# Aliases that may appear inside a longer committee name ("Koalicja Obywatelska
+# PO i Nowoczesna"). Only the unambiguous full party names are listed: a short
+# token like "razem" would otherwise match "Prawica Razem" or "Razem dla
+# Piotrkowa", which are different committees, not the party.
+_PARTY_EMBEDDED: tuple[str, ...] = (
+    "platforma obywatelska",
+    "koalicja obywatelska",
+    "polskie stronnictwo ludowe",
+    "prawo i sprawiedliwosc",
+    "porozumienie jaroslawa gowina",
+    "polska 2050 szymona holowni",
+    "sojusz lewicy demokratycznej",
+)
 
 
 def _norm(value: str | None) -> str:
@@ -107,14 +127,80 @@ def _normalize_person_name(value: str | None) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
 
 
+def _person_name_forms(value: str | None) -> set[str]:
+    """The spellings of one name a fact may use, normalized for comparison.
+
+    A fact writes the name as the article spelled it - "Barbara Gieroń" - while
+    the koryta row may carry the register's fuller form, "Barbara Maria
+    Gieroń-Piskorska". Comparing the two normalizePersonName strings alone
+    therefore dropped every fact about such a person, relations included. This
+    mirrors the name forms the mention index registers (see
+    ``analysis.article_person_mentions._name_forms``): the full name, first +
+    last when a middle name is present, and - for a hyphenated surname - each
+    half, with and without the middle name.
+
+    Candidates are built from the raw words and normalized whole, so the
+    normalized token count never has to agree with the raw one (a hyphenated
+    surname is one raw word but two normalized tokens).
+    """
+    norm = _normalize_person_name(value)
+    if not norm:
+        return set()
+    raw_parts = (value or "").split()
+    forms = {norm}
+    if len(raw_parts) >= 2:
+        head, last = raw_parts[0], raw_parts[-1]
+        if len(raw_parts) >= 3:
+            forms.add(_normalize_person_name(f"{head} {last}"))
+        for half in last.split("-"):
+            if not half:
+                continue
+            forms.add(_normalize_person_name(" ".join([*raw_parts[:-1], half])))
+            if len(raw_parts) >= 3:
+                forms.add(_normalize_person_name(f"{head} {half}"))
+    return {form for form in forms if form}
+
+
+def _canonical_person_name(value: str | None) -> str:
+    """The one name a person's spelling variants share in dedup keys.
+
+    A person is written many ways: the article says "Barbara Gieroń", while the
+    register holds "Barbara Maria Gieroń-Piskorska". Keying on the literal name
+    kept the two apart, so a fact the site already holds looked new and a fact
+    repeated across articles was emitted twice. Reduce every spelling to its
+    first word plus the *first half* of its last word: that drops a middle name
+    and the tail of a hyphenated surname, which is the part an article usually
+    omits. Diacritics fold, agreeing with the website's normalizePersonName.
+
+    A single word is kept as-is, so a lone surname or first name never invents
+    a fuller form and can never collide with a full name.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    words = raw.split()
+    if len(words) == 1:
+        return _normalize_person_name(words[0])
+    last_half = re.split(r"[-–—]", words[-1], maxsplit=1)[0]
+    return _normalize_person_name(f"{words[0]} {last_half}")
+
+
 def _canonical_party(party: str | None) -> str:
     """Map a party spelling to its canonical name, else the normalized value.
 
     The result is diacritic-folded, so all spellings of e.g. Sojusz Lewicy
-    Demokratycznej collapse onto one dedup key.
+    Demokratycznej collapse onto one dedup key. A compound committee name that
+    embeds a known party ("Koalicja Obywatelska PO i Nowoczesna", "Platforma
+    Obywatelska – Koalicja Obywatelska") folds onto the longest known alias it
+    contains, so the party keeps one key no matter how the committee is named.
     """
     folded = _fold(_norm(party))
-    return _PARTY_ALIASES.get(folded, folded)
+    if folded in _PARTY_ALIASES:
+        return _PARTY_ALIASES[folded]
+    for alias in _PARTY_EMBEDDED:
+        if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", folded):
+            return _PARTY_ALIASES[alias]
+    return folded
 
 
 # Legal-form/abbreviation/rename aliases for an organization name.
@@ -139,8 +225,8 @@ _ORG_ALIASES_RAW: dict[str, str] = {
     "prezydent rzeczypospolitej polskiej": "prezydentura",
     "orlen": "orlen",
     "pkn orlen": "orlen",
-    "pkp": "pkp",
-    "pkp s.a.": "pkp",
+    "pkp": "polskie koleje panstwowe",
+    "pkp s.a.": "polskie koleje panstwowe",
     "mon": "ministerstwo obrony narodowej",
     "ministerstwo obrony": "ministerstwo obrony narodowej",
     # Ministry renames the extractor swaps freely for the same office.
@@ -287,6 +373,9 @@ _ORG_ALIASES_RAW: dict[str, str] = {
     "pr-motion": "pr motion",
     "straz pozarna": "panstwowej strazy pozarnej",
     "komisja weryfikacyjna": "komisja weryfikacyjna wsi",
+    "epp": "europejska partia ludowa",
+    "cpk": "centralny port komunikacyjny",
+    "ministerstwo cyfryzacji": "ministerstwo administracji i cyfryzacji",
 }
 
 _ORG_ALIASES: dict[str, str] = {
@@ -1014,6 +1103,14 @@ _ROLE_ALIASES: dict[str, str] = {
     _fold(k).lower(): _fold(v).lower() for k, v in _ROLE_ALIASES_RAW.items()
 }
 
+# Folds applied after the org-scope rules, since the org context can already
+# have turned "szef" into "minister": a non-ministry "szef" is the prezes, and
+# a bare "członek" is the board member the fuller role names.
+_ROLE_POST_FOLDS: dict[str, str] = {
+    "szef": "prezes",
+    "czlonek": "czlonek rady nadzorczej",
+}
+
 # Ordinal qualifiers in front of deputy roles ("I zastępca prezydenta",
 # "drugi wicewojewoda") — folded away so "1st deputy" and "deputy" dedupe.
 _ROLE_ORDINALS = (
@@ -1092,6 +1189,11 @@ def _canonical_role(role: str | None, org_canon: str | None = None) -> str:
         # "komendant wojewódzki" in a "komenda wojewódzka psp" org — scope said it.
         if "komenda" in org_canon:
             r = re.sub(r"\bwojewodzki\b", "", r)
+    # "szef/szefowa" is how articles loosely call the prezes; a ministry's szef
+    # was already folded to "minister" above. A bare "członek" at a body is the
+    # board member the fuller spellings name. A dict keeps this off the branch
+    # budget `_canonical_role` already spends on org-scope rules.
+    r = _ROLE_POST_FOLDS.get(r, r)
     return " ".join(r.split())
 
 
@@ -1124,18 +1226,16 @@ def _fact_key(
     out); party_membership additionally folds party aliases, so "PiS" and
     "Prawo i Sprawiedliwość" group together.
 
-    The person component is ``(literal name, koryta id)`` — the name first, so
-    spelling variants stay apart, then the id, which splits same-named people
-    who are different koryta individuals (e.g. two different "Piotr Woźniak"
-    with different ids). An empty id keeps the name grouping when the person
-    was never confirmed against koryta.
+    The person component is ``(canonical name, koryta id)``. The name is
+    reduced by ``_canonical_person_name`` so all spellings of one person —
+    "Barbara Gieroń" vs "Barbara Maria Gieroń-Piskorska" — share a key. The id
+    then splits same-named people who are different koryta individuals (e.g.
+    two different "Piotr Woźniak" with different ids). An empty id keeps the
+    name grouping when the person was never confirmed against koryta.
     """
     fact_type = str(fact.get("fact_type") or "")
-    person = (
-        (person_name, person_id or "")
-        if person_name is not None
-        else (_norm(fact.get("person")), person_id or "")
-    )
+    raw_person = person_name if person_name is not None else fact.get("person")
+    person = (_canonical_person_name(raw_person), person_id or "")
     if fact_type == "employment":
         org_canon = _canonical_org(fact.get("organization"))
         # "burmistrz @ Kisielice" (bare town as the org) is the municipal
@@ -1197,6 +1297,68 @@ _MENTIONS_FILE = (
 _VERIFICATION_FIELDS = {"verified", "verification_verdict", "verification_reason"}
 
 
+def _rename_fact_person_to_register(
+    fact: dict[str, Any],
+    person_id: str | None,
+    koryta_name_by_id: dict[str, str],
+) -> None:
+    """Write the subject under the name the site knows the person by.
+
+    The ingest links a fact to a person page only when the fact's subject
+    matches the register name exactly, so a fact about "Barbara Gieroń" never
+    reached the node "Barbara Maria Gieroń-Piskorska" - her facts (and both
+    sons' relations) were collected but not attached. The register name is the
+    canonical spelling the site stores, so use it whenever the fact resolves to
+    a confirmed person. The article's spelling still lives in ``justification``.
+    """
+    if not person_id:
+        return
+    register_name = koryta_name_by_id.get(person_id)
+    if not register_name:
+        return
+    if "person" in fact:
+        fact["person"] = register_name
+    elif "subject" in fact:
+        fact["subject"] = register_name
+
+
+def _select_article_facts(
+    fact_rows: list[dict[str, Any]],
+    publication_date: str | None,
+    url: str,
+    only_matched: bool,
+    koryta_ids: list[str],
+    koryta_name_by_id: dict[str, str],
+    person_ids: dict[str, str] | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """The verified, well-formed, koryta-matched facts of one article.
+
+    Each fact that resolves to a confirmed person is renamed to that person's
+    register name (see `_rename_fact_person_to_register`) so the site links it.
+    Returns the kept facts and how many were dropped for a blank required
+    field, so the caller can report the latter without another branch per fact.
+    """
+    kept: list[dict[str, Any]] = []
+    blank = 0
+    for fact in fact_rows:
+        if not isinstance(fact, dict) or fact.get("verified") is False:
+            continue
+        fact = _strip_and_date_fact(fact, publication_date)
+        # A fact missing a content field (no role, no relation) carries no
+        # signal and would key-collide with every other blank fact.
+        if _fact_has_blank_required_field(fact):
+            blank += 1
+            continue
+        if only_matched and not _fact_matches_koryta(
+            fact, url, koryta_ids, koryta_name_by_id
+        ):
+            continue
+        person_id = _fact_koryta_id(fact, koryta_ids, koryta_name_by_id, person_ids)
+        _rename_fact_person_to_register(fact, person_id, koryta_name_by_id)
+        kept.append(fact)
+    return kept, blank
+
+
 class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
     filename = "article_analyzed"
     backup_to_shared_cache = False  # large incremental output, keep local-only
@@ -1245,7 +1407,7 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
         only_matched = article_analyzed_only_matched_koryta()
         # Facts the site already holds, keyed the same way as our own. Empty
         # unless --article-analyzed-dedup-existing-facts is set.
-        existing_keys = _load_existing_fact_keys(ctx)
+        existing_keys, existing_id_keys = _load_existing_fact_keys(ctx)
         # Names of the koryta people each article's ids resolve to, so a fact
         # whose person matches by name can be tied to a person page (the exact
         # rule the website ingest applies).
@@ -1255,6 +1417,7 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
         print(f"  {len(koryta_name_by_id):,} koryta people loaded")
 
         emitted = 0
+        blank_fields = 0
         # url -> (parsed_row, score_row, publication_date, [(fact_key, fact)])
         pending: dict[
             str,
@@ -1280,28 +1443,38 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
                 "publication_date"
             ) or date_iso_from_ld_json(parsed_row.get("ld_json"))
 
-            # Keep only verified facts and stamp each with the article date.
-            # The verifier's bookkeeping fields stay in article_facts_verified;
-            # they're redundant here (every kept fact is verified).
-            verified_facts = []
-            for fact in fact_rows:
-                if not isinstance(fact, dict) or fact.get("verified") is False:
-                    continue
-                fact = _strip_and_date_fact(fact, publication_date)
-                if only_matched and not _fact_matches_koryta(
-                    fact, url, koryta_ids_by_url.get(url, []), koryta_name_by_id
-                ):
-                    continue
-                verified_facts.append(fact)
+            # Keep only verified, well-formed facts that are tied to a confirmed
+            # koryta person, each stamped with the article date.
+            verified_facts, blank = _select_article_facts(
+                fact_rows,
+                publication_date,
+                url,
+                only_matched,
+                koryta_ids_by_url.get(url, []),
+                koryta_name_by_id,
+                person_ids_by_url.get(url),
+            )
+            blank_fields += blank
             # Keep only facts the site does not already hold, so an upload from
-            # this output carries nothing a reviewer has seen before.
-            verified_facts = _drop_existing_facts(verified_facts, existing_keys)
+            # this output carries nothing a reviewer has seen before. The id
+            # key needs the article's confirmed people and the fact's resolved
+            # id to join across name spellings.
+            verified_facts = _drop_existing_facts(
+                verified_facts,
+                existing_keys,
+                existing_id_keys,
+                koryta_ids_by_url.get(url, []),
+                koryta_name_by_id,
+                person_ids_by_url.get(url),
+            )
             triaged = _dedup_facts_for_article(
                 url,
                 verified_facts,
                 first_seen,
                 evidence_by_key,
                 person_ids=person_ids_by_url.get(url),
+                koryta_ids=koryta_ids_by_url.get(url),
+                koryta_name_by_id=koryta_name_by_id,
             )
 
             # Skip articles whose facts were all filtered out — an analyzed
@@ -1343,7 +1516,10 @@ class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
             emitted += 1
             kept_facts += len(deduped_facts)
 
-        print(f"Emitted {emitted:,} ArticleAnalyzed records, {kept_facts:,} facts")
+        print(
+            f"Emitted {emitted:,} ArticleAnalyzed records, {kept_facts:,} facts "
+            f"({blank_fields:,} dropped for a blank field)"
+        )
         return pd.DataFrame()
 
 
@@ -1367,24 +1543,52 @@ def _strip_and_date_fact(
     return cleaned
 
 
+# The content fields a fact of each type must carry. A blank one is a malformed
+# fact (an employment with no role, a relation with nobody), and it would also
+# make a key that collides with every other malformed fact, so it is dropped.
+_REQUIRED_FACT_FIELDS: dict[str, tuple[str, ...]] = {
+    "employment": ("person", "organization", "role"),
+    "party_membership": ("person", "party"),
+    "personal_relation": ("subject", "object", "relation"),
+    "affair_involvement": ("person", "role", "affair"),
+}
+
+
+def _fact_has_blank_required_field(fact: dict[str, Any]) -> bool:
+    """Whether a fact is missing a content field its type requires.
+
+    ``None`` and whitespace-only both count as blank; an unknown ``fact_type``
+    has no declared fields and is left alone.
+    """
+    for field_name in _REQUIRED_FACT_FIELDS.get(str(fact.get("fact_type") or ""), ()):
+        if not str(fact.get(field_name) or "").strip():
+            return True
+    return False
+
+
 def _dedup_facts_for_article(
     url: str,
     verified_facts: list[dict[str, Any]],
     first_seen: dict[_FactKey, str],
     evidence_by_key: dict[_FactKey, list[str]],
     person_ids: dict[str, str] | None = None,
+    koryta_ids: list[str] | None = None,
+    koryta_name_by_id: dict[str, str] | None = None,
 ) -> list[tuple[_FactKey, dict[str, Any]]]:
     """Within-article dedup; record global first-seen and evidence.
 
-    ``person_ids`` maps the article's confirmed person names to their koryta
-    ids, so same-named individuals who are different koryta people get
-    different dedup keys.
+    The person id is resolved the same way as against the site
+    (``_fact_koryta_id``: exact mention name, else spelling variants), so a rule
+    that folds two facts here folds the same two between old and new facts.
     """
     person_ids = person_ids or {}
+    ids = koryta_ids or []
+    names_by_id = koryta_name_by_id or {}
     triaged: list[tuple[_FactKey, dict[str, Any]]] = []
     seen_this_article: set[_FactKey] = set()
     for fact in verified_facts:
-        name, pid = _fact_person(fact, person_ids)
+        name = str(fact.get("person") or fact.get("subject") or "")
+        pid = _fact_koryta_id(fact, ids, names_by_id, person_ids) or ""
         key = _fact_key(fact, person_name=name, person_id=pid)
         # Within-article duplicates: keep the first occurrence only.
         if key in seen_this_article:
@@ -1422,21 +1626,70 @@ def _fact_key_name_only(fact: dict[str, Any]) -> _FactKey:
     return _fact_key(fact, person_name=_norm(name), person_id="")
 
 
-def _existing_fact_keys(ctx: Context) -> set[_FactKey]:
+def _fact_id_key(fact: dict[str, Any], person_id: str) -> _FactKey:
+    """The fact's dedup key keyed by the person's koryta id, not their name.
+
+    Two spellings of one person resolve to the same koryta id, so this joins
+    our facts to the site's even when the names differ ("Barbara Gieroń" vs
+    "Barbara Maria Gieroń-Piskorska") and — unlike a name key — it never joins
+    two *different* people who happen to share a name. The empty name keeps the
+    key disjoint from `_fact_key_name_only`, whose person component is a
+    non-empty name with an empty id.
+    """
+    return _fact_key(fact, person_name="", person_id=person_id)
+
+
+def _fact_koryta_id(
+    fact: dict[str, Any],
+    koryta_ids: list[str],
+    koryta_name_by_id: dict[str, str],
+    person_ids: dict[str, str] | None = None,
+) -> str | None:
+    """The confirmed koryta id the fact's subject resolves to, if unambiguous.
+
+    Prefers the mention index's exact name match, then falls back to the same
+    spelling-variant match `_fact_matches_koryta` applies. Returns None when the
+    subject matches no confirmed person, or more than one: an ambiguous name
+    must not pick an id and drop a fact against the wrong person.
+    """
+    subject = fact.get("person") or fact.get("subject")
+    if not subject:
+        return None
+    if person_ids:
+        pid = person_ids.get(_norm(str(subject)))
+        if pid:
+            return pid
+    if not koryta_ids:
+        return None
+    subject_forms = _person_name_forms(str(subject))
+    if not subject_forms:
+        return None
+    matches = [
+        pid
+        for pid in koryta_ids
+        if subject_forms & _person_name_forms(koryta_name_by_id.get(pid))
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _existing_fact_keys(ctx: Context) -> tuple[set[_FactKey], set[_FactKey]]:
     """Dedup keys of the facts the site already holds on a named person.
 
     Reads the KorytaFacts pipeline (its `extractions` Firestore export) and
-    rebuilds the same key `_fact_key` builds for our own facts, so a fact whose
-    key is absent is one the site does not have yet. Comparing on the name only
-    is deliberate - see `_fact_key_name_only`.
+    rebuilds the same keys `_fact_key` builds for our own facts, so a fact whose
+    key is absent is one the site does not have yet. Returns two sets: keys by
+    canonical person name (`_fact_key_name_only`) and keys by the matched
+    person's koryta id (`_fact_id_key`). The id set is what makes the join
+    precise — see `_fact_id_key`.
     """
     from scrapers.koryta.download import KorytaFacts  # noqa: PLC0415
 
     facts = KorytaFacts().read_or_process(ctx)
-    keys: set[_FactKey] = set()
+    name_keys: set[_FactKey] = set()
+    id_keys: set[_FactKey] = set()
     if facts is None or facts.empty:
         print("No facts already held by the site, nothing to dedup against")
-        return keys
+        return name_keys, id_keys
     # A cached output written before KorytaFacts carried fact content has no
     # person/organization columns, so every key would read as blank and the
     # dedup would drop real facts. Fail loudly instead.
@@ -1454,35 +1707,62 @@ def _existing_fact_keys(ctx: Context) -> set[_FactKey]:
             for key, value in row.items()
             if not (isinstance(value, float) and value != value)
         }
-        keys.add(_fact_key_name_only(clean))
-    print(f"  {len(keys):,} facts already held by the site")
-    return keys
+        name_keys.add(_fact_key_name_only(clean))
+        pid = clean.get("person_koryta_id")
+        if isinstance(pid, str) and pid:
+            id_keys.add(_fact_id_key(clean, pid))
+    print(
+        f"  {len(name_keys):,} facts already held by the site "
+        f"({len(id_keys):,} tied to a person id)"
+    )
+    return name_keys, id_keys
 
 
-def _load_existing_fact_keys(ctx: Context) -> set[_FactKey]:
-    """The site's fact keys, or an empty set when the flag is off.
+def _load_existing_fact_keys(
+    ctx: Context,
+) -> tuple[set[_FactKey], set[_FactKey]]:
+    """The site's fact keys, or empty sets when the flag is off.
 
     Off by default on purpose: the pipeline must not reach for the KorytaFacts
     export unless asked, so a normal run keeps no dependency on the site's
     state.
     """
     if not article_analyzed_dedup_existing_facts():
-        return set()
+        return set(), set()
     return _existing_fact_keys(ctx)
 
 
 def _drop_existing_facts(
     verified_facts: list[dict[str, Any]],
     existing_keys: set[_FactKey],
+    existing_id_keys: set[_FactKey] | None = None,
+    koryta_ids: list[str] | None = None,
+    koryta_name_by_id: dict[str, str] | None = None,
+    person_ids: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Drop the facts whose dedup key the site already holds."""
-    if not existing_keys:
+    """Drop the facts the site already holds.
+
+    A fact is a duplicate if its canonical-name key or, when its subject
+    resolves to a confirmed koryta id, its id key is among the site's. The
+    name key catches people the mention index never confirmed; the id key
+    catches the ones it did, across every name spelling, without merging two
+    different same-named people.
+    """
+    id_keys = existing_id_keys or set()
+    if not existing_keys and not id_keys:
         return verified_facts
-    return [
-        fact
-        for fact in verified_facts
-        if _fact_key_name_only(fact) not in existing_keys
-    ]
+    names_by_id = koryta_name_by_id or {}
+    ids = koryta_ids or []
+    kept: list[dict[str, Any]] = []
+    for fact in verified_facts:
+        if _fact_key_name_only(fact) in existing_keys:
+            continue
+        if id_keys:
+            pid = _fact_koryta_id(fact, ids, names_by_id, person_ids)
+            if pid and _fact_id_key(fact, pid) in id_keys:
+                continue
+        kept.append(fact)
+    return kept
 
 
 def _person_ids_by_url(path: Path) -> dict[str, dict[str, str]]:
@@ -1574,15 +1854,21 @@ def _fact_matches_koryta(
     koryta_name_by_id: dict[str, str],
 ) -> bool:
     """Whether a fact's person (subject for relations) matches one of the
-    article's confirmed koryta people by normalized name — the same match the
-    website ingest uses to link a fact to a person page.
+    article's confirmed koryta people by name — the same match the website
+    ingest uses to link a fact to a person page.
+
+    The names are compared by their spellings, not their raw normalized forms:
+    the article's "Barbara Gieroń" is the koryta "Barbara Maria
+    Gieroń-Piskorska" written the way an article writes it.
     """
     subject = fact.get("person") or fact.get("subject")
     if not subject or not koryta_ids:
         return False
-    normed = _normalize_person_name(subject)
+    subject_forms = _person_name_forms(subject)
+    if not subject_forms:
+        return False
     return any(
-        _normalize_person_name(koryta_name_by_id.get(pid)) == normed
+        subject_forms & _person_name_forms(koryta_name_by_id.get(pid))
         for pid in koryta_ids
     )
 

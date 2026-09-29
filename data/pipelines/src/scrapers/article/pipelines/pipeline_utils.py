@@ -256,8 +256,10 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tag",
         type=str,
-        default=None,
-        help="Tag for this pipeline run (e.g. v1_qwen3-32b), stored in outputs.",
+        default="v27-qwen3.8-27b-v2",
+        help="Tag for this pipeline run (e.g. v1_qwen3-32b), stored in outputs. "
+        "The site's ingest schema requires a string, so this has a default "
+        "rather than None - a null tag makes the whole upload fail validation.",
     )
 
 
@@ -323,8 +325,13 @@ def koryciarski_scorer() -> str:
     return _args().koryciarski_scorer
 
 
-def article_tag() -> str | None:
-    return _args().tag
+def article_tag() -> str:
+    """The run's tag, always a string.
+
+    The ingest schema types ``tag`` as a string, so returning None made every
+    upload of an untagged run fail with "Expected string, received null".
+    """
+    return _args().tag or "v27-qwen3.8-27b-v2"
 
 
 def article_facts_min_koryciarski_score() -> int | None:

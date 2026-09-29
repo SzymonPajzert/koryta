@@ -272,9 +272,10 @@ def _parse_task(task: ParseTask, html_bytes: bytes) -> dict[str, Any]:
         selector_matched = bool(result.get("selector_matched"))
         extraction_method = result.get("extraction_method")
         has_content = bool(article_content.strip())
-        if extraction_method == "selector":
-            parse_status = "ok" if has_content else "empty_text"
-        elif extraction_method == "readability":
+        if extraction_method in ("selector", "readability", "news_data"):
+            # `news_data` is the client-rendered fallback (TVP regional CMS):
+            # the body is real, it just never reaches the DOM, so a page it
+            # recovered is a successful parse like any other.
             parse_status = "ok" if has_content else "empty_text"
         else:
             parse_status = "selector_not_found"
