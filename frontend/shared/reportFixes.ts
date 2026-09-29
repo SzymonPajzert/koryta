@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Regulamin i polityka prywatności stoją w białym arkuszu z ramką na szarym tle, jak /o-nas i /pomoc, a adres e-mail i link do polityki są ciemnozielone zamiast bladozielonych.",
+    fixes: ["3MWd21zn85kJO5T13eNP"],
+  },
+  {
+    change:
       "„Co nowego” na stronie głównej zaczyna się od ośmiu rzędów kafelków - 16 na komputerze i 8 na telefonie, zamiast całej porcji naraz (29 września było ich 37) - więc do stopki jest ponad dwa razy bliżej, a na telefonie cztery razy. „Pokaż więcej” dokłada po osiem rzędów.",
     fixes: [
       "DodgLGSXSPlZjVnyeteO",

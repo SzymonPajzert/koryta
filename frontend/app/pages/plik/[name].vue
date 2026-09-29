@@ -22,17 +22,26 @@ useSeoMeta({
   title: () => file.value?.title,
   description: () => file.value?.description,
 });
+
+// The white sheet on a grey band that /o-nas and /pomoc stand on, asked for by
+// the owner: „use the gray layout for contrast”. This page used to draw its own
+// sheet on the white page, where only a 1px shadow told the two apart. 860
+// rather than the layout's 1200 keeps the text as wide as it was on that sheet,
+// about 74 characters a line; at 1200 the regulamin's lines average 100.
+definePageMeta({
+  layout: "gray",
+  fullWidth: true,
+  maxWidth: 860,
+});
 </script>
 
 <template>
-  <v-container max-width="900" class="py-12">
-    <v-sheet elevation="1" rounded="xl" class="pa-8 pa-md-12 content-styles">
-      <ContentRenderer v-if="file" :value="file" />
-      <div v-else class="text-center text-h5 text-medium-emphasis">
-        Nie znaleziono strony
-      </div>
-    </v-sheet>
-  </v-container>
+  <div class="content-styles">
+    <ContentRenderer v-if="file" :value="file" />
+    <div v-else class="text-center text-h5 text-medium-emphasis">
+      Nie znaleziono strony
+    </div>
+  </div>
 </template>
 
 <style>
@@ -110,8 +119,11 @@ useSeoMeta({
   font-weight: 600;
 }
 
+/* Ink, not the brand's sage fill: #a8c79f is 1.85:1 on the white sheet, so
+   the e-mail address and „Polityka Prywatności” were the faintest words on a
+   page asked to have more contrast. ink-sage is the same green at 6.43:1. */
 .content-styles a:not(h1 a):not(h2 a):not(h3 a):not(h4 a):not(h5 a):not(h6 a) {
-  color: #a8c79f;
+  color: rgb(var(--v-theme-ink-sage));
   text-decoration: none;
   font-weight: 500;
   transition: all 0.2s ease;
