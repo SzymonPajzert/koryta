@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na szerokim ekranie /eksploruj/tabela nie rozciąga się już na całe okno, tylko stoi pośrodku w kolumnie o szerokości 1200px, a pasek filtrów i przełącznik stron zaczynają się i kończą razem z tabelą.",
+    fixes: ["ybyB2AgoZH4qLzRsSv2w"],
+    link: "/eksploruj/tabela",
+  },
+  {
+    change:
       "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
     fixes: ["g29Mn5m5y6EKQegAviQn"],
   },

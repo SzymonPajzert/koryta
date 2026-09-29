@@ -11,13 +11,22 @@
       :company-regions="companyRegions"
       @changed="refreshFocusedEdges()"
     />
-    <!-- `w-100`, because the layout's container is `fill-height` and therefore
-         a flex box (app/layouts/default.vue). A flex item sizes to its
-         max-content, so this page - which asked for `fullWidth` - stopped at
-         whatever the table happened to need and sat flush against the left
-         edge, leaving the rest of a wide window empty. Below about 1120px the
-         content already wants the whole width, so this changes nothing there. -->
-    <div class="pa-4 w-100">
+    <!-- A centred column no wider than the layout's default (`tabela-page`
+         below). Spread over the whole window the five columns were mostly
+         empty: on the live rows they come to 1097px at their cells' caps, and
+         at 2844px each was two and a half times as wide as anything it held.
+
+         Capped here and not by dropping `fullWidth`, which would cap the
+         layout's container instead: the drawer's scrim is `position:
+         absolute` against that container, so opening a row dimmed a 1200px
+         strip down the middle of the window and left the sides white.
+
+         `w-100`, because that container is `fill-height` and therefore a flex
+         box (app/layouts/default.vue), and a flex item sizes to its
+         max-content - the table used to stop at whatever its rows needed and
+         sit against the left edge. `mx-auto` centres it. Below 1200px it is as
+         wide as the window, as it was. -->
+    <div class="tabela-page pa-4 w-100 mx-auto">
       <!-- The whole chrome of this page, in one 44px bar (plus a 32px work row
            for a reader who is signed in). It carries the h1, the filters, a
            chip per filter that is narrowing the table, the row count, the sort
@@ -149,6 +158,8 @@ import { useEdges } from "~/composables/edges";
 import { trackGoal } from "~/composables/analytics";
 import { activeTabelaFilters, tabelaFiltersChanged } from "~~/shared/analytics";
 
+// `fullWidth` although the page is a 1200px column: the drawer's scrim needs
+// the layout's container to be the whole window. See `tabela-page` above.
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
   title: "Eksploruj - Tabela - koryta.pl",
@@ -574,6 +585,14 @@ watch(pending, (isPending, was) => {
 </script>
 
 <style scoped>
+/* The column every page gets that does not ask for `fullWidth` - the default
+ * in app/layouts/default.vue, padding included - so the table lines up with the
+ * pages around it. It leaves the columns 71px over their caps on the live rows,
+ * which explore/Table.vue lets the names and the company chips take. */
+.tabela-page {
+  max-width: 1200px;
+}
+
 /* The sage band the entity pages put behind a section heading, here behind the
  * column titles - which above 960px stick to the app bar as the reader scrolls
  * and have to stay opaque over the rows passing under them. Sage as a fill,
