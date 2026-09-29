@@ -1,19 +1,29 @@
 import argparse
-import json
 import sys
 import time
-from datetime import datetime, timedelta
-from time import sleep
 
 import requests
-from tqdm import tqdm
 
 from conductor import setup_context
+from jobs.krs_bulletin import scrape_updates_by_dates
+from jobs.krs_common import REFRESH_PIPELINES, query_krs_api, upload_result
+from jobs.krs_scrape_free import scrape_krs_free
+from jobs.krs_scrape_paid import scrape_krs_paid
 from scrapers.kmgp.people import PeopleKMGP
-from scrapers.krs.columns import ISO_DATE_LENGTH
-from scrapers.krs.scrape import ScrapeRejestrIO, cost_breakdown, public_krs_ids
-from scrapers.krs.updates import KRSUpdates
-from scrapers.stores import Context, ProcessPolicy, RejestrIO
+
+#: The KRS scrape moved to `jobs`. These names stay importable from here for
+#: one cycle - `krs_nip_resolve.py` on krs-odpis-board-members imports
+#: `upload_result` from this module, and venvs installed before the move run
+#: the console scripts through it until they are reinstalled.
+__all__ = [
+    "REFRESH_PIPELINES",
+    "query_krs_api",
+    "scrape_krs",
+    "scrape_krs_free",
+    "scrape_krs_paid",
+    "scrape_updates_by_dates",
+    "upload_result",
+]
 
 
 def get_urls_to_scrape(ctx):
@@ -64,193 +74,7 @@ def main():
         time.sleep(0.3)
 
 
-def query_krs_api(url, verbose=True) -> str | None:
-    def print_filtered(*args, **kwargs):
-        if verbose:
-            print(*args, **kwargs)
-
-    print_filtered(f"Requesting: {url}")
-    response = None
-    result = {}
-    try:
-        response = requests.get(url)
-        if response.text == "":
-            return None
-        result = response.json()
-    except requests.exceptions.JSONDecodeError:
-        print_filtered(f"Failed to decode JSON from {url}, skipping")
-        if response is not None:
-            print(f"Response: '{response.text}'")
-            raise ValueError("Failed to decode non-empty response")
-        return None
-
-    # either expect odpis or title == Not Found
-    if not ("odpis" in result or result.get("title", "") == "Not Found"):
-        raise ValueError(f"Unexpected response for {url}: {result}, skipping this KRS")
-
-    if "odpis" in result:
-        # Printing data about the company
-        dzial1 = result["odpis"]["dane"]["dzial1"]
-        dane = dzial1.get("danePodmiotu", {})
-        if "siedzibaIAdres" in dzial1:
-            miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
-            print_filtered(f"{dane.get('nazwa', dane)} - {miasto}")
-    return json.dumps(result)
-
-
-def upload_result(ctx: Context, url, result, verbose=True):
-    # We're discarding query params, so it's a hotfix for this
-    url = url.replace("?aktualnosc=", "/aktualnosc_")
-    url = url.replace("&format=json", "")
-    ctx.io.upload(url, result, "application/json", verbose=verbose, include_query=True)
-
-
-REFRESH_PIPELINES = {
-    "ScrapeRejestrIO",
-    "KRSAlreadyScraped",
-    "KRSCensoredPeople",
-    "KRSNeedsRefresh",
-    "CompaniesKRS",
-    "KRSUpdates",
-    # The fold of the register job's log. Nothing it depends on changes when
-    # the log grows, so without this a scrape queues from an old ledger.
-    "KRSRegisterEntries",
-    "RejestrIOCoverage",
-    "PersonFeedCoverage",
-}
-
-
-def scrape_krs_free(sleep_time=0.2):
-    """Phase 1: Scrape bulletin updates and free api-krs queries.
-
-    This updates the bulletin data and api-krs OdpisAktualny snapshots.
-    No cost — all queries go to the free api-krs.ms.gov.pl API.
-    """
-    scrape_updates_by_dates(sleep_time)
-    ctx, _ = setup_context(policy=ProcessPolicy(REFRESH_PIPELINES))
-    pipeline = ScrapeRejestrIO()
-    queries = list(pipeline.read_or_process_list(ctx))
-
-    successful_krs = set()
-    failures = 0
-
-    for query in tqdm(queries):
-        if query.krs is None:
-            continue
-
-        any_succeeded = False
-        for url in query.urls(only_free=True):
-            assert "rejestr.io" not in url
-            result = query_krs_api(url, verbose=False)
-            if result is not None:
-                any_succeeded = True
-            else:
-                print(
-                    f"Recording failure for {url}"
-                    f" as an empty file..."
-                )
-                result = ""
-            upload_result(ctx, url, result, verbose=False)
-            sleep(sleep_time)
-
-        if any_succeeded:
-            successful_krs.add(query.krs)
-        else:
-            failures += 1
-
-    print(
-        f"Successfully scraped {len(successful_krs)}"
-        f" KRS numbers, {failures} failures"
-    )
-
-
-def scrape_krs_paid(sleep_time=0.2):
-    """Phase 2: Query rejestr.io for KRS entries with confirmed changes.
-
-    Uses the KRSCensoredPeople pre-filter to skip KRS entries
-    where the censored people list didn't change. Only pays for
-    rejestr.io queries where there's an actual difference.
-    """
-    # The queries come off a pipeline, but the paid calls are made here, so
-    # this phase asks for the client itself rather than declaring it.
-    ctx, _ = setup_context([RejestrIO], policy=ProcessPolicy(REFRESH_PIPELINES))
-    pipeline = ScrapeRejestrIO()
-    queries = list(pipeline.read_or_process_list(ctx))
-
-    # What the bill is made of, not just what it comes to. Every query carries
-    # the reason it exists, and the reasons are not worth the same money: a
-    # refresh re-buys a company we already hold, a person feed is one name, and
-    # a newly discovered public company is the thing the site is for.
-    # The register's own public verdicts count too: a company found that way
-    # is not in `CompaniesKRS` until its odpis has been crawled.
-    public = public_krs_ids(pipeline.companies.read_or_process(ctx)) | {
-        krs.id for krs in pipeline.owned_per_the_register(ctx)
-    }
-    print(cost_breakdown(queries, public))
-
-    cost = sum(q.cost() for q in queries)
-    print(f"Will cost: {cost} PLN")
-    input("Press enter to continue...")
-
-    for query in queries:
-        for url in query.urls():
-            if "rejestr.io" not in url:
-                continue
-
-            result = RejestrIO.from_context(ctx).get_rejestr_io(url)
-            if result is None:
-                print(f"Skipping {url}")
-                continue
-
-            upload_result(ctx, url, result)
-            sleep(sleep_time)
-
-
 def scrape_krs(sleep_time=0.2):
     """Run both phases: free api-krs queries then paid rejestr.io."""
     scrape_krs_free(sleep_time)
     scrape_krs_paid(sleep_time)
-
-
-
-def scrape_updates_by_dates(sleep_time=0.2):
-    ctx, _ = setup_context(policy=ProcessPolicy({"KRSUpdates"}))
-
-    start_date = datetime.strptime("2025-06-01", "%Y-%m-%d").date()
-    today = datetime.now().date()
-
-    pipeline = KRSUpdates()
-    already_scraped_dates = set()
-    for update in pipeline.read_or_process_list(ctx):
-        # Truncated, because a run that reads the cached output rather than
-        # rebuilding it gets "2025-06-02 00:00:00" here: pandas parses a column
-        # named `date` into a Timestamp whatever dtype asks for. That matches
-        # no date_str below, so every bulletin day since 2025-06-01 would be
-        # fetched again, on every run.
-        already_scraped_dates.add(str(update.date)[:ISO_DATE_LENGTH])
-
-    print("already_scraped_dates: ", already_scraped_dates)
-
-    current_date = start_date
-    while current_date < today:
-        date_str = current_date.strftime("%Y-%m-%d")
-        if date_str in already_scraped_dates:
-            current_date += timedelta(days=1)
-            continue
-
-        url = f"https://api-krs.ms.gov.pl/api/Krs/Biuletyn/{date_str}"
-        print(f"Requesting: {url}")
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                # Parse to ensure it's valid JSON
-                response.json()
-                ctx.io.upload(url, response.text, "application/json")
-                print(f"Successfully scraped and uploaded for date: {date_str}")
-            else:
-                print(f"Failed to fetch {url}: HTTP {response.status_code}")
-        except Exception as e:
-            print(f"An error occurred while uploading {url}: {e}")
-        sleep(sleep_time)
-
-        current_date += timedelta(days=1)

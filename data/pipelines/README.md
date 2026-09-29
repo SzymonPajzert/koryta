@@ -47,6 +47,24 @@ You can run each script with `uv run scripts-name`.
 
 Refer to `pyproject.toml` for the most up-to-date list of the scripts available there.
 
+## Pipelines and jobs
+
+A **pipeline** (`uv run koryta <Name>`) is a function: it reads its sources and
+writes one output to `versioned/`, and running it again gives the same output,
+so any output can be deleted and rebuilt. A **job** (`src/jobs/<name>`) changes
+what the pipelines read - it asks an upstream API, buys, uploads - and running
+it twice is not running it once. Jobs may read pipelines; no pipeline imports a
+job (import-linter enforces it, and pipelines may not import `requests`).
+
+A job's state is what it wrote, never a pipeline output it keeps up to date:
+
+| Job | Script | Writes |
+|---|---|---|
+| `krs_bulletin` | `koryta_scrape_krs_updates` | bulletin days, to the crawl bucket |
+| `krs_scrape_free` | `koryta_scrape_krs_free` | the bulletin, then api-krs odpisy for `ScrapeRejestrIO`'s queries |
+| `krs_scrape_paid` | `koryta_scrape_krs_paid` | rejestr.io responses (paid; asks before buying) |
+| `krs_register_owners` | `koryta_krs_register_owners --reads N` | api-krs answers, to write-once parts in `gs://koryta-pl-sharedcache/jobs/krs_register_owners/responses/`, which `KRSRegisterEntries` folds |
+
 ## Centralny Rejestr Umów (CRU)
 
 `CruDump` fetches the public contracts register from a postgres mirror of the
