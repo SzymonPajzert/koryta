@@ -22,8 +22,12 @@ import re
 import pytest
 
 from scrapers.krs.odpis_pdf import (
+    RegisterEntry,
+    entry_dates,
+    parse_entries,
     parse_people,
     role_of,
+    stated_on,
     unread_person_rubryki,
 )
 
@@ -531,3 +535,138 @@ def test_the_foreign_rubryki_do_not_collide_with_the_domestic_one():
     """`role_of` is a prefix match, and these three all start with "organ"."""
     assert role_of("Organ uprawniony do reprezentacji podmiotu") == "reprezentacja"
     assert role_of("Organ nadzoru") == "nadzor"
+
+
+#: The head of the same kind of document: the register's list of its entries,
+#: as KRS 0000822302's odpis prints it. The court's name wraps onto a second
+#: line, an automatic entry names SYSTEM for the court and dashes for the case
+#: number, and a page footer falls inside the list.
+HEADER = """
+Wydruk informacji pobranej w trybie art. 4 ust. 4aa ustawy z dnia 20 sierpnia 1997 r. o Krajowym Rejestrze Sądowym,
+posiada moc dokumentu wydawanego przez Centralną Informację, nie wymaga podpisu i pieczęci.
+CENTRALNA INFORMACJA KRAJOWEGO REJESTRU SĄDOWEGO
+KRAJOWY REJESTR SĄDOWY
+Stan na dzień 14.09.2026 godz. 14:30:50
+Numer KRS: 0000000001
+Informacja odpowiadająca odpisowi pełnemu
+Z REJESTRU PRZEDSIĘBIORCÓW
+Nr wpisu
+1
+Data dokonania wpisu
+17.02.2001
+Opis
+REJESTRACJA W KRAJOWYM REJESTRZE SĄDOWYM
+Sygnatura akt
+WA.XII NS-REJ.KRS/86699/01/614
+Oznaczenie sądu
+SĄD REJONOWY DLA M. ST. WARSZAWY W WARSZAWIE, XII WYDZIAŁ GOSPODARCZY KRAJOWEGO
+REJESTRU SĄDOWEGO
+Nr wpisu
+2
+Data dokonania wpisu
+18.12.2003
+Opis
+ZMIANA DANYCH W REJESTRZE
+Sygnatura akt
+------
+Oznaczenie sądu
+SYSTEM
+Nr wpisu
+3
+Data dokonania wpisu
+26.09.2005
+Opis
+ZMIANA DANYCH W REJESTRZE
+Sygnatura akt
+WA.XII NS-REJ.KRS/50126/05/195
+Oznaczenie sądu
+SĄD REJONOWY DLA M.ST. WARSZAWY W WARSZAWIE, XII WYDZIAŁ GOSPODARCZY KRAJOWEGO
+Strona 1 z
+60
+REJESTRU SĄDOWEGO
+"""
+
+
+def later_entry(number: int, day: str) -> str:
+    """Entries 4 onwards, which differ only in their number and date."""
+    return f"""Nr wpisu
+{number}
+Data dokonania wpisu
+{day}
+Opis
+ZMIANA DANYCH W REJESTRZE
+Sygnatura akt
+WA.XII NS-REJ.KRS/{number}/10/1
+Oznaczenie sądu
+SĄD REJONOWY DLA M. ST. WARSZAWY W WARSZAWIE, XII WYDZIAŁ GOSPODARCZY KRAJOWEGO
+REJESTRU SĄDOWEGO
+"""
+
+
+#: Entry 12 made KOWALSKI prezes; entry 20 struck him out and seated NOWAK.
+WHOLE = (
+    HEADER
+    + "".join(later_entry(n, f"{n:02d}.03.2010") for n in range(4, 12))
+    + later_entry(12, "05.06.2012")
+    + "".join(later_entry(n, f"{n:02d}.03.2016") for n in range(13, 20))
+    + later_entry(20, "30.04.2021")
+    + ODPIS
+)
+
+
+def test_the_entry_list_numbers_and_dates_every_entry():
+    entries = parse_entries(WHOLE)
+    assert [e.number for e in entries] == [str(n) for n in range(1, 21)]
+    assert entries[0] == RegisterEntry(
+        number="1",
+        date="2001-02-17",
+        description="REJESTRACJA W KRAJOWYM REJESTRZE SĄDOWYM",
+        case_number="WA.XII NS-REJ.KRS/86699/01/614",
+        court="SĄD REJONOWY DLA M. ST. WARSZAWY W WARSZAWIE, XII WYDZIAŁ "
+        "GOSPODARCZY KRAJOWEGO REJESTRU SĄDOWEGO",
+    )
+
+
+def test_the_column_headers_further_down_are_not_entries():
+    """After Dział 1, "Nr wpisu" heads the wprow./wykr. columns: 20, not more."""
+    assert len(parse_entries(WHOLE)) == 20
+    assert parse_entries(ODPIS) == ()
+
+
+def test_an_automatic_entry_has_no_case_number_and_names_the_system():
+    second = parse_entries(WHOLE)[1]
+    assert second.case_number is None
+    assert second.court == "SYSTEM"
+
+
+def test_a_page_footer_inside_the_list_is_not_read_as_a_value():
+    third = parse_entries(WHOLE)[2]
+    assert third.date == "2005-09-26"
+    assert third.court == (
+        "SĄD REJONOWY DLA M.ST. WARSZAWY W WARSZAWIE, XII WYDZIAŁ "
+        "GOSPODARCZY KRAJOWEGO REJESTRU SĄDOWEGO"
+    )
+
+
+def test_an_entry_whose_date_does_not_read_is_left_out():
+    broken = HEADER.replace("18.12.2003", "18.12.03")
+    assert [e.number for e in parse_entries(broken)] == ["1", "3"]
+
+
+def test_the_document_says_what_day_it_speaks_for():
+    assert stated_on(WHOLE) == "2026-09-14"
+    assert stated_on(ODPIS) is None
+
+
+def test_a_seat_is_dated_by_the_entries_that_bracket_it():
+    people = parse_people(WHOLE, krs="0000000001")
+    former, sitting = find(people, "KOWALSKI"), find(people, "NOWAK")
+    assert (former.date_added, former.date_removed) == ("2001-02-17", "2021-04-30")
+    assert (sitting.date_added, sitting.date_removed) == ("2021-04-30", None)
+    assert entry_dates(WHOLE)["12"] == "2012-06-05"
+
+
+def test_without_the_entry_list_a_seat_keeps_its_numbers_and_no_dates(people):
+    former = find(people, "KOWALSKI")
+    assert (former.entry_added, former.entry_removed) == ("1", "20")
+    assert (former.date_added, former.date_removed) == (None, None)
