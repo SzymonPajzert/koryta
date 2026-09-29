@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../../server/api/edges/delete.post";
 
 const mockBatchSet = vi.fn();
+const mockBatchUpdate = vi.fn();
 const mockCommit = vi.fn();
 const mockCacheClear = vi.fn();
 
@@ -23,15 +24,36 @@ function docRef(collection: string, id: string) {
   };
 }
 
+/** `where(field, "array-contains", value)` over the stored documents of one
+ * collection - the only query this handler makes. */
+function arrayContains(collection: string, field: string, value: unknown) {
+  return {
+    get: vi.fn(async () => ({
+      docs: Object.entries(stored)
+        .filter(
+          ([path, data]) =>
+            path.startsWith(`${collection}/`) &&
+            Array.isArray(data?.[field]) &&
+            (data[field] as unknown[]).includes(value),
+        )
+        .map(([path]) => ({ ref: { path } })),
+    })),
+  };
+}
+
 const mockDb = {
   collection: vi.fn((collection: string) => ({
     doc: vi.fn((id?: string) =>
       docRef(collection, id ?? `generated-${++generated}`),
     ),
+    where: vi.fn((field: string, _op: string, value: unknown) =>
+      arrayContains(collection, field, value),
+    ),
   })),
   batch: vi.fn(() => ({
     set: (ref: { path: string }, data: unknown) => mockBatchSet(ref.path, data),
-    update: vi.fn(),
+    update: (ref: { path: string }, data: unknown) =>
+      mockBatchUpdate(ref.path, data),
     commit: mockCommit,
   })),
 };
@@ -41,7 +63,10 @@ vi.mock("firebase-admin/firestore", () => ({
   // Only `now` is reached from here - `createRevisionTransaction` stamps the
   // revision with it and nothing in this path reads the value back.
   Timestamp: { now: () => ({}) },
-  FieldValue: { delete: () => "deleted" },
+  FieldValue: {
+    delete: () => "deleted",
+    arrayRemove: (...values: unknown[]) => ({ arrayRemove: values }),
+  },
 }));
 
 vi.mock("firebase-admin/app", () => ({ getApp: vi.fn() }));
@@ -172,6 +197,21 @@ describe("api/edges/delete", () => {
     await handler({} as never);
 
     expect(edgeWrite()).toMatchObject({ deleted: true });
+  });
+
+  it("takes the relation off every fact that was promoted into it", async () => {
+    // Their cards say „Powiązanie utworzone” and point at „Historia
+    // powiązań”, which stops being true now; they offer the promotion again.
+    stored["extractions/f1"] = { promotedEdgeIds: ["e1", "e2"] };
+    stored["extractions/f2"] = { promotedEdgeIds: ["e1"] };
+    stored["extractions/f3"] = { promotedEdgeIds: ["e2"] };
+
+    await handler({} as never);
+
+    expect(mockBatchUpdate.mock.calls).toEqual([
+      ["extractions/f1", { promotedEdgeIds: { arrayRemove: ["e1"] } }],
+      ["extractions/f2", { promotedEdgeIds: { arrayRemove: ["e1"] } }],
+    ]);
   });
 
   it("clears the handler cache so the page stops drawing it", async () => {

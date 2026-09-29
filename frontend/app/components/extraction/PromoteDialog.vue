@@ -109,23 +109,59 @@
         >
           {{ error }}
         </v-alert>
+
+        <!-- The same relation was already stored - by an earlier promotion of
+             this fact, or by somebody's „Dodaj” on the person's page - and the
+             endpoint handed back its id rather than writing a second one.
+             Said here, in the dialog the reader is looking at: closing as if
+             it had just been made would claim a relation they did not add. -->
+        <v-alert
+          v-if="outcome === 'exists'"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mt-3"
+          data-testid="promote-fact-exists"
+        >
+          To powiązanie już jest w bazie, więc nie dodaliśmy drugiego - ten fakt
+          prowadzi teraz do niego.
+        </v-alert>
+        <!-- The same identity, but an administrator removed it. Writing it
+             again would undo that removal with nobody reviewing it, so the
+             endpoint leaves it gone and the fact unmarked, and says why. -->
+        <v-alert
+          v-else-if="outcome === 'deleted'"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          class="mt-3"
+          data-testid="promote-fact-deleted"
+        >
+          Takie powiązanie było już w bazie, ale administrator je usunął, więc
+          nie dodaliśmy go ponownie.
+        </v-alert>
       </v-card-text>
 
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" :disabled="saving" @click="open = false">
-          Anuluj
+        <v-btn v-if="outcome" variant="text" @click="open = false">
+          Zamknij
         </v-btn>
-        <v-btn
-          color="success"
-          variant="tonal"
-          :loading="saving"
-          :disabled="!readyToSubmit"
-          data-testid="promote-fact-submit"
-          @click="submit()"
-        >
-          Utwórz powiązanie
-        </v-btn>
+        <template v-else>
+          <v-btn variant="text" :disabled="saving" @click="open = false">
+            Anuluj
+          </v-btn>
+          <v-btn
+            color="success"
+            variant="tonal"
+            :loading="saving"
+            :disabled="!readyToSubmit"
+            data-testid="promote-fact-submit"
+            @click="submit()"
+          >
+            Utwórz powiązanie
+          </v-btn>
+        </template>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -144,7 +180,9 @@
  * far end is a free string the article used, which nothing in the app resolves
  * to a node, so the reader picks it. The edge is written as a draft through
  * /api/edges/create, which stores it under an id derived from its identity - so
- * promoting the same fact twice lands on the one document.
+ * promoting the same fact twice lands on the one document, and the dialog says
+ * that is what happened. The request names the fact, which then records the
+ * relation it became: that is what lets its card stop offering this.
  */
 import { computed, ref, watch } from "vue";
 import { mdiArrowRight } from "@mdi/js";
@@ -160,7 +198,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update:modelValue": [value: boolean];
-  created: [edgeId: string];
+  /** The fact now stands for this relation - one just made, or the one that
+   * was already stored under the same identity. */
+  promoted: [edgeId: string];
 }>();
 
 const open = computed({
@@ -174,6 +214,9 @@ const startDate = ref("");
 const endDate = ref("");
 const saving = ref(false);
 const error = ref<string | null>(null);
+/** Set when the endpoint wrote nothing: the relation is already stored, or
+ * was and an administrator removed it. */
+const outcome = ref<"exists" | "deleted" | null>(null);
 
 const verb = computed(() => factConnector(props.fact));
 
@@ -207,6 +250,7 @@ watch(open, (isOpen) => {
   if (!isOpen) return;
   target.value = undefined;
   error.value = null;
+  outcome.value = null;
   // Prefilled from the fact rather than left blank: the role the article gave
   // is the thing being recorded, and retyping it is where a promotion stops
   // being cheaper than the generic form.
@@ -220,7 +264,11 @@ async function submit() {
   saving.value = true;
   error.value = null;
   try {
-    const { id } = await authRequest<{ id: string }>("/api/edges/create", {
+    const { id, created, deleted } = await authRequest<{
+      id: string;
+      created: boolean;
+      deleted?: boolean;
+    }>("/api/edges/create", {
       method: "POST",
       body: {
         source: props.fact.personNodeId,
@@ -230,10 +278,23 @@ async function submit() {
         start_date: startDate.value,
         end_date: endDate.value,
         references: props.fact.articleNodeId ? [props.fact.articleNodeId] : [],
+        // Left off for a fact with no id - a grouped listing can hand one
+        // over - which then simply records nothing on the fact.
+        ...(props.fact.id ? { extraction: props.fact.id } : {}),
       },
     });
-    emit("created", id);
-    open.value = false;
+    if (deleted) {
+      outcome.value = "deleted";
+      return;
+    }
+    // New or already there, the fact now stands for a live relation, so the
+    // card is told; only a new one closes the dialog without a word.
+    emit("promoted", id);
+    if (created === false) {
+      outcome.value = "exists";
+    } else {
+      open.value = false;
+    }
   } catch (e: unknown) {
     const data = (e as { data?: { message?: string } } | null)?.data;
     error.value =
