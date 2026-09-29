@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Artykuł dodany z linku do strony w starym kodowaniu (ISO-8859-2, windows-1250) ma w tytule polskie litery zamiast „�”. Trzy zapisane już tytuły na stronie Dariusza Bielskiego poprawią się dopiero po wdrożeniu funkcji getPageMeta i uruchomieniu migracji refetch-garbled-article-titles - niezalogowani zobaczą je do 6 godzin później, chyba że pamięć podręczna zostanie wyczyszczona.",
+    fixes: ["3qIISyfU0iXo0Sus5bgJ"],
+    link: "/osoba/dariusz-bielski-WQgJ49xVVGnKQnlCoDCK",
+  },
+  {
+    change:
       "W kategoryzacji notatek pod listą typów widać osobę, której dotyczy notatka - jej partie, dane i historię powiązań, a przy notatce o instytucji jej powiązania - i sekcja zmienia się razem z kolejną notatką, więc na telefonie nie trzeba przełączać się do tabeli.",
     fixes: ["g29Mn5m5y6EKQegAviQn"],
   },

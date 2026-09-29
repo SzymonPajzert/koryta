@@ -10,9 +10,13 @@
 import * as logger from "firebase-functions/logger";
 import * as functions from "firebase-functions";
 import axios from "axios";
-import * as cheerio from "cheerio";
 import { v1 } from "@google-cloud/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { readPage } from "./pageMeta";
+import { isHtml } from "../../shared/pageEncoding";
+
+/** The most of a page `getPageMeta` will download: 5 MB. */
+const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
 interface incomingUrl {
   url: string;
@@ -35,7 +39,7 @@ export const getPageMeta = functions.https.onCall<incomingUrl>(
     }
 
     try {
-      const response = await axios.get(url, {
+      const response = await axios.get<Uint8Array>(url, {
         // Ustawienie User-Agent może pomóc w uniknięciu blokowania przez niektóre serwery
         headers: {
           "User-Agent":
@@ -43,16 +47,34 @@ export const getPageMeta = functions.https.onCall<incomingUrl>(
         },
         // Ustawienie timeoutu, aby uniknąć zbyt długiego oczekiwania
         timeout: 10000, // 10 sekund
+        // The body as bytes, for `readPage` to decode in the charset the page
+        // is written in. Left to itself axios reads every body as UTF-8, and a
+        // page in ISO-8859-2 had each Polish letter of its title stored as
+        // U+FFFD.
+        responseType: "arraybuffer",
+        // A page is well under this; what is over it is a download - a scan
+        // of a register, a video - that there is no title in to read.
+        maxContentLength: MAX_PAGE_BYTES,
       });
 
-      const html = response.data;
-      const $ = cheerio.load(html);
-      const title = $("title").first().text().trim();
+      const header = response.headers["content-type"];
+      const contentType = typeof header === "string" ? header : undefined;
+      // A PDF - 32 of the stored articles are one - has no <title> to read,
+      // and decoding it as text would only log it as a page in a charset it
+      // does not declare.
+      if (!isHtml(contentType)) {
+        return { title: "" };
+      }
+      const page = readPage(response.data, contentType);
+      if (page.encodingSource === "guess") {
+        functions.logger.info(
+          `Read ${url} as ${page.encoding}, which it does not declare`,
+        );
+      }
+      const title = page.title;
 
       let meta: { ldJson?: string } | undefined = undefined;
-      const ldJsonScript = $('script[type="application/ld+json"]')
-        .first()
-        .html();
+      const ldJsonScript = page.ldJson;
       if (ldJsonScript) {
         try {
           JSON.parse(ldJsonScript); // Verify it's valid JSON
