@@ -3,6 +3,8 @@ import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import {
   baseNodeFields,
+  createRevisionTransaction,
+  withoutInternalFields,
   proposalId,
   sameStoredValue,
   sanitizeFirestoreData,
@@ -16,7 +18,21 @@ import {
   type ProposableNodeType,
 } from "~~/shared/api";
 
-export default defineEventHandler(async (event) => {
+export type RevisionCreated = {
+  /** The revision this wrote - or, for a restatement, the one already
+   * waiting. */
+  id: string;
+  node_id: string;
+  /** The proposal was already on the table, so nothing new was filed and `id`
+   * is the one waiting. */
+  duplicate: boolean;
+  /** Written approved and put on the page, rather than left for a reviewer.
+   * Only ever true where the caller asked with `apply` and holds the admin
+   * claim. */
+  applied: boolean;
+};
+
+export default defineEventHandler(async (event): Promise<RevisionCreated> => {
   const rawBody = await readBody(event);
   const node_id =
     typeof rawBody.node_id === "string" ? rawBody.node_id : undefined;
@@ -33,11 +49,20 @@ export default defineEventHandler(async (event) => {
     : db.collection("nodes").doc(node_id);
   const timestamp = Timestamp.now();
 
+  // An admin asking for their edit to go live - see `apply` below. Known
+  // before anything is read, because that path needs the whole stored
+  // document and not only the layering base, and one read serves both.
+  const wantsApply =
+    rawBody.apply === true && !isNewNode && user.admin === true;
+  const storedSnapshot = wantsApply ? await nodeRef.get() : undefined;
+
   // Fetch the existing node to use as a base layer so that the revision
   // contains a complete snapshot (type, wikipedia, rejestrIo, etc.).
   const baseFields: Record<string, unknown> = isNewNode
     ? { type: proposableType(rawBody) }
-    : await baseNodeFields(nodeRef);
+    : storedSnapshot
+      ? withoutInternalFields(storedSnapshot.data() ?? {})
+      : await baseNodeFields(nodeRef);
 
   // Which fields are on offer depends on what is being edited: a place takes a
   // KRS number and an ownership answer, a person a party and its source links,
@@ -107,14 +132,88 @@ export default defineEventHandler(async (event) => {
   // "Zaproponuj" pressed after changing nothing - or after changing something
   // back - files a revision that says exactly what the page already says, and
   // a reviewer only finds that out by opening it.
+  //
+  // An empty string counts as no value: the form sends every field it shows,
+  // so a „Treść” left empty on a page that never had one arrived as
+  // `content: ""` and read as a change - and for an admin applying it, wrote an
+  // approved revision that changed nothing a reader could see.
   if (
     !isNewNode &&
-    sameStoredValue(mergedData, sanitizeFirestoreData(baseFields))
+    sameStoredValue(
+      withoutEmptyStrings(mergedData),
+      withoutEmptyStrings(sanitizeFirestoreData(baseFields)),
+    )
   ) {
     throw createError({
       statusCode: 400,
       message: "Ta propozycja niczego nie zmienia - wpis już to zawiera.",
     });
+  }
+
+  // An admin's edit is its own review, which is how `/api/edges/update` already
+  // settles a correction to a relation. Filed as a proposal, it only sent them
+  // to /admin/rewizje to approve their own words - and a topic, whose page
+  // offered no way to edit it at all, got its description corrected in the
+  // database by hand instead. So an admin who asks, with `apply`, has the
+  // revision written approved and the page rewritten from it in one commit.
+  //
+  // Asked for rather than read off the claim: every other page that opens the
+  // propose dialog tells its reader the change will be reviewed, and it is up
+  // to each page to say otherwise. Anybody without the claim who sends the
+  // flag gets exactly what they would have got without it - a proposal. Never
+  // for a new entry, whose review is its publication, nor for a removal, which
+  // takes the page away and is decided in the queue.
+  const apply = wantsApply && !removal;
+  if (apply && storedSnapshot) {
+    // The whole document rather than the layering base above: what a node
+    // owns instead of states - its counters, its votes, whether it is live -
+    // has to be written back around the revision, see `nodeOwnedFields`.
+    const snapshot = storedSnapshot;
+    // And only a page that is there, as /api/edges/update insists for a
+    // relation. Written approved, an id nothing stores would become a page
+    // nobody reviewed, and a removed one would be rewritten under its
+    // tombstone.
+    if (!snapshot.exists) {
+      throw createError({
+        statusCode: 404,
+        message: `Nie ma wpisu o id: ${nodeRef.id}`,
+      });
+    }
+    const stored = snapshot.data() ?? {};
+    if (stored.deleted === true) {
+      throw createError({
+        statusCode: 409,
+        message: "Ten wpis został usunięty i nie da się go już zmienić.",
+      });
+    }
+    const batch = db.batch();
+    const { revisionRef } = createRevisionTransaction(
+      db,
+      batch,
+      user,
+      nodeRef,
+      mergedData,
+      // `published` carried, not decided, as in `/api/edges/update`: rewording
+      // a live page must not take it off the site, nor rewording a draft
+      // publish it.
+      { stored, approve: true, published: stored.published === true },
+    );
+    await batch.commit();
+
+    // The clear every editor write path makes, so that whatever replaces it
+    // there replaces it here too. As it stands it removes nothing - unstorage's
+    // `clear(base)` only visits mounts below `base`, and the cache is mounted
+    // above `nitro:handlers` - so a logged out reader is served the cached
+    // answer until it expires. The admin sees the change at once either way:
+    // a signed in reader asks with `?latest=true`, which reads through.
+    await useStorage("cache").clear("nitro:handlers");
+
+    return {
+      id: revisionRef.id,
+      node_id: nodeRef.id,
+      duplicate: false,
+      applied: true,
+    };
   }
 
   // A proposal is addressed by what it proposes, the way the pipeline's are -
@@ -134,7 +233,12 @@ export default defineEventHandler(async (event) => {
     // Idempotent rather than an error: what the caller is asking for is on the
     // table already, and handing back its id is what lets the page link them
     // to the proposal they had forgotten making.
-    return { id: restated.id, node_id: nodeRef.id, duplicate: true };
+    return {
+      id: restated.id,
+      node_id: nodeRef.id,
+      duplicate: true,
+      applied: false,
+    };
   }
 
   // Already decided, so that record stays where it is and the restatement gets
@@ -178,7 +282,12 @@ export default defineEventHandler(async (event) => {
   }
   await batch.commit();
 
-  return { id: revisionRef.id, node_id: nodeRef.id, duplicate: false };
+  return {
+    id: revisionRef.id,
+    node_id: nodeRef.id,
+    duplicate: false,
+    applied: false,
+  };
 });
 
 /** The kind of node a proposal is for, out of the kinds anyone may propose.
@@ -195,4 +304,15 @@ function proposableType(source: { type?: unknown }): ProposableNodeType {
   return proposableNodeTypes.includes(type as ProposableNodeType)
     ? (type as ProposableNodeType)
     : "person";
+}
+
+/** A document's top-level fields without the empty strings, for comparing what
+ * a form sent against what is stored: an empty field and an absent one say the
+ * same thing to a reader. */
+function withoutEmptyStrings(
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== ""),
+  );
 }

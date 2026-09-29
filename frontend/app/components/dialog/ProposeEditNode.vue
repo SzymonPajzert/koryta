@@ -41,11 +41,16 @@
       <v-card>
         <v-card-title>{{ title }}</v-card-title>
         <v-card-text>
+          <!-- Said before the fields, as in the relation dialog: whether the
+               change is live on saving or waits for a reviewer is what decides
+               how carefully somebody types it. -->
           <p class="mb-4">
             {{
               isCreate
                 ? "Zaproponuj nowy wpis. Wystarczy imię i nazwisko, pozostałe pola są opcjonalne. Wpis będzie musiał zostać zatwierdzony."
-                : "Zaproponuj nowe dane dla tego wpisu. Zmiany będą musiały zostać zatwierdzone."
+                : applies
+                  ? "Zmiana wchodzi od razu - zatwierdzasz ją sam/a. Poprzednia wersja zostaje w historii zmian."
+                  : "Zaproponuj nowe dane dla tego wpisu. Zmiany będą musiały zostać zatwierdzone."
             }}
           </p>
           <v-form ref="form" @submit.prevent="submit">
@@ -185,7 +190,7 @@
           <v-spacer />
           <v-btn variant="text" @click="dialog = false">Anuluj</v-btn>
           <v-btn color="primary" :loading="loading" @click="submit">
-            Zaproponuj
+            {{ applies ? "Zapisz zmianę" : "Zaproponuj" }}
           </v-btn>
         </v-card-actions>
       </v-card></v-dialog
@@ -211,6 +216,7 @@ import {
   isKnownCategory,
 } from "~~/shared/companyCategories";
 import { isValidNip, isValidRegon } from "~~/shared/identifiers";
+import type { RevisionCreated } from "~~/server/api/revisions/create.post";
 
 const props = defineProps<{
   /** Omitted when proposing a brand new node instead of an edit. */
@@ -223,14 +229,21 @@ const props = defineProps<{
   /** Hides the built in activator, for callers that open the dialog via `open()`. */
   hideActivator?: boolean;
   skipRedirect?: boolean;
+  /** Whether this reader's edit goes live on saving instead of waiting for a
+   * reviewer - an admin's, on a page that offers it. `/api/revisions/create`
+   * decides either way, honouring `apply` for an admin only, so this is what
+   * the dialog promises rather than what it grants. A host that sets it
+   * refetches on `submitted`: an applied edit changes the page, and there is
+   * no proposal to redirect to. */
+  canApply?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "success"): void;
   /** `duplicate` when the endpoint recognised this as a restatement of a
    * proposal already waiting, and handed back that one instead of filing a
-   * second copy. */
-  (e: "submitted", id: string, duplicate?: boolean): void;
+   * second copy. `applied` when it went live instead of to review. */
+  (e: "submitted", id: string, duplicate?: boolean, applied?: boolean): void;
   (e: "created", id: string): void;
 }>();
 
@@ -238,6 +251,10 @@ const isCreate = computed(() => !props.entity);
 const type = computed<NodeType>(
   () => props.entity?.type ?? props.createType ?? "person",
 );
+/** An edit that is live on saving. Never a new entry: that is reviewed by
+ * being published, whoever proposes it. */
+const applies = computed(() => !isCreate.value && props.canApply === true);
+
 const createTitles: Record<string, string> = {
   person: "Zaproponuj dodanie osoby",
   place: "Zaproponuj dodanie instytucji",
@@ -245,11 +262,14 @@ const createTitles: Record<string, string> = {
   topic: "Zaproponuj nowy temat",
 };
 
-const title = computed(() =>
-  isCreate.value
-    ? (createTitles[type.value] ?? "Zaproponuj dodanie wpisu")
-    : "Zaproponuj zmianę",
-);
+const title = computed(() => {
+  if (isCreate.value) {
+    return createTitles[type.value] ?? "Zaproponuj dodanie wpisu";
+  }
+  // Not „Zaproponuj”: nothing is being put to anybody.
+  if (applies.value) return "Edytuj wpis";
+  return "Zaproponuj zmianę";
+});
 
 const dialog = ref(false);
 const loginDialog = ref(false);
@@ -415,26 +435,36 @@ async function submit() {
       body.description = editData.description;
     }
 
-    const response = await authRequest<{
-      id: string;
-      node_id: string;
-      duplicate?: boolean;
-    }>("/api/revisions/create", {
-      method: "POST",
-      body,
-    });
+    if (applies.value) {
+      body.apply = true;
+    }
+
+    const response = await authRequest<RevisionCreated>(
+      "/api/revisions/create",
+      {
+        method: "POST",
+        body,
+      },
+    );
     dialog.value = false;
     emit("success");
 
     if (response.id) {
-      emit("submitted", response.id, response.duplicate === true);
+      emit(
+        "submitted",
+        response.id,
+        response.duplicate === true,
+        response.applied === true,
+      );
       if (isCreate.value && response.node_id) {
         emit("created", response.node_id);
       }
 
       // When skipRedirect is set, the parent handles showing the revision
-      // (e.g., the tabela side panel shows the link inline)
-      if (!props.skipRedirect) {
+      // (e.g., the tabela side panel shows the link inline). An applied edit
+      // has nothing to preview either: `?revisionId=` renders a page as a
+      // proposal would leave it, and this one already does.
+      if (!props.skipRedirect && response.applied !== true) {
         // A newly created node lives under its own url, an edit stays in place
         const path =
           isCreate.value && response.node_id

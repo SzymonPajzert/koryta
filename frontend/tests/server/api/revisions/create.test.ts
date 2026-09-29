@@ -1,5 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { baseNodeFields } from "../../../../server/utils/revisions";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  baseNodeFields,
+  withoutInternalFields,
+} from "../../../../server/utils/revisions";
+import { getUser } from "../../../../server/utils/auth";
 import handler from "../../../../server/api/revisions/create.post";
 
 const mockSet = vi.fn();
@@ -528,6 +532,301 @@ describe("api/revisions/create, proposing a removal", () => {
   });
 });
 
+describe("api/revisions/create, an admin's own edit", () => {
+  /** The topic from the report, as stored: live, approved, with counters and
+   * votes of its own that no revision carries. */
+  const bielsko = () => ({
+    type: "topic",
+    name: "Bielsko Biała",
+    content: "",
+    description: "Przykłady koryciarstwa w Bielsko-Białej od lipca 2026 roku",
+    published: true,
+    revision_id: "revisions/before",
+    stats: { nodeGroupSize: 3, isApproved: true },
+    votes: { interesting: 2 },
+  });
+
+  const corrected = {
+    node_id: "bb",
+    name: "Bielsko-Biała",
+    content: "",
+    description: "Przykłady koryciarstwa w Bielsku-Białej od lipca 2026 roku",
+  };
+
+  const mockClear = vi.fn();
+
+  /** Reads of `nodes/bb`, however they were made. */
+  const nodeReads = vi.fn();
+
+  /** `bb` is stored as `stored`; nothing else exists yet, which is what a
+   * proposal's deterministic id finds on its first filing. The proposal path
+   * reads the node through `baseNodeFields`, the admin path directly. */
+  function given(stored: Record<string, unknown>) {
+    vi.mocked(baseNodeFields).mockImplementation(async () => {
+      nodeReads();
+      return withoutInternalFields(stored);
+    });
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      // `createRevisionTransaction` asks which collection its target is in.
+      parent: { id: "nodes" },
+      get: () => {
+        if (id === "bb") nodeReads();
+        return Promise.resolve(
+          id === "bb"
+            ? { exists: true, id, data: () => stored }
+            : { exists: false },
+        );
+      },
+    }));
+  }
+
+  const asAdmin = () =>
+    vi
+      .mocked(getUser)
+      .mockResolvedValueOnce({ uid: "admin-uid", admin: true } as never);
+
+  /** The node document the handler wrote, when it wrote one. */
+  const nodeWrite = () =>
+    mockSet.mock.calls.find(([ref]) => ref.id === "bb")?.[1];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("useStorage", () => ({ clear: mockClear }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    // Back to what the other blocks expect of it.
+    vi.mocked(baseNodeFields).mockResolvedValue({});
+  });
+
+  it("puts an admin's edit on the page at once, when asked", async () => {
+    // The report's lead was corrected in the database by hand, because no
+    // page could do it - and filed as a proposal, an admin's correction only
+    // waits in /admin/rewizje for the same admin to approve it.
+    given(bielsko());
+    asAdmin();
+    mockReadBody.mockResolvedValue({ ...corrected, apply: true });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(result).toEqual({
+      id: "generated-id",
+      node_id: "bb",
+      duplicate: false,
+      applied: true,
+    });
+    expect(writtenRevision()).toMatchObject({
+      node_id: "bb",
+      status: "approved",
+      update_user: "admin-uid",
+      review_user: "admin-uid",
+      update_automatic: false,
+      data: {
+        type: "topic",
+        name: "Bielsko-Biała",
+        description:
+          "Przykłady koryciarstwa w Bielsku-Białej od lipca 2026 roku",
+      },
+    });
+    // The page says it now, and keeps everything it owns rather than states.
+    expect(nodeWrite()).toMatchObject({
+      name: "Bielsko-Biała",
+      description: "Przykłady koryciarstwa w Bielsku-Białej od lipca 2026 roku",
+      published: true,
+      stats: { nodeGroupSize: 3, isApproved: true },
+      votes: { interesting: 2 },
+    });
+    expect(nodeWrite().revision_id).toMatchObject({ id: "generated-id" });
+    expect(mockCommit).toHaveBeenCalledTimes(1);
+    expect(mockClear).toHaveBeenCalledWith("nitro:handlers");
+    // One read serves both the layering base and the fields the node owns.
+    expect(nodeReads).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not take an empty field for a change", async () => {
+    // The form sends every field it shows, so a page that never had a
+    // `content` gets `content: ""` back from a save that touched nothing -
+    // which, applied, was an approved revision changing nothing anybody sees.
+    const { content: _content, ...withoutContent } = bielsko();
+    given(withoutContent);
+    asAdmin();
+    mockReadBody.mockResolvedValue({
+      node_id: "bb",
+      name: "Bielsko Biała",
+      content: "",
+      description: "Przykłady koryciarstwa w Bielsko-Białej od lipca 2026 roku",
+      apply: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("still takes emptying a field that had something in it", async () => {
+    given(bielsko());
+    asAdmin();
+    mockReadBody.mockResolvedValue({
+      node_id: "bb",
+      name: "Bielsko Biała",
+      content: "",
+      description: "",
+      apply: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ applied: true });
+    expect(nodeWrite()).toMatchObject({ description: "" });
+  });
+
+  it("keeps a draft a draft", async () => {
+    // Rewording a topic nobody has published yet is not publishing it.
+    given({ ...bielsko(), published: false, revision_id: undefined });
+    asAdmin();
+    mockReadBody.mockResolvedValue({ ...corrected, apply: true });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(nodeWrite()).toMatchObject({
+      description: "Przykłady koryciarstwa w Bielsku-Białej od lipca 2026 roku",
+      published: false,
+    });
+  });
+
+  it("files anybody else's as a proposal, whatever they ask for", async () => {
+    given(bielsko());
+    mockReadBody.mockResolvedValue({ ...corrected, apply: true });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ duplicate: false, applied: false });
+    expect(writtenRevision().status).toBe("pending");
+    expect(nodeWrite()).toBeUndefined();
+    expect(mockClear).not.toHaveBeenCalled();
+  });
+
+  it("leaves an admin's proposal a proposal when they do not ask", async () => {
+    // Every other page that opens the dialog promises its reader a review,
+    // admins included, and it is for those pages to change that.
+    given(bielsko());
+    asAdmin();
+    mockReadBody.mockResolvedValue(corrected);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ applied: false });
+    expect(writtenRevision().status).toBe("pending");
+    expect(nodeWrite()).toBeUndefined();
+  });
+
+  it("never takes a page down on the spot", async () => {
+    // A removal is decided in the queue, even an admin's.
+    given(bielsko());
+    asAdmin();
+    mockReadBody.mockResolvedValue({
+      node_id: "bb",
+      deleted: true,
+      delete_reason: "Duplikat",
+      apply: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ applied: false });
+    expect(writtenRevision()).toMatchObject({
+      status: "pending",
+      data: { deleted: true, delete_reason: "Duplikat" },
+    });
+    expect(nodeWrite()).toBeUndefined();
+  });
+
+  it("never puts a new entry live", async () => {
+    // A new entry is reviewed by being published, so there is nothing for the
+    // claim to let it skip.
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      get: () => Promise.resolve({ exists: false }),
+    }));
+    asAdmin();
+    mockReadBody.mockResolvedValue({
+      type: "topic",
+      name: "Afera powodziowa",
+      apply: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ applied: false });
+    expect(writtenRevision().status).toBe("pending");
+    expect(writtenNode()).toMatchObject({ published: false });
+  });
+
+  it("still turns down an edit that changes nothing", async () => {
+    given(bielsko());
+    asAdmin();
+    mockReadBody.mockResolvedValue({
+      node_id: "bb",
+      name: "Bielsko Biała",
+      content: "",
+      description: "Przykłady koryciarstwa w Bielsko-Białej od lipca 2026 roku",
+      apply: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("does not make a page out of an id nothing stores", async () => {
+    // Written approved, it would be a new entry nobody reviewed.
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      parent: { id: "nodes" },
+      get: () => Promise.resolve({ exists: false, data: () => undefined }),
+    }));
+    asAdmin();
+    mockReadBody.mockResolvedValue({
+      node_id: "nikt",
+      name: "Temat, którego nie ma",
+      apply: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("does not rewrite a page that has been removed", async () => {
+    // A merged-away duplicate is removed too, and its readers are sent on to
+    // the page it was merged into - the tombstone is not the page to edit.
+    given({ ...bielsko(), deleted: true, merged_into: "survivor" });
+    asAdmin();
+    mockReadBody.mockResolvedValue({ ...corrected, apply: true });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+});
+
 describe("api/revisions/create, the same change twice", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -590,6 +889,7 @@ describe("api/revisions/create, the same change twice", () => {
       id: "proposal_tramwaje_test-user-id_abcdefghij",
       node_id: "tramwaje",
       duplicate: true,
+      applied: false,
     });
     expect(mockCommit).not.toHaveBeenCalled();
   });
