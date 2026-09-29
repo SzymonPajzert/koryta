@@ -7,8 +7,8 @@ import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
 
 /** /admin/zadania, the owner's task list: the lists with one task open, the
- * map of what waits on what with one task picked, and the map with every
- * chain folded.
+ * map of what waits on what with one task picked, the map with every chain
+ * folded, and the map focused on one task.
  *
  * The tasks live in their own database, which the seed leaves empty, so the
  * list is answered from ./fixtures/opsTasks.ts. The page is rendered in the
@@ -93,4 +93,37 @@ test("zadania-mapa-zwiniete", ZADANIA, async ({ page }, testInfo) => {
   });
 
   await expectFitsThePhone(page, testInfo);
+});
+
+test("zadania-mapa-skupienie", ZADANIA, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await logIn(page, USERS.admin, "/admin/zadania?widok=mapa");
+
+  const upload = page.locator('[data-task-node="upload-nazw-spolek"]');
+  await expect(upload).toBeVisible({ timeout: 30_000 });
+  // Focused on the upload: it and what it waits on - the deploy, and the
+  // merge the deploy waits on. Not the other chain, not the loose tasks.
+  await upload.locator("[data-task-focus]").click();
+  await expect(page).toHaveURL(/skupienie=upload-nazw-spolek/);
+  await expect(page.locator("[data-task-node]")).toHaveCount(3);
+  await expect(page.locator(".task-edge")).toHaveCount(2);
+  await expect(upload.locator("[data-task-focus]")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("zadania-mapa-skupienie.png", {
+    fullPage: true,
+  });
+
+  await expectFitsThePhone(page, testInfo);
+
+  // And the whole map back.
+  await page.locator("[data-task-unfocus]").click();
+  await expect(page).not.toHaveURL(/skupienie=/);
+  await expect(page.locator(".task-edge")).toHaveCount(4);
+  await expect(
+    page.locator('[data-task-node="decyzja-widocznosc"]'),
+  ).toBeVisible();
 });
