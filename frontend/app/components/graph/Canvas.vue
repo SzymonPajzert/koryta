@@ -97,6 +97,8 @@ import type {
 import { useSimulationStore } from "@/stores/simulation";
 import type { Node as GraphNode, NodeStats, Edge } from "~~/shared/graph/model";
 import { edgeStyle } from "~~/shared/graph/edges";
+import { GRAPH_INK } from "~~/shared/graph/nodes";
+import { role } from "~~/shared/colors";
 import { personLabel, wrapLabel } from "~/utils/graphLabel";
 import { entityGlyph } from "~/utils/entityIcon";
 import { graphNodeDestination, readableInk } from "~/utils/graphNode";
@@ -128,7 +130,7 @@ const emit = defineEmits<{
 
 /** Sage, a shade darker than the theme's primary, which is too pale to read as
  * a ring against a white canvas. */
-const FOCUS_RING = "#5f7a54";
+const FOCUS_RING = role.focusRing;
 
 /** How wide a node is drawn, by how far it is from the page's subject.
  *
@@ -300,7 +302,8 @@ const configs = reactive(
         // A hairline of the page background, so two nodes the layout pushed
         // together still read as two.
         strokeWidth: (node) => (node.depth === 0 ? 2 : 1.5),
-        strokeColor: (node) => (node.depth === 0 ? FOCUS_RING : "#ffffff"),
+        strokeColor: (node) =>
+          node.depth === 0 ? FOCUS_RING : GRAPH_INK.paper,
       },
       hover: {
         ...nodeShape(6),
@@ -328,14 +331,14 @@ const configs = reactive(
         // what makes any one of them legible.
         visible: (node) => !dimmed(node.id),
         fontSize: (node) => RING_LABEL[ringOf(node)] ?? 11.5,
-        color: "#1b1b1b",
+        color: GRAPH_INK.label,
         // Labels are drawn over whatever the layout put underneath them, and a
         // dense graph puts a lot there: without a plate behind the text, a name
         // crossing an edge or another name is unreadable rather than merely
         // crowded.
         background: {
           visible: true,
-          color: "rgba(255, 255, 255, 0.86)",
+          color: GRAPH_INK.labelPlate,
           padding: { vertical: 1, horizontal: 3 },
           borderRadius: 3,
         },
@@ -363,7 +366,8 @@ const configs = reactive(
     },
     edge: {
       normal: {
-        color: (edge) => (dimmedEdge(edge) ? "#dde2e5" : edgeStyle(edge).color),
+        color: (edge) =>
+          dimmedEdge(edge) ? GRAPH_INK.dimmedEdge : edgeStyle(edge).color,
         width: (edge) => edgeStyle(edge).width,
         dasharray: (edge) => edgeStyle(edge).dasharray ?? 0,
       },
@@ -388,7 +392,7 @@ const configs = reactive(
       },
       label: {
         fontSize: 11,
-        color: "#000",
+        color: GRAPH_INK.edgeLabel,
       },
     },
 

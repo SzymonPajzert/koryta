@@ -35,7 +35,7 @@
               class="bar-segment"
               :style="{
                 width: company.unaffiliatedPercentage + '%',
-                backgroundColor: '#e0e0e0',
+                backgroundColor: partyRemainder.none,
               }"
               title="Brak partii / Nieznana"
             />
@@ -68,6 +68,7 @@
 import { computed } from "vue";
 import type { PersonRich } from "~~/shared/model";
 import { partyColors } from "~~/shared/misc";
+import { partyRemainder } from "~/utils/chartTheme";
 
 const { entities: places } = useEntities("place");
 
@@ -176,7 +177,7 @@ const companies = computed(() => {
           name,
           count,
           percentage: (normalizedCount / company.totalPeople) * 100,
-          color: partyColors[name] || "#999999",
+          color: partyColors[name] || partyRemainder.unknownParty,
         };
       })
       .sort((a, b) => b.percentage - a.percentage);
@@ -213,7 +214,7 @@ const companies = computed(() => {
 <style scoped>
 .bar-chart-container {
   height: 24px;
-  background-color: #f5f5f5;
+  background-color: v-bind("partyRemainder.track");
   border-radius: 4px;
   display: flex;
   overflow: hidden;
