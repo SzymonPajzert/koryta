@@ -38,7 +38,7 @@ useSeoMeta({
 <style>
 .content-styles {
   font-family: Roboto, sans-serif;
-  color: rgba(0, 0, 0, 0.87);
+  color: rgba(var(--v-theme-on-surface), 0.87);
   line-height: 1.6;
 }
 
@@ -111,7 +111,7 @@ useSeoMeta({
 }
 
 .content-styles a:not(h1 a):not(h2 a):not(h3 a):not(h4 a):not(h5 a):not(h6 a) {
-  color: #a8c79f;
+  color: rgb(var(--v-theme-primary));
   text-decoration: none;
   font-weight: 500;
   transition: all 0.2s ease;
