@@ -132,6 +132,11 @@ export default defineEventHandler(async (event) => {
         doc.personNodeId = matched.id;
         doc.personNodeName = matched.name;
       }
+      // The same answer as a field a query can ask for, since Firestore
+      // cannot filter on `personNodeId` being absent. The search reads the
+      // facts that matched nobody for the names in them - see
+      // server/utils/factNames.ts.
+      doc.personMatched = Boolean(matched);
       // Add optional fact-type-specific fields
       if (fact.person !== undefined) doc.person = fact.person;
       if (fact.organization !== undefined) doc.organization = fact.organization;
