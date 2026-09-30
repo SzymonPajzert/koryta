@@ -878,6 +878,12 @@ export interface ExtractionFact {
    * built from. Stored beside the id so a card can link without a read; the
    * fact's own `person` is how the article spelled it, and the two differ. */
   personNodeName?: string;
+  /** Whether `personNodeId` was set, kept as a field of its own because
+   * Firestore cannot filter on one being absent: the facts that matched nobody
+   * are the ones the search reads names out of (`server/utils/factNames.ts`).
+   * Written at ingest; `scripts/migrate/backfill-person-matched.ts` gives it to
+   * the facts ingested before it existed. */
+  personMatched?: boolean;
   tag: string; // extraction model tag (e.g. "v1_qwen3-32b")
   createdAt?: string;
   uploaderUid?: string;
