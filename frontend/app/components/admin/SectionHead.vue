@@ -48,7 +48,7 @@ defineProps<{
   font-weight: 700;
   line-height: 1.5rem;
   background: rgb(var(--v-theme-ink-strong));
-  color: #fff;
+  color: rgb(var(--v-theme-on-ink-strong));
 }
 
 .asec__actions {

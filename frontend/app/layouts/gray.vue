@@ -2,7 +2,7 @@
   <NuxtLayout name="default">
     <!-- Pages using this layout must also set fullWidth: true in their page
          meta, otherwise the default layout constrains and pads the grey band. -->
-    <div class="w-100 bg-grey-lighten-4">
+    <div class="w-100 bg-backdrop">
       <v-container fluid class="pa-4 py-md-10">
         <!-- A page's `maxWidth` caps the sheet, as the default layout caps the
              page with it: how wide the content may be. The default layout

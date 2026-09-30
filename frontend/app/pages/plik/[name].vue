@@ -47,7 +47,7 @@ definePageMeta({
 <style>
 .content-styles {
   font-family: Roboto, sans-serif;
-  color: rgba(0, 0, 0, 0.87);
+  color: rgba(var(--v-theme-on-surface), 0.87);
   line-height: 1.6;
 }
 
