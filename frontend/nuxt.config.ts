@@ -224,18 +224,10 @@ export default defineNuxtConfig({
         defaultTheme: "light",
         themes: {
           light: {
-            colors: {
-              primary: "#a8c79f",
-              secondary: "#fad3d0",
-              // The ink and pale-surface tokens. primary and secondary are
-              // pale fills - as text on a white card primary measures 1.85:1,
-              // so `text-primary` was never readable - and shared/colors.ts
-              // holds the dark companions that are, each measured against
-              // every surface it can land on. Spread rather than listed so
-              // the hexes have one home and the test that checks their
-              // contrast is checking what Vuetify actually paints.
-              ...themeColors,
-            },
+            // Every colour, the brand fills included, comes from
+            // shared/colors.ts, so the hexes have one home and the tests that
+            // check their contrast are checking what Vuetify actually paints.
+            colors: themeColors,
           },
         },
       },
