@@ -1,5 +1,6 @@
 import type { Node as GraphNode } from "~~/shared/graph/model";
 import type { NodeType } from "~~/shared/model";
+import { GRAPH_INK } from "~~/shared/graph/nodes";
 
 /** Which page a node on the canvas leads to.
  *
@@ -34,7 +35,7 @@ export function graphNodeDestination(
  */
 export function readableInk(color: string | undefined): string {
   const match = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(color ?? "");
-  if (!match) return "#ffffff";
+  if (!match) return GRAPH_INK.paper;
   let hex = match[1]!;
   if (hex.length === 3) {
     hex = hex
@@ -48,5 +49,5 @@ export function readableInk(color: string | undefined): string {
   };
   const luminance =
     0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
-  return luminance > 0.45 ? "#1b1b1b" : "#ffffff";
+  return luminance > 0.45 ? GRAPH_INK.label : GRAPH_INK.paper;
 }

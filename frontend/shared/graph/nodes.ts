@@ -17,6 +17,22 @@ export const NODE_COLORS = {
   region: "#3f7d58",
 } as const;
 
+/** The canvas's own inks, as against what a node or an edge means: the same on
+ * every graph, whatever is drawn on it. */
+export const GRAPH_INK = {
+  /** A name under a node, and the dark glyph on a light node. */
+  label: "#1b1b1b",
+  /** The plate behind a name, so that it reads over the edges it crosses. */
+  labelPlate: "rgba(255, 255, 255, 0.86)",
+  /** The page's white: the hairline round a node, and the light glyph on a
+   * dark one. */
+  paper: "#ffffff",
+  /** Every edge but the pointed-at node's, while one is pointed at. */
+  dimmedEdge: "#dde2e5",
+  /** An edge's caption. */
+  edgeLabel: "#000000",
+} as const;
+
 export function personNode(
   person: Person,
   partyColors: Record<string, string>,

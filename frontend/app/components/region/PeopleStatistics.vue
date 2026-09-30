@@ -199,6 +199,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { parties as allParties, partyColors } from "~~/shared/misc";
+import { partyRemainder } from "~/utils/chartTheme";
 import {
   useRegionStatistics,
   type Person,
@@ -293,9 +294,10 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
 
   const colors = labels.map((label) => {
     if (partyColors[label]) return partyColors[label];
-    if (label === "Zatrudnieni (inne / brak partii)") return "#888888";
-    if (label === "Niezatrudnieni / Reszta") return "#e0e0e0";
-    return "#cccccc";
+    if (label === "Zatrudnieni (inne / brak partii)")
+      return partyRemainder.otherParty;
+    if (label === "Niezatrudnieni / Reszta") return partyRemainder.none;
+    return partyRemainder.fallback;
   });
 
   return {

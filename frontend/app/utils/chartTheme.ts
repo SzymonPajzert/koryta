@@ -72,6 +72,34 @@ export const diverging = {
   neutral: "#f0efec",
 } as const;
 
+/** The home page's map of Poland. A district shades from white towards `heat`
+ * with its share of the busiest district's people, `empty` is a district
+ * nobody on the site works in, `hover` the one under the pointer. */
+export const choropleth = {
+  heat: "#cc0000",
+  empty: "#fff6d5",
+  hover: "#e0e0e0",
+  district: "#333333",
+  voivodeship: "#000000",
+} as const;
+
+/** The greys two older party charts - the people bars on a region's page and
+ * the company bars on /eksploruj - give the people no party colour accounts
+ * for. They predate `ink` above and keep their own values, so that moving them
+ * here changes nothing on either chart. */
+export const partyRemainder = {
+  /** Employed, but in no party the site has a colour for. */
+  otherParty: "#888888",
+  /** Not employed, on the region chart; no party, on the company bars. */
+  none: "#e0e0e0",
+  /** A region chart label nothing above names. */
+  fallback: "#cccccc",
+  /** A party with no colour of its own, on the company bars. */
+  unknownParty: "#999999",
+  /** The empty track behind the company bars. */
+  track: "#f5f5f5",
+} as const;
+
 /** One colour per interaction kind, fixed for the whole site so a kind keeps
  * its colour between the timeline, the tiles and the leaderboard. Colour
  * follows the kind, never its current rank. */

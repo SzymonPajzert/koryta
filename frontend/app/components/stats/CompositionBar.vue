@@ -27,7 +27,7 @@
             <span
               v-if="segment.value / total > 0.09"
               class="composition-bar__value"
-              :style="{ color: segment.labelColor ?? '#ffffff' }"
+              :style="{ color: segment.labelColor ?? ink.surface }"
             >
               {{ formatCount(segment.value) }}
             </span>
@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { NuxtLink } from "#components";
-import { formatCount, formatPercent } from "~/utils/chartTheme";
+import { formatCount, formatPercent, ink } from "~/utils/chartTheme";
 
 export type CompositionSegment = {
   key: string;
