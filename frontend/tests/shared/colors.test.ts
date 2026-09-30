@@ -9,6 +9,8 @@ import {
   meetsAaText,
   readableInkOn,
   relativeLuminance,
+  role,
+  statusFill,
   surface,
   themeColors,
 } from "../../shared/colors";
@@ -180,6 +182,57 @@ describe("brand fills", () => {
   });
 });
 
+describe("roles", () => {
+  it("names each part with the colour it was already painted", () => {
+    // The roles only gave the parts names; nothing on the site changed with
+    // them. A palette change is the moment these move.
+    expect(role.band).toBe(brand.primary);
+    expect(role.cta).toBe(ink.info);
+    expect(role.ctaPale).toBe(surface.info);
+    expect(role.background).toBe(surface.white);
+  });
+
+  it("records the ratios quoted beside them", () => {
+    expect({
+      blackOnBand: ratio("#000000", role.band),
+      whiteOnCta: ratio(surface.white, role.cta),
+      paleOnCta: ratio(role.ctaPale, role.cta),
+      whiteOnCtaDeep: ratio(surface.white, role.ctaDeep),
+    }).toEqual({
+      blackOnBand: 11.33,
+      whiteOnCta: 6.35,
+      paleOnCta: 5.17,
+      whiteOnCtaDeep: 7.8,
+    });
+  });
+
+  it("keeps the call to action's bar segments visible on their strip", () => {
+    // Fills, not text: 3:1 is what a segment needs to be seen against the
+    // groove it sits in.
+    expect(ratio(role.ctaPublished, role.ctaDeep)).toBeGreaterThanOrEqual(
+      AA_LARGE_TEXT,
+    );
+    expect(ratio(role.ctaReviewed, role.ctaDeep)).toBeGreaterThanOrEqual(
+      AA_LARGE_TEXT,
+    );
+  });
+
+  it("hands every role to Vuetify under its kebab-cased name", () => {
+    const kebab = (name: string) =>
+      name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    for (const [name, colour] of Object.entries(role)) {
+      if (name === "focusRing") continue; // drawn on a canvas, not by Vuetify
+      expect({
+        name,
+        colour: themeColors[kebab(name) as keyof typeof themeColors],
+      }).toEqual({
+        name,
+        colour,
+      });
+    }
+  });
+});
+
 describe("readableInkOn", () => {
   it("puts white on a dark party colour", () => {
     // Konfederacja's #102440 with the old fixed dark label measured 1.29:1.
@@ -255,11 +308,26 @@ describe("themeColors", () => {
     }
   });
 
-  it("does not redeclare the brand colours", () => {
-    // primary/secondary stay declared in nuxt.config.ts. Two sources for one
-    // colour is how a theme drifts.
-    expect(Object.keys(themeColors)).not.toContain("primary");
-    expect(Object.keys(themeColors)).not.toContain("secondary");
+  it("carries the brand fills, so the Vuetify config needs none of its own", () => {
+    // They used to be typed into nuxt.config.ts beside the copy in `brand` -
+    // two sources for one colour, which is how a theme drifts. The config now
+    // hands over `themeColors` whole; colourLiterals.test.ts keeps it so.
+    expect(themeColors.primary).toBe(brand.primary);
+    expect(themeColors.secondary).toBe(brand.secondary);
+  });
+
+  it("declares Vuetify's status fills at the values Vuetify ships", () => {
+    // Inherited silently until they were declared here; declaring them must
+    // not have repainted a single alert.
+    expect(statusFill).toEqual({
+      success: "#4caf50",
+      info: "#2196f3",
+      warning: "#fb8c00",
+      error: "#b00020",
+    });
+    for (const [name, colour] of Object.entries(statusFill)) {
+      expect(themeColors[name as keyof typeof themeColors]).toBe(colour);
+    }
   });
 
   it("gives every on-* entry AA on the surface it names", () => {
