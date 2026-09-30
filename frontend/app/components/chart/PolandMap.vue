@@ -4,6 +4,8 @@ import powiatyPaths from "@/assets/poland_powiaty.json";
 import wojewodztwaPaths from "@/assets/poland_voivodeships.json";
 import type { Powiat } from "@/composables/entity/regions";
 import { authFetch } from "@/composables/auth";
+import { choropleth } from "~/utils/chartTheme";
+import { hexToRgb } from "~~/shared/colors";
 
 const hoveredDistrict = ref<Powiat | null>(null);
 
@@ -67,18 +69,20 @@ const click = (region: Powiat) => {
   emit("click", region);
 };
 
+const HEAT = hexToRgb(choropleth.heat);
+
 const getFillColor = (item: Powiat) => {
   if (hoveredDistrict.value?.teryt === item.teryt) {
-    return "#e0e0e0";
+    return choropleth.hover;
   }
   if (!item.people || item.people === 0) {
-    return "#fff6d5";
+    return choropleth.empty;
   }
 
   const ratio = item.people / powiaty.value.maxPeople;
   const opacity = 0.2 + 0.8 * ratio;
 
-  return `rgba(204, 0, 0, ${opacity})`;
+  return `rgba(${HEAT.join(", ")}, ${opacity})`;
 };
 </script>
 
@@ -96,7 +100,7 @@ const getFillColor = (item: Powiat) => {
           :key="item.teryt"
           :d="item.d"
           :fill="getFillColor(item)"
-          stroke="#333333"
+          :stroke="choropleth.district"
           stroke-width="1"
           class="transition-colors duration-200 cursor-pointer hover:brightness-95"
           @mouseenter="hover(item)"
@@ -116,7 +120,7 @@ const getFillColor = (item: Powiat) => {
           :key="'woj-' + (item.teryt || index)"
           :d="item.d"
           fill="none"
-          stroke="#000000"
+          :stroke="choropleth.voivodeship"
           stroke-width="2"
         />
       </g>

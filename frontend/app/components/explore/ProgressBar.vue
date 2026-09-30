@@ -235,6 +235,7 @@ import type { Query } from "~~/server/api/nodes/index.get";
 import type { ProgressStats } from "~~/server/api/stats/progress.get";
 import { useMyContributions } from "~/composables/stats/useMyContributions";
 import { polishCountingGenitive, polishNumber } from "~/composables/polish";
+import { categorical, ink, status } from "~/utils/chartTheme";
 
 const props = defineProps<{
   /** The table query; only its structural filters are used, the breakdown by
@@ -302,22 +303,22 @@ const segments = computed(() => {
       key: "approved",
       label: "Opublikowane",
       value: stats.value.approved,
-      color: "#0ca30c",
-      labelColor: "#ffffff",
+      color: status.good,
+      labelColor: ink.surface,
     },
     {
       key: "reviewed",
       label: "Sprawdzone, nieopublikowane",
       value: stats.value.reviewed,
-      color: "#2a78d6",
-      labelColor: "#ffffff",
+      color: categorical[0],
+      labelColor: ink.surface,
     },
     {
       key: "toCheck",
       label: "Do sprawdzenia",
       value: stats.value.toCheck,
-      color: "#e2e0dc",
-      labelColor: "#52514e",
+      color: ink.track,
+      labelColor: ink.secondary,
     },
   ].filter((s) => s.value > 0);
 });
