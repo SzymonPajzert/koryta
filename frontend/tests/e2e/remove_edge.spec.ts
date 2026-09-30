@@ -301,9 +301,12 @@ test.describe("Removing a relation", () => {
     // The table is filtered to this spec's company, so its rows are the two
     // people it employs. Clicking a name is what draws the drawer - by text
     // rather than by role, because the name is a `NuxtLink` with no `to` and an
-    // anchor without an href is not a link to the accessibility tree.
+    // anchor without an href is not a link to the accessibility tree. The name
+    // itself and not its cell: in the centred 1200px column the middle of the
+    // cell is the „otwórz wyszukiwarki” icon beside a short name, which opens
+    // a dozen search tabs and a drawer with no relations in it.
     const row = page
-      .locator(".name-cell")
+      .locator(".name-cell a.person-name")
       .filter({ hasText: `Usuwany Pracownik ${stamp}` })
       .first();
     await expect(row).toBeVisible({ timeout: 30_000 });
