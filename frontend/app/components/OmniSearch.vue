@@ -40,6 +40,7 @@
           v-bind="itemProps"
           :title="undefined"
           :prepend-icon="item.raw.icon"
+          :data-testid="item.raw.testid"
         >
           <v-list-item-title class="text-wrap">
             {{ item.raw.title }}
@@ -48,6 +49,15 @@
             {{ item.raw.subtitle }}
           </v-list-item-subtitle>
         </v-list-item>
+      </template>
+      <!-- The heading over the names found only in the article facts. An
+           entry of type `subheader` in `items`, so Vuetify's own filter drops
+           it together with the last row under it rather than leaving a heading
+           over nothing. -->
+      <template #subheader="{ props: heading }">
+        <v-list-subheader :data-testid="heading.testid">
+          {{ heading.title }}
+        </v-list-subheader>
       </template>
       <template #no-data>
         <v-list-item v-if="!search">
@@ -96,12 +106,21 @@ import {
   mdiFormatListBulletedType,
   mdiMagnify,
   mdiMapMarkerRadiusOutline,
+  mdiTextSearchVariant,
 } from "@mdi/js";
 import { parties } from "~~/shared/misc";
 import { nameMatchesTokens, searchTokens } from "~~/shared/search";
+import { normalizePersonName } from "~~/shared/names";
+import { factNameKey, type FactNameHit } from "~~/shared/factNames";
 import { generateEntityUrl } from "~/composables/slugs";
-import { omniSearchTarget } from "~/composables/omniSearch";
+import {
+  factNameCaption,
+  factNamePick,
+  factNamesBesides,
+  omniSearchTarget,
+} from "~/composables/omniSearch";
 import { trackGoal } from "~/composables/analytics";
+import { authRequest, useAuthState } from "~/composables/auth";
 import {
   resultBucket,
   searchPickKind,
@@ -207,12 +226,21 @@ const onNodeCreated = () => {
  * The substring test stays as the first branch: the parties and „Lista
  * wszystkich osób” are client-side entries that never go near the server, and
  * they were being narrowed by exactly that rule.
+ *
+ * The last branch folds diacritics, which is how /api/search/facts matches:
+ * „zmudzka” finds Żmudzka there, and without it the hit would be thrown away
+ * here on arrival.
  */
 const matchesTypedWords = (title: string, query: string) => {
   const typed = query.trim();
   if (!typed) return true;
   if (title.toLowerCase().includes(typed.toLowerCase())) return true;
-  return nameMatchesTokens(title, searchTokens(typed));
+  if (nameMatchesTokens(title, searchTokens(typed))) return true;
+  // Folded to nothing - punctuation alone - is not a query every row answers.
+  const folded = searchTokens(normalizePersonName(typed));
+  return (
+    folded.length > 0 && nameMatchesTokens(normalizePersonName(title), folded)
+  );
 };
 
 type ListItem = {
@@ -227,17 +255,70 @@ type ListItem = {
   analyticsKind: SearchPickKind;
   path?: string;
   query?: Record<string, string>;
+  hash?: string;
+  /** `subheader` for a group's heading, which Vuetify draws as a heading
+   * rather than as a row to pick; absent for everything else. */
+  type?: "subheader";
+  testid?: string;
 };
+
+const { user } = useAuthState();
+
+/** Names that only the article facts carry, for a signed in reader - see
+ * /api/search/facts. Empty for everybody else, who is not shown the facts. */
+const factNames = ref<FactNameHit[]>([]);
+
+/** The query the latest request for `factNames` was for, so that a slow
+ * answer to an earlier one - or to one since cleared - does not replace it. */
+let factNamesQuery = "";
 
 watch(debouncedSearch, async (val) => {
   if (!val) {
     setTimeout(() => (nodeGroupPicked.value = null), 300);
+    // Forgotten as well as emptied, so an answer still on its way for what
+    // was typed before cannot put its names back under an empty box.
+    factNamesQuery = "";
+    factNames.value = [];
   } else {
     if (val !== nodeGroupPicked.value?.title) {
+      // Not awaited: the people are what most searches are for, and they
+      // should not wait for the names in the facts.
+      void searchFactNames(val);
       await performSearch(val);
     }
   }
 });
+
+// Signing out takes the facts away, and the names found in them with them.
+// Signing in - or the session being restored a moment after the page loads,
+// which is when somebody quick is already typing - brings them for what is in
+// the box.
+watch(user, (current) => {
+  if (!current) {
+    factNamesQuery = "";
+    factNames.value = [];
+  } else if (debouncedSearch.value) void searchFactNames(debouncedSearch.value);
+});
+
+async function searchFactNames(searchTerm: string) {
+  factNamesQuery = searchTerm;
+  if (!user.value) {
+    factNames.value = [];
+    return;
+  }
+  try {
+    const response = await authRequest<{ names: FactNameHit[] }>(
+      "/api/search/facts",
+      { method: "GET", query: { q: searchTerm } },
+    );
+    if (factNamesQuery === searchTerm) factNames.value = response.names;
+  } catch (error) {
+    // The people search above does not depend on it; a failure here leaves
+    // the menu as it was before the facts had anything to add.
+    console.error("Fact name search failed", error);
+    if (factNamesQuery === searchTerm) factNames.value = [];
+  }
+}
 
 const searchData = ref<
   Array<{
@@ -330,6 +411,40 @@ const items = computed<ListItem[]>(() => {
         ...routing,
       });
     });
+  }
+
+  // Under the people, and under a heading of their own: these have no page,
+  // and a row that looks like the ones above would promise one. Each says
+  // whose facts name them, which is also where picking it goes.
+  const mentioned = factNamesBesides(
+    factNames.value,
+    searchData.value
+      .filter((item) => item.type === "person")
+      .map((item) => item.name),
+  );
+  if (mentioned.length > 0) {
+    result.push({
+      id: "fact-names-heading",
+      type: "subheader",
+      title: "Wspomniani w faktach",
+      testid: "omni-search-fact-names",
+      // A heading is never picked; these two only satisfy the row's type.
+      icon: mdiTextSearchVariant,
+      analyticsKind: "fact",
+    });
+    for (const hit of mentioned) {
+      result.push({
+        id: `fact-name-${factNameKey(hit.name)}`,
+        title: hit.name,
+        subtitle: factNameCaption(hit),
+        // The icon „Fakty z artykułów” carries on a person's page, which is
+        // where most of these lead.
+        icon: mdiTextSearchVariant,
+        analyticsKind: "fact",
+        testid: "omni-search-fact-name",
+        ...factNamePick(hit),
+      });
+    }
   }
 
   return result;

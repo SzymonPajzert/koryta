@@ -71,8 +71,8 @@ test.describe("Explore query parameters", () => {
    * return a full table.
    *
    * Signed in for the same reason the sort exists: the facts themselves are
-   * behind the login, and the seeded person the extraction fixture names is
-   * the only one with any. */
+   * behind the login, and of the seeded people the extraction fixture names,
+   * she has the most. */
   test("sorts on the linked factsCount key", async ({ page }) => {
     test.setTimeout(120000);
     await logIn(
@@ -85,7 +85,8 @@ test.describe("Explore query parameters", () => {
     await expect(
       firstRow.locator(".text-primary.cursor-pointer").first(),
     ).toBeVisible({ timeout: 60000 });
-    // Two facts in scripts/extractions.json name her and nobody else has one.
+    // Two facts in scripts/extractions.json name her, and nobody else has more
+    // than one.
     await expect(firstRow).toContainText("Anna Nowak");
     await expect(firstRow).toContainText("2 fakty");
     // „Fakty” has no column of its own, so the „Oceny” header is where the

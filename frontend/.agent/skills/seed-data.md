@@ -20,6 +20,11 @@ Seed data is loaded from JSON files in the `scripts/` directory:
 - `scripts/nodes.json`: Initial nodes (People, Companies, etc.)
 - `scripts/edges.json`: Initial relationships
 - `scripts/revisions.json`: Revision history
+- `scripts/extractions.json`: Facts from articles. Anna Nowak (3) has two,
+  Krzysztof Wójcik (5) one - a relation naming Żaneta Wspomniana, who has no
+  node. Two match nobody: one names Jan Kowalski, who has a node, the other
+  Łukasz Nieprzypisany, who has not. The two without a node are what
+  `/api/search/facts` finds (`tests/e2e/omni_search_facts.spec.ts`).
 
 ## Running Seeds manually
 

@@ -282,13 +282,16 @@ export type HelpTask = (typeof HELP_TASKS)[number];
  *
  * Wider than the node types the endpoint returns: „Lista wszystkich osób” and
  * the parties are entries OmniSearch builds itself and never asks the server
- * about. */
+ * about. `fact` is a name found only in the article facts
+ * (/api/search/facts) - somebody with no page, which is the whole point of
+ * counting it apart from `person`. */
 export const SEARCH_PICK_KINDS = [
   "person",
   "place",
   "region",
   "party",
   "list",
+  "fact",
 ] as const;
 export type SearchPickKind = (typeof SEARCH_PICK_KINDS)[number];
 

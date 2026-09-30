@@ -8,12 +8,17 @@
        `px-2` arrives with the shell, and this section had been missing it: its
        heading started 8px left of the three above it on a person's page, which
        nobody had spotted while every section carried its own copy of the
-       heading rules. -->
+       heading rules.
+
+       The id is what the search box opens this page at (`#fakty`), for a name
+       these facts carry - see `factNamePick`. -->
   <PageSection
     v-if="total > 0"
+    :id="FACT_SECTION_ID"
+    ref="section"
     title="Fakty z artykułów"
     :icon="mdiTextSearchVariant"
-    class="mt-4"
+    class="mt-4 person-facts"
     data-testid="person-extractions"
   >
     <!-- How the facts are judged, behind the heading's „(i)” as the notes'
@@ -50,6 +55,26 @@
 
     <!-- Where a new page starts reading from - see `goToPage`. -->
     <div ref="pageTop" class="facts-page-top" />
+
+    <!-- Opened from the search box on a name that has no page of its own:
+         only the facts that name them, and a way back to all of them. Said
+         in words, because the chips below count what is left and would
+         otherwise read as everything this person has. -->
+    <div
+      v-if="user && mention"
+      class="d-flex align-center flex-wrap ga-2 mb-2"
+      data-testid="person-extractions-mention"
+    >
+      <span class="text-body-2">Tylko fakty, w których pada nazwisko</span>
+      <v-chip
+        size="small"
+        closable
+        close-label="Pokaż wszystkie fakty"
+        @click:close="clearMention"
+      >
+        {{ mention.name }}
+      </v-chip>
+    </div>
 
     <!-- One chip per type this person actually has, with how many of each.
          Only when there is more than one: a filter with a single option
@@ -175,12 +200,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  ref,
+  watch,
+  type ComponentPublicInstance,
+} from "vue";
 import { useDisplay } from "vuetify";
 import { mdiTextSearchVariant } from "@mdi/js";
 import { useExtractions } from "~/composables/extractions";
 import { polishCounting } from "~/composables/polish";
 import { useAuthState } from "~/composables/auth";
+import { FACT_NAME_QUERY, FACT_SECTION_ID } from "~/composables/omniSearch";
+import { factNameKey, factNamesPerson } from "~~/shared/factNames";
 import {
   FACT_TYPE_COLORS,
   FACT_TYPE_LABELS,
@@ -262,11 +295,48 @@ const facts = computed<ExtractionFact[]>(() =>
 );
 const hidden = computed(() => Math.max(0, total.value - facts.value.length));
 
+const router = useRouter();
+
+/** The name the search box sent this page for (`?fakty=Piotr Ferster`):
+ * somebody these facts name who has no page of their own - see
+ * /api/search/facts.
+ *
+ * Null when the facts name nobody by it, a stale link included: filtering on
+ * it then would leave an empty section under a heading that says there are
+ * facts, so the page shows all of them instead. */
+const mention = computed(() => {
+  const raw = route.query[FACT_NAME_QUERY];
+  const name = typeof raw === "string" ? raw.trim() : "";
+  const key = factNameKey(name);
+  if (!key || !facts.value.some((fact) => factNamesPerson(fact, key))) {
+    return null;
+  }
+  return { name, key };
+});
+
+/** What the rest of the section works on: the facts naming `mention`, or all
+ * of them. `groups` is made of these, so the chips and the lines describe the
+ * list on screen. */
+const named = computed<ExtractionFact[]>(() => {
+  const current = mention.value;
+  return current
+    ? facts.value.filter((fact) => factNamesPerson(fact, current.key))
+    : facts.value;
+});
+
+/** Back to every fact, on the same page and at the same place in it. */
+function clearMention() {
+  const query = Object.fromEntries(
+    Object.entries(route.query).filter(([key]) => key !== FACT_NAME_QUERY),
+  );
+  router.replace({ query, hash: route.hash });
+}
+
 /** Every claim the facts make, with the articles each was read from - see
  * `groupFacts`. What the reader is shown, so it is what everything below
  * counts, sorts and pages: two articles saying one thing are one line, one
  * chip count and one place on a page. */
-const groups = computed<FactGroup[]>(() => groupFacts(facts.value));
+const groups = computed<FactGroup[]>(() => groupFacts(named.value));
 
 /** „all" rather than undefined, so the chip row can be `mandatory` and the
  * unfiltered state is a chip you can see rather than the absence of one. */
@@ -398,6 +468,29 @@ async function goToPage(next: number) {
   }
 }
 
+const section = ref<ComponentPublicInstance | null>(null);
+
+// Opened for a name, the page goes to the facts that name them: the section
+// sits under the relations and the graph, a long way down a busy person's
+// page, and the reader came for this. Once the facts have arrived - they are
+// fetched after sign-in resolves, often after the page has loaded - and again
+// for another name picked from the search box while on this page, but not on
+// a refetch of the same one, which would drag a reader back up mid-scroll.
+// Facts that arrive before the page has loaded are the `#fakty` in the url's
+// to bring into view: the router scrolls a new page to its top as it finishes,
+// over anything done here first.
+watch(
+  () => mention.value?.key,
+  async (key) => {
+    if (!key) return;
+    page.value = 1;
+    await nextTick();
+    (section.value?.$el as HTMLElement | undefined)?.scrollIntoView({
+      block: "start",
+    });
+  },
+);
+
 /** The blocks the lines on this page are laid out in.
  *
  * Two framed lists rather than one with a heading inside it, so each half is
@@ -451,8 +544,10 @@ const buckets = computed(() =>
 }
 
 /* Clear of the sticky app bar when a new page scrolls to it - the allowance
-   the help page gives its headings. */
-.facts-page-top {
+   the help page gives its headings. The section's own is for being opened at
+   from the search box, heading and all; the router reads it off `#fakty` too. */
+.facts-page-top,
+.person-facts {
   scroll-margin-top: 96px;
 }
 

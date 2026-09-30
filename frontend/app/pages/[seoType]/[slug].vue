@@ -16,6 +16,7 @@ import {
   parseEntityUrlSlug,
   slugPrefixToNodeType,
   generateNodeUrl,
+  healedLocation,
   seoTypes,
   SLUG_REDIRECT_CODE,
   type SeoType,
@@ -42,10 +43,11 @@ if (status.value === "success" && data.value?.node?.name) {
   // guard the undefined fell through to navigateTo and redirected the visitor to
   // the site root, which is where every article link in the sitemap used to land.
   if (expectedUrl && route.path !== expectedUrl) {
+    const healed = healedLocation(expectedUrl, route);
     if (import.meta.server) {
-      await navigateTo(expectedUrl, { redirectCode: SLUG_REDIRECT_CODE });
+      await navigateTo(healed, { redirectCode: SLUG_REDIRECT_CODE });
     } else {
-      await navigateTo(expectedUrl, { replace: true });
+      await navigateTo(healed, { replace: true });
     }
   }
 } else if (status.value === "error" && import.meta.server) {

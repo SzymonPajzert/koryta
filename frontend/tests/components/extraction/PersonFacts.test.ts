@@ -1,11 +1,35 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ref } from "vue";
-import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
+import { reactive, ref } from "vue";
+import {
+  mockNuxtImport,
+  mountSuspended,
+  registerEndpoint,
+} from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
-import { clearNuxtData } from "#app";
+import { clearNuxtData, useRouter } from "#app";
 import { getQuery } from "h3";
 import PersonFacts from "../../../app/components/extraction/PersonFacts.vue";
 import type { ExtractionFact, Note } from "../../../shared/model";
+
+/** The page's url, which `?fakty=` rides on. Stood in for rather than
+ * navigated to: pushing the test app's router to a person's url let the
+ * sections mounted by earlier tests refetch under the same key and abort this
+ * one's request, so the section came up empty only when the whole file ran.
+ *
+ * Hoisted because `mockNuxtImport` is, and made reactive below once `vue` is
+ * imported, so that taking the name off is seen by the component reading it -
+ * `useRoute` is only called at mount, by which time it hands out the proxy. */
+const page = vi.hoisted(() => ({
+  route: {
+    path: "/osoba/piotr-gajda-abc123",
+    fullPath: "/osoba/piotr-gajda-abc123",
+    query: {} as Record<string, string>,
+    hash: "",
+  },
+}));
+mockNuxtImport("useRoute", () => () => page.route);
+page.route = reactive(page.route);
+const route = page.route;
 
 const currentUser = ref<{ uid: string } | null>({ uid: "reader" });
 vi.mock("~/composables/auth", async (importOriginal) => ({
@@ -85,6 +109,7 @@ describe("ExtractionPersonFacts", () => {
     response = { facts: [], total: 0 };
     lastQuery = {};
     currentUser.value = { uid: "reader" };
+    route.query = {};
   });
 
   it("asks for one person's facts by node id, not by name", async () => {
@@ -702,6 +727,135 @@ describe("ExtractionPersonFacts", () => {
         section.find("[data-testid='person-extractions-open']").exists(),
       ).toBe(true);
       expect(lines(section)).toHaveLength(3);
+    });
+  });
+
+  describe("opened for a name from the search box", () => {
+    // „Dobrze jakby dało się również wyszukiwać po osobach z tych faktów” -
+    // the search box finds the other person in a relation now, and sends the
+    // reader here with the name, to the facts that name them.
+
+    /** Piotr Gajda's facts: a party, and two relations of which one names
+     * Piotr Ferster. */
+    const gajdaFacts = () => [
+      fact(),
+      fact({
+        id: "fact-brother",
+        fact_type: "personal_relation",
+        person: undefined,
+        party: undefined,
+        subject: "Piotr Gajda",
+        object: "Piotr Ferster",
+        relation: "brat",
+      }),
+      fact({
+        id: "fact-wife",
+        fact_type: "personal_relation",
+        person: undefined,
+        party: undefined,
+        subject: "Piotr Gajda",
+        object: "Anna Gajda",
+        relation: "żona",
+      }),
+    ];
+
+    async function mountFor(name: string) {
+      route.query = { fakty: name };
+      return await mount();
+    }
+
+    // The spies below stand in for the app's own router and element methods,
+    // which the tests after these must get back.
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("shows only the facts that name them, and says so", async () => {
+      response = { facts: gajdaFacts(), total: 3 };
+      const section = await mountFor("Piotr Ferster");
+
+      expect(lines(section)).toHaveLength(1);
+      expect(section.text()).toContain("brat");
+      const mention = section.find(
+        "[data-testid='person-extractions-mention']",
+      );
+      expect(mention.text()).toContain("Tylko fakty, w których pada nazwisko");
+      expect(mention.text()).toContain("Piotr Ferster");
+    });
+
+    it("finds them however the name is spelled", async () => {
+      response = { facts: gajdaFacts(), total: 3 };
+      const section = await mountFor("FERSTER PIOTR");
+
+      expect(lines(section)).toHaveLength(1);
+    });
+
+    it("counts the kinds over what it shows", async () => {
+      // Both of what is left are relations, so a row of chips saying
+      // „Wszystkie (3)” over one line would be describing another list.
+      response = { facts: gajdaFacts(), total: 3 };
+      const section = await mountFor("Piotr Ferster");
+
+      expect(
+        section.find("[data-testid='person-extractions-filter']").exists(),
+      ).toBe(false);
+    });
+
+    it("brings the section into view, heading and all", async () => {
+      const scroll = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+      response = { facts: gajdaFacts(), total: 3 };
+      const section = await mountFor("Piotr Ferster");
+
+      // The section itself, which `#fakty` names too: the router scrolls there
+      // when the facts beat the page's own load, and this when they do not.
+      const root = section.find("[data-testid='person-extractions']");
+      expect(root.attributes("id")).toBe("fakty");
+      expect(scroll.mock.contexts).toContain(root.element);
+    });
+
+    it("shows every fact when none of them names the person any more", async () => {
+      // A stale link, say: an empty section under a heading promising facts
+      // would read as the page failing to load.
+      response = { facts: gajdaFacts(), total: 3 };
+      const section = await mountFor("Jan Nikt");
+
+      expect(lines(section)).toHaveLength(3);
+      expect(
+        section.find("[data-testid='person-extractions-mention']").exists(),
+      ).toBe(false);
+    });
+
+    it("gives every fact back when the name is taken off", async () => {
+      // The router is the app's own, so the url it would go to is recorded
+      // and handed to the stand-in above rather than navigated to.
+      const replace = vi
+        .spyOn(useRouter(), "replace")
+        .mockImplementation(async (to) => {
+          const query = (to as { query?: Record<string, string> }).query;
+          if (query) route.query = { ...query };
+        });
+      response = { facts: gajdaFacts(), total: 3 };
+      const section = await mountFor("Piotr Ferster");
+
+      await section
+        .find("[data-testid='person-extractions-mention'] .v-chip__close")
+        .trigger("click");
+      await flushPromises();
+
+      // Replaced rather than pushed: the back button should not step through
+      // a filter being taken off.
+      expect(replace).toHaveBeenCalledWith({ query: {}, hash: "" });
+      expect(lines(section)).toHaveLength(3);
+    });
+
+    it("says nothing about the name to a reader who is not signed in", async () => {
+      currentUser.value = null;
+      response = { facts: gajdaFacts(), total: 3 };
+      const section = await mountFor("Piotr Ferster");
+
+      expect(
+        section.find("[data-testid='person-extractions-mention']").exists(),
+      ).toBe(false);
     });
   });
 
