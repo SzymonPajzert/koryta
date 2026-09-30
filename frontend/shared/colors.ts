@@ -20,6 +20,15 @@
  * that only black reads on it: sage ink on it is 3.47:1, black 10.62:1. Text
  * on primary, on a party colour or on a chart series colour asks
  * `readableInkOn` instead.
+ *
+ * This is also the one place the site's colours are written down. nuxt.config
+ * hands `themeColors` to Vuetify whole, components ask for a token
+ * (`bg-cta`, `rgb(var(--v-theme-band))`) rather than a hex, and
+ * tests/shared/colourLiterals.test.ts fails on a hex anywhere else. Data has
+ * palettes of its own - charts in app/utils/chartTheme.ts, the relation graph
+ * in shared/graph, parties in shared/misc.ts - because a series colour answers
+ * a different question from a button's. Trying a new palette on the site is an
+ * edit to `brand`, `role` and the ink/surface ramps below, and nothing else.
  */
 
 /** An `#rgb` or `#rrggbb` colour. */
@@ -85,8 +94,9 @@ export const AA_TEXT = 4.5;
 export const AA_LARGE_TEXT = 3;
 
 /**
- * The brand. Fills only - see the module comment. Not to be repainted: these
- * two are what the site looks like.
+ * The brand. Fills only - see the module comment. Repainting either is a
+ * palette change, and tests/shared/colors.test.ts pins what black measures on
+ * both so that it is made on purpose.
  */
 export const brand = {
   /** Sage. Header bands, card accents, buttons. Black on it: 11.33:1. */
@@ -152,6 +162,75 @@ export const surface = {
 } as const;
 
 /**
+ * Vuetify's own status fills - `color="error"`, `type="info"`, `bg-success`.
+ * These are the values Vuetify ships and the site had been inheriting without
+ * saying so; declared here so they are one more line to change rather than a
+ * default nobody can see. Fills only, like `brand`: as text #fb8c00 is 2.37:1
+ * and #4caf50 2.78:1, which is what the `ink.*` ramp is for.
+ */
+export const statusFill = {
+  success: "#4caf50",
+  info: "#2196f3",
+  warning: "#fb8c00",
+  error: "#b00020",
+} as const;
+
+/**
+ * The parts of a page that carry the palette, named for what they do rather
+ * than for their hue, so that a new palette changes values here and no
+ * component has to be opened.
+ *
+ * Every value is the colour the part was already painted, so this table
+ * changes nothing on the site; it only gives each of them a name. `band` and
+ * `brand.primary` are the same sage today and are kept apart so that a
+ * palette can darken the buttons without darkening the hero band.
+ */
+export const role = {
+  /** The page itself, behind the cards. */
+  background: surface.white,
+  /** The page behind the cards on /o-nas and /pomoc (the `gray` layout). It
+   * was Vuetify's `grey-lighten-4`. */
+  backdrop: "#f5f5f5",
+  /** The home page's hero band and the footer. Black on it: 11.33:1 */
+  band: brand.primary,
+  /** The home call to action: the pane with the figures, and its button.
+   * White on it: 6.35:1 */
+  cta: ink.info,
+  /** The strip under the call to action's figures that the bar sits in, a
+   * shade darker than `cta`. White on it: 7.80:1 */
+  ctaDeep: "#1a5296",
+  /** The pale labels on the call to action's pane - „Sprawdziliśmy już”, the
+   * legend. On `cta`: 5.17:1 */
+  ctaPale: surface.info,
+  /** The bar in that strip: published is the pale end of the site's green,
+   * checked-but-unpublished the pale end of its blue, lightened until they
+   * hold 3:1 against `ctaDeep` (5.7:1 and 3.7:1). */
+  ctaPublished: "#bfe6b8",
+  ctaReviewed: "#8fb6ea",
+  /** What is left to check: a groove, laid at 42% over `ctaDeep`. */
+  ctaGroove: "#041634",
+  /** The ring round the subject of a relation graph - sage, a shade darker
+   * than `brand.primary`, which is too pale to read as a ring on white. */
+  focusRing: "#5f7a54",
+} as const;
+
+/** Colours that belong to somebody else and are used as theirs. */
+export const external = {
+  /** Zrzutka.pl's pink, on the buttons that send a reader to the fundraiser. */
+  zrzutka: "#e64164",
+} as const;
+
+/**
+ * The notification emails. Mail clients drop stylesheets, so these go inline
+ * as literals rather than as theme variables.
+ */
+export const email = {
+  text: "#1c1c1c",
+  rule: "#e0e0e0",
+  muted: "#666666",
+} as const;
+
+/**
  * `ink.strong` or white, whichever is legible on `background`.
  *
  * Party chips take their colour from the party, and that palette runs from
@@ -181,10 +260,31 @@ export function meetsAaText(fg: Hex, bg: Hex): boolean {
  * are declared rather than left to Vuetify's own black-or-white pick, so that
  * `bg-surface-sage` alone paints a pill in matching ink.
  *
- * nuxt.config.ts spreads this into the light theme. It deliberately does not
- * carry `primary`/`secondary`: those stay declared where they always were.
+ * nuxt.config.ts hands this to the light theme as it is, so it carries every
+ * colour Vuetify is given - the brand fills and Vuetify's status fills too,
+ * which used to be written into the config and inherited from Vuetify's
+ * defaults respectively. `on-cta` and `on-cta-deep` are declared for the same
+ * reason as the surfaces': the pane's white type is part of the design, not
+ * Vuetify's black-or-white guess.
  */
 export const themeColors = {
+  primary: brand.primary,
+  secondary: brand.secondary,
+  background: role.background,
+  success: statusFill.success,
+  info: statusFill.info,
+  warning: statusFill.warning,
+  error: statusFill.error,
+  backdrop: role.backdrop,
+  band: role.band,
+  cta: role.cta,
+  "on-cta": surface.white,
+  "cta-deep": role.ctaDeep,
+  "on-cta-deep": surface.white,
+  "cta-pale": role.ctaPale,
+  "cta-published": role.ctaPublished,
+  "cta-reviewed": role.ctaReviewed,
+  "cta-groove": role.ctaGroove,
   "ink-sage": ink.sage,
   "ink-success": ink.success,
   "ink-warning": ink.warning,

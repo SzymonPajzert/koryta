@@ -467,14 +467,9 @@ const EVERY_FILTER = {
   minVotes: 5,
 };
 
-/** Every colour a class on a chip can name. The two brand fills are added
- * back: Vuetify has them and `themeColors` deliberately does not, and they are
- * exactly what a chip must not be painting its label with. */
-const theme: Record<string, string> = {
-  ...themeColors,
-  primary: brand.primary,
-  secondary: brand.secondary,
-};
+/** Every colour a class on a chip can name - the two brand fills among them,
+ * which are exactly what a chip must not be painting its label with. */
+const theme: Record<string, string> = { ...themeColors };
 
 /** `rgb(7, 59, 118)` back to `#073b76`: an inline colour is read out of the
  * element, and both jsdom and happy-dom hand hex back as rgb. */
