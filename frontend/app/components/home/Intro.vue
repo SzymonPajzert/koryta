@@ -38,7 +38,7 @@
         <v-btn
           href="https://zrzutka.pl/rd7ssx/pay"
           target="_blank"
-          color="#E64164"
+          :color="external.zrzutka"
         >
           <v-img
             :width="30"
@@ -64,3 +64,7 @@
     </HomeCard>
   </v-col>
 </template>
+
+<script setup lang="ts">
+import { external } from "~~/shared/colors";
+</script>

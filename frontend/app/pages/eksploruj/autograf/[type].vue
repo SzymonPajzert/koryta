@@ -17,7 +17,7 @@
           <v-btn
             href="https://zrzutka.pl/rd7ssx/pay"
             target="_blank"
-            color="#E64164"
+            :color="external.zrzutka"
           >
             Zrzutka
             <v-img
@@ -108,6 +108,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { hiddenTargetCount } from "~/utils/hiddenTargets";
 import { useQueryFilters } from "~/composables/queryFilters";
+import { external } from "~~/shared/colors";
 import { parties } from "~~/shared/misc";
 import { regionFilterOptions } from "~~/shared/teryt";
 import type { Query } from "~~/server/api/nodes/index.get";

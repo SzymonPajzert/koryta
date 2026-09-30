@@ -10,6 +10,8 @@
  * `renderNotification`. Everything else is driven off those.
  */
 
+import { email } from "./colors";
+
 export const notificationKinds = [
   "revisionApproved",
   "revisionRejected",
@@ -156,11 +158,11 @@ export function renderNotification(
   ].join("\n\n");
 
   const html = [
-    '<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 15px; line-height: 1.5; color: #1c1c1c;">',
+    `<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 15px; line-height: 1.5; color: ${email.text};">`,
     ...lines.map((line) => `<p>${escapeHtml(line)}</p>`),
     ...(link ? [`<p><a href="${escapeHtml(link)}">Zobacz stronę</a></p>`] : []),
-    '<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">',
-    `<p style="font-size: 13px; color: #666;">Nie chcesz takich wiadomości? <a href="${escapeHtml(
+    `<hr style="border: none; border-top: 1px solid ${email.rule}; margin: 24px 0;">`,
+    `<p style="font-size: 13px; color: ${email.muted};">Nie chcesz takich wiadomości? <a href="${escapeHtml(
       settingsUrl,
     )}">Zmień ustawienia powiadomień</a>.</p>`,
     "</div>",

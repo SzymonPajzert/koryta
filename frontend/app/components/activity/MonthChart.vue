@@ -133,7 +133,7 @@ const options = computed(() => monthChartOptions(daily.value));
 .amc__pane {
   background: rgb(var(--v-theme-ink-info));
   border-radius: 9px 9px 0 0;
-  color: #ffffff;
+  color: rgb(var(--v-theme-on-ink-info));
   display: grid;
   gap: 4px 12px;
   grid-template-areas:
@@ -203,7 +203,7 @@ const options = computed(() => monthChartOptions(daily.value));
 .amc__link {
   align-items: center;
   align-self: start;
-  color: #ffffff;
+  color: rgb(var(--v-theme-on-ink-info));
   display: inline-flex;
   font-size: 0.875rem;
   font-weight: 500;
@@ -213,7 +213,7 @@ const options = computed(() => monthChartOptions(daily.value));
   margin: -12px 0;
   padding: 12px 0;
   text-decoration: underline;
-  text-decoration-color: rgba(255, 255, 255, 0.5);
+  text-decoration-color: rgba(var(--v-theme-on-ink-info), 0.5);
   text-underline-offset: 3px;
 }
 
@@ -225,7 +225,7 @@ const options = computed(() => monthChartOptions(daily.value));
 
 .amc__link:hover,
 .amc__link:focus-visible {
-  text-decoration-color: #ffffff;
+  text-decoration-color: rgb(var(--v-theme-on-ink-info));
 }
 
 .amc__plot {

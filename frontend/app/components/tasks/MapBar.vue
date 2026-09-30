@@ -182,7 +182,7 @@ const emit = defineEmits<{
 .task-bar__mark--goal {
   border-color: rgb(var(--v-theme-ink-strong));
   background: rgb(var(--v-theme-ink-strong));
-  color: #fff;
+  color: rgb(var(--v-theme-on-ink-strong));
   font-weight: 600;
 }
 

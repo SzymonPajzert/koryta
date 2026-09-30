@@ -1,7 +1,7 @@
 <template>
   <v-footer
     class="pt-6 pt-md-16 pb-0 d-flex flex-column"
-    :style="{ background: '#a8c79f' }"
+    :style="{ background: 'rgb(var(--v-theme-band))' }"
     border
   >
     <v-row max-width="1000" justify="center">
