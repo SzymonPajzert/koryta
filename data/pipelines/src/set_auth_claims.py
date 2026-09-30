@@ -43,7 +43,9 @@ def dict_diff(d1, d2):
     removed = d2_keys - d1_keys
     modified = {o: (d1[o], d2[o]) for o in shared_keys if d1[o] != d2[o]}
 
-    return f"Added: {added}\nRemoved: {removed}\nModified: {modified}"
+    return f"Added: {added}\nRemoved: {removed}\nModified: {modified}", len(
+        modified
+    ) + len(added) + len(removed) > 0
 
 
 ROLE_LEVELS = {
@@ -54,6 +56,11 @@ ROLE_LEVELS = {
     "9YY314GDLUauY92yNpjdgYL2ONr2": Level.ADMIN,
     "6tieFsnlz0g4kzT4nb5QFMBvTBx2": Level.ADMIN,
     "WpuDVVsjUpOVOoCbnCfzIve2xMh1": Level.ADMIN,
+    "BNsOBjwYW3eGgcnOnQYZoTPOGbA3": Level.ADMIN,
+    "rJNsODgkXuZ9di81GTcgPhc192o2": Level.ADMIN,
+    "ODZUN0WEZ9PLpVNO3uBq808D8Uh2": Level.ADMIN,
+    "xLrIMGV6ITbhGG2H1s2urN226tv1": Level.ADMIN,
+    "1U0540kyQpOWsqa5OItWyDC4vTf2": Level.DATASCIENCE,
 }
 
 # Administrators on trial. They hold `admin` like any other, plus `newAdmin`,
@@ -74,6 +81,10 @@ NEW_ADMINS = {
     "9YY314GDLUauY92yNpjdgYL2ONr2",
     "6tieFsnlz0g4kzT4nb5QFMBvTBx2",
     "WpuDVVsjUpOVOoCbnCfzIve2xMh1",
+    "BNsOBjwYW3eGgcnOnQYZoTPOGbA3",
+    "rJNsODgkXuZ9di81GTcgPhc192o2",
+    "ODZUN0WEZ9PLpVNO3uBq808D8Uh2",
+    "xLrIMGV6ITbhGG2H1s2urN226tv1",
 }
 
 # The site's owner. `owner` is what opens his task list, /admin/zadania, and
@@ -132,9 +143,13 @@ def main():
             f"{user.display_name} ({user.email}): current levels: {user.custom_claims}"
         )
         change_to = get_claims(uid, level)
+        diff, has_diff = dict_diff(change_to, user.custom_claims)
+        if not has_diff:
+            print("No change needed for this user. SKIPPING")
+            continue
         print(
             f"will set to {level}, \
-dict_diff is:\n{dict_diff(change_to, user.custom_claims)}"
+dict_diff is:\n{diff}"
         )
         # Print confirmation, wait for y, default N
         confirmation = input("Confirm? (y/N): ")
