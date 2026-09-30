@@ -39,7 +39,7 @@
       <div ref="actions" class="cta__actions">
         <v-btn
           :append-icon="mdiArrowRight"
-          color="ink-info"
+          color="cta"
           variant="flat"
           rounded="lg"
           height="44"
@@ -60,7 +60,7 @@
         </v-btn>
         <v-btn
           :append-icon="mdiChevronRight"
-          color="ink-info"
+          color="cta"
           variant="text"
           rounded="lg"
           height="44"
@@ -190,7 +190,7 @@ import { polishCountingGenitive, polishNumber } from "~/composables/polish";
  *
  * ## The layout
  *
- * A split card: the figures on a solid `ink-info` pane, the ask on white. It
+ * A split card: the figures on a solid `cta` pane, the ask on white. It
  * replaced a tinted card whose progress sat in a 260px column beside the copy -
  * a 12px label, a thin bar and a legend whose rows wrapped unevenly, centred
  * vertically so it lined up with nothing - over a paragraph of 12px small
@@ -329,15 +329,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* The pane is `ink-info`, and everything on it is measured against that:
-   white text is 6.3:1 and `surface-info` (the pale labels) 5.17:1. The band
+/* The pane is `cta`, and everything on it is measured against that: white
+   text is 6.3:1 and `cta-pale` (the pale labels) 5.17:1. The band
    under the figures is the same blue a shade darker (white on it 7.8:1),
    which is what makes the bar read as sitting in a groove rather than
    floating on the pane. */
 .cta {
-  --cta-pane: rgb(var(--v-theme-ink-info));
-  --cta-pane-deep: #1a5296;
-  --cta-pale: rgb(var(--v-theme-surface-info));
+  --cta-pane: rgb(var(--v-theme-cta));
+  --cta-pane-deep: rgb(var(--v-theme-cta-deep));
+  --cta-pale: rgb(var(--v-theme-cta-pale));
   --cta-pad-x: 20px;
   --cta-pad-y: 20px;
   --cta-pitch-x: 20px;
@@ -396,7 +396,7 @@ onMounted(() => {
 
 .cta__figures {
   background: var(--cta-pane);
-  color: #ffffff;
+  color: rgb(var(--v-theme-on-cta));
   grid-area: figures;
   padding: var(--cta-pad-y) var(--cta-pad-x) 20px;
 }
@@ -523,8 +523,8 @@ onMounted(() => {
 .cta__band {
   align-items: center;
   background: var(--cta-pane-deep);
-  border-top: 1px solid rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  border-top: 1px solid rgba(var(--v-theme-on-cta-deep), 0.16);
+  color: rgb(var(--v-theme-on-cta-deep));
   display: flex;
   gap: 12px;
   grid-area: band;
@@ -556,21 +556,21 @@ onMounted(() => {
    hold 3:1 against the darker band (5.7:1 and 3.7:1) - and what is left is a
    recessed groove. */
 .cta__seg--approved {
-  background: #bfe6b8;
+  background: rgb(var(--v-theme-cta-published));
 }
 
 .cta__seg--reviewed {
-  background: #8fb6ea;
+  background: rgb(var(--v-theme-cta-reviewed));
 }
 
 .cta__seg--toCheck {
-  background: rgba(4, 22, 52, 0.42);
+  background: rgba(var(--v-theme-cta-groove), 0.42);
 }
 
 /* On the pane the groove colour is almost the pane itself, so its swatch
    needs an outline to be seen at all. */
 .cta__swatch.cta__seg--toCheck {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-on-cta), 0.5);
 }
 
 .cta__percent {
@@ -588,7 +588,7 @@ onMounted(() => {
    icon disc sits on the heading's line rather than in the middle of the rail. */
 .cta__rail {
   background: var(--cta-pane);
-  color: #ffffff;
+  color: rgb(var(--v-theme-on-cta));
   grid-area: rail;
   height: 6px;
 }
@@ -606,7 +606,7 @@ onMounted(() => {
   }
 
   .cta__rail :deep(.v-icon) {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(var(--v-theme-on-cta), 0.14);
     border-radius: 50%;
     box-sizing: content-box;
     display: inline-flex;
@@ -760,7 +760,7 @@ onMounted(() => {
 }
 
 .cta__donate {
-  color: rgb(var(--v-theme-ink-info));
+  color: rgb(var(--v-theme-cta));
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;

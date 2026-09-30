@@ -220,7 +220,7 @@ const goalWord = computed(() =>
 
 .task-node--goal .task-node__head,
 .task-node--goal .task-node__title {
-  color: #fff;
+  color: rgb(var(--v-theme-on-ink-strong));
 }
 
 .task-node--goal .task-node__title {
@@ -327,7 +327,7 @@ const goalWord = computed(() =>
 .task-node--goal .task-node__fold:hover,
 .task-node--goal .task-node__focus:hover,
 .task-node--goal .task-node__focus--on {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(var(--v-theme-on-ink-strong), 0.2);
 }
 
 .task-node__title {
