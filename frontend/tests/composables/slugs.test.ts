@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateNodeUrl } from "../../app/composables/slugs";
+import { generateNodeUrl, healedLocation } from "../../app/composables/slugs";
 import type { Node } from "../../shared/model";
 
 /** A place node, with whatever identifiers the caller wants to give it. */
@@ -51,5 +51,29 @@ describe("generateNodeUrl", () => {
       name: "Adam Niedziałek",
     } as unknown as Node);
     expect(url).toBe("/osoba/adam-niedzialek-SVb31mmNOMmlOy1BsPhH");
+  });
+});
+
+describe("healedLocation", () => {
+  it("keeps the query and the hash a link came with", () => {
+    // The search box opens a person's page at the facts naming somebody,
+    // from the name the fact stored. Renamed since, the page heals the slug -
+    // and a bare path lost the filter and the section.
+    expect(
+      healedLocation("/osoba/rafal-trzaskowski-8rg6", {
+        query: { fakty: "Piotr Ferster" },
+        hash: "#fakty",
+      }),
+    ).toEqual({
+      path: "/osoba/rafal-trzaskowski-8rg6",
+      query: { fakty: "Piotr Ferster" },
+      hash: "#fakty",
+    });
+  });
+
+  it("is the bare path for a link that carried nothing", () => {
+    expect(
+      healedLocation("/osoba/jan-kowalski-1", { query: {}, hash: "" }),
+    ).toEqual({ path: "/osoba/jan-kowalski-1", query: {}, hash: "" });
   });
 });

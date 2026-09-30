@@ -50,12 +50,16 @@
     </div>
 
     <template v-else>
+      <!-- Open when the list is one article's: the search box sends a
+           reader here for the facts naming somebody with no page, and /zrodla
+           for what a capture found - neither came to click a card open. -->
       <ExtractionArticleGroup
         v-for="group in articleGroups"
         :key="group.url"
         :url="group.url"
         :domain="group.domain"
         :facts="group.facts"
+        :open="!!articleFilter"
       />
     </template>
   </v-container>

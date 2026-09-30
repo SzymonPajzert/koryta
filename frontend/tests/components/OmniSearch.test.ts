@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { registerEndpoint } from "@nuxt/test-utils/runtime";
 import OmniSearch from "../../app/components/OmniSearch.vue";
-import { defineComponent, h, Suspense, nextTick } from "vue";
+import { defineComponent, h, Suspense, nextTick, ref } from "vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
@@ -14,6 +14,18 @@ import { createRouter, createMemoryHistory } from "vue-router";
  * `$fetch`, which the `vi.stubGlobal` below never intercepts. */
 let searched: { id: string; name: string; type: string }[] = [];
 registerEndpoint("/api/search", () => searched);
+
+/** Who is signed in - nobody unless a test says so - and what
+ * /api/search/facts answers them. `authRequest` is what attaches the token, so
+ * it is the seam: a call to it at all is the thing a signed out reader must
+ * never cause. */
+const currentUser = ref<{ uid: string } | null>(null);
+const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
+vi.mock("~/composables/auth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/composables/auth")>()),
+  useAuthState: () => ({ user: currentUser }),
+  authRequest: mockAuthRequest,
+}));
 
 // The menu is a real overlay here, and Vuetify measures it on open.
 global.ResizeObserver = class {
@@ -70,6 +82,9 @@ describe("OmniSearch", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     searched = [];
+    currentUser.value = null;
+    mockAuthRequest.mockReset();
+    mockAuthRequest.mockResolvedValue({ names: [] });
   });
 
   // Setup Router
@@ -238,6 +253,139 @@ describe("OmniSearch", () => {
         [],
     ).map((el) => el.textContent.trim());
     expect(lines).toEqual(["PO", "Partia"]);
+
+    wrapper.unmount();
+  });
+
+  /** Piotr Ferster, whom three facts on Rafał Trzaskowski's page name and no
+   * page of his own does. */
+  const FERSTER = {
+    name: "Piotr Ferster",
+    facts: 3,
+    people: [{ id: "8rg6", name: "Rafał Trzaskowski", facts: 3 }],
+    morePeople: 0,
+    articles: [],
+    moreArticles: 0,
+  };
+
+  const texts = (el: Element | undefined, selector: string) =>
+    Array.from(el?.querySelectorAll(selector) ?? []).map((node) =>
+      node.textContent.trim(),
+    );
+
+  it("lists a name only the facts carry under a heading of its own, for a signed in reader", async () => {
+    currentUser.value = { uid: "reader" };
+    searched = [{ id: "p1", name: "Piotr Fersterski", type: "person" }];
+    mockAuthRequest.mockResolvedValue({ names: [FERSTER] });
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "ferster");
+
+    expect(mockAuthRequest).toHaveBeenCalledWith("/api/search/facts", {
+      method: "GET",
+      query: { q: "ferster" },
+    });
+
+    const heading = document.querySelector(
+      "[data-testid='omni-search-fact-names']",
+    );
+    expect(heading?.textContent.trim()).toBe("Wspomniani w faktach");
+
+    // Under the people, not among them: the heading comes after the page the
+    // search found, and the name after the heading.
+    const menu = Array.from(
+      document.querySelectorAll(".v-list-item, .v-list-subheader"),
+    ).map((el) => el.textContent.trim());
+    const page = menu.findIndex((text) => text === "Piotr Fersterski");
+    const header = menu.indexOf("Wspomniani w faktach");
+    expect(page).toBeGreaterThan(-1);
+    expect(header).toBeGreaterThan(page);
+
+    const row = document.querySelector("[data-testid='omni-search-fact-name']");
+    expect(texts(row ?? undefined, ".v-list-item-title")).toEqual([
+      "Piotr Ferster",
+    ]);
+    expect(texts(row ?? undefined, ".v-list-item-subtitle")).toEqual([
+      "W faktach o: Rafał Trzaskowski",
+    ]);
+
+    wrapper.unmount();
+  });
+
+  it("finds it typed without its diacritics", async () => {
+    // /api/search/facts folds them, and the menu's own filter must not throw
+    // the hit away again on arrival.
+    currentUser.value = { uid: "reader" };
+    mockAuthRequest.mockResolvedValue({
+      names: [{ ...FERSTER, name: "Żaneta Wspomniana" }],
+    });
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "zaneta wsp");
+
+    expect(
+      texts(
+        document.querySelector("[data-testid='omni-search-fact-name']") ??
+          undefined,
+        ".v-list-item-title",
+      ),
+    ).toEqual(["Żaneta Wspomniana"]);
+
+    wrapper.unmount();
+  });
+
+  it("keeps a late answer out of a box that was cleared meanwhile", async () => {
+    currentUser.value = { uid: "reader" };
+    let answer: (value: unknown) => void = () => {};
+    mockAuthRequest.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "ferster");
+    await searchFor(wrapper, "");
+
+    answer({ names: [FERSTER] });
+    await flushPromises();
+
+    expect(
+      document.querySelector("[data-testid='omni-search-fact-name']"),
+    ).toBeNull();
+
+    wrapper.unmount();
+  });
+
+  it("does not ask for them for a reader who is not signed in", async () => {
+    // The facts are behind the login, and so are the names in them.
+    mockAuthRequest.mockResolvedValue({ names: [FERSTER] });
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "ferster");
+
+    expect(mockAuthRequest).not.toHaveBeenCalled();
+    expect(
+      document.querySelector("[data-testid='omni-search-fact-names']"),
+    ).toBeNull();
+
+    wrapper.unmount();
+  });
+
+  it("does not list a name again that the people search found a page for", async () => {
+    currentUser.value = { uid: "reader" };
+    searched = [{ id: "p1", name: "Piotr Ferster", type: "person" }];
+    mockAuthRequest.mockResolvedValue({ names: [FERSTER] });
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "ferster");
+
+    expect(
+      document.querySelector("[data-testid='omni-search-fact-names']"),
+    ).toBeNull();
+    expect(
+      rows().filter((el) => el.textContent.includes("Piotr Ferster")),
+    ).toHaveLength(1);
 
     wrapper.unmount();
   });

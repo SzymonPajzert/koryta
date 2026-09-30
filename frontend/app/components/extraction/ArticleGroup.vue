@@ -44,9 +44,14 @@ const props = defineProps<{
   url: string;
   domain: string;
   facts: ExtractionFact[];
+  /** Opened from the start - for a list narrowed to this one article, where
+   * the reader came for its facts and a closed card is one more click to them.
+   * The listeners the closed state saves are a handful for one article. */
+  open?: boolean;
 }>();
 
-const expanded = ref(false);
+// Read once: the reader's own clicks decide from here on.
+const expanded = ref(props.open);
 
 // Domain is already in its chip, so the title shows just the path.
 const articlePath = computed(() => {

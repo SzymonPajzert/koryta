@@ -62,5 +62,47 @@
         "humanVoted": false
       }
     }
+  },
+  "seed-relation-mentioned": {
+    "url": "https://example.com/rodzina-wojcika",
+    "articleUrl": "https://example.com/rodzina-wojcika",
+    "articleDomain": "example.com",
+    "personNodeId": "5",
+    "personNodeName": "Krzysztof Wójcik",
+    "personMatched": true,
+    "fact_type": "personal_relation",
+    "subject": "Krzysztof Wójcik",
+    "object": "Żaneta Wspomniana",
+    "relation": "siostra",
+    "justification": "Siostra Krzysztofa Wójcika, Żaneta Wspomniana, nie ma strony w bazie.",
+    "tag": "seed",
+    "createdAt": "2026-07-10T10:00:00.000Z",
+    "stats": {
+      "votes": {
+        "interesting": 0,
+        "quality": 0,
+        "humanVoted": false
+      }
+    }
+  },
+  "seed-unmatched-mentioned": {
+    "url": "https://example.com/fundacja-bez-stron",
+    "articleUrl": "https://example.com/fundacja-bez-stron",
+    "articleDomain": "example.com",
+    "personMatched": false,
+    "fact_type": "employment",
+    "person": "Łukasz Nieprzypisany",
+    "organization": "Fundacja Bez Stron",
+    "role": "prezes",
+    "justification": "Łukasz Nieprzypisany, prezes Fundacji Bez Stron, nie ma strony w bazie.",
+    "tag": "seed",
+    "createdAt": "2026-07-11T10:00:00.000Z",
+    "stats": {
+      "votes": {
+        "interesting": 0,
+        "quality": 0,
+        "humanVoted": false
+      }
+    }
   }
 }

@@ -1,5 +1,9 @@
 import type { Node, NodeType } from "~~/shared/model";
-import { generateEntityUrl, SLUG_REDIRECT_CODE } from "~/composables/slugs";
+import {
+  generateEntityUrl,
+  healedLocation,
+  SLUG_REDIRECT_CODE,
+} from "~/composables/slugs";
 
 /** Sends /entity/:type/:id on to the readable url for that node.
  *
@@ -37,7 +41,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // Pushing leaves no stray /entity/ entry behind either - the navigation this
   // one supersedes never became one.
   return navigateTo(
-    seoUrl,
+    healedLocation(seoUrl, to),
     import.meta.server ? { redirectCode: SLUG_REDIRECT_CODE } : undefined,
   );
 });
