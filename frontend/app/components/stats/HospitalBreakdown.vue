@@ -265,7 +265,8 @@ import {
   type Breakdown,
   type BreakdownRow,
 } from "~/composables/stats/useHospitalBoards";
-import { formatCount, ink } from "~/utils/chartTheme";
+import { formatCount, ink, status } from "~/utils/chartTheme";
+import { hexToRgb } from "~~/shared/colors";
 import { polishCounting } from "~/composables/polish";
 
 /** The one chart on /eksploruj/szpitale, however it is split.
@@ -587,6 +588,9 @@ const paletteVars = computed(() => ({
   "--bd-grid": ink.grid,
   "--bd-axis": ink.axis,
   "--bd-track": ink.track,
+  "--bd-surface": ink.surface,
+  // The warning hue at 6%: a row of zeroes is flagged, not alarmed about.
+  "--bd-zero-wash": `rgba(${hexToRgb(status.warning).join(", ")}, 0.06)`,
 }));
 </script>
 
@@ -627,7 +631,7 @@ const paletteVars = computed(() => ({
 }
 
 .breakdown__row--zero {
-  background: rgba(250, 178, 25, 0.06);
+  background: var(--bd-zero-wash);
 }
 
 .breakdown__label {
@@ -693,7 +697,7 @@ const paletteVars = computed(() => ({
   font-size: 0.625rem;
   font-weight: 600;
   color: var(--bd-primary);
-  background: #fff;
+  background: var(--bd-surface);
   padding: 0 3px;
 }
 
