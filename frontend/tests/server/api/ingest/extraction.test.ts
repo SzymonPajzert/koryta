@@ -690,4 +690,54 @@ describe("api/ingest/extraction", () => {
       expect(mockCommit).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("the names the search reads", () => {
+    /** One fact about somebody the article confirmed, one about somebody it
+     * did not. */
+    const mixedBatch = () => ({
+      articles: [
+        {
+          url: "sulejow.naszemiasto.pl/a",
+          domain: "naszemiasto.pl",
+          title: null,
+          publication_date: null,
+          tag: "v26",
+          koryta_ids: ["gajda-id"],
+          extracted_facts: [
+            {
+              url: "sulejow.naszemiasto.pl/a",
+              justification: "radny PiS Piotr Gajda",
+              fact_type: "party_membership" as const,
+              person: "Piotr Gajda",
+              party: "Prawo i Sprawiedliwość",
+            },
+            {
+              url: "sulejow.naszemiasto.pl/a",
+              justification: "Leszek Szymczak z Bytowa",
+              fact_type: "party_membership" as const,
+              person: "Leszek Szymczak",
+              party: "Prawo i Sprawiedliwość",
+            },
+          ],
+        },
+      ],
+    });
+
+    it("says on every fact whether its subject was matched", async () => {
+      // Firestore cannot ask for `personNodeId` being absent, and the facts
+      // that matched nobody are the ones /api/search/facts reads names from.
+      personNodes.set("gajda-id", { name: "Piotr Gajda", type: "person" });
+      mockReadBody.mockResolvedValue(mixedBatch());
+
+      await handler({} as any);
+
+      expect(mockBatchSet.mock.calls[0]![1]).toMatchObject({
+        personNodeId: "gajda-id",
+        personMatched: true,
+      });
+      expect(mockBatchSet.mock.calls[1]![1]).toMatchObject({
+        personMatched: false,
+      });
+    });
+  });
 });
