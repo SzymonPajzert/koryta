@@ -1,3 +1,4 @@
+import type { LocationQueryRaw } from "vue-router";
 import type { NodeType, Node } from "~~/shared/model";
 
 export type SeoType = "osoba" | "instytucja" | "region" | "artykul" | "temat";
@@ -140,6 +141,22 @@ export function generateNodeUrl(node: Node): string | undefined {
  */
 export function nodeLinkUrl(node: Node): string {
   return generateNodeUrl(node) ?? `/entity/${node.type}/${node.id}`;
+}
+
+/** Where a slug-healing redirect sends a reader: the canonical path, with the
+ * query and the hash they came with.
+ *
+ * A bare path used to be enough, until a link started carrying something
+ * past it: the search box opens a person's page as `?fakty=<name>#fakty`, to
+ * the facts naming somebody with no page of their own. Built from the name
+ * the fact stored, that link heals to the node's current slug when the node
+ * has been renamed since - and the redirect then dropped the filter and the
+ * section with it. */
+export function healedLocation(
+  path: string,
+  from: { query: LocationQueryRaw; hash: string },
+): { path: string; query: LocationQueryRaw; hash: string } {
+  return { path, query: from.query, hash: from.hash };
 }
 
 export function parseEntityUrlSlug(slugWithId: string): {

@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "szukaj-osob-z-faktow",
+    title: "Wyszukiwarka znajduje osoby wymienione w faktach z artykułów",
+    description:
+      "Osoby bez strony w bazie, które pojawiają się w faktach z artykułów - na przykład czyjś brat z „Relacji osobistej” - są teraz w wyszukiwarce, w grupie „Wspomniani w faktach”, z dopiskiem, w czyich faktach pada nazwisko. Tylko po zalogowaniu, tak jak same fakty.",
+    steps: [
+      "Zaloguj się i wpisz w wyszukiwarkę „Piotr Ferster” - ma się pojawić pod „Wspomniani w faktach” z dopiskiem „W faktach o: Rafał Trzaskowski”.",
+      "Kliknij go - strona Rafała Trzaskowskiego ma się przewinąć do „Faktów z artykułów” i pokazać tylko fakty z tym nazwiskiem, z krzyżykiem, który przywraca wszystkie.",
+    ],
+    link: "/",
+    area: "contributor",
+    fixes: ["khnp7OEE7tH0SKHtUwgE"],
+  },
+  {
     id: "zadania-skupienie-na-mapie",
     title: "Zadania: mapa skupiona na jednym zadaniu",
     description:

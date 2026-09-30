@@ -84,6 +84,12 @@ vi.mock("firebase-admin/firestore", () => ({
   Timestamp: { now: () => "TS" },
 }));
 vi.mock("firebase-admin/app", () => ({ getApp: () => ({}) }));
+const { mockForgetFactNameIndex } = vi.hoisted(() => ({
+  mockForgetFactNameIndex: vi.fn(),
+}));
+vi.mock("../../../../server/utils/factNames", () => ({
+  forgetFactNameIndex: mockForgetFactNameIndex,
+}));
 // `requireDatascience` is left real; only the token lookup is faked.
 vi.mock("../../../../server/utils/auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../../server/utils/auth")>()),
@@ -637,6 +643,20 @@ describe("api/ingest/extraction", () => {
       expect(mockBatchSet.mock.calls[1]![1]).toMatchObject({
         personMatched: false,
       });
+    });
+
+    it("drops this instance's copy of the names once the facts are in", async () => {
+      personNodes.set("gajda-id", { name: "Piotr Gajda", type: "person" });
+      mockReadBody.mockResolvedValue(mixedBatch());
+
+      await handler({} as any);
+
+      expect(mockForgetFactNameIndex).toHaveBeenCalledTimes(1);
+      // After the write, or a search in between would read the old facts
+      // back in for another twelve hours.
+      expect(
+        mockForgetFactNameIndex.mock.invocationCallOrder[0],
+      ).toBeGreaterThan(mockCommit.mock.invocationCallOrder[0]!);
     });
   });
 });

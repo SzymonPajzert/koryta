@@ -2,6 +2,7 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/logger";
 import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
+import { forgetFactNameIndex } from "~~/server/utils/factNames";
 import type { ExtractionFact } from "~~/shared/model";
 import { normalizePersonName } from "~~/shared/names";
 import { normalizeUrl } from "~~/shared/url";
@@ -162,6 +163,11 @@ export default defineEventHandler(async (event) => {
     }
     await batch.commit();
   }
+
+  // The names this batch brings are the search's to find now, not in twelve
+  // hours. Only this instance's copy - each instance holds its own, and the
+  // rest read the facts again when theirs ages out.
+  forgetFactNameIndex();
 
   const touchedPeople = new Set(
     allDocs
