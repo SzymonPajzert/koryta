@@ -1,5 +1,6 @@
 import type { Node, NodeType } from "~~/shared/model";
-import { generateEntityUrl, SLUG_REDIRECT_CODE } from "~/composables/slugs";
+import { generateEntityUrl, generateNodeUrl } from "~/composables/slugs";
+import { redirectToNodeUrl } from "~/composables/slugRedirect";
 
 /** Sends /entity/:type/:id on to the readable url for that node.
  *
@@ -14,13 +15,22 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const destination = to.params.destination as NodeType;
 
   // A node we cannot read is not a reason to fail the navigation - the page
-  // renders the detail view for it and reports its own errors.
+  // renders the detail view for it and reports its own errors. The status line
+  // says it too, or a crawler files the url as a page: the same soft 404
+  // `[seoType]/[slug].vue` answers for.
   const node = await $fetch<{ node: Node }>(`/api/nodes/${id}`)
     .then((response) => response.node)
     .catch(() => undefined);
-  if (!node?.name) return;
+  if (!node?.name) {
+    if (import.meta.server) setResponseStatus(useRequestEvent()!, 404);
+    return;
+  }
 
-  const seoUrl = generateEntityUrl(destination, id, node.name);
+  // Straight to where the node lives, not to the readable url of the type the
+  // link happened to name: a region went /entity/ -> /region/ -> the table, two
+  // redirects into a page robots.txt keeps Google out of.
+  const seoUrl =
+    generateNodeUrl(node) ?? generateEntityUrl(destination, id, node.name);
   if (to.path === seoUrl) return;
 
   // A push, not a replace, and that is what makes the back button work.
@@ -36,8 +46,5 @@ export default defineNuxtRouteMiddleware(async (to) => {
   //
   // Pushing leaves no stray /entity/ entry behind either - the navigation this
   // one supersedes never became one.
-  return navigateTo(
-    seoUrl,
-    import.meta.server ? { redirectCode: SLUG_REDIRECT_CODE } : undefined,
-  );
+  return import.meta.server ? redirectToNodeUrl(seoUrl) : navigateTo(seoUrl);
 });

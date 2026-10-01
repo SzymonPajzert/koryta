@@ -18,9 +18,9 @@ import {
   generateNodeUrl,
   mayBeMangledId,
   seoTypes,
-  SLUG_REDIRECT_CODE,
   type SeoType,
 } from "~/composables/slugs";
+import { redirectToNodeUrl } from "~/composables/slugRedirect";
 import type { NodeType, Node } from "~~/shared/model";
 import { authFetch } from "@/composables/auth";
 
@@ -44,7 +44,7 @@ if (status.value === "success" && data.value?.node?.name) {
   // the site root, which is where every article link in the sitemap used to land.
   if (expectedUrl && route.path !== expectedUrl) {
     if (import.meta.server) {
-      await navigateTo(expectedUrl, { redirectCode: SLUG_REDIRECT_CODE });
+      await redirectToNodeUrl(expectedUrl);
     } else {
       await navigateTo(expectedUrl, { replace: true });
     }
@@ -55,17 +55,13 @@ if (status.value === "success" && data.value?.node?.name) {
   // links come from. Googlebot asked for 51 such addresses 241 times between
   // 2026-09-16 and 10-01, nearly always citing as the referrer the very page
   // they should have led to, and got a 404 every time.
-  //
-  // 301, unlike SLUG_REDIRECT_CODE: a mangled id never becomes a page of its
-  // own, and the address it is sent on to heals itself if the page's slug moves
-  // later - so a browser that keeps this answer for good keeps a right one.
   const found = mayBeMangledId(id)
     ? await $fetch<{ url: string }>(
         `/api/nodes/${encodeURIComponent(id)}/url`,
       ).catch(() => undefined)
     : undefined;
   if (found && found.url !== route.path) {
-    await navigateTo(found.url, { redirectCode: 301 });
+    await redirectToNodeUrl(found.url);
   } else {
     // Say 404 in the status line, not only in the heading.
     //
