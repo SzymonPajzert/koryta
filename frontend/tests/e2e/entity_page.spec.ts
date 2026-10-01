@@ -68,13 +68,16 @@ test.describe("Entity page", () => {
       waitUntil: "domcontentloaded",
     });
 
-    // 302 rather than 301, and asserted rather than assumed: a browser caches a
-    // 301 for the life of the profile, so shipping one here would freeze
-    // today's canonical url into every visitor beyond the reach of any deploy.
-    // See SLUG_REDIRECT_CODE in app/composables/slugs.ts.
+    // A 301, so that Google files the readable url as the page: under the 302
+    // this used to be it kept the /entity/ url as the page's own address. And
+    // `no-store` beside it, asserted rather than assumed: a 301 a browser may
+    // cache is kept for the life of the profile, beyond the reach of any
+    // deploy. See `slugRedirectCode` in app/composables/slugs.ts.
     const redirected = response?.request().redirectedFrom();
     expect(redirected, "/entity/person/1 did not redirect at all").toBeTruthy();
-    expect((await redirected!.response())?.status()).toBe(302);
+    const redirect = await redirected!.response();
+    expect(redirect?.status()).toBe(301);
+    expect(redirect?.headers()["cache-control"]).toBe("no-store");
 
     await expect(page).toHaveURL(/\/osoba\/jan-kowalski-1/, {
       timeout: 30_000,
