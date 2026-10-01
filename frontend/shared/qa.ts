@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "link-z-malymi-literami-prowadzi-do-strony",
+    title: "Stary link pisany małymi literami prowadzi do strony",
+    description:
+      "Do sierpnia strona podawała Google i serwisom społecznościowym swój adres z identyfikatorem zapisanym małymi literami, a taki adres kończył się błędem 404. Teraz przenosi na właściwą stronę - tak samo adres z kropką lub przecinkiem doklejonym na końcu.",
+    steps: [
+      "Otwórz /osoba/tadeusz-grzegorz-slawik-2gbeatnjnfjkauu1kuot - ma przenieść na stronę Tadeusza Sławika, z wielkimi literami w końcówce adresu.",
+    ],
+    link: "/osoba/tadeusz-grzegorz-slawik-2gbeatnjnfjkauu1kuot",
+    area: "public",
+  },
+  {
     id: "admin-procesy-importy",
     title: "Procesy: duże importy na stronę",
     description:
@@ -757,7 +768,7 @@ export const QA_ITEMS: QaItem[] = [
       "wyszukiwarek wyglądało to jak zwykła, istniejąca strona. Teraz " +
       "odpowiedź ma kod 404. Dla czytelnika nic się nie zmienia.",
     steps: [
-      "Otwórz adres osoby i zepsuj końcówkę identyfikatora, np. zamień ją na same małe litery.",
+      "Otwórz adres osoby i zepsuj końcówkę identyfikatora, np. usuń z niej ostatni znak (same małe litery już nie wystarczą - taki adres przenosi teraz na właściwą stronę).",
       "Strona ma nadal pokazywać „Strona nieznaleziona”.",
       "W narzędziach deweloperskich, w zakładce Sieć, pierwsze żądanie ma mieć status 404.",
     ],

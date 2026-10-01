@@ -84,6 +84,26 @@ test.describe("Entity page", () => {
     });
   });
 
+  test("a link that kept the full stop of its sentence opens the page", async ({
+    page,
+  }) => {
+    // Forums, chat apps and mail clients autolink the full stop that ends a
+    // sentence along with the address before it. infokolej.pl did, and its
+    // readers landed on "Strona nieznaleziona".
+    const response = await page.goto(`${PERSON}.`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    const redirected = response?.request().redirectedFrom();
+    expect(redirected, "the dotted url did not redirect at all").toBeTruthy();
+    expect((await redirected!.response())?.status()).toBe(301);
+
+    await expect(page).toHaveURL(new RegExp(`${PERSON}$`), { timeout: 30_000 });
+    await expect(page.getByText("Jan Kowalski").first()).toBeVisible({
+      timeout: 30_000,
+    });
+  });
+
   test("going back from a followed relation returns to the person", async ({
     page,
   }) => {
