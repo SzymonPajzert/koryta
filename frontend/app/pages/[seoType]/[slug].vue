@@ -16,6 +16,7 @@ import {
   parseEntityUrlSlug,
   slugPrefixToNodeType,
   generateNodeUrl,
+  mayBeMangledId,
   seoTypes,
   SLUG_REDIRECT_CODE,
   type SeoType,
@@ -49,18 +50,35 @@ if (status.value === "success" && data.value?.node?.name) {
     }
   }
 } else if (status.value === "error" && import.meta.server) {
-  // Say 404 in the status line, not only in the heading.
+  // An id that has lost its capitals, or kept the full stop of the sentence it
+  // was pasted into, still names a page - see `mangledIdKey` for where those
+  // links come from. Googlebot asked for 51 such addresses 241 times between
+  // 2026-09-16 and 10-01, nearly always citing as the referrer the very page
+  // they should have led to, and got a 404 every time.
   //
-  // `/api/nodes/:id` throws 404 both for an id that resolves to nothing and for
-  // a page nobody has published, and the detail views render "Strona
-  // nieznaleziona" for either - but the response went out as 200, carrying a
-  // canonical pointing at itself. That is a soft 404: Google files the url as a
-  // real page and keeps recrawling it. A lowercased document id is the way to
-  // reach one by accident, and Search Console had them.
-  //
-  // Server only. On the client the navigation has already happened and there is
-  // no status line left to set; the view says the same thing either way.
-  setResponseStatus(useRequestEvent()!, 404);
+  // 301, unlike SLUG_REDIRECT_CODE: a mangled id never becomes a page of its
+  // own, and the address it is sent on to heals itself if the page's slug moves
+  // later - so a browser that keeps this answer for good keeps a right one.
+  const found = mayBeMangledId(id)
+    ? await $fetch<{ url: string }>(
+        `/api/nodes/${encodeURIComponent(id)}/url`,
+      ).catch(() => undefined)
+    : undefined;
+  if (found && found.url !== route.path) {
+    await navigateTo(found.url, { redirectCode: 301 });
+  } else {
+    // Say 404 in the status line, not only in the heading.
+    //
+    // `/api/nodes/:id` throws 404 both for an id that resolves to nothing and
+    // for a page nobody has published, and the detail views render "Strona
+    // nieznaleziona" for either - but the response went out as 200, carrying a
+    // canonical pointing at itself. That is a soft 404: Google files the url as
+    // a real page and keeps recrawling it.
+    //
+    // Server only. On the client the navigation has already happened and there
+    // is no status line left to set; the view says the same thing either way.
+    setResponseStatus(useRequestEvent()!, 404);
+  }
 }
 
 // The head is EntityDetailView's - it is the one that knows whether the node
