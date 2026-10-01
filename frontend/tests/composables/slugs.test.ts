@@ -3,6 +3,7 @@ import {
   generateNodeUrl,
   mangledIdKey,
   mayBeMangledId,
+  slugRedirectCode,
 } from "../../app/composables/slugs";
 import type { Node } from "../../shared/model";
 
@@ -89,5 +90,24 @@ describe("mangledIdKey", () => {
     expect(mangledIdKey("SVb31mmNOMmlOy1BsPhH")).not.toBe(
       mangledIdKey("SVb31mmNOMmlOy1BsPhX"),
     );
+  });
+});
+
+describe("slugRedirectCode", () => {
+  it("moves for good to a node's own page", () => {
+    // Under a 302 Google kept the /entity/ url as the page's address.
+    expect(
+      slugRedirectCode("/osoba/adam-niedzialek-SVb31mmNOMmlOy1BsPhH"),
+    ).toBe(301);
+    expect(
+      slugRedirectCode("/instytucja/amw-invest-warszawa-aRhVbgfIke5i6PqDBZY5"),
+    ).toBe(301);
+    expect(slugRedirectCode("/region/krakow-teryt1261")).toBe(301);
+  });
+
+  it("only borrows the table for a region with no page of its own", () => {
+    // A region is to get a page one day; a 301 would tell Google the table
+    // is where it lives.
+    expect(slugRedirectCode("/eksploruj/tabela?teryt=1862")).toBe(302);
   });
 });
