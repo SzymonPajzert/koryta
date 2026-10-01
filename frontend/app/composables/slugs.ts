@@ -151,3 +151,27 @@ export function parseEntityUrlSlug(slugWithId: string): {
   const slug = parts.join("-");
   return { slug, id };
 }
+
+/** An id reduced to what survives the two ways a link to a page reaches us
+ * mangled: lowercased, and with punctuation stuck to its end.
+ *
+ * The lowercasing was ours. Until 2026-08-08 nuxt-seo-utils lowercased every
+ * canonical and og:url the site sent (`canonicalLowercase` in nuxt.config.ts),
+ * and a Firestore id is case sensitive, so every page advertised an address
+ * that does not resolve. Google filed those addresses as the pages' own and
+ * still asks for them, each time naming the real page as where it found the
+ * link. The punctuation is everybody else's: a link pasted at the end of a
+ * sentence keeps its full stop. */
+export function mangledIdKey(id: string): string {
+  return id.replace(/[^A-Za-z0-9]+$/, "").toLowerCase();
+}
+
+/** Whether `id` could be a mangled copy of another page's id - worth asking
+ * only once it has failed to resolve as it is.
+ *
+ * A generated Firestore id is twenty characters drawn from both cases, so one
+ * that has letters and not a single capital has all but certainly lost them:
+ * by chance that happens to about one id in 50,000. */
+export function mayBeMangledId(id: string): boolean {
+  return /[^A-Za-z0-9]$/.test(id) || (/[a-z]/.test(id) && !/[A-Z]/.test(id));
+}

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { generateNodeUrl } from "../../app/composables/slugs";
+import {
+  generateNodeUrl,
+  mangledIdKey,
+  mayBeMangledId,
+} from "../../app/composables/slugs";
 import type { Node } from "../../shared/model";
 
 /** A place node, with whatever identifiers the caller wants to give it. */
@@ -51,5 +55,39 @@ describe("generateNodeUrl", () => {
       name: "Adam Niedziałek",
     } as unknown as Node);
     expect(url).toBe("/osoba/adam-niedzialek-SVb31mmNOMmlOy1BsPhH");
+  });
+});
+
+describe("mayBeMangledId", () => {
+  it("suspects an id that has letters but no capital", () => {
+    // Every person page advertised its id like this until 2026-08-08.
+    expect(mayBeMangledId("svb31mmnommloy1bsphh")).toBe(true);
+  });
+
+  it("suspects an id that ends in punctuation", () => {
+    expect(mayBeMangledId("qYJdVvw8Up88QRwoATsj.")).toBe(true);
+  });
+
+  it("trusts an id with a capital in it", () => {
+    expect(mayBeMangledId("SVb31mmNOMmlOy1BsPhH")).toBe(false);
+  });
+
+  it("trusts an id with no letters at all, which has no case to lose", () => {
+    expect(mayBeMangledId("1")).toBe(false);
+  });
+});
+
+describe("mangledIdKey", () => {
+  it("is the same for an id and its lowercased, punctuated copies", () => {
+    const key = mangledIdKey("SVb31mmNOMmlOy1BsPhH");
+    expect(mangledIdKey("svb31mmnommloy1bsphh")).toBe(key);
+    expect(mangledIdKey("SVb31mmNOMmlOy1BsPhH.")).toBe(key);
+    expect(mangledIdKey("svb31mmnommloy1bsphh),")).toBe(key);
+  });
+
+  it("tells apart ids that differ in more than case", () => {
+    expect(mangledIdKey("SVb31mmNOMmlOy1BsPhH")).not.toBe(
+      mangledIdKey("SVb31mmNOMmlOy1BsPhX"),
+    );
   });
 });
