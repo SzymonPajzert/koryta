@@ -111,8 +111,11 @@ class IO(metaclass=ABCMeta):
         content_type: str,
         include_query=False,
         verbose=True,
-    ):
-        """Uploads data to storage (e.g. GCS)."""
+    ) -> bool | None:
+        """Uploads data to storage (e.g. GCS).
+
+        False when the upload failed; None from an io that cannot tell.
+        """
         raise NotImplementedError()
 
     @abstractmethod
