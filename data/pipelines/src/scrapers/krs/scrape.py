@@ -669,20 +669,13 @@ def save_org_connections(
     print(f"len(names): {len(names)}")
     print(f"len(people): {len(people)}")
 
-    print(f"\n\nalready_scraped_krs ({len(already_scraped_krs)}):")
-    print(already_scraped_krs.head())
-    print(already_scraped_krs[["method", "date"]].value_counts())
-    print("Matching 0000062694")
-    print(already_scraped_krs[already_scraped_krs["krs"] == "0000062694"])
-
-    print(f"\n\nneeds_refresh_krs ({len(needs_refresh_krs)}):")
-    print(needs_refresh_krs.head())
-    print("Matching 0000062694")
-    print(needs_refresh_krs[needs_refresh_krs["krs"] == "0000062694"])
-    print(f"Nulls: {needs_refresh_krs['date'].isnull().sum()}")
-    print(needs_refresh_krs["date"].value_counts())
-    print(f"Nulls: {needs_refresh_krs['update_date'].isnull().sum()}")
-    print(needs_refresh_krs["update_date"].value_counts())
+    # One line each. These printed every (method, date) pair and the rows of
+    # one KRS someone once chased - ~130 lines a run, read by nobody since.
+    print(
+        f"already scraped: {len(already_scraped_krs)} (krs, method) responses; "
+        f"needs refresh: {len(needs_refresh_krs)}, "
+        f"{needs_refresh_krs['update_date'].isnull().sum()} without an update date"
+    )
 
     # Remove needs refresh from already_scraped_krs, since we need to update them.
     already_scraped = (
@@ -699,9 +692,6 @@ def save_org_connections(
         .groupby("krs")
         .aggregate(series_to_list)
     )
-
-    print(f"\n\nalready_scraped ({len(already_scraped)}):")
-    print(already_scraped.head())
 
     settled = settled_registers(already_scraped_krs)
     print(f"Registers already answered 404: {sum(len(s) for s in settled.values())}")
@@ -1052,8 +1042,6 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                                 )
                 except Exception as e:
                     print(f"Error parsing {blob_name}: {e}")
-
-        print("Starters: ", starters)
 
         if self.args.children:
             children = self.owned_by_the_public(ctx)
