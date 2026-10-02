@@ -33,7 +33,8 @@ import { toArticleCapture } from "~~/server/utils/captures";
 import { CRAWLED_BUCKET } from "~~/server/utils/crawledBucket";
 
 /** What /admin/procesy reads (shared/jobs.ts): the runs the jobs report, the
- * captures, and the two buckets that say how the silent jobs are doing. */
+ * captures for the one job marked `captures`, and the two buckets that say
+ * how the silent jobs are doing. */
 
 export const COMPRESSED_BUCKET = "koryta-pl-compressed";
 
@@ -392,7 +393,9 @@ export async function jobsOverview(now = new Date()): Promise<JobsOverview> {
   }
 
   const jobs: JobView[] = JOBS.map((definition, index) => {
-    if (definition.kind === "triggered") {
+    // Only the captures job's runs are captures. The imports are triggered
+    // too, but they report their runs like every other job.
+    if (definition.captures) {
       return {
         id: definition.id,
         runs: captures?.runs ?? [],

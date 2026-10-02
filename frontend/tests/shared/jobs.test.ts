@@ -11,6 +11,7 @@ import {
   formatDuration,
   isProblem,
   isStalled,
+  jobDefinition,
   jobHealth,
   jobRunFromData,
   lagDays,
@@ -686,14 +687,16 @@ describe("jobHealth", () => {
     when = now,
   ) => jobHealth(def, { runs, record, probe }, when);
 
-  describe("triggered", () => {
-    const captures = definition({
-      id: "capture_extraction",
-      kind: "triggered",
-      schedule: undefined,
-      heartbeatMinutes: 35,
-      queuedMinutes: 15,
-    });
+  const captures = definition({
+    id: "capture_extraction",
+    kind: "triggered",
+    captures: true,
+    schedule: undefined,
+    heartbeatMinutes: 35,
+    queuedMinutes: 15,
+  });
+
+  describe("captures", () => {
     const done = run({
       state: "succeeded",
       startedAt: "2026-10-03T08:00:00.000Z",
@@ -771,6 +774,109 @@ describe("jobHealth", () => {
     });
   });
 
+  describe("triggered, not captures", () => {
+    // An import someone starts by hand: one run per request, like a capture,
+    // but judged by its newest run, with no clock to miss.
+    const imports = definition({
+      id: "company_import",
+      kind: "triggered",
+      schedule: undefined,
+      graceMinutes: undefined,
+      heartbeatMinutes: 15,
+    });
+    const upload = (
+      fields: Partial<JobRun> & Pick<JobRun, "state" | "startedAt">,
+    ) => run({ job: "company_import", trigger: "manual", ...fields });
+    const ended = (
+      state: "succeeded" | "partial" | "failed",
+      stopReason: string | null = null,
+    ) =>
+      upload({
+        state,
+        startedAt: "2026-10-02T13:00:00.000Z",
+        finishedAt: "2026-10-02T13:04:00.000Z",
+        stopReason,
+      });
+
+    it("is never before its first report", () => {
+      expect(health(imports, [])).toEqual({
+        status: "never",
+        detail: "Ten job jeszcze nic nie zgłosił.",
+      });
+    });
+
+    it("is running while the heartbeat is fresh", () => {
+      const going = upload({
+        state: "running",
+        startedAt: "2026-10-03T09:50:00.000Z",
+        heartbeatAt: "2026-10-03T09:58:00.000Z",
+        phase: "wysyłanie",
+      });
+      expect(health(imports, [going])).toEqual({
+        status: "running",
+        detail: "Trwa od 11:50 - wysyłanie.",
+      });
+    });
+
+    it("is stalled once the heartbeat is older than the allowance", () => {
+      const quiet = upload({
+        state: "running",
+        startedAt: "2026-10-03T09:00:00.000Z",
+        heartbeatAt: "2026-10-03T09:40:00.000Z",
+      });
+      expect(health(imports, [quiet])).toEqual({
+        status: "stalled",
+        detail: "Brak sygnału od 20 min (ostatni o 11:40).",
+      });
+    });
+
+    it("says how the newest run ended", () => {
+      expect(health(imports, [ended("succeeded")])).toEqual({
+        status: "ok",
+        detail: "Ostatnio udane: 2.10, 15:04.",
+      });
+      expect(health(imports, [ended("partial", "przerwany")])).toEqual({
+        status: "partial",
+        detail: "Przerwane z zaległościami: 2.10, 15:04 (przerwany).",
+      });
+      expect(health(imports, [ended("failed", "HTTP 500")])).toEqual({
+        status: "failed",
+        detail: "Błąd: 2.10, 15:04 (HTTP 500).",
+      });
+    });
+
+    it("goes by the newest run alone, not by a week of them as captures do", () => {
+      const stuckBefore = upload({
+        id: "stuck",
+        state: "running",
+        startedAt: "2026-10-03T08:00:00.000Z",
+        heartbeatAt: "2026-10-03T08:01:00.000Z",
+      });
+      const okAfter = upload({
+        id: "ok",
+        state: "succeeded",
+        startedAt: "2026-10-03T09:00:00.000Z",
+        finishedAt: "2026-10-03T09:05:00.000Z",
+      });
+      expect(health(imports, [okAfter, stuckBefore]).status).toBe("ok");
+      expect(health(captures, [okAfter, stuckBefore]).status).toBe("stalled");
+      const failedBefore = { ...stuckBefore, state: "failed" as const };
+      expect(health(imports, [okAfter, failedBefore]).status).toBe("ok");
+    });
+
+    it("is never late, however long since it last ran", () => {
+      const longAgo = upload({
+        state: "succeeded",
+        startedAt: "2026-09-01T13:00:00.000Z",
+        finishedAt: "2026-09-01T13:04:00.000Z",
+      });
+      expect(health(imports, [longAgo], LIVE)).toEqual({
+        status: "ok",
+        detail: "Ostatnio udane: 1.09, 15:04.",
+      });
+    });
+  });
+
   describe("scheduled", () => {
     const nightly = definition();
 
@@ -785,13 +891,14 @@ describe("jobHealth", () => {
     it("is unknown, not never, when its runs could not be read", () => {
       const view = { runs: [], record: null, probe: null, unavailable: true };
       expect(jobHealth(nightly, view, now).status).toBe("unknown");
-      // The same goes for the captures.
-      const captures = definition({
-        id: "capture_extraction",
+      // The same goes for the captures, and for an import.
+      expect(jobHealth(captures, view, now).status).toBe("unknown");
+      const imports = definition({
+        id: "company_import",
         kind: "triggered",
         schedule: undefined,
       });
-      expect(jobHealth(captures, view, now).status).toBe("unknown");
+      expect(jobHealth(imports, view, now).status).toBe("unknown");
       // A probe still has something to say.
       const mirror = definition({
         id: "compressor",
@@ -861,6 +968,20 @@ describe("jobHealth", () => {
       expect(health(nightly, [ended("failed", "HTTP 429")], LIVE)).toEqual({
         status: "failed",
         detail: "Błąd: 02:10 (HTTP 429).",
+      });
+    });
+
+    it("names a success's reason, so a trial does not pass for the real thing", () => {
+      const trial = run({
+        state: "succeeded",
+        startedAt: "2026-10-02T22:30:00.000Z",
+        finishedAt: "2026-10-03T00:10:00.000Z",
+        stopReason: "próba - nic nie wysłano",
+        counters: { planned: 1305 },
+      });
+      expect(health(nightly, [trial], LIVE)).toEqual({
+        status: "ok",
+        detail: "Ostatnio udane: 02:10 (próba - nic nie wysłano).",
       });
     });
 
@@ -1288,9 +1409,35 @@ describe("JOBS", () => {
     }
   });
 
-  it("gives every triggered job a queue allowance", () => {
-    for (const job of JOBS.filter((job) => job.kind === "triggered")) {
+  it("marks only the extension's captures as captures", () => {
+    // The server hangs every capture on whichever job says so: a second one
+    // would list the same pages twice, and an import marked by mistake would
+    // lose its reported runs to them.
+    expect(JOBS.filter((job) => job.captures).map((job) => job.id)).toEqual([
+      "capture_extraction",
+    ]);
+    for (const job of JOBS.filter((job) => job.captures)) {
+      expect(job.kind, job.id).toBe("triggered");
+    }
+  });
+
+  it("gives the captures a queue allowance", () => {
+    for (const job of JOBS.filter((job) => job.captures)) {
       expect(job.queuedMinutes, job.id).toBeGreaterThan(0);
     }
+  });
+
+  it("holds no triggered job to a clock", () => {
+    for (const job of JOBS.filter((job) => job.kind === "triggered")) {
+      expect(job.schedule, job.id).toBeUndefined();
+      expect(job.graceMinutes, job.id).toBeUndefined();
+    }
+  });
+
+  it("starts the people import after the export it compares against", () => {
+    const exported = jobDefinition("firestore_export")!.schedule!;
+    const imported = jobDefinition("people_import")!.schedule!;
+    expect(imported.timeZone).toBe(exported.timeZone);
+    expect(imported.dailyAt > exported.dailyAt).toBe(true);
   });
 });

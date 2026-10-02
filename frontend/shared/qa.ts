@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "admin-procesy-importy",
+    title: "Procesy: duże importy na stronę",
+    description:
+      "Strona /admin/procesy pokazuje teraz też duże importy - osób, firm, ocen modeli i faktów z artykułów - z tym, ile stron każde uruchomienie utworzyło, ile zaktualizowało, a ilu nie udało się zapisać, oraz planowany codzienny import osób. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Otwórz /admin/procesy - w „Na żądanie” mają być też „Import firm”, „Oceny modeli” i „Import faktów z artykułów”, a w „Według harmonogramu”, pod „Kopią bazy Firestore”, „Import osób na stronę”.",
+      "Rozwiń „Import osób na stronę” - ma pokazać harmonogram „codziennie o 05:00 czasu warszawskiego”, polecenie koryta_people_import i zadania do wdrożenia; po pierwszym imporcie jego uruchomienia mają mieć liczby po polsku, np. „zaktualizowanych” i „nowych zatrudnień”.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "admin-procesy",
     title: "Procesy: postęp wszystkich jobów na jednej stronie",
     description:

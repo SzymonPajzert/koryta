@@ -200,7 +200,7 @@
     </div>
 
     <h3 class="job-row__subhead">
-      {{ definition.kind === "triggered" ? "Ostatnie zapisy" : "Uruchomienia" }}
+      {{ definition.captures ? "Ostatnie zapisy" : "Uruchomienia" }}
     </h3>
     <JobsRuns
       v-if="view.runs.length > 0"
@@ -260,8 +260,8 @@ const style = computed(() => jobHealthConfig[props.health.status]);
 
 const latest = computed(() => props.view.runs[0] ?? null);
 
-/** The newest run's progress, while it is going. The triggered job's runs
- * are pages, which have no progress of their own. */
+/** The newest run's progress, while it is going. A capture is a page, which
+ * has no progress of its own. */
 const liveProgress = computed(() => {
   const run = latest.value;
   return run && !isFinished(run.state) ? run.progress : null;
@@ -271,12 +271,14 @@ const liveShare = computed(() =>
 );
 
 /** When the newest run started and how long it took - or, for the export,
- * which reports nothing, when its newest copy did. */
+ * which reports nothing, when its newest copy did. A capture is one page, so
+ * the row says when the latest came in, not how long the extractor took
+ * over it. */
 const lastRun = computed(() => {
   const run = latest.value;
   if (run) {
     const at = shortWarsawTime(run.startedAt, props.now);
-    if (props.definition.kind === "triggered") return `ostatni: ${at}`;
+    if (props.definition.captures) return `ostatni: ${at}`;
     const took = run.finishedAt
       ? formatDuration(Date.parse(run.finishedAt) - Date.parse(run.startedAt))
       : `od ${formatDuration(props.now.getTime() - Date.parse(run.startedAt))}`;
@@ -318,7 +320,7 @@ const scheduleFact = computed(() => {
 /** The week of captures in one line, whatever the newest twenty show. */
 const captureStatsText = computed(() => {
   const stats = props.view.captureStats;
-  if (!stats) return null;
+  if (!props.definition.captures || !stats) return null;
   const days = Math.max(
     1,
     Math.round((props.now.getTime() - Date.parse(stats.since)) / 86_400_000),
@@ -334,15 +336,15 @@ const captureStatsText = computed(() => {
   ].join(" · ");
 });
 
-/** Why there is nothing to list: a job that reports has not yet, a probe job
- * never will, and nobody has captured anything. */
+/** Why there is nothing to list: a job that reports - an import included -
+ * has not yet, a probe job never will, and nobody has captured anything. */
 const emptyText = computed(() => {
   if (props.view.unavailable) {
     return "Nie udało się wczytać uruchomień - powód jest nad listą.";
   }
   const probe = props.definition.probe;
   if (probe) return jobProbeConfig[probe].source;
-  if (props.definition.kind === "triggered") {
+  if (props.definition.captures) {
     return "Nikt jeszcze niczego nie zapisał.";
   }
   return NO_RUNS_YET;
