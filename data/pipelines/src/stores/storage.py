@@ -4,6 +4,7 @@ import base64
 import contextlib
 import hashlib
 import io
+import json
 import os
 import shutil
 import tarfile
@@ -11,6 +12,7 @@ import threading
 import time
 import typing
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import cached_property
 from typing import Generator
@@ -36,6 +38,9 @@ warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 #: Guards `Client._listings`: the free scrape uploads from a pool of threads.
 _listings_lock = threading.Lock()
+
+#: The only two fields a listing is read for.
+LISTING_FIELDS = "items(name,size),nextPageToken"
 
 
 def _backup_datetime(blob) -> str:
@@ -142,10 +147,8 @@ class Client:
             size=size,
         )
 
-    def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
-        """Lists blobs in a GCS bucket with a given prefix."""
-        bucket = self.storage_client.bucket(ref.bucket or CRAWLED_BUCKET)
-        prefix = ref.prefix
+    def _listing_glob(self, bucket, ref: CloudStorage) -> str | None:
+        """The match_glob a listing of `ref` filters by, if any."""
         glob = None
 
         if len(ref.max_namespaces) > 0:
@@ -179,6 +182,13 @@ class Client:
                 + "**".join(f"{k}={v}" for k, v in ref.namespace_values.items())
                 + "**"
             )
+        return glob
+
+    def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
+        """Lists blobs in a GCS bucket with a given prefix."""
+        bucket = self.storage_client.bucket(ref.bucket or CRAWLED_BUCKET)
+        prefix = ref.prefix
+        glob = self._listing_glob(bucket, ref)
 
         key = (ref.bucket or CRAWLED_BUCKET, prefix, glob)
         listed = self._listing(key)
@@ -190,35 +200,114 @@ class Client:
                 )
             return
 
-        # Now list all blobs recursively under the chosen prefix
-        print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
-        # Only the two fields read below. Unmasked, every item carries the
-        # object's whole metadata: 83 s against 55 s for the 32k api-krs
-        # objects, and listings egressed 2.7x what reads did in the 30 days
-        # to 2026-09-11.
-        blobs = bucket.list_blobs(
-            prefix=prefix,
-            match_glob=glob,
-            fields="items(name,size),nextPageToken",
-        )
         started = time.monotonic()
         seen: list[tuple[str, int | None]] | None = []
-        for blob in blobs:
-            if seen is not None:
-                seen.append((blob.name, blob.size))
-                if len(seen) > self.LISTING_KEPT_AT_MOST:
-                    seen = None
-            # blob.size comes from the listing response, so carrying it here
-            # costs no extra request and saves a caller a download each time
-            # it needs to tell a failed crawl from a real one.
-            yield self.cached_storage(
-                blob.name, ref.binary, size=blob.size, bucket=ref.bucket
+        bounds = self._range_bounds(key) if glob is None else None
+        if bounds:
+            print(f"Listing {prefix} as {len(bounds) + 1} ranges at once")
+            seen = self._list_ranges(bucket, prefix, bounds)
+            for name, size in seen:
+                yield self.cached_storage(
+                    name, ref.binary, size=size, bucket=ref.bucket
+                )
+        else:
+            # Now list all blobs recursively under the chosen prefix
+            print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
+            # Only the two fields read below. Unmasked, every item carries the
+            # object's whole metadata: 83 s against 55 s for the 32k api-krs
+            # objects, and listings egressed 2.7x what reads did in the 30 days
+            # to 2026-09-11.
+            blobs = bucket.list_blobs(
+                prefix=prefix,
+                match_glob=glob,
+                fields=LISTING_FIELDS,
             )
+            for blob in blobs:
+                if seen is not None:
+                    seen.append((blob.name, blob.size))
+                    if len(seen) > self.LISTING_KEPT_AT_MOST:
+                        seen = None
+                # blob.size comes from the listing response, so carrying it here
+                # costs no extra request and saves a caller a download each time
+                # it needs to tell a failed crawl from a real one.
+                yield self.cached_storage(
+                    blob.name, ref.binary, size=blob.size, bucket=ref.bucket
+                )
         # Kept only once the caller has read it to the end: a listing it
         # stopped part way through is not the whole prefix.
-        if seen is not None:
+        if seen is not None and len(seen) <= self.LISTING_KEPT_AT_MOST:
             with _listings_lock:
                 self._listings()[key] = (started, seen)
+            if glob is None:
+                self._keep_range_bounds(key, seen)
+
+    #: Ranges a big prefix is listed in at once. Listing is all waiting: GCS
+    #: takes ~1.3 s to answer each page of 1,000 names, so the 43k api-krs
+    #: objects took 65 s in turn on 2026-10-02, and 6.4 s as sixteen ranges.
+    LISTING_RANGES = 16
+
+    #: A prefix is split only from this many objects; below it, one listing of
+    #: a few pages is about as quick.
+    LISTING_SPLIT_FROM = 16_000
+
+    def _ranges_file(self, key) -> str:
+        bucket, prefix, _ = key
+        digest = hashlib.sha1(f"{bucket}/{prefix}".encode()).hexdigest()[:16]
+        return os.path.join(config.DOWNLOADED_DIR, ".listing-ranges", f"{digest}.json")
+
+    def _range_bounds(self, key) -> list[str] | None:
+        """Where the last listing of this prefix split into equal ranges.
+
+        Any boundaries cover the prefix whole - the ranges run from one to the
+        next and the first and last are open - so stale ones only list
+        unevenly. A prefix never listed here, as on a fresh container, has
+        none, and is listed in one go.
+        """
+        try:
+            with open(self._ranges_file(key), encoding="utf-8") as f:
+                kept = json.load(f)
+        except (OSError, ValueError):
+            return None
+        bounds = kept.get("bounds") if isinstance(kept, dict) else None
+        if kept.get("prefix") != key[1] or not isinstance(bounds, list):
+            return None
+        if not all(isinstance(b, str) for b in bounds) or bounds != sorted(set(bounds)):
+            return None
+        return bounds or None
+
+    def _keep_range_bounds(self, key, listed: list[tuple[str, int | None]]) -> None:
+        if len(listed) < self.LISTING_SPLIT_FROM:
+            return
+        n = self.LISTING_RANGES
+        bounds = sorted({listed[len(listed) * i // n][0] for i in range(1, n)})
+        path = self._ranges_file(key)
+        part = f"{path}.part"
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(part, "w", encoding="utf-8") as f:
+                json.dump({"bucket": key[0], "prefix": key[1], "bounds": bounds}, f)
+            os.replace(part, path)
+        except OSError as e:
+            print(f"Could not keep the listing ranges of {key[1]}: {e}")
+
+    def _list_ranges(
+        self, bucket, prefix: str, bounds: list[str]
+    ) -> list[tuple[str, int | None]]:
+        """The prefix's names and sizes in listing order, its ranges listed at once."""
+        edges: list[str | None] = [None, *bounds, None]
+
+        def one(i: int) -> list[tuple[str, int | None]]:
+            blobs = bucket.list_blobs(
+                prefix=prefix,
+                start_offset=edges[i],
+                end_offset=edges[i + 1],
+                fields=LISTING_FIELDS,
+            )
+            return [(blob.name, blob.size) for blob in blobs]
+
+        with ThreadPoolExecutor(len(edges) - 1) as pool:
+            parts = list(pool.map(one, range(len(edges) - 1)))
+        return [item for part in parts for item in part]
 
     #: How long a listing is reused. While a run builds its tree it lists the
     #: same prefixes again and again within minutes - rejestr.io and api-krs
