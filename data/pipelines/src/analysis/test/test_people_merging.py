@@ -1,13 +1,18 @@
 """Which Wikipedia biography, if any, the KRS↔PKW join attaches to a person."""
 
+import io
+from types import SimpleNamespace
+
 import duckdb
 import pandas as pd
 import pytest
 
-from analysis.people import people_merged
+from analysis.people import PeopleMerged, people_merged, unique_probability
 from analysis.people_wiki_merged import people_wiki_merged
 from scrapers.stores import Context, ProcessPolicy
+from scrapers.stores.file import VersionedBackup
 from scrapers.test_tree import MockIO, MockNLP, MockRejestrIO, MockUtils, MockWeb
+from stores.file import FromBytesIO
 
 
 @pytest.fixture
@@ -578,3 +583,192 @@ def test_two_krs_rows_carrying_one_register_id_both_reach_the_page(ctx):
     )
 
     assert list(result["koryta_id"]) == ["node-1", "node-1"]
+
+
+# ---------------------------------------- the surname count, however it is read
+WIKI_COLUMNS = [
+    "first_name",
+    "last_name",
+    "birth_year",
+    "birth_date",
+    "full_name",
+    "source",
+    "is_polityk",
+    "wiki_score",
+]
+
+
+def surname_count(teryt) -> pd.DataFrame:
+    """How many people bear "kucza" in one voivodeship, as `NamesCountByRegion`."""
+    return pd.DataFrame([{"last_name": "kucza", "count": 16.0, "teryt": teryt}])
+
+
+def match_region(ctx, voivodeships: list[str], names: pd.DataFrame) -> pd.DataFrame:
+    """Run the merge over one KRS person, their candidacy and a surname count."""
+    candidate = {**pkw_person("jan", "kucza", 1950), "teryt_wojewodztwo": voivodeships}
+    return people_merged(
+        ctx,
+        pd.DataFrame([krs_person("jan", "kucza", "1950-05-01")]),
+        pd.DataFrame(columns=WIKI_COLUMNS),
+        pd.DataFrame([candidate]),
+        no_koryta(),
+        names,
+        pd.DataFrame([{"first_name": "jan", "p": 0.01}]),
+    )
+
+
+@pytest.mark.parametrize(
+    "teryt",
+    [
+        pytest.param("02", id="as-written"),
+        pytest.param(2, id="restored-unpinned"),
+        pytest.param("2", id="read-back-after-that-restore"),
+    ],
+)
+def test_the_regional_surname_count_joins_however_the_code_was_read(ctx, teryt):
+    """`NamesCountByRegion`'s codes have reached the merge in all three shapes.
+
+    Built, or read through its pin, they are "02". A restore made before the
+    pin re-inferred them as integers and wrote those back to disk, so every
+    later read of that file gave "2" - which, as text, found no surname count
+    in the four voivodeships with a leading zero. One person, priced the same
+    all three ways.
+    """
+    result = match_region(ctx, ["02"], surname_count(teryt))
+
+    assert result["unique_chance"].iloc[0] == pytest.approx(
+        unique_probability(0.01, None, False, 16.0)
+    )
+
+
+def test_a_candidacy_with_no_voivodeship_does_not_stop_the_merge(ctx):
+    """The crash: "Could not convert string '' to INT64".
+
+    PKW records no voivodeship for 13,343 candidates, most of them on the Sejm
+    lists of 1991, 1993 and 1997. With the surname counts restored as integers,
+    DuckDB cast PKW's text codes to compare them, and `koryta_scrape_krs_free`
+    ended at the first empty one. No voivodeship is no regional count: the
+    national default.
+    """
+    result = match_region(ctx, [""], surname_count(2))
+
+    assert candidacy_years(result) == ["2024"]
+    assert result["unique_chance"].iloc[0] == pytest.approx(
+        unique_probability(0.01, None, False, None)
+    )
+
+
+class SharedCacheOnly(MockIO):
+    """A checkout with nothing on disk and every output in the shared cache.
+
+    Where a fresh workspace, CI or a Cloud Run container starts. A backup is
+    read through `FromBytesIO`, as a real restore reads it, and whatever the
+    run would write - locally or back to the cache - is kept here instead.
+    """
+
+    def __init__(self, backups: dict[str, pd.DataFrame]):
+        self.backups = {}
+        for filename, frame in backups.items():
+            buffer = io.BytesIO()
+            frame.to_json(buffer, orient="records", lines=True)
+            self.backups[filename] = buffer.getvalue()
+        self.written: dict[str, str] = {}
+        self.dumper = SimpleNamespace(dump_pandas=lambda: None)
+
+    def read_data(self, fs):
+        if isinstance(fs, VersionedBackup) and fs.filename in self.backups:
+            return FromBytesIO(io.BytesIO(self.backups[fs.filename]), fs.filename)
+        raise FileNotFoundError(fs)
+
+    def get_mtime(self, fs):
+        return None
+
+    def write_file(self, fs, content):
+        buffer = io.BytesIO()
+        content(buffer)
+        self.written[fs.filename] = buffer.getvalue().decode()
+
+
+LINKED = koryta_person("Anna Maria Kowalska", "node-1", rejestrio_id="11")
+UNLINKED = koryta_person("Halina Czapla", "node-2")
+
+
+@pytest.mark.parametrize(
+    "pages",
+    [
+        pytest.param([LINKED, UNLINKED], id="as-the-site-is"),
+        pytest.param([LINKED], id="every-page-linked"),
+    ],
+)
+def test_a_cold_run_restores_what_the_merge_reads_and_still_merges(
+    ctx, monkeypatch, pages
+):
+    """`koryta_scrape_krs_free`'s crash, end to end.
+
+    Rebuilding PeopleMerged where none of its inputs is on disk restores all
+    six from the shared cache. The surname counts came back with integer codes
+    and the merge died on the first candidate with no voivodeship. The site's
+    register ids come back as text only while some page has none; once every
+    page is linked they would have come back as integers too.
+    """
+    monkeypatch.setenv("DISABLE_BACKUP", "0")
+    kowalska = krs_person("anna", "kowalska", "1962-01-01", second="maria")
+    kucza = krs_person("jan", "kucza", "1950-05-01")
+    shared = SharedCacheOnly(
+        {
+            "people_krs_merged": pd.DataFrame(
+                [
+                    {**kowalska, "rejestrio_id": ["11"]},
+                    {**kucza, "rejestrio_id": ["12"]},
+                ]
+            ),
+            "people_wiki_merged": people_wiki_merged(
+                ctx, pd.DataFrame([article("Piotr Uszok", "1959-03-02")])
+            ),
+            "people_pkw_merged": pd.DataFrame(
+                [
+                    {
+                        **pkw_person("anna", "kowalska", 1962, second="maria"),
+                        "teryt_wojewodztwo": ["02"],
+                    },
+                    {**pkw_person("jan", "kucza", 1950), "teryt_wojewodztwo": [""]},
+                ]
+            ),
+            "people_koryta_merged": pd.DataFrame(pages),
+            "names_count_by_region": pd.DataFrame(
+                [
+                    {"last_name": "kowalska", "count": 2079.0, "teryt": "02"},
+                    {"last_name": "kucza", "count": 16.0, "teryt": "32"},
+                ]
+            ),
+            "first_name_freq": pd.DataFrame(
+                [
+                    {"first_name": "anna", "count": 200, "p": 0.02},
+                    {"first_name": "jan", "count": 100, "p": 0.01},
+                    {"first_name": "maria", "count": 300, "p": 0.03},
+                ]
+            ),
+        }
+    )
+    cold = Context(
+        io=shared,
+        rejestr_io=MockRejestrIO(),
+        con=duckdb.connect(),
+        utils=MockUtils(),
+        web=MockWeb(),
+        nlp=MockNLP(),
+        refresh_policy=ProcessPolicy({"PeopleMerged"}),
+    )
+
+    merged = PeopleMerged().read_or_process(cold).set_index("krs_name")
+
+    assert merged.loc["anna kowalska", "unique_chance"] == pytest.approx(
+        unique_probability(0.02, 0.03, True, 2079.0)
+    )
+    assert merged.loc["anna kowalska", "koryta_id"] == "node-1"
+    assert merged.loc["jan kucza", "unique_chance"] == pytest.approx(
+        unique_probability(0.01, None, False, None)
+    )
+    # The restore writes the counts back to disk as the cache holds them.
+    restored = shared.written["names_count_by_region/names_count_by_region.jsonl"]
+    assert '"teryt":"02"' in restored

@@ -201,7 +201,17 @@ def people_merged(
         LEFT JOIN first_name_freq_table p_sn ON k.second_name = p_sn.first_name
         LEFT JOIN names_count_by_region_table names_count
             ON k.last_name = names_count.last_name
-            AND list_extract(p.teryt_wojewodztwo, 1) = names_count.teryt
+            -- By the code's value, not its spelling. PKW's codes are text,
+            -- and 13,343 candidates - mostly from the Sejm lists of 1991,
+            -- 1993 and 1997 - have an empty one. NamesCountByRegion's codes
+            -- have come back as integers from a restore, and as "2" for "02"
+            -- from every later read of the file that restore wrote. Against
+            -- integers DuckDB casts PKW's text and stops at the first empty
+            -- code; against "2" it quietly found no surname counts in four
+            -- voivodeships. TRY_CAST reads the empty code as no voivodeship,
+            -- which it is.
+            AND TRY_CAST(list_extract(p.teryt_wojewodztwo, 1) AS INTEGER)
+                = TRY_CAST(names_count.teryt AS INTEGER)
 
     ),
     wiki_candidates AS (
