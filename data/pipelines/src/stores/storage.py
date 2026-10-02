@@ -477,6 +477,8 @@ class Client:
         latest_blob = self._latest_backup_blob(filename)
         print(f"Downloading backup from gs://{SHARED_BUCKET}/{latest_blob.name}")
 
+        # A pipeline restored before it ever ran here has no directory yet.
+        os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
         tmp_path = dest_path + ".bak"
         with open(tmp_path, "wb") as f:
             latest_blob.download_to_file(f)
@@ -487,8 +489,12 @@ class Client:
                         src = tar.extractfile(member)
                         if src is None:
                             continue
-                        with open(dest_path, "wb") as out:
+                        # Renamed into place: a restore cut short must not
+                        # leave a short file that the next run reads as done.
+                        part_path = dest_path + ".part"
+                        with open(part_path, "wb") as out:
                             shutil.copyfileobj(src, out)
+                        os.replace(part_path, dest_path)
                         return
             raise FileNotFoundError(
                 f"Backup archive at '{latest_blob.name}' contains no data file."
