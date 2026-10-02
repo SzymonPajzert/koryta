@@ -1,8 +1,14 @@
 import os
+import sys
 
 from dotenv import load_dotenv
 
 username = None
+
+
+def interactive() -> bool:
+    """Whether somebody can answer a prompt: a scheduled run has no terminal."""
+    return sys.stdin is not None and sys.stdin.isatty()
 
 
 def get_username():
@@ -18,7 +24,7 @@ def get_username():
 
     print("USERNAME environment variable not set. Please set it in .env file.")
     user = os.environ.get("USER", "")
-    if user != "":
+    if user != "" and interactive():
         confirmation = input(
             f"Should we use the system username '{user}' instead? (y/n): "
         )
