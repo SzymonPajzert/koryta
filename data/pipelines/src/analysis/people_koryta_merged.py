@@ -4,6 +4,13 @@ from scrapers.stores import Context, Pipeline
 
 class PeopleKorytaMerged(Pipeline):
     filename = "people_koryta_merged"
+    # Ids, which `PeopleMerged` joins on as text. `rejestrio_id` survives a
+    # restore from the shared cache today only because the 852 pages with no
+    # register link store an empty one, and "" is not a number: if every page
+    # were linked, the restore would re-infer the column as integers, and
+    # DuckDB would refuse the merge's `list_contains(kpw.rejestrio_id,
+    # ko.rejestrio_id)` - a list of text against a number.
+    dtype = {"rejestrio_id": str, "koryta_id": str}
     koryta_pipeline: KorytaPeople
 
     def process(self, ctx: Context):

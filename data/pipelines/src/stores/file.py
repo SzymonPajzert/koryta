@@ -127,8 +127,6 @@ class FromPath(FromBytesIO):
             # TODO remove this hardcodeFix
             if dtype is None:
                 dtype = {}
-            if self.path.endswith("names_count_by_region.jsonl"):
-                dtype["teryt"] = str
             if "company_" in self.path:
                 dtype["krs"] = str
             try:
