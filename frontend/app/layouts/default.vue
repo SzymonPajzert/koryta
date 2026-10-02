@@ -65,7 +65,8 @@
         <!-- The panel and two of the inboxes it lists, under the panel's own
              names; the third, "Zgłoszenia", is under "Zespół" with the QA list
              and its problems, since a problem found there is a report too.
-             "Zadania" is the owner's own list, shown to him alone.
+             "Zadania" is the owner's own list, shown to him alone, and so
+             is "Procesy", the jobs' progress next to it.
              The activator has no `to` of its own - it would navigate and open
              the menu at once - so it is lit by hand instead. -->
         <v-menu
@@ -111,6 +112,12 @@
               :prepend-icon="mdiSitemapOutline"
               to="/admin/zadania"
               title="Zadania"
+            />
+            <v-list-item
+              v-if="isOwner"
+              :prepend-icon="mdiCogSyncOutline"
+              to="/admin/procesy"
+              title="Procesy"
             />
           </v-list>
         </v-menu>
@@ -219,6 +226,7 @@ import {
   mdiNoteEditOutline,
   mdiMessageAlertOutline,
   mdiSitemapOutline,
+  mdiCogSyncOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
