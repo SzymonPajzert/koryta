@@ -11,10 +11,16 @@ def create_people_table(
     to_list: list[str] = [],
     any_vals: list[str] = [],
     flatten_list: list[str] = [],
+    identity: str | None = None,
     **kwargs: dict[str, str],
 ):
     """
     Pass kwargs to struct_pack each argument according to the passed dict
+
+    `identity` names a column of the raw table that says outright who a row is,
+    as rejestr.io's person id does. Every row carrying the same value is given
+    the same spelling of the name before anything is grouped by the name, so
+    somebody the sources spell two ways stays one person.
     """
 
     kwargs_select_list = [
@@ -54,6 +60,62 @@ def create_people_table(
     if all_merge_list:
         final_aggs_select = ",\n" + ",\n".join(all_merge_list)
 
+    spelled = "raw_with_second_name"
+    one_spelling_per_identity = ""
+    if identity is not None:
+        spelled = "raw_spelled"
+        one_spelling_per_identity = f"""
+        spellings AS (
+            -- Each way one person's name is written, and how well its middle
+            -- name is attested: one the source wrote out, then the source
+            -- saying there is none, then one guessed from the full name - a
+            -- guess that makes "ewicz" the middle name of Grzegorz
+            -- Grzegorzewicz.
+            SELECT
+                {identity},
+                first_name,
+                last_name,
+                derived_second_name,
+                min(CASE
+                    WHEN second_name != '' THEN 0
+                    WHEN second_name = '' THEN 1
+                    WHEN derived_second_name != '' THEN 2
+                    ELSE 3
+                END) as attested,
+                length(regexp_replace(
+                    concat_ws(' ', first_name, derived_second_name, last_name),
+                    '[^ąćęłńóśźż]', '', 'g')) as polish_letters,
+                count(*) as written
+            FROM raw_with_second_name
+            WHERE {identity} IS NOT NULL
+            GROUP BY ALL
+        ),
+        spelling AS (
+            -- The best attested; then the one with the most Polish letters,
+            -- because an entry typed without them ("Golanski") is a copy of
+            -- one typed with them and never the other way round; then the
+            -- commonest; then the first alphabetically, so that the answer
+            -- does not depend on the order the rows arrive in.
+            SELECT * FROM spellings
+            QUALIFY row_number() OVER (
+                PARTITION BY {identity}
+                ORDER BY attested, polish_letters DESC, written DESC,
+                    last_name, first_name, derived_second_name
+            ) = 1
+        ),
+        raw_spelled AS (
+            SELECT r.* REPLACE (
+                coalesce(s.first_name, r.first_name) as first_name,
+                coalesce(s.last_name, r.last_name) as last_name,
+                CASE
+                    WHEN s.{identity} IS NULL THEN r.derived_second_name
+                    ELSE s.derived_second_name
+                END as derived_second_name
+            )
+            FROM raw_with_second_name r
+            LEFT JOIN spelling s ON r.{identity} = s.{identity}
+        ),"""
+
     partition_names = "PARTITION BY first_name, last_name, derived_second_name"
     con.execute(
         f"""
@@ -69,7 +131,7 @@ def create_people_table(
                         ''))
                 ) as derived_second_name
             FROM {tbl_name}_raw
-        ),
+        ),{one_spelling_per_identity}
         raw_filled_birth_year AS (
             SELECT
                 *,
@@ -80,7 +142,7 @@ def create_people_table(
                     ELSE
                         birth_year
                 END as effective_birth_year
-            FROM raw_with_second_name
+            FROM {spelled}
         ),
         null_second_names AS (
             SELECT
