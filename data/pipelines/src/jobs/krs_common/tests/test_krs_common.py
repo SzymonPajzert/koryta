@@ -1,12 +1,14 @@
 """Asking api-krs: what comes back, and what of it is kept."""
 
 import json
+from datetime import datetime
 
 import pytest
 
 import jobs.krs_common as common
 from scrapers.krs.people_parsing import is_not_found
 from scrapers.krs.scrape import NOT_FOUND_SIZE_BOUND
+from stores.storage import Client, warsaw_tz
 
 URL = "https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/0000394808?rejestr=P&format=json"
 
@@ -85,3 +87,32 @@ def test_a_session_given_is_the_one_asked():
     common.query_krs_api(URL, verbose=False, session=session)  # type: ignore[arg-type]
 
     assert session.asked == [URL]
+
+
+class Bucket:
+    def __init__(self):
+        self.names: list[str] = []
+
+    def blob(self, name):
+        bucket = self
+
+        class Blob:
+            def upload_from_string(
+                self, data, content_type=None, if_generation_match=None
+            ):
+                bucket.names.append(name)
+
+        return Blob()
+
+
+def test_an_answer_is_named_as_upload_stores_it(tmp_path, monkeypatch):
+    """What the free scrape skips as answered today is found by this name."""
+    monkeypatch.setattr("stores.config.DOWNLOADED_DIR", str(tmp_path))
+    bucket = Bucket()
+    client = Client.__new__(Client)
+    client.storage_client = type("GCS", (), {"bucket": lambda self, n: bucket})()  # type: ignore[assignment]
+    day = datetime.now(warsaw_tz).date().isoformat()
+
+    client.upload(common.stored_url(URL), "{}", "application/json", include_query=True)
+
+    assert bucket.names == [common.answer_name(URL, day)]

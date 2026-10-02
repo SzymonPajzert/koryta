@@ -42,12 +42,13 @@ from jobs.krs_bulletin import scrape_updates_by_dates
 from jobs.krs_common import (
     PINNED,
     REFRESH_PIPELINES,
+    answer_name,
     query_krs_api,
     upload_result,
 )
 from scrapers.krs.scrape import RejestrIOQuery, ScrapeRejestrIO
-from scrapers.stores import Context, ProcessPolicy
-from stores.storage import SHARED_BUCKET, Client, warsaw_tz
+from scrapers.stores import CloudStorage, Context, ProcessPolicy
+from stores.storage import CRAWLED_BUCKET, SHARED_BUCKET, Client, warsaw_tz
 
 #: Requests failing back to back before the run leaves api-krs alone until the
 #: next one: it is down, or refusing this address.
@@ -73,6 +74,10 @@ UPLOAD_WORKERS = 4
 #: Uploads queued at most before the loop waits for the oldest one.
 UPLOADS_AHEAD = 32
 
+#: Where the crawl bucket keeps api-krs answers - the prefix the queue's tree
+#: lists, so a second look is the client's kept listing.
+API_KRS = "hostname=api-krs.ms.gov.pl"
+
 
 def now() -> str:
     return datetime.now(warsaw_tz).isoformat(timespec="seconds")
@@ -94,6 +99,9 @@ class RunSummary:
     empty: int = 0
     failed: int = 0
     upload_failed: int = 0
+    #: Requests not made: the bucket already holds that day's answer, and keeps
+    #: the first one it gets.
+    asked_today: int = 0
     bulletin_fetched: list[str] = field(default_factory=list)
     bulletin_failed: list[str] = field(default_factory=list)
     #: Days the bulletin has long failed to serve; listed, not counted.
@@ -117,9 +125,31 @@ class RunSummary:
         return (
             f"Asked about {self.queries_done:,} of {self.queries:,} companies: "
             f"{self.answered:,} answered, {self.empty:,} empty, "
-            f"{self.failed:,} failed, {self.upload_failed:,} not uploaded"
+            f"{self.failed:,} failed, {self.upload_failed:,} not uploaded, "
+            f"{self.asked_today:,} answered earlier today"
             + (f"; stopped: {self.stopped}" if self.stopped else "")
         )
+
+
+def today() -> str:
+    """The Warsaw day the crawl bucket files an answer under."""
+    return datetime.now(warsaw_tz).date().isoformat()
+
+
+def answered_today(ctx: Context, day: str) -> set[str]:
+    """The api-krs answers the bucket already holds for `day`, by name.
+
+    Read off the listing the queue was just built from, which the client
+    keeps, so this asks nothing more of the bucket. On 2026-10-02 a run asked
+    all 256 of its requests again after an earlier run had, and every answer
+    was refused as already there.
+    """
+    names = set()
+    for ref in ctx.io.list_files(CloudStorage(prefix=API_KRS)):
+        name = getattr(ref, "url", "").removeprefix(f"gs://{CRAWLED_BUCKET}/")
+        if name.endswith(f"/date={day}"):
+            names.add(name)
+    return names
 
 
 def free_queries(queries: Iterable[RejestrIOQuery]) -> list[RejestrIOQuery]:
@@ -156,26 +186,23 @@ def scrape(
     should_stop: Callable[[], str] = lambda: "",
     fetch: Callable[..., str | None] = query_krs_api,
     store: Callable[..., bool] = upload_result,
+    held_today: typing.Collection[str] = (),
 ) -> None:
     """Ask api-krs about each query in turn, counting into `summary`.
+
+    A request whose answer the bucket already holds for today (`held_today`,
+    by name) is not made: one name a day is all the bucket keeps, and it keeps
+    the first, so a second answer could only be thrown away.
 
     Each answer is uploaded on a pool while the next one is asked, and every
     upload has landed or been counted as failed by the time this returns.
     """
     failures_in_a_row = 0
     last_progress = time.monotonic()
-    uploads: collections.deque[Future[bool]] = collections.deque()
-
-    def settle(upload: Future[bool]) -> None:
-        try:
-            stored = upload.result()
-        except Exception as e:  # noqa: BLE001 - counted, as a False is
-            print(f"Upload failed: {e}")
-            stored = False
-        if not stored:
-            summary.upload_failed += 1
+    day = today()
 
     with ThreadPoolExecutor(UPLOAD_WORKERS, thread_name_prefix="upload") as pool:
+        uploads = Uploads(pool, summary)
         try:
             for query in tqdm(queries, disable=None):
                 if reason := should_stop():
@@ -183,6 +210,9 @@ def scrape(
                     break
                 for url in query.urls(only_free=True):
                     assert "rejestr.io" not in url
+                    if held_today and answer_name(url, day) in held_today:
+                        summary.asked_today += 1
+                        continue
                     try:
                         result = fetch(url, verbose=False)
                     # One company is not the run: an answer nothing here
@@ -203,11 +233,7 @@ def scrape(
                         result = ""
                     else:
                         summary.answered += 1
-                    uploads.append(pool.submit(store, ctx, url, result, verbose=False))
-                    while len(uploads) > UPLOADS_AHEAD or (
-                        uploads and uploads[0].done()
-                    ):
-                        settle(uploads.popleft())
+                    uploads.add(store, ctx, url, result)
                     time.sleep(sleep_time)
                 summary.queries_done += 1
                 if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
@@ -217,8 +243,36 @@ def scrape(
                     last_progress = time.monotonic()
                     print(summary.line())
         finally:
-            while uploads:
-                settle(uploads.popleft())
+            uploads.finish()
+
+
+class Uploads:
+    """Answers uploading on a pool behind the requests, counted as they land."""
+
+    def __init__(self, pool: ThreadPoolExecutor, summary: RunSummary):
+        self.pool, self.summary = pool, summary
+        self.pending: collections.deque[Future[bool]] = collections.deque()
+
+    def add(self, store: Callable[..., bool], ctx: Context, url: str, result: str):
+        self.pending.append(self.pool.submit(store, ctx, url, result, verbose=False))
+        while len(self.pending) > UPLOADS_AHEAD or (
+            self.pending and self.pending[0].done()
+        ):
+            self._settle(self.pending.popleft())
+
+    def finish(self) -> None:
+        """Wait for every upload still going, and count the ones that failed."""
+        while self.pending:
+            self._settle(self.pending.popleft())
+
+    def _settle(self, upload: Future[bool]) -> None:
+        try:
+            stored = upload.result()
+        except Exception as e:  # noqa: BLE001 - counted, as a False is
+            print(f"Upload failed: {e}")
+            stored = False
+        if not stored:
+            self.summary.upload_failed += 1
 
 
 def build_queue() -> tuple[Context, list[RejestrIOQuery]]:
@@ -249,9 +303,12 @@ def scrape_krs_free(
     summary.queries = len(queries)
     # One connection for the whole run: a new one per request was most of
     # the request's time - 0.14 s each, against 0.04 s on a kept one.
+    held = answered_today(ctx, today())
     with requests.Session() as session:
         fetch = partial(query_krs_api, session=session)
-        scrape(ctx, queries, sleep_time, summary, should_stop, fetch=fetch)
+        scrape(
+            ctx, queries, sleep_time, summary, should_stop, fetch=fetch, held_today=held
+        )
     print(summary.line())
     return summary
 

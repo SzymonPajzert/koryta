@@ -8,6 +8,7 @@ import json
 import requests
 
 from scrapers.stores import Context
+from stores.storage import crawl_blob_name
 
 #: Seconds api-krs gets to answer one request. It answers in ~0.15 s; without a
 #: limit, a connection that never answers holds an unattended run until it is
@@ -77,16 +78,26 @@ def query_krs_api(
     return json.dumps(result)
 
 
+def stored_url(url: str) -> str:
+    """The url as `upload_result` files its answer: a query parameter it keeps
+    folded into the path, and the format one dropped."""
+    # We're discarding query params, so it's a hotfix for this
+    url = url.replace("?aktualnosc=", "/aktualnosc_")
+    return url.replace("&format=json", "")
+
+
+def answer_name(url: str, day: str) -> str:
+    """The name `upload_result` files the answer to `url` under on `day`."""
+    return crawl_blob_name(stored_url(url), include_query=True, day=day)
+
+
 def upload_result(ctx: Context, url, result, verbose=True) -> bool:
     """Store one answer in the crawl bucket; False when the upload failed.
 
     A failed upload leaves the answer unstored, so the next run asks again.
     """
-    # We're discarding query params, so it's a hotfix for this
-    url = url.replace("?aktualnosc=", "/aktualnosc_")
-    url = url.replace("&format=json", "")
     stored = ctx.io.upload(
-        url, result, "application/json", verbose=verbose, include_query=True
+        stored_url(url), result, "application/json", verbose=verbose, include_query=True
     )
     # An io that cannot tell - the test fakes - returns None, not False.
     return stored is not False

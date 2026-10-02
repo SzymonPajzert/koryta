@@ -12,6 +12,7 @@ import jobs.krs_bulletin as bulletin
 import jobs.krs_scrape_free as job
 from entities.company import KRS
 from entities.person import RejestrIOKey
+from jobs.krs_common import answer_name
 from scrapers.krs.scrape import QueryType, RejestrIOQuery
 from stores.storage import SHARED_BUCKET
 
@@ -391,3 +392,21 @@ def test_a_bulletin_day_long_missing_at_the_source_does_not_fail_the_run():
     assert summary.code() == 0
     summary.bulletin_failed = run.failed
     assert summary.code() == job.EXIT_TRY_LATER
+
+
+def test_what_the_bucket_holds_for_today_is_not_asked_again():
+    """Asked again, the answer is refused as already there: on 2026-10-02 a
+    run asked 256 requests that an earlier run had, for nothing."""
+    held = {answer_name(url_of(1, "P"), job.today())}
+    asked: list[str] = []
+
+    def fetch(url, verbose=True):
+        asked.append(url)
+        return AN_ODPIS
+
+    queries = [company(1)]
+    summary = summary_for(queries)
+    job.scrape(None, queries, 0, summary, fetch=fetch, store=Store(), held_today=held)
+
+    assert asked == [url_of(1, "S")]
+    assert (summary.asked_today, summary.answered, summary.queries_done) == (1, 1, 1)
