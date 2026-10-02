@@ -103,6 +103,32 @@ const overview = (): JobsOverview => ({
       ],
     },
     {
+      // Triggered like the captures, but a run it reported itself.
+      id: "company_import",
+      record: {
+        lastRunId: "co-run",
+        lastStartedAt: "2026-10-01T13:00:00.000Z",
+        lastScheduledAt: null,
+        lastSucceededAt: "2026-10-01T13:04:00.000Z",
+      },
+      probe: null,
+      runs: [
+        run({
+          id: "co-run",
+          job: "company_import",
+          state: "succeeded",
+          trigger: "manual",
+          host: "romb@predator",
+          startedAt: "2026-10-01T13:00:00.000Z",
+          heartbeatAt: "2026-10-01T13:04:00.000Z",
+          finishedAt: "2026-10-01T13:04:00.000Z",
+          progress: { done: 215, total: 215, unit: "firm" },
+          counters: { uploaded: 214, failed: 1, skipped: 0 },
+          exitCode: 0,
+        }),
+      ],
+    },
+    {
       id: "krs_scrape_free",
       record: {
         lastRunId: "k-run",
@@ -224,6 +250,13 @@ const overview = (): JobsOverview => ({
   problems: ["Nie udało się wczytać zgłoszonych uruchomień: test"],
 });
 
+type JobViewOf = JobsOverview["jobs"][number];
+
+/** One job's view in an overview, by id: the server sends them in `JOBS`
+ * order, which moves whenever a job is added. */
+const viewOf = (data: JobsOverview, id: string): JobViewOf =>
+  data.jobs.find((job) => job.id === id)!;
+
 type Wrapper = Awaited<ReturnType<typeof mountSuspended>>;
 
 const rowOf = (wrapper: Wrapper, id: string) =>
@@ -283,7 +316,12 @@ describe("/admin/procesy", () => {
       page
         .findAll(`section[data-kind="${kind}"] [data-job]`)
         .map((row) => row.attributes("data-job"));
-    expect(jobsIn("triggered")).toEqual(["capture_extraction"]);
+    expect(jobsIn("triggered")).toEqual([
+      "capture_extraction",
+      "company_import",
+      "score_import",
+      "extraction_import",
+    ]);
     expect(jobsIn("scheduled")).toEqual([
       "krs_scrape_free",
       "krs_scrape_paid",
@@ -291,6 +329,7 @@ describe("/admin/procesy", () => {
       "krs_register_owners",
       "compressor",
       "firestore_export",
+      "people_import",
     ]);
     expect(jobsIn("ongoing")).toEqual(["article_crawl"]);
     expect(jobsIn("others")).toEqual(["people_upload"]);
@@ -311,11 +350,16 @@ describe("/admin/procesy", () => {
     );
     expect(health).toEqual({
       capture_extraction: "stalled",
+      // By its own newest run, not as captures.
+      company_import: "ok",
       krs_scrape_free: "running",
       krs_scrape_paid: "failed",
       // Registered, and nothing in the overview for them.
+      score_import: "never",
+      extraction_import: "never",
       krs_odpis: "never",
       krs_register_owners: "never",
+      people_import: "never",
       compressor: "stale",
       firestore_export: "ok",
       article_crawl: "never",
@@ -349,8 +393,8 @@ describe("/admin/procesy", () => {
         .map((part) => part.text())
         .join(" ");
     expect(stat("running")).toBe("1 w toku");
-    expect(stat("ok")).toBe("2 działa");
-    expect(stat("never")).toBe("3 brak raportów");
+    expect(stat("ok")).toBe("3 działa");
+    expect(stat("never")).toBe("6 brak raportów");
     // Only the counts that happen to be non-zero beyond the three always shown.
     expect(page.find('[data-stat="stopped"]').exists()).toBe(false);
     expect(page.find('[data-stat="partial"]').exists()).toBe(false);
@@ -361,9 +405,10 @@ describe("/admin/procesy", () => {
     // Everything fixed but the compressor's mirror.
     const calmer = () => {
       const data = overview();
-      const [captures, , paid] = data.jobs;
-      captures!.runs = captures!.runs.filter((r) => r.id !== "c-stuck");
-      paid!.runs = paid!.runs.map((r) => ({ ...r, state: "succeeded" }));
+      const captures = viewOf(data, "capture_extraction");
+      const paid = viewOf(data, "krs_scrape_paid");
+      captures.runs = captures.runs.filter((r) => r.id !== "c-stuck");
+      paid.runs = paid.runs.map((r) => ({ ...r, state: "succeeded" }));
       return data;
     };
     mockAuthRequest.mockImplementation(async () => calmer());
@@ -376,8 +421,8 @@ describe("/admin/procesy", () => {
 
     mockAuthRequest.mockImplementation(async () => {
       const data = calmer();
-      const mirror = data.jobs[3]!.probe as Extract<
-        NonNullable<JobsOverview["jobs"][number]["probe"]>,
+      const mirror = viewOf(data, "compressor").probe as Extract<
+        NonNullable<JobViewOf["probe"]>,
         { kind: "compressedMirror" }
       >;
       mirror.hosts[0]!.through = "2026-10-01";
@@ -404,6 +449,7 @@ describe("/admin/procesy", () => {
     expect(isOpen(page, "krs_scrape_paid")).toBe(true);
     expect(isOpen(page, "compressor")).toBe(true);
     expect(isOpen(page, "krs_scrape_free")).toBe(false);
+    expect(isOpen(page, "company_import")).toBe(false);
     expect(isOpen(page, "firestore_export")).toBe(false);
     expect(isOpen(page, "article_crawl")).toBe(false);
     expect(isOpen(page, "people_upload")).toBe(false);
@@ -520,11 +566,47 @@ describe("/admin/procesy", () => {
     expect(failed.text()).toContain("wklejone na /zrodla");
   });
 
+  it("shows a triggered import as runs it reported, not as captures", async () => {
+    const page = await mountPage();
+    const row = rowOf(page, "company_import");
+    expect(row.get("[data-health-detail]").text()).toBe(
+      "Ostatnio udane: 1.10, 15:04.",
+    );
+    // When it started and how long it took, where a capture says only when.
+    expect(row.get("[data-row-last]").text()).toBe("1.10, 15:00 · 4 min");
+    // No schedule to have, and none missing.
+    expect(row.find("[data-row-next]").exists()).toBe(false);
+    expect(row.find("[data-row-unscheduled]").exists()).toBe(false);
+
+    await row.get("[data-row-toggle]").trigger("click");
+    expect(row.text()).toContain("Uruchomienia");
+    expect(row.text()).not.toContain("Ostatnie zapisy");
+    expect(row.find("[data-capture-stats]").exists()).toBe(false);
+    expect(row.get("[data-fact-succeeded]").text()).toContain("1.10, 15:04");
+    expect(row.text()).toContain(
+      "koryta CompaniesPayloads --output stdout | koryta_uploader --type company --submit",
+    );
+
+    const done = row.get('[data-run="co-run"]');
+    expect(done.find("[data-run-url]").exists()).toBe(false);
+    expect(done.get("[data-run-chip]").text()).toBe("udany");
+    expect(done.text()).toContain("ręcznie");
+    expect(done.get("[data-run-progress]").text()).toBe("215 z 215 firm");
+    expect(done.findAll("[data-run-counter]").map((c) => c.text())).toEqual([
+      "wysłanych: 214",
+      "nieudane: 1",
+      "pominiętych: 0",
+    ]);
+  });
+
   it("says a job that has never reported will report itself", async () => {
     const page = await mountPage();
-    const row = rowOf(page, "article_crawl");
-    await row.get("[data-row-toggle]").trigger("click");
-    expect(row.get("[data-no-runs]").text()).toBe(NO_RUNS_YET);
+    // An import too: "nobody has captured anything" is the captures' line.
+    for (const id of ["article_crawl", "score_import"]) {
+      const row = rowOf(page, id);
+      await row.get("[data-row-toggle]").trigger("click");
+      expect(row.get("[data-no-runs]").text(), id).toBe(NO_RUNS_YET);
+    }
   });
 
   it("shows an unknown job under its id", async () => {
@@ -591,7 +673,7 @@ describe("/admin/procesy", () => {
     await page.get("[data-jobs-refresh]").trigger("click");
     await flushPromises();
     expect(page.text()).toContain("Nie udało się odświeżyć procesów: offline");
-    expect(page.findAll("[data-job]")).toHaveLength(9);
+    expect(page.findAll("[data-job]")).toHaveLength(13);
   });
 
   it("says so when the first load fails", async () => {

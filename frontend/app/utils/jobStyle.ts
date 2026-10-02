@@ -154,7 +154,7 @@ export const jobKindConfig: Record<
   triggered: {
     title: "Na żądanie",
     icon: mdiGestureTap,
-    info: "Jedno uruchomienie na każdą zapisaną stronę; psuje się po jednej stronie naraz - błędem albo stroną, która utknęła i której nic już nie podejmie.",
+    info: "Jedno uruchomienie na każde żądanie - zapisaną stronę albo import puszczony ręcznie. Nie mają stałej pory, więc psują się tylko błędem albo uruchomieniem, które utknęło: stroną, której nic już nie podejmie, albo importem, który przestał dawać sygnał.",
   },
   scheduled: {
     title: "Według harmonogramu",
@@ -233,6 +233,24 @@ const COUNTER_LABELS: Record<string, string> = {
   struck_off: "wykreślonych",
   not_found: "nieznalezionych",
   logged: "zapisanych w logu",
+  // koryta_uploader --submit, per payload type; `failed`, `skipped` and
+  // `facts` are named above. person (people_import): what each payload did
+  // to its page, and in a --dry-run only how many there were.
+  created: "utworzonych",
+  updated: "zaktualizowanych",
+  unchanged: "bez zmian",
+  employments_created: "nowych zatrudnień",
+  companies_created: "dodanych firm",
+  unplaced: "nieumieszczonych kandydatur",
+  planned: "w paczce",
+  // company (company_import).
+  uploaded: "wysłanych",
+  // score (score_import): votes on a model's shortlist, written, taken back
+  // or `unchanged` as above.
+  written: "zapisanych",
+  retracted: "wycofanych",
+  // extraction (extraction_import).
+  articles: "artykułów",
 };
 
 /** The counter keys the jobs in this repository write, so a test can check

@@ -1,5 +1,5 @@
-/** Jobs: the things that run on their own and change the data - the KRS
- * scrapes, the mirror maker, the article crawl, the extension's extractions -
+/** Jobs: the things that change the data - the KRS scrapes, the mirror maker,
+ * the article crawl, the imports into the site, the extension's extractions -
  * and how far each one has got.
  *
  * They used to run on the owner's laptop and home server, where "is it still
@@ -8,8 +8,9 @@
  * place and /admin/procesy reads them back.
  *
  * Three kinds, because each fails differently:
- * - `triggered`: one run per request - a page captured by the extension, then
- *   read by the extractor. Fails one request at a time, or gets stuck.
+ * - `triggered`: one run per request - a page captured by the extension and
+ *   read by the extractor, or a one-off import someone starts by hand. No
+ *   clock is waiting for it, so it fails by breaking or by getting stuck.
  * - `scheduled`: a run at a set time - the free KRS scrape at 00:30. Fails by
  *   breaking, or silently by never starting, which only a clock can notice.
  * - `ongoing`: a long run that drains a queue - the article crawl. Fails by
@@ -25,7 +26,8 @@
  *   database, which holds nothing but ops data.
  * - Captures are already job documents: `articlePages` in the site's database,
  *   with their own `stored -> extracting -> done | error` lifecycle
- *   (shared/capture.ts). The server maps them, rather than copying them.
+ *   (shared/capture.ts). The server maps them onto the one job marked
+ *   `captures`, rather than copying them.
  * - Two jobs report nothing and are watched through what they leave behind:
  *   the compressor through the newest archive in koryta-pl-compressed, the
  *   Firestore export through its completion marker in koryta-pl-crawled.
@@ -220,6 +222,12 @@ export type JobProbe = "compressedMirror" | "firestoreExport";
 export interface JobDefinition {
   id: string;
   kind: JobKind;
+  /** Its runs are the extension's captures, mapped from `articlePages`
+   * (`captureRun`), not runs it reports. A stream of pages, judged by every
+   * page in the last week - one can be stuck while newer ones go through -
+   * and listed by what each captured. A triggered job without it, an import
+   * started by hand, is as good as its newest run. */
+  captures?: true;
   title: string;
   /** One or two sentences: what it does and what it changes. */
   summary: string;
@@ -265,6 +273,7 @@ export const JOBS: readonly JobDefinition[] = [
   {
     id: "capture_extraction",
     kind: "triggered",
+    captures: true,
     title: "Zapis artykułu z rozszerzenia",
     summary:
       "Rozszerzenie (albo „Wklej treść” na /zrodla) zapisuje stronę w archiwum crawla, a capture-extractor wyciąga z niej fakty do /ekstrakcje.",
@@ -276,6 +285,39 @@ export const JOBS: readonly JobDefinition[] = [
     notes: [
       "Ekstrakcja ma 30 minut (dispatchDeadline kolejki); strona, która tyle stoi w „przetwarzam”, utknęła i nic jej już nie podejmie.",
     ],
+  },
+  // The imports report one run per `koryta_uploader --submit`, under the id
+  // of the payload type they send. A person upload reports as people_import,
+  // which also has a daily run of its own, so it sits with the scheduled jobs.
+  {
+    id: "company_import",
+    kind: "triggered",
+    title: "Import firm",
+    summary:
+      "koryta_uploader --type company: firmy z CompaniesPayloads przez /api/ingest/company.",
+    runsOn: "Ręcznie",
+    command:
+      "koryta CompaniesPayloads --output stdout | koryta_uploader --type company --submit",
+    heartbeatMinutes: 15,
+  },
+  {
+    id: "score_import",
+    kind: "triggered",
+    title: "Oceny modeli",
+    summary:
+      "koryta_uploader --type score: krótka lista każdego modelu jako głosy pod jego własnym uid (submit_scores.sh).",
+    runsOn: "Ręcznie",
+    command: "./submit_scores.sh prod",
+    heartbeatMinutes: 15,
+  },
+  {
+    id: "extraction_import",
+    kind: "triggered",
+    title: "Import faktów z artykułów",
+    summary:
+      "koryta_uploader --type extraction: fakty z wsadowej ekstrakcji artykułów, jednym żądaniem do /api/ingest/extraction.",
+    runsOn: "Ręcznie",
+    heartbeatMinutes: 15,
   },
   {
     id: "krs_scrape_free",
@@ -381,6 +423,31 @@ export const JOBS: readonly JobDefinition[] = [
     ],
   },
   {
+    id: "people_import",
+    kind: "scheduled",
+    title: "Import osób na stronę",
+    summary:
+      "Buduje paczki osób (PeoplePayloads --all --on-koryta --only-changed) z najnowszych danych KRS i kopii bazy i wysyła je przez /api/ingest/person: nowe zatrudnienia, kandydatury i partie na stronach, które już są.",
+    runsOn:
+      "Cloud Run job people-import po kopii bazy - do wdrożenia; dziś ręcznie (submit_people.sh)",
+    command: "koryta_people_import",
+    schedule: { dailyAt: "05:00", timeZone: WARSAW },
+    // Building the payloads is one long step that says nothing until it is
+    // done; only the upload after it heartbeats.
+    heartbeatMinutes: 60,
+    graceMinutes: 60,
+    tasks: [
+      "deploy-people-import-job",
+      "schedule-people-import-dry-run",
+      "go-live-people-import",
+    ],
+    notes: [
+      "Rusza po kopii bazy o 04:00, bo --only-changed porównuje paczki właśnie z nią: wysyła tylko osoby, którym import zmieniłby coś na stronie.",
+      "Domyślnie tylko aktualizuje strony, które już są: pierwsza utworzona strona zatrzymuje import (--max-new 0).",
+      "W dni próbne (--dry-run) niczego nie wysyła: uruchomienie kończy się jako „próba - nic nie wysłano”, a „w paczce” mówi, ile osób poszłoby na stronę.",
+    ],
+  },
+  {
     id: "article_crawl",
     kind: "ongoing",
     title: "Crawl artykułów",
@@ -435,7 +502,7 @@ export type ProbeResult =
   | { kind: "firestoreExport"; latest: ExportState | null }
   | { kind: JobProbe; error: string };
 
-/** Captures over the last week, for the triggered row's header. */
+/** Captures over the last week, for the captures job's row. */
 export interface CaptureStats {
   since: string;
   byState: Record<RunState, number>;
@@ -471,7 +538,7 @@ export const RUNS_SHOWN = 10;
  * the row, and which stuck captures still count as a problem. */
 export const CAPTURE_WINDOW_DAYS = 7;
 
-/** A capture as one run of the triggered job. */
+/** A capture as one run of the captures job. */
 export function captureRun(capture: ArticleCapture): JobRun {
   const state: RunState =
     capture.status === "extracting"
@@ -839,8 +906,11 @@ function stateDetail(run: JobRun, now: Date): string {
   const when = shortWarsawTime(run.finishedAt ?? run.heartbeatAt, now);
   const reason = run.stopReason ? ` (${run.stopReason})` : "";
   switch (run.state) {
+    // A success seldom has a reason; when it does, it says what kind of
+    // success it was - a trial import that sent nothing must not read as a
+    // night's real upload.
     case "succeeded":
-      return `Ostatnio udane: ${when}.`;
+      return `Ostatnio udane: ${when}${reason}.`;
     case "partial":
       return `Przerwane z zaległościami: ${when}${reason}.`;
     case "failed":
@@ -902,7 +972,11 @@ export function jobHealth(
       detail: "Nie udało się wczytać uruchomień - powód jest nad listą.",
     };
   }
-  if (definition.kind === "triggered") {
+  // Captures are a stream of pages, any of which can be stuck behind newer
+  // ones that went through. Every other job - a triggered import as much as
+  // a scheduled scrape - is as good as its newest run; with no schedule, as
+  // a triggered job never has, there is no start to miss.
+  if (definition.captures) {
     return capturesHealth(runs, definition, now);
   }
 

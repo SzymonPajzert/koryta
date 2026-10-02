@@ -567,7 +567,7 @@ describe("/api/ops/jobs", () => {
       });
     });
 
-    it("hangs the captures and their counts on the triggered job", async () => {
+    it("hangs the captures and their counts on the captures job alone", async () => {
       process.env.USE_EMULATORS = "true";
       const overview = await jobsOverview(NOW);
       const captures = view(overview, "capture_extraction");
@@ -575,6 +575,108 @@ describe("/api/ops/jobs", () => {
       expect(captures.captureStats!.byState.succeeded).toBe(22);
       expect(captures.record).toBeNull();
       expect(captures).not.toHaveProperty("probe");
+      // The imports are triggered too, and get none of it.
+      expect(
+        overview.jobs
+          .filter((job) => "captureStats" in job)
+          .map((job) => job.id),
+      ).toEqual(["capture_extraction"]);
+      for (const id of [
+        "company_import",
+        "score_import",
+        "extraction_import",
+      ]) {
+        expect(view(overview, id).runs, id).toEqual([]);
+      }
+    });
+  });
+
+  describe("imports", () => {
+    beforeEach(() => {
+      process.env.USE_EMULATORS = "true";
+      captured("c1", "done", "2026-10-02T09:00:00Z");
+    });
+
+    it("gives the triggered imports their reported runs and records, like any reported job", async () => {
+      reported("co1", "company_import", "2026-10-01T13:00:00Z", {
+        trigger: "manual",
+        host: "romb@predator",
+        finishedAt: ts("2026-10-01T13:04:00Z"),
+        progress: { done: 215, total: 215, unit: "firm" },
+        counters: { uploaded: 214, failed: 1, skipped: 0 },
+      });
+      reported("sc1", "score_import", "2026-10-02T08:00:00Z", {
+        trigger: "manual",
+        state: "failed",
+        stopReason: "HTTP 403",
+        errors: ["403 Forbidden: not in datascience"],
+      });
+      record("company_import", {
+        lastRunId: "co1",
+        lastStartedAt: ts("2026-10-01T13:00:00Z"),
+        lastSucceededAt: ts("2026-10-01T13:04:00Z"),
+      });
+
+      const overview = await jobsOverview(NOW);
+      const company = view(overview, "company_import");
+      expect(company.runs).toHaveLength(1);
+      expect(company.runs[0]).toMatchObject({
+        id: "co1",
+        job: "company_import",
+        state: "succeeded",
+        trigger: "manual",
+        finishedAt: "2026-10-01T13:04:00.000Z",
+        progress: { done: 215, total: 215, unit: "firm" },
+        counters: { uploaded: 214, failed: 1, skipped: 0 },
+      });
+      expect(company.record).toEqual({
+        lastRunId: "co1",
+        lastStartedAt: "2026-10-01T13:00:00.000Z",
+        lastScheduledAt: null,
+        lastSucceededAt: "2026-10-01T13:04:00.000Z",
+      });
+      expect(company).not.toHaveProperty("captureStats");
+      expect(company.probe).toBeNull();
+      expect(view(overview, "score_import").runs).toMatchObject([
+        { id: "sc1", state: "failed", stopReason: "HTTP 403" },
+      ]);
+      expect(view(overview, "extraction_import")).toEqual({
+        id: "extraction_import",
+        runs: [],
+        record: null,
+        probe: null,
+      });
+      // The capture stays with the captures job, and no import is "Inne".
+      expect(
+        view(overview, "capture_extraction").runs.map((r) => r.id),
+      ).toEqual(["c1"]);
+      expect(overview.others).toEqual([]);
+    });
+
+    it("gives the people import every person upload, scheduled or by hand", async () => {
+      reported("pe-trial", "people_import", "2026-10-01T03:00:04Z", {
+        trigger: "schedule",
+        host: "cloud-run:people-import/people-import-x1",
+        stopReason: "próba - nic nie wysłano",
+        counters: { planned: 1305 },
+      });
+      reported("pe-hand", "people_import", "2026-10-01T15:00:00Z", {
+        trigger: "manual",
+        host: "romb@predator",
+        counters: { created: 0, updated: 12, unchanged: 30, failed: 0 },
+      });
+      record("people_import", {
+        lastRunId: "pe-hand",
+        lastScheduledAt: ts("2026-10-01T03:00:04Z"),
+      });
+
+      const people = view(await jobsOverview(NOW), "people_import");
+      expect(people.runs.map((r) => r.id)).toEqual(["pe-hand", "pe-trial"]);
+      expect(people.runs[1]).toMatchObject({
+        stopReason: "próba - nic nie wysłano",
+        counters: { planned: 1305 },
+      });
+      expect(people.record!.lastScheduledAt).toBe("2026-10-01T03:00:04.000Z");
     });
   });
 
@@ -582,6 +684,9 @@ describe("/api/ops/jobs", () => {
     beforeEach(() => {
       process.env.USE_EMULATORS = "true";
       reported("a1", "krs_scrape_free", "2026-10-01T22:30:00Z");
+      reported("co1", "company_import", "2026-10-01T13:00:00Z", {
+        trigger: "manual",
+      });
       captured("c1", "done", "2026-10-02T09:00:00Z");
     });
 
@@ -607,6 +712,12 @@ describe("/api/ops/jobs", () => {
         record: null,
         unavailable: true,
       });
+      // An import reports its runs, so it went with them.
+      expect(view(overview, "company_import")).toMatchObject({
+        runs: [],
+        record: null,
+        unavailable: true,
+      });
       // The captures came back, so they are not marked.
       expect(view(overview, "capture_extraction").unavailable).toBeUndefined();
       expect(overview.others).toEqual([]);
@@ -626,6 +737,11 @@ describe("/api/ops/jobs", () => {
       expect(view(overview, "krs_scrape_free").unavailable).toBeUndefined();
       expect(view(overview, "krs_scrape_free").runs.map((r) => r.id)).toEqual([
         "a1",
+      ]);
+      // Triggered, but not captures: its runs did not depend on them.
+      expect(view(overview, "company_import").unavailable).toBeUndefined();
+      expect(view(overview, "company_import").runs.map((r) => r.id)).toEqual([
+        "co1",
       ]);
     });
   });
