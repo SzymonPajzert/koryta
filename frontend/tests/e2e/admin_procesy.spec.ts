@@ -115,7 +115,7 @@ test.describe("Procesy", () => {
         "failed",
       );
 
-      // The capture is one run of the triggered job.
+      // The capture is one run of the captures job.
       const captures = page.locator('[data-job="capture_extraction"]');
       if (!(await captures.locator(`[data-run="${captureId}"]`).isVisible())) {
         await captures.locator("[data-row-toggle]").first().click();

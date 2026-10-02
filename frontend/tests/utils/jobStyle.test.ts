@@ -107,6 +107,8 @@ describe("counterLabel", () => {
       "dni biuletynu bez odpowiedzi",
     );
     expect(counterLabel("pln")).toBe("zł");
+    expect(counterLabel("unplaced")).toBe("nieumieszczonych kandydatur");
+    expect(counterLabel("planned")).toBe("w paczce");
     expect(counterLabel("something_new")).toBe("something_new");
   });
 
@@ -134,7 +136,9 @@ describe("plural", () => {
 describe("counters", () => {
   it("reads every counter the jobs write in Polish", () => {
     // What data/pipelines/src/jobs write: krs_scrape_free, krs_scrape_paid,
-    // krs_odpis, krs_register_owners and the crawl; and the captures' facts.
+    // krs_odpis, krs_register_owners and the crawl; what koryta_uploader
+    // --submit writes for each payload type - person, company, score and
+    // extraction, keys shared between them repeated; and the captures' facts.
     const written = [
       ...["answered", "empty", "failed", "upload_failed"],
       ...["bulletin_fetched", "bulletin_failed"],
@@ -142,6 +146,11 @@ describe("counters", () => {
       ...["fetched", "absent", "gateway", "network"],
       ...["ok", "struck_off", "not_found", "logged"],
       ...["stored", "not_html", "errors", "rate_limited", "discovered"],
+      ...["created", "updated", "unchanged", "employments_created"],
+      ...["companies_created", "unplaced", "failed", "skipped", "planned"],
+      ...["uploaded", "failed", "skipped"],
+      ...["written", "retracted", "unchanged"],
+      ...["articles", "facts"],
       "facts",
     ];
     for (const key of written) {

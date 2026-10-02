@@ -7,8 +7,9 @@ import type { JobRun, JobsOverview } from "../../../shared/jobs";
  * from here. Against the frozen clock (2026-09-01 10:00 UTC, 12:00 in Warsaw)
  * it puts one job in every state the page draws: a capture stuck in the
  * extractor, a nightly scrape that stopped at its deadline, a stale mirror, a
- * finished export, a crawl still going, a job nobody has wired yet and one the
- * registry does not know. */
+ * finished export, the morning's people import cut short the day after a
+ * trial run, a company import run by hand, a crawl still going, jobs nobody
+ * has wired yet and one the registry does not know. */
 
 function run(
   id: string,
@@ -101,6 +102,25 @@ export const opsJobs: JobsOverview = {
           startedAt: "2026-09-01T07:30:00.000Z",
           finishedAt: "2026-09-01T07:30:20.000Z",
           errors: ["Analiza: to nie jest artykuł (koryciarstwo 0/5)."],
+        }),
+      ],
+    },
+    {
+      id: "company_import",
+      record: {
+        lastRunId: "company-0827",
+        lastStartedAt: "2026-08-27T13:12:00.000Z",
+        lastScheduledAt: null,
+        lastSucceededAt: "2026-08-27T13:15:41.000Z",
+      },
+      runs: [
+        run("company-0827", "company_import", {
+          state: "succeeded",
+          startedAt: "2026-08-27T13:12:00.000Z",
+          finishedAt: "2026-08-27T13:15:41.000Z",
+          progress: { done: 215, total: 215, unit: "firm" },
+          counters: { uploaded: 214, failed: 1, skipped: 0 },
+          exitCode: 0,
         }),
       ],
     },
@@ -236,6 +256,47 @@ export const opsJobs: JobsOverview = {
           finishedAt: "2026-09-01T02:03:07.000Z",
         },
       },
+    },
+    {
+      // On its schedule since the trial the day before, so held to 05:00.
+      // That trial is still its last success: this morning's run was cut
+      // short.
+      id: "people_import",
+      record: {
+        lastRunId: "people-0901",
+        lastStartedAt: "2026-09-01T03:00:04.000Z",
+        lastScheduledAt: "2026-09-01T03:00:04.000Z",
+        lastSucceededAt: "2026-08-31T03:41:12.000Z",
+      },
+      runs: [
+        run("people-0901", "people_import", {
+          state: "partial",
+          trigger: "schedule",
+          host: "cloud-run:people-import/people-import-m3v8t",
+          startedAt: "2026-09-01T03:00:04.000Z",
+          finishedAt: "2026-09-01T03:52:41.000Z",
+          progress: { done: 1180, total: 1240, unit: "osób" },
+          counters: {
+            created: 0,
+            updated: 412,
+            unchanged: 768,
+            employments_created: 96,
+            unplaced: 14,
+            failed: 0,
+          },
+          stopReason: "przerwany",
+        }),
+        run("people-0831", "people_import", {
+          state: "succeeded",
+          trigger: "schedule",
+          host: "cloud-run:people-import/people-import-k9d2w",
+          startedAt: "2026-08-31T03:00:03.000Z",
+          finishedAt: "2026-08-31T03:41:12.000Z",
+          counters: { planned: 1305 },
+          stopReason: "próba - nic nie wysłano",
+          exitCode: 0,
+        }),
+      ],
     },
     {
       id: "article_crawl",

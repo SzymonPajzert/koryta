@@ -2,10 +2,10 @@
   <div class="w-100">
     <h1 class="text-h5 text-sm-h4 mb-2">Procesy</h1>
     <p class="text-body-2 text-medium-emphasis mb-4">
-      Wszystko, co działa samo i zmienia dane - pobieranie KRS, lustro, kopia
-      bazy, crawl i zapisy z rozszerzenia - i jak daleko doszło. Joby zgłaszają
-      się same, gdziekolwiek działają; te, które milczą, widać po tym, co
-      zostawiły w zasobnikach.
+      Wszystko, co zmienia dane - pobieranie KRS, lustro, kopia bazy, crawl,
+      importy na stronę i zapisy z rozszerzenia - i jak daleko doszło. Joby
+      zgłaszają się same, gdziekolwiek działają; te, które milczą, widać po tym,
+      co zostawiły w zasobnikach.
     </p>
 
     <!-- The focal point: how many jobs need a look, big and in colour, then

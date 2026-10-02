@@ -8,7 +8,7 @@
       :data-run-state="run.state"
     >
       <!-- A capture: what was captured, and what came of it. -->
-      <template v-if="isCapture(run)">
+      <template v-if="captures">
         <div class="job-run__line">
           <span class="job-run__start" :title="fullTime(run.startedAt)">
             {{ shortWarsawTime(run.startedAt, now) }}
@@ -166,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import {
   mdiCheck,
   mdiChevronDown,
@@ -199,11 +199,17 @@ import {
 
 const props = defineProps<{
   runs: JobRun[];
-  definition: Pick<JobDefinition, "heartbeatMinutes" | "queuedMinutes">;
+  definition: Pick<
+    JobDefinition,
+    "heartbeatMinutes" | "queuedMinutes" | "captures"
+  >;
   now: Date;
 }>();
 
-const isCapture = (run: JobRun) => run.job === "capture_extraction";
+/** Whether these runs are the captures job's pages. Going by the job rather
+ * than by the trigger: an import is one run per request as well, and what
+ * matters about it is what it counted. */
+const captures = computed(() => Boolean(props.definition.captures));
 
 const chipOf = (run: JobRun) => runChip(run, props.definition, props.now);
 
@@ -242,7 +248,7 @@ const hasExtras = (run: JobRun) =>
 
 const openErrors = reactive(
   new Set<string>(
-    props.runs[0]?.state === "failed" && !isCapture(props.runs[0])
+    props.runs[0]?.state === "failed" && !captures.value
       ? [props.runs[0].id]
       : [],
   ),
