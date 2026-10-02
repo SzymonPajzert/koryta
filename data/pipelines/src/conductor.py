@@ -77,6 +77,11 @@ class Conductor(IO):
     def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, DownloadableFile):
             dfs = FileSource(fs)
+            if fs.size == 0 and not dfs.downloaded():
+                # The listing says there is nothing in it - a crawl stored as
+                # failed - so there is nothing to fetch either. 1,511 of them
+                # were fetched one GET each by a dry run on 2026-10-02.
+                return file.FromBytesIO(b"", fs.url)
             if not dfs.downloaded():
                 logging.info("Downloading %s", fs.url)
                 # Downloads that are skipped here -- a --cache-only miss raises
@@ -210,7 +215,7 @@ class Conductor(IO):
         """
 
         def fetch(ref: DataRef) -> bool:
-            if not isinstance(ref, DownloadableFile):
+            if not isinstance(ref, DownloadableFile) or ref.size == 0:
                 return False
             source = FileSource(ref)
             if source.downloaded():

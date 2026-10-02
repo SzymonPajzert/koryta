@@ -150,3 +150,14 @@ def test_a_failed_download_still_fails_the_read():
 
     with pytest.raises(ConnectionError):
         read(io)
+
+
+def test_an_object_listed_as_empty_is_not_fetched():
+    """A crawl stored as failed is a zero-byte object, and the listing says so."""
+    storage = FakeStorage(
+        {name("1/date=2026-10-02"): "", name("2/date=2026-10-02"): "x"}
+    )
+    io = conductor(FakeMirror(None), storage)
+
+    assert read(io) == {url("1/date=2026-10-02"): "", url("2/date=2026-10-02"): "x"}
+    assert storage.downloaded == [name("2/date=2026-10-02")]
