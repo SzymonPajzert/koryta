@@ -160,3 +160,131 @@ hand run rather than the night's.
 first execution Cloud Scheduler starts sets `lastScheduledAt`, and from then on
 a night without a run by 01:30 is flagged. Before that the schedule is a plan,
 and the page says so rather than reporting every night as missed.
+
+## koryta_people_import, daily
+
+It runs once the Firestore export it compares against has landed:
+
+| Warsaw time | What                                                                                      |
+| ----------- | ----------------------------------------------------------------------------------------- |
+| 04:00       | `scheduledFirestoreExport` dumps Firestore - what `--on-koryta` and `--only-changed` read |
+| 05:00       | Cloud Scheduler starts `people-import`; the payloads are built, then sent                 |
+| 07:00       | `--max-minutes=120`, the build included - the job stops sending and writes its summary    |
+| 08:00       | `--task-timeout=3h` - Cloud Run stops whatever is still running                           |
+
+`--max-retries=0`: a failed day is not retried against the same export, and the
+next day's run builds the payloads again - what was not sent still differs from
+the site, so it is sent then. Do not execute it by hand between 05:00 and 08:00:
+both runs compare against the 04:00 export, so the second sends again what the
+first already did.
+
+It has an account of its own, not krs-jobs': it signs in to koryta.pl as
+`pipeline-people-import`, which is the capture extractor's route
+(`stores.koryta_login`). The account mints a custom token for that uid with the
+`datascience` claim and exchanges it with the web key - signing needs
+`roles/iam.serviceAccountTokenCreator` on itself, a grant no other job should
+hold. The uid contains `pipeline`, so the site counts the revisions it files as
+automated rather than as somebody's work.
+
+It reads what the KRS jobs read - the crawl and the export in it, the
+compressed mirror, the shared cache - and the odpisy's PDFs, and writes to the
+shared cache alone, create-only: pipeline backups, the day's payloads
+(`jobs/people_import/payloads/`) and its summary (`jobs/people_import/runs/`). The
+odpis seats are fingerprinted with the PESEL key, so the job is given it. Without
+it they are restored from the shared cache rather than rebuilt, and miss whatever
+`krs_odpis` fetched since - see `refresh_policy` in the job.
+
+16Gi, because PeopleMerged peaked at ~10 GB and a container's disk is memory too;
+Cloud Run will not give more than 8Gi to fewer than 4 CPUs. Nothing has measured
+a whole run on Cloud Run yet: if one dies of memory, 24Gi needs 6 CPUs.
+
+```bash
+PROJECT=koryta-pl
+REGION=europe-central2
+SA=people-import@$PROJECT.iam.gserviceaccount.com
+IMAGE=$REGION-docker.pkg.dev/$PROJECT/koryta/pipelines-jobs
+
+gcloud iam service-accounts create people-import --project=$PROJECT \
+  --display-name="People import on Cloud Run"
+
+# Read what the payloads are built from: the crawl (the export and the odpisy
+# are in it too), its compressed mirror, and the pipeline outputs.
+for bucket in koryta-pl-crawled koryta-pl-compressed koryta-pl-sharedcache; do
+  gcloud storage buckets add-iam-policy-binding gs://$bucket \
+    --member=serviceAccount:$SA --role=roles/storage.objectViewer
+done
+# Add objects to the shared cache, never replace or delete one: backups,
+# payloads and summaries are all written under new names.
+gcloud storage buckets add-iam-policy-binding gs://koryta-pl-sharedcache \
+  --member=serviceAccount:$SA --role=roles/storage.objectCreator
+
+# Sign its own Firebase custom token. Without a key file firebase_admin signs
+# through the IAM API, so the account needs this *on itself*.
+gcloud iam service-accounts add-iam-policy-binding $SA \
+  --member=serviceAccount:$SA --role=roles/iam.serviceAccountTokenCreator
+
+# Report runs to /admin/procesy: the krs-jobs grant, with the same reach over
+# the task list.
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member=serviceAccount:$SA --role=roles/datastore.user \
+  --condition='expression=resource.name=="projects/koryta-pl/databases/agent-tasks",title=agent-tasks-only'
+
+# Two keys, as secrets. The web key is public - it is in nuxt.config.ts, and
+# capture-extractor takes it as a plain variable - so a secret only keeps it out
+# of the job's configuration. The PESEL key is the one that matters: the seats'
+# fingerprints are made with it, and this copy is the first outside the machine
+# that holds it. Read where it is kept (stores.config.PESEL_SALT_FILE), on that
+# machine; the trailing newline is dropped, as the job drops it.
+gcloud secrets create firebase-web-api-key --project=$PROJECT \
+  --replication-policy=automatic
+# From the site's own config, so a rotated key is picked up here too.
+sed -n 's/.*apiKey: "\(AIza[^"]*\)".*/\1/p' frontend/nuxt.config.ts | tr -d '\n' |
+  gcloud secrets versions add firebase-web-api-key --project=$PROJECT --data-file=-
+gcloud secrets create koryta-pesel-salt --project=$PROJECT \
+  --replication-policy=automatic
+tr -d '\n' <~/.config/koryta/pesel-salt |
+  gcloud secrets versions add koryta-pesel-salt --project=$PROJECT --data-file=-
+for secret in firebase-web-api-key koryta-pesel-salt; do
+  gcloud secrets add-iam-policy-binding $secret --project=$PROJECT \
+    --member=serviceAccount:$SA --role=roles/secretmanager.secretAccessor
+done
+
+# The KRS jobs' image (above). USERNAME names its pipeline backups
+# (user=people-import); of what it never rebuilds - Wikipedia, PKW - it restores
+# the newest anyone wrote. TZ keeps the pipelines' dates on the Warsaw day, which
+# is the one KorytaPeople is named after. KORYTA_VERSION as for krs-scrape-free.
+# A week of dry runs first: each builds the day's payloads, sends nothing, and
+# shows on /admin/procesy how many it would have sent.
+gcloud run jobs create people-import --project=$PROJECT --region=$REGION \
+  --image=$IMAGE --service-account=$SA \
+  --command=koryta_people_import --args=--dry-run \
+  --set-env-vars=USERNAME=people-import,TZ=Europe/Warsaw,KORYTA_PIPELINE_UID=pipeline-people-import,KORYTA_VERSION=$(git rev-parse --short HEAD) \
+  --set-secrets=FIREBASE_WEB_API_KEY=firebase-web-api-key:latest,KORYTA_PESEL_SALT=koryta-pesel-salt:latest \
+  --cpu=4 --memory=16Gi --task-timeout=3h --max-retries=0
+
+# Once by hand, as a hand run, then every day at 05:00.
+gcloud run jobs execute people-import --project=$PROJECT --region=$REGION --wait \
+  --update-env-vars=KORYTA_JOB_TRIGGER=manual
+gcloud run jobs add-iam-policy-binding people-import --project=$PROJECT \
+  --region=$REGION --member=serviceAccount:$SA --role=roles/run.invoker
+gcloud scheduler jobs create http people-import-daily --project=$PROJECT \
+  --location=$REGION --schedule="0 5 * * *" --time-zone=Europe/Warsaw \
+  --uri="https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/people-import:run" \
+  --http-method=POST --oauth-service-account-email=$SA
+
+# After the week: live, capped. A few days without a created page or a refusal
+# later, raise the cap towards the default of 3000.
+gcloud run jobs update people-import --project=$PROJECT --region=$REGION \
+  --args=--max-uploads=500
+```
+
+A page created beyond `--max-new` - in the daily `--on-koryta` run, any page at
+all - stops the run there as failed, exit 1, and the run names it, the person
+and the new node, among its errors on /admin/procesy and under `created` in its
+summary: somebody the identity lookup missed, whose two pages want merging. Every `koryta_uploader --submit` run reports under `people_import`
+as well, so a hand upload shows among the daily ones.
+
+On predator instead: a systemd user timer at 05:00 Europe/Warsaw running
+`koryta_people_import` with the same variables plus
+`KORYTA_JOB_STATUS_IMPERSONATE=ops-writer@koryta-pl.iam.gserviceaccount.com`,
+once the account it runs as may sign tokens for itself.

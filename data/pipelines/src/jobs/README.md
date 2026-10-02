@@ -34,6 +34,40 @@ Then `KrsOdpisSeats` and `KrsOdpisEntries` read the PDFs into dated seats and ea
 the company history `krs_scrape_paid` buys from rejestr.io - and `PeopleKRSCombined` puts the seats in place of
 rejestr.io's for every company where the odpis is the newer of the two, on the way to `PeopleMerged`.
 
+## people_import
+1. Rebuilds the people from the newest crawl and this morning's export: `PeopleKRS` (rejestr.io), `KrsOdpisSeats` and `KrsOdpisEntries` (the odpisy), `CompaniesKRS`, `KorytaPeople`, and every pipeline between them and the payloads (`DEFAULT_REFRESH` says why each; `--refresh` names others in their place)
+1. Builds the payloads `koryta PeoplePayloads --all --on-koryta --only-changed` would print - the people the site has whose page would change; `--scope not-on-koryta` the people it has not
+1. Writes them to the shared cache as one write-once part (`jobs/people_import/payloads/date=<day>/<run>.jsonl.gz`), so what any day sent can be read back without diffing two exports
+1. Sends them to `/api/ingest/person` one by one, at the uploader's pace, first creating any company a person names that the site has no page for
+1. Writes a run summary to the shared cache (`jobs/people_import/runs/`)
+
+It stops at once as failed (exit 1) on what means the site is not taking what it should: more pages created than
+`--max-new` allows - none by default, since a page an `--on-koryta` run creates is somebody the identity lookup
+missed, which is how 105 namesake pages appeared on 2026-09-12 - or 20 requests in a row refused. It stops as
+partial (exit 75), leaving the rest to the next day, whose `--only-changed` still finds it changed: after
+`--max-uploads` (3000), at `--max-minutes` (120, the build included), on SIGTERM once the person in hand is done,
+and on Ctrl+C. Some people refused is partial too; every one of them, failed.
+
+Before it goes live it runs a week with `--dry-run`: it builds the payloads, sends nothing, writes nothing of its
+own, and reports the run as succeeded with `planned` and the stop reason "próba - nic nie wysłano", so
+/admin/procesy shows what each day would have sent. Then live, with `--max-uploads` - see [CLOUD_RUN.md](CLOUD_RUN.md).
+
+Every `koryta_uploader --submit` run reports now too: `--type person` as `people_import`, the same job, so a hand
+upload and the daily one read as one history; `company` as `company_import`, `score` as `score_import`,
+`extraction` as `extraction_import`. A preview without `--submit` reports nothing, and nor does `computeNodes`.
+
+The import and the uploader sign in the same way (`stores.koryta_login`), the first that is set winning. A 401
+renews the token once and sends the request again; a token that cannot be renewed fails that payload.
+
+| Variable               | What it does                                                                                                                                                                                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KORYTA_ID_TOKEN`      | A Firebase id token, sent as it is. It lasts an hour and cannot be renewed - for the emulator or a short hand run.                                                                                                                                                                                                        |
+| `KORYTA_PIPELINE_UID`  | Sign in as this robot: the run's service account mints a custom token for the uid with the `datascience` claim and exchanges it for an id token, again before each hour is up. Has to contain `pipeline`, which is what the site counts as automated rather than somebody's work. In production `pipeline-people-import`. |
+| `FIREBASE_WEB_API_KEY` | The web key that exchange needs, the one in `frontend/nuxt.config.ts`. Required with `KORYTA_PIPELINE_UID`.                                                                                                                                                                                                               |
+
+With neither of the first two set, whoever runs it signs in through the browser, as before, and again when the
+site answers 401.
+
 # Reporting a run
 
 The jobs report their runs to [koryta.pl/admin/procesy](https://koryta.pl/admin/procesy)
@@ -83,6 +117,8 @@ one the local /admin/procesy reads.
 
 What reports: `krs_scrape_free` (not `--dry-run`), `krs_scrape_paid` (once the
 bill is accepted), `krs_odpis` (not `--dry-run`), `krs_register_owners` (not
-`--dry-run` or `--reads 0`) and the article crawl, `koryta_crawl`. A job the
-page's registry (`JOBS` in `frontend/shared/jobs.ts`) does not list still shows,
-under "Inne".
+`--dry-run` or `--reads 0`), the article crawl, `koryta_crawl`, `people_import`
+(a `--dry-run` too) and `koryta_uploader --submit`, under `people_import`,
+`company_import`, `score_import` or `extraction_import` by `--type` (not
+`computeNodes`). A job the page's registry (`JOBS` in `frontend/shared/jobs.ts`)
+does not list still shows, under "Inne".
