@@ -51,6 +51,21 @@ def _backup_datetime(blob) -> str:
     return ""
 
 
+def crawl_blob_name(
+    source: NormalizedParse | str, include_query: bool, day: str
+) -> str:
+    """The name `Client.upload` stores a crawl of `source` under on `day`."""
+    if isinstance(source, str):
+        source = NormalizedParse.parse(source)
+    path = source.path if source.path else "index"
+    if include_query:
+        for k, v in sorted(source.query.items(), key=lambda item: item[0]):
+            # We split the keys, so they create folders as well
+            path += f"/?{k}={v}"
+    name = f"hostname={source.hostname}/{path}/date={day}"
+    return name.replace("//", "/").rstrip("/")
+
+
 _GCS_POOL_SIZE = 256  # generous cap; pool is lazy so unused slots cost nothing
 
 
@@ -390,19 +405,9 @@ class Client:
         Prints the error and carries on rather than raising, which the crawler
         relies on. Callers that have to count failures read the result.
         """
-        if isinstance(source, str):
-            source = NormalizedParse.parse(source)
         try:
-            now = datetime.now(warsaw_tz)
-            path = source.path if source.path else "index"
-            if include_query:
-                for k, v in sorted(source.query.items(), key=lambda item: item[0]):
-                    # We split the keys, so they create folders as well
-                    path += f"/?{k}={v}"
-            date = f"{now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}"
-            destination_blob_name = f"hostname={source.hostname}/{path}/date={date}"
-            destination_blob_name = destination_blob_name.replace("//", "/")
-            destination_blob_name = destination_blob_name.rstrip("/")
+            day = datetime.now(warsaw_tz).date().isoformat()
+            destination_blob_name = crawl_blob_name(source, include_query, day)
             bucket = self.storage_client.bucket(CRAWLED_BUCKET)
             blob = bucket.blob(destination_blob_name)
             try:
