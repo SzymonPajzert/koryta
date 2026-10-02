@@ -34,6 +34,9 @@ CRAWLED_BUCKET = "koryta-pl-crawled"
 SHARED_BUCKET = "koryta-pl-sharedcache"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
+#: Guards `Client._listings`: the free scrape uploads from a pool of threads.
+_listings_lock = threading.Lock()
+
 
 def _backup_datetime(blob) -> str:
     """The `datetime=` segment of a backup's name; ISO, so it sorts by time."""
@@ -177,6 +180,16 @@ class Client:
                 + "**"
             )
 
+        key = (ref.bucket or CRAWLED_BUCKET, prefix, glob)
+        listed = self._listing(key)
+        if listed is not None:
+            print(f"Listed {prefix} {time.monotonic() - listed[0]:.0f} s ago; reusing")
+            for name, size in listed[1]:
+                yield self.cached_storage(
+                    name, ref.binary, size=size, bucket=ref.bucket
+                )
+            return
+
         # Now list all blobs recursively under the chosen prefix
         print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
         # Only the two fields read below. Unmasked, every item carries the
@@ -188,13 +201,54 @@ class Client:
             match_glob=glob,
             fields="items(name,size),nextPageToken",
         )
+        started = time.monotonic()
+        seen: list[tuple[str, int | None]] | None = []
         for blob in blobs:
+            if seen is not None:
+                seen.append((blob.name, blob.size))
+                if len(seen) > self.LISTING_KEPT_AT_MOST:
+                    seen = None
             # blob.size comes from the listing response, so carrying it here
             # costs no extra request and saves a caller a download each time
             # it needs to tell a failed crawl from a real one.
             yield self.cached_storage(
                 blob.name, ref.binary, size=blob.size, bucket=ref.bucket
             )
+        # Kept only once the caller has read it to the end: a listing it
+        # stopped part way through is not the whole prefix.
+        if seen is not None:
+            with _listings_lock:
+                self._listings()[key] = (started, seen)
+
+    #: How long a listing is reused. While a run builds its tree it lists the
+    #: same prefixes again and again within minutes - rejestr.io and api-krs
+    #: three times each, 205 of the free scrape's 314 s of listing on
+    #: 2026-10-02. What this run writes it forgets at once (`_forget_listings`);
+    #: what other machines write in the meantime waits for the next listing.
+    LISTING_REUSED_FOR = 30 * 60
+
+    #: Listings longer than this are not kept: a crawl prefix of millions of
+    #: pages would hold its names in memory for little gain.
+    LISTING_KEPT_AT_MOST = 500_000
+
+    def _listings(self) -> dict:
+        # Not set in __init__: tests build a Client without calling it.
+        return self.__dict__.setdefault("_listing_memo", {})
+
+    def _listing(self, key) -> tuple[float, list[tuple[str, int | None]]] | None:
+        with _listings_lock:
+            listed = self._listings().get(key)
+            if listed and time.monotonic() - listed[0] > self.LISTING_REUSED_FOR:
+                del self._listings()[key]
+                listed = None
+        return listed
+
+    def _forget_listings(self, bucket: str, blob_name: str) -> None:
+        """Drop every kept listing a new object under this name belongs in."""
+        with _listings_lock:
+            for key in [k for k in self._listings() if k[0] == bucket]:
+                if blob_name.startswith(key[1]):
+                    del self._listings()[key]
 
     def iterate_blobs(self, io: IO, ref: CloudStorage):
         """List blobs for a given hostname and yield their path and JSON data."""
@@ -245,6 +299,7 @@ class Client:
                     content_type=f"{content_type}; charset=utf-8",
                     if_generation_match=0,
                 )
+                self._forget_listings(CRAWLED_BUCKET, destination_blob_name)
                 self.remember(destination_blob_name, data)
             except gcs_exceptions.PreconditionFailed:
                 pass  # already uploaded, nothing to do
@@ -295,6 +350,7 @@ class Client:
             if blob.md5_hash != base64.b64encode(hashlib.md5(data).digest()).decode():
                 raise
         # The same bytes are under the name either way.
+        self._forget_listings(bucket, blob_name)
         self.remember(blob_name, data, bucket=bucket)
         return f"gs://{bucket}/{blob_name}"
 
