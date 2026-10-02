@@ -61,7 +61,7 @@ import requests
 from uuid_extensions import uuid7str  # type: ignore
 
 from conductor import setup_context
-from jobs.krs_common import REFRESH_PIPELINES
+from jobs.krs_common import PINNED, REFRESH_PIPELINES
 from jobs.krs_odpis import crawl, search, store
 from jobs.krs_odpis.log import FLUSH_EVERY, RUN_BUCKET, RUN_LOG, RunLog
 from jobs.krs_odpis.plan import (
@@ -217,7 +217,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     # on the other routes the bulletin is read before anything else.
     queue = not (args.krs_file or args.graph)
     refresh = set(REFRESH_PIPELINES) if queue else {"KRSUpdates"}
-    ctx, _ = setup_context(policy=ProcessPolicy(refresh))
+    # The queue's people half is the paid job's, so its merge is held: rebuilt
+    # under this job it was 42 s and most of a 10 GB peak on 2026-10-02.
+    ctx, _ = setup_context(policy=ProcessPolicy(refresh, exclude_refresh=set(PINNED)))
     if queue:
         candidates, source = queue_candidates(ctx), "ScrapeRejestrIO"
     changes = bulletin_changes(ctx)
