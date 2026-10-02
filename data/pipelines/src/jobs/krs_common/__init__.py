@@ -14,6 +14,21 @@ from scrapers.stores import Context
 #: killed, with nothing written to say why.
 REQUEST_TIMEOUT = 30
 
+#: What is stored for a register that answers 204 No Content: it holds no
+#: current entry under this number - the company is struck off, which is how
+#: the register job reads a 204 too (`jobs.krs_register_owners.fetch`). Every
+#: one sampled on 2026-10-02 was a company known only from a rejestr.io feed.
+#: That is an answer about the company, as a 404 is, so it is stored in the
+#: 404's shape and `is_not_found` settles it. Stored empty, it read as a crawl
+#: that failed and was asked again on every run: after a full run that day,
+#: every one of the 256 requests left in the free queue was such a register,
+#: and 541 had been asked twice or more for nothing but 204s.
+NO_CURRENT_ENTRY = {
+    "title": "Not Found",
+    "status": 204,
+    "detail": "api-krs answered 204 No Content: no current entry in this register",
+}
+
 
 # TODO move this to stores - this is a generic utility, not KRS-specific.
 def query_krs_api(url, verbose=True, timeout=REQUEST_TIMEOUT) -> str | None:
@@ -26,6 +41,8 @@ def query_krs_api(url, verbose=True, timeout=REQUEST_TIMEOUT) -> str | None:
     result = {}
     try:
         response = requests.get(url, timeout=timeout)
+        if response.status_code == 204:
+            return json.dumps(NO_CURRENT_ENTRY)
         if response.text == "":
             return None
         result = response.json()
