@@ -177,3 +177,14 @@ def test_the_archives_names_split_the_listing_of_what_it_lacks():
     read(io)
 
     assert storage.seeded == [("hostname=rejestr.io", {name("1/date=2026-07-02")})]
+
+
+def test_a_memo_is_kept_for_the_next_run_on_this_machine(tmp_path, monkeypatch):
+    monkeypatch.setattr("stores.config.DOWNLOADED_DIR", str(tmp_path))
+    io = conductor(FakeMirror(None), FakeStorage({}))
+
+    assert io.read_memo("odpis-seats", "a.pdf") is None
+    io.write_memo("odpis-seats", "a.pdf", '{"rows": []}')
+
+    assert io.read_memo("odpis-seats", "a.pdf") == '{"rows": []}'
+    assert not list(tmp_path.rglob("*.part")), "written whole, then renamed"
