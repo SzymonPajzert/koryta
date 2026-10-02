@@ -31,6 +31,7 @@ COMPANY_CONNECTIONS = frozenset(
 PLN_PER_CALL = 0.05
 
 REASON_FILE = "krs_file"
+REASON_GRAPH = "graph"
 
 _KRS_LINE = re.compile(r"^\d{10}$")
 
@@ -110,6 +111,25 @@ def from_queries(queries: Iterable[RejestrIOQuery]) -> list[Candidate]:
             )
         )
     return candidates
+
+
+def from_graph(companies: pd.DataFrame) -> list[Candidate]:
+    """Every company the pipelines know (`CompaniesKRS`), the public ones first.
+
+    The order is what a capped run reaches first: a publicly owned company is
+    the one a page is likeliest to show.
+    """
+    krs = companies["krs"].astype(str).str.zfill(10)
+    public = companies.get("is_public", pd.Series(False, index=companies.index))
+    ordered = pd.concat([krs[public.eq(True)], krs[~public.eq(True)]])
+    return [Candidate(krs=k, reason=REASON_GRAPH) for k in dict.fromkeys(ordered)]
+
+
+def changed_since(
+    candidates: Iterable[Candidate], changes: Mapping[str, str], since: str
+) -> list[Candidate]:
+    """The candidates whose entry the bulletin names on or after `since`, an ISO day."""
+    return [c for c in candidates if changes.get(c.krs, "") >= since]
 
 
 def register_hints(settled: Mapping[str, set[QueryType]]) -> dict[str, str]:
