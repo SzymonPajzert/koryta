@@ -39,7 +39,12 @@ from uuid_extensions import uuid7str  # type: ignore
 
 from conductor import setup_context
 from jobs.krs_bulletin import scrape_updates_by_dates
-from jobs.krs_common import REFRESH_PIPELINES, query_krs_api, upload_result
+from jobs.krs_common import (
+    PINNED,
+    REFRESH_PIPELINES,
+    query_krs_api,
+    upload_result,
+)
 from scrapers.krs.scrape import RejestrIOQuery, ScrapeRejestrIO
 from scrapers.stores import Context, ProcessPolicy
 from stores.storage import SHARED_BUCKET, Client, warsaw_tz
@@ -67,13 +72,6 @@ UPLOAD_WORKERS = 4
 
 #: Uploads queued at most before the loop waits for the oldest one.
 UPLOADS_AHEAD = 32
-
-#: Held at the version on disk, or restored from the shared cache when there is
-#: none. `ScrapeRejestrIO` reads PeopleMerged only for its person queries, which
-#: go to rejestr.io and are the paid job's - yet KorytaPeople is named after the
-#: day, so unpinned it is rebuilt on the first run of every day, and on a fresh
-#: Cloud Run container so is every merge under it.
-PINNED = {"PeopleMerged"}
 
 
 def now() -> str:

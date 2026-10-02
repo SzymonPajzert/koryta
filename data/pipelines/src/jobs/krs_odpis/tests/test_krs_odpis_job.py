@@ -332,6 +332,19 @@ def test_a_dry_run_plans_and_asks_nothing(tmp_path, offline, capsys):
     assert offline[0].refresh_pipelines == {"KRSUpdates"}
 
 
+def test_the_queue_is_planned_without_the_people_merge(offline, monkeypatch, capsys):
+    """The queue's people are the paid job's; its merge was most of a 10 GB peak."""
+    monkeypatch.setattr(
+        job, "queue_candidates", lambda ctx: [plan.Candidate(krs=A, reason="owned")]
+    )
+
+    assert job.main(["--dry-run"]) == 0
+
+    [policy] = offline
+    assert policy.should_refresh("ScrapeRejestrIO")
+    assert not policy.should_refresh("PeopleMerged")
+
+
 def test_the_weekly_refresh_asks_about_the_graph_the_bulletin_names(
     offline, monkeypatch, capsys
 ):

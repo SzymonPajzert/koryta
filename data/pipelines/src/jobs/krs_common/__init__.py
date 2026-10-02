@@ -111,3 +111,11 @@ REFRESH_PIPELINES = {
     "RejestrIOCoverage",
     "PersonFeedCoverage",
 }
+
+#: Held at the version on disk, or restored from the shared cache when there is
+#: none. `ScrapeRejestrIO` reads PeopleMerged only for its person queries, which
+#: go to rejestr.io and are the paid job's - yet KorytaPeople is named after the
+#: day, so unpinned it is rebuilt on the first run of every day, and on a fresh
+#: Cloud Run container so is every merge under it. Neither the free scrape nor
+#: the odpis job asks about a person.
+PINNED = {"PeopleMerged"}
