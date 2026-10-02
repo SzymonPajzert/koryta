@@ -1,7 +1,8 @@
 """The paid half of the KRS scrape: rejestr.io, for the queries worth money.
 
 Recomputes `ScrapeRejestrIO` after the free half has written, prints what the
-bill is made of and what it comes to, and waits for Enter before buying.
+bill is made of and what it comes to, and waits for Enter before buying. What
+it has bought so far is reported to koryta.pl/admin/procesy (`stores.job_runs`).
 
     koryta_scrape_krs_paid
 """
@@ -10,8 +11,14 @@ from time import sleep
 
 from conductor import setup_context
 from jobs.krs_common import REFRESH_PIPELINES, upload_result
-from scrapers.krs.scrape import ScrapeRejestrIO, cost_breakdown, public_krs_ids
+from scrapers.krs.scrape import (
+    PLN_PER_CALL,
+    ScrapeRejestrIO,
+    cost_breakdown,
+    public_krs_ids,
+)
 from scrapers.stores import ProcessPolicy, RejestrIO
+from stores.job_runs import JobRun
 
 
 def scrape_krs_paid(sleep_time=0.2):
@@ -42,18 +49,32 @@ def scrape_krs_paid(sleep_time=0.2):
     print(f"Will cost: {cost} PLN")
     input("Press enter to continue...")
 
-    for query in queries:
-        for url in query.urls():
-            if "rejestr.io" not in url:
-                continue
-
+    paid = [url for query in queries for url in query.urls() if "rejestr.io" in url]
+    # Reported from here, past the prompt: a bill declined is not a run. `pln`
+    # is what has been spent so far and `pln_planned` the bill just accepted;
+    # how many paid calls the run plans is the progress total.
+    counters: dict[str, float] = {
+        "bought": 0,
+        "skipped": 0,
+        "pln": 0.0,
+        "pln_planned": cost,
+    }
+    status = JobRun("krs_scrape_paid", unit="zapytań", total=len(paid))
+    status.progress(counters=counters)  # Kept for the start to write.
+    with status:
+        for done, url in enumerate(paid, 1):
             result = RejestrIO.from_context(ctx).get_rejestr_io(url)
-            if result is None:
+            # None when rejestr.io did not answer, {} when the per-query
+            # prompt was declined and nothing was asked: neither was bought.
+            if not result:
                 print(f"Skipping {url}")
-                continue
-
-            upload_result(ctx, url, result)
-            sleep(sleep_time)
+                counters["skipped"] += 1
+            else:
+                upload_result(ctx, url, result)
+                counters["bought"] += 1
+                counters["pln"] = counters["bought"] * PLN_PER_CALL
+                sleep(sleep_time)
+            status.progress(done, counters=counters)
 
 
 def main():

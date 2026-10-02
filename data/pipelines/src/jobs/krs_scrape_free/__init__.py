@@ -16,7 +16,8 @@ or once `MAX_CONSECUTIVE_FAILURES` requests in a row have failed.
 Exit codes, as `koryta_krs_register_owners` has them: 0 when every query was
 answered; 75 when some were not - the run stopped early, or a request or an
 upload failed - so run again later; 1 for anything else. Each run writes a
-summary to gs://koryta-pl-sharedcache/jobs/krs_scrape_free/runs/.
+summary to gs://koryta-pl-sharedcache/jobs/krs_scrape_free/runs/, and reports
+how it is going to koryta.pl/admin/procesy while it runs (`stores.job_runs`).
 """
 
 import argparse
@@ -39,6 +40,7 @@ from jobs.krs_bulletin import scrape_updates_by_dates
 from jobs.krs_common import REFRESH_PIPELINES, query_krs_api, upload_result
 from scrapers.krs.scrape import RejestrIOQuery, ScrapeRejestrIO
 from scrapers.stores import Context, ProcessPolicy
+from stores.job_runs import FinalState, JobRun
 from stores.storage import SHARED_BUCKET, Client, warsaw_tz
 
 #: Requests failing back to back before the run leaves api-krs alone until the
@@ -47,6 +49,10 @@ MAX_CONSECUTIVE_FAILURES = 20
 
 #: EX_TEMPFAIL: some queries are still unanswered, and the next run asks them.
 EXIT_TRY_LATER = 75
+
+#: How `scrape` says api-krs stopped answering - the one early stop that is a
+#: failure, where a deadline or a SIGTERM only leaves work for the next night.
+REFUSING = "requests in a row failed"
 
 RUNS_PREFIX = "jobs/krs_scrape_free/runs/"
 
@@ -111,6 +117,31 @@ class RunSummary:
         )
 
 
+def run_counters(summary: RunSummary) -> dict[str, int]:
+    """What /admin/procesy shows of a run beside its progress through the queue."""
+    return {
+        "answered": summary.answered,
+        "empty": summary.empty,
+        "failed": summary.failed,
+        "upload_failed": summary.upload_failed,
+        "bulletin_fetched": len(summary.bulletin_fetched),
+        "bulletin_failed": len(summary.bulletin_failed),
+    }
+
+
+def run_state(summary: RunSummary) -> FinalState:
+    """How the page should read a run that ended without raising.
+
+    Exit 75 says only that something is left for the next run. Left because
+    api-krs refused is a failure someone should look at; left because the night
+    ended, or a request or an upload failed here and there, is how a backlog
+    bigger than one night is meant to go.
+    """
+    if summary.code() == 0:
+        return "succeeded"
+    return "failed" if summary.stopped.endswith(REFUSING) else "partial"
+
+
 def free_queries(queries: Iterable[RejestrIOQuery]) -> list[RejestrIOQuery]:
     """The queries with something to ask api-krs; the rest are rejestr.io's."""
     return [
@@ -145,8 +176,10 @@ def scrape(
     should_stop: Callable[[], str] = lambda: "",
     fetch: Callable[..., str | None] = query_krs_api,
     store: Callable[..., bool] = upload_result,
+    progress: Callable[[], None] = lambda: None,
 ) -> None:
-    """Ask api-krs about each query in turn, counting into `summary`."""
+    """Ask api-krs about each query in turn, counting into `summary` and
+    calling `progress` after each company."""
     failures_in_a_row = 0
     last_progress = time.monotonic()
     for query in tqdm(queries, disable=None):
@@ -175,8 +208,9 @@ def scrape(
                 summary.upload_failed += 1
             time.sleep(sleep_time)
         summary.queries_done += 1
+        progress()
         if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
-            summary.stopped = f"{failures_in_a_row} requests in a row failed"
+            summary.stopped = f"{failures_in_a_row} {REFUSING}"
             break
         if time.monotonic() - last_progress >= PROGRESS_EVERY:
             last_progress = time.monotonic()
@@ -196,21 +230,63 @@ def scrape_krs_free(
     sleep_time=0.2,
     summary: RunSummary | None = None,
     should_stop: Callable[[], str] = lambda: "",
+    status: JobRun | None = None,
 ) -> RunSummary:
     """Phase 1: Scrape bulletin updates and free api-krs queries.
 
     This updates the bulletin data and api-krs OdpisAktualny snapshots.
     No cost — all queries go to the free api-krs.ms.gov.pl API.
+
+    `status`, started in the "biuletyn" phase, hears of each phase as it
+    begins and of every company asked; it writes a company at most once a
+    minute, so reporting each one costs nothing.
     """
     summary = summary or RunSummary(run=uuid7str(), started=now())
+
+    def report(phase: str | None = None) -> None:
+        if status is None:
+            return
+        status.progress(
+            summary.queries_done if summary.queries else None,
+            total=summary.queries or None,
+            phase=phase,
+            counters=run_counters(summary),
+            force=phase is not None,
+        )
+
     bulletin = scrape_updates_by_dates(sleep_time)
     summary.bulletin_fetched = bulletin.fetched
     summary.bulletin_failed = bulletin.failed
+    # Rebuilding the queue is minutes of pipelines with nothing to count;
+    # without a phase of its own it would read as the bulletin running long.
+    report("kolejka")
     ctx, queries = build_queue()
     summary.queries = len(queries)
-    scrape(ctx, queries, sleep_time, summary, should_stop)
+    report("odpisy")
+    scrape(ctx, queries, sleep_time, summary, should_stop, progress=report)
     print(summary.line())
     return summary
+
+
+def report_end(
+    status: JobRun,
+    summary: RunSummary,
+    state: FinalState,
+    stop_reason: str | None,
+    summary_path: str,
+    errors: list[str] | None = None,
+) -> None:
+    """`errors` stands in for the summary's when given."""
+    status.finish(
+        state,
+        stop_reason=stop_reason,
+        errors=summary.errors if errors is None else errors,
+        exit_code=summary.exit_code,
+        counters=run_counters(summary),
+        done=summary.queries_done if summary.queries else None,
+        # "" when the summary could not be written: no link to nothing.
+        summary_path=summary_path or None,
+    )
 
 
 def write_summary(summary: RunSummary, client: typing.Any | None = None) -> str:
@@ -287,17 +363,33 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     previous = signal.signal(signal.SIGTERM, on_sigterm)
     summary = RunSummary(run=uuid7str(), started=now())
+    # Under the summary's id, so the page's run and the summary in the shared
+    # cache are found from each other.
+    status = JobRun("krs_scrape_free", run_id=summary.run, unit="firm")
+    status.start(phase="biuletyn")
     try:
-        scrape_krs_free(args.interval, summary, stop_rule(deadline, lambda: signalled))
+        scrape_krs_free(
+            args.interval, summary, stop_rule(deadline, lambda: signalled), status
+        )
     except BaseException as e:
         # Interrupted, or a bug: say so in the summary, then exit as Python
         # would have - 130 for Ctrl+C, 1 for the rest.
-        summary.stopped = summary.stopped or f"raised {type(e).__name__}"
-        summary.errors.append(repr(e)[:500])
-        write_summary(summary)
+        reason = f"raised {type(e).__name__}"
+        summary.stopped = summary.stopped or reason
+        crash = repr(e)[:500]
+        summary.errors.append(crash)
+        path = write_summary(summary)
+        # Ctrl+C is someone stopping a hand run, not the job breaking: what is
+        # left is asked next time, as after a deadline.
+        state: FinalState = "partial" if isinstance(e, KeyboardInterrupt) else "failed"
+        # The crash first: after twenty failed requests the summary already
+        # holds as many errors as the page keeps, and last it would be cut.
+        errors = [crash, *summary.errors[:-1]]
+        report_end(status, summary, state, reason, path, errors)
         raise
     finally:
         signal.signal(signal.SIGTERM, previous)
     summary.exit_code = summary.code()
-    write_summary(summary)
+    path = write_summary(summary)
+    report_end(status, summary, run_state(summary), summary.stopped or None, path)
     return summary.exit_code

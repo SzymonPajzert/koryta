@@ -4,6 +4,7 @@ import gzip
 import sys
 from datetime import datetime
 
+import pandas as pd
 import pytest
 
 import jobs.krs_register_owners as job
@@ -219,3 +220,182 @@ def test_a_retried_flush_sends_the_same_bytes(monkeypatch):
     log.flush()
 
     assert sent[0] == sent[1]
+
+
+# ---------------------------------------------------------------------------
+# What the run reports to /admin/procesy (stores.job_runs)
+
+
+class RecordingRun:
+    """Stands in for `JobRun`, keeping what the job told it."""
+
+    def __init__(self, job_id="krs_register_owners", **kwargs):
+        self.job = job_id
+        self.kwargs = kwargs
+        self.calls: list[tuple[str, dict]] = []
+
+    def __enter__(self):
+        self.calls.append(("start", {}))
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.calls.append(("exit", {"raised": exc_type}))
+
+    def progress(self, done=None, **kwargs):
+        self.calls.append(("progress", {"done": done, **kwargs}))
+
+    def finish(self, state, **kwargs):
+        self.calls.append(("finish", {"state": state, **kwargs}))
+
+    def ending(self) -> dict:
+        [end] = [args for call, args in self.calls if call == "finish"]
+        return end
+
+    def done(self) -> list:
+        return [args["done"] for call, args in self.calls if call == "progress"]
+
+
+def read_with(monkeypatch, reads, todo):
+    """`read_register` over `todo`, `ask` answering from `reads(krs)`."""
+    monkeypatch.setattr(job, "ask", lambda session, krs, *args: reads(krs))
+    status = RecordingRun()
+    code = job.read_register(
+        todo,
+        ResponseLog(Bucket().put, "run-1"),
+        0,
+        "run-1",
+        status=status,  # type: ignore[arg-type]
+    )
+    return code, status
+
+
+def test_a_run_that_reads_everything_is_reported_as_a_success(monkeypatch):
+    answers = {"1": STATUS_STRUCK_OFF, "2": STATUS_OK}
+
+    code, status = read_with(
+        monkeypatch, lambda krs: a_read(krs, answers[krs]), ["1", "2"]
+    )
+
+    assert code == 0
+    assert status.done() == [0, 1, 2]
+    assert status.calls[0][1]["total"] == 2
+    assert status.ending() == {
+        "state": "succeeded",
+        "stop_reason": None,
+        "errors": [],
+        "exit_code": 0,
+        "counters": {
+            STATUS_OK: 1,
+            STATUS_STRUCK_OFF: 1,
+            STATUS_NOT_FOUND: 0,
+            STATUS_FAILED: 0,
+            "logged": 2,
+        },
+        "done": 2,
+    }
+
+
+def test_the_register_refusing_is_reported_as_a_failure(monkeypatch):
+    def refused(krs):
+        read = a_read(krs, STATUS_FAILED)
+        read.error = "HTTP 503"
+        return read
+
+    todo = [str(n) for n in range(job.MAX_CONSECUTIVE_FAILURES + 5)]
+    code, status = read_with(monkeypatch, refused, todo)
+
+    assert code == job.EXIT_UPSTREAM_REFUSING
+    end = status.ending()
+    assert (end["state"], end["exit_code"]) == ("failed", 75)
+    assert end["stop_reason"] == f"{job.MAX_CONSECUTIVE_FAILURES} reads in a row failed"
+    assert end["errors"][:2] == ["0: HTTP 503", "1: HTTP 503"]
+    assert end["counters"][STATUS_FAILED] == job.MAX_CONSECUTIVE_FAILURES
+
+
+def test_sigterm_is_a_partial_run(monkeypatch):
+    handlers = []
+
+    def install(signum, handler):
+        handlers.append(handler)
+
+    monkeypatch.setattr(job.signal, "signal", install)
+
+    def read_then_sigterm(krs):
+        handlers[0](15, None)
+        return a_read(krs)
+
+    code, status = read_with(monkeypatch, read_then_sigterm, ["1", "2", "3"])
+
+    assert code == 0
+    end = status.ending()
+    assert (end["state"], end["stop_reason"], end["done"]) == ("partial", "SIGTERM", 1)
+
+
+def test_ctrl_c_is_a_partial_run(monkeypatch):
+    def interrupted_on_the_second(krs):
+        if krs == "2":
+            raise KeyboardInterrupt
+        return a_read(krs)
+
+    code, status = read_with(monkeypatch, interrupted_on_the_second, ["1", "2", "3"])
+
+    assert code == 0
+    end = status.ending()
+    assert (end["state"], end["stop_reason"], end["done"]) == (
+        "partial",
+        "przerwany",
+        1,
+    )
+
+
+@pytest.fixture
+def runs(monkeypatch) -> list[RecordingRun]:
+    made: list[RecordingRun] = []
+
+    def record(job_id, **kwargs):
+        made.append(RecordingRun(job_id, **kwargs))
+        return made[-1]
+
+    monkeypatch.setattr(job, "JobRun", record)
+    return made
+
+
+@pytest.fixture
+def a_queue(monkeypatch):
+    class Queue:
+        def read_or_process(self, ctx):
+            return pd.DataFrame({"krs": [1, 2, 3], "reason": ["new", "new", "changed"]})
+
+    monkeypatch.setattr(job, "setup_context", lambda **kwargs: ("ctx", None))
+    monkeypatch.setattr(job, "KRSRegisterQueue", Queue)
+
+
+@pytest.mark.parametrize("argv", [["--reads", "0"], ["--reads", "5", "--dry-run"]])
+def test_a_run_that_asks_nothing_reports_nothing(runs, a_queue, argv):
+    assert job.main(argv) == 0
+
+    assert runs == []
+
+
+def test_a_run_is_reported_under_its_log_run_id(monkeypatch, runs, a_queue):
+    seen: dict = {}
+
+    class Client:
+        def create_object(self, *args, **kwargs):
+            raise AssertionError("nothing is written here")
+
+    def read_register(todo, log, interval, run, status=None):
+        seen.update(todo=todo, run=run, status=status)
+        return 0
+
+    monkeypatch.setattr(job, "Client", Client)
+    monkeypatch.setattr(job, "read_register", read_register)
+
+    assert job.main(["--reads", "2"]) == 0
+
+    [run] = runs
+    assert run.job == "krs_register_owners"
+    assert run.kwargs == {"run_id": seen["run"], "unit": "odczytów", "total": 2}
+    assert seen["status"] is run
+    assert seen["todo"] == ["0000000001", "0000000002"]
+    assert run.calls[-1] == ("exit", {"raised": None})
