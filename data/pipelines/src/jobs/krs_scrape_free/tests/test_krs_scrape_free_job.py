@@ -364,3 +364,14 @@ def test_the_bulletin_day_ends_at_midnight_in_warsaw(monkeypatch):
     monkeypatch.setattr(bulletin, "datetime", Clock)
 
     assert bulletin.warsaw_today() == date(2026, 10, 3)
+
+
+def test_a_bulletin_day_on_file_is_not_asked_for_again():
+    """Asked by KRSUpdates' rows, a day nobody's entry changed on looked
+    unfetched: 2025-09-20 and 09-21 were fetched again on every run."""
+    on_file = {"2025-06-01", "2025-06-03"}  # 06-03 named nobody
+
+    assert bulletin.days_to_fetch(on_file, date(2025, 6, 5)) == [
+        "2025-06-02",
+        "2025-06-04",
+    ]

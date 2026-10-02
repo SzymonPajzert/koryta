@@ -20,7 +20,6 @@ import requests
 
 from conductor import setup_context
 from jobs.krs_common import REQUEST_TIMEOUT
-from scrapers.krs.columns import ISO_DATE_LENGTH
 from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import ProcessPolicy
 from stores.storage import warsaw_tz
@@ -44,34 +43,32 @@ def warsaw_today() -> date:
     return datetime.now(warsaw_tz).date()
 
 
+def days_to_fetch(stored: set[str], today: date) -> list[str]:
+    """The days from FIRST_DAY up to yesterday with no bulletin on file."""
+    days = []
+    current_date = FIRST_DAY
+    while current_date < today:
+        if (day := current_date.isoformat()) not in stored:
+            days.append(day)
+        current_date += timedelta(days=1)
+    return days
+
+
 def scrape_updates_by_dates(sleep_time=0.2) -> BulletinRun:
-    ctx, _ = setup_context(policy=ProcessPolicy({"KRSUpdates"}))
+    ctx, _ = setup_context(policy=ProcessPolicy(set()))
 
-    today = warsaw_today()
-
-    pipeline = KRSUpdates()
-    already_scraped_dates = set()
-    for update in pipeline.read_or_process_list(ctx):
-        # Truncated, because a run that reads the cached output rather than
-        # rebuilding it gets "2025-06-02 00:00:00" here: pandas parses a column
-        # named `date` into a Timestamp whatever dtype asks for. That matches
-        # no date_str below, so every bulletin day since 2025-06-01 would be
-        # fetched again, on every run.
-        already_scraped_dates.add(str(update.date)[:ISO_DATE_LENGTH])
-
+    # What is on file, read off the listing. KRSUpdates' rows cannot say it: a
+    # day nobody's entry changed on has none, so it was fetched again on every
+    # run (2025-09-20 and 09-21, three times on 2026-10-02) - and building the
+    # pipeline for it cost a 143 MB rebuild and 20 s turning its rows into
+    # objects, before the run's own tree built it again anyway.
+    stored = KRSUpdates().days_crawled(ctx)
     print(
-        f"{len(already_scraped_dates)} bulletin days stored, the newest "
-        f"{max(already_scraped_dates, default='none')}"
+        f"{len(stored)} bulletin days stored, the newest {max(stored, default='none')}"
     )
 
     run = BulletinRun()
-    current_date = FIRST_DAY
-    while current_date < today:
-        date_str = current_date.strftime("%Y-%m-%d")
-        if date_str in already_scraped_dates:
-            current_date += timedelta(days=1)
-            continue
-
+    for date_str in days_to_fetch(stored, warsaw_today()):
         url = f"https://api-krs.ms.gov.pl/api/Krs/Biuletyn/{date_str}"
         print(f"Requesting: {url}")
         try:
@@ -91,8 +88,6 @@ def scrape_updates_by_dates(sleep_time=0.2) -> BulletinRun:
             print(f"An error occurred while uploading {url}: {e}")
             run.failed.append(date_str)
         sleep(sleep_time)
-
-        current_date += timedelta(days=1)
 
     return run
 
