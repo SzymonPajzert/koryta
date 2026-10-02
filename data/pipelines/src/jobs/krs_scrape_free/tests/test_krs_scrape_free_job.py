@@ -322,7 +322,7 @@ def test_a_summary_that_cannot_be_written_does_not_fail_the_run():
 def test_the_job_keeps_its_flags_from_the_pipelines(monkeypatch):
     seen = {}
 
-    def fake_run(sleep_time, summary, should_stop):
+    def fake_run(sleep_time, summary, should_stop, status=None):
         seen["argv"] = list(sys.argv)
         seen["sleep_time"] = sleep_time
         summary.queries = summary.queries_done = 1
@@ -341,7 +341,7 @@ def test_the_job_keeps_its_flags_from_the_pipelines(monkeypatch):
 def test_a_crash_is_recorded_before_it_ends_the_run(monkeypatch):
     written = []
 
-    def broken(sleep_time, summary, should_stop):
+    def broken(sleep_time, summary, should_stop, status=None):
         raise RuntimeError("CompaniesKRS failed")
 
     monkeypatch.setattr(job, "scrape_krs_free", broken)
@@ -410,3 +410,278 @@ def test_what_the_bucket_holds_for_today_is_not_asked_again():
 
     assert asked == [url_of(1, "S")]
     assert (summary.asked_today, summary.answered, summary.queries_done) == (1, 1, 1)
+
+
+# ---------------------------------------------------------------------------
+# What the run reports to /admin/procesy (stores.job_runs)
+
+
+class RecordingRun:
+    """Stands in for `JobRun`, keeping what the job told it."""
+
+    def __init__(self, job_id, **kwargs):
+        self.job = job_id
+        self.kwargs = kwargs
+        self.calls: list[tuple[str, dict]] = []
+
+    def start(self, *, phase=None):
+        self.calls.append(("start", {"phase": phase}))
+        return self
+
+    def progress(self, done=None, **kwargs):
+        self.calls.append(("progress", {"done": done, **kwargs}))
+
+    def finish(self, state, **kwargs):
+        self.calls.append(("finish", {"state": state, **kwargs}))
+
+    def ending(self) -> dict:
+        [end] = [args for call, args in self.calls if call == "finish"]
+        return end
+
+
+@pytest.fixture
+def runs(monkeypatch) -> list[RecordingRun]:
+    made: list[RecordingRun] = []
+
+    def record(job_id, **kwargs):
+        made.append(RecordingRun(job_id, **kwargs))
+        return made[-1]
+
+    monkeypatch.setattr(job, "JobRun", record)
+    return made
+
+
+SUMMARY_URL = f"gs://{SHARED_BUCKET}/jobs/krs_scrape_free/runs/date=2026-10-03/r.json"
+
+
+def a_night(monkeypatch, outcome, summary_url=SUMMARY_URL):
+    """Run `main` with the scrape replaced by `outcome(summary)`."""
+
+    def fake_run(sleep_time, summary, should_stop, status=None):
+        outcome(summary)
+        return summary
+
+    monkeypatch.setattr(job, "scrape_krs_free", fake_run)
+    monkeypatch.setattr(job, "write_summary", lambda summary: summary_url)
+    return job.main([])
+
+
+def test_a_complete_night_is_reported_as_a_success(monkeypatch, runs):
+    def everything(summary):
+        summary.queries = summary.queries_done = 2
+        summary.answered, summary.empty = 3, 1
+        summary.bulletin_fetched = ["2026-10-02"]
+
+    assert a_night(monkeypatch, everything) == 0
+
+    [run] = runs
+    assert run.job == "krs_scrape_free"
+    assert run.kwargs["unit"] == "firm"
+    assert run.calls[0] == ("start", {"phase": "biuletyn"})
+    assert run.ending() == {
+        "state": "succeeded",
+        "stop_reason": None,
+        "errors": [],
+        "exit_code": 0,
+        "counters": {
+            "answered": 3,
+            "empty": 1,
+            "failed": 0,
+            "upload_failed": 0,
+            "bulletin_fetched": 1,
+            "bulletin_failed": 0,
+        },
+        "done": 2,
+        "summary_path": SUMMARY_URL,
+    }
+
+
+def test_the_run_is_reported_under_the_summarys_id(monkeypatch, runs):
+    ids = []
+
+    def note_id(summary):
+        ids.append(summary.run)
+
+    a_night(monkeypatch, note_id)
+
+    assert runs[0].kwargs["run_id"] == ids[0]
+
+
+@pytest.mark.parametrize(
+    ("stop", "state"),
+    [
+        ("deadline", "partial"),
+        ("SIGTERM", "partial"),
+        ("20 requests in a row failed", "failed"),
+    ],
+)
+def test_an_early_stop_is_partial_unless_api_krs_refused(
+    monkeypatch, runs, stop, state
+):
+    def stopped(summary):
+        summary.queries, summary.queries_done = 10, 4
+        summary.stopped = stop
+
+    assert a_night(monkeypatch, stopped) == job.EXIT_TRY_LATER
+
+    end = runs[0].ending()
+    assert (end["state"], end["stop_reason"], end["exit_code"]) == (state, stop, 75)
+    assert end["done"] == 4
+
+
+def test_the_stop_scrape_writes_when_refused_is_the_one_read_as_a_failure():
+    queries = [company(n) for n in range(1, 31)]
+    summary = summary_for(queries)
+    timeout = answering(lambda url: requests.Timeout("read timed out"))
+
+    job.scrape(None, queries, 0, summary, fetch=timeout, store=Store())
+
+    assert job.run_state(summary) == "failed"
+
+
+@pytest.mark.parametrize(
+    "left",
+    [
+        {"failed": 1},
+        {"upload_failed": 1},
+        {"bulletin_failed": ["2026-10-02"]},
+    ],
+)
+def test_a_few_misses_are_partial_not_failed(monkeypatch, runs, left):
+    def mostly(summary):
+        summary.queries = summary.queries_done = 3
+        for name, value in left.items():
+            setattr(summary, name, value)
+
+    assert a_night(monkeypatch, mostly) == job.EXIT_TRY_LATER
+
+    assert runs[0].ending()["state"] == "partial"
+
+
+def test_a_summary_that_was_not_written_is_not_linked(monkeypatch, runs):
+    def everything(summary):
+        summary.queries = summary.queries_done = 1
+
+    a_night(monkeypatch, everything, summary_url="")
+
+    assert runs[0].ending()["summary_path"] is None
+
+
+def test_a_crash_is_reported_as_a_failure(monkeypatch, runs):
+    def broken(sleep_time, summary, should_stop, status=None):
+        raise RuntimeError("CompaniesKRS failed")
+
+    monkeypatch.setattr(job, "scrape_krs_free", broken)
+    monkeypatch.setattr(job, "write_summary", lambda summary: SUMMARY_URL)
+
+    with pytest.raises(RuntimeError):
+        job.main([])
+
+    end = runs[0].ending()
+    assert (end["state"], end["stop_reason"]) == ("failed", "raised RuntimeError")
+    assert end["exit_code"] is None
+    assert "CompaniesKRS failed" in end["errors"][0]
+    assert end["summary_path"] == SUMMARY_URL
+    assert end["done"] is None, "it never got to the queue"
+
+
+def test_a_crash_after_twenty_failed_requests_is_the_error_the_page_keeps(
+    monkeypatch, runs
+):
+    summaries: list[job.RunSummary] = []
+
+    def broken(sleep_time, summary, should_stop, status=None):
+        summary.errors = [f"{url_of(n, 'P')}: timeout" for n in range(job.ERRORS_KEPT)]
+        raise RuntimeError("the odpis parser crashed")
+
+    monkeypatch.setattr(job, "scrape_krs_free", broken)
+    monkeypatch.setattr(
+        job, "write_summary", lambda summary: summaries.append(summary) or ""
+    )
+
+    with pytest.raises(RuntimeError):
+        job.main([])
+
+    errors = runs[0].ending()["errors"]
+    assert "the odpis parser crashed" in errors[0]
+    assert errors[1:] == [f"{url_of(n, 'P')}: timeout" for n in range(20)]
+    # The summary in the shared cache keeps them all, in the order they came.
+    [summary] = summaries
+    assert len(summary.errors) == 21 and "crashed" in summary.errors[-1]
+
+
+def test_ctrl_c_leaves_the_rest_for_the_next_run(monkeypatch, runs):
+    def interrupted(sleep_time, summary, should_stop, status=None):
+        summary.queries, summary.queries_done = 10, 3
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(job, "scrape_krs_free", interrupted)
+    monkeypatch.setattr(job, "write_summary", lambda summary: "")
+
+    with pytest.raises(KeyboardInterrupt):
+        job.main([])
+
+    end = runs[0].ending()
+    assert (end["state"], end["stop_reason"]) == ("partial", "raised KeyboardInterrupt")
+    assert end["done"] == 3
+
+
+def test_a_dry_run_reports_nothing(monkeypatch, runs):
+    monkeypatch.setattr(job, "build_queue", lambda: ("ctx", []))
+
+    assert job.main(["--dry-run"]) == 0
+
+    assert runs == []
+
+
+def test_each_phase_is_reported_as_it_begins_and_each_company_as_it_is_done(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        job,
+        "scrape_updates_by_dates",
+        lambda sleep_time: bulletin.BulletinRun(fetched=["2026-10-02"]),
+    )
+    monkeypatch.setattr(job, "build_queue", lambda: ("ctx", [company(1), company(2)]))
+
+    def scrape(ctx, queries, sleep_time, summary, should_stop, progress):
+        for _ in queries:
+            summary.answered += 2
+            summary.queries_done += 1
+            progress()
+
+    monkeypatch.setattr(job, "scrape", scrape)
+    status = RecordingRun("krs_scrape_free")
+
+    job.scrape_krs_free(0, summary_for([]), status=status)  # type: ignore[arg-type]
+
+    reported = [
+        (args["phase"], args["done"], args["total"], args["force"])
+        for call, args in status.calls
+    ]
+    assert reported == [
+        ("kolejka", None, None, True),
+        ("odpisy", 0, 2, True),
+        (None, 1, 2, False),
+        (None, 2, 2, False),
+    ]
+    assert status.calls[0][1]["counters"]["bulletin_fetched"] == 1
+    assert status.calls[-1][1]["counters"]["answered"] == 4
+
+
+def test_scrape_reports_after_every_company():
+    queries = [company(1), company(2)]
+    summary = summary_for(queries)
+    seen: list[int] = []
+
+    job.scrape(
+        None,
+        queries,
+        0,
+        summary,
+        fetch=answering(lambda url: AN_ODPIS),
+        store=Store(),
+        progress=lambda: seen.append(summary.queries_done),
+    )
+
+    assert seen == [1, 2]

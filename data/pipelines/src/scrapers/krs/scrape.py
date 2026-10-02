@@ -46,6 +46,11 @@ class QueryType(Enum):
     )
 
 
+#: What rejestr.io bills for one call: the price `RejestrIOQuery.cost` puts on
+#: the plan, and the one `koryta_scrape_krs_paid` counts its spend at.
+PLN_PER_CALL = 0.05
+
+
 #: Why a query is in the list, which is the only thing that explains the bill.
 #: A KRS reaches `save_org_connections` through one of several doors and the
 #: query itself does not say which, so `cost_breakdown` cannot group by
@@ -97,7 +102,7 @@ class RejestrIOQuery:
     def cost(self) -> float:
         """Calculate the cost of this query based on which APIs it will call."""
         calls = [q for q in self.queries if q.value.startswith("rejestrio")]
-        return len(calls) * 0.05
+        return len(calls) * PLN_PER_CALL
 
     def paid_calls(self) -> int:
         """How many rejestr.io calls this query is, which is what is billed."""

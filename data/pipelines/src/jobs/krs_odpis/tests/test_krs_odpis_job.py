@@ -365,6 +365,135 @@ def test_a_run_files_each_pdf_and_records_each_attempt(monkeypatch):
     assert len(records) == 1 and records[0][1].startswith(RUN_LOG.prefix)
 
 
+# ------------------------------------------------- what /admin/procesy is told
+
+
+class RecordingRun:
+    """Stands in for `stores.job_runs.JobRun`, keeping what the run told it."""
+
+    def __init__(self):
+        self.calls: list[tuple[str, dict]] = []
+
+    def start(self, **kwargs):
+        self.calls.append(("start", kwargs))
+        return self
+
+    def progress(self, done=None, **kwargs):
+        self.calls.append(("progress", {"done": done, **kwargs}))
+
+    def finish(self, state, **kwargs):
+        self.calls.append(("finish", {"state": state, **kwargs}))
+
+    def ending(self) -> dict:
+        [end] = [args for call, args in self.calls if call == "finish"]
+        return end
+
+
+def run_reported(monkeypatch, answers, asks_, client=None, status=None):
+    monkeypatch.setattr(
+        search,
+        "fetch_odpis_pdf",
+        lambda krs, register="P", full=True, session=None: answers(krs, register),
+    )
+    monkeypatch.setattr(job, "warsaw_day", lambda: TODAY)
+    status = status or RecordingRun()
+    code = job.run(
+        plan.Plan(asks=asks_),
+        interval=0,
+        flush_every=100,
+        client=client or FakeClient(),
+        session=None,
+        status=status,
+    )
+    return code, status
+
+
+class NoRunRecord(FakeClient):
+    """Files the PDFs, and refuses every part of the run record."""
+
+    def create_object(self, bucket, blob_name, data, content_type):
+        if bucket == job.RUN_BUCKET:
+            raise OSError(f"503 writing gs://{bucket}/{blob_name}")
+        return super().create_object(bucket, blob_name, data, content_type)
+
+
+def test_a_record_that_cannot_be_written_after_the_crawl_fails_the_run(monkeypatch):
+    status = RecordingRun()
+
+    with pytest.raises(OSError, match="503"):
+        run_reported(
+            monkeypatch,
+            lambda krs, register: b"%PDF",
+            [plan.Ask(A, ("P",), "file")],
+            client=NoRunRecord(),
+            status=status,
+        )
+
+    end = status.ending()
+    assert (end["state"], end["stop_reason"]) == ("failed", "raised OSError")
+    assert "503" in end["errors"][0]
+    assert end["done"] == 1
+
+
+def test_a_run_reports_each_company_and_how_it_ended(monkeypatch):
+    code, status = run_reported(
+        monkeypatch,
+        lambda krs, register: b"%PDF" if krs == A else None,
+        [plan.Ask(A, ("P",), "file"), plan.Ask(B, ("P",), "file")],
+    )
+    assert code == 0
+    assert status.calls[0] == ("start", {})
+    assert [args["done"] for call, args in status.calls if call == "progress"] == [1, 2]
+    end = status.ending()
+    assert end["state"] == "succeeded" and end["exit_code"] == 0
+    assert end["counters"] == {
+        "fetched": 1,
+        "absent": 1,
+        "gateway": 0,
+        "network": 0,
+        "failed": 0,
+    }
+    assert end["done"] == 2 and end["stop_reason"] is None
+
+
+def test_companies_the_gateway_ate_leave_the_run_partial(monkeypatch):
+    def answers(krs, register):
+        raise search.OdpisUnavailable("HTTP 504", status=504)
+
+    code, status = run_reported(monkeypatch, answers, [plan.Ask(A, ("P",), "file")])
+    end = status.ending()
+    assert code == crawl.EXIT_UPSTREAM_REFUSING
+    assert end["state"] == "partial"
+    assert end["errors"] and end["errors"][0].startswith(f"{A}: ")
+
+
+def test_a_service_that_stops_answering_fails_the_run(monkeypatch):
+    def answers(krs, register):
+        raise requests.Timeout("t")
+
+    many = [plan.Ask(f"{i:010d}", ("P",), "file") for i in range(1, 30)]
+    code, status = run_reported(monkeypatch, answers, many)
+    end = status.ending()
+    assert code == crawl.EXIT_UPSTREAM_REFUSING
+    assert end["state"] == "failed"
+    assert end["stop_reason"].endswith(crawl.REFUSING)
+
+
+def test_a_slowed_service_is_how_a_run_ends_not_a_failure():
+    stopped = crawl.Result(stopped="trailing-50 mean 3.00s over the 2.50s ceiling")
+    assert job.run_state(stopped) == "partial"
+    assert job.run_state(crawl.Result()) == "succeeded"
+
+
+def test_an_interrupted_run_is_partial(monkeypatch):
+    def answers(krs, register):
+        raise KeyboardInterrupt
+
+    code, status = run_reported(monkeypatch, answers, [plan.Ask(A, ("P",), "file")])
+    assert code == job.EXIT_INTERRUPTED
+    assert status.ending()["state"] == "partial"
+
+
 @pytest.fixture
 def offline(monkeypatch):
     """`main` with the pipelines and the service swapped out; returns its policies."""
