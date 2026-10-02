@@ -26,6 +26,7 @@ import pytest
 
 from analysis.scores.company import CompanyScores
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.odpis_people import PeopleKRSCombined
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
 from scrapers.pkw.process import PeoplePKW
@@ -62,6 +63,12 @@ CASES = [
         {"id": "1403676", "employed_krs": "0000000170", "employed_for": "7.25"},
         ["id", "employed_krs", "employed_for"],
         id="people-krs-ids",
+    ),
+    pytest.param(
+        PeopleKRSCombined,
+        {"id": "1403676", "employed_krs": "0000000170", "employed_for": "7.25"},
+        ["id", "employed_krs", "employed_for"],
+        id="people-krs-combined-ids",
     ),
     pytest.param(
         CompaniesKRS,
