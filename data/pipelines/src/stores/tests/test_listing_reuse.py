@@ -22,12 +22,27 @@ class Bucket:
     def __init__(self, objects: dict[str, int]):
         self.objects = objects
         self.listings = 0
+        self.ranges: list[tuple[str | None, str | None]] = []
 
-    def list_blobs(self, prefix, match_glob=None, fields=None, delimiter=None):
+    def list_blobs(
+        self,
+        prefix,
+        match_glob=None,
+        fields=None,
+        delimiter=None,
+        start_offset=None,
+        end_offset=None,
+    ):
         self.listings += 1
+        self.ranges.append((start_offset, end_offset))
         for name, size in sorted(self.objects.items()):
-            if name.startswith(prefix):
-                yield Blob(self, name, size)
+            if not name.startswith(prefix):
+                continue
+            if start_offset is not None and name < start_offset:
+                continue
+            if end_offset is not None and name >= end_offset:
+                continue
+            yield Blob(self, name, size)
 
     def blob(self, name: str) -> Blob:
         return Blob(self, name)
@@ -103,3 +118,57 @@ def test_an_old_listing_is_listed_again(client, bucket, monkeypatch):
     list(client.list_blobs(CloudStorage(prefix=API_KRS)))
 
     assert bucket.listings == 2
+
+
+def company(n: int) -> str:
+    return f"{ODPIS}/{n:010d}/?rejestr=P/date=2026-10-01"
+
+
+@pytest.fixture
+def big(monkeypatch, bucket) -> Bucket:
+    """A prefix past the split, in three ranges."""
+    monkeypatch.setattr(Client, "LISTING_SPLIT_FROM", 6)
+    monkeypatch.setattr(Client, "LISTING_RANGES", 3)
+    bucket.objects = {company(n): 40 for n in range(10, 100, 10)}
+    return bucket
+
+
+def fresh(bucket: Bucket) -> Client:
+    """A client of a later run: nothing kept in memory, the ranges on disk."""
+    c = Client.__new__(Client)
+    c.storage_client = GCS(bucket)  # type: ignore[assignment]
+    return c
+
+
+def test_a_big_prefix_is_listed_next_time_as_ranges_at_once(client, big):
+    first = names(client.list_blobs(CloudStorage(prefix=API_KRS)))
+    assert big.ranges == [(None, None)], "the first listing has no ranges to go by"
+
+    big.ranges.clear()
+    second = names(fresh(big).list_blobs(CloudStorage(prefix=API_KRS)))
+
+    assert second == first, "the same names, in the same order"
+    assert len(big.ranges) == 3
+    assert big.ranges[0][0] is None and big.ranges[-1][1] is None
+
+
+def test_what_was_written_since_the_ranges_were_taken_is_listed(client, big):
+    list(client.list_blobs(CloudStorage(prefix=API_KRS)))
+    # Before the first boundary, between two, and after the last.
+    for n in (1, 55, 999):
+        big.objects[company(n)] = 7
+
+    listed = [
+        url for url, _ in names(fresh(big).list_blobs(CloudStorage(prefix=API_KRS)))
+    ]
+
+    assert listed == sorted(f"gs://{CRAWLED_BUCKET}/{name}" for name in big.objects)
+
+
+def test_a_small_prefix_is_listed_in_one_go(client, bucket):
+    list(client.list_blobs(CloudStorage(prefix=API_KRS)))
+    bucket.ranges.clear()
+
+    list(fresh(bucket).list_blobs(CloudStorage(prefix=API_KRS)))
+
+    assert bucket.ranges == [(None, None)]
