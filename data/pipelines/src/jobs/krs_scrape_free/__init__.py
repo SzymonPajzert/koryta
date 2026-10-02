@@ -20,6 +20,7 @@ summary to gs://koryta-pl-sharedcache/jobs/krs_scrape_free/runs/.
 """
 
 import argparse
+import collections
 import json
 import os
 import signal
@@ -27,8 +28,10 @@ import sys
 import time
 import typing
 from collections.abc import Callable, Iterable, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from functools import partial
 
 import requests
 from tqdm import tqdm
@@ -56,6 +59,14 @@ ERRORS_KEPT = 20
 #: Seconds between progress lines, which stand in for the progress bar when
 #: there is no terminal to draw it on.
 PROGRESS_EVERY = 300
+
+#: Answers uploading at once, behind the requests. Uploaded in turn, the
+#: answers were 43% of the loop on 2026-10-02: 0.28 s for a GCS upload from
+#: predator, against 0.14 s for the api-krs request it stores.
+UPLOAD_WORKERS = 4
+
+#: Uploads queued at most before the loop waits for the oldest one.
+UPLOADS_AHEAD = 32
 
 #: Held at the version on disk, or restored from the shared cache when there is
 #: none. `ScrapeRejestrIO` reads PeopleMerged only for its person queries, which
@@ -146,41 +157,68 @@ def scrape(
     fetch: Callable[..., str | None] = query_krs_api,
     store: Callable[..., bool] = upload_result,
 ) -> None:
-    """Ask api-krs about each query in turn, counting into `summary`."""
+    """Ask api-krs about each query in turn, counting into `summary`.
+
+    Each answer is uploaded on a pool while the next one is asked, and every
+    upload has landed or been counted as failed by the time this returns.
+    """
     failures_in_a_row = 0
     last_progress = time.monotonic()
-    for query in tqdm(queries, disable=None):
-        if reason := should_stop():
-            summary.stopped = reason
-            break
-        for url in query.urls(only_free=True):
-            assert "rejestr.io" not in url
-            try:
-                result = fetch(url, verbose=False)
-            except (requests.RequestException, ValueError) as e:
-                print(f"Failed: {url}: {e}")
-                summary.failed += 1
-                if len(summary.errors) < ERRORS_KEPT:
-                    summary.errors.append(f"{url}: {e}"[:500])
-                failures_in_a_row += 1
-                time.sleep(sleep_time)
-                continue
-            failures_in_a_row = 0
-            if result is None:
-                summary.empty += 1
-                result = ""
-            else:
-                summary.answered += 1
-            if not store(ctx, url, result, verbose=False):
-                summary.upload_failed += 1
-            time.sleep(sleep_time)
-        summary.queries_done += 1
-        if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
-            summary.stopped = f"{failures_in_a_row} requests in a row failed"
-            break
-        if time.monotonic() - last_progress >= PROGRESS_EVERY:
-            last_progress = time.monotonic()
-            print(summary.line())
+    uploads: collections.deque[Future[bool]] = collections.deque()
+
+    def settle(upload: Future[bool]) -> None:
+        try:
+            stored = upload.result()
+        except Exception as e:  # noqa: BLE001 - counted, as a False is
+            print(f"Upload failed: {e}")
+            stored = False
+        if not stored:
+            summary.upload_failed += 1
+
+    with ThreadPoolExecutor(UPLOAD_WORKERS, thread_name_prefix="upload") as pool:
+        try:
+            for query in tqdm(queries, disable=None):
+                if reason := should_stop():
+                    summary.stopped = reason
+                    break
+                for url in query.urls(only_free=True):
+                    assert "rejestr.io" not in url
+                    try:
+                        result = fetch(url, verbose=False)
+                    # One company is not the run: an answer nothing here
+                    # expected is counted, kept in the summary and asked
+                    # again next time - KRS 0000394808's address with no town
+                    # ended the run on 2026-10-02.
+                    except Exception as e:  # noqa: BLE001
+                        print(f"Failed: {url}: {e!r}")
+                        summary.failed += 1
+                        if len(summary.errors) < ERRORS_KEPT:
+                            summary.errors.append(f"{url}: {e}"[:500])
+                        failures_in_a_row += 1
+                        time.sleep(sleep_time)
+                        continue
+                    failures_in_a_row = 0
+                    if result is None:
+                        summary.empty += 1
+                        result = ""
+                    else:
+                        summary.answered += 1
+                    uploads.append(pool.submit(store, ctx, url, result, verbose=False))
+                    while len(uploads) > UPLOADS_AHEAD or (
+                        uploads and uploads[0].done()
+                    ):
+                        settle(uploads.popleft())
+                    time.sleep(sleep_time)
+                summary.queries_done += 1
+                if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
+                    summary.stopped = f"{failures_in_a_row} requests in a row failed"
+                    break
+                if time.monotonic() - last_progress >= PROGRESS_EVERY:
+                    last_progress = time.monotonic()
+                    print(summary.line())
+        finally:
+            while uploads:
+                settle(uploads.popleft())
 
 
 def build_queue() -> tuple[Context, list[RejestrIOQuery]]:
@@ -208,7 +246,11 @@ def scrape_krs_free(
     summary.bulletin_failed = bulletin.failed
     ctx, queries = build_queue()
     summary.queries = len(queries)
-    scrape(ctx, queries, sleep_time, summary, should_stop)
+    # One connection for the whole run: a new one per request was most of
+    # the request's time - 0.14 s each, against 0.04 s on a kept one.
+    with requests.Session() as session:
+        fetch = partial(query_krs_api, session=session)
+        scrape(ctx, queries, sleep_time, summary, should_stop, fetch=fetch)
     print(summary.line())
     return summary
 

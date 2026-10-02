@@ -31,7 +31,15 @@ NO_CURRENT_ENTRY = {
 
 
 # TODO move this to stores - this is a generic utility, not KRS-specific.
-def query_krs_api(url, verbose=True, timeout=REQUEST_TIMEOUT) -> str | None:
+def query_krs_api(
+    url, verbose=True, timeout=REQUEST_TIMEOUT, session: requests.Session | None = None
+) -> str | None:
+    """One api-krs answer as stored, or None for one with no body.
+
+    Pass a `session` when asking many: it keeps the connection open between
+    requests, where `requests.get` opens one for each.
+    """
+
     def print_filtered(*args, **kwargs):
         if verbose:
             print(*args, **kwargs)
@@ -40,7 +48,7 @@ def query_krs_api(url, verbose=True, timeout=REQUEST_TIMEOUT) -> str | None:
     response = None
     result = {}
     try:
-        response = requests.get(url, timeout=timeout)
+        response = (session or requests).get(url, timeout=timeout)
         if response.status_code == 204:
             return json.dumps(NO_CURRENT_ENTRY)
         if response.text == "":
