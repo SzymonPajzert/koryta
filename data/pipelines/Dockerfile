@@ -1,4 +1,6 @@
-# The capture extractor (src/service), for Cloud Run.
+# The capture extractor (src/service), for Cloud Run - and the jobs (src/jobs),
+# which run as Cloud Run jobs from this image with their own command: see
+# src/jobs/CLOUD_RUN.md.
 #
 # Installs the pipelines package's base dependencies rather than a hand-picked
 # subset: `oneshot.py` drives the pipeline modules directly, so it inherits

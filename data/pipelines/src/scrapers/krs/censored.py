@@ -19,7 +19,6 @@ from scrapers.krs.people_parsing import (
     unread_person_paths,
 )
 from scrapers.stores import CloudStorage, Context, Pipeline
-from scrapers.stores.file import DownloadableFile
 
 
 class StaleOutputError(RuntimeError):
@@ -57,12 +56,12 @@ class KRSCensoredPeople(Pipeline):
         unread: dict[tuple[str, str], set[str]] = {}
         entries: dict[tuple[str, str], int | None] = {}
 
-        for blob_ref in tqdm(
-            ctx.io.list_files(CloudStorage(prefix="hostname=api-krs.ms.gov.pl")),
+        # read_many rather than a listing read object by object: that was
+        # 29,681 GETs, one at a time, and on a fresh runner it never finished.
+        for url, blob in tqdm(
+            ctx.io.read_many(CloudStorage(prefix="hostname=api-krs.ms.gov.pl")),
             desc="Indexing censored people",
         ):
-            assert isinstance(blob_ref, DownloadableFile)
-            url = blob_ref.url
             if "OdpisAktualny" not in url:
                 continue
 
@@ -73,7 +72,7 @@ class KRSCensoredPeople(Pipeline):
                 continue
 
             try:
-                content = ctx.io.read_data(blob_ref).read_string()
+                content = blob.read_string()
                 if not content:
                     continue
                 data = json.loads(content)

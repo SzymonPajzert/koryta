@@ -27,11 +27,19 @@ from uuid_extensions import uuid7str  # type: ignore
 from entities.util import NormalizedParse
 from scrapers.stores import IO, CloudStorage
 from scrapers.stores.file import DownloadableFile
-from stores.user import get_username, pick_user
+from stores.user import get_username, interactive, pick_user
 
 CRAWLED_BUCKET = "koryta-pl-crawled"
 SHARED_BUCKET = "koryta-pl-sharedcache"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
+
+
+def _backup_datetime(blob) -> str:
+    """The `datetime=` segment of a backup's name; ISO, so it sorts by time."""
+    for part in blob.name.split("/"):
+        if part.startswith("datetime="):
+            return part.removeprefix("datetime=")
+    return ""
 
 
 _GCS_POOL_SIZE = 256  # generous cap; pool is lazy so unused slots cost nothing
@@ -170,7 +178,15 @@ class Client:
 
         # Now list all blobs recursively under the chosen prefix
         print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
-        blobs = bucket.list_blobs(prefix=prefix, match_glob=glob)
+        # Only the two fields read below. Unmasked, every item carries the
+        # object's whole metadata: 83 s against 55 s for the 32k api-krs
+        # objects, and listings egressed 2.7x what reads did in the 30 days
+        # to 2026-09-11.
+        blobs = bucket.list_blobs(
+            prefix=prefix,
+            match_glob=glob,
+            fields="items(name,size),nextPageToken",
+        )
         for blob in blobs:
             # blob.size comes from the listing response, so carrying it here
             # costs no extra request and saves a caller a download each time
@@ -197,7 +213,12 @@ class Client:
         content_type,
         include_query=False,
         verbose=True,
-    ):
+    ) -> bool:
+        """Store a crawl under today's Warsaw date; False when it could not.
+
+        Prints the error and carries on rather than raising, which the crawler
+        relies on. Callers that have to count failures read the result.
+        """
         if isinstance(source, str):
             source = NormalizedParse.parse(source)
         try:
@@ -232,10 +253,11 @@ class Client:
                 print(
                     f"Successfully uploaded data to: {full_path}. Go to https://console.cloud.google.com/storage/browser/_details/{file_path}"
                 )
+            return True
 
         except Exception as e:
             print(f"An error occurred: {e}")
-            return None
+            return False
 
     def batch_upload(
         self,
@@ -376,8 +398,9 @@ class Client:
         """The most recent versioned backup blob for a filename.
 
         Prefers backups from the current user. If none exist for the current
-        user, lists available users and prompts for a choice. Raises
-        FileNotFoundError when no backups exist at all.
+        user, lists available users and prompts for a choice - or, with nobody
+        at a terminal to choose, takes the newest backup whoever wrote it.
+        Raises FileNotFoundError when no backups exist at all.
         """
         prefix = f"filename={filename}/"
         bucket = self.storage_client.bucket(SHARED_BUCKET)
@@ -402,6 +425,15 @@ class Client:
                 user_blobs.setdefault(user, []).append(blob)
 
         current_user = get_username()
+        if current_user not in user_blobs and not interactive():
+            # A scheduled run under its own name has no backups of what it
+            # never builds itself, and nobody to ask whose to take.
+            newest = max(
+                (blob for named in user_blobs.values() for blob in named),
+                key=_backup_datetime,
+            )
+            print(f"No backup of {filename} by {current_user}; taking the newest")
+            return newest
         chosen_user = pick_user(current_user, list(user_blobs.keys()))
 
         # Pick the latest backup (sorted by datetime in the blob name)

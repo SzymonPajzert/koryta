@@ -13,7 +13,7 @@ from scrapers.krs.list import (
     posts_held,
 )
 from scrapers.stores import Context, ProcessPolicy
-from scrapers.stores.file import DownloadableFile
+from scrapers.stores.file import DownloadableFile, latest_crawls
 from scrapers.test_tree import MockIO, MockNLP, MockRejestrIO, MockUtils, MockWeb
 
 BUCKET = "gs://koryta-pl-crawled"
@@ -447,6 +447,72 @@ def test_the_newest_good_crawl_is_still_the_one_used(context):
     seen = [name for name, _ in CompaniesKRS().iterate_blobs(ctx, "rejestr.io")]
 
     assert seen == [f"{BUCKET}/{org('0000030563', '2026-07-19')}"]
+
+
+def test_the_newest_crawl_wins_whichever_arrives_first(context):
+    ctx, _ = context(
+        {
+            org("0000030563", "2026-07-19"): {"numery": {"krs": "0000030563"}},
+            org("0000030563", "2026-02-13"): {"numery": {"krs": "0000030563"}},
+        }
+    )
+
+    seen = [name for name, _ in CompaniesKRS().iterate_blobs(ctx, "rejestr.io")]
+
+    assert seen == [f"{BUCKET}/{org('0000030563', '2026-07-19')}"]
+
+
+def test_companies_come_out_in_listing_order_whatever_the_arrival_order(context):
+    """`add_company` keeps the first non-empty value of each field, so the
+    order decides between two crawls that disagree. A mirror serves its
+    archive first and what it lacks after, so arrival order moves with the
+    mirror's age; the output must not."""
+    ctx, _ = context(
+        {
+            org("0000000002", "2026-09-27"): {"numery": {"krs": "0000000002"}},
+            org("0000000001", "2026-07-19"): {"numery": {"krs": "0000000001"}},
+        }
+    )
+
+    seen = [name for name, _ in CompaniesKRS().iterate_blobs(ctx, "rejestr.io")]
+
+    assert seen == [
+        f"{BUCKET}/{org('0000000001', '2026-07-19')}",
+        f"{BUCKET}/{org('0000000002', '2026-09-27')}",
+    ]
+
+
+def odpis(krs: str, date: str, layout: str) -> str:
+    """An api-krs crawl, under either place the bucket has kept its date."""
+    if layout == "date-first":
+        return f"hostname=api-krs.ms.gov.pl/date={date}/api/krs/OdpisAktualny/{krs}"
+    return f"hostname=api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}/date={date}"
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["listing", "reversed"])
+def test_crawls_come_out_in_the_order_a_listing_gives_them(context, reverse):
+    """A query crawled under both layouts sorts under each in a different place.
+
+    Ordering by the newest crawl's own name put 0000028428 among the
+    date-first names, where on 2026-09-28 a listing had it among the others:
+    same crawls chosen, 20,999 of them, in a different order.
+    """
+    crawls: dict[str, dict | str] = {
+        odpis("0000028428", "2025-09-01", "date-last"): {"a": 1},
+        odpis("0000028428", "2025-10-27", "date-first"): {"a": 2},
+        odpis("0000033577", "2025-10-27", "date-first"): {"a": 3},
+        odpis("0000005790", "2025-10-27", "date-first"): {"a": 4},
+        # A failed crawl is not where a listing meets its query.
+        odpis("0000046134", "2026-02-01", "date-last"): "",
+        odpis("0000046134", "2025-10-27", "date-first"): {"a": 5},
+    }
+    arrival = sorted(crawls, reverse=reverse)
+    ctx, _ = context({name: crawls[name] for name in arrival})
+    listing = sorted(name for name, body in crawls.items() if body != "")
+
+    seen = [name for name, _ in CompaniesKRS().iterate_blobs(ctx, "api-krs.ms.gov.pl")]
+
+    assert seen == [f"{BUCKET}/{n}" for n in latest_crawls(listing, lambda n: n)]
 
 
 # ─── who owns whom ─────────────────────────────────────────
