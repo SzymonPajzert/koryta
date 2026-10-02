@@ -70,6 +70,13 @@ API_KEY = "TopSecretApiKey"
 #: nobody had to ask for access to.
 REQUEST_INTERVAL = 0.5
 
+#: Seconds a crawl gives one document before it gives up and moves on. The
+#: gateway gives up at 30: every one of the 36 HTTP 504s of 2026-10-02 came
+#: after 30.1 s, while the 921 documents served took 1.71 s at most and 1.1 s
+#: at the 99th percentile - and each 504 cleared on the second pass in under
+#: a second. Waiting them out was more than half of one run's crawl.
+CRAWL_TIMEOUT = 10.0
+
 # Constants of the token generator, read off TokenEncoderService in the bundle.
 # The positions are arbitrary and have no structure to recover -- they are a
 # lookup table there and they are a lookup table here.

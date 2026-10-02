@@ -40,17 +40,19 @@ def fetch_and_store(
     day: str,
     full: bool = True,
     session: typing.Any | None = None,
+    timeout: float = search.CRAWL_TIMEOUT,
 ) -> tuple[str, bytes] | None:
     """Ask each register in turn; file the first odpis served before returning it.
 
     None when every register asked says the KRS is not in it. A register
     answering anything but a document or a "not here" raises
-    `search.OdpisUnavailable`, and a dropped connection raises what `requests`
-    raises: neither is an answer about the company.
+    `search.OdpisUnavailable`, and a dropped connection or one that answers
+    nothing within `timeout` raises what `requests` raises: none of them is an
+    answer about the company.
     """
     for register in registers:
         content = search.fetch_odpis_pdf(
-            krs, register=register, full=full, session=session
+            krs, register=register, full=full, session=session, timeout=timeout
         )
         if content:
             put(odpis_files.blob_name(krs, register, day, full=full), content)
