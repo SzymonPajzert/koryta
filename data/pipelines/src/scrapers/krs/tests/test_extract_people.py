@@ -160,6 +160,9 @@ def test_the_newest_crawl_wins_whichever_order_it_arrives_in(context, newest_fir
 
     assert len(people) == 1
     assert people.iloc[0]["employed_end"] == "2026-07-07"
+    # The day of the crawl the row came from: an odpis newer than it stands
+    # in for the company (`scrapers.krs.odpis_people`).
+    assert people.iloc[0]["crawled_on"] == "2026-07-19"
 
 
 def test_current_and_historical_seats_are_both_kept(context):

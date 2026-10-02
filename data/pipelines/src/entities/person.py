@@ -45,6 +45,10 @@ class KRS:
     #: than inferring from the empty fields. It is a property of the response
     #: and not of the person - 59 ids in the crawl arrive as both.
     rejestrio_type: str | None = None
+    #: The day the response this row came from was crawled, ISO. An odpis pełny
+    #: tells the same story for free, and which of the two is newer decides
+    #: whose word stands for the company (`scrapers.krs.odpis_people`).
+    crawled_on: str | None = None
 
     def __post_init__(self):
         """Ensures the person's ID is a string."""
