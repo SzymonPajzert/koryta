@@ -4,25 +4,50 @@ The bulletin names each KRS number whose entry changed that day; `KRSUpdates`
 reads it, and through it the free scrape, the paid scrape and the register job
 decide what is out of date. Free - api-krs asks for no key.
 
+A day is fetched once it is over in Warsaw, the clock the crawl bucket's
+`date=` already keeps. A host on UTC (Cloud Run, predator) is still on that day
+until 02:00 in summer, so by its own clock a run at 00:30 would leave the day
+that has just ended for the next night.
+
     koryta_scrape_krs_updates
 """
 
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from time import sleep
 
 import requests
 
 from conductor import setup_context
+from jobs.krs_common import REQUEST_TIMEOUT
 from scrapers.krs.columns import ISO_DATE_LENGTH
 from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import ProcessPolicy
+from stores.storage import warsaw_tz
+
+FIRST_DAY = date(2025, 6, 1)
+
+#: EX_TEMPFAIL, as the other KRS jobs have it: a day was left unfetched, and
+#: the next run asks for it again.
+EXIT_TRY_LATER = 75
 
 
-def scrape_updates_by_dates(sleep_time=0.2):
+@dataclass
+class BulletinRun:
+    """Which days a run stored, and which it asked for and did not get."""
+
+    fetched: list[str] = field(default_factory=list)
+    failed: list[str] = field(default_factory=list)
+
+
+def warsaw_today() -> date:
+    return datetime.now(warsaw_tz).date()
+
+
+def scrape_updates_by_dates(sleep_time=0.2) -> BulletinRun:
     ctx, _ = setup_context(policy=ProcessPolicy({"KRSUpdates"}))
 
-    start_date = datetime.strptime("2025-06-01", "%Y-%m-%d").date()
-    today = datetime.now().date()
+    today = warsaw_today()
 
     pipeline = KRSUpdates()
     already_scraped_dates = set()
@@ -34,9 +59,13 @@ def scrape_updates_by_dates(sleep_time=0.2):
         # fetched again, on every run.
         already_scraped_dates.add(str(update.date)[:ISO_DATE_LENGTH])
 
-    print("already_scraped_dates: ", already_scraped_dates)
+    print(
+        f"{len(already_scraped_dates)} bulletin days stored, the newest "
+        f"{max(already_scraped_dates, default='none')}"
+    )
 
-    current_date = start_date
+    run = BulletinRun()
+    current_date = FIRST_DAY
     while current_date < today:
         date_str = current_date.strftime("%Y-%m-%d")
         if date_str in already_scraped_dates:
@@ -46,20 +75,27 @@ def scrape_updates_by_dates(sleep_time=0.2):
         url = f"https://api-krs.ms.gov.pl/api/Krs/Biuletyn/{date_str}"
         print(f"Requesting: {url}")
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=REQUEST_TIMEOUT)
             if response.status_code == 200:
                 # Parse to ensure it's valid JSON
                 response.json()
-                ctx.io.upload(url, response.text, "application/json")
-                print(f"Successfully scraped and uploaded for date: {date_str}")
+                if ctx.io.upload(url, response.text, "application/json") is False:
+                    run.failed.append(date_str)
+                else:
+                    run.fetched.append(date_str)
+                    print(f"Successfully scraped and uploaded for date: {date_str}")
             else:
                 print(f"Failed to fetch {url}: HTTP {response.status_code}")
+                run.failed.append(date_str)
         except Exception as e:
             print(f"An error occurred while uploading {url}: {e}")
+            run.failed.append(date_str)
         sleep(sleep_time)
 
         current_date += timedelta(days=1)
 
+    return run
 
-def main():
-    scrape_updates_by_dates()
+
+def main() -> int:
+    return EXIT_TRY_LATER if scrape_updates_by_dates().failed else 0
