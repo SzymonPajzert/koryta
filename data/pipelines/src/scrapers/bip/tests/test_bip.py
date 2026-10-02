@@ -19,7 +19,7 @@ from scrapers.bip.models import DocRow, HostRow, UrlRow
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.bip.store import LocalBundleStore, rewrap_part
 from scrapers.common.fetch import HttpResult
-from scrapers.common.links import extract_links
+from scrapers.common.links import extract_link_pairs, extract_links
 from scrapers.common.ratelimit import HostTokenBucket
 
 REGISTRY_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -121,6 +121,17 @@ def test_normalize_url_drops_image_map_coordinates() -> None:
     )
 
 
+def test_normalize_url_drops_presentation_toggles() -> None:
+    base = "https://bip.chelmza.pl/10262,sprawozdania"
+    assert normalize_url(f"{base}?fontsize=big") == base
+    assert normalize_url(f"{base}?FontSize=bigger") == base
+    assert normalize_url(f"{base}?switch_extend_word_spacing=on") == base
+    assert normalize_url(f"{base}?print=1&pokaz_rejestr_zmian=1") == base
+    assert (
+        normalize_url(f"{base}?switch_off_darkmode=1&tresc=5") == f"{base}?tresc=5"
+    )
+
+
 # -- shared utils ------------------------------------------------------------
 def test_shared_link_extraction_keeps_query_when_asked() -> None:
     html = '<a href="/plik.php?zid=1">d</a><a href="mailto:x@y">m</a>'
@@ -129,6 +140,18 @@ def test_shared_link_extraction_keeps_query_when_asked() -> None:
     ]
     assert extract_links(html, "https://bip.x.pl/", keep_query=False) == [
         "https://bip.x.pl/plik.php"
+    ]
+
+
+def test_shared_link_extraction_captures_anchor_text() -> None:
+    html = '<a href="/plik.php?zid=1">Umowa nr 5</a><a href="/x">Drugi</a>'
+    assert extract_link_pairs(html, "https://bip.x.pl/", keep_query=True) == [
+        ("https://bip.x.pl/plik.php?zid=1", "Umowa nr 5"),
+        ("https://bip.x.pl/x", "Drugi"),
+    ]
+    assert extract_links(html, "https://bip.x.pl/", keep_query=True) == [
+        "https://bip.x.pl/plik.php?zid=1",
+        "https://bip.x.pl/x",
     ]
 
 
@@ -203,6 +226,7 @@ class FakeFrontier:
         self.hosts = {h.host: h for h in hosts}
         self.urls: dict[str, UrlRow] = {}
         self.states: dict[str, str] = {}
+        self.skip_reasons: dict[str, str] = {}
         self.docs: dict[str, DocRow] = {}
         self.counters: dict[str, dict[str, int]] = {}
         self.seeded: list[str] = []
@@ -232,12 +256,21 @@ class FakeFrontier:
     # urls
     def queue_url(self, row: UrlRow, *, requeue: bool = False) -> bool:
         if row.url in self.urls:
-            if requeue or self.states.get(row.url) == "skipped":
+            state = self.states.get(row.url)
+            if state == "skipped" and self.skip_reasons.get(row.url) == "robots":
+                return False
+            if requeue or state == "skipped":
                 self.states[row.url] = "queued"
             return False
         self.urls[row.url] = row
         self.states[row.url] = "queued"
         return True
+
+    def queue_urls(self, rows: list[UrlRow], *, requeue: bool = False) -> int:
+        unique: dict[str, UrlRow] = {}
+        for row in rows:
+            unique.setdefault(row.url, row)
+        return sum(1 for row in unique.values() if self.queue_url(row, requeue=requeue))
 
     def claim_urls(
         self, worker_id: str, *, hosts: list[str], limit: int, lock_seconds: int
@@ -265,8 +298,10 @@ class FakeFrontier:
                 break
         return claimed
 
-    def mark_url(self, url, *, state, **kwargs) -> None:  # noqa: ANN001, ANN003
+    def mark_url(self, url, *, state, skip_reason="", **kwargs) -> None:  # noqa: ANN001, ANN003
         self.states[url] = state
+        if skip_reason:
+            self.skip_reasons[url] = skip_reason
 
     def record_docs(self, docs: list[DocRow], crawl_id: str) -> int:
         new = 0
@@ -445,3 +480,28 @@ def test_coordinator_skips_robots_denied(tmp_path: Path) -> None:
     assert stats.skipped >= 1
     assert stats.docs_new == 0
     assert frontier.hosts["bip.test"].status == "dead"
+
+
+def test_coordinator_robots_skip_is_terminal(tmp_path: Path) -> None:
+    frontier, _store, _stats = _run_coordinator(
+        tmp_path, _site_pages(), robots_allowed=lambda url: False
+    )
+    denied = [url for url, state in frontier.states.items() if state == "skipped"]
+    assert denied
+    assert all(frontier.skip_reasons.get(url) == "robots" for url in denied)
+    for url in denied:
+        # even an explicit freshness requeue must not revive a robots denial
+        assert frontier.queue_url(frontier.urls[url], requeue=True) is False
+        assert frontier.states[url] == "skipped"
+
+
+def test_coordinator_cap_skip_is_requeueable(tmp_path: Path) -> None:
+    frontier, _store, stats = _run_coordinator(
+        tmp_path, _site_pages(), max_pages=1, max_docs=1
+    )
+    assert stats.skipped >= 1
+    capped = [url for url, state in frontier.states.items() if state == "skipped"]
+    assert capped
+    assert all(frontier.skip_reasons.get(url) == "cap" for url in capped)
+    assert frontier.queue_url(frontier.urls[capped[0]], requeue=True) is False
+    assert frontier.states[capped[0]] == "queued"

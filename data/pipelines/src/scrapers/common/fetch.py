@@ -2,11 +2,27 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 from curl_cffi import requests
 
 DEFAULT_UA = "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"
+
+_sessions = threading.local()
+
+
+def _session(impersonate: str) -> requests.Session:
+    """One session per thread: keeps connections (and TLS) alive across GETs."""
+    cache = getattr(_sessions, "cache", None)
+    if cache is None:
+        cache = {}
+        _sessions.cache = cache
+    session = cache.get(impersonate)
+    if session is None:
+        session = requests.Session(impersonate=impersonate)  # type: ignore[arg-type]
+        cache[impersonate] = session
+    return session
 
 
 @dataclass(frozen=True)
@@ -29,9 +45,8 @@ def http_get(
     impersonate: str = "chrome136",
 ) -> HttpResult:
     try:
-        response = requests.get(
+        response = _session(impersonate).get(
             url,
-            impersonate=impersonate,  # type: ignore[arg-type]
             headers={"User-Agent": user_agent},
             timeout=timeout,
             allow_redirects=True,
