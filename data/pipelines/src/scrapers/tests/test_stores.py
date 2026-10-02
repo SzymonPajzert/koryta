@@ -765,6 +765,55 @@ class TestOneInstancePerTree(unittest.TestCase):
         self.assertEqual(backup_reads.count("long_shared"), 1)
 
 
+class TestReadKeepsTheRestore(unittest.TestCase):
+    """A pipeline that is not run, and whose output is not on disk, is read
+    from its backup - which used to be dropped after the run, so the next one
+    downloaded it, and asked whether to run the pipeline, all over again."""
+
+    def setUp(self):
+        self.ctx = Mock(spec=Context)
+        self.ctx.io = Mock()
+        self.ctx.refresh_policy = ProcessPolicy.with_default()
+        self.on_disk = False
+
+        def restore(filename, dest_path):
+            self.on_disk = True
+
+        def read_data(ref):
+            if isinstance(ref, LocalFile) and self.on_disk:
+                local = Mock()
+                local.read_dataframe.return_value = pd.DataFrame({"s": [1]})
+                return local
+            raise FileNotFoundError(getattr(ref, "filename", ref))
+
+        self.ctx.io.restore_backup_to_path.side_effect = restore
+        self.ctx.io.read_data.side_effect = read_data
+
+    @patch("scrapers.stores.backup_disabled", return_value=False)
+    def test_the_backup_is_put_on_disk_and_read_from_there(self, _enabled):
+        pipeline = LongShared()
+
+        with patch("scrapers.stores.VERSIONED_DIR", "/versioned"):
+            df = pipeline.read(self.ctx)
+
+        pd.testing.assert_frame_equal(df, pd.DataFrame({"s": [1]}))
+        self.ctx.io.restore_backup_to_path.assert_called_once_with(
+            "long_shared", "/versioned/long_shared/long_shared.jsonl"
+        )
+        backups = [
+            c for c in self.ctx.io.read_data.call_args_list
+            if isinstance(c.args[0], VersionedBackup)
+        ]
+        self.assertEqual(backups, [], "read through the restored file only")
+
+    @patch("scrapers.stores.backup_disabled", return_value=True)
+    def test_no_backup_means_no_restore(self, _disabled):
+        with self.assertRaises(FileNotFoundError):
+            LongShared().read(self.ctx)
+
+        self.ctx.io.restore_backup_to_path.assert_not_called()
+
+
 class TestVersionedBackupRestore(unittest.TestCase):
     """Tests for the versioned backup restore logic in read_or_process."""
 

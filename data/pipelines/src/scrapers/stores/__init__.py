@@ -754,15 +754,26 @@ class Pipeline(typing.Generic[Output]):
         Raises FileNotFoundError if not found."""
         assert self.filename
         filenotfound: Exception | None = None
+        local = LocalFile(self.output_path(), "versioned")
         try:
-            return ctx.io.read_data(
-                LocalFile(self.output_path(), "versioned")
-            ).read_dataframe(self.format, dtype=self.dtype)
+            return ctx.io.read_data(local).read_dataframe(self.format, dtype=self.dtype)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
             filenotfound = e
 
         if self.backup_to_shared_cache and not backup_disabled():
+            # Put on disk byte for byte, then read as a local output is. Read
+            # into memory instead, it was gone after the run: the next one
+            # downloaded it again, and of a pipeline it had declined to run -
+            # ProcessWiki - asked again, and rebuilt what reads it as if the
+            # missing output had been refreshed.
+            if self.restore_output_from_shared_cache(ctx):
+                try:
+                    return ctx.io.read_data(local).read_dataframe(
+                        self.format, dtype=self.dtype
+                    )
+                except FileNotFoundError as e:
+                    print("Restored output not found, continuing: ", e)
             try:
                 return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
                     self.format, dtype=self.dtype
