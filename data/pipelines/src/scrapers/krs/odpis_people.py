@@ -44,6 +44,7 @@ from collections.abc import Iterable
 import pandas as pd
 
 from entities.person import KRS as KrsPerson
+from scrapers.krs.columns import iso_dates, padded_krs
 from scrapers.krs.list import KRS_RELATION_ROLES, CompaniesKRS, PeopleKRS, Post
 from scrapers.krs.odpis_history import (
     KrsOdpisEntries,
@@ -355,6 +356,24 @@ def report(rejestrio, posts, matches, from_odpis, kept, added, unnamed) -> None:
         f"{int(unnamed.sum()):,} rows of people an odpis does not name stay "
         f"rejestr.io's."
     )
+
+
+def odpis_days(combined: pd.DataFrame) -> dict[str, str]:
+    """KRS to the day of the odpis `combine` took the company's people from.
+
+    Read off the combined rows rather than worked out again, so whatever acts
+    on it agrees with what the site shows: the graph, the strike-off and which
+    source is newer are all decided above, once.
+    """
+    if combined.empty or "source" not in combined.columns:
+        return {}
+    rows = combined[combined["source"] == SOURCE_ODPIS]
+    days = pd.Series(
+        iso_dates(rows["crawled_on"]).to_numpy(),
+        index=padded_krs(rows["employed_krs"]).to_numpy(),
+    )
+    latest = days[days != ""].groupby(level=0).max()
+    return {str(krs): str(day) for krs, day in latest.items()}
 
 
 class PeopleKRSCombined(Pipeline):

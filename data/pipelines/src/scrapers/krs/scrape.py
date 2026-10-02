@@ -1,7 +1,7 @@
 import argparse
 import json
 import typing
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
 from enum import Enum
 from functools import cached_property
@@ -19,9 +19,10 @@ from scrapers.krs.columns import is_public, normalise
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.odpis_people import PeopleKRSCombined, odpis_days
 from scrapers.krs.people_parsing import is_not_found
 from scrapers.krs.public_owners import CompaniesPublicByRegister
-from scrapers.krs.updates import KRSUpdates
+from scrapers.krs.updates import KRSUpdates, latest_changes
 from scrapers.stores import (
     CloudStorage,
     Context,
@@ -763,6 +764,42 @@ def save_org_connections(
     print(f"People: {len(people)} of interest, {people_to_fetch} not yet scraped")
 
 
+def told_by_the_odpis(
+    odpis_days: typing.Mapping[str, str], changes: typing.Mapping[str, str]
+) -> set[str]:
+    """The companies whose odpis on file says all their rejestr.io feeds would.
+
+    `odpis_days` is every company whose people `PeopleKRSCombined` takes from
+    an odpis, with the day it speaks for; `changes` the last day the bulletin
+    names each entry. A company counts when the bulletin names nothing since
+    the odpis: its register entry has not moved, so a feed bought now could
+    only repeat the odpis. A change on the odpis's own day may have come after
+    the fetch, so it counts as since, as it does in `jobs.krs_odpis`, which
+    fetches those again.
+    """
+    return {krs for krs, day in odpis_days.items() if changes.get(krs, "") < day}
+
+
+def leave_to_the_odpis(
+    queries: typing.Iterable[RejestrIOQuery], told: typing.Collection[str]
+) -> typing.Iterator[RejestrIOQuery]:
+    """The queries without the company feeds of the companies in `told`.
+
+    Only the krs-powiazania pair goes. The free api-krs pair stays, since
+    `CompaniesKRS` and `RejestrIOCoverage` read the odpis aktualny it fetches,
+    and so do the person feeds: which other companies somebody sits in is
+    nothing a company's odpis says. A query left with nothing to ask is
+    dropped, as `save_org_connections` drops one.
+    """
+    for query in queries:
+        if query.krs is not None and query.krs.id in told:
+            left = [q for q in query.queries if q.value not in ORG_CONNECTION_METHODS]
+            if not left:
+                continue
+            query = replace(query, queries=left)
+        yield query
+
+
 def public_krs_ids(companies: pd.DataFrame) -> set[str]:
     """The KRS ids the register puts in public hands, for the cost report.
 
@@ -870,6 +907,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
     koryta_votes: KorytaVotes
     koryta_people: KorytaPeople
     person_coverage: PersonFeedCoverage
+    updates: KRSUpdates
+    people_combined: PeopleKRSCombined
 
     #: Why each company is in the queue, keyed by KRS id, and why each person
     #: is. Filled by `companies_to_scrape` and `people_to_scrape`, read by
@@ -1151,6 +1190,24 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         print(f"People to scrape: {len(scraped_people)} {get_head(scraped_people, 10)}")
         return scraped_people
 
+    def companies_told_by_the_odpis(self, ctx: Context) -> set[str]:
+        """The companies whose rejestr.io feeds the odpis on file makes redundant.
+
+        Only where `PeopleKRSCombined` already shows the odpis's people. One it
+        sets aside - outside the graph, struck off one register, older than
+        rejestr.io's crawl - is no reason to stop buying. Nor is one the
+        bulletin has moved past: `jobs.krs_odpis` fetches that again for free,
+        and a run after it finds the company here.
+        """
+        days = odpis_days(self.people_combined.read_or_process(ctx))
+        changes = latest_changes(self.updates.read_or_process(ctx))
+        told = told_by_the_odpis(days, changes)
+        print(
+            f"Companies whose people come from an odpis: {len(days)}, "
+            f"{len(told)} with no entry in the bulletin since"
+        )
+        return told
+
     def process(self, ctx: Context):
         # Each source is named before the call rather than inline, so the
         # reason it stands for can be recorded against the companies it
@@ -1165,19 +1222,29 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
             self._record_reason(krs.id, REASON_MISSING_REGISTER_ENTRY)
         people = self.people_to_scrape(ctx)
 
-        for url in save_org_connections(
-            already_scraped_krs=self.already_scraped.latest_scrapes(ctx),
-            needs_refresh_krs=self.needs_refresh.read_or_process(ctx),
-            already_scraped_people=get_osoby_scraped(
-                ctx, self.person_coverage.people_to_refetch(ctx)
-            ),
-            connections=connections,
-            names=missing_names | missing_entries,
-            people=people,
-            company_reasons=self.company_reasons,
-            person_reasons=self.person_reasons,
-        ):
-            ctx.io.output_entity(url)
+        owed = list(
+            save_org_connections(
+                already_scraped_krs=self.already_scraped.latest_scrapes(ctx),
+                needs_refresh_krs=self.needs_refresh.read_or_process(ctx),
+                already_scraped_people=get_osoby_scraped(
+                    ctx, self.person_coverage.people_to_refetch(ctx)
+                ),
+                connections=connections,
+                names=missing_names | missing_entries,
+                people=people,
+                company_reasons=self.company_reasons,
+                person_reasons=self.person_reasons,
+            )
+        )
+        queries = list(leave_to_the_odpis(owed, self.companies_told_by_the_odpis(ctx)))
+        calls = sum(q.paid_calls() for q in owed) - sum(q.paid_calls() for q in queries)
+        cost = sum(q.cost() for q in owed) - sum(q.cost() for q in queries)
+        print(
+            f"Company feeds left to the odpis: {calls} rejestr.io calls "
+            f"({cost:.2f} PLN)"
+        )
+        for query in queries:
+            ctx.io.output_entity(query)
 
 
 def get_head(s: typing.Iterable[KRS | RejestrIOKey], n: int):

@@ -13,6 +13,10 @@
 1. Reads which KRS numbers need to be updated
 1. Performs paid queries to rejestr.io
 
+A company's connections are not bought where `PeopleKRSCombined` already takes its people from an odpis pełny that
+the bulletin names no entry after: `krs_odpis` gets those for free. So run `krs_odpis` first, then
+`koryta PeopleKRSCombined --refresh KrsOdpisSeats --refresh KrsOdpisEntries`, then this.
+
 TODO: to be used only for people queries, since we've found free KRS scraping alternatives
 
 ## krs_register_owners

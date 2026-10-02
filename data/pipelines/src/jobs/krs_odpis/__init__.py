@@ -37,7 +37,11 @@ refuses to start while one holds the lock.
 Exit codes: 0 when everything asked was answered (fetched, or in neither
 register); 75 when the service stopped answering, or some companies were left
 without an answer -- try again later; 130 when interrupted; 1 for anything else.
-Afterwards ``koryta KrsOdpisSeats --refresh KrsOdpisSeats`` parses what arrived.
+Afterwards ``koryta PeopleKRSCombined --refresh KrsOdpisSeats --refresh
+KrsOdpisEntries`` parses what arrived, and `ScrapeRejestrIO` stops buying the
+connections of every company whose people now come from a current odpis. One
+command, not two: `koryta` builds its refresh tree for the first pipeline it
+reads, so a second one named beside it is read from disk, stale.
 """
 
 import argparse
@@ -283,5 +287,8 @@ def run(
         f"under gs://{RUN_BUCKET}/{RUN_LOG.prefix}"
     )
     if final.get("fetched"):
-        print("Parse them: koryta KrsOdpisSeats --refresh KrsOdpisSeats")
+        print(
+            "Parse them: koryta PeopleKRSCombined "
+            "--refresh KrsOdpisSeats --refresh KrsOdpisEntries"
+        )
     return result.code

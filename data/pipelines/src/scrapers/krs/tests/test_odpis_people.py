@@ -310,6 +310,25 @@ def ctx():
     con.close()
 
 
+def test_the_odpis_days_are_where_the_people_come_from_an_odpis():
+    """What the paid job leaves to the odpis is read off this, so it must agree."""
+    rejestrio = people(person(krs=A), person(krs=C, first="Ewa", last="Eckert"))
+    odpisy = seats(
+        seat(krs=A),  # newer than rejestr.io's crawl
+        seat(krs=B, stated_on="2026-09-20"),  # a company rejestr.io never saw
+        seat(krs=C, stated_on="2026-08-01"),  # older than rejestr.io's crawl
+        seat(krs=D),  # struck off one register
+    )
+    combined = restored(combine(rejestrio, odpisy, graph={A, B, C, D}, struck={D}))
+    assert odpis_people.odpis_days(combined) == {A: "2026-09-14", B: "2026-09-20"}
+
+
+def test_no_odpis_days_without_the_key():
+    alone = people(person()).assign(source=SOURCE_REJESTRIO)
+    assert odpis_people.odpis_days(alone) == {}
+    assert odpis_people.odpis_days(pd.DataFrame()) == {}
+
+
 def test_people_krs_merged_takes_one_person_from_both_sources(ctx):
     rejestrio = people(person(krs=A, id="7"))
     odpisy = seats(
