@@ -192,3 +192,21 @@ def test_a_prefix_split_by_its_own_listing_keeps_that_split(client, big):
     client.seed_listing_ranges(CloudStorage(prefix=API_KRS), [company(1), company(2)])
 
     assert client._range_bounds((CRAWLED_BUCKET, API_KRS, None)) == kept
+
+
+def test_one_token_is_fetched_before_the_ranges_are_listed(client, big):
+    class Credentials:
+        valid = False
+        refreshes = 0
+
+        def refresh(self, request):
+            Credentials.refreshes += 1
+            Credentials.valid = True
+
+    list(client.list_blobs(CloudStorage(prefix=API_KRS)))
+    later = fresh(big)
+    later.storage_client._credentials = Credentials()  # type: ignore[attr-defined]
+
+    list(later.list_blobs(CloudStorage(prefix=API_KRS)))
+
+    assert (Credentials.refreshes, len(big.ranges)) == (1, 4)
