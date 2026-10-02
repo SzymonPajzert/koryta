@@ -83,6 +83,8 @@ def test_a_register_that_never_answered_is_still_asked():
 
 def test_the_body_that_settles_it_is_the_register_saying_not_found():
     assert is_not_found(NOT_FOUND_BODY)
+    # A 204 has no body; the scrape stores it in the 404's shape.
+    assert is_not_found({"title": "Not Found", "status": 204, "detail": "..."})
     assert not is_not_found({"status": 404})
     assert not is_not_found({"title": "Not Found"})
     assert not is_not_found({"status": 500, "title": "Not Found"})

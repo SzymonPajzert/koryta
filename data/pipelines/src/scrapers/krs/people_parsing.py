@@ -362,13 +362,17 @@ def is_not_found(data) -> bool:
 
     Both fields are checked because it is read as permanent. All 4,152 of the
     404 bodies in the crawl carry both, and each is exactly 168 bytes.
+
+    A 204 says the same - no current entry under this number - with no body at
+    all, and the scrape stores it in the 404's shape with its own status
+    (`jobs.krs_common.NO_CURRENT_ENTRY`).
     """
     if not isinstance(data, dict):
         return False
     title = data.get("title")
     if not isinstance(title, str):
         return False
-    return data.get("status") == 404 and title.strip().lower() == "not found"
+    return data.get("status") in (404, 204) and title.strip().lower() == "not found"
 
 
 def is_odpis(data) -> bool:
