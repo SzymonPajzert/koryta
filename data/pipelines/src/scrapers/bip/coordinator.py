@@ -13,6 +13,7 @@ import logging
 import signal
 import threading
 import time
+from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -32,7 +33,7 @@ from scrapers.bip.frontier import BipFrontier
 from scrapers.bip.models import HostRow, RunStats, UrlRow
 from scrapers.bip.store import LocalBundleStore
 from scrapers.common.fetch import HttpResult, http_get
-from scrapers.common.links import extract_links
+from scrapers.common.links import extract_link_pairs
 from scrapers.common.ratelimit import HostTokenBucket
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ class BipCoordinator:
         self.run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.stats = RunStats()
         self._deferred: list[tuple[float, UrlRow]] = []
+        self._ready: deque[UrlRow] = deque()
         self._stop = threading.Event()
 
     # -- seeding -------------------------------------------------------------
@@ -154,7 +156,7 @@ class BipCoordinator:
     # -- fetcher -------------------------------------------------------------
     def _fetch_one(
         self, row: UrlRow
-    ) -> tuple[UrlRow, HttpResult | None, list[str], str]:
+    ) -> tuple[UrlRow, HttpResult | None, list[tuple[str, str]], str]:
         if not self.robots_allowed(row.url):
             return (row, None, [], "robots")
         if not self.limiter.acquire(row.host):
@@ -162,11 +164,11 @@ class BipCoordinator:
         result = self.fetch(
             row.url, self.options.request_timeout_s, self.options.user_agent
         )
-        links: list[str] = []
+        links: list[tuple[str, str]] = []
         if result.ok and len(result.content) <= self.options.max_doc_bytes:
             if is_html(result.content_type):
                 html = result.content.decode("utf-8", "replace")
-                links = extract_links(html, result.url, keep_query=True)
+                links = extract_link_pairs(html, result.url, keep_query=True)
         return (row, result, links, "")
 
     # -- result handling -----------------------------------------------------
@@ -185,7 +187,7 @@ class BipCoordinator:
         self,
         row: UrlRow,
         result: HttpResult | None,
-        links: list[str],
+        links: list[tuple[str, str]],
         special: str,
     ) -> None:
         active = self.active.get(row.host)
@@ -197,7 +199,7 @@ class BipCoordinator:
             )
             return
         if special == "robots":
-            self.frontier.mark_url(row.url, state="skipped")
+            self.frontier.mark_url(row.url, state="skipped", skip_reason="robots")
             active.pending -= 1
             self.stats.skipped += 1
             self._maybe_finalize(row.host)
@@ -220,7 +222,7 @@ class BipCoordinator:
             if active.docs >= self.options.max_docs:
                 active.cap_hit = True
                 active.pending -= 1
-                self.frontier.mark_url(row.url, state="skipped")
+                self.frontier.mark_url(row.url, state="skipped", skip_reason="cap")
                 self.stats.skipped += 1
                 self._maybe_finalize(row.host)
                 return
@@ -292,7 +294,11 @@ class BipCoordinator:
         active.pending -= 1
 
     def _handle_page(
-        self, row: UrlRow, result: HttpResult, links: list[str], active: _ActiveHost
+        self,
+        row: UrlRow,
+        result: HttpResult,
+        links: list[tuple[str, str]],
+        active: _ActiveHost,
     ) -> None:
         active.pages += 1
         active.done_pages += 1
@@ -300,24 +306,26 @@ class BipCoordinator:
         self.frontier.bump_host(row.host, pages=1)
         if active.pages >= self.options.max_pages:
             active.cap_hit = True
-        added = 0
+        new_rows: list[UrlRow] = []
         if row.depth < self.options.max_depth:
-            for raw in links:
+            for raw, anchor_text in links:
                 url = normalize_url(raw)
                 if is_low_value_url(url) or not self._in_scope(row.host, url):
                     continue
-                candidate = UrlRow(
-                    url=url,
-                    host=row.host,
-                    kind="doc" if looks_like_document(url, "") else "page",
-                    discovered_from=row.url,
-                    depth=row.depth + 1,
-                    section=url.split("/")[3] if url.count("/") > 2 else "",
-                    priority=priority_for(url),
+                new_rows.append(
+                    UrlRow(
+                        url=url,
+                        host=row.host,
+                        kind="doc" if looks_like_document(url, "") else "page",
+                        discovered_from=row.url,
+                        depth=row.depth + 1,
+                        section=url.split("/")[3] if url.count("/") > 2 else "",
+                        priority=priority_for(url),
+                        anchor_text=anchor_text,
+                    )
                 )
-                if self.frontier.queue_url(candidate):
-                    active.pending += 1
-                    added += 1
+        added = self.frontier.queue_urls(new_rows) if new_rows else 0
+        active.pending += added
         self.frontier.mark_url(
             row.url,
             state="fetched",
@@ -385,15 +393,18 @@ class BipCoordinator:
         self, pool: ThreadPoolExecutor, pending: dict[Future, UrlRow]
     ) -> None:
         free = self.options.workers - len(pending)
-        if free <= 0:
-            return
-        claimed = self.frontier.claim_urls(
-            "coordinator",
-            hosts=list(self.active),
-            limit=min(free, self.options.claim_batch),
-            lock_seconds=self.options.lock_seconds,
-        )
-        for row in claimed:
+        while free > 0:
+            if not self._ready:
+                claimed = self.frontier.claim_urls(
+                    "coordinator",
+                    hosts=list(self.active),
+                    limit=self.options.claim_batch,
+                    lock_seconds=self.options.lock_seconds,
+                )
+                if not claimed:
+                    return
+                self._ready.extend(claimed)
+            row = self._ready.popleft()
             if row.host not in self.active:
                 self.frontier.mark_url(row.url, state="skipped")
                 self.stats.skipped += 1
@@ -402,11 +413,12 @@ class BipCoordinator:
                 active = self.active[row.host]
                 active.cap_hit = True
                 active.pending -= 1
-                self.frontier.mark_url(row.url, state="skipped")
+                self.frontier.mark_url(row.url, state="skipped", skip_reason="cap")
                 self.stats.skipped += 1
                 self._maybe_finalize(row.host)
                 continue
             pending[pool.submit(self._fetch_one, row)] = row
+            free -= 1
 
     def _collect(self, pending: dict[Future, UrlRow]) -> None:
         done, _ = wait(list(pending), timeout=5.0, return_when="FIRST_COMPLETED")
@@ -420,7 +432,7 @@ class BipCoordinator:
                 self.stats.errors += 1
 
     def _is_finished(self, pending: dict[Future, UrlRow]) -> bool:
-        if pending or self._deferred:
+        if pending or self._deferred or self._ready:
             return False
         if self.active:
             return False

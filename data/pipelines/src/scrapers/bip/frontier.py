@@ -10,6 +10,9 @@ batch of URLs, mark results, keep per-host counters and finalize hosts.
 from __future__ import annotations
 
 import json
+import random
+
+from psycopg import sql
 
 from scrapers.bip.models import DocRow, HostRow, RunStats, UrlRow
 from scrapers.common.pg import PostgresClient
@@ -87,6 +90,8 @@ class BipFrontier:
         URLs skipped because of the previous attempt's caps go back to the
         queue: otherwise a resumed host fetches its seed, has nothing pending
         and is declared `ok` while thousands of its URLs are still unfetched.
+        Robots-denied URLs stay skipped: a robots rejection is treated as
+        permanent, so they must not eat the run's queue again.
         """
         with self.pg.transaction() as cur:
             cur.execute(
@@ -103,6 +108,7 @@ class BipFrontier:
                 UPDATE bip_urls
                    SET state = 'queued', locked_by = NULL, locked_until = NULL
                  WHERE host = %s AND state = 'skipped'
+                   AND skip_reason IS DISTINCT FROM 'robots'
                 """,
                 (host,),
             )
@@ -146,48 +152,88 @@ class BipFrontier:
         """Insert a URL as queued, or refresh an existing row.
 
         Returns True when the URL was newly inserted. `requeue=True` also puts a
-        previously fetched/skipped URL back into the queue (freshness re-crawl).
+        previously fetched/skipped URL back into the queue (freshness re-crawl),
+        except robots-denied ones: those are never revived.
         """
-        if len(row.url.encode("utf-8")) > MAX_URL_BYTES:
-            return False
-        with self.pg.transaction() as cur:
-            cur.execute(
-                """
-                INSERT INTO bip_urls
-                    (url, host, kind, discovered_from, depth, section, priority, state)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'queued')
-                ON CONFLICT (url) DO UPDATE
-                   SET last_seen = now(),
-                       priority = LEAST(bip_urls.priority, EXCLUDED.priority),
-                       state = CASE
-                                 WHEN %s OR bip_urls.state = 'skipped' THEN 'queued'
-                                 ELSE bip_urls.state
+        return self.queue_urls([row], requeue=requeue) > 0
+
+    def queue_urls(self, rows: list[UrlRow], *, requeue: bool = False) -> int:
+        """Queue a batch of URLs in one statement; returns newly inserted rows.
+
+        Same semantics as `queue_url`, but one round trip per page instead of
+        one per link. Duplicate URLs inside the batch collapse to one row.
+        """
+        unique: dict[str, UrlRow] = {}
+        for row in rows:
+            if len(row.url.encode("utf-8")) <= MAX_URL_BYTES:
+                unique.setdefault(row.url, row)
+        if not unique:
+            return 0
+        values = sql.SQL(", ").join(
+            sql.SQL("(%s, %s, %s, %s, %s, %s, %s, %s, 'queued')") for _ in unique
+        )
+        query = sql.SQL(
+            """
+            INSERT INTO bip_urls
+                (url, host, kind, discovered_from, depth, section, priority,
+                 anchor_text, state)
+            VALUES {values}
+            ON CONFLICT (url) DO UPDATE
+               SET last_seen = now(),
+                   priority = LEAST(bip_urls.priority, EXCLUDED.priority),
+                   anchor_text = CASE
+                                   WHEN bip_urls.anchor_text = ''
+                                   THEN EXCLUDED.anchor_text
+                                   ELSE bip_urls.anchor_text
+                                 END,
+                   state = CASE
+                             WHEN bip_urls.state = 'skipped'
+                                  AND bip_urls.skip_reason IS NOT DISTINCT
+                                      FROM 'robots'
+                               THEN bip_urls.state
+                             WHEN {requeue} OR bip_urls.state = 'skipped'
+                               THEN 'queued'
+                             ELSE bip_urls.state
+                           END,
+                   locked_by = CASE
+                                 WHEN bip_urls.state = 'skipped'
+                                      AND bip_urls.skip_reason IS NOT DISTINCT
+                                          FROM 'robots'
+                                   THEN bip_urls.locked_by
+                                 WHEN {requeue} OR bip_urls.state = 'skipped'
+                                   THEN NULL
+                                 ELSE bip_urls.locked_by
                                END,
-                       locked_by = CASE
-                                     WHEN %s OR bip_urls.state = 'skipped'
-                                     THEN NULL ELSE bip_urls.locked_by
-                                   END,
-                       locked_until = CASE
-                                        WHEN %s OR bip_urls.state = 'skipped'
-                                        THEN NULL ELSE bip_urls.locked_until
-                                      END
-                RETURNING (xmax = 0) AS inserted
-                """,
-                (
-                    row.url,
-                    row.host,
-                    row.kind,
-                    row.discovered_from,
-                    row.depth,
-                    row.section,
-                    row.priority,
-                    requeue,
-                    requeue,
-                    requeue,
-                ),
+                   locked_until = CASE
+                                    WHEN bip_urls.state = 'skipped'
+                                         AND bip_urls.skip_reason IS NOT DISTINCT
+                                             FROM 'robots'
+                                      THEN bip_urls.locked_until
+                                    WHEN {requeue} OR bip_urls.state = 'skipped'
+                                      THEN NULL
+                                    ELSE bip_urls.locked_until
+                                  END
+            RETURNING (xmax = 0) AS inserted
+            """
+        ).format(values=values, requeue=sql.Literal(requeue))
+        params = [
+            value
+            for row in unique.values()
+            for value in (
+                row.url,
+                row.host,
+                row.kind,
+                row.discovered_from,
+                row.depth,
+                row.section,
+                row.priority,
+                row.anchor_text[:500],
             )
-            result = cur.fetchone()
-        return bool(result and result[0])
+        ]
+        with self.pg.transaction() as cur:
+            cur.execute(query, params)
+            inserted = [r[0] for r in cur.fetchall()]
+        return sum(1 for flag in inserted if flag)
 
     def claim_urls(
         self,
@@ -197,32 +243,65 @@ class BipFrontier:
         limit: int,
         lock_seconds: int,
     ) -> list[UrlRow]:
-        """Claim up to `limit` URLs, round-robin across the active hosts.
+        """Claim up to `limit` URLs, weighted by each host's queued backlog.
 
-        Candidates are ranked within each host and taken in rank order, so a
-        single host with a huge queue cannot monopolize every worker: a batch
-        normally covers `limit` different hosts before any host gets a second
-        claim.
+        Every active host gets at least one URL per batch (from a shuffled host
+        order, so no host starves), and hosts whose queue holds thousands of
+        URLs get up to 16 slots, proportional to depth. Equal shares make a
+        20k-page school archive take days while tiny hosts idle; weighting keeps
+        all hosts progressing and lets deep archives finish in proportion to
+        their size. Expired claims are only consulted when this comes up short.
         """
         if not hosts:
             return []
+        counts = dict(
+            self.pg.fetchall(
+                """
+                SELECT host, count(*) FROM bip_urls
+                 WHERE host = ANY(%s) AND state = 'queued'
+                 GROUP BY host
+                """,
+                (hosts,),
+            )
+        )
+        weighted = [
+            (host, max(1, min(16, counts.get(host, 0) // 1000)))
+            for host in hosts
+            if counts.get(host)
+        ]
+        if not weighted:
+            return []
+        random.shuffle(weighted)
         candidates = self.pg.fetchall(
             """
-            SELECT url FROM (
-                SELECT url, priority, first_seen,
-                       row_number() OVER (
-                           PARTITION BY host ORDER BY priority, first_seen
-                       ) AS host_rank
-                  FROM bip_urls
-                 WHERE host = ANY(%s)
-                   AND (state = 'queued'
-                        OR (state = 'claimed' AND locked_until < now()))
-            ) ranked
-            ORDER BY host_rank, priority, first_seen
+            SELECT q.url FROM unnest(%s::text[], %s::int[])
+                WITH ORDINALITY AS h(host, weight, ord)
+            CROSS JOIN LATERAL (
+                SELECT url FROM bip_urls
+                 WHERE host = h.host AND state = 'queued'
+                 ORDER BY priority, first_seen
+                 LIMIT h.weight
+            ) q
+            ORDER BY h.ord
             LIMIT %s
             """,
-            (hosts, limit),
+            (
+                [host for host, _ in weighted],
+                [weight for _, weight in weighted],
+                limit,
+            ),
         )
+        if len(candidates) < limit:
+            candidates += self.pg.fetchall(
+                """
+                SELECT url FROM bip_urls
+                 WHERE host = ANY(%s) AND state = 'claimed'
+                   AND locked_until < now()
+                 ORDER BY priority, first_seen
+                 LIMIT %s
+                """,
+                (hosts, limit - len(candidates)),
+            )
         if not candidates:
             return []
         rows = self.pg.fetchall(
@@ -262,19 +341,21 @@ class BipFrontier:
         size: int = 0,
         sha256: str = "",
         title: str = "",
+        skip_reason: str = "",
     ) -> None:
         self.pg.execute(
             """
             UPDATE bip_urls
                SET state = %s, last_status = %s, last_checked = now(),
                    last_seen = now(),
+                   skip_reason = NULLIF(%s, ''),
                    content_type = COALESCE(NULLIF(%s, ''), content_type),
                    size = %s,
                    sha256 = COALESCE(NULLIF(%s, ''), sha256),
                    title = COALESCE(NULLIF(%s, ''), title)
              WHERE url = %s
             """,
-            (state, status, content_type, size, sha256, title, url),
+            (state, status, skip_reason, content_type, size, sha256, title, url),
         )
 
     # -- documents -----------------------------------------------------------
