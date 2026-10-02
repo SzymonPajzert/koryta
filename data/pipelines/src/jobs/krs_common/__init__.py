@@ -9,9 +9,14 @@ import requests
 
 from scrapers.stores import Context
 
+#: Seconds api-krs gets to answer one request. It answers in ~0.15 s; without a
+#: limit, a connection that never answers holds an unattended run until it is
+#: killed, with nothing written to say why.
+REQUEST_TIMEOUT = 30
+
 
 # TODO move this to stores - this is a generic utility, not KRS-specific.
-def query_krs_api(url, verbose=True) -> str | None:
+def query_krs_api(url, verbose=True, timeout=REQUEST_TIMEOUT) -> str | None:
     def print_filtered(*args, **kwargs):
         if verbose:
             print(*args, **kwargs)
@@ -20,7 +25,7 @@ def query_krs_api(url, verbose=True) -> str | None:
     response = None
     result = {}
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=timeout)
         if response.text == "":
             return None
         result = response.json()
@@ -47,11 +52,19 @@ def query_krs_api(url, verbose=True) -> str | None:
     return json.dumps(result)
 
 
-def upload_result(ctx: Context, url, result, verbose=True):
+def upload_result(ctx: Context, url, result, verbose=True) -> bool:
+    """Store one answer in the crawl bucket; False when the upload failed.
+
+    A failed upload leaves the answer unstored, so the next run asks again.
+    """
     # We're discarding query params, so it's a hotfix for this
     url = url.replace("?aktualnosc=", "/aktualnosc_")
     url = url.replace("&format=json", "")
-    ctx.io.upload(url, result, "application/json", verbose=verbose, include_query=True)
+    stored = ctx.io.upload(
+        url, result, "application/json", verbose=verbose, include_query=True
+    )
+    # An io that cannot tell - the test fakes - returns None, not False.
+    return stored is not False
 
 
 # TODO This should be calculated by which job updates which pipeline and which pipelines
