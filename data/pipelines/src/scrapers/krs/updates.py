@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from entities.company import KRS
+from scrapers.krs.columns import normalise
 from scrapers.stores import CloudStorage, Context, Pipeline
 from scrapers.stores.file import DownloadableFile
 
@@ -18,6 +19,19 @@ from scrapers.stores.file import DownloadableFile
 class KRSUpdate:
     krs: int
     date: str
+
+
+def latest_changes(updates: pd.DataFrame) -> dict[str, str]:
+    """KRS number to the last day the bulletin names its entry, from `KRSUpdates`.
+
+    Normalised first: a cached output reads `date` back as a Timestamp and the
+    KRS as a number.
+    """
+    if updates.empty:
+        return {}
+    days = normalise(updates, "date")
+    latest = days.groupby("krs")["date"].max()
+    return {str(krs): str(day) for krs, day in latest.items()}
 
 
 class KRSUpdates(Pipeline[KRSUpdate]):

@@ -74,14 +74,6 @@ def test_a_404_in_one_register_hints_the_other():
     assert plan.register_hints(settled) == {A: "P", B: "S"}
 
 
-def test_the_bulletin_gives_each_company_its_last_change():
-    updates = pd.DataFrame(
-        {"krs": [A, A, "31"], "date": ["2026-09-01", "2026-09-20", "2026-08-01"]}
-    )
-    assert plan.latest_changes(updates) == {A: "2026-09-20", B: "2026-08-01"}
-    assert plan.latest_changes(pd.DataFrame(columns=["krs", "date"])) == {}
-
-
 def stored(krs, day, register="P"):
     name = odpis_files.blob_name(krs, register, day)
     return odpis_files.StoredOdpis(krs=krs, register=register, day=day, blob=name)

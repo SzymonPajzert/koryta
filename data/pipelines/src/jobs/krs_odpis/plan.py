@@ -147,15 +147,6 @@ def register_hints(settled: Mapping[str, set[QueryType]]) -> dict[str, str]:
     return hints
 
 
-def latest_changes(updates: pd.DataFrame) -> dict[str, str]:
-    """KRS number to the last day the bulletin names its entry (`KRSUpdates`)."""
-    if updates.empty:
-        return {}
-    days = updates.assign(krs=updates["krs"].astype(str).str.zfill(10))
-    latest = days.groupby("krs")["date"].max()
-    return {str(krs): str(day) for krs, day in latest.items()}
-
-
 def order(first: str) -> tuple[str, ...]:
     """Both registers, the likely one first: a wrong guess costs one request."""
     return (first, "S" if first == "P" else "P")
