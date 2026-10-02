@@ -2,6 +2,9 @@
 
     koryta_krs_odpis                       # the companies ScrapeRejestrIO lists
     koryta_krs_odpis --krs-file todo.tsv   # KRS numbers, one a line, TAB P|S optional
+    koryta_krs_odpis --graph --changed-since 2026-09-25
+                                           # every company the pipelines know that
+                                           # the bulletin names since that day
     python -m jobs.krs_odpis --dry-run     # report the plan, ask nothing
 
 The free half of what `koryta_scrape_krs_paid` buys about a company. An odpis
@@ -18,8 +21,13 @@ with the register entries that began and ended each seat, and
 
 What a run asks about: by default, every company `ScrapeRejestrIO` lists,
 rebuilt first as the other KRS jobs do, with the person feeds left to the paid
-job; or the KRS numbers in a file. An odpis already on file is asked for again
-only when the bulletin names the entry since. At most ``--max`` companies a run.
+job; or the KRS numbers in a file; or, with ``--graph``, every company in
+`CompaniesKRS` -- the companies whose people `PeopleKRSCombined` takes from an
+odpis. ``--changed-since`` keeps only those the bulletin names on or after a
+day, which is the weekly refresh: the register's entries are in the odpis the
+day they are made, where rejestr.io's lag them. An odpis already on file is
+asked for again only when the bulletin names the entry since. At most
+``--max`` companies a run.
 
 Stopping is free at any point: Ctrl+C or SIGTERM ends the run after the
 document in hand, and a document is in the bucket before it is counted. One
@@ -41,7 +49,7 @@ import sys
 import typing
 from collections import Counter
 from collections.abc import Iterator, Sequence
-from datetime import datetime
+from datetime import date, datetime
 from functools import partial
 from pathlib import Path
 
@@ -55,6 +63,8 @@ from jobs.krs_odpis.log import FLUSH_EVERY, RUN_BUCKET, RUN_LOG, RunLog
 from jobs.krs_odpis.plan import (
     Candidate,
     Plan,
+    changed_since,
+    from_graph,
     from_queries,
     latest_changes,
     read_krs_file,
@@ -63,6 +73,7 @@ from jobs.krs_odpis.plan import (
     select,
 )
 from scrapers.krs import odpis_files
+from scrapers.krs.list import CompaniesKRS
 from scrapers.krs.scrape import KRSAlreadyScraped, ScrapeRejestrIO, settled_registers
 from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import Context, ProcessPolicy
@@ -105,14 +116,32 @@ def warsaw_day() -> str:
     return datetime.now(warsaw_tz).date().isoformat()
 
 
+def iso_day(text: str) -> str:
+    try:
+        return date.fromisoformat(text).isoformat()
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a day: {text!r} (YYYY-MM-DD)") from None
+
+
 def parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="koryta_krs_odpis", description=(__doc__ or "").split("\n")[0]
     )
-    parser.add_argument(
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
         "--krs-file",
         help="KRS numbers to ask about, one a line, optionally TAB and P or S "
         "(the krs_todo.tsv shape). Default: the companies ScrapeRejestrIO lists.",
+    )
+    source.add_argument(
+        "--graph",
+        action="store_true",
+        help="Ask about the companies CompaniesKRS knows, the public ones first.",
+    )
+    parser.add_argument(
+        "--changed-since",
+        type=iso_day,
+        help="Only the companies the KRS bulletin names on or after this day.",
     )
     parser.add_argument(
         "--max",
@@ -146,18 +175,26 @@ def parser() -> argparse.ArgumentParser:
     return parser
 
 
-def candidates_from(ctx: Context, krs_file: str | None) -> tuple[list[Candidate], str]:
-    if krs_file:
-        return read_krs_file(Path(krs_file)), krs_file
-    queries = ScrapeRejestrIO().read_or_process_list(ctx)
-    return from_queries(queries), "ScrapeRejestrIO"
+def queue_candidates(ctx: Context) -> list[Candidate]:
+    return from_queries(ScrapeRejestrIO().read_or_process_list(ctx))
+
+
+def graph_candidates(ctx: Context) -> list[Candidate]:
+    return from_graph(CompaniesKRS().read_or_process(ctx))
+
+
+def bulletin_changes(ctx: Context) -> dict[str, str]:
+    return latest_changes(KRSUpdates().read_or_process(ctx))
 
 
 def make_plan(
-    ctx: Context, candidates: Sequence[Candidate], today: str, limit: int
+    ctx: Context,
+    candidates: Sequence[Candidate],
+    changes: dict[str, str],
+    today: str,
+    limit: int,
 ) -> Plan:
     stored = odpis_files.stored_odpisy(ctx)
-    changes = latest_changes(KRSUpdates().read_or_process(ctx))
     settled = settled_registers(KRSAlreadyScraped().read_or_process(ctx))
     return select(candidates, stored, changes, register_hints(settled), today, limit)
 
@@ -170,11 +207,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     # argparse abbreviates to it - so the job's own flags must not reach them.
     sys.argv = sys.argv[:1]
 
-    # A file needs nothing rebuilt; the queue does, as the other KRS jobs have it.
-    refresh = set() if args.krs_file else set(REFRESH_PIPELINES)
+    # The bulletin is what says an odpis on file is out of date, so every route
+    # rebuilds it. The queue's tree reaches it through KRSNeedsRefresh, with the
+    # rest of REFRESH_PIPELINES, as the other KRS jobs have it. The policy
+    # builds its tree for the first pipeline a run reads and for no other, so
+    # on the other routes the bulletin is read before anything else.
+    queue = not (args.krs_file or args.graph)
+    refresh = set(REFRESH_PIPELINES) if queue else {"KRSUpdates"}
     ctx, _ = setup_context(policy=ProcessPolicy(refresh))
-    candidates, source = candidates_from(ctx, args.krs_file)
-    plan = make_plan(ctx, candidates, warsaw_day(), args.max)
+    if queue:
+        candidates, source = queue_candidates(ctx), "ScrapeRejestrIO"
+    changes = bulletin_changes(ctx)
+    if args.krs_file:
+        candidates, source = read_krs_file(Path(args.krs_file)), args.krs_file
+    elif args.graph:
+        candidates, source = graph_candidates(ctx), "CompaniesKRS"
+    if args.changed_since:
+        candidates = changed_since(candidates, changes, args.changed_since)
+        source += f" the bulletin names since {args.changed_since}"
+    plan = make_plan(ctx, candidates, changes, warsaw_day(), args.max)
     print(report(plan, candidates, source))
     if args.dry_run or not plan.asks:
         return 0

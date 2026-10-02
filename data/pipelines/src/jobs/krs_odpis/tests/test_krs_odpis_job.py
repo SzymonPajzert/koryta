@@ -110,6 +110,24 @@ def test_the_cap_defers_rather_than_drops_and_a_file_hint_wins():
     assert the_plan.deferred == 1
 
 
+def test_the_graph_puts_its_public_companies_first():
+    companies = pd.DataFrame(
+        {"krs": ["31", A, C, "31"], "is_public": [False, True, None, False]}
+    )
+    assert [(c.krs, c.reason) for c in plan.from_graph(companies)] == [
+        (A, plan.REASON_GRAPH),
+        (B, plan.REASON_GRAPH),
+        (C, plan.REASON_GRAPH),
+    ]
+
+
+def test_changed_since_keeps_what_the_bulletin_names_on_or_after_the_day():
+    candidates = [plan.Candidate(k, "graph") for k in (A, B, C)]
+    changes = {A: "2026-09-25", B: "2026-09-24"}
+    kept = plan.changed_since(candidates, changes, "2026-09-25")
+    assert [c.krs for c in kept] == [A]
+
+
 def test_the_report_says_what_the_paid_job_would_have_bought():
     the_plan = plan.Plan(asks=[plan.Ask(A, ("P", "S"), "refresh", paid_calls=2)])
     text = plan.report(the_plan, [1, 2], "ScrapeRejestrIO")
@@ -287,17 +305,60 @@ def test_a_run_files_each_pdf_and_records_each_attempt(monkeypatch):
     assert len(records) == 1 and records[0][1].startswith(RUN_LOG.prefix)
 
 
-def test_a_dry_run_plans_and_asks_nothing(tmp_path, monkeypatch, capsys):
-    path = tmp_path / "todo.tsv"
-    path.write_text(f"{A}\n")
-    monkeypatch.setattr(job, "setup_context", lambda policy: (object(), None))
+@pytest.fixture
+def offline(monkeypatch):
+    """`main` with the pipelines and the service swapped out; returns its policies."""
+    policies = []
+
+    def setup_context(policy):
+        policies.append(policy)
+        return object(), None
+
+    monkeypatch.setattr(job, "setup_context", setup_context)
+    monkeypatch.setattr(
+        job, "bulletin_changes", lambda ctx: {A: TODAY, C: "2026-09-01"}
+    )
     monkeypatch.setattr(
         job,
         "make_plan",
-        lambda ctx, candidates, today, limit: plan.select(
-            candidates, {}, {}, {}, today, limit
+        lambda ctx, candidates, changes, today, limit: plan.select(
+            candidates, {}, changes, {}, today, limit
         ),
     )
     monkeypatch.setattr(job, "run", lambda *a, **k: pytest.fail("asked the service"))
+    return policies
+
+
+def test_a_dry_run_plans_and_asks_nothing(tmp_path, offline, capsys):
+    path = tmp_path / "todo.tsv"
+    path.write_text(f"{A}\n")
     assert job.main(["--krs-file", str(path), "--dry-run", "--max", "5"]) == 0
     assert "Asking about 1" in capsys.readouterr().out
+    # A file needs only the bulletin rebuilt, not the paid queue's pipelines.
+    assert offline[0].refresh_pipelines == {"KRSUpdates"}
+
+
+def test_the_weekly_refresh_asks_about_the_graph_the_bulletin_names(
+    offline, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        job,
+        "graph_candidates",
+        lambda ctx: plan.from_graph(pd.DataFrame({"krs": [A, B, C]})),
+    )
+    argv = ["--graph", "--changed-since", "2026-09-25", "--dry-run"]
+    assert job.main(argv) == 0
+    out = capsys.readouterr().out
+    assert "1 companies from CompaniesKRS the bulletin names since 2026-09-25" in out
+    assert "Asking about 1" in out
+
+
+def test_a_day_that_is_not_a_day_is_refused(capsys):
+    with pytest.raises(SystemExit):
+        job.parser().parse_args(["--graph", "--changed-since", "last week"])
+    assert "YYYY-MM-DD" in capsys.readouterr().err
+
+
+def test_a_file_and_the_graph_are_one_or_the_other(capsys):
+    with pytest.raises(SystemExit):
+        job.parser().parse_args(["--graph", "--krs-file", "todo.tsv"])
