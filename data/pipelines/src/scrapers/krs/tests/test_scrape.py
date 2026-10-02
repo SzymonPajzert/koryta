@@ -20,7 +20,9 @@ from scrapers.krs.scrape import (
     compute_refresh_cutoff_date,
     cost_breakdown,
     filter_paid_by_people_changes,
+    leave_to_the_odpis,
     save_org_connections,
+    told_by_the_odpis,
 )
 
 
@@ -424,3 +426,79 @@ def test_a_public_company_with_its_connections_is_not_bought_again():
     )
 
     assert "0001251428" not in queue
+
+
+# ------------------------------------------------ what the odpis tells for free
+AKTUALNE = QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE
+HISTORYCZNE = QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE
+
+
+def test_an_odpis_tells_until_the_bulletin_names_the_company_again():
+    odpis_on = "2026-09-24"
+    told = told_by_the_odpis(
+        {
+            "0000000029": odpis_on,
+            "0000000031": odpis_on,
+            "0000000041": odpis_on,
+            "0000000043": odpis_on,
+        },
+        {
+            "0000000029": "2026-09-23",  # before the odpis: in it
+            "0000000031": odpis_on,  # the same day: maybe after the fetch
+            "0000000041": "2026-09-30",  # since
+            "0000000099": "2026-09-01",  # no odpis at all
+        },
+    )
+    # 0000000043 the bulletin never named: nothing has moved since the odpis.
+    assert told == {"0000000029", "0000000043"}
+
+
+def test_the_odpis_takes_the_company_feeds_and_nothing_else():
+    """The free api-krs pair and the person feeds are no odpis's to replace."""
+    told, untold = "0000000029", "0000000031"
+    paid_only = "0000000041"
+    queries = [
+        RejestrIOQuery(
+            krs=KRS(told),
+            queries=[QueryType.API_KRS_ODPIS_AKTUALNY_P, AKTUALNE, HISTORYCZNE],
+            reasons=[REASON_REFRESH],
+        ),
+        RejestrIOQuery(
+            krs=KRS(paid_only), queries=[AKTUALNE, HISTORYCZNE], reasons=[REASON_OWNED]
+        ),
+        RejestrIOQuery(krs=KRS(untold), queries=[AKTUALNE], reasons=[REASON_OWNED]),
+        RejestrIOQuery(
+            person=RejestrIOKey(id="808738"),
+            queries=[QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE],
+        ),
+    ]
+
+    kept = list(leave_to_the_odpis(queries, {told, paid_only}))
+
+    assert [(q.subject_id, q.queries, q.reasons) for q in kept] == [
+        (told, [QueryType.API_KRS_ODPIS_AKTUALNY_P], [REASON_REFRESH]),
+        (untold, [AKTUALNE], [REASON_OWNED]),
+        ("808738", [QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE], []),
+    ]
+    assert sum(q.cost() for q in kept) == 0.10
+
+
+def test_the_queue_reads_what_the_site_takes_from_an_odpis():
+    """Off `PeopleKRSCombined`'s rows, against a bulletin read back from disk."""
+    scraper = ScrapeRejestrIO()
+    scraper.__dict__["people_combined"] = _Frame(
+        pd.DataFrame(
+            {
+                "employed_krs": ["0000000029", "0000000031", "0000000041"],
+                "crawled_on": ["2026-10-02", "2026-10-02", "2026-09-01"],
+                "source": ["odpis", "odpis", "rejestr.io"],
+            }
+        )
+    )
+    scraper.__dict__["updates"] = _Frame(
+        pd.DataFrame(
+            {"krs": [29, 31], "date": pd.to_datetime(["2026-09-30", "2026-10-02"])}
+        )
+    )
+
+    assert scraper.companies_told_by_the_odpis(None) == {"0000000029"}  # type: ignore[arg-type]

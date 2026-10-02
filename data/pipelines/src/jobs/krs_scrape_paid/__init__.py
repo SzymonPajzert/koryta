@@ -4,6 +4,14 @@ Recomputes `ScrapeRejestrIO` after the free half has written, prints what the
 bill is made of and what it comes to, and waits for Enter before buying.
 
     koryta_scrape_krs_paid
+
+A company's connections are left out where its people already come from a
+current odpis pełny (`ScrapeRejestrIO.companies_told_by_the_odpis`), so the
+bill is smallest after `koryta_krs_odpis` and a rebuild of the seats:
+
+    koryta_krs_odpis
+    koryta PeopleKRSCombined --refresh KrsOdpisSeats --refresh KrsOdpisEntries
+    koryta_scrape_krs_paid
 """
 
 from time import sleep
