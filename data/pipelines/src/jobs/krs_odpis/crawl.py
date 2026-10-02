@@ -60,6 +60,10 @@ FAILED = "failed"
 
 #: What a second try may fix.
 TRANSIENT = frozenset({GATEWAY, NETWORK})
+#: Every status, in the order a summary lists them.
+STATUSES = (FETCHED, ABSENT, GATEWAY, NETWORK, FAILED)
+#: How the stop for too many dead attempts in a row ends.
+REFUSING = "attempts in a row got no answer"
 
 
 @dataclass
@@ -243,7 +247,7 @@ def crawl(
                     + (f"  [{outcome.error}]" if outcome.error else "")
                 )
             if in_a_row >= MAX_CONSECUTIVE_FAILURES:
-                result.stopped = f"{in_a_row} attempts in a row got no answer"
+                result.stopped = f"{in_a_row} {REFUSING}"
             else:
                 result.stopped = stop_reason(served[-WINDOW:], baseline, trouble)
             if result.stopped:

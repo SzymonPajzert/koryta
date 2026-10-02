@@ -81,6 +81,7 @@ from scrapers.krs.list import CompaniesKRS
 from scrapers.krs.scrape import KRSAlreadyScraped, ScrapeRejestrIO, settled_registers
 from scrapers.krs.updates import KRSUpdates, latest_changes
 from scrapers.stores import Context, ProcessPolicy
+from stores.job_runs import ERRORS_KEPT, FinalState, JobRun
 from stores.storage import CRAWLED_BUCKET, Client, warsaw_tz
 
 #: Held for the length of a crawl. The CRU crawl's scripts predate it and do
@@ -257,17 +258,42 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run(plan, args.interval, args.flush_every)
 
 
+def run_state(result: crawl.Result) -> FinalState:
+    """How a run ended, for /admin/procesy. Twenty attempts in a row with no
+    answer is the service refusing; stopping because it slowed down, or
+    leaving companies the gateway ate for the next run, is how this job is
+    meant to end on a busy day."""
+    if result.stopped.endswith(crawl.REFUSING):
+        return "failed"
+    return "partial" if result.code else "succeeded"
+
+
 def run(
     plan: Plan,
     interval: float,
     flush_every: int,
     client: typing.Any | None = None,
     session: typing.Any | None = None,
+    status: JobRun | None = None,
 ) -> int:
     """Ask about every company in the plan, keeping each document and each attempt."""
     client = client or Client()
     session = session or requests.Session()
     record_id = uuid7str()
+    # The page at /admin/procesy shows the run under the run record's own id,
+    # so the one can be found from the other.
+    status = status or JobRun(
+        "krs_odpis", run_id=record_id, unit="firm", total=len(plan.asks)
+    )
+    attempts: Counter[str] = Counter(dict.fromkeys(crawl.STATUSES, 0))
+    asked: set[str] = set()
+
+    def record(outcome: crawl.Outcome) -> None:
+        log.add(outcome)
+        attempts[outcome.status] += 1
+        asked.add(outcome.krs)
+        status.progress(len(asked), counters=attempts)
+
     log = RunLog(
         partial(client.create_object, RUN_BUCKET, content_type="application/gzip"),
         record_id,
@@ -286,19 +312,49 @@ def run(
         nonlocal stop
         stop = True
 
-    previous = signal.signal(signal.SIGTERM, on_sigterm)
+    # Everything from the start on is inside the handlers, the last flush of
+    # the run record included: a part failing to write once the crawl had
+    # returned used to skip every `finish`, and left the run "running" until
+    # the page called it stalled. `finish` keeps its first call, so a crawl
+    # interrupted and then recorded is still the partial run it was.
+    status.start()
     try:
-        result = crawl.crawl(
-            plan.asks, fetch, log.add, interval, should_stop=lambda: stop
-        )
+        previous = signal.signal(signal.SIGTERM, on_sigterm)
+        try:
+            result = crawl.crawl(
+                plan.asks, fetch, record, interval, should_stop=lambda: stop
+            )
+        finally:
+            log.flush()
+            signal.signal(signal.SIGTERM, previous)
     except KeyboardInterrupt:
         print("Interrupted; what was fetched is in the bucket")
+        status.finish(
+            "partial",
+            stop_reason="przerwany",
+            exit_code=EXIT_INTERRUPTED,
+            done=len(asked),
+        )
         return EXIT_INTERRUPTED
-    finally:
-        log.flush()
-        signal.signal(signal.SIGTERM, previous)
+    except BaseException as problem:
+        status.finish(
+            "failed",
+            stop_reason=f"raised {type(problem).__name__}",
+            errors=[repr(problem)],
+            done=len(asked),
+        )
+        raise
 
     final = Counter(o.status for o in result.final().values())
+    errors = [f"{o.krs}: {o.error}" for o in result.final().values() if o.error]
+    status.finish(
+        run_state(result),
+        stop_reason=result.stopped or None,
+        errors=errors[:ERRORS_KEPT],
+        exit_code=result.code,
+        counters={**dict.fromkeys(crawl.STATUSES, 0), **final},
+        done=len(result.final()),
+    )
     print(
         f"Asked about {len(result.final()):,} companies: {dict(final)}"
         + (f"; stopped: {result.stopped}" if result.stopped else "")
