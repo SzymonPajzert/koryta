@@ -29,9 +29,7 @@ import hashlib
 import inspect
 import json
 import multiprocessing
-import os
 import re
-import sys
 import typing
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor
@@ -43,13 +41,7 @@ import pandas as pd
 import pypdf
 
 from scrapers.krs import odpis_files, odpis_pdf, organs
-from scrapers.stores import (
-    DOWNLOADED_DIR,
-    PESEL_SALT_FILE,
-    Context,
-    Pipeline,
-    pesel_salt,
-)
+from scrapers.stores import PESEL_SALT_FILE, Context, Pipeline, pesel_salt
 from util import pesel as pesel_util
 
 #: Parsing processes. One is left for the reader feeding them.
@@ -127,12 +119,6 @@ def parse_all(
     return gather(parsed for _, parsed in parse_each(docs, parse, workers))
 
 
-#: Where each document's parse is kept. Local, as the PDFs it is read from
-#: are: the seats' rows carry names and fingerprints. None is beside the
-#: download cache.
-PARSED_ROOT: str | None = None
-
-
 @functools.cache
 def parser_version() -> str:
     """A digest of all the code a document's rows come out of.
@@ -140,8 +126,10 @@ def parser_version() -> str:
     Any change to the parser, the organ names it reads, the PESEL code or the
     PDF library - or to this module - re-parses every document.
     """
+    this = inspect.getmodule(parser_version)
+    assert this is not None, "a function defined in a module has one"
     digest = hashlib.sha1(pypdf.__version__.encode())
-    for module in (odpis_pdf, organs, pesel_util, sys.modules[__name__]):
+    for module in (odpis_pdf, organs, pesel_util, this):
         digest.update(inspect.getsource(module).encode())
     return digest.hexdigest()[:16]
 
@@ -155,49 +143,49 @@ class ParsedCache:
     changes. The output is still exactly what parsing every document would
     give; only the time differs. A refresh after a crawl of 295 odpisy
     re-parsed all 9,237 on file, 7.7 minutes, on 2026-10-02.
+
+    Kept through the io as a memo: on this machine only, like the PDFs it is
+    read from - the seats' rows carry names and fingerprints.
     """
 
     def __init__(
         self,
+        ctx: Context,
         kind: str,
         columns: typing.Sequence[str],
         variant: str = "",
         keeps: Callable[[list[dict[str, typing.Any]]], bool] = lambda rows: True,
     ):
-        root = PARSED_ROOT or os.path.join(DOWNLOADED_DIR, ".odpis-parsed")
-        self.dir = os.path.join(root, kind)
+        self.ctx = ctx
+        self.kind = f"odpis-{kind}"
         self.stamp = f"{parser_version()}:{variant}"
         #: Only what the pipeline outputs is kept, and only rows `keeps` passes.
         self.columns = tuple(columns)
         self.keeps = keeps
 
-    def _path(self, odpis: odpis_files.StoredOdpis) -> str:
-        return os.path.join(self.dir, f"{odpis.blob.replace('/', '.')}.json")
+    def _key(self, odpis: odpis_files.StoredOdpis) -> str:
+        return odpis.blob.replace("/", ".")
 
     def get(self, odpis: odpis_files.StoredOdpis) -> Parsed | None:
+        text = self.ctx.io.read_memo(self.kind, self._key(odpis))
         try:
-            with open(self._path(odpis), encoding="utf-8") as f:
-                kept = json.load(f)
-        except (OSError, ValueError):
+            kept = json.loads(text) if text else None
+        except ValueError:
             return None
         if not isinstance(kept, dict) or kept.get("stamp") != self.stamp:
             return None
         return kept["rows"], kept["problem"]
 
     def put(self, odpis: odpis_files.StoredOdpis, parsed: Parsed) -> None:
-        path = self._path(odpis)
-        part = f"{path}.part"
         rows = [{c: row.get(c) for c in self.columns} for row in parsed[0]]
-        problem = parsed[1]
         if not self.keeps(rows):
             return
         try:
-            os.makedirs(self.dir, exist_ok=True)
-            with open(part, "w", encoding="utf-8") as f:
-                json.dump({"stamp": self.stamp, "rows": rows, "problem": problem}, f)
-            os.replace(part, path)
-        except (OSError, TypeError) as e:
+            text = json.dumps({"stamp": self.stamp, "rows": rows, "problem": parsed[1]})
+        except TypeError as e:
             print(f"Could not keep the parse of {odpis.blob}: {e}")
+            return
+        self.ctx.io.write_memo(self.kind, self._key(odpis), text)
 
 
 def parse_stored(
@@ -279,7 +267,7 @@ class KrsOdpisEntries(Pipeline[OdpisEntry]):
 
     def process(self, ctx: Context) -> pd.DataFrame:
         stored = odpis_files.stored_odpisy(ctx)
-        cache = ParsedCache("entries", ENTRY_COLUMNS)
+        cache = ParsedCache(ctx, "entries", ENTRY_COLUMNS)
         rows, failed = parse_stored(ctx, stored, entries_of, cache)
         df = pd.DataFrame.from_records(rows, columns=list(ENTRY_COLUMNS))
         report("entries", len(stored), df, failed)
@@ -441,7 +429,7 @@ class KrsOdpisSeats(Pipeline[OdpisSeat]):
         # Keyed by the PESEL key too: a fingerprint under another key is
         # another fingerprint.
         cache = ParsedCache(
-            "seats", SEAT_COLUMNS, pesel_util.salt_id(salt), keeps=carry_no_pesel
+            ctx, "seats", SEAT_COLUMNS, pesel_util.salt_id(salt), keeps=carry_no_pesel
         )
         rows, failed = parse_stored(ctx, stored, partial(seats_of, salt=salt), cache)
         df = pd.DataFrame.from_records(rows, columns=list(SEAT_COLUMNS))

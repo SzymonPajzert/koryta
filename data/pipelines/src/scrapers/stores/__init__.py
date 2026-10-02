@@ -161,6 +161,19 @@ class IO(metaclass=ABCMeta):
         """Uploads a local file as a versioned backup for a filename."""
         raise NotImplementedError()
 
+    def read_memo(self, kind: str, key: str) -> str | None:
+        """What `write_memo` kept under `key`, or None.
+
+        A memo is a pipeline's note to its own later runs on this machine - what
+        it made of an input that never changes - kept beside the download cache
+        and never shared. An io with nowhere to keep one has none, and a
+        pipeline then does the work again; the output does not change.
+        """
+        return None
+
+    def write_memo(self, kind: str, key: str, text: str) -> None:
+        """Keep `text` under `key` for later runs on this machine; best effort."""
+
 
 class ContextResource(metaclass=ABCMeta):
     """A client the Context only carries when some pipeline asked for it.

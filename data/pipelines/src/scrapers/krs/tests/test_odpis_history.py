@@ -85,11 +85,10 @@ def as_text(content: bytes) -> str:
 
 
 @pytest.fixture(autouse=True)
-def text_documents(monkeypatch, tmp_path):
+def text_documents(monkeypatch):
     monkeypatch.setattr(odpis_pdf, "extract_text", as_text)
     monkeypatch.setattr(odpis_pdf, "extract_head_text", as_text)
     monkeypatch.setattr(odpis_history, "WORKERS", 1)
-    monkeypatch.setattr(odpis_history, "PARSED_ROOT", str(tmp_path / "parsed"))
 
 
 class Read:
@@ -104,6 +103,13 @@ class FakeIO:
     def __init__(self, held: dict[str, bytes]):
         self.held = held
         self.listings = 0
+        self.memos: dict[tuple[str, str], str] = {}
+
+    def read_memo(self, kind, key):
+        return self.memos.get((kind, key))
+
+    def write_memo(self, kind, key, text):
+        self.memos[(kind, key)] = text
 
     def list_files(self, ref):
         self.listings += 1
@@ -286,11 +292,12 @@ def test_seats_under_another_key_are_parsed_again(monkeypatch):
     assert df.iloc[0].pesel_fingerprint == pesel_util.fingerprint(PRESIDENT, "q" * 64)
 
 
-def test_a_seat_holding_a_pesel_is_not_kept(tmp_path):
+def test_a_seat_holding_a_pesel_is_not_kept():
+    ctx = FakeContext(held())
     cache = odpis_history.ParsedCache(
-        "seats", ("krs", "funkcja"), keeps=odpis_history.carry_no_pesel
+        ctx, "seats", ("krs", "funkcja"), keeps=odpis_history.carry_no_pesel
     )
-    [odpis] = odpis_files.stored_odpisy(FakeContext(held())).values()
+    [odpis] = odpis_files.stored_odpisy(ctx).values()
 
     cache.put(odpis, ([{"krs": "0000000029", "funkcja": f"Z {PRESIDENT}"}], None))
 

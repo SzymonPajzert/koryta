@@ -32,7 +32,7 @@ from scrapers.stores.file import (
     NotInMirrorError,
     VersionedBackup,
 )
-from stores import file
+from stores import config, file
 from stores.config import PROJECT_ROOT
 from stores.download import CompressedMirror, FileSource
 from stores.duckdb import EntityDumper
@@ -313,6 +313,27 @@ class Conductor(IO):
 
     def restore_backup_to_path(self, filename: str, dest_path: str) -> None:
         self.storage.restore_backup_to_path(filename, dest_path)
+
+    def _memo_path(self, kind: str, key: str) -> str:
+        return os.path.join(config.DOWNLOADED_DIR, ".memo", kind, f"{key}.json")
+
+    def read_memo(self, kind: str, key: str) -> str | None:
+        try:
+            with open(self._memo_path(kind, key), encoding="utf-8") as f:
+                return f.read()
+        except OSError:
+            return None
+
+    def write_memo(self, kind: str, key: str, text: str) -> None:
+        path = self._memo_path(kind, key)
+        part = f"{path}.part"
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(part, "w", encoding="utf-8") as f:
+                f.write(text)
+            os.replace(part, path)
+        except OSError as e:
+            print(f"Could not keep the {kind} memo {key}: {e}")
 
     def upload_backup_from_path(self, filename: str, src_path: str) -> None:
         self.storage.upload_backup_from_path(filename, src_path)
