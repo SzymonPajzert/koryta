@@ -13,6 +13,11 @@ class Source:
     source_krs: str | None = None
     reason: str | None = None
 
+    def sort_key(self) -> tuple[str, str, str]:
+        """The order a company's sources are listed in. They are collected in
+        a set, which iterates in a different order every run."""
+        return (self.source, self.source_krs or "", self.reason or "")
+
 
 @dataclass(frozen=True)
 class Owner:

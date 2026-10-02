@@ -487,7 +487,11 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 for src in hc.sources:
                     company_sources.add(Source(source="hardcoded", reason=src))
 
-            output.append(dataclasses.replace(company, sources=list(company_sources)))
+            output.append(
+                dataclasses.replace(
+                    company, sources=sorted(company_sources, key=Source.sort_key)
+                )
+            )
         return output
 
     def process(self, ctx: Context):

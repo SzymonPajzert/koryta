@@ -658,10 +658,15 @@ def save_org_connections(
     con_refresh = needs_refresh_krs["krs"].unique().tolist()
     refresh_ids = set(str(krs) for krs in con_refresh)
     # Join KRS ids with the ones that needs a refresh.
-    connections = set(con_list) | set(KRS(krs) for krs in con_refresh)
+    # Each group sorted: they arrive as sets, which iterate in a different
+    # order every run, and this order is the queue's - what a capped
+    # `koryta_krs_odpis` run reaches first, and the order the scrapes ask in.
+    connections = sorted(
+        set(con_list) | set(KRS(krs) for krs in con_refresh), key=lambda k: k.id
+    )
 
-    names = list(names)
-    people = list(people)
+    names = sorted(names, key=lambda k: k.id)
+    people = sorted(people, key=lambda p: str(p.id))
 
     print(
         f"len(connections): {len(con_list)} + {len(con_refresh)} = {len(connections)}"
