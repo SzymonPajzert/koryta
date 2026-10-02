@@ -65,6 +65,16 @@ failed, bulletin days fetched, why it stopped. The exit code says the same in
 brief: 0 everything asked was answered, 75 something is left for the next run
 (deadline, api-krs refusing, a failed request or upload), 1 a crash.
 
+While it runs it also reports to koryta.pl/admin/procesy - phase, companies
+asked of the queue, counters - and ends there as succeeded, partial (work left
+for the next night) or failed (a crash, or api-krs refusing); see "Reporting a
+run" in [README.md](README.md). That takes one more grant, on the ops database
+`agent-tasks` and nothing else - but on all of it: IAM cannot narrow Firestore to
+a collection, so the job's account may write, and delete, any document there,
+the owner's task list (`tasks`) included. That is the reach ops-writer already
+has; a database of the job runs' own would narrow it, and has not been made.
+Without the grant the job runs the same and the page never hears of it.
+
 ```bash
 PROJECT=koryta-pl
 REGION=europe-central2
@@ -87,6 +97,13 @@ for bucket in koryta-pl-crawled koryta-pl-sharedcache; do
     --member=serviceAccount:$SA --role=roles/storage.objectCreator
 done
 
+# Report runs to /admin/procesy: Firestore, narrowed by an IAM condition to
+# the ops database. Not to the job runs in it - IAM stops at the database - so
+# this account may also write and delete the task list, as ops-writer may.
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member=serviceAccount:$SA --role=roles/datastore.user \
+  --condition='expression=resource.name=="projects/koryta-pl/databases/agent-tasks",title=agent-tasks-only'
+
 # The capture extractor's Dockerfile, under the jobs' own tag, so rebuilding
 # one does not move the other.
 gcloud builds submit data/pipelines --tag=$IMAGE --project=$PROJECT
@@ -94,17 +111,25 @@ gcloud builds submit data/pipelines --tag=$IMAGE --project=$PROJECT
 # USERNAME names the job's pipeline backups (user=krs-jobs) and, having none of
 # its own at first, makes it restore the newest anyone wrote. TZ keeps the
 # pipelines' naive dates on the Warsaw day, as on the laptops they were written
-# on. 8Gi: a 4.5 GB peak, and a container's disk is memory too.
+# on. KORYTA_VERSION is the commit /admin/procesy records on each run: a Cloud
+# Run job has no revision of its own to stand in, as a service's K_REVISION
+# does, so without it the runs carry no version. Build from a clean tree, or the
+# commit is not quite what the image holds. 8Gi: a 4.5 GB peak, and a
+# container's disk is memory too.
 gcloud run jobs create krs-scrape-free --project=$PROJECT --region=$REGION \
   --image=$IMAGE --service-account=$SA \
   --command=koryta_scrape_krs_free --args=--max-minutes=170 \
-  --set-env-vars=USERNAME=krs-jobs,TZ=Europe/Warsaw \
+  --set-env-vars=USERNAME=krs-jobs,TZ=Europe/Warsaw,KORYTA_VERSION=$(git rev-parse --short HEAD) \
   --cpu=2 --memory=8Gi --task-timeout=3h --max-retries=0
 
 # Once by hand first. Nothing has asked api-krs from Google's addresses yet;
 # if it refuses them, 20 failed requests in a row end the run with 75 and the
-# summary's `errors` say what came back.
-gcloud run jobs execute krs-scrape-free --project=$PROJECT --region=$REGION --wait
+# summary's `errors` say what came back. KORYTA_JOB_TRIGGER=manual, because
+# any Cloud Run execution otherwise counts as the scheduler's: the page would
+# take the schedule for live and call the job late every night until the
+# scheduler below exists.
+gcloud run jobs execute krs-scrape-free --project=$PROJECT --region=$REGION --wait \
+  --update-env-vars=KORYTA_JOB_TRIGGER=manual
 gcloud storage cat "gs://koryta-pl-sharedcache/jobs/krs_scrape_free/runs/date=$(TZ=Europe/Warsaw date +%F)/*.json"
 
 # Then every night. The scheduler calls the Cloud Run API as the job's own
@@ -117,12 +142,21 @@ gcloud scheduler jobs create http krs-scrape-free-nightly --project=$PROJECT \
   --http-method=POST --oauth-service-account-email=$SA
 ```
 
-After a change to the job, rebuild the image and point the job at it:
+After a change to the job, rebuild the image and point the job at it, with the
+version it now runs:
 
 ```bash
 gcloud builds submit data/pipelines --tag=$IMAGE --project=$PROJECT
-gcloud run jobs update krs-scrape-free --project=$PROJECT --region=$REGION --image=$IMAGE
+gcloud run jobs update krs-scrape-free --project=$PROJECT --region=$REGION --image=$IMAGE \
+  --update-env-vars=KORYTA_VERSION=$(git rev-parse --short HEAD)
 ```
 
 Do not execute it by hand between 00:30 and 03:30: two runs ask api-krs twice
-as often, and nothing stops the second.
+as often, and nothing stops the second. Any other time, pass
+`--update-env-vars=KORYTA_JOB_TRIGGER=manual`, as above, so the page records a
+hand run rather than the night's.
+
+/admin/procesy shows the job as late only once it has run on its schedule: the
+first execution Cloud Scheduler starts sets `lastScheduledAt`, and from then on
+a night without a run by 01:30 is flagged. Before that the schedule is a plan,
+and the page says so rather than reporting every night as missed.
