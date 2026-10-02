@@ -42,6 +42,7 @@ from scrapers.koryta.download import (
 from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.odpis_history import KrsOdpisEntries, KrsOdpisSeats
 from scrapers.krs.public_owners import CompaniesPublicByRegister
 from scrapers.krs.register import KRSRegisterEntries, KRSRegisterQueue
 from scrapers.krs.scrape import KRSAlreadyScraped, KRSNeedsRefresh, ScrapeRejestrIO
@@ -86,6 +87,8 @@ PIPELINES = [
     KRSRegisterEntries,
     KRSRegisterQueue,
     KRSUpdates,
+    KrsOdpisEntries,
+    KrsOdpisSeats,
     PersonFeedCoverage,
     RejestrIOCoverage,
     KorytaCompanies,

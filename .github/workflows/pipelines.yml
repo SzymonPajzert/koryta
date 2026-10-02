@@ -208,6 +208,11 @@ jobs:
               ArticleFactsVerified
               ArticleKoryciarskiScores
               PeopleAffairTags
+              # Both read every stored odpis, one object at a time -- ~8,300
+              # PDFs, the better part of an hour on a cold runner -- and the
+              # seats need the PESEL key, which the runner does not hold.
+              KrsOdpisEntries
+              KrsOdpisSeats
             )
             selection="--all-pipelines"
             for pipeline in "${excluded[@]}"; do

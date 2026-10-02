@@ -26,8 +26,10 @@ from scrapers.stores.file import (
     VersionedBackup,
 )
 from stores.config import DOWNLOADED_DIR as DOWNLOADED_DIR
+from stores.config import PESEL_SALT_FILE as PESEL_SALT_FILE
 from stores.config import VERSIONED_DIR as VERSIONED_DIR
 from stores.config import backup_disabled
+from stores.config import pesel_salt as pesel_salt
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection
