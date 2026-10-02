@@ -62,6 +62,17 @@ def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
     create_people_table(
         con,
         "krs_people",
+        # The register id says who a row is, so all of one id's rows are
+        # spelled alike before the name groups them. rejestr.io writes a
+        # person the way each company's entry has it - without Polish letters,
+        # under a maiden name, with the middle name and without - and in the
+        # 2026-10-01 crawl 87 ids came out split over two rows each. 60 were
+        # one person spelled two ways. The other 27 were worse: an entry
+        # missing its middle name had joined every namesake born the same
+        # year, so a stranger's row carried the id and the post. 13 of those
+        # remain, ids written without a middle name at every company, which
+        # leaves nothing to tell which namesake they belong with.
+        identity="rejestrio_id",
         to_list=["rejestrio_id", "full_name"],
         any_vals=["birth_date"],
         employment={
