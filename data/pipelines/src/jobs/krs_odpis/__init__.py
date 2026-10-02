@@ -53,6 +53,7 @@ import sys
 import typing
 from collections import Counter
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import partial
 from pathlib import Path
@@ -178,16 +179,32 @@ def parser() -> argparse.ArgumentParser:
     return parser
 
 
-def queue_candidates(ctx: Context) -> list[Candidate]:
-    return from_queries(ScrapeRejestrIO().read_or_process_list(ctx))
+@dataclass
+class Sources:
+    """The two pipelines a plan reads besides its candidates.
+
+    The queue's own when it built its tree, which rebuilt both and holds them
+    in memory. Built afresh they read their outputs from disk again: the
+    bulletin alone is 143 MB and took 26 s on 2026-10-02.
+    """
+
+    updates: KRSUpdates = field(default_factory=KRSUpdates)
+    scraped: KRSAlreadyScraped = field(default_factory=KRSAlreadyScraped)
+
+
+def queue_candidates(ctx: Context, sources: Sources) -> list[Candidate]:
+    queue = ScrapeRejestrIO()
+    candidates = from_queries(queue.read_or_process_list(ctx))
+    sources.updates, sources.scraped = queue.updates, queue.already_scraped
+    return candidates
 
 
 def graph_candidates(ctx: Context) -> list[Candidate]:
     return from_graph(CompaniesKRS().read_or_process(ctx))
 
 
-def bulletin_changes(ctx: Context) -> dict[str, str]:
-    return latest_changes(KRSUpdates().read_or_process(ctx))
+def bulletin_changes(ctx: Context, sources: Sources) -> dict[str, str]:
+    return latest_changes(sources.updates.read_or_process(ctx))
 
 
 def make_plan(
@@ -196,9 +213,10 @@ def make_plan(
     changes: dict[str, str],
     today: str,
     limit: int,
+    sources: Sources,
 ) -> Plan:
     stored = odpis_files.stored_odpisy(ctx)
-    settled = settled_registers(KRSAlreadyScraped().read_or_process(ctx))
+    settled = settled_registers(sources.scraped.read_or_process(ctx))
     return select(candidates, stored, changes, register_hints(settled), today, limit)
 
 
@@ -220,9 +238,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     # The queue's people half is the paid job's, so its merge is held: rebuilt
     # under this job it was 42 s and most of a 10 GB peak on 2026-10-02.
     ctx, _ = setup_context(policy=ProcessPolicy(refresh, exclude_refresh=set(PINNED)))
+    sources = Sources()
     if queue:
-        candidates, source = queue_candidates(ctx), "ScrapeRejestrIO"
-    changes = bulletin_changes(ctx)
+        candidates, source = queue_candidates(ctx, sources), "ScrapeRejestrIO"
+    changes = bulletin_changes(ctx, sources)
     if args.krs_file:
         candidates, source = read_krs_file(Path(args.krs_file)), args.krs_file
     elif args.graph:
@@ -230,7 +249,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.changed_since:
         candidates = changed_since(candidates, changes, args.changed_since)
         source += f" the bulletin names since {args.changed_since}"
-    plan = make_plan(ctx, candidates, changes, warsaw_day(), args.max)
+    plan = make_plan(ctx, candidates, changes, warsaw_day(), args.max, sources)
     print(report(plan, candidates, source))
     if args.dry_run or not plan.asks:
         return 0

@@ -376,12 +376,12 @@ def offline(monkeypatch):
 
     monkeypatch.setattr(job, "setup_context", setup_context)
     monkeypatch.setattr(
-        job, "bulletin_changes", lambda ctx: {A: TODAY, C: "2026-09-01"}
+        job, "bulletin_changes", lambda ctx, sources: {A: TODAY, C: "2026-09-01"}
     )
     monkeypatch.setattr(
         job,
         "make_plan",
-        lambda ctx, candidates, changes, today, limit: plan.select(
+        lambda ctx, candidates, changes, today, limit, sources: plan.select(
             candidates, {}, changes, {}, today, limit
         ),
     )
@@ -401,7 +401,9 @@ def test_a_dry_run_plans_and_asks_nothing(tmp_path, offline, capsys):
 def test_the_queue_is_planned_without_the_people_merge(offline, monkeypatch, capsys):
     """The queue's people are the paid job's; its merge was most of a 10 GB peak."""
     monkeypatch.setattr(
-        job, "queue_candidates", lambda ctx: [plan.Candidate(krs=A, reason="owned")]
+        job,
+        "queue_candidates",
+        lambda ctx, sources: [plan.Candidate(krs=A, reason="owned")],
     )
 
     assert job.main(["--dry-run"]) == 0
@@ -409,6 +411,38 @@ def test_the_queue_is_planned_without_the_people_merge(offline, monkeypatch, cap
     [policy] = offline
     assert policy.should_refresh("ScrapeRejestrIO")
     assert not policy.should_refresh("PeopleMerged")
+
+
+def test_the_queue_is_planned_from_what_its_tree_already_read(monkeypatch):
+    """Read again from disk, the bulletin alone was 143 MB and 26 s."""
+
+    class Held:
+        def __init__(self, df):
+            self.df, self.reads = df, 0
+
+        def read_or_process(self, ctx):
+            self.reads += 1
+            return self.df
+
+    updates = Held(pd.DataFrame({"krs": [A], "date": ["2026-10-01"]}))
+    scraped = Held(pd.DataFrame(columns=["krs", "method", "date", "not_found"]))
+
+    class Queue:
+        def __init__(self):
+            self.updates, self.already_scraped = updates, scraped
+
+        def read_or_process_list(self, ctx):
+            return []
+
+    monkeypatch.setattr(job, "ScrapeRejestrIO", Queue)
+    monkeypatch.setattr(job.odpis_files, "stored_odpisy", lambda ctx: {})
+    sources = job.Sources()
+
+    job.queue_candidates(None, sources)
+
+    assert job.bulletin_changes(None, sources) == {A: "2026-10-01"}
+    job.make_plan(None, [], {}, TODAY, 5, sources)
+    assert (updates.reads, scraped.reads) == (1, 1)
 
 
 def test_the_weekly_refresh_asks_about_the_graph_the_bulletin_names(
