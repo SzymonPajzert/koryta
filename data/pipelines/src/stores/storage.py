@@ -275,6 +275,24 @@ class Client:
             return None
         return bounds or None
 
+    def seed_listing_ranges(
+        self, ref: CloudStorage, names: typing.Iterable[str]
+    ) -> None:
+        """Split the next listing of `ref` by names known another way.
+
+        For a prefix this machine has never listed - every prefix, on a fresh
+        container - when the compressed mirror has just named most of what is
+        under it. A prefix already split is left as its own last listing left it.
+        """
+        if ref.max_namespaces or ref.namespace_values:
+            return  # a filtered listing is never split
+        key = (ref.bucket or CRAWLED_BUCKET, ref.prefix, None)
+        if self._range_bounds(key) is not None:
+            return
+        self._keep_range_bounds(
+            key, [(name, None) for name in sorted(names) if name.startswith(ref.prefix)]
+        )
+
     def _keep_range_bounds(self, key, listed: list[tuple[str, int | None]]) -> None:
         if len(listed) < self.LISTING_SPLIT_FROM:
             return

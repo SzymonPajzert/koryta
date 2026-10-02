@@ -47,6 +47,10 @@ class FakeStorage:
         self.objects = objects
         self.broken = broken
         self.downloaded: list[str] = []
+        self.seeded: list[tuple[str, set[str]]] = []
+
+    def seed_listing_ranges(self, ref: CloudStorage, names) -> None:
+        self.seeded.append((ref.prefix, set(names)))
 
     def list_blobs(self, ref: CloudStorage):
         for blob_name, body in self.objects.items():
@@ -161,3 +165,15 @@ def test_an_object_listed_as_empty_is_not_fetched():
 
     assert read(io) == {url("1/date=2026-10-02"): "", url("2/date=2026-10-02"): "x"}
     assert storage.downloaded == [name("2/date=2026-10-02")]
+
+
+def test_the_archives_names_split_the_listing_of_what_it_lacks():
+    """A fresh container has never listed the prefix, but the archive just named it."""
+    storage = FakeStorage(
+        {name("1/date=2026-07-02"): "archived", name("2/date=2026-09-27"): "new"}
+    )
+    io = conductor(FakeMirror({name("1/date=2026-07-02"): b"archived"}), storage)
+
+    read(io)
+
+    assert storage.seeded == [("hostname=rejestr.io", {name("1/date=2026-07-02")})]

@@ -172,3 +172,23 @@ def test_a_small_prefix_is_listed_in_one_go(client, bucket):
     list(fresh(bucket).list_blobs(CloudStorage(prefix=API_KRS)))
 
     assert bucket.ranges == [(None, None)]
+
+
+def test_names_known_another_way_split_a_first_listing(client, big):
+    """The mirror's archive names a prefix this machine never listed."""
+    known = [company(n) for n in range(10, 100, 10)]
+
+    client.seed_listing_ranges(CloudStorage(prefix=API_KRS), known)
+    listed = names(fresh(big).list_blobs(CloudStorage(prefix=API_KRS)))
+
+    assert len(big.ranges) == 3
+    assert [url for url, _ in listed] == [f"gs://{CRAWLED_BUCKET}/{n}" for n in known]
+
+
+def test_a_prefix_split_by_its_own_listing_keeps_that_split(client, big):
+    list(client.list_blobs(CloudStorage(prefix=API_KRS)))
+    kept = client._range_bounds((CRAWLED_BUCKET, API_KRS, None))
+
+    client.seed_listing_ranges(CloudStorage(prefix=API_KRS), [company(1), company(2)])
+
+    assert client._range_bounds((CRAWLED_BUCKET, API_KRS, None)) == kept

@@ -186,6 +186,9 @@ class Conductor(IO):
                 # it stood on the build date. Everything the listing has that
                 # the archive does not is fetched object by object, so the set
                 # is the one list_files gives, and only the gap is slow.
+                # The archive's names also say where to split that listing,
+                # which a machine that never listed the prefix cannot know.
+                self.storage.seed_listing_ranges(path, archived)
                 newer = (
                     ref
                     for ref in self.list_files(path)
