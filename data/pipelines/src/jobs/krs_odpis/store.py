@@ -1,9 +1,9 @@
 """Keeping the odpis PDFs, so a parse can be redone without a re-crawl.
 
 The odpis pełny is the only uncensored source of names and PESELs in this
-chain, it costs a request each, and until now it was fetched, parsed in memory
-and thrown away. That is the wrong thing to keep in RAM and drop from storage,
-for one reason above all: **the parser has been wrong twice.**
+chain, it costs a request each, and until it was kept it was fetched, parsed in
+memory and thrown away. That is the wrong thing to keep in RAM and drop from
+storage, for one reason above all: **the parser has been wrong twice.**
 
 A page footer split over two lines put its page count inside a person's name,
 and the next person's ``L.p.`` counter was being appended to the previous
@@ -16,97 +16,43 @@ for access to.
 The same argument is why the api-krs scrape (`jobs.krs_scrape_free`) stores
 every odpis rather than just the people it read out of one.
 
-**The URL is synthetic.** The odpis is a POST and its body is not in the URL,
-so `blob_url` names the question instead -- ``…/OdpisPelny/pdf/<krs>`` -- which
-is what a key is for. Stored bytes are the service's verbatim response;
-verified byte-identical on the round trip.
+The bytes are filed before anyone parses them, under the name
+`scrapers.krs.odpis_files.blob_name` gives them, and through a write that
+raises when it does not land (`stores.storage.Client.create_object`): a crawler
+that believed a lost upload would skip the company for good.
 """
 
 import typing
+from collections.abc import Callable, Sequence
 
 from jobs.krs_odpis import search
-from scrapers.stores import CloudStorage, Context
-from scrapers.stores.file import DownloadableFile, GCSBlob
+from scrapers.krs import odpis_files
 
-#: Where an odpis is filed. `full` is part of the path because a pełny and an
-#: aktualny of the same company are different documents -- the aktualny drops
-#: every struck-out row -- and storing one under the other's name would hand a
-#: later reader the wrong answer with no way to tell.
-BLOB_URL = (
-    "https://wyszukiwarka-krs-api.ms.gov.pl/api/wyszukiwarka/"
-    "{kind}/pdf/{register}/{krs}"
-)
-
-PREFIX = "hostname=wyszukiwarka-krs-api.ms.gov.pl"
-
-#: The segment that says "this blob is an odpis", as opposed to a NIP search.
-_ODPIS_SEGMENT = "/pdf/"
-
-
-def blob_url(krs: str, register: str, full: bool = True) -> str:
-    return BLOB_URL.format(
-        kind="OdpisPelny" if full else "OdpisAktualny",
-        register=register,
-        krs=search.pad_krs(krs),
-    )
-
-
-def stored_odpisy(ctx: Context, full: bool = True) -> dict[str, str]:
-    """KRS number to the newest stored blob name, for odpisy already on file.
-
-    One listing rather than a HEAD per company: at 18,000 companies the
-    per-object form is the hour-long shape `extract_people` warns about.
-    """
-    kind = "OdpisPelny" if full else "OdpisAktualny"
-    newest: dict[str, tuple[str, str]] = {}
-    for ref in ctx.io.list_files(CloudStorage(prefix=PREFIX)):
-        if not isinstance(ref, DownloadableFile):
-            continue
-        url = ref.url
-        if f"/{kind}{_ODPIS_SEGMENT}" not in url:
-            continue
-        tail = url.split(f"/{kind}{_ODPIS_SEGMENT}", 1)[1]
-        parts = tail.split("/")
-        if len(parts) < 2:
-            continue
-        krs = "".join(c for c in parts[1] if c.isdigit())
-        stamp = tail.split("/date=")[-1] if "/date=" in tail else ""
-        if len(krs) != 10:
-            continue
-        if krs in newest and newest[krs][0] >= stamp:
-            continue
-        # The listing hands back a live URL; reading needs the blob name, which
-        # is the URL with its scheme and host replaced by the prefix.
-        blob = PREFIX + url.split("wyszukiwarka-krs-api.ms.gov.pl", 1)[1]
-        newest[krs] = (stamp, blob)
-    return {krs: blob for krs, (_, blob) in newest.items()}
-
-
-def read_stored(ctx: Context, blob_name: str) -> bytes:
-    return ctx.io.read_data(GCSBlob(blob_name=blob_name)).read_bytes()
+#: Files `data` under a blob name, and raises if it cannot. `create_object` on
+#: the crawl bucket in a real run.
+Put = Callable[[str, bytes], typing.Any]
 
 
 def fetch_and_store(
-    ctx: Context,
     krs: str,
+    registers: Sequence[str],
+    put: Put,
+    day: str,
     full: bool = True,
     session: typing.Any | None = None,
 ) -> tuple[str, bytes] | None:
-    """Fetch an odpis and put it in the bucket before parsing it.
+    """Ask each register in turn; file the first odpis served before returning it.
 
-    Uploaded before the parse, deliberately: a document that crashes the parser
-    is exactly the one worth having on disk, and storing it afterwards would
-    lose precisely those.
+    None when every register asked says the KRS is not in it. A register
+    answering anything but a document or a "not here" raises
+    `search.OdpisUnavailable`, and a dropped connection raises what `requests`
+    raises: neither is an answer about the company.
     """
-    fetched = search.fetch_odpis_pdf_either(krs, full=full, session=session)
-    if fetched is None:
-        return None
-    register, content = fetched
-    ctx.io.upload(
-        blob_url(krs, register, full=full),
-        content,
-        "application/pdf",
-        include_query=True,
-        verbose=False,
-    )
-    return register, content
+    for register in registers:
+        content = search.fetch_odpis_pdf(
+            krs, register=register, full=full, session=session
+        )
+        if content:
+            put(odpis_files.blob_name(krs, register, day, full=full), content)
+            return register, content
+    return None
