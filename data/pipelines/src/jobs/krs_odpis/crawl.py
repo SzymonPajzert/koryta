@@ -14,7 +14,8 @@ blip that the old rule never saw -- and 20 of them in a row end the run
 outright. Both kinds clear on a later try (40 of 40 504s came back on one
 retry), so they get a second pass at the end unless the rule stopped the run;
 an odpis that is simply not in either register is an answer, and is not asked
-again.
+again. Before that, a burst of no answers - three of the last five - gets a
+minute's rest, a few times a run.
 """
 
 import statistics
@@ -31,6 +32,18 @@ from jobs.krs_odpis.search import OdpisUnavailable
 
 WINDOW = 50
 MAX_CONSECUTIVE_FAILURES = 20
+
+#: A pause when the service stops answering for a moment: `COOL_AFTER` of the
+#: last `COOL_WINDOW` attempts got no answer. The 504s of 2026-10-02 came in
+#: bursts, with the service answering as usual in between - 15 in ~30 attempts
+#: in the evening run - and running on through one is what tripped the stop
+#: rule at 310 of 1,000. A minute's rest first; the stop rule still ends a
+#: burst that outlasts it.
+COOL_WINDOW = 5
+COOL_AFTER = 3
+COOL_DOWN = 60.0
+#: Pauses a run takes at most before it leaves the rest to the stop rule.
+COOL_DOWNS = 5
 
 #: EX_TEMPFAIL: the service would not answer everything; try again later.
 #: Anything else that goes wrong raises, and exits 1.
@@ -145,6 +158,44 @@ def attempt(
     return outcome(FETCHED, seconds, register=register, size=len(content))
 
 
+@dataclass
+class CoolDown:
+    """When a run rests after a burst of no answers, and how often it may."""
+
+    pauses: int = 0
+    #: Attempts since the last rest; a rest is not taken twice for one burst.
+    since: int = COOL_WINDOW
+
+    def rest_if_due(
+        self,
+        trouble: Sequence[int],
+        clock: Callable[[], float],
+        sleep: Callable[[float], typing.Any],
+        should_stop: Callable[[], bool],
+        say: Callable[[str], typing.Any],
+    ) -> bool:
+        """Rest `COOL_DOWN` if a burst calls for it; False if asked to stop."""
+        recent = list(trouble)[-COOL_WINDOW:]
+        if (
+            self.since < COOL_WINDOW
+            or sum(recent) < COOL_AFTER
+            or self.pauses >= COOL_DOWNS
+        ):
+            return True
+        self.pauses += 1
+        self.since = 0
+        say(
+            f"Pausing {COOL_DOWN:.0f} s: "
+            f"{sum(recent)} of the last {len(recent)} got no answer"
+        )
+        resting = clock() + COOL_DOWN
+        while clock() < resting:
+            if should_stop():
+                return False
+            sleep(min(1.0, resting - clock()))
+        return True
+
+
 def crawl(
     asks: Sequence[Ask],
     fetch: Fetch,
@@ -161,6 +212,7 @@ def crawl(
     trouble: deque[int] = deque(maxlen=WINDOW)
     baseline: float | None = None
     in_a_row = 0
+    cooling = CoolDown()
 
     def run_pass(todo: Sequence[Ask], number: int) -> bool:
         """One pass; False when the run has to stop."""
@@ -178,6 +230,7 @@ def crawl(
             failed = outcome.status in TRANSIENT | {FAILED}
             in_a_row = in_a_row + 1 if failed else 0
             trouble.append(1 if outcome.status in TRANSIENT else 0)
+            cooling.since += 1
             if outcome.status == FETCHED:
                 served.append(outcome.seconds)
                 if len(served) == WINDOW and baseline is None:
@@ -195,6 +248,10 @@ def crawl(
                 result.stopped = stop_reason(served[-WINDOW:], baseline, trouble)
             if result.stopped:
                 say(f"Stopping at {index} of {len(todo)}: {result.stopped}")
+                return False
+            if not cooling.rest_if_due(trouble, clock, sleep, should_stop, say):
+                result.stopped = "asked to stop"
+                say("Stopping: asked to")
                 return False
         return True
 

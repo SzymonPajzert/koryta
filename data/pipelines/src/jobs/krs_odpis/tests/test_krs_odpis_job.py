@@ -220,6 +220,72 @@ def test_asked_to_stop_stops_before_the_next_company():
     assert len(record) == 2 and result.stopped == "asked to stop"
 
 
+class Time:
+    """Simulated seconds: a fetch takes none, a sleep takes what it asks."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.slept = 0.0
+
+    def clock(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+        self.slept += seconds
+
+
+def paced(answers, n, time: Time, **kwargs):
+    said: list[str] = []
+    result = crawl.crawl(
+        asks(n),
+        Service(answers),
+        lambda outcome: None,
+        0.0,
+        sleep=time.sleep,
+        clock=time.clock,
+        say=said.append,
+        **kwargs,
+    )
+    return result, said
+
+
+def test_a_burst_of_no_answers_is_waited_out_and_the_crawl_carries_on():
+    """The 504s of 2026-10-02 came in bursts; running on through one is what
+    stopped the evening run at 310 of 1,000."""
+    time = Time()
+    burst = [b"%PDF", GATEWAY, GATEWAY, GATEWAY] + [b"%PDF"] * 6
+    result, said = paced(burst + [b"%PDF"] * 3, 10, time)
+
+    assert [line for line in said if line.startswith("Pausing")] == [
+        "Pausing 60 s: 3 of the last 4 got no answer"
+    ]
+    assert time.slept == crawl.COOL_DOWN
+    assert (result.stopped, result.code) == ("", 0), "the second pass got the three"
+
+
+def test_asked_to_stop_in_a_pause_stops_at_once():
+    time = Time()
+    stop = iter([False] * 5 + [True] * 100)
+    result, _ = paced(
+        [b"%PDF"] + [GATEWAY] * 3 + [b"%PDF"] * 6,
+        10,
+        time,
+        should_stop=lambda: next(stop),
+    )
+
+    assert result.stopped == "asked to stop"
+    assert time.slept < crawl.COOL_DOWN
+
+
+def test_a_run_pauses_a_few_times_at_most():
+    time = Time()
+    storms = ([GATEWAY] * 3 + [b"%PDF"] * 2) * 10
+    result, said = paced(storms + [b"%PDF"] * 30, 50, time)
+
+    assert sum(line.startswith("Pausing") for line in said) == crawl.COOL_DOWNS
+
+
 def test_the_stop_rule():
     window = [0.8] * crawl.WINDOW
     assert crawl.stop_reason(window, 0.8, [0] * 50) == ""
