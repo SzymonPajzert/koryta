@@ -709,6 +709,8 @@ class Pipeline(typing.Generic[Output]):
 
     _cached_result: pd.DataFrame | None = None
     _refreshed_execution: bool = False
+    #: Whether this run asked to run it, as `confirm_run` asks, and was told no.
+    _declined: bool = False
 
     @abstractmethod
     def process(self, ctx: Context):
@@ -803,6 +805,7 @@ Should I run it? (y/n) [n]",
                 )
                 if answer is None or answer.lower() != "y":
                     print("Not refreshing")
+                    self._declined = True
                     return False
             return result
 
@@ -847,9 +850,16 @@ Should I run it? (y/n) [n]",
                 # If read successfully, we don't need to write (it matches disk).
                 assert df is not None, self.filename
                 return df
-            except FileNotFoundError:
+            except FileNotFoundError as missing:
+                if self._declined:
+                    # Falling through ran it anyway: "Not refreshing", and
+                    # then ProcessWiki's 40 minutes and 2.9 GB download.
+                    raise FileNotFoundError(
+                        f"{self.pipeline_name} runs long and was not run, and "
+                        "there is no output of it to read: answer y (or pass "
+                        "--assume-yes), or restore its output first."
+                    ) from missing
                 # We'll try to process
-                pass
         elif should_refresh and self.filename is not None:
             # When the local output is missing (not an explicit policy refresh),
             # try reading from backup before re-processing, unless backups are

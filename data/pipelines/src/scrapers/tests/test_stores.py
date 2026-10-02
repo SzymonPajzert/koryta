@@ -1247,3 +1247,26 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDeclinedLongPipeline(unittest.TestCase):
+    """Told no, a long pipeline with nothing to read used to run anyway:
+    "Not refreshing", then ProcessWiki's 40 minutes."""
+
+    def test_it_says_so_rather_than_running(self):
+        ctx = Mock(spec=Context)
+        ctx.io = Mock()
+        ctx.utils = Mock()
+        ctx.utils.input_with_timeout.return_value = None
+        ctx.refresh_policy = ProcessPolicy.with_default()
+        ctx.io.get_mtime.return_value = None
+        ctx.io.read_data.side_effect = FileNotFoundError("nothing on disk")
+        ctx.io.restore_backup_to_path.side_effect = FileNotFoundError("no backup")
+
+        with (
+            patch.object(LongShared, "process") as long_process,
+            self.assertRaisesRegex(FileNotFoundError, "runs long and was not run"),
+        ):
+            LongShared().read_or_process(ctx)
+
+        long_process.assert_not_called()
