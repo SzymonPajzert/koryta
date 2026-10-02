@@ -148,8 +148,11 @@ def test_a_big_prefix_is_listed_next_time_as_ranges_at_once(client, big):
     second = names(fresh(big).list_blobs(CloudStorage(prefix=API_KRS)))
 
     assert second == first, "the same names, in the same order"
+    # Recorded in whatever order the threads got there: compare as a chain.
+    starts, ends = zip(*sorted(big.ranges, key=lambda r: r[0] or ""))
     assert len(big.ranges) == 3
-    assert big.ranges[0][0] is None and big.ranges[-1][1] is None
+    assert starts[0] is None and ends[-1] is None
+    assert list(starts[1:]) == list(ends[:-1]), "each range starts where one ends"
 
 
 def test_what_was_written_since_the_ranges_were_taken_is_listed(client, big):
