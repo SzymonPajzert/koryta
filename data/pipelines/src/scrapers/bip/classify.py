@@ -108,7 +108,13 @@ def filename_from_url(url: str) -> str:
 
 _AMP_ENTITY_RE = re.compile(r"&amp;", re.IGNORECASE)
 _AMP_PREFIX_RE = re.compile(r"^(?:amp;)+", re.IGNORECASE)
-_NOISE_QUERY_PARAMS = frozenset({"x", "y"})
+# Presentation-only parameters: same page, different URL. `switch_*` are the
+# accessibility toggles (letter/word spacing, dark mode, link underline), the
+# rest are font size, print view, change-log view and image-map coordinates.
+_NOISE_QUERY_PARAMS = frozenset(
+    {"x", "y", "fontsize", "print", "pokaz_rejestr_zmian"}
+)
+_NOISE_QUERY_PREFIXES = ("switch_",)
 
 
 def normalize_url(url: str) -> str:
@@ -117,8 +123,8 @@ def normalize_url(url: str) -> str:
     Some BIP platforms echo their own query string into every link, HTML-escaping
     it a little more each round (`?amp%3Bamp%3Bacc_pa=1`), which mints an endless
     supply of distinct URLs from one page. Unescaping `&amp;`, stripping `amp;`
-    prefixes from parameter names, dropping image-map coordinates and duplicate
-    pairs, and sorting the rest makes those permutations converge.
+    prefixes from parameter names, dropping presentation-only toggles and
+    duplicate pairs, and sorting the rest makes those permutations converge.
     """
     clean = _AMP_ENTITY_RE.sub("&", url).split("#", maxsplit=1)[0].strip()
     if clean.endswith("/") and clean.count("/") > 3:
@@ -130,13 +136,20 @@ def normalize_url(url: str) -> str:
     seen: set[tuple[str, str]] = set()
     for key, value in parse_query(query):
         key = _AMP_PREFIX_RE.sub("", key)
-        if not key or key.lower() in _NOISE_QUERY_PARAMS:
+        lowered = key.lower()
+        if (
+            not key
+            or lowered in _NOISE_QUERY_PARAMS
+            or lowered.startswith(_NOISE_QUERY_PREFIXES)
+        ):
             continue
         pair = (key, value)
         if pair in seen:
             continue
         seen.add(pair)
         pairs.append(pair)
+    if not pairs:
+        return base
     pairs.sort()
     return f"{base}?{format_query(pairs)}"
 

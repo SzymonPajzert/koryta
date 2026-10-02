@@ -161,6 +161,20 @@ ml = [
 # the Dockerfile installs this group and no other.
 service = ["fastapi (>=0.122.0,<1.0.0)", "uvicorn (>=0.42.0,<1.0.0)"]
 
+# BIP document parsing (analysis.bip_documents_parsed): PyMuPDF for PDF text
+# layers, RapidOCR + pypdfium2 for scans. Heavy (onnxruntime + opencv), so
+# opt-in: uv sync --group bip_parse.
+bip_parse = [
+    "olefile==0.47",
+    "onnxruntime==1.30.0",
+    "opencv-python-headless==5.0.0.93",
+    "pillow==12.3.0",
+    "pymupdf==1.28.2",
+    "pypdfium2==5.13.0",
+    "rapidocr-onnxruntime==1.4.4",
+    "xlrd==2.0.2",
+]
+
 dev = [
     "jupyterlab (>=4.5.6,<5.0.0)",
     "import-linter (>=2.11,<3.0)",
@@ -182,6 +196,24 @@ test = [
     "types-networkx (>=3.6.1.20260724,<4.0.0.0)",
 ]
 
+# rapidocr-onnxruntime 1.4.4 declares Python <3.13 and the GUI opencv-python,
+# but runs fine on this headless 3.13 host (that is what tools/ocrenv proved).
+# Static metadata replaces both for the resolver; the wheel itself is py3-none.
+[[tool.uv.dependency-metadata]]
+name = "rapidocr-onnxruntime"
+version = "1.4.4"
+requires-python = ">=3.8"
+requires-dist = [
+    "pyclipper>=1.2.1",
+    "onnxruntime>=1.7.0",
+    "opencv-python-headless>=4.5.1.48",
+    "numpy>=1.19.3",
+    "six>=1.15.0",
+    "Shapely>=1.7.1",
+    "PyYAML",
+    "Pillow",
+]
+
 [tool.mypy]
 python_version = "3.13"
 mypy_path = "src"
@@ -200,6 +232,15 @@ module = [
     "pymodulon.*",
     "adjustText.*",
     "joblib",
+    # Only installed with the bip_parse group; typed as Any elsewhere so mypy
+    # in CI (test + service groups) does not fail on the lazy imports.
+    "cv2.*",
+    "PIL.*",
+    "olefile.*",
+    "pymupdf.*",
+    "pypdfium2.*",
+    "rapidocr_onnxruntime.*",
+    "xlrd.*",
 ]
 ignore_missing_imports = true
 

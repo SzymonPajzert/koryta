@@ -87,6 +87,7 @@ CREATE TABLE bip_urls (
   discovered_from text NOT NULL DEFAULT '',
   depth          int  NOT NULL DEFAULT 0,
   section        text NOT NULL DEFAULT '',
+  anchor_text    text NOT NULL DEFAULT '',  -- label of the link that discovered it
   priority       int  NOT NULL DEFAULT 50,      -- lower = sooner
   content_type   text NOT NULL DEFAULT '',
   size           bigint NOT NULL DEFAULT 0,
@@ -94,6 +95,7 @@ CREATE TABLE bip_urls (
   title          text NOT NULL DEFAULT '',
   last_status    int  NOT NULL DEFAULT 0,
   state          text NOT NULL DEFAULT 'queued', -- queued|claimed|fetched|error|skipped
+  skip_reason    text,                           -- robots|cap; NULL = not skipped / legacy
   attempts       int  NOT NULL DEFAULT 0,
   locked_by      text,
   locked_until   timestamptz,
@@ -140,7 +142,7 @@ insert (discovered)   → state='queued', first_seen=now(), last_seen=now()
 claim                 → state='claimed', locked_by, locked_until=now()+10min, attempts+1
 fetch ok              → state='fetched', last_checked=now(), last_seen=now()
 fetch error           → state='error' (after attempts exhausted) or back to 'queued'
-quota / out of scope  → state='skipped'
+quota / out of scope  → state='skipped', skip_reason='cap'
 re-encountered later  → UPDATE last_seen=now(); NEVER a second row
 claim expired         → back to 'queued' (another coordinator or the next run picks it up)
 ```
@@ -172,7 +174,9 @@ claim expired         → back to 'queued' (another coordinator or the next run 
     article crawler).
   - **Fetch**: a small shared wrapper around `curl_cffi` (`impersonate`,
     timeout, retries, UA).
-- Robot rules are evaluated per URL; `Disallow` → `state='skipped'`.
+- Robot rules are evaluated per URL; `Disallow` → `state='skipped'` with
+  `skip_reason='robots'`. Robots denials are terminal: resuming a host never
+  re-queues them and `requeue=True` (freshness) does not revive them.
 
 ## 9. Storage
 

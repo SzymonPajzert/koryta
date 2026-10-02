@@ -49,10 +49,38 @@ class IncrementalJsonlPipeline(Pipeline[T]):
         self.temp_output_path.write_text("", encoding="utf-8")
 
     def finalize_temp_output(self) -> None:
-        """Atomically promote `.tmp` to the final output file."""
+        """Atomically promote `.tmp` to the final output file.
+
+        Refuses to replace a non-empty output with an empty one: a pipeline
+        that wrote nothing is a bug, and silently truncating the previous
+        result loses it. The previous file is also kept as `<name>.bak` (a
+        hardlink, so it is free) before being replaced.
+        """
         if self.temp_output_path.exists():
             self.final_output_path.parent.mkdir(parents=True, exist_ok=True)
+            if (
+                self.temp_output_path.stat().st_size == 0
+                and self.final_output_path.exists()
+                and self.final_output_path.stat().st_size > 0
+            ):
+                raise RuntimeError(
+                    "refusing to replace a non-empty output with an empty one: "
+                    f"{self.final_output_path}"
+                )
+            self._backup_final_output()
             self.temp_output_path.replace(self.final_output_path)
+
+    def _backup_final_output(self) -> None:
+        final = self.final_output_path
+        if not final.exists() or final.stat().st_size == 0:
+            return
+        backup = final.with_name(final.name + ".bak")
+        try:
+            if backup.exists():
+                backup.unlink()
+            backup.hardlink_to(final)
+        except OSError:
+            pass
 
     def read_or_process(self, ctx: Context) -> pd.DataFrame:
         if self._cached_result is not None:

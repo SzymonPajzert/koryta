@@ -16,8 +16,15 @@ from entities.util import NormalizedParse
 _SKIP_PREFIXES = ("#", "mailto:", "tel:", "javascript:", "data:")
 
 
-def extract_links(html: str, base_url: str, *, keep_query: bool = False) -> list[str]:
-    """Absolute, normalised links from anchor tags, in document order."""
+def extract_link_pairs(
+    html: str, base_url: str, *, keep_query: bool = False
+) -> list[tuple[str, str]]:
+    """Absolute, normalised `(url, anchor text)` pairs, in document order.
+
+    The anchor text is what a human clicks; the BIP crawler stores it on the
+    discovered URL so category prediction can use the link label later without
+    re-fetching the parent page.
+    """
     soup = BeautifulSoup(html, "lxml")
     base_tag = soup.find("base", href=True)
     if isinstance(base_tag, Tag):
@@ -25,7 +32,7 @@ def extract_links(html: str, base_url: str, *, keep_query: bool = False) -> list
         if isinstance(base_href, str) and base_href.strip():
             base_url = base_href.strip()
 
-    seen: dict[str, None] = {}
+    seen: dict[str, str] = {}
     for anchor in soup.find_all("a", href=True):
         if not isinstance(anchor, Tag):
             continue
@@ -44,12 +51,19 @@ def extract_links(html: str, base_url: str, *, keep_query: bool = False) -> list
         absolute = absolute.split("#")[0]
         if not absolute.startswith(("http://", "https://")):
             continue
+        text = " ".join(anchor.get_text(" ", strip=True).split())
         if keep_query:
-            seen.setdefault(absolute.rstrip("/") or absolute, None)
+            seen.setdefault(absolute.rstrip("/") or absolute, text)
             continue
         parsed = NormalizedParse.parse(absolute)
         clean = (
             f"{parsed.scheme}://{parsed.hostname_normalized}{parsed.path}".rstrip("/")
         )
-        seen.setdefault(clean, None)
-    return list(seen)
+        seen.setdefault(clean, text)
+    return list(seen.items())
+
+
+def extract_links(html: str, base_url: str, *, keep_query: bool = False) -> list[str]:
+    """Absolute, normalised links from anchor tags, in document order."""
+    pairs = extract_link_pairs(html, base_url, keep_query=keep_query)
+    return [url for url, _text in pairs]
