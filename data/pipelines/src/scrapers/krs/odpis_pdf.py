@@ -294,6 +294,29 @@ def extract_text(source: bytes | typing.BinaryIO) -> str:
     return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
+def head_pages(pages: typing.Iterable[str]) -> str:
+    """The pages up to and including the first that opens ``Dział 1``.
+
+    Everything before Dział 1 -- the stamp, and the list of entries
+    `parse_entries` reads -- comes first in the document, and the rest is most
+    of it: an odpis runs to 60 pages, its list of entries rarely to more than
+    a few.
+    """
+    head = []
+    for text in pages:
+        head.append(text)
+        if any(_DZIAL_RE.match(line.strip()) for line in text.splitlines()):
+            break
+    return "\n".join(head)
+
+
+def extract_head_text(source: bytes | typing.BinaryIO) -> str:
+    """`extract_text`, stopping at the page where ``Dział 1`` begins."""
+    handle = io.BytesIO(source) if isinstance(source, bytes) else source
+    reader = PdfReader(handle)
+    return head_pages(page.extract_text() or "" for page in reader.pages)
+
+
 @dataclass(frozen=True)
 class RegisterEntry:
     """One entry of the register's list at the head of an odpis pełny.
