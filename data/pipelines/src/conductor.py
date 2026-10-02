@@ -199,8 +199,10 @@ class Conductor(IO):
             with open(path, "wb") as f:
                 content(f)
 
-    def upload(self, source, data, content_type, include_query=False, verbose=True):
-        self.storage.upload(
+    def upload(
+        self, source, data, content_type, include_query=False, verbose=True
+    ) -> bool:
+        return self.storage.upload(
             source, data, content_type, include_query=include_query, verbose=verbose
         )
 
