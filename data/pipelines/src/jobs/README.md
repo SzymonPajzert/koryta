@@ -8,6 +8,9 @@
 1. Reprocesses pipelines, reads `ScrapeRejestrIO`, which lists what is worth asking about
 1. Asks api-krs for each free URLs that we defined for the given KRS
 1. Writes every answer to the crawl bucket - an empty object where there was none
+1. Writes a run summary to the shared cache (`jobs/krs_scrape_free/runs/`)
+
+Runs nightly on Cloud Run, between midnight and the Firestore export - see [CLOUD_RUN.md](CLOUD_RUN.md).
 
 ## krs_scrape_paid
 1. Reads which KRS numbers need to be updated
