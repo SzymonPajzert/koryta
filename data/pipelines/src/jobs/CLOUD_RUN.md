@@ -30,8 +30,33 @@ that, a night asks about what the bulletin says changed.
 Sized from a headless `--dry-run --no-backup` on predator (2026-10-02, a warm
 `versioned/` and download cache): the queue takes 7 minutes to rebuild and
 peaks at 4.5 GB. Unpinned, PeopleMerged's nightly rebuild made that 10 minutes
-and 10 GB (`PINNED` in `krs_scrape_free`). A container starts with neither
-cache, so the first execution shows what restoring them costs.
+and 10 GB (`PINNED` in `krs_scrape_free`).
+
+### Every run downloads its inputs again
+
+A Cloud Run job starts each execution on an empty disk, so nothing predator
+keeps in `versioned/` and `~/.cache/koryta/downloaded` survives from one night
+to the next. Traced on that dry run, a run reads:
+
+| What                                                                  |    Objects |      Size |
+| --------------------------------------------------------------------- | ---------: | --------: |
+| api-krs objects, all of them (`KRSCensoredPeople`, `CompaniesKRS`)    |     38,206 |   ~257 MB |
+| the newest crawl of each rejestr.io object (`CompaniesKRS`)           |     22,540 |    274 MB |
+| the day's Firestore export (`KorytaPeople`, `KorytaVotes`)            |        362 |     64 MB |
+| pipeline backups restored (PeopleMerged, PeopleKRS, ProcessWiki, ...) |          4 | ~45 MB gz |
+| the rejestr.io mirror archives, streamed three times                  |          2 | 3 x 29 MB |
+| bucket listings: each host three times, ~1.1 KB of metadata an object | 77k a time |   ~265 MB |
+
+On main, `CompaniesKRS` and `KRSCensoredPeople` fetch those objects one at a
+time, which predator did at 8.5 a second: ~2 hours before the first api-krs
+request, most of the night. So before this job goes to Cloud Run, merge
+`nightly-krs-from-mirror`: `read_many` takes the compressed mirror's archives
+and fetches only what they lack, 32 at a time; both pipelines read through it;
+listings ask for name and size alone. It measured ~2.5 minutes a host cold.
+What the archives lack is everything crawled since the mirror's last delta
+(2026-07-31), and it grows every night until the compressor runs after the
+scrape. The money is not the problem: ~1 GB a run from the `eu` bucket at
+0.075 PLN/GiB plus ~61k reads is a few złoty a month.
 
 Each run writes a summary to
 `gs://koryta-pl-sharedcache/jobs/krs_scrape_free/runs/date=<day>/<run>.json`:
