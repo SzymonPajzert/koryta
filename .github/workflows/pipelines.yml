@@ -211,6 +211,8 @@ jobs:
               # Both read every stored odpis, one object at a time -- ~8,300
               # PDFs, the better part of an hour on a cold runner -- and the
               # seats need the PESEL key, which the runner does not hold.
+              # PeopleKRSCombined still asks for the seats; without the key
+              # it says so and takes rejestr.io's people alone.
               KrsOdpisEntries
               KrsOdpisSeats
             )

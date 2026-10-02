@@ -9,8 +9,9 @@ nothing of the service:
   shared cache.
 - `KrsOdpisSeats`: everybody the odpis names in an organ, a proxy, the owners'
   list or a liquidation, with the entries that began and ended each seat and
-  the days of those entries. Names, birth dates and keyed PESEL fingerprints:
-  it stays on this machine, and it refuses to run without the PESEL key.
+  the days of those entries. Names, birth dates and PESEL fingerprints keyed
+  under a key that never leaves the machine holding it: building the seats
+  needs that key, so every other machine restores them from the shared cache.
 
 That is the company history rejestr.io sells as its ``historyczne`` feed, read
 off the register's own documents.
@@ -296,8 +297,11 @@ class KrsOdpisSeats(Pipeline[OdpisSeat]):
 
     filename = "krs_odpis_seats"
     dtype = {c: str for c in SEAT_TEXT_COLUMNS}
-    #: Names, birth dates and keyed fingerprints of private persons.
-    backup_to_shared_cache = False
+    # Shared, as outputs are by default: `PeopleKRSCombined` reads the seats,
+    # and a machine without the PESEL key can only restore them, never build
+    # them. They hold what `person_krs` already shares -- names, birth dates,
+    # posts -- plus fingerprints that are HMACs under that key, which stays on
+    # the machine that parsed the PDFs.
 
     @property
     def output_class(self):

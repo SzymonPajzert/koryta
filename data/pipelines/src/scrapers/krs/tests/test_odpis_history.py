@@ -223,7 +223,9 @@ def test_every_text_column_is_pinned_on_the_way_back():
     assert odpis_history.KrsOdpisSeats.dtype is not None
     for column in ("krs", "pesel_fingerprint", "salt_id", "entry_added", "birth_date"):
         assert odpis_history.KrsOdpisSeats.dtype[column] is str
-    assert odpis_history.KrsOdpisSeats.backup_to_shared_cache is False
+    # Shared since 2026-10-02: PeopleKRSCombined reads the seats, and only the
+    # machine holding the PESEL key can build them.
+    assert odpis_history.KrsOdpisSeats.backup_to_shared_cache is True
 
 
 def test_an_entry_day_survives_the_round_trip_as_text(tmp_path):

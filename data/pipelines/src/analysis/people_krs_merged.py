@@ -1,7 +1,7 @@
 import pandas as pd
 
 from analysis.utils.tables import create_people_table
-from scrapers.krs.list import PeopleKRS
+from scrapers.krs.odpis_people import PeopleKRSCombined
 from scrapers.stores import Context, LocalFile, Pipeline
 
 krs_file = LocalFile("person_krs.jsonl", "versioned")
@@ -9,7 +9,8 @@ krs_file = LocalFile("person_krs.jsonl", "versioned")
 
 class PeopleKRSMerged(Pipeline):
     filename = "people_krs_merged"
-    people_krs: PeopleKRS
+    # rejestr.io's people, with the odpisy standing in wherever they are newer.
+    people_krs: PeopleKRSCombined
 
     def process(self, ctx: Context):
         krs_data = self.people_krs.read_or_process(ctx)
