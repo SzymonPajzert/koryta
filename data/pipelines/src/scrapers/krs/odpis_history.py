@@ -24,8 +24,14 @@ odpis takes ~0.2 s -- so it runs on a process pool; the entries need only the
 document's first pages, before Dział 1.
 """
 
+import functools
+import hashlib
+import inspect
+import json
 import multiprocessing
+import os
 import re
+import sys
 import typing
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor
@@ -34,9 +40,16 @@ from functools import partial
 from itertools import batched
 
 import pandas as pd
+import pypdf
 
-from scrapers.krs import odpis_files, odpis_pdf
-from scrapers.stores import PESEL_SALT_FILE, Context, Pipeline, pesel_salt
+from scrapers.krs import odpis_files, odpis_pdf, organs
+from scrapers.stores import (
+    DOWNLOADED_DIR,
+    PESEL_SALT_FILE,
+    Context,
+    Pipeline,
+    pesel_salt,
+)
 from util import pesel as pesel_util
 
 #: Parsing processes. One is left for the reader feeding them.
@@ -70,38 +83,140 @@ def documents(
         yield Document(krs=krs, register=odpis.register, content=content)
 
 
-def parse_all(
+def parse_each(
     docs: Iterable[Document],
     parse: Callable[[Document], Parsed],
     workers: int | None = None,
-) -> tuple[list[dict[str, typing.Any]], list[str]]:
-    """Every document through `parse`, on a pool when there is more than one worker.
+) -> Iterator[tuple[Document, Parsed]]:
+    """Each document with what `parse` gave for it, in order, on a pool when
+    there is more than one worker."""
+    workers = WORKERS if workers is None else workers
+    if workers <= 1:
+        for doc in docs:
+            yield doc, parse(doc)
+        return
+    # forkserver, not fork: the parent holds the storage client's threads, and
+    # a child forked mid-lock deadlocks. The workers need only the parser.
+    context = multiprocessing.get_context("forkserver")
+    with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+        for chunk in batched(docs, BATCH):
+            yield from zip(chunk, pool.map(parse, chunk))
+
+
+def gather(parsed: Iterable[Parsed]) -> tuple[list[dict[str, typing.Any]], list[str]]:
+    """The rows of every document, and why some gave none.
 
     A document the parser cannot read is reported and left out, not allowed to
     take the run down: one corrupt PDF in eight thousand is a line in the log.
     """
     rows: list[dict[str, typing.Any]] = []
     failed: list[str] = []
-
-    def keep(parsed: Parsed) -> None:
-        found, problem = parsed
+    for found, problem in parsed:
         rows.extend(found)
         if problem:
             failed.append(problem)
-
-    workers = WORKERS if workers is None else workers
-    if workers <= 1:
-        for doc in docs:
-            keep(parse(doc))
-        return rows, failed
-    # forkserver, not fork: the parent holds the storage client's threads, and
-    # a child forked mid-lock deadlocks. The workers need only the parser.
-    context = multiprocessing.get_context("forkserver")
-    with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
-        for chunk in batched(docs, BATCH):
-            for parsed in pool.map(parse, chunk):
-                keep(parsed)
     return rows, failed
+
+
+def parse_all(
+    docs: Iterable[Document],
+    parse: Callable[[Document], Parsed],
+    workers: int | None = None,
+) -> tuple[list[dict[str, typing.Any]], list[str]]:
+    """Every document through `parse`; see `parse_each` and `gather`."""
+    return gather(parsed for _, parsed in parse_each(docs, parse, workers))
+
+
+#: Where each document's parse is kept. Local, as the PDFs it is read from
+#: are: the seats' rows carry names and fingerprints. None is beside the
+#: download cache.
+PARSED_ROOT: str | None = None
+
+
+@functools.cache
+def parser_version() -> str:
+    """A digest of all the code a document's rows come out of.
+
+    Any change to the parser, the organ names it reads, the PESEL code or the
+    PDF library - or to this module - re-parses every document.
+    """
+    digest = hashlib.sha1(pypdf.__version__.encode())
+    for module in (odpis_pdf, organs, pesel_util, sys.modules[__name__]):
+        digest.update(inspect.getsource(module).encode())
+    return digest.hexdigest()[:16]
+
+
+class ParsedCache:
+    """What parsing each stored odpis gave, kept between runs.
+
+    A stored odpis never changes - its name is written once - so what one
+    parser makes of it never does either: keyed by the blob, and stamped with
+    `parser_version` and the key (`variant`), a parse is reused until either
+    changes. The output is still exactly what parsing every document would
+    give; only the time differs. A refresh after a crawl of 295 odpisy
+    re-parsed all 9,237 on file, 7.7 minutes, on 2026-10-02.
+    """
+
+    def __init__(
+        self,
+        kind: str,
+        columns: typing.Sequence[str],
+        variant: str = "",
+        keeps: Callable[[list[dict[str, typing.Any]]], bool] = lambda rows: True,
+    ):
+        root = PARSED_ROOT or os.path.join(DOWNLOADED_DIR, ".odpis-parsed")
+        self.dir = os.path.join(root, kind)
+        self.stamp = f"{parser_version()}:{variant}"
+        #: Only what the pipeline outputs is kept, and only rows `keeps` passes.
+        self.columns = tuple(columns)
+        self.keeps = keeps
+
+    def _path(self, odpis: odpis_files.StoredOdpis) -> str:
+        return os.path.join(self.dir, f"{odpis.blob.replace('/', '.')}.json")
+
+    def get(self, odpis: odpis_files.StoredOdpis) -> Parsed | None:
+        try:
+            with open(self._path(odpis), encoding="utf-8") as f:
+                kept = json.load(f)
+        except (OSError, ValueError):
+            return None
+        if not isinstance(kept, dict) or kept.get("stamp") != self.stamp:
+            return None
+        return kept["rows"], kept["problem"]
+
+    def put(self, odpis: odpis_files.StoredOdpis, parsed: Parsed) -> None:
+        path = self._path(odpis)
+        part = f"{path}.part"
+        rows = [{c: row.get(c) for c in self.columns} for row in parsed[0]]
+        problem = parsed[1]
+        if not self.keeps(rows):
+            return
+        try:
+            os.makedirs(self.dir, exist_ok=True)
+            with open(part, "w", encoding="utf-8") as f:
+                json.dump({"stamp": self.stamp, "rows": rows, "problem": problem}, f)
+            os.replace(part, path)
+        except (OSError, TypeError) as e:
+            print(f"Could not keep the parse of {odpis.blob}: {e}")
+
+
+def parse_stored(
+    ctx: Context,
+    stored: typing.Mapping[str, odpis_files.StoredOdpis],
+    parse: Callable[[Document], Parsed],
+    cache: ParsedCache,
+) -> tuple[list[dict[str, typing.Any]], list[str]]:
+    """Every stored odpis's rows, in KRS order, parsing only what `cache` lacks."""
+    results: dict[str, Parsed] = {}
+    for krs in sorted(stored):
+        if (kept := cache.get(stored[krs])) is not None:
+            results[krs] = kept
+    todo = {krs: odpis for krs, odpis in stored.items() if krs not in results}
+    print(f"  {len(results):,} odpisy parsed before, {len(todo):,} to parse")
+    for doc, parsed in parse_each(documents(ctx, todo), parse):
+        results[doc.krs] = parsed
+        cache.put(todo[doc.krs], parsed)
+    return gather(results[krs] for krs in sorted(stored))
 
 
 def _failure(doc: Document, problem: Exception) -> str:
@@ -164,7 +279,8 @@ class KrsOdpisEntries(Pipeline[OdpisEntry]):
 
     def process(self, ctx: Context) -> pd.DataFrame:
         stored = odpis_files.stored_odpisy(ctx)
-        rows, failed = parse_all(documents(ctx, stored), entries_of)
+        cache = ParsedCache("entries", ENTRY_COLUMNS)
+        rows, failed = parse_stored(ctx, stored, entries_of, cache)
         df = pd.DataFrame.from_records(rows, columns=list(ENTRY_COLUMNS))
         report("entries", len(stored), df, failed)
         return df
@@ -265,6 +381,17 @@ def seats_of(doc: Document, salt: str) -> Parsed:
     return rows, None
 
 
+def carry_no_pesel(rows: list[dict[str, typing.Any]]) -> bool:
+    """Whether seat rows are safe to keep on disk: `assert_no_pesel`'s test."""
+    if not rows:
+        return True
+    try:
+        assert_no_pesel(pd.DataFrame.from_records(rows))
+    except AssertionError:
+        return False
+    return True
+
+
 def assert_no_pesel(df: pd.DataFrame) -> None:
     """Refuse an 11-digit run in any text cell, or a digest column that is no digest."""
     leaked = 0
@@ -311,7 +438,12 @@ class KrsOdpisSeats(Pipeline[OdpisSeat]):
         salt = require_salt()
         print(f"  PESEL key salt_id {pesel_util.salt_id(salt)}")
         stored = odpis_files.stored_odpisy(ctx)
-        rows, failed = parse_all(documents(ctx, stored), partial(seats_of, salt=salt))
+        # Keyed by the PESEL key too: a fingerprint under another key is
+        # another fingerprint.
+        cache = ParsedCache(
+            "seats", SEAT_COLUMNS, pesel_util.salt_id(salt), keeps=carry_no_pesel
+        )
+        rows, failed = parse_stored(ctx, stored, partial(seats_of, salt=salt), cache)
         df = pd.DataFrame.from_records(rows, columns=list(SEAT_COLUMNS))
         assert_no_pesel(df)
         report("seats", len(stored), df, failed)
