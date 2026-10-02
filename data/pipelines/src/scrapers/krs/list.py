@@ -636,8 +636,15 @@ def get_teryt(pcs: DataFrame, city: str, code: str | None, fallback: str = ""):
         # the code it wanted, and which beats having no region at all.
         return fallback
 
-    print(f"Failing to find teryt code for: '{city}' '{code}'")
+    if (city, code) not in _UNPLACED:
+        # Once per address: the same few towns came back 67 times a run.
+        _UNPLACED.add((city, code))
+        print(f"Failing to find teryt code for: '{city}' '{code}'")
     return ""
+
+
+#: The addresses `get_teryt` has said it cannot place, so it says each once.
+_UNPLACED: set[tuple[str, str]] = set()
 
 
 #: How many companies the register names the Treasury as an owner of. Kept as a
