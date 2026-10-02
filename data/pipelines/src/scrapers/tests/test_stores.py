@@ -684,6 +684,87 @@ class TestPipeline(unittest.TestCase):
                 # Stable should NOT run
                 mock_stable_proc.assert_not_called()
 
+
+class LongShared(Pipeline):
+    filename = "long_shared"
+    confirm_run = True
+
+    def process(self, ctx: Context):
+        return pd.DataFrame({"s": [1]})
+
+
+class ReadsShared(Pipeline):
+    filename = "reads_shared"
+    shared: LongShared
+
+    def process(self, ctx: Context):
+        return self.shared.read_or_process(ctx)
+
+
+class AlsoReadsShared(Pipeline):
+    filename = "also_reads_shared"
+    shared: LongShared
+
+    def process(self, ctx: Context):
+        return self.shared.read_or_process(ctx)
+
+
+class ReadsBoth(Pipeline):
+    filename = "reads_both"
+    first: ReadsShared
+    second: AlsoReadsShared
+
+    def process(self, ctx: Context):
+        self.first.read_or_process(ctx)
+        self.second.read_or_process(ctx)
+        return pd.DataFrame({"t": [1]})
+
+
+class TestOneInstancePerTree(unittest.TestCase):
+    """A source several pipelines of one tree name is one instance."""
+
+    def test_both_readers_get_the_same_source(self):
+        for top in (ReadsBoth(), Pipeline.create(ReadsBoth)):
+            self.assertIs(top.first.shared, top.second.shared)
+
+    def test_separate_trees_share_nothing(self):
+        self.assertIsNot(ReadsBoth().first.shared, ReadsBoth().first.shared)
+
+    def test_a_long_source_is_asked_about_and_restored_once(self):
+        """ScrapeRejestrIO asked twice whether to run ProcessWiki, and
+        downloaded its backup twice: the wiki sat in its tree twice."""
+        ctx = Mock(spec=Context)
+        ctx.io = Mock()
+        ctx.io.dumper = Mock()
+        ctx.utils = Mock()
+        ctx.utils.input_with_timeout.return_value = "n"
+        ctx.refresh_policy = ProcessPolicy.with_default()
+        ctx.io.get_mtime.return_value = None
+
+        backup_reads = []
+
+        def read_data(ref):
+            # Nothing on disk; only the long one has a backup to restore.
+            if isinstance(ref, VersionedBackup) and ref.filename == "long_shared":
+                backup_reads.append(ref.filename)
+                restored = Mock()
+                restored.read_dataframe.return_value = pd.DataFrame({"s": [1]})
+                return restored
+            raise FileNotFoundError(ref.filename)
+
+        ctx.io.read_data.side_effect = read_data
+
+        with (
+            patch("scrapers.stores.backup_disabled", return_value=False),
+            patch.object(LongShared, "process") as long_process,
+        ):
+            ReadsBoth().read_or_process(ctx)
+
+        long_process.assert_not_called()
+        self.assertEqual(ctx.utils.input_with_timeout.call_count, 1)
+        self.assertEqual(backup_reads.count("long_shared"), 1)
+
+
 class TestVersionedBackupRestore(unittest.TestCase):
     """Tests for the versioned backup restore logic in read_or_process."""
 

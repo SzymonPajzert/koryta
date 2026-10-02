@@ -4,6 +4,7 @@ to be used across all scrapers. It provides a common interface for handling
 file operations, data references, and pipeline execution contexts.
 """
 
+import contextvars
 import io
 import os
 import posixpath
@@ -593,11 +594,22 @@ class ProcessPolicy:
         # Now print nicely
         print("\n=== Pipeline Execution Tree ===")
 
+        printed: set[str] = set()
+
         def print_tree(pipeline, indent=0):
             run, reason = self.execution_decisions[pipeline.pipeline_name]
             status = "[RUN] " if run else "[SKIP]"
-            print(f"{'  ' * indent}{status} {pipeline.pipeline_name} ({reason})")
-            for dep in getattr(pipeline, "dependencies", {}).values():
+            # A source several pipelines read is one node: its subtree once.
+            deps = getattr(pipeline, "dependencies", {})
+            again = pipeline.pipeline_name in printed and bool(deps)
+            print(
+                f"{'  ' * indent}{status} {pipeline.pipeline_name} ({reason})"
+                + (" - as above" if again else "")
+            )
+            if again:
+                return
+            printed.add(pipeline.pipeline_name)
+            for dep in deps.values():
                 print_tree(dep, indent + 1)
 
         print_tree(root_pipeline)
@@ -623,6 +635,18 @@ class Context:
 
 
 Output = typing.TypeVar("Output")
+
+#: The pipelines of the tree being built, by class, so that a source several
+#: pipelines name is one instance: one node of the graph, run once, read from
+#: disk or restored from the shared cache once, asked about once. Built anew
+#: for every edge, ScrapeRejestrIO's tree held 75 pipelines for its 31 classes
+#: - CompaniesKRS five times, KRSUpdates three - and each copy read its output
+#: again into a frame of its own; the two ProcessWiki copies each asked whether
+#: to run the wiki, and each downloaded its backup. Scoped to one root, so a
+#: pipeline built on its own later starts afresh.
+_tree: contextvars.ContextVar[dict[type, "Pipeline"] | None] = contextvars.ContextVar(
+    "pipeline_tree", default=None
+)
 
 
 def _annotated_classes(pipeline_type: type) -> typing.Iterable[tuple[str, type]]:
@@ -697,8 +721,10 @@ class Pipeline(typing.Generic[Output]):
 
     @staticmethod
     def create(pipeline_type, nested=0):
+        # Built once. This used to run __init__ a second time to set `nested`,
+        # which built the whole tree under it twice and dropped the first.
         result = pipeline_type()
-        Pipeline.__init__(result, nested)
+        result.nested = nested
         return result
 
     def __init__(self, nested=0) -> None:
@@ -706,10 +732,21 @@ class Pipeline(typing.Generic[Output]):
         self._cached_result = None
         self._refreshed_execution = False
         self.dependencies = {}
-        for annotation, pipeline_type_dep in self.list_sources():
-            dep = Pipeline.create(pipeline_type_dep, self.nested + 1)
-            self.__dict__[annotation] = dep
-            self.dependencies[annotation] = dep
+        built = _tree.get()
+        token = _tree.set({}) if built is None else None
+        try:
+            built = _tree.get()
+            assert built is not None
+            for annotation, pipeline_type_dep in self.list_sources():
+                dep = built.get(pipeline_type_dep)
+                if dep is None:
+                    dep = Pipeline.create(pipeline_type_dep, self.nested + 1)
+                    built[pipeline_type_dep] = dep
+                self.__dict__[annotation] = dep
+                self.dependencies[annotation] = dep
+        finally:
+            if token is not None:
+                _tree.reset(token)
 
     def read(self, ctx: Context):
         """Attempts to read the output of the pipeline from storage (local or bucket).
