@@ -27,6 +27,7 @@ from uuid_extensions import uuid7str  # type: ignore
 from entities.util import NormalizedParse
 from scrapers.stores import IO, CloudStorage
 from scrapers.stores.file import DownloadableFile
+from stores import config
 from stores.user import get_username, interactive, pick_user
 
 CRAWLED_BUCKET = "koryta-pl-crawled"
@@ -244,6 +245,7 @@ class Client:
                     content_type=f"{content_type}; charset=utf-8",
                     if_generation_match=0,
                 )
+                self.remember(destination_blob_name, data)
             except gcs_exceptions.PreconditionFailed:
                 pass  # already uploaded, nothing to do
 
@@ -292,7 +294,35 @@ class Client:
             blob.reload()
             if blob.md5_hash != base64.b64encode(hashlib.md5(data).digest()).decode():
                 raise
+        # The same bytes are under the name either way.
+        self.remember(blob_name, data, bucket=bucket)
         return f"gs://{bucket}/{blob_name}"
+
+    def remember(
+        self, blob_name: str, data: str | bytes, bucket: str | None = None
+    ) -> None:
+        """Put what was just uploaded where reading it back would download it to.
+
+        Runs read what earlier runs wrote - CompaniesKRS every api-krs answer,
+        the odpis pipelines every PDF - and an upload left the cache without
+        it, so the next run on the same machine fetched each one back: 540
+        objects at 8 a second on 2026-10-02, the answers stored by the run just
+        before. Best effort: a cache that cannot take it only means a slower
+        read later.
+        """
+        ref = self.cached_storage(blob_name, binary=True, bucket=bucket)
+        path = os.path.join(config.DOWNLOADED_DIR, ref.filename)
+        if os.path.exists(path):
+            return
+        part = f"{path}.part"
+        try:
+            with open(part, "wb") as out:
+                out.write(data.encode("utf-8") if isinstance(data, str) else data)
+            os.replace(part, path)
+        except OSError as e:
+            print(f"Could not keep {blob_name} in the local cache: {e}")
+            with contextlib.suppress(OSError):
+                os.remove(part)
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         """Lists available values for a given namespace (e.g. 'date')."""
