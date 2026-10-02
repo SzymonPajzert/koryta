@@ -66,7 +66,6 @@ from jobs.krs_odpis.plan import (
     changed_since,
     from_graph,
     from_queries,
-    latest_changes,
     read_krs_file,
     register_hints,
     report,
@@ -75,7 +74,7 @@ from jobs.krs_odpis.plan import (
 from scrapers.krs import odpis_files
 from scrapers.krs.list import CompaniesKRS
 from scrapers.krs.scrape import KRSAlreadyScraped, ScrapeRejestrIO, settled_registers
-from scrapers.krs.updates import KRSUpdates
+from scrapers.krs.updates import KRSUpdates, latest_changes
 from scrapers.stores import Context, ProcessPolicy
 from stores.storage import CRAWLED_BUCKET, Client, warsaw_tz
 
