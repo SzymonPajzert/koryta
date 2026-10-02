@@ -49,6 +49,8 @@ import requests
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
+from scrapers.krs.odpis_files import pad_krs
+
 SEARCH_API_URL = "https://wyszukiwarka-krs-api.ms.gov.pl/api/"
 
 #: ``secretKey`` from the bundle's env.js, used as both the AES key and the IV.
@@ -85,7 +87,16 @@ _NO_KRS = "0000000000"
 
 
 class OdpisUnavailable(RuntimeError):
-    """The service did not return a document for this KRS."""
+    """The service did not return a document for this KRS.
+
+    `status` is the HTTP status it answered with instead: a 504 is the gateway
+    giving up after ~30 s, which says nothing about the subject and clears on a
+    later try, so a crawler counts those apart from everything else.
+    """
+
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 #: The search request's body, with every field the app sends. Sent whole rather
@@ -269,14 +280,6 @@ def only_digits(value: typing.Any) -> str:
     return re.sub(r"\D", "", str(value or ""))
 
 
-def pad_krs(krs: str) -> str:
-    """A KRS as the register writes it: ten digits, zero-filled from the left."""
-    krs = str(krs).strip()
-    if not krs.isdigit() or len(krs) > 10:
-        raise ValueError(f"not a KRS number: {krs!r}")
-    return krs.rjust(10, "0")
-
-
 def encrypt_krs(krs: str) -> str:
     """The ``krs`` body field: AES-128-CBC, PKCS7, Base64.
 
@@ -392,7 +395,8 @@ def fetch_odpis_pdf(
     if response.status_code in (400, 404):
         return None
     raise OdpisUnavailable(
-        f"KRS {krs} register {register}: HTTP {response.status_code}"
+        f"KRS {krs} register {register}: HTTP {response.status_code}",
+        status=response.status_code,
     )
 
 
