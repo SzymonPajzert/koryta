@@ -35,13 +35,15 @@ def query_krs_api(url, verbose=True) -> str | None:
     if not ("odpis" in result or result.get("title", "") == "Not Found"):
         raise ValueError(f"Unexpected response for {url}: {result}, skipping this KRS")
 
-    if "odpis" in result:
-        # Printing data about the company
-        dzial1 = result["odpis"]["dane"]["dzial1"]
-        dane = dzial1.get("danePodmiotu", {})
-        if "siedzibaIAdres" in dzial1:
-            miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
-            print_filtered(f"{dane.get('nazwa', dane)} - {miasto}")
+    if verbose and "odpis" in result:
+        # Said, never kept, so nothing here may fail the request. An address
+        # can hold no town at all - "COFFEE POLSKA" S.A., 0000394808, has
+        # `{"kraj": "POLSKA"}` alone - and reading one anyway raised KeyError
+        # out of every free scrape that reached it, even with verbose off.
+        dzial1 = (result["odpis"].get("dane") or {}).get("dzial1") or {}
+        dane = dzial1.get("danePodmiotu") or {}
+        adres = (dzial1.get("siedzibaIAdres") or {}).get("adres") or {}
+        print(f"{dane.get('nazwa', dane)} - {adres.get('miejscowosc', '?')}")
     return json.dumps(result)
 
 
