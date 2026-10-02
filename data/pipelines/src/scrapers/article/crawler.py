@@ -6,6 +6,8 @@ import mimetypes
 import queue as _queue
 import threading
 import time
+from collections import Counter
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -32,6 +34,12 @@ from scrapers.stores import (
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 KORYTA_UA = "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"
+
+#: Called after every batch written to the queue with the run's totals so far:
+#: pages stored, non-HTML pages skipped, errors, rate-limited releases, URLs
+#: discovered. A plain callable, since reporting a run is a store's business
+#: (`stores.job_runs`, wired up in crawl_cli) and a scraper may not import one.
+CrawlProgress = Callable[[dict[str, int]], None]
 
 
 def parse_hostname(url: str) -> str:
@@ -355,8 +363,10 @@ def _flush_batch(
     options: CrawlOptions,
     blocked_normalized: set[str],
     worker_name: str,
-) -> None:
-    """Write a batch of crawl results to the DB in as few transactions as possible."""
+) -> dict[str, int]:
+    """Write a batch of crawl results to the DB in as few transactions as possible.
+
+    Returns what the batch held, in the counters `CrawlProgress` is given."""
     done_items: list[tuple[str, str | None, dict]] = []
     error_items: list[tuple[str, str]] = []
     release_items: list[str] = []
@@ -410,6 +420,27 @@ def _flush_batch(
         queue_store.release_batch(release_items)
     if all_discovered:
         queue_store.put(all_discovered)
+    stored = sum(1 for _, path, _ in done_items if path is not None)
+    return {
+        "stored": stored,
+        "not_html": len(done_items) - stored,
+        "errors": len(error_items),
+        "rate_limited": len(release_items),
+        "discovered": len(all_discovered),
+    }
+
+
+class _Tally:
+    """The run's totals so far, handed to `CrawlProgress` after every batch."""
+
+    def __init__(self, on_progress: CrawlProgress | None) -> None:
+        self.totals: Counter[str] = Counter()
+        self.on_progress = on_progress
+
+    def add(self, batch: dict[str, int]) -> None:
+        self.totals.update(batch)
+        if self.on_progress is not None:
+            self.on_progress(dict(self.totals))
 
 
 def _coordinator(
@@ -418,6 +449,7 @@ def _coordinator(
     queue_store: CrawlQueue,
     ctx: Context,
     blocked_normalized: set[str],
+    on_progress: CrawlProgress | None = None,
 ) -> None:
     """Coordinate DB batches and HTTP workers for one crawler process.
 
@@ -464,6 +496,7 @@ def _coordinator(
     db_exhausted = False
     total_sent = 0
     total_received = 0
+    tally = _Tally(on_progress)
 
     while True:
         # Refill work queue when it runs low.
@@ -506,15 +539,21 @@ def _coordinator(
         if len(pending) >= queue_flush_size or (
             pending and now - last_flush >= _FLUSH_INTERVAL_S
         ):
-            _flush_batch(pending, queue_store, options, blocked_normalized, worker_name)
+            tally.add(
+                _flush_batch(
+                    pending, queue_store, options, blocked_normalized, worker_name
+                )
+            )
             pending.clear()
             last_flush = now
 
         # Terminate when all dispatched URLs have returned results
         if db_exhausted and total_sent == total_received:
             if pending:
-                _flush_batch(
-                    pending, queue_store, options, blocked_normalized, worker_name
+                tally.add(
+                    _flush_batch(
+                        pending, queue_store, options, blocked_normalized, worker_name
+                    )
                 )
                 pending.clear()
             for _ in http_threads:
@@ -528,7 +567,10 @@ def _coordinator(
         time.sleep(0.005)
 
 
-def run_crawler(ctx: Context, options: CrawlOptions) -> None:
+def run_crawler(
+    ctx: Context, options: CrawlOptions, on_progress: CrawlProgress | None = None
+) -> None:
+    """Crawl until the queue is exhausted; `on_progress` hears of every batch."""
     queue_store = ctx.crawl_queue
     if queue_store is None:
         raise ValueError("Context has no crawl_queue set")
@@ -536,4 +578,4 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
     blocked = queue_store.get_blocked_domains()
     blocked_normalized = _normalize_blocked(blocked)
 
-    _coordinator(0, options, queue_store, ctx, blocked_normalized)
+    _coordinator(0, options, queue_store, ctx, blocked_normalized, on_progress)

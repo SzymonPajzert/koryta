@@ -22,7 +22,8 @@ from scrapers.article.crawler import (
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
 from scrapers.article.scoring import SCORING_FUNCTIONS, get_scoring_function
 from scrapers.article.url_store_queue import UrlStoreQueue
-from scrapers.stores import BlockedDomain, CrawlQueue, NewUrl
+from scrapers.stores import BlockedDomain, Context, CrawlQueue, NewUrl
+from stores.job_runs import JobRun
 
 
 def _build_parser() -> ArgumentParser:
@@ -312,9 +313,29 @@ def main() -> None:  # noqa: PLR0915
     ctx, _ = setup_context(crawl_queue=queue, batch_upload=True)
     try:
         with profile_scope(profile_enabled, profile_path):
-            run_crawler(ctx, options)
+            crawl(ctx, options)
     finally:
         pg_client.close()
+
+
+def crawl(ctx: Context, options: CrawlOptions) -> None:
+    """Crawl until the queue runs dry, reporting the run to koryta.pl/admin/procesy.
+
+    An ongoing job: there is no total to count towards, so its progress is the
+    pages stored so far, and the page watches for it going quiet.
+    """
+    status = JobRun("article_crawl", unit="stron")
+
+    def report(totals: dict[str, int]) -> None:
+        status.progress(totals.get("stored", 0), counters=totals)
+
+    with status:  # Anything raised fails the run.
+        try:
+            run_crawler(ctx, options, on_progress=report)
+        except KeyboardInterrupt:
+            status.finish("partial", stop_reason="przerwany")
+            raise
+        status.finish("succeeded", stop_reason="kolejka pusta")
 
 
 def reprioritize(args):
@@ -346,8 +367,6 @@ def bump_small_domains(args, parser):
         )
     finally:
         pg_client.close()
-
-
 
 
 if __name__ == "__main__":
