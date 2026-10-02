@@ -96,6 +96,8 @@ class RunSummary:
     upload_failed: int = 0
     bulletin_fetched: list[str] = field(default_factory=list)
     bulletin_failed: list[str] = field(default_factory=list)
+    #: Days the bulletin has long failed to serve; listed, not counted.
+    bulletin_unavailable: list[str] = field(default_factory=list)
     #: Why the run ended before the queue did, if it did.
     stopped: str = ""
     errors: list[str] = field(default_factory=list)
@@ -242,6 +244,7 @@ def scrape_krs_free(
     bulletin = scrape_updates_by_dates(sleep_time)
     summary.bulletin_fetched = bulletin.fetched
     summary.bulletin_failed = bulletin.failed
+    summary.bulletin_unavailable = bulletin.unavailable
     ctx, queries = build_queue()
     summary.queries = len(queries)
     # One connection for the whole run: a new one per request was most of

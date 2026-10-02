@@ -375,3 +375,19 @@ def test_a_bulletin_day_on_file_is_not_asked_for_again():
         "2025-06-02",
         "2025-06-04",
     ]
+
+
+def test_a_bulletin_day_long_missing_at_the_source_does_not_fail_the_run():
+    """2025-11-21..27 answer HTTP 500 every time: counted, every run exited 75."""
+    run = bulletin.BulletinRun()
+    today = date(2026, 10, 3)
+
+    run.missed("2025-11-21", today)
+    run.missed("2026-10-02", today)
+
+    assert (run.unavailable, run.failed) == (["2025-11-21"], ["2026-10-02"])
+    summary = summary_for([])
+    summary.bulletin_unavailable = run.unavailable
+    assert summary.code() == 0
+    summary.bulletin_failed = run.failed
+    assert summary.code() == job.EXIT_TRY_LATER

@@ -31,12 +31,26 @@ FIRST_DAY = date(2025, 6, 1)
 EXIT_TRY_LATER = 75
 
 
+#: How long after a day ends its bulletin failing still says "try later". Six
+#: days of 2025-11 have answered HTTP 500 on every run since; counted, they
+#: made every run exit 75, and the exit code said nothing about the night.
+GIVE_UP_AFTER = timedelta(days=14)
+
+
 @dataclass
 class BulletinRun:
     """Which days a run stored, and which it asked for and did not get."""
 
     fetched: list[str] = field(default_factory=list)
+    #: Not got, and recent enough that a later run may get it.
     failed: list[str] = field(default_factory=list)
+    #: Not got, long after the day ended: missing at the source. Still asked
+    #: for on every run, and listed, but no reason to call the run unfinished.
+    unavailable: list[str] = field(default_factory=list)
+
+    def missed(self, day: str, today: date) -> None:
+        stale = date.fromisoformat(day) < today - GIVE_UP_AFTER
+        (self.unavailable if stale else self.failed).append(day)
 
 
 def warsaw_today() -> date:
@@ -68,7 +82,8 @@ def scrape_updates_by_dates(sleep_time=0.2) -> BulletinRun:
     )
 
     run = BulletinRun()
-    for date_str in days_to_fetch(stored, warsaw_today()):
+    today = warsaw_today()
+    for date_str in days_to_fetch(stored, today):
         url = f"https://api-krs.ms.gov.pl/api/Krs/Biuletyn/{date_str}"
         print(f"Requesting: {url}")
         try:
@@ -77,16 +92,16 @@ def scrape_updates_by_dates(sleep_time=0.2) -> BulletinRun:
                 # Parse to ensure it's valid JSON
                 response.json()
                 if ctx.io.upload(url, response.text, "application/json") is False:
-                    run.failed.append(date_str)
+                    run.missed(date_str, today)
                 else:
                     run.fetched.append(date_str)
                     print(f"Successfully scraped and uploaded for date: {date_str}")
             else:
                 print(f"Failed to fetch {url}: HTTP {response.status_code}")
-                run.failed.append(date_str)
+                run.missed(date_str, today)
         except Exception as e:
             print(f"An error occurred while uploading {url}: {e}")
-            run.failed.append(date_str)
+            run.missed(date_str, today)
         sleep(sleep_time)
 
     return run
