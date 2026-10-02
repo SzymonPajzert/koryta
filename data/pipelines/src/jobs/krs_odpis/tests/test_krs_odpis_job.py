@@ -277,7 +277,9 @@ def test_a_run_files_each_pdf_and_records_each_attempt(monkeypatch):
     monkeypatch.setattr(
         search,
         "fetch_odpis_pdf",
-        lambda krs, register="P", full=True, session=None: answers.get((krs, register)),
+        lambda krs, register="P", full=True, session=None, timeout=60.0: answers.get(
+            (krs, register)
+        ),
     )
     monkeypatch.setattr(job, "warsaw_day", lambda: TODAY)
     client = FakeClient()

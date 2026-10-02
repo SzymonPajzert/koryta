@@ -12,9 +12,11 @@ class Served:
     def __init__(self, answers):
         self.answers = answers
         self.asked = []
+        self.timeouts = []
 
     def __call__(self, krs, register="P", full=True, session=None, timeout=60.0):
         self.asked.append((krs, register))
+        self.timeouts.append(timeout)
         answer = self.answers.get((krs, register))
         if isinstance(answer, Exception):
             raise answer
@@ -42,9 +44,7 @@ def test_the_first_register_with_a_document_is_filed_and_returned(served):
     )
     assert got == ("S", b"%PDF-1")
     assert fake.asked == [("0000000029", "P"), ("0000000029", "S")]
-    assert put == [
-        (odpis_files.blob_name("0000000029", "S", "2026-10-02"), b"%PDF-1")
-    ]
+    assert put == [(odpis_files.blob_name("0000000029", "S", "2026-10-02"), b"%PDF-1")]
 
 
 def test_a_hinted_register_is_the_only_one_asked(served):
@@ -80,3 +80,13 @@ def test_a_write_that_did_not_land_is_not_swallowed(served):
 
     with pytest.raises(RuntimeError):
         store.fetch_and_store("0000000029", ("P",), refused, "2026-10-02")
+
+
+def test_a_document_is_given_less_time_than_the_gateway_gives_it(served):
+    """Every 504 of 2026-10-02 came after 30.1 s; no document served took 2."""
+    fake = served({("0000000029", "S"): b"%PDF-1"})
+
+    store.fetch_and_store("0000000029", ("P", "S"), lambda n, d: None, "2026-10-02")
+
+    assert fake.timeouts == [search.CRAWL_TIMEOUT] * 2
+    assert search.CRAWL_TIMEOUT < 30
