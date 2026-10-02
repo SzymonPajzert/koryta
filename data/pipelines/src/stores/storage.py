@@ -313,6 +313,9 @@ class Client:
     ) -> list[tuple[str, int | None]]:
         """The prefix's names and sizes in listing order, its ranges listed at once."""
         edges: list[str | None] = [None, *bounds, None]
+        # Asked first by sixteen threads at once, a missing token was fetched
+        # sixteen times, and urllib3 warned of a full pool seven times a run.
+        self._fresh_token()
 
         def one(i: int) -> list[tuple[str, int | None]]:
             blobs = bucket.list_blobs(
@@ -326,6 +329,12 @@ class Client:
         with ThreadPoolExecutor(len(edges) - 1) as pool:
             parts = list(pool.map(one, range(len(edges) - 1)))
         return [item for part in parts for item in part]
+
+    def _fresh_token(self) -> None:
+        """An access token now, rather than one per thread a moment later."""
+        credentials = getattr(self.storage_client, "_credentials", None)
+        if credentials is not None and not credentials.valid:
+            credentials.refresh(google.auth.transport.requests.Request())
 
     #: How long a listing is reused. While a run builds its tree it lists the
     #: same prefixes again and again within minutes - rejestr.io and api-krs
