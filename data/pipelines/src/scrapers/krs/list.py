@@ -122,6 +122,7 @@ class PeopleKRS(Pipeline):
         "employed_krs": str,
         "id": str,
         "employed_for": str,
+        "crawled_on": str,
     }
 
     def process(self, ctx: Context):
@@ -207,6 +208,7 @@ def extract_people(ctx: Context):
                                 employed_end=post.end,
                                 employed_for=post.years,
                                 employed_role=post.role,
+                                crawled_on=date,
                             )
                         )
         except KeyError as e:
