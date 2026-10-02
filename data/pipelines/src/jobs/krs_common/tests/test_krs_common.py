@@ -69,3 +69,19 @@ def test_an_empty_answer_that_is_not_a_204_is_still_a_failure(answers):
     answers(503, None)
 
     assert common.query_krs_api(URL, verbose=False) is None
+
+
+def test_a_session_given_is_the_one_asked():
+    class Session:
+        def __init__(self):
+            self.asked: list[str] = []
+
+        def get(self, url, **kwargs):
+            self.asked.append(url)
+            return Response(200, NO_TOWN)
+
+    session = Session()
+
+    common.query_krs_api(URL, verbose=False, session=session)  # type: ignore[arg-type]
+
+    assert session.asked == [URL]

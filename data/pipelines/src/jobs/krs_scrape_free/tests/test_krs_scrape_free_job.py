@@ -2,6 +2,7 @@
 
 import json
 import sys
+import threading
 from datetime import UTC, date, datetime
 
 import pytest
@@ -152,6 +153,71 @@ def test_an_answer_that_did_not_upload_is_counted():
 
     assert (summary.answered, summary.upload_failed) == (2, 1)
     assert summary.code() == job.EXIT_TRY_LATER
+
+
+def test_an_upload_that_raises_is_counted_too():
+    class Raising(Store):
+        def __call__(self, ctx, url, result, verbose=True) -> bool:
+            if "rejestr=S" in url:
+                raise RuntimeError("503 from storage")
+            return super().__call__(ctx, url, result, verbose)
+
+    queries = [company(1), company(2)]
+    summary = summary_for(queries)
+
+    job.scrape(
+        None,
+        queries,
+        0,
+        summary,
+        fetch=answering(lambda url: AN_ODPIS),
+        store=Raising(),
+    )
+
+    assert (summary.answered, summary.upload_failed) == (4, 2)
+
+
+def test_answers_upload_while_the_next_ones_are_asked():
+    """Uploaded in turn, the answers were 43% of the loop on 2026-10-02."""
+    lock = threading.Lock()
+    in_flight, most = 0, 0
+
+    class Slow(Store):
+        def __call__(self, ctx, url, result, verbose=True) -> bool:
+            nonlocal in_flight, most
+            with lock:
+                in_flight += 1
+                most = max(most, in_flight)
+            threading.Event().wait(0.05)
+            with lock:
+                in_flight -= 1
+            return super().__call__(ctx, url, result, verbose)
+
+    queries = [company(n) for n in range(1, 9)]
+    summary, store = summary_for(queries), Slow()
+
+    job.scrape(
+        None, queries, 0, summary, fetch=answering(lambda url: AN_ODPIS), store=store
+    )
+
+    assert most > 1
+    assert len(store.stored) == 16, "every upload has landed when scrape returns"
+    assert summary.upload_failed == 0
+
+
+def test_an_answer_nothing_expected_does_not_end_the_run():
+    """A KeyError out of the parser ended the run 894 companies in on 2026-10-02."""
+    odd = url_of(1, "P")
+    queries = [company(1), company(2)]
+    summary, store = summary_for(queries), Store()
+
+    def answer(url):
+        return KeyError("miejscowosc") if url == odd else AN_ODPIS
+
+    job.scrape(None, queries, 0, summary, fetch=answering(answer), store=store)
+
+    assert (summary.answered, summary.failed, summary.queries_done) == (3, 1, 2)
+    assert odd not in store.stored, "nothing stored, so the next run asks again"
 
 
 def test_the_deadline_leaves_the_rest_of_the_queue_for_the_next_run():
