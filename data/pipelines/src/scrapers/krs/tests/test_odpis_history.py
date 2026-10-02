@@ -85,10 +85,11 @@ def as_text(content: bytes) -> str:
 
 
 @pytest.fixture(autouse=True)
-def text_documents(monkeypatch):
+def text_documents(monkeypatch, tmp_path):
     monkeypatch.setattr(odpis_pdf, "extract_text", as_text)
     monkeypatch.setattr(odpis_pdf, "extract_head_text", as_text)
     monkeypatch.setattr(odpis_history, "WORKERS", 1)
+    monkeypatch.setattr(odpis_history, "PARSED_ROOT", str(tmp_path / "parsed"))
 
 
 class Read:
@@ -235,3 +236,62 @@ def test_an_entry_day_survives_the_round_trip_as_text(tmp_path):
     df.to_json(path, orient="records", lines=True, force_ascii=False)
     back = pd.read_json(path, lines=True, dtype=odpis_history.KrsOdpisEntries.dtype)
     assert back["entry_date"].tolist() == ["2001-02-17", "2021-04-30"]
+
+
+@pytest.fixture
+def counted(monkeypatch):
+    """How many documents the parser was handed."""
+    seen: list[bytes] = []
+
+    def head(content: bytes) -> str:
+        seen.append(content)
+        return as_text(content)
+
+    monkeypatch.setattr(odpis_pdf, "extract_head_text", head)
+    return seen
+
+
+def test_a_refresh_parses_only_the_odpisy_it_has_not_parsed(counted):
+    ctx = FakeContext(held())
+    first = odpis_history.KrsOdpisEntries().process(ctx)
+
+    ctx.io.held |= held(krs="31")
+    second = odpis_history.KrsOdpisEntries().process(ctx)
+
+    assert len(counted) == 2, "29 once, then only the new 31"
+    pd.testing.assert_frame_equal(
+        second[second["krs"] == "0000000029"].reset_index(drop=True), first
+    )
+    assert set(second["krs"]) == {"0000000029", "0000000031"}
+
+
+def test_a_parser_that_changed_parses_everything_again(counted, monkeypatch):
+    ctx = FakeContext(held())
+    odpis_history.KrsOdpisEntries().process(ctx)
+
+    monkeypatch.setattr(odpis_history, "parser_version", lambda: "another parser")
+    odpis_history.KrsOdpisEntries().process(ctx)
+
+    assert len(counted) == 2
+
+
+def test_seats_under_another_key_are_parsed_again(monkeypatch):
+    ctx = FakeContext(held())
+    monkeypatch.setattr(odpis_history, "pesel_salt", lambda: SALT)
+    odpis_history.KrsOdpisSeats().process(ctx)
+
+    monkeypatch.setattr(odpis_history, "pesel_salt", lambda: "q" * 64)
+    df = odpis_history.KrsOdpisSeats().process(ctx)
+
+    assert df.iloc[0].pesel_fingerprint == pesel_util.fingerprint(PRESIDENT, "q" * 64)
+
+
+def test_a_seat_holding_a_pesel_is_not_kept(tmp_path):
+    cache = odpis_history.ParsedCache(
+        "seats", ("krs", "funkcja"), keeps=odpis_history.carry_no_pesel
+    )
+    [odpis] = odpis_files.stored_odpisy(FakeContext(held())).values()
+
+    cache.put(odpis, ([{"krs": "0000000029", "funkcja": f"Z {PRESIDENT}"}], None))
+
+    assert cache.get(odpis) is None
