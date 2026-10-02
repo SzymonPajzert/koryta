@@ -314,6 +314,40 @@ def test_the_reason_the_caller_recorded_reaches_the_query():
     assert [query.reasons for query in queries] == [[REASON_PERSON_FEED]]
 
 
+def test_the_queue_comes_out_in_the_same_order_every_run():
+    """Its subjects arrive as sets, which iterate differently every run.
+
+    The order is the queue's: a capped `koryta_krs_odpis` run takes the
+    companies in it, so it reached a different sample of them each run, and
+    two runs on the same data wrote two different files.
+    """
+
+    def queue(connections, names, people):
+        return [
+            query.subject_id
+            for query in save_org_connections(
+                already_scraped_krs=pd.DataFrame(columns=["krs", "method", "date"]),
+                needs_refresh_krs=pd.DataFrame(
+                    columns=["krs", "method", "date", "update_date"]
+                ),
+                already_scraped_people={},
+                connections=[KRS(krs) for krs in connections],
+                names=[KRS(krs) for krs in names],
+                people=[RejestrIOKey(id=person) for person in people],
+            )
+        ]
+
+    asked = queue(
+        ["0000000300", "0000000100"], ["0000000900", "0000000500"], ["72", "71"]
+    )
+
+    # Each group in order of its ids, and the groups in the order they had.
+    assert asked == ["0000000100", "0000000300", "0000000500", "0000000900", "71", "72"]
+    assert asked == queue(
+        ["0000000100", "0000000300"], ["0000000500", "0000000900"], ["71", "72"]
+    )
+
+
 def test_a_company_due_a_refresh_says_so():
     """The refresh is decided here, so it is recorded here.
 

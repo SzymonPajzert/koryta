@@ -1,7 +1,7 @@
 import pandas as pd
 from pandas import DataFrame
 
-from entities.company import KRS
+from entities.company import KRS, Source
 from entities.company import Company as KrsCompany
 from entities.company_categories import SPZOZ
 from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP
@@ -641,3 +641,27 @@ def test_a_subsidiary_inherits_what_regon_said_of_its_parent():
     )
 
     assert public == {"0000247533", "0000408185"}
+
+
+def test_a_companys_sources_are_listed_in_the_same_order_every_run():
+    """They are collected in a set, which iterates differently every run."""
+
+    class Hardcoded:
+        sources = ["gmina"]
+
+    pipeline = CompaniesKRS()
+    pipeline.add_company(KrsCompany(krs="0000184990"))
+    pipeline.company_sources["0000184990"] = {
+        Source("wiki"),
+        Source("rejestr-io", source_krs="0000019874"),
+        Source("api-krs", source_krs="0000184990"),
+    }
+
+    [company] = pipeline.build_output({"0000184990": Hardcoded()})
+
+    assert company.sources == [
+        Source("api-krs", source_krs="0000184990"),
+        Source("hardcoded", reason="gmina"),
+        Source("rejestr-io", source_krs="0000019874"),
+        Source("wiki"),
+    ]
