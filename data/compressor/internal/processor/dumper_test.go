@@ -64,16 +64,16 @@ func TestProcessHostnameIncremental(t *testing.T) {
 	mockSrc.AddObject("hostname=example.com/date=2026-05-28.json", int64(len(todayData)), todayData)
 
 	cfg := &config.Config{
-		Incremental: true,
+		Incremental:  true,
 		SourcePrefix: "",
 	}
-	
+
 	dumper := NewDumper(mockSrc, mockDst, cfg)
-	
+
 	ctx := context.Background()
 	today := "2026-05-28"
 	yesterday := "2026-05-27"
-	
+
 	err := dumper.processHostnameIncremental(ctx, "example.com", today, yesterday)
 	if err != nil {
 		t.Fatalf("processHostnameIncremental failed: %v", err)
@@ -102,10 +102,10 @@ func TestRunConcurrency(t *testing.T) {
 	mockSrc.AddObject("hostname=site3.com/date=2026-05-01.json", int64(len(data)), data)
 
 	cfg := &config.Config{
-		Incremental: true,
+		Incremental:  true,
 		SourcePrefix: "",
 	}
-	
+
 	dumper := NewDumper(mockSrc, mockDst, cfg)
 	err := dumper.Run(context.Background())
 	if err != nil {
@@ -127,7 +127,7 @@ func TestProcessHostnameIncremental_SkipRedundant(t *testing.T) {
 
 	// Data up to 05-25 only
 	mockSrc.AddObject("hostname=example.com/date=2026-05-25.json", 10, []byte("some data!"))
-	
+
 	// Destination already has a dump for 05-25
 	mockDst.AddObject("hostname=example.com/from=2025-01-01/date=2026-05-25.tar.gz", 100, []byte("tarball"))
 
@@ -155,7 +155,7 @@ func TestProcessHostnameIncremental_CreatesWhenNewData(t *testing.T) {
 	// Data up to 05-26
 	mockSrc.AddObject("hostname=example.com/date=2026-05-25.json", 10, []byte("some data!"))
 	mockSrc.AddObject("hostname=example.com/date=2026-05-26.json", 10, []byte("some data!"))
-	
+
 	// Destination has a dump for 05-25
 	mockDst.AddObject("hostname=example.com/from=2025-01-01/date=2026-05-25.tar.gz", 100, []byte("tarball"))
 
