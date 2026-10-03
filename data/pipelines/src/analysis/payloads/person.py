@@ -12,6 +12,7 @@ import pandas as pd
 from analysis.extract import Extract
 from analysis.payloads.election import get_election_type
 from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
+from analysis.utils import as_sequence
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
 from scrapers.pkw.elections import parties_of_committee
@@ -88,7 +89,7 @@ class PeoplePayloads(Pipeline[Person]):
         return Person
 
     def process(self, ctx: Context):
-        people_df = self.people.read_or_process(ctx)
+        people_df = self.registered_people(ctx)
         result = [self.map_person_payload(ctx, row) for _, row in people_df.iterrows()]
         if self.args.on_koryta:
             result = self.only_on_koryta(ctx, result)
@@ -116,6 +117,32 @@ class PeoplePayloads(Pipeline[Person]):
                 ]
             )
         )
+
+    def registered_people(self, ctx: Context) -> pd.DataFrame:
+        """The people Extract selected that carry a rejestr.io entry.
+
+        Since the odpis seats are folded into the people, some rows are people
+        only an odpis names, with no register entry at all. The ingest
+        identifies a person by their page, then their register entry, then
+        their name - so one of these would land on a namesake's page, or open a
+        second page for somebody already there. Left out and counted, until
+        the ingest has a way to identify them (task
+        payloads-handle-odpis-only-people); before, `one_register_entry` raised
+        at the first one and no payload was built at all.
+        """
+        people_df = self.people.read_or_process(ctx)
+        if people_df.empty or "rejestrio_id" not in people_df:
+            return people_df
+        registered = people_df["rejestrio_id"].map(
+            lambda ids: any(str(value) for value in as_sequence(ids))
+        )
+        left_out = int((~registered).sum())
+        if left_out:
+            print(
+                f"Leaving out {left_out} people only an odpis names: no rejestr.io "
+                f"entry for the ingest to identify them by"
+            )
+        return people_df[registered]
 
     def site_snapshot(self, ctx: Context) -> SiteSnapshot:
         """The export both filters read, read once.
