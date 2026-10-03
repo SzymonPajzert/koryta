@@ -110,7 +110,10 @@ const adminClient = new v1.FirestoreAdminClient();
 
 /**
  * The nightly dump the scrapers read (`snapshot.py`) and `npm run db:pull`
- * seeds the emulator from, taken at 04:00 Warsaw time.
+ * seeds the emulator from, taken at midnight Warsaw time: the night on the
+ * koryta-nightly VM starts at 00:30 and compares the people it uploads with
+ * this copy of the site, so it has to be tonight's (`data/nightly`). It used
+ * to run at 04:00, after the night it now has to come before.
  *
  * Once a day, not twice, because an export is billed one document read per
  * document exported - 94,103 of them as of 12 August 2026, and the reads do
@@ -125,9 +128,11 @@ const adminClient = new v1.FirestoreAdminClient();
  */
 export const scheduledFirestoreExport = onSchedule(
   {
-    // 04:00 in Warsaw, where the people who read the dump are, rather than in
-    // UTC - which would be 06:00 for half the year and 05:00 for the other.
-    schedule: "every day 04:00",
+    // Midnight in Warsaw, where the night that reads it runs, rather than in
+    // UTC - which would be 02:00 for half the year and 01:00 for the other.
+    // The folder is named in UTC, so it carries the previous day's date: the
+    // pipelines' look-back (`latest_on_or_before`) finds it from the new day.
+    schedule: "every day 00:00",
     timeZone: "Europe/Warsaw",
     region: "europe-west1",
   },

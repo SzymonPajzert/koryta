@@ -1434,10 +1434,12 @@ describe("JOBS", () => {
     }
   });
 
-  it("starts the people import after the export it compares against", () => {
+  it("starts the night after the export it compares the people against", () => {
     const exported = jobDefinition("firestore_export")!.schedule!;
-    const imported = jobDefinition("people_import")!.schedule!;
-    expect(imported.timeZone).toBe(exported.timeZone);
-    expect(imported.dailyAt > exported.dailyAt).toBe(true);
+    const night = jobDefinition("nightly")!.schedule!;
+    expect(night.timeZone).toBe(exported.timeZone);
+    expect(night.dailyAt > exported.dailyAt).toBe(true);
+    // A step of the night, so it has no slot of its own to miss.
+    expect(jobDefinition("people_import")!.schedule).toBeUndefined();
   });
 });
