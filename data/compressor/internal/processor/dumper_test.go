@@ -121,6 +121,33 @@ func TestRunConcurrency(t *testing.T) {
 	}
 }
 
+// One bad host must not keep the others from being archived, but it has to
+// fail the run: a scheduled job that exits 0 after losing hosts looks healthy.
+func TestRunFailsWhenOneHostnameFails(t *testing.T) {
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	data := []byte("data")
+	mockSrc.AddObject("hostname=good.com/date=2026-05-01.json", int64(len(data)), data)
+	// Incremental mode refuses a host holding anything dated before 2025.
+	mockSrc.AddObject("hostname=bad.com/date=2024-12-31.json", int64(len(data)), data)
+
+	dumper := NewDumper(mockSrc, mockDst, &config.Config{Incremental: true})
+	err := dumper.Run(context.Background())
+	if err == nil {
+		t.Fatal("Run succeeded although bad.com failed")
+	}
+	if msg := err.Error(); !strings.Contains(msg, "1 of 2 hostnames failed") || !strings.Contains(msg, "bad.com") {
+		t.Errorf("Expected the error to count and name the failed host, got: %v", err)
+	}
+
+	mockDst.mu.RLock()
+	defer mockDst.mu.RUnlock()
+	if len(mockDst.WriteTracker) != 1 || !strings.HasPrefix(mockDst.WriteTracker[0], "hostname=good.com/") {
+		t.Errorf("Expected good.com to be archived regardless, got %v", mockDst.WriteTracker)
+	}
+}
+
 func TestProcessHostnameIncremental_SkipRedundant(t *testing.T) {
 	mockSrc := NewMockStorageClient()
 	mockDst := NewMockStorageClient()

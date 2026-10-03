@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -116,7 +117,9 @@ func (d *Dumper) Run(ctx context.Context) error {
 				}
 
 				if err != nil {
-					errCh <- fmt.Errorf("failed processing %s: %w", hostname, err)
+					err = fmt.Errorf("failed processing %s: %w", hostname, err)
+					log.Println(err)
+					errCh <- err
 				}
 
 				current := atomic.AddInt32(&processedCount, 1)
@@ -135,15 +138,10 @@ func (d *Dumper) Run(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 	if len(errs) > 0 {
-		log.Printf("Encountered %d errors during hostname processing", len(errs))
-		for i, err := range errs {
-			if i < 5 {
-				log.Println(err)
-			}
-		}
-		if len(errs) > 5 {
-			log.Println("... and more")
-		}
+		// Each one was logged as it happened. Returning them is what makes the
+		// process exit non-zero, so a scheduled run that lost hosts shows up
+		// as failed rather than as a quiet line in its log.
+		return fmt.Errorf("%d of %d hostnames failed: %w", len(errs), len(hostnames), errors.Join(errs...))
 	}
 
 	log.Println("Run completed successfully")
