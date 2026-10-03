@@ -333,6 +333,7 @@ describe("/admin/procesy", () => {
       "extraction_import",
     ]);
     expect(jobsIn("scheduled")).toEqual([
+      "nightly",
       "krs_scrape_free",
       "krs_scrape_paid",
       "krs_odpis",
@@ -369,6 +370,7 @@ describe("/admin/procesy", () => {
       extraction_import: "never",
       krs_odpis: "never",
       krs_register_owners: "never",
+      nightly: "never",
       people_import: "never",
       compressor: "stale",
       firestore_export: "ok",
@@ -404,7 +406,7 @@ describe("/admin/procesy", () => {
         .join(" ");
     expect(stat("running")).toBe("1 w toku");
     expect(stat("ok")).toBe("3 działa");
-    expect(stat("never")).toBe("6 brak raportów");
+    expect(stat("never")).toBe("7 brak raportów");
     // Only the counts that happen to be non-zero beyond the three always shown.
     expect(page.find('[data-stat="stopped"]').exists()).toBe(false);
     expect(page.find('[data-stat="partial"]').exists()).toBe(false);
@@ -552,7 +554,7 @@ describe("/admin/procesy", () => {
     const page = await mountPage();
     const row = rowOf(page, "firestore_export");
     expect(row.get("[data-row-last]").text()).toBe("04:00 · 7 min");
-    expect(row.get("[data-row-next]").text()).toBe("następne: 3.10, 04:00");
+    expect(row.get("[data-row-next]").text()).toBe("następne: 3.10, 00:00");
     await row.get("[data-row-toggle]").trigger("click");
     expect(row.get("[data-probe]").text()).toContain(
       "date=2026-10-02T02:00:01_12345",
@@ -694,7 +696,7 @@ describe("/admin/procesy", () => {
     await page.get("[data-jobs-refresh]").trigger("click");
     await flushPromises();
     expect(page.text()).toContain("Nie udało się odświeżyć procesów: offline");
-    expect(page.findAll("[data-job]")).toHaveLength(13);
+    expect(page.findAll("[data-job]")).toHaveLength(14);
   });
 
   it("says so when the first load fails", async () => {
