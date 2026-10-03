@@ -11,10 +11,13 @@ import pandas as pd
 
 from analysis.extract import Extract
 from analysis.payloads.election import get_election_type
+from analysis.payloads.priority import Pick, prioritised
 from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
 from analysis.utils import as_sequence
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
+from scrapers.koryta.download import KorytaPeople
+from scrapers.krs.columns import is_public
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
 from util.polish import format_person_name
@@ -154,6 +157,40 @@ class PeoplePayloads(Pipeline[Person]):
         if self._snapshot is None:
             self._snapshot = SiteSnapshot.read(ctx, self.args.koryta_date)
         return self._snapshot
+
+    def prioritised(self, ctx: Context, today: date, recent_days: int) -> list[Pick]:
+        """Both halves of `--all` in the order a capped upload sends them.
+
+        New hires the site lacks first, then the published pages that would
+        change, then the other pages that would - see `analysis.payloads.priority`.
+        One build for what would otherwise take two runs, `--not-on-koryta` and
+        `--on-koryta --only-changed`, each guarded as that run would be.
+        """
+        people_df = self.registered_people(ctx)
+        payloads = [
+            self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
+        ]
+        snapshot = self.site_snapshot(ctx)
+        return prioritised(
+            missing_from_koryta(payloads, snapshot),
+            matching_one_page(payloads, snapshot),
+            snapshot,
+            public_krs=self.people.public_companies(ctx),
+            published_ids=self.published_people(ctx),
+            today=today,
+            recent_days=recent_days,
+        )
+
+    def published_people(self, ctx: Context) -> set[str]:
+        """Node ids of the person pages the export shows as published.
+
+        `stats.isApproved`, as `KorytaPeople` keeps it: the site's own reading
+        of `pageIsPublic`, which can trail a publish by a recompute.
+        """
+        people = KorytaPeople(self.args.koryta_date).read_or_process(ctx)
+        if people.empty or "is_public" not in people:
+            return set()
+        return set(people.loc[is_public(people["is_public"]), "id"].astype(str))
 
     def only_changed(self, ctx: Context, people: list[Person]) -> list[Person]:
         """The payloads that would write something, and a note of what.
