@@ -31,9 +31,26 @@ func (c *Client) Close() error {
 	return c.client.Close()
 }
 
+// listAttrs are the only object attributes a listing asks for. Without a
+// selection GCS returns all of them (checksums, links, metadata and so on)
+// for every object, and a run lists every object of every host it archives.
+var listAttrs = []string{"Name", "Size", "Updated"}
+
+func newQuery(prefix, delimiter string) (*storage.Query, error) {
+	q := &storage.Query{Prefix: prefix, Delimiter: delimiter}
+	if err := q.SetAttrSelection(listAttrs); err != nil {
+		return nil, fmt.Errorf("failed to select listing fields: %w", err)
+	}
+	return q, nil
+}
+
 func (c *Client) ListObjects(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, error) {
+	q, err := newQuery(prefix, "")
+	if err != nil {
+		return nil, err
+	}
 	var objects []*storage.ObjectAttrs
-	it := c.bucket.Objects(ctx, &storage.Query{Prefix: prefix})
+	it := c.bucket.Objects(ctx, q)
 	for {
 		attrs, err := it.Next()
 		if err == iterator.Done {
@@ -52,8 +69,14 @@ func (c *Client) ListObjects(ctx context.Context, prefix string) ([]*storage.Obj
 }
 
 func (c *Client) ListPrefixes(ctx context.Context, prefix string) ([]string, error) {
+	// The selection keeps prefixes: the client always asks for them
+	// alongside the selected object fields.
+	q, err := newQuery(prefix, "/")
+	if err != nil {
+		return nil, err
+	}
 	var prefixes []string
-	it := c.bucket.Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: "/"})
+	it := c.bucket.Objects(ctx, q)
 	for {
 		attrs, err := it.Next()
 		if err == iterator.Done {
