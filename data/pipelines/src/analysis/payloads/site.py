@@ -153,6 +153,26 @@ SKARB_PANSTWA_NODE_ID = "qMsAXmM5nDGNdUqmQpWR"
 
 Edge = dict[str, typing.Any]
 
+#: A reason a payload would write something, and the day the fact it writes
+#: dates from (`SiteSnapshot.dated_changes`), or None when it has no date.
+Change = tuple[str, str | None]
+
+
+def day_of(value: typing.Any) -> str | None:
+    """A payload's date as `YYYY-MM-DD`, or None for no date at all.
+
+    The register's dates reach a payload as ISO strings, but one built off a
+    pandas row can hold a date or a Timestamp, and an unset one NaN.
+    """
+    if value is None or value is pd.NaT:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    if hasattr(value, "isoformat"):
+        value = value.isoformat()
+    text = str(value)[:10]
+    return text or None
+
 
 def field(edge: typing.Mapping[str, typing.Any], name: str) -> typing.Any:
     """One writer's "unset" read as another's.
@@ -365,20 +385,32 @@ class SiteSnapshot:
         what tell a reader whether a run is 300 new people or 3000 candidacies
         waiting on a committee.
         """
+        return [reason for reason, _ in self.dated_changes(payload)]
+
+    def dated_changes(self, payload: typing.Mapping[str, typing.Any]) -> list[Change]:
+        """`changes`, each with the day the fact it writes dates from.
+
+        An employment the site lacks dates from its start, a candidacy from the
+        first day of its election year; the person's own fields and a mention
+        carry no date (None). It is how a capped upload sends the newest news
+        first (`analysis.payloads.priority`): the day a post began, not the day
+        anybody noticed, since neither the crawl nor the export says when a
+        fact first arrived.
+        """
         stored = self.person_for(payload)
         if stored is None:
-            return [NEW_PERSON]
+            return [(NEW_PERSON, None)]
 
         person_id = str(stored["id"])
-        reasons: list[str] = []
+        changes: list[Change] = []
         if self._person_learns(stored, payload):
-            reasons.append(PERSON_FIELDS)
+            changes.append((PERSON_FIELDS, None))
 
         matcher = _EdgeMatcher(self)
-        reasons += self._employment_changes(matcher, person_id, payload)
-        reasons += self._mention_changes(matcher, person_id, payload)
-        reasons += self._candidacy_changes(matcher, person_id, payload)
-        return reasons
+        changes += self._employment_changes(matcher, person_id, payload)
+        changes += self._mention_changes(matcher, person_id, payload)
+        changes += self._candidacy_changes(matcher, person_id, payload)
+        return changes
 
     def _person_learns(
         self, stored: dict, payload: typing.Mapping[str, typing.Any]
@@ -625,15 +657,16 @@ class SiteSnapshot:
         matcher: "_EdgeMatcher",
         person_id: str,
         payload: typing.Mapping[str, typing.Any],
-    ) -> list[str]:
-        reasons = []
+    ) -> list[Change]:
+        reasons: list[Change] = []
         for company in _rows(payload.get("companies")):
+            started = day_of(company.get("start"))
             krs = company.get("krs")
             company_id = self.companies.get(str(krs)) if krs else None
             if company_id is None:
                 # The ingest answers 404 and writes nothing at all, and the
                 # uploader creates the company and posts the person again.
-                reasons.append(MISSING_COMPANY)
+                reasons.append((MISSING_COMPANY, started))
                 continue
             edge: Edge = {
                 "type": "employed",
@@ -646,7 +679,7 @@ class SiteSnapshot:
             if company.get("end"):
                 edge["end_date"] = company["end"]
             if matcher.place(edge) != "same":
-                reasons.append(NEW_EMPLOYMENT)
+                reasons.append((NEW_EMPLOYMENT, started))
         return reasons
 
     def _mention_changes(
@@ -654,12 +687,12 @@ class SiteSnapshot:
         matcher: "_EdgeMatcher",
         person_id: str,
         payload: typing.Mapping[str, typing.Any],
-    ) -> list[str]:
-        reasons = []
+    ) -> list[Change]:
+        reasons: list[Change] = []
         for url in payload.get("sources") or []:
             article_id = self.articles.get(str(url))
             if article_id is None:
-                reasons.append(MISSING_ARTICLE)
+                reasons.append((MISSING_ARTICLE, None))
                 continue
             edge: Edge = {
                 "source": person_id,
@@ -667,7 +700,7 @@ class SiteSnapshot:
                 "type": "mentions",
             }
             if matcher.place(edge) != "same":
-                reasons.append(NEW_MENTION)
+                reasons.append((NEW_MENTION, None))
         return reasons
 
     def _candidacy_changes(
@@ -675,9 +708,11 @@ class SiteSnapshot:
         matcher: "_EdgeMatcher",
         person_id: str,
         payload: typing.Mapping[str, typing.Any],
-    ) -> list[str]:
-        reasons = []
+    ) -> list[Change]:
+        reasons: list[Change] = []
         for election in _rows(payload.get("elections")):
+            year = election.get("election_year")
+            held = f"{year}-01-01" if year else None
             region_id = self._region_of(election)
             if region_id is _SKIPPED:
                 continue
@@ -685,7 +720,7 @@ class SiteSnapshot:
                 # The ingest reports this candidacy and writes nothing, so
                 # sending the payload for it achieves nothing either. Counted
                 # rather than acted on - see `INFORMATIONAL_REASONS`.
-                reasons.append(UNRESOLVED_REGION)
+                reasons.append((UNRESOLVED_REGION, held))
                 continue
             edge: Edge = {
                 "source": person_id,
@@ -710,9 +745,9 @@ class SiteSnapshot:
                 case "same":
                     pass
                 case "enriches":
-                    reasons.append(ENRICHED_CANDIDACY)
+                    reasons.append((ENRICHED_CANDIDACY, held))
                 case _:
-                    reasons.append(NEW_CANDIDACY)
+                    reasons.append((NEW_CANDIDACY, held))
         return reasons
 
     def _region_of(self, election: typing.Mapping[str, typing.Any]):
