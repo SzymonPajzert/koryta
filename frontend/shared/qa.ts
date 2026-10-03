@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "admin-procesy-noc",
+    title: "Procesy: noc na maszynie koryta-nightly",
+    description:
+      "Na /admin/procesy jest nowy wiersz „Noc na maszynie koryta-nightly”: jedna maszyna co noc pobiera KRS, przelicza potoki, sprawdza bazę, wysyła do 100 osób i uzupełnia lustro, a każdy krok widać jako etap. Kopia bazy robi się teraz o północy, nie o 04:00.",
+    steps: [
+      "Otwórz /admin/procesy i rozwiń „Noc na maszynie koryta-nightly” - ma pokazać harmonogram „codziennie o 00:30”, polecenie koryta_nightly i zadania do wdrożenia; „Kopia bazy Firestore” ma mieć „następne:” o północy.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "admin-procesy-datascience",
     title: "Procesy dla zespołu danych",
     description:
@@ -76,7 +87,7 @@ export const QA_ITEMS: QaItem[] = [
       "Strona /admin/procesy pokazuje teraz też duże importy - osób, firm, ocen modeli i faktów z artykułów - z tym, ile stron każde uruchomienie utworzyło, ile zaktualizowało, a ilu nie udało się zapisać, oraz planowany codzienny import osób. Stronę widzi tylko właściciel serwisu.",
     steps: [
       "Otwórz /admin/procesy - w „Na żądanie” mają być też „Import firm”, „Oceny modeli” i „Import faktów z artykułów”, a w „Według harmonogramu”, pod „Kopią bazy Firestore”, „Import osób na stronę”.",
-      "Rozwiń „Import osób na stronę” - ma pokazać harmonogram „codziennie o 05:00 czasu warszawskiego”, polecenie koryta_people_import i zadania do wdrożenia; po pierwszym imporcie jego uruchomienia mają mieć liczby po polsku, np. „zaktualizowanych” i „nowych zatrudnień”.",
+      "Rozwiń „Import osób na stronę” - ma pokazać, że rusza w nocy na VM, polecenie koryta_people_import --scope priority --max-uploads 100 i zadania do wdrożenia; po pierwszym imporcie jego uruchomienia mają mieć liczby po polsku, np. „zaktualizowanych” i „nowych zatrudnień”.",
     ],
     link: "/admin/procesy",
     area: "admin",
@@ -88,7 +99,7 @@ export const QA_ITEMS: QaItem[] = [
       "Nowa strona /admin/procesy pokazuje, jak idą joby, które zmieniają dane - nocne pobieranie KRS, zapytania do rejestr.io, kompresję lustra, kopię bazy, crawl artykułów i zapisy z rozszerzenia: co trwa i jak daleko doszło, co się nie udało, co nie wystartowało o swojej porze i co od dawna milczy. Na górze jest liczba procesów, które wymagają uwagi, a ich wiersze są od razu rozwinięte. Stronę widzi tylko właściciel serwisu.",
     steps: [
       "Otwórz /admin/procesy - mają być trzy sekcje: „Na żądanie”, „Według harmonogramu” i „Ciągłe”, a nad nimi blok z liczbą procesów wymagających uwagi i „Odświeżono” z godziną.",
-      "Rozwiń „Kopia bazy Firestore” - ma pokazać folder ostatniej kopii z godziną startu i końca, a w wierszu „następne:” z jutrzejszą 04:00.",
+      "Rozwiń „Kopia bazy Firestore” - ma pokazać folder ostatniej kopii z godziną startu i końca, a w wierszu „następne:” z najbliższą północą.",
       "Rozwiń „Zapis artykułu z rozszerzenia” - ma pokazać liczby zapisów z ostatnich 7 dni i ostatnie zapisane strony, każdą z linkiem do artykułu.",
     ],
     link: "/admin/procesy",
