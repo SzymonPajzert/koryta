@@ -643,8 +643,9 @@ def test_each_phase_is_reported_as_it_begins_and_each_company_as_it_is_done(
         lambda sleep_time: bulletin.BulletinRun(fetched=["2026-10-02"]),
     )
     monkeypatch.setattr(job, "build_queue", lambda: ("ctx", [company(1), company(2)]))
+    monkeypatch.setattr(job, "answered_today", lambda ctx, day: set())
 
-    def scrape(ctx, queries, sleep_time, summary, should_stop, progress):
+    def scrape(ctx, queries, sleep_time, summary, should_stop, progress, **kwargs):
         for _ in queries:
             summary.answered += 2
             summary.queries_done += 1

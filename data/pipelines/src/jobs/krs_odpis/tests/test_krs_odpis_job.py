@@ -393,7 +393,9 @@ def run_reported(monkeypatch, answers, asks_, client=None, status=None):
     monkeypatch.setattr(
         search,
         "fetch_odpis_pdf",
-        lambda krs, register="P", full=True, session=None: answers(krs, register),
+        lambda krs, register="P", full=True, session=None, timeout=60.0: answers(
+            krs, register
+        ),
     )
     monkeypatch.setattr(job, "warsaw_day", lambda: TODAY)
     status = status or RecordingRun()

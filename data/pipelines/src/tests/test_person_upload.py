@@ -17,7 +17,6 @@ def uploader() -> PersonUploader:
     """A PersonUploader without its constructor, which performs a browser login."""
     instance = object.__new__(PersonUploader)
     instance.args = MagicMock(endpoint="http://localhost:3000")
-    instance.headers = {}
     instance.unplaced = collections.Counter()
     return instance
 
