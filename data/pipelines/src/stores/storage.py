@@ -43,6 +43,11 @@ _listings_lock = threading.Lock()
 LISTING_FIELDS = "items(name,size),nextPageToken"
 
 
+#: The user the nightly VM backs its pipeline outputs up as (data/nightly).
+#: A restore prefers its backups to anybody's but the restoring user's own.
+MAIN_USER = "main"
+
+
 def _backup_datetime(blob) -> str:
     """The `datetime=` segment of a backup's name; ISO, so it sorts by time."""
     for part in blob.name.split("/"):
@@ -604,10 +609,11 @@ class Client:
     def _latest_backup_blob(self, filename: str):
         """The most recent versioned backup blob for a filename.
 
-        Prefers backups from the current user. If none exist for the current
-        user, lists available users and prompts for a choice - or, with nobody
-        at a terminal to choose, takes the newest backup whoever wrote it.
-        Raises FileNotFoundError when no backups exist at all.
+        Prefers the newest of the current user's backups and `MAIN_USER`'s,
+        the nightly run's. If neither has one, lists available users and
+        prompts for a choice - or, with nobody at a terminal to choose, takes
+        the newest backup whoever wrote it. Raises FileNotFoundError when no
+        backups exist at all.
         """
         prefix = f"filename={filename}/"
         bucket = self.storage_client.bucket(SHARED_BUCKET)
@@ -632,7 +638,20 @@ class Client:
                 user_blobs.setdefault(user, []).append(blob)
 
         current_user = get_username()
-        if current_user not in user_blobs and not interactive():
+        # Whose backups are trusted without asking: the user's own, and the
+        # nightly run's, which rebuilds everything from the newest crawl and
+        # export every night - so a machine that built something last week
+        # takes this morning's copy rather than its own older one. "Newest"
+        # compares the names' `datetime=`, each in its writer's clock (the VM
+        # writes Warsaw time); within those two hours the pick can be wrong.
+        trusted = [
+            blob
+            for user in dict.fromkeys((current_user, MAIN_USER))
+            for blob in user_blobs.get(user, [])
+        ]
+        if trusted:
+            return max(trusted, key=_backup_datetime)
+        if not interactive():
             # A scheduled run under its own name has no backups of what it
             # never builds itself, and nobody to ask whose to take.
             newest = max(
