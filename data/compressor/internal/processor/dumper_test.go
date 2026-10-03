@@ -1,9 +1,20 @@
 package processor
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"math/rand/v2"
+	"reflect"
+	"runtime"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/koryta/compressor/internal/config"
 )
@@ -86,8 +97,80 @@ func TestProcessHostnameIncremental(t *testing.T) {
 		t.Fatalf("ObjectExists failed: %v", err)
 	}
 	if !exists {
-		t.Errorf("Expected incremental dump %s to exist, but it doesn't", destPath)
+		t.Fatalf("Expected incremental dump %s to exist, but it doesn't", destPath)
 	}
+
+	// And that it reads back whole, the way the Python mirror opens it:
+	// index.txt first, then every file up to yesterday and nothing from today.
+	members := readTarGz(t, mockDst.file(destPath))
+	if len(members) == 0 || members[0].name != "index.txt" {
+		t.Fatalf("Expected index.txt as the first member, got %v", members)
+	}
+	index := strings.Fields(members[0].content)
+	sort.Strings(index)
+	wantIndex := []string{
+		"hostname=example.com/date=2026-05-01.json",
+		"hostname=example.com/date=2026-05-02.json",
+	}
+	if !reflect.DeepEqual(index, wantIndex) {
+		t.Errorf("index.txt lists %v, want %v", index, wantIndex)
+	}
+	wantFiles := map[string]string{
+		"example.com/date=2026-05-01.json": "data1",
+		"example.com/date=2026-05-02.json": "data2",
+	}
+	if got := filesIn(t, members); !reflect.DeepEqual(got, wantFiles) {
+		t.Errorf("Archive holds %v, want %v", got, wantFiles)
+	}
+}
+
+type tarMember struct {
+	name, content string
+}
+
+// readTarGz unpacks an archive, failing the test unless both the tar and the
+// gzip stream around it are complete.
+func readTarGz(t *testing.T, archive []byte) []tarMember {
+	t.Helper()
+	gr, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		t.Fatalf("Archive is not gzip: %v", err)
+	}
+	tr := tar.NewReader(gr)
+	var members []tarMember
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Archive is not a complete tar: %v", err)
+		}
+		content, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatalf("Reading %s from the archive: %v", hdr.Name, err)
+		}
+		members = append(members, tarMember{hdr.Name, string(content)})
+	}
+	// Read on to the gzip trailer, which is where its checksum is verified.
+	if _, err := io.Copy(io.Discard, gr); err != nil {
+		t.Fatalf("Archive's gzip stream is incomplete: %v", err)
+	}
+	return members
+}
+
+// filesIn maps the archived files, everything after index.txt, to their
+// contents.
+func filesIn(t *testing.T, members []tarMember) map[string]string {
+	t.Helper()
+	files := make(map[string]string)
+	for _, m := range members[1:] {
+		if _, dup := files[m.name]; dup {
+			t.Errorf("%s is in the archive twice", m.name)
+		}
+		files[m.name] = m.content
+	}
+	return files
 }
 
 func TestRunConcurrency(t *testing.T) {
@@ -268,5 +351,166 @@ func TestRunHostnameFilterSkipsDiscovery(t *testing.T) {
 
 	if got := mockSrc.PrefixCalls.Load(); got != 0 {
 		t.Errorf("Expected no hostname discovery, got %d ListPrefixes calls", got)
+	}
+}
+
+// A download that fails part way through an archive must not leave the
+// archive behind: whatever sits under the final name is what the next
+// incremental run builds on.
+func TestFailedDownloadPublishesNothing(t *testing.T) {
+	ctx := context.Background()
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	for day := 1; day <= 6; day++ {
+		name := fmt.Sprintf("hostname=example.com/date=2026-05-%02d.json", day)
+		mockSrc.AddObject(name, 4, []byte("data"))
+	}
+	errRead := errors.New("read failed")
+	mockSrc.ErrReadFor = map[string]error{"hostname=example.com/date=2026-05-04.json": errRead}
+
+	dumper := NewDumper(mockSrc, mockDst, &config.Config{Incremental: true, DownloadWorkers: 2})
+	err := dumper.processHostnameIncremental(ctx, "example.com", "2026-05-28", "2026-05-27")
+	if !errors.Is(err, errRead) {
+		t.Fatalf("Expected the read error, got %v", err)
+	}
+
+	destPath := "hostname=example.com/from=2025-01-01/date=2026-05-27.tar.gz"
+	if exists, _ := mockDst.ObjectExists(ctx, destPath); exists {
+		t.Errorf("A partial archive was published as %s", destPath)
+	}
+	if written := mockDst.written(); len(written) != 0 {
+		t.Errorf("Expected nothing written, got %v", written)
+	}
+}
+
+func TestRunFailsWhenADownloadFails(t *testing.T) {
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	for day := 1; day <= 3; day++ {
+		for _, host := range []string{"good.com", "bad.com"} {
+			name := fmt.Sprintf("hostname=%s/date=2026-05-%02d.json", host, day)
+			mockSrc.AddObject(name, 4, []byte("data"))
+		}
+	}
+	errRead := errors.New("read failed")
+	mockSrc.ErrReadFor = map[string]error{"hostname=bad.com/date=2026-05-02.json": errRead}
+
+	err := NewDumper(mockSrc, mockDst, &config.Config{Incremental: true}).Run(context.Background())
+	if !errors.Is(err, errRead) {
+		t.Fatalf("Expected Run to fail with the read error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "1 of 2 hostnames failed") {
+		t.Errorf("Expected the error to count the failed host, got: %v", err)
+	}
+
+	written := mockDst.written()
+	if len(written) != 1 || !strings.HasPrefix(written[0], "hostname=good.com/") {
+		t.Errorf("Expected only good.com to be archived, got %v", written)
+	}
+}
+
+// An archive smaller than the writer's 16 MiB chunk goes to GCS in a single
+// request made inside Close, so Close is the only place a refused upload
+// shows. On a VM with a read-only storage scope that is every such archive.
+func TestUploadErrorOnCloseFailsTheRun(t *testing.T) {
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	data := []byte("data")
+	mockSrc.AddObject("hostname=example.com/date=2026-05-01.json", int64(len(data)), data)
+	errClose := errors.New("googleapi: Error 403: Provided scope(s) are not authorized, forbidden")
+	mockDst.ErrClose = errClose
+
+	err := NewDumper(mockSrc, mockDst, &config.Config{Incremental: true}).Run(context.Background())
+	if !errors.Is(err, errClose) {
+		t.Fatalf("Expected Run to fail with the upload's error, got %v", err)
+	}
+	if written := mockDst.written(); len(written) != 0 {
+		t.Errorf("Expected nothing written, got %v", written)
+	}
+}
+
+// The next incremental run starts after the newest archive it finds, so a run
+// that fails has to leave that where it was. Otherwise whatever the failed run
+// could not archive is skipped for good.
+func TestFailedRunDoesNotMoveTheChainForward(t *testing.T) {
+	ctx := context.Background()
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	// The last good run archived everything up to 05-25.
+	mockDst.AddObject("hostname=example.com/from=2025-01-01/date=2026-05-25.tar.gz", 100, []byte("tarball"))
+	mockSrc.AddObject("hostname=example.com/date=2026-05-26.json", 5, []byte("day26"))
+	mockSrc.AddObject("hostname=example.com/date=2026-05-27.json", 5, []byte("day27"))
+	mockSrc.ErrReadFor = map[string]error{"hostname=example.com/date=2026-05-26.json": errors.New("read failed")}
+
+	dumper := NewDumper(mockSrc, mockDst, &config.Config{Incremental: true})
+	if err := dumper.processHostnameIncremental(ctx, "example.com", "2026-05-28", "2026-05-27"); err == nil {
+		t.Fatal("Expected the run with a failed download to fail")
+	}
+
+	// A day later the object reads fine.
+	mockSrc.mu.Lock()
+	mockSrc.ErrReadFor = nil
+	mockSrc.mu.Unlock()
+	mockSrc.AddObject("hostname=example.com/date=2026-05-28.json", 5, []byte("day28"))
+	if err := dumper.processHostnameIncremental(ctx, "example.com", "2026-05-29", "2026-05-28"); err != nil {
+		t.Fatalf("Next run failed: %v", err)
+	}
+
+	want := "hostname=example.com/from=2026-05-25/date=2026-05-28.tar.gz"
+	if written := mockDst.written(); !reflect.DeepEqual(written, []string{want}) {
+		t.Fatalf("Expected only %s to be written, got %v", want, written)
+	}
+	wantFiles := map[string]string{
+		"example.com/date=2026-05-26.json": "day26",
+		"example.com/date=2026-05-27.json": "day27",
+		"example.com/date=2026-05-28.json": "day28",
+	}
+	if got := filesIn(t, readTarGz(t, mockDst.file(want))); !reflect.DeepEqual(got, wantFiles) {
+		t.Errorf("Archive holds %v, want %v", got, wantFiles)
+	}
+}
+
+// When writing the archive fails, the downloads have to stop with it. The
+// workers used to stay blocked sending to a channel nobody read any more,
+// holding on to the files they had fetched, for every archive that failed.
+func TestWriteErrorStopsTheDownloads(t *testing.T) {
+	ctx := context.Background()
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	// Incompressible and far more than gzip buffers, so the writer is handed
+	// bytes, and fails, while files are still being appended.
+	rng := rand.NewChaCha8([32]byte{})
+	var files []FileInfo
+	for i := range 64 {
+		data := make([]byte, 32<<10)
+		rng.Read(data)
+		name := fmt.Sprintf("hostname=example.com/date=2026-05-01/%02d.html", i)
+		mockSrc.AddObject(name, int64(len(data)), data)
+		files = append(files, FileInfo{Name: name, Hostname: "example.com", Date: "2026-05-01", Size: int64(len(data))})
+	}
+	errWrite := errors.New("chunk upload failed")
+	mockDst.ErrWrite = errWrite
+	mockDst.ErrWriteAfter = 64 << 10
+
+	dumper := NewDumper(mockSrc, mockDst, &config.Config{DownloadWorkers: 4})
+	before := runtime.NumGoroutine()
+	err := dumper.createTarGz(ctx, "hostname=example.com/date=2026-05-01.tar.gz", files, "index\n")
+	if !errors.Is(err, errWrite) {
+		t.Fatalf("Expected the write error, got %v", err)
+	}
+
+	for deadline := time.Now().Add(5 * time.Second); runtime.NumGoroutine() > before; {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d goroutines left running after createTarGz returned, %d before it started", runtime.NumGoroutine(), before)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if written := mockDst.written(); len(written) != 0 {
+		t.Errorf("Expected nothing written, got %v", written)
 	}
 }
