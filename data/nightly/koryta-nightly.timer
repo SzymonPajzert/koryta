@@ -1,0 +1,18 @@
+# Starts the night run at 00:30 Warsaw - on the VM the instance schedule has
+# just booted (at 00:15), or on one somebody left running, which is then
+# powered off afterwards as on any other night (unless /etc/koryta/stay-up).
+#
+# Persistent: a boot after 00:30 - the schedule may start the VM up to 15
+# minutes late - catches up at once. A boot much later (somebody starting the
+# VM at noon after a missed night) catches up too, and night.sh then refuses to
+# run outside the night window.
+
+[Unit]
+Description=Start the koryta night run at 00:30 Warsaw
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 Europe/Warsaw
+Persistent=true
+
+[Install]
+WantedBy=timers.target
