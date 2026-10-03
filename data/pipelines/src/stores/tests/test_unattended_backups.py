@@ -100,3 +100,41 @@ def test_without_a_username_a_scheduled_run_fails_instead_of_asking(
 
     with pytest.raises(ValueError, match="USERNAME"):
         user.get_username()
+
+
+MAIN = "filename=people_merged/user=main/datetime=2026-09-30T01:10:00/backup.tar.gz"
+
+
+@pytest.mark.parametrize("watched", [False, True])
+def test_the_nightly_runs_newer_backup_wins_over_ones_own_older(monkeypatch, watched):
+    monkeypatch.setattr(storage, "interactive", lambda: watched)
+    monkeypatch.setattr(storage, "get_username", lambda: "romb")
+
+    blob = client([*BACKUPS, MAIN])._latest_backup_blob("people_merged")
+
+    assert blob.name == MAIN
+
+
+def test_ones_own_newer_backup_wins_over_the_nightly_runs(monkeypatch, nobody_watching):
+    monkeypatch.setattr(storage, "get_username", lambda: "mp")
+
+    blob = client([*BACKUPS, MAIN])._latest_backup_blob("people_merged")
+
+    assert blob.name == BACKUPS[2]
+
+
+def test_without_backups_of_its_own_a_run_takes_the_nightly_runs(monkeypatch):
+    monkeypatch.setattr(storage, "interactive", lambda: True)
+    monkeypatch.setattr(storage, "get_username", lambda: "someone-else")
+
+    def no_prompts(*args):
+        raise AssertionError("asked whose backup to take")
+
+    monkeypatch.setattr(storage, "pick_user", no_prompts)
+    newer_elsewhere = MAIN.replace("user=main", "user=mp").replace("09-30", "10-01")
+
+    blob = client([*BACKUPS, MAIN, newer_elsewhere])._latest_backup_blob(
+        "people_merged"
+    )
+
+    assert blob.name == MAIN
