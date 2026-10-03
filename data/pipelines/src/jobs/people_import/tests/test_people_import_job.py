@@ -103,6 +103,10 @@ class World:
         self.runs: list[RecordingRun] = []
         self.built: list[dict] = []
         self.tokens = Tokens(self.events)
+        #: A priority run's build, and what it remembers sending.
+        self.candidates: list[build.Candidate] = []
+        self.already_sent: set[tuple[str, str]] = set()
+        self.memory_since: list[str] = []
 
     def run(self) -> RecordingRun:
         [run] = self.runs
@@ -693,3 +697,179 @@ def test_the_deadline_and_sigterm_are_told_apart():
 )
 def test_pages_are_counted_in_polish(n, form):
     assert job.plural(n, "stronę", "strony", "stron") == form
+
+
+# ---------------------------------------------------------------------------
+# A priority run: new hires, then published pages, then the rest
+
+
+def candidate(name: str, tier: str, since: str | None = None) -> build.Candidate:
+    payload = {
+        "name": name,
+        "companies": [],
+        "rejestrIo": f"https://rejestr.io/osoby/{name.rsplit(maxsplit=1)[-1]}",
+    }
+    return build.Candidate(payload, tier, since)
+
+
+@pytest.fixture
+def priority(world, monkeypatch) -> World:
+    """The world, with a priority build and a memory of what was sent."""
+
+    def build_priority(koryta_date, policy, today, recent_days):
+        world.events.append("build")
+        world.built.append(
+            {"date": koryta_date, "today": today, "recent_days": recent_days}
+        )
+        return list(world.candidates)
+
+    def sent_recently(client, since):
+        world.memory_since.append(since)
+        return set(world.already_sent)
+
+    monkeypatch.setattr(job, "build_priority", build_priority)
+    monkeypatch.setattr(job, "sent_recently", sent_recently)
+    return world
+
+
+def sent_part(world: World) -> list[dict]:
+    [name] = [name for name in world.objects if name.startswith(job.SENT_PREFIX)]
+    lines = gzip.decompress(world.objects[name]).decode("utf-8").splitlines()
+    return [json.loads(line) for line in lines]
+
+
+HIRE, PUBLISHED, ON_SITE = "new_hire", "published", "on_site"
+
+
+def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Beata Kos", HIRE, "2026-09-10"),
+        candidate("Jan Kowalski", PUBLISHED, "2026-08-01"),
+        candidate("Ewa Lis", ON_SITE, None),
+    ]
+    priority.answers = [person("created"), person("created"), person("updated")]
+
+    code = job.main(["--scope", "priority", "--max-uploads", "3"])
+
+    assert code == job.EXIT_TRY_LATER
+    assert priority.sent() == ["Anna Nowak", "Beata Kos", "Jan Kowalski"]
+    summary = priority.summary()
+    assert summary["tiers"] == {HIRE: 2, PUBLISHED: 1, ON_SITE: 1}
+    assert (summary["state"], summary["stopped"]) == ("partial", "limit")
+    assert summary["created"] == ["Anna Nowak (p)", "Beata Kos (p)"]
+    assert [
+        (row["name"], row["tier"], row["outcome"]) for row in sent_part(priority)
+    ] == [
+        ("Anna Nowak", HIRE, "created"),
+        ("Beata Kos", HIRE, "created"),
+        ("Jan Kowalski", PUBLISHED, "updated"),
+    ]
+    assert summary["sent"].startswith(f"gs://{SHARED_BUCKET}/{job.SENT_PREFIX}")
+
+
+def test_new_hires_past_max_new_make_room_for_the_pages_after_them(priority):
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Beata Kos", HIRE, "2026-09-10"),
+        candidate("Jan Kowalski", PUBLISHED),
+    ]
+    priority.answers = [person("created"), person("updated")]
+
+    assert job.main(["--scope", "priority", "--max-new", "1"]) == 0
+
+    assert priority.sent() == ["Anna Nowak", "Jan Kowalski"]
+    assert priority.summary()["tiers"] == {HIRE: 1, PUBLISHED: 1, ON_SITE: 0}
+
+
+def test_a_payload_sent_unchanged_lately_is_left_out(priority):
+    unchanged = candidate("Anna Nowak", HIRE, "2026-09-30")
+    changed = candidate("Jan Kowalski", PUBLISHED)
+    priority.candidates = [unchanged, changed]
+    priority.already_sent = {
+        (job.person_key(unchanged.payload), job.payload_hash(unchanged.payload)),
+        # The same person, sent with what the payload said before: not this one.
+        (job.person_key(changed.payload), job.payload_hash({"name": "older"})),
+    }
+    priority.answers = [person("updated")]
+
+    assert job.main(["--scope", "priority"]) == 0
+
+    assert priority.sent() == ["Jan Kowalski"]
+    assert priority.summary()["already_sent"] == 1
+    [since] = priority.memory_since
+    started = date.fromisoformat(priority.summary()["started"][:10])
+    assert (started - date.fromisoformat(since)).days == 30
+
+
+def test_resend_after_0_sends_everything_again(priority):
+    priority.candidates = [candidate("Anna Nowak", PUBLISHED)]
+    priority.answers = [person("updated")]
+
+    assert job.main(["--scope", "priority", "--resend-after", "0"]) == 0
+
+    assert priority.memory_since == []
+    assert priority.sent() == ["Anna Nowak"]
+
+
+def test_a_page_made_for_somebody_planned_onto_a_page_stops_the_run(priority):
+    priority.candidates = [
+        candidate("Jan Kowalski", PUBLISHED),
+        candidate("Ewa Lis", ON_SITE),
+    ]
+    priority.answers = [person("created", "new-node")]
+
+    assert job.main(["--scope", "priority"]) == job.EXIT_FAILED
+
+    assert priority.sent() == ["Jan Kowalski"]
+    summary = priority.summary()
+    assert summary["state"] == "failed"
+    assert summary["stopped"].startswith("utworzył stronę dla osoby, która już ma")
+    assert "utworzona strona: Jan Kowalski (new-node)" in summary["errors"]
+
+
+def test_what_the_site_refused_is_not_remembered_as_sent(priority):
+    priority.candidates = [
+        candidate("Jan Kowalski", PUBLISHED),
+        candidate("Ewa Lis", ON_SITE),
+    ]
+    priority.answers = [REFUSED, person("unchanged")]
+
+    job.main(["--scope", "priority"])
+
+    assert [row["name"] for row in sent_part(priority)] == ["Ewa Lis"]
+
+
+def test_a_priority_dry_run_shows_the_tiers_and_writes_nothing(priority, capsys):
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Jan Kowalski", PUBLISHED),
+        candidate("Ewa Lis", ON_SITE),
+    ]
+
+    assert job.main(["--scope", "priority", "--dry-run", "--max-uploads", "2"]) == 0
+
+    assert priority.sent() == []
+    assert priority.objects == {}
+    out = capsys.readouterr().out
+    assert "The first 2 (--max-uploads) by tier:" in out
+    assert "'new_hire': 1, 'published': 1, 'on_site': 0" in out
+
+
+def test_a_priority_run_may_create_as_many_pages_as_it_sends():
+    args = job.parse_args(["--scope", "priority", "--max-uploads", "100"])
+
+    assert (args.max_new, args.recent_days, args.resend_after) == (100, 30, 30)
+    assert job.parse_args(["--scope", "priority", "--max-new", "10"]).max_new == 10
+
+
+def test_planning_keeps_the_order_and_tells_a_person_from_their_payload():
+    first = candidate("Anna Nowak", HIRE)
+    second = candidate("Beata Kos", HIRE)
+    page = candidate("Jan Kowalski", PUBLISHED)
+    sent = {(job.person_key(second.payload), job.payload_hash(second.payload))}
+
+    planned, skipped = job.plan_priority([first, second, page], sent, max_new=5)
+
+    assert [c.payload["name"] for c in planned] == ["Anna Nowak", "Jan Kowalski"]
+    assert skipped == 1
