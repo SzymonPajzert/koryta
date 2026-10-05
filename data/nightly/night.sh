@@ -9,13 +9,16 @@
 #                               window, and the VM powers off when it is over
 #   night.sh --force [ARGS...]  a run by hand, at any time, never powering
 #                               off; ARGS go to koryta_nightly, e.g.
-#                               --only people_import, or --dry-run
+#                               --only people, or --dry-run
 #
-# By hand, the way the service runs it:
+# By hand, the way the service runs it - a service of its own, which a dropped
+# SSH connection does not end (`--pty` would: koryta_nightly handles only
+# SIGTERM, and a hangup kills it):
 #   sudo systemd-run --unit=koryta-nightly-manual --uid=koryta --gid=koryta \
 #     --property=EnvironmentFile=/etc/koryta/nightly.env \
-#     --property=StateDirectory=koryta-nightly --pty --wait \
+#     --property=StateDirectory=koryta-nightly \
 #     /home/koryta/koryta/data/nightly/night.sh --force
+#   journalctl -u koryta-nightly-manual -f
 set -euo pipefail
 
 # bash reads a script while it runs it, and the checkout below can rewrite

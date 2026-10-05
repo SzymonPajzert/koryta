@@ -109,10 +109,16 @@ and Secret Manager.
    gcloud compute ssh koryta-nightly --zone=europe-central2-b --project=koryta-pl
    sudo systemd-run --unit=koryta-nightly-manual --uid=koryta --gid=koryta \
      --property=EnvironmentFile=/etc/koryta/nightly.env \
-     --property=StateDirectory=koryta-nightly --pty --wait \
+     --property=StateDirectory=koryta-nightly \
      /home/koryta/koryta/data/nightly/night.sh --force --people-dry-run \
        --export-max-age 24
+   journalctl -u koryta-nightly-manual -f   # Ctrl-C leaves the night running
    ```
+
+   The run is a service of its own, as the scheduled night is: a dropped SSH
+   connection does not end it. (Not `--pty`: a hangup on its terminal would
+   kill the night, which handles only SIGTERM.) To start it again after it
+   ended, `sudo systemctl reset-failed koryta-nightly-manual` first.
 
    Then read the summary, and the log for the people step's plan
    ("Planned by tier", "The first 100 by tier"):
