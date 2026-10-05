@@ -1,6 +1,4 @@
 from analysis.article_person_mentions import ArticlePersonMentions
-from analysis.bip_documents_parsed import BipDocumentsParsed
-from analysis.bip_urls_classified import BipUrlsClassified
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
@@ -66,8 +64,6 @@ PIPELINES = [
     ArticleFactsVerified,
     ArticleAnalyzed,
     ArticlePersonMentions,
-    BipUrlsClassified,
-    BipDocumentsParsed,
     PeopleAffairTags,
     DomainToRegion,
     CompaniesKRS,

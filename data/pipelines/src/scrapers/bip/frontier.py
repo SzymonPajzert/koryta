@@ -1,7 +1,7 @@
 """Postgres-backed frontier for the BIP crawler.
 
 Tables `bip_hosts` / `bip_urls` / `bip_docs` / `bip_runs` are created once by
-hand (DDL in BIP_CRAWLER_DESIGN.md §5); this class never creates schema.
+hand (DDL in `scrapers/bip/schema.sql`); this class never creates schema.
 
 The coordinator is the only writer, so the API is deliberately coarse: claim a
 batch of URLs, mark results, keep per-host counters and finalize hosts.
