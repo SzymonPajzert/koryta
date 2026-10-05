@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "admin-procesy-datascience",
+    title: "Procesy dla zespołu danych",
+    description:
+      "Stronę /admin/procesy widzą teraz wszyscy z uprawnieniem datascience, nie tylko właściciel serwisu. Kto nie jest administratorem, ma w menu „Admin” tylko „Procesy”.",
+    steps: [
+      "Zaloguj się kontem z uprawnieniem datascience, ale bez administratora - w menu „Admin” mają być tylko „Procesy”, a /admin/procesy ma się otworzyć.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "admin-procesy-importy",
     title: "Procesy: duże importy na stronę",
     description:

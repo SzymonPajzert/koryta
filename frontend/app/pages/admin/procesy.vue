@@ -155,9 +155,10 @@ import {
 } from "~~/shared/jobs";
 
 definePageMeta({
-  // `admin` as well, though every owner is one: it is what lights the Admin
-  // menu while the page is open.
-  middleware: ["admin", "owner"],
+  // The same claim `/api/ops/jobs` asks for, and nothing besides: somebody in
+  // the group need not be an administrator. The layout lights the Admin menu
+  // on this middleware too, since that is where the page's entry is.
+  middleware: "datascience",
   // One column of rows, like the other admin lists.
   maxWidth: 1100,
 });
