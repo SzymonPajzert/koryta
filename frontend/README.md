@@ -268,6 +268,82 @@ rest of the app uses — they are not the defaults:
 pair an address with a message and only the admin SDK and the extension have
 any business there.
 
+## Roles and `set_auth_claims`
+
+Roles are Firebase Auth custom claims on one cumulative ladder - `trusted`,
+`datascience`, `admin` - plus `newAdmin` (an administrator on trial) and
+`owner` (the site's owner, who alone opens /admin/zadania), described in
+`shared/roles.ts` and `shared/roleClaims.json`. Only
+`data/pipelines/src/set_auth_claims.py` writes them, run by hand by the owner
+with his application default credentials (Auth admin and Firestore on
+`koryta-pl`). The site never changes a claim itself.
+
+1. An established administrator (`admin` without `newAdmin`) nominates
+   somebody on `/admin/uzytkownicy`: a level, a trial if it is `admin`, and a
+   reason. That stores the desired state in `roleNominations/{uid}`. The
+   account is unchanged, and the page lists it under „Czeka na skrypt”.
+2. The owner runs the script:
+
+```bash
+cd data/pipelines
+uv run set_auth_claims --dry-run   # what would change; exits 1 if anything would
+uv run set_auth_claims             # one y/N per account, N by default
+```
+
+For every nomination that differs from the account's live claims, it prints:
+
+- the account: name and address as the user set them, provider, whether the
+  address is verified, and when the account was created;
+- who nominated it, and whether they are an established administrator now (a
+  loud warning if not);
+- the reason, the role before and after, and the claims diff.
+
+Each nomination is read again when its turn comes and once more after the
+`y`: if an administrator changed or withdrew it while the owner was deciding,
+nothing is applied, and the next run asks about the new one.
+
+On `y` it does the following:
+
+- sets the claims;
+- revokes the refresh tokens if the account lost a claim that opened
+  something - not for `newAdmin` alone: ending a trial is a promotion, and
+  signs nobody out;
+- records the change on the nomination (`applied`, `trialStartedAt`) and in
+  the account's history (`userActions`);
+- sets `users/{uid}.claimsChangedAt`, so an open tab fetches a fresh token at
+  once;
+- queues a `roleChanged` mail (verified addresses only, switchable on
+  `/profil`).
+
+Some nominations are refused without a question, with the reason shown on the
+page:
+
+- the account is gone;
+- the account is a robot;
+- `datascience` or `admin` for an unverified address;
+- the owner below a plain administrator.
+
+Accounts that hold claims but have no nomination are listed at the end and
+left alone. No document never means "demote".
+
+- `uv run set_auth_claims --report` lists claim holders with no nomination,
+  nominations whose account is gone, and robot accounts. It changes nothing.
+- `uv run set_auth_claims --seed` is run **once**, when nominations ship. For
+  every account that holds a role and has no document, it writes a nomination
+  with the account's live state, so the first ordinary run does not take every
+  administrator for unnominated. A trial administrator whose document the page
+  made first only gets its trial start filled in. Then it prints where the live
+  claims differ from the table the script used to hardcode. Try it with
+  `--dry-run` first.
+- Against the dev stack's emulators, set both `FIRESTORE_EMULATOR_HOST` and
+  `FIREBASE_AUTH_EMULATOR_HOST`; the project is `demo-koryta-pl` unless
+  `GOOGLE_CLOUD_PROJECT` says otherwise. Only there does `--yes` answer every
+  question, for the end-to-end tests. One of the two without the other is
+  refused.
+
+`OWNERS` stays a constant in the script, so that no write to Firestore can make
+anybody the owner. The tests, `src/test_set_auth_claims*.py`, run in CI.
+
 ## Agent tools
 
 Claude sessions in this repo can read production data through an MCP server,
@@ -359,7 +435,9 @@ gcloud iam service-accounts add-iam-policy-binding \
   --role=roles/iam.serviceAccountTokenCreator
 # From the repo root: rules that shut the browser out of `agent-tasks` entirely.
 frontend/node_modules/.bin/firebase deploy --only firestore --config firebase.ops.json
-# And the `owner` claim, with application default credentials:
+# And the `owner` claim, with application default credentials. The owner is
+# `OWNERS` in the script and needs a nomination document like everybody else
+# (`--seed` writes it the first time; see "Roles and set_auth_claims"):
 (cd data/pipelines && uv run set_auth_claims)
 ```
 

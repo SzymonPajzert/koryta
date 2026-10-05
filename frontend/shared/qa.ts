@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "uprawnienia-z-nominacji",
+    title: "Uprawnienia nadaje skrypt z nominacji",
+    description:
+      "Właściciel serwisu nadaje uprawnienia skryptem, który czyta nominacje ze strony Użytkownicy i pyta o każdą osobno, zamiast listy wpisanej w kod. Po zmianie osoba dostaje mail.",
+    steps: [
+      "Nominuj kogoś na /admin/uzytkownicy - konto ma być w „Czeka na skrypt”.",
+      "Po uruchomieniu skryptu przez właściciela nominacja ma zniknąć z „Czeka na skrypt”, w historii konta ma być „Nadanie uprawnień skryptem”, a osoba z potwierdzonym adresem ma dostać mail „Zmiana Twoich uprawnień na koryta.pl”.",
+    ],
+    link: "/admin/uzytkownicy",
+    area: "admin",
+  },
+  {
     id: "uzytkownicy-i-nominacje",
     title: "Lista kont i nominacje na /admin/uzytkownicy",
     description:
