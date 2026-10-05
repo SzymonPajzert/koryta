@@ -139,6 +139,9 @@ class CompanyScores(Pipeline):
         scores_df = df.groupby("krs", as_index=False)[["score"]].apply(
             lambda s: normalized_scores(s, statistics)
         )
+        # Every group's Series has the one index, "score", so pandas lays them
+        # out as a frame; the stubs allow for a Series, which ragged ones make.
+        assert isinstance(scores_df, pd.DataFrame)
 
         scores_df = scores_df.rename(columns={"score": "sum_score"})
         scores_df = scores_df.sort_values(by="sum_score", ascending=False).reset_index(
