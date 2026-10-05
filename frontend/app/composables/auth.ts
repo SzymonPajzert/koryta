@@ -56,6 +56,10 @@ export function useAuthState() {
     async () =>
       await user.value?.getIdTokenResult().then((r) => !!r.claims.owner),
   );
+  const isDatascience = computedAsync(
+    async () =>
+      await user.value?.getIdTokenResult().then((r) => !!r.claims.datascience),
+  );
   const idToken = computed(() => user.value?.getIdToken());
   const auth = useFirebaseAuth()!;
 
@@ -96,6 +100,7 @@ export function useAuthState() {
     user,
     isAdmin,
     isOwner,
+    isDatascience,
     idToken,
     userConfig,
     logout,
