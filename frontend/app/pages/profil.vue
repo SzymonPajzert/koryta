@@ -124,10 +124,11 @@
         <ProfileMyRevisions />
 
         <v-card class="mb-4" rounded="lg">
-          <v-card-title>Powiadomienia o Twoich zmianach</v-card-title>
+          <v-card-title>Powiadomienia</v-card-title>
           <v-card-subtitle class="text-wrap">
             Wysyłamy je na adres, którym się logujesz — tylko wtedy, gdy ktoś
-            zajmie się czymś, co zaproponowałeś.
+            zajmie się czymś, co zaproponowałeś, albo zmienią się Twoje
+            uprawnienia.
           </v-card-subtitle>
           <v-card-text>
             <v-alert

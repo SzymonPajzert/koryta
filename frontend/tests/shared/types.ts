@@ -6,6 +6,16 @@ export type MockAuthState = {
   isAdmin?: Ref<boolean>;
   isOwner?: Ref<boolean>;
   isDatascience?: Ref<boolean>;
+  /** `admin` with `newAdmin`: an administrator on trial. */
+  isNewAdmin?: Ref<boolean>;
+  /** `admin` without `newAdmin`. */
+  isEstablishedAdmin?: Ref<boolean>;
+  /** Set once a claims change has refreshed the token; the layout shows it as
+   * a snackbar and clears it. */
+  claimsRefreshed?: Ref<boolean>;
+  /** Set when a claims change ended the session instead; shown and cleared
+   * the same way. */
+  claimsSignedOut?: Ref<boolean>;
   idToken?: Ref<string | undefined>;
   userConfig?: { data: Ref<Record<string, unknown>> };
   logout?: ReturnType<typeof vi.fn>;

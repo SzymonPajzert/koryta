@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "uprawnienia-bez-ponownego-logowania",
+    title: "Nowe uprawnienia działają bez ponownego logowania",
+    description:
+      "Gdy właściciel serwisu zmieni komuś uprawnienia, otwarta strona pobiera je sama w ciągu kilku sekund: menu na pasku się zmienia, a na dole pojawia się komunikat. Na /profil jest nowy przełącznik maila o zmianie uprawnień.",
+    steps: [
+      "Otwórz /profil - w „Powiadomieniach” ma być przełącznik „Zmiana Twoich uprawnień”, domyślnie włączony.",
+      "Zostaw stronę otwartą, aż właściciel nada Ci nowe uprawnienia - menu na pasku ma się zmienić bez odświeżania, a na dole ma się pojawić „Twoje uprawnienia się zmieniły - menu jest już aktualne.”",
+    ],
+    link: "/profil",
+    area: "contributor",
+  },
+  {
     id: "zgloszenie-ze-zrzutem-ekranu",
     title: "Do zgłoszenia można dołączyć zrzut ekranu",
     description:

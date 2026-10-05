@@ -8,6 +8,7 @@ const { mockAuthRequest, claims } = vi.hoisted(() => ({
   claims: { current: {} as Record<string, unknown> },
 }));
 
+// The flags as `useAuthState` derives them from the token's claims.
 vi.mock("~/composables/auth", () => ({
   authRequest: mockAuthRequest,
   useAuthState: () => ({
@@ -18,6 +19,11 @@ vi.mock("~/composables/auth", () => ({
       },
     },
     isAdmin: { value: true },
+    isEstablishedAdmin: {
+      get value() {
+        return claims.current.admin === true && !claims.current.newAdmin;
+      },
+    },
   }),
 }));
 
@@ -60,4 +66,27 @@ describe("/admin", () => {
 
     expect(newAdminsLink(wrapper)).toBeUndefined();
   });
+
+  it("gives an established administrator a tile for the users page", async () => {
+    claims.current = { admin: true };
+    const wrapper = await mountSuspended(AdminPage);
+    await flushPromises();
+
+    const tile = usersTile(wrapper);
+    expect(tile?.text()).toContain("Użytkownicy");
+  });
+
+  it("hides the users page from an administrator on trial", async () => {
+    // Its middleware and every route behind it would refuse them.
+    claims.current = { admin: true, newAdmin: true };
+    const wrapper = await mountSuspended(AdminPage);
+    await flushPromises();
+
+    expect(usersTile(wrapper)).toBeUndefined();
+  });
 });
+
+const usersTile = (wrapper: Awaited<ReturnType<typeof mountSuspended>>) =>
+  wrapper
+    .findAllComponents({ name: "VCard" })
+    .find((node) => node.props("to") === "/admin/uzytkownicy");

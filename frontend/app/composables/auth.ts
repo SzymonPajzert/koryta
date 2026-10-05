@@ -3,6 +3,10 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  onIdTokenChanged,
+  type Auth,
+  type ParsedToken,
+  type User,
 } from "firebase/auth";
 import { computedAsync } from "@vueuse/core";
 import {
@@ -11,7 +15,12 @@ import {
   useFirebaseAuth,
   useIsCurrentUserLoaded,
 } from "vuefire";
-import { collection, doc, getFirestore } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getFirestore,
+  type Timestamp,
+} from "firebase/firestore";
 import type { NotificationPreferences } from "~~/shared/notifications";
 
 export type NewsletterPreferences = {
@@ -33,7 +42,132 @@ export type UserConfig = {
    * /eksploruj/statystyki. Absent means no - see `shared/profile.ts`, and note
    * that `/api/stats/activity` reads this same field with the admin SDK. */
   publicProfile?: boolean;
+  /** When the claims script (data/pipelines/src/set_auth_claims.py) last
+   * changed this account's role. Written by the script after it has set the
+   * claims, so a token issued before this moment carries the old ones - see
+   * `refreshIfClaimsChanged`.
+   *
+   * Only ever a hint. The document is its owner's to write (firestore.rules),
+   * so whatever is here can at most make their own browser fetch a fresh
+   * token, and a fresh token carries what the account really holds. */
+  claimsChangedAt?: Timestamp;
 };
+
+/** Bumped whenever this tab's ID token may carry different claims.
+ *
+ * The role flags in `useAuthState` are read off `User.getIdTokenResult()`, and
+ * the `User` vuefire hands out is one object for the whole session: a new token
+ * changes what is inside it, not the object, so a computed over it never ran
+ * again. A promoted administrator kept a toolbar without "Admin" until
+ * something remounted it, or until they signed out and in, which is what
+ * everybody given a role used to be told to do. The flags read this counter as
+ * well, and everything that changes the token bumps it: a forced refresh below,
+ * and Firebase's own token listener, which also covers the hourly refresh and a
+ * refresh made in another tab (Firebase copies the token across).
+ *
+ * Module-level because the token is: one per tab, however many components ask
+ * about it.
+ */
+const claimsVersion = ref(0);
+
+/** Set when a claims change has just been fetched into this tab, so the layout
+ * can say why the menus moved. Cleared by whoever shows it. */
+const claimsRefreshed = ref(false);
+
+/** Set when fetching a claims change ended this tab's session instead, so the
+ * layout can say why the user was signed out mid-page. Cleared by whoever
+ * shows it. See `refreshIfClaimsChanged`. */
+const claimsSignedOut = ref(false);
+
+/** The errors with which Firebase refuses a refresh for good, and signs the
+ * user out as it does (`_logoutIfInvalidated` in @firebase/auth): the
+ * account's refresh tokens were revoked, or the account was disabled. */
+const SESSION_ENDED_CODES: ReadonlySet<unknown> = new Set([
+  "auth/user-token-expired",
+  "auth/user-disabled",
+]);
+
+/** The `claimsChangedAt` values this tab has acted on, as `<uid>@<millis>`.
+ *
+ * At most one refresh per change, whatever happens next. The document is live
+ * in every component that calls `useAuthState`, every snapshot of it hands over
+ * a new Timestamp object, and a refresh that fails - or returns a token that
+ * still reads as older than the stamp - would otherwise be retried on each of
+ * them for as long as the tab is open. */
+const handledClaimChanges = new Set<string>();
+
+/** The Auth instance whose token changes `claimsVersion` already counts. */
+let countedAuth: Auth | undefined;
+
+function countTokenChanges(auth: Auth | null | undefined) {
+  if (!auth || countedAuth === auth) return;
+  countedAuth = auth;
+  onIdTokenChanged(auth, () => {
+    claimsVersion.value++;
+  });
+}
+
+/** Fetches a new ID token if the claims script changed the account's claims
+ * after the current token was issued, and lets the flags know.
+ *
+ * The comparison is in whole seconds, because that is all a token's issue time
+ * has. A token minted a moment after the stamp, within the same second, would
+ * read as older than it on every page load and be refreshed - and announced -
+ * each time, for the hour until it expired. Counting only a later second as
+ * newer means the one case that slips through is a token issued in the same
+ * second as the claims changed but before them; that one catches up at its
+ * hourly refresh, as every token did before this existed.
+ *
+ * A failure is logged and never retried. The one to expect is a session the
+ * change ended: the script revokes the refresh tokens of anybody who loses a
+ * privilege (`roleLosesClaims` in shared/roles.ts - a demotion, not the end
+ * of a trial), and the owner may have revoked them or disabled the account by
+ * other means. Then the forced refresh is refused and Firebase signs the user
+ * out on the spot, which is what the revocation is for - but it happens
+ * mid-page, seconds after the stamp, and on its own it looks like the site
+ * dropping the session for no reason. So that one also raises
+ * `claimsSignedOut`, for the layout to say why and that signing in again
+ * brings what the account holds now. Anything else - a network failure, say -
+ * leaves the session as it was, and the token catches up at its hourly
+ * refresh.
+ */
+async function refreshIfClaimsChanged(
+  user: User,
+  changedAt: unknown,
+): Promise<void> {
+  const changedMs = timestampMillis(changedAt);
+  if (changedMs === null) return;
+
+  const key = `${user.uid}@${changedMs}`;
+  if (handledClaimChanges.has(key)) return;
+  // Before the first await: every caller's watcher fires for the same
+  // snapshot, one after another, and only the first may get past here.
+  handledClaimChanges.add(key);
+
+  try {
+    const { issuedAtTime } = await user.getIdTokenResult();
+    const issuedSecond = Math.floor(Date.parse(issuedAtTime) / 1000);
+    if (!(Math.floor(changedMs / 1000) > issuedSecond)) return;
+
+    await user.getIdToken(true);
+    claimsVersion.value++;
+    claimsRefreshed.value = true;
+  } catch (error) {
+    console.warn("Could not refresh the token after a role change", error);
+    if (SESSION_ENDED_CODES.has((error as { code?: unknown } | null)?.code)) {
+      claimsSignedOut.value = true;
+    }
+  }
+}
+
+/** A Firestore Timestamp as the client SDK hands it over, in milliseconds;
+ * null for anything else somebody may have written into their own document. */
+function timestampMillis(value: unknown): number | null {
+  const toMillis = (value as Partial<Timestamp> | null | undefined)?.toMillis;
+  if (typeof toMillis !== "function") return null;
+  const millis = toMillis.call(value);
+  return Number.isFinite(millis) ? millis : null;
+}
 
 export function useAuthState() {
   const router = useRouter();
@@ -47,19 +181,35 @@ export function useAuthState() {
   const db = getFirestore(useFirebaseApp(), "koryta-pl");
 
   const user = useCurrentUser();
-  const isAdmin = computedAsync(
-    async () =>
-      await user.value?.getIdTokenResult().then((r) => !!r.claims.admin),
-  );
+  /** The claims of the current token; undefined until it has been read, and
+   * while nobody is signed in. Read once for every flag below rather than once
+   * per flag. */
+  const claims = computedAsync<ParsedToken | undefined>(async () => {
+    // Both before the first await: only what is read synchronously is
+    // tracked, and the counter is what makes a refreshed token count.
+    void claimsVersion.value;
+    const current = user.value;
+    return current ? (await current.getIdTokenResult()).claims : undefined;
+  });
+  /** A flag off `claims`, undefined until they are known - some callers wait
+   * for a definite answer (`isAdmin.value === undefined` in
+   * pages/admin/rewizje). */
+  const claimFlag = (read: (claims: ParsedToken) => boolean) =>
+    computed(() => (claims.value ? read(claims.value) : undefined));
+
+  const isAdmin = claimFlag((c) => !!c.admin);
   /** The site's owner, whose task list (/admin/zadania) no other admin sees. */
-  const isOwner = computedAsync(
-    async () =>
-      await user.value?.getIdTokenResult().then((r) => !!r.claims.owner),
-  );
-  const isDatascience = computedAsync(
-    async () =>
-      await user.value?.getIdTokenResult().then((r) => !!r.claims.datascience),
-  );
+  const isOwner = claimFlag((c) => !!c.owner);
+  const isDatascience = claimFlag((c) => !!c.datascience);
+  /** An administrator on trial: `newAdmin` counts only together with `admin`,
+   * as on the server (`isNewAdmin`, server/utils/contributors.ts). Every
+   * administrator is exactly one of this and `isEstablishedAdmin`. */
+  const isNewAdmin = claimFlag((c) => !!c.admin && !!c.newAdmin);
+  /** An administrator not on trial - who the users page and the "Nowi
+   * administratorzy" view are for. Off the token, so it decides what is shown;
+   * the routes behind it ask the account itself (`requireEstablishedAdmin`),
+   * because a token can be up to an hour behind it. */
+  const isEstablishedAdmin = claimFlag((c) => !!c.admin && !c.newAdmin);
   const idToken = computed(() => user.value?.getIdToken());
   const auth = useFirebaseAuth()!;
 
@@ -67,6 +217,24 @@ export function useAuthState() {
     user.value ? doc(collection(db, "users"), user.value.uid) : null,
   );
   const userConfig = useDocument<UserConfig>(userConfigRef);
+
+  // The claims script stamps the account after changing its claims, and the
+  // document is already live here, so this is how an open tab learns about it
+  // within seconds instead of at the next hourly refresh. Every caller watches;
+  // `refreshIfClaimsChanged` lets one of them act per change. Client only: the
+  // server renders with no token to refresh.
+  if (import.meta.client) {
+    countTokenChanges(auth);
+    watch(
+      () => [user.value, userConfig?.data?.value?.claimsChangedAt] as const,
+      ([current, changedAt]) => {
+        if (current && changedAt) {
+          void refreshIfClaimsChanged(current, changedAt);
+        }
+      },
+      { immediate: true },
+    );
+  }
 
   const logout = async () => {
     try {
@@ -101,6 +269,10 @@ export function useAuthState() {
     isAdmin,
     isOwner,
     isDatascience,
+    isNewAdmin,
+    isEstablishedAdmin,
+    claimsRefreshed,
+    claimsSignedOut,
     idToken,
     userConfig,
     logout,

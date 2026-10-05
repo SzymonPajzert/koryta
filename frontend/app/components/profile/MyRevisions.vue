@@ -198,7 +198,7 @@ import {
 } from "~~/shared/proposals";
 import {
   notificationEnabled,
-  notificationKinds,
+  revisionNotificationKinds,
 } from "~~/shared/notifications";
 import type { MyProposals } from "~~/server/api/revisions/mine.get";
 
@@ -292,7 +292,7 @@ const { user, userConfig } = useAuthState();
 const mailWillBeSent = computed(
   () =>
     !!user.value?.emailVerified &&
-    notificationKinds.every((kind) =>
+    revisionNotificationKinds.every((kind) =>
       notificationEnabled(kind, userConfig?.data?.value?.notifications),
     ),
 );

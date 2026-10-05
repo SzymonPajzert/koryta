@@ -65,6 +65,7 @@
         <!-- The panel and two of the inboxes it lists, under the panel's own
              names; the third, "Zgłoszenia", is under "Zespół" with the QA list
              and its problems, since a problem found there is a report too.
+             "Użytkownicy" is for the administrators past their trial.
              "Zadania" is the owner's own list, shown to him alone. "Procesy",
              the jobs' progress next to it, is the datascience group's, and
              the group is not only administrators: somebody in it alone gets
@@ -111,6 +112,15 @@
               :prepend-icon="mdiNoteEditOutline"
               to="/admin/notatki"
               title="Notatki"
+            />
+            <!-- Every account, its role and its requests for access. Not for
+                 an administrator on trial: the page and its routes refuse
+                 them, since a trial is what the page watches. -->
+            <v-list-item
+              v-if="isEstablishedAdmin"
+              :prepend-icon="mdiAccountKeyOutline"
+              to="/admin/uzytkownicy"
+              title="Użytkownicy"
             />
             <v-list-item
               v-if="isOwner"
@@ -211,6 +221,22 @@
     </v-container>
     <HomeAppFooter class="mt-auto w-100" />
     <FeedbackLauncher />
+    <!-- The claims script changed this account's role while the page was
+         open, and the token has been fetched again: the menus above have
+         already moved, and this says why. On every page, since the change
+         can land on any of them. -->
+    <v-snackbar v-model="claimsRefreshed" color="success" :timeout="8000">
+      Twoje uprawnienia się zmieniły - menu jest już aktualne.
+    </v-snackbar>
+    <!-- The same change, but it ended the session: it took a privilege away,
+         so the account's sessions were revoked (or the account was disabled),
+         and Firebase signed this tab out when it asked for the new token.
+         Without this the toolbar would simply vanish mid-page. Longer than the
+         one above, because it asks for something - the "Zaloguj się" button
+         is already in the bar. -->
+    <v-snackbar v-model="claimsSignedOut" color="warning" :timeout="15000">
+      Twoje uprawnienia się zmieniły - zaloguj się ponownie.
+    </v-snackbar>
   </v-main>
 </template>
 
@@ -218,6 +244,7 @@
 import {
   mdiAccount,
   mdiAccountGroupOutline,
+  mdiAccountKeyOutline,
   mdiAlertCircleOutline,
   mdiChevronDown,
   mdiClipboardCheckOutline,
@@ -240,8 +267,17 @@ import { APP_BAR_HEIGHT, useSsrLayoutTop } from "~/composables/appBar";
 
 const ssrLayoutTop = useSsrLayoutTop();
 const { mdAndUp } = useDisplay();
-const { user, userConfig, logout, isAdmin, isOwner, isDatascience } =
-  useAuthState();
+const {
+  user,
+  userConfig,
+  logout,
+  isAdmin,
+  isOwner,
+  isDatascience,
+  isEstablishedAdmin,
+  claimsRefreshed,
+  claimsSignedOut,
+} = useAuthState();
 const route = useRoute();
 const loginDialog = ref(false);
 const maxWidth = computed(() =>

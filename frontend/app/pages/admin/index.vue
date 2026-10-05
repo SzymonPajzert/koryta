@@ -379,9 +379,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { computedAsync } from "@vueuse/core";
+import { computed, ref, onMounted } from "vue";
 import {
+  mdiAccountKeyOutline,
   mdiGraphOutline,
   mdiHistory,
   mdiVectorPolyline,
@@ -408,7 +408,18 @@ useHead({
   title: "Panel administracyjny - koryta.pl",
 });
 
-const subpages = [
+const { isEstablishedAdmin } = useAuthState();
+
+/** An administrator who is not on trial - the only one /aktywnosc will show
+ * who is, and the only one the users page lets in. The page's middleware lets
+ * in anybody holding `admin`, trial administrators too, and for them the "Nowi
+ * administratorzy" link led to a list that quietly ignored the filter. Read
+ * off the token, which the claims script's stamp keeps in step with the
+ * account the server asks (see `useAuthState`); false until it has been read,
+ * so neither link flashes up for somebody it is not for. */
+const established = computed(() => isEstablishedAdmin.value === true);
+
+const subpages = computed(() => [
   // One tile where there were three: "Kolejka zmian", "Rewizje" and "Rewizje
   // krawędzi" are the sections of one page now.
   {
@@ -453,24 +464,23 @@ const subpages = [
     icon: mdiChartLine,
     desc: "Stan bazy i kto ją ostatnio zmieniał.",
   },
-];
+  // Hidden rather than refused, like "Nowi administratorzy" below: its
+  // middleware and every route behind it turn a trial administrator away.
+  ...(established.value
+    ? [
+        {
+          title: "Użytkownicy",
+          to: "/admin/uzytkownicy",
+          icon: mdiAccountKeyOutline,
+          desc: "Konta i ich uprawnienia, prośby o dostęp, nominacje i okresy próbne administratorów.",
+        },
+      ]
+    : []),
+]);
 
 /** The window the panel calls "this week". The stats page lets an admin widen
  * it; here it is fixed, because the question is "who is around right now". */
 const WEEKLY_DAYS = 7;
-
-const { user } = useAuthState();
-
-/** An administrator who is not on trial - the only one /aktywnosc will show
- * who is. The page's middleware lets in anybody holding `admin`, trial
- * administrators too, and for them the "Nowi administratorzy" link led to a
- * list that quietly ignored the filter. Read off the same token the server
- * decides by; false until it has been read, so the link never flashes up for
- * somebody it is not for. */
-const established = computedAsync(async () => {
-  const claims = (await user.value?.getIdTokenResult())?.claims;
-  return claims?.admin === true && claims.newAdmin !== true;
-}, false);
 
 const summary = ref<AdminSummary | null>(null);
 const weekly = ref<ActivityStats | null>(null);

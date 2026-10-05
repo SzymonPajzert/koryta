@@ -28,11 +28,27 @@ const route = vi.hoisted(() => ({
 }));
 mockNuxtImport("useRoute", () => () => route);
 
-function mountLayout(isAdmin = false, { isDatascience = false } = {}) {
+/** The layout as `isAdmin` sees it - an established administrator, unless
+ * `trial` makes it one on trial, which the real flags never leave undecided:
+ * every administrator is exactly one of the two. `isDatascience` adds the
+ * datascience group, which a non-administrator can be in alone. */
+function mountLayout(
+  isAdmin = false,
+  {
+    isDatascience = false,
+    trial = false,
+    claimsRefreshed = ref(false),
+    claimsSignedOut = ref(false),
+  } = {},
+) {
   vi.mocked(useAuthState).mockReturnValue({
     user: ref({ uid: "test-admin" }),
     isAdmin: ref(isAdmin),
     isDatascience: ref(isDatascience),
+    isNewAdmin: ref(isAdmin && trial),
+    isEstablishedAdmin: ref(isAdmin && !trial),
+    claimsRefreshed,
+    claimsSignedOut,
     userConfig: { data: ref({}) },
     logout: vi.fn(),
   } as MockAuthState);
@@ -69,6 +85,13 @@ function mountLayout(isAdmin = false, { isDatascience = false } = {}) {
           template:
             "<a :data-to='typeof to === \"string\" ? to : JSON.stringify(to)' :href='href'>{{ title }}</a>",
           props: ["to", "href", "title"],
+        },
+        // In place too: the real one is teleported to the overlay container.
+        "v-snackbar": {
+          template:
+            "<div v-if='modelValue' data-snackbar><slot /><button data-close @click='$emit(\"update:modelValue\", false)' /></div>",
+          props: ["modelValue"],
+          emits: ["update:modelValue"],
         },
       },
     },
@@ -170,7 +193,67 @@ describe("DefaultLayout", () => {
       "Panel administracyjny",
       "Kolejka zmian",
       "Notatki",
+      "Użytkownicy",
     ]);
+  });
+
+  it("links an established administrator to the users page", async () => {
+    const wrapper = mountLayout(true);
+
+    expect(await menuEntries(wrapper, "Admin")).toContainEqual({
+      title: "Użytkownicy",
+      to: "/admin/uzytkownicy",
+    });
+  });
+
+  // The page and every route behind it refuse a trial administrator, who is
+  // partly what the page is about.
+  it("keeps the users page out of a trial administrator's menu", async () => {
+    const wrapper = mountLayout(true, { trial: true });
+
+    const admin = (await menuEntries(wrapper, "Admin")).map((e) => e.title);
+    expect(admin).toEqual([
+      "Panel administracyjny",
+      "Kolejka zmian",
+      "Notatki",
+    ]);
+  });
+
+  it("says so when the menus changed because the role did", async () => {
+    const claimsRefreshed = ref(false);
+    const wrapper = mountLayout(true, { claimsRefreshed });
+    await flushPromises();
+    expect(wrapper.find("[data-snackbar]").exists()).toBe(false);
+
+    // What `useAuthState` sets after the claims script stamped the account
+    // and this tab fetched a token with the new claims.
+    claimsRefreshed.value = true;
+    await flushPromises();
+    expect(wrapper.find("[data-snackbar]").text()).toBe(
+      "Twoje uprawnienia się zmieniły - menu jest już aktualne.",
+    );
+
+    // Closing it clears the flag, so the next change can raise it again.
+    await wrapper.find("[data-close]").trigger("click");
+    expect(claimsRefreshed.value).toBe(false);
+  });
+
+  it("says why when a role change signed the user out", async () => {
+    const claimsSignedOut = ref(false);
+    const wrapper = mountLayout(true, { claimsSignedOut });
+    await flushPromises();
+    expect(wrapper.find("[data-snackbar]").exists()).toBe(false);
+
+    // What `useAuthState` sets when the refresh after the stamp is refused -
+    // the script revoked the account's sessions - and Firebase signed it out.
+    claimsSignedOut.value = true;
+    await flushPromises();
+    expect(wrapper.find("[data-snackbar]").text()).toBe(
+      "Twoje uprawnienia się zmieniły - zaloguj się ponownie.",
+    );
+
+    await wrapper.find("[data-close]").trigger("click");
+    expect(claimsSignedOut.value).toBe(false);
   });
 
   // /admin/procesy is the datascience group's, and the group is not only
@@ -180,7 +263,13 @@ describe("DefaultLayout", () => {
     const admin = mountLayout(true, { isDatascience: true });
     expect(
       (await menuEntries(admin, "Admin")).map((entry) => entry.title),
-    ).toEqual(["Panel administracyjny", "Kolejka zmian", "Notatki", "Procesy"]);
+    ).toEqual([
+      "Panel administracyjny",
+      "Kolejka zmian",
+      "Notatki",
+      "Użytkownicy",
+      "Procesy",
+    ]);
 
     const member = mountLayout(false, { isDatascience: true });
     expect(await menuEntries(member, "Admin")).toEqual([

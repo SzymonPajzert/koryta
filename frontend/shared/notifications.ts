@@ -8,14 +8,30 @@
  * Adding a kind means three things and no more: a member of `notificationKinds`,
  * an entry in `notificationDefaults` and `notificationLabels`, and a branch of
  * `renderNotification`. Everything else is driven off those.
+ *
+ * Not every kind is sent from this codebase. `roleChanged` is queued by the
+ * claims script (data/pipelines/src/set_auth_claims.py), which writes the same
+ * `mail` document in Python and keeps its own copy of the wording below; it is
+ * here because the switch that stops it lives on /profil with the others, and
+ * the script reads that switch from the same `users/{uid}.notifications`.
  */
 
 export const notificationKinds = [
   "revisionApproved",
   "revisionRejected",
+  "roleChanged",
 ] as const;
 
 export type NotificationKind = (typeof notificationKinds)[number];
+
+/** The kinds about what happened to something the user proposed - the ones the
+ * proposals card on /profil means when it promises "odezwiemy się mailem".
+ * `roleChanged` is about the account, not a proposal, so whether it is on
+ * says nothing about that promise. */
+export const revisionNotificationKinds = [
+  "revisionApproved",
+  "revisionRejected",
+] as const satisfies readonly NotificationKind[];
 
 /** Which kinds a user wants. Absent means "never decided", which is answered by
  * `notificationDefaults` rather than by silence. */
@@ -25,15 +41,19 @@ export type NotificationPreferences = Partial<
 
 /** Whether a user who has never opened their settings gets this kind.
  *
- * Both of these are the outcome of something the recipient did - they proposed
- * a change and somebody reviewed it - so they default to on. A kind that is
- * broadcast rather than earned (a newsletter, a call to action) should default
- * to off; see `NewsletterPreferences`, which is that other thing and stays
- * separate.
+ * The revision kinds are the outcome of something the recipient did - they
+ * proposed a change and somebody reviewed it - so they default to on.
+ * `roleChanged` is on for a different reason: it is about the recipient's own
+ * account, it comes a handful of times in the life of one, and a person who
+ * lost a permission and was told nothing would only find out by running into a
+ * 403. A kind that is broadcast rather than earned (a newsletter, a call to
+ * action) should default to off; see `NewsletterPreferences`, which is that
+ * other thing and stays separate.
  */
 export const notificationDefaults: Record<NotificationKind, boolean> = {
   revisionApproved: true,
   revisionRejected: true,
+  roleChanged: true,
 };
 
 /** How the switches read on `/profil`. */
@@ -48,6 +68,10 @@ export const notificationLabels: Record<
   revisionRejected: {
     title: "Odrzucenie Twojej zmiany",
     hint: "Gdy redakcja nie przyjmie zmiany — wraz z powodem",
+  },
+  roleChanged: {
+    title: "Zmiana Twoich uprawnień",
+    hint: "Gdy administrator nada lub odbierze Ci uprawnienia na stronie",
   },
 };
 
@@ -82,7 +106,17 @@ export type NotificationEvent =
       kind: "revisionRejected";
       target: NotificationTarget;
       reason: string;
+    }
+  | {
+      kind: "roleChanged";
+      /** The role the account holds now, as `describeRole` (shared/roles.ts)
+       * prints it. Already worded, because the script that sends this is
+       * Python and prints the same labels itself. */
+      role: string;
     };
+
+/** The kinds that are about a page somebody proposed a change to. */
+type RevisionEvent = Exclude<NotificationEvent, { kind: "roleChanged" }>;
 
 /** A message in the shape the Trigger Email extension reads. */
 export interface MailMessage {
@@ -105,7 +139,7 @@ export function escapeHtml(value: string): string {
  * A line is text; the link and the footer are the same in every message, so
  * only the part that differs per kind is written per kind.
  */
-function bodyLines(event: NotificationEvent): string[] {
+function bodyLines(event: RevisionEvent): string[] {
   const name = event.target.name;
 
   if (event.kind === "revisionApproved") {
@@ -127,10 +161,41 @@ function bodyLines(event: NotificationEvent): string[] {
   ];
 }
 
-function subjectFor(event: NotificationEvent): string {
+function subjectFor(event: RevisionEvent): string {
   return event.kind === "revisionApproved"
     ? `Zatwierdzono Twoją zmianę w „${event.target.name}”`
     : `Nie przyjęto Twojej zmiany w „${event.target.name}”`;
+}
+
+/** The mail about a changed role, in the exact words the claims script sends.
+ *
+ * Its own shape rather than the revision mails' with different lines. The
+ * script is the sender and keeps a copy of this text in Python, so the format
+ * is the one that can be stated in a sentence and kept identical on both sides:
+ * the paragraphs joined by blank lines, and for the html a `<p>` per paragraph
+ * with the settings address as a link. A styled wrapper or a differently worded
+ * footer here would be one more thing for the two copies to disagree on, in a
+ * message whose whole job is one sentence.
+ */
+function renderRoleChanged(role: string, base: string): MailMessage {
+  const settingsUrl = `${base}/profil`;
+  const paragraphs = [
+    "Dzień dobry,",
+    `Twoje uprawnienia na koryta.pl się zmieniły. Teraz: ${role}.`,
+    "Jeśli masz otwartą stronę, odświeży uprawnienia sama w ciągu kilku sekund. Jeśli menu się nie zmieni, wyloguj się i zaloguj ponownie.",
+  ];
+  const settings = "Ustawienia powiadomień: ";
+
+  return {
+    subject: "Zmiana Twoich uprawnień na koryta.pl",
+    text: [...paragraphs, `${settings}${settingsUrl}`].join("\n\n"),
+    html: [
+      ...paragraphs.map((line) => `<p>${escapeHtml(line)}</p>`),
+      `<p>${settings}<a href="${escapeHtml(settingsUrl)}">${escapeHtml(
+        settingsUrl,
+      )}</a></p>`,
+    ].join("\n"),
+  };
 }
 
 /** The email for `event`, both formats.
@@ -144,6 +209,8 @@ export function renderNotification(
   siteUrl: string,
 ): MailMessage {
   const base = siteUrl.replace(/\/$/, "");
+  if (event.kind === "roleChanged") return renderRoleChanged(event.role, base);
+
   const lines = bodyLines(event);
   const link = event.target.path ? `${base}${event.target.path}` : undefined;
   const settingsUrl = `${base}/profil`;

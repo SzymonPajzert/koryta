@@ -6,9 +6,9 @@ import { logIn, USERS } from "./helpers/auth";
  * exist any more; the toolbar in layouts/default.vue offers Rewizje, Aktywność
  * and a "Zespół" menu to everyone - the QA list, its problems, and for an admin
  * every report, then the links that leave the site - and an "Admin" menu with
- * the panel and two of its inboxes to admins. The intent - the toolbar is for
- * signed in users, and it takes them where it says - ports over; the entries
- * themselves do not.
+ * the panel and two of its inboxes to admins, and the users page to those past
+ * their trial. The intent - the toolbar is for signed in users, and it takes
+ * them where it says - ports over; the entries themselves do not.
  *
  * A menu's entries are teleported out of the toolbar, into the overlay
  * container, so they are looked up under `.user-toolbar-menu` rather than
@@ -103,6 +103,11 @@ test.describe("User toolbar", () => {
     for (const name of ["Kolejka zmian", "Notatki"]) {
       await expect(entries.getByRole("link", { name })).toBeVisible();
     }
+    // The seeded admin holds no `newAdmin`, so the users page is theirs; an
+    // administrator on trial does not get the entry (DefaultLayout.test.ts).
+    await expect(
+      entries.getByRole("link", { name: "Użytkownicy" }),
+    ).toHaveAttribute("href", "/admin/uzytkownicy");
     // The reports are under "Zespół", beside the QA problems they include.
     await expect(entries.getByRole("link", { name: "Zgłoszenia" })).toHaveCount(
       0,
