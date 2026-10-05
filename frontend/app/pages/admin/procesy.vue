@@ -118,6 +118,7 @@
             :health="row.health"
             :now="asOf"
             :highlighted="targetId === row.definition.id"
+            :show-tasks="isOwner"
             :expanded="openRows.has(row.definition.id)"
             @update:expanded="(open) => setOpen(row.definition.id, open)"
           />
@@ -130,6 +131,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, watch } from "vue";
 import { mdiAlertOctagon, mdiCheckCircle, mdiRefresh } from "@mdi/js";
+import { useAuthState } from "~/composables/auth";
 import {
   jobEntries,
   useOpsJobs,
@@ -166,6 +168,7 @@ definePageMeta({
 useHead({ title: "Procesy (Admin) - koryta.pl" });
 
 const route = useRoute();
+const { isOwner } = useAuthState();
 
 const { overview, loading, error, load, lastLoadedAt } = useOpsJobs();
 

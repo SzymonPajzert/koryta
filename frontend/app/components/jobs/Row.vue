@@ -185,7 +185,7 @@
     </ul>
 
     <div
-      v-if="definition.tasks?.length"
+      v-if="showTasks && definition.tasks?.length"
       class="job-row__tasks text-body-2 mb-3"
       data-job-tasks
     >
@@ -252,6 +252,9 @@ const props = defineProps<{
   health: JobHealth;
   now: Date;
   highlighted?: boolean;
+  /** Whether to link the job's tasks. They are on the owner's list, which
+   * refuses everybody else the page is open to. */
+  showTasks?: boolean;
 }>();
 
 const expanded = defineModel<boolean>("expanded", { default: false });

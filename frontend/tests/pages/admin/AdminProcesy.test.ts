@@ -1,18 +1,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
+import { ref } from "vue";
 import ProcesyPage from "../../../app/pages/admin/procesy.vue";
 import { NO_RUNS_YET } from "../../../app/utils/jobStyle";
 import type { JobRun, JobsOverview } from "../../../shared/jobs";
 
-const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
+const { mockAuthRequest, viewer } = vi.hoisted(() => ({
+  mockAuthRequest: vi.fn(),
+  /** Who is looking: the owner, unless a test says somebody else in the
+   * datascience group. */
+  viewer: { owner: true },
+}));
 
+// Refs, as the real ones are, so the template unwraps them. `ref` is only
+// reached once a page mounts, long after the hoisted factory has run.
 vi.mock("~/composables/auth", () => ({
   authRequest: mockAuthRequest,
   useAuthState: () => ({
-    user: { value: { uid: "owner" } },
-    isAdmin: { value: true },
-    isOwner: { value: true },
+    user: ref({ uid: viewer.owner ? "owner" : "analyst" }),
+    isAdmin: ref(viewer.owner),
+    isOwner: ref(viewer.owner),
+    isDatascience: ref(true),
   }),
 }));
 
@@ -281,6 +290,7 @@ describe("/admin/procesy", () => {
     vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
     vi.setSystemTime(NOW);
     visibility = "visible";
+    viewer.owner = true;
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
       get: () => visibility,
@@ -296,7 +306,7 @@ describe("/admin/procesy", () => {
     Reflect.deleteProperty(document, "visibilityState");
   });
 
-  it("asks the owner's endpoint for the overview", async () => {
+  it("asks the jobs endpoint for the overview", async () => {
     await mountPage();
     expect(mockAuthRequest).toHaveBeenCalledWith("/api/ops/jobs", {
       method: "GET",
@@ -513,6 +523,17 @@ describe("/admin/procesy", () => {
     expect(task.attributes("href")).toBe(
       "/admin/zadania#t-decide-rejestrio-budget",
     );
+  });
+
+  // The page is the datascience group's, the task list the owner's alone, so
+  // for anybody else in the group those links would end in a refusal.
+  it("leaves the task links out for the rest of the datascience group", async () => {
+    viewer.owner = false;
+    const page = await mountPage();
+    const row = rowOf(page, "krs_scrape_paid");
+    // Open, as it is for the owner: its newest run failed.
+    expect(row.find('[data-run="p-run"]').exists()).toBe(true);
+    expect(row.find("[data-job-tasks]").exists()).toBe(false);
   });
 
   it("shows the stale mirror host by host, and where the state comes from", async () => {
