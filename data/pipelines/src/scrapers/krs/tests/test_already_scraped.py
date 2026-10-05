@@ -106,6 +106,83 @@ def test_a_reference_whose_size_is_unknown_is_kept():
     assert len(df) == 1
 
 
+# ─── which registers answered 404 ─────────────────────────
+
+NOT_FOUND = (
+    '{"type": "https://tools.ietf.org/html/rfc7231#section-6.5.4",'
+    ' "title": "Not Found", "status": 404, "traceId": "00-a1-d9-00"}'
+)
+
+
+class Body:
+    """A stored object, as IO hands it over."""
+
+    def __init__(self, text: str):
+        self.text = text
+
+    def read_string(self) -> str:
+        return self.text
+
+
+class BodiesIO(ListingIO):
+    """Serves the bodies through read_many, as the mirror does, or not at all,
+    and counts what had to be read one object at a time."""
+
+    def __init__(self, blobs: dict[str, int | None], bodies: dict[str, str], bulk):
+        super().__init__(blobs)
+        self.bodies = bodies
+        self.bulk = bulk
+        self.one_by_one: list[str] = []
+
+    def read_many(self, path):
+        for name in self.bulk:
+            if name.startswith(path.prefix):
+                yield f"{BUCKET}/{name}", Body(self.bodies[name])
+
+    def read_data(self, fs):
+        self.one_by_one.append(fs.url)
+        return Body(self.bodies[fs.url.removeprefix(f"{BUCKET}/")])
+
+
+def not_found(bodies: dict[str, str], bulk=None) -> tuple[dict[str, bool], list]:
+    """`not_found` per register, and what was read one by one."""
+    blobs: dict[str, int | None] = {name: len(body) for name, body in bodies.items()}
+    io = BodiesIO(blobs, bodies, bodies if bulk is None else bulk)
+    ctx = Context(
+        io=io,
+        rejestr_io=MockRejestrIO(),
+        con=None,  # type: ignore[arg-type]
+        utils=MockUtils(),
+        web=MockWeb(),
+        nlp=MockNLP(),
+        refresh_policy=ProcessPolicy.with_default(),
+    )
+    df = KRSAlreadyScraped().process(ctx)
+    return dict(zip(df["method"], df["not_found"])), io.one_by_one
+
+
+def test_the_404s_come_from_the_bulk_read():
+    """One read_data each was 14,439 GETs in a row on a fresh disk."""
+    entry = '{"odpis": {"naglowekA": {"rejestr": "RejP"}}}' + " " * 1800
+    found, one_by_one = not_found(
+        {odpis("P", "2026-07-18"): NOT_FOUND, odpis("S", "2026-07-18"): entry}
+    )
+
+    assert found == {
+        QueryType.API_KRS_ODPIS_AKTUALNY_P.value: True,
+        QueryType.API_KRS_ODPIS_AKTUALNY_S.value: False,
+    }
+    assert one_by_one == []
+
+
+def test_what_the_bulk_read_does_not_hand_over_is_read_one_by_one():
+    """Missing from the bulk read is not the same as not a 404."""
+    found, one_by_one = not_found({odpis("P", "2026-07-18"): NOT_FOUND}, bulk={})
+
+    assert found == {QueryType.API_KRS_ODPIS_AKTUALNY_P.value: True}
+    assert one_by_one == [f"{BUCKET}/{odpis('P', '2026-07-18')}"]
+
+
 def test_the_bulletin_is_not_a_company_scrape():
     df = scraped(
         {"hostname=api-krs.ms.gov.pl/api/Krs/Biuletyn/2026-07-18/date=2026-07-18": 900}
