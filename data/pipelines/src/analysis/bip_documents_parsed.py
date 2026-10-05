@@ -415,7 +415,13 @@ def _extract_stream_text(ole: Any, stream_name: str, method: str) -> Extraction:
 
 
 def _extract_ole(data: bytes) -> Extraction:
-    import olefile  # noqa: PLC0415
+    try:
+        import olefile  # noqa: PLC0415
+    except ImportError:
+        # The bip_parse group is opt-in (CI's unit job does not install it), so
+        # a legacy .doc cannot be parsed here. Mark it unsupported instead of
+        # letting the worker fail on the missing optional dependency.
+        return Extraction("unsupported", "none", "", error="ole: olefile not installed")
 
     try:
         ole = olefile.OleFileIO(io.BytesIO(data))
