@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 import sys
+import traceback
+from collections.abc import Sequence
 
 import pandas as pd
 
@@ -90,6 +92,14 @@ def get_args():
         default=[],
         help="Pipeline name to skip running. Repeatable, and applies to "
         "--all-pipelines.",
+    )
+    parser.add_argument(
+        "--keep-going",
+        action="store_true",
+        help="When a selected pipeline raises, print it and go on with the "
+        "rest, then exit 1 naming every one that failed. For the nightly "
+        "rebuild, where one broken pipeline should not keep the others from "
+        "being built.",
     )
     parser.add_argument(
         "pipeline",
@@ -181,16 +191,43 @@ def main():
 
     printer = Printer(args)
     try:
-        for p_type in PIPELINES:
-            if p_type.__name__ in selected:
-                print(f"Processing {p_type.__name__}")
-                p: Pipeline = Pipeline.create(p_type)
-                res = p.read_or_process(ctx)
-                printer.print_results(res)
+        failed = run_selected(selected, ctx, printer, keep_going=args.keep_going)
     finally:
         print("Dumping...")
         dumper.dump_pandas()
         print("Done")
+    if failed:
+        print(f"Failed ({len(failed)}): {', '.join(failed)}")
+        sys.exit(1)
+
+
+def run_selected(
+    selected: set[str],
+    ctx,
+    printer,
+    keep_going: bool = False,
+    pipelines: Sequence[type[Pipeline]] = PIPELINES,
+) -> list[str]:
+    """Run the selected pipelines in `pipelines`' order. With `keep_going` a
+    pipeline that raises is printed and passed over; the names of those are
+    returned. Without it the first one ends the run, as it always has."""
+    failed: list[str] = []
+    for p_type in pipelines:
+        if p_type.__name__ not in selected:
+            continue
+        print(f"Processing {p_type.__name__}")
+        p: Pipeline = Pipeline.create(p_type)
+        try:
+            res = p.read_or_process(ctx)
+        except Exception:
+            if not keep_going:
+                raise
+            traceback.print_exc()
+            print(f"{p_type.__name__} failed; going on with the rest (--keep-going)")
+            failed.append(p_type.__name__)
+            continue
+        printer.print_results(res)
+    return failed
 
 
 if __name__ == "__main__":

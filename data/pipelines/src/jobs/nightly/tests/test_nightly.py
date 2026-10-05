@@ -183,7 +183,7 @@ def test_the_reprocess_rebuilds_all_but_the_slow_sources_and_the_articles(world)
         "DomainToRegion",
     ):
         assert excluded in argv
-    assert argv[-2:] == ["--assume-yes", "--all"]
+    assert argv[-3:] == ["--keep-going", "--assume-yes", "--all"]
     # Backed up as whoever runs it - USERNAME=main on the VM.
     assert "DISABLE_BACKUP" not in env or env["DISABLE_BACKUP"] != "1"
 
