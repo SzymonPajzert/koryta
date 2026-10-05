@@ -7,11 +7,19 @@
 #   gcloud compute ssh koryta-nightly --zone=europe-central2-b --project=koryta-pl \
 #     --command='sudo bash -s' < data/nightly/setup-vm.sh
 #
+# It sets up from the code the nights run: KORYTA_REF in /etc/koryta/nightly.env,
+# or origin/main. To try a branch nobody has merged yet, name it on the first
+# run - `--command='sudo env KORYTA_REF=origin/<branch> bash -s'` - and the new
+# nightly.env runs that branch every night until its KORYTA_REF is changed back.
+#
 # It does not run the night. The first night after it is a cold one: the
 # download cache and versioned/ are empty, so expect it to take longer.
 set -euo pipefail
 
 repo_url=${REPO_URL:-https://github.com/SzymonPajzert/koryta.git}
+env_file=/etc/koryta/nightly.env
+running_ref=$(sed -n 's/^KORYTA_REF=//p' "$env_file" 2>/dev/null || true)
+ref=${KORYTA_REF:-${running_ref:-origin/main}}
 # At least go.mod's `go` directive (data/compressor/go.mod).
 go_version=${GO_VERSION:-1.25.1}
 user=koryta
@@ -60,11 +68,18 @@ fi
 as_user() { sudo -u "$user" -H bash -c "$1"; }
 as_user 'command -v ~/.local/bin/uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh'
 as_user "[[ -d $repo/.git ]] || git clone --quiet $repo_url $repo"
+# What night.sh does at the start of every night; the units below and the
+# environment come from this checkout.
+as_user "git -C $repo fetch --quiet --prune origin && git -C $repo checkout --quiet --force --detach '$ref'"
+echo "Code: $ref, $(as_user "git -C $repo log -1 --format='%h %s'")"
 
 install -d -m 0755 /etc/koryta
-if [[ ! -e /etc/koryta/nightly.env ]]; then
-  install -m 0644 "$repo/data/nightly/nightly.env.example" /etc/koryta/nightly.env
-  echo "Wrote /etc/koryta/nightly.env from the example - read it before the first night."
+if [[ ! -e "$env_file" ]]; then
+  install -m 0644 "$repo/data/nightly/nightly.env.example" "$env_file"
+  sed -i "s|^KORYTA_REF=.*|KORYTA_REF=$ref|" "$env_file"
+  echo "Wrote $env_file from the example (KORYTA_REF=$ref) - read it before the first night."
+elif [[ "$running_ref" != "$ref" ]]; then
+  echo "!! The nights run KORYTA_REF=$running_ref, not $ref: edit $env_file if they should run $ref too."
 fi
 
 for unit in koryta-nightly.service koryta-nightly.timer; do
