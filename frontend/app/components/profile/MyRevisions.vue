@@ -204,7 +204,7 @@ import type { MyProposals } from "~~/server/api/revisions/mine.get";
 
 /** What became of what this user proposed.
  *
- * The counterpart of `/admin/rewizje/kolejka`: the same rows, read from the
+ * The counterpart of `/admin/rewizje#kolejka`: the same rows, read from the
  * other side. A contributor is otherwise told nothing at all - the emails only
  * go out on a decision, so a proposal nobody has looked at leaves no trace
  * anywhere the author can see.

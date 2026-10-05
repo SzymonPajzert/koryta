@@ -1,14 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
 import { waitForLoginFormHydrated } from "./helpers/login";
 
-/** The logged in toolbar (Rewizje, Nowy bug w GitHubie, ...) does not fit on a
- * phone. Vuetify clips `.v-toolbar__content`, which used to leave the trailing
- * buttons unreachable - no scrolling, no overflow menu. The layout now lets
- * that strip scroll sideways, so the test asserts both halves of the fix: the
- * content really does overflow, and it can be scrolled to the last button. */
+/** The logged in toolbar (Rewizje, Aktywność, the "Zespół" menu, ...) does not
+ * fit on a phone. Vuetify clips `.v-toolbar__content`, which used to leave the
+ * trailing buttons unreachable - no scrolling, no overflow menu. The layout now
+ * lets that strip scroll sideways, so the test asserts both halves of the fix:
+ * the content really does overflow, and it can be scrolled to the last
+ * button. */
 
 // Narrow enough that the toolbar overflows even for a non admin, who only sees
-// the two always-on buttons.
+// the three always-on buttons.
 const PHONE = { width: 320, height: 700 };
 
 async function registerAndLogIn(page: Page) {
@@ -50,12 +51,8 @@ test.describe("Logged in toolbar on a phone", () => {
 
     // The last button starts off screen and becomes reachable after scrolling.
     //
-    // Which button is last depends on the page: registering lands on `/`,
-    // whose meta carries a "Dyskusja w affine" link that `/login` has none of,
-    // and it is appended a tick after the url changes - so a strip scrolled to
-    // its end grows a new end, back at scrollLeft 0. Scroll and measure in one
-    // retried block, so the measurement is always about the button that is
-    // last at the time it is taken.
+    // Scroll and measure in one retried block, so a measurement taken while the
+    // strip is still settling after the redirect is simply taken again.
     await expect(async () => {
       const lastButton = page.locator(".user-toolbar .v-btn").last();
       await lastButton.scrollIntoViewIfNeeded();
@@ -76,5 +73,24 @@ test.describe("Logged in toolbar on a phone", () => {
     // The strip must not have grown a vertical scrollbar or spilled over the
     // page - the fix is horizontal only.
     await expect(content).toHaveCSS("overflow-y", "hidden");
+
+    // The last button is the "Zespół" menu. Its list is drawn outside the
+    // strip, so the strip's overflow does not clip it, and it opens inside the
+    // window even from the right-hand end of a phone.
+    const team = page.locator(".user-toolbar .v-btn").last();
+    await expect(team).toHaveText(/Zespół/);
+    await team.click();
+    const github = page
+      .locator(".user-toolbar-menu")
+      .getByRole("link", { name: "Nowy bug w GitHubie" });
+    await expect(github).toBeVisible();
+    const entry = (await github.boundingBox())!;
+    expect(entry.x).toBeGreaterThanOrEqual(0);
+    expect(entry.x + entry.width).toBeLessThanOrEqual(PHONE.width);
+    expect(entry.y + entry.height).toBeLessThanOrEqual(PHONE.height);
+    // Neither of those sees clipping - a box is the same size whether an
+    // ancestor's overflow cuts it off or not. A trial click does: it checks the
+    // entry is what is actually under the pointer, without leaving for GitHub.
+    await github.click({ trial: true });
   });
 });

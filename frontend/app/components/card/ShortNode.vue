@@ -21,6 +21,16 @@
            above is often only „powiązanie” - the sector is the one thing on the
            card that says what the reader is being sent to. -->
       <ChipCompanyCategories :company="edgeCompany(edge)" class="my-1" />
+      <!-- Whether the relation itself is live, and an admin's way to make it
+           so. In the subtitle with the other chips: the append slot on this
+           card is the bin, and a card is the one surface where the two would
+           otherwise sit side by side. -->
+      <ChipEdgeDraftStatus
+        :edge-id="edge.id"
+        :published="edge.visibility"
+        :publishable="edgeIsPublishable(edge, subjectPublished)"
+        @published="emit('published')"
+      />
       <div v-if="edge.start_date || edge.end_date" class="text-caption">
         {{ edge.start_date }} - {{ edge.end_date || "obecnie" }}
       </div>
@@ -47,16 +57,27 @@
 
 <script setup lang="ts">
 import { mdiTrashCanOutline } from "@mdi/js";
-import { edgeCompany, type EdgeNode } from "~/composables/edges";
+import {
+  edgeCompany,
+  edgeIsPublishable,
+  type EdgeNode,
+} from "~/composables/edges";
 import { entityIcon } from "~/utils/entityIcon";
 import { nodeLinkUrl } from "~/composables/slugs";
 
-const { edge, canRemove } = defineProps<{
+const { edge, canRemove, subjectPublished } = defineProps<{
   edge: EdgeNode;
   /** Whether the card offers taking the relation off the graph outright, which
    * is an administrator's decision and nobody else's. */
   canRemove?: boolean;
+  /** Whether the page this card hangs off is itself published. See the same
+   * prop on `CardEmploymentHistory`. */
+  subjectPublished?: boolean;
 }>();
 
-const emit = defineEmits<{ remove: [edge: EdgeNode] }>();
+const emit = defineEmits<{
+  remove: [edge: EdgeNode];
+  /** The relation went live; the caller refetches if it draws it twice. */
+  published: [];
+}>();
 </script>

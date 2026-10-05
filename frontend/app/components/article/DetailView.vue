@@ -139,12 +139,16 @@
                only when it is opened. -->
           <div v-if="factsOpen" data-testid="article-facts-body">
             <div v-if="facts.length" data-testid="article-facts">
+              <!-- A fact ingest matched to this article is promoted with the
+                   article as its source, so the relation it became belongs in
+                   „Artykuł stanowi źródło dla” below. -->
               <ExtractionCard
                 v-for="fact in facts"
                 :key="fact.id ?? fact.url"
                 :fact="fact"
                 can-promote
                 class="mb-3"
+                @promoted="refreshSourced()"
               >
                 <template #actions>
                   <ExtractionVoteButtons v-if="fact.id" :id="fact.id" />

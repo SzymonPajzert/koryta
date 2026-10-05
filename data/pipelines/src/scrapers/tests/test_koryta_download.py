@@ -243,6 +243,33 @@ class TestWantedBlobs(unittest.TestCase):
         self.assertEqual(len(wanted), 3)
 
 
+class TestExportListing(unittest.TestCase):
+    """How much of the bucket a collection read asks to see.
+
+    The host holds every export ever taken, and listing all of it took a
+    quarter of an hour for each collection a pipeline read. A dated read keeps
+    one day's worth, so one day is all it should list.
+    """
+
+    def listed_prefix(self, collection: FirestoreCollection) -> str:
+        ctx = mock_ctx()
+        ctx.io.list_files.return_value = []
+        collection.process(ctx)
+        (ref,), _ = ctx.io.list_files.call_args
+        return ref.prefix
+
+    def test_a_dated_read_lists_only_that_day(self):
+        self.assertEqual(
+            self.listed_prefix(FirestoreCollection("nodes", date="2026-08-07")),
+            "hostname=koryta.pl/date=2026-08-07",
+        )
+
+    def test_an_undated_read_lists_the_whole_host(self):
+        self.assertEqual(
+            self.listed_prefix(FirestoreCollection("nodes")), "hostname=koryta.pl"
+        )
+
+
 class TestExportDtypes(unittest.TestCase):
     """The identifiers a comparison matches on have to survive being written.
 

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { mountSuspended } from "@nuxt/test-utils/runtime";
+import { describe, it, expect, vi } from "vitest";
+import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
 import { mount } from "@vue/test-utils";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
@@ -11,6 +11,9 @@ import ChipRelativeDuration from "../../../app/components/chip/RelativeDuration.
 import type { EdgeNode } from "../../../app/composables/edges";
 
 const vuetify = createVuetify({ components, directives });
+
+const { navigateTo } = vi.hoisted(() => ({ navigateTo: vi.fn() }));
+mockNuxtImport("navigateTo", () => navigateTo);
 
 function edge(fields: Partial<EdgeNode>): EdgeNode {
   return {
@@ -40,6 +43,39 @@ describe("CardEmploymentHistory", () => {
     ).toBe(true);
   });
 
+  it("marks a candidacy the person won", async () => {
+    // `elected` is set on 2 of the 14,518 stored candidacies and nothing
+    // rendered it, so no page could say anybody won anything.
+    const wrapper = await render([
+      edge({
+        id: "won",
+        type: "election",
+        label: "kandydatura",
+        elected: true,
+      }),
+    ]);
+    expect(wrapper.find('[data-testid="edge-elected-won"]').exists()).toBe(
+      true,
+    );
+    expect(wrapper.text()).toContain("Wybrany");
+  });
+
+  it("says nothing about a candidacy that carries no win", async () => {
+    // `false` is not "lost": `useEdgeEdit` writes it for every box a
+    // contributor left unticked, and PKW published no result at all for
+    // 68,728 of its 97,748 candidacy rows. Neither case may print a verdict
+    // about a named person.
+    for (const elected of [false, undefined]) {
+      const wrapper = await render([
+        edge({ id: "e1", type: "election", label: "kandydatura", elected }),
+      ]);
+      expect(wrapper.find('[data-testid="edge-elected-e1"]').exists()).toBe(
+        false,
+      );
+      expect(wrapper.text()).not.toContain("Wybrany");
+    }
+  });
+
   it("drops the duration bar for a relation that carries no dates", async () => {
     // `connection` has no date fields in the schema, so every one of them would
     // otherwise draw a full-width bar over a span nobody recorded.
@@ -62,6 +98,59 @@ describe("CardEmploymentHistory", () => {
     // control has to be absent rather than merely refused by the server.
     const wrapper = await render([edge({})]);
     expect(wrapper.find('[data-testid="edge-remove-e1"]').exists()).toBe(false);
+  });
+
+  it("hands each row's publication state to the badge that draws it", async () => {
+    // What decides whether the badge offers „Opublikuj" is the rule
+    // /api/edges/publish enforces - neither end still a draft - and the row is
+    // where both halves of it are known: the far end off `richNode`, the near
+    // one off the page this list belongs to.
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [
+          edge({
+            visibility: false,
+            richNode: {
+              id: "place",
+              type: "place",
+              name: "PKP",
+              visibility: true,
+            },
+          }),
+        ],
+        subjectPublished: true,
+      },
+    });
+
+    const badge = wrapper.findComponent({ name: "ChipEdgeDraftStatus" });
+    expect(badge.props()).toMatchObject({
+      edgeId: "e1",
+      published: false,
+      publishable: true,
+    });
+  });
+
+  it("does not offer publishing a relation whose far end is a draft", async () => {
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [
+          edge({
+            visibility: false,
+            richNode: {
+              id: "place",
+              type: "place",
+              name: "PKP",
+              visibility: false,
+            },
+          }),
+        ],
+        subjectPublished: true,
+      },
+    });
+
+    expect(
+      wrapper.findComponent({ name: "ChipEdgeDraftStatus" }).props(),
+    ).toMatchObject({ publishable: false });
   });
 
   it("asks the page to remove the row an admin clicked", async () => {
@@ -97,8 +186,15 @@ describe("EmploymentHistory sectors", () => {
     expect(wrapper.text()).toContain("Koleje");
     const chip = wrapper
       .findAllComponents({ name: "VChip" })
-      .find((c) => c.text() === "Koleje");
-    expect(chip?.props("to")).toBe("/eksploruj/tabela?category=koleje");
+      .find((c) => c.text() === "Koleje")!;
+    // Not a link of its own: the row already is one, to the employer, and a
+    // link inside a link is what the browser's parser takes apart.
+    expect(chip.element.tagName).not.toBe("A");
+    navigateTo.mockClear();
+    await chip.trigger("click");
+    expect(navigateTo).toHaveBeenCalledWith(
+      "/eksploruj/tabela?category=koleje",
+    );
   });
 
   it("says nothing for an employer filed under no sector", async () => {
@@ -320,6 +416,24 @@ describe("EmploymentHistory", () => {
     expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
   });
 
+  it("names the office a candidacy was for", () => {
+    // The report: a 2023 row read „kandydatura", the region and the committee,
+    // and nothing on it said that the run was for the Senate.
+    const wrapper = mountHistory([
+      candidacy({ label: "kandydatura", position: "Senat" }),
+    ]);
+
+    expect(wrapper.find('[data-testid="edge-office-e1"]').text()).toBe("Senat");
+  });
+
+  it("names no office on a relation that is not a candidacy", () => {
+    const wrapper = mountHistory([
+      candidacy({ type: "employed", label: "Prezes", position: "Senat" }),
+    ]);
+
+    expect(wrapper.find('[data-testid="edge-office-e1"]').exists()).toBe(false);
+  });
+
   it("shows no party chip for an employment that carries one", () => {
     const wrapper = mountHistory([
       candidacy({ type: "employed", label: "Prezes", party: "PiS" }),
@@ -469,5 +583,53 @@ describe("EmploymentHistory sources", () => {
     expect(
       wrapper.find('[data-testid="add-relation-employment"]').exists(),
     ).toBe(true);
+  });
+});
+
+/** The report on PZO Gliwice's page: one prokurent listed as „Prokurent" and
+ * again without a role, for one appointment stored twice. The row with no role
+ * reads „Zatrudniony/a w", the edge type's phrase, which `useEdges` puts in
+ * `label` when the edge has no `name`. See shared/rolelessSpells.ts. */
+describe("EmploymentHistory role-less copies", () => {
+  function janina(fields: Partial<EdgeNode>): EdgeNode {
+    return edge({
+      source: "janina",
+      target: "pzo",
+      label: "Zatrudniony/a w",
+      richNode: { id: "janina", type: "person", name: "Janina Podwójna" },
+      ...fields,
+    } as Partial<EdgeNode>);
+  }
+
+  const prokura = janina({
+    id: "prokurent",
+    name: "Prokurent",
+    label: "Prokurent",
+    start_date: "2026-07-14",
+  });
+
+  it("lists a prokura once, not again without its role", async () => {
+    const wrapper = await render([
+      janina({ id: "bez-funkcji", start_date: "2026-07-14" }),
+      prokura,
+    ]);
+
+    expect(wrapper.findAll(".history-row")).toHaveLength(1);
+    expect(wrapper.text()).toContain("Prokurent");
+    expect(wrapper.text()).not.toContain("Zatrudniony/a w");
+  });
+
+  it("keeps a role-less stint from years before the prokura", async () => {
+    const wrapper = await render([
+      janina({
+        id: "wczesniej",
+        start_date: "2012-03-01",
+        end_date: "2015-06-30",
+      }),
+      prokura,
+    ]);
+
+    expect(wrapper.findAll(".history-row")).toHaveLength(2);
+    expect(wrapper.text()).toContain("Zatrudniony/a w");
   });
 });

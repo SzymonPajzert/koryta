@@ -188,7 +188,13 @@ const page = computed<number>({
 
 const itemsPerPageParam = numberFilter("itemsPerPage");
 const itemsPerPage = computed<number>({
-  get: () => itemsPerPageParam.value ?? DEFAULT_ITEMS_PER_PAGE,
+  // Not the param as it stands: a link shared while the table still offered
+  // "Wszystkie" carries `itemsPerPage=-1`, which the api refuses. Such a link
+  // opens on the default page size instead of on an error.
+  get: () => {
+    const requested = itemsPerPageParam.value;
+    return requested && requested > 0 ? requested : DEFAULT_ITEMS_PER_PAGE;
+  },
   set: (val) => {
     // Asking for more rows is the same intent as turning the page, so it is the
     // same goal - what matters is that the reader wanted past the tenth row.

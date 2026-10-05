@@ -198,6 +198,25 @@ describe("/eksploruj/nowe", () => {
     expect(wrapper.find('input[type="number"]').exists()).toBe(false);
   });
 
+  it("narrows the queue to the tier the url asks for", async () => {
+    // Where the cards on /pomoc land. The score floor goes with it: the tier
+    // is already a shortlist, and a reader who picked one there asked for its
+    // people, not for the highly-rated subset of them.
+    const wrapper = await mountPage({ tier: "1" });
+
+    expect(currentQuery()).toMatchObject({ queueTier: 1, minVotes: 0 });
+    expect(wrapper.text()).toContain("Tylko poziom 1");
+  });
+
+  it("asks for no tier at all when the url names none", async () => {
+    // Absent rather than 0: `queueTier: 0` is a real tier value - the people
+    // nothing can be checked against - and asking for it would empty the
+    // default queue.
+    await mountPage();
+
+    expect(currentQuery().queueTier).toBeUndefined();
+  });
+
   it("advances the queue by at least one person", async () => {
     const wrapper = await mountPage();
 

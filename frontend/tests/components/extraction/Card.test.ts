@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { nextTick } from "vue";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import Card from "../../../app/components/extraction/Card.vue";
 import type { ExtractionFact } from "../../../shared/model";
@@ -131,14 +132,97 @@ describe("ExtractionCard", () => {
     ).toBe(false);
   });
 
-  it("greys itself when asked to stand behind a confirmed one", async () => {
-    const card = await mountSuspended(Card, {
-      props: { fact: fact(), muted: true },
+  describe("turning the fact into a relation", () => {
+    /** An employment matched to somebody - the kind that can become one. */
+    const employment = (fields: Partial<ExtractionFact> = {}) =>
+      fact({
+        fact_type: "employment",
+        organization: "Spółka Wodna",
+        role: "prezes zarządu",
+        personNodeId: "KIZV3jJgniMdX7AoRxN9",
+        personNodeName: "Piotr Gajda",
+        ...fields,
+      });
+
+    it("offers it where the surface asks for it", async () => {
+      const card = await mountSuspended(Card, {
+        props: { fact: employment(), canPromote: true },
+      });
+
+      expect(card.find("[data-testid='extraction-promote']").text()).toContain(
+        "Utwórz powiązanie",
+      );
     });
 
-    expect(card.find(".extraction-card").classes()).toContain(
-      "extraction-card--muted",
-    );
+    it("keeps it off the surfaces that do not", async () => {
+      const card = await mountSuspended(Card, {
+        props: { fact: employment() },
+      });
+
+      expect(card.find("[data-testid='extraction-promote']").exists()).toBe(
+        false,
+      );
+    });
+
+    it("offers nothing for a kind of fact no relation stands for", async () => {
+      // A party is not a node - see `factEdgeRule`.
+      const card = await mountSuspended(Card, {
+        props: {
+          fact: fact({
+            personNodeId: "KIZV3jJgniMdX7AoRxN9",
+            personNodeName: "Piotr Gajda",
+          }),
+          canPromote: true,
+        },
+      });
+
+      expect(card.find("[data-testid='extraction-promote']").exists()).toBe(
+        false,
+      );
+      expect(card.find("[data-testid='extraction-promoted']").exists()).toBe(
+        false,
+      );
+    });
+
+    it("says it is done, rather than offering it again, once somebody has", async () => {
+      // The reader picks the far end, so a second promotion could pick another
+      // node and leave two relations saying one thing.
+      const card = await mountSuspended(Card, {
+        props: {
+          fact: employment({ promotedEdgeIds: ["edge-1"] }),
+          canPromote: true,
+        },
+      });
+
+      expect(card.find("[data-testid='extraction-promote']").exists()).toBe(
+        false,
+      );
+      expect(card.find("[data-testid='extraction-promoted']").text()).toContain(
+        "Powiązanie utworzone",
+      );
+    });
+
+    it("says so straight away once it has made one here", async () => {
+      // The list the fact came from is not refetched, so the document's
+      // `promotedEdgeIds` would only arrive with the next reload.
+      const card = await mountSuspended(Card, {
+        props: { fact: employment(), canPromote: true },
+      });
+
+      await card
+        .findComponent({ name: "ExtractionPromoteDialog" })
+        .vm.$emit("promoted", "edge-1");
+      await nextTick();
+
+      expect(card.find("[data-testid='extraction-promote']").exists()).toBe(
+        false,
+      );
+      expect(card.find("[data-testid='extraction-promoted']").exists()).toBe(
+        true,
+      );
+      // Passed on, so the page can show the relation where it now lives.
+      expect(card.emitted("promoted")).toEqual([["edge-1"]]);
+    });
   });
 
   describe("the link to the quoted passage", () => {
@@ -232,6 +316,54 @@ describe("ExtractionCard", () => {
       expect(card.find("[data-testid='extraction-copy-quote']").exists()).toBe(
         false,
       );
+    });
+  });
+
+  describe("the way to the article's own page", () => {
+    // „jak przejść do widoku artykułu tak jak tutaj?” - asked by a reader who
+    // had found /artykul/... once and could not get back to it from the facts
+    // on a person's page, where the quote leads only out to the newspaper.
+    it("links a fact to the article page it came from, when asked to", async () => {
+      const card = await mountSuspended(Card, {
+        props: {
+          fact: fact({ articleNodeId: "g1Pr5yFTQJcyCdtiHKGk" }),
+          linkArticle: true,
+        },
+      });
+
+      const link = card.find("[data-testid='extraction-article-page']");
+      expect(link.exists()).toBe(true);
+      expect(link.attributes("href")).toBe(
+        "/entity/article/g1Pr5yFTQJcyCdtiHKGk",
+      );
+      expect(link.text()).toContain("Artykuł w bazie");
+      // Beside the quote's link rather than inside it: an anchor inside an
+      // anchor is invalid html, and the parser closes the outer one early.
+      expect(
+        card
+          .find("a.source-block [data-testid='extraction-article-page']")
+          .exists(),
+      ).toBe(false);
+    });
+
+    it("offers no such link for a fact no article page was matched to", async () => {
+      const card = await mountSuspended(Card, {
+        props: { fact: fact(), linkArticle: true },
+      });
+
+      expect(
+        card.find("[data-testid='extraction-article-page']").exists(),
+      ).toBe(false);
+    });
+
+    it("leaves it off by default, for the article's own page", async () => {
+      const card = await mountSuspended(Card, {
+        props: { fact: fact({ articleNodeId: "g1Pr5yFTQJcyCdtiHKGk" }) },
+      });
+
+      expect(
+        card.find("[data-testid='extraction-article-page']").exists(),
+      ).toBe(false);
     });
   });
 });

@@ -69,6 +69,52 @@ def parse_yes_no(s: str, _: Never) -> str:
     raise ValueError(f"Unknown bool: {s}")
 
 
+def parse_mandate(s: str, _: Never) -> str:
+    """
+    Read the `Mandat` column of a candidate list.
+
+    It is not a yes/no: PKW writes a letter naming *how* the seat was taken
+    and leaves everyone else either blank or `N`. Measured over every source
+    that carries the column, the whole vocabulary is
+    `T`/`W`/`G`/`B`/`L`/`P`/`O`/`K`/`N`, and each letter but the last is a
+    seat:
+
+    - `T` tak, `W` wybrany, `G` wybrany w głosowaniu -- the ordinary win;
+    - `B` bez głosowania, where a district fielded no more candidates than it
+      had seats, so nobody voted. These rows carry no vote count at all;
+    - `L` w losowaniu, a tie broken by drawing lots;
+    - `P` pierwszeństwo, a tie settled before it came to lots - "wybrany w
+      drodze pierwszeństwa do uzyskania mandatu przy remisie", as PKW's page
+      for the 1998 workbook defines it. All 109 `P` rows there are level on
+      votes with a candidate in the same district marked `N`;
+    - `O`/`K` z listy okręgowej / z listy krajowej, how the pre-2001 Sejm
+      files distinguish the two halves of the chamber.
+
+    `2` is not a letter but it is not a seat either: the 2006 wójt file gives
+    every candidate one row per round, and writes `2` into the first-round row
+    of anybody who went through to the second. Their result is on their
+    second-round row. The 2002 file writes `N` in the same place, so the
+    first-round row reads as not elected there too.
+
+    A blank means a loss, not an unknown. In 2018 `T` (43,683) plus `B`
+    (3,062) is exactly the 46,745 rows of `2018-radni.xlsx`, the separate
+    list of who was elected, and every blank row is absent from it. The
+    letter counts line up the same way elsewhere: `O` + `K` is 391 + 69 = 460
+    Sejm seats in 1991, 1993 and 1997, `T` is 100 senators, and `T` is 54/50/51
+    MEPs in 2004/2009/2014.
+    """
+    if s is None or s != s:  # None, or a pandas NaN
+        return "FALSE"
+
+    match str(s).strip():
+        case "T" | "W" | "G" | "B" | "L" | "P" | "O" | "K":
+            return "TRUE"
+        case "N" | "" | "nan" | "2":
+            return "FALSE"
+
+    raise ValueError(f"Unknown mandate: {s!r}")
+
+
 def lookup_teryt_from_city(teryt, city: str, _: None) -> str:
     # Remove trailing roman numerals, e.g. Warszawa II
     city = city.rstrip("I").rstrip()
@@ -100,13 +146,18 @@ CSV_HEADERS: dict[str, SetField | None] = {
     'Głosy\n"za"\'': None,
     'Zero "x"': None,
     "% gł. odd. na listę": None,
+    "% gł.\nna listę": None,
+    "% gł.\nw okr.": None,
     "% gł. w okręgu": None,
     "% głosów na listę": None,
     "% głosów w okręgu": None,
     "% głosów": None,
     "% głosów\nna listę": None,
     "% głosów\nw okręgu": None,
+    "% w okręgu": None,
+    "% z listy": None,
     "%": None,
+    "%\nw okr.": None,
     "1. imie": SetField("first_name"),
     "1. Imie": SetField("first_name"),
     "1. imię": SetField("first_name"),
@@ -138,6 +189,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Drugie imię": SetField("middle_name"),
     "Dzielnica": SetField("position", const_processor("Rada dzielnicy")),
     "Frekw.": None,
+    "Frekwencja": None,
     "Glosy": None,
     "Gł. bez wyb.": None,
     "Gł. kand.": None,
@@ -158,6 +210,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Głosy": None,
     "Gm. zam.": None,
     "Gmina m. z.": None,
+    "Gmina m. zam.": None,
     "Gmina m.z.": None,
     "Gmina Mandat": None,
     "Gmina miejsca zamieszkania": None,
@@ -190,6 +243,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Imiona Mandat": SetField("first_name"),
     "Imiona": SetField("first_name"),
     "Jednostka": None,
+    "Kandydat": None,
     "Kod gminy": SetField("teryt_candidacy"),
     "Kod TERYT": SetField("teryt_candidacy"),
     "Komitet  wyborczy": SetField("party"),
@@ -213,8 +267,11 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Liczba\ngłosów": None,
     "Lista": None,
     "Lp": None,
-    "Mand.": None,
-    "Mandat": None,
+    # The same column abbreviated, as the 1998 council workbook heads it.
+    "Mand.": SetField("candidacy_success", parse_mandate),
+    # Every candidate list that carries this column is a result file: the
+    # winners are marked, everyone else is blank or `N`. See parse_mandate.
+    "Mandat": SetField("candidacy_success", parse_mandate),
     "Miejce zam.": None,
     "Miejce\n zam.": None,
     "Miejsce zam.": None,
@@ -252,6 +309,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Nr pozycji": None,
     "Nr woj.": None,
     "Nr": None,
+    "Nr kand.": None,
     "Nr\nkand.": None,
     "Nr\nlisty": None,
     "Nr\nna liście": None,
@@ -271,6 +329,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Obwód": None,
     "Obywatelstwo": None,
     "Odd.": None,
+    "Oddane": None,
     "Okręg": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt),
     "Opis": None,
     "Oświadczenie": None,
@@ -295,6 +354,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Procent głosów oddanych w okręgu": None,
     "Procent głosów": None,
     "Przynależność do partii": SetField("party_member"),
+    "Przynależność do partii politycznej": SetField("party_member"),
     "Rada Nazwa": None,
     "Rada Okręg nr": None,
     "Rada Rada": None,
@@ -323,6 +383,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "TERYT Dzielnicy": SetField("teryt_candidacy"),
     "TERYT Gminy": SetField("teryt_candidacy"),
     "Teryt m. z.": SetField("teryt_living"),
+    "Teryt m.z.": SetField("teryt_living"),
     "TERYT m. z.": SetField("teryt_living"),
     "TERYT Mandat": SetField("teryt_candidacy"),
     "TERYT Powiatu": SetField("teryt_candidacy"),

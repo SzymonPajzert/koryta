@@ -32,6 +32,7 @@
         v-for="edge in edgesSorted"
         :key="edge.id"
         :to="nodeLinkUrl(edge.richNode)"
+        :target="newTab ? '_blank' : undefined"
         class="history-row mt-1"
         rounded
       >
@@ -53,6 +54,18 @@
           <span class="text-caption text-medium-emphasis text-wrap">
             {{ edgeLabel(edge) }}
           </span>
+          <!-- What the candidacy was for. The ingest names every one of them
+               „kandydatura", so a run for the Senate and one for a gmina
+               council read alike without it. Bold, as `ShortNode` prints it:
+               it is the word on the row that says which kind of election this
+               was. -->
+          <span
+            v-if="officeOf(edge)"
+            class="text-caption font-weight-bold"
+            :data-testid="`edge-office-${edge.id}`"
+          >
+            {{ officeOf(edge) }}
+          </span>
           <!-- Whose party the person at the other end is in. Never collides
                with the candidacy chip below: that one only shows on `election`
                rows, whose far end is a place. -->
@@ -64,6 +77,15 @@
           >
             {{ committeeOf(edge) }}
           </span>
+          <v-chip
+            v-if="wonSeat(edge)"
+            size="x-small"
+            color="success"
+            variant="flat"
+            :data-testid="`edge-elected-${edge.id}`"
+          >
+            Wybrany
+          </v-chip>
           <ChipPublicCompany :company="edgeCompany(edge)" />
           <!-- Which sector the employer belongs to, so a career reads as the
                shape it has - three railways and a water utility - rather than
@@ -71,6 +93,16 @@
                nothing where the row is not a company, or where nobody has filed
                one under a sector. -->
           <ChipCompanyCategories :company="edgeCompany(edge)" />
+          <!-- Whether the relation itself is live. Among the chips rather than
+               among the buttons on the right: it says what the row *is*, the
+               way the sector and the party do, and the one control it carries
+               belongs next to the words that explain it. -->
+          <ChipEdgeDraftStatus
+            :edge-id="edge.id"
+            :published="edge.visibility"
+            :publishable="isPublishable(edge)"
+            @published="emit('published')"
+          />
           <!-- Last, where the bar sits on a wide screen. On a phone the bar is
                a 200px track in a 210px column, clipped at both ends, and the
                dates it captions are the only part of it that survives the
@@ -218,6 +250,7 @@ import { relationPeriodLabel } from "~/utils/relationPeriod";
 import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
 import { asArray, type Company } from "~~/shared/model";
+import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~/composables/slugs";
 
@@ -244,6 +277,12 @@ const props = defineProps<{
   /** Whether each row offers taking the relation off the graph outright, which
    * is an administrator's decision and nobody else's. */
   canRemove?: boolean;
+  /** Whether the page these relations hang off is itself published. Decides
+   * whether an unpublished row offers an admin the way to publish it - a
+   * relation to a draft page cannot go live, and the draft's own „Opublikuj"
+   * dialog carries its relations along anyway. Left undefined where the surface
+   * does not know; see `edgeIsPublishable`. */
+  subjectPublished?: boolean;
   /** The institution this list belongs to, on the page that *is* one.
    *
    * A person's page has a different company on every row and reads it off the
@@ -259,6 +298,12 @@ const props = defineProps<{
    * The endpoint answers per post rather than per edge, so a caller builds this
    * with `predecessorsByEdge` (app/utils/succession.ts) rather than by hand. */
   predecessors?: Record<string, Predecessor>;
+  /** Whether a row opens the page at its far end in a tab of its own rather
+   * than in place of this one. For a host whose place is worth keeping: the
+   * note queue, whose „Cofnij" only reaches the verdicts given since the page
+   * was opened. The router's own navigation stands aside for `_blank`, so the
+   * browser opens the tab. */
+  newTab?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -266,7 +311,16 @@ const emit = defineEmits<{
   sources: [edge: EdgeNode];
   edit: [edge: EdgeNode];
   remove: [edge: EdgeNode];
+  /** A row went live. The badge hides itself, so a caller that draws the same
+   * relation only here need not listen; the ones that also draw it in a graph
+   * refetch on this. */
+  published: [];
 }>();
+
+/** Whether the row's „Opublikuj" is offered, for this list's subject. */
+function isPublishable(edge: EdgeNode): boolean {
+  return edgeIsPublishable(edge, props.subjectPublished);
+}
 
 /** How many articles a relation is cited to. An edge that predates
  * `references`, or one the graph returned without it, counts as none rather
@@ -275,8 +329,24 @@ function sourceCount(edge: EdgeNode) {
   return edge.references?.length ?? 0;
 }
 
+/** The rows this card lists: every relation it was handed, less the role-less
+ * copy of a prokura the same person also holds under its name over the same
+ * time. PZO Gliwice listed one of its prokurents as „Prokurent" and again as
+ * „Zatrudniony/a w", both from 2026-07-14 - one appointment, stored twice. See
+ * `withoutRedundantRoleless`, which is also why a role-less row beside a
+ * zarząd seat stays: that one is a different post.
+ *
+ * Here rather than in each host, so the person's page, the company's,
+ * `/eksploruj/nowe` and the drawer cannot disagree about it. The row is only
+ * left out of the list; the stored copy is still there, and taking the 35 such
+ * copies out of the database is a job for a migration rather than for 35
+ * clicks on a bin. */
+const listedEdges = computed(() =>
+  withoutRedundantRoleless(props.edges, employmentSpell),
+);
+
 const edgesSorted = computed(() => {
-  return props.edges.toSorted((a, b) => {
+  return listedEdges.value.toSorted((a, b) => {
     if (!a.start_date) return -1;
     if (!b.start_date) return 1;
 
@@ -317,6 +387,15 @@ function edgeLabel(edge: EdgeNode) {
   return displayRole(edge.label, roleOwner(edge)) ?? edge.label;
 }
 
+/** The office a candidacy was for - "Sejm", "Senat", "Rada gminy", or
+ * "Samorząd" for a local election where the pipeline did not keep which seat
+ * (see the `election` entry in server/utils/edges.ts).
+ *
+ * Guarded on the type for the reason `partyOf` is. */
+function officeOf(edge: EdgeNode): string | undefined {
+  return edge.type === "election" ? edge.position || undefined : undefined;
+}
+
 /** The party a candidacy was run for, on the edges that assert one.
  *
  * Only `election` edges carry it in the schema, but the check is explicit: a
@@ -342,6 +421,21 @@ function committeeOf(edge: EdgeNode): string | undefined {
     return undefined;
   }
   return edge.committee;
+}
+
+/** Whether PKW recorded this candidacy as winning the mandate.
+ *
+ * Only a win renders. `elected` is stored as a bare boolean, and `false` is
+ * what `useEdgeEdit` writes for every box a contributor left unticked, so it
+ * does not mean "lost" - it means nobody said, which is also true of the 70%
+ * of PKW's register that publishes no result at all. A "Przegrał" chip built
+ * on that would be a claim about a named person drawn from an absence.
+ *
+ * Guarded on the type for the reason `committeeOf` is: the card lists every
+ * relation a person has, and only a candidacy can be won.
+ */
+function wonSeat(edge: EdgeNode): boolean {
+  return edge.type === "election" && edge.elected === true;
 }
 
 /** Whether the edge asserts a period at all.

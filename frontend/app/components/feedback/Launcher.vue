@@ -1,19 +1,20 @@
 <template>
   <ClientOnly>
-    <!-- Narrow screens get the icon with no label beside it, so the button is
-         named here rather than being announced as an unlabelled control. -->
+    <!-- The same button at every width. Phones used to get the icon alone, but
+         the label's slot was still there, and VBtn draws a default slot in
+         place of its icon even when the slot renders nothing - so a phone got
+         a blank disc, reported as „a dot with no Zgłoś on it”. The label says
+         what the button is for; the aria-label says a little more. -->
     <v-btn
-      :icon="mdAndUp ? undefined : mdiMessageAlertOutline"
-      :prepend-icon="mdAndUp ? mdiMessageAlertOutline : undefined"
+      :prepend-icon="mdiMessageAlertOutline"
       color="primary"
       position="fixed"
       location="bottom end"
       class="feedback-fab"
-      :size="mdAndUp ? 'default' : 'small'"
       aria-label="Zgłoś błąd lub pomysł"
       @click="open = true"
     >
-      <span v-if="mdAndUp">Zgłoś</span>
+      Zgłoś
     </v-btn>
 
     <FeedbackDialog v-model="open" />
@@ -22,11 +23,11 @@
 
 <script setup lang="ts">
 import { mdiMessageAlertOutline } from "@mdi/js";
-import { ref } from "vue";
-import { useDisplay } from "vuetify";
+import { useFeedbackDialog } from "~/composables/feedbackDialog";
 
-const { mdAndUp } = useDisplay();
-const open = ref(false);
+// Shared, so „Zgłoś błąd albo pomysł” on the home call to action and
+// the card on /pomoc open this dialog rather than a second one of their own.
+const open = useFeedbackDialog();
 </script>
 
 <style scoped>

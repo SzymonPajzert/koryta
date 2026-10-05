@@ -53,9 +53,16 @@ vi.mock("firebase-admin/app", () => ({
   getApp: vi.fn(),
 }));
 
-vi.mock("../../../../server/utils/auth", () => ({
-  getUser: vi.fn().mockResolvedValue({ uid: "test-user-id" }),
+// Only `getUser` is faked. `requireDatascience` is a pure check on the decoded
+// token, so the endpoint's real gate runs against whatever `getUser` hands back.
+const mockGetUser = vi.fn();
+vi.mock("../../../../server/utils/auth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../../server/utils/auth")>()),
+  getUser: (...args: unknown[]) => mockGetUser(...args),
 }));
+
+/** The uploader's account, which is in the datascience group. */
+const caller = { uid: "test-user-id", datascience: true };
 
 // `withoutInternalFields` is pure and is what decides which of the stored
 // company's fields the revision carries, so the test wants the real one.
@@ -85,10 +92,24 @@ const { mockReadBody } = vi.hoisted(() => {
 describe("api/ingest/company", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockGetUser.mockResolvedValue(caller);
     // Reset query chain mocks
     mockWhere.mockReturnValue(queryMock);
     queryMock.where.mockReturnValue(queryMock);
     queryMock.limit.mockReturnValue(queryMock);
+  });
+
+  it("refuses a caller who is not in the datascience group", async () => {
+    // Being logged in is not enough: the revision this writes goes onto the
+    // node unreviewed, so any account could rename or publish a company.
+    mockGetUser.mockResolvedValue({ uid: "test-user-id" });
+    mockReadBody.mockResolvedValue({ krs: "12345", name: "Inna nazwa" });
+
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(createRevisionTransaction).not.toHaveBeenCalled();
+    expect(mockCommit).not.toHaveBeenCalled();
   });
 
   it("should throw 400 if krs is missing", async () => {
@@ -114,7 +135,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       mockRef,
       {
         name: "New Company",
@@ -155,7 +176,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef, // Expect the ref from the doc
       {
         // Layered over what is stored, so a field the payload says nothing
@@ -202,7 +223,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef,
       {
         content: "Old Content",
@@ -247,7 +268,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef,
       {
         name: "Updated Company",
@@ -278,7 +299,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       mockRef,
       {
         name: "Public Company",
@@ -320,7 +341,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef,
       {
         name: "Public Company",
@@ -352,7 +373,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       expect.anything(),
       {
         name: "PKP Szybka Kolej Miejska w Trójmieście",
@@ -392,7 +413,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef,
       expect.objectContaining({ categories: [] }),
       expect.objectContaining({ automatic: true }),
@@ -418,7 +439,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       expect.anything(),
       expect.objectContaining({ supervisoryBody: "rada-spoleczna" }),
       expect.objectContaining({ automatic: true }),
@@ -475,7 +496,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef,
       expect.objectContaining({ supervisoryBody: "rada-spoleczna" }),
       expect.objectContaining({ automatic: true }),
@@ -508,7 +529,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef,
       expect.objectContaining({ categories: ["koleje"] }),
       expect.objectContaining({ automatic: true }),
@@ -546,7 +567,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef,
       {
         name: "Kopalnia Wapienia Czatkowice",
@@ -579,7 +600,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       mockRef,
       {
         name: "SZPITAL POWIATOWY W GRÓJCU",
@@ -620,7 +641,7 @@ describe("api/ingest/company", () => {
       1,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       existingRef,
       {
         name: "Szpital sp. z o.o.",
@@ -681,7 +702,7 @@ describe("api/ingest/company", () => {
       2,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       edgeRef,
       {
         source: "child-id",
@@ -719,7 +740,7 @@ describe("api/ingest/company", () => {
       2,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       edgeRef,
       {
         source: "teryt1061",
@@ -943,7 +964,7 @@ describe("api/ingest/company", () => {
       2,
       mockDb,
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       edgeRef,
       {
         source: "teryt1061", // Must have correctly sliced
@@ -1039,7 +1060,7 @@ describe("api/ingest/company", () => {
     expect(createRevisionTransaction).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       { id: "edge-owner-id" },
       { source: "teryt2261011", target: "company-id", type: "owns" },
       { automatic: true, approve: true, published: true },
@@ -1047,7 +1068,7 @@ describe("api/ingest/company", () => {
     expect(createRevisionTransaction).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      { uid: "test-user-id" },
+      caller,
       { id: "edge-seat-id" },
       { source: "teryt2262", target: "company-id", type: "seat" },
       { automatic: true, approve: true, published: true },
@@ -1184,6 +1205,7 @@ describe("api/ingest/company, re-run over a company nothing has changed", () => 
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetUser.mockResolvedValue(caller);
     mockWhere.mockReturnValue(queryMock);
     queryMock.where.mockReturnValue(queryMock);
     queryMock.limit.mockReturnValue(queryMock);

@@ -3,33 +3,9 @@
     <div class="sec-head">
       <v-icon v-if="icon" :icon="icon" size="18" class="sec-head__icon" />
       <h3 class="text-h6">{{ title }}</h3>
-      <!-- The half of the explanation a reader may read rather than has to.
-           „Tekst który wyjaśnia o co chodzi (...) robi straszny bloat na
-           stronie (...) dodałbym to w jakimś dymku” is how it was reported,
-           about a section whose heading was followed by five lines of prose.
-           Opens on click as well as on hover, like `chip/RevisionStatus.vue`,
-           because a phone never hovers - and focusable and labelled, or the
-           sentence would exist only for a reader with a mouse. -->
-      <v-tooltip
-        v-if="info || $slots.info"
-        location="bottom start"
-        max-width="360"
-        open-on-click
-      >
-        <template #activator="{ props: infoProps }">
-          <v-icon
-            v-bind="infoProps"
-            :icon="mdiInformationOutline"
-            size="18"
-            class="sec-head__icon sec-head__info"
-            tabindex="0"
-            role="button"
-            :aria-label="`Co to jest: ${title}`"
-            data-testid="section-info"
-          />
-        </template>
+      <InfoBubble v-if="info || $slots.info" :label="title">
         <slot name="info">{{ info }}</slot>
-      </v-tooltip>
+      </InfoBubble>
       <!-- Rendered only when somebody filled the slot: an empty `v-spacer` in
            a flex row is a 100%-wide invisible column, which would push a
            heading with no controls hard against the left edge of nothing. -->
@@ -53,7 +29,11 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiInformationOutline } from "@mdi/js";
+// Imported rather than left to Nuxt's auto-import: this component's own tests
+// use a plain `mount` from @vue/test-utils, which has no auto-import resolver,
+// and an unresolved `<InfoBubble>` renders as nothing - so the bubble's tests
+// would go green while asserting on an element that is not there.
+import InfoBubble from "./InfoBubble.vue";
 
 /** The shell every section of an entity page is drawn in.
  *
@@ -88,12 +68,3 @@ defineProps<{
   info?: string;
 }>();
 </script>
-
-<style scoped>
-/* The one visual rule that does not live in `app.vue`: the bubble is drawn by
-   this component rather than by whoever fills a slot, so a scoped selector
-   does reach it. Cursor only - the tint is `sec-head__icon`'s. */
-.sec-head__info {
-  cursor: pointer;
-}
-</style>

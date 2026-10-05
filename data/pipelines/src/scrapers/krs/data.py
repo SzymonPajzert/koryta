@@ -9,6 +9,28 @@ from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
 from scrapers.stores.file import DownloadableFile as FileSource
 
+#: The catalogue entries REGON records as publicly owned - see `publicly_owned`.
+#: Not a seed like `SPOLKI_SKARBU_PANSTWA`: `CompaniesKRS.compute_public_krss`
+#: consults it only for a company whose register entry names no owner.
+REGON_PUBLIC_OWNERSHIP = "REGON_PUBLIC_OWNERSHIP_KRS"
+
+
+def publicly_owned(catalogue: pd.DataFrame) -> pd.DataFrame:
+    """The rows of the public-entity catalogue that REGON says the public owns.
+
+    The catalogue lists whoever provides a public service, not who owns them:
+    1,425 of its 5,510 entries with a KRS number are private hospitals, schools
+    and bus operators, which is why nothing reads the list as a whole as saying
+    a company is public. What it does carry, for every entry, is REGON's own
+    `Forma własności`, and the first digit of that code is the sector: 1 is
+    public - 111 Skarb Panstwa, 112 panstwowe osoby prawne, 113 samorzad, 12x
+    and 13x mixed with a public majority - and 2 is private.
+
+    Withdrawn entries are kept. Most of them were liquidated or merged away,
+    and they were public while the people on the site worked there.
+    """
+    return catalogue[catalogue["Forma własności"].astype(str).str.startswith("1")]
+
 
 class CompaniesHardcoded(Pipeline[KRS]):
     filename = None
@@ -90,9 +112,15 @@ class CompaniesHardcoded(Pipeline[KRS]):
 
     def process(self, ctx: Context):
         self.teryt.process(ctx)
+        public_companies = self.read_public_companies(ctx)
         self.register_partials(
             "PUBLIC_COMPANIES_KRS",
-            data=self.read_public_companies(ctx),
+            data=public_companies,
+            map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
+        )
+        self.register_partials(
+            REGON_PUBLIC_OWNERSHIP,
+            data=publicly_owned(public_companies),
             map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
         )
         register_companies(self)
@@ -1083,3 +1111,285 @@ def register_companies(self: CompaniesHardcoded):
             "0000770481",
         ],
     )
+
+    for wojewodztwo, krss in WOJEWODZTWA_SPOLKI.items():
+        self.register_partials(f"WOJEWODZTWO_{wojewodztwo}", data=list(krss))
+
+
+#: The companies each samorząd województwa lists itself as holding shares in,
+#: from its own BIP, read on 2026-09-28 with every KRS number checked against
+#: api-krs. Seeded because the register says so for only 135 of these 188:
+#: it names an S.A.'s shareholder only when there is one, and a stake under 10%
+#: in a spółka z o.o. not at all, so `CompaniesPublicByRegister` cannot find
+#: Pomorska Kolej Metropolitalna (94.17% Pomorskie), Port Lotniczy Bydgoszcz
+#: or Górnośląskie Przedsiębiorstwo Wodociągów. 29 had no connections bought
+#: when this was written, eleven of them regional loan, guarantee and
+#: development funds - the kind Pomorski Fundusz Pożyczkowy is, and the
+#: public-service catalogue does not list.
+#:
+#: Minority stakes are kept: a seed is a company worth crawling, not one called
+#: public, and `CompaniesKRS` still decides that from the odpis. The lists go
+#: stale - companies are founded, merged and sold - so each carries its source.
+WOJEWODZTWA_SPOLKI: dict[str, list[str]] = {
+    # https://bip.dolnyslask.pl/a,96056,udzialy-wojewodztwa-dolnoslaskiego-w-spolkach-prawa-handlowego.html
+    # (the list of 2026-08-03)
+    "DOLNOSLASKIE": [
+        "0000055025",  # AGENCJA ROZWOJU REGIONALNEGO "AGROREG" S.A. W NOWEJ RUDZIE
+        "0000055657",  # WROCŁAWSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000067163",  # UZDROWISKO LĄDEK - DŁUGOPOLE S.A.
+        "0000073772",  # KARKONOSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000073983",  # AGENCJA ROZWOJU REGIONALNEGO "ARLEG" S.A.
+        "0000086071",  # "PORT LOTNICZY WROCŁAW" S.A.
+        "0000099043",  # DOLNOŚLĄSKI FUNDUSZ GOSPODARCZY SP. Z O.O.
+        "0000104893",  # WYTWÓRNIA SPRZĘTU KOMUNIKACYJNEGO "PZL-KROSNO" S.A.
+        "0000110745",  # UZDROWISKO SZCZAWNO-JEDLINA S.A.
+        "0000128228",  # SANATORIA DOLNOŚLĄSKIE SP. Z O.O.
+        "0000143957",  # DOLNOŚLĄSKIE CENTRUM REHABILITACJI I ORTOPEDII SP. Z O.O.
+        "0000213275",  # DOLNOŚLĄSKA AGENCJA WSPÓŁPRACY GOSPODARCZEJ SP. Z O.O.
+        "0000242837",  # DOLNOŚLĄSKIE CENTRUM MEDYCZNE DOLMED S.A.
+        "0000298575",  # KOLEJE DOLNOŚLĄSKIE S.A.
+        "0000319739",  # DOLNOŚLĄSKI PARK INNOWACJI I NAUKI S.A.
+        "0000348483",  # "DOLNOŚLĄSKIE CENTRUM ZDROWIA PSYCHICZNEGO" SP. Z O.O.
+        "0000353252",  # INWESTYCJE DOLNOŚLĄSKIE SP. Z O.O.
+        "0000378062",  # STAWY MILICKIE S.A.
+        "0000415829",  # DOLNOŚLĄSKI FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://bip.kujawsko-pomorskie.pl/4437/spolki-z-udzialem-wojewodztwa.html
+    "KUJAWSKO_POMORSKIE": [
+        "0000033744",  # POMORSKA SPECJALNA STREFA EKONOMICZNA SP. Z O.O.
+        "0000062945",  # UZDROWISKO CIECHOCINEK S.A.
+        "0000066071",  # TORUŃSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000074794",  # ZAKŁAD SPRZĘTU ORTOPEDYCZNEGO I REHABILITACYJNEGO SP. Z O.O.
+        "0000121056",  # PORT LOTNICZY BYDGOSZCZ S.A.
+        "0000147815",  # KUJAWSKO-POMORSKI FUNDUSZ PORĘCZEŃ KREDYTOWYCH SP. Z O.O.
+        "0000155903",  # KUJAWSKO-POMORSKIE CENTRUM KOMPETENCJI CYFROWYCH SP. Z O.O.
+        "0000225897",  # KUJAWSKO-POMORSKI FUNDUSZ POŻYCZKOWY SP. Z O.O.
+        "0000331628",  # KUJAWSKO-POMORSKIE INWESTYCJE MEDYCZNE SP. Z O.O.
+        "0000370591",  # REGIONALNY OŚRODEK ZRÓWNOWAŻONEGO ROZWOJU SP. Z O.O.
+        "0000417604",  # KUJAWSKO-POMORSKI TRANSPORT SAMOCHODOWY S.A.
+        "0000671974",  # KUJAWSKO-POMORSKI FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000771343",  # KUJAWSKO-POMORSKIE INWESTYCJE REGIONALNE SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+        "0000930917",  # KUJAWSKO-POMORSKIE CENTRUM NAUKOWO-TECHNOLOGICZNE IM. PROF....
+    ],
+    # https://www.lodzkie.pl/urzad/spolki-wojewodztwa
+    "LODZKIE": [
+        "0000057719",  # "PORT LOTNICZY ŁÓDŹ IM. WŁADYSŁAWA REYMONTA" SP. Z O.O.
+        "0000059880",  # ŁÓDZKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000187053",  # "BIONANOPARK" SP. Z O.O.
+        "0000286937",  # "BIPROWŁÓK" SP. Z O.O.
+        "0000359408",  # "ŁÓDZKA KOLEJ AGLOMERACYJNA" SP. Z O.O.
+        "0000404953",  # WYTWÓRNIA FILMÓW OŚWIATOWYCH SP. Z O.O.
+        "0000507870",  # INWESTYCJE MEDYCZNE ŁÓDZKIEGO SP. Z O.O.
+        "0000832178",  # REGIONALNY FUNDUSZ ROZWOJU WOJEWÓDZTWA ŁÓDZKIEGO SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://umwl.bip.lubelskie.pl/index.php?id=531
+    # (as of 2025-12-31, plus Lubelskie Koleje, registered 2026-05-29)
+    "LUBELSKIE": [
+        "0000047934",  # "LUBELSKI RYNEK HURTOWY" S.A.
+        "0000061116",  # TARGI LUBLIN S.A.
+        "0000092480",  # PORT LOTNICZY LUBLIN S.A.
+        "0000173449",  # "CENTRUM INNOWACJI I TRANSFERU TECHNOLOGII LUBELSKIEGO PARK...
+        "0000228715",  # LUBELSKI PARK NAUKOWO -TECHNOLOGICZNY S.A.
+        "0000302534",  # PRZEDSIĘBIORSTWO KOMUNIKACJI SAMOCHODOWEJ W MIĘDZYRZECU POD...
+        "0000306605",  # LUBELSKIE DWORCE S.A.
+        "0000335852",  # PRZEDSIĘBIORSTWO KOMUNIKACJI SAMOCHODOWEJ W BIŁGORAJU SP. Z...
+        "0000911384",  # LUBELSKI REGIONALNY FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+        "0001210037",  # LUBELSKIE CENTRUM NIERUCHOMOŚCI SP. Z O.O.
+        "0001243843",  # LUBELSKIE KOLEJE SP. Z O.O.
+    ],
+    # https://bip.lubuskie.pl/system/pobierz.php?plik=wykaz_spolek_BIP_15.09.2026.pdf&id=c7919ffef9aa469f773ca06c06c14292
+    # (as of 2026-09-15)
+    "LUBUSKIE": [
+        "0000026425",  # "AGENCJA ROZWOJU REGIONALNEGO" S.A.
+        "0000086641",  # "ZIELONOGÓRSKI RYNEK ROLNO-TOWAROWY" S.A.
+        "0000127519",  # "LUBUSKI FUNDUSZ PORĘCZEŃ KREDYTOWYCH" SP. Z O.O.
+        "0000358240",  # LOTNISKO ZIELONA GÓRA/BABIMOST SP. Z O.O.
+        "0000364723",  # LUBUSKI PARK PRZEMYSŁOWO-TECHNOLOGICZNY SP. Z O.O.
+        "0000365415",  # LUBUSKI SZPITAL SPECJALISTYCZNY PULMONOLOGICZNO-KARDIOLOGIC...
+        "0000476259",  # WIELOSPECJALISTYCZNY SZPITAL WOJEWÓDZKI W GORZOWIE WLKP. SP...
+        "0000590170",  # LUBUSKIE CENTRUM ORTOPEDII IM. DR. LECHA WIERUSZA W ŚWIEBOD...
+        "0000596211",  # SZPITAL UNIWERSYTECKI IMIENIA KAROLA MARCINKOWSKIEGO W ZIEL...
+        "0000929422",  # POLREGIO S.A.
+        "0001064628",  # PARK TECHNOLOGII KOSMICZNYCH - BADAŃ, ROZWOJU I INNOWACJI S...
+        "0001146081",  # LUBUSKIE CENTRUM CYFRYZACJI GO CLOUD SP. Z O.O.
+        "0001227691",  # LUBUSKI TRANSPORT PUBLICZNY SP. Z O.O.
+    ],
+    # https://bip.malopolska.pl/umwm,a,121539,mienie-wojewodztwa-malopolskiego.html
+    # (the property report as of 2025-12-31)
+    "MALOPOLSKIE": [
+        "0000008522",  # MIĘDZYNARODOWY PORT LOTNICZY IM. JANA PAWŁA II KRAKÓW-BALIC...
+        "0000033198",  # MAŁOPOLSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000044181",  # TARNOWSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000058058",  # KRAKOWSKI PARK TECHNOLOGICZNY-SP. Z O.O.
+        "0000085864",  # MAŁOPOLSKIE DWORCE AUTOBUSOWE S.A.
+        "0000170122",  # MAŁOPOLSKIE BIURO GEODEZJI I TERENÓW ROLNYCH W TARNOWIE SP....
+        "0000195528",  # APOLLO FILM SP. Z O.O.
+        "0000220884",  # MAŁOPOLSKI FUNDUSZ PORĘCZEŃ KREDYTOWYCH SP. Z O.O. W LIKWID...
+        "0000242954",  # MAŁOPOLSKIE PARKI ZDROWIA SP. Z O.O.
+        "0000300761",  # PUHIT KRAKÓW SP. Z O.O.
+        "0000304258",  # MAŁOPOLSKA KOLUMNA TRANSPORTU SANITARNEGO SP. Z O.O.
+        "0000352784",  # SZPITAL SPECJALISTYCZNY IM. LUDWIKA RYDYGIERA W KRAKOWIE SP...
+        "0000367964",  # MAŁOPOLSKI REGIONALNY FUNDUSZ PORĘCZENIOWY SP. Z O.O.
+        "0000500799",  # "KOLEJE MAŁOPOLSKIE" SP. Z O.O.
+        "0000546817",  # KRAKÓW NOWA HUTA PRZYSZŁOŚCI S.A.
+        "0000709209",  # MAŁOPOLSKI FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+        "0000947256",  # IGRZYSKA EUROPEJSKIE 2023 SP. Z O.O. W LIKWIDACJI
+    ],
+    # https://mazovia.pl/survey/register/list/id.20
+    "MAZOWIECKIE": [
+        "0000116702",  # WARSZAWSKA KOLEJ DOJAZDOWA SP. Z O.O.
+        "0000171197",  # MAZOWIECKI FUNDUSZ PORĘCZEŃ SP. Z O.O.
+        "0000184990",  # "MAZOWIECKI PORT LOTNICZY WARSZAWA-MODLIN SP. Z O.O."
+        "0000206994",  # CENTRUM ADMINISTRACYJNE MAZOVIA SP. Z O.O. W LIKWIDACJI
+        "0000222735",  # "KOLEJE MAZOWIECKIE - KM" SP. Z O.O.
+        "0000236457",  # INSTYTUCJA FILMOWA "MAX-FILM" S.A.
+        "0000249823",  # AGENCJA ROZWOJU MAZOWSZA S.A.
+        "0000328664",  # "MAZOWIECKA AGENCJA ENERGETYCZNA" SP. Z O.O.
+        "0000336164",  # MAZOWIECKI SZPITAL BRÓDNOWSKI SP. Z O.O.
+        "0000336643",  # MAZOWIECKIE CENTRUM NEUROPSYCHIATRII SP. Z O.O.
+        "0000336825",  # MAZOWIECKI SZPITAL WOJEWÓDZKI IM. ŚW. JANA PAWŁA II W SIEDL...
+        "0000336826",  # SZPITAL MAZOWIECKI W GARWOLINIE SP. Z O.O.
+        "0000337011",  # MAZOWIECKIE CENTRUM REHABILITACJI "STOCER" SP. Z O.O.
+        "0000338846",  # MAZOWIECKIE CENTRUM STOMATOLOGII SP. Z O.O.
+        "0000349207",  # "MAZOWIECKI SZPITAL WOJEWÓDZKI DREWNICA" SP. Z O.O.
+        "0000490819",  # MAZOWIECKI SZPITAL SPECJALISTYCZNY SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://bip.opolskie.pl/category/spolki-samorzadowe/
+    "OPOLSKIE": [
+        "0000059084",  # WAŁBRZYSKA SPECJALNA STREFA EKONOMICZNA "INVEST-PARK" SP. Z...
+        "0000477870",  # MOSZNA ZAMEK SP. Z O.O.
+        "0000490720",  # CENTRUM TERAPII NERWIC W MOSZNEJ SP. Z O.O.
+        "0000514922",  # STOBRAWSKIE CENTRUM MEDYCZNE SP. Z O.O.
+        "0000592388",  # SZPITAL WOJEWÓDZKI W OPOLU SP. Z O.O.
+        "0000625798",  # OPOLSKIE CENTRUM REHABILITACJI W KORFANTOWIE SP. Z O.O.
+        "0000667942",  # OPOLSKI REGIONALNY FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://bip.podkarpackie.pl/samorzad/spolki
+    # (the list of 2026-08-25)
+    "PODKARPACKIE": [
+        "0000004324",  # HUTA STALOWA WOLA S.A.
+        "0000008207",  # RZESZOWSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000022693",  # PODKARPACKIE CENTRUM HURTOWE AGROHURT S.A.
+        "0000044261",  # ZAKŁADY METALOWE "DEZAMET" S.A.
+        "0000072889",  # TARNOBRZESKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000088952",  # "UZDROWISKO HORYNIEC" SP. Z O.O.
+        "0000098424",  # UZDROWISKO RYMANÓW S.A.
+        "0000296055",  # PORT LOTNICZY RZESZÓW-JASIONKA IM. RODZINY ULMÓW SP. Z O.O.
+        "0000677127",  # PODKARPACKI FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000710883",  # PODKARPACKIE CENTRUM INNOWACJI SP. Z O.O.
+        "0000715504",  # WDM SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://bip.podlaskie.eu/wojewodztwo/jednostki_spolki/spolki_prawa_handlowego/
+    "PODLASKIE": [
+        "0000051749",  # AGENCJA ROZWOJU REGIONALNEGO "ARES" S.A. W SUWAŁKACH
+        "0000061677",  # AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000222492",  # PODLASKI FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000246383",  # PODLASKA KOMUNIKACJA SAMOCHODOWA NOVA S.A.
+        "0000367645",  # WODOCIĄGI PODLASKIE SP. Z O.O.
+        "0000542436",  # WOSIR SZELMENT SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+        "0001068956",  # PODLASKI FUNDUSZ EKOSYSTEM DOLINA ROLNICZA 4.0 SP. Z O.O.
+    ],
+    # https://bip.pomorskie.eu/a,54179,mienie-wojewodztwa-pomorskiego.html
+    # (as of 2025-12-31, hospitals as of 2026-07)
+    "POMORSKIE": [
+        "0000004441",  # AGENCJA ROZWOJU POMORZA S.A.
+        "0000033744",  # POMORSKA SPECJALNA STREFA EKONOMICZNA SP. Z O.O.
+        "0000038362",  # MIĘDZYNARODOWE TARGI GDAŃSKIE S.A.
+        "0000052733",  # POMORSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000075422",  # PORT LOTNICZY GDAŃSK SP. Z O.O.
+        "0000076705",  # PKP SZYBKA KOLEJ MIEJSKA W TRÓJMIEŚCIE SP. Z O.O.
+        "0000103127",  # POMORSKI REGIONALNY FUNDUSZ PORĘCZEŃ KREDYTOWYCH SP. Z O.O.
+        "0000225512",  # POMORSKI FUNDUSZ POŻYCZKOWY SP. Z O.O.
+        "0000264374",  # POMORSKI FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000311943",  # INNOBALTICA SP. Z O.O.
+        "0000365210",  # POMORSKA KOLEJ METROPOLITALNA S.A.
+        "0000432908",  # SZPITAL SPECJALISTYCZNY W PRABUTACH SP. Z O.O.
+        "0000434843",  # SZPITAL DZIECIĘCY POLANKI IM. MACIEJA PŁAŻYŃSKIEGO W GDAŃSK...
+        "0000469668",  # SZPITAL SPECJALISTYCZNY W KOŚCIERZYNIE SP. Z O.O.
+        "0000478705",  # COPERNICUS PODMIOT LECZNICZY SP. Z O.O.
+        "0000492201",  # SZPITALE POMORSKIE SP. Z O.O.
+        "0000565090",  # WOJEWÓDZKI SZPITAL SPECJALISTYCZNY IM. JANUSZA KORCZAKA W S...
+        "0000684944",  # POMORSKIE CENTRUM REUMATOLOGICZNE IM. DR JADWIGI TITZ-KOSKO...
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://bip.slaskie.pl/wojewodztwo/jednostki_org_i_spolki_z_udzialem_wojewodztwa/spolki_z_udzialem_wojewodztwa/
+    "SLASKIE": [
+        "0000023650",  # GÓRNOŚLĄSKIE TOWARZYSTWO LOTNICZE S.A.
+        "0000042922",  # FUNDUSZ GÓRNOŚLĄSKI S.A.
+        "0000046440",  # AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000067503",  # HUTA ŁAZISKA S.A.
+        "0000073413",  # RUDZKA AGENCJA ROZWOJU "INWESTOR" SP. Z O.O.
+        "0000169777",  # PARK ŚLĄSKI IM. GEN. JERZEGO ZIĘTKA S.A.
+        "0000247533",  # GÓRNOŚLĄSKIE PRZEDSIĘBIORSTWO WODOCIĄGÓW S.A.
+        "0000357114",  # KOLEJE ŚLĄSKIE SP. Z O.O.
+        "0000444064",  # ŚLĄSKIE CENTRUM REHABILITACYJNO - UZDROWISKOWE IM. DR ADAMA...
+        "0000477883",  # STADION ŚLĄSKI SP. Z O.O. W LIKWIDACJI
+        "0000492008",  # SZPITAL CHORÓB PŁUC W SIEWIERZU SP. Z O.O.
+        "0000527630",  # ŚLĄSKIE CENTRUM REUMATOLOGII IM. GEN. JERZEGO ZIĘTKA W USTR...
+        "0000527775",  # UZDROWISKO GOCZAŁKOWICE-ZDRÓJ SP. Z O.O.
+        "0000532342",  # CENTRUM ZDROWIA DZIECKA I RODZINY IM. JANA PAWŁA II W SOSNO...
+        "0000566979",  # OŚRODEK LECZNICZO-REHABILITACYJNY "PAŁAC KAMIENIEC" SP. Z O.O.
+        "0000568080",  # SZPITAL SPECJALISTYCZNY W ZABRZU SP. Z O.O.
+        "0000824122",  # ŚLĄSKI FUNDUSZ ROZWOJU SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚĆIĄ
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://bip.sejmik.kielce.pl/667-spolki-prawa-handlowego/4709-spolki-prawa-handlowego-w-ktorych-wojewodztwo-swietokrzyskie-posiada-pakiet-udzialow-akcji.html
+    # (the list of 2026-01-07)
+    "SWIETOKRZYSKIE": [
+        "0000014800",  # HUTA OSTROWIEC S.A. W UPADŁOŚCI
+        "0000023144",  # INWESTSTAR S.A.
+        "0000039695",  # ŚWIĘTOKRZYSKA AGENCJA ROZWOJU REGIONU S.A.
+        "0000055824",  # "UZDROWISKO BUSKO-ZDRÓJ" S.A.
+        "0000080176",  # ŚWIĘTOKRZYSKIE CENTRUM INNOWACJI I TRANSFERU TECHNOLOGII SP...
+        "0000360966",  # ŚWIĘTOKRZYSKI FUNDUSZ PORĘCZENIOWY SP. Z O.O.
+        "0000362947",  # ŚWIĘTOKRZYSKI FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://bip.warmia.mazury.pl/kategoria/154/spolki-z-udzialem-wojewodztwa.html
+    "WARMINSKO_MAZURSKIE": [
+        "0000014479",  # WARMIŃSKO-MAZURSKA AGENCJA ROZWOJU REGIONALNEGO S.A. W OLSZ...
+        "0000137185",  # PORT LOTNICZY "MAZURY" SP. Z O.O.
+        "0000217603",  # WARMIŃSKO-MAZURSKI FUNDUSZ "PORĘCZENIA KREDYTOWE" SP. Z O.O.
+        "0000399439",  # WARMIA I MAZURY SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://bip.umww.pl/7---k_191---k_spolki
+    "WIELKOPOLSKIE": [
+        "0000003431",  # PORT LOTNICZY POZNAŃ-ŁAWICA SP. Z O.O.
+        "0000053695",  # AGENCJA ROZWOJU REGIONALNEGO S.A. W KONINIE
+        "0000059084",  # WAŁBRZYSKA SPECJALNA STREFA EKONOMICZNA "INVEST-PARK" SP. Z...
+        "0000094064",  # FUNDUSZ ROZWOJU I PROMOCJI WOJEWÓDZTWA WIELKOPOLSKIEGO S.A.
+        "0000174198",  # WIELKOPOLSKA AGENCJA ROZWOJU PRZEDSIĘBIORCZOŚCI SP. Z O.O.
+        "0000202703",  # MIĘDZYNARODOWE TARGI POZNAŃSKIE SP. Z O.O.
+        "0000343277",  # WIELKOPOLSKA SIEĆ SZEROKOPASMOWA S.A.
+        "0000349125",  # KOLEJE WIELKOPOLSKIE SP. Z O.O.
+        "0000385647",  # WIELKOPOLSKIE INWESTYCJE SAMORZĄDOWE SP. Z O.O.
+        "0000496614",  # WIELKOPOLSKIE CENTRUM RATOWNICTWA MEDYCZNEGO SP. Z O.O.
+        "0000504795",  # WOJEWÓDZKI ZAKŁAD OPIEKI PSYCHIATRYCZNEJ SP. Z O.O.
+        "0000530819",  # OŚRODEK PROFILAKTYKI I EPIDEMIOLOGII NOWOTWORÓW IM. ALINY P...
+        "0000645228",  # WIELKOPOLSKI FUNDUSZ ROZWOJU SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+    ],
+    # https://www.bip.wzp.pl/artykul/wykaz-spolek-z-udzialem-wojewodztwa-zachodniopomorskiego-0
+    # (the list of 2026-07-21)
+    "ZACHODNIOPOMORSKIE": [
+        "0000038385",  # PORT LOTNICZY SZCZECIN-GOLENIÓW SP. Z O.O.
+        "0000043530",  # ZACHODNIOPOMORSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000045345",  # KOSZALIŃSKA AGENCJA ROZWOJU REGIONALNEGO S.A.
+        "0000048198",  # "UZDROWISKO KOŁOBRZEG" S.A.
+        "0000075180",  # "UZDROWISKO ŚWINOUJŚCIE" S.A.
+        "0000118513",  # "WODOCIĄGI ZACHODNIOPOMORSKIE" SP. Z O.O.
+        "0000126048",  # "FUNDUSZ POMERANIA" SP. Z O.O.
+        "0000929422",  # POLREGIO S.A.
+        "0001237293",  # SZPITALE ZACHODNIOPOMORSKIE SP. Z O.O.
+    ],
+}

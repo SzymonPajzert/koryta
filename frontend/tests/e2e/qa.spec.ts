@@ -1,6 +1,13 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { logIn, USERS } from "./helpers/auth";
 import { QA_ITEMS } from "../../shared/qa";
+
+/** A filter chip, by the filter it sets rather than by its name. Every row is
+ * a button too, named after its entry, so the entry about „Problemy” on /qa
+ * matched the chip's name - and the chip's own name gains a count once
+ * something has been reported. */
+const filterChip = (page: Page, value: "issue" | "all") =>
+  page.locator(`[data-filter="${value}"]`);
 
 /** The newest entry is the one the page opens on, whatever it happens to be. */
 const NEWEST = QA_ITEMS[0]!;
@@ -21,12 +28,18 @@ test.describe("QA changelog", () => {
     const card = page.locator(`[data-qa-item="${NEWEST.id}"]`);
     await expect(card).toBeVisible({ timeout: 30_000 });
     await expect(card).toContainText(NEWEST.title);
-    // An unchecked entry opens with its instructions showing.
+    // One line until it is opened; open, the instructions are there.
+    await expect(card).not.toContainText(NEWEST.steps[0]!);
+    await card.locator("[data-row-toggle]").click();
     await expect(card).toContainText(NEWEST.steps[0]!);
 
     const feedback = `nie działa ${Date.now()}`;
     await card.getByLabel("Uwagi", { exact: false }).fill(feedback);
-    await card.getByRole("button", { name: "Coś nie działa" }).click();
+    // Exact: the line is a button too, and it names the verdict already given
+    // - "Coś nie działa", after an earlier run against the same emulator.
+    await card
+      .getByRole("button", { name: "Coś nie działa", exact: true })
+      .click();
 
     await expect(
       page.getByText("Zgłoszone - problem trafił do zespołu"),
@@ -34,7 +47,7 @@ test.describe("QA changelog", () => {
 
     // Reported problems leave the default list and turn up under "Problemy".
     await expect(card).toBeHidden({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Problemy" }).click();
+    await filterChip(page, "issue").click();
     await expect(card).toBeVisible();
 
     // The verdict is stored, not just held on the page. Reading it back waits
@@ -46,7 +59,9 @@ test.describe("QA changelog", () => {
       timeout: 60_000,
     });
 
-    await page.getByRole("button", { name: "Problemy" }).click();
+    await filterChip(page, "issue").click();
+    // A reload closes every row again.
+    await card.locator("[data-row-toggle]").click();
     await expect(card).toContainText("Twoja ocena: Coś nie działa", {
       timeout: 60_000,
     });
@@ -72,21 +87,20 @@ test.describe("QA changelog", () => {
     await expect(page.locator('[data-qa-loaded="true"]')).toBeVisible({
       timeout: 60_000,
     });
-    await page.getByRole("button", { name: "Wszystkie" }).click();
+    await filterChip(page, "all").click();
 
     const card = page.locator(`[data-qa-item="${SECOND.id}"]`);
     await expect(card).toBeVisible({ timeout: 30_000 });
-    // A settled entry keeps its instructions folded away and the note field
-    // with them, while an unchecked one opens on them - so this unfolds only
-    // when it needs to, rather than toggling whatever state it found.
+    // Every row starts as one line, whatever its state; the note field is in
+    // the open one.
+    await card.locator("[data-row-toggle]").click();
     const note = card.getByLabel("Uwagi", { exact: false });
-    if (!(await note.isVisible())) {
-      await card.getByRole("button", { name: "Jak sprawdzić" }).click();
-    }
 
     const feedback = `zgłoszenie z QA ${Date.now()}`;
     await note.fill(feedback);
-    await card.getByRole("button", { name: "Coś nie działa" }).click();
+    await card
+      .getByRole("button", { name: "Coś nie działa", exact: true })
+      .click();
     await expect(
       page.getByText("Zgłoszone - problem trafił do zespołu"),
     ).toBeVisible({ timeout: 30_000 });
@@ -103,32 +117,39 @@ test.describe("QA changelog", () => {
       const adminPage = await adminContext.newPage();
       await logIn(adminPage, USERS.admin, "/admin/opinie");
 
+      // Found by its message, which is on the line; the verdict is in the
+      // open row.
       const report = adminPage
-        .locator(".v-card", { hasText: feedback })
+        .locator("[data-feedback-id]", { hasText: feedback })
         .first();
       await expect(report).toBeVisible({ timeout: 60_000 });
+      await report.locator("[data-row-toggle]").click();
       await expect(report).toContainText(`QA: ${SECOND.title}`);
-      await expect(report).toContainText("Coś nie działa");
+      await expect(report.locator("[data-row-panel]")).toContainText(
+        "Coś nie działa",
+      );
     } finally {
       await adminContext.close();
     }
   });
 
-  test("QA is reached from the admin panel, not from the toolbar", async ({
+  test("QA is reached from the admin panel and a menu, never a button on the strip", async ({
     page,
   }) => {
     test.setTimeout(120_000);
 
     await logIn(page, USERS.admin, "/admin");
 
-    // The panel is the one place that links to the changelog now.
+    // The panel's tile; the menu's entry is not drawn until it opens.
     await expect(page.locator('a[href="/qa"]').first()).toBeVisible({
       timeout: 30_000,
     });
 
     // The contributor toolbar used to carry a QA button with a badge that
     // turned red for any reported problem, on every page of the site. Both are
-    // gone deliberately, so a link reappearing there is a regression.
+    // gone deliberately, so a link reappearing on the strip is a regression -
+    // the way in from there is the "Zespół" menu, which is drawn outside it.
     await expect(page.locator('.user-toolbar a[href="/qa"]')).toHaveCount(0);
+    await expect(page.locator(".user-toolbar .v-badge")).toHaveCount(0);
   });
 });

@@ -8,8 +8,11 @@
         location="bottom"
       >
         <template #activator="{ props: tooltipProps }">
+          <!-- The imported NuxtLink, not the string 'NuxtLink', which `:is`
+               looks up among globally registered components and does not
+               find: a segment with a `to` drew as an inert <nuxtlink> tag. -->
           <component
-            :is="segment.to ? 'NuxtLink' : 'div'"
+            :is="segment.to ? NuxtLink : 'div'"
             v-bind="tooltipProps"
             :to="segment.to"
             class="composition-bar__segment"
@@ -54,6 +57,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { NuxtLink } from "#components";
 import { formatCount, formatPercent } from "~/utils/chartTheme";
 
 export type CompositionSegment = {
@@ -113,6 +117,20 @@ const visible = computed(() => props.segments.filter((s) => s.value > 0));
   font-size: 0.75rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+
+/* The 9% threshold above is a proportion, and a proportion is not a width: on a
+   375px phone a segment can clear it and still be ~45px wide, which is less
+   than the four tabular figures printed inside it. The legend under the bar
+   carries every number anyway, so on a phone the bar is only the shape.
+
+   A media query rather than `useDisplay()`, because the breakpoint composable
+   resolves to the desktop default during SSR and the numbers would appear in
+   the server's markup and vanish on hydration. */
+@media (max-width: 599px) {
+  .composition-bar__value {
+    display: none;
+  }
 }
 
 .composition-bar__dot {

@@ -1,6 +1,13 @@
 <template>
   <v-card v-if="person" class="ma-2" flat>
-    <v-card-title class="text-wrap text-h5 mb-2 d-flex align-center ga-2">
+    <!-- `flex-wrap`, for the reason the person page's own heading has it: on
+         one line a long name kept its width and the party chips, which clip,
+         took all the squeeze - a double-barrelled surname on a 390px phone
+         left „PSL” as „P…”. Whatever does not fit now goes to the next line
+         whole. -->
+    <v-card-title
+      class="text-wrap text-h5 mb-2 d-flex flex-wrap align-center ga-2"
+    >
       <!-- Not `text-primary`. Sage on white is 1.85:1, and this is the
            person's name - the one thing on the card a reader has to be able
            to read. Default ink, with the underline kept for the hover. -->
@@ -35,7 +42,7 @@
           :key="query"
           :prepend-icon="mdiGoogle"
           variant="outlined"
-          class="ma-1"
+          class="ma-1 search-query"
           @click="searchInGoogle(query)"
         >
           {{ query }}
@@ -84,5 +91,19 @@ const { queries, searchInGoogle } = usePersonSearch(
 
 .person-link:hover {
   text-decoration: underline;
+}
+
+/* A query is a full name and a town, which on a phone is wider than the card.
+   Vuetify keeps a button's label on one line at a fixed height, so the label
+   ran out past both sides of its own outline and was cut off by the card.
+   Here it wraps inside the button, which grows to hold it. */
+.v-btn.search-query {
+  height: auto;
+  min-height: var(--v-btn-height);
+  padding-block: 6px;
+}
+
+.search-query :deep(.v-btn__content) {
+  white-space: normal;
 }
 </style>

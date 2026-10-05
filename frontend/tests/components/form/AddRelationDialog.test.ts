@@ -182,6 +182,42 @@ describe("AddRelationDialog", () => {
     expect(created()).toMatchObject({ source: "piotr", target: "node-1" });
   });
 
+  it("records a candidacy's win when the box is ticked", async () => {
+    // The same fields as the correction dialog, so a win can be said when the
+    // candidacy is first typed rather than only in a second edit.
+    const wrapper = mountDialog();
+    await pick(wrapper, { id: "krakow", type: "region", name: "Kraków" });
+
+    const box = document
+      .querySelector('[data-testid="add-relation-elected"]')
+      ?.querySelector("input");
+    expect(box).toBeTruthy();
+    box!.click();
+    await flushPromises();
+    await submit();
+
+    expect(created()).toMatchObject({ type: "election", elected: true });
+  });
+
+  it("drops the win when the reader switches to a relation that has none", async () => {
+    // The fields outlive a change of mind - only opening the dialog clears
+    // them - so a box ticked on a region would otherwise ride along, unseen,
+    // onto the employment picked after it.
+    const wrapper = mountDialog();
+    await pick(wrapper, { id: "krakow", type: "region", name: "Kraków" });
+    document
+      .querySelector('[data-testid="add-relation-elected"]')
+      ?.querySelector("input")
+      ?.click();
+    await flushPromises();
+
+    await pick(wrapper, orlen);
+    await submit();
+
+    expect(created()).toMatchObject({ type: "employed" });
+    expect(created()?.elected).not.toBe(true);
+  });
+
   it("says so when nothing can join the two", async () => {
     const wrapper = mountDialog({ nodeType: "region", nodeName: "Mazowsze" });
     await pick(wrapper, { id: "r2", type: "region", name: "Podlasie" });

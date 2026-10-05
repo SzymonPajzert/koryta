@@ -102,7 +102,8 @@
 
           <v-divider class="my-1" />
 
-          <!-- The escape hatch: the note and its url are all this view has, and
+          <!-- The escape hatch: the note, its url and - for a person or a
+               company - the record under the list are all this view has, and
                sometimes that is not enough to say what the entry is about. -->
           <v-list-item
             title="Nie da się ocenić tutaj"
@@ -117,6 +118,35 @@
             </template>
           </v-list-item>
         </v-list>
+
+        <!-- Who the note is about, so that a reviewer on a phone can read the
+             record without switching to the table. Under the choices rather
+             than above them: the note and a tap stay on the first screen, and
+             this is what a reviewer scrolls to when they need it.
+
+             Its own `<Suspense>`, keyed by the node. The section awaits its
+             reads, which makes it an async component, and a boundary of its
+             own is what gives it a fallback without holding up the card and
+             the choices. The key starts each node from that fallback rather
+             than leaving the last person under the next note while theirs
+             loads; two entries on one node, the common case, keep the record
+             already drawn. -->
+        <Suspense v-if="showSubject" :key="current.nodeId">
+          <LazyNoteTriageSubject :node-id="current.nodeId" class="mt-6" />
+          <template #fallback>
+            <div
+              class="d-flex align-center justify-center ga-2 mt-6 py-4 text-caption text-medium-emphasis"
+              data-testid="triage-subject-loading"
+            >
+              <v-progress-circular indeterminate size="16" width="2" />
+              {{
+                current.nodeType === "person"
+                  ? "Ładowanie danych osoby…"
+                  : "Ładowanie danych instytucji…"
+              }}
+            </div>
+          </template>
+        </Suspense>
       </div>
     </template>
 
@@ -141,7 +171,7 @@ import {
 } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { noteAdminTypeConfig } from "~/composables/notes";
-import type { NoteRow } from "~~/shared/model";
+import type { NodeType, NoteRow } from "~~/shared/model";
 
 definePageMeta({
   middleware: "admin",
@@ -178,6 +208,18 @@ const handled = computed(() => new Set(history.value.map((h) => h.row.key)));
 const judgedBeforeLoad = ref(0);
 
 const current = computed<NoteRow | undefined>(() => queue.value[0]);
+
+/** The kinds of node whose record is drawn under the choices. Not a region:
+ * its relations are every institution inside it and everyone who stood for
+ * election there - hundreds of rows, and a heavy read, for nothing a reviewer
+ * could take in on a phone. Not an article or a topic either, which the
+ * relations endpoint does not carry at all. */
+const SUBJECT_TYPES: NodeType[] = ["person", "place"];
+
+const showSubject = computed(
+  () =>
+    !!current.value?.nodeType && SUBJECT_TYPES.includes(current.value.nodeType),
+);
 
 /** What the server counted when the batch was fetched, less what has been
  * judged since - the fetch cannot know about verdicts given after it. Undoing
@@ -277,8 +319,9 @@ const record = async (verdict: Verdict) => {
 const classify = (adminType: string) =>
   record({ adminType, adminTypeDeferred: false });
 
-/** This view holds the note and its url and nothing else; when that is not
- * enough, the entry goes to the table rather than back around this queue. */
+/** This view holds the note, its url and at most the node's record; when that
+ * is not enough, the entry goes to the table rather than back around this
+ * queue. */
 const defer = () => record({ adminType: null, adminTypeDeferred: true });
 
 const undo = async () => {

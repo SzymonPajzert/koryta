@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  addsOnlyAnnotations,
   edgeDocumentId,
   edgeIdentity,
   edgeSemantics,
@@ -212,6 +213,35 @@ describe("edgeRelation", () => {
         withCommittee,
       ),
     ).toBe("same");
+  });
+});
+
+describe("the result of a candidacy", () => {
+  const won: EdgeLike = { ...candidacy, elected: true };
+
+  it("enriches a stored candidacy without changing which one it is", () => {
+    // Both at once, and they pull opposite ways: the result has to be worth
+    // writing, and it must not move the edge to a different document id, or
+    // every winning candidacy would be stored a second time.
+    expect(edgeRelation(candidacy, won)).toBe("enriches");
+    expect(edgeIdentity(won)).toBe(edgeIdentity(candidacy));
+  });
+
+  it("is a conflict where the stored edge says otherwise", () => {
+    expect(edgeRelation({ ...candidacy, elected: true }, won)).toBe("same");
+  });
+
+  it("can be written out on its own, but not alongside a committee", () => {
+    expect(addsOnlyAnnotations(candidacy, won)).toBe(true);
+    expect(
+      addsOnlyAnnotations(candidacy, { ...won, committee: "KWW Nasza Gmina" }),
+    ).toBe(false);
+    // Nothing to add is not "only annotations to add".
+    expect(addsOnlyAnnotations(won, won)).toBe(false);
+    // A type with no annotations never takes the shortcut.
+    expect(
+      addsOnlyAnnotations(spell, { ...spell, end_date: "2020-01-01" }),
+    ).toBe(false);
   });
 });
 

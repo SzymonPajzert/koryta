@@ -79,25 +79,68 @@ export function regionNamesByPlaceId(
   return names;
 }
 
-/** Node ids of the places a person holds or held a post at.
+type EmploymentEdge = {
+  type?: string;
+  richNode?: { id?: string; type?: string; name?: string } | null;
+};
+
+/** The places a person holds or held a post at, as their edges carry them.
  *
  * Only `employed` edges count: an `owns` edge to a company says the person is
  * behind it, not that they ever sat there, and a `connection` says nothing
  * about a workplace at all.
  */
-export function employmentPlaceIds(
-  edges: {
-    type?: string;
-    richNode?: { id?: string; type?: string } | null;
-  }[],
-): string[] {
-  const ids: string[] = [];
-  for (const edge of edges) {
-    if (edge.type !== "employed") continue;
-    const node = edge.richNode;
-    if (node?.type === "place" && node.id) ids.push(node.id);
-  }
-  return ids;
+function employmentPlaces(edges: EmploymentEdge[]) {
+  return edges
+    .filter((edge) => edge.type === "employed")
+    .map((edge) => edge.richNode)
+    .filter((node) => node?.type === "place");
+}
+
+/** Node ids of the places a person holds or held a post at. */
+export function employmentPlaceIds(edges: EmploymentEdge[]): string[] {
+  return employmentPlaces(edges)
+    .map((node) => node?.id)
+    .filter((id): id is string => !!id);
+}
+
+/** The town the pipelines wrote after a company's name, where they did.
+ *
+ * Every company whose name does not already say where it is gets its seat's
+ * town appended in brackets - `display_name` in
+ * `data/pipelines/src/entities/company.py` - because a register full of
+ * „Zakład Gospodarki Komunalnej" cannot be told apart otherwise. So the town is
+ * already in hand wherever the name is, which is what the person page's
+ * employment rows print: „WOJEWÓDZKIE CENTRUM SZPITALNE KOTLINY JELENIOGÓRSKIEJ
+ * (Jelenia Góra)".
+ *
+ * Only a bracket that closes the name, and only one written the way the
+ * register writes a town - a capital, then lower case - since the names
+ * themselves are in capitals: an abbreviation such as „(PGE)" or a remark such
+ * as „(w likwidacji)" is part of the name, not a place.
+ */
+export function townInCompanyName(
+  name: string | undefined,
+): string | undefined {
+  const bracket = name?.match(/\(([^()]+)\)\s*$/)?.[1]?.trim();
+  if (!bracket) return undefined;
+  if (!/^\p{Lu}/u.test(bracket) || !/\p{Ll}/u.test(bracket)) return undefined;
+  return bracket;
+}
+
+/** The towns of a person's employers, read off the employers' names, once each.
+ *
+ * A stand-in for `workLocationRegions` where the region collection is not worth
+ * fetching: that is the seat as the graph records it, but reaching it means
+ * `useCompanyLocations` and every region there is, which a person's page is not
+ * going to load for one menu. A company whose name carries no town - one whose
+ * name already spelled it out, or one added by hand - is left out.
+ */
+export function employmentTowns(edges: EmploymentEdge[]): string[] {
+  const towns = employmentPlaces(edges)
+    .map((node) => townInCompanyName(node?.name))
+    .filter((town): town is string => !!town);
+  return Array.from(new Set(towns));
 }
 
 /** The regions a person has worked in, from the places they were employed at.

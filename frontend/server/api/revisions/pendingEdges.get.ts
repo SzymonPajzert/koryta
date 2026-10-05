@@ -62,8 +62,9 @@ export type PendingEdgeRevision = {
  * Admin-only, because it reads through the admin SDK and so bypasses the
  * Firestore rules, which deny `/edges` to the client outright.
  *
- * Rendered by /admin/rewizje-krawedzi. Not to be confused with
- * /admin/krawedzie, which lists edges that are ready to be published.
+ * Rendered by the „Zmiany powiązań” section of /admin/rewizje (#powiazania).
+ * Not to be confused with /admin/krawedzie, which lists edges that are ready
+ * to be published.
  */
 export default defineEventHandler(async (event) => {
   const user = await getUser(event);

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { logIn, USERS } from "./helpers/auth";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
@@ -56,6 +56,23 @@ async function seedPendingRevision(stamp: number) {
   return { db, uid, email, nodeId, revisionId, name };
 }
 
+/** The approve button for the seeded revision on the entry's page.
+ *
+ * Deciding happens in the history list above the comparison table, inside the
+ * revision's row - which opens by itself, being the newest one still waiting.
+ * `getByTestId` is strict, so this also pins that the table's column headers no
+ * longer carry a second button with the same id.
+ */
+async function approveButton(page: Page, revisionId: string) {
+  const row = page.locator(`[data-revision-row="${revisionId}"]`);
+  await expect(row.locator("[data-row-panel]")).toBeVisible({
+    timeout: 30_000,
+  });
+  const approve = page.getByTestId(`approve-${revisionId}`);
+  await expect(approve).toBeVisible();
+  return approve;
+}
+
 test.describe("Mail about a reviewed revision", () => {
   test("approving queues a message to the contributor", async ({ page }) => {
     // Registering, logging in and waiting for onRevisionWritten all sit in
@@ -70,8 +87,7 @@ test.describe("Mail about a reviewed revision", () => {
     await page.goto(`/admin/rewizje/${nodeId}`, {
       waitUntil: "domcontentloaded",
     });
-    const approve = page.getByTestId(`approve-${revisionId}`);
-    await expect(approve).toBeVisible({ timeout: 30_000 });
+    const approve = await approveButton(page, revisionId);
     await approve.click();
 
     // The write to `mail` happens after the approval is committed and the
@@ -103,8 +119,7 @@ test.describe("Mail about a reviewed revision", () => {
     await page.goto(`/admin/rewizje/${nodeId}`, {
       waitUntil: "domcontentloaded",
     });
-    const approve = page.getByTestId(`approve-${revisionId}`);
-    await expect(approve).toBeVisible({ timeout: 30_000 });
+    const approve = await approveButton(page, revisionId);
     await approve.click();
 
     // The approval itself must still go through - the mail is a courtesy on

@@ -7,19 +7,18 @@ and returns what it left out, so the uploader is what has to say so: a fix that
 turns a visible 500 into a silent omission is not a fix.
 """
 
-import collections
 from unittest.mock import MagicMock
 
 from uploader import PersonUploader
 
 
 def uploader() -> PersonUploader:
-    """A PersonUploader without its constructor, which performs a browser login."""
-    instance = object.__new__(PersonUploader)
-    instance.args = MagicMock(endpoint="http://localhost:3000")
-    instance.headers = {}
-    instance.unplaced = collections.Counter()
-    return instance
+    """A PersonUploader whose sign-in is never asked for: nothing here is sent."""
+    return PersonUploader(
+        MagicMock(endpoint="http://localhost:3000", type="person"),
+        tokens=MagicMock(),
+        session=MagicMock(),
+    )
 
 
 def response(status: int = 200, **body) -> MagicMock:

@@ -15,16 +15,25 @@
           size="small"
           class="text-medium-emphasis flex-shrink-0"
         />
+        <!-- The imported component, not the string 'NuxtLink': Nuxt imports a
+             component where a template names it, while a string handed to
+             `:is` is looked up at render time among the globally registered
+             ones, which NuxtLink is not. The name drew as an inert <nuxtlink>
+             tag that looked like a link and went nowhere.
+
+             The open-in-new icon goes inside the anchor, so the name and the
+             icon are one target - beside it, the icon looked clickable and
+             was not. -->
         <component
-          :is="entityUrl ? 'NuxtLink' : 'span'"
+          :is="entityUrl ? NuxtLink : 'span'"
           :to="entityUrl"
           :target="entityUrl ? '_blank' : undefined"
           class="text-subtitle-2 font-weight-medium node-name"
           :class="entityUrl ? 'text-primary' : undefined"
         >
           {{ row.nodeName ?? row.nodeId }}
+          <v-icon v-if="entityUrl" :icon="mdiOpenInNew" size="x-small" />
         </component>
-        <v-icon v-if="entityUrl" :icon="mdiOpenInNew" size="x-small" />
       </div>
 
       <div class="d-flex align-center flex-wrap ga-2">
@@ -78,6 +87,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { mdiHelp, mdiLink, mdiOpenInNew } from "@mdi/js";
+import { NuxtLink } from "#components";
 import { noteKindConfig } from "~/composables/notes";
 import { generateEntityUrl } from "~/composables/slugs";
 import type { NoteRow } from "~~/shared/model";

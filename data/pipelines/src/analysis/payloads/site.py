@@ -65,6 +65,12 @@ class EdgeSemantics:
     #: Whether a stored edge may be matched by an incoming one that contradicts
     #: nothing and fills in a discriminator it lacks.
     enrichable: bool
+    #: Fields that say something about the episode without saying *which*
+    #: episode it is. They enrich - filling one in is a reason to write - but
+    #: never take part in `edge_identity`, so learning one cannot move an edge
+    #: to another document. Mirrors `annotations` in server/utils/edges.ts;
+    #: `elected` is the one that exists.
+    annotations: tuple[str, ...] = ()
 
 
 EDGE_SEMANTICS: dict[str, EdgeSemantics] = {
@@ -78,7 +84,10 @@ EDGE_SEMANTICS: dict[str, EdgeSemantics] = {
     "source": EdgeSemantics("state", (), False),
     "employed": EdgeSemantics("occurrence", ("name", "start_date"), False),
     "election": EdgeSemantics(
-        "occurrence", ("position", "start_date", "party", "committee", "term"), True
+        "occurrence",
+        ("position", "start_date", "party", "committee", "term"),
+        True,
+        ("elected",),
     ),
     "connection": EdgeSemantics(
         "authored", ("name", "content", "start_date", "end_date"), False
@@ -195,7 +204,8 @@ def edge_relation(
     disagreement, because the pipeline saying nothing is not saying "none".
     """
     added = 0
-    for name in semantics(incoming.get("type")).discriminators:
+    rules = semantics(incoming.get("type"))
+    for name in (*rules.discriminators, *rules.annotations):
         before = field(stored, name)
         after = field(incoming, name)
         if before is None:
@@ -688,6 +698,11 @@ class SiteSnapshot:
                 edge["party"] = election["party"]
             if election.get("committee"):
                 edge["committee"] = election["committee"]
+            # Only a win, the way `createElection` writes only a win - so the
+            # prediction does not count a recorded defeat as something the
+            # upload would store.
+            if election.get("elected") is True:
+                edge["elected"] = True
             if election.get("election_year"):
                 edge["start_date"] = f"{election['election_year']}-01-01"
 
@@ -756,7 +771,13 @@ class _EdgeMatcher:
         enrichable: list[dict] = []
         for stored in siblings:
             if edge_identity(stored) == identity:
-                same.append(stored)
+                # The same episode by everything that says which episode it is,
+                # and still possibly missing an annotation this row carries -
+                # which is a write. See the same branch in `findEdgeMatches`.
+                if may_enrich and edge_relation(stored, edge) == "enriches":
+                    enrichable.append(stored)
+                else:
+                    same.append(stored)
                 continue
             if not may_enrich or not meets_enrich_floor(stored):
                 continue

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -116,7 +117,9 @@ func (d *Dumper) Run(ctx context.Context) error {
 				}
 
 				if err != nil {
-					errCh <- fmt.Errorf("failed processing %s: %w", hostname, err)
+					err = fmt.Errorf("failed processing %s: %w", hostname, err)
+					log.Println(err)
+					errCh <- err
 				}
 
 				current := atomic.AddInt32(&processedCount, 1)
@@ -135,15 +138,10 @@ func (d *Dumper) Run(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 	if len(errs) > 0 {
-		log.Printf("Encountered %d errors during hostname processing", len(errs))
-		for i, err := range errs {
-			if i < 5 {
-				log.Println(err)
-			}
-		}
-		if len(errs) > 5 {
-			log.Println("... and more")
-		}
+		// Each one was logged as it happened. Returning them is what makes the
+		// process exit non-zero, so a scheduled run that lost hosts shows up
+		// as failed rather than as a quiet line in its log.
+		return fmt.Errorf("%d of %d hostnames failed: %w", len(errs), len(hostnames), errors.Join(errs...))
 	}
 
 	log.Println("Run completed successfully")
@@ -350,6 +348,9 @@ type downloadedFile struct {
 	data []byte
 }
 
+// createTarGz uploads files to destPath as one tar.gz, with indexContent as
+// its first member, index.txt. Either the whole archive is published or
+// nothing is.
 func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileInfo, indexContent string) error {
 	if d.cfg.DryRun {
 		log.Printf("[DRY-RUN] Would create %s with %d files", destPath, len(files))
@@ -358,14 +359,39 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 
 	log.Printf("Creating %s...", destPath)
 	timeNow := time.Now().UTC()
-	w := d.outClient.WriteObject(ctx, destPath)
-	defer w.Close()
 
+	// Closing a GCS writer publishes whatever was written to it, and the next
+	// incremental run starts after the newest archive it finds, so a truncated
+	// archive would hide the objects it is missing for good. The only way to
+	// abandon an upload is to cancel the context the writer was opened with,
+	// so a failure does that before the writer is closed.
+	uploadCtx, abortUpload := context.WithCancel(ctx)
+	defer abortUpload()
+	w := d.outClient.WriteObject(uploadCtx, destPath)
+
+	if err := d.writeTarGz(ctx, w, destPath, files, indexContent); err != nil {
+		abortUpload()
+		_ = w.Close() // Waits for the abandoned upload; err already says why.
+		log.Printf("Abandoned %s, nothing was published", destPath)
+		return err
+	}
+	// Close is where GCS reports how the upload went. An archive smaller than
+	// the writer's 16 MiB chunk is sent whole from inside it, so for most
+	// archives this is the only place a refused upload shows.
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("failed to upload %s: %w", destPath, err)
+	}
+	log.Printf("Finished after %v creating %s", time.Since(timeNow), destPath)
+	return nil
+}
+
+// writeTarGz streams the archive into w and finishes the tar and gzip streams,
+// but leaves closing w, which publishes it, to the caller. It returns only
+// once every download worker has exited.
+func (d *Dumper) writeTarGz(ctx context.Context, w io.Writer, destPath string, files []FileInfo, indexContent string) error {
+	timeNow := time.Now().UTC()
 	gw := gzip.NewWriter(w)
-	defer gw.Close()
-
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
 
 	// Write index file
 	indexBytes := []byte(indexContent)
@@ -411,7 +437,12 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 		}
 	}()
 
-	g, gCtx := errgroup.WithContext(ctx)
+	// errgroup cancels gCtx only when a worker fails. A failed append has to
+	// stop the workers too, or those waiting to hand over a file nobody will
+	// read any more block forever.
+	downloadCtx, stopDownloads := context.WithCancel(ctx)
+	defer stopDownloads()
+	g, gCtx := errgroup.WithContext(downloadCtx)
 
 	jobs := make(chan FileInfo, len(files))
 	for _, f := range files {
@@ -424,6 +455,9 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 	for i := 0; i < workers; i++ {
 		g.Go(func() error {
 			for file := range jobs {
+				if err := gCtx.Err(); err != nil {
+					return err
+				}
 				data, err := d.downloadFile(gCtx, file.Name)
 				if err != nil {
 					return err
@@ -447,13 +481,23 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 
 	for res := range results {
 		if err := d.appendDataToTar(ctx, tw, res.file, res.data); err != nil {
+			stopDownloads()
+			g.Wait()
 			return err
 		}
 		appendedCount.Add(1)
 	}
-	cancelReport()
-	log.Printf("Finished after %v creating %s", time.Since(timeNow), destPath)
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("failed to finish the tar stream: %w", err)
+	}
+	if err := gw.Close(); err != nil {
+		return fmt.Errorf("failed to finish the gzip stream: %w", err)
+	}
+	return nil
 }
 
 func getTarHeaderName(hostname, filename string) string {

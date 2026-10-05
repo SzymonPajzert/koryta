@@ -213,6 +213,38 @@ describe("/api/stats/activity", () => {
     });
   });
 
+  it("tells a reader whether anybody else sees the name on their own row", async () => {
+    // Named to them either way, so `named` cannot say it; the chip's tooltip
+    // used to promise "visible to everyone" to people the others see masked.
+    mockGetUser.mockResolvedValue({ uid: "quiet" });
+
+    const hidden = await call();
+
+    expect(hidden.contributors[1]).toMatchObject({
+      named: true,
+      isSelf: true,
+      publicName: false,
+    });
+    // Only on their own row: it is an answer about them.
+    expect(hidden.contributors[0]).not.toHaveProperty("publicName");
+
+    userDocs.set("quiet", { publicProfile: true });
+    const shown = await call();
+
+    expect(shown.contributors[1]).toMatchObject({ publicName: true });
+  });
+
+  it("does not tell a signed-out reader about anybody's setting", async () => {
+    mockGetUser.mockResolvedValue(null);
+    userDocs.set("busy", { publicProfile: true });
+
+    const result = await call();
+
+    expect(
+      result.contributors.some((contributor) => "publicName" in contributor),
+    ).toBe(false);
+  });
+
   it("still hands a signed-in non-admin no uids", async () => {
     mockGetUser.mockResolvedValue({ uid: "quiet" });
 

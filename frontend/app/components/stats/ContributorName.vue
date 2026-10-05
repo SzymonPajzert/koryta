@@ -2,7 +2,7 @@
   <v-chip
     size="small"
     variant="tonal"
-    :color="row.isSelf ? 'primary' : undefined"
+    :color="row.isSelf ? 'ink-sage' : undefined"
     class="contributor-name"
   >
     <template #prepend>
@@ -17,8 +17,11 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { mdiAccountCircle, mdiEyeOffOutline } from "@mdi/js";
-import type { ActivityContributor } from "~~/server/api/stats/activity.get";
+import {
+  contributorNameExplanation,
+  contributorNameIcon,
+  type ContributorNameRow,
+} from "~/utils/contributorName";
 
 /** One name in the public ranking, as far as the reader is allowed to see it.
  *
@@ -26,23 +29,23 @@ import type { ActivityContributor } from "~~/server/api/stats/activity.get";
  * admin-only lookup, which is exactly the thing a public ranking must not do.
  * Everything shown here arrived on the row already decided by the server, so
  * there is no identity to fetch and nothing to fall back to.
+ *
+ * Only the fields it draws, so an actor from `/api/activity/feed` - decided by
+ * the server the same way - fits as well as a ranking row. What the name says
+ * about itself lives in `utils/contributorName`, which the feed shares.
  */
-const props = defineProps<{ row: ActivityContributor }>();
+const props = defineProps<{
+  row: ContributorNameRow;
+  /** The reader is an administrator, shown every name whatever its owner
+   * chose. */
+  identified?: boolean;
+}>();
 
-const icon = computed(() =>
-  props.row.named ? mdiAccountCircle : mdiEyeOffOutline,
+const icon = computed(() => contributorNameIcon(props.row));
+
+const explanation = computed(() =>
+  contributorNameExplanation(props.row, props.identified),
 );
-
-const explanation = computed(() => {
-  if (props.row.isSelf) {
-    return props.row.named
-      ? "To Ty. Twoja nazwa jest widoczna dla wszystkich."
-      : "To Ty. Inni widzą w tym miejscu zamazaną nazwę — możesz to zmienić w swoim profilu.";
-  }
-  return props.row.named
-    ? "Ta osoba zgodziła się, żeby jej nazwa była widoczna publicznie."
-    : "Ta osoba nie pokazuje swojej nazwy publicznie.";
-});
 </script>
 
 <style scoped>

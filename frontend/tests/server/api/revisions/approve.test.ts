@@ -248,6 +248,63 @@ describe("api/revisions/approve", () => {
     expect(writtenTarget().published).toBe(true);
   });
 
+  it("files the publication it made as well as the approval", async () => {
+    // Otherwise "zatwierdź i opublikuj" puts a page live that the publication
+    // count and /aktywnosc, which read only `publish` rows, never see.
+    requestApproval({ publish: true });
+    stored["revisions/rev-1"] = {
+      node_id: "node-1",
+      collection: "nodes",
+      data: { name: "Nowa" },
+    };
+    stored["nodes/node-1"] = { name: "Stara" };
+
+    await handler({} as never);
+
+    expect(writtenAudit()).toMatchObject({ action: "approve" });
+    expect(mockBatchSet.mock.calls[2]![1]).toMatchObject({
+      action: "publish",
+      collection: "nodes",
+      target_id: "node-1",
+      revision_id: "rev-1",
+      user: "admin-uid",
+    });
+    expect(mockCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("approves a removal as a removal, even when asked to publish", async () => {
+    // The queue offered "Zatwierdź i opublikuj" on removals too, and the page
+    // it deleted then showed as published on /aktywnosc and in the statistics.
+    requestApproval({ publish: true });
+    stored["revisions/rev-1"] = {
+      node_id: "node-1",
+      collection: "nodes",
+      data: { name: "Stara", deleted: true, delete_reason: "duplikat" },
+    };
+    stored["nodes/node-1"] = { name: "Stara", published: false };
+
+    const result = await handler({} as never);
+
+    expect(writtenTarget()).toMatchObject({ deleted: true, published: false });
+    expect(result.published).toBe(false);
+    expect(writtenAudit()).toMatchObject({ action: "approve" });
+    expect(mockBatchSet).toHaveBeenCalledTimes(2);
+  });
+
+  it("files no publication for a page that was already live", async () => {
+    requestApproval({ publish: true });
+    stored["revisions/rev-1"] = {
+      node_id: "node-1",
+      collection: "nodes",
+      data: { name: "Nowa" },
+    };
+    stored["nodes/node-1"] = { name: "Stara", published: true };
+
+    await handler({} as never);
+
+    expect(mockBatchSet).toHaveBeenCalledTimes(2);
+  });
+
   it("carries over the counters the triggers maintain", async () => {
     // The write is a `set`, so anything the node owns rather than the revision
     // is dropped unless it is copied across by hand.

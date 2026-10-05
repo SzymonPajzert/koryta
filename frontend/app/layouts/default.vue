@@ -62,58 +62,143 @@
       >
         <v-spacer />
 
-        <v-btn
-          v-if="isAdmin"
-          :prepend-icon="mdiShieldAccount"
-          variant="text"
-          to="/admin"
+        <!-- The panel and two of the inboxes it lists, under the panel's own
+             names; the third, "Zgłoszenia", is under "Zespół" with the QA list
+             and its problems, since a problem found there is a report too.
+             "Zadania" is the owner's own list, shown to him alone. "Procesy",
+             the jobs' progress next to it, is the datascience group's, and
+             the group is not only administrators: somebody in it alone gets
+             the menu with that one entry, and none of the panel's.
+             The activator has no `to` of its own - it would navigate and open
+             the menu at once - so it is lit by hand instead. -->
+        <v-menu
+          v-if="isAdmin || isDatascience"
+          location="bottom start"
+          content-class="user-toolbar-menu"
         >
-          Admin
-        </v-btn>
+          <template #activator="{ props: menu }">
+            <v-btn
+              v-bind="menu"
+              :prepend-icon="mdiShieldAccount"
+              :append-icon="mdiChevronDown"
+              :active="onAdminPage"
+              :aria-current="onAdminPage || undefined"
+              variant="text"
+            >
+              Admin
+            </v-btn>
+          </template>
+          <v-list density="compact" min-width="220">
+            <v-list-item
+              v-if="isAdmin"
+              :prepend-icon="mdiShieldAccount"
+              to="/admin"
+              exact
+              title="Panel administracyjny"
+            />
+            <v-divider v-if="isAdmin" />
+            <!-- The queue is the first section of /admin/rewizje, which is
+                 open to every signed-in reader - so arriving there lights
+                 "Rewizje" rather than this menu. -->
+            <v-list-item
+              v-if="isAdmin"
+              :prepend-icon="mdiInboxArrowDown"
+              to="/admin/rewizje#kolejka"
+              title="Kolejka zmian"
+            />
+            <v-list-item
+              v-if="isAdmin"
+              :prepend-icon="mdiNoteEditOutline"
+              to="/admin/notatki"
+              title="Notatki"
+            />
+            <v-list-item
+              v-if="isOwner"
+              :prepend-icon="mdiSitemapOutline"
+              to="/admin/zadania"
+              title="Zadania"
+            />
+            <v-list-item
+              v-if="isDatascience"
+              :prepend-icon="mdiCogSyncOutline"
+              to="/admin/procesy"
+              title="Procesy"
+            />
+          </v-list>
+        </v-menu>
         <v-btn :prepend-icon="mdiViewList" variant="text" to="/admin/rewizje">
           Rewizje
         </v-btn>
         <v-btn
-          v-if="isAdmin"
-          :prepend-icon="mdiInboxArrowDown"
+          :prepend-icon="mdiTimelineClockOutline"
           variant="text"
-          to="/admin/rewizje/kolejka"
+          to="/aktywnosc"
         >
-          Kolejka
+          Aktywność
         </v-btn>
-        <v-btn
-          v-if="isAdmin"
-          :prepend-icon="mdiNoteTextOutline"
-          variant="text"
-          to="/admin/notatki"
-        >
-          Notatki
-        </v-btn>
-        <v-btn
-          v-if="isAdmin"
-          :prepend-icon="mdiMessageAlertOutline"
-          variant="text"
-          to="/admin/opinie"
-        >
-          Zgłoszenia
-        </v-btn>
-        <v-btn
-          :prepend-icon="mdiLightningBolt"
-          variant="text"
-          href="https://github.com/users/SzymonPajzert/projects/2/views/3"
-          target="_blank"
-        >
-          Nowy bug w GitHubie
-        </v-btn>
-        <v-btn
-          v-if="affineLink"
-          :prepend-icon="mdiLightningBolt"
-          variant="text"
-          :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
-          target="_blank"
-        >
-          Dyskusja w affine
-        </v-btn>
+        <!-- What there is to check and what is wrong, in one place: the QA
+             list, its "Problemy" and, for an admin, every report - a problem
+             found on /qa is one of those, and an admin's "Problemy" shows it
+             as that report; then the two links that leave the site. A menu,
+             so there is no QA button with a count on the strip again (a
+             standing alarm on every page, taken off on purpose), and so the
+             strip keeps one shape on pages with no affine board rather than
+             growing a button a tick after the route changes. Lit by hand on
+             the pages it lists, as "Admin" is. -->
+        <v-menu location="bottom start" content-class="user-toolbar-menu">
+          <template #activator="{ props: menu }">
+            <v-btn
+              v-bind="menu"
+              :prepend-icon="mdiAccountGroupOutline"
+              :append-icon="mdiChevronDown"
+              :active="onTeamPage"
+              :aria-current="onTeamPage || undefined"
+              variant="text"
+            >
+              Zespół
+            </v-btn>
+          </template>
+          <v-list density="compact" min-width="220">
+            <!-- Exact, query included, so only the tab that is showing is lit:
+                 both are /qa to the router. -->
+            <v-list-item
+              :prepend-icon="mdiClipboardCheckOutline"
+              to="/qa"
+              exact
+              title="QA - zmiany do sprawdzenia"
+            />
+            <v-list-item
+              :prepend-icon="mdiAlertCircleOutline"
+              :to="{ path: '/qa', query: { widok: 'problemy' } }"
+              exact
+              title="Problemy z QA"
+            />
+            <v-list-item
+              v-if="isAdmin"
+              :prepend-icon="mdiMessageAlertOutline"
+              to="/admin/opinie"
+              title="Zgłoszenia"
+            />
+            <v-divider />
+            <v-list-item
+              :prepend-icon="mdiGithub"
+              :append-icon="mdiOpenInNew"
+              href="https://github.com/users/SzymonPajzert/projects/2/views/3"
+              target="_blank"
+              rel="noopener"
+              title="Nowy bug w GitHubie"
+            />
+            <v-list-item
+              v-if="affineLink"
+              :prepend-icon="mdiCommentTextOutline"
+              :append-icon="mdiOpenInNew"
+              :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
+              target="_blank"
+              rel="noopener"
+              title="Dyskusja w affine"
+            />
+          </v-list>
+        </v-menu>
         <v-spacer icon />
       </v-toolbar>
     </ClientOnly>
@@ -132,12 +217,21 @@
 <script lang="ts" setup>
 import {
   mdiAccount,
+  mdiAccountGroupOutline,
+  mdiAlertCircleOutline,
+  mdiChevronDown,
+  mdiClipboardCheckOutline,
+  mdiCommentTextOutline,
+  mdiGithub,
   mdiInboxArrowDown,
-  mdiLightningBolt,
+  mdiOpenInNew,
   mdiShieldAccount,
+  mdiTimelineClockOutline,
   mdiViewList,
-  mdiNoteTextOutline,
+  mdiNoteEditOutline,
   mdiMessageAlertOutline,
+  mdiSitemapOutline,
+  mdiCogSyncOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
@@ -146,7 +240,8 @@ import { APP_BAR_HEIGHT, useSsrLayoutTop } from "~/composables/appBar";
 
 const ssrLayoutTop = useSsrLayoutTop();
 const { mdAndUp } = useDisplay();
-const { user, userConfig, logout, isAdmin } = useAuthState();
+const { user, userConfig, logout, isAdmin, isOwner, isDatascience } =
+  useAuthState();
 const route = useRoute();
 const loginDialog = ref(false);
 const maxWidth = computed(() =>
@@ -154,6 +249,28 @@ const maxWidth = computed(() =>
 );
 const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const affineLink = computed(() => route?.meta?.affineLink);
+/** The pages the "Zespół" menu leads to on this site, which light it while it
+ * is closed, as "Admin" is lit by hand below. /qa is one page whichever tab is
+ * showing; the router serves a path with a trailing slash as the same page. */
+const TEAM_PAGES = ["/qa", "/admin/opinie"];
+const onTeamPage = computed(() =>
+  TEAM_PAGES.includes(route?.path?.replace(/\/+$/, "") ?? ""),
+);
+/** Whether the page is admin-only, which is what the "Admin" menu stands for
+ * while it is closed - the panel's pages without an entry of their own too.
+ * Read off the page's middleware rather than its path: /admin/rewizje and a
+ * single revision live under /admin but are open to every signed-in reader,
+ * and the router serves /admin/notatki/ as the same page as /admin/notatki.
+ * `datascience` counts as well: it is /admin/procesy's, whose entry is here.
+ * /admin/opinie is admin-only too, but it is listed under "Zespół", which is
+ * lit there instead - two buttons lit for one page would say neither. */
+const onAdminPage = computed(() => {
+  const middleware = [route?.meta?.middleware].flat();
+  return (
+    (middleware.includes("admin") || middleware.includes("datascience")) &&
+    !onTeamPage.value
+  );
+});
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
 

@@ -67,6 +67,7 @@ SKARB_PANSTWA = "SKARB PANSTWA"
 #: Longest first, because "GMINA MIEJSKA" has to win over "GMINA". Each maps to
 #: the level it names and, for a gmina, the RODZ it implies.
 _PREFIXES: tuple[tuple[str, Level, str | None], ...] = (
+    ("MIASTO NA PRAWACH POWIATU", "gmina", RODZ_MIEJSKA),
     ("MIASTO STOLECZNE", "gmina", RODZ_MIEJSKA),
     ("MIASTO I GMINA", "gmina", RODZ_MIEJSKO_WIEJSKA),
     ("GMINA I MIASTO", "gmina", RODZ_MIEJSKO_WIEJSKA),
@@ -123,6 +124,16 @@ _DROPPED_SUFFIXES = (
 #: "GMINA ZAGAN O STATUSIE MIEJSKIM" is otherwise indistinguishable from the
 #: bare "GMINA ZAGAN" that sits next to a gmina wiejska of the same name.
 _MIEJSKA_SUFFIX = " O STATUSIE MIEJSKIM"
+
+#: A miasto na prawach powiatu is a gmina miejska that is also a powiat, and the
+#: register often names one by that status alone, written after the town rather
+#: than before it: "WLOCLAWEK - MIASTO NA PRAWACH POWIATU". `clean` cuts the
+#: status off like the other suffixes, which leaves a bare town name - and a name
+#: with no prefix is read as a company, so the ten companies owned this way,
+#: MPEC Wloclawek and Wodociagi Slupsk among them, all came out private. The
+#: status is what says the owner is the town and not the gmina wiejska of the
+#: same name that Wloclawek and Chelm both have.
+_POWIAT_STATUS = ("NA PRAWACH POWIATU", "NA PRWACH POWIATU")
 
 #: Abbreviations and outright typos in the register, and the aliases where the
 #: unit has been renamed since the entry was filed. Applied to the normalised
@@ -221,6 +232,8 @@ def classify(name: str) -> tuple[Level | None, str | None, str]:
             if core.startswith("W "):
                 core = core[2:].strip()
             return level, forced_rodz or rodz, core
+    if any(status in normalise(name) for status in _POWIAT_STATUS):
+        return "gmina", RODZ_MIEJSKA, text
     return None, None, text
 
 

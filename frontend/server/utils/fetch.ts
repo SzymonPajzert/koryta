@@ -11,9 +11,12 @@ import {
 import { getFirestore, Filter } from "firebase-admin/firestore";
 import { z } from "zod";
 
+/** Positive whole numbers only. Firestore throws on a negative or fractional
+ * limit or offset, and until this said so that surfaced as a 500 - `limit=-1`
+ * being what Vuetify's "all rows" option asks for. */
 export const fetchOptionsValidator = z.object({
-  limit: z.coerce.number().optional(),
-  page: z.coerce.number().optional(),
+  limit: z.coerce.number().int().min(1).optional(),
+  page: z.coerce.number().int().min(1).optional(),
 });
 
 export type FetchOptions = z.infer<typeof fetchOptionsValidator>;
@@ -25,10 +28,23 @@ export function paginate(
   let paginatedQuery = query;
   if (options.limit) {
     const page = options.page || 1;
+    // The same rule as `fetchOptionsValidator`, for the routes that validate
+    // their query with a schema of their own: a 400 rather than Firestore's
+    // throw, which is a 500.
+    if (!isPositiveInteger(options.limit) || !isPositiveInteger(page)) {
+      throw createError({
+        statusCode: 400,
+        message: "limit i page muszą być dodatnimi liczbami całkowitymi.",
+      });
+    }
     const offset = (page - 1) * options.limit;
     paginatedQuery = paginatedQuery.offset(offset).limit(options.limit);
   }
   return paginatedQuery;
+}
+
+function isPositiveInteger(value: number): boolean {
+  return Number.isInteger(value) && value > 0;
 }
 
 interface nodeData {
@@ -74,10 +90,26 @@ export function applyPartiesFilter(
   return query;
 }
 
+/** A node document's fields, less the search index. Mutates and returns
+ * `data`, which is always a fresh `doc.data()`.
+ *
+ * `nameChunksLower` is every prefix of every word of the name, written by the
+ * `onNodeWritten` trigger so /api/search can match on it with
+ * `array-contains` - a query, which never needs the field handed back. Nothing
+ * outside the server reads it, and it went out with every node anyway: 59% of
+ * the bytes of `/api/nodes?type=place`, and a share of every graph, table and
+ * entity response. */
+export function dropSearchIndex(
+  data: FirebaseFirestore.DocumentData,
+): FirebaseFirestore.DocumentData {
+  delete data.nameChunksLower;
+  return data;
+}
+
 export function parseNodeDoc<T extends { id?: string; visibility?: boolean }>(
   doc: FirebaseFirestore.QueryDocumentSnapshot,
 ): T {
-  const data = doc.data();
+  const data = dropSearchIndex(doc.data());
   if (data.revision_id && typeof data.revision_id.path === "string") {
     data.revision_id = data.revision_id.path;
   }
@@ -116,7 +148,7 @@ const _cachedFetchNodes = defineCachedFunction(
       if (!docSnap.exists) return {};
       if (docSnap.data()?.type !== path) return {};
 
-      const data = docSnap.data() || {};
+      const data = dropSearchIndex(docSnap.data() || {});
       if (data.revision_id && typeof data.revision_id.path === "string") {
         data.revision_id = data.revision_id.path;
       }

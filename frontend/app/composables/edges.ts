@@ -7,6 +7,7 @@ import type {
   Person,
 } from "~~/shared/model";
 import type { TraversePolicy } from "~~/shared/graph/model";
+import type { RoleSpell } from "~~/shared/rolelessSpells";
 
 export type EdgeNode = {
   richNode: Node;
@@ -28,6 +29,12 @@ export type EdgeNode = {
    * dialog - here it is the count that matters, so a claim with nothing behind
    * it can be told apart from one that is sourced. */
   references?: string[];
+  /** Whether the relation is on the public site, as the local graph answers it
+   * - `pageIsPublic` of the stored edge, carried through `getEdges`. Only ever
+   * false for a signed in reader: the same endpoint drops unpublished relations
+   * before anyone else sees them. Read by `ChipEdgeDraftStatus`, which is what
+   * marks such a row and offers an admin the way to publish it. */
+  visibility?: boolean;
   start_date?: string;
   end_date?: string;
   party?: string;
@@ -52,6 +59,24 @@ export function edgeCompany(edge: EdgeNode): Company | undefined {
     : undefined;
 }
 
+/** Whether a relation could go live right now: the rule `/api/edges/publish`
+ * enforces is that neither end is still a draft.
+ *
+ * Answered from what a row already holds - the far end is `richNode`, and the
+ * page the rows belong to is the caller's own subject, which it passes in. A
+ * caller that does not know its subject's state leaves it undefined and gets
+ * `true`, which offers the action and lets the endpoint refuse it: the check
+ * here only exists so that the common case - a draft page, whose every relation
+ * is unpublishable until the page itself goes live - does not draw a row of
+ * buttons that can only fail.
+ */
+export function edgeIsPublishable(
+  edge: EdgeNode,
+  subjectPublished?: boolean,
+): boolean {
+  return subjectPublished !== false && edge.richNode.visibility !== false;
+}
+
 /** The row's other end, where that end is a person at all.
  *
  * `edgeCompany`'s counterpart, and true of `richNode` for the same reason: the
@@ -62,6 +87,63 @@ export function edgePerson(edge: EdgeNode): Person | undefined {
   return edge.richNode.type === "person"
     ? (edge.richNode as Person)
     : undefined;
+}
+
+/** One row per node at the other end, for a list whose rows name nodes rather
+ * than relations - „Właściciele" on a company's page, „Spółki zależne" on a
+ * region's.
+ *
+ * Two relations between the same pair are ordinary there, and each used to be
+ * a row: a gmina that both owns a company and is where it is registered holds a
+ * `seat` and an `owns` edge, and was listed twice - 131 companies in the
+ * 2026-09-27 export. 62 more carry a second copy of their seat from before
+ * edge ids were derived. `CardConnectionList` keys its rows by the node, so the
+ * two rows also shared a key.
+ *
+ * `preferred` says which relation stands for the node, most wanted first: the
+ * row's remove button and its draft chip act on that edge, so under an owners
+ * heading it is the `owns` one. Among equals a published copy wins, so a draft
+ * duplicate does not mark a live relation „szkic". Order of first appearance is
+ * kept; the list sorts its rows anyway.
+ */
+export function onePerNode(
+  edges: EdgeNode[],
+  preferred: EdgeType[] = [],
+): EdgeNode[] {
+  const rank = (edge: EdgeNode) => {
+    const at = preferred.indexOf(edge.type);
+    return (
+      (at === -1 ? preferred.length : at) * 2 +
+      (edge.visibility === false ? 1 : 0)
+    );
+  };
+  const chosen = new Map<string, EdgeNode>();
+  for (const edge of edges) {
+    const key = edge.richNode.id ?? edge.id ?? `${edge.source}|${edge.target}`;
+    const held = chosen.get(key);
+    if (!held || rank(edge) < rank(held)) chosen.set(key, edge);
+  }
+  return Array.from(chosen.values());
+}
+
+/** An employment row as `withoutRedundantRoleless` reads it, or nothing for a
+ * row of any other kind - which the rule then leaves alone.
+ *
+ * `name` and not `label`: a row whose role nobody recorded is labelled with the
+ * edge type's own phrase, „Zatrudniony/a w", and that is not a role. Source and
+ * target as stored, whichever page the row is drawn on - an employment runs
+ * person -> place, so the person is the source on the company's page and on
+ * their own alike.
+ */
+export function employmentSpell(edge: EdgeNode): RoleSpell | undefined {
+  if (edge.type !== "employed") return undefined;
+  return {
+    personId: edge.source,
+    companyId: edge.target,
+    role: edge.name,
+    start: edge.start_date,
+    end: edge.end_date,
+  };
 }
 
 /** "1 powiązanie", "2 powiązania", "5 powiązań".

@@ -73,12 +73,13 @@
         </v-card>
 
         <v-card class="mb-4" rounded="lg">
-          <v-card-title>Widoczność w statystykach</v-card-title>
+          <v-card-title>Widoczność w statystykach i w aktywności</v-card-title>
           <v-card-subtitle class="text-wrap">
             Ranking na
             <NuxtLink to="/eksploruj/statystyki">stronie statystyk</NuxtLink>
-            pokazuje, kto ile sprawdził. Nazwy są w nim zamazane, dopóki ich
-            właściciele nie zdecydują inaczej.
+            pokazuje, kto ile sprawdził, a strona Aktywność - kto co i kiedy
+            zrobił. Nazwy są w nich ukryte, dopóki ich właściciele nie zdecydują
+            inaczej.
           </v-card-subtitle>
           <v-card-text>
             <v-switch
@@ -104,14 +105,15 @@
                 numer. Ustaw ją wyżej, a wrócimy do tego.
               </template>
               <template v-else-if="publicProfile">
-                Inni widzą w rankingu
+                Inni widzą w rankingu i w aktywności
                 <strong>{{ ownDisplayName }}</strong
                 >.
               </template>
               <template v-else>
                 Inni widzą w rankingu
                 <strong>{{ maskedContributorName(ownDisplayName, 1) }}</strong
-                >. Swoje własne miejsce widzisz tak czy inaczej.
+                >, a w aktywności „Anonim”. Swoje własne miejsce widzisz tak czy
+                inaczej.
               </template>
             </div>
           </v-card-text>
@@ -342,8 +344,8 @@ const saveVisibility = async () => {
     );
     notify(
       publicProfile.value
-        ? "Twoja nazwa jest teraz widoczna w statystykach."
-        : "Twoja nazwa jest znów zamazana w statystykach.",
+        ? "Twoja nazwa jest teraz widoczna w statystykach i w aktywności."
+        : "Twoja nazwa jest znów zamazana w statystykach i w aktywności.",
     );
   } catch (err) {
     console.error("Failed to save profile visibility:", err);

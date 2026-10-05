@@ -58,6 +58,8 @@
     "backendId": "autopush",
     "rootDir": "frontend",
     "ignore": [
+      ".agent",
+      ".firebase",
       ".git",
       ".jj",
       ".output",

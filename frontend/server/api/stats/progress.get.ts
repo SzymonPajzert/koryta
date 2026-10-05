@@ -19,6 +19,7 @@ const queryValidator = z.object({
   currentlyEmployed: z.enum(["all", "any", "selected"]).optional(),
   minEmploymentDate: z.string().optional(),
   minVotes: z.coerce.number().optional(),
+  queueTier: z.coerce.number().optional(),
 });
 
 // Re-exported because the components fetching this endpoint import the type

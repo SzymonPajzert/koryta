@@ -172,7 +172,15 @@ jobs:
       #
       # --assume-yes answers the "this pipeline runs long" prompts. Without it
       # they read EOF from /dev/null, take it as no, and skip the wiki pass.
+      #
+      # The step has its own ceiling, below the job's, so that a slow night
+      # fails here rather than being cancelled: the saves below are
+      # `!cancelled()`, and every nightly from 2026-09-24 to 09-27 was
+      # cancelled at the job's 120 minutes and kept nothing it had fetched.
+      # Failed instead, it leaves downloaded/ to the next night, which starts
+      # where this one stopped.
       - name: Run pipelines
+        timeout-minutes: 100
         working-directory: data/pipelines
         run: |
           set -euo pipefail
@@ -208,6 +216,13 @@ jobs:
               ArticleFactsVerified
               ArticleKoryciarskiScores
               PeopleAffairTags
+              # Both read every stored odpis, one object at a time -- ~8,300
+              # PDFs, the better part of an hour on a cold runner -- and the
+              # seats need the PESEL key, which the runner does not hold.
+              # PeopleKRSCombined still asks for the seats; without the key
+              # it says so and takes rejestr.io's people alone.
+              KrsOdpisEntries
+              KrsOdpisSeats
             )
             selection="--all-pipelines"
             for pipeline in "${excluded[@]}"; do

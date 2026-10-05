@@ -8,9 +8,17 @@ import pandas as pd
 from tqdm import tqdm
 
 from entities.article import KoryciarskiScore
+from scrapers.article.content_models import (
+    ML_MODEL_TAG,
+    models_available,
+    score_article,
+)
 from scrapers.article.pipelines.incremental import IncrementalJsonlPipeline
 from scrapers.article.pipelines.parsed_pipeline import ArticleParsed
-from scrapers.article.pipelines.pipeline_utils import llm_model
+from scrapers.article.pipelines.pipeline_utils import (
+    koryciarski_scorer,
+    llm_model,
+)
 from scrapers.stores import LLM, VERSIONED_DIR, Context, LLMRequest
 
 PROMPT_VERSION = 1
@@ -49,6 +57,9 @@ _PROMPT = (
     "Artykuł:\n{text}"
 )
 
+#: Reason text stamped on rows scored by the ML content models.
+_ML_REASON = "scored by content ML model (TF-IDF + logistic regression)"
+
 
 class ArticleKoryciarskiScores(IncrementalJsonlPipeline[KoryciarskiScore]):
     filename = "article_koryciarski_scores"
@@ -72,10 +83,22 @@ class ArticleKoryciarskiScores(IncrementalJsonlPipeline[KoryciarskiScore]):
             _TEMP_OUTPUT_FILE,
         )
         self.prepare_temp_output()
-        model = llm_model()
         latest = _latest_parsed_offsets(_PARSED_FILE)
-        asyncio.run(_score_records(ctx, _PARSED_FILE, latest, existing, model=model))
-        _print_llm_usage(ctx)
+        if koryciarski_scorer() == "ml":
+            if not models_available():
+                raise FileNotFoundError(
+                    "ML scorer selected (--koryciarski-scorer ml) but content "
+                    "models are missing. Train them with "
+                    "`python -m scrapers.article.scripts."
+                    "train_koryciarski_content_models` first."
+                )
+            _score_records_ml(ctx, _PARSED_FILE, latest, existing)
+        else:
+            model = llm_model()
+            asyncio.run(
+                _score_records(ctx, _PARSED_FILE, latest, existing, model=model)
+            )
+            _print_llm_usage(ctx)
         return pd.DataFrame()
 
 
@@ -192,6 +215,57 @@ async def _score_records(
 
     if cached_count:
         print(f"Reused cached koryciarstwo scores: {cached_count}")
+
+
+def _score_records_ml(
+    ctx: Context,
+    path: Path,
+    latest: dict[str, int],
+    existing: dict[str, dict[str, Any]],
+) -> None:
+    """Score every latest parsed record with the content ML models.
+
+    No LLM involved: rows are stamped with ``model=koryciarski_content_ml``,
+    so they never collide with LLM-scored rows and the cache-validity check
+    (which compares the model name) keeps the two pools separate.
+    """
+    with tqdm(
+        total=len(latest),
+        desc="Scoring koryciarstwo (ML)",
+        unit="article",
+        dynamic_ncols=True,
+        mininterval=1.0,
+        smoothing=0.05,
+    ) as bar:
+        with path.open("rb") as handle:
+            for _, offset in sorted(latest.items(), key=lambda item: item[1]):
+                handle.seek(offset)
+                record: dict[str, Any] = json.loads(handle.readline())
+                cached = existing.get(record["url"])
+                if _cache_valid(cached, record, ML_MODEL_TAG):
+                    assert cached is not None
+                    _emit_score(ctx, _score_row_from_cache(cached))
+                    bar.update(1)
+                    continue
+                _emit_score(ctx, _ml_score_row(record))
+                bar.update(1)
+
+
+def _ml_score_row(record: dict[str, Any]) -> dict[str, Any]:
+    result = score_article(str(record.get("article_content") or ""))
+    return {
+        "url": record.get("url"),
+        "article_content_hash": record.get("article_content_hash"),
+        "koryciarski_llm_score": result.score,
+        "koryciarski_llm_reason": _ML_REASON,
+        "llm_is_article": result.is_article,
+        "model": ML_MODEL_TAG,
+        "prompt_version": PROMPT_VERSION,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "error": None,
+    }
 
 
 def _emit_score_response(

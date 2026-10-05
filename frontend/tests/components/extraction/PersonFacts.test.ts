@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ref } from "vue";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
@@ -97,9 +97,21 @@ describe("ExtractionPersonFacts", () => {
     expect(lastQuery.person).toBeUndefined();
   });
 
-  it("renders a card per matched fact under a heading", async () => {
+  /** The closed lines, one per claim. */
+  const lines = (section: Awaited<ReturnType<typeof mount>>) =>
+    section.findAll("[data-testid='person-fact']");
+
+  /** Opens every line on the page, the way a reader clicks one. */
+  async function openAll(section: Awaited<ReturnType<typeof mount>>) {
+    for (const toggle of section.findAll("[data-row-toggle]")) {
+      await toggle.trigger("click");
+    }
+    await flushPromises();
+  }
+
+  it("renders a line per claim under a heading", async () => {
     response = {
-      facts: [fact(), fact({ id: "fact-2" })],
+      facts: [fact(), fact({ id: "fact-2", party: "Konfederacja" })],
       total: 2,
     };
     const section = await mount();
@@ -108,27 +120,40 @@ describe("ExtractionPersonFacts", () => {
       true,
     );
     expect(section.text()).toContain("Fakty z artykułów");
-    expect(section.findAll(".extraction-card")).toHaveLength(2);
+    expect(lines(section)).toHaveLength(2);
   });
 
-  it("lays the cards out two to a row from md up", async () => {
-    response = { facts: [fact(), fact({ id: "fact-2" })], total: 2 };
+  it("shows each fact closed: what it says and where from, and no more", async () => {
+    // „fakty jako rozkładalne elementy - czyli dopiero jak użytkownik je
+    // kliknie, to pojawia się cytat” - and the reader this answers finds the
+    // site too wordy, so a closed line says the fact and nothing else.
+    response = { facts: [fact()], total: 1 };
     const section = await mount();
 
-    // Full width on a phone, half from md — what `cols="12" md="6"` compiles to.
-    const cols = section.findAll(".v-col-12");
-    expect(cols).toHaveLength(2);
-    expect(cols[0]!.classes()).toContain("v-col-md-6");
+    const line = lines(section)[0]!;
+    expect(line.text()).toContain("Prawo i Sprawiedliwość");
+    expect(line.text()).toContain("członek");
+    expect(line.find("[data-testid='person-fact-meta']").text()).toBe(
+      "example.com",
+    );
+    expect(line.text()).not.toContain("radny PiS Piotr Gajda");
+    expect(line.find("[data-testid='verdict-buttons']").exists()).toBe(false);
+
+    await openAll(section);
+    expect(lines(section)[0]!.text()).toContain("radny PiS Piotr Gajda");
   });
 
-  it("offers a verdict on every card, without opening a listener", async () => {
+  it("offers a verdict in every opened line, without opening a listener", async () => {
     // A reader looking up one person should be able to judge what is said
     // about them where it is shown. `ExtractionQuickVerdict` is a write and
     // nothing else; `useVotes` - what the review queue's copy of this row is
-    // built on - subscribes to the fact's vote document, and this section
-    // mounts every card at once instead of behind an expander.
-    response = { facts: [fact(), fact({ id: "fact-2" })], total: 2 };
+    // built on - subscribes to the fact's vote document.
+    response = {
+      facts: [fact(), fact({ id: "fact-2", party: "Konfederacja" })],
+      total: 2,
+    };
     const section = await mount();
+    await openAll(section);
 
     expect(section.findAll("[data-testid='verdict-buttons']")).toHaveLength(2);
     expect(useVotes).not.toHaveBeenCalled();
@@ -138,12 +163,201 @@ describe("ExtractionPersonFacts", () => {
     // What a verdict on its own leads to: „poprawny” is a number nobody reads
     // back, while a note entry stands in the section above under the reader's
     // name and is what the article promotion runs over.
-    response = { facts: [fact(), fact({ id: "fact-2" })], total: 2 };
+    response = {
+      facts: [fact(), fact({ id: "fact-2", party: "Konfederacja" })],
+      total: 2,
+    };
     const section = await mount();
+    await openAll(section);
 
     const buttons = section.findAll("[data-testid='extraction-add-to-note']");
     expect(buttons).toHaveLength(2);
     expect(buttons[0]!.text()).toContain("Dodaj do notatki");
+  });
+
+  it("offers to make a relation of each fact that can become one", async () => {
+    // „Brakuje chyba jeszcze promocji do krawędzi” - the queue and the
+    // article's page could turn a fact into a relation, the person's own page
+    // could only file it in a note. A party membership has no relation to
+    // become (a party is not a node), so its line has no such button.
+    response = {
+      facts: [
+        fact({
+          id: "job",
+          fact_type: "employment",
+          organization: "Spółka Wodna",
+          role: "prezes zarządu",
+        }),
+        fact({ id: "party" }),
+      ],
+      total: 2,
+    };
+    const section = await mount();
+    await openAll(section);
+
+    const buttons = section.findAll("[data-testid='extraction-promote']");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.text()).toContain("Utwórz powiązanie");
+  });
+
+  it("leads from each fact to its article's page on the site", async () => {
+    // The quote goes out to the newspaper; the article's page here - its
+    // topics, who else it names, the other facts in it - was reachable from
+    // nowhere on a person's page.
+    response = {
+      facts: [
+        fact({ articleNodeId: "art1" }),
+        fact({ id: "fact-2", party: "Konfederacja" }),
+      ],
+      total: 2,
+    };
+    const section = await mount();
+    await openAll(section);
+
+    const links = section.findAll("[data-testid='extraction-article-page']");
+    expect(links).toHaveLength(1);
+    expect(links[0]!.attributes("href")).toBe("/entity/article/art1");
+  });
+
+  describe("one claim from several articles", () => {
+    // „Wtedy możemy też je złączyć jeśli mamy ten sam fakt z różnych
+    // źródeł.”
+    const fromTwoPapers = () => [
+      fact({
+        id: "tvn",
+        articleUrl: "tvn24.pl/a",
+        articleDomain: "tvn24.pl",
+        justification: "posłanka PiS",
+      }),
+      fact({
+        id: "rmf",
+        articleUrl: "rmf24.pl/b",
+        articleDomain: "rmf24.pl",
+        party: "prawo i sprawiedliwość",
+        justification: "z PiS",
+      }),
+    ];
+
+    it("is one line, which says how many articles it was read in", async () => {
+      response = { facts: fromTwoPapers(), total: 2 };
+      const section = await mount();
+
+      expect(lines(section)).toHaveLength(1);
+      expect(section.find("[data-testid='person-fact-meta']").text()).toBe(
+        "2 źródła",
+      );
+    });
+
+    it("opens to every article's quote, each judged on its own", async () => {
+      // A vote is about one extraction - does this quote say this - so a
+      // reader who confirmed one article's quote has said nothing about the
+      // other's, and each keeps its own buttons and its own vote document.
+      response = { facts: fromTwoPapers(), total: 2 };
+      const section = await mount();
+      await openAll(section);
+
+      const sources = section.findAll("[data-testid='person-fact-source']");
+      expect(sources).toHaveLength(2);
+      expect(sources[0]!.text()).toContain("posłanka PiS");
+      expect(sources[1]!.text()).toContain("z PiS");
+      expect(
+        sources.map(
+          (source) => source.findAll("[data-testid='verdict-buttons']").length,
+        ),
+      ).toEqual([1, 1]);
+    });
+
+    it("counts once in the chips over it", async () => {
+      response = {
+        facts: [
+          ...fromTwoPapers(),
+          fact({ id: "brat", fact_type: "personal_relation", object: "Jan" }),
+        ],
+        total: 3,
+      };
+      const section = await mount();
+
+      const filter = section.find("[data-testid='person-extractions-filter']");
+      expect(filter.text()).toContain("Wszystkie (2)");
+      expect(filter.text()).toContain("Członkostwo partyjne (1)");
+    });
+
+    it("is one relation, made or not, whichever article it was made from", async () => {
+      // „Utwórz powiązanie” belongs to the claim: two articles saying one
+      // thing are one relation, so a promotion from either retires the button.
+      const job = {
+        fact_type: "employment" as const,
+        organization: "Spółka Wodna",
+        role: "prezes zarządu",
+        party: undefined,
+      };
+      response = {
+        facts: [
+          fact({ id: "new", articleUrl: "tvn24.pl/a", ...job }),
+          fact({
+            id: "old",
+            articleUrl: "rmf24.pl/b",
+            promotedEdgeIds: ["edge-1"],
+            ...job,
+          }),
+        ],
+        total: 2,
+      };
+      const section = await mount();
+      await openAll(section);
+
+      expect(lines(section)).toHaveLength(1);
+      expect(section.find("[data-testid='extraction-promote']").exists()).toBe(
+        false,
+      );
+      expect(
+        section.findAll("[data-testid='extraction-promoted']"),
+      ).toHaveLength(1);
+    });
+
+    it("is confirmed once one of its articles is", async () => {
+      response = {
+        facts: [
+          fact({ id: "open", party: "Partia Niesprawdzona" }),
+          ...fromTwoPapers().map((each, index) =>
+            index === 1
+              ? {
+                  ...each,
+                  stats: {
+                    votes: { correct: 1, humanVoted: true, humanCount: 1 },
+                  } as ExtractionFact["stats"],
+                }
+              : each,
+          ),
+        ],
+        total: 3,
+      };
+      const section = await mount();
+
+      expect(lines(section)[0]!.text()).toContain("Prawo i Sprawiedliwość");
+      expect(
+        section.find("[data-testid='person-extractions-confirmed']").exists(),
+      ).toBe(true);
+    });
+  });
+
+  it("says in the open that the facts may be wrong, and the rest behind the (i)", async () => {
+    // „Ten tekst podobnie jak w notatce powinien być domyślnie schowany bo
+    // robi bloat” - four sentences stood between the heading and the cards.
+    // The warning is the half a reader needs before trusting a card, so it
+    // stays; how to judge one is a click away.
+    response = { facts: [fact()], total: 1 };
+    const section = await mount();
+
+    expect(section.get("[data-testid='person-extractions-lead']").text()).toBe(
+      "Automatycznie wyszukane w prasie - mogą być błędne.",
+    );
+    expect(section.text()).not.toContain("po imieniu i nazwisku");
+
+    await section.get("[data-testid='section-info']").trigger("click");
+    await flushPromises();
+    expect(document.body.textContent).toContain("po imieniu i nazwisku");
+    expect(document.body.textContent).toContain("„To nie ta osoba”");
   });
 
   it("renders nothing at all when the person has no matched facts", async () => {
@@ -196,12 +410,14 @@ describe("ExtractionPersonFacts", () => {
       };
       const section = await mount();
 
-      const cards = section.findAll(".extraction-card");
-      expect(cards).toHaveLength(2);
+      const shown = lines(section);
+      expect(shown).toHaveLength(2);
       // Confirmed first, whatever order the endpoint sent them in.
-      expect(cards[0]!.text()).toContain("Partia Potwierdzona");
-      expect(cards[1]!.text()).toContain("Partia Niesprawdzona");
-      expect(cards[1]!.classes()).toContain("extraction-card--muted");
+      expect(shown[0]!.text()).toContain("Partia Potwierdzona");
+      expect(shown[1]!.text()).toContain("Partia Niesprawdzona");
+      expect(shown[1]!.classes()).toContain("fact-row--muted");
+      // The rail says it before anything is opened.
+      expect(shown[0]!.classes()).toContain("arow--tone-success");
       expect(
         section.find("[data-testid='person-extractions-confirmed']").exists(),
       ).toBe(true);
@@ -213,18 +429,20 @@ describe("ExtractionPersonFacts", () => {
     it("draws no line when everything is on the same side of it", async () => {
       // Almost every person's facts are entirely unjudged today, and a heading
       // saying so over all of them is the lead paragraph again in small type.
-      response = { facts: [fact(), fact({ id: "fact-2" })], total: 2 };
+      response = {
+        facts: [fact(), fact({ id: "fact-2", party: "Konfederacja" })],
+        total: 2,
+      };
       const section = await mount();
 
       expect(
         section.find("[data-testid='person-extractions-open']").exists(),
       ).toBe(false);
-      expect(section.find(".extraction-card").classes()).not.toContain(
-        "extraction-card--muted",
-      );
+      expect(lines(section)[0]!.classes()).not.toContain("fact-row--muted");
     });
 
-    it("counts the people who voted on a fact", async () => {
+    it("counts the people who voted on a fact, on the closed line", async () => {
+      // „Dobrze jakby było widać gdzieś jakiś licznik głosów na dany fakt”.
       response = {
         facts: [
           fact({
@@ -237,12 +455,11 @@ describe("ExtractionPersonFacts", () => {
       };
       const section = await mount();
 
-      expect(
-        section.find("[data-testid='extraction-vote-count']").text(),
-      ).toContain("Potwierdzony");
-      expect(
-        section.find("[data-testid='extraction-vote-count']").text(),
-      ).toContain("2 głosy");
+      const count = lines(section)[0]!.find(
+        "[data-testid='extraction-vote-count']",
+      );
+      expect(count.text()).toContain("Potwierdzony");
+      expect(count.text()).toContain("2 głosy");
     });
 
     it("says nothing about votes on a fact nobody has read", async () => {
@@ -258,7 +475,7 @@ describe("ExtractionPersonFacts", () => {
   describe("filtering by type", () => {
     it("offers no filter when every fact is of one kind", async () => {
       response = {
-        facts: [fact(), fact({ id: "fact-2" })],
+        facts: [fact(), fact({ id: "fact-2", party: "Konfederacja" })],
         total: 2,
       };
       const section = await mount();
@@ -272,8 +489,8 @@ describe("ExtractionPersonFacts", () => {
       response = {
         facts: [
           fact(),
-          fact({ id: "fact-2", fact_type: "personal_relation" }),
-          fact({ id: "fact-3", fact_type: "personal_relation" }),
+          fact({ id: "fact-2", fact_type: "personal_relation", object: "A" }),
+          fact({ id: "fact-3", fact_type: "personal_relation", object: "B" }),
         ],
         total: 3,
       };
@@ -290,8 +507,8 @@ describe("ExtractionPersonFacts", () => {
       response = {
         facts: [
           fact(),
-          fact({ id: "fact-2", fact_type: "personal_relation" }),
-          fact({ id: "fact-3", fact_type: "personal_relation" }),
+          fact({ id: "fact-2", fact_type: "personal_relation", object: "A" }),
+          fact({ id: "fact-3", fact_type: "personal_relation", object: "B" }),
         ],
         total: 3,
       };
@@ -301,13 +518,190 @@ describe("ExtractionPersonFacts", () => {
         .find("[data-testid='person-extractions-filter-personal_relation']")
         .trigger("click");
       await flushPromises();
-      expect(section.findAll(".extraction-card")).toHaveLength(2);
+      expect(lines(section)).toHaveLength(2);
 
       await section
         .findAll("[data-testid='person-extractions-filter'] .v-chip")[0]!
         .trigger("click");
       await flushPromises();
-      expect(section.findAll(".extraction-card")).toHaveLength(3);
+      expect(lines(section)).toHaveLength(3);
+    });
+  });
+
+  describe("paging", () => {
+    // „Pokazujemy 24 najnowszych z 66 -> dlaczego tylko 24? Nie ma sposobu na
+    // przejrzenie wszystkiego”, and from a phone: „max 6 było i dalej już
+    // strony, inaczej ciężko dojść do sekcji dyskusja”.
+
+    /** `count` facts, newest first, as the endpoint sends them - each a claim
+     * of its own. */
+    function many(count: number, fields: Partial<ExtractionFact> = {}) {
+      return Array.from({ length: count }, (_, index) =>
+        fact({ id: `fact-${index}`, party: `Partia ${index}`, ...fields }),
+      );
+    }
+
+    function setWidth(width: number) {
+      window.innerWidth = width;
+      window.dispatchEvent(new Event("resize"));
+    }
+
+    const pager = (section: Awaited<ReturnType<typeof mount>>) =>
+      section.find("[data-testid='person-extractions-pages']");
+
+    async function goToPage(
+      section: Awaited<ReturnType<typeof mount>>,
+      page: number,
+    ) {
+      await pager(section)
+        .find(`[aria-label='Przejdź do strony ${page}']`)
+        .trigger("click");
+      await flushPromises();
+    }
+
+    afterEach(() => setWidth(1024));
+
+    it("asks for every fact at once, so the rest is a page away", async () => {
+      // The page is cut here rather than by the endpoint - see the component
+      // for why. What the request must not do any more is stop at 24.
+      response = { facts: many(3), total: 3 };
+      await mount();
+
+      expect(Number(lastQuery.limit)).toBeGreaterThanOrEqual(100);
+      expect(lastQuery.page).toBeUndefined();
+    });
+
+    it("shows 24 on a desktop and pages to the rest", async () => {
+      response = { facts: many(30), total: 30 };
+      const section = await mount();
+
+      expect(lines(section)).toHaveLength(24);
+      expect(pager(section).exists()).toBe(true);
+      // The whole set came back, so there is nothing withheld to own up to.
+      expect(
+        section.find("[data-testid='person-extractions-hidden']").exists(),
+      ).toBe(false);
+
+      await goToPage(section, 2);
+      const shown = lines(section);
+      expect(shown).toHaveLength(6);
+      expect(shown[0]!.text()).toContain("Partia 24");
+    });
+
+    it("pages over claims rather than facts", async () => {
+      // Seven articles saying one thing are one line, not a page of seven.
+      response = {
+        facts: [
+          ...Array.from({ length: 7 }, (_, index) =>
+            fact({ id: `same-${index}`, articleUrl: `example.com/${index}` }),
+          ),
+          ...many(3),
+        ],
+        total: 10,
+      };
+      setWidth(393);
+      const section = await mount();
+
+      expect(lines(section)).toHaveLength(4);
+      expect(pager(section).exists()).toBe(false);
+    });
+
+    it("shows six at a time on a phone", async () => {
+      setWidth(393);
+      response = { facts: many(14), total: 14 };
+      const section = await mount();
+
+      expect(lines(section)).toHaveLength(6);
+      await goToPage(section, 3);
+      expect(lines(section)).toHaveLength(2);
+    });
+
+    it("keeps the line being read on screen when the window crosses md", async () => {
+      // Page five of six-a-page is facts 24-29, which is page two of
+      // 24-a-page - not page five clamped to the two pages there now are.
+      setWidth(393);
+      response = { facts: many(30), total: 30 };
+      const section = await mount();
+
+      await goToPage(section, 5);
+      expect(lines(section)[0]!.text()).toContain("Partia 24");
+
+      setWidth(1024);
+      await flushPromises();
+      let shown = lines(section);
+      expect(shown).toHaveLength(6);
+      expect(shown[0]!.text()).toContain("Partia 24");
+
+      setWidth(393);
+      await flushPromises();
+      shown = lines(section);
+      expect(shown).toHaveLength(6);
+      expect(shown[0]!.text()).toContain("Partia 24");
+    });
+
+    it("offers no pager when everything fits on one page", async () => {
+      response = { facts: many(6), total: 6 };
+      const section = await mount();
+
+      expect(pager(section).exists()).toBe(false);
+    });
+
+    it("pages over the chosen kind alone, starting from its first page", async () => {
+      setWidth(393);
+      response = {
+        facts: [
+          ...many(10),
+          ...many(4, { fact_type: "personal_relation" }).map((each, index) => ({
+            ...each,
+            id: `relation-${index}`,
+            object: `Osoba ${index}`,
+          })),
+        ],
+        total: 14,
+      };
+      const section = await mount();
+
+      await goToPage(section, 2);
+      await section
+        .find("[data-testid='person-extractions-filter-personal_relation']")
+        .trigger("click");
+      await flushPromises();
+
+      // Four of them, all on page one: a reader left on page two of the
+      // unfiltered list would be looking at an empty list.
+      expect(lines(section)).toHaveLength(4);
+      expect(pager(section).exists()).toBe(false);
+    });
+
+    it("puts the confirmed ones on the first page, wherever they arrived", async () => {
+      setWidth(393);
+      response = {
+        facts: [
+          ...many(8),
+          fact({
+            id: "confirmed",
+            party: "Partia Potwierdzona",
+            stats: {
+              votes: { correct: 2, humanVoted: true, humanCount: 2 },
+            } as ExtractionFact["stats"],
+          }),
+        ],
+        total: 9,
+      };
+      const section = await mount();
+
+      expect(lines(section)[0]!.text()).toContain("Partia Potwierdzona");
+
+      // Page two is all unchecked: it says so, and has no empty confirmed
+      // heading over nothing.
+      await goToPage(section, 2);
+      expect(
+        section.find("[data-testid='person-extractions-confirmed']").exists(),
+      ).toBe(false);
+      expect(
+        section.find("[data-testid='person-extractions-open']").exists(),
+      ).toBe(true);
+      expect(lines(section)).toHaveLength(3);
     });
   });
 
@@ -340,6 +734,13 @@ describe("ExtractionPersonFacts", () => {
       expect(section.text()).toContain("Zaloguj się lub załóż konto");
     });
 
+    it("has no (i) to open, since it explains buttons they are not shown", async () => {
+      response = { facts: [], total: 3 };
+      const section = await mount();
+
+      expect(section.find("[data-testid='section-info']").exists()).toBe(false);
+    });
+
     it("declines the Polish plural properly", async () => {
       response = { facts: [], total: 5 };
       const section = await mount();
@@ -349,11 +750,11 @@ describe("ExtractionPersonFacts", () => {
       ).toContain("5 faktów");
     });
 
-    it("shows no fact text and no cards at all", async () => {
+    it("shows no fact text and no lines at all", async () => {
       response = { facts: [fact()], total: 3 };
       const section = await mount();
 
-      expect(section.findAll(".extraction-card")).toHaveLength(0);
+      expect(section.findAll("[data-testid='person-fact']")).toHaveLength(0);
       expect(section.text()).not.toContain("Piotr Gajda");
       expect(section.text()).not.toContain("radny PiS");
       expect(section.html()).not.toContain("Prawo i Sprawiedliwość");

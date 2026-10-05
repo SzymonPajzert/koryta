@@ -1,5 +1,7 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./test";
 import { logIn, USERS } from "../e2e/helpers/auth";
+import { pageTag } from "./pageTags";
 
 /** The verification progress bar, which nothing else in this suite draws.
  *
@@ -35,8 +37,12 @@ async function readyBar(page: Page) {
   return bar;
 }
 
+/** The table and /eksploruj/nowe carry the same bar. */
+const TABELA = { tag: pageTag("eksploruj/tabela") };
+const NOWE = { tag: pageTag("eksploruj/nowe") };
+
 test.describe("Postęp weryfikacji", () => {
-  test("postep-weryfikacji", async ({ page }) => {
+  test("postep-weryfikacji", TABELA, async ({ page }) => {
     test.setTimeout(120_000);
     await logIn(page, USERS.normal, "/eksploruj/tabela");
 
@@ -72,7 +78,7 @@ test.describe("Postęp weryfikacji", () => {
     });
   });
 
-  test("postep-weryfikacji-nowe", async ({ page }) => {
+  test("postep-weryfikacji-nowe", NOWE, async ({ page }) => {
     test.setTimeout(120_000);
     // The card variant, which is the reason this is a second shot rather than
     // the same one: /eksploruj/nowe gets the five-band outlined card, while

@@ -213,8 +213,14 @@ async function seedDatabase() {
     batch.set(ref, nodeData);
   }
 
-  for (const edgeData of seededEdges) {
-    const ref = db.collection("edges").doc();
+  // Ids by position rather than `.doc()`'s random ones. Firestore lists by id,
+  // and ties are broken on it - the two members sukspolka's board took on the
+  // same day came out in a different order after every seeding, and a visual
+  // baseline cannot follow that. Zero-padded so the id order is the file's.
+  for (const [i, edgeData] of seededEdges.entries()) {
+    const ref = db
+      .collection("edges")
+      .doc(`seededge${String(i).padStart(3, "0")}`);
     batch.set(ref, edgeData);
   }
 
@@ -314,11 +320,13 @@ async function seedAuth() {
       await auth.createUser(user);
       if (user.uid === "test-admin") {
         // datascience: allows uploading extractions via /api/ingest/extraction
+        // owner: opens the owner's task list, /admin/zadania
         await auth.setCustomUserClaims(user.uid, {
           admin: true,
           datascience: true,
+          owner: true,
         });
-        console.log(`Set admin + datascience claim for ${user.email}`);
+        console.log(`Set admin + datascience + owner claim for ${user.email}`);
       }
       console.log(`User created: ${user.email} / ${user.password}`);
     }

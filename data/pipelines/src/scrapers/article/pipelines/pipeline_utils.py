@@ -185,6 +185,15 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         help="Parallel workers for article parsing pipelines.",
     )
     parser.add_argument(
+        "--koryciarski-scorer",
+        choices=["llm", "ml"],
+        default="llm",
+        help="Scorer for ArticleKoryciarskiScores. 'llm' (default) calls the "
+        "LLM; 'ml' scores article content with the trained TF-IDF + logistic "
+        "regression models (no LLM, fast), stamping rows with "
+        "model=koryciarski_content_ml.",
+    )
+    parser.add_argument(
         "--article-facts-min-koryciarski-score",
         type=int,
         default=None,
@@ -225,6 +234,24 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "of the article's confirmed koryta_ids by name — the rule the website "
         "ingest uses to link a fact to a person page. Default: keep every "
         "verified fact.",
+    )
+    parser.add_argument(
+        "--article-analyzed-dedup-existing-facts",
+        action="store_true",
+        help="Drop facts the site already holds. Reads the KorytaFacts "
+        "pipeline (the `extractions` Firestore export) and rebuilds the same "
+        "dedup key ArticleAnalyzed uses for each fact already matched to a "
+        "person, so only facts new to the site survive. Requires the export "
+        "to be reachable. Off by default: no dependency on the site's state.",
+    )
+    parser.add_argument(
+        "--article-mentions-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reuse mention-judge verdicts across runs, keyed by article "
+        "content hash + person id + judge version (and the ids a merged "
+        "person came from). Default: on; pass --no-article-mentions-cache to "
+        "re-judge every pair.",
     )
     parser.add_argument(
         "--tag",
@@ -292,6 +319,10 @@ def article_workers() -> int:
     return _args().article_workers
 
 
+def koryciarski_scorer() -> str:
+    return _args().koryciarski_scorer
+
+
 def article_tag() -> str | None:
     return _args().tag
 
@@ -318,3 +349,11 @@ def article_analyzed_keep_evidence() -> bool:
 
 def article_analyzed_only_matched_koryta() -> bool:
     return bool(_args().article_analyzed_only_matched_koryta)
+
+
+def article_analyzed_dedup_existing_facts() -> bool:
+    return bool(_args().article_analyzed_dedup_existing_facts)
+
+
+def article_mentions_cache() -> bool:
+    return bool(_args().article_mentions_cache)

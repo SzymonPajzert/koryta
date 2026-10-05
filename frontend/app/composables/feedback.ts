@@ -1,13 +1,21 @@
-import type { RouteLocationNormalizedLoaded } from "vue-router";
+import type {
+  RouteLocationNormalizedLoaded,
+  RouteLocationRaw,
+} from "vue-router";
 import {
+  mdiAlertCircleOutline,
   mdiBug,
+  mdiCheckCircleOutline,
   mdiLightbulbOutline,
   mdiDatabaseEdit,
   mdiDotsHorizontal,
+  mdiProgressClock,
 } from "@mdi/js";
 import { parseEntityUrlSlug, seoTypes, type SeoType } from "./slugs";
 import { anonymousRequest, authRequest } from "./auth";
 import { feedbackKindLabels } from "~~/shared/model";
+import type { RowTone } from "./rowTone";
+import type { FixState } from "~~/shared/feedbackFixes";
 import type {
   FeedbackContext,
   FeedbackKind,
@@ -46,6 +54,16 @@ export const feedbackKindConfig: Record<
   },
 };
 
+/** The kind as one of the ink/surface pairs in shared/colors.ts, for the
+ * admin rows: `ink-<tone>` for a bare icon, the pair for the row itself. The
+ * `color`s above are Vuetify's, which are too pale to be read as text. */
+export const feedbackKindTone: Record<FeedbackKind, RowTone> = {
+  bug: "danger",
+  data: "warning",
+  idea: "sage",
+  other: "neutral",
+};
+
 export const feedbackStatusConfig: Record<
   FeedbackStatus,
   { title: string; color: string }
@@ -55,6 +73,35 @@ export const feedbackStatusConfig: Record<
   resolved: { title: "Załatwione", color: "success" },
   wont_fix: { title: "Nie robimy", color: "grey" },
 };
+
+/** How a fix claimed on the QA list reads on a report (`shared/feedbackFixes.ts`).
+ * Ink colours: the chip is tonal and the icon stands alone in the ordering
+ * rows, so the colour has to be readable as text. */
+export const fixStateConfig: Record<
+  FixState,
+  { label: string; icon: string; color: string }
+> = {
+  awaiting: {
+    label: "czeka na sprawdzenie",
+    icon: mdiProgressClock,
+    color: "ink-neutral",
+  },
+  works: { label: "działa", icon: mdiCheckCircleOutline, color: "ink-success" },
+  broken: {
+    label: "nie działa",
+    icon: mdiAlertCircleOutline,
+    color: "ink-danger",
+  },
+};
+
+/** Where a link to one report leads. On the page that lists every report it
+ * is the hash alone, which that page follows by opening and outlining the row
+ * (/admin/opinie); from a page showing only some of them, `page` is where the
+ * rest are, and the link goes there with the same hash. */
+export const feedbackReportLink = (
+  id: string,
+  page?: string,
+): RouteLocationRaw => (page ? `${page}#fb-${id}` : { hash: `#fb-${id}` });
 
 /** The node the route is about, when it is about one.
  *

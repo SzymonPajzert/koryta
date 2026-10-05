@@ -10,7 +10,7 @@ func TestParse(t *testing.T) {
 	// Save original args
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
-	
+
 	// Reset flags for testing
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
@@ -49,7 +49,7 @@ func TestParse(t *testing.T) {
 func TestParseDefaultOutBucket(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
-	
+
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	os.Args = []string{

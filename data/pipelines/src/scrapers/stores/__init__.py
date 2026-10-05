@@ -4,6 +4,7 @@ to be used across all scrapers. It provides a common interface for handling
 file operations, data references, and pipeline execution contexts.
 """
 
+import contextvars
 import io
 import os
 import posixpath
@@ -26,8 +27,10 @@ from scrapers.stores.file import (
     VersionedBackup,
 )
 from stores.config import DOWNLOADED_DIR as DOWNLOADED_DIR
+from stores.config import PESEL_SALT_FILE as PESEL_SALT_FILE
 from stores.config import VERSIONED_DIR as VERSIONED_DIR
 from stores.config import backup_disabled
+from stores.config import pesel_salt as pesel_salt
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection
@@ -109,8 +112,11 @@ class IO(metaclass=ABCMeta):
         content_type: str,
         include_query=False,
         verbose=True,
-    ):
-        """Uploads data to storage (e.g. GCS)."""
+    ) -> bool | None:
+        """Uploads data to storage (e.g. GCS).
+
+        False when the upload failed; None from an io that cannot tell.
+        """
         raise NotImplementedError()
 
     @abstractmethod
@@ -154,6 +160,19 @@ class IO(metaclass=ABCMeta):
     def upload_backup_from_path(self, filename: str, src_path: str) -> None:
         """Uploads a local file as a versioned backup for a filename."""
         raise NotImplementedError()
+
+    def read_memo(self, kind: str, key: str) -> str | None:
+        """What `write_memo` kept under `key`, or None.
+
+        A memo is a pipeline's note to its own later runs on this machine - what
+        it made of an input that never changes - kept beside the download cache
+        and never shared. An io with nowhere to keep one has none, and a
+        pipeline then does the work again; the output does not change.
+        """
+        return None
+
+    def write_memo(self, kind: str, key: str, text: str) -> None:
+        """Keep `text` under `key` for later runs on this machine; best effort."""
 
 
 class ContextResource(metaclass=ABCMeta):
@@ -588,11 +607,22 @@ class ProcessPolicy:
         # Now print nicely
         print("\n=== Pipeline Execution Tree ===")
 
+        printed: set[str] = set()
+
         def print_tree(pipeline, indent=0):
             run, reason = self.execution_decisions[pipeline.pipeline_name]
             status = "[RUN] " if run else "[SKIP]"
-            print(f"{'  ' * indent}{status} {pipeline.pipeline_name} ({reason})")
-            for dep in getattr(pipeline, "dependencies", {}).values():
+            # A source several pipelines read is one node: its subtree once.
+            deps = getattr(pipeline, "dependencies", {})
+            again = pipeline.pipeline_name in printed and bool(deps)
+            print(
+                f"{'  ' * indent}{status} {pipeline.pipeline_name} ({reason})"
+                + (" - as above" if again else "")
+            )
+            if again:
+                return
+            printed.add(pipeline.pipeline_name)
+            for dep in deps.values():
                 print_tree(dep, indent + 1)
 
         print_tree(root_pipeline)
@@ -618,6 +648,18 @@ class Context:
 
 
 Output = typing.TypeVar("Output")
+
+#: The pipelines of the tree being built, by class, so that a source several
+#: pipelines name is one instance: one node of the graph, run once, read from
+#: disk or restored from the shared cache once, asked about once. Built anew
+#: for every edge, ScrapeRejestrIO's tree held 75 pipelines for its 31 classes
+#: - CompaniesKRS five times, KRSUpdates three - and each copy read its output
+#: again into a frame of its own; the two ProcessWiki copies each asked whether
+#: to run the wiki, and each downloaded its backup. Scoped to one root, so a
+#: pipeline built on its own later starts afresh.
+_tree: contextvars.ContextVar[dict[type, "Pipeline"] | None] = contextvars.ContextVar(
+    "pipeline_tree", default=None
+)
 
 
 def _annotated_classes(pipeline_type: type) -> typing.Iterable[tuple[str, type]]:
@@ -680,6 +722,8 @@ class Pipeline(typing.Generic[Output]):
 
     _cached_result: pd.DataFrame | None = None
     _refreshed_execution: bool = False
+    #: Whether this run asked to run it, as `confirm_run` asks, and was told no.
+    _declined: bool = False
 
     @abstractmethod
     def process(self, ctx: Context):
@@ -692,8 +736,10 @@ class Pipeline(typing.Generic[Output]):
 
     @staticmethod
     def create(pipeline_type, nested=0):
+        # Built once. This used to run __init__ a second time to set `nested`,
+        # which built the whole tree under it twice and dropped the first.
         result = pipeline_type()
-        Pipeline.__init__(result, nested)
+        result.nested = nested
         return result
 
     def __init__(self, nested=0) -> None:
@@ -701,10 +747,21 @@ class Pipeline(typing.Generic[Output]):
         self._cached_result = None
         self._refreshed_execution = False
         self.dependencies = {}
-        for annotation, pipeline_type_dep in self.list_sources():
-            dep = Pipeline.create(pipeline_type_dep, self.nested + 1)
-            self.__dict__[annotation] = dep
-            self.dependencies[annotation] = dep
+        built = _tree.get()
+        token = _tree.set({}) if built is None else None
+        try:
+            built = _tree.get()
+            assert built is not None
+            for annotation, pipeline_type_dep in self.list_sources():
+                dep = built.get(pipeline_type_dep)
+                if dep is None:
+                    dep = Pipeline.create(pipeline_type_dep, self.nested + 1)
+                    built[pipeline_type_dep] = dep
+                self.__dict__[annotation] = dep
+                self.dependencies[annotation] = dep
+        finally:
+            if token is not None:
+                _tree.reset(token)
 
     def read(self, ctx: Context):
         """Attempts to read the output of the pipeline from storage (local or bucket).
@@ -712,15 +769,26 @@ class Pipeline(typing.Generic[Output]):
         Raises FileNotFoundError if not found."""
         assert self.filename
         filenotfound: Exception | None = None
+        local = LocalFile(self.output_path(), "versioned")
         try:
-            return ctx.io.read_data(
-                LocalFile(self.output_path(), "versioned")
-            ).read_dataframe(self.format, dtype=self.dtype)
+            return ctx.io.read_data(local).read_dataframe(self.format, dtype=self.dtype)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
             filenotfound = e
 
         if self.backup_to_shared_cache and not backup_disabled():
+            # Put on disk byte for byte, then read as a local output is. Read
+            # into memory instead, it was gone after the run: the next one
+            # downloaded it again, and of a pipeline it had declined to run -
+            # ProcessWiki - asked again, and rebuilt what reads it as if the
+            # missing output had been refreshed.
+            if self.restore_output_from_shared_cache(ctx):
+                try:
+                    return ctx.io.read_data(local).read_dataframe(
+                        self.format, dtype=self.dtype
+                    )
+                except FileNotFoundError as e:
+                    print("Restored output not found, continuing: ", e)
             try:
                 return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
                     self.format, dtype=self.dtype
@@ -750,6 +818,7 @@ Should I run it? (y/n) [n]",
                 )
                 if answer is None or answer.lower() != "y":
                     print("Not refreshing")
+                    self._declined = True
                     return False
             return result
 
@@ -794,9 +863,16 @@ Should I run it? (y/n) [n]",
                 # If read successfully, we don't need to write (it matches disk).
                 assert df is not None, self.filename
                 return df
-            except FileNotFoundError:
+            except FileNotFoundError as missing:
+                if self._declined:
+                    # Falling through ran it anyway: "Not refreshing", and
+                    # then ProcessWiki's 40 minutes and 2.9 GB download.
+                    raise FileNotFoundError(
+                        f"{self.pipeline_name} runs long and was not run, and "
+                        "there is no output of it to read: answer y (or pass "
+                        "--assume-yes), or restore its output first."
+                    ) from missing
                 # We'll try to process
-                pass
         elif should_refresh and self.filename is not None:
             # When the local output is missing (not an explicit policy refresh),
             # try reading from backup before re-processing, unless backups are

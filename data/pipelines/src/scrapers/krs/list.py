@@ -11,14 +11,14 @@ from pandas import DataFrame
 from entities.company import KRS, Owner, Source
 from entities.company import Company as KrsCompany
 from entities.person import KRS as KrsPerson
-from scrapers.krs.data import CompaniesHardcoded
+from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
 from scrapers.krs.graph import QueryRelation
 from scrapers.krs.organs import supervision_kind
 from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Jst, Teryt, normalize_unit_name
 from scrapers.stores import CloudStorage, Context, Pipeline
-from scrapers.stores.file import DownloadableFile, latest_crawls, split_crawl_date
+from scrapers.stores.file import split_crawl_date
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -122,6 +122,7 @@ class PeopleKRS(Pipeline):
         "employed_krs": str,
         "id": str,
         "employed_for": str,
+        "crawled_on": str,
     }
 
     def process(self, ctx: Context):
@@ -207,6 +208,7 @@ def extract_people(ctx: Context):
                                 employed_end=post.end,
                                 employed_for=post.years,
                                 employed_role=post.role,
+                                crawled_on=date,
                             )
                         )
         except KeyError as e:
@@ -262,6 +264,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.company_sources: dict[str, set[Source]] = {}
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
         self.unknown_relations: typing.Counter[str] = collections.Counter()
+        #: KRS numbers whose odpis says who owns them - see `names_an_owner`.
+        self.owner_on_record: set[str] = set()
 
     @property
     def output_class(self) -> Type:
@@ -332,28 +336,47 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         older crawls is not harmful the way it is for people - but it is not
         free either, and the ownership edges it replays are the *old* ones. The
         newest crawl is the answer to "who owns this company", so read that.
+
+        Read through `read_many`, as `extract_people` is and for the same
+        reason: a listing read one object at a time is ~3 objects a second on
+        a fresh runner, and the nightly spent its whole two hours here. So the
+        newest crawl is picked from what arrives rather than from a listing,
+        and the choice has to be complete before anything is yielded - unlike
+        `extract_people`, `add_company` merges, so a crawl yielded cannot be
+        taken back when a newer one turns up. What is held until then is the
+        newest crawl of each query, ~180 MB for rejestr.io.
         """
-        listing = [
-            blob_ref
-            for blob_ref in ctx.io.list_files(
-                CloudStorage(prefix=f"hostname={hostname}")
-            )
-            # A crawl that failed is stored as a zero-byte object, and dropping
-            # it here rather than after `latest_crawls` is the whole point: the
-            # newest crawl of a company may be the failed one, and taking it
-            # and then skipping it loses the company altogether instead of
-            # falling back to the last crawl that worked. `extract_people`
-            # makes the same choice, for the same reason.
-            if isinstance(blob_ref, DownloadableFile) and blob_ref.size != 0
-        ]
-        for blob_ref in latest_crawls(listing, lambda ref: ref.url):
-            blob = ctx.io.read_data(blob_ref)
+        newest: dict[str, tuple[str, str, str]] = {}
+        # Where a listing first meets each query: the smallest name among its
+        # crawls that are not empty. Yielding in that order is yielding in the
+        # order this used to, when it walked a listing, and the order matters -
+        # `add_company` keeps the first non-empty value of each field, so it
+        # decides between two crawls that disagree. Arrival order will not do,
+        # it moves with the mirror's age; nor will the newest crawl's own name,
+        # as the `date=` segment has moved within the path (see
+        # `split_crawl_date`) and a query crawled under both layouts sorts
+        # under each in a different place.
+        listed_at: dict[str, str] = {}
+        for url, blob in ctx.io.read_many(CloudStorage(prefix=f"hostname={hostname}")):
+            subject, date = split_crawl_date(url)
+            seen = newest.get(subject)
+            # Same day under both layouts: the one a listing meets first wins.
+            if seen is not None and (date, seen[1]) <= (seen[0], url):
+                if url < listed_at[subject] and blob.read_string() != "":
+                    listed_at[subject] = url
+                continue
             content = blob.read_string()
             if content == "":
-                # Still checked: a listing that carries no sizes cannot say.
+                # A crawl that failed is stored as a zero-byte object. Nothing
+                # is recorded for it, so the crawl before it stands: the newest
+                # crawl of a company may be the failed one, and taking it and
+                # then skipping it loses the company altogether.
                 continue
-            data = json.loads(content)
-            yield blob_ref.url, data
+            newest[subject] = (date, url, content)
+            listed_at[subject] = min(listed_at.get(subject, url), url)
+        for subject in sorted(newest, key=listed_at.__getitem__):
+            _, url, content = newest[subject]
+            yield url, json.loads(content)
 
     def process_rejestrio_blob(
         self, blob_name: str, data, postal_codes: DataFrame
@@ -391,9 +414,20 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             return
         self.add_company(c)
         self.add_company_source(c.krs, blob_name)
+        if names_an_owner(data, self.jst_index):
+            self.owner_on_record.add(c.krs)
 
     def compute_public_krss(self, hardcoded) -> set[str]:
-        """Base case: companies explicitly public or hardcoded as public."""
+        """Base case: companies explicitly public or hardcoded as public.
+
+        REGON's ownership code is the one source consulted only when the
+        register has nothing to say, which is what `owner_on_record` tracks. It
+        is a code a company files once and seldom revisits. Where KRS does name
+        an owner, the two agree on 2,054 of the 2,129 companies REGON calls
+        public. Of the 75 they disagree on, the register shows 19 owned by
+        people alone and 54 by another company. So an owner in the register
+        outranks the code, and a register that names nobody does not.
+        """
         public_krss = set()
         for company in self.companies.values():
             if company.is_public:
@@ -406,6 +440,13 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     "SPOLKI_SKARBU_PANSTWA",
                 ]
                 for src in hc.sources
+            ):
+                public_krss.add(company.krs)
+                company.is_public = True
+            if (
+                hc
+                and REGON_PUBLIC_OWNERSHIP in hc.sources
+                and company.krs not in self.owner_on_record
             ):
                 public_krss.add(company.krs)
                 company.is_public = True
@@ -446,7 +487,11 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 for src in hc.sources:
                     company_sources.add(Source(source="hardcoded", reason=src))
 
-            output.append(dataclasses.replace(company, sources=list(company_sources)))
+            output.append(
+                dataclasses.replace(
+                    company, sources=sorted(company_sources, key=Source.sort_key)
+                )
+            )
         return output
 
     def process(self, ctx: Context):
@@ -595,8 +640,15 @@ def get_teryt(pcs: DataFrame, city: str, code: str | None, fallback: str = ""):
         # the code it wanted, and which beats having no region at all.
         return fallback
 
-    print(f"Failing to find teryt code for: '{city}' '{code}'")
+    if (city, code) not in _UNPLACED:
+        # Once per address: the same few towns came back 67 times a run.
+        _UNPLACED.add((city, code))
+        print(f"Failing to find teryt code for: '{city}' '{code}'")
     return ""
+
+
+#: The addresses `get_teryt` has said it cannot place, so it says each once.
+_UNPLACED: set[tuple[str, str]] = set()
 
 
 #: How many companies the register names the Treasury as an owner of. Kept as a
@@ -736,6 +788,44 @@ def company_from_api_krs(  # noqa: PLR0915
     except TypeError as e:
         print(data)
         raise ValueError(f"Wrong data: {data}") from e
+
+
+def names_an_owner(data: dict, jst: "JstIndex | None" = None) -> bool:
+    """Whether the odpis says who owns the company, in terms this module reads.
+
+    True when dzial 1 lists a natural person, a company by its KRS number, or a
+    government the name resolves to - an answer, whichever way it points. False
+    when it lists nobody: the register publishes the shareholders of a spolka
+    akcyjna only when there is exactly one, so that is every SA with several,
+    and every association and foundation too. Also False when all it lists are
+    names nothing here can place: a public university, KOWR, a zwiazek gmin, a
+    city's holding company written without its KRS number - or a foreign
+    company. REGON then answers for all of them alike. Going by the owners'
+    names that is right for 74 of the 76 such companies it calls public; the
+    other two belong to a GmbH and to an economists' society.
+
+    Karkonoska Agencja Rozwoju Regionalnego is the first kind. Its odpis has no
+    shareholder section at all, so it was published as private, although REGON
+    records it as owned by local government and a correction proposed on the
+    site said the same.
+    """
+    dzial1 = (data.get("odpis") or {}).get("dane", {}).get("dzial1", {})
+    siedziba = (dzial1.get("siedzibaIAdres") or {}).get("siedziba") or {}
+    seat_wojewodztwo = (
+        jst.wojewodztwo_code(siedziba.get("wojewodztwo")) if jst else None
+    )
+    for w in dzial1.get("wspolnicySpzoo", []) + dzial1.get("jedynyAkcjonariusz", []):
+        # A person comes masked, as a surname and first names, never a `nazwa`
+        if "nazwisko" in w or "imiona" in w:
+            return True
+        if "nazwa" not in w:
+            continue
+        krs = (w.get("krs") or {}).get("krs")
+        if krs and krs != "0000000000":
+            return True
+        if jst is not None and jst.resolve(w["nazwa"], seat_wojewodztwo):
+            return True
+    return False
 
 
 def parse_activity_from_api_krs(dzial3: dict) -> list[str]:

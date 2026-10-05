@@ -115,7 +115,7 @@
           :key="sourcePath"
           :entity="entity"
           :type="type"
-          :extra-locations="electionLocations"
+          :extra-locations="searchLocations"
           @published="refreshNode()"
         />
 
@@ -131,19 +131,25 @@
               :edges="owners"
               title="Część regionu"
               :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
               @remove="openRemove"
+              @published="refreshEdges()"
             />
             <CardConnectionList
               :edges="subregions"
               title="Regiony"
               :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
               @remove="openRemove"
+              @published="refreshEdges()"
             />
             <CardConnectionList
               :edges="subsidiaries"
               title="Spółki zależne"
               :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
               @remove="openRemove"
+              @published="refreshEdges()"
             />
           </template>
           <template v-if="entity?.type === 'person'">
@@ -153,11 +159,13 @@
               :can-cite="canAddRelations"
               :can-correct="canEditRelations"
               :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
               :predecessors="predecessors"
               @add="openAdd(undefined, 'Dodaj powiązanie')"
               @sources="openSources"
               @edit="openEdit"
               @remove="openRemove"
+              @published="refreshEdges()"
             />
             <!-- The rows above only hint at a handover; this states it, and
                  says how much of the history it covers. It renders nothing at
@@ -166,7 +174,7 @@
               :person-id="node"
               :person-name="entity.name"
               :person-parties="(entity as Person).parties"
-              :relation-count="edges.length"
+              :relation-count="listedRelationCount"
               class="mt-4"
             />
           </template>
@@ -188,7 +196,9 @@
               <CardShortNode
                 :edge="edge"
                 :can-remove="canRemoveRelations"
+                :subject-published="subjectPublished"
                 @remove="openRemove"
+                @published="refreshEdges()"
               />
             </v-col>
           </v-row>
@@ -211,7 +221,9 @@
               <CardShortNode
                 :edge="edge"
                 :can-remove="canRemoveRelations"
+                :subject-published="subjectPublished"
                 @remove="openRemove"
+                @published="refreshEdges()"
               />
             </v-col>
           </v-row>
@@ -227,11 +239,18 @@
 
         <!-- Notes on a person are unreviewed claims about a named individual,
              so a reader has to be logged in to see them. Everything else -
-             companies, regions, topics - stays open. -->
+             companies, regions, topics - stays open.
+             `columns`: two notes to a row on a desktop, where one full-width
+             column left half the screen empty beside each of them. A person's
+             page only - that is where it was asked for; a region's is drawn by
+             this component too and was not part of the request, and the
+             table's side panel mounts the same editor and was asked to stay a
+             single stack. -->
         <NoteEditor
           v-if="user || entity?.type !== 'person'"
           :node-id="node"
           :node-type="type"
+          :columns="type === 'person'"
           class="mt-4"
         />
 
@@ -278,9 +297,13 @@
              named individual - so the section locks itself and shows a logged
              out reader only how many there are. That gate lives inside the
              component, because the count is public and the facts are not. -->
+        <!-- A fact turned into a relation is a new draft in „Historia
+             powiązań” above, so that list is read again, as it is after
+             „Dodaj”. -->
         <ExtractionPersonFacts
           v-if="entity?.type === 'person'"
           :node-id="node"
+          @promoted="refreshEdges()"
         />
 
         <FormAddRelationDialog
@@ -424,7 +447,12 @@ import {
   mdiHome,
   mdiRefresh,
 } from "@mdi/js";
-import { useEdges, type EdgeNode } from "~/composables/edges";
+import {
+  employmentSpell,
+  onePerNode,
+  useEdges,
+  type EdgeNode,
+} from "~/composables/edges";
 import { edgeSentence } from "~/utils/edgeSentence";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
 import { useEdgeEditing } from "~/composables/edgeEditing";
@@ -442,7 +470,9 @@ import type {
   NodeType,
   Revision,
 } from "~~/shared/model";
+import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { predecessorsByEdge } from "~/utils/succession";
+import { employmentTowns } from "~/utils/companyLocation";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
@@ -515,6 +545,12 @@ const entity = computed(() => {
   return response.value?.node;
 });
 
+/** Whether the page itself is live, which is what decides whether one of its
+ * relations may be. A draft's relations cannot be published at all - and do not
+ * need to be from here, since the „Opublikuj" dialog on the draft badge
+ * publishes them along with the page. */
+const subjectPublished = computed(() => entity.value?.published === true);
+
 const regionTeryt = computed(() => {
   if (entity.value && entity.value.type === "region") {
     return entity.value.teryt;
@@ -530,6 +566,14 @@ const {
   refresh: refreshEdges,
 } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
+
+/** How many rows the relation history lists, for the coverage line of
+ * „Zmiany na stanowisku" - which says "2 z 8" and should not count a row the
+ * card above it leaves out. The card drops the role-less copy of a post this
+ * person also holds under its name; see `withoutRedundantRoleless`. */
+const listedRelationCount = computed(
+  () => withoutRedundantRoleless(edges.value, employmentSpell).length,
+);
 
 /** Who held each of this person's seats before them, keyed by the relation it
  * is a hint on.
@@ -565,6 +609,19 @@ const electionLocations = computed(() =>
     .map((edge) => edge.richNode.name),
 );
 
+/** Where to search the person in: the election towns, then the towns their
+ * employers sit in - the order `usePersonSearch` documents. Without the second
+ * half the menu searched Rafał Dyjur in „Powiat lwówecki", where he stood, and
+ * not in Jelenia Góra, where the hospital he works for is and which his own
+ * page printed beside its name. The table's drawer gets them from
+ * `useCompanyLocations`, which fetches every region there is - well over a
+ * megabyte that each reader of this page would pay for a menu only an admin
+ * sees - while the employers' names already carry them. */
+const searchLocations = computed(() => [
+  ...electionLocations.value,
+  ...employmentTowns(edges.value),
+]);
+
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");
 });
@@ -573,12 +630,18 @@ const subregions = computed(() => {
     (e) => e.type === "owns" && e.richNode.type === "region",
   );
 });
-const subsidiaries = computed(() => {
-  return targets.value.filter(
-    (e) =>
-      (e.type === "owns" || e.type === "seat") && e.richNode.type == "place",
-  );
-});
+/** The companies a region seats or holds shares in, once each: a gmina that
+ * does both has two edges to the company, and the row is its `owns` one. See
+ * `onePerNode`. */
+const subsidiaries = computed(() =>
+  onePerNode(
+    targets.value.filter(
+      (e) =>
+        (e.type === "owns" || e.type === "seat") && e.richNode.type == "place",
+    ),
+    ["owns", "seat"],
+  ),
+);
 
 /** An entity page is the thing a reader actually shares, so it carries its own
  * card: the entity's own description rather than the site tagline, and an image,

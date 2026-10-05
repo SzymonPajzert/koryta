@@ -51,7 +51,7 @@ mounts the dialog behind them:
 | `can-remove`   | bin          | **admin only**   | `dialog/RemoveEdge.vue` → `/api/edges/delete`       |
 
 Only removal is an admin's alone. A correction from anybody else is written as a
-pending revision and waits in /admin/rewizje-krawedzi; an admin's is applied as
+pending revision and waits in /admin/rewizje#powiazania; an admin's is applied as
 it is written. `/api/edges/update` decides that, not the dialog - the dialog only
 says which of the two is about to happen.
 

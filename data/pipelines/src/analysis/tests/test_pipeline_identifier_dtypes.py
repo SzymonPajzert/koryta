@@ -24,8 +24,11 @@ import io
 import pandas as pd
 import pytest
 
+from analysis.people_koryta_merged import PeopleKorytaMerged
 from analysis.scores.company import CompanyScores
+from analysis.utils.names import NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.odpis_people import PeopleKRSCombined
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
 from scrapers.pkw.process import PeoplePKW
@@ -64,6 +67,12 @@ CASES = [
         id="people-krs-ids",
     ),
     pytest.param(
+        PeopleKRSCombined,
+        {"id": "1403676", "employed_krs": "0000000170", "employed_for": "7.25"},
+        ["id", "employed_krs", "employed_for"],
+        id="people-krs-combined-ids",
+    ),
+    pytest.param(
         CompaniesKRS,
         {
             "krs": "0000000111",
@@ -73,6 +82,25 @@ CASES = [
         },
         ["krs", "teryt_code", "nip", "regon"],
         id="companies-krs-ids",
+    ),
+    pytest.param(
+        NamesCountByRegion,
+        {"last_name": "jankowska", "count": 2079.0, "teryt": "02"},
+        ["teryt"],
+        id="names-count-teryt",
+    ),
+    pytest.param(
+        PeopleKorytaMerged,
+        {
+            "first_name": "anna",
+            "last_name": "nowak",
+            "tail_name": "maria nowak",
+            "rejestrio_id": "1403676",
+            "koryta_id": "3kQ9xV1bT0mZpL8sWc2R",
+            "full_name": "Anna Maria Nowak",
+        },
+        ["rejestrio_id", "koryta_id"],
+        id="people-koryta-merged-ids",
     ),
 ]
 

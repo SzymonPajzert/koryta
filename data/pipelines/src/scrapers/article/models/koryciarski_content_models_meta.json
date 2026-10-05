@@ -1,0 +1,270 @@
+{
+  "artifact": "koryciarski_content_models",
+  "trained_at": "2026-09-01 (regenerated at 2026-09-01T20:31:09 without refitting; values reproduced from seeded eval splits)",
+  "labels": "LLM oracle article_koryciarski_scores.jsonl (model=Qwen/Qwen3.8-27B, prompt_version=1, is_article gate + 0-5 koryciarstwo score)",
+  "config": {
+    "features": {
+      "tfidf": {
+        "ngram_range": [
+          1,
+          2
+        ],
+        "min_df": 5,
+        "max_features": 40000,
+        "sublinear_tf": true,
+        "strip_accents": "unicode",
+        "lowercase": true
+      },
+      "text_truncate_chars": 20000,
+      "scaler": "none"
+    },
+    "is_article": {
+      "name": "koryciarski_content_is_article",
+      "solver": "lbfgs",
+      "class_weight": "balanced",
+      "max_iter": 2000
+    },
+    "score": {
+      "name": "koryciarski_content_score",
+      "solver": "lbfgs",
+      "class_weight": "balanced",
+      "max_iter": 2000,
+      "labels": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "split": {
+      "test_size": 0.2,
+      "random_state": 42,
+      "eval_modes": [
+        "random-stratified",
+        "domain-held-out"
+      ]
+    }
+  },
+  "dataset": {
+    "path": "/home/mp/Projects/koryta/data/pipelines/versioned/koryciarski_content_train.parquet",
+    "source": "Domain-uniform per-class sample of article_koryciarski_scores.jsonl (labels by LLM Qwen/Qwen3.8-27B, prompt_version 1, scoring pipeline ArticleKoryciarskiScores), joined on url with article_content from article_parsed.jsonl (content kept <=30k chars at dataset build). Per class, rows are allocated evenly across domains via a per-domain cap; rare score classes 4 and 5 are kept fully.",
+    "n_rows": 79039,
+    "n_articles": 64439,
+    "n_not_articles": 14600,
+    "rows_by_class": {
+      "not_article:na": 14600,
+      "article:0": 15893,
+      "article:1": 13785,
+      "article:2": 9367,
+      "article:3": 4905,
+      "article:4": 17699,
+      "article:5": 2790
+    },
+    "distinct_domains": 1677,
+    "top_domains": {
+      "rmf24.pl": 1449,
+      "rp.pl": 1046,
+      "wiadomosci.onet.pl": 926,
+      "fakt.pl": 831,
+      "wiadomosci.wp.pl": 797,
+      "gazetaprawna.pl": 712,
+      "bankier.pl": 676,
+      "money.pl": 672,
+      "natemat.pl": 606,
+      "polsatnews.pl": 498
+    },
+    "content_chars": {
+      "median": 3898,
+      "mean": 4959.3,
+      "min": 1,
+      "max": 30000
+    },
+    "sampling": "domain-uniform per class (per-domain cap = ceil(target/ndomains)); score classes 4 and 5 kept fully; training rows drawn from the article_koryciarski_scores snapshot at dataset build time."
+  },
+  "evaluation": {
+    "is_article": {
+      "random": {
+        "split": "koryciarski_content_is_article",
+        "n_test": 15808,
+        "accuracy": 0.9593243927125507,
+        "balanced_accuracy": 0.9567779946089812,
+        "roc_auc": 0.956777994608981,
+        "class_f1": {
+          "0": 0.8964072821008539,
+          "1": 0.9746940060608446
+        },
+        "baseline_accuracy": 0.8152834008097166,
+        "confusion": [
+          [
+            2782,
+            138
+          ],
+          [
+            505,
+            12383
+          ]
+        ]
+      },
+      "domain_holdout": {
+        "n_test": 14145,
+        "accuracy": 0.938,
+        "balanced_accuracy": 0.9372,
+        "roc_auc": 0.9372,
+        "class_f1": {
+          "0": 0.87,
+          "1": 0.959
+        },
+        "baseline_accuracy": 0.7782,
+        "confusion": [
+          [
+            2936,
+            202
+          ],
+          [
+            675,
+            10332
+          ]
+        ],
+        "note": "fitted a throwaway model on the domain-train 80% (unseen-domain generalization); not the shipped checkpoint's predictions",
+        "split": "koryciarski_content_is_article"
+      }
+    },
+    "score": {
+      "random": {
+        "split": "koryciarski_content_score",
+        "n_test": 12888,
+        "accuracy": 0.6772191185599007,
+        "balanced_accuracy": 0.6404480657226642,
+        "weighted_f1": 0.6844606244769161,
+        "macro_f1": 0.6169943615423399,
+        "mae": 0.43179702048417135,
+        "recall_score_ge4": 0.8445583211322596,
+        "n_hot": 4098,
+        "baseline_accuracy": 0.2746741154562384,
+        "baseline_mae": 1.472791082490374,
+        "confusion": [
+          [
+            2674,
+            395,
+            30,
+            20,
+            57,
+            3
+          ],
+          [
+            397,
+            1732,
+            345,
+            161,
+            113,
+            9
+          ],
+          [
+            51,
+            272,
+            1062,
+            342,
+            138,
+            8
+          ],
+          [
+            27,
+            90,
+            230,
+            462,
+            165,
+            7
+          ],
+          [
+            43,
+            65,
+            101,
+            413,
+            2437,
+            481
+          ],
+          [
+            1,
+            2,
+            0,
+            12,
+            182,
+            361
+          ]
+        ]
+      },
+      "domain_holdout": {
+        "n_test": 14443,
+        "accuracy": 0.6398,
+        "balanced_accuracy": 0.6245,
+        "weighted_f1": 0.6482,
+        "macro_f1": 0.5844,
+        "mae": 0.5198,
+        "recall_score_ge4": 0.7994,
+        "n_hot": 5734,
+        "baseline_accuracy": 0.3429,
+        "baseline_mae": 1.5596,
+        "confusion": [
+          [
+            2613,
+            405,
+            34,
+            27,
+            43,
+            4
+          ],
+          [
+            451,
+            1683,
+            345,
+            137,
+            112,
+            11
+          ],
+          [
+            83,
+            292,
+            1082,
+            253,
+            133,
+            9
+          ],
+          [
+            43,
+            112,
+            245,
+            407,
+            167,
+            18
+          ],
+          [
+            219,
+            146,
+            241,
+            522,
+            2895,
+            929
+          ],
+          [
+            2,
+            2,
+            6,
+            12,
+            199,
+            561
+          ]
+        ],
+        "note": "fitted a throwaway model on the domain-train 80% (unseen-domain generalization); not the shipped checkpoint's predictions",
+        "split": "koryciarski_content_score"
+      }
+    }
+  },
+  "url_model_comparison": {
+    "n_rows": 14443,
+    "content_ml_mae": 0.5198,
+    "url_only_mae": 1.1874,
+    "note": "content MAE is the domain-held-out throwaway-model MAE above; url-only MAE is koryciarski_url.joblib on the same 14,443 held-out-articles row set"
+  }
+}

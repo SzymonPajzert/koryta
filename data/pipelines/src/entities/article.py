@@ -146,7 +146,6 @@ class ArticleAnalyzedRecord:
     domain: str
     title: str | None
     publication_date: str | None
-    article_content: str
     koryciarski_llm_score: int | None
     koryciarski_llm_reason: str
     extracted_facts: list[dict[str, Any]]

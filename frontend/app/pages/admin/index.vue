@@ -71,7 +71,8 @@
 
           <v-card-text>
             <div class="text-caption text-medium-emphasis mb-2">
-              Wysłane przyciskiem „Zgłoś” albo z listy QA, jeszcze nietknięte.
+              Wysłane przyciskiem „Zgłoś” albo z listy QA, jeszcze nietknięte i
+              poza kolejką.
             </div>
 
             <template v-if="pending">
@@ -284,14 +285,15 @@
             </template>
             <template v-else-if="summary">
               <v-list density="compact" class="py-0">
-                <!-- An edge revision has no page of its own, so it links to the
-                     queue that lists it rather than to a detail view. -->
+                <!-- An edge revision has no page of its own, so it opens pinned
+                     in the review queue - the id is the revision's - where it
+                     can be decided on, rather than in a detail view. -->
                 <v-list-item
                   v-for="item in summary.revisions.sample"
                   :key="`${item.kind}-${item.id}`"
                   :to="
                     item.kind === 'edge'
-                      ? '/admin/rewizje-krawedzi'
+                      ? `/admin/rewizje?rewizja=${encodeURIComponent(item.id)}#kolejka`
                       : `/admin/rewizje/${item.id}`
                   "
                   :title="item.name ?? item.id"
@@ -314,22 +316,24 @@
             </template>
           </v-card-text>
 
-          <v-card-actions>
+          <!-- Both into /admin/rewizje, at the section each half of the count
+               above is decided in. -->
+          <v-card-actions class="flex-wrap">
             <v-btn
               variant="text"
               color="primary"
-              to="/admin/rewizje"
+              to="/admin/rewizje#kolejka"
               :append-icon="mdiChevronRight"
             >
-              Przejdź do rewizji
+              Przejdź do kolejki
             </v-btn>
             <v-btn
               variant="text"
               color="primary"
-              to="/admin/rewizje-krawedzi"
+              to="/admin/rewizje#powiazania"
               :append-icon="mdiChevronRight"
             >
-              Rewizje krawędzi
+              Zmiany powiązań
             </v-btn>
           </v-card-actions>
         </v-card>
@@ -337,9 +341,22 @@
     </v-row>
 
     <!-- Who has been working -->
-    <div class="d-flex align-center mt-8 mb-3">
+    <div class="d-flex align-center flex-wrap mt-8 mb-3">
       <h2 class="text-h6">Aktywni w tym tygodniu</h2>
       <v-spacer />
+      <!-- What the administrators on trial did, decision by decision. The
+           table below only counts, and its links open the review queue, which
+           filters on who proposed - never on who approved. -->
+      <v-btn
+        v-if="established"
+        variant="text"
+        color="primary"
+        size="small"
+        to="/aktywnosc?kto=nowi-admini"
+        :append-icon="mdiChevronRight"
+      >
+        Nowi administratorzy
+      </v-btn>
       <v-btn
         variant="text"
         color="primary"
@@ -363,10 +380,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import { computedAsync } from "@vueuse/core";
 import {
   mdiGraphOutline,
   mdiHistory,
-  mdiInboxArrowDown,
   mdiVectorPolyline,
   mdiNoteEditOutline,
   mdiTextBoxSearchOutline,
@@ -378,7 +395,7 @@ import {
   mdiRefresh,
   mdiMessageAlertOutline,
 } from "@mdi/js";
-import { authRequest } from "~/composables/auth";
+import { authRequest, useAuthState } from "~/composables/auth";
 import { noteAdminTypeLabel, noteKindConfig } from "~/composables/notes";
 import type { AdminSummary } from "~~/server/api/admin/summary.get";
 import type { ActivityStats } from "~~/server/api/stats/activity.get";
@@ -392,29 +409,19 @@ useHead({
 });
 
 const subpages = [
-  {
-    title: "Kolejka zmian",
-    to: "/admin/rewizje/kolejka",
-    icon: mdiInboxArrowDown,
-    desc: "Propozycje od ludzi czekające na decyzję — wpisy i powiązania razem.",
-  },
+  // One tile where there were three: "Kolejka zmian", "Rewizje" and "Rewizje
+  // krawędzi" are the sections of one page now.
   {
     title: "Rewizje",
     to: "/admin/rewizje",
     icon: mdiHistory,
-    desc: "Przeglądaj i akceptuj rewizje węzłów.",
+    desc: "Propozycje czekające na decyzję, zmiany powiązań i historia każdego wpisu.",
   },
   {
     title: "Powiązania",
     to: "/admin/krawedzie",
     icon: mdiGraphOutline,
     desc: "Powiązania gotowe do publikacji - obie strony już opublikowane.",
-  },
-  {
-    title: "Rewizje krawędzi",
-    to: "/admin/rewizje-krawedzi",
-    icon: mdiVectorPolyline,
-    desc: "Zmiany krawędzi zaproponowane przez pipeline, jeszcze nierozpatrzone.",
   },
   {
     title: "Notatki",
@@ -451,6 +458,19 @@ const subpages = [
 /** The window the panel calls "this week". The stats page lets an admin widen
  * it; here it is fixed, because the question is "who is around right now". */
 const WEEKLY_DAYS = 7;
+
+const { user } = useAuthState();
+
+/** An administrator who is not on trial - the only one /aktywnosc will show
+ * who is. The page's middleware lets in anybody holding `admin`, trial
+ * administrators too, and for them the "Nowi administratorzy" link led to a
+ * list that quietly ignored the filter. Read off the same token the server
+ * decides by; false until it has been read, so the link never flashes up for
+ * somebody it is not for. */
+const established = computedAsync(async () => {
+  const claims = (await user.value?.getIdTokenResult())?.claims;
+  return claims?.admin === true && claims.newAdmin !== true;
+}, false);
 
 const summary = ref<AdminSummary | null>(null);
 const weekly = ref<ActivityStats | null>(null);

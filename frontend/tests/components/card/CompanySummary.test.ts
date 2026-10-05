@@ -46,6 +46,19 @@ describe("CardCompanySummary", () => {
     expect(link.find(".v-icon").exists()).toBe(true);
   });
 
+  it("links its categories, since nothing around them is a link", async () => {
+    // The one caller of ChipCompanyCategories that may: every other one puts
+    // the chips inside a row that already links somewhere.
+    const wrapper = await mountSuspended(CompanySummary, {
+      props: {
+        company: { ...company, categories: ["koleje"] } as Company,
+        location: "Powiat Testowy",
+      },
+    });
+
+    expect(wrapper.find("a.v-chip--link").exists()).toBe(true);
+  });
+
   it("leaves the name as text on the company's own page", async () => {
     // place/DetailView renders this card as the heading of the page it links
     // to, and a heading that links to itself is a dead end.

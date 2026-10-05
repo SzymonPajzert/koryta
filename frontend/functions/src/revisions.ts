@@ -41,7 +41,7 @@ export const onRevisionWritten = onDocumentWritten(
       // is not tellable from a node one by its id alone - only by `collection`.
       // The `revisions` summary this trigger maintains is a nodes-only field:
       // /admin/rewizje reads it off the node document, while the edge queue at
-      // /admin/rewizje-krawedzi queries the revisions collection directly and
+      // /admin/rewizje#powiazania queries the revisions collection directly and
       // wants nothing denormalised onto the edge. So an edge revision has
       // nothing here to recompute.
       //

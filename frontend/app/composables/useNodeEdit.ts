@@ -36,7 +36,10 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     ...referencedIn.value,
   ]);
 
-  const partiesDefault = computed<string[]>(() => [...parties, "inne"]);
+  // „Inne” is one of `parties` now, capitalised the way it is stored; the
+  // lowercase "inne" this used to append would have been a second, different
+  // party.
+  const partiesDefault = computed<string[]>(() => [...parties]);
 
   async function saveNode() {
     if (!idToken.value) {

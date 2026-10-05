@@ -1,8 +1,11 @@
-import type {
-  ExtractionFact,
-  ExtractionFactType,
-  NodeType,
-} from "~~/shared/model";
+import {
+  mdiAccountGroupOutline,
+  mdiAccountOutline,
+  mdiBomb,
+  mdiDomain,
+} from "@mdi/js";
+import type { ExtractionFact, ExtractionFactType } from "~~/shared/model";
+import { factEdgeRule, type FactEdgeRule } from "~~/shared/factPromotion";
 
 /** Exported so a filter can label the *types* rather than a fact: the chip row
  * on a person's page names every kind of fact that person has, and there is no
@@ -19,6 +22,15 @@ export const FACT_TYPE_COLORS: Record<ExtractionFactType, string> = {
   party_membership: "secondary",
   personal_relation: "info",
   affair_involvement: "warning",
+};
+
+/** What the far end of a fact is, as an icon: an organization, a party, an
+ * affair, or another person. */
+export const FACT_TYPE_ICONS: Record<ExtractionFactType, string> = {
+  employment: mdiDomain,
+  party_membership: mdiAccountGroupOutline,
+  personal_relation: mdiAccountOutline,
+  affair_involvement: mdiBomb,
 };
 
 /** Human-readable label for a fact's type (falls back to the raw type). */
@@ -66,65 +78,9 @@ export function factTargetKind(fact: ExtractionFact): string {
 
 // --- Promotion to a relation in the graph ---
 
-/** How an extracted fact becomes an edge, where it can.
- *
- * `targetType` is what the reader has to pick, because only the person side of
- * a fact is ever resolved: `ingest/extraction.post.ts` matches the subject
- * against the article's confirmed `koryta_ids`, and leaves `organization`,
- * `party`, `object` and `affair` as the strings the article used. Nothing in the
- * app resolves those to a node, so the far end is a question rather than a
- * lookup - and the answer is a judgement anyway, since two companies share a
- * name as readily as two people do.
- */
-export type FactEdgeRule = {
-  edgeType: "employed" | "connection";
-  targetType: NodeType;
-  /** What goes in the edge's `name`, off the fact. */
-  label: (fact: ExtractionFact) => string;
-  /** What to call the far end while it is being picked. */
-  targetLabel: string;
-};
-
-/** The two fact types that have an edge type to become.
- *
- * The other two have nowhere to go, and saying so is the honest answer rather
- * than an oversight:
- *
- * - `party_membership` has no party node. A person's parties are a `parties`
- *   array on the node itself (see `Person`), so recording one is an edit to
- *   that person rather than a relation, and it belongs to whatever eventually
- *   proposes node revisions from facts.
- * - `affair_involvement` would be person -> topic, and `tagged` - the only edge
- *   type a topic is declared for - is article -> topic. Widening it is a model
- *   change with its own consequences for the graph, where `tagged` is a
- *   dead end in both directions specifically so a topic does not become a hub.
- */
-const FACT_EDGE_RULES: Partial<Record<ExtractionFactType, FactEdgeRule>> = {
-  employment: {
-    edgeType: "employed",
-    targetType: "place",
-    label: (fact) => fact.role ?? "",
-    targetLabel: "Pracodawca",
-  },
-  personal_relation: {
-    edgeType: "connection",
-    targetType: "person",
-    label: (fact) => fact.relation ?? "",
-    targetLabel: "Druga osoba",
-  },
-};
-
-/** How this fact would become an edge, or undefined where it cannot.
- *
- * Undefined for a fact whose subject was never matched to anybody, as well as
- * for a type with no edge: without a person node there is no end of the relation
- * we are sure of, and asking a reader to pick both ends is the generic edge
- * form rather than a promotion.
- */
-export function factEdgeRule(fact: ExtractionFact): FactEdgeRule | undefined {
-  if (!fact.personNodeId) return undefined;
-  return FACT_EDGE_RULES[fact.fact_type];
-}
+// In shared/ so /api/edges/create checks a promotion against the same rule the
+// card offers it by.
+export { factEdgeRule, type FactEdgeRule };
 
 /** Why a fact cannot be promoted, in the reader's words. Empty when it can. */
 export function factPromotionBlocker(fact: ExtractionFact): string {
@@ -184,8 +140,181 @@ export function factVoterCount(fact: ExtractionFact): number {
   return votes?.humanVoted ? 1 : 0;
 }
 
+/** How many readers have said the fact is about somebody else, off the same
+ * aggregate. `computeVoteStats` only writes a category somebody has voted in,
+ * so an unflagged fact has no field here at all. */
+export function factWrongPersonReports(fact: ExtractionFact): number {
+  const votes = fact.stats?.votes as Record<string, unknown> | undefined;
+  return numeric(votes?.wrongPerson);
+}
+
 /** A vote category is only written once somebody has voted in it, so every
  * read of the aggregate has to survive the field being absent. */
 function numeric(value: unknown): number {
   return typeof value === "number" ? value : 0;
+}
+
+// --- One claim, several articles ---
+
+/** What a fact claims about its person, field by field and far end first.
+ *
+ * `person` and `subject` are not among them: who a fact is about is
+ * `personNodeId`, settled once at ingest, and the article's spelling of the
+ * name is precisely what differs between two articles saying one thing.
+ * Partial because the documents come out of a pipeline, and a kind of fact
+ * this does not know should stand alone rather than break the list. */
+const CLAIM_FIELDS: Partial<
+  Record<ExtractionFactType, (keyof ExtractionFact)[]>
+> = {
+  employment: ["organization", "role"],
+  party_membership: ["party"],
+  personal_relation: ["object", "relation"],
+  affair_involvement: ["affair", "role"],
+};
+
+/** One field of a claim, spelled the way two articles would agree on.
+ *
+ * Only what is typography rather than meaning goes: case, quotation marks and
+ * apostrophes („Tak! Dla Polski” and "Tak! Dla Polski", Kukiz'15 and Kukiz15),
+ * a dash or hyphen with or without spaces round it (PO-KO, PO – KO), runs of
+ * spaces, and a full stop at the end (Wlkp. and Wlkp). Diacritics stay: the
+ * model copies them from the article, so two spellings that differ in them
+ * came from articles that did too. Nothing is expanded or stemmed - „Urząd
+ * m.st. Warszawy” and „Urząd Miasta Stołecznego Warszawa” stay two lines,
+ * because telling one office under two names from two offices is a reader's
+ * judgement and not a string rule.
+ */
+export function normalizeClaimField(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .normalize("NFC")
+    .toLocaleLowerCase("pl")
+    .replace(/[„”“"«»'’‘`]/g, "")
+    .replace(/[\s\-‐‑‒–—]+/g, " ")
+    .trim()
+    .replace(/[.,;:]+$/, "")
+    .trim();
+}
+
+/** What a fact says about its person, as a string two facts share exactly when
+ * they say the same thing - or undefined for a fact that stands on its own.
+ *
+ * Narrow on purpose, because a wrong merge is worse than a missed one: it puts
+ * one article's quote under another article's claim, and a verdict given
+ * there would be read as a verdict on both. So the same person, the same kind
+ * of fact, and every field the kind is stated in - the role as well as the
+ * company, since „prezes” and „wiceprezes” of one company are two facts. Two
+ * spellings of one company stay two lines; see `normalizeClaimField`.
+ *
+ * A fact nobody was matched to stands alone - the same words about two
+ * different people are two facts - and so does one without its far end: a
+ * „prezes” of two unnamed companies is not one claim.
+ */
+export function factClaimKey(fact: ExtractionFact): string | undefined {
+  if (!fact.personNodeId) return undefined;
+  const fields = CLAIM_FIELDS[fact.fact_type];
+  if (!fields) return undefined;
+  const values = fields.map((field) => normalizeClaimField(fact[field]));
+  if (!values[0]) return undefined;
+  return JSON.stringify([fact.personNodeId, fact.fact_type, ...values]);
+}
+
+/** One article a claim was read from. */
+export type FactSource = {
+  /** The extraction this article's line is shown and judged through: of the
+   * ones below, the one readers have judged most, and otherwise the newest. */
+  fact: ExtractionFact;
+  /** The same claim taken from the same article again - a second model run
+   * over it, or a capture extracted twice. They are one source to a reader,
+   * so they are shown as one; a verdict lands on `fact`, and whatever these
+   * carry stays theirs. */
+  twins: ExtractionFact[];
+};
+
+/** One claim about a person, with every article it was read from. */
+export type FactGroup = {
+  /** Stable for as long as the list is: the claim, or the lone fact's id. */
+  key: string;
+  /** The fact the line is drawn from - its first source's. */
+  fact: ExtractionFact;
+  /** In the order the facts came, which is newest first. */
+  sources: FactSource[];
+};
+
+/** An article's url in the one form two extractions of it agree on: stored
+ * with and without a scheme, and with and without a trailing slash. */
+function articleKey(fact: ExtractionFact): string {
+  return (fact.articleUrl || fact.url || "")
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+    .replace(/\/+$/, "");
+}
+
+/** The facts as the claims they make, each with its sources.
+ *
+ * Order is kept: a claim stands where its newest fact did, and so do its
+ * sources inside it, so the endpoint's newest-first order survives. Facts that
+ * share no claim with anything come out as groups of one, which is most of
+ * them. On the 29 September export 427 of 14,562 matched facts shared one, in
+ * 103 claims about 65 people: 57 claims read in two to four articles, and 46
+ * read more than once from a single one - among them the 213 copies of two
+ * facts a re-run capture left on one person, who goes from 239 cards to 27
+ * lines.
+ */
+export function groupFacts(facts: ExtractionFact[]): FactGroup[] {
+  const claims = new Map<string, Map<string, ExtractionFact[]>>();
+  facts.forEach((fact, index) => {
+    const key = factClaimKey(fact) ?? `fact:${fact.id ?? `${index}`}`;
+    let articles = claims.get(key);
+    if (!articles) {
+      articles = new Map();
+      claims.set(key, articles);
+    }
+    const article = articleKey(fact);
+    const same = articles.get(article);
+    if (same) same.push(fact);
+    else articles.set(article, [fact]);
+  });
+
+  return [...claims].map(([key, articles]) => {
+    const sources = [...articles.values()].map(toSource);
+    return { key, fact: sources[0]!.fact, sources };
+  });
+}
+
+/** One article's extractions of a claim as the source they are. Stable, so of
+ * two facts nobody has judged the newer one is shown. */
+function toSource(extractions: ExtractionFact[]): FactSource {
+  const [fact, ...twins] = extractions.toSorted(
+    (a, b) => factVoterCount(b) - factVoterCount(a),
+  );
+  return { fact: fact!, twins };
+}
+
+/** Where a claim stands with its readers: confirmed once one of its sources
+ * is and none is disputed; open while no verdict settles it; disputed only
+ * once every source has been rejected.
+ *
+ * A reader confirming one article's quote and another rejecting a second
+ * article's is two readers disagreeing about the claim - „Niepoprawny fakt”
+ * says the fact is wrong, not that its article is thin - so the line settles
+ * nothing and reads „Bez rozstrzygnięcia”, as a single fact whose votes net
+ * to zero already does. No claim on the 29 September export is in that
+ * state. */
+export function factGroupState(group: FactGroup): FactReviewState {
+  const states = group.sources.map((source) => factReviewState(source.fact));
+  const confirmed = states.includes("confirmed");
+  const disputed = states.includes("disputed");
+  if (confirmed && disputed) return "unreviewed";
+  if (confirmed) return "confirmed";
+  if (states.includes("unreviewed")) return "unreviewed";
+  return "disputed";
+}
+
+/** How many people have voted on a claim, across the sources it is shown
+ * through. */
+export function factGroupVoters(group: FactGroup): number {
+  return group.sources.reduce(
+    (sum, source) => sum + factVoterCount(source.fact),
+    0,
+  );
 }

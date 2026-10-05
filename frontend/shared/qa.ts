@@ -11,6 +11,10 @@
  * arrives long after the deploy. `id` is what joins the two, so ids are never
  * reused or renamed: doing so would silently move somebody's verdict onto a
  * different feature.
+ *
+ * An entry can also say which reports from /admin/opinie the change answers
+ * (`fixes`), and those reports then show the entry and what its checkers
+ * found - see `shared/feedbackFixes.ts`.
  */
 
 /** Where in the site a change is visible, which decides who can check it. */
@@ -29,6 +33,13 @@ export type QaItem = {
   /** Where to start, if the change lives on one page. */
   link?: string;
   area: QaArea;
+  /** Reports this change is meant to fix, as `feedback` document ids - the
+   * part after `#fb-` in Slack's "Otwórz w panelu" link, or in the link on a
+   * card's date on /admin/opinie. A claim made in the commit that makes the
+   * fix: the report then shows this entry and what people found checking it,
+   * and an admin closes the report once they say it works. Several entries
+   * may name one report (a fix, then a fix of the fix). */
+  fixes?: string[];
 };
 
 export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
@@ -47,6 +58,474 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * disagreed with the order often enough that the two had to be reconciled
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
+  {
+    id: "admin-procesy-datascience",
+    title: "Procesy dla zespołu danych",
+    description:
+      "Stronę /admin/procesy widzą teraz wszyscy z uprawnieniem datascience, nie tylko właściciel serwisu. Kto nie jest administratorem, ma w menu „Admin” tylko „Procesy”.",
+    steps: [
+      "Zaloguj się kontem z uprawnieniem datascience, ale bez administratora - w menu „Admin” mają być tylko „Procesy”, a /admin/procesy ma się otworzyć, bez linków do zadań.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
+    id: "admin-procesy-importy",
+    title: "Procesy: duże importy na stronę",
+    description:
+      "Strona /admin/procesy pokazuje teraz też duże importy - osób, firm, ocen modeli i faktów z artykułów - z tym, ile stron każde uruchomienie utworzyło, ile zaktualizowało, a ilu nie udało się zapisać, oraz planowany codzienny import osób. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Otwórz /admin/procesy - w „Na żądanie” mają być też „Import firm”, „Oceny modeli” i „Import faktów z artykułów”, a w „Według harmonogramu”, pod „Kopią bazy Firestore”, „Import osób na stronę”.",
+      "Rozwiń „Import osób na stronę” - ma pokazać harmonogram „codziennie o 05:00 czasu warszawskiego”, polecenie koryta_people_import i zadania do wdrożenia; po pierwszym imporcie jego uruchomienia mają mieć liczby po polsku, np. „zaktualizowanych” i „nowych zatrudnień”.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
+    id: "admin-procesy",
+    title: "Procesy: postęp wszystkich jobów na jednej stronie",
+    description:
+      "Nowa strona /admin/procesy pokazuje, jak idą joby, które zmieniają dane - nocne pobieranie KRS, zapytania do rejestr.io, kompresję lustra, kopię bazy, crawl artykułów i zapisy z rozszerzenia: co trwa i jak daleko doszło, co się nie udało, co nie wystartowało o swojej porze i co od dawna milczy. Na górze jest liczba procesów, które wymagają uwagi, a ich wiersze są od razu rozwinięte. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Otwórz /admin/procesy - mają być trzy sekcje: „Na żądanie”, „Według harmonogramu” i „Ciągłe”, a nad nimi blok z liczbą procesów wymagających uwagi i „Odświeżono” z godziną.",
+      "Rozwiń „Kopia bazy Firestore” - ma pokazać folder ostatniej kopii z godziną startu i końca, a w wierszu „następne:” z jutrzejszą 04:00.",
+      "Rozwiń „Zapis artykułu z rozszerzenia” - ma pokazać liczby zapisów z ostatnich 7 dni i ostatnie zapisane strony, każdą z linkiem do artykułu.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
+    id: "fakty-rozwijane",
+    title: "Fakty z artykułów jako wiersze, które się rozwija",
+    description:
+      "Każdy fakt na stronie osoby to teraz krótki wiersz - co mówi i skąd - a cytat, ocena i przyciski pojawiają się dopiero po kliknięciu. Ten sam fakt z kilku artykułów jest jednym wierszem z liczbą źródeł, który rozwija się w cytat z każdego z nich.",
+    steps: [
+      "Wybierz „Członkostwo partyjne” i kliknij wiersz „Koalicja Obywatelska - PO i Nowoczesna” - ma mówić „2 źródła” i pokazać dwa cytaty, każdy z własnymi przyciskami oceny.",
+    ],
+    link: "/osoba/rafal-trzaskowski-8rg6MrDfdiRR7YaAvE5O",
+    area: "contributor",
+    fixes: ["IzZixsXeIRtgftDXSpWG"],
+  },
+  {
+    id: "fakt-do-powiazania-na-stronie-osoby",
+    title: "„Utwórz powiązanie” przy faktach na stronie osoby",
+    description:
+      "Fakt o zatrudnieniu albo o relacji z drugą osobą można teraz zapisać jako powiązanie w grafie prosto ze strony osoby, tak jak w kolejce ekstrakcji. Fakt, z którego ktoś już zrobił powiązanie, mówi „Powiązanie utworzone” zamiast proponować to drugi raz.",
+    steps: [
+      "W „Faktach z artykułów” kliknij „Utwórz powiązanie” przy fakcie o zatrudnieniu, wybierz pracodawcę i zapisz - w miejscu przycisku ma się pojawić „Powiązanie utworzone”, a w „Historii powiązań” szkic.",
+    ],
+    link: "/osoba/agnieszka-zurek-xQwaKwMSFZeDTc8Tz1Ce",
+    area: "contributor",
+    fixes: ["xMpU8TquC3q4O3AFFOhg"],
+  },
+  {
+    id: "zadania-skupienie-na-mapie",
+    title: "Zadania: mapa skupiona na jednym zadaniu",
+    description:
+      "Przycisk obok zwijania na karcie mapy zostawia na niej tylko to zadanie i wszystko, na co czeka - wprost albo przez inne zadania. „Cała mapa” na pasku nad mapą przywraca resztę. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania?widok=mapa najedź na kartę, do której prowadzą strzałki, i kliknij przycisk obok zwijania - mają zostać tylko ona i zadania, od których strzałki prowadzą do niej; „Cała mapa” ma przywrócić resztę wokół tej karty.",
+      "Skup mapę na zadaniu, otwórz je i kliknij zadanie w jego „Blokuje” - mapa ma wrócić cała, z tamtym zadaniem na środku.",
+    ],
+    link: "/admin/zadania?widok=mapa",
+    area: "admin",
+  },
+  {
+    id: "zadania-blokuje-do-wyboru",
+    title: "Zadania: „Blokuje” do wybrania, tak jak „Czeka na”",
+    description:
+      "W szczegółach zadania można teraz wskazać nie tylko, na co ono czeka, ale też co ma czekać na nie. Kliknięcie zadania na którejś z tych dwóch list otwiera je. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania otwórz zadanie i w „Blokuje” wybierz inne - tamto ma przejść do „Czekają”, z tym zadaniem w swoim „Czeka na”.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "zadania-kopiuj-dla-czatu",
+    title: "Zadania: „Kopiuj dla czatu”",
+    description:
+      "Przycisk w szczegółach zadania kopiuje je razem z tym, skąd się wzięło - notatką w pamięci, sesją agenta, zgłoszeniami - z zależnościami i historią, do wklejenia w rozmowie z agentem. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania otwórz zadanie dodane przez agenta, kliknij „Kopiuj dla czatu” i wklej tekst - ma być w nim tytuł, link, notatka albo sesja, z której zadanie pochodzi, i jego historia.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "zadania-zwijanie-mapy",
+    title: "Zadania: zwijanie łańcuchów na mapie i pasek celów nad nią",
+    description:
+      "Kartę na mapie zadań można zwinąć razem ze wszystkim, co prowadzi tylko do niej - zostaje z niej stos kart. Cele i stosy są też na pasku nad mapą, więc strzałkę można upuścić na nie z każdego miejsca mapy. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania?widok=mapa kliknij „Zwiń wszystkie” - każdy łańcuch ma się zwinąć w stos na swoim końcu, z liczbą schowanych zadań, a stosy mają się pojawić na pasku nad mapą.",
+      "Przeciągnij od prawej krawędzi dowolnej karty na cel albo stos na pasku - ma się pojawić strzałka do niego.",
+      "Kliknij „Rozwiń wszystkie” - mapa ma wrócić do stanu sprzed zwinięcia.",
+    ],
+    link: "/admin/zadania?widok=mapa",
+    area: "admin",
+  },
+  {
+    id: "zadania-cele",
+    title: "Zadania: cele, które grupują zadania",
+    description:
+      "Nowy rodzaj zadania - cel. Cel czeka na zadania, które do niego prowadzą, i tak się je grupuje: cele mają własną listę na górze, z tym, ile z tych zadań już zamknięto, a filtr „Cel” zostawia tylko jego zadania. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania dodaj zadanie rodzaju „Cel” i w „Prowadzą do niego” wybierz dwa zadania - cel ma się pojawić na liście „Cele” z „0/2”.",
+      "Otwórz cel i kliknij „Pokaż jego zadania” - na liście i na mapie mają zostać tylko on i te dwa zadania, a na mapie cel ma być ciemną kartą.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "zadania-najnowsze",
+    title: "Zadania: najnowsze na górze listy",
+    description:
+      "Listy na /admin/zadania można ułożyć od najnowszych, żeby nic świeżo dodanego nie utonęło w starszych. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania wybierz „Najnowsze” - ostatnio dodane zadania mają być na górze każdej listy, z „dzisiaj”, „wczoraj” albo „N dni temu” na końcu wiersza.",
+    ],
+    link: "/admin/zadania?kolejnosc=najnowsze",
+    area: "admin",
+  },
+  {
+    id: "zadania-lista-i-mapa",
+    title: "Zadania właściciela: lista i mapa tego, co na co czeka",
+    description:
+      "Nowa strona /admin/zadania zbiera to, co zostało do wdrożenia, uruchomienia, zdecydowania i zbudowania - także to, co agenci zostawiają po sesji. Na mapie widać, co na co czeka, a zadania łączy się strzałkami. Stronę widzi tylko właściciel serwisu, więc tylko on może to sprawdzić - pozostali mogą ten wpis pominąć.",
+    steps: [
+      "Na /admin/zadania otwórz zadanie z listy „Czekają” - ma pokazać, na co czeka, co po nim odblokuje i jego historię.",
+      "Przełącz na „Mapa” i przeciągnij od prawej krawędzi jednego zadania do lewej krawędzi drugiego - ma pojawić się strzałka, a drugie zadanie ma przejść do „Czekają”.",
+      "Kliknij tę strzałkę i „Usuń zależność” - strzałka ma zniknąć, a zadanie wrócić na swoją listę.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "partia-inne",
+    title: "Partia „Inne” dla powiązań politycznych spoza głównych partii",
+    description:
+      "Osobie można teraz przypisać partię „Inne”, gdy znaleźliśmy jej powiązanie polityczne, ale nie z żadną z głównych partii. " +
+      "Wszędzie, gdzie widać partię, „Inne” jest wyszarzone - bladoszary chip z szarym napisem, szara kropka na grafie - żeby nie wyglądało jak kolejna partia.",
+    steps: [
+      "Na stronie dowolnej osoby kliknij „Zaproponuj zmianę” - na końcu listy „Przynależność partyjna” ma być „Inne”.",
+      "Otwórz tabelę z filtrem „Inne” - chip filtra nad tabelą ma być bladoszary z szarym napisem, a nie w kolorze którejś partii.",
+    ],
+    link: "/eksploruj/tabela?party=Inne",
+    area: "contributor",
+  },
+  {
+    id: "zespol-qa-i-problemy",
+    title: "Lista QA, jej problemy i zgłoszenia są w menu „Zespół”",
+    description:
+      "Menu „Zespół” na pasku prowadzi teraz do listy QA i do jej „Problemów”, a administratora także do zgłoszeń, które zeszły z menu „Admin”. " +
+      "Na „Problemach” administrator widzi swój problem raz - jako zgłoszenie z wpisem, którego dotyczy - a nie drugi raz jako wpis pod listą zgłoszeń.",
+    steps: [
+      "Kliknij „Zespół” na pasku - mają tam być „QA - zmiany do sprawdzenia” i „Problemy z QA”, a z konta administratora także „Zgłoszenia”.",
+      "Z konta administratora kliknij „Problemy z QA” - problem, który sam zgłosiłeś, ma być tylko linijką zgłoszenia z „QA: …”, bez listy wpisów pod spodem.",
+    ],
+    link: "/qa?widok=problemy",
+    area: "contributor",
+    fixes: ["tWVaktgCDV4CvKn5tb3B"],
+  },
+  {
+    id: "statystyki-kafelki-i-paski-to-linki",
+    title: "Kafelki i paski na stronie statystyk prowadzą tam, gdzie wskazują",
+    description:
+      "Kafelek „Fakty z ekstrakcji” i części paska „Postęp weryfikacji osób” wyglądały na linki, ale kliknięte nic nie robiły. Teraz to zwykłe linki, które otworzysz też z ctrl albo środkowym przyciskiem w nowej karcie.",
+    steps: [
+      "Na /eksploruj/statystyki kliknij kafelek „Fakty z ekstrakcji”, a potem zieloną część paska „Postęp weryfikacji osób” - mają przenieść na /ekstrakcje i do tabeli opublikowanych osób.",
+    ],
+    link: "/eksploruj/statystyki",
+    area: "public",
+  },
+  {
+    id: "qa-zgloszenia-do-zamkniecia",
+    title: "Na /qa są zgłoszenia, które ta wersja strony poprawia",
+    description:
+      "Poprawkę zgłoszenia można teraz ogłosić linijką w kodzie, bez osobnego wpisu na tej liście. Administrator widzi takie otwarte zgłoszenia na górze „Do sprawdzenia”, z opisem zmiany i przyciskiem „Zamknij jako załatwione”.",
+    steps: [
+      "Na /qa rozwiń zgłoszenie w „Zgłoszenia do zamknięcia”, sprawdź zmianę tam, gdzie je zgłoszono, i zamknij je - po odświeżeniu ma go tu już nie być, a na /admin/opinie ma być zamknięte.",
+    ],
+    link: "/qa",
+    area: "admin",
+  },
+  {
+    id: "opinie-zgloszenie-z-linku-podswietlone",
+    title: "Zgłoszenie, do którego prowadzi link, zostaje podświetlone",
+    description:
+      "Link do zgłoszenia rozwijał je, ale obwódka znikała po dwóch sekundach. Teraz zgłoszenie ma zielone tło i obwódkę tak długo, jak adres na nie wskazuje.",
+    steps: [
+      "Na /admin/opinie rozwiń zgłoszenie i kliknij jego datę (albo „Otwórz w panelu” na Slacku) - ma być rozwinięte i podświetlone także po przewinięciu strony i powrocie.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+  },
+  {
+    id: "opinie-linijki-i-problemy-qa",
+    title:
+      "Zgłoszenia to linijki, a „Problemy” na /qa zbierają zgłoszenia z QA",
+    description:
+      "Na /admin/opinie każde zgłoszenie to linijka, która rozwija się po kliknięciu, a chipy „Wszystkie”, „Zgłoszenia” i „Z QA” zawężają listę. " +
+      "Zakładka „Problemy” na /qa pokazuje administratorom wszystkie otwarte zgłoszenia z QA, które można rozpatrzyć na miejscu.",
+    steps: [
+      "Na /admin/opinie kliknij chip „Z QA” i rozwiń zgłoszenie - ma pokazać rodzaj, datę, autora, status i notatkę.",
+      "Na /qa otwórz „Problemy” i zmień status któregoś zgłoszenia - ta sama zmiana ma być widoczna na /admin/opinie.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+  },
+  {
+    id: "qa-wpisy-jako-linijki",
+    title: "Wpisy na tej liście to linijki, które rozwijają się po kliknięciu",
+    description:
+      "Każdy wpis był kartą z pełnym opisem, więc lista zajmowała wiele ekranów. Teraz to linijka z tytułem i Twoją oceną, a opis, kroki i przyciski oceny pokazują się po kliknięciu.",
+    steps: [
+      "Na /qa kliknij dowolny wpis - ma się rozwinąć z opisem, krokami, polem na uwagi i przyciskami „Działa” i „Coś nie działa”.",
+    ],
+    link: "/qa",
+    area: "contributor",
+  },
+  {
+    id: "rewizje-jedna-strona",
+    title: "Kolejka zmian i zmiany powiązań są teraz na stronie Rewizje",
+    description:
+      "/admin/rewizje ma trzy części: „Czeka na decyzję”, „Zmiany powiązań” i „Wpisy z historią zmian”. Każda pozycja to linijka, która po kliknięciu pokazuje autora, zmiany i decyzje, " +
+      "a stare adresy /admin/rewizje/kolejka i /admin/rewizje-krawedzi prowadzą do właściwej części.",
+    steps: [
+      "Wejdź na /admin/rewizje i kliknij propozycję w „Czeka na decyzję” - ma pokazać autora, datę, różnicę i przyciski „Zatwierdź” i „Odrzuć”.",
+      "Rozwiń wpis w „Wpisy z historią zmian” - ma pokazać wszystkie jego rewizje z autorami.",
+      "Otwórz stary link /admin/rewizje/kolejka - ma przenieść do „Czeka na decyzję”.",
+    ],
+    link: "/admin/rewizje",
+    area: "admin",
+  },
+  {
+    id: "rewizje-historia-wpisu",
+    title: "Każda rewizja wpisu to linijka z autorem",
+    description:
+      "Nad porównaniem na stronie rewizji wpisu jest teraz „Historia zmian”: każda rewizja to linijka ze statusem, datą, autorem i zmienionymi polami. " +
+      "Po kliknięciu pokazuje różnicę względem zatwierdzonej wersji i decyzje, które zniknęły z kolumn porównania.",
+    steps: [
+      "Wejdź na /admin/rewizje i otwórz rewizje wpisu, który ma ich kilka - nad porównaniem ma być lista rewizji z autorem przy każdej.",
+      "Kliknij oczekującą rewizję - ma się rozwinąć z różnicą, podglądem i przyciskami „Zatwierdź” i „Odrzuć”.",
+    ],
+    link: "/admin/rewizje",
+    area: "admin",
+  },
+  {
+    id: "aktywnosc-wykres-30-dni",
+    title: "Na górze Aktywności jest wykres ostatnich 30 dni",
+    description:
+      "Nad listą wpisów widać, ile zmian było każdego dnia przez ostatnie 30 dni, ile razem i od ilu osób. Link „Pełne statystyki” prowadzi do /eksploruj/statystyki.",
+    steps: [
+      "Otwórz /aktywnosc - nad filtrami ma być niebieskie pole z liczbą zmian i wykres. Najedź na słupek (na telefonie dotknij go) - ma pokazać, jakie zmiany były tego dnia.",
+      "Kliknij „Pełne statystyki” - ma się otworzyć /eksploruj/statystyki.",
+    ],
+    link: "/aktywnosc",
+    area: "contributor",
+  },
+  {
+    id: "tabela-bez-opcji-wszystkie",
+    title: "Tabela nie proponuje już pokazania wszystkich wierszy naraz",
+    description:
+      "Opcja „Wszystkie” w liczbie wierszy na stronę kończyła się błędem i pustą tabelą. Zostały 10, 25, 50 i 100, a stary link z tą opcją otwiera tabelę z 10 wierszami.",
+    steps: [
+      "Otwórz /eksploruj/tabela i rozwiń „Wierszy na stronę” na dole tabeli - mają być tylko 10, 25, 50 i 100.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
+    id: "opinie-poprawki-z-qa",
+    title: "Wpis na tej liście może wskazać zgłoszenie, które poprawia",
+    description:
+      "Takie zgłoszenie ma na /admin/opinie chip „Poprawka”: szary, dopóki nikt nie sprawdził wpisu, zielony, gdy działa, " +
+      "czerwony, gdy ktoś zgłosił problem. Link do wpisu otwiera teraz /qa na tym wpisie, nawet jeśli już go oceniłeś.",
+    steps: [
+      "Na /admin/opinie kliknij chip „QA: …” przy zgłoszeniu napisanym z tej listy - /qa ma się otworzyć na tym wpisie.",
+      "Chip „Poprawka” pojawi się przy pierwszym zgłoszeniu, które wskaże któryś następny wpis. Wtedy kliknij go - ma pokazać wpis, oceny sprawdzających i zgłoszenia napisane po poprawce. Gdy chip jest zielony, a żadne z tych zgłoszeń nie jest otwartym „Coś nie działa”, karta ma przycisk „Zamknij jako załatwione”.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+  },
+  {
+    id: "opinie-kolejka",
+    title: "Zgłoszenia da się ułożyć w kolejkę do zrobienia",
+    description:
+      "Na /admin/opinie są teraz trzy części zamiast filtra statusu: „Poza kolejką” (tu trafia każde nowe zgłoszenie), " +
+      "„Kolejka” (od góry to, czym zajmujemy się najpierw) i zwinięte „Zamknięte”. Kolejność układa się przyciskiem " +
+      "„Ułóż kolejkę” - zgłoszenia zwijają się wtedy do jednej linijki, bez statusu i notatki. Zgłoszenie w kolejce " +
+      "nie liczy się już do „Nowych zgłoszeń” na /admin.",
+    steps: [
+      "Przy zgłoszeniu w „Poza kolejką” kliknij „Do kolejki” - ma przejść do „Kolejki” z numerem.",
+      "Kliknij „Ułóż kolejkę”, przeciągnij zgłoszenie wyżej (albo użyj strzałki), kliknij „Gotowe” i odśwież stronę - kolejność ma zostać.",
+    ],
+    link: "/admin/opinie",
+    area: "admin",
+  },
+  {
+    id: "wezwanie-do-pomocy-dwa-panele",
+    title: "Wezwanie do sprawdzania osób na stronie głównej ma nowy wygląd",
+    description:
+      "Postęp sprawdzania był wąską kolumną z drobnym podpisem, a pod drobnym drukiem zostawał duży " +
+      "pusty margines. Teraz liczby są na niebieskim panelu obok przycisków, a drobny druk mieści się w jednym pasku na dole karty.",
+    steps: [
+      "Otwórz stronę główną i przewiń do „Zostało jeszcze dużo osób do sprawdzenia” - po lewej ma być niebieski panel z liczbą sprawdzonych osób, legendą i paskiem, po prawej nagłówek i przyciski.",
+      "Na telefonie panel z liczbami ma być nad nagłówkiem, a nic nie może wystawać poza ekran.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
+    id: "aktywnosc-czytelniejsza",
+    title: "Aktywność: każda strona osobno, rodzaj akcji na ikonie",
+    description:
+      "Nazwy stron pod linijką zlewały się w jeden ciąg tekstu. Teraz każda strona to osobna zielona " +
+      "etykieta z ikoną, a kółko przy linijce mówi, czy to ocena, publikacja czy usunięcie.",
+    steps: [
+      "Wejdź na /aktywnosc - pod każdą linijką strony mają być osobnymi etykietami, a przy linijce kolorowe kółko z ikoną.",
+    ],
+    link: "/aktywnosc",
+    area: "contributor",
+  },
+  {
+    id: "pasek-zalogowanych-menu",
+    title: "Pasek zalogowanych zajmuje mniej miejsca",
+    description:
+      "Strony administracyjne są teraz w menu „Admin”, a GitHub i dyskusja w affine - w menu „Zespół”. " +
+      "Na pasku zostały „Rewizje” i „Aktywność”.",
+    steps: [
+      "Z konta administratora kliknij „Admin” - menu ma mieć „Panel administracyjny”, „Kolejka zmian”, „Notatki” i „Zgłoszenia”, a przycisk „Admin” ma być podświetlony na każdej z tych stron.",
+      "Na stronie głównej kliknij „Zespół” - „Nowy bug w GitHubie” i „Dyskusja w affine” mają się otwierać w nowej karcie.",
+    ],
+    link: "/",
+    area: "contributor",
+  },
+  {
+    id: "aktywnosc-nowych-administratorow",
+    title: "Aktywność nowych administratorów da się oglądać osobno",
+    description:
+      "Administratorzy na okresie próbnym mają na /aktywnosc chip „okres próbny”, a przycisk „Nowi " +
+      "administratorzy” zawęża listę do nich. Przy każdej decyzji widać powód, link do zmiany w " +
+      "kolejce i ostrzeżenie „własna propozycja”, gdy ktoś zatwierdził albo opublikował to, co sam zaproponował.",
+    steps: [
+      "Z konta administratora, który nie jest na okresie próbnym: na /admin, w sekcji „Aktywni w tym tygodniu”, kliknij „Nowi administratorzy” - ma się otworzyć /aktywnosc z tym filtrem i listą osób na okresie próbnym.",
+      "Przy decyzji z powodem (odrzucenie, usunięcie, scalenie) ma być widać ten powód, a link „zmiana” ma otwierać rewizję w kolejce.",
+    ],
+    link: "/aktywnosc?kto=nowi-admini",
+    area: "admin",
+  },
+  {
+    id: "aktywnosc",
+    title: "Strona „Aktywność”: kto co ostatnio zrobił",
+    description:
+      "Nowa strona dla zalogowanych, z przyciskiem „Aktywność” na pasku: oceny, notatki, propozycje " +
+      "zmian i publikacje z ostatnich dni, zebrane w jedną linijkę na osobę i posiedzenie. Nazwę " +
+      "widać tylko u osób, które włączyły ją w profilu - reszta to „Anonim”.",
+    steps: [
+      "Kliknij „Aktywność” na pasku - lista ma być pogrupowana po dniach, z godziną i linkami do stron.",
+      "Oceń kogoś w tabeli i wróć po kilku minutach - na górze ma być Twoja linijka z oznaczeniem „Ty”.",
+      "Na /profil przełącznik widoczności nazwy ma teraz wspominać także o aktywności.",
+    ],
+    link: "/aktywnosc",
+    area: "contributor",
+  },
+  {
+    id: "publikacja-z-kolejki-liczy-sie",
+    title: "„Zatwierdź i opublikuj” liczy się jako publikacja",
+    description:
+      "Publikacja z kolejki i zatwierdzenie tematu nie zostawiały wpisu o publikacji, więc licznik " +
+      "„Opublikowane” na /eksploruj/statystyki ich nie widział. Teraz zostawiają, a propozycji usunięcia " +
+      "kolejka nie pozwala już „opublikować”.",
+    steps: [
+      "W /admin/rewizje/kolejka przy propozycji usunięcia strony ma być tylko „Zatwierdź”, bez „Zatwierdź i opublikuj”.",
+    ],
+    link: "/admin/rewizje/kolejka",
+    area: "admin",
+  },
+  {
+    id: "poziomy-trudnosci-kolejki",
+    title: "Kolejka ma trzy poziomy trudności, z liczbą osób do zrobienia",
+    description:
+      "Kolejka układała 9 tys. osób według tego, jak bardzo są ciekawe, i nic " +
+      "nie mówiła o tym, ile pracy kosztuje sprawdzenie jednej z nich - a to " +
+      "dwie różne rzeczy. Teraz na stronie pomocy są trzy poziomy: osoby z " +
+      "biogramem na Wikipedii obok wpisu w rejestrze, osoby ze świeżą wygraną " +
+      "w wyborach (jest oświadczenie majątkowe do porównania) i osoby z " +
+      "faktami wyciągniętymi z artykułów. Przy każdym piszemy, ile osób " +
+      "zostało, i pokazujemy kogoś, kto już został sprawdzony.",
+    steps: [
+      "Wejdź na /pomoc i zjedź do sekcji „Sprawdzaj razem z nami”.",
+      "Pod czterema kaflami ma być blok „Od czego zacząć: trzy poziomy trudności”.",
+      "Każdy kafel ma mówić, na czym polega robota, czego do niej trzeba, i ile osób zostało (liczba może się nie pokazać, jeśli statystyki jeszcze się nie przeliczyły - to nie błąd).",
+      "Kliknij kafel „1.” - kolejka ma się otworzyć z ustawionym filtrem „Poziom trudności” i opisem „Tylko poziom 1”.",
+      "W kolejce zmień poziom na 3 - lista ma się przeładować, a w adresie ma się pojawić „tier=3”.",
+      "Wyczyść filtr poziomu - kolejka ma wrócić do domyślnej, z minimalną sumą ocen 3.",
+      "Wróć na /pomoc i kliknij nazwisko w bloku „Tak wygląda strona, którą ktoś już sprawdził” - ma otworzyć stronę tej osoby.",
+    ],
+    link: "/pomoc",
+    area: "contributor",
+  },
+  {
+    id: "wygrana-kandydatura",
+    title: "Widać, którą kandydaturę osoba wygrała",
+    description:
+      "PKW podaje wynik przy kandydaturze, a serwis go do tej pory gubił - " +
+      "wynik miały 2 z 14 518 zapisanych kandydatur, więc żadna strona nie " +
+      "mogła powiedzieć, że ktokolwiek wygrał. Teraz wygrane mają chip " +
+      "„Wybrany”. Przegranych nie oznaczamy: PKW nie podała wyniku dla 70% " +
+      "swojego rejestru, a puste pole w formularzu wygląda tak samo jak " +
+      "przegrana, więc chip „Przegrał” byłby zarzutem wobec konkretnej osoby " +
+      "postawionym na podstawie milczenia rejestru.",
+    steps: [
+      "Wejdź na stronę osoby, która startowała w wyborach samorządowych 2010 lub 2024 albo do sejmu w 2011, 2019 lub 2023 - tylko te roczniki mają wynik w komplecie.",
+      "W historii powiązań, przy wygranej kandydaturze, ma być zielony chip „Wybrany”.",
+      "Sprawdź kandydaturę z wyborów samorządowych 2014 - tam PKW wyniku nie podała, więc chipa ma nie być (brak chipa to nie przegrana).",
+    ],
+    area: "public",
+  },
+  {
+    id: "wiadomo-jak-mozna-pomoc",
+    title: "Strona główna i pomoc mówią wprost, co jest do zrobienia",
+    description:
+      "Sekcja „Zostało nam jeszcze dużo osób” nie mówiła, do czego te osoby " +
+      "są potrzebne, i kończyła się dwoma jednakowymi zielonymi przyciskami " +
+      "proszącymi o to samo. Teraz nagłówek mówi, że chodzi o sprawdzanie, " +
+      "jest jeden wyróżniony przycisk prowadzący prosto do kolejki, a pasek " +
+      "postępu ma uczciwe podpisy. Strona pomocy zaczyna się od sześciu dróg " +
+      "do wyboru i przy każdej rzeczy pisze, czy trzeba konta.",
+    steps: [
+      "Otwórz stronę główną i przewiń do sekcji z paskiem postępu - nagłówek ma kończyć się słowami „do sprawdzenia”.",
+      "W sekcji ma być jeden wypełniony przycisk „Sprawdź pierwszą osobę”, a przy nim dwa mniej wyróżnione: „Zgłoś błąd albo pomysł” i „Inne sposoby pomocy”.",
+      "Kliknij „(i)” przy nagłówku - ma się pokazać wyjaśnienie, na czym polega sprawdzanie.",
+      "Kliknij „Zgłoś błąd albo pomysł” - ma się otworzyć to samo okno co po kliknięciu „Zgłoś” w prawym dolnym rogu.",
+      "Kliknij „Inne sposoby pomocy” - na stronie „Jak możesz pomóc” sześć kafelków ma być widoczne bez przewijania.",
+      "Kliknij kafelek „Mam minutę” - strona ma przewinąć się do sekcji, w której każda karta ma plakietkę „bez konta”.",
+      "W sekcji „Wiesz coś, czego my nie wiemy” kliknij „Dopisz brakującą osobę albo spółkę” - ma się otworzyć okno dodawania osoby.",
+      "Na telefonie (375 px) sprawdź, że liczby z paska postępu są tylko w legendzie, a nie na samym pasku, i nic nie wystaje poza ekran.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
+    id: "publish-relation-from-the-row",
+    title: "Powiązanie można opublikować z wiersza, na którym stoi",
+    description:
+      "Powiązanie dodane między dwiema już opublikowanymi stronami dało się " +
+      "opublikować tylko w kolejce /admin/krawedzie - kilkuset wierszach " +
+      "ułożonych według identyfikatora, więc to dopiero co dodane było tam " +
+      "najtrudniejsze do znalezienia. Teraz nieopublikowany wiersz nosi " +
+      "odznakę „szkic”, a admin ma przy niej „Opublikuj”.",
+    steps: [
+      "Zaloguj się jako admin i wejdź na stronę opublikowanej osoby.",
+      "Dodaj powiązanie do innej, też opublikowanej osoby.",
+      "W „Historii powiązań” nowy wiersz ma mieć odznakę „szkic” i przycisk „Opublikuj” obok niej.",
+      "Kliknij „Opublikuj” - odznaka ma zniknąć, a powiązanie ma być widoczne po wylogowaniu.",
+      "Wejdź na stronę szkicu (osoby nieopublikowanej): jej wiersze mają nosić samą odznakę, bez przycisku - powiązania szkicu publikuje dialog „Opublikuj” przy nazwie strony.",
+    ],
+    area: "contributor",
+  },
   {
     id: "person-birth-date-from-register",
     title: "Daty urodzenia z rejestru trafiają na strony osób",
@@ -531,6 +1010,7 @@ export const QA_ITEMS: QaItem[] = [
     ],
     link: "/eksploruj/tabela",
     area: "contributor",
+    fixes: ["QUAuKkMLMc6N2OFxFXWl"],
   },
   {
     id: "ocena-faktow-na-stronie-osoby",
@@ -621,6 +1101,7 @@ export const QA_ITEMS: QaItem[] = [
     ],
     link: "/ekstrakcje",
     area: "contributor",
+    fixes: ["pqJ2F41aikHuUFQd8WOK"],
   },
   {
     id: "regulamin-i-polityka-to-dwie-strony",
@@ -2651,13 +3132,13 @@ export const QA_ITEMS: QaItem[] = [
       "W kolejce zgłoszeń widać teraz na pierwszy rzut oka, czym nikt nie " +
       "musi się już zajmować: zgłoszenia ze statusem „Załatwione” i „Nie " +
       "robimy” są wyszarzone. Nie znikają - najechanie kursorem przywraca im " +
-      "pełny kontrast, a filtr statusu nad listą dalej pozwala je ukryć.",
+      "pełny kontrast.",
     steps: [
       "Jako admin wejdź na /admin/opinie.",
       "Ustaw jednemu zgłoszeniu status „Załatwione” - jego karta ma od razu zblednieć.",
       "Najedź na tę kartę kursorem - ma wrócić do pełnego kontrastu, a status dalej ma się dać zmienić.",
       "Ustaw innemu status „W trakcie” - ta karta ma zostać normalna, bo to wciąż robota do zrobienia.",
-      "Wybierz w filtrze u góry „Załatwione” - lista ma pokazać same wyszarzone karty.",
+      "Kliknij na dole „Pokaż zamknięte” - pod „Zamknięte” mają być same wyszarzone karty.",
     ],
     link: "/admin/opinie",
     area: "admin",

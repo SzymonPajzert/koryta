@@ -33,6 +33,14 @@ export interface DescribeOptions {
    * `getAuth().getUser` away from the admin-only `/api/users/lookup`.
    */
   withAuthors: boolean;
+  /** Every changed field, rather than the first `MAX_INLINE_CHANGES`.
+   *
+   * The cap is for a queue row, which has one table cell to say what a
+   * proposal does. An entry's own history opens one revision at a time, and a
+   * reviewer who opened it to read the change wants all of it - "…i jeszcze 3
+   * pola" is a link to somewhere else there, not a summary.
+   */
+  allChanges?: boolean;
 }
 
 /**
@@ -71,6 +79,7 @@ export async function describeRevisions(
       approved,
       endpoints,
       authors: options.withAuthors ? authors : null,
+      allChanges: options.allChanges === true,
     }),
   );
 }
@@ -107,6 +116,7 @@ type Context = {
   approved: Map<string, ApprovedRevision>;
   endpoints: Map<string, EndpointInfo>;
   authors: Map<string, AuthorInfo> | null;
+  allChanges: boolean;
 };
 
 /** The key a revision's target is cached under. `node_id` is the target's id
@@ -328,7 +338,7 @@ function describeOne(
       typeof proposed.delete_reason === "string"
         ? proposed.delete_reason
         : null,
-    changes: changes.slice(0, MAX_INLINE_CHANGES),
+    changes: ctx.allChanges ? changes : changes.slice(0, MAX_INLINE_CHANGES),
     changeCount: changes.length,
     updateTime,
     updateUser,
@@ -341,6 +351,12 @@ function describeOne(
         ? revision.reject_reason
         : null,
     reviewTime: normalizeUpdateTime(revision.review_time),
+    // Only where authors are resolved: which reviewer turned a proposal down is
+    // the reviewing side's business, and the author's own view says
+    // `redakcja` for it - see `/api/revisions/mine`.
+    reviewUser: ctx.authors
+      ? (stringField(revision, "review_user") ?? null)
+      : null,
     stale: isStale(doc.id, updateTime, approvedId, approved),
   };
 }

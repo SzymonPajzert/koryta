@@ -1,5 +1,6 @@
 import type { Node } from "./model";
 import type { Person, Company, Region } from "../model";
+import { paintedParty } from "../misc";
 
 /** What each kind of node is painted, where a party colour does not decide it.
  *
@@ -9,7 +10,8 @@ import type { Person, Company, Region } from "../model";
  * primary green loud enough to pull the eye to whichever region happened to be
  * on screen. */
 export const NODE_COLORS = {
-  /** Somebody with no party. The party ones come from `shared/misc`. */
+  /** Somebody with no party at all. The party ones come from `shared/misc`,
+   * „Inne” and a party with no colour of its own among them. */
   person: "#4466cc",
   place: "#6b7a83",
   region: "#3f7d58",
@@ -19,16 +21,15 @@ export function personNode(
   person: Person,
   partyColors: Record<string, string>,
 ): Node {
-  const party =
-    person.parties && person.parties.length > 0
-      ? (person.parties[0] ?? "")
-      : "";
   // Falls back on the plain person blue rather than on nothing. A party with
   // no colour here - one the pipeline knows and `shared/misc` does not, Razem
   // among them - used to leave `color` undefined, and an svg shape with no
   // fill is drawn black: a node that read as a party of its own, and a legend
-  // that could not name it.
-  const color = (partyColors[party] ?? NODE_COLORS.person) as Node["color"];
+  // that could not name it. `paintedParty` now draws such a party as „Inne”,
+  // so the blue is left meaning no party at all.
+  const party = paintedParty(person.parties, partyColors);
+  const color = ((party ? partyColors[party] : undefined) ??
+    NODE_COLORS.person) as Node["color"];
   return {
     ...person,
     entityType: person.type,

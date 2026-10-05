@@ -10,6 +10,7 @@ from scrapers.krs.scrape import (
     REASON_MISSING_NAME,
     REASON_OWNED,
     REASON_PERSON_FEED,
+    REASON_PUBLIC_OWNER,
     REASON_REFRESH,
     REASON_UNRECORDED,
     KRSScraped,
@@ -19,7 +20,9 @@ from scrapers.krs.scrape import (
     compute_refresh_cutoff_date,
     cost_breakdown,
     filter_paid_by_people_changes,
+    leave_to_the_odpis,
     save_org_connections,
+    told_by_the_odpis,
 )
 
 
@@ -311,6 +314,40 @@ def test_the_reason_the_caller_recorded_reaches_the_query():
     assert [query.reasons for query in queries] == [[REASON_PERSON_FEED]]
 
 
+def test_the_queue_comes_out_in_the_same_order_every_run():
+    """Its subjects arrive as sets, which iterate differently every run.
+
+    The order is the queue's: a capped `koryta_krs_odpis` run takes the
+    companies in it, so it reached a different sample of them each run, and
+    two runs on the same data wrote two different files.
+    """
+
+    def queue(connections, names, people):
+        return [
+            query.subject_id
+            for query in save_org_connections(
+                already_scraped_krs=pd.DataFrame(columns=["krs", "method", "date"]),
+                needs_refresh_krs=pd.DataFrame(
+                    columns=["krs", "method", "date", "update_date"]
+                ),
+                already_scraped_people={},
+                connections=[KRS(krs) for krs in connections],
+                names=[KRS(krs) for krs in names],
+                people=[RejestrIOKey(id=person) for person in people],
+            )
+        ]
+
+    asked = queue(
+        ["0000000300", "0000000100"], ["0000000900", "0000000500"], ["72", "71"]
+    )
+
+    # Each group in order of its ids, and the groups in the order they had.
+    assert asked == ["0000000100", "0000000300", "0000000500", "0000000900", "71", "72"]
+    assert asked == queue(
+        ["0000000100", "0000000300"], ["0000000500", "0000000900"], ["71", "72"]
+    )
+
+
 def test_a_company_due_a_refresh_says_so():
     """The refresh is decided here, so it is recorded here.
 
@@ -343,3 +380,159 @@ def test_a_company_due_a_refresh_says_so():
 
     assert [query.reasons for query in queries] == [[REASON_OWNED, REASON_REFRESH]]
     assert queries[0].primary_reason == REASON_REFRESH
+
+
+class _Frame:
+    """Stands in for a pipeline source by handing back a fixed frame."""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+
+    def read_or_process(self, ctx):
+        return self.df
+
+
+class _NoSeeds:
+    all_companies_krs: dict = {}
+
+    def process(self, ctx):
+        pass
+
+
+class _NoPersonFeeds:
+    """A context whose bucket holds no person feeds."""
+
+    class io:
+        @staticmethod
+        def read_many(ref):
+            return []
+
+
+def _queue(companies=None, by_register=None, scraped=None):
+    scraper = ScrapeRejestrIO()
+    scraper.__dict__["hardcoded_companies"] = _NoSeeds()
+    scraper.__dict__["already_scraped"] = _StubScraped(
+        scraped if scraped is not None else _scraped()
+    )
+    scraper.__dict__["companies"] = _Frame(
+        companies
+        if companies is not None
+        else pd.DataFrame(columns=["krs", "is_public"])
+    )
+    scraper.__dict__["public_by_register"] = _Frame(
+        by_register if by_register is not None else pd.DataFrame(columns=["krs"])
+    )
+    return scraper, scraper.companies_to_scrape(_NoPersonFeeds())  # type: ignore[arg-type]
+
+
+def test_a_company_only_the_register_knows_is_queued():
+    """Pomorski Fundusz Pożyczkowy: no seed, no feed, no KRS-numbered owner."""
+    scraper, queue = _queue(by_register=pd.DataFrame({"krs": ["0000225512"]}))
+
+    assert "0000225512" in queue
+    assert scraper.company_reasons["0000225512"] == {REASON_PUBLIC_OWNER}
+
+
+def test_a_public_subsidiary_known_only_from_a_feed_is_queued():
+    """The ownership door used to walk an empty graph and add nothing.
+
+    ENEA ELEKTROWNIA POŁANIEC is in the crawl only because a parent's feed
+    lists it, and `CompaniesKRS` carried the parent's public ownership down to
+    it. A private company beside it stays out.
+    """
+    scraper, queue = _queue(
+        companies=pd.DataFrame(
+            {"krs": ["0001251428", "0000010120"], "is_public": [True, False]}
+        )
+    )
+
+    assert "0001251428" in queue
+    assert "0000010120" not in queue
+    assert REASON_OWNED in scraper.company_reasons["0001251428"]
+
+
+def test_a_public_company_with_its_connections_is_not_bought_again():
+    _, queue = _queue(
+        companies=pd.DataFrame({"krs": ["0001251428"], "is_public": [True]}),
+        scraped=_scraped(
+            ("0001251428", QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE.value)
+        ),
+    )
+
+    assert "0001251428" not in queue
+
+
+# ------------------------------------------------ what the odpis tells for free
+AKTUALNE = QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE
+HISTORYCZNE = QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE
+
+
+def test_an_odpis_tells_until_the_bulletin_names_the_company_again():
+    odpis_on = "2026-09-24"
+    told = told_by_the_odpis(
+        {
+            "0000000029": odpis_on,
+            "0000000031": odpis_on,
+            "0000000041": odpis_on,
+            "0000000043": odpis_on,
+        },
+        {
+            "0000000029": "2026-09-23",  # before the odpis: in it
+            "0000000031": odpis_on,  # the same day: maybe after the fetch
+            "0000000041": "2026-09-30",  # since
+            "0000000099": "2026-09-01",  # no odpis at all
+        },
+    )
+    # 0000000043 the bulletin never named: nothing has moved since the odpis.
+    assert told == {"0000000029", "0000000043"}
+
+
+def test_the_odpis_takes_the_company_feeds_and_nothing_else():
+    """The free api-krs pair and the person feeds are no odpis's to replace."""
+    told, untold = "0000000029", "0000000031"
+    paid_only = "0000000041"
+    queries = [
+        RejestrIOQuery(
+            krs=KRS(told),
+            queries=[QueryType.API_KRS_ODPIS_AKTUALNY_P, AKTUALNE, HISTORYCZNE],
+            reasons=[REASON_REFRESH],
+        ),
+        RejestrIOQuery(
+            krs=KRS(paid_only), queries=[AKTUALNE, HISTORYCZNE], reasons=[REASON_OWNED]
+        ),
+        RejestrIOQuery(krs=KRS(untold), queries=[AKTUALNE], reasons=[REASON_OWNED]),
+        RejestrIOQuery(
+            person=RejestrIOKey(id="808738"),
+            queries=[QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE],
+        ),
+    ]
+
+    kept = list(leave_to_the_odpis(queries, {told, paid_only}))
+
+    assert [(q.subject_id, q.queries, q.reasons) for q in kept] == [
+        (told, [QueryType.API_KRS_ODPIS_AKTUALNY_P], [REASON_REFRESH]),
+        (untold, [AKTUALNE], [REASON_OWNED]),
+        ("808738", [QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE], []),
+    ]
+    assert sum(q.cost() for q in kept) == 0.10
+
+
+def test_the_queue_reads_what_the_site_takes_from_an_odpis():
+    """Off `PeopleKRSCombined`'s rows, against a bulletin read back from disk."""
+    scraper = ScrapeRejestrIO()
+    scraper.__dict__["people_combined"] = _Frame(
+        pd.DataFrame(
+            {
+                "employed_krs": ["0000000029", "0000000031", "0000000041"],
+                "crawled_on": ["2026-10-02", "2026-10-02", "2026-09-01"],
+                "source": ["odpis", "odpis", "rejestr.io"],
+            }
+        )
+    )
+    scraper.__dict__["updates"] = _Frame(
+        pd.DataFrame(
+            {"krs": [29, 31], "date": pd.to_datetime(["2026-09-30", "2026-10-02"])}
+        )
+    )
+
+    assert scraper.companies_told_by_the_odpis(None) == {"0000000029"}  # type: ignore[arg-type]

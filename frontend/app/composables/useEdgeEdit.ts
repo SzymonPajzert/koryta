@@ -265,7 +265,10 @@ function emptyEdge(direction?: "incoming" | "outgoing"): InternalEdge {
     end_date: "",
     direction: direction ?? "outgoing",
     references: [],
-    elected: false,
+    // Left out rather than defaulted to false: an untouched form says nothing
+    // about whether anybody won, and `/api/edges/create` stores that silence
+    // as null.
+    elected: undefined,
     by_election: false,
   };
 }

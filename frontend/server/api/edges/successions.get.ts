@@ -12,6 +12,7 @@ import {
   type SuccessionSpell,
 } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
+import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import type { H3Event } from "h3";
 
 /** One end of a handover, named. */
@@ -265,8 +266,23 @@ async function companySuccessions(
     });
   }
 
+  // Less the role-less copies of a prokura somebody also holds under its name,
+  // which would otherwise sit in the list twice - once under „Funkcja niepodana
+  // w rejestrze”. See `withoutRedundantRoleless`. Read from every spell, closed
+  // ones too: a copy written before the post ended lacks the end date its named
+  // twin has, and is still the same post.
+  const listed = withoutRedundantRoleless(
+    byCompany.get(companyId) ?? [],
+    (spell) => ({
+      personId: spell.personId,
+      companyId,
+      role: spell.role,
+      start: spell.start,
+      end: spell.end,
+    }),
+  );
   const current: CurrentPost[] = [];
-  for (const spell of byCompany.get(companyId) ?? []) {
+  for (const spell of listed) {
     // An absent end date is what "still in post" looks like; `create.post.ts`
     // writes null and the edge editor writes "", so neither may be trusted to
     // be the other.

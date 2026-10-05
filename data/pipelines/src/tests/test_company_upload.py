@@ -22,10 +22,13 @@ from uploader import CompanyUploader
 
 
 def uploader() -> CompanyUploader:
-    """A CompanyUploader without its constructor, which performs a browser login."""
-    instance = object.__new__(CompanyUploader)
-    instance.args = MagicMock(endpoint="http://localhost:3000")
-    instance.headers = {}
+    """A CompanyUploader whose sign-in is never asked for: `submit_payload`,
+    which would send, is replaced."""
+    instance = CompanyUploader(
+        MagicMock(endpoint="http://localhost:3000", type="company"),
+        tokens=MagicMock(),
+        session=MagicMock(),
+    )
     instance.submit_payload = MagicMock(return_value=None)  # type: ignore[method-assign]
     return instance
 

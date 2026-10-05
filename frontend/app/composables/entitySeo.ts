@@ -1,4 +1,6 @@
 import type { Person, Company, Article, Region, Topic } from "~~/shared/model";
+import { asArray } from "~~/shared/model";
+import { OTHER_PARTY } from "~~/shared/misc";
 import { relationsPlural } from "~/composables/edges";
 
 export type EntityNode = Person | Company | Article | Region | Topic;
@@ -42,9 +44,13 @@ export function entityDescription(
 
   switch (entity.type) {
     case "person": {
-      const parties = entity.parties?.length
-        ? ` (${entity.parties.join(", ")})`
-        : "";
+      // „Inne” is left out: it says there is a tie and not whose, and
+      // „Jan Kowalski (Inne)” in a search result reads as a typo rather
+      // than as that.
+      const named = asArray(entity.parties).filter(
+        (party) => party !== OTHER_PARTY,
+      );
+      const parties = named.length ? ` (${named.join(", ")})` : "";
       const lead = `${entity.name}${parties} w bazie koryciarstwa`;
       return truncateDescription(
         relations

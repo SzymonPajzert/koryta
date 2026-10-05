@@ -245,9 +245,14 @@
         <div
           v-if="item.companies?.length || item.latestEmploymentStart"
           class="companies-cell"
+          :class="{ 'companies-cell--fill': hasElectionsColumn }"
         >
           <div class="d-flex flex-wrap ga-1 py-1">
-            <span v-for="companyName in item.companies" :key="companyName">
+            <span
+              v-for="companyName in item.companies"
+              :key="companyName"
+              class="company-slot"
+            >
               <v-tooltip :text="shortCompanyName(companyName)" location="top">
                 <template #activator="{ props: shortCompanyProps }">
                   <v-chip
@@ -339,7 +344,10 @@
          path, so a click on it would go into `orderBy` verbatim and drop every
          document that stores the field under any other shape. -->
     <template #[`item.elections`]="{ item }">
-      <ExploreTableElectionChips :elections="item.elections" />
+      <ExploreTableElectionChips
+        class="elections-column"
+        :elections="item.elections"
+      />
     </template>
 
     <!-- No `visibility` slot any more: no page declares the column. It was the
@@ -562,14 +570,15 @@ const props = withDefaults(
     sortBy: () => [],
     noDataText: "Brak danych",
     itemsPerPageText: "Wierszy na stronę:",
-    // Vuetify's defaults, except that the last one is labelled by its English
-    // locale string ("All") - the app never sets a Polish locale.
+    // Vuetify's defaults less the last, "All". It asks for `limit=-1`, and the
+    // rows come a page at a time from /api/nodes, which cannot be asked for
+    // every row at once - picking it was a 500 and an empty table. /zrodla
+    // leaves it out for the same reason.
     itemsPerPageOptions: () => [
       { value: 10, title: "10" },
       { value: 25, title: "25" },
       { value: 50, title: "50" },
       { value: 100, title: "100" },
-      { value: -1, title: "Wszystkie" },
     ],
     loadingText: "Ładowanie...",
     hideDefaultFooter: false,
@@ -810,7 +819,8 @@ a.person-name:focus-visible {
 
 /* Matches the cell, in pixels rather than a percentage: the chip sits in an
  * auto sized flex item, so there is nothing definite for a percentage to
- * resolve against. */
+ * resolve against - until that item is held to the row as well, which is what
+ * the desktop rules below do so that the chip can grow with its column. */
 .company-chip {
   max-width: 300px;
 }
@@ -821,6 +831,41 @@ a.person-name:focus-visible {
  * the children carry theirs, and a cap on the parent would fight the gap. */
 .history-cell {
   align-items: flex-start;
+}
+
+/* The caps above say how wide a cell may ask its column to be, and they stay:
+ * they are what keeps one long company or town from setting the width of the
+ * column for every other row. But a cap is also how wide the cell draws, and
+ * on /eksploruj/tabela, which takes the whole window, the table hands out more
+ * than the caps asked for - at 1680px „Firmy” came to 526px with its chips
+ * stopping at 300 and cut off, and the rest of the column empty.
+ *
+ * `min-width: 100%` lifts the second without the first. A percentage in a min
+ * size resolves against nothing while the table measures its columns, and
+ * against the column once they are laid out; a min width wins over a max
+ * width. So the columns come out as wide as they were and the cells fill them.
+ *
+ * Only where a cell has its column to itself. On /eksploruj/nowe the elections
+ * sit beside the companies in one cell, where a company cell as wide as the
+ * column would push them out of it, so `companies-cell--fill` is set only when
+ * the page gives the elections a column of their own. Desktop only: below
+ * 960px the phone budget further down is the whole layout, and stays as it
+ * was. */
+@media (min-width: 960px) {
+  .name-cell,
+  .companies-cell--fill,
+  .elections-column {
+    min-width: 100%;
+  }
+
+  /* A company chip grows with its cell rather than stopping at 300px, and is
+   * cut at the cell's edge instead. The slot around it is the flex item, and
+   * sizes to its content unless it is held to the row too - which a pixel cap
+   * needed no help with, and a percentage does. */
+  .company-slot,
+  .company-chip {
+    max-width: 100%;
+  }
 }
 
 /* The page drops to two columns here (see pages/eksploruj/tabela.vue), and a

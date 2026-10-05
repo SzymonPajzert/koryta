@@ -1,9 +1,13 @@
 import { z } from "zod";
-import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getOptionalUser } from "~~/server/utils/auth";
 import { collectActivityEvents } from "~~/server/utils/activityEvents";
+import {
+  identify,
+  readPublicProfiles,
+  type ContributorIdentity,
+} from "~~/server/utils/contributors";
 import {
   dayStartIso,
   ensureDailyRollups,
@@ -24,7 +28,7 @@ import {
   type ActivityKind,
   type ActivityRange,
 } from "~~/shared/activity";
-import { maskedContributorName, publicProfileEnabled } from "~~/shared/profile";
+import { maskedContributorName } from "~~/shared/profile";
 
 const queryValidator = z.object({
   // One of the three the page offers, not a range. See `activityRanges`: every
@@ -46,9 +50,6 @@ const queryValidator = z.object({
  * response — and the auth lookups behind it — bounded either way. */
 const LEADERBOARD_SIZE = 25;
 
-/** `getUsers` takes at most 100 identifiers per call. */
-const AUTH_LOOKUP_CHUNK = 100;
-
 export type ActivityContributor = {
   /** Stable key for a table row or chart series. The uid for an admin, the rank
    * for everybody else — who never receive a uid. */
@@ -64,6 +65,10 @@ export type ActivityContributor = {
   named: boolean;
   /** The caller's own row, which is always named — to them. */
   isSelf: boolean;
+  /** The caller's own row only: whether everybody else is shown this name
+   * too, which `named` cannot say, since your own name is shown to you
+   * whatever the setting. */
+  publicName?: boolean;
   /** Admin only. */
   email: string | null;
   /** Only for a row that is named; an avatar identifies a person as surely as
@@ -168,14 +173,7 @@ type WindowedActivity = {
   truncated: ActivityKind[];
   /** Display data for the ranked slice, from the auth service. Server side
    * only — `present` decides which fields of it any given caller may see. */
-  identities: Record<
-    string,
-    {
-      displayName: string | null;
-      email: string | null;
-      photoURL: string | null;
-    }
-  >;
+  identities: Record<string, ContributorIdentity>;
   /** Which of the ranked contributors agreed to be named in public. */
   public: Record<string, boolean>;
 };
@@ -211,6 +209,15 @@ function present(
     counts: contributor.counts,
     total: contributor.total,
     lastActiveAt: contributor.lastActiveAt,
+    // What a stranger's copy of this row would say, so the chip can tell you
+    // whether the name you see is one everybody sees.
+    ...(isSelf
+      ? {
+          publicName:
+            windowed.public[contributor.uid] === true &&
+            !!identity?.displayName,
+        }
+      : {}),
   };
 }
 
@@ -284,57 +291,3 @@ const cachedWindow = defineCachedFunction(
     getKey: (days: number) => String(days),
   },
 );
-
-/** Display data for the ranked uids, so a chart can say "Anna" instead of a
- * 28-character opaque string. Uids that no longer resolve keep their place in
- * the ranking - the work happened even if the account is gone. */
-async function identify(
-  uids: string[],
-): Promise<WindowedActivity["identities"]> {
-  const found: WindowedActivity["identities"] = {};
-  if (uids.length === 0) return found;
-
-  for (let i = 0; i < uids.length; i += AUTH_LOOKUP_CHUNK) {
-    const chunk = uids.slice(i, i + AUTH_LOOKUP_CHUNK);
-    const result = await getAuth().getUsers(chunk.map((uid) => ({ uid })));
-    for (const user of result.users) {
-      found[user.uid] = {
-        displayName: user.displayName ?? null,
-        email: user.email ?? null,
-        photoURL: user.photoURL ?? null,
-      };
-    }
-  }
-
-  return found;
-}
-
-/** Who among the ranked said their name may be shown.
- *
- * Read with the admin SDK, which the `users` rules do not apply to - they let
- * only the owner read their own document, and deliberately so. Nothing but the
- * boolean leaves this function.
- */
-async function readPublicProfiles(
-  db: FirebaseFirestore.Firestore,
-  uids: string[],
-): Promise<Record<string, boolean>> {
-  const allowed: Record<string, boolean> = {};
-  if (uids.length === 0) return allowed;
-
-  // The field mask is not an optimisation. A `users` document is writable by
-  // its owner (`firestore.rules`), with no constraint on shape or size, so
-  // pulling it whole would carry whatever they chose to put in it into this
-  // handler's memo. One boolean is all this decision needs.
-  const snapshots = await db.getAll(
-    ...uids.map((uid) => db.collection("users").doc(uid)),
-    { fieldMask: ["publicProfile"] },
-  );
-  for (const snapshot of snapshots) {
-    allowed[snapshot.id] = publicProfileEnabled(
-      snapshot.data()?.publicProfile as boolean | undefined,
-    );
-  }
-
-  return allowed;
-}

@@ -20,7 +20,7 @@ export type EdgeUpdated = {
    * nothing was written. */
   revision_id: string | null;
   /** Whether the site already says what the caller typed. False means it is a
-   * standing proposal in /admin/rewizje-krawedzi instead. */
+   * standing proposal in /admin/rewizje#powiazania instead. */
   applied: boolean;
   /** Nothing was written because the relation already said exactly this. */
   unchanged: boolean;
@@ -39,7 +39,8 @@ export type EdgeUpdated = {
  * Who may say it is settled the same way every other write here settles it. An
  * admin's edit is its own review and applies at once, like `/api/edges/delete`;
  * anybody else's is a proposal - the revision stands, the relation is untouched
- * and /admin/rewizje-krawedzi is where it waits. The two paths write the same
+ * and /admin/rewizje#powiazania is where it waits. The two paths write the
+ * same
  * revision, so a reviewer approving one through `/api/revisions/approve` gets
  * exactly what the admin path would have written.
  *
@@ -77,9 +78,16 @@ export default defineEventHandler(async (event): Promise<EdgeUpdated> => {
   // `/api/revisions/create` does through `baseNodeFields`. Only the keys the
   // caller actually sent are overlaid: zod leaves an omitted optional field
   // undefined, and spreading that over the stored value would blank it.
-  const edited = Object.fromEntries(
+  const edited: Record<string, unknown> = Object.fromEntries(
     Object.entries(fields).filter(([, value]) => value !== undefined),
   );
+  // An unticked „Uzyskano mandat" says nobody recorded a win, not that the
+  // person lost, so it is stored as nothing rather than as `false` - see
+  // `elected` in shared/api.ts, and /api/edges/create, which does the same.
+  // Null rather than a dropped key, so that unticking takes a win back off the
+  // relation instead of leaving the stored `true` under the overlay;
+  // `sanitizeFirestoreData` drops the null on the way to Firestore.
+  if (edited.elected === false) edited.elected = null;
   const data = { ...withoutInternalFields(stored), ...edited };
 
   const isAdmin = user.admin === true;

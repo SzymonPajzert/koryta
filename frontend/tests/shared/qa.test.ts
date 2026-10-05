@@ -10,6 +10,7 @@ import {
   qaVerdictIsReportable,
   type QaCheck,
 } from "../../shared/qa";
+import { FEEDBACK_ID_PATTERN } from "../../shared/feedbackFixes";
 
 const check = (
   itemId: string,
@@ -41,6 +42,20 @@ describe("QA_ITEMS", () => {
       expect(item.title.length).toBeGreaterThan(0);
       expect(item.description.length).toBeGreaterThan(0);
       expect(item.steps.length).toBeGreaterThan(0);
+    }
+  });
+
+  // fixIndex skips a malformed id rather than failing, so a typo here would
+  // silently attach the fix to no report at all.
+  it("names the reports it fixes by well-formed ids, each once", () => {
+    for (const item of QA_ITEMS) {
+      const fixes = item.fixes ?? [];
+      for (const id of fixes) {
+        expect(id, `${item.id} fixes ${id}`).toMatch(FEEDBACK_ID_PATTERN);
+      }
+      expect(new Set(fixes).size, `${item.id} repeats a report`).toBe(
+        fixes.length,
+      );
     }
   });
 });

@@ -267,6 +267,106 @@ describe("api/ingest/person", () => {
     );
   });
 
+  it("records that a candidacy won", async () => {
+    // `elected` is set on 2 of the 14,518 stored candidacies, so no page can
+    // say anybody won anything. The pipeline has carried the result since
+    // `people_pkw_merged` first selected `candidacy_success` into the
+    // elections struct; the request schema is where it stopped.
+    mockReadBody.mockResolvedValue({
+      name: "Test Person",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          elected: true,
+          election_year: "2024",
+          election_type: "Samorząd",
+          teryt: "1465",
+        },
+      ],
+    });
+
+    mockGet.mockReset();
+    mockDoc.mockReset();
+    mockDoc.mockReturnValue({
+      id: "new-doc-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({
+      id: "person-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
+    });
+    const edgeRef = { id: "edge-id" };
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
+      mockDb,
+      expect.anything(),
+      expect.objectContaining({ uid: "test-user-id" }),
+      edgeRef,
+      expect.objectContaining({ type: "election", elected: true }),
+      { automatic: true, approve: false, published: false },
+    );
+  });
+
+  it("does not record a defeat, which it cannot tell from a blank form", async () => {
+    // PKW published no result for 68,728 of its 97,748 candidacy rows, and
+    // `useEdgeEdit` writes `elected: false` for every box a human left
+    // unticked - so a stored `false` does not mean "this person lost", it
+    // means "nobody said". Writing one would print a defeat on a named
+    // person's page on the strength of a silent register.
+    mockReadBody.mockResolvedValue({
+      name: "Test Person",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          elected: false,
+          election_year: "2024",
+          election_type: "Samorząd",
+          teryt: "1465",
+        },
+      ],
+    });
+
+    mockGet.mockReset();
+    mockDoc.mockReset();
+    mockDoc.mockReturnValue({
+      id: "new-doc-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({
+      id: "person-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
+    });
+    const edgeRef = { id: "edge-id" };
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    const written = vi.mocked(createRevisionTransaction).mock.calls[1]![4];
+    expect(written).not.toHaveProperty("elected");
+  });
+
   describe("a candidacy the database already has", () => {
     /** The shape every one of the 10476 stored candidacies has today: written
      * before the ingest accepted a committee, so carrying none. */
@@ -320,6 +420,47 @@ describe("api/ingest/person", () => {
         elections: [{ election_type: "Samorząd", teryt: "1465", ...election }],
       };
     }
+
+    it("writes the result onto a candidacy already stored without one", async () => {
+      // What the backfill turns on: `elected` is set on 15 of the 15,696
+      // stored candidacies, and every one of the rest was written before the
+      // ingest accepted the field. They are reached by restating them, so the
+      // result has to land on the stored edge rather than beside it.
+      personWithStoredEdges([storedCandidacy]);
+      mockReadBody.mockResolvedValue(
+        payload({ election_year: "2024", elected: true }),
+      );
+
+      await handler({} as any);
+
+      const call = vi.mocked(createRevisionTransaction).mock.calls[0]!;
+      expect(call[3]).toMatchObject({ id: "stored-0" });
+      expect(call[4]).toEqual({ ...storedCandidacy, elected: true });
+    });
+
+    it("still proposes a result that arrives with an unrecognised committee", async () => {
+      // The guard on the rule above: `enrichedEdge` fills every blank it can,
+      // so a revision vouched for because it carries a result would write a
+      // one-gmina KWW out with it - which is the review the committee rule
+      // exists for.
+      personWithStoredEdges([storedCandidacy]);
+      mockReadBody.mockResolvedValue(
+        payload({
+          election_year: "2024",
+          elected: true,
+          committee: "KWW Nasza Gmina",
+        }),
+      );
+
+      await handler({} as any);
+
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+      const call = vi.mocked(proposeRevisionTransaction).mock.calls[0]!;
+      expect(call[4]).toMatchObject({
+        elected: true,
+        committee: "KWW Nasza Gmina",
+      });
+    });
 
     it("writes onto the stored candidacy, not beside it", async () => {
       // The whole point: `committee` is part of edgeIdentity, so without this

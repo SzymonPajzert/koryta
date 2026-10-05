@@ -444,6 +444,21 @@ describe("applyRevision", () => {
   const user = { uid: "reviewer" };
   const revisionRef = { id: "rev-2" } as unknown as DocumentReference;
 
+  /** The batch the latest `approveOver` wrote into. */
+  let batch: {
+    set: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    commit: ReturnType<typeof vi.fn>;
+  };
+
+  /** The audit entries that batch filed, in order. The fake hands the target's
+   * ref back for every collection, so they are told apart by their shape. */
+  function writtenAudit() {
+    return batch.set.mock.calls
+      .map((call) => call[1] as Record<string, unknown>)
+      .filter((written) => "action" in written);
+  }
+
   /** Approve `revision` over a target that currently holds `stored`, and
    * return what the target was written with. */
   async function approveOver(
@@ -451,7 +466,7 @@ describe("applyRevision", () => {
     data: Record<string, unknown>,
     publish?: boolean,
   ) {
-    const batch = { set: vi.fn(), update: vi.fn(), commit: vi.fn() };
+    batch = { set: vi.fn(), update: vi.fn(), commit: vi.fn() };
     const targetRef = {
       id: "node-1",
       parent: { id: "nodes" },
@@ -500,6 +515,53 @@ describe("applyRevision", () => {
     );
   });
 
+  describe("filing a change of visibility", () => {
+    // Approving with `publish` puts a page live as surely as /api/nodes/publish
+    // does, and the publication count and /aktywnosc read only `publish` rows.
+
+    it("files the publication after the approval, with the revision", async () => {
+      await approveOver({ published: false }, {}, true);
+
+      expect(writtenAudit()).toMatchObject([
+        { action: "approve", revision_id: "rev-2" },
+        {
+          action: "publish",
+          collection: "nodes",
+          target_id: "node-1",
+          revision_id: "rev-2",
+          user: "reviewer",
+        },
+      ]);
+      expect(batch.commit).toHaveBeenCalledTimes(1);
+    });
+
+    it("files a hiding as an unpublication", async () => {
+      await approveOver({ published: true }, {}, false);
+
+      expect(writtenAudit()).toMatchObject([
+        { action: "approve" },
+        { action: "unpublish", target_id: "node-1", revision_id: "rev-2" },
+      ]);
+    });
+
+    it("files nothing more when the page already stood that way", async () => {
+      // Re-approving a live page with "zatwierdź i opublikuj" is not a second
+      // publication of it.
+      await approveOver({ published: true }, {}, true);
+      expect(writtenAudit()).toMatchObject([{ action: "approve" }]);
+      expect(writtenAudit()).toHaveLength(1);
+
+      await approveOver({}, {}, false);
+      expect(writtenAudit()).toHaveLength(1);
+    });
+
+    it("files nothing more when not told about visibility", async () => {
+      // /api/nodes/publish approves this way and files its own publication.
+      await approveOver({ published: false }, {});
+      expect(writtenAudit()).toHaveLength(1);
+    });
+  });
+
   it("applies a removal, which states `deleted` in its own data", async () => {
     const written = await approveOver(
       { published: true },
@@ -507,6 +569,32 @@ describe("applyRevision", () => {
     );
     expect(written.deleted).toBe(true);
     expect(written.delete_reason).toBe("duplicate");
+  });
+
+  it("never publishes the page a removal deletes", async () => {
+    // "Zatwierdź i opublikuj" on a removal used to file `approve` + `publish`,
+    // which /aktywnosc folded into "opublikował/a" and the statistics counted
+    // as a page gone live.
+    const written = await approveOver(
+      { published: false },
+      { deleted: true, delete_reason: "duplicate" },
+      true,
+    );
+    expect(written.published).toBe(false);
+    expect(writtenAudit()).toMatchObject([{ action: "approve" }]);
+    expect(writtenAudit()).toHaveLength(1);
+  });
+
+  it("never hides the page a removal deletes either", async () => {
+    // The removal is what takes it down; an `unpublish` beside it would be a
+    // second decision nobody made.
+    const written = await approveOver(
+      { published: true },
+      { deleted: true, delete_reason: "duplicate" },
+      false,
+    );
+    expect(written.published).toBe(true);
+    expect(writtenAudit()).toHaveLength(1);
   });
 
   it("does not resurrect a removed page by approving an ordinary edit", async () => {

@@ -47,6 +47,24 @@ You can run each script with `uv run scripts-name`.
 
 Refer to `pyproject.toml` for the most up-to-date list of the scripts available there.
 
+## Pipelines and jobs
+
+A **pipeline** (`uv run koryta <Name>`) is a function: it reads its sources and
+writes one output to `versioned/`, and running it again gives the same output,
+so any output can be deleted and rebuilt. A **job** (`src/jobs/<name>`) changes
+what the pipelines read - it asks an upstream API, buys, uploads - and running
+it twice is not running it once. Jobs may read pipelines; no pipeline imports a
+job (import-linter enforces it, and pipelines may not import `requests`).
+
+A job's state is what it wrote, never a pipeline output it keeps up to date:
+
+| Job | Script | Writes |
+|---|---|---|
+| `krs_bulletin` | `koryta_scrape_krs_updates` | bulletin days, to the crawl bucket |
+| `krs_scrape_free` | `koryta_scrape_krs_free` | the bulletin, then api-krs odpisy for `ScrapeRejestrIO`'s queries |
+| `krs_scrape_paid` | `koryta_scrape_krs_paid` | rejestr.io responses (paid; asks before buying) |
+| `krs_register_owners` | `koryta_krs_register_owners --reads N` | api-krs answers, to write-once parts in `gs://koryta-pl-sharedcache/jobs/krs_register_owners/responses/`, which `KRSRegisterEntries` folds |
+
 ## Centralny Rejestr Umów (CRU)
 
 `CruDump` fetches the public contracts register from a postgres mirror of the
@@ -91,9 +109,16 @@ has been submitted before takes an hour and leaves the site as it was.
 `--only-changed` drops those payloads:
 
 ```bash
-uv run koryta PeoplePayloads --region 14 --only-changed |
-  uv run koryta_uploader --type person --submit
+uv run koryta PeoplePayloads --region 14 --only-changed --output stderr 2> people.jsonl
+uv run koryta_uploader --type person --submit < people.jsonl
 ```
+
+`--output stderr` is what puts the payloads anywhere the uploader can read
+them. The default, `--output file`, prints nothing but "Finished processing",
+and piped into the uploader that comes out as "No results." -- the same words a
+day with nothing to upload gets. A file rather than a pipe leaves the report
+below on the terminal, to be read before anything is posted; the uploader
+skips, with a complaint each, the lines on stderr that are not payloads.
 
 It decides by replaying the ingest's own matching offline, against the nightly
 Firestore export in `gs://koryta-pl-crawled` -- the same dumps `KorytaPeople`
@@ -113,9 +138,15 @@ What the rest would write:
 emits is one the site already has, so a quiet day is almost all no-ops.
 
 ```bash
-uv run koryta CompaniesPayloads --only-changed |
-  uv run koryta_uploader --type company --submit
+uv run koryta CompaniesPayloads --only-changed --refresh CompaniesKRS \
+  --output stderr 2> companies.jsonl
+uv run koryta_uploader --type company --submit < companies.jsonl
 ```
+
+`--refresh CompaniesKRS` is what lets the run see a change to how the register
+is read. Without it `company_krs` comes from `versioned/` or the shared cache,
+built by the code as it stood when it last ran, and `--only-changed` then
+reports -- correctly -- that nothing differs from the site.
 
 The comparison is a transcription of `frontend/server/utils/edges.ts` and the
 matching helpers in `frontend/server/api/ingest/person.post.ts` and
@@ -140,7 +171,10 @@ fetching each object. GCS gives about 5-7 small objects a second, so the ~29k
 rejestr.io responses took most of an hour; the same data is one 18 MB archive
 that reads in seconds. Each run prints which archives it used, dates included.
 
-That archive is a snapshot. To rebuild it for one host:
+That archive is a snapshot, so the read also lists the bucket and fetches
+whatever the archive lacks, 32 objects at a time. The result is the same set
+of objects as a plain listing; only the part written since the last rebuild is
+slow, and it grows until someone rebuilds. To rebuild for one host:
 
 ```bash
 cd ../compressor
@@ -149,13 +183,8 @@ go run ./cmd/compressor \
   -incremental -hostname rejestr.io
 ```
 
-Pass `--no-mirror` to skip it and read the bucket object by object instead.
-That is much slower, but it sees everything written since the last rebuild,
-which is what you want when iterating on a scrape:
-
-```bash
-uv run koryta ScrapeRejestrIO --no-mirror
-```
+Pass `--no-mirror` to skip the archive and read the bucket object by object
+instead -- the same objects, only slower.
 
 ## The nightly pipeline run
 

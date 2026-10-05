@@ -10,8 +10,9 @@ export interface PolishNoun {
 /** Which of the three nominative forms a count takes. Split out of
  * `polishCounting` so that the grouped variant below picks the noun by the
  * same rule; two copies of it would answer „1 284 osoba” the first time one of
- * them was corrected and the other was not. */
-function nominativeNoun(
+ * them was corrected and the other was not. Exported for a figure set apart
+ * from its noun, like a large number over its caption. */
+export function nominativeNoun(
   number: number,
   form_singular: string,
   form_plural: string,
@@ -49,7 +50,7 @@ export function polishCounting(
  * non-breaking space, so a number never wraps between „1” and „284”.
  */
 export function polishNumber(number: number): string {
-  return new Intl.NumberFormat("pl-PL", { useGrouping: true }).format(number);
+  return new Intl.NumberFormat("pl-PL").format(number);
 }
 
 /** A count after a preposition that takes the genitive: „z 1 284 osób”, „z 1

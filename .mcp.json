@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "koryta": {
+      "type": "stdio",
+      "command": "${CLAUDE_PROJECT_DIR:-.}/frontend/node_modules/.bin/tsx",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/frontend/scripts/mcp/server.ts"]
+    }
+  }
+}

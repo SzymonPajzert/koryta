@@ -14,6 +14,17 @@ const COMPRESSIBLE =
  * Well under any page this exists for - the smallest is ~450 KB. */
 const MIN_BYTES = 1024;
 
+/** What h3 would serialise to JSON itself: a plain object or an array. Not
+ * `null` (a 204), and not a class instance - a stream, a web `Response`, or
+ * the `H3Error` h3 hands this hook when a handler throws - which h3 sends some
+ * other way, or not from the body at all. */
+function isJsonBody(body: unknown): body is object {
+  if (body === null || typeof body !== "object") return false;
+  if (Array.isArray(body)) return true;
+  const proto = Object.getPrototypeOf(body);
+  return proto === Object.prototype || proto === null;
+}
+
 /** Brotli's default is quality 11, which is a text-book choice for a file you
  * compress once at build time and a bad one for a response you compress on
  * every miss: on `/lista`'s 10 MB document it is seconds of a Cloud Run cpu.
@@ -33,14 +44,18 @@ const BROTLI_QUALITY = 4;
  * outermost seam, past the cache, and h3 re-reads `response.body` after the
  * hook, so replacing it here is what actually goes out.
  *
- * Handlers that return an object are left alone: h3 serialises those after
- * this hook, so there is no body to compress yet and no content-type to test.
- * That is api routes only, which are small and mostly uncached. */
+ * An api route that returns an object is serialised here, not left to h3.
+ * h3 does that after this hook, so there is no body to compress yet - and
+ * leaving those alone, on the theory that api responses were small, sent
+ * every one of them raw: `/api/nodes?type=place` is 14.4 MB, and the table's
+ * requests came to 16.3 MB a visit. It is only done when the result is going to
+ * be compressed; otherwise the object goes on to h3 untouched, as before. */
 export default defineNitroPlugin((nitro) => {
   nitro.hooks.hook("beforeResponse", async (event, response) => {
     const body = response.body;
     const isBuffer = Buffer.isBuffer(body);
-    if (typeof body !== "string" && !isBuffer) return;
+    const isJson = isJsonBody(body);
+    if (typeof body !== "string" && !isBuffer && !isJson) return;
 
     // Only compress what is going out over a socket. A sub-request made with
     // localFetch/$fetch runs through this same hook, and its caller reads the
@@ -62,18 +77,30 @@ export default defineNitroPlugin((nitro) => {
     // siblings itself; re-encoding those would produce nonsense.
     if (getResponseHeader(event, "content-encoding")) return;
 
-    const type = String(getResponseHeader(event, "content-type") || "");
-    if (!COMPRESSIBLE.test(type)) return;
-
-    const raw = isBuffer ? body : Buffer.from(body, "utf8");
-    if (raw.byteLength < MIN_BYTES) return;
-
     const accepted = String(getRequestHeader(event, "accept-encoding") || "");
     const encoding = /\bbr\b/.test(accepted)
       ? "br"
       : /\bgzip\b/.test(accepted)
         ? "gzip"
         : undefined;
+
+    let raw: Buffer;
+    if (isJson) {
+      // Serialising only to send it raw would do h3's work twice, so a client
+      // that takes no encoding gets the object passed through. It still varies:
+      // the size is unknown without serialising, and the next client may take
+      // brotli.
+      if (!encoding) {
+        appendResponseHeader(event, "Vary", "Accept-Encoding");
+        return;
+      }
+      raw = Buffer.from(JSON.stringify(body), "utf8");
+    } else {
+      const type = String(getResponseHeader(event, "content-type") || "");
+      if (!COMPRESSIBLE.test(type)) return;
+      raw = isBuffer ? body : Buffer.from(body as string, "utf8");
+    }
+    if (raw.byteLength < MIN_BYTES) return;
 
     // Whatever the client can take, the CDN has to key the entry on - it sits
     // in front of us and these responses carry an s-maxage.
@@ -98,6 +125,11 @@ export default defineNitroPlugin((nitro) => {
       return;
     }
 
+    // h3 names the type of what it serialises itself, and sends a buffer as it
+    // is - so a body serialised here has to say it is JSON on its own.
+    if (isJson && !getResponseHeader(event, "content-type")) {
+      setResponseHeader(event, "Content-Type", "application/json");
+    }
     setResponseHeader(event, "Content-Encoding", encoding);
     // The stale length is the uncompressed one; h3 sets the right one when it
     // sends the buffer, but only if this is not already sitting on the event.

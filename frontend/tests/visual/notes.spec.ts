@@ -1,4 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./test";
+import { pageTag } from "./pageTags";
 import { logIn, USERS } from "../e2e/helpers/auth";
 
 /** The notes section, which nothing else in this suite draws.
@@ -28,7 +30,7 @@ async function settled(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
 
-test.describe("Notatki", () => {
+test.describe("Notatki", { tag: pageTag("[seoType]/[slug]") }, () => {
   test("notatki-sekcja", async ({ page }) => {
     test.setTimeout(120_000);
     // Jan Kowalski, who the seed gives one note of each kind - a source with a

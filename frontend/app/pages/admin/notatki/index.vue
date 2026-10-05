@@ -114,6 +114,7 @@
         no-data-text="Brak notatek"
         loading-text="Ładowanie..."
         items-per-page-text="Wierszy na stronę:"
+        :items-per-page-options="[10, 25, 50, 100]"
       >
         <!-- The date doubles as the entry's permalink. A reviewer working
              through the queue needs a way to hand one row to somebody else,

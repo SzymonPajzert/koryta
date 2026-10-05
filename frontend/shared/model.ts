@@ -118,6 +118,20 @@ export interface NodeStats {
   };
   nodeGroupSize?: number;
   people?: number;
+  /** How hard this person is to check, from the outside: 1, 2, 3, or 0 for
+   * "with what the site holds, not really checkable at all". See
+   * `queueTier` in shared/queueTiers.ts for what each one means.
+   *
+   * Denormalised for the same reason `factsCount` is: the tiers are counted
+   * and filtered on, and every one of them is a question about a person's
+   * edges, their facts and the companies at the far end - none of which
+   * Firestore can join. Written only by /api/stats/computeNodes, which is the
+   * one place that reads all three.
+   *
+   * Absent on a person that run has not reached, and absent is not 0: a
+   * Firestore filter does not match a document lacking the field, so such a
+   * person is left out of the counts rather than counted as untierable. */
+  queueTier?: number;
 }
 
 export type VoteCategory =
@@ -821,6 +835,11 @@ export type Feedback = {
   createdAt: string;
   adminStatus: FeedbackStatus;
   adminNote?: string;
+  /** Place in the team's work queue on /admin/opinie, lowest first. Absent
+   * means nobody has put the report in the queue yet. Sparse on purpose - see
+   * `shared/feedbackQueue.ts` - so a move writes the moved report alone. Kept
+   * when the report is settled, so reopening it puts it back where it was. */
+  queueRank?: number;
   slack?: FeedbackSlackState;
 };
 
@@ -871,4 +890,9 @@ export interface ExtractionFact {
    * /api/extractions: a human (not the pipeline) has reviewed this fact, so the
    * review flow hands it to no one else. */
   reviewed?: boolean;
+  /** The relations somebody made of this fact with „Utwórz powiązanie”, by
+   * edge id. Written by /api/edges/create, so a card can say the fact is
+   * already in the graph rather than offer to put it there again. Absent on
+   * every fact nobody has promoted. */
+  promotedEdgeIds?: string[];
 }

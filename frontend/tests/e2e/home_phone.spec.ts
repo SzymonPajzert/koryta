@@ -37,6 +37,20 @@ test.describe("the home page on a phone", () => {
     await expect(page.getByTestId("home-cta")).toBeHidden();
   });
 
+  // The hero button above is desktop-only on purpose, so on a phone this
+  // section is the page's only ask before the feed starts. Pinned, because the
+  // thing that made it worth rewriting was a reader not finding the ask at all.
+  test("carries the help section on a phone", async ({ page }) => {
+    await page.goto("/", { waitUntil: "load" });
+
+    const cta = page.getByTestId("home-help-cta");
+    await cta.scrollIntoViewIfNeeded();
+    await expect(cta).toBeVisible();
+    await expect(
+      cta.getByRole("link", { name: "Sprawdź pierwszą osobę" }),
+    ).toBeVisible();
+  });
+
   test("keeps /pomoc reachable, from the footer", async ({ page }) => {
     await page.goto("/", { waitUntil: "load" });
 

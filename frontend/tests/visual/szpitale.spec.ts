@@ -1,6 +1,8 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./test";
 import { hospitalStatsFixture } from "./fixtures/hospitalStats";
 import { expectFitsThePhone } from "./phoneWidth";
+import { pageTag } from "./pageTags";
 
 /** /eksploruj/szpitale, with hospitals in it.
  *
@@ -59,7 +61,9 @@ async function settled(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
 
-test("szpitale", async ({ page }, testInfo) => {
+const SZPITALE = { tag: pageTag("eksploruj/szpitale") };
+
+test("szpitale", SZPITALE, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await openWithFixture(page);
   await settled(page);
@@ -70,7 +74,7 @@ test("szpitale", async ({ page }, testInfo) => {
   await expectFitsThePhone(page, testInfo);
 });
 
-test("szpitale-podzial-na-szpitale", async ({ page }, testInfo) => {
+test("szpitale-podzial-na-szpitale", SZPITALE, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await openWithFixture(page);
   await page.getByRole("button", { name: "Szpitala" }).click();

@@ -131,22 +131,26 @@ sources.extend(
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
         ),
+        # PKW's candidate lists with the result, as for 1991-2005. The
+        # wybory2007.pkw.gov.pl lists read before are the same candidates
+        # without a result or their sex. Both are named anew, so that a copy
+        # of the old files cached under the old names cannot stand in.
         InputSource(
             FileSource(
-                "https://wybory2007.pkw.gov.pl/SJM/pliki/DOKUMENTY/dane_w_arkuszach/kandydaci_SJM.xls",
-                "2007_sejm_kandydaci.xls",
+                "https://danewyborcze.kbw.gov.pl/dane/2007/sejm/kandsejm2007.xls",
+                "2007_sejm_kandydaci_wyniki.xls",
             ),
-            XlsExtractor(header_rows=1, skip_rows=1),
+            XlsExtractor(header_rows=1),
             2007,
             PkwFormat.UNKNOWN,
             ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
-                "https://wybory2007.pkw.gov.pl/SNT/pliki/DOKUMENTY/dane_w_arkuszach/kandydaci_SNT.xls",
-                "2007_senat_kandydaci.xls",
+                "https://danewyborcze.kbw.gov.pl/dane/2007/senat/kandsen2007.xls",
+                "2007_senat_kandydaci_wyniki.xls",
             ),
-            XlsExtractor(header_rows=1, skip_rows=1),
+            XlsExtractor(header_rows=1),
             2007,
             PkwFormat.UNKNOWN,
             ElectionType.SENAT,
@@ -243,22 +247,26 @@ sources.extend(
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
         ),
+        # PKW's final lists with the result. parlament2015.pkw.gov.pl's
+        # kandydaci.zip, read before, is the register as it stood on
+        # 19 October, six days out: no result, and 31 Sejm candidates who
+        # are not on the final lists.
         InputSource(
-            FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
-            ZipExtractor(
-                "kandsejm2015-10-19-10-00.xls",
-                extractor=XlsExtractor(header_rows=1),
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2015/sejm/2015-kand-sejm.xls",
+                "2015_sejm_kandydaci_wyniki.xls",
             ),
+            XlsExtractor(header_rows=1),
             2015,
             PkwFormat.UNKNOWN,
             ElectionType.SEJM,
         ),
         InputSource(
-            FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
-            ZipExtractor(
-                "kandsen2015-10-19-10-00.xls",
-                extractor=XlsExtractor(header_rows=1),
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2015/senat/2015-kand-sen.xls",
+                "2015_senat_kandydaci_wyniki.xls",
             ),
+            XlsExtractor(header_rows=1),
             2015,
             PkwFormat.UNKNOWN,
             ElectionType.SENAT,
@@ -281,45 +289,8 @@ sources.extend(
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
         ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/wbp-wybrani.xls"
-            ),
-            XlsExtractor(header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-            ElectionType.SAMORZADOWE,
-        ),
     ]
 )
-
-for woj in [
-    "dolnoslaskie",
-    "kujawsko_pomorskie",
-    "lubelskie",
-    "lubuskie",
-    "lodzkie",
-    "malopolskie",
-    "mazowieckie",
-    "opolskie",
-    "podkarpackie",
-    "podlaskie",
-    "pomorskie",
-    "slaskie",
-    "swietokrzyskie",
-    "warminsko_mazurskie",
-    "wielkopolskie",
-    "zachodniopomorskie",
-]:
-    sources.append(
-        InputSource(
-            FileSource(f"https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/{woj}.xls"),
-            XlsExtractor(header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-            ElectionType.SAMORZADOWE,
-        )
-    )
 
 sources.extend(
     [
@@ -531,6 +502,40 @@ sources.extend(
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
         ),
+        # 2006 is read from the same kind of files as 2002: every candidate,
+        # with the result. The wybory2006.pkw.gov.pl spreadsheets it used to
+        # come from list only the people who were elected - 45,997 rows with
+        # no result on any of them, and some 3,300 seats short of the 46,789
+        # radni this file holds.
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2006/2006-kand-rady-new.xlsx",
+                "2006_rady_kandydaci.xlsx",
+            ),
+            XlsExtractor(header_rows=1),
+            2006,
+            PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2006/wbp/wbp2006.zip",
+                "2006_wbp_kandydaci.zip",
+            ),
+            # One row per candidate per round, like wojt2002.xls.
+            ZipExtractor(
+                "wojt2006-zbiorówka.xls",
+                extractor=XlsExtractor(header_rows=1),
+            ),
+            2006,
+            PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
+        ),
+        # Every level of the 1998 councils, the small gminas included. PKW
+        # also publishes those small gminas polling station by polling station
+        # (dane/1998/rada_gminy/1998_rady_gmin.zip), which is the same
+        # candidacies again - 121,069 of its 121,072 candidates are here, every
+        # one with the same result - so it is not read.
         InputSource(
             FileSource(
                 "https://danewyborcze.kbw.gov.pl/dane/1998/1998-kand-rady.xlsx",
@@ -543,20 +548,6 @@ sources.extend(
         ),
     ]
 )
-
-for index in range(0, 16):
-    sources.append(
-        InputSource(
-            FileSource(
-                "https://danewyborcze.kbw.gov.pl/dane/1998/rada_gminy/1998_rady_gmin.zip",
-                "1998_rady_gmin.zip",
-            ),
-            ZipExtractor(None, XlsExtractor(header_rows=1), index=0),
-            1998,
-            PkwFormat.UNKNOWN,
-            ElectionType.SAMORZADOWE,
-        )
-    )
 
 for old_woj in range(1, 50):
     sources.append(

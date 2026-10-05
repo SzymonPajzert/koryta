@@ -1,5 +1,7 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./test";
 import { logIn, USERS } from "../e2e/helpers/auth";
+import { pageTag } from "./pageTags";
 
 /** The institution card in the state nothing else photographs: right after
  * "Zaproponuj zmianę" has been sent, with the confirmation on it.
@@ -77,7 +79,9 @@ async function proposeWithStubbedServer(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
 
-test("propozycja-potwierdzenie", async ({ page }) => {
+const COMPANY_PAGE = { tag: pageTag("[seoType]/[slug]") };
+
+test("propozycja-potwierdzenie", COMPANY_PAGE, async ({ page }) => {
   test.setTimeout(120_000);
   await proposeWithStubbedServer(page);
 

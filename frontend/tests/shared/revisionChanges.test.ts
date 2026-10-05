@@ -47,6 +47,25 @@ describe("revisionChanges", () => {
     expect(revisionChanges({ content: "Senator." }, stored)).toHaveLength(1);
   });
 
+  it("reports a win taken back, which the proposal says by leaving it out", () => {
+    // `elected` is stored for a win and never as `false`, so a correction that
+    // unticks „Uzyskano mandat” reaches the queue with no key at all - and
+    // approving it, a `set`, deletes the win. Skipped as an omission, the
+    // reviewer saw an empty proposal whose approval removed a claim about a
+    // named person.
+    const candidacy = { type: "election", position: "Senat", elected: true };
+    const { elected: _won, ...unticked } = candidacy;
+
+    expect(revisionChanges(unticked, candidacy)).toEqual([
+      { field: "elected", label: "wybrany", from: "tak", to: null },
+    ]);
+    // A stored `false` reads as a blank everywhere (see `elected` in
+    // shared/api.ts), so dropping one is not a change anybody has to decide on.
+    expect(revisionChanges(unticked, { ...candidacy, elected: false })).toEqual(
+      [],
+    );
+  });
+
   it("tells a field that was never there from one holding an empty value", () => {
     expect(
       revisionChanges({ wikipedia: "https://pl.wikipedia.org/wiki/X" }, stored),

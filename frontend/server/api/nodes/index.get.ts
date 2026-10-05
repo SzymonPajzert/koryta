@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import {
+  dropSearchIndex,
   fetchNodes,
   fetchOptionsValidator,
   paginate,
@@ -39,6 +40,7 @@ const queryValidator = z.object({
   currentlyEmployed: z.enum(["all", "any", "selected"]).optional(),
   minEmploymentDate: z.string().optional(),
   minVotes: z.coerce.number().optional(),
+  queueTier: z.coerce.number().optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),
@@ -229,7 +231,7 @@ export default defineEventHandler(async (event) => {
     }
 
     let nodesArray = snapshot!.docs.map((doc) => {
-      const data = doc.data();
+      const data = dropSearchIndex(doc.data());
       if (data.revision_id) {
         if (typeof data.revision_id.path === "string") {
           data.revision_id = data.revision_id.path;

@@ -1,7 +1,7 @@
 import argparse
 import json
 import typing
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
 from enum import Enum
 from functools import cached_property
@@ -9,20 +9,20 @@ from functools import cached_property
 import pandas as pd
 from tqdm import tqdm
 
-from analysis.extract import is_public
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
 from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.censored import KRSCensoredPeople
-from scrapers.krs.columns import normalise
+from scrapers.krs.columns import is_public, normalise
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
-from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.odpis_people import PeopleKRSCombined, odpis_days
 from scrapers.krs.people_parsing import is_not_found
-from scrapers.krs.updates import KRSUpdates
+from scrapers.krs.public_owners import CompaniesPublicByRegister
+from scrapers.krs.updates import KRSUpdates, latest_changes
 from scrapers.stores import (
     CloudStorage,
     Context,
@@ -46,11 +46,18 @@ class QueryType(Enum):
     )
 
 
+#: What rejestr.io bills for one call: the price `RejestrIOQuery.cost` puts on
+#: the plan, and the one `koryta_scrape_krs_paid` counts its spend at.
+PLN_PER_CALL = 0.05
+
+
 #: Why a query is in the list, which is the only thing that explains the bill.
 #: A KRS reaches `save_org_connections` through one of several doors and the
 #: query itself does not say which, so `cost_breakdown` cannot group by
 #: anything but this.
 REASON_HARDCODED = "hardcoded"
+#: The register itself names a public owner: `CompaniesPublicByRegister`.
+REASON_PUBLIC_OWNER = "public_owner"
 REASON_PERSON_FEED = "person_feed"
 REASON_OWNED = "owned"
 REASON_REFRESH = "refresh"
@@ -67,6 +74,7 @@ REASON_UNRECORDED = "unrecorded"
 REASON_PRECEDENCE = (
     REASON_REFRESH,
     REASON_HARDCODED,
+    REASON_PUBLIC_OWNER,
     REASON_PERSON_FEED,
     REASON_OWNED,
     REASON_MISSING_NAME,
@@ -94,7 +102,7 @@ class RejestrIOQuery:
     def cost(self) -> float:
         """Calculate the cost of this query based on which APIs it will call."""
         calls = [q for q in self.queries if q.value.startswith("rejestrio")]
-        return len(calls) * 0.05
+        return len(calls) * PLN_PER_CALL
 
     def paid_calls(self) -> int:
         """How many rejestr.io calls this query is, which is what is billed."""
@@ -299,7 +307,7 @@ class KRSAlreadyScraped(Pipeline):
         """Lists krs numbers along with the method and the date it was ran on.
 
         A crawl that failed is stored as a zero-byte object rather than not
-        stored at all (see `scraper.scrape_krs_free`), so the object existing
+        stored at all (see `jobs.krs_scrape_free`), so the object existing
         is not the same as the query having been answered. Counting those as
         scraped left 1,052 api-krs subjects - 402 companies with nothing from
         either register - looking done and never retried.
@@ -655,10 +663,15 @@ def save_org_connections(
     con_refresh = needs_refresh_krs["krs"].unique().tolist()
     refresh_ids = set(str(krs) for krs in con_refresh)
     # Join KRS ids with the ones that needs a refresh.
-    connections = set(con_list) | set(KRS(krs) for krs in con_refresh)
+    # Each group sorted: they arrive as sets, which iterate in a different
+    # order every run, and this order is the queue's - what a capped
+    # `koryta_krs_odpis` run reaches first, and the order the scrapes ask in.
+    connections = sorted(
+        set(con_list) | set(KRS(krs) for krs in con_refresh), key=lambda k: k.id
+    )
 
-    names = list(names)
-    people = list(people)
+    names = sorted(names, key=lambda k: k.id)
+    people = sorted(people, key=lambda p: str(p.id))
 
     print(
         f"len(connections): {len(con_list)} + {len(con_refresh)} = {len(connections)}"
@@ -666,20 +679,13 @@ def save_org_connections(
     print(f"len(names): {len(names)}")
     print(f"len(people): {len(people)}")
 
-    print(f"\n\nalready_scraped_krs ({len(already_scraped_krs)}):")
-    print(already_scraped_krs.head())
-    print(already_scraped_krs[["method", "date"]].value_counts())
-    print("Matching 0000062694")
-    print(already_scraped_krs[already_scraped_krs["krs"] == "0000062694"])
-
-    print(f"\n\nneeds_refresh_krs ({len(needs_refresh_krs)}):")
-    print(needs_refresh_krs.head())
-    print("Matching 0000062694")
-    print(needs_refresh_krs[needs_refresh_krs["krs"] == "0000062694"])
-    print(f"Nulls: {needs_refresh_krs['date'].isnull().sum()}")
-    print(needs_refresh_krs["date"].value_counts())
-    print(f"Nulls: {needs_refresh_krs['update_date'].isnull().sum()}")
-    print(needs_refresh_krs["update_date"].value_counts())
+    # One line each. These printed every (method, date) pair and the rows of
+    # one KRS someone once chased - ~130 lines a run, read by nobody since.
+    print(
+        f"already scraped: {len(already_scraped_krs)} (krs, method) responses; "
+        f"needs refresh: {len(needs_refresh_krs)}, "
+        f"{needs_refresh_krs['update_date'].isnull().sum()} without an update date"
+    )
 
     # Remove needs refresh from already_scraped_krs, since we need to update them.
     already_scraped = (
@@ -696,9 +702,6 @@ def save_org_connections(
         .groupby("krs")
         .aggregate(series_to_list)
     )
-
-    print(f"\n\nalready_scraped ({len(already_scraped)}):")
-    print(already_scraped.head())
 
     settled = settled_registers(already_scraped_krs)
     print(f"Registers already answered 404: {sum(len(s) for s in settled.values())}")
@@ -759,6 +762,42 @@ def save_org_connections(
             yield query
 
     print(f"People: {len(people)} of interest, {people_to_fetch} not yet scraped")
+
+
+def told_by_the_odpis(
+    odpis_days: typing.Mapping[str, str], changes: typing.Mapping[str, str]
+) -> set[str]:
+    """The companies whose odpis on file says all their rejestr.io feeds would.
+
+    `odpis_days` is every company whose people `PeopleKRSCombined` takes from
+    an odpis, with the day it speaks for; `changes` the last day the bulletin
+    names each entry. A company counts when the bulletin names nothing since
+    the odpis: its register entry has not moved, so a feed bought now could
+    only repeat the odpis. A change on the odpis's own day may have come after
+    the fetch, so it counts as since, as it does in `jobs.krs_odpis`, which
+    fetches those again.
+    """
+    return {krs for krs, day in odpis_days.items() if changes.get(krs, "") < day}
+
+
+def leave_to_the_odpis(
+    queries: typing.Iterable[RejestrIOQuery], told: typing.Collection[str]
+) -> typing.Iterator[RejestrIOQuery]:
+    """The queries without the company feeds of the companies in `told`.
+
+    Only the krs-powiazania pair goes. The free api-krs pair stays, since
+    `CompaniesKRS` and `RejestrIOCoverage` read the odpis aktualny it fetches,
+    and so do the person feeds: which other companies somebody sits in is
+    nothing a company's odpis says. A query left with nothing to ask is
+    dropped, as `save_org_connections` drops one.
+    """
+    for query in queries:
+        if query.krs is not None and query.krs.id in told:
+            left = [q for q in query.queries if q.value not in ORG_CONNECTION_METHODS]
+            if not left:
+                continue
+            query = replace(query, queries=left)
+        yield query
 
 
 def public_krs_ids(companies: pd.DataFrame) -> set[str]:
@@ -858,6 +897,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
+    public_by_register: CompaniesPublicByRegister
     already_scraped: KRSAlreadyScraped
     needs_refresh: KRSNeedsRefresh
     companies_all: Companies
@@ -867,6 +907,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
     koryta_votes: KorytaVotes
     koryta_people: KorytaPeople
     person_coverage: PersonFeedCoverage
+    updates: KRSUpdates
+    people_combined: PeopleKRSCombined
 
     #: Why each company is in the queue, keyed by KRS id, and why each person
     #: is. Filled by `companies_to_scrape` and `people_to_scrape`, read by
@@ -933,6 +975,46 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         connections = scraped[scraped["method"].isin(ORG_CONNECTION_METHODS)]
         return KRSSet(KRS(id=str(krs).zfill(10)) for krs in connections["krs"].unique())
 
+    def owned_by_the_public(self, ctx: Context) -> KRSSet:
+        """Every company `CompaniesKRS` says the public owns.
+
+        This is what the ownership door was for and never did: it built an
+        empty `CompanyGraph` and asked it for descendants, so it only ever
+        handed back the starters it was given. Measured on the 2026-09-28
+        `company_krs`, 360 of the 5,238 companies marked public had no
+        connections bought, 266 of them known only because a crawled
+        company's feed named them - ENEA ELEKTROWNIA POŁANIEC, PGE EC
+        OPERATOR, NASK, OTWOCKIE PRZEDSIĘBIORSTWO KOMUNALNE.
+
+        `CompaniesKRS` already walks the ownership it knows from both ends -
+        the subsidiaries a rejestr.io feed lists and the wspólnik an odpis
+        names - and `propagate_is_public` carries a public parent down to every
+        child. Its verdict is that walk, done once, and done from public owners
+        only. Walking down from every seed instead would follow the private
+        companies the public-service catalogue also lists - Górażdże Cement,
+        PCC Rokita - into their own subsidiaries.
+        """
+        companies = self.companies.read_or_process(ctx)
+        if companies is None or companies.empty or "is_public" not in companies:
+            return KRSSet()
+        public = companies.loc[is_public(companies["is_public"]), "krs"]
+        return KRSSet(KRS(id=str(krs).zfill(10)) for krs in public)
+
+    def owned_per_the_register(self, ctx: Context) -> KRSSet:
+        """Companies the register names a public owner for, crawled or not.
+
+        The door for the companies no other door knows: one a gmina or a
+        województwo owns sits in no seed list unless somebody put it there,
+        and has no KRS-numbered owner for `owned_by_the_public` to reach it
+        from. `jobs.krs_register_owners` reads the register for the entities
+        in the bulletin, `KRSRegisterEntries` folds what it read, and
+        `CompaniesPublicByRegister` picks out the public ones.
+        """
+        found = self.public_by_register.read_or_process(ctx)
+        if found is None or found.empty:
+            return KRSSet()
+        return KRSSet(KRS(id=str(krs).zfill(10)) for krs in found["krs"])
+
     def companies_to_scrape(self, ctx: Context) -> KRSSet:
         """The companies worth a rejestr.io query, and why each one is here.
 
@@ -949,6 +1031,10 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         starters = KRSSet(self.hardcoded_companies.all_companies_krs.values())
         for krs in starters:
             self._record_reason(krs.id, REASON_HARDCODED)
+
+        for krs in self.owned_per_the_register(ctx):
+            starters.add(krs)
+            self._record_reason(krs.id, REASON_PUBLIC_OWNER)
 
         for blob_name, blob in ctx.io.read_many(
             CloudStorage(prefix="hostname=rejestr.io")
@@ -967,18 +1053,12 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                 except Exception as e:
                     print(f"Error parsing {blob_name}: {e}")
 
-        print("Starters: ", starters)
-
-        graph = CompanyGraph()
-
         if self.args.children:
-            children = KRSSet(
-                KRS(krs) for krs in graph.all_descendants(set(s.id for s in starters))
-            )
+            children = self.owned_by_the_public(ctx)
             for krs in children:
                 self._record_reason(krs.id, REASON_OWNED)
         else:
-            children = starters
+            children = KRSSet()
 
         to_scrape = (starters | children) - already_scraped
         print(f"Starters: {len(starters)} {get_head(starters, 10)}")
@@ -990,7 +1070,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         return to_scrape
 
     def companies_without_register_entry(self, ctx: Context) -> KRSSet:
-        """Companies we hold rejestr.io connections for and no api-krs entry.
+        """Companies the crawl knows and holds no api-krs entry for.
 
         `companies_to_scrape` subtracts every company that has any blob at all,
         so a company first met through a rejestr.io response - the usual way,
@@ -1005,15 +1085,34 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         reverse - buying rejestr.io connections for every company we happen to
         have a register entry for - is 1,642 companies and 164 PLN, and is a
         decision rather than a repair.
+
+        A company a feed only names is in the same state, with less excuse. A
+        rejestr.io response lists the organisations tied to the one asked
+        about - its subsidiaries, its owners, companies sharing a board member
+        - and `CompaniesKRS` keeps each by name and number and nothing else,
+        so nothing about who owns it. That was 6,853 of the 17,629 companies
+        in the 2026-09-28 `company_krs`. Only the odpis says a gmina or a
+        state fund owns one, and once `CompaniesKRS` has read it,
+        `owned_by_the_public` buys its connections.
         """
         scraped = self.already_scraped.latest_scrapes(ctx)
-        if scraped.empty:
-            return KRSSet()
-        method = scraped["method"].astype(str)
-        from_rejestrio = set(scraped.loc[method.str.startswith("rejestrio_org"), "krs"])
-        from_register = set(scraped.loc[method.str.startswith("api_krs"), "krs"])
-        missing = from_rejestrio - from_register
-        print(f"Companies with connections but no register entry: {len(missing)}")
+        from_rejestrio: set[str] = set()
+        from_register: set[str] = set()
+        if not scraped.empty:
+            method = scraped["method"].astype(str)
+            from_rejestrio = set(
+                scraped.loc[method.str.startswith("rejestrio_org"), "krs"]
+            )
+            from_register = set(scraped.loc[method.str.startswith("api_krs"), "krs"])
+        companies = self.companies.read_or_process(ctx)
+        named = set()
+        if companies is not None and "krs" in companies:
+            named = {str(krs).zfill(10) for krs in companies["krs"]}
+        missing = (from_rejestrio | named) - from_register
+        print(
+            f"Companies with no register entry: {len(missing)} "
+            f"({len(from_rejestrio - from_register)} with connections)"
+        )
         return KRSSet(KRS(id=str(krs).zfill(10)) for krs in missing)
 
     def companies_without_names(self, ctx: Context) -> KRSSet:
@@ -1089,6 +1188,24 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         print(f"People to scrape: {len(scraped_people)} {get_head(scraped_people, 10)}")
         return scraped_people
 
+    def companies_told_by_the_odpis(self, ctx: Context) -> set[str]:
+        """The companies whose rejestr.io feeds the odpis on file makes redundant.
+
+        Only where `PeopleKRSCombined` already shows the odpis's people. One it
+        sets aside - outside the graph, struck off one register, older than
+        rejestr.io's crawl - is no reason to stop buying. Nor is one the
+        bulletin has moved past: `jobs.krs_odpis` fetches that again for free,
+        and a run after it finds the company here.
+        """
+        days = odpis_days(self.people_combined.read_or_process(ctx))
+        changes = latest_changes(self.updates.read_or_process(ctx))
+        told = told_by_the_odpis(days, changes)
+        print(
+            f"Companies whose people come from an odpis: {len(days)}, "
+            f"{len(told)} with no entry in the bulletin since"
+        )
+        return told
+
     def process(self, ctx: Context):
         # Each source is named before the call rather than inline, so the
         # reason it stands for can be recorded against the companies it
@@ -1103,19 +1220,29 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
             self._record_reason(krs.id, REASON_MISSING_REGISTER_ENTRY)
         people = self.people_to_scrape(ctx)
 
-        for url in save_org_connections(
-            already_scraped_krs=self.already_scraped.latest_scrapes(ctx),
-            needs_refresh_krs=self.needs_refresh.read_or_process(ctx),
-            already_scraped_people=get_osoby_scraped(
-                ctx, self.person_coverage.people_to_refetch(ctx)
-            ),
-            connections=connections,
-            names=missing_names | missing_entries,
-            people=people,
-            company_reasons=self.company_reasons,
-            person_reasons=self.person_reasons,
-        ):
-            ctx.io.output_entity(url)
+        owed = list(
+            save_org_connections(
+                already_scraped_krs=self.already_scraped.latest_scrapes(ctx),
+                needs_refresh_krs=self.needs_refresh.read_or_process(ctx),
+                already_scraped_people=get_osoby_scraped(
+                    ctx, self.person_coverage.people_to_refetch(ctx)
+                ),
+                connections=connections,
+                names=missing_names | missing_entries,
+                people=people,
+                company_reasons=self.company_reasons,
+                person_reasons=self.person_reasons,
+            )
+        )
+        queries = list(leave_to_the_odpis(owed, self.companies_told_by_the_odpis(ctx)))
+        calls = sum(q.paid_calls() for q in owed) - sum(q.paid_calls() for q in queries)
+        cost = sum(q.cost() for q in owed) - sum(q.cost() for q in queries)
+        print(
+            f"Company feeds left to the odpis: {calls} rejestr.io calls "
+            f"({cost:.2f} PLN)"
+        )
+        for query in queries:
+            ctx.io.output_entity(query)
 
 
 def get_head(s: typing.Iterable[KRS | RejestrIOKey], n: int):

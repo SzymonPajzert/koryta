@@ -28,15 +28,21 @@ export const proposalStatuses = [
 
 /** How each state reads, and in which colour. The vocabulary is lifted from
  * `/admin/rewizje/[id]`, which taught these four words first; only
- * `Zastąpiona` is new, because that page never distinguished it. */
+ * `Zastąpiona` is new, because that page never distinguished it.
+ *
+ * The colours are the ink tokens from `shared/colors.ts`, not Vuetify's
+ * `warning`/`success`/`grey`: a tonal chip paints its colour as the text, and
+ * those three came out at 2.1-2.5:1 on their own tint - the word the chip
+ * exists to say was the hardest thing on the row to read. The same token is
+ * what a bare status icon is drawn in. */
 export const proposalStatusLabels: Record<
   ProposalStatus,
   { label: string; color: string }
 > = {
-  pending: { label: "Oczekuje", color: "warning" },
-  approved: { label: "Zatwierdzona", color: "success" },
-  superseded: { label: "Zastąpiona", color: "grey" },
-  rejected: { label: "Odrzucona", color: "error" },
+  pending: { label: "Oczekuje", color: "ink-warning" },
+  approved: { label: "Zatwierdzona", color: "ink-success" },
+  superseded: { label: "Zastąpiona", color: "ink-neutral" },
+  rejected: { label: "Odrzucona", color: "ink-danger" },
 };
 
 /** Why a proposal is in the state it is in, for the reader who wonders. */
@@ -119,7 +125,8 @@ export function matchesStoredStatus(
  */
 export type ProposalKind = "edit" | "create" | "removal";
 
-/** One row of `/admin/rewizje/kolejka` or of the card on `/profil`. */
+/** One row of the review queue, of an entry's revision history, or of the
+ * card on `/profil`. */
 export interface Proposal {
   /** The revision id. Also the permalink key. */
   id: string;
@@ -141,7 +148,8 @@ export interface Proposal {
   kind: ProposalKind;
   /** Only on a removal: why the author thinks the entry should go. */
   deleteReason: string | null;
-  /** Capped at `MAX_INLINE_CHANGES`; `changeCount` is the number before the cap. */
+  /** Capped at `MAX_INLINE_CHANGES` unless the endpoint asked for every field
+   * (an entry's history does); `changeCount` is the number before the cap. */
   changes: RevisionChange[];
   changeCount: number;
   updateTime: string | null;
@@ -162,6 +170,11 @@ export interface Proposal {
   statusDerived: boolean;
   rejectReason: string | null;
   reviewTime: string | null;
+  /** Who approved or rejected it, as a uid. Given on the same terms as
+   * `author` - to admins only - and missing from rows built before it existed,
+   * hence optional. Null on the pipeline revisions approved as they were
+   * written, which nobody reviewed. */
+  reviewUser?: string | null;
   /** The target changed after this proposal was filed, so approving it would
    * write an older snapshot over whatever landed since. `applyRevision` writes
    * with `set`, not `merge`, so this really does undo the newer edits - it is

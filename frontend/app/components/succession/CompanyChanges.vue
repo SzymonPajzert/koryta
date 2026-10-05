@@ -335,19 +335,38 @@ import type {
 
 const props = defineProps<{ companyId: string; companyName: string }>();
 
-/** The two roles the register fills at almost every company, in the order a
- * reader looks for them. Everything else - prokurent, likwidator, a role
+/** The roles a reader looks for first, in the order they look: who runs the
+ * company, who stands in for them, the rest of the board, then whoever
+ * supervises it. Everything else - prokurent, likwidator, a dyrektor biura
  * somebody typed by hand - sorts alphabetically after them. Matched on the
  * lowercased name, the way `shared/succession.ts` matches a seat.
  *
- * Three entries for two roles: the supervisory organ reaches this card under
- * whichever name the institution's own form gives it (`displayRole`, applied
- * by `/api/edges/successions`), and a hospital's rada społeczna belongs in the
+ * The prezes and the deputies used to be in that alphabetical tail, so PKP's
+ * current board read Zarząd, dyrektor…, naczelnik…, prezes, zastępca prezesa -
+ * „Kolejność osób - prezes, zastępca prezesa, potem zarząd” is the report.
+ * They are matched by how the title starts, because the register says
+ * „Prezes Zarządu" where somebody adding a relation by hand says „prezes", and
+ * both are the same seat - up to a space or the end of the title, so that
+ * „prezes" does not also take a „prezesa…" of some other kind.
+ *
+ * Two entries for the supervisory organ: it reaches this card under whichever
+ * name the institution's own form gives it (`displayRole`, applied by
+ * `/api/edges/successions`), and a hospital's rada społeczna belongs in the
  * same place a spółka's rada nadzorcza does. No company has both. */
-const ROLE_ORDER = ["zarząd", "rada nadzorcza", "rada społeczna"];
+const ROLE_ORDER: RegExp[] = [
+  /^prezes( |$)/,
+  /^(wiceprezes|zastępca prezesa)( |$)/,
+  /^(zarząd|członek zarządu)$/,
+  /^rada nadzorcza$/,
+  /^rada społeczna$/,
+];
 
 /** What a role with no name is called on screen. The pairing drops spells
- * whose role nobody recorded, so this only ever labels a current post. */
+ * whose role nobody recorded, so this only ever labels a current post. The
+ * endpoint leaves out a role-less copy of a prokura that also arrived as
+ * „Prokurent" (see `withoutRedundantRoleless`), which used to put one person
+ * under both headings; a role-less post beside a zarząd seat is a different
+ * post, and keeps this label. */
 const NO_ROLE = "Funkcja niepodana w rejestrze";
 
 const route = useRoute();
@@ -472,12 +491,12 @@ function roleKey(role: string | null): string {
 }
 
 function roleRank(key: string): number {
-  const at = ROLE_ORDER.indexOf(key);
+  const at = ROLE_ORDER.findIndex((pattern) => pattern.test(key));
   return at < 0 ? ROLE_ORDER.length : at;
 }
 
-/** Zarząd, Rada Nadzorcza, then whatever else the register holds, in Polish
- * collation. */
+/** Prezes, the deputies, Zarząd, Rada Nadzorcza, then whatever else the
+ * register holds, in Polish collation. */
 function byRole<T>(groups: Map<string, { role: string; items: T[] }>) {
   return [...groups.entries()]
     .sort(

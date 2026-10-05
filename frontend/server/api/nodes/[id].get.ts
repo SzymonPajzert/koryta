@@ -3,6 +3,7 @@ import { getApp } from "firebase-admin/app";
 import { nodeTypes, pageIsPublic } from "~~/shared/model";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { resolveMergedNode } from "~~/server/utils/merge";
+import { dropSearchIndex } from "~~/server/utils/fetch";
 import { z } from "zod";
 import type { Node } from "~~/shared/model";
 
@@ -14,7 +15,12 @@ const responseValidator = z.object({
   name: z.string(),
   type: z.enum(nodeTypes),
   // TODO revision elements are either string or complex object
-  revision_id: z.union([z.string(), z.object({ path: z.string() })]).optional(),
+  //
+  // `null` as well as absent: null is how a page still waiting for its first
+  // review is marked, and /api/nodes/pending queries on exactly that. Under
+  // `.optional()` every such page threw a ZodError here - a 500 where a 404
+  // belonged, and most of production's 5xx in September 2026.
+  revision_id: z.union([z.string(), z.object({ path: z.string() })]).nullish(),
   published: z.boolean().optional(),
 });
 
@@ -38,14 +44,18 @@ export default authCachedEventHandler(async (event) => {
       message: `Node not found for id=${id} and latest=${query.latest}`,
     });
   }
-  // TODO how to check the response has a correct shape
-  const response: Node = responseValidator.parse(node);
-  if (!pageIsPublic(response) && !query.latest) {
+  // Ahead of the shape check rather than after it. Whether a page may be read
+  // is `published` and `deleted`, which are there whatever else the document
+  // holds, so a page nobody may read is a 404 however it is shaped - not a
+  // 500 that tells a crawler to come back and try again.
+  if (!pageIsPublic(node) && !query.latest) {
     throw createError({
       statusCode: 404,
       message: `Page ${id} is not approved`,
     });
   }
+  // TODO how to check the response has a correct shape
+  responseValidator.parse(node);
 
   return { node };
 });
@@ -95,7 +105,7 @@ async function getEntity(db: FirebaseFirestore.Firestore, id: string) {
   }
   const result = {
     id: nodeDoc.id,
-    ...nodeDoc.data(),
+    ...dropSearchIndex(nodeDoc.data() ?? {}),
   } as Node;
   if (result.revision_id) {
     if (typeof result.revision_id === "object") {

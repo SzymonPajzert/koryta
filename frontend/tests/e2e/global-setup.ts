@@ -47,6 +47,8 @@ const LOGGED_IN_ROUTES = [
   // first few seconds.
   "/admin/krawedzie",
   "/admin/opinie",
+  // The jobs overview, whose spec checks the rows as soon as it lands.
+  "/admin/procesy",
   // The id does not have to resolve; the route's own chunk is what we want
   // compiled before a spec follows a revision link into it.
   "/admin/rewizje/warmup",

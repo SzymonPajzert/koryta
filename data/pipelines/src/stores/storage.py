@@ -1,7 +1,10 @@
 import argparse
 import atexit
+import base64
 import contextlib
+import hashlib
 import io
+import json
 import os
 import shutil
 import tarfile
@@ -9,6 +12,7 @@ import threading
 import time
 import typing
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import cached_property
 from typing import Generator
@@ -25,11 +29,41 @@ from uuid_extensions import uuid7str  # type: ignore
 from entities.util import NormalizedParse
 from scrapers.stores import IO, CloudStorage
 from scrapers.stores.file import DownloadableFile
-from stores.user import get_username, pick_user
+from stores import config
+from stores.user import get_username, interactive, pick_user
 
 CRAWLED_BUCKET = "koryta-pl-crawled"
 SHARED_BUCKET = "koryta-pl-sharedcache"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
+
+#: Guards `Client._listings`: the free scrape uploads from a pool of threads.
+_listings_lock = threading.Lock()
+
+#: The only two fields a listing is read for.
+LISTING_FIELDS = "items(name,size),nextPageToken"
+
+
+def _backup_datetime(blob) -> str:
+    """The `datetime=` segment of a backup's name; ISO, so it sorts by time."""
+    for part in blob.name.split("/"):
+        if part.startswith("datetime="):
+            return part.removeprefix("datetime=")
+    return ""
+
+
+def crawl_blob_name(
+    source: NormalizedParse | str, include_query: bool, day: str
+) -> str:
+    """The name `Client.upload` stores a crawl of `source` under on `day`."""
+    if isinstance(source, str):
+        source = NormalizedParse.parse(source)
+    path = source.path if source.path else "index"
+    if include_query:
+        for k, v in sorted(source.query.items(), key=lambda item: item[0]):
+            # We split the keys, so they create folders as well
+            path += f"/?{k}={v}"
+    name = f"hostname={source.hostname}/{path}/date={day}"
+    return name.replace("//", "/").rstrip("/")
 
 
 _GCS_POOL_SIZE = 256  # generous cap; pool is lazy so unused slots cost nothing
@@ -71,7 +105,9 @@ class Client:
                 ) from e
             raise
 
-    def download_from_gcs(self, blob_name: str, filename: str, binary: bool):
+    def download_from_gcs(
+        self, blob_name: str, filename: str, binary: bool, bucket: str | None = None
+    ):
         """Downloads a blob from GCS to a local path.
 
         Written aside and renamed on success, as `stores.download` already does
@@ -82,8 +118,10 @@ class Client:
         silent, because half a JSON document raises a parse error somewhere
         else entirely.
         """
-        bucket = self.storage_client.bucket(CRAWLED_BUCKET)
-        blob = bucket.blob(blob_name)
+        # TODO remove the default and always set it in the caller
+        # Alternatively, make it receive an object configuring the read.
+        bucket_name = bucket or CRAWLED_BUCKET
+        blob = self.storage_client.bucket(bucket_name).blob(blob_name)
         partial = f"{filename}.part"
         try:
             if not binary:
@@ -99,27 +137,33 @@ class Client:
             # Best effort: a leftover .part is inert, but it is still litter.
             with contextlib.suppress(OSError):
                 os.remove(partial)
-            print(f"Failed to download gs://{CRAWLED_BUCKET}/{blob_name}: {e}")
+            print(f"Failed to download gs://{bucket_name}/{blob_name}: {e}")
             raise
 
     def cached_storage(
-        self, blob_name: str, binary: bool, size: int | None = None
+        self,
+        blob_name: str,
+        binary: bool,
+        size: int | None = None,
+        bucket: str | None = None,
     ) -> DownloadableFile:
         filename = blob_name.replace("/", ".")
+        if bucket and bucket != CRAWLED_BUCKET:
+            # The local cache is one flat directory keyed by object name, and
+            # two buckets may hold the same name.
+            filename = f"bucket={bucket}.{filename}"
         return DownloadableFile(
-            f"gs://{CRAWLED_BUCKET}/{blob_name}",
+            f"gs://{bucket or CRAWLED_BUCKET}/{blob_name}",
             filename,
             download_lambda=lambda path: self.download_from_gcs(
-                blob_name, path, binary
+                blob_name, path, binary, bucket
             ),
             binary=binary,
             size=size,
         )
 
-    def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
-        """Lists blobs in a GCS bucket with a given prefix."""
-        bucket = self.storage_client.bucket(CRAWLED_BUCKET)
-        prefix = ref.prefix
+    def _listing_glob(self, bucket, ref: CloudStorage) -> str | None:
+        """The match_glob a listing of `ref` filters by, if any."""
         glob = None
 
         if len(ref.max_namespaces) > 0:
@@ -153,15 +197,189 @@ class Client:
                 + "**".join(f"{k}={v}" for k, v in ref.namespace_values.items())
                 + "**"
             )
+        return glob
 
-        # Now list all blobs recursively under the chosen prefix
-        print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
-        blobs = bucket.list_blobs(prefix=prefix, match_glob=glob)
-        for blob in blobs:
-            # blob.size comes from the listing response, so carrying it here
-            # costs no extra request and saves a caller a download each time
-            # it needs to tell a failed crawl from a real one.
-            yield self.cached_storage(blob.name, ref.binary, size=blob.size)
+    def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
+        """Lists blobs in a GCS bucket with a given prefix."""
+        bucket = self.storage_client.bucket(ref.bucket or CRAWLED_BUCKET)
+        prefix = ref.prefix
+        glob = self._listing_glob(bucket, ref)
+
+        key = (ref.bucket or CRAWLED_BUCKET, prefix, glob)
+        listed = self._listing(key)
+        if listed is not None:
+            print(f"Listed {prefix} {time.monotonic() - listed[0]:.0f} s ago; reusing")
+            for name, size in listed[1]:
+                yield self.cached_storage(
+                    name, ref.binary, size=size, bucket=ref.bucket
+                )
+            return
+
+        started = time.monotonic()
+        seen: list[tuple[str, int | None]] | None = []
+        bounds = self._range_bounds(key) if glob is None else None
+        if bounds:
+            print(f"Listing {prefix} as {len(bounds) + 1} ranges at once")
+            seen = self._list_ranges(bucket, prefix, bounds)
+            for name, size in seen:
+                yield self.cached_storage(
+                    name, ref.binary, size=size, bucket=ref.bucket
+                )
+        else:
+            # Now list all blobs recursively under the chosen prefix
+            print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
+            # Only the two fields read below. Unmasked, every item carries the
+            # object's whole metadata: 83 s against 55 s for the 32k api-krs
+            # objects, and listings egressed 2.7x what reads did in the 30 days
+            # to 2026-09-11.
+            blobs = bucket.list_blobs(
+                prefix=prefix,
+                match_glob=glob,
+                fields=LISTING_FIELDS,
+            )
+            for blob in blobs:
+                if seen is not None:
+                    seen.append((blob.name, blob.size))
+                    if len(seen) > self.LISTING_KEPT_AT_MOST:
+                        seen = None
+                # blob.size comes from the listing response, so carrying it here
+                # costs no extra request and saves a caller a download each time
+                # it needs to tell a failed crawl from a real one.
+                yield self.cached_storage(
+                    blob.name, ref.binary, size=blob.size, bucket=ref.bucket
+                )
+        # Kept only once the caller has read it to the end: a listing it
+        # stopped part way through is not the whole prefix.
+        if seen is not None and len(seen) <= self.LISTING_KEPT_AT_MOST:
+            with _listings_lock:
+                self._listings()[key] = (started, seen)
+            if glob is None:
+                self._keep_range_bounds(key, seen)
+
+    #: Ranges a big prefix is listed in at once. Listing is all waiting: GCS
+    #: takes ~1.3 s to answer each page of 1,000 names, so the 43k api-krs
+    #: objects took 65 s in turn on 2026-10-02, and 6.4 s as sixteen ranges.
+    LISTING_RANGES = 16
+
+    #: A prefix is split only from this many objects; below it, one listing of
+    #: a few pages is about as quick.
+    LISTING_SPLIT_FROM = 16_000
+
+    def _ranges_file(self, key) -> str:
+        bucket, prefix, _ = key
+        digest = hashlib.sha1(f"{bucket}/{prefix}".encode()).hexdigest()[:16]
+        return os.path.join(config.DOWNLOADED_DIR, ".listing-ranges", f"{digest}.json")
+
+    def _range_bounds(self, key) -> list[str] | None:
+        """Where the last listing of this prefix split into equal ranges.
+
+        Any boundaries cover the prefix whole - the ranges run from one to the
+        next and the first and last are open - so stale ones only list
+        unevenly. A prefix never listed here, as on a fresh container, has
+        none, and is listed in one go.
+        """
+        try:
+            with open(self._ranges_file(key), encoding="utf-8") as f:
+                kept = json.load(f)
+        except (OSError, ValueError):
+            return None
+        bounds = kept.get("bounds") if isinstance(kept, dict) else None
+        if kept.get("prefix") != key[1] or not isinstance(bounds, list):
+            return None
+        if not all(isinstance(b, str) for b in bounds) or bounds != sorted(set(bounds)):
+            return None
+        return bounds or None
+
+    def seed_listing_ranges(
+        self, ref: CloudStorage, names: typing.Iterable[str]
+    ) -> None:
+        """Split the next listing of `ref` by names known another way.
+
+        For a prefix this machine has never listed - every prefix, on a fresh
+        container - when the compressed mirror has just named most of what is
+        under it. A prefix already split is left as its own last listing left it.
+        """
+        if ref.max_namespaces or ref.namespace_values:
+            return  # a filtered listing is never split
+        key = (ref.bucket or CRAWLED_BUCKET, ref.prefix, None)
+        if self._range_bounds(key) is not None:
+            return
+        self._keep_range_bounds(
+            key, [(name, None) for name in sorted(names) if name.startswith(ref.prefix)]
+        )
+
+    def _keep_range_bounds(self, key, listed: list[tuple[str, int | None]]) -> None:
+        if len(listed) < self.LISTING_SPLIT_FROM:
+            return
+        n = self.LISTING_RANGES
+        bounds = sorted({listed[len(listed) * i // n][0] for i in range(1, n)})
+        path = self._ranges_file(key)
+        part = f"{path}.part"
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(part, "w", encoding="utf-8") as f:
+                json.dump({"bucket": key[0], "prefix": key[1], "bounds": bounds}, f)
+            os.replace(part, path)
+        except OSError as e:
+            print(f"Could not keep the listing ranges of {key[1]}: {e}")
+
+    def _list_ranges(
+        self, bucket, prefix: str, bounds: list[str]
+    ) -> list[tuple[str, int | None]]:
+        """The prefix's names and sizes in listing order, its ranges listed at once."""
+        edges: list[str | None] = [None, *bounds, None]
+        # Asked first by sixteen threads at once, a missing token was fetched
+        # sixteen times, and urllib3 warned of a full pool seven times a run.
+        self._fresh_token()
+
+        def one(i: int) -> list[tuple[str, int | None]]:
+            blobs = bucket.list_blobs(
+                prefix=prefix,
+                start_offset=edges[i],
+                end_offset=edges[i + 1],
+                fields=LISTING_FIELDS,
+            )
+            return [(blob.name, blob.size) for blob in blobs]
+
+        with ThreadPoolExecutor(len(edges) - 1) as pool:
+            parts = list(pool.map(one, range(len(edges) - 1)))
+        return [item for part in parts for item in part]
+
+    def _fresh_token(self) -> None:
+        """An access token now, rather than one per thread a moment later."""
+        credentials = getattr(self.storage_client, "_credentials", None)
+        if credentials is not None and not credentials.valid:
+            credentials.refresh(google.auth.transport.requests.Request())
+
+    #: How long a listing is reused. While a run builds its tree it lists the
+    #: same prefixes again and again within minutes - rejestr.io and api-krs
+    #: three times each, 205 of the free scrape's 314 s of listing on
+    #: 2026-10-02. What this run writes it forgets at once (`_forget_listings`);
+    #: what other machines write in the meantime waits for the next listing.
+    LISTING_REUSED_FOR = 30 * 60
+
+    #: Listings longer than this are not kept: a crawl prefix of millions of
+    #: pages would hold its names in memory for little gain.
+    LISTING_KEPT_AT_MOST = 500_000
+
+    def _listings(self) -> dict:
+        # Not set in __init__: tests build a Client without calling it.
+        return self.__dict__.setdefault("_listing_memo", {})
+
+    def _listing(self, key) -> tuple[float, list[tuple[str, int | None]]] | None:
+        with _listings_lock:
+            listed = self._listings().get(key)
+            if listed and time.monotonic() - listed[0] > self.LISTING_REUSED_FOR:
+                del self._listings()[key]
+                listed = None
+        return listed
+
+    def _forget_listings(self, bucket: str, blob_name: str) -> None:
+        """Drop every kept listing a new object under this name belongs in."""
+        with _listings_lock:
+            for key in [k for k in self._listings() if k[0] == bucket]:
+                if blob_name.startswith(key[1]):
+                    del self._listings()[key]
 
     def iterate_blobs(self, io: IO, ref: CloudStorage):
         """List blobs for a given hostname and yield their path and JSON data."""
@@ -181,20 +399,15 @@ class Client:
         content_type,
         include_query=False,
         verbose=True,
-    ):
-        if isinstance(source, str):
-            source = NormalizedParse.parse(source)
+    ) -> bool:
+        """Store a crawl under today's Warsaw date; False when it could not.
+
+        Prints the error and carries on rather than raising, which the crawler
+        relies on. Callers that have to count failures read the result.
+        """
         try:
-            now = datetime.now(warsaw_tz)
-            path = source.path if source.path else "index"
-            if include_query:
-                for k, v in sorted(source.query.items(), key=lambda item: item[0]):
-                    # We split the keys, so they create folders as well
-                    path += f"/?{k}={v}"
-            date = f"{now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}"
-            destination_blob_name = f"hostname={source.hostname}/{path}/date={date}"
-            destination_blob_name = destination_blob_name.replace("//", "/")
-            destination_blob_name = destination_blob_name.rstrip("/")
+            day = datetime.now(warsaw_tz).date().isoformat()
+            destination_blob_name = crawl_blob_name(source, include_query, day)
             bucket = self.storage_client.bucket(CRAWLED_BUCKET)
             blob = bucket.blob(destination_blob_name)
             try:
@@ -207,6 +420,8 @@ class Client:
                     content_type=f"{content_type}; charset=utf-8",
                     if_generation_match=0,
                 )
+                self._forget_listings(CRAWLED_BUCKET, destination_blob_name)
+                self.remember(destination_blob_name, data)
             except gcs_exceptions.PreconditionFailed:
                 pass  # already uploaded, nothing to do
 
@@ -216,10 +431,11 @@ class Client:
                 print(
                     f"Successfully uploaded data to: {full_path}. Go to https://console.cloud.google.com/storage/browser/_details/{file_path}"
                 )
+            return True
 
         except Exception as e:
             print(f"An error occurred: {e}")
-            return None
+            return False
 
     def batch_upload(
         self,
@@ -230,6 +446,60 @@ class Client:
         verbose=True,
     ) -> str:
         raise NotImplementedError("Use BatchClient instead")
+
+    def create_object(
+        self, bucket: str, blob_name: str, data: bytes, content_type: str
+    ) -> str:
+        """Writes an object that must not exist yet, and raises if it cannot.
+
+        Unlike `upload`, which prints and carries on, and which takes an
+        existing object for success: a job writing its state has to know
+        that the write landed, and a name it reuses is a bug, not a retry.
+        Create-only, so a service account without delete can do it.
+
+        One 412 is not a reused name: the library retries a request whose
+        response was lost, and the retry of a create that did land is refused.
+        The same bytes already under the name are that write.
+        """
+        blob = self.storage_client.bucket(bucket).blob(blob_name)
+        try:
+            blob.upload_from_string(
+                data, content_type=content_type, if_generation_match=0
+            )
+        except gcs_exceptions.PreconditionFailed:
+            blob.reload()
+            if blob.md5_hash != base64.b64encode(hashlib.md5(data).digest()).decode():
+                raise
+        # The same bytes are under the name either way.
+        self._forget_listings(bucket, blob_name)
+        self.remember(blob_name, data, bucket=bucket)
+        return f"gs://{bucket}/{blob_name}"
+
+    def remember(
+        self, blob_name: str, data: str | bytes, bucket: str | None = None
+    ) -> None:
+        """Put what was just uploaded where reading it back would download it to.
+
+        Runs read what earlier runs wrote - CompaniesKRS every api-krs answer,
+        the odpis pipelines every PDF - and an upload left the cache without
+        it, so the next run on the same machine fetched each one back: 540
+        objects at 8 a second on 2026-10-02, the answers stored by the run just
+        before. Best effort: a cache that cannot take it only means a slower
+        read later.
+        """
+        ref = self.cached_storage(blob_name, binary=True, bucket=bucket)
+        path = os.path.join(config.DOWNLOADED_DIR, ref.filename)
+        if os.path.exists(path):
+            return
+        part = f"{path}.part"
+        try:
+            with open(part, "wb") as out:
+                out.write(data.encode("utf-8") if isinstance(data, str) else data)
+            os.replace(part, path)
+        except OSError as e:
+            print(f"Could not keep {blob_name} in the local cache: {e}")
+            with contextlib.suppress(OSError):
+                os.remove(part)
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         """Lists available values for a given namespace (e.g. 'date')."""
@@ -335,8 +605,9 @@ class Client:
         """The most recent versioned backup blob for a filename.
 
         Prefers backups from the current user. If none exist for the current
-        user, lists available users and prompts for a choice. Raises
-        FileNotFoundError when no backups exist at all.
+        user, lists available users and prompts for a choice - or, with nobody
+        at a terminal to choose, takes the newest backup whoever wrote it.
+        Raises FileNotFoundError when no backups exist at all.
         """
         prefix = f"filename={filename}/"
         bucket = self.storage_client.bucket(SHARED_BUCKET)
@@ -361,6 +632,15 @@ class Client:
                 user_blobs.setdefault(user, []).append(blob)
 
         current_user = get_username()
+        if current_user not in user_blobs and not interactive():
+            # A scheduled run under its own name has no backups of what it
+            # never builds itself, and nobody to ask whose to take.
+            newest = max(
+                (blob for named in user_blobs.values() for blob in named),
+                key=_backup_datetime,
+            )
+            print(f"No backup of {filename} by {current_user}; taking the newest")
+            return newest
         chosen_user = pick_user(current_user, list(user_blobs.keys()))
 
         # Pick the latest backup (sorted by datetime in the blob name)
@@ -404,6 +684,8 @@ class Client:
         latest_blob = self._latest_backup_blob(filename)
         print(f"Downloading backup from gs://{SHARED_BUCKET}/{latest_blob.name}")
 
+        # A pipeline restored before it ever ran here has no directory yet.
+        os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
         tmp_path = dest_path + ".bak"
         with open(tmp_path, "wb") as f:
             latest_blob.download_to_file(f)
@@ -414,8 +696,12 @@ class Client:
                         src = tar.extractfile(member)
                         if src is None:
                             continue
-                        with open(dest_path, "wb") as out:
+                        # Renamed into place: a restore cut short must not
+                        # leave a short file that the next run reads as done.
+                        part_path = dest_path + ".part"
+                        with open(part_path, "wb") as out:
                             shutil.copyfileobj(src, out)
+                        os.replace(part_path, dest_path)
                         return
             raise FileNotFoundError(
                 f"Backup archive at '{latest_blob.name}' contains no data file."

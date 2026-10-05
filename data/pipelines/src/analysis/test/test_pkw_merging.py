@@ -2,6 +2,7 @@ import duckdb
 import pandas as pd
 import pytest
 
+from analysis.people_pkw_merged import drop_contradictory_candidacies
 from analysis.utils.tables import create_people_table
 
 
@@ -104,3 +105,43 @@ def test_teresa_zieba_merging(con):
     assert len(df) == 1, f"Expected 1 record, found {len(df)}"
     # The birth year should be one of them (likely the MAX, 1959)
     assert df.iloc[0]["birth_year"] in [1958, 1959]
+
+
+def test_a_sejmik_candidacy_is_not_a_second_place(con):
+    # 1400 is how a mazowieckie sejmik candidacy comes out at powiat depth,
+    # 1465 is Warszawa and 2400 is the śląskie sejmik.
+    def standing(*powiats):
+        return [
+            {
+                "election_year": "2006",
+                "election_type": "samorządu",
+                "teryt_candidacy_powiat": powiat,
+                "teryt_powiat": [powiat],
+            }
+            for powiat in powiats
+        ]
+
+    people = pd.DataFrame(  # noqa: F841
+        {
+            "full_name": ["sejmik and warszawa", "two sejmiki", "two powiats"],
+            "elections": [
+                standing("1400", "1465"),
+                standing("1400", "2400"),
+                standing("1465", "2461"),
+            ],
+        }
+    )
+    con.execute("CREATE TABLE people_pkw_merged AS SELECT * FROM people")
+
+    drop_contradictory_candidacies(con)
+
+    ambiguous = dict(
+        con.execute(
+            "SELECT full_name, elections_ambiguous FROM people_pkw_merged"
+        ).fetchall()
+    )
+    assert ambiguous == {
+        "sejmik and warszawa": False,
+        "two sejmiki": True,
+        "two powiats": True,
+    }

@@ -61,7 +61,9 @@ class Companies(Pipeline[Company]):
         )
 
         outputs = []
-        for krs_id in all_krs:
+        # Sorted, so the same companies are written in the same order every
+        # run. key=str: a NaN, skipped just below, does not compare with a str.
+        for krs_id in sorted(all_krs, key=str):
             if pd.isna(krs_id):
                 continue
             assert isinstance(krs_id, str), " ".join(

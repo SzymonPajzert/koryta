@@ -300,6 +300,35 @@ def test_a_candidacy_that_would_learn_a_committee_is_kept():
     assert snapshot.changes(payload(elections=[with_committee])) == [ENRICHED_CANDIDACY]
 
 
+def test_a_candidacy_that_would_learn_it_was_won_is_kept():
+    """What the backfill turns on, and what would silently drop it.
+
+    `--only-changed` decides what an upload would write, so a result the
+    prediction does not model is a person dropped from the run that was meant
+    to tell 15,681 stored candidacies what happened to them.
+    """
+    snapshot = SiteSnapshot(nodes(), edges(STORED_CANDIDACY))
+    won = dict(CANDIDACY, elected=True)
+
+    assert snapshot.changes(payload(elections=[won])) == [ENRICHED_CANDIDACY]
+
+
+def test_a_candidacy_already_marked_won_is_dropped():
+    stored = dict(STORED_CANDIDACY, elected=True)
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    won = dict(CANDIDACY, elected=True)
+
+    assert snapshot.changes(payload(elections=[won])) == []
+
+
+def test_a_recorded_defeat_is_not_something_the_upload_would_write():
+    """`createElection` writes only a win, so predicting one would be wrong."""
+    snapshot = SiteSnapshot(nodes(), edges(STORED_CANDIDACY))
+    lost = dict(CANDIDACY, elected=False)
+
+    assert snapshot.changes(payload(elections=[lost])) == []
+
+
 def test_a_committee_that_differs_only_in_case_is_dropped():
     """PKW writes the same committee differently from one year's file to the next."""
     stored = dict(STORED_CANDIDACY, committee="KW  Prawo i Sprawiedliwość")

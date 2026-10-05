@@ -4,6 +4,15 @@ from scrapers.stores.file import DownloadableFile as FileSource
 
 class NamesCountByRegion(Pipeline):
     filename = "names_count_by_region"
+    # A voivodeship's TERYT, written zero-padded and only meaningful
+    # zero-padded. Without the pin a restore from the shared cache re-infers it
+    # as an integer, and `PeopleMerged` then compares PKW's text codes against
+    # integers: DuckDB casts every one of them, and the empty code PKW gives
+    # 13,343 candidates - mostly from the Sejm lists of 1991, 1993 and 1997 -
+    # ended the run with "Could not convert string '' to INT64". The restore
+    # also writes the integers back to disk, as 2 for "02". See
+    # scrapers/krs/columns.py for the two read paths and why they disagree.
+    dtype = {"teryt": str}
     surnames: list[FileSource] = [
         FileSource(
             # https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table

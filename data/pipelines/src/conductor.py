@@ -1,7 +1,9 @@
+import collections
 import io
 import logging
 import os
 import typing
+from concurrent.futures import Future, ThreadPoolExecutor
 from functools import cached_property
 
 import duckdb
@@ -30,7 +32,7 @@ from scrapers.stores.file import (
     NotInMirrorError,
     VersionedBackup,
 )
-from stores import file
+from stores import config, file
 from stores.config import PROJECT_ROOT
 from stores.download import CompressedMirror, FileSource
 from stores.duckdb import EntityDumper
@@ -65,20 +67,28 @@ class Conductor(IO):
         """
         return BatchClient() if self._batch_upload else CloudStorageClient()
 
+    def _count_download(self):
+        if self.progress_bar is None or not self.continous_download:
+            self.progress_bar = tqdm(desc="Downloading files")
+            self.continous_download = True
+        assert self.progress_bar is not None
+        self.progress_bar.update(1)
+
     def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, DownloadableFile):
             dfs = FileSource(fs)
+            if fs.size == 0 and not dfs.downloaded():
+                # The listing says there is nothing in it - a crawl stored as
+                # failed - so there is nothing to fetch either. 1,511 of them
+                # were fetched one GET each by a dry run on 2026-10-02.
+                return file.FromBytesIO(b"", fs.url)
             if not dfs.downloaded():
                 logging.info("Downloading %s", fs.url)
                 # Downloads that are skipped here -- a --cache-only miss raises
                 # inside download() -- must not count as downloads, so the bar
                 # is only touched once the file actually landed.
                 dfs.download()
-                if self.progress_bar is None or not self.continous_download:
-                    self.progress_bar = tqdm(desc="Downloading files")
-                    self.continous_download = True
-                assert self.progress_bar is not None
-                self.progress_bar.update(1)
+                self._count_download()
             else:
                 logging.info("Reading from cache %s", dfs.downloaded_path)
             try:
@@ -135,6 +145,7 @@ class Conductor(IO):
     def read_many(self, path: DataRef) -> typing.Iterable[tuple[str, File]]:
         if (
             isinstance(path, CloudStorage)
+            and path.bucket is None
             and not path.max_namespaces
             and self.mirror.bulk_reads_enabled
         ):
@@ -154,17 +165,88 @@ class Conductor(IO):
                     f"Reading {host} from the compressed mirror: "
                     + ", ".join(p.name for p in tar_paths)
                 )
+                archived: set[str] = set()
                 for name, data in self.mirror.iter_objects(host):
+                    # The archive holds the whole host; a narrower prefix
+                    # wants only what a listing of it would have returned.
+                    if not name.startswith(path.prefix):
+                        continue
+                    archived.add(name)
                     # Spelled exactly as list_files spells it. Callers parse
                     # these: add_company_source strips the gs:// prefix off to
                     # decide provenance, and silently records the wrong source
                     # rather than failing if it is not there.
                     url = f"gs://{CRAWLED_BUCKET}/{name}"
                     yield url, file.FromBytesIO(data, url)
+
+                # The archive is only as new as its last build, and the bucket
+                # has gone on filling since - on 2026-09-28 the newest archive
+                # was two months old and missed 21% of rejestr.io and 41% of
+                # api-krs. Stopping at the archive silently served the data as
+                # it stood on the build date. Everything the listing has that
+                # the archive does not is fetched object by object, so the set
+                # is the one list_files gives, and only the gap is slow.
+                # The archive's names also say where to split that listing,
+                # which a machine that never listed the prefix cannot know.
+                self.storage.seed_listing_ranges(path, archived)
+                newer = (
+                    ref
+                    for ref in self.list_files(path)
+                    if getattr(ref, "url", "").removeprefix(f"gs://{CRAWLED_BUCKET}/")
+                    not in archived
+                )
+                yield from self._read_each(newer)
                 return
 
-        for ref in self.list_files(path):
-            yield getattr(ref, "url", str(ref)), self.read_data(ref)
+        yield from self._read_each(self.list_files(path))
+
+    #: How many objects `_read_each` fetches at once. One GET for a small
+    #: object costs about a third of a second, so one at a time a runner
+    #: fetches ~3 a second, and the nightly spent its whole two hours on the
+    #: first 22k of CompaniesKRS's crawls.
+    READ_MANY_WORKERS = 32
+
+    def _read_each(
+        self, refs: typing.Iterable[DataRef]
+    ) -> typing.Iterable[tuple[str, File]]:
+        """read_data on each ref, in order, with the downloads running ahead.
+
+        Only the download is handed to the pool. read_data - and the progress
+        bar it keeps - stays on this thread, where it finds the file already
+        in the cache. A failed download raises when its turn comes, as it did
+        when this was a plain loop.
+        """
+
+        def fetch(ref: DataRef) -> bool:
+            if not isinstance(ref, DownloadableFile) or ref.size == 0:
+                return False
+            source = FileSource(ref)
+            if source.downloaded():
+                return False
+            logging.info("Downloading %s", ref.url)
+            source.download()
+            return True
+
+        # Bounded, so a caller that stops early has not queued the whole
+        # prefix, and a failure surfaces while little else is in flight.
+        ahead: collections.deque[tuple[DataRef, Future[bool]]] = collections.deque()
+
+        def take() -> tuple[str, File]:
+            ref, fetched = ahead.popleft()
+            if fetched.result():
+                self._count_download()
+            return getattr(ref, "url", str(ref)), self.read_data(ref)
+
+        with ThreadPoolExecutor(self.READ_MANY_WORKERS) as pool:
+            try:
+                for ref in refs:
+                    ahead.append((ref, pool.submit(fetch, ref)))
+                    if len(ahead) >= 4 * self.READ_MANY_WORKERS:
+                        yield take()
+                while ahead:
+                    yield take()
+            finally:
+                pool.shutdown(cancel_futures=True)
 
     def output_entity(self, entity, sort_by=[]):
         try:
@@ -198,8 +280,10 @@ class Conductor(IO):
             with open(path, "wb") as f:
                 content(f)
 
-    def upload(self, source, data, content_type, include_query=False, verbose=True):
-        self.storage.upload(
+    def upload(
+        self, source, data, content_type, include_query=False, verbose=True
+    ) -> bool:
+        return self.storage.upload(
             source, data, content_type, include_query=include_query, verbose=verbose
         )
 
@@ -229,6 +313,27 @@ class Conductor(IO):
 
     def restore_backup_to_path(self, filename: str, dest_path: str) -> None:
         self.storage.restore_backup_to_path(filename, dest_path)
+
+    def _memo_path(self, kind: str, key: str) -> str:
+        return os.path.join(config.DOWNLOADED_DIR, ".memo", kind, f"{key}.json")
+
+    def read_memo(self, kind: str, key: str) -> str | None:
+        try:
+            with open(self._memo_path(kind, key), encoding="utf-8") as f:
+                return f.read()
+        except OSError:
+            return None
+
+    def write_memo(self, kind: str, key: str, text: str) -> None:
+        path = self._memo_path(kind, key)
+        part = f"{path}.part"
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(part, "w", encoding="utf-8") as f:
+                f.write(text)
+            os.replace(part, path)
+        except OSError as e:
+            print(f"Could not keep the {kind} memo {key}: {e}")
 
     def upload_backup_from_path(self, filename: str, src_path: str) -> None:
         self.storage.upload_backup_from_path(filename, src_path)

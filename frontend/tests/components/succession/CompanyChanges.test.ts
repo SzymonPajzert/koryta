@@ -186,6 +186,66 @@ describe("SuccessionCompanyChanges", () => {
     expect(wrapper.findAll('[data-testid="succession-batch"]')).toHaveLength(2);
   });
 
+  // „Kolejność osób - prezes, zastępca prezesa, potem zarząd.” PKP's current
+  // board came out as Zarząd, dyrektor…, naczelnik…, prezes, zastępca prezesa:
+  // the order knew Zarząd and the supervisory boards and put every other role
+  // after them alphabetically, the head of the company among them.
+  it("puts the prezes first and the deputies second, then the board", async () => {
+    response = {
+      successions: [],
+      current: [
+        post("A", { role: "Zarząd" }),
+        post("B", { role: "dyrektor Biura Zarządzania Strategicznego" }),
+        post("C", { role: "naczelnik w Biurze Spraw Międzynarodowych" }),
+        post("D", { role: "prezes" }),
+        post("E", { role: "zastępca prezesa" }),
+        post("F", { role: "Rada Nadzorcza" }),
+      ],
+      hidden: 0,
+    };
+
+    const wrapper = await mountChanges();
+
+    const roles = wrapper
+      .findAll('[data-testid^="current-role-"]')
+      .map((node) => node.attributes("data-testid"));
+    expect(roles).toEqual([
+      "current-role-prezes",
+      "current-role-zastepca-prezesa",
+      "current-role-zarzad",
+      "current-role-rada-nadzorcza",
+      "current-role-dyrektor-biura-zarzadzania-strategicznego",
+      "current-role-naczelnik-w-biurze-spraw-miedzynarodowych",
+    ]);
+  });
+
+  it("ranks the register's longer titles the same way", async () => {
+    response = {
+      successions: [],
+      current: [
+        post("A", { role: "Członek Zarządu" }),
+        post("B", { role: "Wiceprezes Zarządu" }),
+        post("C", { role: "Prokurent" }),
+        post("D", { role: "Prezes Zarządu" }),
+        post("E", { role: "Zastępca Prezesa Zarządu" }),
+      ],
+      hidden: 0,
+    };
+
+    const wrapper = await mountChanges();
+
+    const roles = wrapper
+      .findAll('[data-testid^="current-role-"]')
+      .map((node) => node.attributes("data-testid"));
+    expect(roles).toEqual([
+      "current-role-prezes-zarzadu",
+      "current-role-wiceprezes-zarzadu",
+      "current-role-zastepca-prezesa-zarzadu",
+      "current-role-czlonek-zarzadu",
+      "current-role-prokurent",
+    ]);
+  });
+
   it("says how many handovers it will not name", async () => {
     response = {
       successions: turnover("2024-04-12", [

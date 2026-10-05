@@ -51,6 +51,15 @@ export function useAuthState() {
     async () =>
       await user.value?.getIdTokenResult().then((r) => !!r.claims.admin),
   );
+  /** The site's owner, whose task list (/admin/zadania) no other admin sees. */
+  const isOwner = computedAsync(
+    async () =>
+      await user.value?.getIdTokenResult().then((r) => !!r.claims.owner),
+  );
+  const isDatascience = computedAsync(
+    async () =>
+      await user.value?.getIdTokenResult().then((r) => !!r.claims.datascience),
+  );
   const idToken = computed(() => user.value?.getIdToken());
   const auth = useFirebaseAuth()!;
 
@@ -90,6 +99,8 @@ export function useAuthState() {
   return {
     user,
     isAdmin,
+    isOwner,
+    isDatascience,
     idToken,
     userConfig,
     logout,

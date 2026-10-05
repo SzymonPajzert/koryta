@@ -99,26 +99,26 @@ test.describe("Admin Revisions View", () => {
     // Now that auth is ready and cookie is likely set, navigate to admin revisions
     await page.goto("/admin/rewizje");
 
-    // Wait for the table to load
-    await page.waitForSelector(".v-data-table");
+    // The entry list is the one section a reader who is not an admin gets, and
+    // the seeded node is found by its id rather than by being the first row.
+    // It is on the first page anyway: its `latest_time` is a map, which
+    // Firestore sorts above every timestamp under the default newest-first.
+    const row = page.locator(`#wpisy [data-node-id="${testNodeId}"]`);
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("#kolejka")).toHaveCount(0);
 
-    // Wait for items to be present
-    await page.waitForSelector("tbody tr:first-child");
-
-    // Read the total from the first row and click it
-    const firstRow = page.locator("tbody tr").first();
-    const totalCell = firstRow.locator("td").nth(2); // "Rewizje łącznie" is the 3rd column
-    const text = await totalCell.innerText();
+    // The line says how many revisions there are - "2 rewizje".
+    const text = await row.locator("[data-revision-count]").innerText();
     const expectedTotal = parseInt(text.trim(), 10) || 0;
 
     console.log("expectedTotal parsed as:", expectedTotal, "from text:", text);
 
-    // Check href before click
-    const href = await totalCell.locator("a").getAttribute("href");
-    console.log("Clicking link with href:", href);
+    // The line opens in place rather than navigating.
+    await row.locator("[data-row-toggle]").click();
+    await expect(row.locator("[data-row-panel]")).toBeVisible();
 
-    // Click the link in the total column
-    await totalCell.locator("a").click();
+    // The side-by-side view is the icon at the end of the line.
+    await row.getByRole("link", { name: "Porównanie obok siebie" }).click();
 
     // Wait for navigation to complete - Match EXACTLY a path parameter, not a query param
     await page.waitForURL(/\/admin\/rewizje\/[a-zA-Z0-9_-]+(?:\?.*)?$/);

@@ -123,7 +123,8 @@ npm run quick-check:failsafe
 ## QA changelog
 
 Every user visible change gets an entry at the top of `shared/qa.ts`, in the
-same commit as the change itself:
+same commit as the change itself - unless all it does is what a report asked
+for, which can be claimed in `shared/reportFixes.ts` instead (see below):
 
 ```ts
 {
@@ -133,6 +134,7 @@ same commit as the change itself:
   steps: ["Wejdź na /eksploruj/tabela", "Kliknij wiersz z osobą"],
   link: "/eksploruj/tabela",     // optional
   area: "public",                // public | contributor | admin
+  fixes: ["Kx8V2mQpZrT4bN7cYh1A"], // optional - reports from /admin/opinie this answers
 }
 ```
 
@@ -159,6 +161,38 @@ Slack channel and `/admin/opinie` with the entry and the verdict attached
 or anything somebody wrote out, but never a bare "działa" and never a re-save
 of the verdict that was already there. The `qaChecks` document is written
 first, so a Slack outage costs the report and never the tick.
+
+When the change answers a report from `/admin/opinie`, put the report's id in
+`fixes` - the part after `#fb-` in the Slack "Otwórz w panelu" link, or in the
+link on the card's date. It is a claim, not a verdict. The report shows a
+"Poprawka" chip for the newest entry naming it, coloured by everybody's current
+verdict on that entry on `/qa` - any "Coś nie działa" makes it red, and only
+that person changing their verdict clears it. Behind a click are the verdicts,
+the reports written while checking any of the entries naming it, and the older
+entries. When the chip is green and none of those reports is an open "Coś nie
+działa", the card offers "Zamknij jako załatwione" - nothing closes a report by
+itself. The joins live in `shared/feedbackFixes.ts`; ids that are not Firestore
+auto-ids fail `tests/shared/qa.test.ts`.
+
+A change that does what a report asked and no more needs no entry of its own:
+the report already says what to check and where. Claim it with a line at the
+top of `shared/reportFixes.ts`, in the same commit:
+
+```ts
+{
+  change: "Okno edycji relacji ma pole „Uzyskano mandat” przy kandydaturze.",
+  fixes: ["Qm4ZtR8vLp2XnB6cWy1D"], // as in an entry's `fixes`
+  link: "/osoba/…", // optional - where to look, when not the report's own page
+}
+```
+
+Only an admin checks those. For an admin, `/qa` opens on "Zgłoszenia do
+zamknięcia": every open report the build claims to fix, by an entry or by one of
+these lines, with the change written out under the message and "Zamknij jako
+załatwione" in the row. A branch's claims can be checked on the branch, and a
+rollout's on koryta.pl. `/admin/opinie` shows the same line on the report, and
+the report's line carries the "czeka na sprawdzenie" icon until it is closed.
+`tests/shared/reportFixes.test.ts` checks the ids and links.
 
 ## Scripts reference
 
@@ -233,3 +267,106 @@ rest of the app uses — they are not the defaults:
 `firestore.rules` denies every client read and write on `mail`; the documents
 pair an address with a message and only the admin SDK and the extension have
 any business there.
+
+## Agent tools
+
+Claude sessions in this repo can read production data through an MCP server,
+`scripts/mcp/server.ts`, which `/.mcp.json` registers as `koryta`. It has the
+feedback queue from `/admin/opinie`:
+
+- `feedback_queue` — open reports in the page's order (not yet in the queue,
+  then the queue from the top), or the newest closed ones; one line each.
+- `feedback_get` — whole reports by id or `#fb-<id>` link, with their place in
+  the queue and what the claims in `shared/qa.ts` and `shared/reportFixes.ts`
+  say.
+
+It can only read. Reads go out as `firestore-reader@koryta-pl.iam.gserviceaccount.com`,
+which holds `roles/datastore.viewer` and nothing else, and gcloud impersonates
+it, so no key file exists. Every read names its fields, so reporters' `contact`,
+user agents and uids never leave Firestore.
+
+Once, as a project owner (Cloud Shell will do):
+
+```bash
+gcloud services enable iamcredentials.googleapis.com --project=koryta-pl
+gcloud iam service-accounts create firestore-reader --project=koryta-pl \
+  --display-name="Agents: read-only Firestore"
+gcloud projects add-iam-policy-binding koryta-pl --condition=None \
+  --member=serviceAccount:firestore-reader@koryta-pl.iam.gserviceaccount.com \
+  --role=roles/datastore.viewer
+gcloud iam service-accounts add-iam-policy-binding \
+  firestore-reader@koryta-pl.iam.gserviceaccount.com --project=koryta-pl \
+  --member=serviceAccount:dev-workflow@koryta-pl.iam.gserviceaccount.com \
+  --role=roles/iam.serviceAccountTokenCreator
+```
+
+The last binding names whoever gcloud is logged in as on the machine the agents
+run on. Claude Code asks before starting a server from `.mcp.json`; to approve
+it for sessions that cannot ask, add to `~/.claude/settings.json`:
+
+```json
+"enabledMcpjsonServers": ["koryta"],
+"permissions": { "allow": ["mcp__koryta"] }
+```
+
+With `FIRESTORE_EMULATOR_HOST` set the server reads that emulator instead.
+Every answer says which database it came from.
+
+### The owner's task list
+
+The same server keeps the owner's task list, `/admin/zadania`: what is left to
+deploy, run, decide or build, and what has to happen before what
+(`shared/tasks.ts`). An agent that leaves something behind - "deploy the
+indexes once this merges" - adds it there instead of only to its notes:
+
+- `tasks_list` — the page's lists: goals, ready for the owner, ready for an
+  agent, blocked (with what each waits on), ideas, parked, closed. `goal`
+  narrows it to one goal and the tasks that lead to it.
+- `task_get` — whole tasks by id or `#t-<id>` link, with their history and
+  what they unblock.
+- `task_add` — a new task, one step each, with the commands in its body and
+  `dependsOn` for what has to happen first. An open task that looks like the
+  same thing is shown instead of a duplicate being added.
+- `task_update` — close, start or park a task, change what it waits on, or add
+  a line to its history. A dependency that would close a loop is refused.
+
+A task of kind `goal` groups others: it depends on the tasks that lead to it,
+so a task is put under a goal by adding it to the goal's `dependsOn`. The page
+lists goals first, with how many of those tasks are closed, and filters by one.
+
+This is the one thing agents write to production, and it lives in its own
+database, `agent-tasks`, so that the account they write as cannot touch the
+site's data: `ops-writer` holds `roles/datastore.user` under an IAM condition
+naming that database alone. It is also out of the nightly export. The page
+reads the same documents through `/api/ops/tasks/*`, which only the `owner`
+claim opens (`data/pipelines/src/set_auth_claims.py`); other administrators
+get a 403.
+
+Once, as a project owner:
+
+```bash
+gcloud firestore databases create --database=agent-tasks --project=koryta-pl \
+  --location=europe-central2 --delete-protection
+gcloud iam service-accounts create ops-writer --project=koryta-pl \
+  --display-name="Agents: the owner's task list"
+gcloud projects add-iam-policy-binding koryta-pl \
+  --member=serviceAccount:ops-writer@koryta-pl.iam.gserviceaccount.com \
+  --role=roles/datastore.user \
+  --condition='expression=resource.name=="projects/koryta-pl/databases/agent-tasks",title=ops-only'
+gcloud iam service-accounts add-iam-policy-binding \
+  ops-writer@koryta-pl.iam.gserviceaccount.com --project=koryta-pl \
+  --member=serviceAccount:dev-workflow@koryta-pl.iam.gserviceaccount.com \
+  --role=roles/iam.serviceAccountTokenCreator
+# From the repo root: rules that shut the browser out of `agent-tasks` entirely.
+frontend/node_modules/.bin/firebase deploy --only firestore --config firebase.ops.json
+# And the `owner` claim, with application default credentials:
+(cd data/pipelines && uv run set_auth_claims)
+```
+
+`firebase.ops.json` is separate from `firebase.json` because the Firestore
+emulator loads no rules at all once `firebase.json` names two databases.
+
+To load a list of tasks - the harvest of open items from the agents' notes,
+say - `scripts/ops/import-tasks.ts <file.json>` writes each task that is not
+there yet, as `ops-writer`, or into the emulator when `FIRESTORE_EMULATOR_HOST`
+is set. It never changes a task that exists.

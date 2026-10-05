@@ -3,6 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { defineEventHandler } from "h3";
 import { getUser } from "~~/server/utils/auth";
 import { noteNeedsAction } from "~~/shared/model";
+import { compareNewest, isQueued, OPEN_CAP } from "~~/shared/feedbackQueue";
 import type {
   Feedback,
   FeedbackKind,
@@ -18,7 +19,8 @@ const SAMPLE_SIZE = 8;
 
 export type AdminSummary = {
   feedback: {
-    // Reports nobody has triaged yet.
+    // Reports nobody has triaged yet: still "nowe", and not given a place in
+    // the work queue on /admin/opinie either.
     needsAction: number;
     sample: {
       id: string;
@@ -50,13 +52,13 @@ export type AdminSummary = {
   revisions: {
     // Nodes whose latest revision is not the approved one, plus edge revisions
     // nobody has settled. Counted per node but per *revision* for edges: an
-    // edge carries no `has_unapproved` flag, and /admin/rewizje-krawedzi - where
-    // this number sends a reviewer - lists one row per revision too.
+    // edge carries no `has_unapproved` flag, and /admin/rewizje#powiazania -
+    // where this number sends a reviewer - lists one row per revision too.
     unapproved: number;
     // Of those, the ones a human filed rather than an automatic import, and
     // which therefore need review. For edges that is a reader proposing a
     // relation; the ingest's own proposals are automatic and live at
-    // /admin/rewizje-krawedzi rather than being counted here.
+    // /admin/rewizje#powiazania rather than being counted here.
     unapprovedManual: number;
     inspected: number;
     // True when there was more of either kind than we inspected, so
@@ -126,19 +128,32 @@ export default defineEventHandler(async (event): Promise<AdminSummary> => {
   }
 
   // --- Untriaged feedback ---------------------------------------------------
+  // Putting a report in the queue is triage too, and a missing field is not
+  // something a query can filter on - so the new reports are read and the
+  // queued ones taken off the count. The read is capped: anybody can write a
+  // report, and a flood of them should not turn every visit to /admin into
+  // thousands of reads. Past the cap the count is an upper bound.
   const newFeedbackQuery = db
     .collection("feedback")
     .where("adminStatus", "==", "new");
 
-  const [feedbackCountSnap, feedbackSnap] = await Promise.all([
+  const [newFeedbackCountSnap, newFeedbackSnap] = await Promise.all([
     newFeedbackQuery.count().get(),
-    newFeedbackQuery.orderBy("createdAt", "desc").limit(SAMPLE_SIZE).get(),
+    newFeedbackQuery.orderBy("createdAt", "desc").limit(OPEN_CAP).get(),
   ]);
 
-  const feedbackSample = feedbackSnap.docs.map((doc) => {
-    const data = doc.data() as Feedback;
+  const inspectedFeedback = newFeedbackSnap.docs.map((doc) => ({
+    ...(doc.data() as Feedback),
+    id: doc.id,
+  }));
+  const untriagedFeedback = inspectedFeedback
+    .filter((report) => !isQueued(report))
+    .sort(compareNewest);
+  const queuedNewFeedback = inspectedFeedback.length - untriagedFeedback.length;
+
+  const feedbackSample = untriagedFeedback.slice(0, SAMPLE_SIZE).map((data) => {
     return {
-      id: doc.id,
+      id: data.id,
       kind: data.kind,
       message: data.message.slice(0, 200),
       route: data.context.route,
@@ -229,7 +244,7 @@ export default defineEventHandler(async (event): Promise<AdminSummary> => {
 
   return {
     feedback: {
-      needsAction: feedbackCountSnap.data().count,
+      needsAction: newFeedbackCountSnap.data().count - queuedNewFeedback,
       sample: feedbackSample,
     },
     notes: {
@@ -329,7 +344,7 @@ async function summariseEdgeRevisions(db: Firestore): Promise<{
     const edgeId = String(doc.get("node_id") ?? "");
     const edge = edges.get(edgeId);
     // The edge was deleted after the proposal was filed. It still counts as
-    // waiting - /admin/rewizje-krawedzi is where that gets sorted out - but
+    // waiting - /admin/rewizje#powiazania is where that gets sorted out - but
     // there is no pair to name it by.
     const ends = edge
       ? [edge.source, edge.target].map((end) =>

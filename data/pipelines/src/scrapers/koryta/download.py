@@ -10,6 +10,7 @@ It defines two main pipelines:
 """
 
 import dataclasses
+import math
 import typing
 from datetime import datetime
 
@@ -190,9 +191,17 @@ class FirestoreCollection(Pipeline):
         List the objects from the specified Firestore collection and output entities.
         """
         output = []
-        blobs = ctx.io.list_files(
-            CloudStorage(prefix="hostname=koryta.pl", binary=True)
-        )
+        # Every export sits under its own `date=<timestamp>/`, so naming the day
+        # in the prefix lists that day's exports and nothing else. Listing the
+        # whole host meant every export ever taken - ~290 of them at ~500
+        # objects each - to keep one day's worth in `wanted_blobs`, and it took
+        # a quarter of an hour per collection read, per day
+        # `latest_on_or_before` walks back. Without a date the caller wants
+        # every export, so there the whole host is still listed.
+        prefix = "hostname=koryta.pl"
+        if self.date:
+            prefix += f"/date={self.date}"
+        blobs = ctx.io.list_files(CloudStorage(prefix=prefix, binary=True))
         for blob_ref in tqdm(self.wanted_blobs(blobs)):
             date = export_timestamp(blob_ref)
             content = ctx.io.read_data(blob_ref).read_file()
@@ -245,6 +254,32 @@ def _teryt_from_edges(data: dict) -> tuple[list[str], list[str]]:
     return sorted(woj), sorted(powiat)
 
 
+def _missing(value: object) -> bool:
+    """Whether a field is absent - None, or the float NaN pandas leaves behind.
+
+    An optional field is absent for some document types and a float NaN rather
+    than None once the export has been through a DataFrame, and NaN is truthy.
+    `math.isnan` needs the guard because it raises on anything non-float.
+    """
+    return value is None or (isinstance(value, float) and math.isnan(value))
+
+
+def _merged_into(data: dict) -> str | None:
+    """The id a merged-away person node points at, or None when it is a person.
+
+    A merge sets `merged_into` on the duplicate alongside `deleted`, so a node
+    carrying it is a tombstone - its url still resolves for readers, but it is
+    no longer a person and nothing may be joined to it. Absent on exports from
+    before the site started merging, and a float NaN once a frame has been
+    through pandas, which is truthy and must not become the string "nan".
+    """
+    value = data.get("merged_into")
+    if _missing(value):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 class KorytaPeople(Pipeline[Person]):
     date: str
 
@@ -283,6 +318,7 @@ class KorytaPeople(Pipeline[Person]):
                     rejestrIo=data.get("rejestrIo"),
                     teryt_wojewodztwo=teryt_wojewodztwo,
                     teryt_powiat=teryt_powiat,
+                    merged_into=_merged_into(data),
                 )
             )
 
@@ -558,6 +594,21 @@ class KorytaFacts(Pipeline[PersonFact]):
                     fact_type=str(data.get("fact_type") or ""),
                     correct=int(correct) if isinstance(correct, (int, float)) else None,
                     wrong_person=bool(votes.get("wrongPerson")),
+                    # The fact's own content, so a consumer can rebuild the same
+                    # dedup key `ArticleAnalyzed` uses. Blank and NaN both mean
+                    # "not set" - pandas turns an absent string field into NaN.
+                    person=_fact_str(data, "person"),
+                    organization=_fact_str(data, "organization"),
+                    role=_fact_str(data, "role"),
+                    party=_fact_str(data, "party"),
+                    subject=_fact_str(data, "subject"),
+                    object=_fact_str(data, "object"),
+                    relation=_fact_str(data, "relation"),
+                    affair=_fact_str(data, "affair"),
+                    justification=_fact_str(data, "justification"),
+                    justification_in_text=_fact_str(data, "justification_in_text"),
+                    article_domain=_fact_str(data, "articleDomain"),
+                    tag=_fact_str(data, "tag"),
                 )
             )
 
@@ -579,3 +630,18 @@ def _fact_votes(data: dict) -> dict:
         return {}
     votes = stats.get("votes")
     return votes if isinstance(votes, dict) else {}
+
+
+def _fact_str(data: dict, key: str) -> str | None:
+    """A fact's string field, or None for a blank/absent/NaN value.
+
+    An optional field on an extraction row is absent for some fact types and a
+    float NaN rather than None once the export has been through a DataFrame,
+    and NaN is truthy - storing it would hand consumers the literal string
+    "nan" as an organization.
+    """
+    value = data.get(key)
+    if _missing(value):
+        return None
+    text = str(value).strip()
+    return text or None

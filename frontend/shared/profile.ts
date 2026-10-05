@@ -6,7 +6,8 @@
  * somebody's real name, and nobody signed up to have theirs listed next to what
  * they have been reading. That reasoning still holds for anyone who has not
  * said otherwise - so the ranking is public and the names in it are not, until
- * the person whose name it is turns `publicProfile` on from /profil.
+ * the person whose name it is turns `publicProfile` on from /profil. The same
+ * choice decides who is named on /aktywnosc.
  *
  * Kept here rather than in the endpoint so the switch on /profil, the server
  * that applies it and the table that renders the result are all written against
@@ -22,13 +23,20 @@
  */
 export const publicProfileDefault = false;
 
-/** How the switch reads on /profil. */
+/** How the switch reads on /profil.
+ *
+ * /aktywnosc names people by the same choice, and it shows more than the
+ * ranking does: what somebody rated, noted or proposed, and when. Agreeing to
+ * a line in a ranking is not agreeing to that, so the switch says both.
+ */
 export const publicProfileLabel = {
-  title: "Pokaż moją nazwę w statystykach",
+  title: "Pokaż moją nazwę w statystykach i w aktywności",
   hint:
-    "Twoja nazwa użytkownika pojawi się w rankingu na /eksploruj/statystyki. " +
-    "Bez tego widać tam tylko zamazaną nazwę - Twoje wpisy i oceny są " +
-    "widoczne tak samo jak dotąd.",
+    "Twoja nazwa użytkownika pojawi się w rankingu na /eksploruj/statystyki " +
+    "i na stronie Aktywność, przy tym, co i kiedy oceniasz, notujesz lub " +
+    "proponujesz. Bez tego inni widzą w rankingu zamazaną nazwę, a w " +
+    "aktywności „Anonim”. Administratorzy widzą Twoją nazwę niezależnie od " +
+    "tego ustawienia.",
 };
 
 export function publicProfileEnabled(

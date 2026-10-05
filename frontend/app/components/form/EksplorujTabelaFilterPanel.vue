@@ -143,8 +143,9 @@
                 closable-chips
               >
                 <!-- The chosen parties in their own colours, as the rail and
-                     the table's party column draw them. `readableInkOn`
-                     rather than a fixed dark label: the palette runs from
+                     the table's party column draw them - `partyChipPaint`,
+                     the one call PartyChip makes too. A measured ink rather
+                     than a fixed dark label: the palette runs from
                      #f5c400 to Konfederacja's near-black navy, where black
                      ink measures 1.29:1. What that ink is measured against is
                      the declared fill, which is only what gets painted here
@@ -218,9 +219,9 @@
 
 import { mdiInformationOutline } from "@mdi/js";
 import { computed, ref } from "vue";
-import { ink, readableInkOn, surface } from "~~/shared/colors";
+import { ink, surface } from "~~/shared/colors";
 import { companyCategories } from "~~/shared/companyCategories";
-import { partyColors } from "~~/shared/misc";
+import { partyChipPaint } from "~~/shared/misc";
 import { polishCounting } from "~/composables/polish";
 import FormEksplorujTabelaVerificationFields from "./EksplorujTabelaVerificationFields.vue";
 
@@ -302,20 +303,20 @@ const verificationCount = computed(
 const filtersSet = (count: number) =>
   polishCounting(count, "filtr", "filtry", "filtrów");
 
-/** A party chip in the party's own colour, and the grey of the query bar's
- * other chips for a party that has none.
+/** A party chip in the party's own colour, „Inne” greyed out as it is in the
+ * table's rows, and the grey of the query bar's other chips for a party that
+ * has no colour at all.
  *
  * `shared/misc` leaves several of the parties it offers without a colour -
  * Razem's is commented out - and a flat chip with no background of its own
  * falls back to Vuetify's `surface-variant`, which in the light theme is
  * #424242. „Razem” in dark ink on that is 1.6:1, so the fallback is spelled
  * out rather than left to the variant. */
-const partyStyle = (party: string) => {
-  const fill = partyColors[party];
-  return fill
-    ? { backgroundColor: fill, color: readableInkOn(fill) }
-    : { backgroundColor: surface.muted, color: ink.neutral };
-};
+const partyStyle = (party: string) =>
+  partyChipPaint(party) ?? {
+    backgroundColor: surface.muted,
+    color: ink.neutral,
+  };
 
 /** Read once, when the overlay is first opened: after that the reader has
  * decided whether the section is open, and reopening it under them on every
