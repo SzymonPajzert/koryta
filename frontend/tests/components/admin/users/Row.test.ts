@@ -513,6 +513,7 @@ describe("AdminUsersRow", () => {
       userRow("u1", {
         displayName: "Ktoś Obraźliwy",
         photoURL: "https://koryta.pl/api/images/abc",
+        avatarRemovable: true,
         profile: { handle: "ktos", public: true, hidden: false },
       }),
       { expanded: true },
@@ -538,6 +539,7 @@ describe("AdminUsersRow", () => {
       userRow("u2", {
         displayName: null,
         photoURL: "https://lh3.googleusercontent.com/a/photo",
+        avatarRemovable: false,
         profile: { handle: "u2", public: true, hidden: true },
       }),
       { expanded: true },
@@ -553,6 +555,37 @@ describe("AdminUsersRow", () => {
       { expanded: true },
     );
     expect(bare.find("[data-nothing-to-moderate]").exists()).toBe(true);
+  });
+
+  it("offers to take a picture down whenever the server says it can, whatever its url", async () => {
+    // A url pointed at from the browser: nothing in it says it is not the
+    // provider's, but the server compared the two and found it is not.
+    const { wrapper: elsewhere } = await mountRow(
+      userRow("u1", {
+        displayName: null,
+        photoURL: "https://example.org/offensive.png",
+        avatarRemovable: true,
+      }),
+      { expanded: true },
+    );
+    expect(
+      elsewhere
+        .findAll("[data-moderate]")
+        .map((b) => b.attributes("data-moderate")),
+    ).toEqual(["removeAvatar"]);
+
+    // The flag decides, not the url: a row the server says has nothing to
+    // take down offers nothing, even with a url that looks like one of ours.
+    const { wrapper: notTheirs } = await mountRow(
+      userRow("u2", {
+        displayName: null,
+        photoURL: "https://koryta.pl/api/images/abc",
+        avatarRemovable: false,
+      }),
+      { expanded: true },
+    );
+    expect(notTheirs.find("[data-moderate]").exists()).toBe(false);
+    expect(notTheirs.find("[data-nothing-to-moderate]").exists()).toBe(true);
   });
 
   it("sends a nomination from the form with the account's uid", async () => {

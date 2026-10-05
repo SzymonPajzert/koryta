@@ -2,14 +2,8 @@ import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, readValidatedBody } from "h3";
 import { getUser } from "~~/server/utils/auth";
-import { setUserPhotoURL } from "~~/server/utils/avatars";
-import {
-  deleteImages,
-  imageField,
-  imagesOf,
-  newImage,
-} from "~~/server/utils/images";
-import { imagePath } from "~~/shared/images";
+import { setUserAvatar } from "~~/server/utils/avatars";
+import { imageField } from "~~/server/utils/images";
 
 const bodyValidator = z.object({
   // A square the browser has already cropped and re-encoded - see
@@ -22,35 +16,26 @@ const bodyValidator = z.object({
 
 /** Sets the caller's own profile picture.
  *
- * The new picture is stored before anything points at it, and the old one is
- * deleted only after nothing does, so a failure half way leaves an unused
- * image behind rather than a picture that does not load. Deleting the old one
- * is also what keeps a user to one stored picture however often they change
- * it.
+ * Only for an account whose address is confirmed. A picture is public the
+ * moment it is stored (`IMAGE_ACCESS`), at an address on koryta.pl, and an
+ * account costs nothing to open with any address at all - so without the
+ * check, anybody could host an image on the site from a throwaway account.
+ * The token's `email_verified` is enough: a user who has just confirmed gets
+ * a fresh token from /profil before uploading.
  *
- * The url is absolute because Auth takes nothing else, and it is the site's
- * own: the picture is served by `/api/images/<id>`, which lets anybody see an
- * avatar. */
+ * The rest - the record, the mirrors, the old picture and a race with another
+ * upload - is `setUserAvatar`'s. */
 export default defineEventHandler(async (event) => {
   const user = await getUser(event);
+  if (user.email_verified !== true) {
+    throw createError({
+      statusCode: 403,
+      message: "Potwierdź adres e-mail, zanim dodasz zdjęcie profilowe.",
+    });
+  }
   const { image } = await readValidatedBody(event, (body) =>
     bodyValidator.parse(body),
   );
 
-  const db = getFirestore("koryta-pl");
-  const subject = `users/${user.uid}`;
-  const previous = await imagesOf(db, subject, "avatar");
-
-  const created = newImage(db, image, {
-    purpose: "avatar",
-    subject,
-    uploadedBy: user.uid,
-  });
-  await created.ref.set(created.doc);
-
-  const photoURL = `${useRuntimeConfig(event).public.siteUrl}${imagePath(created.ref.id)}`;
-  await setUserPhotoURL(db, user.uid, photoURL);
-  await deleteImages(db, previous);
-
-  return { photoURL, image: created.imageRef };
+  return await setUserAvatar(getFirestore("koryta-pl"), user.uid, image);
 });

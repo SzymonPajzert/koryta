@@ -808,9 +808,54 @@ describe("GET /api/admin/users", () => {
       roleNominations: ["desired", "trialStartedAt", "applyError"],
       userStats: ["signIns", "activeDays", "firstSeenAt", "lastSeenAt"],
       accessRequests: ["reason", "source", "createdAt", "status"],
-      profiles: ["handle", "hidden"],
+      profiles: ["handle", "hidden", "avatarImageId"],
+      // Who has an avatar stored, by purpose, for every row at once - and
+      // never the bytes.
+      images: ["subject"],
     });
+    expect(whole.find((read) => read.collection === "images")?.wheres).toEqual([
+      ["purpose", "==", "avatar"],
+    ]);
     expect(whole.every((read) => read.limit === 10_000)).toBe(true);
+  });
+
+  it("says whose picture an administrator can take down, as the takedown decides it", async () => {
+    const google = "https://lh3.example/photo.jpg";
+    const withPhoto = (uid: string, shown: string | null, provider = google) =>
+      Object.assign(accounts.get(uid)!, {
+        photoURL: shown ?? undefined,
+        providerData: [{ providerId: "google.com", photoURL: provider }],
+      });
+    // The provider's own picture: nothing to take down.
+    withPhoto("nominee", google);
+    // Ours, named by the record.
+    withPhoto("visitor", "https://koryta.pl/api/images/pic1");
+    stored("profiles", "visitor", {
+      handle: null,
+      avatarImageId: "pic1",
+      hidden: null,
+    });
+    stored("images", "pic1", { purpose: "avatar", subject: "users/visitor" });
+    // A leftover of a failed upload, named by nothing.
+    withPhoto("worker", google);
+    stored("images", "stray", { purpose: "avatar", subject: "users/worker" });
+    // Somebody else's photo of a person is not this account's avatar.
+    stored("images", "person", { purpose: "person", subject: "users/asker" });
+    // A url pointed at from the browser.
+    withPhoto("newcomer", "https://example.org/offensive.png");
+
+    const { users } = await list(as("boss"));
+    const removable = Object.fromEntries(
+      users.map((row) => [row.uid, row.avatarRemovable]),
+    );
+    expect(removable).toMatchObject({
+      nominee: false,
+      visitor: true,
+      worker: true,
+      asker: false,
+      newcomer: true,
+      boss: false,
+    });
   });
 
   it("walks Auth once per five minutes, but shows a new nomination at once", async () => {
@@ -966,7 +1011,6 @@ describe("GET /api/admin/users/[uid]", () => {
       "feedback",
       "qaChecks",
       "comments",
-      "images",
     ]) {
       expect(
         reads.filter(
@@ -974,6 +1018,15 @@ describe("GET /api/admin/users/[uid]", () => {
         ),
       ).toEqual([]);
     }
+    // The one read of `images` that is not a count is the row's own avatar
+    // lookup, by subject.
+    expect(
+      reads.filter(
+        (read) => read.collection === "images" && read.kind === "get",
+      ),
+    ).toEqual([
+      expect.objectContaining({ wheres: [["subject", "==", "users/anna"]] }),
+    ]);
     expect(event.sent["Cache-Control"]).toBe("private, no-store");
   });
 
@@ -993,11 +1046,19 @@ describe("GET /api/admin/users/[uid]", () => {
     expect(row).toMatchObject({
       uid: "anna",
       displayName: "Anna",
+      avatarRemovable: false,
       nomination: {
         desired: { level: "trusted", byName: "Szefowa" },
         pending: true,
       },
     });
+  });
+
+  it("offers to take down a picture left over from an upload", async () => {
+    // Nothing on the account or the record says so; only the images do.
+    stored("images", "stray", { purpose: "avatar", subject: "users/anna" });
+    const { row } = await detail(as("boss"), "anna");
+    expect(row.avatarRemovable).toBe(true);
   });
 
   it("counts a trial since it began", async () => {

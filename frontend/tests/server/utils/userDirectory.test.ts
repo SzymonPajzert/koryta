@@ -69,6 +69,7 @@ function account(fields: Partial<DirectoryAccount> = {}): DirectoryAccount {
     disabled: false,
     providers: ["google.com"],
     photoURL: null,
+    providerPhotoURL: null,
     createdAt: new Date(NOW.getTime() - 200 * DAY).toISOString(),
     lastSignInAt: null,
     lastRefreshAt: null,
@@ -123,11 +124,30 @@ describe("toDirectoryAccount", () => {
       disabled: false,
       providers: ["google.com", "password"],
       photoURL: "https://example.com/a.png",
+      providerPhotoURL: null,
       createdAt: "2026-09-01T10:00:00.000Z",
       lastSignInAt: "2026-10-03T08:30:00.000Z",
       lastRefreshAt: "2026-10-05T11:59:00.000Z",
       current: { level: "admin", trial: true, owner: false },
     });
+  });
+
+  it("keeps the sign-in provider's picture to hold the shown one against", () => {
+    // `password` carries a copy of whatever the account shows, ours included,
+    // so it is never the provider's picture.
+    const result = toDirectoryAccount(
+      record("anna", {
+        photoURL: "https://koryta.pl/api/images/pic1",
+        providerData: [
+          {
+            providerId: "password",
+            photoURL: "https://koryta.pl/api/images/pic1",
+          },
+          { providerId: "google.com", photoURL: "https://lh3.example/a.jpg" },
+        ] as UserRecord["providerData"],
+      }),
+    );
+    expect(result.providerPhotoURL).toBe("https://lh3.example/a.jpg");
   });
 
   it("fills the gaps of an account made from a custom token", () => {
@@ -391,6 +411,7 @@ describe("buildUserRow", () => {
           applyError: { at: "2026-10-04T01:00:00Z", message: "brak konta" },
         },
         publicProfile: false,
+        storedAvatars: false,
       },
       { boss: "Szefowa" },
     );
@@ -427,6 +448,7 @@ describe("buildUserRow", () => {
           applyError: null,
         },
         publicProfile: false,
+        storedAvatars: false,
       },
       {},
     );
@@ -435,8 +457,13 @@ describe("buildUserRow", () => {
   });
 
   it("says nothing it was not given", () => {
-    const row = buildUserRow(account(), { ...none, publicProfile: false }, {});
+    const row = buildUserRow(
+      account(),
+      { ...none, publicProfile: false, storedAvatars: false },
+      {},
+    );
     expect(row).toMatchObject({
+      avatarRemovable: false,
       nomination: null,
       trialStartedAt: null,
       signIns: null,
@@ -444,6 +471,76 @@ describe("buildUserRow", () => {
       accessRequest: null,
       profile: { handle: null, public: false, hidden: false },
       robot: false,
+    });
+    // What the picture is held against stays on the server.
+    expect(row).not.toHaveProperty("providerPhotoURL");
+  });
+
+  describe("avatarRemovable", () => {
+    const GOOGLE = "https://lh3.example/anna.jpg";
+    const removable = (
+      fields: Partial<DirectoryAccount>,
+      records: { avatarImageId?: string | null; storedAvatars?: boolean } = {},
+    ) =>
+      buildUserRow(
+        account({ providerPhotoURL: GOOGLE, photoURL: GOOGLE, ...fields }),
+        {
+          ...none,
+          profile: {
+            handle: null,
+            hidden: null,
+            avatarImageId: records.avatarImageId ?? null,
+          },
+          publicProfile: false,
+          storedAvatars: records.storedAvatars ?? false,
+        },
+        {},
+      ).avatarRemovable;
+
+    // The moderation route takes a picture down in exactly these cases and
+    // refuses the rest, so the button is offered for exactly these.
+    it.each<
+      [
+        string,
+        Partial<DirectoryAccount>,
+        { avatarImageId?: string | null; storedAvatars?: boolean },
+        boolean,
+      ]
+    >([
+      ["the sign-in provider's picture", {}, {}, false],
+      [
+        "an account with no picture anywhere",
+        { photoURL: null, providerPhotoURL: null },
+        {},
+        false,
+      ],
+      [
+        "a picture we store, named by the record",
+        { photoURL: "https://koryta.pl/api/images/pic1" },
+        { avatarImageId: "pic1", storedAvatars: true },
+        true,
+      ],
+      [
+        "a leftover of an upload the record does not name",
+        {},
+        { storedAvatars: true },
+        true,
+      ],
+      ["a record whose image is gone", {}, { avatarImageId: "pic1" }, true],
+      [
+        "a url pointed at from the browser",
+        { photoURL: "https://example.org/offensive.png" },
+        {},
+        true,
+      ],
+      [
+        "a url from the browser on an account with no provider picture",
+        { photoURL: "https://example.org/a.png", providerPhotoURL: null },
+        {},
+        true,
+      ],
+    ])("%s", (_label, fields, records, expected) => {
+      expect(removable(fields, records)).toBe(expected);
     });
   });
 
@@ -459,8 +556,10 @@ describe("buildUserRow", () => {
             at: "2026-10-04T00:00:00Z",
             reason: "Podszywa się",
           },
+          avatarImageId: null,
         },
         publicProfile: true,
+        storedAvatars: false,
       },
       {},
     );
@@ -474,8 +573,9 @@ describe("userLinks", () => {
       account({ uid: "a/b" }),
       {
         ...none,
-        profile: { handle: "ab", hidden: null },
+        profile: { handle: "ab", hidden: null, avatarImageId: null },
         publicProfile: false,
+        storedAvatars: false,
       },
       {},
     );

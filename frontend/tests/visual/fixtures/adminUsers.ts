@@ -25,6 +25,7 @@ const row = (uid: string, fields: Partial<AdminUserRow>): AdminUserRow => ({
   disabled: false,
   providers: ["google.com"],
   photoURL: null,
+  avatarRemovable: false,
   createdAt: daysAgo(200),
   lastSignInAt: daysAgo(20),
   lastRefreshAt: daysAgo(2),

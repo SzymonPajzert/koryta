@@ -7,7 +7,13 @@ import {
 } from "firebase-admin/firestore";
 import { cachedActivityWindow } from "~~/server/utils/activityWindow";
 import type { ContributorAggregate } from "~~/server/utils/activityStats";
+import {
+  avatarOwners,
+  hasRemovableAvatar,
+  providerPhotoOf,
+} from "~~/server/utils/avatars";
 import { identify, readPublicProfiles } from "~~/server/utils/contributors";
+import { imagesOf } from "~~/server/utils/images";
 import {
   isRoleLevel,
   roleFromClaims,
@@ -114,7 +120,12 @@ export type DirectoryAccount = Pick<
   | "lastSignInAt"
   | "lastRefreshAt"
   | "current"
->;
+> & {
+  /** `providerPhotoOf` the account: what `photoURL` is held against to tell
+   * whether the account shows a picture of its own. Kept off the row, which
+   * says only the answer (`avatarRemovable`). */
+  providerPhotoURL: string | null;
+};
 
 /** Auth's metadata times are HTTP dates ("Sat, 05 Oct 2026 12:00:00 GMT");
  * everything else on the page is ISO 8601, so they are turned into that. */
@@ -133,6 +144,7 @@ export function toDirectoryAccount(user: UserRecord): DirectoryAccount {
     disabled: user.disabled,
     providers: user.providerData.map((provider) => provider.providerId),
     photoURL: user.photoURL ?? null,
+    providerPhotoURL: providerPhotoOf(user),
     createdAt: isoOrNull(user.metadata.creationTime),
     lastSignInAt: isoOrNull(user.metadata.lastSignInTime),
     lastRefreshAt: isoOrNull(user.metadata.lastRefreshTime),
@@ -225,7 +237,7 @@ export type AccountRecords = {
     AccessRequestDoc,
     "reason" | "source" | "createdAt" | "status"
   > | null;
-  profile: Pick<ProfileDoc, "handle" | "hidden"> | null;
+  profile: Pick<ProfileDoc, "handle" | "hidden" | "avatarImageId"> | null;
   /** The last `USER_ACTIVITY_WINDOW_DAYS` days. */
   activity: AccountActivity | null;
 };
@@ -273,6 +285,8 @@ export type UserCollections = {
   stats: Map<string, NonNullable<AccountRecords["stats"]>>;
   requests: Map<string, NonNullable<AccountRecords["request"]>>;
   profiles: Map<string, NonNullable<AccountRecords["profile"]>>;
+  /** The uids with an avatar stored as theirs, the record's or a leftover. */
+  avatarOwners: Set<string>;
 };
 
 /** One whole collection, keyed by document id, with only the fields a row
@@ -293,11 +307,14 @@ async function readWhole<T>(
 /** The four small collections, whole. Each holds at most one document per
  * account, and most accounts have none, so reading them whole is cheaper than
  * reading them per row - and it is what lets a row exist for a nomination or a
- * request the five-minute memo has not seen yet. */
+ * request the five-minute memo has not seen yet.
+ *
+ * With them, who has an avatar stored, for `avatarRemovable`: one query on
+ * the images' purpose rather than one per row. */
 export async function readUserCollections(
   db: Firestore,
 ): Promise<UserCollections> {
-  const [nominations, stats, requests, profiles] = await Promise.all([
+  const [nominations, stats, requests, profiles, owners] = await Promise.all([
     readWhole<Partial<RoleNominationDoc>>(db, userCollections.roleNominations, [
       "desired",
       "trialStartedAt",
@@ -316,8 +333,9 @@ export async function readUserCollections(
     readWhole<NonNullable<AccountRecords["profile"]>>(
       db,
       userCollections.profiles,
-      ["handle", "hidden"],
+      ["handle", "hidden", "avatarImageId"],
     ),
+    avatarOwners(db, MAX_ACCOUNTS),
   ]);
 
   const readable = new Map<string, NominationRecord>();
@@ -326,7 +344,13 @@ export async function readUserCollections(
     if (nomination) readable.set(uid, nomination);
   }
 
-  return { nominations: readable, stats, requests, profiles };
+  return {
+    nominations: readable,
+    stats,
+    requests,
+    profiles,
+    avatarOwners: owners,
+  };
 }
 
 /** The same four documents for one account. */
@@ -418,15 +442,27 @@ export function isActiveAccount(
  * against the claims the account holds now. Never against `applied`, which is
  * the script's receipt - a claim changed by hand in the console has no receipt
  * and still has to show up as a difference.
+ *
+ * Whether the picture can be taken down is decided here too, by the test the
+ * moderation route refuses by (`hasRemovableAvatar`), so the button shows
+ * exactly when the route would act - for a url set from the browser as much as
+ * for a picture we store.
  */
 export function buildUserRow(
   account: DirectoryAccount,
-  records: AccountRecords & { publicProfile: boolean },
+  records: AccountRecords & { publicProfile: boolean; storedAvatars: boolean },
   names: Record<string, string | null>,
 ): AdminUserRow {
   const { nomination, stats, request, profile, activity } = records;
+  const { providerPhotoURL, ...shown } = account;
   return {
-    ...account,
+    ...shown,
+    avatarRemovable: hasRemovableAvatar({
+      avatarImageId: profile?.avatarImageId,
+      storedAvatars: records.storedAvatars,
+      photoURL: account.photoURL,
+      providerPhotoURL,
+    }),
     nomination: nomination
       ? {
           desired: {
@@ -592,7 +628,11 @@ export async function listUserRows(
     .map(({ account, records }) =>
       buildUserRow(
         account,
-        { ...records, publicProfile: publicProfiles[account.uid] ?? false },
+        {
+          ...records,
+          publicProfile: publicProfiles[account.uid] ?? false,
+          storedAvatars: collections.avatarOwners.has(account.uid),
+        },
         names,
       ),
     )
@@ -616,10 +656,11 @@ export async function buildRowFor(
   db: Firestore,
   account: DirectoryAccount,
 ): Promise<AdminUserRow> {
-  const [records, publicProfiles, windowed] = await Promise.all([
+  const [records, publicProfiles, windowed, avatars] = await Promise.all([
     readRecordsOf(db, account.uid),
     readPublicProfiles(db, [account.uid]),
     cachedActivityWindow(USER_ACTIVITY_WINDOW_DAYS),
+    imagesOf(db, `users/${account.uid}`, "avatar"),
   ]);
   const contributor = windowed.aggregate.contributors.find(
     (candidate) => candidate.uid === account.uid,
@@ -633,6 +674,7 @@ export async function buildRowFor(
       ...records,
       activity: contributor ? toActivity(contributor) : null,
       publicProfile: publicProfiles[account.uid] ?? false,
+      storedAvatars: avatars.length > 0,
     },
     names,
   );

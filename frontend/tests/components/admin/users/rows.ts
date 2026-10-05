@@ -24,6 +24,7 @@ export const userRow = (
   disabled: false,
   providers: ["google.com"],
   photoURL: null,
+  avatarRemovable: false,
   createdAt: daysBefore(100),
   lastSignInAt: daysBefore(10),
   lastRefreshAt: daysBefore(2),

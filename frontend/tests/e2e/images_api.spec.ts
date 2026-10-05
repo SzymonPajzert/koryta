@@ -60,8 +60,25 @@ test.describe("Obrazy przez API", () => {
   }) => {
     test.setTimeout(120_000);
     await page.goto("/o-nas");
-    const token = await idToken(request, USERS.normal.email);
-    const account = () => getAuth(app()).getUserByEmail(USERS.normal.email);
+
+    // An address nobody confirmed hosts no public picture: the seeded user
+    // never clicked a verification link, so they are turned away.
+    const unconfirmed = await request.post("/api/users/avatar", {
+      headers: bearer(await idToken(request, USERS.normal.email)),
+      data: { image: await webp(page, 256, 256) },
+    });
+    expect(unconfirmed.status()).toBe(403);
+
+    // The rest runs as an account of its own with a confirmed address, made
+    // for this test so that its picture is nobody else's.
+    const email = `avatar-${Date.now()}@koryta.pl`;
+    await getAuth(app()).createUser({
+      email,
+      password: USERS.admin.password,
+      emailVerified: true,
+    });
+    const token = await idToken(request, email);
+    const account = () => getAuth(app()).getUserByEmail(email);
 
     const first = await request.post("/api/users/avatar", {
       headers: bearer(token),
@@ -117,6 +134,7 @@ test.describe("Obrazy przez API", () => {
     expect(removed.status()).toBe(200);
     expect((await request.get(secondPath)).status()).toBe(404);
     expect((await account()).photoURL).toBeUndefined();
+    await getAuth(app()).deleteUser((await account()).uid);
   });
 
   test("zdjęcie osoby: widać je dopiero po zatwierdzeniu, i tylko na opublikowanej stronie", async ({

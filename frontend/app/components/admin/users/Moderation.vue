@@ -76,13 +76,6 @@ type Option = {
   confirm: string;
 };
 
-/** A picture the site stores for the account, rather than the one the sign-in
- * provider hands over. Only that one can be removed: a Google photo is
- * Google's, and the account would get it back at the next sign-in. */
-const ownAvatar = computed(
-  () => !!props.row.photoURL?.includes("/api/images/"),
-);
-
 /** How the dialogs name the profile: by its address where it has one. */
 const profileName = computed(() =>
   props.row.profile.handle
@@ -92,7 +85,12 @@ const profileName = computed(() =>
 
 const options = computed(() => {
   const list: Option[] = [];
-  if (ownAvatar.value) {
+  // Any picture but the sign-in provider's, which is Google's and would come
+  // back at the next sign-in: one we store, a leftover of a failed upload, or
+  // a url pointed at from the browser. The server says which, by the test the
+  // takedown itself is refused by - the url alone cannot tell the last one
+  // from Google's.
+  if (props.row.avatarRemovable) {
     list.push({
       action: "removeAvatar",
       label: "Usuń zdjęcie profilowe",

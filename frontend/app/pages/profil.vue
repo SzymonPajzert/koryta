@@ -6,10 +6,35 @@
           <v-card-text
             class="d-flex flex-column flex-sm-row align-center ga-4 pa-6"
           >
-            <v-avatar size="80" color="primary">
-              <v-img v-if="photoURL" :src="photoURL" alt="Zdjęcie profilowe" />
-              <span v-else class="text-h4">{{ initials }}</span>
-            </v-avatar>
+            <div class="avatar-wrapper">
+              <v-avatar size="80" color="primary">
+                <v-img
+                  v-if="photoURL"
+                  :src="photoURL"
+                  alt="Zdjęcie profilowe"
+                />
+                <span v-else class="text-h4">{{ initials }}</span>
+              </v-avatar>
+              <v-btn
+                class="avatar-edit"
+                icon
+                size="x-small"
+                color="primary"
+                aria-label="Zmień zdjęcie profilowe"
+                :loading="avatarPending"
+                @click="avatarInput?.click()"
+              >
+                <v-icon :icon="mdiCamera" />
+              </v-btn>
+              <input
+                ref="avatarInput"
+                type="file"
+                accept="image/*"
+                class="d-none"
+                data-testid="avatar-input"
+                @change="onAvatarPicked"
+              />
+            </div>
             <div class="text-center text-sm-left flex-grow-1">
               <div class="text-h5 mb-1">
                 {{ user.displayName || "Bez nazwy" }}
@@ -42,6 +67,16 @@
                   @click="sendVerification"
                 >
                   Wyślij email weryfikacyjny
+                </v-btn>
+                <v-btn
+                  v-if="hasOwnAvatar"
+                  size="small"
+                  variant="text"
+                  color="warning"
+                  :loading="avatarPending"
+                  @click="removeAvatar"
+                >
+                  Usuń zdjęcie profilowe
                 </v-btn>
               </div>
             </div>
@@ -212,11 +247,17 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiCheckCircle, mdiAlertCircle } from "@mdi/js";
-import { updateProfile, sendEmailVerification } from "firebase/auth";
+import { mdiCheckCircle, mdiAlertCircle, mdiCamera } from "@mdi/js";
+import {
+  reload,
+  updateProfile,
+  sendEmailVerification,
+  type User,
+} from "firebase/auth";
 import { doc, getFirestore, setDoc } from "firebase/firestore";
 import { useFirebaseApp } from "vuefire";
-import { useAuthState } from "@/composables/auth";
+import { authRequest, useAuthState } from "@/composables/auth";
+import { ImageUploadError, prepareImage } from "~/utils/imageUpload";
 import {
   notificationDefaults,
   notificationEnabled,
@@ -263,6 +304,115 @@ const notify = (text: string, color: "success" | "error" = "success") => {
   snackbarText.value = text;
   snackbarColor.value = color;
   snackbar.value = true;
+};
+
+// The user's own profile picture. The server stores it, records it as theirs
+// and points the account and the users document at it
+// (server/utils/avatars.ts); the header's picture follows the document live.
+const avatarInput = ref<HTMLInputElement>();
+const avatarPending = ref(false);
+
+/** The picture is one we store, rather than Google's or none - the only kind
+ * there is anything to remove. The same test as the server's `isOwnImage`;
+ * the base only lets a relative url parse. */
+const hasOwnAvatar = computed(() => {
+  if (!photoURL.value) return false;
+  try {
+    return new URL(photoURL.value, "https://koryta.pl").pathname.startsWith(
+      "/api/images/",
+    );
+  } catch {
+    return false;
+  }
+});
+
+/** What to tell the user about a change that failed: why the picture could
+ * not be prepared, or why the server turned it down - an unconfirmed address,
+ * a session that ran out. Not the message of a 400, which is the body
+ * parser's report on a request the page built itself. */
+const avatarError = (err: unknown, fallback: string) => {
+  if (err instanceof ImageUploadError) return err.message;
+  const { statusCode, data } = err as {
+    statusCode?: number;
+    data?: { message?: string };
+  };
+  return (statusCode === 401 || statusCode === 403) && data?.message
+    ? data.message
+    : fallback;
+};
+
+/** The server takes `email_verified` off the ID token, which keeps what it
+ * was issued with: an address confirmed from the mail a minute ago, in
+ * another tab, is still unconfirmed in the token this page holds. So for an
+ * account the page knows as unconfirmed, ask Auth again - the header's chip
+ * then says what Auth says now - and take a fresh token carrying the same. An
+ * address still unconfirmed goes to the server all the same, and its refusal
+ * is what the snackbar says. */
+async function tokenKnowsConfirmedAddress(account: User) {
+  if (account.emailVerified) return;
+  await reload(account);
+  await account.getIdToken(true);
+}
+
+/** The account the page holds keeps the picture it was loaded with until it
+ * is reloaded: after a removal that leaves none, the page would fall back to
+ * the very picture just deleted. Not fatal if it fails - the change is saved,
+ * and the document above already shows it. */
+async function reloadAccount(account: User) {
+  try {
+    await reload(account);
+  } catch (err) {
+    console.warn("Failed to reload the account after a picture change:", err);
+  }
+}
+
+const onAvatarPicked = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  // Reset so picking the same file again still fires a change event.
+  input.value = "";
+  if (!file || !user.value) return;
+  avatarPending.value = true;
+  try {
+    // Cropped to a square, scaled down and encoded again in the browser,
+    // which also leaves a phone photo's location behind (`prepareImage`).
+    const { dataUrl } = await prepareImage(file, "avatar");
+    await tokenKnowsConfirmedAddress(user.value);
+    await authRequest("/api/users/avatar", {
+      method: "POST",
+      body: { image: dataUrl },
+    });
+    await reloadAccount(user.value);
+    notify("Zapisano zdjęcie profilowe.");
+  } catch (err) {
+    if (!(err instanceof ImageUploadError)) {
+      console.error("Failed to upload a profile picture:", err);
+    }
+    notify(
+      avatarError(err, "Nie udało się zapisać zdjęcia. Spróbuj ponownie."),
+      "error",
+    );
+  } finally {
+    avatarPending.value = false;
+  }
+};
+
+const removeAvatar = async () => {
+  if (!user.value) return;
+  avatarPending.value = true;
+  try {
+    await authRequest("/api/users/avatar", { method: "DELETE" });
+    await reloadAccount(user.value);
+    notify("Usunięto zdjęcie profilowe.");
+  } catch (err) {
+    console.error("Failed to remove the profile picture:", err);
+    notify(
+      avatarError(err, "Nie udało się usunąć zdjęcia. Spróbuj ponownie."),
+      "error",
+    );
+  } finally {
+    avatarPending.value = false;
+  }
 };
 
 // Display name editing
@@ -465,5 +615,17 @@ const sendVerification = async () => {
 <style scoped>
 .profile-page {
   max-width: 640px;
+}
+
+/* The camera sits on the avatar's lower right edge, over the picture it
+   changes. */
+.avatar-wrapper {
+  position: relative;
+}
+
+.avatar-edit {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
 }
 </style>

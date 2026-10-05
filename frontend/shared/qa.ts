@@ -59,6 +59,33 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "moderacja-kont-uzytkownikow",
+    title: "Usunięcie komuś zdjęcia albo nazwy i ukrycie profilu",
+    description:
+      "Na /admin/uzytkownicy administrator po okresie próbnym może usunąć zdjęcie profilowe, usunąć nazwę użytkownika albo ukryć i przywrócić publiczny profil. Każda taka zmiana wymaga powodu i trafia do historii konta.",
+    steps: [
+      "Rozwiń konto z własnym zdjęciem i usuń zdjęcie, podając powód - zdjęcie ma zniknąć, a w historii konta ma się pojawić „Usunięcie zdjęcia profilowego” z powodem.",
+      "Usuń temu kontu nazwę - w historii ma się pojawić „Usunięcie nazwy użytkownika” z dawną nazwą.",
+      "Ukryj profil - adres /uczestnik/… ma dawać stronę „nie znaleziono”. Przywróć go - ma się otwierać znowu.",
+    ],
+    link: "/admin/uzytkownicy",
+    area: "admin",
+  },
+  {
+    id: "wlasne-zdjecie-profilowe",
+    title: "Własne zdjęcie profilowe",
+    description:
+      "Na /profil można dodać własne zdjęcie. Przeglądarka przycina je do kwadratu i zmniejsza, zanim je wyśle, bez zapisanych w nim danych, np. miejsca zrobienia. Zdjęcie doda tylko konto z potwierdzonym adresem e-mail.",
+    steps: [
+      "Zaloguj się kontem z potwierdzonym adresem i otwórz /profil - na zdjęciu albo inicjałach ma być okrągły przycisk z aparatem.",
+      "Kliknij aparat i wybierz zdjęcie - ma się pojawić „Zapisano zdjęcie profilowe.”, a nowe zdjęcie na profilu i w prawym górnym rogu strony.",
+      "Kliknij „Usuń zdjęcie profilowe” - ma wrócić zdjęcie z konta Google albo inicjały.",
+      "Na koncie z niepotwierdzonym adresem wybierz zdjęcie - ma się pojawić „Potwierdź adres e-mail, zanim dodasz zdjęcie profilowe.”",
+    ],
+    link: "/profil",
+    area: "contributor",
+  },
+  {
     id: "prosba-o-dostep",
     title: "Prośba o dostęp do narzędzi zespołu",
     description:

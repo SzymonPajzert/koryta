@@ -398,6 +398,12 @@ export type AdminUserRow = {
   providers: string[];
   /** Auth's, as `/api/users/lookup` hands it to administrators. */
   photoURL: string | null;
+  /** The account shows a picture an administrator can take down: anything but
+   * its sign-in provider's (`hasRemovableAvatar`, server/utils/avatars.ts).
+   * Decided on the server, which reads the record, the stored images and the
+   * provider's picture; `photoURL` alone cannot tell a url set from the
+   * browser from the one Google hands over. */
+  avatarRemovable: boolean;
   createdAt: string | null;
   lastSignInAt: string | null;
   /** Auth's `lastRefreshTime`: the last time a browser refreshed a token, so
