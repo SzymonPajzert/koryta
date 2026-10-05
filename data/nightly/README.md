@@ -81,8 +81,8 @@ and Secret Manager.
 
    The PESEL key is added from the machine that holds it
    (`~/.config/koryta/pesel-salt`); the script says how if it is not that one.
-   Whether the key may live in Secret Manager at all is
-   `decide-pesel-key-in-secret-manager`.
+   An existing secret is kept as it is: never add it a second version, as a
+   new key's fingerprints join to nothing.
 
 2. Prepare the VM - packages, the `koryta` user, uv, Go, the checkout, the
    units:
@@ -91,6 +91,12 @@ and Secret Manager.
    gcloud compute ssh koryta-nightly --zone=europe-central2-b --project=koryta-pl \
      --command='sudo bash -s' < data/nightly/setup-vm.sh
    ```
+
+   It sets up from `origin/main`. Before this is merged, name the branch -
+   `--command='sudo env KORYTA_REF=origin/nightly-vm bash -s'` - and the
+   nights run the branch until `KORYTA_REF` in `/etc/koryta/nightly.env` goes
+   back to `origin/main`. Change it when the branch merges: once it is deleted,
+   a night cannot check it out and stops at the start.
 
 3. Run the first night by hand, sending nobody. It is a cold one - empty
    `versioned/`, empty download cache - so it takes longer than the rest.
