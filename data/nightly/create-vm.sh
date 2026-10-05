@@ -15,9 +15,11 @@ project=${PROJECT:-koryta-pl}
 region=${REGION:-europe-central2}
 zone=${ZONE:-europe-central2-b}
 vm=${VM:-koryta-nightly}
-# 2 vCPU / 16 GB: the night's peak is ~5 GB, but a pipeline rebuilt without
-# its pin has taken 11 GB. e2-standard-2 (8 GB) is $0.081/h against $0.109/h.
-machine=${MACHINE:-e2-highmem-2}
+# 4 vCPU / 32 GB: a full night peaks at 17.6-18.4 GB (2026-10-05, systemd's
+# "memory peak") - every pipeline is rebuilt in one process and keeps its
+# output until the end - so 16 GB is not enough. The extra cores help DuckDB
+# and the odpis parser's process pool. $0.218/h against e2-highmem-2's $0.109.
+machine=${MACHINE:-e2-highmem-4}
 # versioned/ (~3 GB), the download cache, the venv, the odpis PDFs and memo.
 disk_gb=${DISK_GB:-30}
 sa_name=${SA_NAME:-koryta-nightly}

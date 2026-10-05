@@ -9,7 +9,7 @@ when nobody is still editing, and compares tonight's people with that copy:
 | 04:00       | `scheduledFirestoreExport` copies the site to `gs://koryta-pl-crawled/hostname=koryta.pl/date=<UTC>/` |
 | 04:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
 | 04:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
-| ~06:00      | the night is over; `poweroff.sh` switches the VM off                                                   |
+| ~06:20      | the night is over; `poweroff.sh` switches the VM off                                                   |
 | 08:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
 | 09:00       | the instance schedule stops the VM, if a night hung                                                    |
 
@@ -157,9 +157,11 @@ way, and the timer runs the night on a VM that is already up too.
 
 ## What it costs
 
-At list prices in europe-central2: the VM, e2-highmem-2, is $0.109 an hour -
-about $5 a month at an hour and a half a night - and its 30 GB balanced disk
-$3.90 a month whether it runs or not. Bucket traffic is under a dollar. The
+At list prices in europe-central2: the VM, e2-highmem-4, is $0.218 an hour.
+The first full night (2026-10-05, caches warm) took 110 minutes - 67 of them
+the rebuild, 27 the pipeline tests - and peaked at 17.6 GB, so with the boot
+about $13 a month. Its 30 GB balanced disk is $3.90 a month whether it runs
+or not. Bucket traffic is under a dollar. The
 shared cache grows by the night's backups as `main`; how long it keeps them is
 `decide-sharedcache-backup-retention`.
 
