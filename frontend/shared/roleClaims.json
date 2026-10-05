@@ -1,0 +1,6 @@
+{
+  "normal": {},
+  "trusted": { "trusted": true },
+  "datascience": { "trusted": true, "datascience": true },
+  "admin": { "trusted": true, "datascience": true, "admin": true }
+}

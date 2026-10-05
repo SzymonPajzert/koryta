@@ -1,26 +1,12 @@
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getOptionalUser } from "~~/server/utils/auth";
-import { collectActivityEvents } from "~~/server/utils/activityEvents";
+import type { ActivityAggregate } from "~~/server/utils/activityStats";
 import {
-  identify,
-  readPublicProfiles,
-  type ContributorIdentity,
-} from "~~/server/utils/contributors";
-import {
-  dayStartIso,
-  ensureDailyRollups,
-  mergeRollups,
-  mergeTruncated,
-  rollupForDay,
-  splitSettledDays,
-  type DailyRollup,
-} from "~~/server/utils/activityRollup";
-import {
-  daysBetween,
-  type ActivityAggregate,
-} from "~~/server/utils/activityStats";
+  cachedActivityWindow,
+  LEADERBOARD_SIZE,
+  type WindowedActivity,
+} from "~~/server/utils/activityWindow";
 import {
   activityRanges,
   defaultActivityRange,
@@ -44,11 +30,6 @@ const queryValidator = z.object({
     )
     .default(defaultActivityRange),
 });
-
-/** How many contributors the leaderboard resolves names for. Well past the
- * number of people who have ever been active in a week, and it keeps the
- * response — and the auth lookups behind it — bounded either way. */
-const LEADERBOARD_SIZE = 25;
 
 export type ActivityContributor = {
   /** Stable key for a table row or chart series. The uid for an admin, the rank
@@ -124,7 +105,7 @@ export default defineEventHandler(async (event): Promise<ActivityStats> => {
   const caller = await getOptionalUser(event);
   const isAdmin = caller?.admin === true;
 
-  const windowed = await cachedWindow(days);
+  const windowed = await cachedActivityWindow(days);
   const ranked = windowed.aggregate.contributors;
 
   if (caller) {
@@ -166,17 +147,6 @@ export default defineEventHandler(async (event): Promise<ActivityStats> => {
     truncated: windowed.truncated,
   };
 });
-
-type WindowedActivity = {
-  window: { since: string; until: string; days: number };
-  aggregate: ActivityAggregate;
-  truncated: ActivityKind[];
-  /** Display data for the ranked slice, from the auth service. Server side
-   * only — `present` decides which fields of it any given caller may see. */
-  identities: Record<string, ContributorIdentity>;
-  /** Which of the ranked contributors agreed to be named in public. */
-  public: Record<string, boolean>;
-};
 
 /** One ranked contributor as this caller may see them. */
 function present(
@@ -220,74 +190,3 @@ function present(
       : {}),
   };
 }
-
-/** The whole read-and-roll-up, memoized per window length.
- *
- * Five minutes of staleness on a chart of days is not worth noticing, and the
- * memo is what keeps the auth and `users` lookups off the per-request path as
- * well. What it holds is shared between callers, so it holds everything anyone
- * may see and nothing is stripped out on the way in — `present` does the
- * stripping, per caller, on the way out.
- */
-const cachedWindow = defineCachedFunction(
-  async (days: number): Promise<WindowedActivity> => {
-    const until = new Date();
-    const since = new Date(until);
-    since.setUTCDate(since.getUTCDate() - (days - 1));
-    since.setUTCHours(0, 0, 0, 0);
-
-    const window = {
-      since: since.toISOString().slice(0, 10),
-      until: until.toISOString().slice(0, 10),
-      days,
-    };
-
-    const db = getFirestore("koryta-pl");
-
-    // A settled day is counted once and kept; the tail of the window is read
-    // live, because a vote stamped by a slow browser clock can still land in it.
-    // `daysBetween` ends on `until`, which is today, so `live` is never empty.
-    const spanned = daysBetween(window.since, window.until);
-    const { settled, live } = splitSettledDays(spanned, until);
-    const [past, current] = await Promise.all([
-      ensureDailyRollups(db, settled),
-      collectActivityEvents(db, {
-        sinceIso: dayStartIso(live[0] ?? window.until),
-      }),
-    ]);
-
-    // One scan covers every live day; `rollupForDay` keeps only the events that
-    // fall on the day it is given, so handing it the same list per day is what
-    // splits them.
-    const rollups: DailyRollup[] = [
-      ...past,
-      ...live.map((day) =>
-        rollupForDay(day, current.events, current.truncated),
-      ),
-    ];
-
-    const aggregate = mergeRollups(spanned, rollups);
-    const ranked = aggregate.contributors.slice(0, LEADERBOARD_SIZE);
-    const [identities, publicProfiles] = await Promise.all([
-      identify(ranked.map((c) => c.uid)),
-      readPublicProfiles(
-        db,
-        ranked.map((c) => c.uid),
-      ),
-    ]);
-
-    return {
-      window,
-      aggregate,
-      truncated: mergeTruncated(rollups),
-      identities,
-      public: publicProfiles,
-    };
-  },
-  {
-    name: "stats-activity",
-    maxAge: 300,
-    swr: true,
-    getKey: (days: number) => String(days),
-  },
-);

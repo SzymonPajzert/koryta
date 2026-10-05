@@ -115,6 +115,43 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Accounts as the site keeps them beyond Firebase Auth - see
+    // frontend/shared/userAdmin.ts. All of it is written by the server or by
+    // the claims script with the admin SDK, which these rules do not apply to,
+    // and read back through /api/admin/users, /api/users/* and
+    // /api/profiles/*. Closed on both sides:
+    // - roleNominations: who should hold which role. A client that could write
+    //   here would be nominating itself, and one that could read would see
+    //   who is on trial and why.
+    // - userActions: the history of every nomination, takedown and request,
+    //   with the reasons given.
+    // - userStats: how often each account signs in.
+    // - accessRequests: why somebody asked for the team's tools.
+    // - profiles, profileHandles: the handle a public profile is found by, the
+    //   picture it shows and whether an administrator hid it. A handle is
+    //   unique because it is a document id here, which only holds if nobody
+    //   but the server can create one.
+    // Spelled out rather than left to the default deny so none of them is
+    // mistaken for an oversight and opened up later.
+    match /roleNominations/{uid} {
+      allow read, write: if false;
+    }
+    match /userActions/{actionId} {
+      allow read, write: if false;
+    }
+    match /userStats/{uid} {
+      allow read, write: if false;
+    }
+    match /accessRequests/{uid} {
+      allow read, write: if false;
+    }
+    match /profiles/{uid} {
+      allow read, write: if false;
+    }
+    match /profileHandles/{handle} {
+      allow read, write: if false;
+    }
+
     // Daily counters bounding how much feedback gets forwarded to Slack, and
     // how many screenshots are kept. Server-side only; a client that could
     // read these would learn how close the caps are, and one that could write
