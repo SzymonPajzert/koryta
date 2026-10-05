@@ -269,8 +269,9 @@ def scrape(
                     uploads.add(store, ctx, url, result)
                     time.sleep(sleep_time)
                 summary.queries_done += 1
+                progress()
                 if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
-                    summary.stopped = f"{failures_in_a_row} requests in a row failed"
+                    summary.stopped = f"{failures_in_a_row} {REFUSING}"
                     break
                 if time.monotonic() - last_progress >= PROGRESS_EVERY:
                     last_progress = time.monotonic()
@@ -360,9 +361,16 @@ def scrape_krs_free(
     with requests.Session() as session:
         fetch = partial(query_krs_api, session=session)
         report("odpisy")
-    scrape(
-            ctx, queries, sleep_time, summary, should_stop, fetch=fetch, held_today=held
-        , progress=report)
+        scrape(
+            ctx,
+            queries,
+            sleep_time,
+            summary,
+            should_stop,
+            fetch=fetch,
+            held_today=held,
+            progress=report,
+        )
     print(summary.line())
     return summary
 
