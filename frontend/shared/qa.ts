@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "prosba-o-dostep",
+    title: "Prośba o dostęp do narzędzi zespołu",
+    description:
+      "Zamiast „poproś mailem albo na Slacku” na /pomoc jest karta „Poproś o dostęp do narzędzi”, a na /rozszerzenie przycisk pod ostrzeżeniem o braku uprawnień. Prośba trafia do administratorów na stronę Użytkownicy, a karta mówi potem, na jakim jest etapie.",
+    steps: [
+      "Z konta bez uprawnień zespołu otwórz /pomoc, w „Dołącz do zespołu” kliknij „Poproś o dostęp do narzędzi”, wpisz co najmniej 10 znaków i wyślij - karta ma potem mówić „Prośba wysłana <dzisiejsza data>…”.",
+      "Otwórz /rozszerzenie - pod ostrzeżeniem o braku uprawnień ma być ta sama informacja zamiast przycisku.",
+      "Z konta administratora otwórz /admin/uzytkownicy - prośba ma być w „Prośby o dostęp”, z treścią i stroną, z której ją wysłano.",
+    ],
+    link: "/pomoc",
+    area: "contributor",
+  },
+  {
     id: "polityka-prywatnosci-konta",
     title: "Polityka prywatności mówi, co wiemy o kontach",
     description:

@@ -23,8 +23,14 @@
         variant="tonal"
         class="mb-4"
       >
-        Twoje konto nie ma uprawnień do wysyłania artykułów. Napisz do nas,
-        jeśli chcesz pomagać przy zbieraniu danych.
+        Twoje konto nie ma jeszcze uprawnień do wysyłania artykułów - to jedno z
+        narzędzi zespołu. Jeśli chcesz pomagać przy zbieraniu danych, poproś o
+        dostęp.
+        <AccessRequestButton
+          source="rozszerzenie"
+          class="mt-3"
+          @has-access="recheckClaims"
+        />
       </v-alert>
 
       <template v-else>
@@ -195,4 +201,14 @@ onMounted(async () => {
   isDatascience.value = result?.claims.datascience === true;
   if (silent.value && isDatascience.value) await sendToken();
 });
+
+/** The account holds the claim, but the token this page read does not: the
+ * claims script granted it after the token was issued, and a token keeps its
+ * claims for up to an hour. A forced refresh fetches one that carries it, and
+ * the warning gives way to the button that connects the extension - rather
+ * than telling somebody who was just let in that they are not. */
+async function recheckClaims() {
+  const result = await user.value?.getIdTokenResult(true);
+  isDatascience.value = result?.claims.datascience === true;
+}
 </script>

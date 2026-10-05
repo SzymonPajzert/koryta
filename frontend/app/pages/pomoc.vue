@@ -320,19 +320,44 @@
         <!-- Named as real work and chipped „dla zespołu”, rather than linked as
              if anyone can click it: the extension is gated on the datascience
              claim. It goes to /rozszerzenie rather than to a mailto, because
-             that page says what the tool is and tells a reader without the
-             claim to write to us - which a mailto cannot. Nothing linked to it
-             from here before. -->
+             that page says what the tool is and offers a reader without the
+             claim the same request as the card beside it - which a mailto
+             cannot. Nothing linked to it from here before. -->
         <v-col cols="12" sm="6" md="4">
           <CardAction
             :icon="mdiToolboxOutline"
             to="/rozszerzenie"
             title="Narzędzia dla stałych wolontariuszy"
-            desc="Wtyczka do przeglądarki, która zapisuje czytany artykuł - także zza paywalla - i od razu wyciąga z niego fakty. O dostęp poproś mailem albo na Slacku."
+            desc="Wtyczka do przeglądarki, która zapisuje czytany artykuł - także zza paywalla - i od razu wyciąga z niego fakty."
             ink="ink-neutral"
             access="team"
             @click="task('narzedzia')"
           />
+        </v-col>
+        <!-- The request for those tools, which used to be "O dostęp poproś
+             mailem albo na Slacku" at the end of the card above. A card of its
+             own rather than a button inside that one: the card above is a link,
+             and a button inside a link is two controls in one place - a click
+             on it would also follow the link. It fills the sixth cell of the
+             grid the five cards before it left empty. Once the request is sent,
+             granted or turned down, the card's sentence says so instead. -->
+        <v-col cols="12" sm="6" md="4">
+          <AccessRequestButton source="pomoc" class="h-100">
+            <template #activator="{ open, summary }">
+              <CardAction
+                :icon="mdiAccountKeyOutline"
+                title="Poproś o dostęp do narzędzi"
+                ink="ink-neutral"
+                access="login"
+                @activate="open"
+              >
+                {{
+                  summary ??
+                  "Napisz, przy czym chcesz pomagać - prośba trafi do administratorów, a odpowiedź zobaczysz na swoim koncie."
+                }}
+              </CardAction>
+            </template>
+          </AccessRequestButton>
         </v-col>
       </v-row>
     </section>
@@ -471,6 +496,7 @@
 <script lang="ts" setup>
 import { ref } from "vue";
 import {
+  mdiAccountKeyOutline,
   mdiAccountPlusOutline,
   mdiAccountQuestionOutline,
   mdiAccountSearchOutline,
