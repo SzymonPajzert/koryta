@@ -11,9 +11,9 @@ import re
 
 from entities.util import format_query, parse_query
 
-# URL shapes that serve a file rather than a page. Measured across the sample in
-# BIP_SCRAPING_80_20.md; extensionless endpoints (attachments/download, getFile)
-# are included because the response content-type is the authoritative check.
+# URL shapes that serve a file rather than a page. Extensionless endpoints
+# (attachments/download, getFile) are included because the response
+# content-type is the authoritative check.
 _DOC_PATTERNS = [
     re.compile(r"/attachments?/\d+/download", re.IGNORECASE),
     re.compile(r"/attachments/download/\d+", re.IGNORECASE),
