@@ -10,26 +10,36 @@ export const seoTypes: readonly SeoType[] = [
   "temat",
 ] as const;
 
-/** The status a slug-healing redirect goes out with on the server.
+/** The status a slug-healing redirect to `url` goes out with on the server.
  *
- * 302, deliberately, and not 301. Every one of these redirects says "the id in
- * this url resolves, but the slug in front of it is not the current canonical
- * one" - and what is canonical is derived from the node's name and from which
- * types have a page of their own, both of which change. A 301 is cached by the
- * browser for the life of the profile and is never revalidated, so each such
- * change would be frozen into every browser that saw the old answer, with no
- * deploy able to reach it.
+ * Every one of these redirects says "the id in this url resolves, but this is
+ * not the address its page is at": an `/entity/:type/:id`, a slug from before a
+ * rename, a mangled id. Where `url` is the node's own page, that is a permanent
+ * move and it says so with a 301. Anywhere else - a region, sent to the table
+ * for want of a page of its own - it is a stopgap, and stays a 302.
  *
- * That is not hypothetical: companies were forwarded to `/eksploruj/tabela`
+ * This was a 302 throughout until 2026-10-01, because a browser keeps a 301
+ * for the life of the profile: companies were forwarded to `/eksploruj/tabela`
  * between 2026-05-31 and 2026-08-26, and after the page came back an
  * `/instytucja/...` url still went to the table in any browser that had been
- * there before - the request never left the machine.
+ * there before. `redirectToNodeUrl` now sends these with `no-store`, so no
+ * browser keeps either kind - and a 301 to a node's own page could not strand
+ * anybody anyway, since that address resolves through this same code.
  *
- * The cost is the search-engine signal a 301 carries and a 302 does not. It is
- * worth paying: `_sitemap-urls.ts` advertises the canonical url directly, so a
- * crawler is told the right address without having to be redirected to it.
+ * What the 302 cost was measured on 2026-10-01, and the sitemap advertising the
+ * canonical url did not prevent it. Google treats a 302 as "the page still
+ * lives here", so it kept the old address as the page's own: of 64
+ * `/entity/` urls inspected, 31 were indexed under that address, 28 of them
+ * alongside the readable page - two copies of one page splitting what it ranks
+ * on. 62 `/entity/` urls drew 312 impressions in the two weeks to 09-30.
+ * Company slugs renamed with their town were the same: 8 of 20 old ones still
+ * indexed as themselves.
  */
-export const SLUG_REDIRECT_CODE = 302;
+export function slugRedirectCode(url: string): 301 | 302 {
+  return /^\/(osoba|instytucja|region|artykul|temat)\/[^?#]+$/.test(url)
+    ? 301
+    : 302;
+}
 
 export function createSlug(name: string): string {
   return name
@@ -150,4 +160,28 @@ export function parseEntityUrlSlug(slugWithId: string): {
   const id = parts.pop() || "";
   const slug = parts.join("-");
   return { slug, id };
+}
+
+/** An id reduced to what survives the two ways a link to a page reaches us
+ * mangled: lowercased, and with punctuation stuck to its end.
+ *
+ * The lowercasing was ours. Until 2026-08-08 nuxt-seo-utils lowercased every
+ * canonical and og:url the site sent (`canonicalLowercase` in nuxt.config.ts),
+ * and a Firestore id is case sensitive, so every page advertised an address
+ * that does not resolve. Google filed those addresses as the pages' own and
+ * still asks for them, each time naming the real page as where it found the
+ * link. The punctuation is everybody else's: a link pasted at the end of a
+ * sentence keeps its full stop. */
+export function mangledIdKey(id: string): string {
+  return id.replace(/[^A-Za-z0-9]+$/, "").toLowerCase();
+}
+
+/** Whether `id` could be a mangled copy of another page's id - worth asking
+ * only once it has failed to resolve as it is.
+ *
+ * A generated Firestore id is twenty characters drawn from both cases, so one
+ * that has letters and not a single capital has all but certainly lost them:
+ * by chance that happens to about one id in 50,000. */
+export function mayBeMangledId(id: string): boolean {
+  return /[^A-Za-z0-9]$/.test(id) || (/[a-z]/.test(id) && !/[A-Z]/.test(id));
 }

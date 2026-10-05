@@ -152,6 +152,15 @@ export default defineNuxtConfig({
       // with its own ?krs=/?teryt=. That is the bulk of the crawl budget.
       "/eksploruj/tabela",
     ],
+    // A Disallow keeps a crawler from reading a url, not Google from listing
+    // it: a blocked url that enough pages link to is indexed anyway, as a bare
+    // address, because the noindex the module stamps on it is in a response
+    // nobody may fetch. On 2026-10-01 Search Console had eight - the category
+    // chips' `/eksploruj/tabela?category=…` (446 impressions for
+    // komunikacja-miejska in two weeks, at position 44, never clicked),
+    // `/profil` and `/plik`. These few are let through so that the noindex
+    // can be read; `routeRules` keeps it on them now that robots.txt does not.
+    allow: ["/eksploruj/tabela?category=", "/profil$", "/plik$"],
   },
   plausible: {
     // Prevent tracking on localhost
@@ -357,6 +366,12 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { swr: 3600 },
     "/admin/**": { ssr: false },
+
+    // Crawlable through `robots.allow` above, and never to be indexed: the
+    // module derives its noindex from robots.txt, which no longer says so for
+    // these. `/plik` alone needs nothing - it is a 404.
+    "/eksploruj/tabela": { robots: false },
+    "/profil": { robots: false },
 
     // `/lista` was removed in "Remove /lista, and point what linked to it at
     // the table", and 404ed from then on - but it kept ranking. Search Console

@@ -68,17 +68,40 @@ test.describe("Entity page", () => {
       waitUntil: "domcontentloaded",
     });
 
-    // 302 rather than 301, and asserted rather than assumed: a browser caches a
-    // 301 for the life of the profile, so shipping one here would freeze
-    // today's canonical url into every visitor beyond the reach of any deploy.
-    // See SLUG_REDIRECT_CODE in app/composables/slugs.ts.
+    // A 301, so that Google files the readable url as the page: under the 302
+    // this used to be it kept the /entity/ url as the page's own address. And
+    // `no-store` beside it, asserted rather than assumed: a 301 a browser may
+    // cache is kept for the life of the profile, beyond the reach of any
+    // deploy. See `slugRedirectCode` in app/composables/slugs.ts.
     const redirected = response?.request().redirectedFrom();
     expect(redirected, "/entity/person/1 did not redirect at all").toBeTruthy();
-    expect((await redirected!.response())?.status()).toBe(302);
+    const redirect = await redirected!.response();
+    expect(redirect?.status()).toBe(301);
+    expect(redirect?.headers()["cache-control"]).toBe("no-store");
 
     await expect(page).toHaveURL(/\/osoba\/jan-kowalski-1/, {
       timeout: 30_000,
     });
+    await expect(page.getByText("Jan Kowalski").first()).toBeVisible({
+      timeout: 30_000,
+    });
+  });
+
+  test("a link that kept the full stop of its sentence opens the page", async ({
+    page,
+  }) => {
+    // Forums, chat apps and mail clients autolink the full stop that ends a
+    // sentence along with the address before it. infokolej.pl did, and its
+    // readers landed on "Strona nieznaleziona".
+    const response = await page.goto(`${PERSON}.`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    const redirected = response?.request().redirectedFrom();
+    expect(redirected, "the dotted url did not redirect at all").toBeTruthy();
+    expect((await redirected!.response())?.status()).toBe(301);
+
+    await expect(page).toHaveURL(new RegExp(`${PERSON}$`), { timeout: 30_000 });
     await expect(page.getByText("Jan Kowalski").first()).toBeVisible({
       timeout: 30_000,
     });

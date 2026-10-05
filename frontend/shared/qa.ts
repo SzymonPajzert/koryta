@@ -59,6 +59,28 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "stare-adresy-przenosza-na-stale",
+    title: "Stare adresy stron przenoszą na stałe (301)",
+    description:
+      "Adres /entity/… i adres ze starą nazwą przenosiły na właściwą stronę tymczasowo (302), więc Google trzymało w indeksie stary adres obok nowego. Teraz przekierowanie jest stałe, a /entity/ z nieistniejącym identyfikatorem odpowiada 404.",
+    steps: [
+      "Otwórz /entity/person/SVb31mmNOMmlOy1BsPhH z narzędziami deweloperskimi: w zakładce Sieć pierwsze żądanie ma mieć status 301 i nagłówek cache-control: no-store, a strona ma się otworzyć pod adresem z nazwiskiem.",
+    ],
+    link: "/entity/person/SVb31mmNOMmlOy1BsPhH",
+    area: "public",
+  },
+  {
+    id: "link-z-malymi-literami-prowadzi-do-strony",
+    title: "Stary link pisany małymi literami prowadzi do strony",
+    description:
+      "Do sierpnia strona podawała Google i serwisom społecznościowym swój adres z identyfikatorem zapisanym małymi literami, a taki adres kończył się błędem 404. Teraz przenosi na właściwą stronę - tak samo adres z kropką lub przecinkiem doklejonym na końcu.",
+    steps: [
+      "Otwórz /osoba/tadeusz-grzegorz-slawik-2gbeatnjnfjkauu1kuot - ma przenieść na stronę Tadeusza Sławika, z wielkimi literami w końcówce adresu.",
+    ],
+    link: "/osoba/tadeusz-grzegorz-slawik-2gbeatnjnfjkauu1kuot",
+    area: "public",
+  },
+  {
     id: "admin-procesy-importy",
     title: "Procesy: duże importy na stronę",
     description:
@@ -757,7 +779,7 @@ export const QA_ITEMS: QaItem[] = [
       "wyszukiwarek wyglądało to jak zwykła, istniejąca strona. Teraz " +
       "odpowiedź ma kod 404. Dla czytelnika nic się nie zmienia.",
     steps: [
-      "Otwórz adres osoby i zepsuj końcówkę identyfikatora, np. zamień ją na same małe litery.",
+      "Otwórz adres osoby i zepsuj końcówkę identyfikatora, np. usuń z niej ostatni znak (same małe litery już nie wystarczą - taki adres przenosi teraz na właściwą stronę).",
       "Strona ma nadal pokazywać „Strona nieznaleziona”.",
       "W narzędziach deweloperskich, w zakładce Sieć, pierwsze żądanie ma mieć status 404.",
     ],
