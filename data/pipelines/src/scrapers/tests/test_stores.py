@@ -1270,3 +1270,66 @@ class TestDeclinedLongPipeline(unittest.TestCase):
             LongShared().read_or_process(ctx)
 
         long_process.assert_not_called()
+
+
+class FirstRoot(Pipeline):
+    filename = "first_root"
+
+    def process(self, ctx: Context):
+        return pd.DataFrame({"a": [1]})
+
+
+class SecondRoot(Pipeline):
+    filename = "second_root"
+
+    def process(self, ctx: Context):
+        return pd.DataFrame({"b": [2]})
+
+
+class TestEveryRootIsDecided(unittest.TestCase):
+    """`koryta A B --refresh ...` decides B's tree too, not only A's.
+
+    Only the first pipeline's tree used to be decided, and any later one outside
+    it was read from disk whatever --refresh said: on the nightly VM's first
+    night `koryta --all-pipelines --refresh all` rebuilt one tree and read or
+    restored the rest.
+    """
+
+    def setUp(self):
+        self.ctx = Mock(spec=Context)
+        self.ctx.io = Mock()
+        self.ctx.io.dumper = Mock()
+        # Both outputs are on disk and read back.
+        self.ctx.io.get_mtime.return_value = 100.0
+        self.ctx.io.read_data.return_value.read_dataframe.return_value = pd.DataFrame(
+            {"x": [0]}
+        )
+
+    def run_both(self, **policy: Any) -> tuple[int, int]:
+        """How many times each root was processed, run one after the other."""
+        self.ctx.refresh_policy = ProcessPolicy.with_default(**policy)
+        with (
+            patch.object(
+                FirstRoot, "process", side_effect=FirstRoot.process, autospec=True
+            ) as first,
+            patch.object(
+                SecondRoot, "process", side_effect=SecondRoot.process, autospec=True
+            ) as second,
+        ):
+            FirstRoot().read_or_process(self.ctx)
+            SecondRoot().read_or_process(self.ctx)
+        return first.call_count, second.call_count
+
+    def test_refresh_all_rebuilds_every_root(self):
+        self.assertEqual(self.run_both(refresh=["all"]), (1, 1))
+
+    def test_a_later_root_named_in_refresh_is_rebuilt(self):
+        self.assertEqual(self.run_both(refresh=["SecondRoot"]), (0, 1))
+
+    def test_a_root_held_out_of_refresh_all_is_read(self):
+        self.assertEqual(
+            self.run_both(refresh=["all"], exclude_refresh=["SecondRoot"]), (1, 0)
+        )
+
+    def test_nothing_named_reads_both(self):
+        self.assertEqual(self.run_both(), (0, 0))
