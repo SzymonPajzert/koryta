@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "polityka-prywatnosci-konta",
+    title: "Polityka prywatności mówi, co wiemy o kontach",
+    description:
+      "W polityce prywatności są nowe części o koncie, statystykach logowań, zdjęciu profilowym, publicznym profilu oraz prośbach o dostęp i nominacjach.",
+    steps: [
+      "Otwórz /plik/polityka_prywatnosci - w punkcie 2 mają być te części, a w punkcie 4 Google (Firebase) wśród odbiorców danych.",
+    ],
+    link: "/plik/polityka_prywatnosci",
+    area: "public",
+  },
+  {
     id: "statystyki-logowan",
     title: "Logowania i dni aktywności na liście użytkowników",
     description:
