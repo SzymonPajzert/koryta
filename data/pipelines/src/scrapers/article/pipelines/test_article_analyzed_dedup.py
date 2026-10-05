@@ -3,16 +3,22 @@
 from scrapers.article.pipelines.article_analyzed_pipeline import (
     _canonical_org,
     _canonical_party,
+    _canonical_person_name,
     _canonical_role,
     _collapse_between_articles,
     _dedup_facts_for_article,
     _drop_existing_facts,
+    _fact_has_blank_required_field,
+    _fact_id_key,
     _fact_key,
     _fact_key_name_only,
+    _fact_koryta_id,
     _fact_matches_koryta,
     _fact_person,
     _koryta_name_by_id,
     _person_ids_by_url,
+    _rename_fact_person_to_register,
+    _select_article_facts,
     _strip_and_date_fact,
 )
 
@@ -44,6 +50,29 @@ def test_canonical_party_aliases_fold():
     assert _canonical_party("PSL-Koalicja Polska") == "polskie stronnictwo ludowe"
     assert _canonical_party("po") == "platforma obywatelska"
     assert _canonical_party("Platforma Obywatelska") == "platforma obywatelska"
+
+
+def test_canonical_party_folds_po_and_ko_family():
+    # The committee PO runs as is the same membership, whatever it is called.
+    assert _canonical_party("Platforma") == "platforma obywatelska"
+    assert _canonical_party("KO") == "platforma obywatelska"
+    assert _canonical_party("Koalicja Obywatelska") == "platforma obywatelska"
+    # Compound committee names fold on the party they embed.
+    assert _canonical_party("Platforma Obywatelska – Koalicja Obywatelska") == (
+        "platforma obywatelska"
+    )
+    assert _canonical_party("Koalicja Obywatelska PO i Nowoczesna") == (
+        "platforma obywatelska"
+    )
+    # A short token must not fold a different committee ("Prawica Razem").
+    assert _canonical_party("Prawica Razem") == "prawica razem"
+    assert _canonical_party("Razem dla Piotrkowa") == "razem dla piotrkowa"
+
+
+def test_canonical_party_folds_party_full_names():
+    assert _canonical_party("Porozumienie Jarosława Gowina") == "porozumienie"
+    assert _canonical_party("Porozumienie") == "porozumienie"
+    assert _canonical_party("Polska 2050 Szymona Hołowni") == "polska 2050"
 
 
 def test_canonical_party_unknown_passes_through():
@@ -306,8 +335,30 @@ def test_canonical_role_folds_podsekretarz_and_resort_heads():
     assert _canonical_role("wiceszef", "ministerstwo aktywow panstwowych") == (
         "wiceminister"
     )
-    # Outside a ministry the loose role keeps its own canonical.
-    assert _canonical_role("szef") == "szef"
+    # Outside a ministry "szef" is how articles write the prezes.
+    assert _canonical_role("szef") == "prezes"
+
+
+def test_canonical_role_folds_szef_and_bare_czlonek():
+    # Articles call the company/association head "szef"; the site stores
+    # "prezes". The bare "członek" is the board member the site names fully.
+    assert _canonical_role("szef") == "prezes"
+    assert _canonical_role("szefowa") == "prezes"
+    assert _canonical_role("szef zarządu") == "prezes"
+    assert _canonical_role("członek") == "czlonek rady nadzorczej"
+    assert _canonical_role("członkini") == "czlonek rady nadzorczej"
+    # A ministry head is still the minister, and a zarząd member still its own.
+    assert _canonical_role("szef", "ministerstwo aktywow panstwowych") == "minister"
+    assert _canonical_role("członek", "zarzad spolki") == "czlonek zarzadu"
+
+
+def test_canonical_org_folds_abbreviation_aliases():
+    assert _canonical_org("EPP") == "europejska partia ludowa"
+    assert _canonical_org("PKP") == "polskie koleje panstwowe"
+    assert _canonical_org("CPK") == "centralny port komunikacyjny"
+    assert _canonical_org("Ministerstwo Cyfryzacji") == (
+        "ministerstwo administracji i cyfryzacji"
+    )
 
 
 def test_canonical_role_folds_senior_and_council_forms():
@@ -404,7 +455,7 @@ def test_canonical_role_folds_gender_and_form():
     assert _canonical_role("poseł") == "posel"
     assert _canonical_role("posłanka") == "posel"
     assert _canonical_role("prezes zarządu") == "prezes"
-    assert _canonical_role("szefowa") == "szef"
+    assert _canonical_role("szefowa") == "prezes"
 
 
 def test_canonical_role_folds_more_gender_variants():
@@ -445,7 +496,41 @@ def test_canonical_role_drops_org_scope_redundancy():
     assert _canonical_role("komendant wojewódzki") == "komendant wojewodzki"
 
 
+# --- _canonical_person_name ------------------------------------------------ #
+
+
+def test_canonical_person_name_folds_spelling_variants():
+    # The Barbara Gieroń case: article drops a middle name and a hyphen half,
+    # the register keeps both; the dedup key must be the same.
+    assert _canonical_person_name("Barbara Gieroń") == "barbara gieron"
+    assert _canonical_person_name("Barbara Maria Gieroń-Piskorska") == (
+        "barbara gieron"
+    )
+    assert _canonical_person_name("Barbara Maria Gieron") == "barbara gieron"
+    # Diacritics fold, whitespace and case collapse.
+    assert _canonical_person_name("  BARBARA   Gieron  ") == "barbara gieron"
+
+
+def test_canonical_person_name_keeps_a_lone_word():
+    # A bare surname/first name never invents a fuller form.
+    assert _canonical_person_name("Gieroń") == "gieron"
+    assert _canonical_person_name(None) == ""
+    assert _canonical_person_name("   ") == ""
+
+
+def test_canonical_person_name_keeps_distinct_people_apart():
+    # The full name decides the canonical, so two different people do not fold.
+    assert _canonical_person_name("Marek Wiesław Sowa") == "marek sowa"
+    assert _canonical_person_name("Marek Jan Nowak") == "marek nowak"
+
+
 # --- _fact_key ------------------------------------------------------------ #
+
+
+def test_fact_key_matches_across_name_spellings():
+    a = _fact_key(employment("Barbara Gieroń", "Alior Bank", "prezes"))
+    b = _fact_key(employment("Barbara Maria Gieroń-Piskorska", "Alior Bank", "prezes"))
+    assert a == b
 
 
 def test_fact_key_is_exact_on_entity_fields():
@@ -660,6 +745,107 @@ def test_strip_and_date_fact_drops_null_fields():
     assert fact["organization"] == "Orlen"
 
 
+def test_rename_fact_person_to_register():
+    names = {"idA": "Barbara Maria Gieroń-Piskorska"}
+    fact = employment("Barbara Gieroń", "Orlen", "prezes")
+    _rename_fact_person_to_register(fact, "idA", names)
+    assert fact["person"] == "Barbara Maria Gieroń-Piskorska"
+    # Relations name their subject `subject`.
+    rel = {
+        "fact_type": "personal_relation",
+        "subject": "Barbara Gieroń",
+        "object": "Łukasz",
+        "relation": "syn",
+    }
+    _rename_fact_person_to_register(rel, "idA", names)
+    assert rel["subject"] == "Barbara Maria Gieroń-Piskorska"
+    # No resolved id (or an unknown one) leaves the article's spelling alone.
+    other = employment("Barbara Gieroń", "Orlen", "prezes")
+    _rename_fact_person_to_register(other, None, names)
+    assert other["person"] == "Barbara Gieroń"
+    _rename_fact_person_to_register(other, "idZ", names)
+    assert other["person"] == "Barbara Gieroń"
+
+
+def test_select_article_facts_renames_confirmed_people():
+    rows = [
+        employment("Barbara Gieroń", "Rada Miasta Częstochowy", "radna", verified=True),
+        employment("Obcy Człowiek", "Orlen", "prezes", verified=True),
+    ]
+    facts, _ = _select_article_facts(
+        rows,
+        None,
+        "a.pl/x",
+        False,
+        ["idA"],
+        {"idA": "Barbara Maria Gieroń-Piskorska"},
+    )
+    by_org = {f["organization"]: f["person"] for f in facts}
+    assert by_org["Rada Miasta Częstochowy"] == "Barbara Maria Gieroń-Piskorska"
+    assert by_org["Orlen"] == "Obcy Człowiek"
+
+
+def test_fact_has_blank_required_field():
+    assert _fact_has_blank_required_field(employment("Jan Kowalski", "Orlen", ""))
+    assert _fact_has_blank_required_field(employment("Jan Kowalski", "", "prezes"))
+    assert _fact_has_blank_required_field(employment("", "Orlen", "prezes"))
+    assert not _fact_has_blank_required_field(
+        employment("Jan Kowalski", "Orlen", "prezes")
+    )
+    assert _fact_has_blank_required_field(party("Jan Kowalski", ""))
+    assert _fact_has_blank_required_field(
+        {
+            "fact_type": "personal_relation",
+            "subject": "Anna Nowak",
+            "object": "",
+            "relation": "matka",
+        }
+    )
+    assert not _fact_has_blank_required_field(
+        {
+            "fact_type": "personal_relation",
+            "subject": "Anna Nowak",
+            "object": "Jan Kowalski",
+            "relation": "matka",
+        }
+    )
+    # An unknown type has no declared fields and is left alone.
+    assert not _fact_has_blank_required_field({"fact_type": "mystery"})
+
+
+def test_dedup_facts_for_article_collapses_name_variants_via_koryta():
+    first_seen = {}
+    evidence = {}
+    names = {"idA": "Barbara Maria Gieroń-Piskorska"}
+    facts = [
+        employment("Barbara Gieroń", "Orlen", "prezes"),
+        employment("Barbara Maria Gieroń-Piskorska", "Orlen", "prezes"),
+    ]
+    triaged = _dedup_facts_for_article(
+        "a.pl/x",
+        facts,
+        first_seen,
+        evidence,
+        koryta_ids=["idA"],
+        koryta_name_by_id=names,
+    )
+    assert len(triaged) == 1
+
+
+def test_drop_existing_facts_folds_szef_and_czlonek_synonyms():
+    held_prezes = employment("Jan Kowalski", "Orlen", "prezes")
+    held_czlonek = employment(
+        "Jan Kowalski", "Orlen", "członek rady nadzorczej"
+    )
+    fresh_szef = employment("Jan Kowalski", "Orlen", "szef")
+    fresh_czlonek = employment("Jan Kowalski", "Orlen", "członek")
+    existing = {
+        _fact_key_name_only(held_prezes),
+        _fact_key_name_only(held_czlonek),
+    }
+    assert _drop_existing_facts([fresh_szef, fresh_czlonek], existing) == []
+
+
 # --- _dedup_facts_for_article --------------------------------------------- #
 
 
@@ -836,6 +1022,38 @@ def test_fact_matches_koryta_subject_for_relation():
     assert not _fact_matches_koryta(fact, "a.pl/1", [], names)
 
 
+def test_fact_matches_koryta_when_the_article_drops_a_middle_name():
+    # The article says "Tomasz Kotajny"; the register holds the middle name.
+    # An exact normalized comparison dropped every such fact.
+    names = {"idA": "Tomasz Jerzy Kotajny"}
+    fact = employment("Tomasz Kotajny", "Orlen", "prezes")
+    assert _fact_matches_koryta(fact, "a.pl/1", ["idA"], names)
+
+
+def test_fact_matches_koryta_when_a_middle_name_and_hyphen_are_dropped():
+    # Both at once, the Barbara Gieroń case: the article writes "Barbara
+    # Gieroń" and the register holds "Barbara Maria Gieroń-Piskorska".
+    names = {"idA": "Barbara Maria Gieroń-Piskorska"}
+    fact = {
+        "fact_type": "personal_relation",
+        "subject": "Barbara Gieroń",
+        "object": "Łukasz",
+        "relation": "syn",
+    }
+    assert _fact_matches_koryta(fact, "a.pl/1", ["idA"], names)
+    # A different person is still not matched.
+    assert not _fact_matches_koryta(fact, "a.pl/1", ["idB"], {"idB": "Jan Kowalski"})
+
+
+def test_fact_matches_koryta_does_not_match_a_lone_surname_or_first_name():
+    # Variants never invent a bare surname or first name: "Gieroń" alone is not
+    # the registered "Barbara Maria Gieroń-Piskorska".
+    names = {"idA": "Barbara Maria Gieroń-Piskorska"}
+    assert not _fact_matches_koryta(
+        employment("Gieroń", "Orlen", "prezes"), "a.pl/1", ["idA"], names
+    )
+
+
 def test_fact_person_uses_person_then_subject():
     assert _fact_person(
         employment("Jan Kowalski", "Orlen", "prezes"), {"jan kowalski": "k1"}
@@ -876,6 +1094,153 @@ def test_fact_key_name_only_relation_uses_subject():
     assert _fact_key_name_only(fact) == _fact_key(
         fact, person_name="barbara gieroń", person_id=""
     )
+
+
+def test_drop_existing_facts_matches_across_name_spellings():
+    # The site holds the register's fuller spelling; our article wrote the
+    # short one. The fact is the same and must be dropped.
+    held = employment("Barbara Maria Gieroń-Piskorska", "Alior Bank", "prezes")
+    fresh = employment("Barbara Gieroń", "Alior Bank", "prezes")
+    existing = {_fact_key_name_only(held)}
+    assert _drop_existing_facts([fresh], existing) == []
+
+
+def test_dedup_collapses_spelling_variants_across_articles():
+    first_seen = {}
+    evidence = {}
+    t1 = _dedup_facts_for_article(
+        "a.pl/1",
+        [employment("Barbara Gieroń", "Orlen", "prezes")],
+        first_seen,
+        evidence,
+    )
+    t2 = _dedup_facts_for_article(
+        "b.pl/2",
+        [employment("Barbara Maria Gieroń-Piskorska", "Orlen", "prezes")],
+        first_seen,
+        evidence,
+    )
+    out1 = _collapse_between_articles(
+        "a.pl/1", t1, first_seen, evidence, keep_evidence=True
+    )
+    out2 = _collapse_between_articles(
+        "b.pl/2", t2, first_seen, evidence, keep_evidence=True
+    )
+    assert len(out1) == 1
+    assert out2 == []
+    assert out1[0]["evidence"] == ["a.pl/1", "b.pl/2"]
+
+
+def test_dedup_keeps_same_name_different_people_apart():
+    first_seen = {}
+    evidence = {}
+    t1 = _dedup_facts_for_article(
+        "a.pl/1",
+        [employment("Marek Sowa", "Orlen", "prezes")],
+        first_seen,
+        evidence,
+        person_ids={"marek sowa": "idA"},
+    )
+    t2 = _dedup_facts_for_article(
+        "b.pl/2",
+        [employment("Marek Sowa", "Orlen", "prezes")],
+        first_seen,
+        evidence,
+        person_ids={"marek sowa": "idB"},
+    )
+    out1 = _collapse_between_articles(
+        "a.pl/1", t1, first_seen, evidence, keep_evidence=True
+    )
+    out2 = _collapse_between_articles(
+        "b.pl/2", t2, first_seen, evidence, keep_evidence=True
+    )
+    assert len(out1) == 1
+    assert len(out2) == 1
+
+
+def test_fact_key_ignores_tag():
+    # Two pipeline runs stamp a different tag; the same fact must still dedup.
+    a = employment("Jan Kowalski", "Orlen", "prezes", tag="v26")
+    b = employment("Jan Kowalski", "Orlen", "prezes", tag="v27")
+    assert _fact_key(a) == _fact_key(b)
+    assert _fact_key_name_only(a) == _fact_key_name_only(b)
+    assert _fact_id_key(a, "idA") == _fact_id_key(b, "idA")
+
+
+def test_drop_existing_facts_ignores_tag():
+    held = employment("Jan Kowalski", "Orlen", "prezes", tag="v26-old")
+    fresh = employment("Jan Kowalski", "Orlen", "prezes", tag="v27-new")
+    assert _drop_existing_facts([fresh], {_fact_key_name_only(held)}) == []
+
+
+def test_fact_id_key_ignores_name_and_keeps_id():
+    a = _fact_id_key(employment("Barbara Gieroń", "Alior Bank", "prezes"), "idA")
+    b = _fact_id_key(
+        employment("Barbara Maria Gieroń-Piskorska", "Alior Bank", "prezes"), "idA"
+    )
+    assert a == b
+    # A different id is a different key, and it never equals a name-only key.
+    assert a != _fact_id_key(
+        employment("Barbara Gieroń", "Alior Bank", "prezes"), "idB"
+    )
+    assert a != _fact_key_name_only(
+        employment("Barbara Gieroń", "Alior Bank", "prezes")
+    )
+
+
+def test_fact_koryta_id_resolves_exact_and_variant_names():
+    names = {"idA": "Barbara Maria Gieroń-Piskorska"}
+    fact = employment("Barbara Gieroń", "Orlen", "prezes")
+    # Fallback to spelling variants when the mention index has no exact entry.
+    assert _fact_koryta_id(fact, ["idA"], names) == "idA"
+    # An exact mention-index match wins.
+    assert _fact_koryta_id(
+        fact, ["idA"], names, person_ids={"barbara gieroń": "idZ"}
+    ) == "idZ"
+    # No confirmed ids, or no name match, resolves nothing.
+    assert _fact_koryta_id(fact, [], names) is None
+    assert _fact_koryta_id(fact, ["idB"], {"idB": "Jan Kowalski"}) is None
+
+
+def test_fact_koryta_id_ambiguous_name_resolves_none():
+    # Two confirmed people share the spelling; the id is not picked.
+    names = {"idA": "Jan Duda", "idB": "Jan Duda"}
+    fact = employment("Jan Duda", "Orlen", "prezes")
+    assert _fact_koryta_id(fact, ["idA", "idB"], names) is None
+
+
+def test_drop_existing_facts_joins_by_id_across_name_variants():
+    # The site holds the fact under the second surname half and its own id; our
+    # article wrote the first half. Canonical names differ, so only the id join
+    # can see it is the same fact.
+    held = employment("Barbara Piskorska", "Alior Bank", "prezes")
+    held["person_koryta_id"] = "idA"
+    fresh = employment("Barbara Gieroń", "Alior Bank", "prezes")
+    name_keys = {_fact_key_name_only(held)}
+    id_keys = {_fact_id_key(held, "idA")}
+    assert _drop_existing_facts(
+        [fresh],
+        name_keys,
+        id_keys,
+        ["idA"],
+        {"idA": "Barbara Maria Gieroń-Piskorska"},
+    ) == []
+    # Without the id context the name join alone misses it (different spelling).
+    assert _drop_existing_facts([fresh], name_keys, id_keys) == [fresh]
+
+
+def test_drop_existing_facts_id_join_keeps_a_different_person():
+    held = employment("Jan Wiesław Duda", "Orlen", "prezes")
+    held["person_koryta_id"] = "idA"
+    fresh = employment("Jan Duda", "Orlen", "prezes")
+    id_keys = {_fact_id_key(held, "idA")}
+    # Same canonical name, but our article's confirmed person is a different id,
+    # so the fact is not the site's and must survive.
+    assert _drop_existing_facts(
+        [fresh], set(), id_keys, ["idB"], {"idB": "Jan Duda"}
+    ) == [fresh]
+    # With no resolvable id there is nothing to join on.
+    assert _drop_existing_facts([fresh], set(), id_keys) == [fresh]
 
 
 def test_drop_existing_facts_keeps_only_new():

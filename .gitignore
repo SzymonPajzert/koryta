@@ -27,6 +27,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+# Long detached pipeline runs write here.
+data/pipelines/logs/
 
 # Editor directories and files
 .idea
