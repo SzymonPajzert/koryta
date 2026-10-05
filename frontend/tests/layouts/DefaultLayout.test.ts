@@ -28,10 +28,11 @@ const route = vi.hoisted(() => ({
 }));
 mockNuxtImport("useRoute", () => () => route);
 
-function mountLayout(isAdmin = false) {
+function mountLayout(isAdmin = false, { isDatascience = false } = {}) {
   vi.mocked(useAuthState).mockReturnValue({
     user: ref({ uid: "test-admin" }),
     isAdmin: ref(isAdmin),
+    isDatascience: ref(isDatascience),
     userConfig: { data: ref({}) },
     logout: vi.fn(),
   } as MockAuthState);
@@ -172,6 +173,21 @@ describe("DefaultLayout", () => {
     ]);
   });
 
+  // /admin/procesy is the datascience group's, and the group is not only
+  // administrators: its entry is under Admin for an administrator in it, and
+  // somebody in it alone gets the menu with that entry and none of the panel's.
+  it("gives the datascience group Procesy under Admin", async () => {
+    const admin = mountLayout(true, { isDatascience: true });
+    expect(
+      (await menuEntries(admin, "Admin")).map((entry) => entry.title),
+    ).toEqual(["Panel administracyjny", "Kolejka zmian", "Notatki", "Procesy"]);
+
+    const member = mountLayout(false, { isDatascience: true });
+    expect(await menuEntries(member, "Admin")).toEqual([
+      { title: "Procesy", to: "/admin/procesy" },
+    ]);
+  });
+
   // What makes a page the admin's is its middleware, as it is for the router:
   // /admin/rewizje sits under /admin but takes any signed-in reader - and that
   // holds for the review queue too, now a section of it: "Kolejka zmian" in
@@ -189,6 +205,21 @@ describe("DefaultLayout", () => {
     expect(admin?.attributes("data-active")).toBe("true");
     expect(admin?.attributes("aria-current")).toBe("true");
   });
+
+  // Its gate is not `admin`, and it is lit for the group's members who are not
+  // administrators as much as for those who are.
+  it.each([true, false])(
+    "lights the Admin menu on /admin/procesy (admin: %s)",
+    async (isAdmin) => {
+      route.path = "/admin/procesy";
+      route.meta = { middleware: "datascience" };
+      const wrapper = mountLayout(isAdmin, { isDatascience: true });
+
+      const admin = await toolbarButton(wrapper, "Admin");
+      expect(admin?.attributes("data-active")).toBe("true");
+      expect(admin?.attributes("aria-current")).toBe("true");
+    },
+  );
 
   // /admin/opinie is an admin's page, but its entry is under "Zespół" now.
   it.each([
