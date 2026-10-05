@@ -1,10 +1,13 @@
 import { expect, type Page } from "@playwright/test";
 import { waitForLoginFormHydrated } from "./login";
 
-/** The two accounts scripts/seed-emulator.ts creates. */
+/** The accounts scripts/seed-emulator.ts creates: an established
+ * administrator (who is also the owner), a contributor with no role, and an
+ * administrator on trial. */
 export const USERS = {
   admin: { email: "admin@koryta.pl", password: "password123" },
   normal: { email: "user@koryta.pl", password: "password123" },
+  newAdmin: { email: "newadmin@koryta.pl", password: "password123" },
 } as const;
 
 type User = (typeof USERS)[keyof typeof USERS];
