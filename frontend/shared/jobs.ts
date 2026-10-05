@@ -11,7 +11,7 @@
  * - `triggered`: one run per request - a page captured by the extension and
  *   read by the extractor, or a one-off import someone starts by hand. No
  *   clock is waiting for it, so it fails by breaking or by getting stuck.
- * - `scheduled`: a run at a set time - the free KRS scrape at 00:30. Fails by
+ * - `scheduled`: a run at a set time - the night on the VM at 04:30. Fails by
  *   breaking, or silently by never starting, which only a clock can notice.
  * - `ongoing`: a long run that drains a queue - the article crawl. Fails by
  *   going quiet while still claiming to run.
@@ -324,11 +324,11 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "scheduled",
     title: "Noc na maszynie koryta-nightly",
     summary:
-      "Po kolei: czeka na dzisiejszą kopię bazy, pobiera bezpłatne KRS i odpisy, przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, wysyła do 100 osób na stronę i uzupełnia lustro KRS.",
+      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS i odpisy, przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki i wysyła do 100 osób na stronę.",
     runsOn:
-      "VM koryta-nightly (europe-central2): harmonogram włącza ją o 00:15, a po pracy sama się wyłącza - data/nightly",
+      "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza - data/nightly",
     command: "koryta_nightly",
-    schedule: { dailyAt: "00:30", timeZone: WARSAW },
+    schedule: { dailyAt: "04:30", timeZone: WARSAW },
     // Przeliczenie potoków to jeden krok do dwóch i pół godziny, w którym noc
     // nie daje znaku życia.
     heartbeatMinutes: 160,
@@ -346,9 +346,9 @@ export const JOBS: readonly JobDefinition[] = [
     summary:
       "Biuletyn KRS z ostatnich dni i odpisy aktualne z api-krs dla firm z kolejki ScrapeRejestrIO; odpowiedzi trafiają do archiwum crawla.",
     runsOn:
-      "Krok nocy na VM koryta-nightly (koryta_nightly), zaraz po kopii bazy",
+      "Krok nocy na VM koryta-nightly (koryta_nightly), zaraz po kopii bazy z 04:00",
     command: "koryta_scrape_krs_free --max-minutes=60",
-    schedule: { dailyAt: "00:30", timeZone: WARSAW },
+    schedule: { dailyAt: "04:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
     graceMinutes: 60,
     tasks: ["create-nightly-vm"],
@@ -401,12 +401,11 @@ export const JOBS: readonly JobDefinition[] = [
     title: "Kompresja lustra KRS",
     summary:
       "Pakuje nowe odpowiedzi rejestr.io i api-krs z archiwum crawla do koryta-pl-compressed; potoki czytają te hosty tylko z lustra.",
-    runsOn:
-      "Ostatni krok nocy na VM koryta-nightly (koryta_nightly), po wysłaniu osób",
+    runsOn: "Pierwszy krok nocy na VM koryta-nightly (koryta_nightly), o 04:30",
     command:
       "go run ./cmd/compressor -incremental -hostname rejestr.io (i -hostname api-krs.ms.gov.pl)",
     scheduleNote:
-      "Co noc, na końcu - po północy UTC bierze cały poprzedni dzień; uruchomień jeszcze nie raportuje",
+      "Co noc, na początku nocy - po północy UTC bierze cały poprzedni dzień; uruchomień jeszcze nie raportuje",
     heartbeatMinutes: 30,
     probe: "compressedMirror",
     mirrorHosts: ["rejestr.io", "api-krs.ms.gov.pl"],
@@ -427,13 +426,12 @@ export const JOBS: readonly JobDefinition[] = [
     summary:
       "Funkcja scheduledFirestoreExport zapisuje dziewięć kolekcji do koryta-pl-crawled; z tej kopii czytają potoki, nocne testy i agenci.",
     runsOn: "Cloud Functions (europe-west1)",
-    schedule: { dailyAt: "00:00", timeZone: WARSAW },
+    schedule: { dailyAt: "04:00", timeZone: WARSAW },
     heartbeatMinutes: 120,
     graceMinutes: 60,
     probe: "firestoreExport",
-    tasks: ["deploy-firestore-export-at-midnight"],
     notes: [
-      "O północy, żeby noc na VM (od 00:30) porównywała osoby z dzisiejszą kopią.",
+      "Noc na VM rusza o 04:30 i porównuje osoby właśnie z tą kopią, więc czeka, aż eksport się skończy.",
       "Stan bierze się z pliku .overall_export_metadata, który eksport zapisuje na końcu.",
     ],
   },
@@ -627,7 +625,7 @@ export function zoneOffsetMinutes(at: Date, timeZone: string): number {
 
 /** The instant a wall-clock time on a calendar day is, in a zone. Correct
  * across the DST changes, which in Warsaw happen at 02:00/03:00 and so never
- * touch a schedule at 00:00 or 00:30. */
+ * touch a schedule at 04:00 or 04:30. */
 export function zonedTime(day: string, hhmm: string, timeZone: string): Date {
   const [year, month, date] = day.split("-").map(Number);
   const [hour, minute] = hhmm.split(":").map(Number);

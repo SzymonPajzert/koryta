@@ -81,4 +81,4 @@ install -d -o "$user" -g "$user" /var/lib/koryta-nightly /var/lib/koryta-nightly
 as_user "cd $repo/data/compressor && /usr/local/go/bin/go build -o /var/lib/koryta-nightly/bin/compressor ./cmd/compressor"
 
 systemctl list-timers koryta-nightly.timer --no-pager
-echo "Done. The night runs at 00:30 Warsaw - see data/nightly/README.md for the first one."
+echo "Done. The night runs at 04:30 Warsaw - see data/nightly/README.md for the first one."

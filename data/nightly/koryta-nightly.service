@@ -1,5 +1,5 @@
 # The night run on the koryta-nightly VM, started by koryta-nightly.timer at
-# 00:30 Warsaw. The instance schedule boots the VM at 00:15 for it; when the
+# 04:30 Warsaw. The instance schedule boots the VM at 04:15 for it; when the
 # night is over, ExecStopPost powers the VM off again, whatever the run ended
 # with.
 #
@@ -26,7 +26,7 @@ ExecStart=/home/koryta/koryta/data/nightly/night.sh
 # ended, and powers off only when night.sh asked it to (a night run).
 ExecStopPost=+/home/koryta/koryta/data/nightly/poweroff.sh
 # koryta_nightly stops its own steps long before this. This is for a hang the
-# steps' timeouts cannot see; the instance schedule's 05:00 stop is the last line.
+# steps' timeouts cannot see; the instance schedule's 09:00 stop is the last line.
 TimeoutStartSec=4h
 # A stop - the schedule's, or a shutdown - reaches every step. The KRS scrape
 # and the people import finish the item in hand on SIGTERM and write their

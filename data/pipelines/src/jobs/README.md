@@ -10,7 +10,7 @@
 1. Writes every answer to the crawl bucket - an empty object where there was none
 1. Writes a run summary to the shared cache (`jobs/krs_scrape_free/runs/`)
 
-Runs nightly on Cloud Run, between midnight and the Firestore export - see [CLOUD_RUN.md](CLOUD_RUN.md).
+Runs nightly as a step of the night on the koryta-nightly VM, after the 04:00 Firestore export - see [data/nightly/README.md](../../../nightly/README.md).
 
 ## krs_scrape_paid
 1. Reads which KRS numbers need to be updated
@@ -39,11 +39,11 @@ the company history `krs_scrape_paid` buys from rejestr.io - and `PeopleKRSCombi
 rejestr.io's for every company where the odpis is the newer of the two, on the way to `PeopleMerged`.
 
 ## nightly
-1. Runs the night on the koryta-nightly VM, one step after another: waits for tonight's export, then `krs_scrape_free`, `krs_odpis`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100`, and the compressor
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_odpis`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, and `people_import --scope priority --max-uploads 100`
 1. A step that fails holds only the steps that depend on it; the people wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
 1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
 
-Started by a systemd timer on the VM at 00:30 - see [data/nightly/README.md](../../../nightly/README.md).
+Started by a systemd timer on the VM at 04:30, after the export - see [data/nightly/README.md](../../../nightly/README.md).
 
 ## people_import
 1. Rebuilds the people from the newest crawl and this morning's export: `PeopleKRS` (rejestr.io), `KrsOdpisSeats` and `KrsOdpisEntries` (the odpisy), `CompaniesKRS`, `KorytaPeople`, and every pipeline between them and the payloads (`DEFAULT_REFRESH` says why each; `--refresh` names others in their place)
