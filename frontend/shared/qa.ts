@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "statystyki-logowan",
+    title: "Logowania i dni aktywności na liście użytkowników",
+    description:
+      "Raz dziennie przeglądarka zalogowanej osoby zgłasza, że strona jest otwarta. Z tego serwer liczy logowania, dni aktywności i ostatnią wizytę, które administratorzy widzą na /admin/uzytkownicy - bez adresów stron i bez IP.",
+    steps: [
+      "Zaloguj się i otwórz dowolną stronę - w narzędziach przeglądarki (Sieć) ma pójść jedno POST /api/users/seen z odpowiedzią 204, a po przejściu na kolejne strony już żadne.",
+      "Na koryta.pl (nie na autopushu, gdzie nic się nie zapisuje) otwórz /admin/uzytkownicy - przy Twoim koncie ma być co najmniej 1 logowanie i 1 dzień aktywności.",
+    ],
+    link: "/admin/uzytkownicy",
+    area: "admin",
+  },
+  {
     id: "uprawnienia-z-nominacji",
     title: "Uprawnienia nadaje skrypt z nominacji",
     description:
