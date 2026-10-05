@@ -223,9 +223,12 @@ def reprocess_argv() -> list[str]:
     argv += ["--refresh", "all"]
     for name in HELD:
         argv += ["--refresh", f":{name}"]
+    # --keep-going builds every pipeline it can and names the broken ones at
+    # the end - the step still fails, so nothing is sent - rather than stop at
+    # the first: the first night found them one 1.5-hour run at a time.
     # --assume-yes answers ProcessWiki's "runs long?" should it be missing
     # everywhere; --all is Extract's, which refuses to run without a scope.
-    return [*argv, "--assume-yes", "--all"]
+    return [*argv, "--keep-going", "--assume-yes", "--all"]
 
 
 def pytest_argv(*args: str, report: str) -> list[str]:
