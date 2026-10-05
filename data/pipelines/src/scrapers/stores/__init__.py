@@ -525,6 +525,8 @@ class ProcessPolicy:
 
     execution_decisions: dict[str, tuple[bool, str]] = field(default_factory=dict)
     tree_printed: bool = False
+    # Across trees, so a later tree points back at a subtree already shown.
+    printed_pipelines: set[str] = field(default_factory=set)
 
     @staticmethod
     def with_default(
@@ -552,6 +554,20 @@ class ProcessPolicy:
 
     def add_refreshed_pipeline(self, pipeline_name: str):
         self.refreshed_pipelines.add(pipeline_name)
+
+    def decide(self, pipeline: Any, ctx: Any) -> None:
+        """Decide the tree of a pipeline nothing has decided yet.
+
+        Every pipeline a run reaches gets its tree, not only the first one.
+        Deciding the first alone left any later pipeline outside its tree read
+        from disk whatever --refresh said: `koryta --all-pipelines --refresh
+        all` rebuilt CommitteeParties' four pipelines on the nightly VM and
+        read or restored the other forty. Decisions already made stand, and
+        `refreshed_pipelines` keeps a pipeline two trees share from running
+        twice.
+        """
+        if pipeline.pipeline_name not in self.execution_decisions:
+            self.build_and_print_tree(pipeline, ctx)
 
     def build_and_print_tree(self, root_pipeline: Any, ctx: Any):
         def evaluate(pipeline) -> tuple[bool, str]:
@@ -607,7 +623,7 @@ class ProcessPolicy:
         # Now print nicely
         print("\n=== Pipeline Execution Tree ===")
 
-        printed: set[str] = set()
+        printed = self.printed_pipelines
 
         def print_tree(pipeline, indent=0):
             run, reason = self.execution_decisions[pipeline.pipeline_name]
@@ -829,8 +845,7 @@ Should I run it? (y/n) [n]",
         """
         Determines if the pipeline should refresh based on the execution tree.
         """
-        if not ctx.refresh_policy.tree_printed:
-            ctx.refresh_policy.build_and_print_tree(self, ctx)
+        ctx.refresh_policy.decide(self, ctx)
 
         if (
             getattr(self, "filename", None) is not None
@@ -852,8 +867,7 @@ Should I run it? (y/n) [n]",
         if self._cached_result is not None:
             return self._cached_result
 
-        if not ctx.refresh_policy.tree_printed:
-            ctx.refresh_policy.build_and_print_tree(self, ctx)
+        ctx.refresh_policy.decide(self, ctx)
 
         should_refresh = self.should_refresh_with_logic(ctx)
         if not should_refresh and self.filename is not None:

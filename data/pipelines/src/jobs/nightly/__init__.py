@@ -80,7 +80,11 @@ EXIT_FAILED = 1
 #: Out of `--all-pipelines`, as in the CI nightly (.github/workflows/pipelines.yml):
 #: the article branch needs the crawl queue's Postgres and its url store, and
 #: ProcessWikiNer the ml group's spaCy, which the VM does not install.
+#: KorytaDiffer writes nothing - it prints how one export differs from another
+#: - and reads every export ever taken to do it: on the VM's first night it
+#: spent 65 minutes on the people alone and the kernel killed the run at 16 GB.
 EXCLUDED = (
+    "KorytaDiffer",
     "ProcessWikiNer",
     "ArticleDoneUrls",
     "ArticleParsed",
