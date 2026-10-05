@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import Future
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -13,7 +14,7 @@ from scrapers.bip.classify import (
     path_of,
     priority_for,
 )
-from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
+from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions, _ActiveHost
 from scrapers.bip.frontier import BipFrontier
 from scrapers.bip.models import DocRow, HostRow, UrlRow
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
@@ -505,3 +506,75 @@ def test_coordinator_cap_skip_is_requeueable(tmp_path: Path) -> None:
     assert all(frontier.skip_reasons.get(url) == "cap" for url in capped)
     assert frontier.queue_url(frontier.urls[capped[0]], requeue=True) is False
     assert frontier.states[capped[0]] == "queued"
+
+
+def test_bundle_is_closed_when_a_host_finishes(tmp_path: Path) -> None:
+    """A host's bundle is finalized at host end, not only at run end."""
+
+    class ClosingStore(LocalBundleStore):
+        closed: list[str] = []
+
+        def close_host(self, host: str) -> None:
+            self.closed.append(host)
+            super().close_host(host)
+
+    frontier = FakeFrontier(
+        [
+            HostRow(
+                host="bip.test",
+                name="t",
+                source_url="https://bip.test/",
+                teryt="",
+                entry_count=1,
+            )
+        ]
+    )
+    store = ClosingStore(tmp_path / "out")
+    coordinator = BipCoordinator(
+        cast("BipFrontier", frontier),  # test double
+        store,
+        CoordinatorOptions(workers=1, rate_interval_s=0.0),
+        fetch=lambda url, timeout, ua: HttpResult(
+            url=url,
+            status=200,
+            content_type="application/pdf",
+            content=b"%PDF-1.4 one",
+        ),
+        robots_allowed=lambda url: True,
+    )
+    coordinator.run()
+    assert "bip.test" in store.closed
+    assert list((tmp_path / "out").rglob("*.part")) == []
+
+
+def test_result_exception_releases_the_host(tmp_path: Path) -> None:
+    """A raise while handling a result must still finalize the host (no hang)."""
+    frontier = FakeFrontier(
+        [
+            HostRow(
+                host="bip.test",
+                name="t",
+                source_url="https://bip.test/",
+                teryt="",
+                entry_count=1,
+            )
+        ]
+    )
+    store = LocalBundleStore(tmp_path / "out")
+    coordinator = BipCoordinator(
+        cast("BipFrontier", frontier),  # test double
+        store,
+        CoordinatorOptions(workers=1, rate_interval_s=0.0),
+    )
+    coordinator.active["bip.test"] = _ActiveHost(crawl_id="run-bip_test", pending=1)
+
+    failing: Future = Future()
+    failing.set_exception(RuntimeError("boom"))
+    row = UrlRow(url="https://bip.test/x", host="bip.test", kind="page")
+    frontier.urls[row.url] = row
+    frontier.states[row.url] = "claimed"
+    coordinator._collect({failing: row})  # noqa: SLF001 - exercising the handler
+
+    assert coordinator.stats.errors == 1
+    assert "bip.test" not in coordinator.active
+    assert frontier.hosts["bip.test"].status == "partial"
