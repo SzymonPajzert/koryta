@@ -93,14 +93,19 @@ and Secret Manager.
    ```
 
 3. Run the first night by hand, sending nobody. It is a cold one - empty
-   `versioned/`, empty download cache - so it takes longer than the rest:
+   `versioned/`, empty download cache - so it takes longer than the rest.
+   `--export-max-age 24` lets a daytime run take this morning's 04:00 export
+   as tonight's. Only one taken within 6 h of the start counts otherwise, so
+   a run started after 10:00 would wait 90 minutes for an export that comes
+   tomorrow and then hold the people step:
 
    ```bash
    gcloud compute ssh koryta-nightly --zone=europe-central2-b --project=koryta-pl
    sudo systemd-run --unit=koryta-nightly-manual --uid=koryta --gid=koryta \
      --property=EnvironmentFile=/etc/koryta/nightly.env \
      --property=StateDirectory=koryta-nightly --pty --wait \
-     /home/koryta/koryta/data/nightly/night.sh --force --people-dry-run
+     /home/koryta/koryta/data/nightly/night.sh --force --people-dry-run \
+       --export-max-age 24
    ```
 
    Then read the summary, and the log for the people step's plan
