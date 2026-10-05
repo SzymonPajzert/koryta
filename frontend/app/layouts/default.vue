@@ -65,12 +65,14 @@
         <!-- The panel and two of the inboxes it lists, under the panel's own
              names; the third, "Zgłoszenia", is under "Zespół" with the QA list
              and its problems, since a problem found there is a report too.
-             "Zadania" is the owner's own list, shown to him alone, and so
-             is "Procesy", the jobs' progress next to it.
+             "Zadania" is the owner's own list, shown to him alone. "Procesy",
+             the jobs' progress next to it, is the datascience group's, and
+             the group is not only administrators: somebody in it alone gets
+             the menu with that one entry, and none of the panel's.
              The activator has no `to` of its own - it would navigate and open
              the menu at once - so it is lit by hand instead. -->
         <v-menu
-          v-if="isAdmin"
+          v-if="isAdmin || isDatascience"
           location="bottom start"
           content-class="user-toolbar-menu"
         >
@@ -88,21 +90,24 @@
           </template>
           <v-list density="compact" min-width="220">
             <v-list-item
+              v-if="isAdmin"
               :prepend-icon="mdiShieldAccount"
               to="/admin"
               exact
               title="Panel administracyjny"
             />
-            <v-divider />
+            <v-divider v-if="isAdmin" />
             <!-- The queue is the first section of /admin/rewizje, which is
                  open to every signed-in reader - so arriving there lights
                  "Rewizje" rather than this menu. -->
             <v-list-item
+              v-if="isAdmin"
               :prepend-icon="mdiInboxArrowDown"
               to="/admin/rewizje#kolejka"
               title="Kolejka zmian"
             />
             <v-list-item
+              v-if="isAdmin"
               :prepend-icon="mdiNoteEditOutline"
               to="/admin/notatki"
               title="Notatki"
@@ -256,11 +261,16 @@ const onTeamPage = computed(() =>
  * Read off the page's middleware rather than its path: /admin/rewizje and a
  * single revision live under /admin but are open to every signed-in reader,
  * and the router serves /admin/notatki/ as the same page as /admin/notatki.
+ * `datascience` counts as well: it is /admin/procesy's, whose entry is here.
  * /admin/opinie is admin-only too, but it is listed under "Zespół", which is
  * lit there instead - two buttons lit for one page would say neither. */
-const onAdminPage = computed(
-  () => [route?.meta?.middleware].flat().includes("admin") && !onTeamPage.value,
-);
+const onAdminPage = computed(() => {
+  const middleware = [route?.meta?.middleware].flat();
+  return (
+    (middleware.includes("admin") || middleware.includes("datascience")) &&
+    !onTeamPage.value
+  );
+});
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
 
