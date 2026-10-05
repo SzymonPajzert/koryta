@@ -25,6 +25,10 @@ sa="$sa_name@$project.iam.gserviceaccount.com"
 pesel_secret=${PESEL_SECRET:-koryta-pesel-salt}
 web_key_secret=${WEB_KEY_SECRET:-firebase-web-api-key}
 schedule=${SCHEDULE:-koryta-nightly}
+# The default network is in custom subnet mode, so a VM has to name its subnet;
+# koryta-compressor and claude-dev use this one too, and default-allow-ssh
+# lets gcloud compute ssh in.
+subnet=${SUBNET:-default}
 
 g() { gcloud --project="$project" --quiet "$@"; }
 
@@ -96,7 +100,7 @@ done
 echo "== VM $vm"
 if ! g compute instances describe "$vm" --zone="$zone" >/dev/null 2>&1; then
   g compute instances create "$vm" --zone="$zone" \
-    --machine-type="$machine" \
+    --machine-type="$machine" --subnet="$subnet" \
     --service-account="$sa" --scopes=cloud-platform \
     --image-family=debian-13 --image-project=debian-cloud \
     --boot-disk-size="${disk_gb}GB" --boot-disk-type=pd-balanced \
@@ -105,6 +109,12 @@ if ! g compute instances describe "$vm" --zone="$zone" >/dev/null 2>&1; then
 fi
 
 echo "== Schedule $schedule: start 04:15, stop 09:00 (Warsaw)"
+# Compute Engine's own agent starts and stops the VM, and attaching a schedule
+# is refused until it may - so the grant comes first.
+number=$(g projects describe "$project" --format='value(projectNumber)')
+g projects add-iam-policy-binding "$project" \
+  --member="serviceAccount:service-$number@compute-system.iam.gserviceaccount.com" \
+  --role=roles/compute.instanceAdmin.v1 --condition=None >/dev/null
 # The night follows the 04:00 Firestore export. A start may begin up to 15
 # minutes late (the docs), so 04:15 is running by 04:30. The VM powers itself
 # off when the night is over; the 09:00 stop only catches a night that hung.
@@ -112,15 +122,23 @@ g compute resource-policies describe "$schedule" --region="$region" >/dev/null 2
   g compute resource-policies create instance-schedule "$schedule" --region="$region" \
     --vm-start-schedule="15 4 * * *" --vm-stop-schedule="0 9 * * *" \
     --timezone=Europe/Warsaw --description="koryta nightly run"
-g compute instances add-resource-policies "$vm" --zone="$zone" \
-  --resource-policies="$schedule" 2>/dev/null || true
-
-# Without this the schedule silently does nothing: Compute Engine's own agent
-# starts and stops the VM, and needs the right to.
-number=$(g projects describe "$project" --format='value(projectNumber)')
-g projects add-iam-policy-binding "$project" \
-  --member="serviceAccount:service-$number@compute-system.iam.gserviceaccount.com" \
-  --role=roles/compute.instanceAdmin.v1 --condition=None >/dev/null
+attached() {
+  g compute instances describe "$vm" --zone="$zone" --format='value(resourcePolicies)' |
+    tr ';' '\n' | grep "/resourcePolicies/$schedule$" >/dev/null
+}
+# A fresh grant takes a minute or two to reach Compute, so the attach retries.
+for attempt in 1 2 3 4 5 6; do
+  attached && break
+  g compute instances add-resource-policies "$vm" --zone="$zone" \
+    --resource-policies="$schedule" && break
+  if ((attempt == 6)); then
+    echo "!! $schedule is not attached to $vm: the VM would never start on its own." >&2
+    exit 1
+  fi
+  echo "Attaching $schedule failed (attempt $attempt); again in 30 s."
+  sleep 30
+done
+attached && echo "$schedule is attached to $vm."
 
 # The VM is running now. After setup-vm.sh, stop it (or let it be): the
 # schedule boots it at 04:15 and the timer runs the night at 04:30 either way.
