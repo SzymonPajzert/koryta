@@ -1,17 +1,18 @@
-# Starts the night run at 00:30 Warsaw - on the VM the instance schedule has
-# just booted (at 00:15), or on one somebody left running, which is then
-# powered off afterwards as on any other night (unless /etc/koryta/stay-up).
+# Starts the night run at 04:30 Warsaw, half an hour after the Firestore
+# export - on the VM the instance schedule has just booted (at 04:15), or on
+# one somebody left running, which is then powered off afterwards as on any
+# other night (unless /etc/koryta/stay-up).
 #
-# Persistent: a boot after 00:30 - the schedule may start the VM up to 15
+# Persistent: a boot after 04:30 - the schedule may start the VM up to 15
 # minutes late - catches up at once. A boot much later (somebody starting the
 # VM at noon after a missed night) catches up too, and night.sh then refuses to
 # run outside the night window.
 
 [Unit]
-Description=Start the koryta night run at 00:30 Warsaw
+Description=Start the koryta night run at 04:30 Warsaw
 
 [Timer]
-OnCalendar=*-*-* 00:30:00 Europe/Warsaw
+OnCalendar=*-*-* 04:30:00 Europe/Warsaw
 Persistent=true
 
 [Install]

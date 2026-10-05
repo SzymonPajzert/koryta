@@ -1,6 +1,6 @@
 """The whole night on the koryta-nightly VM, one step after another.
 
-    koryta_nightly                    # what data/nightly/night.sh runs at 00:30
+    koryta_nightly                    # what data/nightly/night.sh runs at 04:30
     koryta_nightly --dry-run          # every step's command; runs nothing
     koryta_nightly --only people      # one step; repeatable
     koryta_nightly --skip krs_odpis   # all but this one; repeatable
@@ -8,8 +8,9 @@
 
 The steps, in order (`STEPS`):
 
-    export      wait for tonight's Firestore export to finish; the people are
-                compared with it, so it has to be tonight's
+    compress    the compressed mirror of rejestr.io and api-krs.ms.gov.pl
+    export      wait for tonight's 04:00 Firestore export to finish; the people
+                are compared with it, so it has to be tonight's
     krs_free    koryta_scrape_krs_free: the bulletin, then api-krs
     krs_odpis   koryta_krs_odpis for the companies the bulletin named since
                 yesterday
@@ -22,7 +23,6 @@ The steps, in order (`STEPS`):
     invariants  the database invariants over tonight's export
     people      koryta_people_import --scope priority --max-uploads 100: new
                 hires first, then published pages, then the rest
-    compress    the compressed mirror of rejestr.io and api-krs.ms.gov.pl
     tidy        old export shards and day-named outputs off the disk
 
 Every step but `export` and `tidy` is a process of its own - the jobs and the
@@ -38,9 +38,9 @@ night; only the steps that depend on it are held:
   18 invariants failing on 2026-10-03 (budgets drifted past their measured
   values) fail every night and do not hold it.
 
-Compressing comes last rather than first: the compressor archives up to
-yesterday in UTC, so after midnight UTC it takes the whole previous day
-(`data/compressor`).
+The night starts at 04:30 Warsaw, after the export and after midnight UTC, so
+the compressor - which archives up to yesterday in UTC - takes the whole
+previous day even as the first step (`data/compressor`).
 
 The night writes its summary to gs://koryta-pl-sharedcache/jobs/nightly/runs/,
 its log to .../jobs/nightly/logs/, and reports on koryta.pl/admin/procesy as
@@ -181,12 +181,13 @@ class Step:
     phase: str
     #: Minutes the step may take, at most.
     minutes: float
-    #: A closing step runs whatever the time: it is short, and leaving it out
-    #: would cost the next night (`compress`, `tidy`).
-    closing: bool = False
+    #: Runs whatever the time, past --stop-by too: it is short, and leaving it
+    #: out would cost the next night (`compress`, `tidy`).
+    always: bool = False
 
 
 STEPS = (
+    Step("compress", "lustro", 20, always=True),
     Step("export", "kopia bazy", 90),
     Step("krs_free", "KRS", 75),
     Step("krs_odpis", "odpisy", 45),
@@ -195,8 +196,7 @@ STEPS = (
     Step("outputs", "wyniki", 20),
     Step("invariants", "niezmienniki", 30),
     Step("people", "osoby", 60),
-    Step("compress", "lustro", 20, closing=True),
-    Step("tidy", "porządki", 5, closing=True),
+    Step("tidy", "porządki", 5, always=True),
 )
 STEP_NAMES = tuple(step.name for step in STEPS)
 #: The checks whose failures the night compares with the last one's.
@@ -501,7 +501,7 @@ class Night:
         """Why a step will not run tonight, or "" when it will."""
         if self.signalled:
             return "SIGTERM"
-        if not step.closing and self.minutes_left() <= 0:
+        if not step.always and self.minutes_left() <= 0:
             return f"koniec nocy ({self.args.stop_by})"
         if (
             step.name == "invariants"
@@ -552,7 +552,7 @@ class Night:
         return minutes_until(self.args.stop_by, warsaw_now())
 
     def minutes_for(self, step: Step) -> float:
-        if step.closing:
+        if step.always:
             return step.minutes
         return max(0.0, min(step.minutes, self.minutes_left()))
 
@@ -931,9 +931,9 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stop-by",
         type=clock,
-        help="Warsaw time (HH:MM) after which no step but the closing ones "
+        help="Warsaw time (HH:MM) after which no step but compress and tidy "
         "starts, and a running one is stopped. night.sh gives the scheduled "
-        "night 04:30, as the instance schedule stops the VM at 05:00; a hand "
+        "night 08:30, as the instance schedule stops the VM at 09:00; a hand "
         "run has no deadline unless given one.",
     )
     parser.add_argument(

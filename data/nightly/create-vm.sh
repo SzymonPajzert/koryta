@@ -104,13 +104,13 @@ if ! g compute instances describe "$vm" --zone="$zone" >/dev/null 2>&1; then
     --labels=purpose=koryta-nightly
 fi
 
-echo "== Schedule $schedule: start 00:15, stop 05:00 (Warsaw)"
-# A start may begin up to 15 minutes late (the docs), so 00:15 is running by
-# 00:30. The VM powers itself off when the night is over; the 05:00 stop only
-# catches a night that hung.
+echo "== Schedule $schedule: start 04:15, stop 09:00 (Warsaw)"
+# The night follows the 04:00 Firestore export. A start may begin up to 15
+# minutes late (the docs), so 04:15 is running by 04:30. The VM powers itself
+# off when the night is over; the 09:00 stop only catches a night that hung.
 g compute resource-policies describe "$schedule" --region="$region" >/dev/null 2>&1 ||
   g compute resource-policies create instance-schedule "$schedule" --region="$region" \
-    --vm-start-schedule="15 0 * * *" --vm-stop-schedule="0 5 * * *" \
+    --vm-start-schedule="15 4 * * *" --vm-stop-schedule="0 9 * * *" \
     --timezone=Europe/Warsaw --description="koryta nightly run"
 g compute instances add-resource-policies "$vm" --zone="$zone" \
   --resource-policies="$schedule" 2>/dev/null || true
@@ -123,5 +123,5 @@ g projects add-iam-policy-binding "$project" \
   --role=roles/compute.instanceAdmin.v1 --condition=None >/dev/null
 
 # The VM is running now. After setup-vm.sh, stop it (or let it be): the
-# schedule boots it at 00:15 and the timer runs the night at 00:30 either way.
+# schedule boots it at 04:15 and the timer runs the night at 04:30 either way.
 echo "Created. Next: setup-vm.sh (see the top of this file), then the README's first night."

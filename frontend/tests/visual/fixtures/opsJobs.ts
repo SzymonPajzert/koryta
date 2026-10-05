@@ -128,17 +128,17 @@ export const opsJobs: JobsOverview = {
       id: "krs_scrape_free",
       record: {
         lastRunId: "free-0901",
-        lastStartedAt: "2026-08-31T22:30:04.000Z",
-        lastScheduledAt: "2026-08-31T22:30:04.000Z",
-        lastSucceededAt: "2026-08-29T23:58:31.000Z",
+        lastStartedAt: "2026-09-01T02:30:04.000Z",
+        lastScheduledAt: "2026-09-01T02:30:04.000Z",
+        lastSucceededAt: "2026-08-30T03:58:31.000Z",
       },
       runs: [
         run("free-0901", "krs_scrape_free", {
           state: "partial",
           trigger: "schedule",
           host: "cloud-run:krs-scrape-free/krs-scrape-free-x7k2p",
-          startedAt: "2026-08-31T22:30:04.000Z",
-          finishedAt: "2026-09-01T01:20:02.000Z",
+          startedAt: "2026-09-01T02:30:04.000Z",
+          finishedAt: "2026-09-01T05:20:02.000Z",
           progress: { done: 5210, total: 6762, unit: "firm" },
           counters: {
             answered: 9874,
@@ -157,8 +157,8 @@ export const opsJobs: JobsOverview = {
           state: "succeeded",
           trigger: "schedule",
           host: "cloud-run:krs-scrape-free/krs-scrape-free-q4m8s",
-          startedAt: "2026-08-29T22:30:03.000Z",
-          finishedAt: "2026-08-29T23:58:31.000Z",
+          startedAt: "2026-08-30T02:30:03.000Z",
+          finishedAt: "2026-08-30T03:58:31.000Z",
           progress: { done: 3120, total: 3120, unit: "firm" },
           counters: { answered: 6101, empty: 188, failed: 0, upload_failed: 0 },
           exitCode: 0,
@@ -167,8 +167,8 @@ export const opsJobs: JobsOverview = {
           state: "failed",
           trigger: "schedule",
           host: "cloud-run:krs-scrape-free/krs-scrape-free-b2n9d",
-          startedAt: "2026-08-28T22:30:05.000Z",
-          finishedAt: "2026-08-28T22:41:50.000Z",
+          startedAt: "2026-08-29T02:30:05.000Z",
+          finishedAt: "2026-08-29T02:41:50.000Z",
           progress: { done: 40, total: 3311, unit: "firm" },
           counters: { answered: 52, empty: 3, failed: 20, upload_failed: 0 },
           stopReason: "20 requests in a row failed",
@@ -258,8 +258,8 @@ export const opsJobs: JobsOverview = {
       },
     },
     {
-      // On its schedule since the trial the day before, so held to 05:00.
-      // That trial is still its last success: this morning's run was cut
+      // A step of the night, with no slot of its own: the dry run the day
+      // before is still its last success, as this morning's run was cut
       // short.
       id: "people_import",
       record: {

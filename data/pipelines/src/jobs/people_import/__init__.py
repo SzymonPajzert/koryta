@@ -142,15 +142,15 @@ STOP_NOT_WRITTEN = "nie zapisano paczek"
 #: and read none of them.
 #:
 #: `KorytaPeople` is named after the day, which does not make a backup under
-#: today's name today's export: a run before the midnight export finishes builds
-#: it from the one before and uploads it under today's name.
+#: today's name today's export: a run before the 04:00 export builds it from the
+#: one before and uploads it under today's name.
 #:
 #: Left to be reused: Wikipedia (`ProcessWiki`), PKW (`PeoplePKW`) and the name
 #: frequencies, which change with a dump or an election, not overnight. Out of
 #: reach: the export `--on-koryta` and `--only-changed` compare against
 #: (`KorytaNodes`, `KorytaEdges`) is read outside this tree, so a backup made
 #: under today's name before the export is taken as it is - which only a hand
-#: run in the minutes after midnight makes.
+#: run between midnight and four makes.
 DEFAULT_REFRESH = (
     "PeopleKRS",
     "KrsOdpisSeats",
@@ -767,7 +767,7 @@ def parser() -> argparse.ArgumentParser:
         "--koryta-date",
         type=iso_day,
         help="The export (YYYY-MM-DD) --on-koryta and --only-changed compare "
-        "against. Default: the latest - in the night, the midnight one.",
+        "against. Default: the latest - in the night, the 04:00 one.",
     )
     parser.add_argument(
         "--refresh",

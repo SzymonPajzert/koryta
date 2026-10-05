@@ -10,8 +10,10 @@ import pytest
 import jobs.nightly as night
 from stores.storage import SHARED_BUCKET, warsaw_tz
 
-FRESH = "2026-10-03T22:00:04.120Z"
-STALE = "2026-10-02T02:00:04.120Z"
+# The 04:00 Warsaw export, in UTC as its folder is named; the night starts at
+# 04:30 Warsaw, half an hour later.
+FRESH = "2026-10-04T02:00:04.120Z"
+STALE = "2026-10-03T02:00:04.120Z"
 #: What the processes would answer, by the entry point's name.
 GOOD = {
     "koryta_scrape_krs_free": 0,
@@ -145,6 +147,8 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
     assert night.main([]) == 0
 
     assert world.ran() == [
+        "compressor",
+        "compressor",
         "koryta_scrape_krs_free",
         "koryta_krs_odpis",
         "koryta",
@@ -152,8 +156,6 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "pytest outputs",
         "pytest invariants",
         "koryta_people_import",
-        "compressor",
-        "compressor",
     ]
     assert set(world.steps().values()) == {("succeeded", "")} | {
         ("succeeded", FRESH),
@@ -330,23 +332,23 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     assert "koryta_people_import --scope priority --max-uploads 100" in out
 
 
-def test_past_the_stop_by_only_the_closing_steps_run(world, monkeypatch):
-    late = datetime(2026, 10, 4, 4, 45, tzinfo=warsaw_tz)
+def test_past_the_stop_by_only_compress_and_tidy_run(world, monkeypatch):
+    late = datetime(2026, 10, 4, 8, 45, tzinfo=warsaw_tz)
     monkeypatch.setattr(night, "warsaw_now", lambda: late)
 
-    assert night.main(["--stop-by", "04:30"]) == 0
+    assert night.main(["--stop-by", "08:30"]) == 0
 
     assert world.ran() == ["compressor", "compressor"]
-    assert world.steps()["reprocess"] == ("skipped", "koniec nocy (04:30)")
+    assert world.steps()["reprocess"] == ("skipped", "koniec nocy (08:30)")
 
 
 def test_stop_by_is_tomorrows_when_the_night_starts_before_midnight():
-    args = night.parser().parse_args(["--stop-by", "4:30"])
+    args = night.parser().parse_args(["--stop-by", "8:30"])
     at = datetime(2026, 10, 3, 23, 50, tzinfo=warsaw_tz)
 
     minutes = night.minutes_until(args.stop_by, at)
 
-    assert minutes == pytest.approx(4 * 60 + 40)
+    assert minutes == pytest.approx(8 * 60 + 40)
 
 
 # ---------------------------------------------------------------------------
@@ -389,13 +391,13 @@ def test_the_newest_finished_export_is_found_past_a_running_one():
 
     class Listing(list):
         prefixes = {
-            "hostname=koryta.pl/date=2026-10-02T02:00:04.120Z/",
-            "hostname=koryta.pl/date=2026-10-03T22:00:04.120Z/",
-            "hostname=koryta.pl/date=2026-10-04T00:10:00.000Z/",  # still writing
+            "hostname=koryta.pl/date=2026-10-03T02:00:04.120Z/",
+            "hostname=koryta.pl/date=2026-10-04T02:00:04.120Z/",
+            "hostname=koryta.pl/date=2026-10-04T05:10:00.000Z/",  # still writing
             "hostname=koryta.pl/date=2026-10-04/",  # page captures
         }
 
-    finished = {"2026-10-02T02:00:04.120Z", "2026-10-03T22:00:04.120Z"}
+    finished = {"2026-10-03T02:00:04.120Z", "2026-10-04T02:00:04.120Z"}
 
     class Bucket:
         def list_blobs(self, prefix, delimiter):

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# koryta-nightly.service's ExecStart (koryta-nightly.timer starts it at 00:30).
+# koryta-nightly.service's ExecStart (koryta-nightly.timer starts it at 04:30,
+# half an hour after the 04:00 Firestore export).
 # Checks that it is night, brings the checkout and its environment up to date,
 # and hands over to koryta_nightly (data/pipelines/src/jobs/nightly), which
 # runs the night's steps.
@@ -38,11 +39,11 @@ state=${STATE_DIRECTORY:-/var/lib/koryta-nightly}
 export TZ=Europe/Warsaw
 export PATH="$HOME/.local/bin:/usr/local/go/bin:$PATH"
 
-# 23:00-04:00 by default. The timer catches up on a missed 00:30 at the next
+# 03:00-08:00 by default. The timer catches up on a missed 04:30 at the next
 # boot, so a start outside the window is somebody booting the VM to look at
 # it: run nothing, and leave it up.
 in_night_window() {
-  local now=$((10#$1)) from=$((10#${KORYTA_NIGHT_FROM:-2300})) until=$((10#${KORYTA_NIGHT_UNTIL:-0400}))
+  local now=$((10#$1)) from=$((10#${KORYTA_NIGHT_FROM:-0300})) until=$((10#${KORYTA_NIGHT_UNTIL:-0800}))
   if ((from <= until)); then
     ((now >= from && now < until))
   else
@@ -114,8 +115,8 @@ if ((force)); then
 else
   export KORYTA_JOB_TRIGGER=schedule
   # Nothing new starts after this, so the night is over before the instance
-  # schedule's 05:00 stop; a hand run has no deadline.
-  deadline=(--stop-by "${KORYTA_NIGHT_STOP_BY:-04:30}")
+  # schedule's 09:00 stop; a hand run has no deadline.
+  deadline=(--stop-by "${KORYTA_NIGHT_STOP_BY:-08:30}")
 fi
 
 cd "$repo/data/pipelines"
