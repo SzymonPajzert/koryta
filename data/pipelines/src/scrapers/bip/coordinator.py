@@ -149,6 +149,9 @@ class BipCoordinator:
         elif active.done_pages == 0 and active.docs == 0:
             status = "dead"
         self.frontier.finalize_host(host, status)
+        # Close the host's bundle now. Leaving it open until 64 MB or the end of
+        # the run strands one .part per host and exhausts file descriptors.
+        self.store.close_host(host)
         del self.active[host]
         self.stats.hosts_finalized += 1
         logger.info("host %s -> %s", host, status)
@@ -428,8 +431,19 @@ class BipCoordinator:
                 self._handle_result(*future.result())
             except Exception as exc:  # keep the crawl alive
                 logger.exception("result handling failed: %s", exc)
-                self.frontier.mark_url(row.url, state="error")
+                try:
+                    self.frontier.mark_url(row.url, state="error")
+                except Exception:
+                    logger.exception("could not mark %s as error", row.url)
                 self.stats.errors += 1
+                # Release the in-flight slot as well: without this the host
+                # never reaches pending == 0 and the run spins forever.
+                active = self.active.get(row.host)
+                if active is not None:
+                    active.errors += 1
+                    if active.pending > 0:
+                        active.pending -= 1
+                    self._maybe_finalize(row.host)
 
     def _is_finished(self, pending: dict[Future, UrlRow]) -> bool:
         if pending or self._deferred or self._ready:
