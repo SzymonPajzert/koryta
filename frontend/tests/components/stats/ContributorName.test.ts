@@ -6,7 +6,7 @@ import type { ActivityContributor } from "../../../server/api/stats/activity.get
 
 type Row = Pick<
   ActivityContributor,
-  "name" | "named" | "isSelf" | "photoURL" | "publicName"
+  "name" | "named" | "isSelf" | "photoURL" | "publicName" | "profilePath"
 >;
 
 const HIDDEN_FROM_OTHERS =
@@ -84,5 +84,27 @@ describe("StatsContributorName", () => {
     expect(icon(named)).toBe(mdiAccountCircle);
     expect(tooltip(masked)).toContain("nie pokazuje");
     expect(icon(masked)).toBe(mdiEyeOffOutline);
+  });
+
+  it("links a name to the profile its owner made public", async () => {
+    const wrapper = await mountName({ profilePath: "/uczestnik/bartek" });
+
+    expect(wrapper.findComponent({ name: "VChip" }).props("to")).toBe(
+      "/uczestnik/bartek",
+    );
+    expect(tooltip(wrapper)).toContain("zobaczyć profil");
+  });
+
+  it("is no link without one", async () => {
+    // A feed actor, or a ranking row whose owner kept their profile off.
+    for (const row of [{}, { profilePath: null }]) {
+      const wrapper = await mountName(row);
+
+      expect(wrapper.findComponent({ name: "VChip" }).props("to")).toBe(
+        undefined,
+      );
+      expect(wrapper.find("a").exists()).toBe(false);
+      expect(tooltip(wrapper)).not.toContain("zobaczyć profil");
+    }
   });
 });

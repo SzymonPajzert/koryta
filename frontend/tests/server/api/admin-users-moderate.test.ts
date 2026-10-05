@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import handler, {
-  type ModerateResponse,
-} from "../../../server/api/admin/users/moderate.post";
+import handler from "../../../server/api/admin/users/moderate.post";
+import type { AdminUserRow } from "../../../shared/userAdmin";
 import type { MemoryFirestore } from "./memoryFirestore";
 
 const { mockVerifyIdToken, mockUpdateUser, accounts, memory } = vi.hoisted(
@@ -13,6 +12,9 @@ const { mockVerifyIdToken, mockUpdateUser, accounts, memory } = vi.hoisted(
       event: { headers?: Record<string, string> },
       name: string,
     ) => event.headers?.[name.toLowerCase()];
+    // The row the route answers with is built by userDirectory, whose memos
+    // are not what these tests are about.
+    g.defineCachedFunction = (fn: unknown) => fn;
 
     return {
       mockVerifyIdToken: vi.fn(),
@@ -68,9 +70,19 @@ vi.mock("firebase-admin/auth", () => ({
           code: "auth/user-not-found",
         });
       }
-      return { uid, providerData: [], customClaims: {}, ...account };
+      return {
+        uid,
+        providerData: [],
+        customClaims: {},
+        metadata: { creationTime: "Mon, 01 Sep 2026 10:00:00 GMT" },
+        ...account,
+      };
     },
   }),
+}));
+
+vi.mock("~~/server/utils/activityWindow", () => ({
+  cachedActivityWindow: async () => ({ aggregate: { contributors: [] } }),
 }));
 
 const TOKENS: Record<string, Record<string, unknown>> = {
@@ -82,7 +94,7 @@ const TOKENS: Record<string, Record<string, unknown>> = {
 
 type Event = { body?: unknown; headers?: Record<string, string> };
 const moderate = (body: unknown, token: string | null = "admin-token") =>
-  (handler as unknown as (e: Event) => Promise<ModerateResponse>)({
+  (handler as unknown as (e: Event) => Promise<AdminUserRow>)({
     body,
     headers: token ? { authorization: `Bearer ${token}` } : {},
   });
@@ -108,10 +120,15 @@ describe("POST /api/admin/users/moderate", () => {
       if (!decoded) throw new Error("bad token");
       return decoded;
     });
-    mockUpdateUser.mockImplementation(async (uid: string) => {
-      store().log.push(`auth ${uid}`);
-      return {};
-    });
+    // Auth keeps what it is told, so the row read back after the action shows
+    // it.
+    mockUpdateUser.mockImplementation(
+      async (uid: string, fields: Record<string, unknown>) => {
+        store().log.push(`auth ${uid}`);
+        Object.assign(accounts.get(uid) ?? {}, fields);
+        return {};
+      },
+    );
     accounts.set("admin", {
       customClaims: { admin: true, datascience: true, trusted: true },
     });
@@ -253,12 +270,15 @@ describe("POST /api/admin/users/moderate", () => {
       expect(log.indexOf("auth u1")).toBeLessThan(
         log.indexOf("delete images/pic1"),
       );
-      expect(answer).toEqual({
+      // The account's row as it is now, for the page to put in place of the
+      // one it shows: the users list is a five-minute memo of Auth, and would
+      // still have the picture.
+      expect(answer).toMatchObject({
         uid: "u1",
-        action: "removeAvatar",
         displayName: "Jan Testowy",
         photoURL: GOOGLE_PICTURE,
-        hidden: false,
+        avatarRemovable: false,
+        profile: { handle: "jan-testowy", public: true, hidden: false },
       });
     });
 
@@ -272,12 +292,16 @@ describe("POST /api/admin/users/moderate", () => {
         providerData: [{ providerId: "google.com", photoURL: GOOGLE_PICTURE }],
       });
 
-      await moderate(takeDown);
+      const answer = await moderate(takeDown);
 
       expect(mockUpdateUser).toHaveBeenCalledWith("u1", {
         photoURL: GOOGLE_PICTURE,
       });
       expect(actions()).toHaveLength(1);
+      expect(answer).toMatchObject({
+        photoURL: GOOGLE_PICTURE,
+        avatarRemovable: false,
+      });
     });
 
     it("has nothing to do for an account showing its provider's picture", async () => {
@@ -306,8 +330,15 @@ describe("POST /api/admin/users/moderate", () => {
 
   describe("resetName", () => {
     const reset = { uid: "u1", action: "resetName", reason: "Podszywa się" };
+    const NEUTRAL = /^uczestnik-[a-z0-9]{4}$/;
 
     it("clears the name from the account and from the user's document", async () => {
+      store().seed("profiles/u1", {
+        handle: null,
+        avatarImageId: "pic1",
+        hidden: null,
+      });
+
       const answer = await moderate(reset);
 
       expect(mockUpdateUser).toHaveBeenCalledWith("u1", { displayName: null });
@@ -324,11 +355,54 @@ describe("POST /api/admin/users/moderate", () => {
           detail: "Jan Testowy",
         }),
       ]);
-      // Auth first: it cannot join the batch, and a line saying the name was
-      // reset must not exist for a reset that failed.
+      // Auth first: it cannot join the transaction, and a line saying the name
+      // was reset must not exist for a reset that failed.
       const { log } = store();
       expect(log.indexOf("auth u1")).toBeLessThan(log.indexOf("set users/u1"));
-      expect(answer.displayName).toBeNull();
+      expect(answer).toMatchObject({ uid: "u1", displayName: null });
+    });
+
+    it("takes the handle made from the name with it, to a neutral one", async () => {
+      store().seed("profileHandles/jan-testowy", {
+        uid: "u1",
+        createdAt: "2026-10-01T00:00:00.000Z",
+      });
+      // The owner's own changes of the day, which this is not one of.
+      store().seed("profiles/u1", {
+        handle: "jan-testowy",
+        avatarImageId: "pic1",
+        hidden: null,
+        handleChanges: { day: "2026-10-05", count: 4 },
+      });
+
+      const answer = await moderate(reset);
+
+      const handle = doc("profiles/u1")?.handle as string;
+      expect(handle).toMatch(NEUTRAL);
+      expect(doc("profiles/u1")?.handleChanges).toEqual({
+        day: "2026-10-05",
+        count: 4,
+      });
+      expect(doc(`profileHandles/${handle}`)).toMatchObject({ uid: "u1" });
+      // The old address no longer opens anything: it named the person.
+      expect(doc("profileHandles/jan-testowy")).toBeUndefined();
+      // What it was stays nameable, in the history.
+      expect(actions()).toEqual([
+        expect.objectContaining({
+          kind: "resetName",
+          detail: `Jan Testowy (adres profilu: jan-testowy → ${handle})`,
+        }),
+      ]);
+      expect(answer.profile).toEqual({
+        handle,
+        public: true,
+        hidden: false,
+      });
+      // After Auth, like the rest of the reset.
+      const { log } = store();
+      expect(log.indexOf("auth u1")).toBeLessThan(
+        log.indexOf(`create profileHandles/${handle}`),
+      );
     });
 
     it("does not make up a users document for an account that has none", async () => {
@@ -375,7 +449,7 @@ describe("POST /api/admin/users/moderate", () => {
           reason: "Wulgarny adres profilu",
         }),
       ]);
-      expect(answer.hidden).toBe(true);
+      expect(answer.profile.hidden).toBe(true);
       // Nothing else about the account is touched.
       expect(mockUpdateUser).not.toHaveBeenCalled();
     });
@@ -413,7 +487,7 @@ describe("POST /api/admin/users/moderate", () => {
           detail: "Spam",
         }),
       ]);
-      expect(answer.hidden).toBe(false);
+      expect(answer.profile.hidden).toBe(false);
     });
 
     it.each([

@@ -14,6 +14,8 @@ import {
   type ActivityKind,
   type ActivityRange,
 } from "~~/shared/activity";
+import { ownAvatarPath } from "~~/server/utils/avatars";
+import { openProfilePath } from "~~/server/utils/profiles";
 import { maskedContributorName } from "~~/shared/profile";
 
 const queryValidator = z.object({
@@ -53,8 +55,17 @@ export type ActivityContributor = {
   /** Admin only. */
   email: string | null;
   /** Only for a row that is named; an avatar identifies a person as surely as
-   * the name over it. */
+   * the name over it. And only the picture the site itself stored for the
+   * account (`/api/images/<id>`), for administrators as well: Auth's
+   * `photoURL` can be set to any address from the browser, and every reader of
+   * the ranking would fetch it. A Google account's photo is therefore not
+   * shown - the admin list of accounts has its own. */
   photoURL: string | null;
+  /** `/uczestnik/<handle>`, for a row named by its owner's own consent - the
+   * `publicProfile` switch - and whose profile no administrator hid. Never for
+   * a row named only because an administrator or the person themself is
+   * looking: a link is a page anybody can open. */
+  profilePath: string | null;
   counts: ActivityCounts;
   total: number;
   lastActiveAt: string;
@@ -156,11 +167,12 @@ function present(
   caller: { isAdmin: boolean; callerUid: string | null },
 ): ActivityContributor {
   const identity = windowed.identities[contributor.uid];
+  const profile = windowed.profiles[contributor.uid];
+  const isPublic = windowed.public[contributor.uid] === true;
   const isSelf = contributor.uid === caller.callerUid;
   // Your own name is not a disclosure, so it is shown to you whatever the
   // setting says - seeing where you stand is the reason the ranking is public.
-  const named =
-    caller.isAdmin || isSelf || windowed.public[contributor.uid] === true;
+  const named = caller.isAdmin || isSelf || isPublic;
 
   const rank = index + 1;
   const ownName =
@@ -175,7 +187,8 @@ function present(
     named: named && !!ownName,
     isSelf,
     email: caller.isAdmin ? (identity?.email ?? null) : null,
-    photoURL: named ? (identity?.photoURL ?? null) : null,
+    photoURL: named ? ownAvatarPath(profile) : null,
+    profilePath: openProfilePath(profile, isPublic),
     counts: contributor.counts,
     total: contributor.total,
     lastActiveAt: contributor.lastActiveAt,
@@ -183,9 +196,7 @@ function present(
     // whether the name you see is one everybody sees.
     ...(isSelf
       ? {
-          publicName:
-            windowed.public[contributor.uid] === true &&
-            !!identity?.displayName,
+          publicName: isPublic && !!identity?.displayName,
         }
       : {}),
   };

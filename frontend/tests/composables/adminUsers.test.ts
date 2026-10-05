@@ -493,6 +493,35 @@ describe("useAdminUsers", () => {
     expect(users.busy.has("a")).toBe(false);
   });
 
+  it("puts the row a moderation answers with in place, without asking for the list", async () => {
+    const before = userRow("a", {
+      displayName: "Obraźliwa nazwa",
+      avatarRemovable: true,
+    });
+    const after = userRow("a", { displayName: null, avatarRemovable: true });
+    mockAuthRequest
+      .mockResolvedValueOnce(usersResponse([before, userRow("b")]))
+      .mockResolvedValueOnce(after);
+    const users = useAdminUsers();
+    await users.load("aktywni");
+
+    const ok = await users.moderate({
+      uid: "a",
+      action: "resetName",
+      reason: "Wulgarna.",
+    });
+
+    expect(ok).toBe(true);
+    // The list is a five-minute memo on the server; asked again now, it
+    // would still have the name.
+    expect(mockAuthRequest).toHaveBeenCalledTimes(2);
+    expect(users.data.value?.users.map((row) => row.displayName)).toEqual([
+      null,
+      "Osoba b",
+    ]);
+    expect(users.snackbarText.value).toBe("Nazwa użytkownika usunięta.");
+  });
+
   it("asks for the list again when a write answers with less than a row", async () => {
     mockAuthRequest
       .mockResolvedValueOnce(usersResponse([userRow("a")]))

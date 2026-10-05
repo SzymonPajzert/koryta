@@ -74,6 +74,15 @@ export function createMemoryFirestore() {
       docs.set(path, merged(docs.get(path), data));
       log.push(`update ${path}`);
     },
+    create(path: string, data: Data) {
+      if (docs.has(path)) {
+        throw Object.assign(new Error(`Document already exists: ${path}`), {
+          code: 6,
+        });
+      }
+      docs.set(path, written(data));
+      log.push(`create ${path}`);
+    },
     delete(path: string) {
       docs.delete(path);
       log.push(`delete ${path}`);
@@ -121,6 +130,9 @@ export function createMemoryFirestore() {
       },
       update: (ref: DocRef, data: Data) => {
         queued.push(() => apply.update(ref.path, data));
+      },
+      create: (ref: DocRef, data: Data) => {
+        queued.push(() => apply.create(ref.path, data));
       },
       delete: (ref: DocRef) => {
         queued.push(() => apply.delete(ref.path));
@@ -174,6 +186,10 @@ export function createMemoryFirestore() {
         },
         update: (ref: DocRef, data: Data) => {
           queue.update(ref, data);
+          return tx;
+        },
+        create: (ref: DocRef, data: Data) => {
+          queue.create(ref, data);
           return tx;
         },
         delete: (ref: DocRef) => {

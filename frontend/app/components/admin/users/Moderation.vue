@@ -112,7 +112,12 @@ const options = computed(() => {
       title: "Usunąć nazwę użytkownika?",
       text:
         `Nazwa „${props.row.displayName}” zniknie z konta, a w historii ` +
-        "zostanie zapisana. Właściciel konta może ustawić nową na /profil.",
+        "zostanie zapisana. Właściciel konta może ustawić nową na /profil." +
+        // The handle is usually the name, slugged, so it goes too
+        // (`replaceHandleWithNeutral`) - say so before the address breaks.
+        (props.row.profile.handle
+          ? ` Adres profilu /uczestnik/${props.row.profile.handle} zmieni się na neutralny.`
+          : ""),
       confirm: "Usuń nazwę",
     });
   }

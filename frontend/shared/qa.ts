@@ -59,6 +59,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "publiczny-profil-uczestnika",
+    title: "Publiczny profil uczestnika pod /uczestnik/<adres>",
+    description:
+      "Przełącznik widoczności na /profil włącza teraz też publiczny profil: nazwa, własne zdjęcie (albo inicjały), miesiąc dołączenia i liczba ocen, notatek i propozycji. Adres profilu można zmienić na /profil, a nazwa w rankingu prowadzi do profilu.",
+    steps: [
+      "Zaloguj się, otwórz /profil i włącz „Pokaż moją nazwę i publiczny profil” - pod przełącznikiem ma się pojawić link „koryta.pl/uczestnik/…” i pole „Adres profilu”.",
+      "Kliknij link - profil ma pokazać Twoją nazwę, własne zdjęcie albo inicjały (nigdy zdjęcie z Google), „Na koryta.pl od <miesiąc rok>” i cztery liczby.",
+      "Zmień „Adres profilu” na poprawny i zapisz - link ma się zmienić, a stary adres ma dawać 404.",
+      "Wyłącz przełącznik i otwórz profil w oknie prywatnym - ma być strona 404.",
+      "Na /eksploruj/statystyki nazwa osoby z włączonym profilem ma być linkiem do jej profilu; zamazane nazwy linkami nie są.",
+    ],
+    link: "/profil",
+    area: "contributor",
+  },
+  {
     id: "moderacja-kont-uzytkownikow",
     title: "Usunięcie komuś zdjęcia albo nazwy i ukrycie profilu",
     description:

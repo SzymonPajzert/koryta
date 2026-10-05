@@ -323,10 +323,12 @@ function failureText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The row an action answered with, if it answered with one. The nominate
- * route returns the updated row; the others may return only what they
- * changed, and a partial row merged in would be a row that lies about the
- * fields it left out. So anything short of a whole row means "ask again". */
+/** The row an action answered with, if it answered with one. Every write
+ * route returns the account's updated row, read live - moderation too, which
+ * matters most there: the list comes out of a five-minute memo of Auth, and
+ * asking for it again would bring back the name or picture just taken down.
+ * A partial row merged in would be a row that lies about the fields it left
+ * out, so anything short of a whole row still means "ask again". */
 export function rowFromResponse(response: unknown): AdminUserRow | null {
   const looksLikeRow = (value: unknown): value is AdminUserRow => {
     const row = value as Partial<AdminUserRow> | null | undefined;

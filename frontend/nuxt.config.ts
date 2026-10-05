@@ -147,6 +147,10 @@ export default defineNuxtConfig({
       "/plik",
       // Signed-in only, and it names contributors next to what they did.
       "/aktywnosc",
+      // Volunteers' public profiles. Each page carries a noindex of its own as
+      // well: agreeing to be named on the site is not agreeing to come up when
+      // somebody searches for your name.
+      "/uczestnik",
       // Renders nothing server-side (the whole template is <ClientOnly>), so it
       // has no indexable content to lose, and every entity URL 301s into it
       // with its own ?krs=/?teryt=. That is the bulk of the crawl budget.

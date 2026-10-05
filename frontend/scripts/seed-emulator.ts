@@ -9,6 +9,11 @@ import { generateChunksLower } from "../shared/search";
 import { computeEdgeStats } from "../shared/stats";
 import { bodyIsPaidPost } from "../shared/companyBodies";
 import type { Edge } from "../shared/model";
+import {
+  userCollections,
+  type ProfileDoc,
+  type ProfileHandleDoc,
+} from "../shared/userAdmin";
 
 import nodes from "./nodes.json";
 import edges from "./edges.json";
@@ -140,6 +145,12 @@ async function seedDatabase() {
     // would leave every note any earlier run had made sitting on the page
     // under the fixtures below.
     "notes",
+    // The accounts' own records: nominations and their history, sign-ins,
+    // requests for access, and the public profiles with their handles. A
+    // nomination or a hidden profile left over from an earlier run would show
+    // on /admin/uzytkownicy, or close the seeded profile below, as though the
+    // seed had put it there.
+    ...Object.values(userCollections),
   ];
   for (const col of collections) {
     const docs = await db.collection(col).listDocuments();
@@ -269,6 +280,32 @@ async function seedDatabase() {
     batch.set(ref, note);
   }
 
+  // `test-user` has the public profile switched on, under a handle of its
+  // own, so /uczestnik/testowy-uczestnik has somebody to show - the visual
+  // suite photographs it. Both halves of the handle are written, as
+  // server/utils/profiles.ts would: the profile names its handle and the
+  // handle names its owner, and the public route insists the two agree.
+  //
+  // Merged into `users/test-user`, which nothing else here writes but a spec
+  // may have, and which is otherwise only ever written by its owner.
+  batch.set(
+    db.collection("users").doc("test-user"),
+    { publicProfile: true },
+    { merge: true },
+  );
+  batch.set(db.collection(userCollections.profiles).doc("test-user"), {
+    handle: "testowy-uczestnik",
+    avatarImageId: null,
+    hidden: null,
+  } satisfies ProfileDoc);
+  batch.set(
+    db.collection(userCollections.profileHandles).doc("testowy-uczestnik"),
+    {
+      uid: "test-user",
+      createdAt: "2026-05-04T09:00:00.000Z",
+    } satisfies ProfileHandleDoc,
+  );
+
   for (const [id, fact] of Object.entries(extractions)) {
     const ref = db.collection("extractions").doc(id);
     // The fixture carries an ISO string because JSON has no timestamp; the
@@ -302,43 +339,68 @@ async function seedAuth() {
     throw "this is not a test environment";
   }
 
-  try {
-    for (const user of [
-      {
-        uid: "test-admin",
-        email: "admin@koryta.pl",
-        password: "password123",
-        displayName: "Admin User",
-      },
-      {
-        uid: "test-user",
-        email: "user@koryta.pl",
-        password: "password123",
-        displayName: "Normal User",
-      },
-    ]) {
+  // Claims per account, set again on every run so a re-seeded emulator is back
+  // to these whatever a spec changed.
+  const accounts: {
+    uid: string;
+    email: string;
+    password: string;
+    displayName: string;
+    claims?: Record<string, boolean>;
+  }[] = [
+    {
+      uid: "test-admin",
+      email: "admin@koryta.pl",
+      password: "password123",
+      displayName: "Admin User",
+      // datascience: allows uploading extractions via /api/ingest/extraction
+      // trusted: below datascience on the ladder (shared/roles.ts), so the
+      //   claims script reads this account as a plain administrator
+      // owner: opens the owner's task list, /admin/zadania
+      claims: { admin: true, datascience: true, trusted: true, owner: true },
+    },
+    {
+      uid: "test-user",
+      email: "user@koryta.pl",
+      password: "password123",
+      displayName: "Normal User",
+    },
+    {
+      // An administrator on trial: the whole cumulative ladder up to `admin`
+      // (shared/roles.ts), plus `newAdmin`. What the established-admin pages
+      // (/admin/uzytkownicy) turn away, and what the "Okresy próbne" section
+      // and /aktywnosc's "Nowi administratorzy" list.
+      uid: "test-new-admin",
+      email: "newadmin@koryta.pl",
+      password: "password123",
+      displayName: "Trial Admin",
+      claims: { admin: true, datascience: true, trusted: true, newAdmin: true },
+    },
+  ];
+
+  // One account at a time, so an emulator that already holds the first ones
+  // still gets the ones added since. The whole loop used to sit in one `try`,
+  // and the first "already exists" ended it.
+  for (const { claims, ...user } of accounts) {
+    try {
       await auth.createUser(user);
-      if (user.uid === "test-admin") {
-        // datascience: allows uploading extractions via /api/ingest/extraction
-        // owner: opens the owner's task list, /admin/zadania
-        await auth.setCustomUserClaims(user.uid, {
-          admin: true,
-          datascience: true,
-          owner: true,
-        });
-        console.log(`Set admin + datascience + owner claim for ${user.email}`);
-      }
       console.log(`User created: ${user.email} / ${user.password}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      if (
+        error.code === "auth/email-already-exists" ||
+        error.code === "auth/uid-already-exists"
+      ) {
+        console.log(`User already exists: ${user.email}`);
+      } else {
+        throw error;
+      }
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    if (
-      error.code === "auth/email-already-exists" ||
-      error.code === "auth/uid-already-exists"
-    ) {
-      console.log("User already exists", error);
-    } else {
-      throw error;
+    if (claims) {
+      await auth.setCustomUserClaims(user.uid, claims);
+      console.log(
+        `Set ${Object.keys(claims).join(" + ")} claims for ${user.email}`,
+      );
     }
   }
 }

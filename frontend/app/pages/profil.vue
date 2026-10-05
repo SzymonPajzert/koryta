@@ -108,13 +108,13 @@
         </v-card>
 
         <v-card class="mb-4" rounded="lg">
-          <v-card-title>Widoczność w statystykach i w aktywności</v-card-title>
+          <v-card-title>Widoczność i publiczny profil</v-card-title>
           <v-card-subtitle class="text-wrap">
             Ranking na
             <NuxtLink to="/eksploruj/statystyki">stronie statystyk</NuxtLink>
             pokazuje, kto ile sprawdził, a strona Aktywność - kto co i kiedy
-            zrobił. Nazwy są w nich ukryte, dopóki ich właściciele nie zdecydują
-            inaczej.
+            zrobił. Nazwy są w nich ukryte, a profili nie ma, dopóki ich
+            właściciele nie zdecydują inaczej.
           </v-card-subtitle>
           <v-card-text>
             <v-switch
@@ -151,6 +151,15 @@
                 inaczej.
               </template>
             </div>
+            <!-- Publiczny profil: its address, and the field to change it.
+                 Asks the server once the switch above is saved, which is when
+                 a profile that was just turned on gets its handle. -->
+            <ProfilePublicProfileSettings
+              :public-profile="publicProfile"
+              :saving="savingVisibility"
+              :loaded="profileVisibilityLoaded"
+              @notify="notify"
+            />
           </v-card-text>
         </v-card>
 
@@ -495,8 +504,8 @@ const saveVisibility = async () => {
     );
     notify(
       publicProfile.value
-        ? "Twoja nazwa jest teraz widoczna w statystykach i w aktywności."
-        : "Twoja nazwa jest znów zamazana w statystykach i w aktywności.",
+        ? "Twoja nazwa i profil są teraz widoczne dla wszystkich."
+        : "Twoja nazwa jest znów zamazana, a profil wyłączony.",
     );
   } catch (err) {
     console.error("Failed to save profile visibility:", err);

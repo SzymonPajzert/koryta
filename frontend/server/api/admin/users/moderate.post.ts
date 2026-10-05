@@ -6,28 +6,22 @@ import {
 } from "firebase-admin/firestore";
 import { defineEventHandler, readValidatedBody } from "h3";
 import { requireEstablishedAdmin } from "~~/server/utils/auth";
-import { providerPhotoOf, removeUserAvatar } from "~~/server/utils/avatars";
+import {
+  hasRemovableAvatar,
+  providerPhotoOf,
+  removeUserAvatar,
+} from "~~/server/utils/avatars";
 import { imagesOf } from "~~/server/utils/images";
+import { replaceHandleWithNeutral } from "~~/server/utils/profiles";
 import { recordUserAction } from "~~/server/utils/userActions";
+import { buildRowFor, readAccount } from "~~/server/utils/userDirectory";
 import { roleFromClaims } from "~~/shared/roles";
 import {
   moderateBodySchema,
   userCollections,
-  type ModerationAction,
+  type AdminUserRow,
   type ProfileDoc,
 } from "~~/shared/userAdmin";
-
-/** What the account shows once the action is done, for the row on
- * /admin/uzytkownicy to take over without reading the list again. */
-export type ModerateResponse = {
-  uid: string;
-  action: ModerationAction;
-  /** Auth's, as `AdminUserRow` has it. */
-  displayName: string | null;
-  photoURL: string | null;
-  /** The public profile is hidden by an administrator. */
-  hidden: boolean;
-};
 
 const nothingToDo = (message: string) =>
   createError({ statusCode: 409, message });
@@ -45,10 +39,10 @@ async function findAccount(uid: string): Promise<UserRecord> {
 
 /** Back to the sign-in provider's picture, or none.
  *
- * Something to do whenever the account shows anything but that: a picture we
- * store, one left over from an upload that failed half way, or a url the
- * account was pointed at from the browser, which Auth takes from anybody about
- * themselves. */
+ * Something to do whenever the account shows anything but that
+ * (`hasRemovableAvatar`, which the row on /admin/uzytkownicy offers the button
+ * by too): a picture we store, one left over from an upload that failed half
+ * way, or a url the account was pointed at from the browser. */
 async function takeDownAvatar(
   db: Firestore,
   account: UserRecord,
@@ -59,9 +53,12 @@ async function takeDownAvatar(
   const stored = await imagesOf(db, `users/${account.uid}`, "avatar");
   const shown = account.photoURL ?? null;
   if (
-    !profile?.avatarImageId &&
-    stored.length === 0 &&
-    shown === providerPhotoOf(account)
+    !hasRemovableAvatar({
+      avatarImageId: profile?.avatarImageId,
+      storedAvatars: stored.length > 0,
+      photoURL: shown,
+      providerPhotoURL: providerPhotoOf(account),
+    })
   ) {
     throw nothingToDo("To konto nie ma własnego zdjęcia profilowego.");
   }
@@ -76,13 +73,20 @@ async function takeDownAvatar(
   });
 }
 
-/** Clears the display name, so the account is shown by its fallback - the
- * handle on its profile, an ordinal in the ranking - until its holder sets
+/** Clears the display name, so the account is shown by its fallback -
+ * "Uczestnik" on its profile, an ordinal in the ranking - until its holder sets
  * another on /profil.
  *
- * Auth first, then the batch with the mirror and the history line: Auth
- * cannot join a batch, and a line saying a name was reset must not exist for
- * a reset that failed. The other way round is logged loudly instead. */
+ * The handle goes with it, to a neutral `uczestnik-xxxx`
+ * (`replaceHandleWithNeutral`): it was most likely cut from this very name, and
+ * would otherwise keep the words just taken down in the profile's address and
+ * in the ranking's link to it. The old one is kept in the history line, next
+ * to the name.
+ *
+ * Auth first, then one transaction with the handle, the mirror and the history
+ * line: Auth cannot join a transaction, and a line saying a name was reset must
+ * not exist for a reset that failed. The other way round is logged loudly
+ * instead. */
 async function resetName(
   db: Firestore,
   account: UserRecord,
@@ -99,23 +103,34 @@ async function resetName(
 
   await getAuth().updateUser(account.uid, { displayName: null });
 
-  const batch = db.batch();
-  // Not for an account that never saved a setting: it has no document, and
-  // gets none for this.
-  if (mirrored !== undefined) {
-    batch.set(usersRef, { displayName: FieldValue.delete() }, { merge: true });
-  }
-  recordUserAction(
-    db,
-    { kind: "resetName", target: account.uid, by, reason, detail: name },
-    batch,
-  );
   try {
-    await batch.commit();
+    await db.runTransaction(async (tx) => {
+      // Every read of the transaction is in here, so it goes first.
+      const handle = await replaceHandleWithNeutral(db, tx, account.uid);
+      // Not for an account that never saved a setting: it has no document,
+      // and gets none for this.
+      if (mirrored !== undefined) {
+        tx.set(usersRef, { displayName: FieldValue.delete() }, { merge: true });
+      }
+      recordUserAction(
+        db,
+        {
+          kind: "resetName",
+          target: account.uid,
+          by,
+          reason,
+          detail: handle
+            ? `${name} (adres profilu: ${handle.from} → ${handle.to})`
+            : name,
+        },
+        tx,
+      );
+    });
   } catch (error) {
     console.error(
       `moderate: the name of ${account.uid} is reset in Auth, but neither ` +
-        `its users document nor the record of who reset it was written`,
+        `its handle, its users document nor the record of who reset it ` +
+        `was written`,
       error,
     );
     throw error;
@@ -132,7 +147,7 @@ async function setHidden(
   action: "hideProfile" | "unhideProfile",
   by: string,
   reason: string,
-): Promise<boolean> {
+) {
   const hide = action === "hideProfile";
   const ref = db.collection(userCollections.profiles).doc(uid);
   await db.runTransaction(async (tx) => {
@@ -158,7 +173,6 @@ async function setHidden(
       tx,
     );
   });
-  return hide;
 }
 
 /** An established administrator's takedowns on somebody's account: the
@@ -173,8 +187,13 @@ async function setHidden(
  *
  * Moderation never takes a role away; that is a nomination, and the claims
  * script's to apply.
+ *
+ * Answers with the account's row, read again once the action is done, as the
+ * page's other writes do. The page puts it in place of the row it shows rather
+ * than asking for the list, which comes out of a five-minute memo of Auth and
+ * would bring back the very name or picture just taken down.
  */
-export default defineEventHandler(async (event): Promise<ModerateResponse> => {
+export default defineEventHandler(async (event): Promise<AdminUserRow> => {
   const caller = await requireEstablishedAdmin(event);
   const { uid, action, reason } = await readValidatedBody(event, (body) =>
     moderateBodySchema.parse(body),
@@ -192,33 +211,25 @@ export default defineEventHandler(async (event): Promise<ModerateResponse> => {
   const profile = (
     await db.collection(userCollections.profiles).doc(uid).get()
   ).data() as Partial<ProfileDoc> | undefined;
-  const shown: ModerateResponse = {
-    uid,
-    action,
-    displayName: account.displayName ?? null,
-    photoURL: account.photoURL ?? null,
-    hidden: !!profile?.hidden,
-  };
 
   switch (action) {
-    case "removeAvatar": {
-      const { photoURL } = await takeDownAvatar(
-        db,
-        account,
-        profile,
-        caller.uid,
-        reason,
-      );
-      return { ...shown, photoURL };
-    }
+    case "removeAvatar":
+      await takeDownAvatar(db, account, profile, caller.uid, reason);
+      break;
     case "resetName":
       await resetName(db, account, caller.uid, reason);
-      return { ...shown, displayName: null };
+      break;
     case "hideProfile":
     case "unhideProfile":
-      return {
-        ...shown,
-        hidden: await setHidden(db, uid, action, caller.uid, reason),
-      };
+      await setHidden(db, uid, action, caller.uid, reason);
+      break;
   }
+
+  // Read again rather than the `UserRecord` above, which still has the name
+  // and the picture as they were.
+  const after = await readAccount(uid);
+  if (!after) {
+    throw createError({ statusCode: 404, message: "Nie ma takiego konta." });
+  }
+  return buildRowFor(db, after);
 });

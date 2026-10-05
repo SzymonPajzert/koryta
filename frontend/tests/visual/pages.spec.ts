@@ -58,6 +58,26 @@ const pages: {
   // `KorytaCrawler/0.1 (+http://koryta.pl/crawler)`.
   { name: "crawler", path: "/crawler", file: "crawler" },
   {
+    // A volunteer's public profile: the seeded `test-user`, who has it
+    // switched on under the handle `testowy-uczestnik` (see
+    // scripts/seed-emulator.ts). Server rendered, so it arrives whole with the
+    // document.
+    name: "uczestnik",
+    path: "/uczestnik/testowy-uczestnik",
+    file: "uczestnik/[handle]",
+    settled: ["Profil uczestnika"],
+    // „Na koryta.pl od …” is the month the account was created, which in the
+    // emulator is the month it was seeded - so the shot would change on the
+    // first of every month. Pinned to one month for the capture: the line is
+    // still drawn, at the length a real one has, and nothing else on the page
+    // depends on the date.
+    act: async (page) => {
+      await page
+        .getByTestId("uczestnik-joined")
+        .evaluate((line) => (line.textContent = "Na koryta.pl od maja 2026"));
+    },
+  },
+  {
     name: "statystyki",
     path: "/eksploruj/statystyki",
     file: "eksploruj/statystyki",

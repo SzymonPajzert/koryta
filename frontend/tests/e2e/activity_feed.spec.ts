@@ -132,7 +132,9 @@ test("an administrator sees names and the filter for administrators on trial", a
 
   await page.getByTestId("activity-new-admins").click();
   await expect(page).toHaveURL(/kto=nowi-admini/);
+  // The seed keeps one administrator on trial (scripts/seed-emulator.ts), who
+  // is listed whether or not they did anything.
   await expect(page.getByTestId("activity-new-admin-list")).toContainText(
-    "Nikt nie ma teraz statusu nowego administratora.",
+    "Trial Admin",
   );
 });

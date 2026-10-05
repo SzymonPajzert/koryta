@@ -7,7 +7,8 @@
  * they have been reading. That reasoning still holds for anyone who has not
  * said otherwise - so the ranking is public and the names in it are not, until
  * the person whose name it is turns `publicProfile` on from /profil. The same
- * choice decides who is named on /aktywnosc.
+ * choice decides who is named on /aktywnosc, and who has a public profile at
+ * `/uczestnik/<handle>` (server/utils/profiles.ts).
  *
  * Kept here rather than in the endpoint so the switch on /profil, the server
  * that applies it and the table that renders the result are all written against
@@ -28,15 +29,24 @@ export const publicProfileDefault = false;
  * /aktywnosc names people by the same choice, and it shows more than the
  * ranking does: what somebody rated, noted or proposed, and when. Agreeing to
  * a line in a ranking is not agreeing to that, so the switch says both.
+ *
+ * The public profile came later and rides on the same switch, by the owner's
+ * decision of 2026-10-05: one choice about being seen, rather than a second
+ * one nobody would find. So the label says what the profile shows, item by
+ * item - the people who turned the switch on before the profile existed get
+ * one without being asked again, and this wording is what they agreed to. It
+ * shows less than /aktywnosc already does: counts, never what was rated.
  */
 export const publicProfileLabel = {
-  title: "Pokaż moją nazwę w statystykach i w aktywności",
+  title: "Pokaż moją nazwę i publiczny profil",
   hint:
     "Twoja nazwa użytkownika pojawi się w rankingu na /eksploruj/statystyki " +
     "i na stronie Aktywność, przy tym, co i kiedy oceniasz, notujesz lub " +
-    "proponujesz. Bez tego inni widzą w rankingu zamazaną nazwę, a w " +
-    "aktywności „Anonim”. Administratorzy widzą Twoją nazwę niezależnie od " +
-    "tego ustawienia.",
+    "proponujesz. Dostaniesz też publiczny profil pod adresem " +
+    "/uczestnik/<adres> z Twoją nazwą, zdjęciem (jeśli dodasz własne), " +
+    "miesiącem dołączenia i liczbą ocen, notatek i propozycji. Bez tego inni " +
+    "widzą w rankingu zamazaną nazwę, w aktywności „Anonim”, a profilu nie " +
+    "ma. Administratorzy widzą Twoją nazwę niezależnie od tego ustawienia.",
 };
 
 export function publicProfileEnabled(

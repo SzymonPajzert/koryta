@@ -268,6 +268,10 @@ export type ProfileDoc = {
   avatarImageId: string | null;
   /** Set by an administrator; a hidden profile is a 404. */
   hidden: { by: string; at: string; reason: string } | null;
+  /** How many times the owner changed the handle on `day` (UTC
+   * `YYYY-MM-DD`), for the daily limit in server/utils/profiles.ts. Absent
+   * until the first change. */
+  handleChanges?: { day: string; count: number };
 };
 
 /** `profileHandles/{handle}`. */

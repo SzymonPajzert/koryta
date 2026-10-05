@@ -3,6 +3,7 @@ import {
   maskedContributorName,
   publicProfileDefault,
   publicProfileEnabled,
+  publicProfileLabel,
 } from "../../shared/profile";
 
 describe("publicProfileEnabled", () => {
@@ -47,5 +48,29 @@ describe("maskedContributorName", () => {
     // Iterating a string by index would cut a surrogate pair and emit half of
     // an emoji or of a rarer script's letter.
     expect(maskedContributorName("𝔄nna", 1)).toBe("𝔄•••••");
+  });
+});
+
+describe("publicProfileLabel", () => {
+  it("says the switch opens a profile, and what is on it", () => {
+    // The people who turned it on before profiles existed get one without
+    // being asked again; this sentence is what they agreed to.
+    const { hint } = publicProfileLabel;
+
+    expect(hint).toContain("/uczestnik/");
+    for (const shown of [
+      "nazwą",
+      "zdjęciem (jeśli dodasz własne)",
+      "miesiącem dołączenia",
+      "liczbą ocen, notatek i propozycji",
+    ]) {
+      expect(hint).toContain(shown);
+    }
+  });
+
+  it("still says administrators see the name either way", () => {
+    expect(publicProfileLabel.hint).toContain(
+      "Administratorzy widzą Twoją nazwę niezależnie od tego ustawienia.",
+    );
   });
 });

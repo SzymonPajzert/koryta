@@ -18,7 +18,9 @@ import {
   daysBetween,
   type ActivityAggregate,
 } from "~~/server/utils/activityStats";
+import { ensureHandle, readProfiles } from "~~/server/utils/profiles";
 import type { ActivityKind } from "~~/shared/activity";
+import type { ProfileDoc } from "~~/shared/userAdmin";
 
 /** How many contributors the leaderboard resolves names for. Well past the
  * number of people who have ever been active in a week, and it keeps the
@@ -34,6 +36,10 @@ export type WindowedActivity = {
   identities: Record<string, ContributorIdentity>;
   /** Which of the ranked contributors agreed to be named in public. */
   public: Record<string, boolean>;
+  /** The ranked contributors' profiles: the handle a public row links to, the
+   * picture the site stored for them, and whether an administrator hid the
+   * profile. Server side only, like `identities`. */
+  profiles: Record<string, ProfileDoc>;
 };
 
 /** The whole read-and-roll-up, memoized per window length.
@@ -87,13 +93,13 @@ export const cachedActivityWindow = defineCachedFunction(
 
     const aggregate = mergeRollups(spanned, rollups);
     const ranked = aggregate.contributors.slice(0, LEADERBOARD_SIZE);
-    const [identities, publicProfiles] = await Promise.all([
-      identify(ranked.map((c) => c.uid)),
-      readPublicProfiles(
-        db,
-        ranked.map((c) => c.uid),
-      ),
+    const rankedUids = ranked.map((c) => c.uid);
+    const [identities, publicProfiles, profiles] = await Promise.all([
+      identify(rankedUids),
+      readPublicProfiles(db, rankedUids),
+      readProfiles(db, rankedUids),
     ]);
+    await ensurePublicHandles(db, identities, publicProfiles, profiles);
 
     return {
       window,
@@ -101,6 +107,7 @@ export const cachedActivityWindow = defineCachedFunction(
       truncated: mergeTruncated(rollups),
       identities,
       public: publicProfiles,
+      profiles,
     };
   },
   {
@@ -110,3 +117,49 @@ export const cachedActivityWindow = defineCachedFunction(
     getKey: (days: number) => String(days),
   },
 );
+
+/** A handle for every ranked contributor who is named in public and has none
+ * yet, so their row can link to their profile.
+ *
+ * The people who turned `publicProfile` on before profiles existed agreed to a
+ * switch whose label now includes the profile; this is where they get one,
+ * from the name they are already shown under, without having to open /profil
+ * first. Nobody else is given a handle here - a handle for somebody who did not
+ * agree would be the stable pseudonym the ranking withholds the uid to avoid.
+ *
+ * A failure leaves the row unlinked rather than the ranking unbuilt; the next
+ * rebuild of the memo tries again. In place, on `profiles`.
+ */
+async function ensurePublicHandles(
+  db: FirebaseFirestore.Firestore,
+  identities: Record<string, ContributorIdentity>,
+  publicProfiles: Record<string, boolean>,
+  profiles: Record<string, ProfileDoc>,
+) {
+  const missing = Object.keys(publicProfiles).filter(
+    // An account the auth service no longer knows has no profile page to
+    // link to, so it is not given an address for one.
+    (uid) =>
+      publicProfiles[uid] === true && !profiles[uid]?.handle && identities[uid],
+  );
+  await Promise.all(
+    missing.map(async (uid) => {
+      try {
+        const handle = await ensureHandle(
+          db,
+          uid,
+          identities[uid]?.displayName,
+        );
+        profiles[uid] = {
+          ...(profiles[uid] ?? {
+            avatarImageId: null,
+            hidden: null,
+          }),
+          handle,
+        };
+      } catch (error) {
+        console.warn(`stats-activity: no handle for ${uid}`, error);
+      }
+    }),
+  );
+}

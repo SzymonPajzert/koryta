@@ -2,31 +2,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ActivityStats } from "../../../server/api/stats/activity.get";
 import { activityRanges } from "../../../shared/activity";
 import handler from "../../../server/api/stats/activity.get";
+import { FakeFirestore } from "../fakeFirestore";
 
-const {
-  mockGetUser,
-  mockGetUsers,
-  mockCollect,
-  mockEnsure,
-  userDocs,
-  headers,
-} = vi.hoisted(() => {
-  const globals = globalThis as Record<string, unknown>;
-  globals.createError = (opts: { statusCode: number; message?: string }) =>
-    Object.assign(new Error(opts.message), opts);
-  // Nitro wraps the read-and-roll-up in its cache; here it runs straight
-  // through, so each test sees the events it set up.
-  globals.defineCachedFunction = (fn: unknown) => fn;
+const firestore = vi.hoisted(() => ({ db: undefined as unknown }));
 
-  return {
-    mockGetUser: vi.fn(),
-    mockGetUsers: vi.fn(),
-    mockCollect: vi.fn(),
-    mockEnsure: vi.fn(),
-    userDocs: new Map<string, Record<string, unknown>>(),
-    headers: new Map<string, string>(),
-  };
-});
+const { mockGetUser, mockGetUsers, mockCollect, mockEnsure, headers } =
+  vi.hoisted(() => {
+    const globals = globalThis as Record<string, unknown>;
+    globals.createError = (opts: { statusCode: number; message?: string }) =>
+      Object.assign(new Error(opts.message), opts);
+    // Nitro wraps the read-and-roll-up in its cache; here it runs straight
+    // through, so each test sees the events it set up.
+    globals.defineCachedFunction = (fn: unknown) => fn;
+
+    return {
+      mockGetUser: vi.fn(),
+      mockGetUsers: vi.fn(),
+      mockCollect: vi.fn(),
+      mockEnsure: vi.fn(),
+      headers: new Map<string, string>(),
+    };
+  });
 
 vi.mock("h3", async (importOriginal) => {
   const actual = await importOriginal<typeof import("h3")>();
@@ -46,22 +42,10 @@ vi.mock("firebase-admin/auth", () => ({
   getAuth: () => ({ getUsers: mockGetUsers }),
 }));
 
+// The `users` switches, the profiles and the handles the ranking hands out, in
+// one Firestore kept in memory.
 vi.mock("firebase-admin/firestore", () => ({
-  getFirestore: () => ({
-    collection: (name: string) => ({
-      doc: (id: string) => ({ collection: name, id }),
-    }),
-    // The real `getAll` takes a trailing `ReadOptions`, which the handler uses
-    // to mask everything but `publicProfile`; drop it rather than treating it
-    // as another document reference.
-    getAll: async (...args: { collection?: string; id?: string }[]) =>
-      args
-        .filter((arg): arg is { collection: string; id: string } => !!arg.id)
-        .map((ref) => ({
-          id: ref.id,
-          data: () => userDocs.get(ref.id),
-        })),
-  }),
+  getFirestore: () => firestore.db,
 }));
 
 vi.mock("~~/server/utils/auth", () => ({ getOptionalUser: mockGetUser }));
@@ -79,6 +63,9 @@ vi.mock("~~/server/utils/activityRollup", async (importOriginal) => {
   return { ...actual, ensureDailyRollups: mockEnsure };
 });
 
+const fake = new FakeFirestore();
+firestore.db = fake;
+
 const call = (query: Record<string, unknown> = {}) =>
   (handler as unknown as (event: unknown) => Promise<ActivityStats>)({ query });
 
@@ -88,7 +75,7 @@ const today = new Date().toISOString();
 beforeEach(() => {
   vi.clearAllMocks();
   headers.clear();
-  userDocs.clear();
+  fake.reset();
   mockEnsure.mockResolvedValue([]);
   mockCollect.mockResolvedValue({
     events: [
@@ -162,7 +149,7 @@ describe("/api/stats/activity", () => {
 
   it("names the contributors who asked to be named", async () => {
     mockGetUser.mockResolvedValue(null);
-    userDocs.set("busy", { publicProfile: true });
+    fake.seed("users/busy", { publicProfile: true });
 
     const result = await call();
 
@@ -171,19 +158,152 @@ describe("/api/stats/activity", () => {
       named: true,
       uid: null,
       email: null,
-      photoURL: "https://example.com/anna.png",
+      profilePath: "/uczestnik/anna-nowak",
     });
     expect(result.contributors[1]).toMatchObject({
       name: "B•••••",
       named: false,
+      profilePath: null,
     });
     expect(result.namedCount).toBe(1);
   });
 
+  it("gives an opted-in contributor with no handle one from their name", async () => {
+    // People who turned the switch on before profiles existed are linked the
+    // first time the ranking lists them, without being asked to choose.
+    mockGetUser.mockResolvedValue(null);
+    fake.seed("users/busy", { publicProfile: true });
+
+    await call();
+
+    expect(fake.read("profileHandles/anna-nowak")).toMatchObject({
+      uid: "busy",
+    });
+    expect(fake.read("profiles/busy")).toMatchObject({ handle: "anna-nowak" });
+    // Nobody else gets one: a handle for somebody who never agreed would be
+    // the stable pseudonym the ranking withholds the uid to avoid.
+    expect(fake.read("profiles/quiet")).toBeUndefined();
+  });
+
+  it("keeps the handle a contributor already chose", async () => {
+    mockGetUser.mockResolvedValue(null);
+    fake.seed("users/busy", { publicProfile: true });
+    fake.seed("profiles/busy", {
+      handle: "ania",
+      avatarImageId: null,
+      hidden: null,
+    });
+
+    const result = await call();
+
+    expect(result.contributors[0]!.profilePath).toBe("/uczestnik/ania");
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("links nobody to a profile an administrator hid", async () => {
+    mockGetUser.mockResolvedValue(null);
+    fake.seed("users/busy", { publicProfile: true });
+    fake.seed("profiles/busy", {
+      handle: "ania",
+      avatarImageId: null,
+      hidden: { by: "a1", at: "2026-10-05T00:00:00.000Z", reason: "spam" },
+    });
+
+    const result = await call();
+
+    // Hiding the profile is not hiding the name, which has its own action.
+    expect(result.contributors[0]).toMatchObject({
+      name: "Anna Nowak",
+      profilePath: null,
+    });
+  });
+
+  it("links a name only by its owner's consent, not by who is looking", async () => {
+    // Named to an administrator and to themselves either way - but a link is
+    // a page anybody could open, so it follows the switch alone.
+    fake.seed("users/busy", { publicProfile: true });
+    mockGetUser.mockResolvedValue({ uid: "admin-1", admin: true });
+
+    const asAdmin = await call();
+
+    expect(asAdmin.contributors.map((c) => c.profilePath)).toEqual([
+      "/uczestnik/anna-nowak",
+      null,
+    ]);
+
+    mockGetUser.mockResolvedValue({ uid: "quiet" });
+    const asSelf = await call();
+
+    expect(asSelf.contributors[1]).toMatchObject({
+      isSelf: true,
+      named: true,
+      profilePath: null,
+    });
+  });
+
+  it("still ranks when a handle cannot be made", async () => {
+    mockGetUser.mockResolvedValue(null);
+    fake.seed("users/busy", { publicProfile: true });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const transaction = vi
+      .spyOn(fake, "runTransaction")
+      .mockRejectedValueOnce(new Error("contention"));
+
+    const result = await call();
+
+    expect(result.contributors[0]).toMatchObject({
+      name: "Anna Nowak",
+      profilePath: null,
+    });
+    transaction.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("sends a picture only when the site stored it, to administrators too", async () => {
+    // Auth's photoURL can be set to any address from the browser, and every
+    // reader's browser would fetch it. The ranking used to pass it on.
+    fake.seed("users/busy", { publicProfile: true });
+    fake.seed("profiles/busy", {
+      handle: "anna-nowak",
+      avatarImageId: "img1",
+      hidden: null,
+    });
+
+    mockGetUser.mockResolvedValue(null);
+    const anonymous = await call();
+
+    expect(anonymous.contributors[0]!.photoURL).toBe("/api/images/img1");
+    expect(JSON.stringify(anonymous)).not.toContain("example.com/anna.png");
+
+    mockGetUser.mockResolvedValue({ uid: "admin-1", admin: true });
+    const asAdmin = await call();
+
+    expect(asAdmin.contributors.map((c) => c.photoURL)).toEqual([
+      "/api/images/img1",
+      null,
+    ]);
+  });
+
+  it("withholds the site's own picture of a masked row", async () => {
+    mockGetUser.mockResolvedValue(null);
+    fake.seed("profiles/quiet", {
+      handle: null,
+      avatarImageId: "img2",
+      hidden: null,
+    });
+
+    const result = await call();
+
+    expect(result.contributors[1]).toMatchObject({
+      named: false,
+      photoURL: null,
+    });
+  });
+
   it("still withholds a name that was never turned on", async () => {
     mockGetUser.mockResolvedValue(null);
-    userDocs.set("busy", { publicProfile: false });
-    userDocs.set("quiet", { newsletter: { recentPeople: true } });
+    fake.seed("users/busy", { publicProfile: false });
+    fake.seed("users/quiet", { newsletter: { recentPeople: true } });
 
     const result = await call();
 
@@ -228,7 +348,7 @@ describe("/api/stats/activity", () => {
     // Only on their own row: it is an answer about them.
     expect(hidden.contributors[0]).not.toHaveProperty("publicName");
 
-    userDocs.set("quiet", { publicProfile: true });
+    fake.seed("users/quiet", { publicProfile: true });
     const shown = await call();
 
     expect(shown.contributors[1]).toMatchObject({ publicName: true });
@@ -236,7 +356,7 @@ describe("/api/stats/activity", () => {
 
   it("does not tell a signed-out reader about anybody's setting", async () => {
     mockGetUser.mockResolvedValue(null);
-    userDocs.set("busy", { publicProfile: true });
+    fake.seed("users/busy", { publicProfile: true });
 
     const result = await call();
 
