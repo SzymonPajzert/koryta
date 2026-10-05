@@ -59,6 +59,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "uzytkownicy-i-nominacje",
+    title: "Lista kont i nominacje na /admin/uzytkownicy",
+    description:
+      "Nowa strona dla administratorów po okresie próbnym, w menu „Admin” jako „Użytkownicy”: konta z rolą, prośby o dostęp, nominacje czekające na skrypt i okresy próbne. Z otwartego wiersza nominujesz zmianę roli z uzasadnieniem i widzisz historię konta. Rolę nadaje dopiero skrypt właściciela.",
+    steps: [
+      "Z konta administratora otwórz menu „Admin” → „Użytkownicy” - na górze prośby o dostęp i nominacje czekające na skrypt, niżej okresy próbne (po 30 dniach oznaczone do decyzji), zespół i pozostali.",
+      "Wpisz w wyszukiwarkę fragment nazwy, e-maila albo uid i wybierz poziom w chipach - lista ma się zawęzić, a adres strony to zapamiętać.",
+      "Otwórz czyjś wiersz - mają się pokazać liczby (oceny, propozycje z odsetkiem przyjętych), linki do propozycji i aktywności oraz historia konta.",
+      "Nominuj kogoś na „Zaufany uczestnik” z uzasadnieniem - wiersz ma przejść do „Czeka na skrypt”; „Wycofaj” ma to cofnąć, a w historii mają być obie czynności.",
+      "Z konta administratora na okresie próbnym - „Użytkowników” nie ma w menu, a /admin/uzytkownicy kończy się komunikatem, że strona jest tylko dla administratorów po okresie próbnym.",
+    ],
+    link: "/admin/uzytkownicy",
+    area: "admin",
+  },
+  {
     id: "uprawnienia-bez-ponownego-logowania",
     title: "Nowe uprawnienia działają bez ponownego logowania",
     description:

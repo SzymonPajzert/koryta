@@ -49,6 +49,10 @@ const LOGGED_IN_ROUTES = [
   "/admin/opinie",
   // The jobs overview, whose spec checks the rows as soon as it lands.
   "/admin/procesy",
+  // The accounts and nominations, whose visual spec opens a row as soon as
+  // the list is in. The seeded admin is an established one, so the
+  // `established-admin` middleware lets the warm-up in.
+  "/admin/uzytkownicy",
   // The id does not have to resolve; the route's own chunk is what we want
   // compiled before a spec follows a revision link into it.
   "/admin/rewizje/warmup",
