@@ -114,7 +114,7 @@
               title="Zadania"
             />
             <v-list-item
-              v-if="isOwner"
+              v-if="isDatascience"
               :prepend-icon="mdiCogSyncOutline"
               to="/admin/procesy"
               title="Procesy"
@@ -235,7 +235,8 @@ import { APP_BAR_HEIGHT, useSsrLayoutTop } from "~/composables/appBar";
 
 const ssrLayoutTop = useSsrLayoutTop();
 const { mdAndUp } = useDisplay();
-const { user, userConfig, logout, isAdmin, isOwner } = useAuthState();
+const { user, userConfig, logout, isAdmin, isOwner, isDatascience } =
+  useAuthState();
 const route = useRoute();
 const loginDialog = ref(false);
 const maxWidth = computed(() =>
