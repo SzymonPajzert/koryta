@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import handler from "../../../server/api/ops/jobs.get";
-import { requireOwner } from "../../../server/utils/auth";
+import { getUser } from "../../../server/utils/auth";
 import {
   COMPRESSED_BUCKET,
   captureRuns,
@@ -43,8 +43,11 @@ vi.mock("h3", async (importOriginal) => ({
   defineEventHandler: (fn: unknown) => fn,
 }));
 
-vi.mock("~~/server/utils/auth", () => ({
-  requireOwner: vi.fn(),
+// Only `getUser` is faked. `requireDatascience` is a pure check on the decoded
+// token, so the route's real gate runs against whatever `getUser` hands back.
+vi.mock("~~/server/utils/auth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/utils/auth")>()),
+  getUser: vi.fn(),
 }));
 
 vi.mock("firebase-admin/firestore", () => ({
@@ -328,7 +331,10 @@ describe("/api/ops/jobs", () => {
     delete process.env.FIRESTORE_EMULATOR_HOST;
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(requireOwner).mockResolvedValue({ uid: "owner" } as never);
+    vi.mocked(getUser).mockResolvedValue({
+      uid: "analyst",
+      datascience: true,
+    } as never);
     mockGetFirestore.mockImplementation((database: string) => fakeDb(database));
     mockGetStorage.mockImplementation(() => ({ bucket }));
   });
@@ -345,22 +351,24 @@ describe("/api/ops/jobs", () => {
     const call = () =>
       (handler as unknown as (event: unknown) => Promise<unknown>)({});
 
-    it("refuses anybody but the owner before reading anything", async () => {
-      vi.mocked(requireOwner).mockRejectedValue(
-        Object.assign(new Error("no"), { statusCode: 403 }),
-      );
+    it("refuses anybody outside the datascience group before reading anything", async () => {
+      // An admin, even: the claim is what counts.
+      vi.mocked(getUser).mockResolvedValue({
+        uid: "admin",
+        admin: true,
+      } as never);
       await expect(call()).rejects.toMatchObject({ statusCode: 403 });
       expect(mockGetFirestore).not.toHaveBeenCalled();
       expect(mockGetStorage).not.toHaveBeenCalled();
     });
 
-    it("answers the owner with every registered job", async () => {
+    it("answers the datascience group with every registered job", async () => {
       process.env.USE_EMULATORS = "true";
       const overview = (await call()) as { jobs: JobView[] };
       expect(overview.jobs.map((job) => job.id)).toEqual(
         JOBS.map((job) => job.id),
       );
-      expect(vi.mocked(requireOwner).mock.invocationCallOrder[0]!).toBeLessThan(
+      expect(vi.mocked(getUser).mock.invocationCallOrder[0]!).toBeLessThan(
         mockGetFirestore.mock.invocationCallOrder[0]!,
       );
     });
