@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 import pandas as pd
 
 from entities.composite import Company, Election, Person, Source
+from entities.person import PKW
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import CloudStorage, Pipeline
@@ -112,9 +113,17 @@ class PeopleKMGP(Pipeline[Person]):
                     source=person["attachment_url"],
                 )
 
-    def process(self, ctx):
-        self.pkw_index: dict[str, list[Person]] = {}
-        for pkw_person in self.people_pkw.read_or_process_list(ctx):
+    def index_pkw(self, records: typing.Iterable[PKW]) -> None:
+        """The 2024 candidacies by lowercased name, with and without the
+        middle one, for `lookup_election`.
+
+        The PKW records themselves: the index held a bare composite Person
+        built from each, which kept the name and dropped the candidacy, so
+        the first match raised on `teryt_candidacy`. Nothing ran the pipeline
+        until the nightly rebuilt every root (2026-10-05).
+        """
+        self.pkw_index: dict[str, list[PKW]] = {}
+        for pkw_person in records:
             if str(pkw_person.election_year) != "2024":
                 continue
             if not pkw_person.first_name or not pkw_person.last_name:
@@ -128,16 +137,10 @@ class PeopleKMGP(Pipeline[Person]):
                 names_to_index.append(full_name)
 
             for n in names_to_index:
-                if n not in self.pkw_index:
-                    self.pkw_index[n] = []
-                self.pkw_index[n].append(
-                    Person(
-                        name=pkw_person.pkw_name or "",
-                        companies=[],
-                        elections=[],
-                        sources=[],
-                    )
-                )
+                self.pkw_index.setdefault(n, []).append(pkw_person)
+
+    def process(self, ctx):
+        self.index_pkw(self.people_pkw.read_or_process_list(ctx))
 
         self.companies_index: dict[tuple[str, str], str] = {}
         for c in self.companies_kmgp.read_or_process_list(ctx):
