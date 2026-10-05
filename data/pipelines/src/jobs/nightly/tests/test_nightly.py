@@ -174,8 +174,14 @@ def test_the_reprocess_rebuilds_all_but_the_slow_sources_and_the_articles(world)
     assert "--refresh" in argv and argv[argv.index("--refresh") + 1] == "all"
     for held in ("ProcessWiki", "PeoplePKW", "CruDump", "FirstNameFreq"):
         assert f":{held}" in argv
-    # KorytaDiffer reads every export ever taken and writes nothing.
-    for excluded in ("ArticleParsed", "ProcessWikiNer", "KorytaDiffer"):
+    # KorytaDiffer reads every export ever taken and writes nothing;
+    # DomainToRegion copies a gitignored file only the article branch reads.
+    for excluded in (
+        "ArticleParsed",
+        "ProcessWikiNer",
+        "KorytaDiffer",
+        "DomainToRegion",
+    ):
         assert excluded in argv
     assert argv[-2:] == ["--assume-yes", "--all"]
     # Backed up as whoever runs it - USERNAME=main on the VM.

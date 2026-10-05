@@ -83,8 +83,12 @@ EXIT_FAILED = 1
 #: KorytaDiffer writes nothing - it prints how one export differs from another
 #: - and reads every export ever taken to do it: on the VM's first night it
 #: spent 65 minutes on the people alone and the kernel killed the run at 16 GB.
+#: DomainToRegion is the article branch's own input, copied from a gitignored
+#: files/domain_to_region.json the VM does not hold; only ArticlePersonMentions
+#: reads it.
 EXCLUDED = (
     "KorytaDiffer",
+    "DomainToRegion",
     "ProcessWikiNer",
     "ArticleDoneUrls",
     "ArticleParsed",
