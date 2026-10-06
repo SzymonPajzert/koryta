@@ -84,3 +84,26 @@ test("'Bez moich' leaves the admin's own proposals out of the queue", async ({
     "true",
   );
 });
+
+test("'Bez moich' leaves them out of the grouped view too", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await logIn(page, USERS.admin, "/admin/rewizje?group=subject#kolejka");
+  await page.waitForURL(/\/admin\/rewizje/, { timeout: 30_000 });
+
+  // Grouped, the endpoint reads the whole list and leaves the reader out of
+  // it in memory - a different path from the plain list's `!=` query.
+  const queue = page.locator("#kolejka");
+  const group = (id: string) =>
+    queue.locator(`[data-queue-group][data-subject-id="${id}"]`);
+  await expect(group(THEIRS)).toBeVisible({ timeout: 30_000 });
+  await expect(group(MINE)).toBeVisible();
+
+  await queue.locator('[data-filter="hide"]').click();
+
+  await expect(page).toHaveURL(/mine=hide/, { timeout: 30_000 });
+  await expect(group(MINE)).toHaveCount(0, { timeout: 30_000 });
+  await expect(group(THEIRS)).toBeVisible();
+  await expect(page).toHaveURL(/group=subject/);
+});

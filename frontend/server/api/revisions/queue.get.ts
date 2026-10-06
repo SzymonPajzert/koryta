@@ -105,7 +105,9 @@ export type RevisionQueue = {
  * `excludeAuthor` is a clause of the query on the first path, not a filter
  * over its answer: dropping one person's rows from a page Firestore already
  * cut would leave short pages and a total that counts them anyway. On the
- * second it is applied in memory with the rest, which it can only empty.
+ * second it is applied in memory with the rest, which it can only empty. On
+ * the third, below, it comes off the scan before the scan is paged, which
+ * keeps the pages and the count as exact, and needs no index.
  *
  * Backfilling the flag was considered and rejected. The uid that wrote 1,447 of
  * the 1,760 flagless revisions is both the owner's admin account and the
@@ -277,8 +279,10 @@ async function byScan(
     status: query.status,
     automatic: query.automatic,
   });
-  const matching = scan.rows.filter((row) =>
-    matchesPublished(row.published, query.published),
+  const matching = scan.rows.filter(
+    (row) =>
+      matchesPublished(row.published, query.published) &&
+      leftIn(row.updateUser, query.excludeAuthor),
   );
   const offset = (query.page - 1) * query.limit;
   const answer = {
@@ -354,6 +358,13 @@ async function describeFresh(
   return described.filter((row) =>
     matchesPublished(row.subject.published, query.published),
   );
+}
+
+/** Whether a revision by `user` stays in a queue that leaves `excluded` out.
+ * The same answer Firestore's `!=` gives the first path: a revision naming
+ * nobody goes too. */
+function leftIn(user: string | null, excluded: string | undefined): boolean {
+  return !excluded || (user !== null && user !== excluded);
 }
 
 /** `rows` in runs of one key each, in the order each key first appears - so
