@@ -157,7 +157,7 @@
             v-model="page"
             :length="queuePages"
             density="compact"
-            class="flex-1-1"
+            class="rev-pages"
           />
           <v-select
             v-model="itemsPerPage"
@@ -316,7 +316,7 @@
           v-model="nodePage"
           :length="nodePages"
           density="compact"
-          class="flex-1-1"
+          class="rev-pages"
         />
         <v-select
           v-model="nodePerPage"
@@ -1142,5 +1142,19 @@ watch(
 .rev-per-page {
   width: 8rem;
   flex: none;
+}
+
+/* The page numbers get what the page-size select leaves of the line, and no
+ * more. Sized by its own content, `v-pagination` measured itself to work out
+ * how many numbers fit, found room for the ones it already had, and added more
+ * - until every page had a button: 1,828 of them, 108,000px wide, under the
+ * entry list in October 2026. The page could then scroll sideways, and the
+ * router, scrolling to the section a filter's url names, scrolled it
+ * sideways too, so every filter change threw the page against the left edge
+ * of the window. A basis and a minimum taken from the line end the loop; 14rem
+ * is what still drops the numbers onto a line of their own on a phone. */
+.rev-pages {
+  flex: 1 1 14rem;
+  min-width: 0;
 }
 </style>
