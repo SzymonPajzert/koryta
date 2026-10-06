@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { reportRemaining } from "../remaining";
 
 /**
  * One-time migration: make the December 2025 backfill's revisions usable.
@@ -131,6 +132,7 @@ async function migrate() {
         `target cannot be recovered; their node_id is still corrected.`,
     );
   }
+  if (!commit) reportRemaining({ rekeyed, restored });
 }
 
 migrate()
