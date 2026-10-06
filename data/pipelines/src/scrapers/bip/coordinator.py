@@ -27,8 +27,6 @@ from scrapers.bip.classify import (
     is_low_value_url,
     looks_like_document,
     normalize_url,
-    path_of,
-    priority_for,
 )
 from scrapers.bip.store import LocalBundleStore
 from scrapers.bip.types import HostRow, RunStats, UrlRow
@@ -71,7 +69,6 @@ class _ActiveHost:
     errors: int = 0
     done_pages: int = 0
     scope_hosts: set[str] = field(default_factory=set)
-    scope_prefix: str = ""
 
 
 class BipCoordinator:
@@ -117,7 +114,6 @@ class BipCoordinator:
                     discovered_from="",
                     depth=0,
                     section="root",
-                    priority=priority_for(seed),
                 ),
                 requeue=True,
             )
@@ -179,12 +175,7 @@ class BipCoordinator:
         active = self.active.get(host)
         if active is None:
             return False
-        url_host = host_of(url)
-        if url_host not in active.scope_hosts:
-            return False
-        if url_host == host or not active.scope_prefix:
-            return True
-        return path_of(url).startswith(active.scope_prefix)
+        return host_of(url) in active.scope_hosts
 
     def _handle_result(
         self,
@@ -217,7 +208,7 @@ class BipCoordinator:
             self.stats.errors += 1
             self._maybe_finalize(row.host)
             return
-        self._register_scope(row.host, result.url)
+        self._register_scope(row.host, result.url, row.depth)
         if looks_like_document(row.url, result.content_type):
             # The cap is also checked at claim time, but several workers can
             # already have document URLs in flight when the previous result
@@ -234,19 +225,21 @@ class BipCoordinator:
             self._handle_page(row, result, links, active)
         self._maybe_finalize(row.host)
 
-    def _register_scope(self, host: str, final_url: str) -> None:
-        active = self.active[host]
+    def _register_scope(self, host: str, final_url: str, depth: int) -> None:
+        """Adopt a redirect's host for the seed only.
+
+        Cross-host is a first-layer move: a seed whose site migrated gets its
+        new host crawled, but from there BFS stays on that host (links to yet
+        another host are dropped by `_in_scope`).
+        """
+        if depth != 0:
+            return
+        active = self.active.get(host)
+        if active is None:
+            return
         effective = host_of(final_url)
-        if not effective or effective == host:
-            return
-        active.scope_hosts.add(effective)
-        if active.scope_prefix:
-            return
-        segments = [s for s in path_of(final_url).split("/") if s]
-        if segments and segments[0] == "web" and len(segments) >= 2:
-            active.scope_prefix = f"/web/{segments[1]}"
-        elif segments:
-            active.scope_prefix = f"/{segments[0]}"
+        if effective and effective != host:
+            active.scope_hosts.add(effective)
 
     def _store_document(
         self, row: UrlRow, result: HttpResult, active: _ActiveHost
@@ -323,7 +316,6 @@ class BipCoordinator:
                         discovered_from=row.url,
                         depth=row.depth + 1,
                         section=url.split("/")[3] if url.count("/") > 2 else "",
-                        priority=priority_for(url),
                         anchor_text=anchor_text,
                     )
                 )

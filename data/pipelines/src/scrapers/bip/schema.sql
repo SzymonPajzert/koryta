@@ -26,7 +26,6 @@ CREATE TABLE bip_urls (
   depth          int  NOT NULL DEFAULT 0,
   section        text NOT NULL DEFAULT '',
   anchor_text    text NOT NULL DEFAULT '',  -- label of the link that discovered it
-  priority       int  NOT NULL DEFAULT 50,      -- lower = sooner
   content_type   text NOT NULL DEFAULT '',
   size           bigint NOT NULL DEFAULT 0,
   sha256         text NOT NULL DEFAULT '',
@@ -41,7 +40,7 @@ CREATE TABLE bip_urls (
   last_checked   timestamptz,
   last_seen      timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX bip_urls_claim_idx ON bip_urls (state, priority, first_seen);
+CREATE INDEX bip_urls_claim_idx ON bip_urls (state, depth, first_seen);
 CREATE INDEX bip_urls_host_idx  ON bip_urls (host, state);
 
 CREATE TABLE bip_docs (
