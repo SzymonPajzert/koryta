@@ -20,7 +20,13 @@ A company's connections are not bought where `PeopleKRSCombined` already takes i
 the bulletin names no entry after: `krs_odpis` gets those for free. So run `krs_odpis` first, then
 `koryta PeopleKRSCombined --refresh KrsOdpisSeats --refresh KrsOdpisEntries`, then this.
 
-TODO: to be used only for people queries, since we've found free KRS scraping alternatives
+By hand it buys the whole queue, after Enter and a question before each call. At night it runs as
+`--scope fallback --max-calls 50`: only what the free sources cannot give - the person feeds of the people somebody
+marked interesting, and the connections of the companies whose odpis pełny `krs_odpis` asked for and did not get
+(`KrsOdpisAttempts`, the fold of its run record) - people first, then public companies, at most 50 calls a day. What
+the crawl bucket already holds from rejestr.io that day counts against the cap, so it is the day's, not the run's.
+It asks nothing, stops at once when rejestr.io refuses the account (exit 1), leaves what the cap or a failed call
+left for the next run (exit 75), and writes a run summary to the shared cache (`jobs/krs_scrape_paid/runs/`).
 
 ## krs_register_owners
 1. Reads output of `KRSRegisterEntries` pipeline
@@ -134,7 +140,8 @@ the project `GOOGLE_CLOUD_PROJECT` or `GCLOUD_PROJECT` names, else
 one the local /admin/procesy reads.
 
 What reports: `krs_scrape_free` (not `--dry-run`), `score_import` (not `--dry-run`), `krs_scrape_paid` (once the
-bill is accepted), `krs_odpis` (not `--dry-run`), `krs_register_owners` (not
+bill is accepted; with `--max-calls`, every run but `--dry-run`, a run with
+nothing to buy too), `krs_odpis` (not `--dry-run`), `krs_register_owners` (not
 `--dry-run` or `--reads 0`), the article crawl, `koryta_crawl`, `people_import`
 (a `--dry-run` too) and `koryta_uploader --submit`, under `people_import`,
 `company_import`, `score_import` or `extraction_import` by `--type` (not
