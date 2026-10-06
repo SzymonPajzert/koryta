@@ -675,7 +675,7 @@ describe("proposeRevisionTransaction", () => {
   });
 
   it("addresses a standing proposal by what it proposes", () => {
-    // `committee_to_party` names about twenty-five committees, so most
+    // `committee_to_party` names about sixty committees, so most
     // candidacies stay pending; with a fresh id per run the pipeline would add
     // a revision per candidacy per night, forever.
     proposeRevisionTransaction(mockDb, mockBatch, user, targetRef, data);

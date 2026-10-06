@@ -21,14 +21,12 @@ export const OTHER_PARTY = "Inne";
  * list in 2001 was not a member of a party that did not exist yet, and the
  * election it comes from is the whole of the evidence.
  *
- * The last two run ahead of that map, because the names reach a person by
- * another road: the article pipeline already canonicalises "nowoczesna", and
- * „Bezpartyjni Samorządowcy" arrives from a person's own edit - the one PKW
- * committee carrying the name, the joint „Konfederacja i Bezpartyjni
- * Samorządowcy" list, is still read as Konfederacja alone. Until they were
- * listed here neither could be picked in „Przynależność partyjna" at all.
- * Nowoczesna stays separate from PO on the same reasoning as SLD: somebody who
- * stood on a .Nowoczesna list in 2015 stood for a party that was its own then.
+ * Razem, Nowoczesna and „Bezpartyjni Samorządowcy" each come from their own
+ * lists too: Razem's 2015 Sejm and 2018 sejmik ones, Nowoczesna's 2015 Sejm one,
+ * and BS's from 2014 on. The joint „Konfederacja i Bezpartyjni Samorządowcy"
+ * list of 2024 counts as both parties. Nowoczesna stays separate from PO on the
+ * same reasoning as SLD: somebody who stood on a .Nowoczesna list in 2015 stood
+ * for a party that was its own then.
  *
  * Order is the graph legend's rank - `graph/Container.vue` sorts by
  * `parties.indexOf` - so a name goes on the end rather than in its historical
