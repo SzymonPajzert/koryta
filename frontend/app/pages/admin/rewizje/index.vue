@@ -36,6 +36,44 @@
           class="rev-filter"
           data-filter="automatic"
         />
+        <!-- Whether the entry a proposal is about is live, which is what
+             makes a change worth reviewing first: the pipeline's proposals
+             are mostly about drafts nobody can open yet. -->
+        <v-select
+          v-model="published"
+          :items="publishedOptions"
+          label="Strona"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="rev-filter"
+          data-filter="published"
+        />
+        <v-btn-toggle
+          v-model="grouping"
+          mandatory
+          density="compact"
+          variant="outlined"
+          divided
+          data-queue-grouping
+        >
+          <v-btn
+            value="list"
+            size="small"
+            :prepend-icon="mdiFormatListBulleted"
+            title="Każda propozycja w osobnym wierszu"
+          >
+            Lista
+          </v-btn>
+          <v-btn
+            value="subject"
+            size="small"
+            :prepend-icon="mdiFormatListGroup"
+            title="Jeden wiersz na wpis, z propozycjami w środku"
+          >
+            Według wpisu
+          </v-btn>
+        </v-btn-toggle>
         <!-- No dropdown of people: there is no client-side list of uids, and
              the way in is a click from "Najaktywniejsi" on /eksploruj/statystyki
              or from an open row below. -->
@@ -74,7 +112,11 @@
         variant="tonal"
         density="compact"
         class="mb-3"
-        :text="`Wczytaliśmy ${AUTHOR_SCAN_CAP} najnowszych rewizji tej osoby. Starsze są poza tym zestawieniem.`"
+        :text="
+          author
+            ? `Wczytaliśmy ${AUTHOR_SCAN_CAP} najnowszych rewizji tej osoby. Starsze są poza tym zestawieniem.`
+            : `Wczytaliśmy ${QUEUE_SCAN_CAP.toLocaleString('pl-PL')} najnowszych rewizji. Starsze są poza tym zestawieniem.`
+        "
       />
 
       <v-alert
@@ -126,7 +168,38 @@
           color="primary"
           class="mb-1"
         />
-        <AdminRowList v-if="queueRows.length > 0" data-queue-list>
+        <p
+          v-if="groupSummary"
+          class="text-body-2 text-medium-emphasis mb-2"
+          data-group-summary
+        >
+          {{ groupSummary }}
+        </p>
+        <AdminRowList v-if="queueGroups.length > 0" data-queue-groups>
+          <RevisionQueueGroup
+            v-for="group in queueGroups"
+            :key="group.subject.id"
+            :expanded="isOpen(groupKey(group.subject.id))"
+            :group="group"
+            :proposals="groupRows(group)"
+            @update:expanded="setOpen(groupKey(group.subject.id), $event)"
+          >
+            <RevisionQueueRow
+              v-for="proposal in groupRows(group)"
+              :key="proposal.id"
+              :expanded="isOpen(queueKey(proposal.id))"
+              :proposal="proposal"
+              :loading="deciding === proposal.id"
+              :author-focused="!!author"
+              @update:expanded="setOpen(queueKey(proposal.id), $event)"
+              @approve="approve(proposal, $event)"
+              @reject="openReject(proposal)"
+              @permalink="copyPermalink(proposal)"
+              @focus-author="focusAuthor"
+            />
+          </RevisionQueueGroup>
+        </AdminRowList>
+        <AdminRowList v-else-if="queueRows.length > 0" data-queue-list>
           <RevisionQueueRow
             v-for="proposal in queueRows"
             :key="proposal.id"
@@ -149,7 +222,7 @@
           {{ queueEmptyText }}
         </p>
         <div
-          v-if="queueTotal > SMALLEST_PAGE_SIZE"
+          v-if="queuePaged > SMALLEST_PAGE_SIZE"
           class="rev-pager d-flex flex-wrap align-center ga-2 mt-2"
         >
           <v-pagination
@@ -368,6 +441,12 @@
  * work queue on /admin/opinie reads. Which rows are open is held here rather
  * than in the rows, so a permalink can open one.
  *
+ * The queue can also be narrowed to proposals about a live entry (`published`)
+ * and folded into one row per entry (`group=subject`), each with its proposals
+ * inside - the way to go through what is waiting on pages that are already
+ * public. A relation counts as being about the person at either end of it; see
+ * `ProposalSubject`.
+ *
  * The queue has two modes, and the difference matters. Without `?author=` the
  * endpoint can only see revisions that carry an explicit `update_automatic`
  * flag, which nothing wrote for a human change before July 2026; with it, it
@@ -382,13 +461,22 @@
  */
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import type { LocationQuery } from "vue-router";
-import { mdiCheckDecagramOutline, mdiLinkVariant } from "@mdi/js";
+import {
+  mdiCheckDecagramOutline,
+  mdiFormatListBulleted,
+  mdiFormatListGroup,
+  mdiLinkVariant,
+} from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { sameQuery } from "~/composables/queryFilters";
+import { polishCounting } from "~/composables/polish";
 import type { RevisedNode } from "~/components/revision/NodeRow.vue";
 import type { NodeType } from "~~/shared/model";
 import type { Proposal } from "~~/shared/proposals";
-import type { RevisionQueue } from "~~/server/api/revisions/queue.get";
+import type {
+  QueueGroup,
+  RevisionQueue,
+} from "~~/server/api/revisions/queue.get";
 import type { PendingEdgeRevision } from "~~/server/api/revisions/pendingEdges.get";
 
 // Narrower than the default 1200: rows are one line each, and a line much
@@ -406,6 +494,8 @@ const SECTIONS: readonly SectionId[] = ["kolejka", "powiazania", "wpisy"];
 /** Mirrors `AUTHOR_SCAN_CAP` in `/api/revisions/queue`; the module itself pulls
  * in firebase-admin, so only its type survives into the client bundle. */
 const AUTHOR_SCAN_CAP = 500;
+/** Mirrors `QUEUE_SCAN_CAP` in `server/utils/queueScan`, for the same reason. */
+const QUEUE_SCAN_CAP = 30_000;
 
 /** The page sizes both paged lists offer. `/api/nodes/revisions` takes any
  * `limit` at all, so the url is held to these rather than passed through. */
@@ -548,6 +638,7 @@ function pageSizeParam(
  * stay open across a refetch that brings them back. */
 const openRows = reactive(new Set<string>());
 const queueKey = (id: string) => `kolejka:${id}`;
+const groupKey = (id: string) => `kolejka-wpis:${id}`;
 const edgeKey = (id: string) => `powiazania:${id}`;
 const nodeKey = (id: string) => `wpisy:${id}`;
 const isOpen = (key: string) => openRows.has(key);
@@ -571,6 +662,21 @@ const automatic = choiceFilter(
   "automatic",
   ["false", "true", "all"] as const,
   "false",
+  "page",
+);
+const published = choiceFilter(
+  "kolejka",
+  "published",
+  ["all", "true", "false"] as const,
+  "all",
+  "page",
+);
+/** A different grouping pages through different things, so the page goes. */
+const grouping = choiceFilter(
+  "kolejka",
+  "group",
+  ["list", "subject"] as const,
+  "list",
   "page",
 );
 const author = computed<string | null>({
@@ -597,13 +703,21 @@ const automaticOptions = [
   { title: "Wszystko", value: "all" },
 ];
 
+const publishedOptions = [
+  { title: "Wszystkie", value: "all" },
+  { title: "Opublikowane", value: "true" },
+  { title: "Nieopublikowane", value: "false" },
+];
+
 const queue = ref<RevisionQueue | null>(null);
 const queuePending = ref(false);
 const queueFailed = ref(false);
 
 const queueTotal = computed(() => queue.value?.total ?? 0);
+/** What the pages count: entries when grouped, proposals otherwise. */
+const queuePaged = computed(() => queue.value?.groupTotal ?? queueTotal.value);
 const queuePages = computed(() =>
-  Math.ceil(queueTotal.value / itemsPerPage.value),
+  Math.ceil(queuePaged.value / itemsPerPage.value),
 );
 const queueCount = computed(() =>
   queue.value
@@ -621,6 +735,9 @@ const pinned = computed<Proposal | null>(() => {
   return (
     queue.value.pinned ??
     queue.value.revisions.find((row) => row.id === id) ??
+    queue.value.groups
+      ?.flatMap((group) => group.proposals)
+      .find((row) => row.id === id) ??
     null
   );
 });
@@ -629,11 +746,34 @@ const queueRows = computed(() =>
   (queue.value?.revisions ?? []).filter((row) => row.id !== pinned.value?.id),
 );
 
+/** A group's rows less the pinned one, which is on top already. */
+const groupRows = (group: QueueGroup) =>
+  group.proposals.filter((row) => row.id !== pinned.value?.id);
+
+const queueGroups = computed(() =>
+  (queue.value?.groups ?? []).filter((group) => groupRows(group).length > 0),
+);
+
+/** How much a grouped page stands for, which its rows alone do not say. */
+const groupSummary = computed(() => {
+  const groups = queue.value?.groupTotal;
+  if (groups === undefined || groups === 0) return null;
+  const proposals = polishCounting(
+    queueTotal.value,
+    "propozycja",
+    "propozycje",
+    "propozycji",
+  );
+  return `${proposals} w ${groups} ${groups === 1 ? "wpisie" : "wpisach"}`;
+});
+
 const queueQuery = computed(() => ({
   page: page.value,
   limit: itemsPerPage.value,
   status: status.value,
   automatic: automatic.value,
+  published: published.value,
+  group: grouping.value === "subject" ? "subject" : undefined,
   author: author.value || undefined,
   revision: permalinked.value || undefined,
 }));
@@ -683,7 +823,17 @@ const loadQueue = async () => {
 // every change to the url, the other sections' paging included, and the queue
 // would be read again each time.
 watch(
-  [page, itemsPerPage, status, automatic, author, permalinked, admin],
+  [
+    page,
+    itemsPerPage,
+    status,
+    automatic,
+    published,
+    grouping,
+    author,
+    permalinked,
+    admin,
+  ],
   loadQueue,
   { immediate: true },
 );
@@ -709,15 +859,29 @@ const queueScope = computed(() => {
       : automatic.value === "true"
         ? "Zmiany dopisane przez pipeline."
         : "Wszystkie rewizje — i te od ludzi, i te z pipeline'u.";
-  return author.value
-    ? `${scope} Tylko jedna osoba, najnowsze na górze.`
-    : `${scope} Najnowsze na górze.`;
+  const pages =
+    published.value === "true"
+      ? " Tylko o wpisach, które są już opublikowane."
+      : published.value === "false"
+        ? " Tylko o wpisach, których jeszcze nikt nie opublikował."
+        : "";
+  const order = author.value
+    ? " Tylko jedna osoba, najnowsze na górze."
+    : " Najnowsze na górze.";
+  const groups =
+    grouping.value === "subject"
+      ? " Jeden wiersz na wpis; zmiana powiązania trafia do osoby, której dotyczy."
+      : "";
+  return `${scope}${pages}${order}${groups}`;
 });
 
 /** The empty list speaks for whichever filter emptied it; the success alert
  * owns the one case worth celebrating. */
 const queueEmptyText = computed(() =>
-  status.value === "pending" && automatic.value === "false" && !author.value
+  status.value === "pending" &&
+  automatic.value === "false" &&
+  published.value === "all" &&
+  !author.value
     ? "Nic nie czeka na rozpatrzenie."
     : "Brak zmian pasujących do filtrów.",
 );
@@ -731,7 +895,8 @@ const isEmptyDefaultQueue = computed(
     !pinned.value &&
     !author.value &&
     status.value === "pending" &&
-    automatic.value === "false",
+    automatic.value === "false" &&
+    published.value === "all",
 );
 
 const focusAuthor = (uid: string) =>
@@ -772,13 +937,36 @@ const settle = (id: string) => {
     };
   }
   if (!queue.value) return;
+  const groups = queue.value.groups?.map((group) =>
+    group.proposals.some((row) => row.id === id)
+      ? {
+          ...group,
+          count: group.count - 1,
+          proposals: group.proposals.filter((row) => row.id !== id),
+        }
+      : group,
+  );
+  // A group goes with its last proposal. One that still has proposals the page
+  // never held has to be read again to show them.
+  const emptied = groups?.filter((group) => group.proposals.length === 0);
   queue.value = {
     ...queue.value,
     revisions: queue.value.revisions.filter((row) => row.id !== id),
+    groups: groups?.filter((group) => group.proposals.length > 0),
+    groupTotal:
+      queue.value.groupTotal === undefined
+        ? undefined
+        : Math.max(0, queue.value.groupTotal - (emptied?.length ?? 0)),
     total: Math.max(0, queue.value.total - 1),
     pinned: queue.value.pinned?.id === id ? null : queue.value.pinned,
   };
-  if (queue.value.revisions.length === 0 && queue.value.total > 0) {
+  const pageEmpty =
+    queue.value.revisions.length === 0 &&
+    (queue.value.groups?.length ?? 0) === 0;
+  if (
+    (pageEmpty && queue.value.total > 0) ||
+    emptied?.some((group) => group.count > 0)
+  ) {
     void loadQueue();
   }
 };

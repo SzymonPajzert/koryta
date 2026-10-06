@@ -5,6 +5,7 @@ import { requireAdmin } from "~~/server/utils/auth";
 import { applyRevision, revisionTargetRef } from "~~/server/utils/revisions";
 import { notifyRevisionReviewed } from "~~/server/utils/revisionNotifications";
 import { resolveEdgeEndpoints } from "~~/server/utils/edgePublication";
+import { forgetQueued } from "~~/server/utils/queueScan";
 import type { Edge, Revision } from "~~/shared/model";
 import { z } from "zod";
 
@@ -110,6 +111,7 @@ export default defineEventHandler(async (event) => {
   // The node and entity endpoints are cached per handler, so a page approved
   // now would otherwise keep serving its previous answer.
   await useStorage("cache").clear("nitro:handlers");
+  forgetQueued(body.revision_id, "approved");
 
   await notifyRevisionReviewed(db, {
     decision: "approved",

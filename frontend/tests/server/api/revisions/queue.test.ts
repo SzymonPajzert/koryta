@@ -3,6 +3,10 @@ import handler, {
   AUTHOR_SCAN_CAP,
   type RevisionQueue,
 } from "../../../../server/api/revisions/queue.get";
+import {
+  clearQueueScans,
+  forgetQueued,
+} from "../../../../server/utils/queueScan";
 
 type Data = Record<string, unknown>;
 
@@ -26,6 +30,7 @@ const mockWhere = vi.fn();
 const mockOrderBy = vi.fn();
 const mockLimit = vi.fn();
 const mockOffset = vi.fn();
+const mockSelect = vi.fn();
 
 function snapshotOf(id: string, data: Data | undefined) {
   return {
@@ -74,6 +79,11 @@ function queryOver(docs: Snapshot[]) {
     limit(count: number) {
       mockLimit(count);
       return queryOver(docs.slice(0, count));
+    },
+    /** A field mask. The fake keeps whole documents either way. */
+    select(...fields: string[]) {
+      mockSelect(...fields);
+      return queryOver(docs);
     },
     count: () => ({
       get: async () => ({ data: () => ({ count: docs.length }) }),
@@ -186,6 +196,7 @@ function approveOnto(nodeId: string, revisionId: string, data: Data) {
 describe("api/revisions/queue", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearQueueScans();
     revisions = {};
     targets = {};
     headers.clear();
@@ -758,6 +769,149 @@ describe("api/revisions/queue", () => {
         type: null,
         published: false,
       });
+    });
+  });
+
+  describe("by the entry a proposal is about", () => {
+    /** Three people, one of them live, with proposals about each. */
+    beforeEach(() => {
+      targets["nodes/live"] = {
+        name: "Barbara Opublikowana",
+        type: "person",
+        published: true,
+      };
+      targets["nodes/draft"] = {
+        name: "Cezary Szkicowy",
+        type: "person",
+        published: false,
+      };
+      targets["nodes/place-1"] = { name: "Wodociągi", type: "place" };
+      addRevision("live-old", {
+        node_id: "live",
+        update_time: "2026-08-01T09:00:00.000Z",
+      });
+      addRevision("draft-new", {
+        node_id: "draft",
+        update_time: "2026-08-05T09:00:00.000Z",
+      });
+      // A relation is about the person at its source, so it joins her group.
+      addRevision("live-relation", {
+        node_id: "edge-1",
+        collection: "edges",
+        data: { type: "employed", source: "live", target: "place-1" },
+        update_time: "2026-08-04T09:00:00.000Z",
+      });
+      addRevision("draft-old", {
+        node_id: "draft",
+        update_time: "2026-07-30T09:00:00.000Z",
+      });
+    });
+
+    it("lists only proposals about a live page when asked for published", async () => {
+      const result = await call({ published: "true" });
+
+      expect(ids(result.revisions)).toEqual(["live-relation", "live-old"]);
+      expect(result.total).toBe(2);
+      // The same two clauses as the plain queue, read whole and masked to what
+      // names a target - nothing about the target can go in the query.
+      expect(mockWhere).toHaveBeenCalledWith("update_automatic", "==", false);
+      expect(mockWhere).toHaveBeenCalledWith("status", "==", "pending");
+      expect(mockOffset).not.toHaveBeenCalled();
+      expect(mockSelect).toHaveBeenCalledWith(
+        "node_id",
+        "nodeId",
+        "collection",
+        "data.source",
+        "data.target",
+      );
+      expect(result.flagOnly).toBe(true);
+    });
+
+    it("and only the drafts' when asked for unpublished", async () => {
+      const result = await call({ published: "false" });
+
+      expect(ids(result.revisions)).toEqual(["draft-new", "draft-old"]);
+    });
+
+    it("groups the proposals by entry, newest entry first", async () => {
+      const result = await call({ group: "subject" });
+
+      expect(result.revisions).toEqual([]);
+      expect(result.total).toBe(4);
+      expect(result.groupTotal).toBe(2);
+      expect(
+        result.groups!.map((group) => [
+          group.subject.id,
+          group.count,
+          ids(group.proposals),
+        ]),
+      ).toEqual([
+        ["draft", 2, ["draft-new", "draft-old"]],
+        ["live", 2, ["live-relation", "live-old"]],
+      ]);
+      expect(result.groups![1]!.subject).toMatchObject({
+        name: "Barbara Opublikowana",
+        published: true,
+      });
+    });
+
+    it("pages through entries rather than proposals when grouped", async () => {
+      const result = await call({ group: "subject", limit: 1, page: 2 });
+
+      expect(result.groups!.map((group) => group.subject.id)).toEqual(["live"]);
+      expect(result.groupTotal).toBe(2);
+    });
+
+    it("groups the live entries alone with both set", async () => {
+      const result = await call({ group: "subject", published: "true" });
+
+      expect(result.groups!.map((group) => group.subject.id)).toEqual(["live"]);
+      expect(result.total).toBe(2);
+    });
+
+    it("reads the list once for a couple of minutes, and every page fresh", async () => {
+      await call({ published: "true" });
+      const firstScan = mockSelect.mock.calls.length;
+
+      // Decided elsewhere - by another admin, on another instance - after the
+      // list was read: the scan still holds it, the page must not.
+      revisions["live-old"]!.status = "approved";
+      const result = await call({ published: "true" });
+
+      expect(mockSelect.mock.calls.length).toBe(firstScan);
+      expect(ids(result.revisions)).toEqual(["live-relation"]);
+    });
+
+    it("drops a proposal decided here from the list it holds", async () => {
+      await call({ published: "true" });
+
+      revisions["live-old"]!.status = "rejected";
+      forgetQueued("live-old", "rejected");
+      const result = await call({ published: "true" });
+
+      expect(result.total).toBe(1);
+      expect(ids(result.revisions)).toEqual(["live-relation"]);
+    });
+
+    it("filters and groups one author's history the same way", async () => {
+      const result = await call({
+        author: "volunteer-uid",
+        group: "subject",
+        published: "true",
+      });
+
+      expect(result.groups!.map((group) => group.subject.id)).toEqual(["live"]);
+      expect(ids(result.groups![0]!.proposals)).toEqual([
+        "live-relation",
+        "live-old",
+      ]);
+      expect(mockSelect).not.toHaveBeenCalled();
+    });
+
+    it("answers a permalink that is inside one of the groups as already there", async () => {
+      const result = await call({ group: "subject", revision: "live-old" });
+
+      expect(result.pinned).toBeNull();
     });
   });
 });

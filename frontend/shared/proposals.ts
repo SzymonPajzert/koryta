@@ -97,6 +97,16 @@ export function resolveProposalStatus(args: {
 /** The three states a revision is *stored* in, which is what a filter names. */
 export type StoredStatusFilter = RevisionStatus | "all";
 
+/** Whether the entry a proposal is about is live, as the queue filters it. */
+export type PublishedFilter = "true" | "false" | "all";
+
+export function matchesPublished(
+  published: boolean,
+  filter: PublishedFilter,
+): boolean {
+  return filter === "all" || published === (filter === "true");
+}
+
 /**
  * Whether a resolved status answers a filter written in stored terms.
  *

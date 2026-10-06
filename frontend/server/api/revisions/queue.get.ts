@@ -4,7 +4,13 @@ import type { Firestore, Query } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getUser } from "~~/server/utils/auth";
 import { describeRevisions } from "~~/server/utils/revisionQueue";
-import { matchesStoredStatus, type Proposal } from "~~/shared/proposals";
+import { scanQueue } from "~~/server/utils/queueScan";
+import {
+  matchesPublished,
+  matchesStoredStatus,
+  type Proposal,
+  type ProposalSubject,
+} from "~~/shared/proposals";
 
 const queryValidator = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -22,6 +28,11 @@ const queryValidator = z.object({
   /** One proposal by id, answered alongside the page and independent of every
    * filter, so a permalink still resolves after the decision is made. */
   revision: z.string().min(1).optional(),
+  /** Whether the entry a proposal is about is live - see `ProposalSubject`. */
+  published: z.enum(["true", "false", "all"]).default("all"),
+  /** One row per entry instead of one per proposal; the page then counts
+   * entries. */
+  group: z.enum(["subject"]).optional(),
 });
 
 /** How many of one person's revisions are read before the answer is a lower
@@ -29,11 +40,31 @@ const queryValidator = z.object({
  * tens of thousands, and this is what stops one from being paged through. */
 export const AUTHOR_SCAN_CAP = 500;
 
+/** How many of one entry's proposals a group carries. In the 2026-10-06 export
+ * the most anybody had pending was 73, a draft's, all from the pipeline; on a
+ * published page, 21. */
+export const GROUP_PROPOSAL_CAP = 50;
+
+/** One entry and the proposals about it, newest first. */
+export type QueueGroup = {
+  subject: ProposalSubject;
+  /** How many proposals match, of which `proposals` holds at most
+   * `GROUP_PROPOSAL_CAP`. */
+  count: number;
+  proposals: Proposal[];
+};
+
 export type RevisionQueue = {
+  /** The page's proposals; empty when they come in `groups`. */
   revisions: Proposal[];
+  /** The page's entries, when the queue was asked to group. */
+  groups?: QueueGroup[];
+  /** How many entries a grouped answer pages through. */
+  groupTotal?: number;
+  /** How many proposals match, grouped or not. */
   total: number;
   /** The scan hit its cap, so `total` is a lower bound and older proposals are
-   * not in the answer. Only the per-author path can report this. */
+   * not in the answer. The aggregate query never reports this. */
   truncated: boolean;
   /** The proposal named by `?revision=`, when it is not already on this page. */
   pinned: Proposal | null;
@@ -74,6 +105,16 @@ export type RevisionQueue = {
  * pipeline write from an old human one. Guessing would fill the queue with
  * thousands of rows nobody proposed, which is the failure this page exists to
  * fix, one level up.
+ *
+ * ## And a third, for what the target is
+ *
+ * Whether the entry a proposal is about is live (`published`), and grouping by
+ * that entry (`group=subject`), are questions about the target - no clause on
+ * `revisions` can ask them, and neither can be answered for one page of 25
+ * alone. With either set, the aggregate query is read whole instead, once and
+ * kept for a couple of minutes (`scanQueue`), and only the rows of the page
+ * are read in full. That is what it takes to find the 425 pending pipeline
+ * proposals about a published person among the pipeline's 20,523.
  */
 export default defineEventHandler(async (event): Promise<RevisionQueue> => {
   const caller = await getUser(event);
@@ -93,13 +134,17 @@ export default defineEventHandler(async (event): Promise<RevisionQueue> => {
 
   const page = query.author
     ? await byAuthor(db, query)
-    : await byFilter(db, query);
+    : query.published !== "all" || query.group
+      ? await byScan(db, query)
+      : await byFilter(db, query);
 
+  const onPage = [
+    ...page.revisions,
+    ...(page.groups ?? []).flatMap((group) => group.proposals),
+  ];
   return {
     ...page,
-    pinned: query.revision
-      ? await onePinned(db, query.revision, page.revisions)
-      : null,
+    pinned: query.revision ? await onePinned(db, query.revision, onPage) : null,
   };
 });
 
@@ -128,15 +173,33 @@ async function byAuthor(
   // scanned set is described before it can be filtered on status. The cap is
   // what keeps that bounded: describing 500 rows is two `getAll` calls.
   const described = await describeRevisions(db, docs, { withAuthors: true });
-  const matching = described.filter((row) =>
-    matchesStoredStatus(row.status, query.status),
+  const matching = described.filter(
+    (row) =>
+      matchesStoredStatus(row.status, query.status) &&
+      matchesPublished(row.subject.published, query.published),
   );
 
   const offset = (query.page - 1) * query.limit;
+  const truncated = snapshot.size >= AUTHOR_SCAN_CAP;
+  if (query.group) {
+    const groups = groupBy(matching, (row) => row.subject.id);
+    return {
+      revisions: [],
+      groups: groups.slice(offset, offset + query.limit).map((rows) => ({
+        subject: rows[0]!.subject,
+        count: rows.length,
+        proposals: rows.slice(0, GROUP_PROPOSAL_CAP),
+      })),
+      groupTotal: groups.length,
+      total: matching.length,
+      truncated,
+      flagOnly: false,
+    };
+  }
   return {
     revisions: matching.slice(offset, offset + query.limit),
     total: matching.length,
-    truncated: snapshot.size >= AUTHOR_SCAN_CAP,
+    truncated,
     flagOnly: false,
   };
 }
@@ -176,6 +239,115 @@ async function byFilter(
     truncated: false,
     flagOnly: query.automatic !== "all",
   };
+}
+
+/** The aggregate queue, filtered or grouped by what its proposals are about.
+ *
+ * Paged over the scan, then each row of the page read in full. Read fresh
+ * because the scan is kept for a while: a proposal decided since then - by
+ * another admin, or on another server instance - is left out rather than shown
+ * as still waiting, and so is one whose entry has been published or taken down
+ * since. The page can come out a row or two short for it, which is the honest
+ * way round.
+ */
+async function byScan(
+  db: Firestore,
+  query: QueryOptions,
+): Promise<Omit<RevisionQueue, "pinned">> {
+  const scan = await scanQueue(db, {
+    status: query.status,
+    automatic: query.automatic,
+  });
+  const matching = scan.rows.filter((row) =>
+    matchesPublished(row.published, query.published),
+  );
+  const offset = (query.page - 1) * query.limit;
+  const answer = {
+    total: matching.length,
+    truncated: scan.truncated,
+    flagOnly: query.automatic !== "all",
+  };
+
+  if (!query.group) {
+    const slice = matching.slice(offset, offset + query.limit);
+    return {
+      ...answer,
+      revisions: await describeFresh(
+        db,
+        slice.map((row) => row.id),
+        query,
+      ),
+    };
+  }
+
+  const groups = groupBy(matching, (row) => row.subjectId);
+  const slice = groups
+    .slice(offset, offset + query.limit)
+    .map((rows) => rows.slice(0, GROUP_PROPOSAL_CAP));
+  const described = new Map(
+    (
+      await describeFresh(
+        db,
+        slice.flatMap((rows) => rows.map((row) => row.id)),
+        query,
+      )
+    ).map((row) => [row.id, row]),
+  );
+  const pageGroups = slice.flatMap((rows, index): QueueGroup[] => {
+    const proposals = rows.flatMap((row) => described.get(row.id) ?? []);
+    if (proposals.length === 0) return [];
+    const all = groups[offset + index]!.length;
+    return [
+      {
+        subject: proposals[0]!.subject,
+        count: all - (rows.length - proposals.length),
+        proposals,
+      },
+    ];
+  });
+  return {
+    ...answer,
+    revisions: [],
+    groups: pageGroups,
+    groupTotal: groups.length,
+  };
+}
+
+/** The revisions named, read in full and described - those that still match
+ * the query, in the order asked. */
+async function describeFresh(
+  db: Firestore,
+  ids: string[],
+  query: QueryOptions,
+): Promise<Proposal[]> {
+  if (ids.length === 0) return [];
+  const snapshots = await db.getAll(
+    ...ids.map((id) => db.collection("revisions").doc(id)),
+  );
+  const current = snapshots.filter(
+    (snapshot) =>
+      snapshot.exists &&
+      (query.status === "all" || snapshot.get("status") === query.status),
+  );
+  const described = await describeRevisions(db, current, {
+    withAuthors: true,
+  });
+  return described.filter((row) =>
+    matchesPublished(row.subject.published, query.published),
+  );
+}
+
+/** `rows` in runs of one key each, in the order each key first appears - so
+ * newest-first rows give the entry with the newest proposal first. */
+function groupBy<T>(rows: T[], key: (row: T) => string): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const id = key(row);
+    const group = groups.get(id);
+    if (group) group.push(row);
+    else groups.set(id, [row]);
+  }
+  return [...groups.values()];
 }
 
 /** The permalinked proposal, when it is not already on the page. */
