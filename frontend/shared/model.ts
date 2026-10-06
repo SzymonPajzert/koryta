@@ -324,8 +324,8 @@ export interface Person extends Omit<Node, "type"> {
    *
    * Absent means the pipelines wrote it. Lists a person stated before this
    * marker existed were stamped after the fact by
-   * `scripts/migrate/backfill-parties-source.ts`, which also put back the ones
-   * an upload had already widened. */
+   * `scripts/migrate/archive/backfill-parties-source.ts`, which also put back
+   * the ones an upload had already widened. */
   partiesSource?: "manual";
   birthDate?: string;
   /** Education, as a line of prose rather than a code: the useful answer is

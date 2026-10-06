@@ -24,10 +24,10 @@ import { getFirestore } from "firebase-admin/firestore";
  * defect.
  *
  * Usage (against the running dev:prod-data emulator):
- *   npx tsx scripts/migrate/repair-migrated-revisions.ts            # dry run
- *   npx tsx scripts/migrate/repair-migrated-revisions.ts --commit   # apply
+ *   npx tsx scripts/migrate/archive/repair-migrated-revisions.ts           # dry run
+ *   npx tsx scripts/migrate/archive/repair-migrated-revisions.ts --commit  # apply
  * Against production:
- *   npx tsx scripts/migrate/repair-migrated-revisions.ts --prod --commit
+ *   npx tsx scripts/migrate/archive/repair-migrated-revisions.ts --prod --commit
  */
 
 const isProd = process.argv.includes("--prod");
