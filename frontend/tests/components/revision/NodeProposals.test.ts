@@ -61,6 +61,13 @@ const proposal = (over: Partial<Proposal> = {}): Proposal => ({
   rejectReason: null,
   reviewTime: null,
   stale: false,
+  subject: {
+    id: "firma-1",
+    name: "Tramwaje Śląskie",
+    type: "place",
+    path: "/instytucja/tramwaje-slaskie-firma-1",
+    published: true,
+  },
   ...over,
 });
 

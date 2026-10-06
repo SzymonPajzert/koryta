@@ -660,4 +660,104 @@ describe("api/revisions/queue", () => {
       expect(result.revisions[0]!.author).toBeNull();
     });
   });
+  describe("what a proposal is about", () => {
+    /** An edge revision between two nodes, with both of them stored. */
+    function addRelation(
+      id: string,
+      ends: { source: string; target: string; type?: string },
+      overrides: Data = {},
+    ) {
+      addRevision(id, {
+        node_id: `edge-${id}`,
+        collection: "edges",
+        data: { type: ends.type ?? "employed", ...ends },
+        ...overrides,
+      });
+      targets[`edges/edge-${id}`] = { ...ends, published: false };
+    }
+
+    beforeEach(() => {
+      targets["nodes/person-1"] = {
+        name: "Anna Nowak",
+        type: "person",
+        published: true,
+      };
+      targets["nodes/place-1"] = {
+        name: "Wodociągi",
+        type: "place",
+        published: true,
+      };
+      targets["nodes/article-1"] = {
+        name: "Artykuł o radzie",
+        type: "article",
+        published: true,
+      };
+      targets["nodes/region-1"] = {
+        name: "Gmina Przykładowo",
+        type: "region",
+        published: false,
+      };
+    });
+
+    it("is the entry itself for a node revision", async () => {
+      addRevision("rev-1");
+
+      const [row] = (await call()).revisions;
+
+      expect(row!.subject).toEqual({
+        id: "node-1",
+        name: "Anna Nowak",
+        type: "person",
+        path: "/osoba/anna-nowak-node-1",
+        published: true,
+      });
+    });
+
+    it("is the person at either end of a relation", async () => {
+      // A seat on a board is filed under the person; a mention, under the
+      // article - but it is the person a reviewer is going through.
+      addRelation("employed", { source: "person-1", target: "place-1" });
+      addRelation(
+        "mention",
+        { source: "article-1", target: "person-1", type: "mentions" },
+        { update_time: "2026-08-09T09:00:00.000Z" },
+      );
+
+      const result = await call();
+
+      expect(result.revisions.map((row) => row.subject.id)).toEqual([
+        "person-1",
+        "person-1",
+      ]);
+      expect(result.revisions[0]!.subject).toMatchObject({
+        name: "Anna Nowak",
+        type: "person",
+        published: true,
+      });
+    });
+
+    it("is the source of a relation between two entries that are not people", async () => {
+      addRelation("seat", {
+        source: "region-1",
+        target: "place-1",
+        type: "seat",
+      });
+
+      const [row] = (await call()).revisions;
+
+      expect(row!.subject).toMatchObject({ id: "region-1", published: false });
+    });
+
+    it("is the relation itself, never live, when neither end can be read", async () => {
+      addRelation("orphan", { source: "gone-1", target: "gone-2" });
+
+      const [row] = (await call()).revisions;
+
+      expect(row!.subject).toMatchObject({
+        id: "edge-orphan",
+        type: null,
+        published: false,
+      });
+    });
+  });
 });

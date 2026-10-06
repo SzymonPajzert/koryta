@@ -53,6 +53,13 @@ const proposal = (overrides: Partial<Proposal> = {}): Proposal => ({
   rejectReason: null,
   reviewTime: null,
   stale: false,
+  subject: {
+    id: "node-1",
+    name: "Jan Testowy",
+    type: "person",
+    path: "/osoba/jan-testowy-node-1",
+    published: true,
+  },
   ...overrides,
 });
 

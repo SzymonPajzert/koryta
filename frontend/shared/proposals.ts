@@ -181,6 +181,39 @@ export interface Proposal {
    * the most expensive mistake available on the review screen.
    */
   stale: boolean;
+  /** The entry the change is about - see `ProposalSubject`. */
+  subject: ProposalSubject;
+}
+
+/** The entry a proposal is about, which is what the review queue groups by and
+ * what its "Wpis" filter reads.
+ *
+ * A node revision is about its node. A relation is about the person at either
+ * end of it, the source first: a candidacy or a seat on a board is a fact about
+ * the person, and the mention of a person in an article belongs on the
+ * person's page as much as on the article's. A relation between two entries
+ * that are neither is about its source, the page `targetPath` already sends a
+ * reader to. One whose ends cannot be read at all is about itself, and is
+ * never live - it shows on no page. */
+export interface ProposalSubject {
+  /** A node id, or the relation's own when neither of its ends can be read. */
+  id: string;
+  name: string | null;
+  type: NodeType | null;
+  path: string | null;
+  /** Whether the entry is live on the public site. */
+  published: boolean;
+}
+
+/** The person a relation is about, by the rule on `ProposalSubject`. Each end
+ * is undefined when it cannot be read. */
+export function relationSubject<End extends { type: NodeType | null }>(
+  source: End | undefined,
+  target: End | undefined,
+): End | undefined {
+  if (source?.type === "person") return source;
+  if (target?.type === "person") return target;
+  return source ?? target;
 }
 
 /** How many changed fields a row shows before it says "and N more". Six fits a
