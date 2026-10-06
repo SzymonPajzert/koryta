@@ -81,6 +81,7 @@ from jobs.people_import.payloads import (
     build_priority,
     pipeline_names,
 )
+from scrapers.koryta.created import SENT_LOG
 from scrapers.stores import ProcessPolicy
 from stores.config import pesel_salt
 from stores.job_runs import ERROR_CHARS, ERRORS_KEPT, FinalState, JobRun
@@ -101,9 +102,11 @@ UNIT = "osób"
 
 PAYLOADS_PREFIX = "jobs/people_import/payloads/"
 RUNS_PREFIX = "jobs/people_import/runs/"
-#: What each priority run took - person, payload hash, outcome - as one
-#: write-once part, so the next runs can leave alone what is already sent.
-SENT_PREFIX = "jobs/people_import/sent/"
+#: What each priority run took - person, payload hash, outcome, page - as one
+#: write-once part, so the next runs can leave alone what is already sent, and
+#: the scoring models can rate the pages a run created before the next export
+#: has them (`scrapers.koryta.created`, which owns the name).
+SENT_PREFIX = SENT_LOG.prefix
 
 #: Where submit_people.sh uploads for production.
 DEFAULT_ENDPOINT = "https://autopush.koryta.pl"
@@ -428,8 +431,9 @@ class PeopleImport:
         self._client: Client | None = None
         #: A priority run: each payload's tier, in sending order.
         self.tiers: list[str] | None = None
-        #: A priority run: what the site took - payload, tier, outcome.
-        self.taken: list[tuple[dict, str, str]] = []
+        #: A priority run: what the site took - payload, tier, outcome, and
+        #: the page it filed the person under.
+        self.taken: list[tuple[dict, str, str, str | None]] = []
 
     def run(self) -> int:
         self.status.start(phase=PHASE_BUILD)
@@ -557,7 +561,9 @@ class PeopleImport:
                 if result is not None and self.tiers is not None:
                     tier = self.tiers[n]
                     if result.outcome in TAKEN:
-                        self.taken.append((payload, tier, result.outcome))
+                        self.taken.append(
+                            (payload, tier, result.outcome, result.person_id)
+                        )
                     if result.outcome == "created" and tier != NEW_HIRE:
                         # Planned onto a page the export has, so a page made
                         # for it is the identity lookup missing somebody.
@@ -644,7 +650,8 @@ class PeopleImport:
     def write_sent(self) -> str:
         """Write what the site took, once, for later runs to leave alone; a
         failure to is printed and kept among the errors, not raised - those
-        people are only sent again."""
+        people are only sent again, and the pages it created are rated after
+        the next export rather than tonight."""
         day, run = self.summary.started[:10], self.summary.run
         name = f"{SENT_PREFIX}date={day}/{run}.jsonl.gz"
         lines = "".join(
@@ -655,11 +662,13 @@ class PeopleImport:
                     "name": payload.get("name"),
                     "tier": tier,
                     "outcome": outcome,
+                    "node": node,
+                    "rejestrIo": payload.get("rejestrIo"),
                 },
                 ensure_ascii=False,
             )
             + "\n"
-            for payload, tier, outcome in self.taken
+            for payload, tier, outcome, node in self.taken
         )
         data = gzip.compress(lines.encode("utf-8"), mtime=0)
         try:

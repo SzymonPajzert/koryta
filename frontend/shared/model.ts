@@ -322,8 +322,10 @@ export interface Person extends Omit<Node, "type"> {
    * companies, and it is set by `/api/revisions/create` whenever a person
    * proposal states `parties` at all.
    *
-   * Absent means the pipelines wrote it, which is the case for every value
-   * predating this marker - including any party a human had already removed. */
+   * Absent means the pipelines wrote it. Lists a person stated before this
+   * marker existed were stamped after the fact by
+   * `scripts/migrate/backfill-parties-source.ts`, which also put back the ones
+   * an upload had already widened. */
   partiesSource?: "manual";
   birthDate?: string;
   /** Education, as a line of prose rather than a code: the useful answer is

@@ -1,8 +1,14 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler, {
   AUTHOR_SCAN_CAP,
   type RevisionQueue,
 } from "../../../../server/api/revisions/queue.get";
+import {
+  clearQueueScans,
+  forgetQueued,
+} from "../../../../server/utils/queueScan";
 
 type Data = Record<string, unknown>;
 
@@ -26,6 +32,7 @@ const mockWhere = vi.fn();
 const mockOrderBy = vi.fn();
 const mockLimit = vi.fn();
 const mockOffset = vi.fn();
+const mockSelect = vi.fn();
 
 function snapshotOf(id: string, data: Data | undefined) {
   return {
@@ -43,10 +50,14 @@ function documentAt(path: string): Data | undefined {
   return collection === "revisions" ? revisions[id!] : targets[path];
 }
 
-/** Firestore's `==`, including the half of it this endpoint turns on: a
- * document that does not carry the field at all matches no equality. */
-function equals(data: Data, field: string, value: unknown): boolean {
-  return field in data && data[field] === value;
+/** Firestore's `==` and `!=`, including the half of them this endpoint turns
+ * on: a document that does not carry the field at all matches neither, and
+ * `!=` leaves out a null too. */
+function matches(data: Data, field: string, op: string, value: unknown) {
+  if (op === "==") return field in data && data[field] === value;
+  if (op === "!=")
+    return field in data && data[field] !== null && data[field] !== value;
+  throw new Error(`the fake only knows "==" and "!=", not "${op}"`);
 }
 
 /** A query over `docs`, recorded so a test can assert the clause and applied
@@ -55,9 +66,8 @@ function queryOver(docs: Snapshot[]) {
   return {
     where(field: string, op: string, value: unknown) {
       mockWhere(field, op, value);
-      if (op !== "==") throw new Error(`the fake only knows "==", not "${op}"`);
       return queryOver(
-        docs.filter((doc) => equals(doc.data() ?? {}, field, value)),
+        docs.filter((doc) => matches(doc.data() ?? {}, field, op, value)),
       );
     },
     orderBy(field: string, direction: "asc" | "desc") {
@@ -74,6 +84,11 @@ function queryOver(docs: Snapshot[]) {
     limit(count: number) {
       mockLimit(count);
       return queryOver(docs.slice(0, count));
+    },
+    /** A field mask. The fake keeps whole documents either way. */
+    select(...fields: string[]) {
+      mockSelect(...fields);
+      return queryOver(docs);
     },
     count: () => ({
       get: async () => ({ data: () => ({ count: docs.length }) }),
@@ -186,6 +201,7 @@ function approveOnto(nodeId: string, revisionId: string, data: Data) {
 describe("api/revisions/queue", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearQueueScans();
     revisions = {};
     targets = {};
     headers.clear();
@@ -283,6 +299,120 @@ describe("api/revisions/queue", () => {
     // Newest first, so page two of five is the third and fourth newest.
     expect(ids(result.revisions)).toEqual(["rev-3", "rev-2"]);
     expect(result.total).toBe(5);
+  });
+
+  describe("everybody's but one person's", () => {
+    // What the owner opens the queue for: the proposals somebody else filed,
+    // with his own edits - the bulk of the human ones - out of the way.
+    const interleave = () => {
+      addRevision("theirs-1", { update_time: "2026-08-01T09:00:00.000Z" });
+      addRevision("mine-1", {
+        update_user: "admin-uid",
+        update_time: "2026-08-02T09:00:00.000Z",
+      });
+      addRevision("theirs-2", { update_time: "2026-08-03T09:00:00.000Z" });
+      addRevision("mine-2", {
+        update_user: "admin-uid",
+        update_time: "2026-08-04T09:00:00.000Z",
+      });
+      addRevision("theirs-3", {
+        update_user: "other-uid",
+        update_time: "2026-08-05T09:00:00.000Z",
+      });
+    };
+
+    it("leaves them out in the query, so the pages and the count stay exact", async () => {
+      interleave();
+
+      const first = await call({ excludeAuthor: "admin-uid", limit: 2 });
+
+      expect(mockWhere).toHaveBeenCalledWith("update_user", "!=", "admin-uid");
+      expect(mockWhere).toHaveBeenCalledWith("update_automatic", "==", false);
+      expect(mockWhere).toHaveBeenCalledWith("status", "==", "pending");
+      expect(mockOrderBy).toHaveBeenCalledWith("update_time", "desc");
+      expect(ids(first.revisions)).toEqual(["theirs-3", "theirs-2"]);
+      // Counted by Firestore over the same clauses - not the page's length,
+      // and not everything less what one page happened to drop.
+      expect(first.total).toBe(3);
+
+      vi.clearAllMocks();
+      const second = await call({
+        excludeAuthor: "admin-uid",
+        limit: 2,
+        page: 2,
+      });
+
+      expect(mockOffset).toHaveBeenCalledWith(2);
+      expect(ids(second.revisions)).toEqual(["theirs-1"]);
+      expect(second.total).toBe(3);
+    });
+
+    it("answers nothing for the one person it was asked to leave out", async () => {
+      interleave();
+
+      const result = await call({
+        author: "admin-uid",
+        excludeAuthor: "admin-uid",
+        status: "all",
+      });
+
+      expect(result.revisions).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it("has an index for every combination of clauses it can send", async () => {
+      // The emulator needs none, so nothing but production would notice one
+      // missing - and there the queue would fail to load.
+      const indexes = (
+        JSON.parse(
+          readFileSync(
+            // At the root of the repo, whether the tests run from there or
+            // from frontend/.
+            existsSync(resolve(process.cwd(), "firestore.indexes.json"))
+              ? resolve(process.cwd(), "firestore.indexes.json")
+              : resolve(process.cwd(), "..", "firestore.indexes.json"),
+            "utf8",
+          ),
+        ).indexes as {
+          collectionGroup: string;
+          fields: { fieldPath: string; order: string }[];
+        }[]
+      )
+        .filter((index) => index.collectionGroup === "revisions")
+        .map((index) =>
+          index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", "),
+        );
+
+      for (const automatic of ["false", "true", "all"]) {
+        for (const status of ["pending", "all"]) {
+          mockWhere.mockClear();
+          await call({ automatic, status, excludeAuthor: "admin-uid" });
+          const equalities = mockWhere.mock.calls
+            .filter(([, op]) => op === "==")
+            .map(([field]) => `${field} ASCENDING`);
+          // Firestore orders by the inequality after the explicit order, in
+          // the same direction, so that is where the index has it.
+          expect(indexes).toContain(
+            [
+              ...equalities,
+              "update_time DESCENDING",
+              "update_user DESCENDING",
+            ].join(", "),
+          );
+        }
+      }
+    });
+
+    it("does not narrow one person's history by somebody else's exclusion", async () => {
+      interleave();
+
+      const result = await call({
+        author: "volunteer-uid",
+        excludeAuthor: "admin-uid",
+      });
+
+      expect(ids(result.revisions)).toEqual(["theirs-2", "theirs-1"]);
+    });
   });
 
   describe("one person's history", () => {
@@ -658,6 +788,291 @@ describe("api/revisions/queue", () => {
 
       expect(ids(result.revisions)).toEqual(["rev-1"]);
       expect(result.revisions[0]!.author).toBeNull();
+    });
+  });
+  describe("what a proposal is about", () => {
+    /** An edge revision between two nodes, with both of them stored. */
+    function addRelation(
+      id: string,
+      ends: { source: string; target: string; type?: string },
+      overrides: Data = {},
+    ) {
+      addRevision(id, {
+        node_id: `edge-${id}`,
+        collection: "edges",
+        data: { type: ends.type ?? "employed", ...ends },
+        ...overrides,
+      });
+      targets[`edges/edge-${id}`] = { ...ends, published: false };
+    }
+
+    beforeEach(() => {
+      targets["nodes/person-1"] = {
+        name: "Anna Nowak",
+        type: "person",
+        published: true,
+      };
+      targets["nodes/place-1"] = {
+        name: "Wodociągi",
+        type: "place",
+        published: true,
+      };
+      targets["nodes/article-1"] = {
+        name: "Artykuł o radzie",
+        type: "article",
+        published: true,
+      };
+      targets["nodes/region-1"] = {
+        name: "Gmina Przykładowo",
+        type: "region",
+        published: false,
+      };
+    });
+
+    it("is the entry itself for a node revision", async () => {
+      addRevision("rev-1");
+
+      const [row] = (await call()).revisions;
+
+      expect(row!.subject).toEqual({
+        id: "node-1",
+        name: "Anna Nowak",
+        type: "person",
+        path: "/osoba/anna-nowak-node-1",
+        published: true,
+      });
+    });
+
+    it("is the person at either end of a relation", async () => {
+      // A seat on a board is filed under the person; a mention, under the
+      // article - but it is the person a reviewer is going through.
+      addRelation("employed", { source: "person-1", target: "place-1" });
+      addRelation(
+        "mention",
+        { source: "article-1", target: "person-1", type: "mentions" },
+        { update_time: "2026-08-09T09:00:00.000Z" },
+      );
+
+      const result = await call();
+
+      expect(result.revisions.map((row) => row.subject.id)).toEqual([
+        "person-1",
+        "person-1",
+      ]);
+      expect(result.revisions[0]!.subject).toMatchObject({
+        name: "Anna Nowak",
+        type: "person",
+        published: true,
+      });
+    });
+
+    it("is the source of a relation between two entries that are not people", async () => {
+      addRelation("seat", {
+        source: "region-1",
+        target: "place-1",
+        type: "seat",
+      });
+
+      const [row] = (await call()).revisions;
+
+      expect(row!.subject).toMatchObject({ id: "region-1", published: false });
+    });
+
+    it("is the relation itself, never live, when neither end can be read", async () => {
+      addRelation("orphan", { source: "gone-1", target: "gone-2" });
+
+      const [row] = (await call()).revisions;
+
+      expect(row!.subject).toMatchObject({
+        id: "edge-orphan",
+        type: null,
+        published: false,
+      });
+    });
+  });
+
+  describe("by the entry a proposal is about", () => {
+    /** Three people, one of them live, with proposals about each. */
+    beforeEach(() => {
+      targets["nodes/live"] = {
+        name: "Barbara Opublikowana",
+        type: "person",
+        published: true,
+      };
+      targets["nodes/draft"] = {
+        name: "Cezary Szkicowy",
+        type: "person",
+        published: false,
+      };
+      targets["nodes/place-1"] = { name: "Wodociągi", type: "place" };
+      addRevision("live-old", {
+        node_id: "live",
+        update_time: "2026-08-01T09:00:00.000Z",
+      });
+      addRevision("draft-new", {
+        node_id: "draft",
+        update_time: "2026-08-05T09:00:00.000Z",
+      });
+      // A relation is about the person at its source, so it joins her group.
+      addRevision("live-relation", {
+        node_id: "edge-1",
+        collection: "edges",
+        data: { type: "employed", source: "live", target: "place-1" },
+        update_time: "2026-08-04T09:00:00.000Z",
+      });
+      addRevision("draft-old", {
+        node_id: "draft",
+        update_time: "2026-07-30T09:00:00.000Z",
+      });
+    });
+
+    it("lists only proposals about a live page when asked for published", async () => {
+      const result = await call({ published: "true" });
+
+      expect(ids(result.revisions)).toEqual(["live-relation", "live-old"]);
+      expect(result.total).toBe(2);
+      // The same two clauses as the plain queue, read whole and masked to what
+      // names a target, and who filed it for "Bez moich" - nothing about the
+      // target can go in the query.
+      expect(mockWhere).toHaveBeenCalledWith("update_automatic", "==", false);
+      expect(mockWhere).toHaveBeenCalledWith("status", "==", "pending");
+      expect(mockOffset).not.toHaveBeenCalled();
+      expect(mockSelect).toHaveBeenCalledWith(
+        "node_id",
+        "nodeId",
+        "collection",
+        "data.source",
+        "data.target",
+        "update_user",
+      );
+      expect(result.flagOnly).toBe(true);
+    });
+
+    it("and only the drafts' when asked for unpublished", async () => {
+      const result = await call({ published: "false" });
+
+      expect(ids(result.revisions)).toEqual(["draft-new", "draft-old"]);
+    });
+
+    it("groups the proposals by entry, newest entry first", async () => {
+      const result = await call({ group: "subject" });
+
+      expect(result.revisions).toEqual([]);
+      expect(result.total).toBe(4);
+      expect(result.groupTotal).toBe(2);
+      expect(
+        result.groups!.map((group) => [
+          group.subject.id,
+          group.count,
+          ids(group.proposals),
+        ]),
+      ).toEqual([
+        ["draft", 2, ["draft-new", "draft-old"]],
+        ["live", 2, ["live-relation", "live-old"]],
+      ]);
+      expect(result.groups![1]!.subject).toMatchObject({
+        name: "Barbara Opublikowana",
+        published: true,
+      });
+    });
+
+    it("pages through entries rather than proposals when grouped", async () => {
+      const result = await call({ group: "subject", limit: 1, page: 2 });
+
+      expect(result.groups!.map((group) => group.subject.id)).toEqual(["live"]);
+      expect(result.groupTotal).toBe(2);
+    });
+
+    it("groups the live entries alone with both set", async () => {
+      const result = await call({ group: "subject", published: "true" });
+
+      expect(result.groups!.map((group) => group.subject.id)).toEqual(["live"]);
+      expect(result.total).toBe(2);
+    });
+
+    it("reads the list once for a couple of minutes, and every page fresh", async () => {
+      await call({ published: "true" });
+      const firstScan = mockSelect.mock.calls.length;
+
+      // Decided elsewhere - by another admin, on another instance - after the
+      // list was read: the scan still holds it, the page must not.
+      revisions["live-old"]!.status = "approved";
+      const result = await call({ published: "true" });
+
+      expect(mockSelect.mock.calls.length).toBe(firstScan);
+      expect(ids(result.revisions)).toEqual(["live-relation"]);
+    });
+
+    it("drops a proposal decided here from the list it holds", async () => {
+      await call({ published: "true" });
+
+      revisions["live-old"]!.status = "rejected";
+      forgetQueued("live-old", "rejected");
+      const result = await call({ published: "true" });
+
+      expect(result.total).toBe(1);
+      expect(ids(result.revisions)).toEqual(["live-relation"]);
+    });
+
+    it("filters and groups one author's history the same way", async () => {
+      const result = await call({
+        author: "volunteer-uid",
+        group: "subject",
+        published: "true",
+      });
+
+      expect(result.groups!.map((group) => group.subject.id)).toEqual(["live"]);
+      expect(ids(result.groups![0]!.proposals)).toEqual([
+        "live-relation",
+        "live-old",
+      ]);
+      expect(mockSelect).not.toHaveBeenCalled();
+    });
+
+    it("leaves one person out of the scan in memory - no clause, no index", async () => {
+      // "Bez moich" beside the grouping: the reviewer's own edit on Barbara's
+      // page, and an old revision that names nobody, which the plain queue's
+      // `!=` leaves out as well.
+      addRevision("mine-live", {
+        node_id: "live",
+        update_user: "admin-uid",
+        update_time: "2026-08-06T09:00:00.000Z",
+      });
+      addRevision("nobodys", {
+        node_id: "draft",
+        update_user: undefined,
+        update_time: "2026-08-07T09:00:00.000Z",
+      });
+
+      const result = await call({
+        group: "subject",
+        excludeAuthor: "admin-uid",
+      });
+
+      expect(mockWhere).not.toHaveBeenCalledWith(
+        "update_user",
+        "!=",
+        "admin-uid",
+      );
+      expect(result.total).toBe(4);
+      expect(
+        result.groups!.map((group) => [group.subject.id, group.count]),
+      ).toEqual([
+        ["draft", 2],
+        ["live", 2],
+      ]);
+
+      // Back in with the switch off, from the scan already held.
+      const scans = mockSelect.mock.calls.length;
+      const everybody = await call({ group: "subject" });
+      expect(mockSelect.mock.calls.length).toBe(scans);
+      expect(everybody.total).toBe(6);
+    });
+
+    it("answers a permalink that is inside one of the groups as already there", async () => {
+      const result = await call({ group: "subject", revision: "live-old" });
+
+      expect(result.pinned).toBeNull();
     });
   });
 });

@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timedelta
 
@@ -18,8 +19,10 @@ STALE = "2026-10-03T02:00:04.120Z"
 GOOD = {
     "koryta_scrape_krs_free": 0,
     "koryta_krs_odpis": 0,
+    "koryta_scrape_krs_paid": 0,
     "koryta": 0,
     "koryta_people_import": 0,
+    "koryta_score_import": 0,
     "compressor": 0,
 }
 
@@ -64,6 +67,15 @@ class World:
         self.objects: dict[str, bytes] = {}
         self.runs: list[RecordingRun] = []
         self.tmp = tmp_path
+        #: Secret Manager, as the VM's account may read it.
+        self.secrets: dict[str, str] = {night.REJESTR_SECRET: "a-key"}
+        self.secrets_read: list[str] = []
+
+    def read_secret(self, name: str) -> tuple[str | None, str]:
+        self.secrets_read.append(name)
+        if name in self.secrets:
+            return self.secrets[name], ""
+        return None, f"{name}: ERROR: PERMISSION_DENIED"
 
     def ran(self) -> list[str]:
         return [name for name, _, _ in self.commands]
@@ -135,6 +147,9 @@ def world(monkeypatch, tmp_path) -> World:
     monkeypatch.setattr(night, "tidy", lambda keep_days, today: (0, 0))
     monkeypatch.setenv("KORYTA_NIGHTLY_LOGS", str(tmp_path / "logs"))
     monkeypatch.setenv("KORYTA_COMPRESSOR", "/var/lib/koryta-nightly/bin/compressor")
+    monkeypatch.delenv("REJESTR_KEY", raising=False)
+    monkeypatch.delenv("KORYTA_REJESTR_SECRET", raising=False)
+    monkeypatch.setattr(night, "read_secret", w.read_secret)
     monkeypatch.setattr(sys, "argv", ["koryta_nightly"])
     return w
 
@@ -151,11 +166,13 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "compressor",
         "koryta_scrape_krs_free",
         "koryta_krs_odpis",
+        "koryta_scrape_krs_paid",
         "koryta",
         "pytest tests",
         "pytest outputs",
         "pytest invariants",
         "koryta_people_import",
+        "koryta_score_import",
     ]
     assert set(world.steps().values()) == {("succeeded", "")} | {
         ("succeeded", FRESH),
@@ -212,6 +229,131 @@ def test_the_people_go_up_capped_in_priority_order_from_what_is_on_disk(world):
     assert "--dry-run" not in argv
 
 
+def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
+    night.main([])
+
+    argv, env = world.command("koryta_score_import")
+    assert argv[argv.index("--max-minutes") + 1] == "30"
+    assert "--dry-run" not in argv
+    # The site's people read again: an export taken by hand later the same day
+    # is otherwise not seen, as their outputs are named by the day.
+    refreshed = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--refresh"]
+    assert refreshed == ["KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores"]
+    # Backed up as whoever runs it, as the reprocess: the models it rebuilds
+    # are tonight's newest.
+    assert env.get("DISABLE_BACKUP") != "1"
+
+
+def test_rejestr_io_is_bought_for_what_the_free_sources_failed_under_a_daily_cap(
+    world,
+):
+    night.main([])
+
+    argv, env = world.command("koryta_scrape_krs_paid")
+    assert argv[argv.index("--scope") + 1] == "fallback"
+    assert argv[argv.index("--max-calls") + 1] == "50"
+    # The key goes to the job in its environment, never on its command line,
+    # and to no other step.
+    assert world.secrets_read == ["rejestr-io-key"]
+    assert env["REJESTR_KEY"] == "a-key"
+    assert "a-key" not in argv
+    for name, _, other in world.commands:
+        if name != "koryta_scrape_krs_paid":
+            assert "REJESTR_KEY" not in other, name
+
+    world.commands.clear()
+    world.objects.clear()
+    night.main(["--paid-max-calls", "120"])
+
+    argv, _ = world.command("koryta_scrape_krs_paid")
+    assert argv[argv.index("--max-calls") + 1] == "120"
+
+
+def test_without_the_rejestr_io_key_the_paid_step_is_skipped_and_holds_nothing(
+    world,
+):
+    world.secrets.clear()
+
+    assert night.main([]) == 0
+
+    assert "koryta_scrape_krs_paid" not in world.ran()
+    assert world.steps()["krs_paid"] == ("skipped", "brak klucza rejestr.io")
+    assert world.steps()["people"] == ("succeeded", "")
+    # Why, for whoever reads the log: the secret's name and gcloud's answer.
+    [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
+    assert (
+        b"No rejestr.io key: rejestr-io-key: ERROR: PERMISSION_DENIED"
+        in (world.objects[log])
+    )
+
+
+def test_the_key_in_the_environment_wins_and_an_empty_secret_name_turns_it_off(
+    world, monkeypatch
+):
+    monkeypatch.setenv("REJESTR_KEY", "a-hand-run-key")
+
+    night.main(["--only", "krs_paid"])
+
+    _, env = world.command("koryta_scrape_krs_paid")
+    assert env["REJESTR_KEY"] == "a-hand-run-key"
+    assert world.secrets_read == []
+
+    monkeypatch.delenv("REJESTR_KEY")
+    monkeypatch.setenv("KORYTA_REJESTR_SECRET", "")
+    world.commands.clear()
+    world.objects.clear()
+
+    night.main(["--only", "krs_paid"])
+
+    assert world.ran() == [] and world.secrets_read == []
+    assert world.steps()["krs_paid"] == ("skipped", "brak klucza rejestr.io")
+
+
+def test_a_secret_is_read_with_gcloud_and_its_value_never_said(monkeypatch):
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        if argv[-2] == "--secret=rejestr-io-key":
+            return subprocess.CompletedProcess(argv, 0, "the-key\n", "")
+        return subprocess.CompletedProcess(
+            argv, 1, "", "ERROR: (gcloud.secrets.versions.access) NOT_FOUND\nmore"
+        )
+
+    monkeypatch.setattr(night.subprocess, "run", run)
+
+    assert night.read_secret("rejestr-io-key") == ("the-key", "")
+    assert night.read_secret("other") == (
+        None,
+        "other: ERROR: (gcloud.secrets.versions.access) NOT_FOUND",
+    )
+    assert calls[0][:5] == ["gcloud", "secrets", "versions", "access", "latest"]
+
+
+def test_a_cap_of_nothing_buys_nothing(world):
+    assert night.main(["--paid-max-calls", "0"]) == 0
+
+    assert "koryta_scrape_krs_paid" not in world.ran()
+    assert world.steps()["krs_paid"] == ("skipped", "limit zapytań 0")
+
+
+def test_what_the_paid_step_leaves_or_breaks_does_not_hold_the_people(world):
+    world.codes["koryta_scrape_krs_paid"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["krs_paid"] == ("partial", "zostało na następny raz")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_scrape_krs_paid"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["krs_paid"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["people"] == ("succeeded", "")
+
+
 def test_the_mirror_is_made_one_host_at_a_time(world):
     night.main([])
 
@@ -247,7 +389,9 @@ def test_a_stale_export_holds_the_people_but_nothing_else(world):
     steps = world.steps()
     assert steps["export"][0] == "partial"
     assert steps["people"] == ("held", "wstrzymane: nie ma dzisiejszej kopii bazy")
+    assert steps["scores"] == ("held", "wstrzymane: nie ma dzisiejszej kopii bazy")
     assert "koryta_people_import" not in world.ran()
+    assert "koryta_score_import" not in world.ran()
     assert world.ran().count("compressor") == 2
 
 
@@ -258,7 +402,7 @@ def test_a_failed_reprocess_holds_what_reads_its_outputs(world):
 
     steps = world.steps()
     assert steps["reprocess"] == ("failed", "kod wyjścia 1")
-    for held in ("tests", "outputs", "people"):
+    for held in ("tests", "outputs", "people", "scores"):
         assert steps[held][0] == "held"
     # The export is checked whatever the pipelines did.
     assert steps["invariants"][0] == "succeeded"
@@ -271,6 +415,7 @@ def test_a_test_failing_tonight_that_passed_last_night_holds_the_people(world):
     assert night.main([]) == night.EXIT_TRY_LATER
 
     assert world.steps()["people"] == ("held", "wstrzymane: nowe błędy testów: b::new")
+    assert world.steps()["scores"] == ("held", "wstrzymane: nowe błędy testów: b::new")
     assert world.summary()["new_failures"] == ["b::new"]
 
 
@@ -307,6 +452,25 @@ def test_a_check_that_gives_no_verdict_holds_the_people(world):
     )
 
 
+def test_the_scores_do_not_wait_on_how_the_people_went(world):
+    world.codes["koryta_people_import"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["people"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["scores"] == ("succeeded", "")
+    assert world.ran()[-2:] == ["koryta_people_import", "koryta_score_import"]
+
+
+def test_a_failed_score_upload_fails_the_night(world):
+    world.codes["koryta_score_import"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["scores"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["tidy"][0] == "succeeded"
+
+
 def test_a_job_leaving_work_for_tomorrow_is_not_a_bad_night(world):
     world.codes["koryta_scrape_krs_free"] = night.EXIT_TRY_LATER
     world.codes["koryta_people_import"] = night.EXIT_TRY_LATER
@@ -337,6 +501,8 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     assert "krs_odpis" not in out
     assert "koryta --all-pipelines" in out
     assert "koryta_people_import --scope priority --max-uploads 100" in out
+    assert "koryta_score_import" in out
+    assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
 
 
 def test_past_the_stop_by_only_compress_and_tidy_run(world, monkeypatch):

@@ -32,6 +32,7 @@ from scrapers.cru.dump import CruDump
 from scrapers.cru.umowy import CruUmowy
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.kmgp.people import PeopleKMGP
+from scrapers.koryta.created import KorytaPeopleCreated
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import (
     KorytaCompanies,
@@ -44,6 +45,7 @@ from scrapers.koryta.download import (
 from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.odpis_attempts import KrsOdpisAttempts
 from scrapers.krs.odpis_history import KrsOdpisEntries, KrsOdpisSeats
 from scrapers.krs.odpis_people import PeopleKRSCombined
 from scrapers.krs.public_owners import CompaniesPublicByRegister
@@ -92,6 +94,7 @@ PIPELINES = [
     KRSRegisterEntries,
     KRSRegisterQueue,
     KRSUpdates,
+    KrsOdpisAttempts,
     KrsOdpisEntries,
     KrsOdpisSeats,
     PersonFeedCoverage,
@@ -102,6 +105,7 @@ PIPELINES = [
     KorytaFacts,
     KorytaNodes,
     KorytaPeople,
+    KorytaPeopleCreated,
     KorytaVotes,
     PeopleEnriched,
     PeopleKRS,

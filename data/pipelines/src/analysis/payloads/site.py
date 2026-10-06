@@ -426,12 +426,19 @@ class SiteSnapshot:
         """
         data = {k: v for k, v in stored.items() if k not in INTERNAL_FIELDS}
 
-        stored_parties = _as_list(data.get("parties"))
-        parties = sorted(set(stored_parties) | set(_as_list(payload.get("parties"))))
-
         learned: dict[str, typing.Any] = {}
-        if len(parties) > len(stored_parties):
-            learned["parties"] = parties
+        # A list a person stated carries `partiesSource: "manual"`, and the
+        # ingest then leaves `parties` alone - so a payload naming another
+        # party writes nothing. Every candidate of a coalition committee arrives
+        # naming both of its parties, and counted here each pinned person would
+        # be sent again and again for nothing.
+        if data.get("partiesSource") != "manual":
+            stored_parties = _as_list(data.get("parties"))
+            parties = sorted(
+                set(stored_parties) | set(_as_list(payload.get("parties")))
+            )
+            if len(parties) > len(stored_parties):
+                learned["parties"] = parties
         for key in ("content", "wikipedia", "rejestrIo"):
             value = field(payload, key)
             if value:

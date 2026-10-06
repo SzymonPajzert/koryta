@@ -29,6 +29,7 @@ from analysis.payloads.site import (
     SiteSnapshot,
 )
 from entities.composite import Election, Person
+from scrapers.koryta.download import KorytaNodes
 from scrapers.stores import Context, Pipeline, ProcessPolicy
 
 PERSON_ID = "person-1"
@@ -169,6 +170,51 @@ def test_a_party_the_node_already_carries_is_dropped():
     snapshot = SiteSnapshot(nodes(), edges())
 
     assert snapshot.changes(payload(parties=["PiS"])) == []
+
+
+def test_a_party_added_to_a_list_a_person_stated_is_dropped():
+    """`partiesSource: "manual"` and `updatedPerson` leaves the list alone.
+
+    A person stated it, so a payload naming another party writes nothing - and
+    every candidate of a coalition committee arrives naming both its parties.
+    Read as a change, each pinned person was sent night after night, taking a
+    place under the upload's cap to write nothing.
+    """
+    snapshot = SiteSnapshot(nodes(person={"partiesSource": "manual"}), edges())
+
+    assert snapshot.changes(payload(parties=["PiS", "PSL"])) == []
+
+
+def test_a_list_a_person_stated_does_not_stop_the_rest_being_learned():
+    """Only `parties` is pinned; the node still learns everything else."""
+    snapshot = SiteSnapshot(nodes(person={"partiesSource": "manual"}), edges())
+
+    assert snapshot.changes(
+        payload(parties=["PiS", "PSL"], birthDate="1967-09-20")
+    ) == [PERSON_FIELDS]
+
+
+@pytest.mark.parametrize(
+    ("marker", "expected"),
+    [("manual", []), (None, [PERSON_FIELDS])],
+)
+def test_the_marker_survives_the_trip_through_the_export(tmp_path, marker, expected):
+    """What `SiteSnapshot` reads is `KorytaNodes`' output, narrowed to
+    `NODE_FIELDS` and read back off disk with its dtypes. Leave the column out
+    of `NODE_FIELDS` and the marker never arrives, so every pinned person is a
+    change again; and the people without it, the column empty, must read as
+    unpinned rather than trip over a NaN.
+    """
+    stored = nodes(person={"partiesSource": marker} if marker else {})
+    path = tmp_path / "koryta_nodes.jsonl"
+    stored.reindex(columns=KorytaNodes.fields).to_json(
+        path, orient="records", lines=True
+    )
+    read = pd.read_json(path, lines=True, dtype=KorytaNodes.dtype)
+
+    snapshot = SiteSnapshot(read, edges())
+
+    assert snapshot.changes(payload(parties=["PiS", "PSL"])) == expected
 
 
 def test_a_rejestr_io_link_the_node_lacks_is_kept():

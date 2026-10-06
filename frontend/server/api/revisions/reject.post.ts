@@ -4,6 +4,7 @@ import { requireAdmin } from "~~/server/utils/auth";
 import { revisionTargetRef } from "~~/server/utils/revisions";
 import { notifyRevisionReviewed } from "~~/server/utils/revisionNotifications";
 import { recordAudit } from "~~/server/utils/audit";
+import { forgetQueued } from "~~/server/utils/queueScan";
 import { approvedRevisionId } from "~~/shared/model";
 import { z } from "zod";
 
@@ -69,6 +70,7 @@ export default defineEventHandler(async (event) => {
     batch,
   );
   await batch.commit();
+  forgetQueued(body.revision_id, "rejected");
 
   // A rejection is the one verdict the author cannot discover by looking at the
   // page, so the reason only reaches them if it is sent.

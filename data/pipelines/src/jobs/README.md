@@ -20,7 +20,13 @@ A company's connections are not bought where `PeopleKRSCombined` already takes i
 the bulletin names no entry after: `krs_odpis` gets those for free. So run `krs_odpis` first, then
 `koryta PeopleKRSCombined --refresh KrsOdpisSeats --refresh KrsOdpisEntries`, then this.
 
-TODO: to be used only for people queries, since we've found free KRS scraping alternatives
+By hand it buys the whole queue, after Enter and a question before each call. At night it runs as
+`--scope fallback --max-calls 50`: only what the free sources cannot give - the person feeds of the people somebody
+marked interesting, and the connections of the companies whose odpis pełny `krs_odpis` asked for and did not get
+(`KrsOdpisAttempts`, the fold of its run record) - people first, then public companies, at most 50 calls a day. What
+the crawl bucket already holds from rejestr.io that day counts against the cap, so it is the day's, not the run's.
+It asks nothing, stops at once when rejestr.io refuses the account (exit 1), leaves what the cap or a failed call
+left for the next run (exit 75), and writes a run summary to the shared cache (`jobs/krs_scrape_paid/runs/`).
 
 ## krs_register_owners
 1. Reads output of `KRSRegisterEntries` pipeline
@@ -39,8 +45,8 @@ the company history `krs_scrape_paid` buys from rejestr.io - and `PeopleKRSCombi
 rejestr.io's for every company where the odpis is the newer of the two, on the way to `PeopleMerged`.
 
 ## nightly
-1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_odpis`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, and `people_import --scope priority --max-uploads 100`
-1. A step that fails holds only the steps that depend on it; the people wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_odpis`, `krs_scrape_paid --scope fallback --max-calls 50`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100` and `score_import`
+1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
 1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
 
 Started by a systemd timer on the VM at 04:30, after the export - see [data/nightly/README.md](../../../nightly/README.md).
@@ -78,6 +84,13 @@ renews the token once and sends the request again; a token that cannot be renewe
 
 With neither of the first two set, whoever runs it signs in through the browser, as before, and again when the
 site answers 401.
+
+## score_import
+1. Rebuilds every scoring model (`analysis.scores`) over what is on disk - on the VM, what the night's reprocess has just built - rating the site's people as this morning's export has them, and the pages the people import created since: `KorytaPeopleCreated` folds them from its `sent/` parts, which name the page each person went to
+1. Reconciles each model's votes on the site with what it wrote last time (`util.firestore.Firestore.replace_scores`): a changed score is written, one it no longer gives taken back; a model that rates nobody is not uploaded, since reconciled it would take back every vote it has, and fails the run
+1. Writes a run summary to the shared cache (`jobs/score_import/runs/`): each model's counts, and how many of the pages created since the export some model rated
+
+Runs nightly as the step after the people on the koryta-nightly VM, so a new hire's page has its score the morning it is created - see [data/nightly/README.md](../../../nightly/README.md). `submit_scores.sh` uploads the same models by hand, one `koryta_uploader --type score` per model. After an export taken by hand later the same day, `--refresh KorytaPeople --refresh KorytaVotes --refresh KorytaFacts --refresh CompanyScores` makes the models read it: the site's people are read through day-named outputs, which still hold the morning's.
 
 # Reporting a run
 
@@ -126,8 +139,9 @@ the project `GOOGLE_CLOUD_PROJECT` or `GCLOUD_PROJECT` names, else
 `demo-koryta-pl` - the one the dev stack starts its emulators under, and so the
 one the local /admin/procesy reads.
 
-What reports: `krs_scrape_free` (not `--dry-run`), `krs_scrape_paid` (once the
-bill is accepted), `krs_odpis` (not `--dry-run`), `krs_register_owners` (not
+What reports: `krs_scrape_free` (not `--dry-run`), `score_import` (not `--dry-run`), `krs_scrape_paid` (once the
+bill is accepted; with `--max-calls`, every run but `--dry-run`, a run with
+nothing to buy too), `krs_odpis` (not `--dry-run`), `krs_register_owners` (not
 `--dry-run` or `--reads 0`), the article crawl, `koryta_crawl`, `people_import`
 (a `--dry-run` too) and `koryta_uploader --submit`, under `people_import`,
 `company_import`, `score_import` or `extraction_import` by `--type` (not

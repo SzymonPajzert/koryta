@@ -4,7 +4,10 @@ import { flushPromises } from "@vue/test-utils";
 import { useRouter } from "#app";
 import RewizjePage from "../../../app/pages/admin/rewizje/index.vue";
 import type { Proposal } from "~~/shared/proposals";
-import type { RevisionQueue } from "~~/server/api/revisions/queue.get";
+import type {
+  QueueGroup,
+  RevisionQueue,
+} from "~~/server/api/revisions/queue.get";
 import type { PendingEdgeRevision } from "~~/server/api/revisions/pendingEdges.get";
 import type { RevisedNode } from "~/components/revision/NodeRow.vue";
 
@@ -18,7 +21,7 @@ const { mockAuthRequest, auth } = vi.hoisted(() => ({
 vi.mock("~/composables/auth", () => ({
   authRequest: mockAuthRequest,
   useAuthState: () => ({
-    user: { value: null },
+    user: { value: { uid: "admin-uid" } },
     isAdmin: { value: auth.isAdmin },
   }),
 }));
@@ -53,7 +56,31 @@ const proposal = (overrides: Partial<Proposal> = {}): Proposal => ({
   rejectReason: null,
   reviewTime: null,
   stale: false,
+  subject: {
+    id: "node-1",
+    name: "Jan Testowy",
+    type: "person",
+    path: "/osoba/jan-testowy-node-1",
+    published: true,
+  },
   ...overrides,
+});
+
+/** An entry and its proposals, as a grouped queue sends them. */
+const group = (
+  subject: Partial<QueueGroup["subject"]>,
+  proposals: Proposal[],
+): QueueGroup => ({
+  subject: {
+    id: "node-1",
+    name: "Jan Testowy",
+    type: "person",
+    path: "/osoba/jan-testowy-node-1",
+    published: true,
+    ...subject,
+  },
+  count: proposals.length,
+  proposals,
 });
 
 const edgeRevision = (
@@ -246,9 +273,193 @@ describe("the review queue section", () => {
         limit: 25,
         status: "all",
         automatic: "all",
+        published: "all",
+        group: undefined,
         author: "user-a",
         revision: undefined,
       },
+    });
+  });
+
+  it("asks for live entries only, grouped, under the url's names", async () => {
+    serve();
+    await mount("/?published=true&group=subject&automatic=true");
+
+    expect(callsTo("/api/revisions/queue")[0]![1].query).toMatchObject({
+      automatic: "true",
+      published: "true",
+      group: "subject",
+    });
+  });
+
+  it("writes the grouping into the url and starts it from the first page", async () => {
+    serve({ queue: { revisions: [proposal()], total: 60 } });
+    const wrapper = await mount("/?page=2");
+
+    const toggle = wrapper.get("[data-queue-grouping]");
+    const button = toggle
+      .findAll("button")
+      .find((candidate) => candidate.text().includes("Według wpisu"));
+    await button!.trigger("click");
+
+    const router = useRouter();
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.query).toEqual({ group: "subject" }),
+    );
+    expect(router.currentRoute.value.hash).toBe("#kolejka");
+  });
+
+  describe("grouped by entry", () => {
+    const anna = proposal({ id: "rev-a1", targetName: "Anna Nowak" });
+    const annaRelation = proposal({
+      id: "rev-a2",
+      targetCollection: "edges",
+      targetName: "Anna Nowak → Orlen (prezes)",
+      automatic: true,
+    });
+    const jan = proposal({ id: "rev-j1" });
+    const grouped = (groups: QueueGroup[]): Partial<RevisionQueue> => ({
+      groups,
+      groupTotal: groups.length,
+      total: groups.reduce((sum, item) => sum + item.count, 0),
+    });
+
+    it("draws one closed line per entry, its proposals inside", async () => {
+      serve({
+        queue: grouped([
+          group({ id: "anna", name: "Anna Nowak" }, [anna, annaRelation]),
+          group({ id: "jan", published: false }, [
+            { ...jan, changes: [], changeCount: 0 },
+          ]),
+        ]),
+      });
+      const wrapper = await mount("/?group=subject");
+
+      expect(wrapper.get("[data-group-summary]").text()).toBe(
+        "3 propozycje w 2 wpisach",
+      );
+      const line = wrapper
+        .get('[data-subject-id="anna"] > .arow__head [data-row-toggle]')
+        .text();
+      expect(line).toContain("Anna Nowak");
+      expect(line).toContain("opublikowana");
+      expect(line).toContain("2 propozycje");
+      expect(line).toContain("Opis, partie, powiązania");
+      expect(line).toContain("Autor Testowy, pipeline");
+      const janLine = wrapper.get('[data-subject-id="jan"]');
+      expect(janLine.find("[data-subject-published]").exists()).toBe(false);
+      // A proposal that changes nothing says so, as its own line would.
+      expect(janLine.get("[data-row-toggle]").text()).toContain("Bez zmian");
+      expect(wrapper.find('[data-proposal-id="rev-a1"]').exists()).toBe(false);
+
+      await wrapper
+        .get('[data-subject-id="anna"] [data-row-toggle]')
+        .trigger("click");
+
+      const inside = wrapper.get('[data-subject-id="anna"] [data-group-list]');
+      expect(
+        inside
+          .findAll("[data-proposal-row]")
+          .map((row) => row.attributes("data-proposal-id")),
+      ).toEqual(["rev-a1", "rev-a2"]);
+    });
+
+    it("takes a decided proposal out of its group, and the group with its last", async () => {
+      serve({
+        queue: grouped([
+          group({ id: "anna" }, [anna, annaRelation]),
+          group({ id: "jan" }, [jan]),
+        ]),
+      });
+      const wrapper = await mount("/?group=subject");
+      const open = async (selector: string) =>
+        wrapper.get(`${selector} [data-row-toggle]`).trigger("click");
+
+      await open('[data-subject-id="jan"]');
+      await open('[data-proposal-id="rev-j1"]');
+      await wrapper.get('[data-testid="approve-rev-j1"]').trigger("click");
+      await flushPromises();
+      await open('[data-subject-id="anna"]');
+      await open('[data-proposal-id="rev-a1"]');
+      await wrapper.get('[data-testid="approve-rev-a1"]').trigger("click");
+      await flushPromises();
+
+      expect(wrapper.find('[data-subject-id="jan"]').exists()).toBe(false);
+      expect(
+        wrapper.get('[data-subject-id="anna"] [data-group-count]').text(),
+      ).toBe("1 propozycja");
+      expect(wrapper.get("[data-group-summary]").text()).toBe(
+        "1 propozycja w 1 wpisie",
+      );
+      // Settled where it stood: nothing read again.
+      expect(callsTo("/api/revisions/queue")).toHaveLength(1);
+    });
+
+    it("reads the page again once a group's shown proposals run out before its count", async () => {
+      serve({
+        queue: grouped([{ ...group({ id: "jan" }, [jan]), count: 3 }]),
+      });
+      const wrapper = await mount("/?group=subject");
+
+      await wrapper
+        .get('[data-subject-id="jan"] [data-row-toggle]')
+        .trigger("click");
+      await wrapper
+        .get('[data-proposal-id="rev-j1"] [data-row-toggle]')
+        .trigger("click");
+      expect(wrapper.get("[data-group-more]").text()).toBe(
+        "Pokazujemy 1 najnowszych z 3.",
+      );
+      await wrapper.get('[data-testid="approve-rev-j1"]').trigger("click");
+      await flushPromises();
+
+      expect(callsTo("/api/revisions/queue")).toHaveLength(2);
+    });
+
+    it("pins a permalinked proposal on top rather than inside its group", async () => {
+      serve({
+        queue: grouped([group({ id: "anna" }, [anna, annaRelation])]),
+      });
+      const wrapper = await mount("/?group=subject&rewizja=rev-a2");
+
+      expect(
+        wrapper.find('[data-pinned] [data-proposal-id="rev-a2"]').exists(),
+      ).toBe(true);
+      expect(
+        wrapper.get('[data-subject-id="anna"] [data-group-count]').text(),
+      ).toBe("1 propozycja");
+    });
+
+    it("asks for the groups without the reader's own when they are hidden", async () => {
+      serve({ queue: grouped([group({ id: "anna" }, [anna])]) });
+      const wrapper = await mount("/?group=subject&published=true&mine=hide");
+
+      // One request carries all three: the endpoint leaves the reader out of
+      // its scan before it groups and pages.
+      expect(callsTo("/api/revisions/queue")[0]![1].query).toMatchObject({
+        group: "subject",
+        published: "true",
+        excludeAuthor: "admin-uid",
+      });
+      // Both switches are the same kind of control, side by side.
+      expect(
+        wrapper.get('#kolejka [data-filter="hide"]').attributes("aria-pressed"),
+      ).toBe("true");
+      expect(
+        wrapper
+          .get('#kolejka [data-queue-grouping] [data-filter="subject"]')
+          .attributes("aria-pressed"),
+      ).toBe("true");
+    });
+
+    it("pages through entries, not proposals", async () => {
+      serve({
+        queue: { ...grouped([group({ id: "anna" }, [anna])]), groupTotal: 30 },
+      });
+      const wrapper = await mount("/?group=subject");
+
+      const pager = wrapper.getComponent({ name: "VPagination" });
+      expect(pager.props("length")).toBe(2);
     });
   });
 
@@ -334,12 +545,76 @@ describe("the review queue section", () => {
     expect(route.hash).toBe("#kolejka");
   });
 
+  it("leaves the reader's own proposals out in one click", async () => {
+    // The report: "Mainly I'm interested to see any revision that is not from
+    // the admin / me, so I can see if someone has proposed something".
+    serve({ queue: { revisions: [proposal()] } });
+    const wrapper = await mount();
+    expect(callsTo("/api/revisions/queue")[0]![1].query.excludeAuthor).toBe(
+      undefined,
+    );
+
+    await wrapper.get('#kolejka [data-filter="hide"]').trigger("click");
+
+    const router = useRouter();
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.query).toMatchObject({ mine: "hide" }),
+    );
+    expect(router.currentRoute.value.hash).toBe("#kolejka");
+    await flushPromises();
+    // Left out by the endpoint, so its pages and its count are of the rest.
+    expect(callsTo("/api/revisions/queue").at(-1)![1].query).toMatchObject({
+      excludeAuthor: "admin-uid",
+      status: "pending",
+      automatic: "false",
+    });
+  });
+
+  it("says nothing is waiting from anybody else, not that the queue is empty", async () => {
+    serve();
+    const wrapper = await mount("/?mine=hide");
+
+    expect(callsTo("/api/revisions/queue")[0]![1].query.excludeAuthor).toBe(
+      "admin-uid",
+    );
+    const section = wrapper.get("#kolejka").text();
+    expect(section).toContain("Od innych osób nic nie czeka na rozpatrzenie.");
+    expect(section).not.toContain("Kolejka jest pusta");
+  });
+
+  it("puts the switch away while one author is picked, and drops it on picking", async () => {
+    // One author's list already leaves everybody else out; leaving the
+    // reader out on top would be a filter the page does not show.
+    serve({ queue: { revisions: [proposal()] } });
+    const wrapper = await mount("/?mine=hide");
+
+    await wrapper.get("[data-row-toggle]").trigger("click");
+    await wrapper.get("[data-focus-author]").trigger("click");
+
+    const router = useRouter();
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.query.author).toBe("user-a"),
+    );
+    expect(router.currentRoute.value.query).not.toHaveProperty("mine");
+    await flushPromises();
+    expect(wrapper.find('#kolejka [data-filter="hide"]').exists()).toBe(false);
+  });
+
   it("celebrates an empty default queue instead of an empty list", async () => {
     serve();
     const wrapper = await mount();
 
     expect(wrapper.get("#kolejka").text()).toContain(
       "Kolejka jest pusta — nic nie czeka na rozpatrzenie.",
+    );
+  });
+
+  it("does not call a queue narrowed to live pages empty, only its filter", async () => {
+    serve();
+    const wrapper = await mount("/?published=true");
+
+    expect(wrapper.get("[data-queue-empty]").text()).toBe(
+      "Brak zmian pasujących do filtrów.",
     );
   });
 });

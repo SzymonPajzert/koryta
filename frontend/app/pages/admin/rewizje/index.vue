@@ -36,6 +36,37 @@
           class="rev-filter"
           data-filter="automatic"
         />
+        <!-- Whether the entry a proposal is about is live, which is what
+             makes a change worth reviewing first: the pipeline's proposals
+             are mostly about drafts nobody can open yet. -->
+        <v-select
+          v-model="published"
+          :items="publishedOptions"
+          label="Strona"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="rev-filter"
+          data-filter="published"
+        />
+        <!-- One click to what somebody else proposed. An admin's own edits
+             are filed as proposals too and wait here like anybody's, so
+             without this a volunteer's suggestion sits among them. Put away
+             while one author is picked, which leaves everybody else out
+             already. -->
+        <FeedbackFilterChips
+          v-if="!author"
+          v-model="mine"
+          :options="mineOptions"
+        />
+        <!-- How the same list is laid out, so it is picked the way "Bez
+             moich" is: one row per proposal, or one per entry with its
+             proposals inside. Last, after everything that narrows the list. -->
+        <FeedbackFilterChips
+          v-model="grouping"
+          :options="groupingOptions"
+          data-queue-grouping
+        />
         <!-- No dropdown of people: there is no client-side list of uids, and
              the way in is a click from "Najaktywniejsi" on /eksploruj/statystyki
              or from an open row below. -->
@@ -74,7 +105,11 @@
         variant="tonal"
         density="compact"
         class="mb-3"
-        :text="`Wczytaliśmy ${AUTHOR_SCAN_CAP} najnowszych rewizji tej osoby. Starsze są poza tym zestawieniem.`"
+        :text="
+          author
+            ? `Wczytaliśmy ${AUTHOR_SCAN_CAP} najnowszych rewizji tej osoby. Starsze są poza tym zestawieniem.`
+            : `Wczytaliśmy ${QUEUE_SCAN_CAP.toLocaleString('pl-PL')} najnowszych rewizji. Starsze są poza tym zestawieniem.`
+        "
       />
 
       <v-alert
@@ -126,7 +161,38 @@
           color="primary"
           class="mb-1"
         />
-        <AdminRowList v-if="queueRows.length > 0" data-queue-list>
+        <p
+          v-if="groupSummary"
+          class="text-body-2 text-medium-emphasis mb-2"
+          data-group-summary
+        >
+          {{ groupSummary }}
+        </p>
+        <AdminRowList v-if="queueGroups.length > 0" data-queue-groups>
+          <RevisionQueueGroup
+            v-for="group in queueGroups"
+            :key="group.subject.id"
+            :expanded="isOpen(groupKey(group.subject.id))"
+            :group="group"
+            :proposals="groupRows(group)"
+            @update:expanded="setOpen(groupKey(group.subject.id), $event)"
+          >
+            <RevisionQueueRow
+              v-for="proposal in groupRows(group)"
+              :key="proposal.id"
+              :expanded="isOpen(queueKey(proposal.id))"
+              :proposal="proposal"
+              :loading="deciding === proposal.id"
+              :author-focused="!!author"
+              @update:expanded="setOpen(queueKey(proposal.id), $event)"
+              @approve="approve(proposal, $event)"
+              @reject="openReject(proposal)"
+              @permalink="copyPermalink(proposal)"
+              @focus-author="focusAuthor"
+            />
+          </RevisionQueueGroup>
+        </AdminRowList>
+        <AdminRowList v-else-if="queueRows.length > 0" data-queue-list>
           <RevisionQueueRow
             v-for="proposal in queueRows"
             :key="proposal.id"
@@ -149,7 +215,7 @@
           {{ queueEmptyText }}
         </p>
         <div
-          v-if="queueTotal > SMALLEST_PAGE_SIZE"
+          v-if="queuePaged > SMALLEST_PAGE_SIZE"
           class="rev-pager d-flex flex-wrap align-center ga-2 mt-2"
         >
           <v-pagination
@@ -157,7 +223,7 @@
             v-model="page"
             :length="queuePages"
             density="compact"
-            class="flex-1-1"
+            class="rev-pages"
           />
           <v-select
             v-model="itemsPerPage"
@@ -316,7 +382,7 @@
           v-model="nodePage"
           :length="nodePages"
           density="compact"
-          class="flex-1-1"
+          class="rev-pages"
         />
         <v-select
           v-model="nodePerPage"
@@ -368,6 +434,12 @@
  * work queue on /admin/opinie reads. Which rows are open is held here rather
  * than in the rows, so a permalink can open one.
  *
+ * The queue can also be narrowed to proposals about a live entry (`published`)
+ * and folded into one row per entry (`group=subject`), each with its proposals
+ * inside - the way to go through what is waiting on pages that are already
+ * public. A relation counts as being about the person at either end of it; see
+ * `ProposalSubject`.
+ *
  * The queue has two modes, and the difference matters. Without `?author=` the
  * endpoint can only see revisions that carry an explicit `update_automatic`
  * flag, which nothing wrote for a human change before July 2026; with it, it
@@ -385,10 +457,14 @@ import type { LocationQuery } from "vue-router";
 import { mdiCheckDecagramOutline, mdiLinkVariant } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { sameQuery } from "~/composables/queryFilters";
+import { polishCounting } from "~/composables/polish";
 import type { RevisedNode } from "~/components/revision/NodeRow.vue";
 import type { NodeType } from "~~/shared/model";
 import type { Proposal } from "~~/shared/proposals";
-import type { RevisionQueue } from "~~/server/api/revisions/queue.get";
+import type {
+  QueueGroup,
+  RevisionQueue,
+} from "~~/server/api/revisions/queue.get";
 import type { PendingEdgeRevision } from "~~/server/api/revisions/pendingEdges.get";
 
 // Narrower than the default 1200: rows are one line each, and a line much
@@ -406,6 +482,8 @@ const SECTIONS: readonly SectionId[] = ["kolejka", "powiazania", "wpisy"];
 /** Mirrors `AUTHOR_SCAN_CAP` in `/api/revisions/queue`; the module itself pulls
  * in firebase-admin, so only its type survives into the client bundle. */
 const AUTHOR_SCAN_CAP = 500;
+/** Mirrors `QUEUE_SCAN_CAP` in `server/utils/queueScan`, for the same reason. */
+const QUEUE_SCAN_CAP = 30_000;
 
 /** The page sizes both paged lists offer. `/api/nodes/revisions` takes any
  * `limit` at all, so the url is held to these rather than passed through. */
@@ -416,7 +494,7 @@ const SMALLEST_PAGE_SIZE = Math.min(...PAGE_SIZES);
 /** How many edge revisions one page holds - the endpoint's own default. */
 const EDGE_PAGE_SIZE = 25;
 
-const { isAdmin } = useAuthState();
+const { isAdmin, user } = useAuthState();
 /** `isAdmin` is undefined until the token has been read; only a definite yes
  * shows the admin sections, and only a definite answer either way lets the page
  * decide it has finished loading (see `scrollTarget`). */
@@ -548,6 +626,7 @@ function pageSizeParam(
  * stay open across a refetch that brings them back. */
 const openRows = reactive(new Set<string>());
 const queueKey = (id: string) => `kolejka:${id}`;
+const groupKey = (id: string) => `kolejka-wpis:${id}`;
 const edgeKey = (id: string) => `powiazania:${id}`;
 const nodeKey = (id: string) => `wpisy:${id}`;
 const isOpen = (key: string) => openRows.has(key);
@@ -573,10 +652,36 @@ const automatic = choiceFilter(
   "false",
   "page",
 );
+const published = choiceFilter(
+  "kolejka",
+  "published",
+  ["all", "true", "false"] as const,
+  "all",
+  "page",
+);
+/** A different grouping pages through different things, so the page goes. */
+const grouping = choiceFilter(
+  "kolejka",
+  "group",
+  ["list", "subject"] as const,
+  "list",
+  "page",
+);
 const author = computed<string | null>({
   get: () => readQuery("author"),
   set: (value) => writeQuery("kolejka", { author: value }, ["page"]),
 });
+/** Whether the reader's own proposals are left out. In the url as a switch
+ * rather than as their uid, so a link to it means the same to whoever opens
+ * it: "without mine". */
+const mine = choiceFilter(
+  "kolejka",
+  "mine",
+  ["show", "hide"] as const,
+  "show",
+  "page",
+);
+const hidesMine = computed(() => mine.value === "hide");
 /** Not a filter but a selector: it names one proposal to answer with, and the
  * endpoint returns it whether or not the current filters would have. */
 const permalinked = computed(() => readQuery("rewizja"));
@@ -597,13 +702,31 @@ const automaticOptions = [
   { title: "Wszystko", value: "all" },
 ];
 
+const publishedOptions = [
+  { title: "Wszystkie", value: "all" },
+  { title: "Opublikowane", value: "true" },
+  { title: "Nieopublikowane", value: "false" },
+];
+
+const mineOptions: { title: string; value: "show" | "hide" }[] = [
+  { title: "Wszystkie", value: "show" },
+  { title: "Bez moich", value: "hide" },
+];
+
+const groupingOptions: { title: string; value: "list" | "subject" }[] = [
+  { title: "Lista", value: "list" },
+  { title: "Według wpisu", value: "subject" },
+];
+
 const queue = ref<RevisionQueue | null>(null);
 const queuePending = ref(false);
 const queueFailed = ref(false);
 
 const queueTotal = computed(() => queue.value?.total ?? 0);
+/** What the pages count: entries when grouped, proposals otherwise. */
+const queuePaged = computed(() => queue.value?.groupTotal ?? queueTotal.value);
 const queuePages = computed(() =>
-  Math.ceil(queueTotal.value / itemsPerPage.value),
+  Math.ceil(queuePaged.value / itemsPerPage.value),
 );
 const queueCount = computed(() =>
   queue.value
@@ -621,6 +744,9 @@ const pinned = computed<Proposal | null>(() => {
   return (
     queue.value.pinned ??
     queue.value.revisions.find((row) => row.id === id) ??
+    queue.value.groups
+      ?.flatMap((group) => group.proposals)
+      .find((row) => row.id === id) ??
     null
   );
 });
@@ -629,12 +755,39 @@ const queueRows = computed(() =>
   (queue.value?.revisions ?? []).filter((row) => row.id !== pinned.value?.id),
 );
 
+/** A group's rows less the pinned one, which is on top already. */
+const groupRows = (group: QueueGroup) =>
+  group.proposals.filter((row) => row.id !== pinned.value?.id);
+
+const queueGroups = computed(() =>
+  (queue.value?.groups ?? []).filter((group) => groupRows(group).length > 0),
+);
+
+/** How much a grouped page stands for, which its rows alone do not say. */
+const groupSummary = computed(() => {
+  const groups = queue.value?.groupTotal;
+  if (groups === undefined || groups === 0) return null;
+  const proposals = polishCounting(
+    queueTotal.value,
+    "propozycja",
+    "propozycje",
+    "propozycji",
+  );
+  return `${proposals} w ${groups} ${groups === 1 ? "wpisie" : "wpisach"}`;
+});
+
 const queueQuery = computed(() => ({
   page: page.value,
   limit: itemsPerPage.value,
   status: status.value,
   automatic: automatic.value,
+  published: published.value,
+  group: grouping.value === "subject" ? "subject" : undefined,
   author: author.value || undefined,
+  // Left out by the endpoint before it pages - in its query, or off its scan
+  // when grouped or narrowed by "Strona" - rather than dropped from the page
+  // it answers, so the pages and the count are of what is left.
+  excludeAuthor: hidesMine.value ? user.value?.uid : undefined,
   revision: permalinked.value || undefined,
 }));
 
@@ -683,7 +836,18 @@ const loadQueue = async () => {
 // every change to the url, the other sections' paging included, and the queue
 // would be read again each time.
 watch(
-  [page, itemsPerPage, status, automatic, author, permalinked, admin],
+  [
+    page,
+    itemsPerPage,
+    status,
+    automatic,
+    published,
+    grouping,
+    author,
+    mine,
+    permalinked,
+    admin,
+  ],
   loadQueue,
   { immediate: true },
 );
@@ -709,18 +873,40 @@ const queueScope = computed(() => {
       : automatic.value === "true"
         ? "Zmiany dopisane przez pipeline."
         : "Wszystkie rewizje — i te od ludzi, i te z pipeline'u.";
-  return author.value
-    ? `${scope} Tylko jedna osoba, najnowsze na górze.`
-    : `${scope} Najnowsze na górze.`;
+  const pages =
+    published.value === "true"
+      ? " Tylko o wpisach, które są już opublikowane."
+      : published.value === "false"
+        ? " Tylko o wpisach, których jeszcze nikt nie opublikował."
+        : "";
+  const order = author.value
+    ? " Tylko jedna osoba, najnowsze na górze."
+    : hidesMine.value
+      ? " Bez twoich, najnowsze na górze."
+      : " Najnowsze na górze.";
+  const groups =
+    grouping.value === "subject"
+      ? " Jeden wiersz na wpis; zmiana powiązania trafia do osoby, której dotyczy."
+      : "";
+  return `${scope}${pages}${order}${groups}`;
 });
 
 /** The empty list speaks for whichever filter emptied it; the success alert
- * owns the one case worth celebrating. */
-const queueEmptyText = computed(() =>
-  status.value === "pending" && automatic.value === "false" && !author.value
-    ? "Nic nie czeka na rozpatrzenie."
-    : "Brak zmian pasujących do filtrów.",
-);
+ * owns the one case worth celebrating. With the reader's own left out, an
+ * empty list says nothing about the rest of the queue, so it only speaks for
+ * everybody else. */
+const queueEmptyText = computed(() => {
+  if (
+    status.value !== "pending" ||
+    automatic.value !== "false" ||
+    published.value !== "all" ||
+    author.value
+  )
+    return "Brak zmian pasujących do filtrów.";
+  return hidesMine.value
+    ? "Od innych osób nic nie czeka na rozpatrzenie."
+    : "Nic nie czeka na rozpatrzenie.";
+});
 
 const isEmptyDefaultQueue = computed(
   () =>
@@ -730,14 +916,20 @@ const isEmptyDefaultQueue = computed(
     queueTotal.value === 0 &&
     !pinned.value &&
     !author.value &&
+    !hidesMine.value &&
     status.value === "pending" &&
-    automatic.value === "false",
+    automatic.value === "false" &&
+    published.value === "all",
 );
 
+/** One person's everything. "Bez moich" goes with it: that list leaves
+ * everybody else out already, and the switch is not shown beside it. */
 const focusAuthor = (uid: string) =>
-  writeQuery("kolejka", { author: uid, status: "all", automatic: "all" }, [
-    "page",
-  ]);
+  writeQuery(
+    "kolejka",
+    { author: uid, status: "all", automatic: "all", mine: undefined },
+    ["page"],
+  );
 
 const notice = ref("");
 const noticeShown = ref(false);
@@ -772,13 +964,36 @@ const settle = (id: string) => {
     };
   }
   if (!queue.value) return;
+  const groups = queue.value.groups?.map((group) =>
+    group.proposals.some((row) => row.id === id)
+      ? {
+          ...group,
+          count: group.count - 1,
+          proposals: group.proposals.filter((row) => row.id !== id),
+        }
+      : group,
+  );
+  // A group goes with its last proposal. One that still has proposals the page
+  // never held has to be read again to show them.
+  const emptied = groups?.filter((group) => group.proposals.length === 0);
   queue.value = {
     ...queue.value,
     revisions: queue.value.revisions.filter((row) => row.id !== id),
+    groups: groups?.filter((group) => group.proposals.length > 0),
+    groupTotal:
+      queue.value.groupTotal === undefined
+        ? undefined
+        : Math.max(0, queue.value.groupTotal - (emptied?.length ?? 0)),
     total: Math.max(0, queue.value.total - 1),
     pinned: queue.value.pinned?.id === id ? null : queue.value.pinned,
   };
-  if (queue.value.revisions.length === 0 && queue.value.total > 0) {
+  const pageEmpty =
+    queue.value.revisions.length === 0 &&
+    (queue.value.groups?.length ?? 0) === 0;
+  if (
+    (pageEmpty && queue.value.total > 0) ||
+    emptied?.some((group) => group.count > 0)
+  ) {
     void loadQueue();
   }
 };
@@ -1142,5 +1357,19 @@ watch(
 .rev-per-page {
   width: 8rem;
   flex: none;
+}
+
+/* The page numbers get what the page-size select leaves of the line, and no
+ * more. Sized by its own content, `v-pagination` measured itself to work out
+ * how many numbers fit, found room for the ones it already had, and added more
+ * - until every page had a button: 1,828 of them, 108,000px wide, under the
+ * entry list in October 2026. The page could then scroll sideways, and the
+ * router, scrolling to the section a filter's url names, scrolled it
+ * sideways too, so every filter change threw the page against the left edge
+ * of the window. A basis and a minimum taken from the line end the loop; 14rem
+ * is what still drops the numbers onto a line of their own on a phone. */
+.rev-pages {
+  flex: 1 1 14rem;
+  min-width: 0;
 }
 </style>

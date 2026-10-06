@@ -138,6 +138,7 @@ koryta_scrape_krs_updates = "jobs.krs_bulletin:main"
 koryta_krs_register_owners = "jobs.krs_register_owners:main"
 koryta_krs_odpis = "jobs.krs_odpis:main"
 koryta_people_import = "jobs.people_import:main"
+koryta_score_import = "jobs.score_import:main"
 koryta_nightly = "jobs.nightly:main"
 set_auth_claims = "set_auth_claims:main"
 

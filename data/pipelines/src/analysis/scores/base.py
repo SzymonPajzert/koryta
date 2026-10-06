@@ -54,12 +54,14 @@ highest score now comes from whichever model has earned the right to say it.
 """
 
 import dataclasses
+import itertools
 import typing
 
 import pandas as pd
 
 from analysis.payloads.person import PeoplePayloads
 from entities.composite import PersonScore
+from scrapers.koryta.created import KorytaPeopleCreated
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.list import CompaniesKRS
 from scrapers.stores import Context, Pipeline
@@ -309,6 +311,9 @@ class PeopleScoreModel(Pipeline):
 
     people_payloads: PeoplePayloads
     people_koryta: KorytaPeople
+    #: The pages the people import created since the export: the night makes
+    #: its new hires' pages after it, and they are the people the queue is for.
+    people_created: KorytaPeopleCreated
     people_votes: KorytaVotes
     companies_krs: CompaniesKRS
 
@@ -360,6 +365,7 @@ class PeopleScoreModel(Pipeline):
     def population(self, ctx: Context) -> Population:
         people = self.people_payloads.read_or_process(ctx)
         koryta = self.people_koryta.read_or_process(ctx)
+        created = self.people_created.read_or_process(ctx)
         votes = self.people_votes.read_or_process(ctx)
         companies = self.companies_krs.read_or_process(ctx)
 
@@ -427,8 +433,23 @@ class PeopleScoreModel(Pipeline):
         names: dict[str, str] = {}
         seed_weights: dict[str, float] = {}
         shortlist: list[str] = []
-        for _, entry in koryta.iterrows():
+        # The pages created since the export after its own, so that a person
+        # one of those already stands for keeps it: a page created since for
+        # the same person is the identity lookup missing them, and taking
+        # their score away from the page people have worked on would be the
+        # wrong way round. A new page is not published and nobody has voted on
+        # it, so it is read below as a candidate.
+        pages = itertools.chain(
+            ((entry, False) for _, entry in koryta.iterrows()),
+            (
+                (entry, True)
+                for _, entry in self.created_since(koryta, created).iterrows()
+            ),
+        )
+        for entry, new_page in pages:
             key = key_of(entry)
+            if new_page and key in node_ids:
+                continue
             node_ids[key] = str(entry.get("id"))
             names[key] = str(entry.get("full_name"))
 
@@ -455,6 +476,22 @@ class PeopleScoreModel(Pipeline):
             shortlist=shortlist,
             names=names,
         )
+
+    @staticmethod
+    def created_since(koryta: pd.DataFrame, created: pd.DataFrame) -> pd.DataFrame:
+        """The pages created today that the export does not have.
+
+        One the export has was created before it was taken, and the export is
+        the one to read it from: it knows whether the page has been published
+        or voted on since.
+        """
+        if created is None or created.empty:
+            return pd.DataFrame(columns=["id", "full_name", "rejestrIo"])
+        known = set(koryta["id"].astype(str)) if "id" in koryta else set()
+        new = created[~created["id"].astype(str).isin(known)]
+        if len(new):
+            print(f"{len(new)} pages created since the export join the site's people")
+        return new
 
     @staticmethod
     def human_votes(votes: pd.DataFrame, koryta: pd.DataFrame) -> dict[str, float]:
