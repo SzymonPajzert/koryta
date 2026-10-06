@@ -14,12 +14,19 @@ does, but in one process, unattended:
     koryta_score_import                         # the night's step, after the people
     koryta_score_import --dry-run               # build them and count; write nothing
     koryta_score_import --model PeopleScoresTurnover
+    koryta_score_import --refresh KorytaPeople --refresh KorytaVotes \
+        --refresh KorytaFacts --refresh CompanyScores   # after an export by hand
 
 The models are rebuilt; everything they read is taken as it is on disk, which
-on the VM is what the night's reprocess built minutes before. By hand on a
-machine whose outputs are older, rebuild them first, as submit_scores.sh does
-(`koryta PeopleEnriched --refresh :ProcessWiki --refresh all`), or run the
-night's step on the VM: `night.sh --force --only scores`.
+on the VM is what the night's reprocess built minutes before - restored from
+the shared cache when missing, and never rebuilt because something under it
+is newer, so a run takes the minute or two the models take. `--refresh` names
+what to rebuild besides. The site's people are read through day-named outputs,
+so after a second export the same day name the four above: the models then
+rate the people that export has. By hand on a machine whose outputs are
+older, rebuild them first, as submit_scores.sh does (`koryta PeopleEnriched
+--refresh :ProcessWiki --refresh all`), or run the night's step on the VM:
+`night.sh --force --only scores`.
 
 The people they rate are the site's as the 04:00 export has them, and the pages
 the people import has created since (`scrapers.koryta.created`). The night
@@ -182,12 +189,37 @@ def one_tree(names: Sequence[str]) -> dict[str, PeopleScoreModel]:
     }
 
 
-def build_models(names: Sequence[str]) -> Built:
+def tree_names(models: Iterable[Pipeline]) -> set[str]:
+    """Every pipeline under these, themselves included."""
+    names: set[str] = set()
+    todo = list(models)
+    while todo:
+        pipeline = todo.pop()
+        if pipeline.pipeline_name in names:
+            continue
+        names.add(pipeline.pipeline_name)
+        todo.extend(pipeline.dependencies.values())
+    return names
+
+
+def refresh_policy(
+    names: Sequence[str], refresh: Sequence[str], tree: set[str]
+) -> ProcessPolicy:
+    """The models and what `--refresh` names are rebuilt; the rest of the tree
+    is held - read from disk, restored when missing - so that one source
+    rebuilt does not rebuild everything above it: `KorytaPeople` would take
+    `PeopleKorytaMerged`, `PeopleMerged` and `PeopleEnriched` with it."""
+    rebuilt = set(names) | set(refresh)
+    return ProcessPolicy(rebuilt, exclude_refresh=tree - rebuilt)
+
+
+def build_models(names: Sequence[str], refresh: Sequence[str] = ()) -> Built:
     """Each model's scores, rebuilt over what is on disk.
 
-    The models are rebuilt and nothing else is, unless it is missing. `--all`
-    is on sys.argv while they build, as `koryta <Model> --all` would have it:
-    `Extract`, under the payloads, refuses to run without a scope.
+    The models, and what `refresh` names, are rebuilt and nothing else is,
+    unless it is missing (`refresh_policy`). `--all` is on sys.argv while they
+    build, as `koryta <Model> --all` would have it: `Extract`, under the
+    payloads, refuses to run without a scope.
     """
     saved = sys.argv
     prog = saved[0] if saved else "koryta_score_import"
@@ -195,7 +227,7 @@ def build_models(names: Sequence[str]) -> Built:
     outputs: dict[str, pd.DataFrame | BaseException] = {}
     try:
         models = one_tree(names)
-        policy = ProcessPolicy(set(names))
+        policy = refresh_policy(names, refresh, tree_names(models.values()))
         resources = set().union(*(required_resources(MODELS[n]) for n in names))
         ctx, dumper = setup_context(resources, policy=policy)
         try:
@@ -291,7 +323,7 @@ class ScoreImport:
         # Before the build: a key or a grant that is missing is better found
         # in a second than after the models.
         tokens = sign_in(self.args.endpoint)
-        built = build_models(self.args.model)
+        built = build_models(self.args.model, self.args.refresh)
         self.summary.new_pages = len(built.new_pages)
         self.counts["new_pages"] = len(built.new_pages)
         self.status.progress(
@@ -360,7 +392,7 @@ class ScoreImport:
     def dry_run(self) -> int:
         """Build the models and say what each would upload; sign in to nothing,
         write nothing, report nothing."""
-        built = build_models(self.args.model)
+        built = build_models(self.args.model, self.args.refresh)
         for name, output in built.outputs.items():
             if isinstance(output, BaseException):
                 print(f"{name}: did not build: {one_line(output)}")
@@ -459,6 +491,15 @@ def parser() -> argparse.ArgumentParser:
         "Default: %(default)s.",
     )
     parser.add_argument(
+        "--refresh",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="Rebuild this pipeline as well as the models; repeatable. "
+        "Everything else they read is taken as it is on disk. After an export "
+        "taken by hand: KorytaPeople, KorytaVotes, KorytaFacts, CompanyScores.",
+    )
+    parser.add_argument(
         "--no-backup",
         action="store_true",
         help="Neither restore pipeline outputs from the shared cache nor upload "
@@ -468,10 +509,19 @@ def parser() -> argparse.ArgumentParser:
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    args = parser().parse_args(argv)
+    parse = parser()
+    args = parse.parse_args(argv)
     # In the order the models are listed, whatever order they were named in.
     asked = set(args.model or MODELS)
     args.model = [name for name in MODELS if name in asked]
+    known = tree_names(one_tree(args.model).values())
+    unknown = sorted(set(args.refresh) - known)
+    if unknown:
+        # A misspelt name would rebuild nothing, and say nothing about it.
+        parse.error(
+            f"--refresh {' '.join(unknown)}: not a pipeline the models read. "
+            f"One of: {', '.join(sorted(known))}"
+        )
     return args
 
 

@@ -2,6 +2,7 @@
 
 import json
 import sys
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -81,6 +82,7 @@ class World:
         self.objects: dict[str, bytes] = {}
         self.runs: list[RecordingRun] = []
         self.built: list[list[str]] = []
+        self.refreshed: list[list[str]] = []
 
     def run(self) -> RecordingRun:
         [run] = self.runs
@@ -95,9 +97,10 @@ class World:
 def world(monkeypatch) -> World:
     w = World()
 
-    def build_models(names):
+    def build_models(names, refresh=()):
         w.events.append("build")
         w.built.append(list(names))
+        w.refreshed.append(list(refresh))
         return job.Built({name: w.outputs[name] for name in names}, w.new_pages)
 
     def sign_in(endpoint):
@@ -323,8 +326,41 @@ def test_models_are_taken_in_the_registrys_order_whatever_order_they_are_named()
     assert job.parse_args([]).model == NAMES
 
 
+def test_refresh_is_handed_to_the_build_and_checked_against_the_tree(world):
+    job.main(["--refresh", "KorytaPeople", "--refresh", "CompanyScores"])
+
+    assert world.refreshed == [["KorytaPeople", "CompanyScores"]]
+    with pytest.raises(SystemExit):
+        job.parse_args(["--refresh", "KorytaPeple"])
+    # Not under the models it was asked for.
+    with pytest.raises(SystemExit):
+        job.parse_args(["--model", "PeopleScoresTurnover", "--refresh", "KorytaFacts"])
+
+
 # ---------------------------------------------------------------------------
 # The build
+
+
+def test_a_refreshed_source_rebuilds_only_what_was_named():
+    """Everything on disk, KorytaPeople asked for: without the hold, the export
+    reader would take PeopleKorytaMerged, PeopleMerged and PeopleEnriched -
+    the whole people chain - with it."""
+    models = job.one_tree(NAMES)
+    policy = job.refresh_policy(
+        NAMES, ["KorytaPeople", "CompanyScores"], job.tree_names(models.values())
+    )
+    ctx = SimpleNamespace(io=SimpleNamespace(get_mtime=lambda ref: 1000.0))
+
+    for model in models.values():
+        policy.decide(model, ctx)
+
+    decided = policy.execution_decisions
+    for name in [*NAMES, "KorytaPeople", "CompanyScores"]:
+        assert decided[name] == (True, "policy"), name
+    for name in ("PeopleKorytaMerged", "PeopleMerged", "PeopleEnriched", "KorytaVotes"):
+        assert decided[name] == (False, "up to date"), name
+    # Never stored, so read afresh whatever the policy says.
+    assert decided["KorytaPeopleCreated"] == (True, "missing output")
 
 
 def test_the_models_share_one_tree():
@@ -340,7 +376,10 @@ def test_the_build_puts_all_on_argv_and_keeps_going_past_a_broken_model(monkeypa
     seen: list[list[str]] = []
 
     class Model:
-        def __init__(self, output):
+        dependencies: dict = {}
+
+        def __init__(self, name, output):
+            self.pipeline_name = name
             self.output = output
 
         def read_or_process(self, ctx):
@@ -360,8 +399,8 @@ def test_the_build_puts_all_on_argv_and_keeps_going_past_a_broken_model(monkeypa
         job,
         "one_tree",
         lambda names: {
-            "PeopleScores": Model(built_ok),
-            "PeopleScoresTurnover": Model(ValueError("broken")),
+            "PeopleScores": Model("PeopleScores", built_ok),
+            "PeopleScoresTurnover": Model("PeopleScoresTurnover", ValueError("broken")),
         },
     )
     monkeypatch.setattr(
