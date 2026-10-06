@@ -73,10 +73,12 @@ def cmd_crawl(args: argparse.Namespace) -> int:
     if not args.no_repair:
         # A SIGKILL/crash leaves .part bundles behind (SIGTERM flushes them).
         # Re-wrap them before crawling so their bytes are kept, not re-fetched.
+        # Single-instance assumption: at startup no crawler is writing to this
+        # --out, so every .part is stale and can be re-wrapped.
         counts = repair_parts(
             bip_queue,
             root,
-            older_than_minutes=args.repair_older_than,
+            older_than_minutes=0,
             keep_missing=False,
         )
         if counts["repaired"] or counts["empty"] or counts["failed"]:
@@ -222,12 +224,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-repair",
         action="store_true",
         help="skip the startup re-wrap of .part bundles left by a killed run",
-    )
-    crawl.add_argument(
-        "--repair-older-than",
-        type=int,
-        default=10,
-        help="only repair .part files older than this many minutes",
     )
     crawl.set_defaults(func=cmd_crawl)
 
