@@ -1,13 +1,11 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.13.*"
 resolution-markers = [
     "sys_platform == 'win32'",
     "sys_platform == 'emscripten'",
     "sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
-
-[manifest]
 
 [[manifest.dependency-metadata]]
 name = "rapidocr-onnxruntime"
@@ -2533,9 +2531,13 @@ dependencies = [
     { name = "nbconvert" },
     { name = "networkx" },
     { name = "numpy" },
+    { name = "olefile" },
+    { name = "onnxruntime" },
+    { name = "opencv-python-headless" },
     { name = "openpyxl" },
     { name = "packaging" },
     { name = "pandas" },
+    { name = "pillow" },
     { name = "plotly" },
     { name = "pluggy" },
     { name = "preshed" },
@@ -2551,11 +2553,14 @@ dependencies = [
     { name = "pydantic-core" },
     { name = "pygments" },
     { name = "pyjwt" },
+    { name = "pymupdf" },
     { name = "pypdf" },
+    { name = "pypdfium2" },
     { name = "pytest" },
     { name = "pytest-fast-first" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
+    { name = "rapidocr-onnxruntime" },
     { name = "regex" },
     { name = "requests" },
     { name = "rich" },
@@ -2587,16 +2592,6 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
-bip-parse = [
-    { name = "olefile" },
-    { name = "onnxruntime" },
-    { name = "opencv-python-headless" },
-    { name = "pillow" },
-    { name = "pymupdf" },
-    { name = "pypdfium2" },
-    { name = "rapidocr-onnxruntime" },
-    { name = "xlrd" },
-]
 dev = [
     { name = "import-linter" },
     { name = "jupyterlab" },
@@ -2697,9 +2692,13 @@ requires-dist = [
     { name = "nbconvert", specifier = ">=7.17.1,<8.0.0" },
     { name = "networkx", specifier = "==3.6.1" },
     { name = "numpy", specifier = "==2.5.1" },
+    { name = "olefile", specifier = "==0.47" },
+    { name = "onnxruntime", specifier = "==1.30.0" },
+    { name = "opencv-python-headless", specifier = "==5.0.0.93" },
     { name = "openpyxl", specifier = ">=3.1.5,<4.0.0" },
     { name = "packaging", specifier = "==26.2" },
     { name = "pandas", specifier = ">=3.0.2,<4.0.0" },
+    { name = "pillow", specifier = "==12.3.0" },
     { name = "plotly", specifier = ">=6.9.0,<7.0.0" },
     { name = "pluggy", specifier = "==1.6.0" },
     { name = "preshed", specifier = "==3.0.13" },
@@ -2715,11 +2714,14 @@ requires-dist = [
     { name = "pydantic-core", specifier = "==2.33.2" },
     { name = "pygments", specifier = "==2.20.0" },
     { name = "pyjwt", specifier = "==2.13.0" },
+    { name = "pymupdf", specifier = "==1.28.2" },
     { name = "pypdf", specifier = ">=6.18.1,<7.0.0" },
+    { name = "pypdfium2", specifier = "==5.13.0" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-fast-first", specifier = ">=1.0.5,<2.0.0" },
     { name = "python-dotenv", specifier = "==1.2.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
+    { name = "rapidocr-onnxruntime", specifier = "==1.4.4" },
     { name = "regex", specifier = "==2026.7.19" },
     { name = "requests", specifier = "==2.34.2" },
     { name = "rich", specifier = "==15.0.0" },
@@ -2751,16 +2753,6 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-bip-parse = [
-    { name = "olefile", specifier = "==0.47" },
-    { name = "onnxruntime", specifier = "==1.30.0" },
-    { name = "opencv-python-headless", specifier = "==5.0.0.93" },
-    { name = "pillow", specifier = "==12.3.0" },
-    { name = "pymupdf", specifier = "==1.28.2" },
-    { name = "pypdfium2", specifier = "==5.13.0" },
-    { name = "rapidocr-onnxruntime", specifier = "==1.4.4" },
-    { name = "xlrd", specifier = "==2.0.2" },
-]
 dev = [
     { name = "import-linter", specifier = ">=2.11,<3.0" },
     { name = "jupyterlab", specifier = ">=4.5.6,<5.0.0" },
