@@ -18,6 +18,7 @@ STALE = "2026-10-03T02:00:04.120Z"
 GOOD = {
     "koryta_scrape_krs_free": 0,
     "koryta_krs_odpis": 0,
+    "koryta_scrape_krs_paid": 0,
     "koryta": 0,
     "koryta_people_import": 0,
     "koryta_score_import": 0,
@@ -136,6 +137,7 @@ def world(monkeypatch, tmp_path) -> World:
     monkeypatch.setattr(night, "tidy", lambda keep_days, today: (0, 0))
     monkeypatch.setenv("KORYTA_NIGHTLY_LOGS", str(tmp_path / "logs"))
     monkeypatch.setenv("KORYTA_COMPRESSOR", "/var/lib/koryta-nightly/bin/compressor")
+    monkeypatch.setenv("REJESTR_KEY", "a-key")
     monkeypatch.setattr(sys, "argv", ["koryta_nightly"])
     return w
 
@@ -152,6 +154,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "compressor",
         "koryta_scrape_krs_free",
         "koryta_krs_odpis",
+        "koryta_scrape_krs_paid",
         "koryta",
         "pytest tests",
         "pytest outputs",
@@ -227,6 +230,65 @@ def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
     # Backed up as whoever runs it, as the reprocess: the models it rebuilds
     # are tonight's newest.
     assert env.get("DISABLE_BACKUP") != "1"
+
+
+def test_rejestr_io_is_bought_for_what_the_free_sources_failed_under_a_daily_cap(
+    world,
+):
+    night.main([])
+
+    argv, env = world.command("koryta_scrape_krs_paid")
+    assert argv[argv.index("--scope") + 1] == "fallback"
+    assert argv[argv.index("--max-calls") + 1] == "50"
+    # The key goes to the job in its environment, never on its command line.
+    assert env["REJESTR_KEY"] == "a-key"
+    assert "a-key" not in argv
+
+    world.commands.clear()
+    world.objects.clear()
+    night.main(["--paid-max-calls", "120"])
+
+    argv, _ = world.command("koryta_scrape_krs_paid")
+    assert argv[argv.index("--max-calls") + 1] == "120"
+
+
+def test_without_the_rejestr_io_key_the_paid_step_is_skipped_and_holds_nothing(
+    world, monkeypatch
+):
+    monkeypatch.delenv("REJESTR_KEY")
+
+    assert night.main([]) == 0
+
+    assert "koryta_scrape_krs_paid" not in world.ran()
+    assert world.steps()["krs_paid"] == (
+        "skipped",
+        "brak klucza rejestr.io (REJESTR_KEY)",
+    )
+    assert world.steps()["people"] == ("succeeded", "")
+
+
+def test_a_cap_of_nothing_buys_nothing(world):
+    assert night.main(["--paid-max-calls", "0"]) == 0
+
+    assert "koryta_scrape_krs_paid" not in world.ran()
+    assert world.steps()["krs_paid"] == ("skipped", "limit zapytań 0")
+
+
+def test_what_the_paid_step_leaves_or_breaks_does_not_hold_the_people(world):
+    world.codes["koryta_scrape_krs_paid"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["krs_paid"] == ("partial", "zostało na następny raz")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_scrape_krs_paid"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["krs_paid"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["people"] == ("succeeded", "")
 
 
 def test_the_mirror_is_made_one_host_at_a_time(world):
@@ -377,6 +439,7 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     assert "koryta --all-pipelines" in out
     assert "koryta_people_import --scope priority --max-uploads 100" in out
     assert "koryta_score_import" in out
+    assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
 
 
 def test_past_the_stop_by_only_compress_and_tidy_run(world, monkeypatch):

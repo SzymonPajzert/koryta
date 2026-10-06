@@ -5,6 +5,7 @@
     koryta_nightly --only people      # one step; repeatable
     koryta_nightly --skip krs_odpis   # all but this one; repeatable
     koryta_nightly --max-uploads 300  # more people, once the first nights look right
+    koryta_nightly --paid-max-calls 0 # buy nothing from rejestr.io tonight
 
 The steps, in order (`STEPS`):
 
@@ -14,6 +15,11 @@ The steps, in order (`STEPS`):
     krs_free    koryta_scrape_krs_free: the bulletin, then api-krs
     krs_odpis   koryta_krs_odpis for the companies the bulletin named since
                 yesterday
+    krs_paid    koryta_scrape_krs_paid --scope fallback: rejestr.io for what the
+                free sources cannot give - the people somebody marked
+                interesting, and the companies whose odpis did not come - at
+                most --paid-max-calls a day; before the reprocess, so what it
+                buys reaches tonight's people
     reprocess   every pipeline rebuilt, as the CI nightly does, less the ones
                 whose sources change with a dump or an election rather than
                 overnight; each output backed up to the shared cache under
@@ -42,6 +48,10 @@ night; only the steps that depend on it are held:
   values) fail every night and do not hold it.
 - `scores` needs the same, and not the people: their outcome only decides
   which new pages there are to rate as well.
+
+`krs_paid` holds nothing back, and nothing holds it: the people go up with or
+without what it bought. It needs the rejestr.io key, REJESTR_KEY, which
+night.sh reads from Secret Manager, and is skipped without it.
 
 The night starts at 04:30 Warsaw, after the export and after midnight UTC, so
 the compressor - which archives up to yesterday in UTC - takes the whole
@@ -211,6 +221,7 @@ STEPS = (
     Step("export", "kopia bazy", 90),
     Step("krs_free", "KRS", 75),
     Step("krs_odpis", "odpisy", 45),
+    Step("krs_paid", "rejestr.io", 30),
     Step("reprocess", "potoki", 150),
     Step("tests", "testy", 45),
     Step("outputs", "wyniki", 20),
@@ -656,6 +667,20 @@ class Night:
         ]
         return self.judge_job(*self.process(step, argv))
 
+    def step_krs_paid(self, step: Step) -> tuple[str, str, int | None]:
+        if not self.args.paid_max_calls:
+            return SKIPPED, "limit zapytań 0", None
+        if not os.environ.get("REJESTR_KEY"):
+            return SKIPPED, "brak klucza rejestr.io (REJESTR_KEY)", None
+        argv = [
+            bin_path("koryta_scrape_krs_paid"),
+            "--scope",
+            "fallback",
+            "--max-calls",
+            str(self.args.paid_max_calls),
+        ]
+        return self.judge_job(*self.process(step, argv))
+
     def step_reprocess(self, step: Step) -> tuple[str, str, int | None]:
         code, timed_out = self.process(step, reprocess_argv())
         state, reason, code = self.judge_job(code, timed_out)
@@ -806,6 +831,8 @@ class Night:
             "krs_free": f"koryta_scrape_krs_free --max-minutes {self.args.krs_minutes}",
             "krs_odpis": "koryta_krs_odpis --graph --changed-since <yesterday> "
             f"--max {self.args.odpis_max}",
+            "krs_paid": "koryta_scrape_krs_paid --scope fallback --max-calls "
+            f"{self.args.paid_max_calls} (needs REJESTR_KEY)",
             "reprocess": "koryta " + " ".join(reprocess_argv()[1:]),
             "tests": "pytest src/tests/pipelines",
             "outputs": "pytest -m e2e src/tests/e2e",
@@ -960,6 +987,13 @@ def parser() -> argparse.ArgumentParser:
         type=positive_int,
         default=300,
         help="Odpisy pełne asked for at most. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--paid-max-calls",
+        type=positive_int,
+        default=50,
+        help="rejestr.io calls bought at most a day, at 0.05 PLN each; 0 buys "
+        "nothing. Default: %(default)s.",
     )
     parser.add_argument(
         "--export-max-age",
