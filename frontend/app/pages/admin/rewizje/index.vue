@@ -49,31 +49,6 @@
           class="rev-filter"
           data-filter="published"
         />
-        <v-btn-toggle
-          v-model="grouping"
-          mandatory
-          density="compact"
-          variant="outlined"
-          divided
-          data-queue-grouping
-        >
-          <v-btn
-            value="list"
-            size="small"
-            :prepend-icon="mdiFormatListBulleted"
-            title="Każda propozycja w osobnym wierszu"
-          >
-            Lista
-          </v-btn>
-          <v-btn
-            value="subject"
-            size="small"
-            :prepend-icon="mdiFormatListGroup"
-            title="Jeden wiersz na wpis, z propozycjami w środku"
-          >
-            Według wpisu
-          </v-btn>
-        </v-btn-toggle>
         <!-- One click to what somebody else proposed. An admin's own edits
              are filed as proposals too and wait here like anybody's, so
              without this a volunteer's suggestion sits among them. Put away
@@ -83,6 +58,14 @@
           v-if="!author"
           v-model="mine"
           :options="mineOptions"
+        />
+        <!-- How the same list is laid out, so it is picked the way "Bez
+             moich" is: one row per proposal, or one per entry with its
+             proposals inside. Last, after everything that narrows the list. -->
+        <FeedbackFilterChips
+          v-model="grouping"
+          :options="groupingOptions"
+          data-queue-grouping
         />
         <!-- No dropdown of people: there is no client-side list of uids, and
              the way in is a click from "Najaktywniejsi" on /eksploruj/statystyki
@@ -471,12 +454,7 @@
  */
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import type { LocationQuery } from "vue-router";
-import {
-  mdiCheckDecagramOutline,
-  mdiFormatListBulleted,
-  mdiFormatListGroup,
-  mdiLinkVariant,
-} from "@mdi/js";
+import { mdiCheckDecagramOutline, mdiLinkVariant } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { sameQuery } from "~/composables/queryFilters";
 import { polishCounting } from "~/composables/polish";
@@ -735,6 +713,11 @@ const mineOptions: { title: string; value: "show" | "hide" }[] = [
   { title: "Bez moich", value: "hide" },
 ];
 
+const groupingOptions: { title: string; value: "list" | "subject" }[] = [
+  { title: "Lista", value: "list" },
+  { title: "Według wpisu", value: "subject" },
+];
+
 const queue = ref<RevisionQueue | null>(null);
 const queuePending = ref(false);
 const queueFailed = ref(false);
@@ -801,8 +784,9 @@ const queueQuery = computed(() => ({
   published: published.value,
   group: grouping.value === "subject" ? "subject" : undefined,
   author: author.value || undefined,
-  // Left out by the endpoint's query rather than dropped from the page it
-  // answers, so the pages and the count are of what is left.
+  // Left out by the endpoint before it pages - in its query, or off its scan
+  // when grouped or narrowed by "Strona" - rather than dropped from the page
+  // it answers, so the pages and the count are of what is left.
   excludeAuthor: hidesMine.value ? user.value?.uid : undefined,
   revision: permalinked.value || undefined,
 }));

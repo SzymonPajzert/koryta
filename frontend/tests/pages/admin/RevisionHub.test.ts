@@ -430,6 +430,28 @@ describe("the review queue section", () => {
       ).toBe("1 propozycja");
     });
 
+    it("asks for the groups without the reader's own when they are hidden", async () => {
+      serve({ queue: grouped([group({ id: "anna" }, [anna])]) });
+      const wrapper = await mount("/?group=subject&published=true&mine=hide");
+
+      // One request carries all three: the endpoint leaves the reader out of
+      // its scan before it groups and pages.
+      expect(callsTo("/api/revisions/queue")[0]![1].query).toMatchObject({
+        group: "subject",
+        published: "true",
+        excludeAuthor: "admin-uid",
+      });
+      // Both switches are the same kind of control, side by side.
+      expect(
+        wrapper.get('#kolejka [data-filter="hide"]').attributes("aria-pressed"),
+      ).toBe("true");
+      expect(
+        wrapper
+          .get('#kolejka [data-queue-grouping] [data-filter="subject"]')
+          .attributes("aria-pressed"),
+      ).toBe("true");
+    });
+
     it("pages through entries, not proposals", async () => {
       serve({
         queue: { ...grouped([group({ id: "anna" }, [anna])]), groupTotal: 30 },

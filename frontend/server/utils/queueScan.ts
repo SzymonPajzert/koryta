@@ -23,6 +23,9 @@ export type QueuedRevision = {
   subjectId: string;
   /** Whether that entry is live. */
   published: boolean;
+  /** Who filed it, for "Bez moich" - a filter over the scan rather than a scan
+   * of its own. Null on the few written before `update_user` was. */
+  updateUser: string | null;
 };
 
 export type QueueScan = {
@@ -122,7 +125,14 @@ async function readScan(
   }
   const snapshot = await query
     .orderBy("update_time", "desc")
-    .select("node_id", "nodeId", "collection", "data.source", "data.target")
+    .select(
+      "node_id",
+      "nodeId",
+      "collection",
+      "data.source",
+      "data.target",
+      "update_user",
+    )
     .limit(QUEUE_SCAN_CAP)
     .get();
 
@@ -135,6 +145,7 @@ async function readScan(
       targetId: targetIdOf(doc) ?? "",
       source: idField(proposed.source),
       target: idField(proposed.target),
+      updateUser: idField(data.update_user) ?? null,
     };
   });
 
@@ -197,18 +208,20 @@ async function readScan(
   };
 
   const rows = revisions.map((row): QueuedRevision => {
+    const { id, updateUser } = row;
     if (row.collection === "nodes") {
       const data = nodes.get(row.targetId);
       return {
-        id: row.id,
+        id,
         subjectId: row.targetId,
         published: data ? pageIsPublic(data) : false,
+        updateUser,
       };
     }
     const subject = relationSubject(end(row.source), end(row.target));
     return subject
-      ? { id: row.id, subjectId: subject.id, published: subject.published }
-      : { id: row.id, subjectId: row.targetId, published: false };
+      ? { id, subjectId: subject.id, published: subject.published, updateUser }
+      : { id, subjectId: row.targetId, published: false, updateUser };
   });
 
   return { rows, truncated: snapshot.size >= QUEUE_SCAN_CAP };

@@ -932,7 +932,8 @@ describe("api/revisions/queue", () => {
       expect(ids(result.revisions)).toEqual(["live-relation", "live-old"]);
       expect(result.total).toBe(2);
       // The same two clauses as the plain queue, read whole and masked to what
-      // names a target - nothing about the target can go in the query.
+      // names a target, and who filed it for "Bez moich" - nothing about the
+      // target can go in the query.
       expect(mockWhere).toHaveBeenCalledWith("update_automatic", "==", false);
       expect(mockWhere).toHaveBeenCalledWith("status", "==", "pending");
       expect(mockOffset).not.toHaveBeenCalled();
@@ -942,6 +943,7 @@ describe("api/revisions/queue", () => {
         "collection",
         "data.source",
         "data.target",
+        "update_user",
       );
       expect(result.flagOnly).toBe(true);
     });
@@ -1025,6 +1027,46 @@ describe("api/revisions/queue", () => {
         "live-old",
       ]);
       expect(mockSelect).not.toHaveBeenCalled();
+    });
+
+    it("leaves one person out of the scan in memory - no clause, no index", async () => {
+      // "Bez moich" beside the grouping: the reviewer's own edit on Barbara's
+      // page, and an old revision that names nobody, which the plain queue's
+      // `!=` leaves out as well.
+      addRevision("mine-live", {
+        node_id: "live",
+        update_user: "admin-uid",
+        update_time: "2026-08-06T09:00:00.000Z",
+      });
+      addRevision("nobodys", {
+        node_id: "draft",
+        update_user: undefined,
+        update_time: "2026-08-07T09:00:00.000Z",
+      });
+
+      const result = await call({
+        group: "subject",
+        excludeAuthor: "admin-uid",
+      });
+
+      expect(mockWhere).not.toHaveBeenCalledWith(
+        "update_user",
+        "!=",
+        "admin-uid",
+      );
+      expect(result.total).toBe(4);
+      expect(
+        result.groups!.map((group) => [group.subject.id, group.count]),
+      ).toEqual([
+        ["draft", 2],
+        ["live", 2],
+      ]);
+
+      // Back in with the switch off, from the scan already held.
+      const scans = mockSelect.mock.calls.length;
+      const everybody = await call({ group: "subject" });
+      expect(mockSelect.mock.calls.length).toBe(scans);
+      expect(everybody.total).toBe(6);
     });
 
     it("answers a permalink that is inside one of the groups as already there", async () => {
