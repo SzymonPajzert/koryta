@@ -10,7 +10,7 @@
 1. Writes every answer to the crawl bucket - an empty object where there was none
 1. Writes a run summary to the shared cache (`jobs/krs_scrape_free/runs/`)
 
-Runs nightly on Cloud Run, between midnight and the Firestore export - see [CLOUD_RUN.md](CLOUD_RUN.md).
+Runs nightly as a step of the night on the koryta-nightly VM, after the 04:00 Firestore export - see [data/nightly/README.md](../../../nightly/README.md).
 
 ## krs_scrape_paid
 1. Reads which KRS numbers need to be updated
@@ -38,9 +38,16 @@ Then `KrsOdpisSeats` and `KrsOdpisEntries` read the PDFs into dated seats and ea
 the company history `krs_scrape_paid` buys from rejestr.io - and `PeopleKRSCombined` puts the seats in place of
 rejestr.io's for every company where the odpis is the newer of the two, on the way to `PeopleMerged`.
 
+## nightly
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_odpis`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, and `people_import --scope priority --max-uploads 100`
+1. A step that fails holds only the steps that depend on it; the people wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
+1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
+
+Started by a systemd timer on the VM at 04:30, after the export - see [data/nightly/README.md](../../../nightly/README.md).
+
 ## people_import
 1. Rebuilds the people from the newest crawl and this morning's export: `PeopleKRS` (rejestr.io), `KrsOdpisSeats` and `KrsOdpisEntries` (the odpisy), `CompaniesKRS`, `KorytaPeople`, and every pipeline between them and the payloads (`DEFAULT_REFRESH` says why each; `--refresh` names others in their place)
-1. Builds the payloads `koryta PeoplePayloads --all --on-koryta --only-changed` would print - the people the site has whose page would change; `--scope not-on-koryta` the people it has not
+1. Builds the payloads `koryta PeoplePayloads --all --on-koryta --only-changed` would print - the people the site has whose page would change; `--scope not-on-koryta` the people it has not; `--scope priority` both, ordered for a capped run: new hires at public companies first, then published pages, then the rest, leaving out what it sent unchanged in the last 30 days
 1. Writes them to the shared cache as one write-once part (`jobs/people_import/payloads/date=<day>/<run>.jsonl.gz`), so what any day sent can be read back without diffing two exports
 1. Sends them to `/api/ingest/person` one by one, at the uploader's pace, first creating any company a person names that the site has no page for
 1. Writes a run summary to the shared cache (`jobs/people_import/runs/`)

@@ -275,9 +275,19 @@ API_KRS_METHODS = (
 def _read_json(ctx: Context, blob_ref: DownloadableFile):
     """A stored response as parsed JSON, or None if there is nothing to read."""
     try:
-        content = ctx.io.read_data(blob_ref).read_string()
+        opened = ctx.io.read_data(blob_ref)
     except Exception as e:
         print(f"Could not read {blob_ref.url}: {e}")
+        return None
+    return _file_json(blob_ref.url, opened)
+
+
+def _file_json(url: str, opened: typing.Any):
+    """The JSON in an opened file, or None if there is nothing to read."""
+    try:
+        content = opened.read_string()
+    except Exception as e:
+        print(f"Could not read {url}: {e}")
         return None
     if not content:
         return None
@@ -362,18 +372,40 @@ class KRSAlreadyScraped(Pipeline):
         reference whose size is unknown is opened too - unknown is not small,
         but it is not big either, and only a listing that carries sizes can
         say which.
+
+        Read in bulk, through `read_many`: it serves what the compressed mirror
+        holds from the archive and fetches only the newer objects, 32 at a
+        time. One `read_data` each was 14,439 GETs in a row - 25 minutes - on
+        the nightly VM's first night, whose download cache was empty. Whatever
+        the bulk read does not hand over is still read one by one, so a
+        failure there costs time, never a 404.
         """
-        candidates = [
-            (scraped, ref)
+        candidates = {
+            ref.url: (scraped, ref)
             for scraped, ref in newest.values()
             if ref.size is None or ref.size <= NOT_FOUND_SIZE_BOUND
-        ]
-        for scraped, ref in tqdm(candidates, desc="Reading the short api-krs bodies"):
-            scraped.not_found = is_not_found(_read_json(ctx, ref))
-        settled = sum(scraped.not_found for scraped, _ in candidates)
+        }
+        left = dict(candidates)
+        if candidates:
+            listing = CloudStorage(prefix="hostname=api-krs.ms.gov.pl")
+            try:
+                for url, data in tqdm(
+                    ctx.io.read_many(listing), desc="Reading api-krs for its 404s"
+                ):
+                    if (found := left.pop(url, None)) is not None:
+                        found[0].not_found = is_not_found(_file_json(url, data))
+            except Exception as e:
+                print(f"Reading api-krs in bulk failed, the rest one by one: {e}")
+        if left:
+            for scraped, ref in tqdm(
+                left.values(), desc="Reading the short api-krs bodies one by one"
+            ):
+                scraped.not_found = is_not_found(_read_json(ctx, ref))
+        settled = sum(scraped.not_found for scraped, _ in candidates.values())
         print(
             f"Registers that answered 404: {settled} "
-            f"(read {len(candidates)} of {len(newest)} newest responses)"
+            f"(read {len(candidates)} of {len(newest)} newest responses, "
+            f"{len(left)} of them one by one)"
         )
 
     def latest_scrapes(self, ctx: Context):

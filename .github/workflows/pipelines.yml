@@ -223,6 +223,16 @@ jobs:
               # it says so and takes rejestr.io's people alone.
               KrsOdpisEntries
               KrsOdpisSeats
+              # Writes nothing - it prints how koryta.pl exports differ - and
+              # reads every export ever taken: 65 minutes and over 16 GB for
+              # the people alone on the nightly VM (data/nightly).
+              KorytaDiffer
+              # The article branch's domain->region map, copied from a
+              # gitignored files/domain_to_region.json no runner has. Only
+              # ArticlePersonMentions, out with the branch above, reads it.
+              # Until koryta decided every selected pipeline's tree it was
+              # never really run here; now it would fail the job.
+              DomainToRegion
             )
             selection="--all-pipelines"
             for pipeline in "${excluded[@]}"; do

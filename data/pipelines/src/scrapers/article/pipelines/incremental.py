@@ -86,8 +86,7 @@ class IncrementalJsonlPipeline(Pipeline[T]):
         if self._cached_result is not None:
             return self._cached_result
 
-        if not ctx.refresh_policy.tree_printed:
-            ctx.refresh_policy.build_and_print_tree(self, ctx)
+        ctx.refresh_policy.decide(self, ctx)
 
         if not self.should_refresh_with_logic(ctx):
             # Avoid loading multi-GB output into pandas just to report success.

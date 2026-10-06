@@ -40,6 +40,53 @@ def test_a_joint_list_counts_as_both_parties():
 
 
 @pytest.mark.parametrize(
+    ("committee", "expected"),
+    [
+        ("KOMITET WYBORCZY WYBORCÓW PLATFORMA OBYWATELSKA", ["PO"]),
+        ('KOMITET WYBORCZY "PRAWO I SPRAWIEDLIWOŚĆ"', ["PiS"]),
+        ("POLSKIE STRONNICTWO LUDOWE", ["PSL"]),
+        ("SOJUSZ LEWICY DEMOKRATYCZNEJ", ["SLD"]),
+        ("KOALICYJNY KOMITET WYBORCZY LEWICA I DEMOKRACI SLD+SDPL+PD+UP", ["SLD"]),
+        (
+            "KOALICYJNY KOMITET WYBORCZY ZJEDNOCZONA LEWICA SLD+TR+PPS+UP+ZIELONI",
+            ["SLD"],
+        ),
+        ("KOMITET WYBORCZY PARTIA RAZEM", ["Razem"]),
+        ("KOMITET WYBORCZY NOWOCZESNA RYSZARDA PETRU", ["Nowoczesna"]),
+        ("KOMITET WYBORCZY BEZPARTYJNI SAMORZĄDOWCY", ["Bezpartyjni Samorządowcy"]),
+    ],
+)
+def test_the_older_lists_of_the_same_parties_are_recognised(committee, expected):
+    """The 2001, 2007 and 2015 Sejm lists, and the ones before 1998 that were
+    named after the party alone."""
+    assert parties_of_committee(committee) == expected
+
+
+@pytest.mark.parametrize(
+    ("committee", "expected"),
+    [
+        (
+            "KOALICYJNY KW PLATFORMA OBYWATELSKA - PRAWO I SPRAWIEDLIWOŚĆ",
+            ["PO", "PiS"],
+        ),
+        (
+            "KWW KONFEDERACJA I BEZPARTYJNI SAMORZĄDOWCY",
+            ["Konfederacja", "Bezpartyjni Samorządowcy"],
+        ),
+    ],
+)
+def test_other_joint_lists_count_as_both_parties(committee, expected):
+    assert parties_of_committee(committee) == expected
+
+
+def test_a_separate_party_with_a_similar_name_gets_no_party():
+    """PSL-Porozumienie Ludowe was its own party, which ran against PSL in 1993."""
+    assert (
+        parties_of_committee("POLSKIE STRONNICTWO LUDOWE - POROZUMIENIE LUDOWE") == []
+    )
+
+
+@pytest.mark.parametrize(
     "committee",
     [
         "komitet wyborczy prawo i sprawiedliwość",
@@ -63,6 +110,9 @@ def test_case_and_spacing_do_not_matter(committee):
         " DLA POMORZA",
         "KOMITET WYBORCZY WYBORCÓW RAZEM DLA GMINY OPATÓWEK",
         "KOMITET WYBORCZY WYBORCÓW WSPÓLNY KALISZ",
+        # Gmina and powiat lists only, never a sejmik one, in 2024.
+        "KWW PSL TRZECIA DROGA",
+        "KWW KO TRZECIA DROGA LUBUSKIE",
     ],
 )
 def test_a_local_committee_borrowing_a_name_gets_no_party(committee):

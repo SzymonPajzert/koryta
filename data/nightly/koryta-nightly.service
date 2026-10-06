@@ -1,0 +1,34 @@
+# The night run on the koryta-nightly VM, started by koryta-nightly.timer at
+# 04:30 Warsaw. The instance schedule boots the VM at 04:15 for it; when the
+# night is over, ExecStopPost powers the VM off again, whatever the run ended
+# with.
+#
+# Installed by setup-vm.sh. After changing this file run setup-vm.sh again
+# (or copy it to /etc/systemd/system and `systemctl daemon-reload`): systemd
+# reads its own copy, not the checkout's.
+
+[Unit]
+Description=koryta nightly: KRS scrape, reprocess, invariants, people upload, mirror
+Documentation=https://github.com/SzymonPajzert/koryta/blob/main/data/nightly/README.md
+Wants=network-online.target
+After=network-online.target google-guest-agent.service
+
+[Service]
+Type=oneshot
+User=koryta
+Group=koryta
+EnvironmentFile=/etc/koryta/nightly.env
+# /var/lib/koryta-nightly: the lock, the logs, the compressor binary, the
+# poweroff request. Owned by koryta, kept across boots.
+StateDirectory=koryta-nightly
+ExecStart=/home/koryta/koryta/data/nightly/night.sh
+# Root ("+"), since powering off needs it. Runs after ExecStart however that
+# ended, and powers off only when night.sh asked it to (a night run).
+ExecStopPost=+/home/koryta/koryta/data/nightly/poweroff.sh
+# koryta_nightly stops its own steps long before this. This is for a hang the
+# steps' timeouts cannot see; the instance schedule's 09:00 stop is the last line.
+TimeoutStartSec=4h
+# A stop - the schedule's, or a shutdown - reaches every step. The KRS scrape
+# and the people import finish the item in hand on SIGTERM and write their
+# summaries; give them the time to.
+TimeoutStopSec=120

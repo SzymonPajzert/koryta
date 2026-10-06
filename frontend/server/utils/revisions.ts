@@ -599,7 +599,7 @@ export function proposeRevisionTransaction(
   // applied revision is history and each one is its own record; a proposal is a
   // standing offer, and the pipeline restates it on every run until somebody
   // acts on it. With a fresh id each time, the unrecognised committees - the
-  // majority, since `committee_to_party` names about twenty-five - would add a
+  // majority, since `committee_to_party` names about sixty - would add a
   // revision per candidacy per night, forever.
   const revisionRef = db
     .collection("revisions")
