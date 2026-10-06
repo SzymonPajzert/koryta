@@ -14,6 +14,15 @@ does - but in one process, unattended, and with guardrails a pipe has not got:
     koryta_people_import --dry-run         # build and count them; send nothing
     koryta_people_import --scope not-on-koryta --max-new 50
     koryta_people_import --scope priority --max-uploads 100   # the nightly VM
+    koryta_people_import --request <run id>   # what a page's button asked for
+
+`--request` is a run the datascience group asked for from a company's or a
+person's page on the site (`stores.job_requests`): the company's people, or the
+person, built as the other scopes build them and kept to the same guards
+(`analysis.payloads.target`). It reports as `people_request`, under the id of
+the run the site queued, so the link the site handed out follows it to its end.
+A company's run creates pages for the company's people the site lacks, and
+only those; a person's run creates none.
 
 `--scope priority` builds both halves at once and sends, up to the cap, the
 new hires the site lacks first, then the published pages that would change,
@@ -73,17 +82,21 @@ from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
 from analysis.payloads.priority import NEW_HIRE, TIERS
+from analysis.payloads.target import NEW, PageTarget
 from jobs.people_import.payloads import (
     PRIORITY,
+    REQUEST,
     SCOPES,
     Candidate,
     build_payloads,
     build_priority,
+    build_targeted,
     pipeline_names,
 )
 from scrapers.koryta.created import SENT_LOG
 from scrapers.stores import ProcessPolicy
 from stores.config import pesel_salt
+from stores.job_requests import PEOPLE_REQUEST, Request, read_request
 from stores.job_runs import ERROR_CHARS, ERRORS_KEPT, FinalState, JobRun
 from stores.koryta_login import TokenSource, token_source
 from stores.storage import SHARED_BUCKET, Client, warsaw_tz
@@ -128,6 +141,11 @@ STOP_SIGTERM = "SIGTERM"
 STOP_INTERRUPTED = "przerwany"
 STOP_DRY_RUN = "próba - nic nie wysłano"
 STOP_NOT_WRITTEN = "nie zapisano paczek"
+STOP_UP_TO_DATE = "nic do wysłania - strona ma już te dane"
+
+#: The tiers whose people the run is meant to create pages for. A page
+#: created for anybody else is the identity lookup missing somebody.
+CREATING = (NEW_HIRE, NEW)
 
 #: Rebuilt on every run, whatever is on disk or in the shared cache, so that
 #: the payloads are made from the newest crawl and this morning's export.
@@ -219,6 +237,11 @@ class RunSummary:
     already_sent: int = 0
     #: A priority run: the gs:// path of what it took (`SENT_PREFIX`).
     sent: str = ""
+    #: A run asked for on a page: which page, and what of its people it left.
+    target: str = ""
+    matched: int = 0
+    up_to_date: int = 0
+    left_out: int = 0
 
 
 @dataclass
@@ -420,20 +443,41 @@ class PeopleImport:
     ):
         self.args = args
         self.should_stop = should_stop
+        asked: str | None = getattr(args, "request", None)
         self.summary = RunSummary(
-            run=uuid7str(), started=now(), scope=args.scope, endpoint=args.endpoint
+            run=asked or uuid7str(),
+            started=now(),
+            scope=args.scope,
+            endpoint=args.endpoint,
         )
         # Under the summary's id, so the page's run and what the run left in
-        # the shared cache are found from each other.
-        self.status = JobRun(JOB, run_id=self.summary.run, unit=UNIT)
+        # the shared cache are found from each other. A run asked for on the
+        # site goes on in the document the site queued, which holds the
+        # request and is the one its link names.
+        self.status = (
+            JobRun(
+                PEOPLE_REQUEST, run_id=asked, trigger="request", adopt=True, unit=UNIT
+            )
+            if asked
+            else JobRun(JOB, run_id=self.summary.run, unit=UNIT)
+        )
         self.uploader: PersonUploader | None = None
         self.ending = Ending()
         self._client: Client | None = None
-        #: A priority run: each payload's tier, in sending order.
+        #: A priority run, or one asked for: each payload's tier, in sending order.
         self.tiers: list[str] | None = None
-        #: A priority run: what the site took - payload, tier, outcome, and
-        #: the page it filed the person under.
+        #: A priority run, or one asked for: what the site took - payload,
+        #: tier, outcome, and the page it filed the person under.
         self.taken: list[tuple[dict, str, str, str | None]] = []
+        #: A run asked for on a page: what was asked, once read.
+        self.request: Request | None = None
+        #: ...and what of the page's people it found and left, for the page.
+        self.request_counts: dict[str, int] = {}
+
+    @property
+    def dry(self) -> bool:
+        """Sends nothing: --dry-run, or a request for a count alone."""
+        return bool(self.args.dry_run or (self.request and self.request.dry_run))
 
     def run(self) -> int:
         self.status.start(phase=PHASE_BUILD)
@@ -452,8 +496,14 @@ class PeopleImport:
 
     def attempt(self) -> int:
         args = self.args
-        tokens = None if args.dry_run else sign_in(args.endpoint)
-        if args.scope == PRIORITY:
+        if args.request:
+            self.request = read_request(args.request)
+            self.summary.target = self.request.describe()
+            print(f"Asked for on the site: {self.summary.target}")
+        tokens = None if self.dry else sign_in(args.endpoint)
+        if self.request is not None:
+            payloads = self.plan_request(self.request)
+        elif args.scope == PRIORITY:
             payloads = self.plan()
         else:
             payloads = build_payloads(
@@ -463,11 +513,20 @@ class PeopleImport:
         self.status.progress(
             0,
             total=len(payloads),
-            counters={"planned": len(payloads)} if args.dry_run else self.counters(),
+            counters=(
+                {"planned": len(payloads), **self.request_counts}
+                if self.dry
+                else self.counters()
+            ),
             force=True,
         )
         if tokens is None:  # A dry run, which signed in to nothing.
             return self.dry_run(payloads)
+        if self.request is not None and not payloads:
+            # Nothing the page lacks. Said, rather than left as a success with
+            # no reason, which on the page reads as a run that did nothing.
+            self.summary.stopped = self.summary.stopped or STOP_UP_TO_DATE
+            return self.end("succeeded", 0)
         if payloads:
             try:
                 self.summary.payloads = self.write_payloads(payloads)
@@ -514,6 +573,44 @@ class PeopleImport:
         )
         return [candidate.payload for candidate in planned]
 
+    def plan_request(self, request: Request) -> list[dict]:
+        """A page's people, in sending order: the pages that would change,
+        then the people the site lacks - a company's, never a person's."""
+        target = PageTarget(
+            kind=request.target,
+            node_id=request.node_id,
+            name=request.name,
+            krs=request.krs,
+            register=request.register_number,
+        )
+        candidates, targeted = build_targeted(
+            target, self.args.koryta_date, refresh_policy(self.args.refresh)
+        )
+        self.tiers = [candidate.tier for candidate in candidates]
+        # The people it was asked to add are exactly the pages it may create;
+        # one more is somebody whose page the export has and the ingest missed.
+        self.args.max_new = len(targeted.new)
+        summary = self.summary
+        summary.matched = targeted.matched
+        summary.up_to_date = targeted.up_to_date
+        summary.left_out = targeted.left_out
+        summary.tiers = dict(Counter(self.tiers))
+        self.request_counts = {
+            "matched": targeted.matched,
+            "to_change": len(targeted.changed),
+            "to_create": len(targeted.new),
+            "up_to_date": targeted.up_to_date,
+            "left_out": targeted.left_out,
+        }
+        if targeted.reason:
+            summary.stopped = targeted.reason
+        print(
+            f"Planned for {request.describe()}: {len(targeted.changed)} to change, "
+            f"{len(targeted.new)} to create; {targeted.up_to_date} up to date, "
+            f"{targeted.left_out} left out"
+        )
+        return [candidate.payload for candidate in candidates]
+
     def dry_run(self, payloads: list[dict]) -> int:
         names = ", ".join(str(payload.get("name")) for payload in payloads[:3])
         more = ", ..." if len(payloads) > 3 else ""
@@ -521,17 +618,20 @@ class PeopleImport:
             f"Dry run: {len(payloads):,} people would be sent to "
             f"{self.args.endpoint}" + (f": {names}{more}" if payloads else "")
         )
-        if self.tiers is not None:
+        if self.tiers is not None and self.request is None:
             sent = min(len(payloads), self.args.max_uploads)
             first = Counter(self.tiers[:sent])
             print(
                 f"The first {sent} (--max-uploads) by tier: "
                 f"{ {tier: first.get(tier, 0) for tier in TIERS} }"
             )
+        reason = STOP_DRY_RUN
+        if self.request is not None and self.summary.stopped:
+            reason = f"{STOP_DRY_RUN}; {self.summary.stopped}"
         self.status.finish(
             "succeeded",
-            stop_reason=STOP_DRY_RUN,
-            counters={"planned": len(payloads)},
+            stop_reason=reason,
+            counters={"planned": len(payloads), **self.request_counts},
             exit_code=0,
             done=0,
         )
@@ -564,7 +664,7 @@ class PeopleImport:
                         self.taken.append(
                             (payload, tier, result.outcome, result.person_id)
                         )
-                    if result.outcome == "created" and tier != NEW_HIRE:
+                    if result.outcome == "created" and tier not in CREATING:
                         # Planned onto a page the export has, so a page made
                         # for it is the identity lookup missing somebody.
                         reason = (
@@ -601,12 +701,12 @@ class PeopleImport:
             if self.uploader is not None
             else dict.fromkeys(PERSON_COUNTERS, 0)
         )
-        return {"planned": self.summary.planned, **sent}
+        return {"planned": self.summary.planned, **self.request_counts, **sent}
 
     def end(self, state: FinalState, code: int, crash: str | None = None) -> int:
         """Write the run's summary and tell the page how the run ended."""
         summary = self.summary
-        if self.taken and not self.args.dry_run:
+        if self.taken and not self.dry:
             summary.sent = self.write_sent()
         summary.state = state
         summary.exit_code = code
@@ -617,7 +717,7 @@ class PeopleImport:
             # errors as the page keeps, and last it would be cut.
             errors = [crash, *errors]
         summary.errors = errors[:ERRORS_KEPT]
-        path = "" if self.args.dry_run else self.write_summary()
+        path = "" if self.dry else self.write_summary()
         self.status.finish(
             state,
             stop_reason=summary.stopped or None,
@@ -734,6 +834,14 @@ def parser() -> argparse.ArgumentParser:
         "(analysis.payloads.priority).",
     )
     parser.add_argument(
+        "--request",
+        metavar="RUN_ID",
+        help="Do what the site was asked on a page: the company's people, or "
+        "the person, of the queued run RUN_ID (koryta_job_requests starts "
+        "these). In place of --scope; the run may create pages only for the "
+        "company's people the site lacks.",
+    )
+    parser.add_argument(
         "--recent-days",
         type=non_negative_int,
         default=30,
@@ -815,6 +923,10 @@ def parser() -> argparse.ArgumentParser:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parse = parser()
     args = parse.parse_args(argv)
+    if args.request:
+        # The page decides who: `plan_request` sets --max-new to the people
+        # it was asked to add, once it knows them.
+        args.scope = REQUEST
     if args.max_new is None:
         args.max_new = args.max_uploads if args.scope == PRIORITY else 0
     if args.scope == "not-on-koryta" and args.max_new <= 0:
