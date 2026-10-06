@@ -5,7 +5,8 @@ they do not say: which companies a run asked about and why, which came back,
 which were not in either register, which the gateway or the network ate, and
 how long each took. One gzipped jsonl part per `FLUSH_EVERY` attempts, written
 once and never rewritten, under `RUN_LOG` -- the layout `krs_register_owners`
-keeps its answers in.
+keeps its answers in. `KrsOdpisAttempts` folds it back into each company's
+newest attempt, which is how the paid job knows where the free odpis failed.
 """
 
 import gzip
@@ -15,11 +16,8 @@ from dataclasses import asdict
 from datetime import datetime
 
 from jobs.krs_odpis.crawl import Outcome
-from scrapers.stores import CloudStorage
+from scrapers.krs.odpis_attempts import RUN_LOG
 from stores.storage import warsaw_tz
-
-RUN_BUCKET = "koryta-pl-sharedcache"
-RUN_LOG = CloudStorage(prefix="jobs/krs_odpis/runs/", bucket=RUN_BUCKET, binary=True)
 
 #: Attempts per part: ~1,000 is about half an hour at the polite pace, which is
 #: the most a hard kill can lose.
