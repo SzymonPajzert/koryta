@@ -10,8 +10,10 @@
  * Talking to Cloud Tasks over its REST API rather than through
  * `@google-cloud/tasks` keeps a 40 MB dependency out of the frontend for what
  * is one POST; the access token comes from the metadata server the same way the
- * library would get it.
+ * library would get it (`metadataAccessToken`). Locally there is no metadata
+ * server, which is exactly why `direct` mode exists.
  */
+import { metadataAccessToken } from "~~/server/utils/metadataToken";
 
 export type ExtractorJob = {
   pageId: string;
@@ -50,19 +52,6 @@ function extractorConfig(): ExtractorConfig {
     project: String(config.gcpProject || ""),
     serviceAccount: String(config.extractorServiceAccount || ""),
   };
-}
-
-/** An access token for this instance's own service account.
- *
- * Only reachable on Cloud Run; locally there is no metadata server, which is
- * exactly why `direct` mode exists.
- */
-async function metadataAccessToken(): Promise<string> {
-  const response = await $fetch<{ access_token: string }>(
-    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
-    { headers: { "Metadata-Flavor": "Google" } },
-  );
-  return response.access_token;
 }
 
 async function enqueueTask(

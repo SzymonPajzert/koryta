@@ -332,6 +332,7 @@ describe("/admin/procesy", () => {
       "company_import",
       "score_import",
       "extraction_import",
+      "people_request",
     ]);
     expect(jobsIn("scheduled")).toEqual([
       "nightly",
@@ -369,6 +370,7 @@ describe("/admin/procesy", () => {
       // Registered, and nothing in the overview for them.
       score_import: "never",
       extraction_import: "never",
+      people_request: "never",
       krs_odpis: "never",
       krs_register_owners: "never",
       nightly: "never",
@@ -407,7 +409,7 @@ describe("/admin/procesy", () => {
         .join(" ");
     expect(stat("running")).toBe("1 w toku");
     expect(stat("ok")).toBe("3 działa");
-    expect(stat("never")).toBe("7 brak raportów");
+    expect(stat("never")).toBe("8 brak raportów");
     // Only the counts that happen to be non-zero beyond the three always shown.
     expect(page.find('[data-stat="stopped"]').exists()).toBe(false);
     expect(page.find('[data-stat="partial"]').exists()).toBe(false);
@@ -726,7 +728,7 @@ describe("/admin/procesy", () => {
     expect(page.text()).toContain(
       "Nie udało się odświeżyć procesów: serwer nie odpowiedział w 30 s",
     );
-    expect(page.findAll("[data-job]")).toHaveLength(14);
+    expect(page.findAll("[data-job]")).toHaveLength(15);
 
     await vi.advanceTimersByTimeAsync(60_000);
     await flushPromises();
@@ -740,7 +742,7 @@ describe("/admin/procesy", () => {
     await page.get("[data-jobs-refresh]").trigger("click");
     await flushPromises();
     expect(page.text()).toContain("Nie udało się odświeżyć procesów: offline");
-    expect(page.findAll("[data-job]")).toHaveLength(14);
+    expect(page.findAll("[data-job]")).toHaveLength(15);
   });
 
   it("says so when the first load fails", async () => {
@@ -748,5 +750,212 @@ describe("/admin/procesy", () => {
     const page = await mountPage();
     expect(page.text()).toContain("Nie udało się wczytać procesów: 403");
     expect(page.find("[data-job]").exists()).toBe(false);
+  });
+});
+
+describe("/admin/procesy#przebieg-<id>", () => {
+  /** A company's people, asked for on its page and still waiting. */
+  const asked = (): JobRun =>
+    run({
+      id: "r-asked",
+      job: "people_request",
+      state: "queued",
+      trigger: "request",
+      startedAt: "2026-10-02T09:58:00.000Z",
+      heartbeatAt: "2026-10-02T09:58:00.000Z",
+      title: "Wodociągi Miejskie",
+      link: "/instytucja/wodociagi-miejskie-place1",
+      request: {
+        target: "company",
+        nodeId: "place1",
+        name: "Wodociągi Miejskie",
+        krs: "0000000001",
+        rejestrIo: null,
+        dryRun: false,
+        by: "analyst",
+        byName: "Ania",
+        at: "2026-10-02T09:58:00.000Z",
+      },
+      dispatch: {
+        mode: "vm",
+        at: "2026-10-02T09:58:01.000Z",
+        ok: true,
+        error: null,
+      },
+    });
+
+  const withAsked = (): JobsOverview => {
+    const data = overview();
+    data.jobs.push({ id: "people_request", record: null, runs: [asked()] });
+    return data;
+  };
+
+  /** The overview, and one run for its link. */
+  function answer(single: JobRun | Error) {
+    mockAuthRequest.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/ops/jobs/runs/")) {
+        if (single instanceof Error) throw single;
+        return { run: single };
+      }
+      return withAsked();
+    });
+  }
+
+  /** The test router starts at "/". Pushing another path with a hash waits
+   * for Nuxt's scroll hook, which no component test fires, so the hash is
+   * given on the same path - the page reads the hash alone. */
+  async function mountAt(hash: string) {
+    wrapper = await mountSuspended(ProcesyPage, {
+      route: { path: "/", hash },
+    });
+    await flushPromises();
+    return wrapper;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.setSystemTime(NOW);
+    visibility = "visible";
+    viewer.owner = true;
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => visibility,
+    });
+  });
+
+  afterEach(() => {
+    wrapper?.unmount();
+    wrapper = null;
+    vi.useRealTimers();
+    Reflect.deleteProperty(document, "visibilityState");
+  });
+
+  it("puts the run a link names on top, and marks it in its job's open row", async () => {
+    answer(asked());
+    const page = await mountAt("#przebieg-r-asked");
+
+    expect(mockAuthRequest).toHaveBeenCalledWith("/api/ops/jobs/runs/r-asked", {
+      method: "GET",
+    });
+    const card = page.get("[data-focus-run]");
+    expect(card.attributes("data-run-state")).toBe("queued");
+    expect(card.get("[data-focus-title]").text()).toBe("Wodociągi Miejskie");
+    expect(card.get("[data-focus-title] a").attributes("href")).toBe(
+      "/instytucja/wodociagi-miejskie-place1",
+    );
+    expect(card.get("[data-focus-job]").text()).toContain(
+      "Wysyłka osób na żądanie",
+    );
+    expect(card.get("[data-focus-dispatch]").text()).toContain(
+      "Maszynę uruchomiono 11:58",
+    );
+    expect(card.text()).toContain("Ania");
+
+    // The link's anchor is the card; the run's line is marked in its row.
+    expect(card.attributes("id")).toBe("przebieg-r-asked");
+    expect(isOpen(page, "people_request")).toBe(true);
+    const listed = page.get('[data-job-runs] [data-run="r-asked"]');
+    expect(listed.classes()).toContain("job-run--target");
+    expect(listed.get("[data-run-request]").text()).toContain("firma");
+    expect(listed.text()).toContain("zlecone ze strony");
+  });
+
+  it("follows the run until it ends, and then stops asking", async () => {
+    let current = asked();
+    mockAuthRequest.mockImplementation(async (url: string) =>
+      url.startsWith("/api/ops/jobs/runs/") ? { run: current } : withAsked(),
+    );
+    const page = await mountAt("#przebieg-r-asked");
+
+    current = {
+      ...asked(),
+      state: "running",
+      phase: "wysyłanie",
+      progress: { done: 3, total: 12, unit: "osób" },
+    };
+    await vi.advanceTimersByTimeAsync(10_000);
+    await flushPromises();
+    expect(page.get("[data-focus-status]").text()).toContain("3 z 12 osób");
+
+    current = {
+      ...asked(),
+      state: "succeeded",
+      finishedAt: "2026-10-02T10:00:30.000Z",
+      counters: { planned: 12, updated: 11, created: 1 },
+    };
+    await vi.advanceTimersByTimeAsync(10_000);
+    await flushPromises();
+    expect(page.get("[data-focus-run]").attributes("data-run-state")).toBe(
+      "succeeded",
+    );
+    expect(page.get("[data-focus-counters]").text()).toContain(
+      "zaktualizowanych: 11",
+    );
+
+    const asks = () =>
+      mockAuthRequest.mock.calls.filter(([url]) =>
+        String(url).startsWith("/api/ops/jobs/runs/"),
+      ).length;
+    const before = asks();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await flushPromises();
+    expect(asks()).toBe(before);
+  });
+
+  it("shows a capture the extension links to, though it is not in the list", async () => {
+    answer(
+      run({
+        id: "c-old",
+        job: "capture_extraction",
+        state: "succeeded",
+        trigger: "event",
+        host: "rozszerzenie",
+        startedAt: "2026-09-20T08:00:00.000Z",
+        finishedAt: "2026-09-20T08:01:00.000Z",
+        counters: { facts: 2 },
+        title: "Stary artykuł",
+        url: "https://example.pl/stary",
+        link: "/ekstrakcje?article=https%3A%2F%2Fexample.pl%2Fstary",
+      }),
+    );
+    const page = await mountAt("#przebieg-c-old");
+
+    const card = page.get("[data-focus-run]");
+    expect(card.get("[data-focus-title] a").attributes("href")).toBe(
+      "https://example.pl/stary",
+    );
+    expect(card.get("[data-focus-facts]").attributes("href")).toContain(
+      "/ekstrakcje?article=",
+    );
+    expect(isOpen(page, "capture_extraction")).toBe(true);
+    expect(page.find('[data-job-runs] [data-run="c-old"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("says so when the run is not there", async () => {
+    answer(
+      Object.assign(new Error("404"), {
+        data: { message: "Nie ma takiego procesu." },
+      }),
+    );
+    const page = await mountAt("#przebieg-nope");
+
+    expect(page.get("[data-focus-error]").text()).toBe(
+      "Nie ma takiego procesu.",
+    );
+  });
+
+  it("links every run in the list to itself", async () => {
+    mockAuthRequest.mockImplementation(async () => withAsked());
+    const page = await mountAt("#proces-people_request");
+
+    expect(page.find("[data-focus-run]").exists()).toBe(false);
+    expect(
+      page
+        .get('[data-job-runs] [data-run="r-asked"] [data-run-self]')
+        .attributes("href"),
+    ).toBe("#przebieg-r-asked");
   });
 });
