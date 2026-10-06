@@ -50,8 +50,10 @@ night; only the steps that depend on it are held:
   which new pages there are to rate as well.
 
 `krs_paid` holds nothing back, and nothing holds it: the people go up with or
-without what it bought. It needs the rejestr.io key, REJESTR_KEY, which
-night.sh reads from Secret Manager, and is skipped without it.
+without what it bought. It needs the rejestr.io key - REJESTR_KEY, else the
+Secret Manager secret rejestr-io-key (KORYTA_REJESTR_SECRET names another) -
+which the step reads itself and gives the paid job alone, and is skipped
+without it.
 
 The night starts at 04:30 Warsaw, after the export and after midnight UTC, so
 the compressor - which archives up to yesterday in UTC - takes the whole
@@ -139,6 +141,10 @@ HELD = (
 #: rate the pages a run by hand created - is read only if they are rebuilt; on
 #: a night with one export they read the same again, in about a minute.
 SCORES_REFRESH = ("KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores")
+
+#: The secret the paid step reads its rejestr.io key from, unless
+#: KORYTA_REJESTR_SECRET names another; an empty one switches the step off.
+REJESTR_SECRET = "rejestr-io-key"
 
 COMPRESSED_HOSTS = ("rejestr.io", "api-krs.ms.gov.pl")
 COMPRESSED_BUCKET = "koryta-pl-compressed"
@@ -238,6 +244,46 @@ CHECKS = ("tests", "outputs", "invariants")
 def bin_path(name: str) -> str:
     """An entry point of this environment, the one this process runs from."""
     return os.path.join(os.path.dirname(sys.executable), name)
+
+
+def read_secret(name: str) -> tuple[str | None, str]:
+    """A Secret Manager secret's latest version, read with the machine's own
+    gcloud and account; or None, and why - gcloud's first line, which never
+    holds the value."""
+    argv = ["gcloud", "secrets", "versions", "access", "latest"]
+    try:
+        done = subprocess.run(
+            [*argv, f"--secret={name}", "--quiet"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, f"{name}: {type(e).__name__}"
+    value = done.stdout.strip()
+    if done.returncode == 0 and value:
+        return value, ""
+    said = (done.stderr or "").strip().splitlines()
+    return None, f"{name}: " + (said[0][:200] if said else f"gcloud {done.returncode}")
+
+
+def rejestr_key() -> tuple[str | None, str]:
+    """The key the paid step buys with - REJESTR_KEY, else the secret - or
+    None, and why.
+
+    Read here, by the step, not by night.sh with the other secrets. night.sh
+    runs from a copy of the version checked out before the night fetched its
+    code, so a key it had just learned to read would come a night late. And
+    this way no other step is given it.
+    """
+    key = os.environ.get("REJESTR_KEY")
+    if key:
+        return key, ""
+    secret = os.environ.get("KORYTA_REJESTR_SECRET", REJESTR_SECRET)
+    if not secret:
+        return None, "KORYTA_REJESTR_SECRET is empty"
+    return read_secret(secret)
 
 
 def reprocess_argv() -> list[str]:
@@ -670,8 +716,10 @@ class Night:
     def step_krs_paid(self, step: Step) -> tuple[str, str, int | None]:
         if not self.args.paid_max_calls:
             return SKIPPED, "limit zapytań 0", None
-        if not os.environ.get("REJESTR_KEY"):
-            return SKIPPED, "brak klucza rejestr.io (REJESTR_KEY)", None
+        key, why = rejestr_key()
+        if not key:
+            self.log(f"No rejestr.io key: {why}", step.name)
+            return SKIPPED, "brak klucza rejestr.io", None
         argv = [
             bin_path("koryta_scrape_krs_paid"),
             "--scope",
@@ -679,7 +727,9 @@ class Night:
             "--max-calls",
             str(self.args.paid_max_calls),
         ]
-        return self.judge_job(*self.process(step, argv))
+        # In the job's environment, never on its command line, which the
+        # night's log prints.
+        return self.judge_job(*self.process(step, argv, {"REJESTR_KEY": key}))
 
     def step_reprocess(self, step: Step) -> tuple[str, str, int | None]:
         code, timed_out = self.process(step, reprocess_argv())
@@ -832,7 +882,7 @@ class Night:
             "krs_odpis": "koryta_krs_odpis --graph --changed-since <yesterday> "
             f"--max {self.args.odpis_max}",
             "krs_paid": "koryta_scrape_krs_paid --scope fallback --max-calls "
-            f"{self.args.paid_max_calls} (needs REJESTR_KEY)",
+            f"{self.args.paid_max_calls} (the key from {REJESTR_SECRET})",
             "reprocess": "koryta " + " ".join(reprocess_argv()[1:]),
             "tests": "pytest src/tests/pipelines",
             "outputs": "pytest -m e2e src/tests/e2e",

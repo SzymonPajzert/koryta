@@ -87,10 +87,12 @@ mkdir -p "$state/bin"
 (cd "$repo/data/compressor" && go build -o "$state/bin/compressor" ./cmd/compressor)
 
 # Secrets from Secret Manager into this process's environment only, never onto
-# the disk: the PESEL key KrsOdpisSeats fingerprints with, the web key the
+# the disk: the PESEL key KrsOdpisSeats fingerprints with, and the web key the
 # people import exchanges its custom token with (public, but kept with the
-# others), and the rejestr.io key. create-vm.sh makes them; the first two are
-# also the people import's Cloud Run runbook's (data/pipelines/src/jobs/CLOUD_RUN.md).
+# other). The secrets are the ones the people import's Cloud Run runbook
+# creates (data/pipelines/src/jobs/CLOUD_RUN.md). The rejestr.io key is not
+# read here: the paid step reads it itself, for its own process alone
+# (data/pipelines/src/jobs/nightly).
 secret() {
   gcloud secrets versions access latest --secret="$1" --quiet 2>/dev/null
 }
@@ -106,17 +108,6 @@ if [[ -z "${FIREBASE_WEB_API_KEY:-}" && -n "${KORYTA_WEB_KEY_SECRET:-}" ]]; then
     export FIREBASE_WEB_API_KEY
   else
     echo "Could not read the web key ($KORYTA_WEB_KEY_SECRET): the people import will be skipped."
-  fi
-fi
-# The rejestr.io key the paid step buys with. Read by default, so a VM set up
-# before the step existed picks it up as soon as the secret has a version; an
-# empty KORYTA_REJESTR_SECRET switches the step off.
-rejestr_secret=${KORYTA_REJESTR_SECRET-rejestr-io-key}
-if [[ -z "${REJESTR_KEY:-}" && -n "$rejestr_secret" ]]; then
-  if REJESTR_KEY=$(secret "$rejestr_secret"); then
-    export REJESTR_KEY
-  else
-    echo "Could not read the rejestr.io key ($rejestr_secret): the paid step will be skipped."
   fi
 fi
 

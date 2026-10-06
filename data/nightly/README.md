@@ -56,8 +56,9 @@ holds from rejestr.io that day counts against it, so a night run twice buys no
 more than once. People first, then public companies. What the cap leaves waits
 for the next night, which reads as "partial". A refused account - a key
 rejestr.io does not take, no credit left - fails the step; nothing waits on it,
-so the people go up either way. Without the key (`rejestr-io-key` in Secret
-Manager) the step is skipped.
+so the people go up either way. The step reads the key from Secret Manager
+itself (`rejestr-io-key`) and gives it to the paid job alone; without it the
+step is skipped, and the night's log says why.
 
 ## What the night uploads, and what holds it back
 
