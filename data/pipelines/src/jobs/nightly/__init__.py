@@ -5,6 +5,7 @@
     koryta_nightly --only people      # one step; repeatable
     koryta_nightly --skip krs_odpis   # all but this one; repeatable
     koryta_nightly --max-uploads 300  # more people, once the first nights look right
+    koryta_nightly --paid-max-calls 0 # buy nothing from rejestr.io tonight
 
 The steps, in order (`STEPS`):
 
@@ -14,6 +15,11 @@ The steps, in order (`STEPS`):
     krs_free    koryta_scrape_krs_free: the bulletin, then api-krs
     krs_odpis   koryta_krs_odpis for the companies the bulletin named since
                 yesterday
+    krs_paid    koryta_scrape_krs_paid --scope fallback: rejestr.io for what the
+                free sources cannot give - the people somebody marked
+                interesting, and the companies whose odpis did not come - at
+                most --paid-max-calls a day; before the reprocess, so what it
+                buys reaches tonight's people
     reprocess   every pipeline rebuilt, as the CI nightly does, less the ones
                 whose sources change with a dump or an election rather than
                 overnight; each output backed up to the shared cache under
@@ -23,6 +29,9 @@ The steps, in order (`STEPS`):
     invariants  the database invariants over tonight's export
     people      koryta_people_import --scope priority --max-uploads 100: new
                 hires first, then published pages, then the rest
+    scores      koryta_score_import: every scoring model rebuilt over the
+                day's newest export and the pages the people step has just
+                created, and its votes reconciled with the site's
     tidy        old export shards and day-named outputs off the disk
 
 Every step but `export` and `tidy` is a process of its own - the jobs and the
@@ -37,6 +46,14 @@ night; only the steps that depend on it are held:
   likely after last night's upload, holds the upload until somebody looks. The
   18 invariants failing on 2026-10-03 (budgets drifted past their measured
   values) fail every night and do not hold it.
+- `scores` needs the same, and not the people: their outcome only decides
+  which new pages there are to rate as well.
+
+`krs_paid` holds nothing back, and nothing holds it: the people go up with or
+without what it bought. It needs the rejestr.io key - REJESTR_KEY, else the
+Secret Manager secret rejestr-io-key (KORYTA_REJESTR_SECRET names another) -
+which the step reads itself and gives the paid job alone, and is skipped
+without it.
 
 The night starts at 04:30 Warsaw, after the export and after midnight UTC, so
 the compressor - which archives up to yesterday in UTC - takes the whole
@@ -117,6 +134,17 @@ HELD = (
     "CruDump",
     "CruUmowy",
 )
+
+#: Read again by the scores step, whatever the reprocess built from them: the
+#: site's people, their votes and facts, and the company scores made of those.
+#: They are named by the day, so an export taken by hand later that day - to
+#: rate the pages a run by hand created - is read only if they are rebuilt; on
+#: a night with one export they read the same again, in about a minute.
+SCORES_REFRESH = ("KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores")
+
+#: The secret the paid step reads its rejestr.io key from, unless
+#: KORYTA_REJESTR_SECRET names another; an empty one switches the step off.
+REJESTR_SECRET = "rejestr-io-key"
 
 COMPRESSED_HOSTS = ("rejestr.io", "api-krs.ms.gov.pl")
 COMPRESSED_BUCKET = "koryta-pl-compressed"
@@ -199,11 +227,13 @@ STEPS = (
     Step("export", "kopia bazy", 90),
     Step("krs_free", "KRS", 75),
     Step("krs_odpis", "odpisy", 45),
+    Step("krs_paid", "rejestr.io", 30),
     Step("reprocess", "potoki", 150),
     Step("tests", "testy", 45),
     Step("outputs", "wyniki", 20),
     Step("invariants", "niezmienniki", 30),
     Step("people", "osoby", 60),
+    Step("scores", "oceny", 30),
     Step("tidy", "porządki", 5, always=True),
 )
 STEP_NAMES = tuple(step.name for step in STEPS)
@@ -214,6 +244,46 @@ CHECKS = ("tests", "outputs", "invariants")
 def bin_path(name: str) -> str:
     """An entry point of this environment, the one this process runs from."""
     return os.path.join(os.path.dirname(sys.executable), name)
+
+
+def read_secret(name: str) -> tuple[str | None, str]:
+    """A Secret Manager secret's latest version, read with the machine's own
+    gcloud and account; or None, and why - gcloud's first line, which never
+    holds the value."""
+    argv = ["gcloud", "secrets", "versions", "access", "latest"]
+    try:
+        done = subprocess.run(
+            [*argv, f"--secret={name}", "--quiet"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, f"{name}: {type(e).__name__}"
+    value = done.stdout.strip()
+    if done.returncode == 0 and value:
+        return value, ""
+    said = (done.stderr or "").strip().splitlines()
+    return None, f"{name}: " + (said[0][:200] if said else f"gcloud {done.returncode}")
+
+
+def rejestr_key() -> tuple[str | None, str]:
+    """The key the paid step buys with - REJESTR_KEY, else the secret - or
+    None, and why.
+
+    Read here, by the step, not by night.sh with the other secrets. night.sh
+    runs from a copy of the version checked out before the night fetched its
+    code, so a key it had just learned to read would come a night late. And
+    this way no other step is given it.
+    """
+    key = os.environ.get("REJESTR_KEY")
+    if key:
+        return key, ""
+    secret = os.environ.get("KORYTA_REJESTR_SECRET", REJESTR_SECRET)
+    if not secret:
+        return None, "KORYTA_REJESTR_SECRET is empty"
+    return read_secret(secret)
 
 
 def reprocess_argv() -> list[str]:
@@ -522,8 +592,8 @@ class Night:
             return "wstrzymane: brak kopii bazy"
         if step.name in ("tests", "outputs") and not self.came_through("reprocess"):
             return "wstrzymane: potoki się nie przeliczyły"
-        if step.name == "people":
-            return self.why_not_people()
+        if step.name in ("people", "scores"):
+            return self.why_not_upload()
         return ""
 
     def needs(self, name: str) -> bool:
@@ -535,7 +605,8 @@ class Night:
         """Whether a step this run includes succeeded; true for one left out."""
         return not self.needs(name) or self.succeeded(name)
 
-    def why_not_people(self) -> str:
+    def why_not_upload(self) -> str:
+        """Why nothing goes up to the site tonight, or "" when it may."""
         if self.needs("export") and not self.summary.export_fresh:
             return "wstrzymane: nie ma dzisiejszej kopii bazy"
         if not self.came_through("reprocess"):
@@ -642,6 +713,24 @@ class Night:
         ]
         return self.judge_job(*self.process(step, argv))
 
+    def step_krs_paid(self, step: Step) -> tuple[str, str, int | None]:
+        if not self.args.paid_max_calls:
+            return SKIPPED, "limit zapytań 0", None
+        key, why = rejestr_key()
+        if not key:
+            self.log(f"No rejestr.io key: {why}", step.name)
+            return SKIPPED, "brak klucza rejestr.io", None
+        argv = [
+            bin_path("koryta_scrape_krs_paid"),
+            "--scope",
+            "fallback",
+            "--max-calls",
+            str(self.args.paid_max_calls),
+        ]
+        # In the job's environment, never on its command line, which the
+        # night's log prints.
+        return self.judge_job(*self.process(step, argv, {"REJESTR_KEY": key}))
+
     def step_reprocess(self, step: Step) -> tuple[str, str, int | None]:
         code, timed_out = self.process(step, reprocess_argv())
         state, reason, code = self.judge_job(code, timed_out)
@@ -737,6 +826,19 @@ class Night:
             argv.append("--dry-run")
         return self.judge_job(*self.process(step, argv))
 
+    def step_scores(self, step: Step) -> tuple[str, str, int | None]:
+        # The models are rebuilt over the newest export of the day; the rest
+        # of what they read is the reprocess's, on disk, and the pages the
+        # people step created are read from its record.
+        argv = [
+            bin_path("koryta_score_import"),
+            "--max-minutes",
+            f"{self.minutes_for(step):.0f}",
+        ]
+        for name in SCORES_REFRESH:
+            argv += ["--refresh", name]
+        return self.judge_job(*self.process(step, argv))
+
     def step_compress(self, step: Step) -> tuple[str, str, int | None]:
         compressor = os.environ.get("KORYTA_COMPRESSOR")
         if not compressor:
@@ -779,6 +881,8 @@ class Night:
             "krs_free": f"koryta_scrape_krs_free --max-minutes {self.args.krs_minutes}",
             "krs_odpis": "koryta_krs_odpis --graph --changed-since <yesterday> "
             f"--max {self.args.odpis_max}",
+            "krs_paid": "koryta_scrape_krs_paid --scope fallback --max-calls "
+            f"{self.args.paid_max_calls} (the key from {REJESTR_SECRET})",
             "reprocess": "koryta " + " ".join(reprocess_argv()[1:]),
             "tests": "pytest src/tests/pipelines",
             "outputs": "pytest -m e2e src/tests/e2e",
@@ -786,6 +890,8 @@ class Night:
             "people": "koryta_people_import --scope priority --max-uploads "
             f"{self.args.max_uploads}"
             + (" --dry-run" if self.args.people_dry_run else ""),
+            "scores": "koryta_score_import: every scoring model, tonight's new "
+            "pages included",
             "compress": "compressor -incremental -hostname "
             + " / ".join(COMPRESSED_HOSTS),
             "tidy": f"remove export shards and day-named outputs older than "
@@ -931,6 +1037,13 @@ def parser() -> argparse.ArgumentParser:
         type=positive_int,
         default=300,
         help="Odpisy pełne asked for at most. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--paid-max-calls",
+        type=positive_int,
+        default=50,
+        help="rejestr.io calls bought at most a day, at 0.05 PLN each; 0 buys "
+        "nothing. Default: %(default)s.",
     )
     parser.add_argument(
         "--export-max-age",

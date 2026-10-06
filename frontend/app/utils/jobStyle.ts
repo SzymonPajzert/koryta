@@ -246,9 +246,12 @@ const COUNTER_LABELS: Record<string, string> = {
   // company (company_import).
   uploaded: "wysłanych",
   // score (score_import): votes on a model's shortlist, written, taken back
-  // or `unchanged` as above.
+  // or `unchanged` as above; the nightly run also counts the pages created
+  // since the export, and how many of them a model rated.
   written: "zapisanych",
   retracted: "wycofanych",
+  new_pages: "nowych stron",
+  new_pages_scored: "nowych stron z oceną",
   // extraction (extraction_import).
   articles: "artykułów",
 };

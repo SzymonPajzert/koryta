@@ -62,7 +62,8 @@ A job's state is what it wrote, never a pipeline output it keeps up to date:
 |---|---|---|
 | `krs_bulletin` | `koryta_scrape_krs_updates` | bulletin days, to the crawl bucket |
 | `krs_scrape_free` | `koryta_scrape_krs_free` | the bulletin, then api-krs odpisy for `ScrapeRejestrIO`'s queries |
-| `krs_scrape_paid` | `koryta_scrape_krs_paid` | rejestr.io responses (paid; asks before buying) |
+| `krs_scrape_paid` | `koryta_scrape_krs_paid` | rejestr.io responses (paid: asks before buying by hand; at night `--scope fallback --max-calls 50`, the fallback for what the free sources failed to give, capped a day), and a run summary to `gs://koryta-pl-sharedcache/jobs/krs_scrape_paid/runs/` |
+| `krs_odpis` | `koryta_krs_odpis` | odpisy pełne, to the crawl bucket, and a record of every attempt to write-once parts in `gs://koryta-pl-sharedcache/jobs/krs_odpis/runs/`, which `KrsOdpisAttempts` folds |
 | `krs_register_owners` | `koryta_krs_register_owners --reads N` | api-krs answers, to write-once parts in `gs://koryta-pl-sharedcache/jobs/krs_register_owners/responses/`, which `KRSRegisterEntries` folds |
 
 ## Centralny Rejestr Umów (CRU)

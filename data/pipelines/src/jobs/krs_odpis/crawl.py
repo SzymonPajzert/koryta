@@ -30,6 +30,18 @@ import requests
 from jobs.krs_odpis.plan import Ask
 from jobs.krs_odpis.search import OdpisUnavailable
 
+# How an attempt ends. The run record's vocabulary, kept with its reader
+# (`KrsOdpisAttempts`), which the paid job buys rejestr.io's feeds from.
+from scrapers.krs.odpis_attempts import (
+    ABSENT,
+    FAILED,
+    FETCHED,
+    GATEWAY,
+    NETWORK,
+    TRANSIENT,
+    UNANSWERED,
+)
+
 WINDOW = 50
 MAX_CONSECUTIVE_FAILURES = 20
 
@@ -49,19 +61,6 @@ COOL_DOWNS = 5
 #: Anything else that goes wrong raises, and exits 1.
 EXIT_UPSTREAM_REFUSING = 75
 
-FETCHED = "fetched"
-#: The service answered: the KRS is in neither register asked.
-ABSENT = "absent"
-#: The gateway gave up (504), or the network did. Says nothing of the company.
-GATEWAY = "gateway"
-NETWORK = "network"
-#: Any other answer, or a bug. Not retried.
-FAILED = "failed"
-
-#: What a second try may fix.
-TRANSIENT = frozenset({GATEWAY, NETWORK})
-#: Every status, in the order a summary lists them.
-STATUSES = (FETCHED, ABSENT, GATEWAY, NETWORK, FAILED)
 #: How the stop for too many dead attempts in a row ends.
 REFUSING = "attempts in a row got no answer"
 
@@ -92,7 +91,7 @@ class Result:
 
     @property
     def unanswered(self) -> list[str]:
-        return [k for k, o in self.final().items() if o.status in TRANSIENT | {FAILED}]
+        return [k for k, o in self.final().items() if o.status in UNANSWERED]
 
     @property
     def code(self) -> int:
@@ -133,9 +132,7 @@ def classify(problem: Exception) -> tuple[str, str]:
 Fetch = Callable[[Ask], "tuple[str, bytes] | None"]
 
 
-def attempt(
-    ask: Ask, number: int, fetch: Fetch, clock: Callable[[], float]
-) -> Outcome:
+def attempt(ask: Ask, number: int, fetch: Fetch, clock: Callable[[], float]) -> Outcome:
     """One try at one company, whatever happens: a broken one is not the run."""
 
     def outcome(status: str, seconds: float, **extra: typing.Any) -> Outcome:
@@ -231,7 +228,7 @@ def crawl(
             outcome = attempt(ask, number, fetch, clock)
             result.outcomes.append(outcome)
             record(outcome)
-            failed = outcome.status in TRANSIENT | {FAILED}
+            failed = outcome.status in UNANSWERED
             in_a_row = in_a_row + 1 if failed else 0
             trouble.append(1 if outcome.status in TRANSIENT else 0)
             cooling.since += 1

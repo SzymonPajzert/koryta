@@ -828,6 +828,27 @@ def test_a_page_made_for_somebody_planned_onto_a_page_stops_the_run(priority):
     assert "utworzona strona: Jan Kowalski (new-node)" in summary["errors"]
 
 
+def test_what_was_sent_names_the_page_each_person_went_to(priority):
+    # The scoring models read the pages a run created off this part, so they
+    # can rate the people the night added before the next export has them
+    # (`scrapers.koryta.created`).
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Jan Kowalski", PUBLISHED),
+    ]
+    priority.answers = [person("created", "new-page"), person("updated", "old-page")]
+
+    assert job.main(["--scope", "priority"]) == 0
+
+    assert [
+        (row["name"], row["outcome"], row["node"], row["rejestrIo"])
+        for row in sent_part(priority)
+    ] == [
+        ("Anna Nowak", "created", "new-page", "https://rejestr.io/osoby/Nowak"),
+        ("Jan Kowalski", "updated", "old-page", "https://rejestr.io/osoby/Kowalski"),
+    ]
+
+
 def test_what_the_site_refused_is_not_remembered_as_sent(priority):
     priority.candidates = [
         candidate("Jan Kowalski", PUBLISHED),

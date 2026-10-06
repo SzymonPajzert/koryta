@@ -8,10 +8,28 @@ import {
   type JobsOverview,
 } from "~~/shared/jobs";
 
+/** How long a refresh may take before it counts as failed. The answer comes
+ * in well under three seconds; one that has not come in thirty is not coming,
+ * and while it is out every later poll and click joins it instead of asking
+ * again - the page would stop refreshing for as long as it hung. */
+export const REFRESH_TIMEOUT_MS = 30_000;
+
+/** Whether the request was given up on after `REFRESH_TIMEOUT_MS`: ofetch
+ * aborts it with a `TimeoutError` and fails with that as the cause. */
+function timedOut(error: unknown): boolean {
+  const failure = error as { name?: string; cause?: { name?: string } } | null;
+  return (
+    failure?.name === "TimeoutError" || failure?.cause?.name === "TimeoutError"
+  );
+}
+
 /** What the server said went wrong, in its own words where it gave some. */
 function reason(error: unknown): string {
   const data = (error as { data?: { message?: string } } | null)?.data;
   if (data?.message) return data.message;
+  if (timedOut(error)) {
+    return `serwer nie odpowiedział w ${REFRESH_TIMEOUT_MS / 1000} s`;
+  }
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -37,6 +55,7 @@ export function useOpsJobs() {
       try {
         overview.value = await authRequest<JobsOverview>("/api/ops/jobs", {
           method: "GET",
+          timeout: REFRESH_TIMEOUT_MS,
         });
         lastLoadedAt.value = new Date();
         error.value = "";

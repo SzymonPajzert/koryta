@@ -59,6 +59,51 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "rewizje-kolejka-wedlug-wpisu",
+    title: "Kolejka zmian: opublikowane strony i jeden wiersz na wpis",
+    description:
+      "W „Czeka na decyzję” na /admin/rewizje jest filtr „Strona” - opublikowane albo nieopublikowane - i przełącznik „Lista / Według wpisu”, który składa propozycje w jeden wiersz na wpis. Zmiana powiązania trafia do osoby, której dotyczy, więc „Z pipeline'u”, „Opublikowane” i „Według wpisu” razem dają opublikowane osoby ze zmianami, które jeszcze nie weszły.",
+    steps: [
+      "Ustaw „Rodzaj: Z pipeline'u” i „Strona: Opublikowane”, a potem kliknij „Według wpisu” - mają zostać same opublikowane wpisy, każdy z liczbą propozycji, a nad listą zdanie, ile propozycji jest w ilu wpisach.",
+      "Rozwiń jeden wpis i zatwierdź albo odrzuć propozycję w środku - ma zniknąć z grupy, a liczba w wierszu ma spaść o jeden.",
+    ],
+    link: "/admin/rewizje?automatic=true&published=true&group=subject#kolejka",
+    area: "admin",
+  },
+  {
+    id: "rewizje-filtry-bez-przesuwania",
+    title: "Rewizje: filtr nie przesuwa strony pod lewą krawędź",
+    description:
+      "Zmiana „Rodzaju” czy innego filtra na /admin/rewizje przesuwała całą stronę pod lewą krawędź okna, bo pod listami było tyle numerów stron, ile stron - pod wpisami 1828. Teraz numerów jest tyle, ile się mieści w wierszu.",
+    steps: [
+      "Na /admin/rewizje zmień „Rodzaj” na „Z pipeline'u” - strona ma zostać na środku, z marginesem po lewej, a pod każdą listą ma być jeden rząd numerów stron.",
+    ],
+    link: "/admin/rewizje#kolejka",
+    area: "admin",
+  },
+  {
+    id: "admin-procesy-rejestrio-noca",
+    title: "Procesy: rejestr.io co noc, z dziennym limitem",
+    description:
+      "Zapytania do rejestr.io są teraz krokiem nocy: kupuje się tylko to, czego nie dały bezpłatne źródła, najwyżej 50 zapytań dziennie.",
+    steps: [
+      "Otwórz /admin/procesy i rozwiń „Zapytania do rejestr.io (płatne)” - ma pokazać harmonogram „codziennie o 04:30”, polecenie z --max-calls 50 i dzienny limit w uwagach.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
+    id: "oceny-modeli-co-noc",
+    title: "Oceny modeli co noc, także dla nowych stron",
+    description:
+      "Noc na maszynie koryta-nightly wysyła po imporcie osób oceny modeli, także dla stron, które ten import właśnie utworzył - nowa osoba trafia do kolejki /eksploruj/nowe tego samego ranka, a nie dopiero po następnej kopii bazy.",
+    steps: [
+      "Rano otwórz /admin/procesy i rozwiń „Oceny modeli” - ostatnie uruchomienie ma być z nocy, z licznikami „zapisanych”, „wycofanych” i „nowych stron z oceną”.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "admin-procesy-noc",
     title: "Procesy: noc na maszynie koryta-nightly",
     description:

@@ -1,5 +1,8 @@
 import type { Proposal } from "../../../shared/proposals";
-import type { RevisionQueue } from "../../../server/api/revisions/queue.get";
+import type {
+  QueueGroup,
+  RevisionQueue,
+} from "../../../server/api/revisions/queue.get";
 import type { PendingEdgeRevision } from "../../../server/api/revisions/pendingEdges.get";
 import type { RevisedNode } from "../../../app/components/revision/NodeRow.vue";
 import { daysAgo } from "../clock";
@@ -17,8 +20,10 @@ import { daysAgo } from "../clock";
  * and an edit made stale by a later change - and a pipeline edge change of
  * each common type. The people and places are made up. */
 
-const proposal = (fields: Partial<Proposal> & Pick<Proposal, "id">) =>
-  ({
+/** A proposal about its own target, unless it says otherwise - the subject of
+ * a node revision is the node. */
+const proposal = (fields: Partial<Proposal> & Pick<Proposal, "id">) => {
+  const row: Omit<Proposal, "subject"> = {
     targetId: "wizos1",
     targetCollection: "nodes",
     targetName: "Barbara Przykładowa",
@@ -41,7 +46,18 @@ const proposal = (fields: Partial<Proposal> & Pick<Proposal, "id">) =>
     reviewUser: null,
     stale: false,
     ...fields,
-  }) satisfies Proposal;
+  };
+  return {
+    ...row,
+    subject: fields.subject ?? {
+      id: row.targetId,
+      name: row.targetName,
+      type: row.targetType,
+      path: row.targetPath,
+      published: row.published,
+    },
+  } satisfies Proposal;
+};
 
 export const queueProposals: Proposal[] = [
   proposal({
@@ -118,6 +134,57 @@ export const revisionQueue: RevisionQueue = {
   truncated: false,
   pinned: null,
   flagOnly: true,
+};
+
+/** A relation the pipeline wants to change, about the person at its source -
+ * so in the grouped queue it joins her own proposal. */
+const barbaraOnTheBoard = proposal({
+  id: "wizrew5",
+  targetId: "wizedge2",
+  targetCollection: "edges",
+  targetName:
+    "Barbara Przykładowa → Wodociągi Przykładowo sp. z o.o. (przewodnicząca rady nadzorczej)",
+  targetType: null,
+  changes: [
+    { field: "start_date", label: "data od", from: null, to: "2025-03-01" },
+  ],
+  changeCount: 1,
+  updateTime: daysAgo(4),
+  updateUser: "wizpipeline",
+  author: null,
+  automatic: true,
+  subject: {
+    id: "wizos1",
+    name: "Barbara Przykładowa",
+    type: "person",
+    path: "/osoba/barbara-przykladowa-wizos1",
+    published: true,
+  },
+});
+
+/** The same queue folded into one row per entry, the way `group=subject`
+ * answers it: newest entry first, a relation in its person's group. */
+const groupOf = (proposals: Proposal[]): QueueGroup => ({
+  subject: proposals[0]!.subject,
+  count: proposals.length,
+  proposals,
+});
+
+const [editBarbara, newCompany, removeArticle, staleTomasz] = queueProposals;
+
+export const groupedQueue: RevisionQueue = {
+  revisions: [],
+  groups: [
+    groupOf([editBarbara!, barbaraOnTheBoard]),
+    groupOf([newCompany!]),
+    groupOf([removeArticle!]),
+    groupOf([staleTomasz!]),
+  ],
+  groupTotal: 4,
+  total: queueProposals.length + 1,
+  truncated: false,
+  pinned: null,
+  flagOnly: false,
 };
 
 export const pendingEdgeRevisions: PendingEdgeRevision[] = [

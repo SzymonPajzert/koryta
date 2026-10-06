@@ -30,6 +30,13 @@ const proposal = (over: Partial<Proposal> = {}): Proposal => ({
   rejectReason: null,
   reviewTime: null,
   stale: false,
+  subject: {
+    id: "n1",
+    name: "Jan Kowalski",
+    type: "person",
+    path: "/osoba/n1",
+    published: false,
+  },
   ...over,
 });
 

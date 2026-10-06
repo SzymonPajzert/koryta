@@ -9,12 +9,12 @@ when nobody is still editing, and compares tonight's people with that copy:
 | 04:00       | `scheduledFirestoreExport` copies the site to `gs://koryta-pl-crawled/hostname=koryta.pl/date=<UTC>/` |
 | 04:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
 | 04:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
-| ~06:20      | the night is over; `poweroff.sh` switches the VM off                                                   |
+| ~06:30      | the night is over; `poweroff.sh` switches the VM off                                                   |
 | 08:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
 | 09:00       | the instance schedule stops the VM, if a night hung                                                    |
 
 `night.sh` brings the checkout up to `KORYTA_REF` (`origin/main` by default),
-syncs the venv, builds the compressor, reads the two secrets, and hands over to
+syncs the venv, builds the compressor, reads the secrets, and hands over to
 `koryta_nightly` (`data/pipelines/src/jobs/nightly`), which runs the steps in
 order, each with a time limit and its output in the night's log:
 
@@ -24,17 +24,41 @@ order, each with a time limit and its output in the night's log:
 | `export`     | waits for tonight's export: the newest one with its `.overall_export_metadata`, taken at most 6 h before the night     |
 | `krs_free`   | `koryta_scrape_krs_free --max-minutes 60`: the bulletin, then api-krs                                                  |
 | `krs_odpis`  | `koryta_krs_odpis --graph --changed-since <yesterday> --max 300`: odpisy pełne of the companies the bulletin named      |
+| `krs_paid`   | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give           |
 | `reprocess`  | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch and the slow static sources (`HELD`) |
 | `tests`      | `pytest src/tests/pipelines` over the night's outputs                                                                  |
 | `outputs`    | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                     |
 | `invariants` | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                    |
 | `people`     | `koryta_people_import --scope priority --max-uploads 100 --refresh none`                                               |
+| `scores`     | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled            |
 | `tidy`       | export shards and day-named outputs older than a week off the disk                                                     |
 
 The VM keeps its disk, so `versioned/`, the download cache, the listing ranges
 and the odpis parse memo carry over from one night to the next: the jobs run
 the warm path they were measured on, on predator, rather than a cold container
 fetching everything again.
+
+## What the night buys
+
+rejestr.io charges 0.05 PLN a call, so the night buys only what the free
+sources cannot give (`--scope fallback`), before the rebuild, so that what it
+buys reaches the same night's people:
+
+- the person feeds of the people somebody marked interesting - a vote on the
+  site, or the hardcoded list - which no register says;
+- the connections of a company whose odpis pełny `krs_odpis` asked for and did
+  not get: the gateway or the network ate it twice, or the service answered
+  with something the job could not take (`KrsOdpisAttempts`, the fold of the
+  odpis job's run record). A company it has not asked about yet waits for it.
+
+At most 50 calls a day (`--paid-max-calls`): what the crawl bucket already
+holds from rejestr.io that day counts against it, so a night run twice buys no
+more than once. People first, then public companies. What the cap leaves waits
+for the next night, which reads as "partial". A refused account - a key
+rejestr.io does not take, no credit left - fails the step; nothing waits on it,
+so the people go up either way. The step reads the key from Secret Manager
+itself (`rejestr-io-key`) and gives it to the paid job alone; without it the
+step is skipped, and the night's log says why.
 
 ## What the night uploads, and what holds it back
 
@@ -57,6 +81,15 @@ Newest news first inside each. A payload sent unchanged in the last 30 days
 is left alone (`--resend-after`), so a pending update or a party a human took
 off a page does not take a slot every night - and is not put back every night.
 
+Scores: after the people, every scoring model (`analysis/scores`) is rebuilt
+and its shortlist reconciled with the votes it holds on the site - a changed
+score written, one it no longer gives taken back (`koryta_score_import`). The
+models rate the site's people as the 04:00 export has them and the pages the
+people step has just created (`scrapers/koryta/created.py`, read from what the
+import says it sent), so a new hire is in the queue on /eksploruj/nowe the same
+morning rather than after the next export. A model that rates nobody is not
+uploaded: reconciled, it would take back every vote it has.
+
 A failed step does not end the night; the steps that depend on it are held:
 
 - `invariants` needs the export; `tests` and `outputs` the reprocess.
@@ -66,6 +99,8 @@ A failed step does not end the night; the steps that depend on it are held:
   holds the upload until somebody looks. The first night's failures are its
   baseline; on 2026-10-03, 18 invariants failed on budgets that had drifted
   past their measured values.
+- `scores` needs the same, but not the people: however they went, the scores
+  go up, with whatever pages the people step did create.
 
 ## Setting it up
 
@@ -82,7 +117,11 @@ and Secret Manager.
    The PESEL key is added from the machine that holds it
    (`~/.config/koryta/pesel-salt`); the script says how if it is not that one.
    An existing secret is kept as it is: never add it a second version, as a
-   new key's fingerprints join to nothing.
+   new key's fingerprints join to nothing. The rejestr.io key comes from
+   `REJESTR_KEY` (`REJESTR_KEY=... bash data/nightly/create-vm.sh`); without
+   it the script prints the command that adds it later, and until then the
+   night buys nothing. A new rejestr.io key can simply be added as a new
+   version.
 
 2. Prepare the VM - packages, the `koryta` user, uv, Go, the checkout, the
    units:
@@ -145,11 +184,16 @@ way, and the timer runs the night on a VM that is already up too.
   the schedule's 09:00 stop. A boot outside the night window runs nothing.
 - **One step by hand.** `night.sh --force --only people --people-dry-run`
   (the `systemd-run` line above). Steps left out by `--only` or `--skip` hold
-  nothing back.
+  nothing back. A real people run by hand creates pages no model has rated:
+  add `--only scores`, or they wait for the next night.
 - **Other code.** `KORYTA_REF` in `/etc/koryta/nightly.env` - a tag holds the
   VM still while `main` moves. Every merge to `main` is otherwise live the
   next night.
 - **More people.** `KORYTA_NIGHTLY_ARGS=--max-uploads 300`.
+- **More, or nothing, from rejestr.io.** `KORYTA_NIGHTLY_ARGS=--paid-max-calls 100`,
+  or `0`. What a night bought is in
+  `gs://koryta-pl-sharedcache/jobs/krs_scrape_paid/runs/`; what it would buy,
+  without buying, `koryta_scrape_krs_paid --scope fallback --max-calls 50 --dry-run`.
 - **A changed unit or timer.** Run `setup-vm.sh` again: systemd reads its own
   copies, not the checkout's.
 - **Something broken in `versioned/`.** Delete the output; the next night
@@ -163,11 +207,15 @@ the rebuild, 27 the pipeline tests - and peaked at 17.6 GB, so with the boot
 about $13 a month. Its 30 GB balanced disk is $3.90 a month whether it runs
 or not. Bucket traffic is under a dollar. The
 shared cache grows by the night's backups as `main`; how long it keeps them is
-`decide-sharedcache-backup-retention`.
+`decide-sharedcache-backup-retention`. rejestr.io is at most 50 calls a night,
+2.50 PLN; the first night's plan, on 2026-10-06's queue, was 12 calls.
 
 ## What it does not do
 
-- The paid rejestr.io scrape: no budget yet (`decide-rejestrio-budget`).
+- rejestr.io for a company the free odpis has not been asked about: the
+  night's `krs_odpis` asks only the companies the bulletin named since
+  yesterday, so one that is new to the queue waits for a hand run of
+  `koryta_krs_odpis`, which asks the queue's.
 - Companies: `CompaniesPayloads --only-changed` is not sent; a person's missing
   company is created on the way, as the uploader always did.
 - `test_rejestrio_coverage.py`: it walks the whole rejestr.io prefix twice, an

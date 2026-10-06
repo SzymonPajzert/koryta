@@ -4,7 +4,9 @@ import { logIn, USERS } from "../e2e/helpers/auth";
 import { freezeClock } from "./clock";
 import { readyForFullPage } from "./fullPage";
 import {
+  groupedQueue,
   pendingEdgeRevisions,
+  queueProposals,
   revisedNodes,
   revisionQueue,
 } from "./fixtures/revisionHub";
@@ -25,15 +27,24 @@ import { expectFitsThePhone } from "./phoneWidth";
 const HUB = { tag: pageTag("admin/rewizje/index") };
 const ENTRY = { tag: pageTag("admin/rewizje/[id]") };
 
-async function answerHub(page: Page) {
-  await page.route("**/api/revisions/queue**", (route) =>
-    route.fulfill({ json: revisionQueue }),
-  );
+/** How long the three lists are. The fixtures' own lengths by default; the
+ * production ones for the test that is about how long they are. */
+type Totals = { queue?: number; edges?: number; nodes?: number };
+
+async function answerHub(page: Page, totals: Totals = {}) {
+  await page.route("**/api/revisions/queue**", (route) => {
+    const grouped =
+      new URL(route.request().url()).searchParams.get("group") === "subject";
+    const queue = grouped ? groupedQueue : revisionQueue;
+    return route.fulfill({
+      json: { ...queue, total: totals.queue ?? queue.total },
+    });
+  });
   await page.route("**/api/revisions/pendingEdges**", (route) =>
     route.fulfill({
       json: {
         revisions: pendingEdgeRevisions,
-        total: pendingEdgeRevisions.length,
+        total: totals.edges ?? pendingEdgeRevisions.length,
       },
     }),
   );
@@ -41,7 +52,7 @@ async function answerHub(page: Page) {
     route.fulfill({
       json: {
         nodes: Object.fromEntries(revisedNodes.map((node) => [node.id, node])),
-        total: revisedNodes.length,
+        total: totals.nodes ?? revisedNodes.length,
       },
     }),
   );
@@ -71,6 +82,108 @@ test("rewizje", HUB, async ({ page }, testInfo) => {
   await expect(page).toHaveScreenshot("rewizje.png", { fullPage: true });
 
   await expectFitsThePhone(page, testInfo);
+});
+
+test("rewizje-wedlug-wpisu", HUB, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await freezeClock(page);
+  await answerHub(page);
+  await logIn(page, USERS.admin, "/admin/rewizje?group=subject");
+
+  // One line per entry: Barbara's own edit and the pipeline's change to her
+  // seat on the board are one group.
+  const groups = page.locator("[data-queue-group]");
+  await expect(groups).toHaveCount(4, { timeout: 30_000 });
+  const barbara = page.locator('[data-queue-group][data-subject-id="wizos1"]');
+  await expect(barbara.locator("[data-group-count]")).toHaveText(
+    "2 propozycje",
+  );
+  await barbara.locator("[data-row-toggle]").first().click();
+  await expect(barbara.locator("[data-proposal-row]")).toHaveCount(2);
+
+  // The page down to the end of the queue: the two lists below it are in the
+  // shot above, and a shot of the section alone would cut off the labels its
+  // fields float above its top edge.
+  await readyForFullPage(page);
+  const queue = (await page.locator("#kolejka").boundingBox())!;
+  await expect(page).toHaveScreenshot("rewizje-wedlug-wpisu.png", {
+    fullPage: true,
+    clip: {
+      x: 0,
+      y: 0,
+      width: page.viewportSize()!.width,
+      height: Math.ceil(queue.y + queue.height) + 16,
+    },
+  });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+/** No picture: what this guards is a width, and a full-page shot of it would
+ * be a hundred thousand pixels wide - which is how it went unseen. With the
+ * lists as long as production's, `v-pagination` sized by its own buttons drew
+ * one per page, and the router scrolled the window sideways to the section on
+ * every filter change. */
+test("rewizje-dlugie-listy", async ({ page }) => {
+  test.setTimeout(120_000);
+  await freezeClock(page);
+  // Production's on 2026-10-06: the pipeline's pending proposals and the
+  // entries with a history.
+  await answerHub(page, { queue: 20_523, edges: 15_951, nodes: 18_275 });
+  await logIn(page, USERS.admin, "/admin/rewizje");
+  await expect(page.locator("[data-proposal-row]")).toHaveCount(
+    queueProposals.length,
+    { timeout: 30_000 },
+  );
+
+  // The pagers size themselves over a run of frames, so the page is measured
+  // once they have stopped: early on, a runaway one still looks fine.
+  const sideways = () =>
+    page.evaluate(
+      () =>
+        new Promise<{ overflow: number; scrollX: number; buttons: number }>(
+          (resolve) => {
+            const buttons = () =>
+              Math.max(
+                0,
+                ...Array.from(document.querySelectorAll(".v-pagination")).map(
+                  (pager) =>
+                    pager.querySelectorAll(".v-pagination__item").length,
+                ),
+              );
+            let last = -1;
+            let still = 0;
+            let frames = 0;
+            const tick = () => {
+              const now = buttons();
+              still = now === last ? still + 1 : 0;
+              last = now;
+              if (still < 20 && ++frames < 600) {
+                requestAnimationFrame(tick);
+                return;
+              }
+              const doc = document.documentElement;
+              resolve({
+                overflow: doc.scrollWidth - doc.clientWidth,
+                scrollX: window.scrollX,
+                buttons: now,
+              });
+            };
+            requestAnimationFrame(tick);
+          },
+        ),
+    );
+
+  const loaded = await sideways();
+  expect(loaded.buttons).toBeLessThan(40);
+  expect(loaded).toMatchObject({ overflow: 0, scrollX: 0 });
+
+  // A filter's url names its section, and the router scrolls there - which
+  // has to stay a scroll down the page.
+  await page.locator('[data-filter="automatic"]').click();
+  await page.getByRole("option", { name: "Z pipeline'u" }).click();
+  await expect(page).toHaveURL(/automatic=true/);
+  expect(await sideways()).toMatchObject({ overflow: 0, scrollX: 0 });
 });
 
 test("rewizje-wpis", ENTRY, async ({ page }, testInfo) => {

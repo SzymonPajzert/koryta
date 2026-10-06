@@ -380,6 +380,10 @@ NODE_FIELDS = [
     "type",
     "name",
     "parties",
+    # Says a person stated `parties`, which `updatedPerson` then leaves alone:
+    # read for whether it is "manual", never compared, on the same terms as the
+    # two company markers below.
+    "partiesSource",
     "content",
     "wikipedia",
     "rejestrIo",

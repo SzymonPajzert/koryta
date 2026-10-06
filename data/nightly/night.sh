@@ -90,7 +90,9 @@ mkdir -p "$state/bin"
 # the disk: the PESEL key KrsOdpisSeats fingerprints with, and the web key the
 # people import exchanges its custom token with (public, but kept with the
 # other). The secrets are the ones the people import's Cloud Run runbook
-# creates (data/pipelines/src/jobs/CLOUD_RUN.md).
+# creates (data/pipelines/src/jobs/CLOUD_RUN.md). The rejestr.io key is not
+# read here: the paid step reads it itself, for its own process alone
+# (data/pipelines/src/jobs/nightly).
 secret() {
   gcloud secrets versions access latest --secret="$1" --quiet 2>/dev/null
 }
