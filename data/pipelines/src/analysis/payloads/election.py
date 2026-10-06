@@ -35,6 +35,7 @@ Szymona Hołowni - Polskie Stronnictwo Ludowe": [
     "Komitet Wyborczy Polskie Stronnictwo Ludowe - Unia Pracy": "PSL",
     "Komitet Wyborczy Nowa Lewica": "Nowa Lewica",
     "Komitet Wyborczy Polska Jest Najważniejsza": "PiS",
+    "Koalicyjny Komitet Wyborczy Lewica i Demokraci SLD+SDPL+PD+UP": "SLD",
 }
 
 # TODO we need a better logic than this
