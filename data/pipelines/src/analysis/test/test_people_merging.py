@@ -726,11 +726,12 @@ def test_one_page_two_namesakes_gives_neither_of_them_the_id(ctx):
 def test_two_krs_rows_carrying_one_register_id_both_reach_the_page(ctx):
     """And the exemption that has to go with it.
 
-    `create_people_table` groups on the birth year, so one register entry filed
-    under two dates comes out as two rows. Both carry the same register id, so
-    both are the same man and both belong on his one page - 7 pages on the site
-    are reached that way. Refusing here, the way a shared name is refused, would
-    strand him instead.
+    `create_people_table` used to group KRS people by name and birth year, so
+    one register entry filed under two dates came out as two rows - 7 pages on
+    the site were reached that way. It groups by the entry now and cannot, but
+    two rows carrying one register id are still the same man, both belonging on
+    his one page; refusing here, the way a shared name is refused, would strand
+    him.
     """
     result = match_koryta(
         ctx,
