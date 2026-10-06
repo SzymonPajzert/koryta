@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Create everything the nightly VM needs in koryta-pl, once, as the project
-# owner: its service account and that account's grants, the two secrets it
+# owner: its service account and that account's grants, the three secrets it
 # reads, the VM, and the schedule that starts it. Each step checks first, so
 # a rerun after a failure carries on. Nothing here runs the night.
 #
 #   bash data/nightly/create-vm.sh
+#   REJESTR_KEY=... bash data/nightly/create-vm.sh   # with the rejestr.io key
 #   gcloud compute ssh koryta-nightly --zone=europe-central2-b --project=koryta-pl \
 #     --command='sudo bash -s' < data/nightly/setup-vm.sh
 #
@@ -26,6 +27,7 @@ sa_name=${SA_NAME:-koryta-nightly}
 sa="$sa_name@$project.iam.gserviceaccount.com"
 pesel_secret=${PESEL_SECRET:-koryta-pesel-salt}
 web_key_secret=${WEB_KEY_SECRET:-firebase-web-api-key}
+rejestr_secret=${REJESTR_SECRET:-rejestr-io-key}
 schedule=${SCHEDULE:-koryta-nightly}
 # The default network is in custom subnet mode, so a VM has to name its subnet;
 # koryta-compressor and claude-dev use this one too, and default-allow-ssh
@@ -69,7 +71,7 @@ g iam service-accounts add-iam-policy-binding "$sa" \
   --member="serviceAccount:$sa" --role=roles/iam.serviceAccountTokenCreator >/dev/null
 g services enable iamcredentials.googleapis.com secretmanager.googleapis.com
 
-echo "== Secrets: the PESEL key and the web key"
+echo "== Secrets: the PESEL key, the web key and the rejestr.io key"
 # The same two the people import's Cloud Run runbook creates
 # (data/pipelines/src/jobs/CLOUD_RUN.md): whichever runs first makes them.
 # The PESEL key is the one that matters (task decide-pesel-key-in-secret-manager):
@@ -94,7 +96,24 @@ if ! g secrets describe "$web_key_secret" >/dev/null 2>&1; then
   sed -n 's/.*apiKey: "\(AIza[^"]*\)".*/\1/p' "$(dirname "$0")/../../frontend/nuxt.config.ts" | tr -d '\n' |
     g secrets versions add "$web_key_secret" --data-file=-
 fi
-for secret in "$pesel_secret" "$web_key_secret"; do
+# The key the night's paid step buys from rejestr.io with
+# (https://rejestr.io/konto/api). Without a version the step is skipped. A new
+# version is fine here, unlike the PESEL key: night.sh reads `latest`.
+if ! g secrets describe "$rejestr_secret" >/dev/null 2>&1; then
+  g secrets create "$rejestr_secret" --replication-policy=automatic
+fi
+if ! g secrets versions list "$rejestr_secret" --limit=1 --format='value(name)' | grep -q .; then
+  if [[ -n "${REJESTR_KEY:-}" ]]; then
+    printf %s "$REJESTR_KEY" | g secrets versions add "$rejestr_secret" --data-file=-
+  else
+    cat <<EOF
+!! $rejestr_secret has no version yet, so the night buys nothing from rejestr.io.
+   With the key from https://rejestr.io/konto/api in REJESTR_KEY:
+   printf %s "\$REJESTR_KEY" | gcloud secrets versions add $rejestr_secret --project=$project --data-file=-
+EOF
+  fi
+fi
+for secret in "$pesel_secret" "$web_key_secret" "$rejestr_secret"; do
   g secrets add-iam-policy-binding "$secret" \
     --member="serviceAccount:$sa" --role=roles/secretmanager.secretAccessor >/dev/null
 done
