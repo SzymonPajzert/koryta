@@ -102,6 +102,45 @@ A failed step does not end the night; the steps that depend on it are held:
 - `scores` needs the same, but not the people: however they went, the scores
   go up, with whatever pages the people step did create.
 
+## Runs asked for on the site
+
+The datascience group can ask, from a company's page or a person's, for what
+the pipelines know about it to be sent now ("Wyślij dane osób",
+"Wyślij dane tej osoby"). The site queues a run - a `jobRuns` document in the
+ops database, `queued`, with the request in it - hands back its link,
+`/admin/procesy#przebieg-<id>`, and starts this VM (`JOB_RUNNER_DISPATCH=vm`).
+At every boot `koryta-requests.service` (`requests.sh`) runs
+`koryta_job_requests --watch`, which:
+
+- claims the queued runs one at a time, oldest first, and runs each as
+  `koryta_people_import --request <id> --refresh none` - the night's outputs as
+  they are on disk, the code the last night checked out. A company's run sends
+  its people (pages for those the site lacks are created unpublished), a
+  person's run that one person (it never creates a page);
+- takes `/var/lib/koryta-nightly/lock` for each run, as `night.sh` does for a
+  night: a run waits for a night to finish, and a night started during a run
+  waits for it (up to `KORYTA_LOCK_WAIT`, 30 min) instead of giving up;
+- holds `requests.busy` while it has a run in hand, so the night's
+  `poweroff.sh` leaves the VM up (as it does while one is queued) and the
+  worker switches it off itself;
+- once it has run something and nothing more comes for 10 minutes, writes
+  `poweroff-requested` and exits, and `poweroff.sh requests` switches the VM
+  off - never between 03:45 and 04:45 (the night is about to start), never
+  while somebody is logged in or a night holds the lock, never with
+  `/etc/koryta/stay-up`. A VM booted by hand, where it has run nothing, stays
+  up as before;
+- ends a run its job could not end (a crash, the ops database out of reach) by
+  the job's exit code, and at start a run this host was doing when it went down.
+
+Until the site may start the VM (task `grant-site-starts-nightly-vm`), a
+request waits for the next night: the 04:15 boot starts the worker too, which
+runs the queue once the night lets go of the lock.
+
+By hand on the VM: `journalctl -u koryta-requests -f`;
+`sudo systemctl stop koryta-requests` keeps it from claiming anything.
+`KORYTA_REQUESTS_ARGS` in `/etc/koryta/nightly.env` passes flags, e.g.
+`--idle-minutes 30`.
+
 ## Setting it up
 
 Once, as the project owner. `dev-workflow` cannot: it gets 403 on IAM, Compute
@@ -181,7 +220,8 @@ way, and the timer runs the night on a VM that is already up too.
   `.../logs/`.
 - **Log in during a night.** `sudo touch /etc/koryta/stay-up` before 04:30 and
   the VM stays up afterwards; remove it, or the VM runs - and bills - until
-  the schedule's 09:00 stop. A boot outside the night window runs nothing.
+  the schedule's 09:00 stop. A boot outside the night window runs no night -
+  only the requests worker, which does what is queued (above).
 - **One step by hand.** `night.sh --force --only people --people-dry-run`
   (the `systemd-run` line above). Steps left out by `--only` or `--skip` hold
   nothing back. A real people run by hand creates pages no model has rated:
@@ -224,12 +264,14 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 
 ## Files
 
-| File                     | What                                                                                   |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| `create-vm.sh`           | the GCP side, once: service account, grants, secrets, VM, schedule                     |
-| `setup-vm.sh`            | the VM side, idempotent: packages, user, uv, Go, checkout, `/etc/koryta`, units          |
-| `koryta-nightly.timer`   | 04:30 Warsaw; catches up a missed start after boot                                     |
-| `koryta-nightly.service` | runs `night.sh` as `koryta`, then `poweroff.sh` as root                                  |
-| `night.sh`               | night window, lock, checkout, venv, compressor, secrets, then `koryta_nightly`         |
-| `poweroff.sh`            | powers off after a night run, unless `/etc/koryta/stay-up`                              |
-| `nightly.env.example`    | `/etc/koryta/nightly.env`'s first version                                               |
+| File                      | What                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| `create-vm.sh`            | the GCP side, once: service account, grants, secrets, VM, schedule              |
+| `setup-vm.sh`             | the VM side, idempotent: packages, user, uv, Go, checkout, `/etc/koryta`, units |
+| `koryta-nightly.timer`    | 04:30 Warsaw; catches up a missed start after boot                              |
+| `koryta-nightly.service`  | runs `night.sh` as `koryta`, then `poweroff.sh` as root                         |
+| `night.sh`                | night window, lock, checkout, venv, compressor, secrets, then `koryta_nightly`  |
+| `koryta-requests.service` | at every boot: `requests.sh`, the worker for runs asked for on the site         |
+| `requests.sh`             | the web key, then `koryta_job_requests --watch`                                 |
+| `poweroff.sh`             | powers off after a night or an idle worker, unless `/etc/koryta/stay-up`        |
+| `nightly.env.example`     | `/etc/koryta/nightly.env`'s first version                                       |

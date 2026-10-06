@@ -65,10 +65,17 @@ if ((force == 0)); then
   touch "$state/poweroff-requested"
 fi
 
+# Shared with the requests worker (koryta-requests.service), which holds it for
+# each run somebody asked for on the site: a night started meanwhile waits for
+# that run - minutes - rather than losing the night to it. A second night does
+# not get it in that time either, and gives up.
 exec 9>"$state/lock"
 if ! flock --nonblock 9; then
-  echo "Another night run holds $state/lock; not starting a second one."
-  exit 1
+  echo "$state/lock is held - a run asked for on the site, or another night; waiting"
+  if ! flock --wait "${KORYTA_LOCK_WAIT:-1800}" 9; then
+    echo "Still held after ${KORYTA_LOCK_WAIT:-1800} s; not starting."
+    exit 1
+  fi
 fi
 
 echo "$(date -Is) koryta nightly on $(hostname), code $ref"
