@@ -691,6 +691,23 @@ describe("/admin/procesy", () => {
     expect(isOpen(page, "krs_scrape_free")).toBe(false);
   });
 
+  it("polls without the button's spinner, which is for a click", async () => {
+    const page = await mountPage();
+    const button = () => page.get("[data-jobs-refresh]");
+    // The minute's poll goes out and its answer does not come.
+    mockAuthRequest.mockImplementationOnce(() => new Promise(() => {}));
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flushPromises();
+    expect(mockAuthRequest).toHaveBeenCalledTimes(2);
+    expect(button().classes()).not.toContain("v-btn--loading");
+
+    // A click joins the request that is out, and shows that it is waiting.
+    await button().trigger("click");
+    await flushPromises();
+    expect(mockAuthRequest).toHaveBeenCalledTimes(2);
+    expect(button().classes()).toContain("v-btn--loading");
+  });
+
   it("gives up on a refresh that does not answer, and asks again at the next poll", async () => {
     const page = await mountPage();
     // How ofetch fails a request it has given up on after `timeout`.
