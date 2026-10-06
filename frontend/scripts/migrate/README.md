@@ -3,6 +3,9 @@
 Scripts that repair or reshape documents in the `koryta-pl` Firestore database.
 They are kept after they have been run: the commit that adds one explains why
 the data was wrong, and the script is the only record of what was done to it.
+A finished one moves to `archive/`, where its dry run keeps being run against
+production data and has to keep finding nothing; see
+[Finished migrations go to `archive/`](#finished-migrations-go-to-archive).
 
 ## The two flags
 
@@ -56,6 +59,9 @@ would rather not start it.
 
 - **Report before it writes.** The dry run prints the same counts the real run
   will, so the number can be sanity-checked against the database first.
+- **End the dry run with `reportRemaining`** from `remaining.ts`: the counts of
+  what it would still write, on the one line `check:archived-migrations` reads.
+  A script that does it from the start can be archived by moving the file.
 - **Be idempotent.** Re-running must be a no-op. Skip documents that are already
   in the target shape rather than rewriting them — a write that changes nothing
   still costs, and "a clean run is free" is what makes the script safe to leave
@@ -157,7 +163,56 @@ people whose `rejestrIo` overwrote each other — is `needs_split` and
 against the nightly production export. Most of its assertions carry a budget —
 the number of documents known to be broken — so after running a migration
 against production, lower the matching budget to the new count. A migration is
-finished when its budget reaches zero.
+not finished until its budget reaches zero.
+
+## Finished migrations go to `archive/`
+
+A migration is finished when it has run against production, a dry run against
+an export taken after that run reports nothing left to change, and any budget it
+had in the invariants suite is zero. Then move it into `archive/`. The scripts
+meant to be re-run stay where they are: they are tools, and finding work is
+their job.
+
+The archive is not where scripts go to be forgotten. Every one in it is dry-run
+against the newest production export, and has to keep reporting zero:
+
+```bash
+npm run db:pull
+devns npm run check:archived-migrations
+```
+
+That loads the export into a Firestore emulator — Firestore alone, no app —
+then runs each archived script's dry run in turn, the way a person would: no
+`--prod`, no `--commit`, a process each, with `FIRESTORE_EMULATOR_HOST` set so
+that no call can reach production. It fails unless every one of them reports
+zero. It took 17 seconds with the first two
+scripts in it, and it runs every morning after the 04:00 export as part of the
+dev box's morning check.
+
+Zero is what the code fix that came with the migration is meant to hold it at,
+so a count coming back means something writes the old shape again: the fix
+regressed, or a new write path goes around it. The script that noticed is also
+the repair, and still takes `--commit` and `--prod` like any other. The one
+harmless way to see a count is an export older than the production run, which
+is what the day a script is archived looks like until the next export.
+
+What the check needs from a script, which `tests/scripts/checkArchive.test.ts`
+verifies without an emulator:
+
+- **A dry run.** It writes only with `--commit`, which the check never passes.
+- **`reportRemaining({...})` at the end of that dry run**, with the counts of
+  what it would still write. Only what it would write: documents it reports and
+  leaves alone on purpose are not left to migrate, and counting them would keep
+  a finished migration from ever reading zero — `backfill-parties-source.ts`
+  reports the lists it would pin and the proposals it would stamp, not the two
+  it leaves to a person. A script that prints no such line fails the check
+  rather than passing as zero.
+
+Moving a script in adds a `../` to its relative imports and `archive/` to the
+usage lines in its docstring, and whatever imports it — usually its test —
+follows. The check runs every script under Nuxt's server tsconfig, so one that
+imports through `~~/`, like `merge-duplicate-people.ts`, needs nothing more than
+`npx nuxt prepare` to have been run.
 
 ## Note on the older scripts
 
