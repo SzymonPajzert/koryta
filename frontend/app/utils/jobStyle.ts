@@ -181,6 +181,7 @@ export const runTriggerConfig: Record<
   schedule: { title: "harmonogram", icon: mdiCalendarClock },
   manual: { title: "ręcznie", icon: mdiConsoleLine },
   event: { title: "zdarzenie", icon: mdiLightningBoltOutline },
+  request: { title: "zlecone ze strony", icon: mdiGestureTap },
 };
 
 /** The two jobs that report nothing, and where their state is read from. */
@@ -243,6 +244,13 @@ const COUNTER_LABELS: Record<string, string> = {
   companies_created: "dodanych firm",
   unplaced: "nieumieszczonych kandydatur",
   planned: "w paczce",
+  // people_request: what of the page's people the run found and left, in the
+  // order the run's card lists them.
+  matched: "w danych",
+  to_change: "do zmiany",
+  to_create: "do utworzenia",
+  up_to_date: "już aktualnych",
+  left_out: "nieprzypisanych",
   // company (company_import).
   uploaded: "wysłanych",
   // score (score_import): votes on a model's shortlist, written, taken back

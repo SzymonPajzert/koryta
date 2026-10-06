@@ -79,6 +79,16 @@
             node-type="person"
           />
         </template>
+        <!-- The datascience group's, not only the admins': send what the
+             pipelines know about this person to this page now, rather than
+             whenever a night reaches them. Gates itself on the claim. -->
+        <JobsRequestButton
+          v-if="entity?.id"
+          :node-id="entity.id"
+          :name="entity.name"
+          target="person"
+          variant="icon"
+        />
         <DialogProposeEditNode
           v-if="entity && type === 'person'"
           :entity="entity"

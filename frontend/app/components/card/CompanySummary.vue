@@ -82,6 +82,16 @@
           Rewizje
         </v-btn>
 
+        <!-- Only on the company's own page, where the card is the heading:
+             send the people the pipelines know worked here to the site now.
+             The datascience group's; the button gates itself on the claim. -->
+        <JobsRequestButton
+          v-if="company.id && !linkToPage"
+          :node-id="company.id"
+          :name="company.name"
+          target="company"
+        />
+
         <DialogProposeEditNode
           :entity="company"
           skip-redirect
