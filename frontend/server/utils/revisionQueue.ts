@@ -16,9 +16,11 @@ import { normalizeUpdateTime } from "~~/shared/revisions";
 import { revisionChanges } from "~~/shared/revisionChanges";
 import {
   MAX_INLINE_CHANGES,
+  relationSubject,
   resolveProposalStatus,
   type Proposal,
   type ProposalKind,
+  type ProposalSubject,
 } from "~~/shared/proposals";
 import { withoutInternalFields } from "~~/server/utils/revisions";
 
@@ -49,9 +51,9 @@ export interface DescribeOptions {
  * The expensive part is the join, and it is done in batches over the *page
  * slice* rather than per row: the distinct targets in one `getAll`, then the
  * revisions those targets point at, then - for edge revisions only - the nodes
- * at their ends, masked to a name and a type. A page of 25 therefore costs a
- * fixed handful of batched reads however many revisions were scanned to find
- * it.
+ * at their ends, masked to a name, a type and whether they are live. A page of
+ * 25 therefore costs a fixed handful of batched reads however many revisions
+ * were scanned to find it.
  *
  * Identities come from Firebase Auth, which is not billed as Firestore reads. A
  * uid that no longer resolves keeps its row with null fields - the proposal was
@@ -109,6 +111,8 @@ type EndpointInfo = {
   name: string | null;
   type: NodeType | null;
   path: string | null;
+  /** Whether the node is live, for when it is what the relation is about. */
+  published: boolean;
 };
 
 type Context = {
@@ -237,24 +241,22 @@ async function readEdgeEndpoints(
 
   const snapshots = await db.getAll(
     ...ids.map((id) => db.collection("nodes").doc(id)),
-    { fieldMask: ["name", "type"] },
+    { fieldMask: ["name", "type", "published", "deleted"] },
   );
 
   const endpoints = new Map<string, EndpointInfo>();
   ids.forEach((id, index) => {
     const snapshot = snapshots[index];
     if (!snapshot?.exists) return;
-    const name = stringField(snapshot.data() ?? {}, "name") ?? null;
-    const raw = stringField(snapshot.data() ?? {}, "type");
-    const type =
-      raw && (nodeTypes as readonly string[]).includes(raw)
-        ? (raw as NodeType)
-        : null;
+    const data = snapshot.data() ?? {};
+    const name = stringField(data, "name") ?? null;
+    const type = nodeTypeOf(data);
     endpoints.set(id, {
       id,
       name,
       type,
       path: type ? generateEntityUrl(type, id, name ?? undefined) : null,
+      published: pageIsPublic(data),
     });
   });
   return endpoints;
@@ -323,16 +325,20 @@ function describeOne(
   const updateUser =
     typeof revision.update_user === "string" ? revision.update_user : "";
   const ends = edgeEnds(proposed, target, collection, ctx.endpoints);
+  const name = targetName(proposed, target, ends);
+  const type = targetType(proposed, target);
+  const path = targetPath(proposed, target, collection, targetId, ends);
+  const published = pageIsPublic(target?.data ?? {});
 
   return {
     id: doc.id,
     targetId,
     targetCollection: collection,
-    targetName: targetName(proposed, target, ends),
-    targetType: targetType(proposed, target),
-    targetPath: targetPath(proposed, target, collection, targetId, ends),
+    targetName: name,
+    targetType: type,
+    targetPath: path,
     targetExists: target?.exists ?? false,
-    published: pageIsPublic(target?.data ?? {}),
+    published,
     kind,
     deleteReason:
       typeof proposed.delete_reason === "string"
@@ -358,6 +364,29 @@ function describeOne(
       ? (stringField(revision, "review_user") ?? null)
       : null,
     stale: isStale(doc.id, updateTime, approvedId, approved),
+    subject:
+      collection === "edges"
+        ? edgeSubject(targetId, name, ends)
+        : { id: targetId, name, type, path, published },
+  };
+}
+
+/** What a relation is about, by the rule on `ProposalSubject`. */
+function edgeSubject(
+  edgeId: string,
+  name: string | null,
+  ends: { source?: EndpointInfo; target?: EndpointInfo },
+): ProposalSubject {
+  const end = relationSubject(ends.source, ends.target);
+  if (!end) {
+    return { id: edgeId, name, type: null, path: null, published: false };
+  }
+  return {
+    id: end.id,
+    name: end.name,
+    type: end.type,
+    path: end.path,
+    published: end.published,
   };
 }
 
@@ -475,8 +504,12 @@ function targetType(
   proposed: Record<string, unknown>,
   target: TargetInfo | undefined,
 ): NodeType | null {
-  const raw =
-    stringField(proposed, "type") ?? stringField(target?.data ?? {}, "type");
+  return nodeTypeOf(proposed) ?? nodeTypeOf(target?.data ?? {});
+}
+
+/** A document's `type`, when it is one a node can have. */
+export function nodeTypeOf(data: Record<string, unknown>): NodeType | null {
+  const raw = stringField(data, "type");
   return raw && (nodeTypes as readonly string[]).includes(raw)
     ? (raw as NodeType)
     : null;

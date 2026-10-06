@@ -54,6 +54,13 @@ const proposal = (over: Partial<Proposal> = {}): Proposal => ({
   reviewTime: null,
   reviewUser: null,
   stale: false,
+  subject: {
+    id: "node-1",
+    name: "Anna Nowak",
+    type: "person",
+    path: "/osoba/anna-nowak-node-1",
+    published: true,
+  },
   ...over,
 });
 

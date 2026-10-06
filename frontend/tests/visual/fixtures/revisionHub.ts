@@ -17,8 +17,10 @@ import { daysAgo } from "../clock";
  * and an edit made stale by a later change - and a pipeline edge change of
  * each common type. The people and places are made up. */
 
-const proposal = (fields: Partial<Proposal> & Pick<Proposal, "id">) =>
-  ({
+/** A proposal about its own target, unless it says otherwise - the subject of
+ * a node revision is the node. */
+const proposal = (fields: Partial<Proposal> & Pick<Proposal, "id">) => {
+  const row: Omit<Proposal, "subject"> = {
     targetId: "wizos1",
     targetCollection: "nodes",
     targetName: "Barbara Przykładowa",
@@ -41,7 +43,18 @@ const proposal = (fields: Partial<Proposal> & Pick<Proposal, "id">) =>
     reviewUser: null,
     stale: false,
     ...fields,
-  }) satisfies Proposal;
+  };
+  return {
+    ...row,
+    subject: fields.subject ?? {
+      id: row.targetId,
+      name: row.targetName,
+      type: row.targetType,
+      path: row.targetPath,
+      published: row.published,
+    },
+  } satisfies Proposal;
+};
 
 export const queueProposals: Proposal[] = [
   proposal({
