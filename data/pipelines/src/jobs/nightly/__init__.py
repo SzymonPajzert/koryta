@@ -23,6 +23,9 @@ The steps, in order (`STEPS`):
     invariants  the database invariants over tonight's export
     people      koryta_people_import --scope priority --max-uploads 100: new
                 hires first, then published pages, then the rest
+    scores      koryta_score_import: every scoring model rebuilt over the
+                export and the pages the people step has just created, and
+                its votes reconciled with the site's
     tidy        old export shards and day-named outputs off the disk
 
 Every step but `export` and `tidy` is a process of its own - the jobs and the
@@ -37,6 +40,8 @@ night; only the steps that depend on it are held:
   likely after last night's upload, holds the upload until somebody looks. The
   18 invariants failing on 2026-10-03 (budgets drifted past their measured
   values) fail every night and do not hold it.
+- `scores` needs the same, and not the people: their outcome only decides
+  which new pages there are to rate as well.
 
 The night starts at 04:30 Warsaw, after the export and after midnight UTC, so
 the compressor - which archives up to yesterday in UTC - takes the whole
@@ -204,6 +209,7 @@ STEPS = (
     Step("outputs", "wyniki", 20),
     Step("invariants", "niezmienniki", 30),
     Step("people", "osoby", 60),
+    Step("scores", "oceny", 30),
     Step("tidy", "porządki", 5, always=True),
 )
 STEP_NAMES = tuple(step.name for step in STEPS)
@@ -522,8 +528,8 @@ class Night:
             return "wstrzymane: brak kopii bazy"
         if step.name in ("tests", "outputs") and not self.came_through("reprocess"):
             return "wstrzymane: potoki się nie przeliczyły"
-        if step.name == "people":
-            return self.why_not_people()
+        if step.name in ("people", "scores"):
+            return self.why_not_upload()
         return ""
 
     def needs(self, name: str) -> bool:
@@ -535,7 +541,8 @@ class Night:
         """Whether a step this run includes succeeded; true for one left out."""
         return not self.needs(name) or self.succeeded(name)
 
-    def why_not_people(self) -> str:
+    def why_not_upload(self) -> str:
+        """Why nothing goes up to the site tonight, or "" when it may."""
         if self.needs("export") and not self.summary.export_fresh:
             return "wstrzymane: nie ma dzisiejszej kopii bazy"
         if not self.came_through("reprocess"):
@@ -737,6 +744,16 @@ class Night:
             argv.append("--dry-run")
         return self.judge_job(*self.process(step, argv))
 
+    def step_scores(self, step: Step) -> tuple[str, str, int | None]:
+        # The models are rebuilt; what they read is the reprocess's, on disk,
+        # and the pages the people step created are read from its record.
+        argv = [
+            bin_path("koryta_score_import"),
+            "--max-minutes",
+            f"{self.minutes_for(step):.0f}",
+        ]
+        return self.judge_job(*self.process(step, argv))
+
     def step_compress(self, step: Step) -> tuple[str, str, int | None]:
         compressor = os.environ.get("KORYTA_COMPRESSOR")
         if not compressor:
@@ -786,6 +803,8 @@ class Night:
             "people": "koryta_people_import --scope priority --max-uploads "
             f"{self.args.max_uploads}"
             + (" --dry-run" if self.args.people_dry_run else ""),
+            "scores": "koryta_score_import: every scoring model, tonight's new "
+            "pages included",
             "compress": "compressor -incremental -hostname "
             + " / ".join(COMPRESSED_HOSTS),
             "tidy": f"remove export shards and day-named outputs older than "

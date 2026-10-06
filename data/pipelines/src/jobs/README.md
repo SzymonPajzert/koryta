@@ -39,8 +39,8 @@ the company history `krs_scrape_paid` buys from rejestr.io - and `PeopleKRSCombi
 rejestr.io's for every company where the odpis is the newer of the two, on the way to `PeopleMerged`.
 
 ## nightly
-1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_odpis`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, and `people_import --scope priority --max-uploads 100`
-1. A step that fails holds only the steps that depend on it; the people wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_odpis`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100` and `score_import`
+1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
 1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
 
 Started by a systemd timer on the VM at 04:30, after the export - see [data/nightly/README.md](../../../nightly/README.md).
@@ -78,6 +78,13 @@ renews the token once and sends the request again; a token that cannot be renewe
 
 With neither of the first two set, whoever runs it signs in through the browser, as before, and again when the
 site answers 401.
+
+## score_import
+1. Rebuilds every scoring model (`analysis.scores`) over what is on disk - on the VM, what the night's reprocess has just built - rating the site's people as this morning's export has them, and the pages the people import created since: `KorytaPeopleCreated` folds them from its `sent/` parts, which name the page each person went to
+1. Reconciles each model's votes on the site with what it wrote last time (`util.firestore.Firestore.replace_scores`): a changed score is written, one it no longer gives taken back; a model that rates nobody is not uploaded, since reconciled it would take back every vote it has, and fails the run
+1. Writes a run summary to the shared cache (`jobs/score_import/runs/`): each model's counts, and how many of the pages created since the export some model rated
+
+Runs nightly as the step after the people on the koryta-nightly VM, so a new hire's page has its score the morning it is created - see [data/nightly/README.md](../../../nightly/README.md). `submit_scores.sh` uploads the same models by hand, one `koryta_uploader --type score` per model.
 
 # Reporting a run
 
@@ -126,7 +133,7 @@ the project `GOOGLE_CLOUD_PROJECT` or `GCLOUD_PROJECT` names, else
 `demo-koryta-pl` - the one the dev stack starts its emulators under, and so the
 one the local /admin/procesy reads.
 
-What reports: `krs_scrape_free` (not `--dry-run`), `krs_scrape_paid` (once the
+What reports: `krs_scrape_free` (not `--dry-run`), `score_import` (not `--dry-run`), `krs_scrape_paid` (once the
 bill is accepted), `krs_odpis` (not `--dry-run`), `krs_register_owners` (not
 `--dry-run` or `--reads 0`), the article crawl, `koryta_crawl`, `people_import`
 (a `--dry-run` too) and `koryta_uploader --submit`, under `people_import`,
