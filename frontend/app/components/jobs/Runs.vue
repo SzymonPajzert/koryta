@@ -4,6 +4,7 @@
       v-for="run in runs"
       :key="run.id"
       class="job-run"
+      :class="{ 'job-run--target': run.id === targetRunId }"
       :data-run="run.id"
       :data-run-state="run.state"
     >
@@ -46,6 +47,14 @@
           <span v-if="run.host" class="text-medium-emphasis">
             {{ run.host }}
           </span>
+          <a
+            :href="`#${runAnchor(run.id)}`"
+            class="job-run__self"
+            title="Link do tego zapisu"
+            data-run-self
+          >
+            #
+          </a>
         </div>
         <p
           v-for="(message, index) in run.errors"
@@ -82,6 +91,29 @@
             class="text-medium-emphasis"
           >
             - {{ run.phase }}
+          </span>
+          <a
+            :href="`#${runAnchor(run.id)}`"
+            class="job-run__self"
+            title="Link do tego uruchomienia"
+            data-run-self
+          >
+            #
+          </a>
+        </div>
+
+        <!-- A run asked for on a page: which page, and who asked. -->
+        <div v-if="run.request" class="job-run__extras" data-run-request>
+          <NuxtLink v-if="run.link" :to="run.link" class="job-run__title">
+            {{ run.title || run.request.name }}
+          </NuxtLink>
+          <span v-else class="job-run__title">{{ run.request.name }}</span>
+          <span class="text-medium-emphasis">
+            {{ run.request.target === "company" ? "firma" : "osoba" }}
+            <template v-if="run.request.dryRun"> · tylko liczenie</template>
+            <template v-if="run.request.byName">
+              · zlecił(a) {{ run.request.byName }}</template
+            >
           </span>
         </div>
 
@@ -186,6 +218,7 @@ import { formatCount } from "~/utils/chartTheme";
 import {
   formatDuration,
   isFinished,
+  runAnchor,
   shortWarsawTime,
   WARSAW,
   type JobDefinition,
@@ -204,6 +237,8 @@ const props = defineProps<{
     "heartbeatMinutes" | "queuedMinutes" | "captures"
   >;
   now: Date;
+  /** The run a `#przebieg-<id>` link names, marked. */
+  targetRunId?: string | null;
 }>();
 
 /** Whether these runs are the captures job's pages. Going by the job rather
@@ -291,6 +326,20 @@ async function copyPath(run: JobRun) {
 
 .job-run + .job-run {
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+/* The run a link named: the row target's colours, as `.arow--target`. */
+.job-run--target {
+  background: rgb(var(--v-theme-surface-sage));
+  outline: 2px solid rgb(var(--v-theme-ink-sage));
+  outline-offset: -2px;
+}
+
+/* The way to a run's own link: quiet, since every run has one. */
+.job-run__self {
+  margin-inline-start: auto;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  text-decoration: none;
 }
 
 .job-run__line,

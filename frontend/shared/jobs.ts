@@ -28,6 +28,11 @@
  *   with their own `stored -> extracting -> done | error` lifecycle
  *   (shared/capture.ts). The server maps them onto the one job marked
  *   `captures`, rather than copying them.
+ * - A run somebody asks for on a page - "send this company's people" - starts
+ *   as a `jobRuns` document the site writes itself, `queued`, with what was
+ *   asked in `request` (server/utils/jobRequests.ts). The job that takes it on
+ *   reports on that same document, so its link (`/admin/procesy#przebieg-<id>`)
+ *   follows it from the click to its end.
  * - Two jobs report nothing and are watched through what they leave behind:
  *   the compressor through the newest archive in koryta-pl-compressed, the
  *   Firestore export through its completion marker in koryta-pl-crawled.
@@ -42,6 +47,15 @@ import type { ArticleCapture } from "./capture";
 
 export const JOBS_COLLECTION = "jobs";
 export const JOB_RUNS_COLLECTION = "jobRuns";
+
+/** The job a company's or a person's page asks for: their people, sent to the
+ * site (`koryta_people_import --request`, data/pipelines/src/jobs/requests). */
+export const PEOPLE_REQUEST = "people_request";
+
+/** Where a run is reached: `/admin/procesy#przebieg-<id>`. A capture is a run
+ * too, under its `articlePages` id. */
+export const runAnchor = (id: string) => `przebieg-${id}`;
+export const runLink = (id: string) => `/admin/procesy#${runAnchor(id)}`;
 
 export const JOB_KINDS = ["triggered", "scheduled", "ongoing"] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
@@ -70,9 +84,9 @@ export type RunState = (typeof RUN_STATES)[number];
 export const isFinished = (state: RunState) =>
   state === "succeeded" || state === "partial" || state === "failed";
 
-/** How a run started: Cloud Scheduler, someone at a terminal, or an event on
- * the site (a capture). */
-export const RUN_TRIGGERS = ["schedule", "manual", "event"] as const;
+/** How a run started: Cloud Scheduler, someone at a terminal, an event on
+ * the site (a capture), or somebody asking for it on a page. */
+export const RUN_TRIGGERS = ["schedule", "manual", "event", "request"] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
 export interface RunProgress {
@@ -109,10 +123,44 @@ export interface JobRun {
   summaryPath: string | null;
   /** Code version, when the job knows it. */
   version: string | null;
-  /** Captures only: what was captured and where its facts are. */
+  /** What the run is about, when it is about one thing: the page a capture
+   * read, the company a request named. `link` is that thing on the site. */
   title?: string | null;
   url?: string | null;
   link?: string | null;
+  /** A run asked for on a page: what was asked, and by whom. */
+  request?: RunRequest | null;
+  /** A run asked for on a page: what came of starting the machine for it. */
+  dispatch?: RunDispatch | null;
+}
+
+/** What somebody asked for, on the page of a company or a person. */
+export interface RunRequest {
+  target: RequestTarget;
+  nodeId: string;
+  name: string;
+  /** A company's KRS number. */
+  krs?: string | null;
+  /** A person's rejestr.io link. */
+  rejestrIo?: string | null;
+  /** Build and count, send nothing. */
+  dryRun: boolean;
+  /** Who asked: their uid, and a name to show. */
+  by?: string | null;
+  byName?: string | null;
+  at?: string | null;
+}
+
+export const REQUEST_TARGETS = ["company", "person"] as const;
+export type RequestTarget = (typeof REQUEST_TARGETS)[number];
+
+/** Starting the machine that does the asked-for runs (server/utils/jobRunner.ts):
+ * `vm` when the site starts it, `off` when the run waits for the night. */
+export interface RunDispatch {
+  mode: "vm" | "off";
+  at: string;
+  ok: boolean;
+  error?: string | null;
 }
 
 /** Errors and their length are capped where they are written; these caps
@@ -158,6 +206,31 @@ const runDataSchema = z.object({
   exitCode: z.number().int().nullish().catch(null),
   summaryPath: z.string().nullish().catch(null),
   version: z.string().nullish().catch(null),
+  title: z.string().nullish().catch(null),
+  link: z.string().nullish().catch(null),
+  request: z
+    .object({
+      target: z.enum(REQUEST_TARGETS),
+      nodeId: z.string().min(1),
+      name: z.string().catch(""),
+      krs: z.string().nullish().catch(null),
+      rejestrIo: z.string().nullish().catch(null),
+      dryRun: z.boolean().catch(false),
+      by: z.string().nullish().catch(null),
+      byName: z.string().nullish().catch(null),
+      at: isoOrNull.catch(null),
+    })
+    .nullish()
+    .catch(null),
+  dispatch: z
+    .object({
+      mode: z.enum(["vm", "off"]),
+      at: isoTime,
+      ok: z.boolean(),
+      error: z.string().nullish().catch(null),
+    })
+    .nullish()
+    .catch(null),
 });
 
 /** A reported run as the page uses it, from a document's data with its times
@@ -201,6 +274,25 @@ export function jobRunFromData(id: string, data: unknown): JobRun | null {
     exitCode: run.exitCode ?? null,
     summaryPath: run.summaryPath ?? null,
     version: run.version ?? null,
+    // Only where a run is about one thing; the rest of the jobs leave them out
+    // rather than carry three nulls each.
+    ...(run.title ? { title: run.title } : {}),
+    ...(run.link ? { link: run.link } : {}),
+    ...(run.request
+      ? {
+          request: {
+            ...run.request,
+            krs: run.request.krs ?? null,
+            rejestrIo: run.request.rejestrIo ?? null,
+            by: run.request.by ?? null,
+            byName: run.request.byName ?? null,
+            at: run.request.at ?? null,
+          },
+        }
+      : {}),
+    ...(run.dispatch
+      ? { dispatch: { ...run.dispatch, error: run.dispatch.error ?? null } }
+      : {}),
   };
 }
 
@@ -326,6 +418,27 @@ export const JOBS: readonly JobDefinition[] = [
       "koryta_uploader --type extraction: fakty z wsadowej ekstrakcji artykułów, jednym żądaniem do /api/ingest/extraction.",
     runsOn: "Ręcznie",
     heartbeatMinutes: 15,
+  },
+  {
+    id: PEOPLE_REQUEST,
+    kind: "triggered",
+    title: "Wysyłka osób na żądanie",
+    summary:
+      "Przycisk na stronie firmy albo osoby: paczki jej ludzi - albo tej jednej osoby - z najnowszych danych, wysłane przez /api/ingest/person. Osobom spółki, których serwis nie ma, zakłada strony (nieopublikowane); osobie nie zakłada żadnej.",
+    runsOn:
+      "VM koryta-nightly, którą strona włącza na żądanie (koryta-requests.service); bez tego - w nocy",
+    command: "koryta_job_requests --once",
+    // Building the payloads says nothing until it is done: the export and
+    // the company's people are read in one step.
+    heartbeatMinutes: 45,
+    // The VM boots in a minute or two; a run nobody takes for half an hour
+    // was not given a machine.
+    queuedMinutes: 30,
+    tasks: ["grant-site-starts-nightly-vm", "install-koryta-requests-worker"],
+    notes: [
+      "Porównuje paczki z porannym eksportem bazy: wysyła tylko to, co zmieniłoby stronę, i nie zgaduje po samym nazwisku, gdy dwie osoby się nie odróżniają.",
+      "Maszyna wyłącza się sama 10 minut po ostatniej wysyłce - chyba że ktoś jest zalogowany albo zaraz zacznie się noc.",
+    ],
   },
   {
     id: "nightly",

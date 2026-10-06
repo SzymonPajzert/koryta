@@ -33,11 +33,16 @@ enough that a crawl reporting from every page costs nothing. There is
 deliberately no background heartbeat: a job stuck in one step should look
 stuck.
 
+A run somebody asked for on the site starts as a document the site writes - a
+`queued` run with what was asked in `request` (`stores.job_requests`). The job
+that takes it on reports under that run's id with `adopt=True`, so its first
+write fills the document in rather than replacing it, and the request stays.
+
 Environment:
 - `KORYTA_JOB_STATUS=0` (or off/false/no) writes nothing.
-- `KORYTA_JOB_TRIGGER=schedule|manual|event` says how the run started; without
-  it a Cloud Run execution is taken for Cloud Scheduler's and anything else
-  for a hand run.
+- `KORYTA_JOB_TRIGGER=schedule|manual|event|request` says how the run started;
+  without it a Cloud Run execution is taken for Cloud Scheduler's and anything
+  else for a hand run.
 - `KORYTA_JOB_STATUS_IMPERSONATE=<service account>` writes as that account
   rather than as the default credentials - predator's dev-workflow account
   impersonates ops-writer, which may write the ops database - all of it, the
@@ -100,7 +105,9 @@ MAX_FAILED_WRITES = 3
 
 RunState = Literal["queued", "running", "succeeded", "partial", "failed"]
 FinalState = Literal["succeeded", "partial", "failed"]
-RunTrigger = Literal["schedule", "manual", "event"]
+#: `RUN_TRIGGERS` in shared/jobs.ts: Cloud Scheduler or the VM's timer, a hand
+#: run, an event on the site (a capture), a run asked for on the site.
+RunTrigger = Literal["schedule", "manual", "event", "request"]
 RUN_STATES: tuple[RunState, ...] = get_args(RunState)
 FINAL_STATES: tuple[FinalState, ...] = get_args(FinalState)
 RUN_TRIGGERS: tuple[RunTrigger, ...] = get_args(RunTrigger)
@@ -244,9 +251,13 @@ class JobRun:
         clock: Callable[[], datetime] = _utc_now,
         monotonic: Callable[[], float] = time.monotonic,
         enabled: bool | None = None,
+        adopt: bool = False,
     ) -> None:
         self.job = job
         self.run_id = run_id or uuid7str()
+        #: The run's document exists already - the site queued it - and the
+        #: first write merges into it, keeping what the site wrote there.
+        self.adopt = adopt and run_id is not None
         self.trigger: RunTrigger = (
             trigger if trigger in RUN_TRIGGERS else detect_trigger()
         )
@@ -477,8 +488,11 @@ class JobRun:
                 record["lastSucceededAt"] = now
         whole = not self._run_written
         if whole:
+            # Merged into a queued run, so its `request` - what was asked and
+            # by whom - outlives the job taking it on. Every field the run
+            # writes is named, so a merge leaves nothing of the queued state.
             run_op: _Op = (
-                "set",
+                "merge" if self.adopt else "set",
                 JOB_RUNS_COLLECTION,
                 self.run_id,
                 self._run_document(now),

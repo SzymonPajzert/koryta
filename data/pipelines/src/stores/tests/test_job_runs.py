@@ -175,6 +175,48 @@ def test_start_writes_the_whole_run_and_the_job_record(clock, capsys):
     assert capsys.readouterr().out == "job status: agent-tasks/jobRuns/run-1\n"
 
 
+def test_a_run_the_site_queued_is_filled_in_not_replaced(clock):
+    client = Client()
+    queued_at = T0 - timedelta(minutes=3)
+    client.docs[RUN] = {
+        "job": "people_request",
+        "state": "queued",
+        "trigger": "request",
+        "startedAt": queued_at,
+        "title": "Wodociągi Miejskie",
+        "request": {"target": "company", "nodeId": "place-1", "by": "uid-1"},
+    }
+
+    run = JobRun(
+        "people_request",
+        run_id="run-1",
+        trigger="request",
+        adopt=True,
+        client=client,
+        clock=clock.now,
+        monotonic=clock.monotonic,
+    )
+    run.start(phase="paczki")
+    run.finish("succeeded", counters={"planned": 2})
+
+    doc = client.docs[RUN]
+    # What the site wrote stays; what the run knows replaces the queued state.
+    assert doc["request"] == {"target": "company", "nodeId": "place-1", "by": "uid-1"}
+    assert doc["title"] == "Wodociągi Miejskie"
+    assert (doc["state"], doc["trigger"], doc["startedAt"]) == (
+        "succeeded",
+        "request",
+        T0,
+    )
+    assert doc["counters"] == {"planned": 2}
+    [(run_kind, _, _), _] = client.commits[0]
+    assert run_kind == "merge"
+
+
+def test_adopting_needs_the_id_of_the_run_to_adopt():
+    assert JobRun("x", adopt=True, client=Client()).adopt is False
+
+
 def test_times_are_utc_and_timezone_aware(clock):
     client = Client()
 
@@ -707,6 +749,7 @@ def test_the_emulator_gets_the_dev_stacks_project_and_no_credentials(
             "cloud-run:krs-scrape-free/krs-scrape-free-x7k",
         ),
         ({"KORYTA_JOB_TRIGGER": "event"}, "event", "szymon@predator"),
+        ({"KORYTA_JOB_TRIGGER": "request"}, "request", "szymon@predator"),
         ({"KORYTA_JOB_TRIGGER": "nightly"}, "manual", "szymon@predator"),
         (
             {"CLOUD_RUN_EXECUTION": "e1", "KORYTA_JOB_TRIGGER": "?"},

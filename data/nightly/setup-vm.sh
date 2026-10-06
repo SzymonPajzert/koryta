@@ -82,18 +82,25 @@ elif [[ "$running_ref" != "$ref" ]]; then
   echo "!! The nights run KORYTA_REF=$running_ref, not $ref: edit $env_file if they should run $ref too."
 fi
 
-for unit in koryta-nightly.service koryta-nightly.timer; do
+for unit in koryta-nightly.service koryta-nightly.timer koryta-requests.service; do
   install -m 0644 "$repo/data/nightly/$unit" "/etc/systemd/system/$unit"
 done
 systemctl daemon-reload
 # The timer, not the service: the service has no [Install] and runs only when
 # the timer (or somebody) starts it.
 systemctl enable --now koryta-nightly.timer
+# The requests worker starts at every boot - the site boots the VM for it. Not
+# started here yet: the venv below has to have its entry point first.
+systemctl enable koryta-requests.service
 
 # The environment, now rather than in the first night's budget.
 as_user "cd $repo/data/pipelines && ~/.local/bin/uv sync --frozen --no-default-groups --group test"
 install -d -o "$user" -g "$user" /var/lib/koryta-nightly /var/lib/koryta-nightly/bin
 as_user "cd $repo/data/compressor && /usr/local/go/bin/go build -o /var/lib/koryta-nightly/bin/compressor ./cmd/compressor"
+
+# Restarted rather than started, so a rerun of this script runs the worker's
+# new code.
+systemctl restart koryta-requests.service
 
 systemctl list-timers koryta-nightly.timer --no-pager
 echo "Done. The night runs at 04:30 Warsaw - see data/nightly/README.md for the first one."

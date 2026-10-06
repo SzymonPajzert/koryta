@@ -150,6 +150,7 @@ koryta_krs_odpis = "jobs.krs_odpis:main"
 koryta_people_import = "jobs.people_import:main"
 koryta_score_import = "jobs.score_import:main"
 koryta_nightly = "jobs.nightly:main"
+koryta_job_requests = "jobs.requests:main"
 set_auth_claims = "set_auth_claims:main"
 
 

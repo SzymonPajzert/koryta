@@ -81,6 +81,13 @@ export default defineNuxtConfig({
     extractorQueue: process.env.EXTRACTOR_QUEUE || "article-extraction",
     extractorLocation: process.env.EXTRACTOR_LOCATION || "europe-central2",
     extractorServiceAccount: process.env.EXTRACTOR_SERVICE_ACCOUNT || "",
+    // What a run asked for on a company's or a person's page is done on: the
+    // koryta-nightly VM, which the server starts for it (server/utils/
+    // jobRunner.ts). "off" everywhere it is not configured - the run then waits
+    // in the queue for the next night.
+    jobRunnerDispatch: process.env.JOB_RUNNER_DISPATCH || "off",
+    jobRunnerZone: process.env.JOB_RUNNER_ZONE || "europe-central2-b",
+    jobRunnerInstance: process.env.JOB_RUNNER_INSTANCE || "koryta-nightly",
     gcpProject:
       process.env.GCLOUD_PROJECT ||
       process.env.GOOGLE_CLOUD_PROJECT ||

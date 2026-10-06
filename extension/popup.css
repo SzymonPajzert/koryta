@@ -216,3 +216,18 @@ footer a {
   font-size: 12px;
   text-decoration: none;
 }
+
+/* The capture's run on /admin/procesy, under the status line once the upload
+ * has named the page. `[hidden]` restated: the display below would beat the
+ * browser's own rule for the attribute. */
+.progress-link {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--primary);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.progress-link[hidden] {
+  display: none;
+}

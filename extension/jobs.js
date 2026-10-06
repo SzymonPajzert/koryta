@@ -42,3 +42,15 @@ export function jobMessage(job) {
 export function jobIsBusy(job) {
   return ["capturing", "uploading", "extracting"].includes(job?.state);
 }
+
+/** Where the capture can be followed on the site: its run on /admin/procesy,
+ * which reads the same `articlePages` document this job polls and shows what
+ * came of it after the panel is closed - the extractor's progress, its
+ * error, the facts. Null until the upload has handed back the page's id.
+ *
+ * The page is the datascience group's, as capturing is, so whoever can
+ * capture can open it. */
+export function jobProgressUrl(origin, job) {
+  if (!job?.pageId) return null;
+  return `${origin}/admin/procesy#przebieg-${encodeURIComponent(job.pageId)}`;
+}

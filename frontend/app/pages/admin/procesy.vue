@@ -8,6 +8,17 @@
       co zostawiły w zasobnikach.
     </p>
 
+    <!-- The one run a link named (#przebieg-<id>): what somebody asked for
+         on a page, or a capture the extension sent, followed until it ends. -->
+    <JobsFocusRun
+      v-if="focusRunId"
+      :key="focusRunId"
+      :run-id="focusRunId"
+      :now="now"
+      @close="closeFocus"
+      @loaded="onFocusLoaded"
+    />
+
     <!-- The focal point: how many jobs need a look, big and in colour, then
          the calmer counts. Everything below is the detail behind it. -->
     <div v-if="overview" class="jobs-summary mb-4" data-jobs-summary>
@@ -118,6 +129,7 @@
             :health="row.health"
             :now="asOf"
             :highlighted="targetId === row.definition.id"
+            :target-run-id="focusRunId"
             :show-tasks="isOwner"
             :expanded="openRows.has(row.definition.id)"
             @update:expanded="(open) => setOpen(row.definition.id, open)"
@@ -154,6 +166,7 @@ import {
   shortWarsawTime,
   type JobHealth,
   type JobHealthStatus,
+  type JobRun,
 } from "~~/shared/jobs";
 
 definePageMeta({
@@ -168,6 +181,7 @@ definePageMeta({
 useHead({ title: "Procesy (Admin) - koryta.pl" });
 
 const route = useRoute();
+const router = useRouter();
 const { isOwner } = useAuthState();
 
 const { overview, loading, error, load, lastLoadedAt } = useOpsJobs();
@@ -338,6 +352,42 @@ async function focusTarget() {
 }
 
 watch(() => route.hash, focusTarget);
+
+/** The run a `#przebieg-<id>` link names - what a page's request button and
+ * the extension hand out. */
+const focusRunId = computed(() => {
+  const id = /^#przebieg-(.+)$/.exec(route.hash)?.[1];
+  if (!id) return null;
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return id;
+  }
+});
+
+/** The run's job's row opens under the card, its runs listed with this one
+ * marked - once, so a poll does not reopen a row somebody closed. The card
+ * reads the run every ten seconds and the list once a minute, so when the
+ * card sees the run move on, the list is read again rather than going on
+ * saying "W toku" under a card that says it is done. */
+let openedFor: string | null = null;
+let lastState: string | null = null;
+function onFocusLoaded(run: JobRun) {
+  if (openedFor !== run.id) {
+    openedFor = run.id;
+    lastState = run.state;
+    openRows.add(run.job);
+    return;
+  }
+  if (run.state !== lastState) {
+    lastState = run.state;
+    void refresh();
+  }
+}
+
+function closeFocus() {
+  void router.replace({ hash: "" });
+}
 
 onMounted(async () => {
   await refresh();
