@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timedelta
 
@@ -66,6 +67,15 @@ class World:
         self.objects: dict[str, bytes] = {}
         self.runs: list[RecordingRun] = []
         self.tmp = tmp_path
+        #: Secret Manager, as the VM's account may read it.
+        self.secrets: dict[str, str] = {night.REJESTR_SECRET: "a-key"}
+        self.secrets_read: list[str] = []
+
+    def read_secret(self, name: str) -> tuple[str | None, str]:
+        self.secrets_read.append(name)
+        if name in self.secrets:
+            return self.secrets[name], ""
+        return None, f"{name}: ERROR: PERMISSION_DENIED"
 
     def ran(self) -> list[str]:
         return [name for name, _, _ in self.commands]
@@ -137,7 +147,9 @@ def world(monkeypatch, tmp_path) -> World:
     monkeypatch.setattr(night, "tidy", lambda keep_days, today: (0, 0))
     monkeypatch.setenv("KORYTA_NIGHTLY_LOGS", str(tmp_path / "logs"))
     monkeypatch.setenv("KORYTA_COMPRESSOR", "/var/lib/koryta-nightly/bin/compressor")
-    monkeypatch.setenv("REJESTR_KEY", "a-key")
+    monkeypatch.delenv("REJESTR_KEY", raising=False)
+    monkeypatch.delenv("KORYTA_REJESTR_SECRET", raising=False)
+    monkeypatch.setattr(night, "read_secret", w.read_secret)
     monkeypatch.setattr(sys, "argv", ["koryta_nightly"])
     return w
 
@@ -240,9 +252,14 @@ def test_rejestr_io_is_bought_for_what_the_free_sources_failed_under_a_daily_cap
     argv, env = world.command("koryta_scrape_krs_paid")
     assert argv[argv.index("--scope") + 1] == "fallback"
     assert argv[argv.index("--max-calls") + 1] == "50"
-    # The key goes to the job in its environment, never on its command line.
+    # The key goes to the job in its environment, never on its command line,
+    # and to no other step.
+    assert world.secrets_read == ["rejestr-io-key"]
     assert env["REJESTR_KEY"] == "a-key"
     assert "a-key" not in argv
+    for name, _, other in world.commands:
+        if name != "koryta_scrape_krs_paid":
+            assert "REJESTR_KEY" not in other, name
 
     world.commands.clear()
     world.objects.clear()
@@ -253,18 +270,64 @@ def test_rejestr_io_is_bought_for_what_the_free_sources_failed_under_a_daily_cap
 
 
 def test_without_the_rejestr_io_key_the_paid_step_is_skipped_and_holds_nothing(
-    world, monkeypatch
+    world,
 ):
-    monkeypatch.delenv("REJESTR_KEY")
+    world.secrets.clear()
 
     assert night.main([]) == 0
 
     assert "koryta_scrape_krs_paid" not in world.ran()
-    assert world.steps()["krs_paid"] == (
-        "skipped",
-        "brak klucza rejestr.io (REJESTR_KEY)",
-    )
+    assert world.steps()["krs_paid"] == ("skipped", "brak klucza rejestr.io")
     assert world.steps()["people"] == ("succeeded", "")
+    # Why, for whoever reads the log: the secret's name and gcloud's answer.
+    [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
+    assert (
+        b"No rejestr.io key: rejestr-io-key: ERROR: PERMISSION_DENIED"
+        in (world.objects[log])
+    )
+
+
+def test_the_key_in_the_environment_wins_and_an_empty_secret_name_turns_it_off(
+    world, monkeypatch
+):
+    monkeypatch.setenv("REJESTR_KEY", "a-hand-run-key")
+
+    night.main(["--only", "krs_paid"])
+
+    _, env = world.command("koryta_scrape_krs_paid")
+    assert env["REJESTR_KEY"] == "a-hand-run-key"
+    assert world.secrets_read == []
+
+    monkeypatch.delenv("REJESTR_KEY")
+    monkeypatch.setenv("KORYTA_REJESTR_SECRET", "")
+    world.commands.clear()
+    world.objects.clear()
+
+    night.main(["--only", "krs_paid"])
+
+    assert world.ran() == [] and world.secrets_read == []
+    assert world.steps()["krs_paid"] == ("skipped", "brak klucza rejestr.io")
+
+
+def test_a_secret_is_read_with_gcloud_and_its_value_never_said(monkeypatch):
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        if argv[-2] == "--secret=rejestr-io-key":
+            return subprocess.CompletedProcess(argv, 0, "the-key\n", "")
+        return subprocess.CompletedProcess(
+            argv, 1, "", "ERROR: (gcloud.secrets.versions.access) NOT_FOUND\nmore"
+        )
+
+    monkeypatch.setattr(night.subprocess, "run", run)
+
+    assert night.read_secret("rejestr-io-key") == ("the-key", "")
+    assert night.read_secret("other") == (
+        None,
+        "other: ERROR: (gcloud.secrets.versions.access) NOT_FOUND",
+    )
+    assert calls[0][:5] == ["gcloud", "secrets", "versions", "access", "latest"]
 
 
 def test_a_cap_of_nothing_buys_nothing(world):
