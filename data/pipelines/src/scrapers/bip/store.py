@@ -10,14 +10,13 @@ swap, not a redesign.
 from __future__ import annotations
 
 import hashlib
-import json
 import tarfile
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scrapers.bip.models import DocRow
+from scrapers.bip.types import DocRow
 
 
 @dataclass
@@ -149,13 +148,11 @@ class LocalBundleStore:
         )
         return row, is_new
 
-    def flush(self) -> list[DocRow]:
-        """Close every open bundle. Returns rows for its manifest entries."""
-        rows: list[DocRow] = []
+    def flush(self) -> None:
+        """Close every open bundle at the end of a run."""
         with self._lock:
             for bundle in list(self._bundles.values()):
                 self._close(bundle)
-        return rows
 
     def close_host(self, host: str) -> None:
         """Finalize a host's open bundle so its documents get a real blob.
@@ -168,10 +165,6 @@ class LocalBundleStore:
             bundle = self._bundles.get(host)
             if bundle is not None:
                 self._close(bundle)
-
-    def known_digest(self, digest: str) -> bool:
-        with self._lock:
-            return digest in self._seen
 
     def blob_exists(self, bundle_rel: str) -> bool:
         """Whether the bundle a document row points at is still on disk."""
@@ -195,16 +188,6 @@ class _BytesReader:
         chunk = self._data[self._offset : self._offset + size]
         self._offset += len(chunk)
         return chunk
-
-
-def write_run_manifest(root: Path, stats: list[dict[str, object]]) -> Path:
-    """Append a run summary to `root/runs.jsonl` for later reporting."""
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / "runs.jsonl"
-    with path.open("a", encoding="utf-8") as handle:
-        for entry in stats:
-            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    return path
 
 
 def rewrap_part(part: Path, root: Path) -> tuple[str, list[str], str]:

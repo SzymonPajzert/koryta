@@ -1,12 +1,12 @@
-"""BIP document crawler (iteration 2: Postgres frontier, coordinator + fetchers)."""
+"""BIP document crawler (iteration 2: Postgres bip_queue, coordinator + fetchers)."""
 
+from scrapers.bip.bip_queue import BipQueue
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
-from scrapers.bip.frontier import BipFrontier
-from scrapers.bip.models import DocRow, HostRow, RegistryEntry, RunStats, UrlRow
+from scrapers.bip.types import DocRow, HostRow, RegistryEntry, RunStats, UrlRow
 
 __all__ = [
     "BipCoordinator",
-    "BipFrontier",
+    "BipQueue",
     "CoordinatorOptions",
     "DocRow",
     "HostRow",

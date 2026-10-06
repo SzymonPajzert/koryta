@@ -78,12 +78,6 @@ class RobotsCache:
             return host not in self._unreachable
         return parser.can_fetch(self.user_agent, url)
 
-    def crawl_delay(self, host: str) -> float | None:
-        parser = self._parser(host)
-        if parser is None:
-            return None
-        delay = parser.crawl_delay(self.user_agent)
-        return float(delay) if delay is not None else None
 
 
 _caches: dict[str, RobotsCache] = {}
