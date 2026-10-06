@@ -125,6 +125,14 @@ def repair_parts(
     parts = sorted(p for p in root.rglob("*.part") if p.stat().st_mtime <= cutoff)
     repaired = empty = failed = 0
     orphaned_shas: list[str] = []
+    if parts:
+        total = sum(p.stat().st_size for p in parts)
+        print(
+            f"re-wrapping {len(parts)} stale .part bundles "
+            f"({total / 1e9:.1f} GB); this runs before the crawl...",
+            flush=True,
+        )
+    step = max(1, len(parts) // 10)
     for index, part in enumerate(parts, 1):
         bundle, members, status = rewrap_part(part, root)
         if status == "repaired":
@@ -140,7 +148,7 @@ def repair_parts(
             empty += 1
         elif status == "failed":
             failed += 1
-        if index % 200 == 0:
+        if index % step == 0 or index == len(parts):
             print(f"  {index}/{len(parts)} rewrapped={repaired}", flush=True)
     pruned = bip_queue.delete_docs(orphaned_shas) if orphaned_shas else 0
     return {
@@ -164,10 +172,6 @@ def cmd_repair(args: argparse.Namespace) -> int:
         )
     finally:
         pg.close()
-    print(
-        f"stale partial bundles: {counts['parts']} "
-        f"(older than {args.older_than_minutes} min; live ones are left alone)"
-    )
     print(
         f"rewrapped {counts['repaired']}, empty/removed {counts['empty']}, "
         f"failed {counts['failed']}; pruned {counts['pruned']} doc rows "
