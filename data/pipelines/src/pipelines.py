@@ -30,6 +30,7 @@ from scrapers.cru.dump import CruDump
 from scrapers.cru.umowy import CruUmowy
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.kmgp.people import PeopleKMGP
+from scrapers.koryta.created import KorytaPeopleCreated
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import (
     KorytaCompanies,
@@ -98,6 +99,7 @@ PIPELINES = [
     KorytaFacts,
     KorytaNodes,
     KorytaPeople,
+    KorytaPeopleCreated,
     KorytaVotes,
     PeopleEnriched,
     PeopleKRS,
