@@ -140,7 +140,15 @@ async function waitForAuthReady() {
  */
 export async function authRequest<T>(
   url: string,
-  options: { method?: string; body?: unknown; query?: unknown } = {},
+  options: {
+    method?: string;
+    body?: unknown;
+    query?: unknown;
+    /** Milliseconds to wait for an answer before failing. Without one, a
+     * request whose answer never comes waits for as long as the connection
+     * stays open - for a poll, which nobody is watching, that can be hours. */
+    timeout?: number;
+  } = {},
 ): Promise<T> {
   await waitForAuthReady();
 
@@ -155,6 +163,7 @@ export async function authRequest<T>(
     body: options.body as Record<string, unknown>,
     query: options.query as Record<string, unknown>,
     headers,
+    timeout: options.timeout,
   });
 }
 
