@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 // @ts-expect-error - the extension is plain JS with no types of its own.
-import { jobIsBusy, jobMessage } from "../../../extension/jobs.js";
+import {
+  jobIsBusy,
+  jobMessage,
+  jobProgressUrl,
+} from "../../../extension/jobs.js";
+import { runLink } from "../../shared/jobs";
 
 /** Every state the background worker can set, because the table is the whole
  * point: a state missing from it renders as a blank line over a job that is
@@ -79,5 +84,27 @@ describe("jobIsBusy", () => {
       expect(jobIsBusy({ state })).toBe(false);
     }
     expect(jobIsBusy(undefined)).toBe(false);
+  });
+});
+
+describe("jobProgressUrl", () => {
+  it("links a capture to its run on /admin/procesy once the page has an id", () => {
+    expect(
+      jobProgressUrl("https://koryta.pl", {
+        state: "extracting",
+        pageId: "abc",
+      }),
+    ).toBe("https://koryta.pl/admin/procesy#przebieg-abc");
+    // The same anchor the page builds (`runLink` in shared/jobs.ts).
+    expect(
+      jobProgressUrl("http://localhost:3000", { state: "done", pageId: "a/b" }),
+    ).toBe(`http://localhost:3000${runLink("a%2Fb")}`);
+  });
+
+  it("has nothing to link before the upload names the page", () => {
+    for (const state of ["capturing", "uploading", "unauthenticated"]) {
+      expect(jobProgressUrl("https://koryta.pl", { state })).toBeNull();
+    }
+    expect(jobProgressUrl("https://koryta.pl", undefined)).toBeNull();
   });
 });
