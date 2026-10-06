@@ -34,3 +34,13 @@
      three helpers, and `/eksploruj/nowe` and `/eksploruj/tabela` are kept in
      parity on purpose - a capability added to one belongs on the other, in its
      own shape.
+
+1. **Data migrations** (`scripts/migrate/`):
+   A migration that has run against production, and whose dry run against a
+   later export reports nothing left to change, moves to
+   `scripts/migrate/archive/`. Every migration ends its dry run with
+   `reportRemaining(...)` from `scripts/migrate/remaining.ts` - the counts of
+   what it would still write - so that `devns npm run check:archived-migrations`
+   (after `npm run db:pull`) can confirm each archived one still reports zero.
+   A count there is a finding, not noise: something writes the old shape again.
+   Details in `scripts/migrate/README.md`.
