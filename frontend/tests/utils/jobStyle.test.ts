@@ -149,7 +149,7 @@ describe("counters", () => {
       ...["created", "updated", "unchanged", "employments_created"],
       ...["companies_created", "unplaced", "failed", "skipped", "planned"],
       ...["uploaded", "failed", "skipped"],
-      ...["written", "retracted", "unchanged"],
+      ...["written", "retracted", "unchanged", "new_pages", "new_pages_scored"],
       ...["articles", "facts"],
       "facts",
     ];

@@ -289,6 +289,9 @@ export const JOBS: readonly JobDefinition[] = [
   // The imports report one run per `koryta_uploader --submit`, under the id
   // of the payload type they send. A person upload reports as people_import,
   // which also has a daily run of its own, so it sits with the scheduled jobs.
+  // score_import is a step of the night too (koryta_score_import), but the
+  // night's own row is what says a night did not run it; this one is judged
+  // by its newest run, as before.
   {
     id: "company_import",
     kind: "triggered",
@@ -305,10 +308,15 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "triggered",
     title: "Oceny modeli",
     summary:
-      "koryta_uploader --type score: krótka lista każdego modelu jako głosy pod jego własnym uid (submit_scores.sh).",
-    runsOn: "Ręcznie",
-    command: "./submit_scores.sh prod",
+      "Krótka lista każdego modelu oceniającego osoby jako głosy pod jego własnym uid: zmienione oceny zapisuje, a tym, których model już nie ocenia, je wycofuje. Z tych głosów kolejka /eksploruj/nowe bierze kolejność i próg.",
+    runsOn:
+      "Krok nocy na VM koryta-nightly (koryta_nightly), po imporcie osób; ręcznie ./submit_scores.sh prod",
+    command: "koryta_score_import",
     heartbeatMinutes: 15,
+    notes: [
+      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 04:00 jeszcze ich nie ma - nowa osoba trafia do kolejki tego samego ranka.",
+      "Model, który nikogo nie ocenił, nie jest wysyłany: wycofałby wszystkie swoje głosy.",
+    ],
   },
   {
     id: "extraction_import",
@@ -324,7 +332,7 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "scheduled",
     title: "Noc na maszynie koryta-nightly",
     summary:
-      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS i odpisy, przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki i wysyła do 100 osób na stronę.",
+      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS i odpisy, przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, wysyła do 100 osób na stronę, a potem oceny modeli.",
     runsOn:
       "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza - data/nightly",
     command: "koryta_nightly",

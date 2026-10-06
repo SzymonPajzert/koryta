@@ -9,7 +9,7 @@ when nobody is still editing, and compares tonight's people with that copy:
 | 04:00       | `scheduledFirestoreExport` copies the site to `gs://koryta-pl-crawled/hostname=koryta.pl/date=<UTC>/` |
 | 04:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
 | 04:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
-| ~06:20      | the night is over; `poweroff.sh` switches the VM off                                                   |
+| ~06:30      | the night is over; `poweroff.sh` switches the VM off                                                   |
 | 08:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
 | 09:00       | the instance schedule stops the VM, if a night hung                                                    |
 
@@ -29,6 +29,7 @@ order, each with a time limit and its output in the night's log:
 | `outputs`    | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                     |
 | `invariants` | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                    |
 | `people`     | `koryta_people_import --scope priority --max-uploads 100 --refresh none`                                               |
+| `scores`     | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled            |
 | `tidy`       | export shards and day-named outputs older than a week off the disk                                                     |
 
 The VM keeps its disk, so `versioned/`, the download cache, the listing ranges
@@ -57,6 +58,15 @@ Newest news first inside each. A payload sent unchanged in the last 30 days
 is left alone (`--resend-after`), so a pending update or a party a human took
 off a page does not take a slot every night - and is not put back every night.
 
+Scores: after the people, every scoring model (`analysis/scores`) is rebuilt
+and its shortlist reconciled with the votes it holds on the site - a changed
+score written, one it no longer gives taken back (`koryta_score_import`). The
+models rate the site's people as the 04:00 export has them and the pages the
+people step has just created (`scrapers/koryta/created.py`, read from what the
+import says it sent), so a new hire is in the queue on /eksploruj/nowe the same
+morning rather than after the next export. A model that rates nobody is not
+uploaded: reconciled, it would take back every vote it has.
+
 A failed step does not end the night; the steps that depend on it are held:
 
 - `invariants` needs the export; `tests` and `outputs` the reprocess.
@@ -66,6 +76,8 @@ A failed step does not end the night; the steps that depend on it are held:
   holds the upload until somebody looks. The first night's failures are its
   baseline; on 2026-10-03, 18 invariants failed on budgets that had drifted
   past their measured values.
+- `scores` needs the same, but not the people: however they went, the scores
+  go up, with whatever pages the people step did create.
 
 ## Setting it up
 
@@ -145,7 +157,8 @@ way, and the timer runs the night on a VM that is already up too.
   the schedule's 09:00 stop. A boot outside the night window runs nothing.
 - **One step by hand.** `night.sh --force --only people --people-dry-run`
   (the `systemd-run` line above). Steps left out by `--only` or `--skip` hold
-  nothing back.
+  nothing back. A real people run by hand creates pages no model has rated:
+  add `--only scores`, or they wait for the next night.
 - **Other code.** `KORYTA_REF` in `/etc/koryta/nightly.env` - a tag holds the
   VM still while `main` moves. Every merge to `main` is otherwise live the
   next night.

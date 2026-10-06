@@ -20,6 +20,7 @@ GOOD = {
     "koryta_krs_odpis": 0,
     "koryta": 0,
     "koryta_people_import": 0,
+    "koryta_score_import": 0,
     "compressor": 0,
 }
 
@@ -156,6 +157,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "pytest outputs",
         "pytest invariants",
         "koryta_people_import",
+        "koryta_score_import",
     ]
     assert set(world.steps().values()) == {("succeeded", "")} | {
         ("succeeded", FRESH),
@@ -212,6 +214,17 @@ def test_the_people_go_up_capped_in_priority_order_from_what_is_on_disk(world):
     assert "--dry-run" not in argv
 
 
+def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
+    night.main([])
+
+    argv, env = world.command("koryta_score_import")
+    assert argv[argv.index("--max-minutes") + 1] == "30"
+    assert "--dry-run" not in argv
+    # Backed up as whoever runs it, as the reprocess: the models it rebuilds
+    # are tonight's newest.
+    assert env.get("DISABLE_BACKUP") != "1"
+
+
 def test_the_mirror_is_made_one_host_at_a_time(world):
     night.main([])
 
@@ -247,7 +260,9 @@ def test_a_stale_export_holds_the_people_but_nothing_else(world):
     steps = world.steps()
     assert steps["export"][0] == "partial"
     assert steps["people"] == ("held", "wstrzymane: nie ma dzisiejszej kopii bazy")
+    assert steps["scores"] == ("held", "wstrzymane: nie ma dzisiejszej kopii bazy")
     assert "koryta_people_import" not in world.ran()
+    assert "koryta_score_import" not in world.ran()
     assert world.ran().count("compressor") == 2
 
 
@@ -258,7 +273,7 @@ def test_a_failed_reprocess_holds_what_reads_its_outputs(world):
 
     steps = world.steps()
     assert steps["reprocess"] == ("failed", "kod wyjścia 1")
-    for held in ("tests", "outputs", "people"):
+    for held in ("tests", "outputs", "people", "scores"):
         assert steps[held][0] == "held"
     # The export is checked whatever the pipelines did.
     assert steps["invariants"][0] == "succeeded"
@@ -271,6 +286,7 @@ def test_a_test_failing_tonight_that_passed_last_night_holds_the_people(world):
     assert night.main([]) == night.EXIT_TRY_LATER
 
     assert world.steps()["people"] == ("held", "wstrzymane: nowe błędy testów: b::new")
+    assert world.steps()["scores"] == ("held", "wstrzymane: nowe błędy testów: b::new")
     assert world.summary()["new_failures"] == ["b::new"]
 
 
@@ -307,6 +323,25 @@ def test_a_check_that_gives_no_verdict_holds_the_people(world):
     )
 
 
+def test_the_scores_do_not_wait_on_how_the_people_went(world):
+    world.codes["koryta_people_import"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["people"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["scores"] == ("succeeded", "")
+    assert world.ran()[-2:] == ["koryta_people_import", "koryta_score_import"]
+
+
+def test_a_failed_score_upload_fails_the_night(world):
+    world.codes["koryta_score_import"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["scores"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["tidy"][0] == "succeeded"
+
+
 def test_a_job_leaving_work_for_tomorrow_is_not_a_bad_night(world):
     world.codes["koryta_scrape_krs_free"] = night.EXIT_TRY_LATER
     world.codes["koryta_people_import"] = night.EXIT_TRY_LATER
@@ -337,6 +372,7 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     assert "krs_odpis" not in out
     assert "koryta --all-pipelines" in out
     assert "koryta_people_import --scope priority --max-uploads 100" in out
+    assert "koryta_score_import" in out
 
 
 def test_past_the_stop_by_only_compress_and_tidy_run(world, monkeypatch):

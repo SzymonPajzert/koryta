@@ -4,6 +4,10 @@ set -e
 # Runs every scoring model and uploads each one's shortlist under its own
 # pipeline uid, so the site can tell which model nominated whom.
 #
+# The night on the koryta-nightly VM does this itself, after the people import
+# (koryta_score_import, data/nightly). This is for a local stack, or a run by
+# hand in between.
+#
 #   ./submit_scores.sh                    # against a local dev stack
 #   ./submit_scores.sh prod               # against autopush
 #   ./submit_scores.sh "" PeopleScoresPageRank   # one model only
