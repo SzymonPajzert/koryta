@@ -10,10 +10,8 @@ from scrapers.bip.classify import (
     host_of,
     is_document_url,
     is_low_value_url,
-    is_section_url,
     normalize_url,
     path_of,
-    priority_for,
 )
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions, _ActiveHost
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
@@ -84,19 +82,11 @@ def test_document_url_patterns() -> None:
     assert not is_document_url("https://bip.x.pl/oswiadczenie-majatkowe/1/kowalski")
 
 
-def test_priorities_documents_before_sections_before_pages() -> None:
-    doc = priority_for("https://bip.x.pl/attachments/download/1")
-    section = priority_for("https://bip.x.pl/oswiadczenia-majatkowe")
-    page = priority_for("https://bip.x.pl/kontakt")
-    assert doc < section < page
-    assert is_section_url("https://bip.x.pl/oswiadczenia-majatkowe")
-    assert is_low_value_url("https://bip.x.pl/banners/1/redirect")
-
-
 def test_url_helpers() -> None:
     assert normalize_url("https://bip.x.pl/a/#frag") == "https://bip.x.pl/a"
     assert host_of("https://www.bip.x.pl/a") == "bip.x.pl"
     assert path_of("https://bip.x.pl/a/b?q=1") == "/a/b?q=1"
+    assert is_low_value_url("https://bip.x.pl/banners/1/redirect")
 
 
 def test_normalize_url_collapses_echoed_query_junk() -> None:
@@ -282,7 +272,7 @@ class FakeFrontier:
             if state == "queued" and row.host in hosts:
                 queues.setdefault(row.host, []).append(url)
         for urls in queues.values():
-            urls.sort(key=lambda u: (self.urls[u].priority, u))
+            urls.sort(key=lambda u: (self.urls[u].depth, u))
         claimed: list[UrlRow] = []
         while len(claimed) < limit:
             progressed = False
@@ -347,10 +337,10 @@ def test_claim_urls_round_robins_across_hosts() -> None:
     bip_queue = FakeFrontier(hosts)
     for i in range(3):
         bip_queue.queue_url(
-            UrlRow(url=f"https://a.pl/d{i}.pdf", host="a.pl", kind="doc", priority=10)
+            UrlRow(url=f"https://a.pl/d{i}.pdf", host="a.pl", kind="doc", depth=i)
         )
         bip_queue.queue_url(
-            UrlRow(url=f"https://b.pl/{i}", host="b.pl", kind="page", priority=50)
+            UrlRow(url=f"https://b.pl/{i}", host="b.pl", kind="page", depth=i)
         )
     claimed = bip_queue.claim_urls(
         "c", hosts=["a.pl", "b.pl"], limit=4, lock_seconds=60
@@ -578,3 +568,50 @@ def test_result_exception_releases_the_host(tmp_path: Path) -> None:
     assert coordinator.stats.errors == 1
     assert "bip.test" not in coordinator.active
     assert bip_queue.hosts["bip.test"].status == "partial"
+
+
+def test_cross_host_is_a_seed_only_move(tmp_path: Path) -> None:
+    """The seed may land on another host; a deeper redirect may not be adopted."""
+    bip_queue = FakeFrontier(
+        [
+            HostRow(
+                host="bip.test",
+                name="t",
+                source_url="https://bip.test/",
+                teryt="",
+                entry_count=1,
+            )
+        ]
+    )
+    store = LocalBundleStore(tmp_path / "out")
+    pages = {
+        "https://bip.test/": ("text/html", b'<a href="/b">b</a>'),
+        "https://moved.test/b": ("text/html", b'<a href="/c">c</a>'),
+    }
+    finals = {
+        "https://bip.test/": "https://moved.test/",  # seed: adopted
+        "https://moved.test/b": "https://third.test/b",  # depth 1: dropped
+    }
+
+    def fetch(url: str, timeout: float, user_agent: str) -> HttpResult:
+        content_type, content = pages[url]
+        return HttpResult(
+            url=finals.get(url, url),
+            status=200,
+            content_type=content_type,
+            content=content,
+        )
+
+    coordinator = BipCoordinator(
+        cast("BipQueue", bip_queue),  # test double
+        store,
+        CoordinatorOptions(workers=1, rate_interval_s=0.0),
+        fetch=fetch,
+        robots_allowed=lambda url: True,
+    )
+    coordinator.run()
+
+    # the seed's link resolved onto the host it redirected to, and was followed
+    assert "https://moved.test/b" in bip_queue.urls
+    # the depth-1 redirect to third.test was not adopted, so its links are gone
+    assert not any("third.test" in url for url in bip_queue.urls)
