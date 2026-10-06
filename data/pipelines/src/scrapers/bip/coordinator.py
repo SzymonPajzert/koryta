@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
+from scrapers.bip.bip_queue import BipQueue
 from scrapers.bip.classify import (
     filename_from_url,
     host_of,
@@ -29,9 +30,8 @@ from scrapers.bip.classify import (
     path_of,
     priority_for,
 )
-from scrapers.bip.frontier import BipFrontier
-from scrapers.bip.models import HostRow, RunStats, UrlRow
 from scrapers.bip.store import LocalBundleStore
+from scrapers.bip.types import HostRow, RunStats, UrlRow
 from scrapers.common.fetch import HttpResult, http_get
 from scrapers.common.links import extract_link_pairs
 from scrapers.common.ratelimit import HostTokenBucket
@@ -77,7 +77,7 @@ class _ActiveHost:
 class BipCoordinator:
     def __init__(
         self,
-        frontier: BipFrontier,
+        bip_queue: BipQueue,
         store: LocalBundleStore,
         options: CoordinatorOptions,
         *,
@@ -85,7 +85,7 @@ class BipCoordinator:
         robots_allowed: Callable[[str], bool] = lambda url: True,
         limiter: HostTokenBucket | None = None,
     ) -> None:
-        self.frontier = frontier
+        self.bip_queue = bip_queue
         self.store = store
         self.options = options
         self.fetch = fetch
@@ -104,12 +104,12 @@ class BipCoordinator:
         while len(self.active) < self.options.max_active_hosts and self.host_iter:
             host = self.host_iter.pop(0)
             crawl_id = f"{self.run_id}-{host.host.replace('.', '_')[:40]}"
-            self.frontier.start_host(host.host, crawl_id)
+            self.bip_queue.start_host(host.host, crawl_id)
             active = _ActiveHost(crawl_id=crawl_id)
             active.scope_hosts.add(host.host)
             self.active[host.host] = active
             seed = host.source_url or f"https://{host.host}/"
-            inserted = self.frontier.queue_url(
+            inserted = self.bip_queue.queue_url(
                 UrlRow(
                     url=normalize_url(seed),
                     host=host.host,
@@ -139,7 +139,7 @@ class BipCoordinator:
         active = self.active.get(host)
         if active is None or active.pending > 0:
             return
-        if self.frontier.host_pending(host) > 0:
+        if self.bip_queue.host_pending(host) > 0:
             return
         status = "ok"
         if active.cap_hit:
@@ -148,7 +148,7 @@ class BipCoordinator:
             status = "partial"
         elif active.done_pages == 0 and active.docs == 0:
             status = "dead"
-        self.frontier.finalize_host(host, status)
+        self.bip_queue.finalize_host(host, status)
         # Close the host's bundle now. Leaving it open until 64 MB or the end of
         # the run strands one .part per host and exhausts file descriptors.
         self.store.close_host(host)
@@ -202,14 +202,14 @@ class BipCoordinator:
             )
             return
         if special == "robots":
-            self.frontier.mark_url(row.url, state="skipped", skip_reason="robots")
+            self.bip_queue.mark_url(row.url, state="skipped", skip_reason="robots")
             active.pending -= 1
             self.stats.skipped += 1
             self._maybe_finalize(row.host)
             return
         assert result is not None
         if result.error or result.status >= 400:
-            self.frontier.mark_url(
+            self.bip_queue.mark_url(
                 row.url, state="error", status=result.status
             )
             active.pending -= 1
@@ -225,7 +225,7 @@ class BipCoordinator:
             if active.docs >= self.options.max_docs:
                 active.cap_hit = True
                 active.pending -= 1
-                self.frontier.mark_url(row.url, state="skipped", skip_reason="cap")
+                self.bip_queue.mark_url(row.url, state="skipped", skip_reason="cap")
                 self.stats.skipped += 1
                 self._maybe_finalize(row.host)
                 return
@@ -252,11 +252,11 @@ class BipCoordinator:
         self, row: UrlRow, result: HttpResult, active: _ActiveHost
     ) -> None:
         digest = hashlib.sha256(result.content).hexdigest()
-        known_bundle = self.frontier.doc_bundle(digest)
+        known_bundle = self.bip_queue.doc_bundle(digest)
         duplicate = known_bundle is not None and self.store.blob_exists(known_bundle)
         if duplicate:
             self.stats.docs_seen += 1
-            self.frontier.mark_url(
+            self.bip_queue.mark_url(
                 row.url,
                 state="fetched",
                 status=result.status,
@@ -276,17 +276,17 @@ class BipCoordinator:
             title="",
             chain=[row.discovered_from, row.url],
         )
-        self.frontier.record_docs([doc], active.crawl_id)
+        self.bip_queue.record_docs([doc], active.crawl_id)
         if is_new:
             self.stats.docs_new += 1
             self.stats.bytes_stored += doc.size
             active.docs += 1
-            self.frontier.bump_host(row.host, docs=1)
+            self.bip_queue.bump_host(row.host, docs=1)
         else:
             self.stats.docs_seen += 1
         if active.docs >= self.options.max_docs:
             active.cap_hit = True
-        self.frontier.mark_url(
+        self.bip_queue.mark_url(
             row.url,
             state="fetched",
             status=result.status,
@@ -306,7 +306,7 @@ class BipCoordinator:
         active.pages += 1
         active.done_pages += 1
         self.stats.pages_fetched += 1
-        self.frontier.bump_host(row.host, pages=1)
+        self.bip_queue.bump_host(row.host, pages=1)
         if active.pages >= self.options.max_pages:
             active.cap_hit = True
         new_rows: list[UrlRow] = []
@@ -327,9 +327,9 @@ class BipCoordinator:
                         anchor_text=anchor_text,
                     )
                 )
-        added = self.frontier.queue_urls(new_rows) if new_rows else 0
+        added = self.bip_queue.queue_urls(new_rows) if new_rows else 0
         active.pending += added
-        self.frontier.mark_url(
+        self.bip_queue.mark_url(
             row.url,
             state="fetched",
             status=result.status,
@@ -352,8 +352,8 @@ class BipCoordinator:
 
     def run(self) -> RunStats:
         self._install_signal_handlers()
-        self.frontier.start_run(self.run_id)
-        self.host_iter = self.frontier.select_hosts(
+        self.bip_queue.start_run(self.run_id)
+        self.host_iter = self.bip_queue.select_hosts(
             freshness_seconds=self.options.freshness_seconds,
             limit=self.options.host_limit,
         )
@@ -378,7 +378,7 @@ class BipCoordinator:
                 if self._is_finished(pending):
                     break
         self.store.flush()
-        self.frontier.finish_run(self.run_id, self.stats)
+        self.bip_queue.finish_run(self.run_id, self.stats)
         return self.stats
 
     def _dispatch_deferred(
@@ -398,7 +398,7 @@ class BipCoordinator:
         free = self.options.workers - len(pending)
         while free > 0:
             if not self._ready:
-                claimed = self.frontier.claim_urls(
+                claimed = self.bip_queue.claim_urls(
                     "coordinator",
                     hosts=list(self.active),
                     limit=self.options.claim_batch,
@@ -409,14 +409,14 @@ class BipCoordinator:
                 self._ready.extend(claimed)
             row = self._ready.popleft()
             if row.host not in self.active:
-                self.frontier.mark_url(row.url, state="skipped")
+                self.bip_queue.mark_url(row.url, state="skipped")
                 self.stats.skipped += 1
                 continue
             if self._over_quota(row):
                 active = self.active[row.host]
                 active.cap_hit = True
                 active.pending -= 1
-                self.frontier.mark_url(row.url, state="skipped", skip_reason="cap")
+                self.bip_queue.mark_url(row.url, state="skipped", skip_reason="cap")
                 self.stats.skipped += 1
                 self._maybe_finalize(row.host)
                 continue
@@ -432,7 +432,7 @@ class BipCoordinator:
             except Exception as exc:  # keep the crawl alive
                 logger.exception("result handling failed: %s", exc)
                 try:
-                    self.frontier.mark_url(row.url, state="error")
+                    self.bip_queue.mark_url(row.url, state="error")
                 except Exception:
                     logger.exception("could not mark %s as error", row.url)
                 self.stats.errors += 1
@@ -456,8 +456,8 @@ class BipCoordinator:
         return not self.active
 
     def _print_progress(self) -> None:
-        stats = self.frontier.stats()
-        rates = self.frontier.recent_rates()
+        stats = self.bip_queue.stats()
+        rates = self.bip_queue.recent_rates()
         print(
             "hosts ok={ok} partial={partial} dead={dead} active={active} | "
             "urls queued={queued} claimed={claimed} | docs={docs} | "

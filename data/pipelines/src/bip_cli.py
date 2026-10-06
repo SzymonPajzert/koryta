@@ -1,4 +1,4 @@
-"""CLI for the BIP document crawler (Postgres frontier, coordinator + fetchers).
+"""CLI for the BIP document crawler (Postgres bip_queue, coordinator + fetchers).
 
 Top-level script like `crawl_cli.py`: outside the import-linter layers, so it
 wires the concrete Postgres client, robots cache and bundle store.
@@ -13,8 +13,8 @@ import sys
 import time
 from pathlib import Path
 
+from scrapers.bip.bip_queue import BipQueue
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
-from scrapers.bip.frontier import BipFrontier
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.bip.store import LocalBundleStore, rewrap_part
 from scrapers.common.pg import PostgresClient
@@ -53,8 +53,8 @@ def cmd_registry(args: argparse.Namespace) -> int:
     hosts = hosts_from_entries(entries)
     pg = PostgresClient.from_env()
     try:
-        inserted, updated = BipFrontier(pg).upsert_hosts(hosts)
-        stats = BipFrontier(pg).stats()
+        inserted, updated = BipQueue(pg).upsert_hosts(hosts)
+        stats = BipQueue(pg).stats()
     finally:
         pg.close()
     print(f"source:        {source}")
@@ -67,9 +67,26 @@ def cmd_registry(args: argparse.Namespace) -> int:
 
 
 def cmd_crawl(args: argparse.Namespace) -> int:
+    root = Path(args.out)
     pg = PostgresClient.from_env(max_size=4)
-    frontier = BipFrontier(pg)
-    store = LocalBundleStore(Path(args.out))
+    bip_queue = BipQueue(pg)
+    if not args.no_repair:
+        # A SIGKILL/crash leaves .part bundles behind (SIGTERM flushes them).
+        # Re-wrap them before crawling so their bytes are kept, not re-fetched.
+        counts = repair_parts(
+            bip_queue,
+            root,
+            older_than_minutes=args.repair_older_than,
+            keep_missing=False,
+        )
+        if counts["repaired"] or counts["empty"] or counts["failed"]:
+            print(
+                f"startup repair: rewrapped {counts['repaired']}, "
+                f"empty/removed {counts['empty']}, failed {counts['failed']}; "
+                f"pruned {counts['pruned']} doc rows",
+                flush=True,
+            )
+    store = LocalBundleStore(root)
     robots = RobotsCache(USER_AGENT)
     options = CoordinatorOptions(
         out_dir=args.out,
@@ -84,7 +101,7 @@ def cmd_crawl(args: argparse.Namespace) -> int:
         user_agent=USER_AGENT,
     )
     coordinator = BipCoordinator(
-        frontier, store, options, robots_allowed=robots.allowed
+        bip_queue, store, options, robots_allowed=robots.allowed
     )
     try:
         stats = coordinator.run()
@@ -94,45 +111,65 @@ def cmd_crawl(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_repair(args: argparse.Namespace) -> int:
-    """Recover `.part` bundles left by a killed run, without re-downloading."""
-    root = Path(args.out)
-    cutoff = time.time() - args.older_than_minutes * 60
-    parts = sorted(
-        p for p in root.rglob("*.part") if p.stat().st_mtime <= cutoff
-    )
-    print(
-        f"stale partial bundles: {len(parts)} "
-        f"(older than {args.older_than_minutes} min; live ones are left alone)"
-    )
-    pg = PostgresClient.from_env()
+def repair_parts(
+    bip_queue: BipQueue,
+    root: Path,
+    *,
+    older_than_minutes: int,
+    keep_missing: bool,
+) -> dict[str, int]:
+    """Re-wrap `.part` bundles left by a killed run; return per-outcome counts."""
+    cutoff = time.time() - older_than_minutes * 60
+    parts = sorted(p for p in root.rglob("*.part") if p.stat().st_mtime <= cutoff)
     repaired = empty = failed = 0
     orphaned_shas: list[str] = []
+    for index, part in enumerate(parts, 1):
+        bundle, members, status = rewrap_part(part, root)
+        if status == "repaired":
+            repaired += 1
+            if not keep_missing:
+                known = set(members)
+                orphaned_shas.extend(
+                    sha
+                    for sha, filename in bip_queue.docs_for_bundle(bundle)
+                    if filename not in known
+                )
+        elif status == "empty":
+            empty += 1
+        elif status == "failed":
+            failed += 1
+        if index % 200 == 0:
+            print(f"  {index}/{len(parts)} rewrapped={repaired}", flush=True)
+    pruned = bip_queue.delete_docs(orphaned_shas) if orphaned_shas else 0
+    return {
+        "parts": len(parts),
+        "repaired": repaired,
+        "empty": empty,
+        "failed": failed,
+        "pruned": pruned,
+    }
+
+
+def cmd_repair(args: argparse.Namespace) -> int:
+    """Recover `.part` bundles left by a killed run, without re-downloading."""
+    pg = PostgresClient.from_env()
     try:
-        frontier = BipFrontier(pg)
-        for index, part in enumerate(parts, 1):
-            bundle, members, status = rewrap_part(part, root)
-            if status == "repaired":
-                repaired += 1
-                if not args.keep_missing:
-                    known = set(members)
-                    orphaned_shas.extend(
-                        sha
-                        for sha, filename in frontier.docs_for_bundle(bundle)
-                        if filename not in known
-                    )
-            elif status == "empty":
-                empty += 1
-            elif status == "failed":
-                failed += 1
-            if index % 200 == 0:
-                print(f"  {index}/{len(parts)} rewrapped={repaired}", flush=True)
-        pruned = frontier.delete_docs(orphaned_shas) if orphaned_shas else 0
+        counts = repair_parts(
+            BipQueue(pg),
+            Path(args.out),
+            older_than_minutes=args.older_than_minutes,
+            keep_missing=args.keep_missing,
+        )
     finally:
         pg.close()
     print(
-        f"rewrapped {repaired}, empty/removed {empty}, failed {failed}; "
-        f"pruned {pruned} doc rows whose member was truncated"
+        f"stale partial bundles: {counts['parts']} "
+        f"(older than {args.older_than_minutes} min; live ones are left alone)"
+    )
+    print(
+        f"rewrapped {counts['repaired']}, empty/removed {counts['empty']}, "
+        f"failed {counts['failed']}; pruned {counts['pruned']} doc rows "
+        f"whose member was truncated"
     )
     return 0
 
@@ -140,9 +177,9 @@ def cmd_repair(args: argparse.Namespace) -> int:
 def cmd_stats(args: argparse.Namespace) -> int:
     pg = PostgresClient.from_env()
     try:
-        frontier = BipFrontier(pg)
-        stats = frontier.stats()
-        rates = frontier.recent_rates()
+        bip_queue = BipQueue(pg)
+        stats = bip_queue.stats()
+        rates = bip_queue.recent_rates()
     finally:
         pg.close()
     for key, value in stats.items():
@@ -181,6 +218,17 @@ def build_parser() -> argparse.ArgumentParser:
     crawl.add_argument(
         "--rate", type=float, default=1.0, help="seconds between hits on one host"
     )
+    crawl.add_argument(
+        "--no-repair",
+        action="store_true",
+        help="skip the startup re-wrap of .part bundles left by a killed run",
+    )
+    crawl.add_argument(
+        "--repair-older-than",
+        type=int,
+        default=10,
+        help="only repair .part files older than this many minutes",
+    )
     crawl.set_defaults(func=cmd_crawl)
 
     repair = sub.add_parser(
@@ -200,7 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     repair.set_defaults(func=cmd_repair)
 
-    stats = sub.add_parser("stats", help="print frontier statistics")
+    stats = sub.add_parser("stats", help="print bip_queue statistics")
     stats.set_defaults(func=cmd_stats)
     return parser
 
