@@ -84,7 +84,7 @@ site answers 401.
 1. Reconciles each model's votes on the site with what it wrote last time (`util.firestore.Firestore.replace_scores`): a changed score is written, one it no longer gives taken back; a model that rates nobody is not uploaded, since reconciled it would take back every vote it has, and fails the run
 1. Writes a run summary to the shared cache (`jobs/score_import/runs/`): each model's counts, and how many of the pages created since the export some model rated
 
-Runs nightly as the step after the people on the koryta-nightly VM, so a new hire's page has its score the morning it is created - see [data/nightly/README.md](../../../nightly/README.md). `submit_scores.sh` uploads the same models by hand, one `koryta_uploader --type score` per model.
+Runs nightly as the step after the people on the koryta-nightly VM, so a new hire's page has its score the morning it is created - see [data/nightly/README.md](../../../nightly/README.md). `submit_scores.sh` uploads the same models by hand, one `koryta_uploader --type score` per model. After an export taken by hand later the same day, `--refresh KorytaPeople --refresh KorytaVotes --refresh KorytaFacts --refresh CompanyScores` makes the models read it: the site's people are read through day-named outputs, which still hold the morning's.
 
 # Reporting a run
 
