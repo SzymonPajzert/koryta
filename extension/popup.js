@@ -6,13 +6,14 @@ import {
   setSidePanelOnCapture,
 } from "./config.js";
 import { factConnector, factSubject, factTarget, factWord } from "./facts.js";
-import { jobIsBusy, jobMessage } from "./jobs.js";
+import { jobIsBusy, jobMessage, jobProgressUrl } from "./jobs.js";
 
 const el = (id) => document.getElementById(id);
 const status = el("status");
 const captureButton = el("capture");
 const connectButton = el("connect");
 const reviewLink = el("review");
+const progressLink = el("progress");
 const sidePanelToggle = el("side-panel");
 
 let tabId = null;
@@ -27,6 +28,10 @@ let sidePanelOnCapture = false;
  * extension, which has nothing stored and no job yet, showed no way to connect.
  */
 let connected = false;
+/** Where captures go, kept for `render`, which is synchronous: the link to a
+ * capture's run is built from it. Set by `showAccount` before any job is
+ * rendered. */
+let currentOrigin = DEFAULT_ORIGIN;
 
 /** Makes the panel available on one tab, and tells it which tab that is.
  *
@@ -112,10 +117,16 @@ function render(job) {
   captureButton.textContent = busy ? "Pracuję…" : "Zapisz i wyciągnij fakty";
   connectButton.hidden = connected && job.state !== "unauthenticated";
   reviewLink.hidden = job.state !== "done" || !job.facts;
+  // Once the upload has named the page: the run on /admin/procesy goes on
+  // showing the extraction after this popup has closed.
+  const progress = jobProgressUrl(currentOrigin, job);
+  progressLink.hidden = !progress;
+  if (progress) progressLink.href = progress;
 }
 
 async function showAccount() {
   const origin = await getOrigin();
+  currentOrigin = origin;
   el("origin").value = origin;
   reviewLink.href = `${origin}/ekstrakcje`;
 
