@@ -56,8 +56,8 @@ koryta_scrape_bip crawl \
 - `--max-pages` / `--max-docs` — per-host caps; a capped host is marked
   `partial`, so a later pass picks it up again.
 - `--rate` — seconds between hits on one host (default 1.0).
-- On start it re-wraps stale `.part` bundles left by a killed run
-  (`--no-repair` to skip, `--repair-older-than` default 10 minutes).
+- On start it re-wraps every stale `.part` bundle left by a killed run
+  (`--no-repair` to skip); a single crawler per `--out` is assumed.
 
 Politeness: robots.txt is fetched per host (404 = allow), and a redirect to a
 shared platform is confined to that portal section (e.g. a `*.bip.gov.pl` that
