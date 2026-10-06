@@ -217,6 +217,11 @@ export function publishEdgeInBatch(
   stored: Record<string, unknown>,
   candidate: (Revision & { id: string }) | undefined,
   user: { uid: string },
+  /** False for the ingest publishing on its own authority. The audit log is a
+   * record of administrators' decisions, and an automatic approval is already
+   * recorded on the revision it approves - `review_user` is the pipeline - the
+   * way every other write the ingest approves is. */
+  audit = true,
 ): { approvedRevision: string | null } {
   const update: Record<string, unknown> = { published: true };
   let approvedRevision: string | null = null;
@@ -232,34 +237,38 @@ export function publishEdgeInBatch(
     });
     update.revision_id = revisionRef;
     approvedRevision = candidate.id;
-    recordAudit(
-      db,
-      {
-        action: "approve",
-        collection: "edges",
-        target_id: edgeRef.id,
-        revision_id: candidate.id,
-        user: user.uid,
-      },
-      batch,
-    );
+    if (audit) {
+      recordAudit(
+        db,
+        {
+          action: "approve",
+          collection: "edges",
+          target_id: edgeRef.id,
+          revision_id: candidate.id,
+          user: user.uid,
+        },
+        batch,
+      );
+    }
   }
 
   // `update`, not `set`: unlike applying a revision this changes who may see
   // the edge, not what it says, and the stored document already holds the
   // approved snapshot. A full overwrite here would drop `votes` and `stats`.
   batch.update(edgeRef, update);
-  recordAudit(
-    db,
-    {
-      action: "publish",
-      collection: "edges",
-      target_id: edgeRef.id,
-      ...(approvedRevision ? { revision_id: approvedRevision } : {}),
-      user: user.uid,
-    },
-    batch,
-  );
+  if (audit) {
+    recordAudit(
+      db,
+      {
+        action: "publish",
+        collection: "edges",
+        target_id: edgeRef.id,
+        ...(approvedRevision ? { revision_id: approvedRevision } : {}),
+        user: user.uid,
+      },
+      batch,
+    );
+  }
 
   return { approvedRevision };
 }
