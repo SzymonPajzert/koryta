@@ -53,7 +53,7 @@ def create_revisions(
         # `user` and `date` are node bookkeeping that a revision has its own
         # fields for. `source` and `target` used to be stripped alongside them,
         # which cost 621 edge revisions the two fields that say what the edge
-        # links - see frontend/scripts/migrate/repair-migrated-revisions.ts.
+        # links - see frontend/scripts/migrate/archive/repair-migrated-revisions.ts.
         for removable in ["user", "date"]:
             if removable in data:
                 del data[removable]
