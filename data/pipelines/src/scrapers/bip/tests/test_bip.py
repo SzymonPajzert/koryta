@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
+from scrapers.bip.bip_queue import BipQueue
 from scrapers.bip.classify import (
     host_of,
     is_document_url,
@@ -15,10 +16,9 @@ from scrapers.bip.classify import (
     priority_for,
 )
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions, _ActiveHost
-from scrapers.bip.frontier import BipFrontier
-from scrapers.bip.models import DocRow, HostRow, UrlRow
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.bip.store import LocalBundleStore, rewrap_part
+from scrapers.bip.types import DocRow, HostRow, UrlRow
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import extract_link_pairs, extract_links
 from scrapers.common.ratelimit import HostTokenBucket
@@ -221,7 +221,7 @@ def test_rewrap_recovers_a_truncated_bundle(tmp_path: Path) -> None:
 
 # -- coordinator -------------------------------------------------------------
 class FakeFrontier:
-    """In-memory stand-in for BipFrontier, same methods the coordinator uses."""
+    """In-memory stand-in for BipQueue, same methods the coordinator uses."""
 
     def __init__(self, hosts: list[HostRow]) -> None:
         self.hosts = {h.host: h for h in hosts}
@@ -344,15 +344,15 @@ def test_claim_urls_round_robins_across_hosts() -> None:
         HostRow(host="a.pl", name="A", source_url="", teryt="", entry_count=1),
         HostRow(host="b.pl", name="B", source_url="", teryt="", entry_count=1),
     ]
-    frontier = FakeFrontier(hosts)
+    bip_queue = FakeFrontier(hosts)
     for i in range(3):
-        frontier.queue_url(
+        bip_queue.queue_url(
             UrlRow(url=f"https://a.pl/d{i}.pdf", host="a.pl", kind="doc", priority=10)
         )
-        frontier.queue_url(
+        bip_queue.queue_url(
             UrlRow(url=f"https://b.pl/{i}", host="b.pl", kind="page", priority=50)
         )
-    claimed = frontier.claim_urls(
+    claimed = bip_queue.claim_urls(
         "c", hosts=["a.pl", "b.pl"], limit=4, lock_seconds=60
     )
     assert [row.host for row in claimed] == ["a.pl", "b.pl", "a.pl", "b.pl"]
@@ -382,7 +382,7 @@ def _run_coordinator(
     robots_allowed=lambda url: True,
     **option_overrides,
 ):  # noqa: ANN001, ANN003
-    frontier = FakeFrontier(
+    bip_queue = FakeFrontier(
         [
             HostRow(
                 host="bip.test",
@@ -409,31 +409,31 @@ def _run_coordinator(
     option_values.update(option_overrides)
     options = CoordinatorOptions(**option_values)  # type: ignore[arg-type]
     coordinator = BipCoordinator(
-        cast("BipFrontier", frontier),  # test double
+        cast("BipQueue", bip_queue),  # test double
         store,
         options,
         fetch=fetch,
         robots_allowed=robots_allowed,
     )
     stats = coordinator.run()
-    return frontier, store, stats
+    return bip_queue, store, stats
 
 
 def test_coordinator_crawls_pages_and_documents(tmp_path: Path) -> None:
-    frontier, store, stats = _run_coordinator(tmp_path, _site_pages())
+    bip_queue, store, stats = _run_coordinator(tmp_path, _site_pages())
     assert stats.pages_fetched == 2
     assert stats.docs_new == 2
-    assert "https://bip.test/banners/1" not in frontier.urls
-    assert frontier.hosts["bip.test"].status == "ok"
-    assert len(frontier.docs) == 2
+    assert "https://bip.test/banners/1" not in bip_queue.urls
+    assert bip_queue.hosts["bip.test"].status == "ok"
+    assert len(bip_queue.docs) == 2
     assert stats.errors == 0
 
 
 def test_coordinator_marks_partial_when_capped(tmp_path: Path) -> None:
-    frontier, _store, stats = _run_coordinator(
+    bip_queue, _store, stats = _run_coordinator(
         tmp_path, _site_pages(), max_docs=1
     )
-    assert frontier.hosts["bip.test"].status == "partial"
+    assert bip_queue.hosts["bip.test"].status == "partial"
     assert stats.docs_new == 1
 
 
@@ -447,7 +447,7 @@ class RecordingStore(LocalBundleStore):
 
 def test_stopped_run_flushes_bundles(tmp_path: Path) -> None:
     """Ctrl-C/SIGTERM must close open bundles, not leave .part files behind."""
-    frontier = FakeFrontier(
+    bip_queue = FakeFrontier(
         [
             HostRow(
                 host="bip.test",
@@ -460,7 +460,7 @@ def test_stopped_run_flushes_bundles(tmp_path: Path) -> None:
     )
     store = RecordingStore(tmp_path / "out")
     coordinator = BipCoordinator(
-        cast("BipFrontier", frontier),  # test double
+        cast("BipQueue", bip_queue),  # test double
         store,
         CoordinatorOptions(workers=1, rate_interval_s=0.0),
         fetch=lambda url, timeout, ua: HttpResult(
@@ -475,37 +475,37 @@ def test_stopped_run_flushes_bundles(tmp_path: Path) -> None:
 
 
 def test_coordinator_skips_robots_denied(tmp_path: Path) -> None:
-    frontier, _store, stats = _run_coordinator(
+    bip_queue, _store, stats = _run_coordinator(
         tmp_path, _site_pages(), robots_allowed=lambda url: False
     )
     assert stats.skipped >= 1
     assert stats.docs_new == 0
-    assert frontier.hosts["bip.test"].status == "dead"
+    assert bip_queue.hosts["bip.test"].status == "dead"
 
 
 def test_coordinator_robots_skip_is_terminal(tmp_path: Path) -> None:
-    frontier, _store, _stats = _run_coordinator(
+    bip_queue, _store, _stats = _run_coordinator(
         tmp_path, _site_pages(), robots_allowed=lambda url: False
     )
-    denied = [url for url, state in frontier.states.items() if state == "skipped"]
+    denied = [url for url, state in bip_queue.states.items() if state == "skipped"]
     assert denied
-    assert all(frontier.skip_reasons.get(url) == "robots" for url in denied)
+    assert all(bip_queue.skip_reasons.get(url) == "robots" for url in denied)
     for url in denied:
         # even an explicit freshness requeue must not revive a robots denial
-        assert frontier.queue_url(frontier.urls[url], requeue=True) is False
-        assert frontier.states[url] == "skipped"
+        assert bip_queue.queue_url(bip_queue.urls[url], requeue=True) is False
+        assert bip_queue.states[url] == "skipped"
 
 
 def test_coordinator_cap_skip_is_requeueable(tmp_path: Path) -> None:
-    frontier, _store, stats = _run_coordinator(
+    bip_queue, _store, stats = _run_coordinator(
         tmp_path, _site_pages(), max_pages=1, max_docs=1
     )
     assert stats.skipped >= 1
-    capped = [url for url, state in frontier.states.items() if state == "skipped"]
+    capped = [url for url, state in bip_queue.states.items() if state == "skipped"]
     assert capped
-    assert all(frontier.skip_reasons.get(url) == "cap" for url in capped)
-    assert frontier.queue_url(frontier.urls[capped[0]], requeue=True) is False
-    assert frontier.states[capped[0]] == "queued"
+    assert all(bip_queue.skip_reasons.get(url) == "cap" for url in capped)
+    assert bip_queue.queue_url(bip_queue.urls[capped[0]], requeue=True) is False
+    assert bip_queue.states[capped[0]] == "queued"
 
 
 def test_bundle_is_closed_when_a_host_finishes(tmp_path: Path) -> None:
@@ -518,7 +518,7 @@ def test_bundle_is_closed_when_a_host_finishes(tmp_path: Path) -> None:
             self.closed.append(host)
             super().close_host(host)
 
-    frontier = FakeFrontier(
+    bip_queue = FakeFrontier(
         [
             HostRow(
                 host="bip.test",
@@ -531,7 +531,7 @@ def test_bundle_is_closed_when_a_host_finishes(tmp_path: Path) -> None:
     )
     store = ClosingStore(tmp_path / "out")
     coordinator = BipCoordinator(
-        cast("BipFrontier", frontier),  # test double
+        cast("BipQueue", bip_queue),  # test double
         store,
         CoordinatorOptions(workers=1, rate_interval_s=0.0),
         fetch=lambda url, timeout, ua: HttpResult(
@@ -549,7 +549,7 @@ def test_bundle_is_closed_when_a_host_finishes(tmp_path: Path) -> None:
 
 def test_result_exception_releases_the_host(tmp_path: Path) -> None:
     """A raise while handling a result must still finalize the host (no hang)."""
-    frontier = FakeFrontier(
+    bip_queue = FakeFrontier(
         [
             HostRow(
                 host="bip.test",
@@ -562,7 +562,7 @@ def test_result_exception_releases_the_host(tmp_path: Path) -> None:
     )
     store = LocalBundleStore(tmp_path / "out")
     coordinator = BipCoordinator(
-        cast("BipFrontier", frontier),  # test double
+        cast("BipQueue", bip_queue),  # test double
         store,
         CoordinatorOptions(workers=1, rate_interval_s=0.0),
     )
@@ -571,10 +571,10 @@ def test_result_exception_releases_the_host(tmp_path: Path) -> None:
     failing: Future = Future()
     failing.set_exception(RuntimeError("boom"))
     row = UrlRow(url="https://bip.test/x", host="bip.test", kind="page")
-    frontier.urls[row.url] = row
-    frontier.states[row.url] = "claimed"
+    bip_queue.urls[row.url] = row
+    bip_queue.states[row.url] = "claimed"
     coordinator._collect({failing: row})  # noqa: SLF001 - exercising the handler
 
     assert coordinator.stats.errors == 1
     assert "bip.test" not in coordinator.active
-    assert frontier.hosts["bip.test"].status == "partial"
+    assert bip_queue.hosts["bip.test"].status == "partial"

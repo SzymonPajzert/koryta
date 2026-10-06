@@ -1,4 +1,4 @@
-"""Postgres-backed frontier for the BIP crawler.
+"""Postgres-backed URL queue (bip_queue) for the BIP crawler.
 
 Tables `bip_hosts` / `bip_urls` / `bip_docs` / `bip_runs` are created once by
 hand (DDL in `scrapers/bip/schema.sql`); this class never creates schema.
@@ -14,7 +14,7 @@ import random
 
 from psycopg import sql
 
-from scrapers.bip.models import DocRow, HostRow, RunStats, UrlRow
+from scrapers.bip.types import DocRow, HostRow, RunStats, UrlRow
 from scrapers.common.pg import PostgresClient
 
 # Postgres btree rejects index entries over ~2704 bytes; urls.url is the primary
@@ -23,7 +23,7 @@ from scrapers.common.pg import PostgresClient
 MAX_URL_BYTES = 2000
 
 
-class BipFrontier:
+class BipQueue:
     def __init__(self, pg: PostgresClient) -> None:
         self.pg = pg
 
