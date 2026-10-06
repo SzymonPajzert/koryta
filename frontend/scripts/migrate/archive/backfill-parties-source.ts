@@ -5,7 +5,7 @@ import {
   type DocumentReference,
   type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
-import { asArray } from "../../shared/model";
+import { asArray } from "../../../shared/model";
 
 /**
  * Pin the parties people stated before `partiesSource` existed.
@@ -64,11 +64,11 @@ import { asArray } from "../../shared/model";
  *     pointer moves only if it already had one.
  *
  * Usage, against the running dev:prod-data emulator:
- *   npx tsx scripts/migrate/backfill-parties-source.ts            # dry run
- *   npx tsx scripts/migrate/backfill-parties-source.ts --commit
+ *   npx tsx scripts/migrate/archive/backfill-parties-source.ts     # dry run
+ *   npx tsx scripts/migrate/archive/backfill-parties-source.ts --commit
  * Against production:
- *   npx tsx scripts/migrate/backfill-parties-source.ts --prod
- *   npx tsx scripts/migrate/backfill-parties-source.ts --prod --commit
+ *   npx tsx scripts/migrate/archive/backfill-parties-source.ts --prod
+ *   npx tsx scripts/migrate/archive/backfill-parties-source.ts --prod --commit
  */
 
 const AUTHOR = "migration:backfill-parties-source";
