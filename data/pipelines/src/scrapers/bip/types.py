@@ -39,7 +39,6 @@ class UrlRow:
     discovered_from: str = ""
     depth: int = 0
     section: str = ""
-    priority: int = 50
     anchor_text: str = ""
     content_type: str = ""
     size: int = 0
