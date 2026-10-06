@@ -127,9 +127,9 @@ and Secret Manager.
    gcloud storage cat "gs://koryta-pl-sharedcache/jobs/nightly/runs/date=$(TZ=Europe/Warsaw date +%F)/*.json"
    ```
 
-4. `/etc/koryta/nightly.env` starts with `KORYTA_NIGHTLY_ARGS=--people-dry-run`:
-   the nights build and count tonight's people and send none. Delete that line
-   when the upload goes live (`go-live-people-import`).
+4. The nights send up to 100 people from the start (`--max-uploads`). For
+   nights that build and count them and send none, put
+   `KORYTA_NIGHTLY_ARGS=--people-dry-run` in `/etc/koryta/nightly.env`.
 
 Stop the VM afterwards, or leave it: the schedule boots it at 04:15 either
 way, and the timer runs the night on a VM that is already up too.
