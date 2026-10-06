@@ -24,8 +24,8 @@ The steps, in order (`STEPS`):
     people      koryta_people_import --scope priority --max-uploads 100: new
                 hires first, then published pages, then the rest
     scores      koryta_score_import: every scoring model rebuilt over the
-                export and the pages the people step has just created, and
-                its votes reconciled with the site's
+                day's newest export and the pages the people step has just
+                created, and its votes reconciled with the site's
     tidy        old export shards and day-named outputs off the disk
 
 Every step but `export` and `tidy` is a process of its own - the jobs and the
@@ -122,6 +122,13 @@ HELD = (
     "CruDump",
     "CruUmowy",
 )
+
+#: Read again by the scores step, whatever the reprocess built from them: the
+#: site's people, their votes and facts, and the company scores made of those.
+#: They are named by the day, so an export taken by hand later that day - to
+#: rate the pages a run by hand created - is read only if they are rebuilt; on
+#: a night with one export they read the same again, in about a minute.
+SCORES_REFRESH = ("KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores")
 
 COMPRESSED_HOSTS = ("rejestr.io", "api-krs.ms.gov.pl")
 COMPRESSED_BUCKET = "koryta-pl-compressed"
@@ -745,13 +752,16 @@ class Night:
         return self.judge_job(*self.process(step, argv))
 
     def step_scores(self, step: Step) -> tuple[str, str, int | None]:
-        # The models are rebuilt; what they read is the reprocess's, on disk,
-        # and the pages the people step created are read from its record.
+        # The models are rebuilt over the newest export of the day; the rest
+        # of what they read is the reprocess's, on disk, and the pages the
+        # people step created are read from its record.
         argv = [
             bin_path("koryta_score_import"),
             "--max-minutes",
             f"{self.minutes_for(step):.0f}",
         ]
+        for name in SCORES_REFRESH:
+            argv += ["--refresh", name]
         return self.judge_job(*self.process(step, argv))
 
     def step_compress(self, step: Step) -> tuple[str, str, int | None]:

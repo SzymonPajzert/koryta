@@ -220,6 +220,10 @@ def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
     argv, env = world.command("koryta_score_import")
     assert argv[argv.index("--max-minutes") + 1] == "30"
     assert "--dry-run" not in argv
+    # The site's people read again: an export taken by hand later the same day
+    # is otherwise not seen, as their outputs are named by the day.
+    refreshed = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--refresh"]
+    assert refreshed == ["KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores"]
     # Backed up as whoever runs it, as the reprocess: the models it rebuilds
     # are tonight's newest.
     assert env.get("DISABLE_BACKUP") != "1"
