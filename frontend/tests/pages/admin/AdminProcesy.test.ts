@@ -310,6 +310,7 @@ describe("/admin/procesy", () => {
     await mountPage();
     expect(mockAuthRequest).toHaveBeenCalledWith("/api/ops/jobs", {
       method: "GET",
+      timeout: 30_000,
     });
   });
 
@@ -688,6 +689,32 @@ describe("/admin/procesy", () => {
       "running",
     );
     expect(isOpen(page, "krs_scrape_free")).toBe(false);
+  });
+
+  it("gives up on a refresh that does not answer, and asks again at the next poll", async () => {
+    const page = await mountPage();
+    // How ofetch fails a request it has given up on after `timeout`.
+    mockAuthRequest.mockRejectedValueOnce(
+      new Error(
+        '[GET] "/api/ops/jobs": <no response> [TimeoutError]: The operation was aborted due to timeout',
+        {
+          cause: Object.assign(new Error("The operation timed out"), {
+            name: "TimeoutError",
+          }),
+        },
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flushPromises();
+    expect(page.text()).toContain(
+      "Nie udało się odświeżyć procesów: serwer nie odpowiedział w 30 s",
+    );
+    expect(page.findAll("[data-job]")).toHaveLength(14);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flushPromises();
+    expect(mockAuthRequest).toHaveBeenCalledTimes(3);
+    expect(page.text()).not.toContain("Nie udało się odświeżyć");
   });
 
   it("keeps what it last knew when a refresh fails", async () => {
