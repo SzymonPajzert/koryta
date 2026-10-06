@@ -179,7 +179,7 @@ class TestScoreRanges:
 class TestPopulation:
     """Who a model is allowed to have an opinion about."""
 
-    def build(self, koryta_rows, vote_rows=(), payload_rows=None):
+    def build(self, koryta_rows, vote_rows=(), payload_rows=None, created_rows=()):
         scorer = model(PeopleScoresCapture)
         payloads = pd.DataFrame.from_records(
             payload_rows
@@ -192,6 +192,9 @@ class TestPopulation:
         scorer.people_payloads.read_or_process = lambda ctx: payloads
         scorer.people_koryta.read_or_process = lambda ctx: pd.DataFrame.from_records(
             koryta_rows
+        )
+        scorer.people_created.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            list(created_rows), columns=["id", "full_name", "rejestrIo", "run"]
         )
         scorer.people_votes.read_or_process = lambda ctx: pd.DataFrame.from_records(
             list(vote_rows)
@@ -272,6 +275,74 @@ class TestPopulation:
         assert result.shortlist == []
 
 
+class TestPagesCreatedSinceTheExport:
+    """The night's new pages, which the morning's export does not have yet."""
+
+    ANNA = {"id": "n1", "full_name": "Anna Nowak", "is_public": False, "parties": []}
+
+    def build(self, koryta_rows, created_rows, vote_rows=(), payload_rows=None):
+        return TestPopulation().build(
+            koryta_rows,
+            vote_rows,
+            payload_rows
+            if payload_rows is not None
+            else [
+                {"name": name, "companies": [{"krs": "1"}], "elections": []}
+                for name in ("Anna Nowak", "Beata Kos")
+            ],
+            created_rows,
+        )
+
+    def test_a_page_created_since_the_export_is_a_candidate(self):
+        result = self.build(
+            [self.ANNA],
+            [{"id": "n2", "full_name": "Beata Kos", "rejestrIo": None, "run": "r"}],
+        )
+
+        assert result.shortlist == ["Anna Nowak", "Beata Kos"]
+        assert result.node_ids["Beata Kos"] == "n2"
+        assert result.display_name("Beata Kos") == "Beata Kos"
+
+    def test_a_page_the_export_has_is_read_from_the_export(self):
+        # Created before the 04:00 export and voted on since: the export knows.
+        result = self.build(
+            [self.ANNA],
+            [{"id": "n1", "full_name": "Anna Nowak", "rejestrIo": None, "run": "r"}],
+            [{"person_koryta_id": "n1", "interesting": 4}],
+        )
+
+        assert result.shortlist == []
+        assert result.seed_weights == {"Anna Nowak": 4}
+
+    def test_a_person_a_page_already_stands_for_keeps_that_page(self):
+        # The page the night created is the identity lookup missing somebody
+        # the site has; the score stays on the page people have worked on.
+        link = "https://rejestr.io/osoby/7"
+        result = self.build(
+            [self.ANNA],
+            [{"id": "n2", "full_name": "Anna Nowak", "rejestrIo": link, "run": "r"}],
+            payload_rows=[
+                {
+                    "name": "Anna Nowak",
+                    "rejestrIo": link,
+                    "companies": [{"krs": "1"}],
+                    "elections": [],
+                }
+            ],
+        )
+
+        assert result.node_ids == {"rejestr.io/7": "n1"}
+        assert result.shortlist == ["rejestr.io/7"]
+
+    def test_a_page_with_nothing_in_the_payloads_is_not_scorable(self):
+        result = self.build(
+            [self.ANNA],
+            [{"id": "n2", "full_name": "Celina Bór", "rejestrIo": None, "run": "r"}],
+        )
+
+        assert result.shortlist == ["Anna Nowak"]
+
+
 class TestPersonKey:
     """Which payload row is which koryta node."""
 
@@ -302,13 +373,16 @@ class TestPersonKey:
 class TestPopulationJoin:
     """The payload and the site do not spell people the same way."""
 
-    def build(self, koryta_rows, payload_rows):
+    def build(self, koryta_rows, payload_rows, created_rows=()):
         scorer = model(PeopleScoresCapture)
         scorer.people_payloads.read_or_process = lambda ctx: pd.DataFrame.from_records(
             payload_rows
         )
         scorer.people_koryta.read_or_process = lambda ctx: pd.DataFrame.from_records(
             koryta_rows
+        )
+        scorer.people_created.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            list(created_rows), columns=["id", "full_name", "rejestrIo", "run"]
         )
         scorer.people_votes.read_or_process = lambda ctx: pd.DataFrame()
         scorer.companies_krs.read_or_process = lambda ctx: pd.DataFrame()
