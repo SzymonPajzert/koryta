@@ -72,9 +72,9 @@
           variant="outlined"
           size="small"
           :prepend-icon="mdiRefresh"
-          :loading="loading"
+          :loading="refreshing"
           data-jobs-refresh
-          @click="refresh"
+          @click="refreshNow"
         >
           Odśwież
         </v-btn>
@@ -129,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, watch } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { mdiAlertOctagon, mdiCheckCircle, mdiRefresh } from "@mdi/js";
 import { useAuthState } from "~/composables/auth";
 import {
@@ -182,8 +182,23 @@ const refresh = async () => {
 };
 
 /** Once a minute while the tab is in front - the jobs heartbeat about that
- * often, and the server caches its bucket probes for five. */
+ * often, and the server caches its bucket probes for five. Quietly: the
+ * button's spinner is for a click. It is redrawn every frame while it shows -
+ * a quarter of a CPU core in headless Chromium - and a poll nobody asked for
+ * has nothing to tell anyone while it is out; "Odświeżono" says how old the
+ * page is once it is back. */
 usePollWhileVisible(refresh, 60_000);
+
+/** A refresh asked for with the button, while it is out. */
+const refreshing = ref(false);
+async function refreshNow() {
+  refreshing.value = true;
+  try {
+    await refresh();
+  } finally {
+    refreshing.value = false;
+  }
+}
 
 /** The clock health is judged against. Normally now, so "W toku" turns into
  * "Bez sygnału" on a page nobody touches. But once the data is more than two
