@@ -69,6 +69,11 @@ Before it goes live it runs a week with `--dry-run`: it builds the payloads, sen
 own, and reports the run as succeeded with `planned` and the stop reason "próba - nic nie wysłano", so
 /admin/procesy shows what each day would have sent. Then live, with `--max-uploads` - see [CLOUD_RUN.md](CLOUD_RUN.md).
 
+`--request <run id>` does what somebody asked for on a page of the site: a company's people, or one person
+(`analysis/payloads/target.py`). It reads the request from the run the site queued, builds both halves as `priority`
+does and keeps to their guards - a company's run creates pages for the company's people the site lacks and no one
+else, a person's run creates none - and reports as `people_request` on that same run. `koryta_job_requests` starts it.
+
 Every `koryta_uploader --submit` run reports now too: `--type person` as `people_import`, the same job, so a hand
 upload and the daily one read as one history; `company` as `company_import`, `score` as `score_import`,
 `extraction` as `extraction_import`. A preview without `--submit` reports nothing, and nor does `computeNodes`.
@@ -91,6 +96,15 @@ site answers 401.
 1. Writes a run summary to the shared cache (`jobs/score_import/runs/`): each model's counts, and how many of the pages created since the export some model rated
 
 Runs nightly as the step after the people on the koryta-nightly VM, so a new hire's page has its score the morning it is created - see [data/nightly/README.md](../../../nightly/README.md). `submit_scores.sh` uploads the same models by hand, one `koryta_uploader --type score` per model. After an export taken by hand later the same day, `--refresh KorytaPeople --refresh KorytaVotes --refresh KorytaFacts --refresh CompanyScores` makes the models read it: the site's people are read through day-named outputs, which still hold the morning's.
+
+## requests
+1. Takes the runs the datascience group queued from the site's pages ("Wyślij dane osób", "Wyślij dane tej osoby"), oldest first, claiming each so that no run is done twice
+1. Runs each as `koryta_people_import --request <id> --refresh none`, under the night's lock
+1. Ends a run whose job could not say how it ended, by the job's exit code
+1. `--watch`: once it has run something and nothing more comes for ten minutes, asks for the VM to be switched off
+
+Started at every boot of the koryta-nightly VM, which the site starts for a request - see [data/nightly/README.md](../../../nightly/README.md).
+By hand, against the emulator or wherever there are outputs to read: `koryta_job_requests --once`.
 
 # Reporting a run
 
@@ -130,7 +144,7 @@ made.
 | Variable                        | What it does                                                                                                                                                                                                  |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `KORYTA_JOB_STATUS`             | `0` (or `off`, `false`, `no`) writes nothing. Under pytest nothing is written unless a test passes in its own client.                                                                                         |
-| `KORYTA_JOB_TRIGGER`            | `schedule`, `manual` or `event`. Without it a Cloud Run execution counts as Cloud Scheduler's and anything else as a hand run.                                                                                |
+| `KORYTA_JOB_TRIGGER`            | `schedule`, `manual`, `event` or `request`. Without it a Cloud Run execution counts as Cloud Scheduler's and anything else as a hand run.                                                                     |
 | `KORYTA_JOB_STATUS_IMPERSONATE` | A service account to write as. On predator `ops-writer@koryta-pl.iam.gserviceaccount.com`: dev-workflow may impersonate it, and it may write `agent-tasks` - all of it, the task list too - and nothing else. |
 | `KORYTA_VERSION`                | The code version recorded on the run. The Cloud Run jobs are given it at deploy time (CLOUD_RUN.md); without it only a Cloud Run service has one, `K_REVISION`, and a job's runs have none.                   |
 
@@ -138,6 +152,11 @@ made.
 the project `GOOGLE_CLOUD_PROJECT` or `GCLOUD_PROJECT` names, else
 `demo-koryta-pl` - the one the dev stack starts its emulators under, and so the
 one the local /admin/procesy reads.
+
+A run somebody asks for on a page starts as a document the site writes: `jobRuns/{runId}` in state `queued`, with
+the request under `request` (`stores.job_requests`, `frontend/server/utils/jobRequests.ts`). The job that takes it on
+reports on that same document - `JobRun(..., adopt=True)` fills it in rather than replacing it - so the link the site
+handed out, `/admin/procesy#przebieg-<runId>`, follows the run from the click to its end.
 
 What reports: `krs_scrape_free` (not `--dry-run`), `score_import` (not `--dry-run`), `krs_scrape_paid` (once the
 bill is accepted; with `--max-calls`, every run but `--dry-run`, a run with

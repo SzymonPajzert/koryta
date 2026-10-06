@@ -1,0 +1,36 @@
+# The runs the datascience group asks for on koryta.pl's pages, done on the
+# koryta-nightly VM while it is up: requests.sh, then koryta_job_requests
+# --watch. The site starts the VM when somebody asks; once the worker has run
+# something and is idle, ExecStopPost powers the VM off again.
+#
+# Installed and enabled by setup-vm.sh. After changing this file run
+# setup-vm.sh again: systemd reads its own copy, not the checkout's.
+
+[Unit]
+Description=koryta: runs asked for on the site's pages (koryta_job_requests)
+Documentation=https://github.com/SzymonPajzert/koryta/blob/main/data/nightly/README.md
+Wants=network-online.target
+After=network-online.target google-guest-agent.service
+# A worker that keeps failing - no ops database, no venv - gives up rather
+# than restarting all day.
+StartLimitIntervalSec=1h
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=koryta
+Group=koryta
+EnvironmentFile=/etc/koryta/nightly.env
+# /var/lib/koryta-nightly: the night's lock, the busy lock, the poweroff request.
+StateDirectory=koryta-nightly
+ExecStart=/home/koryta/koryta/data/nightly/requests.sh
+# Root ("+"): powering off needs it. Powers off only when the worker asked to.
+ExecStopPost=+/home/koryta/koryta/data/nightly/poweroff.sh requests
+Restart=on-failure
+RestartSec=60
+# A stop - the schedule's 09:00, a shutdown - reaches the run in hand too; the
+# people import finishes the person it is sending and reports how far it got.
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

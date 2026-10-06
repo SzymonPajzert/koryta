@@ -56,6 +56,12 @@ const isoOrNull = (value: unknown): string | null => {
   return typeof plain === "string" && plain ? plain : null;
 };
 
+/** A map field with its `at` as an ISO string - a request's and a dispatch's. */
+const withIsoAt = (value: unknown): unknown =>
+  value && typeof value === "object"
+    ? { ...(value as DocumentData), at: iso((value as DocumentData).at) }
+    : value;
+
 /** A run document's data with its times as ISO strings. */
 export function runFromDoc(id: string, data: DocumentData): JobRun | null {
   return jobRunFromData(id, {
@@ -63,6 +69,8 @@ export function runFromDoc(id: string, data: DocumentData): JobRun | null {
     startedAt: iso(data.startedAt),
     heartbeatAt: iso(data.heartbeatAt),
     finishedAt: iso(data.finishedAt),
+    request: withIsoAt(data.request),
+    dispatch: withIsoAt(data.dispatch),
   });
 }
 

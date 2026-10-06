@@ -14,6 +14,7 @@ from datetime import date
 import pandas as pd
 
 from analysis.payloads.person import PeoplePayloads
+from analysis.payloads.target import PageTarget, Targeted
 from conductor import setup_context
 from scrapers.stores import (
     Context,
@@ -27,6 +28,8 @@ from scrapers.stores import (
 #: `priority`, both, ordered for a capped run (`analysis.payloads.priority`).
 PRIORITY = "priority"
 SCOPES = ("on-koryta", "not-on-koryta", PRIORITY)
+#: A run somebody asked for on a page (`--request`): that page's people alone.
+REQUEST = "request"
 
 
 @dataclass(frozen=True)
@@ -117,6 +120,50 @@ def build_priority(
         Candidate(row, pick.tier, pick.since)
         for row, pick in zip(rows, picks, strict=True)
     ]
+
+
+def target_argv(target: PageTarget, koryta_date: str | None) -> list[str]:
+    """Extract's flags for one page's people: the company's, which `--krs`
+    reads with its subsidiaries (`analysis.payloads.target` keeps the company's
+    own), or the person's register entry. A person page without one is read
+    out of everybody, by its id and name."""
+    if target.kind == "company":
+        argv = ["--krs", str(target.krs)]
+    elif target.register:
+        argv = ["--rejestrio-id", target.register]
+    else:
+        argv = ["--all"]
+    if koryta_date:
+        argv += ["--koryta-date", koryta_date]
+    return argv
+
+
+def build_targeted(
+    target: PageTarget, koryta_date: str | None, policy: ProcessPolicy
+) -> tuple[list[Candidate], Targeted]:
+    """What a run asked for on one page sends, in order, each with its tier
+    (`analysis.payloads.target`) and made what the pipe would have carried, as
+    `build_priority` makes them; and the whole answer, with what it leaves."""
+    saved = sys.argv
+    prog = saved[0] if saved else "koryta_people_import"
+    sys.argv = [prog, *target_argv(target, koryta_date)]
+    try:
+        ctx, dumper = setup_context(required_resources(PeoplePayloads), policy=policy)
+        try:
+            targeted = Pipeline.create(PeoplePayloads).targeted(ctx, target)
+        finally:
+            dumper.dump_pandas()
+    finally:
+        sys.argv = saved
+    plan = targeted.plan()
+    if not plan:
+        return [], targeted
+    frame = pd.DataFrame.from_records([asdict(person) for person, _ in plan])
+    rows = [as_sent(row) for row in iterate_pipeline_dict(frame)]
+    candidates = [
+        Candidate(row, tier, None) for row, (_, tier) in zip(rows, plan, strict=True)
+    ]
+    return candidates, targeted
 
 
 def pipeline_names() -> set[str]:

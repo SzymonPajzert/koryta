@@ -1,9 +1,11 @@
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue";
 import { authRequest } from "~/composables/auth";
 import { otherDefinition } from "~/utils/jobStyle";
 import {
   JOBS,
+  isFinished,
   type JobDefinition,
+  type JobRun,
   type JobView,
   type JobsOverview,
 } from "~~/shared/jobs";
@@ -156,4 +158,118 @@ export function usePollWhileVisible(refresh: () => unknown, everyMs: number) {
     document.removeEventListener("visibilitychange", onVisibility);
     clearInterval(timer);
   });
+}
+
+/** One run, for `/admin/procesy#przebieg-<id>` and for a page's request button:
+ * GET /api/ops/jobs/runs/<id>, again every `everyMs` while it is not finished
+ * and the tab is in front. A run that has ended is read no more. */
+export function useOpsRun(id: Ref<string | null>, everyMs = 10_000) {
+  const run = ref<JobRun | null>(null);
+  const error = ref("");
+  const loading = ref(false);
+  let inFlight: Promise<void> | null = null;
+
+  function load(): Promise<void> {
+    const wanted = id.value;
+    if (!wanted) {
+      run.value = null;
+      return Promise.resolve();
+    }
+    if (inFlight) return inFlight;
+    loading.value = true;
+    inFlight = (async () => {
+      try {
+        const answer = await authRequest<{ run: JobRun }>(
+          `/api/ops/jobs/runs/${encodeURIComponent(wanted)}`,
+          { method: "GET" },
+        );
+        // A hash changed while this was out: the answer is the old run's.
+        if (id.value === wanted) {
+          run.value = answer.run;
+          error.value = "";
+        }
+      } catch (failure) {
+        if (id.value === wanted) error.value = reason(failure);
+      } finally {
+        loading.value = false;
+        inFlight = null;
+      }
+    })();
+    return inFlight;
+  }
+
+  watch(id, () => {
+    run.value = null;
+    error.value = "";
+    void load();
+  });
+  onMounted(() => void load());
+
+  usePollWhileVisible(() => {
+    if (id.value && (!run.value || !isFinished(run.value.state))) {
+      return load();
+    }
+  }, everyMs);
+
+  return { run, error, loading, load };
+}
+
+/** The runs asked for on one page, newest first (GET /api/ops/jobs/requests),
+ * and asking for another (POST). Polls while the newest is still going. */
+export function useNodeJobRequests(nodeId: Ref<string | null | undefined>) {
+  const runs = ref<JobRun[]>([]);
+  const error = ref("");
+  const sending = ref(false);
+
+  async function load() {
+    const node = nodeId.value;
+    if (!node) return;
+    try {
+      const answer = await authRequest<{ runs: JobRun[] }>(
+        "/api/ops/jobs/requests",
+        { method: "GET", query: { node } },
+      );
+      if (nodeId.value === node) runs.value = answer.runs;
+    } catch {
+      // The button still works without the history; it is a hint, not data.
+    }
+  }
+
+  async function request(dryRun: boolean): Promise<JobRequested | null> {
+    const node = nodeId.value;
+    if (!node) return null;
+    sending.value = true;
+    error.value = "";
+    try {
+      const answer = await authRequest<JobRequested>("/api/ops/jobs/requests", {
+        method: "POST",
+        body: { nodeId: node, dryRun },
+      });
+      runs.value = [
+        answer.run,
+        ...runs.value.filter((run) => run.id !== answer.run.id),
+      ];
+      return answer;
+    } catch (failure) {
+      error.value = reason(failure);
+      return null;
+    } finally {
+      sending.value = false;
+    }
+  }
+
+  usePollWhileVisible(() => {
+    const newest = runs.value[0];
+    if (newest && !isFinished(newest.state)) return load();
+  }, 15_000);
+
+  return { runs, error, sending, load, request };
+}
+
+export interface JobRequested {
+  run: JobRun;
+  /** The page had a run waiting or going already, and this is it. */
+  reused: boolean;
+  /** `/admin/procesy#przebieg-<id>`. */
+  link: string;
 }

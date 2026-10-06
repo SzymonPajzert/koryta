@@ -207,6 +207,7 @@
       :runs="view.runs"
       :definition="definition"
       :now="now"
+      :target-run-id="targetRunId"
     />
     <p v-else class="text-body-2 text-medium-emphasis" data-no-runs>
       {{ emptyText }}
@@ -255,6 +256,8 @@ const props = defineProps<{
   /** Whether to link the job's tasks. They are on the owner's list, which
    * refuses everybody else the page is open to. */
   showTasks?: boolean;
+  /** The run a `#przebieg-<id>` link names, marked in the list. */
+  targetRunId?: string | null;
 }>();
 
 const expanded = defineModel<boolean>("expanded", { default: false });

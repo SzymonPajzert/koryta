@@ -13,8 +13,11 @@ import pandas as pd
 import pytest
 
 import jobs.people_import as job
+from analysis.payloads.target import NEW, Targeted
 from jobs.people_import import payloads as build
 from scrapers.stores import ProcessPolicy
+from stores import job_requests
+from stores.job_requests import Request
 from stores.storage import SHARED_BUCKET
 from uploader import Args, PersonUploader
 
@@ -107,6 +110,8 @@ class World:
         self.candidates: list[build.Candidate] = []
         self.already_sent: set[tuple[str, str]] = set()
         self.memory_since: list[str] = []
+        #: Set by plan_for(): what a page's priority run sends.
+        self.targeted: Targeted = Targeted()
 
     def run(self) -> RecordingRun:
         [run] = self.runs
@@ -894,3 +899,173 @@ def test_planning_keeps_the_order_and_tells_a_person_from_their_payload():
 
     assert [c.payload["name"] for c in planned] == ["Anna Nowak", "Jan Kowalski"]
     assert skipped == 1
+
+
+# ---------------------------------------------------------------------------
+# A run asked for on a page (--request)
+
+
+COMPANY = Request(
+    run_id="run-asked",
+    job="people_request",
+    target="company",
+    node_id="place-1",
+    name="Wodociągi Miejskie",
+    krs="0000000001",
+    by="uid-1",
+)
+
+
+@pytest.fixture
+def asked(world, monkeypatch) -> World:
+    """The world, with a request on the site and a build for one page."""
+    world.request = COMPANY
+    world.targeted = Targeted()
+
+    def read_request(run_id):
+        world.events.append(f"read {run_id}")
+        assert run_id == world.request.run_id
+        return world.request
+
+    def build_targeted(target, koryta_date, policy):
+        world.events.append("build")
+        world.built.append({"target": target, "policy": policy})
+        return list(world.candidates), world.targeted
+
+    monkeypatch.setattr(job, "read_request", read_request)
+    monkeypatch.setattr(job, "build_targeted", build_targeted)
+    return world
+
+
+def plan_for(world: World, changed: list[str], new: list[str], **counts) -> None:
+    world.candidates = [candidate(name, ON_SITE) for name in changed] + [
+        candidate(name, NEW) for name in new
+    ]
+    world.targeted = Targeted(
+        new=[object()] * len(new),  # type: ignore[list-item]
+        changed=[object()] * len(changed),  # type: ignore[list-item]
+        **counts,
+    )
+
+
+def test_a_run_asked_for_on_a_page_goes_on_in_the_run_the_site_queued(asked):
+    plan_for(asked, ["Anna Nowak"], ["Jan Kowalski"], matched=3, up_to_date=1)
+    asked.answers = [person("updated"), person("created", "new-node")]
+
+    assert job.main(["--request", "run-asked"]) == 0
+
+    run = asked.run()
+    assert run.job == "people_request"
+    assert run.kwargs == {
+        "run_id": "run-asked",
+        "trigger": "request",
+        "adopt": True,
+        "unit": "osób",
+    }
+    assert asked.events.index("read run-asked") < asked.events.index("build")
+    [built] = asked.built
+    assert built["target"].kind == "company"
+    assert (built["target"].node_id, built["target"].krs) == ("place-1", "0000000001")
+    assert asked.sent() == ["Anna Nowak", "Jan Kowalski"]
+
+    end = run.ending()
+    assert end["state"] == "succeeded"
+    assert end["counters"]["matched"] == 3
+    assert end["counters"]["up_to_date"] == 1
+    assert end["counters"]["created"] == 1
+    summary = asked.summary()
+    assert summary["run"] == "run-asked"
+    assert (summary["scope"], summary["target"]) == ("request", COMPANY.describe())
+    # What it took is remembered, so the night leaves these people alone.
+    assert [row["name"] for row in sent_part(asked)] == ["Anna Nowak", "Jan Kowalski"]
+
+
+def test_a_page_made_for_somebody_the_site_has_stops_an_asked_for_run(asked):
+    plan_for(asked, ["Anna Nowak", "Ewa Lis"], [])
+    asked.answers = [person("created", "new-node")]
+
+    assert job.main(["--request", "run-asked"]) == job.EXIT_FAILED
+
+    assert asked.sent() == ["Anna Nowak"]
+    assert asked.summary()["state"] == "failed"
+
+
+def test_an_asked_for_run_creates_no_more_pages_than_it_was_asked_to(asked):
+    plan_for(asked, [], ["Jan Kowalski"])
+    asked.answers = [person("created", "a"), person("created", "b")]
+    # One person the site lacks, but two pages made: the second one stops it.
+    asked.candidates.append(candidate("Anna Nowak", NEW))
+
+    assert job.main(["--request", "run-asked"]) == job.EXIT_FAILED
+
+    assert asked.sent() == ["Jan Kowalski", "Anna Nowak"]
+    assert "(--max-new)" in asked.summary()["stopped"]
+
+
+def test_a_page_with_nothing_new_says_so(asked):
+    plan_for(asked, [], [], matched=2, up_to_date=2)
+
+    assert job.main(["--request", "run-asked"]) == 0
+
+    assert asked.sent() == []
+    end = asked.run().ending()
+    assert end["state"] == "succeeded"
+    assert end["stop_reason"] == job.STOP_UP_TO_DATE
+    assert end["counters"]["up_to_date"] == 2
+
+
+def test_a_person_nobody_can_be_sure_of_is_said_so(asked):
+    asked.request = Request(
+        run_id="run-asked",
+        job="people_request",
+        target="person",
+        node_id="p-1",
+        name="Anna Nowak",
+        rejestr_io="https://rejestr.io/osoby/5",
+    )
+    asked.targeted = Targeted(
+        matched=2, left_out=2, reason="2 osoby z danych trafiłyby na tę stronę"
+    )
+
+    assert job.main(["--request", "run-asked"]) == 0
+
+    [built] = asked.built
+    assert (built["target"].kind, built["target"].register) == ("person", "5")
+    end = asked.run().ending()
+    assert end["stop_reason"] == "2 osoby z danych trafiłyby na tę stronę"
+    assert end["counters"]["left_out"] == 2
+
+
+def test_a_request_for_a_count_alone_sends_nothing(asked):
+    asked.request = Request(**{**COMPANY.__dict__, "dry_run": True})
+    plan_for(asked, ["Anna Nowak"], ["Jan Kowalski"], matched=2)
+
+    assert job.main(["--request", "run-asked"]) == 0
+
+    assert asked.sent() == []
+    assert "token" not in asked.events
+    assert asked.objects == {}
+    end = asked.run().ending()
+    assert end["stop_reason"] == job.STOP_DRY_RUN
+    assert end["counters"] == {
+        "planned": 2,
+        "matched": 2,
+        "to_change": 1,
+        "to_create": 1,
+        "up_to_date": 0,
+        "left_out": 0,
+    }
+
+
+def test_a_request_that_cannot_be_read_fails_its_run(asked, monkeypatch):
+    def unreadable(run_id):
+        raise job_requests.RequestError(f"{run_id}: no request")
+
+    monkeypatch.setattr(job, "read_request", unreadable)
+
+    with pytest.raises(job_requests.RequestError):
+        job.main(["--request", "run-asked"])
+
+    end = asked.run().ending()
+    assert end["state"] == "failed"
+    assert "no request" in end["errors"][0]

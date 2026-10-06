@@ -11,9 +11,9 @@
  * whatever the reader switched to.
  */
 
-import { getOrigin } from "./config.js";
+import { DEFAULT_ORIGIN, getOrigin } from "./config.js";
 import { factCard, factWord } from "./facts.js";
-import { jobIsBusy, jobMessage } from "./jobs.js";
+import { jobIsBusy, jobMessage, jobProgressUrl } from "./jobs.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -27,6 +27,9 @@ const MIN_SELECTION_CHARS = 80;
 
 let tabId = null;
 let tabUrl = "";
+/** Where captures go, for `renderJob`'s link to a capture's run; read in
+ * `load` before the job is. */
+let currentOrigin = DEFAULT_ORIGIN;
 
 function setStatus(text, state) {
   el("status").textContent = text;
@@ -42,6 +45,11 @@ function renderJob(job) {
   button.textContent = busy ? "Pracuję…" : "Zapisz i wyciągnij fakty";
   // One job per tab, so a run started from either button holds both.
   el("selection-extract").disabled = busy;
+
+  // The capture's run on /admin/procesy, once the upload has named the page.
+  const progress = jobProgressUrl(currentOrigin, job);
+  el("progress").hidden = !progress;
+  if (progress) el("progress").href = progress;
 }
 
 /** Offers to extract from the passage the reader has highlighted.
@@ -158,6 +166,7 @@ async function panelTab() {
  * second only when that page turned out to have facts.
  */
 async function load() {
+  currentOrigin = await getOrigin();
   const tab = await panelTab();
   tabId = tab?.id ?? null;
   tabUrl = tab?.url || "";

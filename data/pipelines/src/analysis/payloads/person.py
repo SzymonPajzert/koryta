@@ -13,6 +13,13 @@ from analysis.extract import Extract
 from analysis.payloads.election import get_election_type
 from analysis.payloads.priority import Pick, prioritised
 from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
+from analysis.payloads.target import (
+    PageTarget,
+    Targeted,
+    employment_krs,
+    for_company,
+    for_person,
+)
 from analysis.utils import as_sequence
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
@@ -133,19 +140,7 @@ class PeoplePayloads(Pipeline[Person]):
         payloads-handle-odpis-only-people); before, `one_register_entry` raised
         at the first one and no payload was built at all.
         """
-        people_df = self.people.read_or_process(ctx)
-        if people_df.empty or "rejestrio_id" not in people_df:
-            return people_df
-        registered = people_df["rejestrio_id"].map(
-            lambda ids: any(str(value) for value in as_sequence(ids))
-        )
-        left_out = int((~registered).sum())
-        if left_out:
-            print(
-                f"Leaving out {left_out} people only an odpis names: no rejestr.io "
-                f"entry for the ingest to identify them by"
-            )
-        return people_df[registered]
+        return only_registered(self.people.read_or_process(ctx))[0]
 
     def site_snapshot(self, ctx: Context) -> SiteSnapshot:
         """The export both filters read, read once.
@@ -180,6 +175,40 @@ class PeoplePayloads(Pipeline[Person]):
             today=today,
             recent_days=recent_days,
         )
+
+    def targeted(self, ctx: Context, target: PageTarget) -> Targeted:
+        """The payloads a button on one page asks for - a company's people or
+        one person - each guarded as the nightly runs are
+        (`analysis.payloads.target`).
+
+        Extract's own flags have already narrowed the people to the target
+        (`jobs.people_import.payloads.target_argv`); the rows are narrowed
+        again to the target alone before any is made a payload, since a
+        person run without a register link reads everybody.
+        """
+        people_df = self.people.read_or_process(ctx)
+        if not people_df.empty:
+            people_df = people_df[
+                [row_is_about(row, target) for _, row in people_df.iterrows()]
+            ]
+        people_df, odpis_only = only_registered(people_df)
+        payloads = [
+            self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
+        ]
+        snapshot = self.site_snapshot(ctx)
+        if target.kind == "company":
+            assert target.krs is not None
+            result = for_company(payloads, snapshot, target.krs)
+        else:
+            result = for_person(payloads, snapshot, target)
+        result.left_out += odpis_only
+        print(
+            f"For {target.kind} {target.node_id}: {result.matched} in the data, "
+            f"{len(result.new)} to create, {len(result.changed)} to change, "
+            f"{result.up_to_date} up to date, {result.left_out} left out"
+            + (f" ({result.reason})" if result.reason else "")
+        )
+        return result
 
     def published_people(self, ctx: Context) -> set[str]:
         """Node ids of the person pages the export shows as published.
@@ -457,6 +486,60 @@ def _extract_elections(row: pd.Series) -> list[Election]:
 
                 elections.append(election_payload)
     return elections
+
+
+def only_registered(people_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """The rows carrying a rejestr.io entry, and how many were left out
+    (`PeoplePayloads.registered_people` says why)."""
+    if people_df.empty or "rejestrio_id" not in people_df:
+        return people_df, 0
+    registered = people_df["rejestrio_id"].map(
+        lambda ids: any(str(value) for value in as_sequence(ids))
+    )
+    left_out = int((~registered).sum())
+    if left_out:
+        print(
+            f"Leaving out {left_out} people only an odpis names: no rejestr.io "
+            f"entry for the ingest to identify them by"
+        )
+    return people_df[registered], left_out
+
+
+#: The columns a person's name may be read from, in `map_person_payload`'s order.
+NAME_COLUMNS = ("name", "full_name", "fullname", "krs_name", "base_full_name")
+
+
+def row_is_about(row: pd.Series, target: PageTarget) -> bool:
+    """Whether an Extract row may be about the page a button was pressed on,
+    before it is made a payload: a post at the company; for a person, the page
+    id, the register entry or the name. Loose on purpose - `for_person` decides
+    who the page is about, off the payloads, as the ingest would."""
+    if target.kind == "company":
+        return target.krs in employment_krs(
+            row.get("employment") if "employment" in row else row.get("companies")
+        )
+    koryta_id = row.get("koryta_id")
+    if isinstance(koryta_id, str) and koryta_id == target.node_id:
+        return True
+    if target.register is not None and target.register in {
+        str(value) for value in _cell_values(row.get("rejestrio_id"))
+    }:
+        return True
+    wanted = " ".join(target.name.lower().split())
+    if not wanted:
+        return False
+    for column in NAME_COLUMNS:
+        for value in _cell_values(row.get(column)):
+            if isinstance(value, str) and " ".join(value.lower().split()) == wanted:
+                return True
+    return False
+
+
+def _cell_values(value: typing.Any) -> list:
+    """A cell holding one value or a list of them, as a list."""
+    if isinstance(value, (str, int)):
+        return [value]
+    return as_sequence(value)
 
 
 def identified_by(snapshot: SiteSnapshot, payload: typing.Mapping) -> bool:

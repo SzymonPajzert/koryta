@@ -72,6 +72,19 @@ env:
       - BUILD
       - RUNTIME
 
+  # A run somebody asks for on a company's or a person's page (send its
+  # people) is done on the koryta-nightly VM, and this starts the VM for it
+  # (server/utils/jobRunner.ts). It needs compute.instances.start on that one
+  # instance for this backend's account, firebase-app-hosting-compute@ - until
+  # that is granted every start fails, the run says so on /admin/procesy and
+  # waits for the night, whose boot runs the queue anyway. JOB_RUNNER_ZONE and
+  # JOB_RUNNER_INSTANCE default to europe-central2-b and koryta-nightly.
+  - variable: JOB_RUNNER_DISPATCH
+    value: vm
+    availability:
+      - BUILD
+      - RUNTIME
+
   # What tells sentry.server.config.ts that it is running on a deployed backend
   # rather than on somebody's laptop. There is no request to read a hostname off
   # at init time, and nothing else in the environment separates a deployed nitro

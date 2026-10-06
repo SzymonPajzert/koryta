@@ -136,7 +136,8 @@ describe("plural", () => {
 describe("counters", () => {
   it("reads every counter the jobs write in Polish", () => {
     // What data/pipelines/src/jobs write: krs_scrape_free, krs_scrape_paid,
-    // krs_odpis, krs_register_owners and the crawl; what koryta_uploader
+    // krs_odpis, krs_register_owners and the crawl; people_import's request
+    // counts; what koryta_uploader
     // --submit writes for each payload type - person, company, score and
     // extraction, keys shared between them repeated; and the captures' facts.
     const written = [
@@ -148,6 +149,8 @@ describe("counters", () => {
       ...["stored", "not_html", "errors", "rate_limited", "discovered"],
       ...["created", "updated", "unchanged", "employments_created"],
       ...["companies_created", "unplaced", "failed", "skipped", "planned"],
+      // people_import --request: what of a page's people it found.
+      ...["matched", "to_change", "to_create", "up_to_date", "left_out"],
       ...["uploaded", "failed", "skipped"],
       ...["written", "retracted", "unchanged", "new_pages", "new_pages_scored"],
       ...["articles", "facts"],

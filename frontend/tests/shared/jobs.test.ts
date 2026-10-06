@@ -19,6 +19,8 @@ import {
   missedSlot,
   nextSlot,
   previousSlot,
+  runAnchor,
+  runLink,
   scheduleIsLive,
   shortWarsawTime,
   taskLink,
@@ -534,6 +536,72 @@ describe("jobRunFromData", () => {
       startedAt: "2026-10-02T22:30:00+00:00",
     })!;
     expect(parsed.startedAt).toBe("2026-10-02T22:30:00.000Z");
+  });
+});
+
+describe("jobRunFromData: a run asked for on a page", () => {
+  const asked = {
+    job: "people_request",
+    state: "queued",
+    trigger: "request",
+    startedAt: "2026-10-06T10:00:00.000Z",
+    title: "Wodociągi Miejskie",
+    link: "/instytucja/wodociagi-miejskie-place1",
+    request: {
+      target: "company",
+      nodeId: "place1",
+      name: "Wodociągi Miejskie",
+      krs: "0000000001",
+      dryRun: true,
+      by: "analyst",
+      at: "2026-10-06T10:00:00Z",
+    },
+    dispatch: {
+      mode: "vm",
+      at: "2026-10-06T10:00:01Z",
+      ok: false,
+      error: "403",
+    },
+  };
+
+  it("keeps what was asked, by whom, and what came of starting the VM", () => {
+    expect(jobRunFromData("r1", asked)).toMatchObject({
+      trigger: "request",
+      title: "Wodociągi Miejskie",
+      link: "/instytucja/wodociagi-miejskie-place1",
+      request: {
+        target: "company",
+        nodeId: "place1",
+        krs: "0000000001",
+        rejestrIo: null,
+        dryRun: true,
+        by: "analyst",
+        byName: null,
+        at: "2026-10-06T10:00:00.000Z",
+      },
+      dispatch: {
+        mode: "vm",
+        at: "2026-10-06T10:00:01.000Z",
+        ok: false,
+        error: "403",
+      },
+    });
+  });
+
+  it("drops a request it cannot read rather than the run", () => {
+    const run = jobRunFromData("r1", {
+      ...asked,
+      request: { target: "region", nodeId: "x" },
+      dispatch: "soon",
+    });
+    expect(run?.state).toBe("queued");
+    expect(run).not.toHaveProperty("request");
+    expect(run).not.toHaveProperty("dispatch");
+  });
+
+  it("links every run by the same anchor", () => {
+    expect(runAnchor("r1")).toBe("przebieg-r1");
+    expect(runLink("r1")).toBe("/admin/procesy#przebieg-r1");
   });
 });
 
