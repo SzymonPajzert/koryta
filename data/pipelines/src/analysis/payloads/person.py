@@ -11,9 +11,13 @@ import pandas as pd
 
 from analysis.extract import Extract
 from analysis.payloads.election import get_election_type
+from analysis.payloads.priority import Pick, prioritised
 from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
+from analysis.utils import as_sequence
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
+from scrapers.koryta.download import KorytaPeople
+from scrapers.krs.columns import is_public
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
 from util.polish import format_person_name
@@ -88,7 +92,7 @@ class PeoplePayloads(Pipeline[Person]):
         return Person
 
     def process(self, ctx: Context):
-        people_df = self.people.read_or_process(ctx)
+        people_df = self.registered_people(ctx)
         result = [self.map_person_payload(ctx, row) for _, row in people_df.iterrows()]
         if self.args.on_koryta:
             result = self.only_on_koryta(ctx, result)
@@ -117,6 +121,32 @@ class PeoplePayloads(Pipeline[Person]):
             )
         )
 
+    def registered_people(self, ctx: Context) -> pd.DataFrame:
+        """The people Extract selected that carry a rejestr.io entry.
+
+        Since the odpis seats are folded into the people, some rows are people
+        only an odpis names, with no register entry at all. The ingest
+        identifies a person by their page, then their register entry, then
+        their name - so one of these would land on a namesake's page, or open a
+        second page for somebody already there. Left out and counted, until
+        the ingest has a way to identify them (task
+        payloads-handle-odpis-only-people); before, `one_register_entry` raised
+        at the first one and no payload was built at all.
+        """
+        people_df = self.people.read_or_process(ctx)
+        if people_df.empty or "rejestrio_id" not in people_df:
+            return people_df
+        registered = people_df["rejestrio_id"].map(
+            lambda ids: any(str(value) for value in as_sequence(ids))
+        )
+        left_out = int((~registered).sum())
+        if left_out:
+            print(
+                f"Leaving out {left_out} people only an odpis names: no rejestr.io "
+                f"entry for the ingest to identify them by"
+            )
+        return people_df[registered]
+
     def site_snapshot(self, ctx: Context) -> SiteSnapshot:
         """The export both filters read, read once.
 
@@ -127,6 +157,40 @@ class PeoplePayloads(Pipeline[Person]):
         if self._snapshot is None:
             self._snapshot = SiteSnapshot.read(ctx, self.args.koryta_date)
         return self._snapshot
+
+    def prioritised(self, ctx: Context, today: date, recent_days: int) -> list[Pick]:
+        """Both halves of `--all` in the order a capped upload sends them.
+
+        New hires the site lacks first, then the published pages that would
+        change, then the other pages that would - see `analysis.payloads.priority`.
+        One build for what would otherwise take two runs, `--not-on-koryta` and
+        `--on-koryta --only-changed`, each guarded as that run would be.
+        """
+        people_df = self.registered_people(ctx)
+        payloads = [
+            self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
+        ]
+        snapshot = self.site_snapshot(ctx)
+        return prioritised(
+            missing_from_koryta(payloads, snapshot),
+            matching_one_page(payloads, snapshot),
+            snapshot,
+            public_krs=self.people.public_companies(ctx),
+            published_ids=self.published_people(ctx),
+            today=today,
+            recent_days=recent_days,
+        )
+
+    def published_people(self, ctx: Context) -> set[str]:
+        """Node ids of the person pages the export shows as published.
+
+        `stats.isApproved`, as `KorytaPeople` keeps it: the site's own reading
+        of `pageIsPublic`, which can trail a publish by a recompute.
+        """
+        people = KorytaPeople(self.args.koryta_date).read_or_process(ctx)
+        if people.empty or "is_public" not in people:
+            return set()
+        return set(people.loc[is_public(people["is_public"]), "id"].astype(str))
 
     def only_changed(self, ctx: Context, people: list[Person]) -> list[Person]:
         """The payloads that would write something, and a note of what.

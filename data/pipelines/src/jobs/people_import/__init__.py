@@ -13,6 +13,15 @@ does - but in one process, unattended, and with guardrails a pipe has not got:
     koryta_people_import                   # daily on Cloud Run, jobs/CLOUD_RUN.md
     koryta_people_import --dry-run         # build and count them; send nothing
     koryta_people_import --scope not-on-koryta --max-new 50
+    koryta_people_import --scope priority --max-uploads 100   # the nightly VM
+
+`--scope priority` builds both halves at once and sends, up to the cap, the
+new hires the site lacks first, then the published pages that would change,
+then the rest, newest news first in each (`analysis.payloads.priority`). It
+leaves alone a payload it already sent unchanged in the last `--resend-after`
+days: an update a reviewer has not yet approved, or a party a human took off a
+page, still reads as a change against the export, and sent every night it
+would take a slot each night and undo the human each time.
 
 A run builds the payloads (phase "paczki"), writes them to the shared cache as
 one write-once part - `jobs/people_import/payloads/date=<day>/<run>.jsonl.gz`,
@@ -48,20 +57,30 @@ It signs in as `stores.koryta_login` decides; in production through
 
 import argparse
 import gzip
+import hashlib
 import json
 import os
 import signal
 import sys
 import time
 import typing
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
-from jobs.people_import.payloads import SCOPES, build_payloads, pipeline_names
+from analysis.payloads.priority import NEW_HIRE, TIERS
+from jobs.people_import.payloads import (
+    PRIORITY,
+    SCOPES,
+    Candidate,
+    build_payloads,
+    build_priority,
+    pipeline_names,
+)
 from scrapers.stores import ProcessPolicy
 from stores.config import pesel_salt
 from stores.job_runs import ERROR_CHARS, ERRORS_KEPT, FinalState, JobRun
@@ -82,6 +101,9 @@ UNIT = "osób"
 
 PAYLOADS_PREFIX = "jobs/people_import/payloads/"
 RUNS_PREFIX = "jobs/people_import/runs/"
+#: What each priority run took - person, payload hash, outcome - as one
+#: write-once part, so the next runs can leave alone what is already sent.
+SENT_PREFIX = "jobs/people_import/sent/"
 
 #: Where submit_people.sh uploads for production.
 DEFAULT_ENDPOINT = "https://autopush.koryta.pl"
@@ -121,8 +143,7 @@ STOP_NOT_WRITTEN = "nie zapisano paczek"
 #:
 #: `KorytaPeople` is named after the day, which does not make a backup under
 #: today's name today's export: a run before the 04:00 export builds it from the
-#: one before and uploads it under today's name - `krs_scrape_free` does, at
-#: 00:30, for `ScrapeRejestrIO`.
+#: one before and uploads it under today's name.
 #:
 #: Left to be reused: Wikipedia (`ProcessWiki`), PKW (`PeoplePKW`) and the name
 #: frequencies, which change with a dump or an election, not overnight. Out of
@@ -146,6 +167,12 @@ DEFAULT_REFRESH = (
 #: Fingerprinted with the PESEL key, so only a machine holding it can rebuild
 #: them; any other can restore them.
 SEATS = "KrsOdpisSeats"
+
+#: The answers that mean the site has the payload, whatever it did with it.
+TAKEN = ("created", "updated", "unchanged")
+
+#: `--refresh none`: rebuild nothing, take every output on disk as it is.
+REFRESH_NONE = "none"
 
 
 def now() -> str:
@@ -183,6 +210,12 @@ class RunSummary:
     #: Pages the run created, as "<name> (<node id>)". An --on-koryta run
     #: should have none, and the first is one too many (`--max-new`).
     created: list[str] = field(default_factory=list)
+    #: A priority run: how many of the planned are in each tier.
+    tiers: dict[str, int] = field(default_factory=dict)
+    #: A priority run: payloads left out as sent unchanged within --resend-after.
+    already_sent: int = 0
+    #: A priority run: the gs:// path of what it took (`SENT_PREFIX`).
+    sent: str = ""
 
 
 @dataclass
@@ -252,10 +285,14 @@ def judge(ending: Ending, counts: Mapping[str, int]) -> tuple[FinalState, str, i
 
 def refresh_policy(asked: Sequence[str] | None) -> ProcessPolicy:
     """What the payloads are built under: `DEFAULT_REFRESH`, or the pipelines
-    --refresh names in its place, less any `:Name`, which is held as it is."""
+    --refresh names in its place, less any `:Name`, which is held as it is.
+    `none` rebuilds nothing: what is on disk is taken as it is - the nightly's
+    reprocess has rebuilt all of it minutes before."""
     named = {name for name in asked or () if not name.startswith(":")}
     held = {name[1:] for name in asked or () if name.startswith(":")}
     refresh = named or set(DEFAULT_REFRESH)
+    if REFRESH_NONE in refresh:
+        refresh = set()
     rebuilt = SEATS in refresh or "all" in refresh
     if rebuilt and SEATS not in held and not pesel_salt():
         # Rebuilt without the key, the seats fail and `PeopleKRSCombined` falls
@@ -268,6 +305,64 @@ def refresh_policy(asked: Sequence[str] | None) -> ProcessPolicy:
         )
         held.add(SEATS)
     return ProcessPolicy(refresh - held, exclude_refresh=held)
+
+
+def person_key(payload: Mapping[str, typing.Any]) -> str:
+    """Who a payload is about, as steadily as the payload can say: the
+    register link, else the page it names, else the name."""
+    for key in ("rejestrIo", "korytaId", "name"):
+        if payload.get(key):
+            return str(payload[key])
+    return ""
+
+
+def payload_hash(payload: Mapping[str, typing.Any]) -> str:
+    """The payload's content, so an unchanged one is recognised next time."""
+    text = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
+def sent_recently(client: "Client", since: str) -> set[tuple[str, str]]:
+    """(person, payload hash) of everything a priority run took on `since`
+    (YYYY-MM-DD) or later, read from its `SENT_PREFIX` parts."""
+    bucket = client.storage_client.bucket(SHARED_BUCKET)
+    seen: set[tuple[str, str]] = set()
+    for blob in bucket.list_blobs(
+        prefix=SENT_PREFIX, start_offset=f"{SENT_PREFIX}date={since}"
+    ):
+        for line in (
+            gzip.decompress(blob.download_as_bytes()).decode("utf-8").splitlines()
+        ):
+            if line.strip():
+                row = json.loads(line)
+                seen.add((row["person"], row["payload"]))
+    return seen
+
+
+def plan_priority(
+    candidates: Sequence[Candidate], already_sent: set[tuple[str, str]], max_new: int
+) -> tuple[list[Candidate], int]:
+    """What a priority run sends, in order, and how many it left out as sent.
+
+    Out: a payload already taken unchanged (`already_sent`), and the new hires
+    past `max_new` - so a night with more of them than it may create still
+    gets to the pages after them.
+    """
+    planned: list[Candidate] = []
+    skipped = hires = 0
+    for candidate in candidates:
+        if (
+            person_key(candidate.payload),
+            payload_hash(candidate.payload),
+        ) in already_sent:
+            skipped += 1
+            continue
+        if candidate.tier == NEW_HIRE:
+            if hires >= max_new:
+                continue
+            hires += 1
+        planned.append(candidate)
+    return planned, skipped
 
 
 def sign_in(endpoint: str) -> TokenSource:
@@ -331,6 +426,10 @@ class PeopleImport:
         self.uploader: PersonUploader | None = None
         self.ending = Ending()
         self._client: Client | None = None
+        #: A priority run: each payload's tier, in sending order.
+        self.tiers: list[str] | None = None
+        #: A priority run: what the site took - payload, tier, outcome.
+        self.taken: list[tuple[dict, str, str]] = []
 
     def run(self) -> int:
         self.status.start(phase=PHASE_BUILD)
@@ -350,9 +449,12 @@ class PeopleImport:
     def attempt(self) -> int:
         args = self.args
         tokens = None if args.dry_run else sign_in(args.endpoint)
-        payloads = build_payloads(
-            args.scope, args.koryta_date, refresh_policy(args.refresh)
-        )
+        if args.scope == PRIORITY:
+            payloads = self.plan()
+        else:
+            payloads = build_payloads(
+                args.scope, args.koryta_date, refresh_policy(args.refresh)
+            )
         self.summary.planned = len(payloads)
         self.status.progress(
             0,
@@ -384,6 +486,30 @@ class PeopleImport:
         )
         return self.end(state, code)
 
+    def plan(self) -> list[dict]:
+        """A priority run's payloads, in sending order: built, the already sent
+        left out, the new hires cut at --max-new."""
+        args = self.args
+        today = datetime.now(warsaw_tz).date()
+        candidates = build_priority(
+            args.koryta_date, refresh_policy(args.refresh), today, args.recent_days
+        )
+        already: set[tuple[str, str]] = set()
+        if args.resend_after:
+            since = (today - timedelta(days=args.resend_after)).isoformat()
+            already = sent_recently(self.client(), since)
+        planned, self.summary.already_sent = plan_priority(
+            candidates, already, args.max_new
+        )
+        self.tiers = [candidate.tier for candidate in planned]
+        counts = Counter(self.tiers)
+        self.summary.tiers = {tier: counts.get(tier, 0) for tier in TIERS}
+        print(
+            f"Planned by tier: {self.summary.tiers}; left out as sent unchanged "
+            f"in the last {args.resend_after} days: {self.summary.already_sent}"
+        )
+        return [candidate.payload for candidate in planned]
+
     def dry_run(self, payloads: list[dict]) -> int:
         names = ", ".join(str(payload.get("name")) for payload in payloads[:3])
         more = ", ..." if len(payloads) > 3 else ""
@@ -391,6 +517,13 @@ class PeopleImport:
             f"Dry run: {len(payloads):,} people would be sent to "
             f"{self.args.endpoint}" + (f": {names}{more}" if payloads else "")
         )
+        if self.tiers is not None:
+            sent = min(len(payloads), self.args.max_uploads)
+            first = Counter(self.tiers[:sent])
+            print(
+                f"The first {sent} (--max-uploads) by tier: "
+                f"{ {tier: first.get(tier, 0) for tier in TIERS} }"
+            )
         self.status.finish(
             "succeeded",
             stop_reason=STOP_DRY_RUN,
@@ -421,6 +554,23 @@ class PeopleImport:
                         self.summary.created.append(page)
                 ending.done = n + 1
                 self.status.progress(ending.done, counters=self.counters())
+                if result is not None and self.tiers is not None:
+                    tier = self.tiers[n]
+                    if result.outcome in TAKEN:
+                        self.taken.append((payload, tier, result.outcome))
+                    if result.outcome == "created" and tier != NEW_HIRE:
+                        # Planned onto a page the export has, so a page made
+                        # for it is the identity lookup missing somebody.
+                        reason = (
+                            f"utworzył stronę dla osoby, która już ma stronę: "
+                            f"{self.summary.created[-1]}"
+                        )
+                        print(f"Stopping: {reason}")
+                        ending.stopped, ending.guarded = reason, True
+                        self.summary.errors.append(
+                            f"utworzona strona: {self.summary.created[-1]}"
+                        )
+                        break
                 if reason := guardrail(
                     uploader.counts["created"], refused, args.max_new
                 ):
@@ -450,6 +600,8 @@ class PeopleImport:
     def end(self, state: FinalState, code: int, crash: str | None = None) -> int:
         """Write the run's summary and tell the page how the run ended."""
         summary = self.summary
+        if self.taken and not self.args.dry_run:
+            summary.sent = self.write_sent()
         summary.state = state
         summary.exit_code = code
         summary.counters = self.counters()
@@ -487,6 +639,38 @@ class PeopleImport:
         data = gzip.compress(lines.encode("utf-8"), mtime=0)
         url = self.client().create_object(SHARED_BUCKET, name, data, "application/gzip")
         print(f"Payloads: {url}")
+        return url
+
+    def write_sent(self) -> str:
+        """Write what the site took, once, for later runs to leave alone; a
+        failure to is printed and kept among the errors, not raised - those
+        people are only sent again."""
+        day, run = self.summary.started[:10], self.summary.run
+        name = f"{SENT_PREFIX}date={day}/{run}.jsonl.gz"
+        lines = "".join(
+            json.dumps(
+                {
+                    "person": person_key(payload),
+                    "payload": payload_hash(payload),
+                    "name": payload.get("name"),
+                    "tier": tier,
+                    "outcome": outcome,
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+            for payload, tier, outcome in self.taken
+        )
+        data = gzip.compress(lines.encode("utf-8"), mtime=0)
+        try:
+            url = self.client().create_object(
+                SHARED_BUCKET, name, data, "application/gzip"
+            )
+        except Exception as e:
+            print(f"Could not write what was sent {name}: {e}")
+            self.summary.errors.append(f"nie zapisano wysłanych: {one_line(e)}")
+            return ""
+        print(f"Sent: {url}")
         return url
 
     def write_summary(self) -> str:
@@ -536,7 +720,23 @@ def parser() -> argparse.ArgumentParser:
         choices=SCOPES,
         default="on-koryta",
         help="on-koryta, the default, refreshes the pages the site has; "
-        "not-on-koryta adds the people it has not, and needs --max-new.",
+        "not-on-koryta adds the people it has not, and needs --max-new; "
+        "priority sends new hires first, then published pages, then the rest "
+        "(analysis.payloads.priority).",
+    )
+    parser.add_argument(
+        "--recent-days",
+        type=non_negative_int,
+        default=30,
+        help="Priority: a new hire is somebody without a page whose public post "
+        "began within this many days and has not ended. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--resend-after",
+        type=non_negative_int,
+        default=30,
+        help="Priority: leave alone a payload already sent unchanged within this "
+        "many days. 0: send it again every run. Default: %(default)s.",
     )
     parser.add_argument(
         "--max-uploads",
@@ -548,9 +748,10 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-new",
         type=non_negative_int,
-        default=0,
         help="Pages the run may create before it stops as failed. Default 0: "
-        "an --on-koryta run that creates a page has missed somebody's identity.",
+        "an --on-koryta run that creates a page has missed somebody's identity. "
+        "With --scope priority: the most new hires a run sends, default "
+        "--max-uploads; a page made for anybody else stops it as failed.",
     )
     parser.add_argument(
         "--dry-run",
@@ -566,7 +767,7 @@ def parser() -> argparse.ArgumentParser:
         "--koryta-date",
         type=iso_day,
         help="The export (YYYY-MM-DD) --on-koryta and --only-changed compare "
-        "against. Default: the latest - at 05:00, the 04:00 one.",
+        "against. Default: the latest - in the night, the 04:00 one.",
     )
     parser.add_argument(
         "--refresh",
@@ -575,7 +776,8 @@ def parser() -> argparse.ArgumentParser:
         help="A pipeline to rebuild rather than reuse; repeatable, and in place "
         "of the default set (DEFAULT_REFRESH: the newest crawl and export, "
         "and what is built from them). ':NAME' holds one as it is, alone "
-        "taking it out of the default set; 'all' rebuilds everything.",
+        "taking it out of the default set; 'all' rebuilds everything, 'none' "
+        "nothing.",
     )
     parser.add_argument(
         "--max-minutes",
@@ -604,13 +806,15 @@ def parser() -> argparse.ArgumentParser:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parse = parser()
     args = parse.parse_args(argv)
+    if args.max_new is None:
+        args.max_new = args.max_uploads if args.scope == PRIORITY else 0
     if args.scope == "not-on-koryta" and args.max_new <= 0:
         parse.error(
             "--scope not-on-koryta creates a page for everybody it sends; say "
             "how many this run may create with --max-new"
         )
     if args.refresh:
-        known = pipeline_names() | {"all"}
+        known = pipeline_names() | {"all", REFRESH_NONE}
         unknown = sorted({name.removeprefix(":") for name in args.refresh} - known)
         if unknown:
             # A misspelt name would refresh nothing, and say nothing about it.

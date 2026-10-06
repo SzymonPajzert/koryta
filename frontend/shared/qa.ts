@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "admin-procesy-noc",
+    title: "Procesy: noc na maszynie koryta-nightly",
+    description:
+      "Na /admin/procesy jest nowy wiersz „Noc na maszynie koryta-nightly”: jedna maszyna co noc, po kopii bazy z 04:00, uzupełnia lustro, pobiera KRS, przelicza potoki, sprawdza bazę i wysyła do 100 osób, a każdy krok widać jako etap.",
+    steps: [
+      "Otwórz /admin/procesy i rozwiń „Noc na maszynie koryta-nightly” - ma pokazać harmonogram „codziennie o 04:30 czasu warszawskiego”, polecenie koryta_nightly i zadania do wdrożenia.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "admin-procesy-datascience",
     title: "Procesy dla zespołu danych",
     description:
@@ -76,7 +87,7 @@ export const QA_ITEMS: QaItem[] = [
       "Strona /admin/procesy pokazuje teraz też duże importy - osób, firm, ocen modeli i faktów z artykułów - z tym, ile stron każde uruchomienie utworzyło, ile zaktualizowało, a ilu nie udało się zapisać, oraz planowany codzienny import osób. Stronę widzi tylko właściciel serwisu.",
     steps: [
       "Otwórz /admin/procesy - w „Na żądanie” mają być też „Import firm”, „Oceny modeli” i „Import faktów z artykułów”, a w „Według harmonogramu”, pod „Kopią bazy Firestore”, „Import osób na stronę”.",
-      "Rozwiń „Import osób na stronę” - ma pokazać harmonogram „codziennie o 05:00 czasu warszawskiego”, polecenie koryta_people_import i zadania do wdrożenia; po pierwszym imporcie jego uruchomienia mają mieć liczby po polsku, np. „zaktualizowanych” i „nowych zatrudnień”.",
+      "Rozwiń „Import osób na stronę” - ma pokazać, że rusza w nocy na VM, polecenie koryta_people_import --scope priority --max-uploads 100 i zadania do wdrożenia; po pierwszym imporcie jego uruchomienia mają mieć liczby po polsku, np. „zaktualizowanych” i „nowych zatrudnień”.",
     ],
     link: "/admin/procesy",
     area: "admin",

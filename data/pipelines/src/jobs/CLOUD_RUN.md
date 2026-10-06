@@ -1,5 +1,11 @@
 # Running the jobs on Cloud Run
 
+> The nightly jobs - the free KRS scrape, the odpisy, the people import and the
+> compressor - run on the koryta-nightly VM instead, as steps of one night
+> (`data/nightly`, `koryta_nightly`): the VM keeps its disk, so nothing is
+> fetched again every night. What follows is how a job would run on Cloud Run,
+> kept for a job that does not need a warm disk.
+
 A job runs as a Cloud Run job in `koryta-pl`, next to the buckets it reads and
 writes, and Cloud Scheduler starts it. The image is the one `data/pipelines/Dockerfile`
 builds for the capture extractor: it already carries the base dependencies every

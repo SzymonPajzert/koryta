@@ -141,9 +141,9 @@ const overview = (): JobsOverview => ({
       id: "krs_scrape_free",
       record: {
         lastRunId: "k-run",
-        lastStartedAt: "2026-10-01T22:30:00.000Z",
-        lastScheduledAt: "2026-10-01T22:30:00.000Z",
-        lastSucceededAt: "2026-09-29T01:00:00.000Z",
+        lastStartedAt: "2026-10-02T02:30:00.000Z",
+        lastScheduledAt: "2026-10-02T02:30:00.000Z",
+        lastSucceededAt: "2026-09-29T05:00:00.000Z",
       },
       probe: null,
       runs: [
@@ -153,7 +153,7 @@ const overview = (): JobsOverview => ({
           state: "running",
           trigger: "schedule",
           host: "cloud-run:krs-scrape-free/abc",
-          startedAt: "2026-10-01T22:30:00.000Z",
+          startedAt: "2026-10-02T02:30:00.000Z",
           heartbeatAt: "2026-10-02T09:59:00.000Z",
           progress: { done: 1200, total: 5000, unit: "firm" },
           counters: { answered: 1100, empty: 100 },
@@ -165,9 +165,9 @@ const overview = (): JobsOverview => ({
           state: "partial",
           trigger: "schedule",
           host: "cloud-run:krs-scrape-free/xyz",
-          startedAt: "2026-09-30T22:30:00.000Z",
-          heartbeatAt: "2026-10-01T01:20:00.000Z",
-          finishedAt: "2026-10-01T01:20:00.000Z",
+          startedAt: "2026-10-01T02:30:00.000Z",
+          heartbeatAt: "2026-10-01T05:20:00.000Z",
+          finishedAt: "2026-10-01T05:20:00.000Z",
           stopReason: "deadline",
           exitCode: 75,
         }),
@@ -333,6 +333,7 @@ describe("/admin/procesy", () => {
       "extraction_import",
     ]);
     expect(jobsIn("scheduled")).toEqual([
+      "nightly",
       "krs_scrape_free",
       "krs_scrape_paid",
       "krs_odpis",
@@ -369,6 +370,7 @@ describe("/admin/procesy", () => {
       extraction_import: "never",
       krs_odpis: "never",
       krs_register_owners: "never",
+      nightly: "never",
       people_import: "never",
       compressor: "stale",
       firestore_export: "ok",
@@ -404,7 +406,7 @@ describe("/admin/procesy", () => {
         .join(" ");
     expect(stat("running")).toBe("1 w toku");
     expect(stat("ok")).toBe("3 działa");
-    expect(stat("never")).toBe("6 brak raportów");
+    expect(stat("never")).toBe("7 brak raportów");
     // Only the counts that happen to be non-zero beyond the three always shown.
     expect(page.find('[data-stat="stopped"]').exists()).toBe(false);
     expect(page.find('[data-stat="partial"]').exists()).toBe(false);
@@ -473,9 +475,9 @@ describe("/admin/procesy", () => {
       "24",
     );
     expect(row.get("[data-health-detail]").text()).toBe(
-      "Trwa od 00:30 - odpisy.",
+      "Trwa od 04:30 - odpisy.",
     );
-    expect(row.get("[data-row-next]").text()).toBe("następne: 3.10, 00:30");
+    expect(row.get("[data-row-next]").text()).toBe("następne: 3.10, 04:30");
 
     await row.get("[data-row-toggle]").trigger("click");
     const runs = row.findAll("[data-run]").map((r) => r.attributes("data-run"));
@@ -491,7 +493,7 @@ describe("/admin/procesy", () => {
     expect(old.get("[data-run-chip]").text()).toBe("niedokończony");
     expect(old.get("[data-run-stop-reason]").text()).toBe("powód: deadline");
     expect(old.get("[data-run-exit]").text()).toBe("kod wyjścia 75");
-    expect(row.text()).toContain("codziennie o 00:30 czasu warszawskiego");
+    expect(row.text()).toContain("codziennie o 04:30 czasu warszawskiego");
     expect(row.text()).not.toContain("jeszcze nie uruchomiony");
   });
 
@@ -694,7 +696,7 @@ describe("/admin/procesy", () => {
     await page.get("[data-jobs-refresh]").trigger("click");
     await flushPromises();
     expect(page.text()).toContain("Nie udało się odświeżyć procesów: offline");
-    expect(page.findAll("[data-job]")).toHaveLength(13);
+    expect(page.findAll("[data-job]")).toHaveLength(14);
   });
 
   it("says so when the first load fails", async () => {
