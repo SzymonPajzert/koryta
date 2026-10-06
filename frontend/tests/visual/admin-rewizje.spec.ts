@@ -4,6 +4,7 @@ import { logIn, USERS } from "../e2e/helpers/auth";
 import { freezeClock } from "./clock";
 import { readyForFullPage } from "./fullPage";
 import {
+  groupedQueue,
   pendingEdgeRevisions,
   queueProposals,
   revisedNodes,
@@ -31,11 +32,14 @@ const ENTRY = { tag: pageTag("admin/rewizje/[id]") };
 type Totals = { queue?: number; edges?: number; nodes?: number };
 
 async function answerHub(page: Page, totals: Totals = {}) {
-  await page.route("**/api/revisions/queue**", (route) =>
-    route.fulfill({
-      json: { ...revisionQueue, total: totals.queue ?? revisionQueue.total },
-    }),
-  );
+  await page.route("**/api/revisions/queue**", (route) => {
+    const grouped =
+      new URL(route.request().url()).searchParams.get("group") === "subject";
+    const queue = grouped ? groupedQueue : revisionQueue;
+    return route.fulfill({
+      json: { ...queue, total: totals.queue ?? queue.total },
+    });
+  });
   await page.route("**/api/revisions/pendingEdges**", (route) =>
     route.fulfill({
       json: {
@@ -76,6 +80,41 @@ test("rewizje", HUB, async ({ page }, testInfo) => {
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("rewizje.png", { fullPage: true });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+test("rewizje-wedlug-wpisu", HUB, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await freezeClock(page);
+  await answerHub(page);
+  await logIn(page, USERS.admin, "/admin/rewizje?group=subject");
+
+  // One line per entry: Barbara's own edit and the pipeline's change to her
+  // seat on the board are one group.
+  const groups = page.locator("[data-queue-group]");
+  await expect(groups).toHaveCount(4, { timeout: 30_000 });
+  const barbara = page.locator('[data-queue-group][data-subject-id="wizos1"]');
+  await expect(barbara.locator("[data-group-count]")).toHaveText(
+    "2 propozycje",
+  );
+  await barbara.locator("[data-row-toggle]").first().click();
+  await expect(barbara.locator("[data-proposal-row]")).toHaveCount(2);
+
+  // The page down to the end of the queue: the two lists below it are in the
+  // shot above, and a shot of the section alone would cut off the labels its
+  // fields float above its top edge.
+  await readyForFullPage(page);
+  const queue = (await page.locator("#kolejka").boundingBox())!;
+  await expect(page).toHaveScreenshot("rewizje-wedlug-wpisu.png", {
+    fullPage: true,
+    clip: {
+      x: 0,
+      y: 0,
+      width: page.viewportSize()!.width,
+      height: Math.ceil(queue.y + queue.height) + 16,
+    },
+  });
 
   await expectFitsThePhone(page, testInfo);
 });
