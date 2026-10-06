@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
+from bip_cli import repair_parts
 from scrapers.bip.bip_queue import BipQueue
 from scrapers.bip.classify import (
     host_of,
@@ -209,6 +210,40 @@ def test_rewrap_recovers_a_truncated_bundle(tmp_path: Path) -> None:
     assert not part.exists()
 
 
+def test_repair_parts_rewraps_stale_bundles(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    store = LocalBundleStore(out)
+    bundles = []
+    for i in range(2):
+        row, _ = store.add(
+            host=f"h{i}.pl",
+            crawl_id="c1",
+            url=f"https://h{i}.pl/{i}",
+            data=f"data{i}".encode(),
+            content_type="application/pdf",
+            filename=f"{i}.pdf",
+            title="",
+            chain=[],
+        )
+        bundles.append(row.bundle)
+    store.flush()
+    for rel in bundles:
+        bundle = out / rel
+        killed = bundle.read_bytes()
+        bundle.unlink()
+        Path(f"{bundle}.part").write_bytes(killed[:-16])
+
+    frontier = FakeFrontier(
+        [HostRow(host="h0.pl", name="x", source_url="", teryt="", entry_count=1)]
+    )
+    counts = repair_parts(
+        cast("BipQueue", frontier), out, older_than_minutes=0, keep_missing=True
+    )
+
+    assert counts == {"parts": 2, "repaired": 2, "empty": 0, "failed": 0, "pruned": 0}
+    assert list(out.rglob("*.part")) == []
+
+
 # -- coordinator -------------------------------------------------------------
 class FakeFrontier:
     """In-memory stand-in for BipQueue, same methods the coordinator uses."""
@@ -305,6 +340,12 @@ class FakeFrontier:
     def doc_bundle(self, sha256: str) -> str | None:
         doc = self.docs.get(sha256)
         return doc.bundle if doc else None
+
+    def docs_for_bundle(self, bundle: str) -> list[tuple[str, str]]:
+        return []
+
+    def delete_docs(self, shas: list[str]) -> int:
+        return 0
 
     def start_run(self, run_id: str) -> None:
         pass

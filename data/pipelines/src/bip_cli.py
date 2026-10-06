@@ -8,10 +8,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing
+import os
 import re
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+
+from tqdm import tqdm
 
 from scrapers.bip.bip_queue import BipQueue
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
@@ -123,41 +128,46 @@ def repair_parts(
     """Re-wrap `.part` bundles left by a killed run; return per-outcome counts."""
     cutoff = time.time() - older_than_minutes * 60
     parts = sorted(p for p in root.rglob("*.part") if p.stat().st_mtime <= cutoff)
+    counts = {"parts": len(parts), "repaired": 0, "empty": 0, "failed": 0, "pruned": 0}
+    if not parts:
+        return counts
+    total = sum(p.stat().st_size for p in parts)
+    workers = min(16, os.cpu_count() or 8)
+    print(
+        f"re-wrapping {len(parts)} stale .part bundles ({total / 1e9:.1f} GB) "
+        f"with {workers} workers...",
+        flush=True,
+    )
     repaired = empty = failed = 0
     orphaned_shas: list[str] = []
-    if parts:
-        total = sum(p.stat().st_size for p in parts)
-        print(
-            f"re-wrapping {len(parts)} stale .part bundles "
-            f"({total / 1e9:.1f} GB); this runs before the crawl...",
-            flush=True,
-        )
-    step = max(1, len(parts) // 10)
-    for index, part in enumerate(parts, 1):
-        bundle, members, status = rewrap_part(part, root)
-        if status == "repaired":
-            repaired += 1
-            if not keep_missing:
-                known = set(members)
-                orphaned_shas.extend(
-                    sha
-                    for sha, filename in bip_queue.docs_for_bundle(bundle)
-                    if filename not in known
-                )
-        elif status == "empty":
-            empty += 1
-        elif status == "failed":
-            failed += 1
-        if index % step == 0 or index == len(parts):
-            print(f"  {index}/{len(parts)} rewrapped={repaired}", flush=True)
-    pruned = bip_queue.delete_docs(orphaned_shas) if orphaned_shas else 0
-    return {
-        "parts": len(parts),
-        "repaired": repaired,
-        "empty": empty,
-        "failed": failed,
-        "pruned": pruned,
-    }
+    # spawn, not fork: workers must not inherit the parent's Postgres sockets.
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+        futures = [pool.submit(rewrap_part, part, root) for part in parts]
+        for future in tqdm(
+            as_completed(futures), total=len(parts), desc="repair", unit="bundle"
+        ):
+            bundle, members, status = future.result()
+            if status == "repaired":
+                repaired += 1
+                if not keep_missing:
+                    known = set(members)
+                    orphaned_shas.extend(
+                        sha
+                        for sha, filename in bip_queue.docs_for_bundle(bundle)
+                        if filename not in known
+                    )
+            elif status == "empty":
+                empty += 1
+            elif status == "failed":
+                failed += 1
+    counts.update(
+        repaired=repaired,
+        empty=empty,
+        failed=failed,
+        pruned=bip_queue.delete_docs(orphaned_shas) if orphaned_shas else 0,
+    )
+    return counts
 
 
 def cmd_repair(args: argparse.Namespace) -> int:
