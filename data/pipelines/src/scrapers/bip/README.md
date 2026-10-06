@@ -59,9 +59,9 @@ koryta_scrape_bip crawl \
 - On start it re-wraps every stale `.part` bundle left by a killed run
   (`--no-repair` to skip); a single crawler per `--out` is assumed.
 
-Politeness: robots.txt is fetched per host (404 = allow), and a redirect to a
-shared platform is confined to that portal section (e.g. a `*.bip.gov.pl` that
-now serves under `gov.pl/web/<unit>` is only followed inside `/web/<unit>`).
+Politeness: robots.txt is fetched per host (404 = allow). The crawl is
+BFS-ordered (by depth); a seed that redirects to another host is followed
+there once, after which only links on that host are kept.
 
 ### `repair`
 

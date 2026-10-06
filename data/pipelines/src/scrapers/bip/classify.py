@@ -48,34 +48,7 @@ _LOW_VALUE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Sections that hold the documents iteration 1 is after; crawled first.
-_SECTION_KEYWORDS = (
-    "oswiadczen",
-    "przetarg",
-    "umow",
-    "zamowien",
-    "budzet",
-    "majatek",
-    "mienie",
-    "nieruchomosc",
-    "zarzadzen",
-    "uchwal",
-    "ogloszen",
-    "dokument",
-    "spolk",
-    "jednostk",
-    "wykaz",
-    "rejestr",
-    "podatk",
-    "finans",
-)
-
 _FILENAME_RE = re.compile(r"/([^/?#]+?)(?:[?#].*)?$")
-
-PRIORITY_DOC = 10
-PRIORITY_SECTION = 20
-PRIORITY_PAGE = 50
-PRIORITY_JUNK = 90
 
 _HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
 
@@ -156,20 +129,6 @@ def normalize_url(url: str) -> str:
 
 def is_low_value_url(url: str) -> bool:
     return bool(_LOW_VALUE_RE.search(url))
-
-
-def is_section_url(url: str) -> bool:
-    lowered = url.lower()
-    return any(keyword in lowered for keyword in _SECTION_KEYWORDS)
-
-
-def priority_for(url: str) -> int:
-    """Lower runs sooner: documents, then document-bearing sections, then pages."""
-    if is_document_url(url):
-        return PRIORITY_DOC
-    if is_section_url(url):
-        return PRIORITY_SECTION
-    return PRIORITY_PAGE
 
 
 def host_of(url: str) -> str:

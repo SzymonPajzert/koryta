@@ -170,17 +170,16 @@ class BipQueue:
         if not unique:
             return 0
         values = sql.SQL(", ").join(
-            sql.SQL("(%s, %s, %s, %s, %s, %s, %s, %s, 'queued')") for _ in unique
+            sql.SQL("(%s, %s, %s, %s, %s, %s, %s, 'queued')") for _ in unique
         )
         query = sql.SQL(
             """
             INSERT INTO bip_urls
-                (url, host, kind, discovered_from, depth, section, priority,
+                (url, host, kind, discovered_from, depth, section,
                  anchor_text, state)
             VALUES {values}
             ON CONFLICT (url) DO UPDATE
                SET last_seen = now(),
-                   priority = LEAST(bip_urls.priority, EXCLUDED.priority),
                    anchor_text = CASE
                                    WHEN bip_urls.anchor_text = ''
                                    THEN EXCLUDED.anchor_text
@@ -226,7 +225,6 @@ class BipQueue:
                 row.discovered_from,
                 row.depth,
                 row.section,
-                row.priority,
                 row.anchor_text[:500],
             )
         ]
@@ -279,7 +277,7 @@ class BipQueue:
             CROSS JOIN LATERAL (
                 SELECT url FROM bip_urls
                  WHERE host = h.host AND state = 'queued'
-                 ORDER BY priority, first_seen
+                 ORDER BY depth, first_seen
                  LIMIT h.weight
             ) q
             ORDER BY h.ord
@@ -297,7 +295,7 @@ class BipQueue:
                 SELECT url FROM bip_urls
                  WHERE host = ANY(%s) AND state = 'claimed'
                    AND locked_until < now()
-                 ORDER BY priority, first_seen
+                 ORDER BY depth, first_seen
                  LIMIT %s
                 """,
                 (hosts, limit - len(candidates)),
@@ -314,7 +312,7 @@ class BipQueue:
              WHERE url = ANY(%s)
                AND (state = 'queued'
                     OR (state = 'claimed' AND locked_until < now()))
-            RETURNING url, host, kind, discovered_from, depth, section, priority
+            RETURNING url, host, kind, discovered_from, depth, section
             """,
             (worker_id, lock_seconds, [r[0] for r in candidates]),
         )
@@ -326,7 +324,6 @@ class BipQueue:
                 discovered_from=r[3],
                 depth=r[4],
                 section=r[5],
-                priority=r[6],
             )
             for r in rows
         ]
