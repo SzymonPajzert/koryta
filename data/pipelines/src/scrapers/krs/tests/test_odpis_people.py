@@ -343,3 +343,96 @@ def test_people_krs_merged_takes_one_person_from_both_sources(ctx):
     assert list(jan["rejestrio_id"]) == ["7"]
     # A person only an odpis names has no register id - not the string "nan".
     assert list(merged.loc["nowy"]["rejestrio_id"]) == []
+
+
+def posts_by_row(merged: pd.DataFrame) -> list[tuple[list[str], str, list[str]]]:
+    """Each merged person as (register ids, birth date, companies), in a fixed order."""
+    return sorted(
+        (
+            sorted(str(i) for i in row["rejestrio_id"]),
+            str(row["birth_date"]),
+            sorted(e["employed_krs"] for e in row["employment"]),
+        )
+        for _, row in merged.iterrows()
+    )
+
+
+def test_an_odpis_namesake_born_on_another_day_is_another_person(ctx):
+    """The same name and year, another day: two people, each with their own posts.
+
+    Grouped by the year, the odpis person's post at B landed on rejestr.io's Jan
+    Nowak and went out in his payload, filed under his register id.
+    """
+    rejestrio = people(person(krs=A, id="7"))
+    odpisy = seats(seat(krs=B, birth_date="1970-11-30", pesel_fingerprint="e" * 32))
+    combined = restored(combine(rejestrio, odpisy, graph={A, B}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        ([], "1970-11-30", [B]),
+        (["7"], BORN, [A]),
+    ]
+
+
+def test_an_odpis_namesake_born_on_the_same_day_stays_one_person(ctx):
+    """Name and date agree, so they stay one row: a probable duplicate.
+
+    The fingerprints differ only because rejestr.io's Jan Nowak has none yet: no
+    odpis of A is on file. Fetching it gives the evidence - his fingerprint at A
+    - but nothing here reads fingerprints, so the row stays one either way until
+    a later step acts on them.
+    """
+    rejestrio = people(person(krs=A, id="7"))
+    odpisy = seats(seat(krs=B, pesel_fingerprint="e" * 32))
+    combined = restored(combine(rejestrio, odpisy, graph={A, B}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [(["7"], BORN, [A, B])]
+
+
+def test_two_register_entries_born_the_same_year_are_two_people(ctx):
+    """No rejestr.io id carries two birth dates, so two dates are two people."""
+    rejestrio = people(
+        person(krs=A, id="7"),
+        person(krs=B, id="8", birth_date="1970-09-01"),
+    )
+    combined = restored(rejestrio.assign(source=SOURCE_REJESTRIO))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        (["7"], BORN, [A]),
+        (["8"], "1970-09-01", [B]),
+    ]
+
+
+def test_an_entry_without_a_middle_name_joins_no_other_entry(ctx):
+    """It used to join every namesake born that year, posts and register id
+    with it. Not even the namesake born that same day: two register entries
+    are two people."""
+    rejestrio = people(
+        person(krs=A, id="7", second_names="Adam"),
+        person(krs=B, id="8", second_names="Piotr", birth_date="1970-05-05"),
+        person(krs=C, id="9", birth_date="1970-05-05"),
+    )
+    combined = restored(rejestrio.assign(source=SOURCE_REJESTRIO))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        (["7"], BORN, [A]),
+        (["8"], "1970-05-05", [B]),
+        (["9"], "1970-05-05", [C]),
+    ]
+
+
+def test_each_person_keeps_their_own_birth_year(ctx):
+    """Not moved to a namesake's a year later, as the year grouping smoothed it.
+
+    The year feeds the PKW and Wikipedia joins and the score, so a moved one
+    would quietly change which candidacies a person is given.
+    """
+    rejestrio = people(
+        person(krs=A, id="7"),
+        person(krs=B, id="8", birth_date="1971-03-03"),
+    )
+    merged = people_krs_merged(ctx, restored(rejestrio.assign(source=SOURCE_REJESTRIO)))
+
+    assert sorted(zip(merged["birth_date"], merged["birth_year"])) == [
+        (BORN, 1970),
+        ("1971-03-03", 1971),
+    ]
