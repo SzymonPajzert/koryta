@@ -6,6 +6,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
 import { asArray } from "../../../shared/model";
+import { reportRemaining } from "../remaining";
 
 /**
  * Pin the parties people stated before `partiesSource` existed.
@@ -420,6 +421,7 @@ async function main() {
   );
 
   if (!commit) {
+    reportRemaining({ pins: pins.length, proposals: proposals.length });
     console.log("\nDry run. Re-run with --commit to apply.");
     return;
   }
