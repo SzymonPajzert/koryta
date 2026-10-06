@@ -64,7 +64,7 @@ from uuid_extensions import uuid7str  # type: ignore
 from conductor import setup_context
 from jobs.krs_common import PINNED, REFRESH_PIPELINES
 from jobs.krs_odpis import crawl, search, store
-from jobs.krs_odpis.log import FLUSH_EVERY, RUN_BUCKET, RUN_LOG, RunLog
+from jobs.krs_odpis.log import FLUSH_EVERY, RunLog
 from jobs.krs_odpis.plan import (
     Candidate,
     Plan,
@@ -78,6 +78,7 @@ from jobs.krs_odpis.plan import (
 )
 from scrapers.krs import odpis_files
 from scrapers.krs.list import CompaniesKRS
+from scrapers.krs.odpis_attempts import RUN_BUCKET, RUN_LOG, STATUSES
 from scrapers.krs.scrape import KRSAlreadyScraped, ScrapeRejestrIO, settled_registers
 from scrapers.krs.updates import KRSUpdates, latest_changes
 from scrapers.stores import Context, ProcessPolicy
@@ -285,7 +286,7 @@ def run(
     status = status or JobRun(
         "krs_odpis", run_id=record_id, unit="firm", total=len(plan.asks)
     )
-    attempts: Counter[str] = Counter(dict.fromkeys(crawl.STATUSES, 0))
+    attempts: Counter[str] = Counter(dict.fromkeys(STATUSES, 0))
     asked: set[str] = set()
 
     def record(outcome: crawl.Outcome) -> None:
@@ -352,7 +353,7 @@ def run(
         stop_reason=result.stopped or None,
         errors=errors[:ERRORS_KEPT],
         exit_code=result.code,
-        counters={**dict.fromkeys(crawl.STATUSES, 0), **final},
+        counters={**dict.fromkeys(STATUSES, 0), **final},
         done=len(result.final()),
     )
     print(
