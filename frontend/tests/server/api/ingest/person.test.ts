@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   createRevisionTransaction,
   proposeRevisionTransaction,
@@ -52,6 +52,18 @@ mockBatch.mockReturnValue({
 
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: vi.fn(() => mockDb),
+  // Approving a stored edge stamps its revision, and reading an edge's
+  // revisions sorts them by their stamps. What the stamp says is not what any
+  // test here is about.
+  Timestamp: class {
+    static now() {
+      return new this();
+    }
+    toMillis() {
+      return 0;
+    }
+  },
+  FieldValue: { delete: () => "<deleted>" },
 }));
 
 vi.mock("firebase-admin/app", () => ({
@@ -1582,5 +1594,362 @@ describe("api/ingest/person, one register entry is one human", () => {
     const result = await handler({} as any);
 
     expect(result.personId).toBe("pawel");
+  });
+});
+
+describe("api/ingest/person, jobs from the register entry a published page links", () => {
+  /** Every collection the request reads, keyed by id. Answered by filtering,
+   * like the suite above, because what matters here is which stored edges and
+   * revisions a query finds. */
+  let store: Record<string, Record<string, Record<string, unknown>>> = {};
+  const batchSet = vi.fn();
+  const batchUpdate = vi.fn();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function fakeQuery(
+    collection: string,
+    constraints: [string, unknown][],
+  ): any {
+    return {
+      where: (field: string, _op: string, value: unknown) =>
+        fakeQuery(collection, [...constraints, [field, value]]),
+      limit: () => fakeQuery(collection, constraints),
+      get: async () => {
+        const docs = Object.entries(store[collection] ?? {})
+          .filter(([, data]) =>
+            constraints.every(([field, value]) => data[field] === value),
+          )
+          .map(([id, data]) => ({
+            id,
+            ref: { id, parent: { id: collection } },
+            data: () => data,
+          }));
+        return { empty: docs.length === 0, docs };
+      },
+    };
+  }
+
+  function fakeCollection(collection: string) {
+    return {
+      where: (field: string, _op: string, value: unknown) =>
+        fakeQuery(collection, [[field, value]]),
+      doc: (id?: string) => ({
+        id: id ?? `new-${collection}-id`,
+        parent: { id: collection },
+        get: async () => ({
+          id,
+          exists: id !== undefined && store[collection]?.[id] !== undefined,
+          data: () => (id === undefined ? undefined : store[collection]?.[id]),
+        }),
+      }),
+    };
+  }
+
+  /** The 10-06 payload that added his KGHM seat, cut to two of its seven
+   * jobs: one his page already showed, published by hand, and the new seat. */
+  function payload(overrides: Record<string, unknown> = {}) {
+    mockReadBody.mockResolvedValue({
+      name: "Łukasz Żelewski",
+      rejestrIo: "https://rejestr.io/osoby/1398014",
+      birthDate: "1962-12-08",
+      parties: [],
+      elections: [],
+      companies: [
+        {
+          krs: "0000004441",
+          role: "Zarząd",
+          start: "2007-05-10",
+          end: "2024-10-04",
+        },
+        { krs: "0000023302", role: "Rada Nadzorcza", start: "2026-02-09" },
+      ],
+      ...overrides,
+    });
+  }
+
+  /** The options the KGHM seat was written with, if it was written as new. */
+  function newSeat() {
+    const call = vi
+      .mocked(createRevisionTransaction)
+      .mock.calls.find(([, , , ref]) =>
+        (ref as unknown as { id: string }).id.startsWith(
+          "edge_zelewski_kghm_employed",
+        ),
+      );
+    return call?.[5];
+  }
+
+  /** A KGHM seat already stored and waiting for review, as the 10-06 run left
+   * it before this rule existed. */
+  function waitingSeat(
+    edge: Record<string, unknown> = {},
+    revision: Record<string, unknown> = {},
+  ) {
+    const data = {
+      type: "employed",
+      name: "Rada Nadzorcza",
+      source: "zelewski",
+      target: "kghm",
+      start_date: "2026-02-09",
+    };
+    store.edges!.seat = { ...data, published: false, ...edge };
+    store.revisions!.proposal = {
+      node_id: "seat",
+      collection: "edges",
+      data,
+      status: "pending",
+      update_user: "pipeline-people-import",
+      update_automatic: true,
+      update_time: "2026-10-06T06:22:31.053Z",
+      ...revision,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockResolvedValue({
+      uid: "pipeline-people-import",
+      datascience: true,
+    });
+    store = {
+      nodes: {
+        zelewski: {
+          type: "person",
+          name: "Łukasz Żelewski",
+          parties: ["PO"],
+          rejestrIo: "https://rejestr.io/osoby/1398014",
+          published: true,
+        },
+        arp: {
+          type: "place",
+          name: "AGENCJA ROZWOJU POMORZA",
+          krsNumber: "0000004441",
+          published: true,
+        },
+        kghm: {
+          type: "place",
+          name: "KGHM POLSKA MIEDŹ",
+          krsNumber: "0000023302",
+          published: true,
+        },
+      },
+      edges: {
+        "arp-board": {
+          type: "employed",
+          name: "Zarząd",
+          source: "zelewski",
+          target: "arp",
+          start_date: "2007-05-10",
+          end_date: "2024-10-04",
+          published: true,
+          revision_id: "revisions/arp-board-approved",
+        },
+      },
+      revisions: {},
+    };
+    mockCollection.mockImplementation((name: string) => fakeCollection(name));
+    mockBatch.mockReturnValue({
+      commit: mockCommit,
+      set: batchSet,
+      update: batchUpdate,
+    });
+  });
+
+  afterEach(() => {
+    mockCollection.mockReset();
+    mockCollection.mockReturnValue({ where: mockWhere, doc: mockDoc });
+    mockBatch.mockReturnValue({ commit: mockCommit, set: vi.fn() });
+  });
+
+  it("publishes a new job of a published person linked to the same entry", async () => {
+    // The register is the source and the link says the entry is this person,
+    // so there is nothing left for a reviewer to check.
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toEqual({
+      automatic: true,
+      approve: true,
+      published: true,
+    });
+  });
+
+  it("trusts a link adopted in the same request when the page already shows one of the entry's jobs", async () => {
+    // Żelewski's page had no register link before the 10-06 run adopted one by
+    // name. The job his page already showed is what says it is him.
+    delete store.nodes!.zelewski!.rejestrIo;
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: true, published: true });
+  });
+
+  it("leaves the job for a reviewer when the page shows none of the entry's jobs", async () => {
+    // A link adopted on a name is all a namesake needs to pass the first two
+    // checks. A namesake's entry restates nothing a reviewer published.
+    delete store.nodes!.zelewski!.rejestrIo;
+    delete store.edges!["arp-board"];
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: false, published: false });
+  });
+
+  it("does not count a job the page holds but does not show", async () => {
+    // Approved and kept off the site is not a reviewer saying it is this
+    // person's job.
+    store.edges!["arp-board"]!.published = false;
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: false, published: false });
+  });
+
+  it("does not count a job at the same company that began on another day", async () => {
+    // A different spell is a different fact, and agreeing on the company alone
+    // is weaker evidence than the rule asks for.
+    store.edges!["arp-board"]!.start_date = "2008-01-01";
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: false, published: false });
+  });
+
+  it("never trusts a payload from a register entry the page does not link", async () => {
+    // `korytaId` reaches the page whatever entry it links, and the payload's is
+    // somebody else's.
+    store.nodes!.zelewski!.rejestrIo = "https://rejestr.io/osoby/1";
+    payload({ korytaId: "zelewski" });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("zelewski");
+    expect(newSeat()).toMatchObject({ approve: false, published: false });
+  });
+
+  it("reads a link pasted from a browser as the entry it names", async () => {
+    // Nine published pages store the link with the person's name after the
+    // number, the way a browser shows it. It is the same entry the pipeline
+    // sends bare.
+    store.nodes!.zelewski!.rejestrIo =
+      "https://rejestr.io/osoby/1398014/lukasz-zelewski";
+    payload({ korytaId: "zelewski" });
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: true, published: true });
+  });
+
+  it("leaves a draft's jobs for a reviewer", async () => {
+    store.nodes!.zelewski!.published = false;
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: false, published: false });
+  });
+
+  it("needs the payload to name its register entry", async () => {
+    payload({ rejestrIo: undefined });
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: false, published: false });
+  });
+
+  it("leaves a job at a company in draft for whoever publishes the company", async () => {
+    // A relation cannot be live while one of its ends is a draft.
+    store.nodes!.kghm!.published = false;
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: false, published: false });
+  });
+
+  it("publishes a stored job still waiting for its first review", async () => {
+    // How the seat the 10-06 run left waiting reaches the site: the next
+    // payload restates it.
+    waitingSeat();
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toBeUndefined();
+    expect(batchUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "proposal", parent: { id: "revisions" } }),
+      expect.objectContaining({
+        status: "approved",
+        review_user: "pipeline-people-import",
+      }),
+    );
+    expect(batchUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "seat", parent: { id: "edges" } }),
+      {
+        published: true,
+        revision_id: expect.objectContaining({ id: "proposal" }),
+      },
+    );
+    // The revision records who approved it. The audit log is for
+    // administrators' decisions.
+    expect(batchSet).not.toHaveBeenCalledWith(
+      expect.objectContaining({ parent: { id: "audit" } }),
+      expect.anything(),
+    );
+  });
+
+  it("leaves a stored job a reviewer rejected", async () => {
+    waitingSeat({}, { status: "rejected", reject_reason: "inna osoba" });
+    payload();
+
+    await handler({} as any);
+
+    expect(batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("leaves a stored job somebody approved and kept off the site", async () => {
+    waitingSeat({ revision_id: "revisions/proposal" }, { status: "approved" });
+    payload();
+
+    await handler({} as any);
+
+    expect(batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("leaves a stored job a person wrote", async () => {
+    waitingSeat({}, { update_automatic: false, update_user: "editor" });
+    payload();
+
+    await handler({} as any);
+
+    expect(batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("publishes only a revision that says what the stored job says", async () => {
+    // Approving the revision points the edge at it; one saying something else
+    // would put up a version of the job nobody wrote to the page.
+    waitingSeat(
+      {},
+      {
+        data: {
+          type: "employed",
+          name: "Rada Nadzorcza",
+          source: "zelewski",
+          target: "kghm",
+          start_date: "2026-02-09",
+          end_date: "2026-03-18",
+        },
+      },
+    );
+    payload();
+
+    await handler({} as any);
+
+    expect(batchUpdate).not.toHaveBeenCalled();
   });
 });
