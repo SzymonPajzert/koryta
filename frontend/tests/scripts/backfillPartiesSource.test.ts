@@ -4,7 +4,7 @@ import {
   proposalsToPin,
   type NodeFacts,
   type RevisionFacts,
-} from "../../scripts/migrate/backfill-parties-source";
+} from "../../scripts/migrate/archive/backfill-parties-source";
 
 const DAY = 24 * 60 * 60 * 1000;
 
