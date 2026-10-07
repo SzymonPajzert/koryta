@@ -2,6 +2,7 @@
 
 import json
 import os
+import signal
 import subprocess
 import sys
 from datetime import datetime, timedelta
@@ -479,6 +480,61 @@ def test_a_job_leaving_work_for_tomorrow_is_not_a_bad_night(world):
 
     assert world.steps()["krs_free"] == ("partial", "zostało na następny raz")
     assert world.runs[0].ending()["state"] == "succeeded"
+
+
+# ---------------------------------------------------------------------------
+# What the night reports
+
+
+def test_the_reason_reported_is_the_step_that_decided_the_night(world):
+    # Ahead of the held upload in step order: the scrape's backlog and the
+    # checks' known failure, which any night may have.
+    world.codes["koryta_scrape_krs_free"] = night.EXIT_TRY_LATER
+    world.last = {"tests": [], "outputs": [], "invariants": ["a::known"]}
+    world.failures["invariants"] = ["a::known", "b::new"]
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    ending = world.runs[-1].ending()
+    assert ending["stop_reason"] == (
+        "people: held - wstrzymane: nowe błędy testów: b::new"
+    )
+    # Every step that did not simply succeed, in step order and in this
+    # shape: /admin/procesy finds the held ones among them.
+    assert ending["errors"] == [
+        "krs_free: partial - zostało na następny raz",
+        "invariants: partial - 2 nie przechodzi",
+        "people: held - wstrzymane: nowe błędy testów: b::new",
+        "scores: held - wstrzymane: nowe błędy testów: b::new",
+    ]
+
+    world.commands.clear()
+    world.objects.clear()
+    world.failures["invariants"] = ["a::known"]
+    world.codes["koryta_score_import"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.runs[-1].ending()["stop_reason"] == "scores: failed - kod wyjścia 1"
+
+
+def test_a_night_stopped_by_sigterm_says_so(world, monkeypatch):
+    stream = night.stream
+
+    def stopped_in_the_scrape(argv, env, timeout, log, on_start=lambda proc: None):
+        if os.path.basename(argv[0]) == "koryta_scrape_krs_free":
+            # Taken by the night's own handler, as systemd's would be.
+            signal.raise_signal(signal.SIGTERM)
+        return stream(argv, env, timeout, log, on_start)
+
+    monkeypatch.setattr(night, "stream", stopped_in_the_scrape)
+    world.codes["koryta_scrape_krs_free"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.steps()["krs_odpis"] == ("skipped", "SIGTERM")
+    ending = world.runs[-1].ending()
+    assert (ending["state"], ending["stop_reason"]) == ("partial", "SIGTERM")
 
 
 # ---------------------------------------------------------------------------
