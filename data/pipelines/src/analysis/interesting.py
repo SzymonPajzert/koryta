@@ -334,17 +334,16 @@ def wiki_article_for(
     An infobox's KRS number is an editor's claim and almost always a true one,
     but it is not always on the company's own article. A power station gives
     its operator's number - Elektrownia Rybnik is filed under PGE Energia
-    Ciepla's - a company's predecessors keep theirs - Soda-Matwy and
-    Janikosoda, both Soda Polska Ciech now - and once in a while it is a typo:
-    Macica Serbska, a Sorbian cultural society, gives a Warsaw legal clinic's.
-    So the names have to agree as well, by `NAME_AGREEMENT`.
+    Ciepla's - and a company's predecessors keep theirs - Soda-Matwy and
+    Janikosoda, both Soda Polska Ciech now. So the names have to agree as well,
+    by `NAME_AGREEMENT`. (A number from another country's register never gets
+    this far: `Infobox.krs_number` leaves it out.)
 
-    Measured over the 469 site companies an article gives the KRS number of
-    (the 2026-08 dump against the 2026-10-07 register): 445 agree, 3 have no
-    name in the register to disagree with, and 21 are left out. About half of
-    those are the cases above; the rest are companies renamed since the article
-    was written - Presspublica is Gremi Media now - whose link a reader can
-    still add by hand.
+    Measured over the 467 site companies an article gives the KRS number of
+    (the 2026-08 dump against the 2026-10-07 register): 448 are linked and 19
+    left out. About half of those are the cases above; the rest are companies
+    renamed since the article was written - Presspublica is Gremi Media now -
+    whose link a reader can still add by hand.
     """
     if not articles:
         return None
