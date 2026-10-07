@@ -292,31 +292,34 @@ def test_middle_names_that_disagree_still_do_not_match(ctx):
     assert candidacy_years(result) == []
 
 
-def test_silence_decides_nothing_when_it_leaves_two_candidates(ctx):
-    """Four Piotr Mrozińskis stand; KRS names no middle name for its one.
+def test_silence_attaches_every_candidate_it_leaves(ctx):
+    """Piotr Mrozińskis stand; KRS names no middle name for its one.
 
-    Any of them could be the person, so none of them is: hanging a stranger's
-    candidacies on the page is the harm the whole merge is arranged to avoid.
+    Any of them could be the person, and nothing says which, so all of them
+    go to the page and the reviewers remove the strangers'. Refusing them all,
+    as this did, lost the person's own candidacy with them.
     """
     result = match_pkw(
         ctx,
         [krs_person("piotr", "mroziński", "1955-04-15")],
         [
-            pkw_person("piotr", "mroziński", 1955, second="paweł"),
-            pkw_person("piotr", "mroziński", 1956, second="teofil"),
+            pkw_person("piotr", "mroziński", 1955, second="paweł", years=("2018",)),
+            pkw_person("piotr", "mroziński", 1956, second="teofil", years=("2024",)),
         ],
     )
 
-    assert candidacy_years(result) == []
+    assert candidacy_years(result) == ["2018", "2024"]
+    assert list(result["pkw_records"].iloc[0]) == [
+        "piotr paweł mroziński 1955",
+        "piotr teofil mroziński 1956",
+    ]
 
 
-def test_an_agreeing_middle_name_wins_over_a_silent_one(ctx):
-    """A person who already had a match cannot be pulled off it by a looser one.
-
-    4292 people have both kinds of candidate. Whoever agrees on the middle name
-    is the answer; the one that merely fails to contradict is not even
-    considered, so the count of candidates behind it cannot matter.
-    """
+def test_an_agreeing_middle_name_names_the_person_and_keeps_the_silent_ones(ctx):
+    """4292 people have a record agreeing on the middle name and others silent
+    on it. The agreeing one names them, but the silent ones contradict nothing,
+    and PKW writes one person down without a middle name as often as with it:
+    their candidacies go to the page too."""
     result = match_pkw(
         ctx,
         [krs_person("mariusz", "mandat", "1974-01-04", second="mieczysław")],
@@ -327,7 +330,8 @@ def test_an_agreeing_middle_name_wins_over_a_silent_one(ctx):
         ],
     )
 
-    assert candidacy_years(result) == ["2014"]
+    assert candidacy_years(result) == ["2002", "2010", "2014"]
+    assert list(result["pkw_name"]) == ["mariusz mieczysław mandat"]
 
 
 def test_a_year_only_biography_needs_the_first_name_exactly(ctx):
@@ -496,7 +500,8 @@ def test_a_dated_biography_leaves_a_silent_candidacy_alone(ctx):
     """Hanna Suchocka is "Hanna Stanisława" to her article and plain "Hanna" in
     both of PKW's records of her. Ranked below a middle name the article names,
     as KRS's would rank them, two silent records would decide nothing, and she
-    would lose her candidacies to a rule meant to make them surer."""
+    would lose her candidacies to a rule meant to make them surer. Both records
+    are hers, and both bring their candidacies."""
     result = match_all(
         ctx,
         [krs_person("hanna", "suchocka", "1946-04-03")],
@@ -507,7 +512,7 @@ def test_a_dated_biography_leaves_a_silent_candidacy_alone(ctx):
         [article("Hanna Stanisława Suchocka", "1946-04-03")],
     )
 
-    assert candidacy_years(result) == ["1991", "1993", "1997"]
+    assert candidacy_years(result) == ["1991", "1993", "1997", "2011"]
 
 
 def test_the_middle_name_krs_gives_outweighs_the_articles(ctx):
@@ -820,19 +825,26 @@ def test_a_namesake_silent_on_the_middle_name_gets_the_candidacy_too(ctx):
     assert result.loc["1970-11-30", "pkw_name"] == "jan adam nowak"
 
 
-def test_ambiguity_is_judged_per_person(ctx):
-    """Jan Piotr fits two candidacies and so takes neither - "one of these" is
-    no answer for one page. Jan Adam fits one of them, and takes it."""
+def test_every_person_gets_every_candidacy_that_fits_them(ctx):
+    """Jan Piotr, born 1971, fits both silent records, born 1970 and 1972, and
+    gets both; Jan Adam, born 1970, is two years off the second, and gets the
+    first only."""
     adam = registered(krs_person("jan", "nowak", "1970-02-08", second="adam"), "7")
     piotr = registered(krs_person("jan", "nowak", "1971-03-01", second="piotr"), "8")
     result = match_pkw(
         ctx,
         [adam, piotr],
-        [pkw_person("jan", "nowak", 1970), pkw_person("jan", "nowak", 1972)],
+        [
+            pkw_person("jan", "nowak", 1970, years=("2018",)),
+            pkw_person("jan", "nowak", 1972, years=("2024",)),
+        ],
     ).set_index("birth_date")
 
-    assert result.loc["1970-02-08", "pkw_name"] == "jan nowak"
-    assert pd.isna(result.loc["1971-03-01", "pkw_name"])
+    assert list(result.loc["1970-02-08", "pkw_records"]) == ["jan nowak 1970"]
+    assert list(result.loc["1971-03-01", "pkw_records"]) == [
+        "jan nowak 1970",
+        "jan nowak 1972",
+    ]
 
 
 def test_namesakes_born_the_same_day_are_both_kept_whatever_they_score(ctx):
