@@ -110,6 +110,8 @@ class World:
         self.candidates: list[build.Candidate] = []
         self.already_sent: set[tuple[str, str]] = set()
         self.memory_since: list[str] = []
+        #: What a run asked for one page's people is told to send.
+        self.targeted = Targeted()
 
     def run(self) -> RecordingRun:
         [run] = self.runs
