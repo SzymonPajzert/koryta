@@ -515,3 +515,54 @@ def test_upload_payloads_carry_the_organ_the_register_names(mock_ctx, monkeypatc
     # an earlier run stored. NaN is how `from_records` fills a column a row
     # never set; `clean_payload` is not what drops it, `submit_payload` is.
     assert pd.isna(by_krs["0000076705"]["supervisory_organ"])
+
+
+def test_upload_payloads_carry_the_wikipedia_article(mock_ctx, monkeypatch):
+    """The company's own article, and the sector it files a holding company in.
+
+    Energa declares 70.10, holding company, and reaches no sector by its codes;
+    its article is in "Przedsiebiorstwa energetyczne w Polsce". A company with
+    no article carries no `wikipedia` key, so a link a reader added stays.
+    """
+    pipeline = Pipeline.create(CompaniesPayloads)
+    pipeline.companies = MockPipeline(
+        [
+            {
+                "krs": "0000271591",
+                "name": "ENERGA",
+                "city": "Gdańsk",
+                "activity": ["70.10.Z"],
+                "is_public": True,
+                "parents": [{"krs": "0000028860", "teryt": None, "source": "wiki"}],
+                "wikipedia": "https://pl.wikipedia.org/wiki/Energa",
+                "wiki_categories": ["Orlen", "Przedsiębiorstwa energetyczne w Polsce"],
+            },
+            {
+                "krs": "0000076705",
+                "name": "PKP Szybka Kolej Miejska w Trojmiescie",
+                "city": "Gdynia",
+                "activity": ["49.12.Z"],
+                "is_public": True,
+                "parents": [],
+                "wikipedia": None,
+                "wiki_categories": [],
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [{"krs": krs} for krs in ("0000271591", "0000076705")]
+        ),
+    )
+
+    by_krs = {
+        row["krs"]: row for row in pipeline.process(mock_ctx).to_dict(orient="records")
+    }
+
+    energa = by_krs["0000271591"]
+    assert energa["wikipedia"] == "https://pl.wikipedia.org/wiki/Energa"
+    assert energa["categories"] == ["energetyka"]
+    # An owner the article named travels as the register's would.
+    assert energa["owners"] == ["0000028860"]
+    assert pd.isna(by_krs["0000076705"]["wikipedia"])

@@ -38,6 +38,25 @@ def add_register_fields(payload: dict, form: str | None, organ) -> None:
         payload["supervisory_organ"] = organ.strip()
 
 
+def wiki_categories(row: dict) -> list[str]:
+    """The categories of the company's Wikipedia article, as `Companies` read
+    them - see `entities.company_categories.categories_for` for what of them
+    is used."""
+    categories = row.get("wiki_categories")
+    return list(categories) if isinstance(categories, (list, np.ndarray)) else []
+
+
+def add_wikipedia(payload: dict, article) -> None:
+    """The company's own Wikipedia article, as `Companies` matched it.
+
+    Omitted rather than sent empty, on the terms `legal_form` is: a company
+    with no article this run may carry one a reader linked by hand, and the
+    ingest writes a revision wholesale.
+    """
+    if isinstance(article, str) and article.strip():
+        payload["wikipedia"] = article.strip()
+
+
 class CompaniesPayloads(Pipeline):
     """Emits ingest payloads for companies already submitted to koryta.pl.
 
@@ -77,6 +96,15 @@ class CompaniesPayloads(Pipeline):
     be left out too, because the endpoint allocated a random id per edge and
     re-running duplicated them; it now derives the id from the link itself and
     skips edges that already exist, so this is safe to re-run.
+
+    Where `Companies` matched the company's own Polish Wikipedia article, the
+    payload carries its address as `wikipedia`, which the site links from the
+    company's page the way it links a person's. The article stands in for the
+    register in two places as well, both only where the register is silent:
+    its infobox's owners become `owners`, `owner_teryts` and
+    `owner_skarb_panstwa` for a spolka akcyjna the register lists no
+    shareholder of, and its categories place a company no PKD code does - see
+    `wiki_owners` in `analysis.interesting` and `categories_for`.
     """
 
     volatile = True
@@ -206,7 +234,9 @@ class CompaniesPayloads(Pipeline):
                 "krs": krs,
                 "name": name,
                 "activity": list(activity),
-                "categories": categories_for(krs, list(activity), form),
+                "categories": categories_for(
+                    krs, list(activity), form, wiki_categories(row)
+                ),
                 "supervisory_body": supervisory_body(form),
                 "is_public": is_public,
                 "owners": owners,
@@ -214,6 +244,7 @@ class CompaniesPayloads(Pipeline):
                 "owner_skarb_panstwa": skarb_panstwa,
             }
             add_register_fields(payload, form, row.get("supervisory_organ"))
+            add_wikipedia(payload, row.get("wikipedia"))
 
             teryt_code = row.get("teryt_code")
             if isinstance(teryt_code, str) and teryt_code.strip():
@@ -234,11 +265,12 @@ class CompaniesPayloads(Pipeline):
         with_owners = sum(1 for p in payloads if p["owners"])
         with_jst = sum(1 for p in payloads if p["owner_teryts"])
         with_skarb = sum(1 for p in payloads if p["owner_skarb_panstwa"])
+        with_wikipedia = sum(1 for p in payloads if p.get("wikipedia"))
         print(
             f"Emitting {len(payloads)} company payloads "
             f"({with_teryt} with a TERYT code, {with_owners} with a company "
             f"owner, {with_jst} with a JST owner, {with_skarb} owned by the "
-            f"Treasury)"
+            f"Treasury, {with_wikipedia} with a Wikipedia article)"
         )
         if not payloads:
             return pd.DataFrame(
@@ -255,6 +287,7 @@ class CompaniesPayloads(Pipeline):
                     "teryt_code",
                     "legal_form",
                     "supervisory_organ",
+                    "wikipedia",
                 ]
             )
         return pd.DataFrame.from_records(payloads)

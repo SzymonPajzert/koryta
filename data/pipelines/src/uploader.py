@@ -536,10 +536,14 @@ class CompanyUploader(Uploader):
         form = form if isinstance(form, str) and form.strip() else None
         if "categories" not in payload:
             activity = payload.get("activity")
+            wiki_categories = payload.get("wiki_categories")
             payload["categories"] = categories_for(
                 payload.get("krs"),
                 list(activity) if isinstance(activity, (list, np.ndarray)) else [],
                 form,
+                list(wiki_categories)
+                if isinstance(wiki_categories, (list, np.ndarray))
+                else [],
             )
         if "supervisory_body" not in payload:
             payload["supervisory_body"] = supervisory_body(form)
