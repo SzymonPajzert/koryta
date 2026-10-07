@@ -921,18 +921,35 @@ class Night:
         else:
             state, code = "succeeded", 0
         summary.exit_code = code
+
+        def said(result: StepResult) -> str:
+            return f"{result.name}: {result.state}" + (
+                f" - {result.reason}" if result.reason else ""
+            )
+
+        # One line per step that did not simply succeed, in step order;
+        # /admin/procesy finds the held ones among them by this shape.
         problems = [
-            f"{result.name}: {result.state}"
-            + (f" - {result.reason}" if result.reason else "")
+            said(result)
             for result in results
             if result.state in (FAILED, PARTIAL, HELD_BACK)
         ]
+        # The reason given is what decided the state, as above. The partial
+        # steps any night may have - the scrape's backlog, the checks' known
+        # failures - come earlier in step order, and named first they read
+        # as the cause of an upload they held.
+        decisive = (
+            [said(result) for result in results if result.state == FAILED]
+            or [said(result) for result in results if result.state == HELD_BACK]
+            or (["SIGTERM"] if self.signalled else [])
+            or problems
+        )
         self.log(f"night over: {state}; " + ("; ".join(problems) or "all well"))
         summary.log = self.write_log()
         path = self.write_summary()
         self.status.finish(
             state,
-            stop_reason=problems[0][:200] if problems else None,
+            stop_reason=decisive[0][:200] if decisive else None,
             errors=problems,
             exit_code=code,
             counters={
