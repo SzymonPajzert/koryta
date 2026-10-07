@@ -59,6 +59,28 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "admin-procesy-noc-wstrzymana",
+    title: "Procesy: noc, która coś wstrzymała, wymaga uwagi",
+    description:
+      "Noc, która wstrzymała wysyłkę osób - bo nowy test nie przechodzi albo nie ma dzisiejszej kopii bazy - była tylko „Niedokończona”, jak zwykłe zaległości, i nie trafiała do procesów wymagających uwagi. Teraz jest „Wstrzymane kroki” i mówi, który krok wstrzymała i dlaczego.",
+    steps: [
+      "Po nocy, która coś wstrzymała, otwórz /admin/procesy - „Noc na maszynie koryta-nightly” ma być w bloku „wymaga uwagi”, z wierszem otwartym i powodem w rodzaju „people: held - wstrzymane: nowe błędy testów: …”.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
+    id: "zatrudnienia-z-rejestru-bez-przegladu",
+    title: "Nowe zatrudnienia opublikowanych osób publikują się same",
+    description:
+      "Gdy import dodaje zatrudnienie osobie już opublikowanej, z tego samego wpisu rejestr.io, do którego prowadzi jej strona, i powtarza przy tym choć jedno z jej opublikowanych zatrudnień, nowe powiązanie jest od razu zatwierdzone i widoczne. Pozostałe nowe zatrudnienia dalej czekają na przegląd.",
+    steps: [
+      "Po nocnym imporcie otwórz stronę opublikowanej osoby, której przybyło zatrudnienie - nowe powiązanie ma być widoczne bez logowania, a na /admin/krawedzie ma go nie być.",
+    ],
+    link: "/admin/krawedzie",
+    area: "admin",
+  },
+  {
     id: "rozszerzenie-link-do-procesu",
     title: "Rozszerzenie: postęp zapisu na stronie Procesy",
     description:

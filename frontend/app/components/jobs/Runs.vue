@@ -234,7 +234,7 @@ const props = defineProps<{
   runs: JobRun[];
   definition: Pick<
     JobDefinition,
-    "heartbeatMinutes" | "queuedMinutes" | "captures"
+    "heartbeatMinutes" | "queuedMinutes" | "captures" | "partialIsHeld"
   >;
   now: Date;
   /** The run a `#przebieg-<id>` link names, marked. */

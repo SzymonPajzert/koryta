@@ -229,6 +229,20 @@ describe("runChip", () => {
       ).title,
     ).toBe("błąd");
   });
+
+  it("names the night's partial run as its row does, and anyone else's as unfinished", () => {
+    const partial = run({ job: "nightly", state: "partial" });
+    expect(
+      runChip(partial, { ...definition, partialIsHeld: true }, now),
+    ).toMatchObject({
+      title: "wstrzymane kroki",
+      tone: jobHealthConfig.held.tone,
+      icon: jobHealthConfig.held.icon,
+      stalled: false,
+    });
+    expect(runChip(partial, definition, now).title).toBe("niedokończony");
+    expect(jobHealthConfig.held.title).toBe("Wstrzymane kroki");
+  });
 });
 
 describe("schedules", () => {
