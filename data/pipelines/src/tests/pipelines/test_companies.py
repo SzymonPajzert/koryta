@@ -1,6 +1,6 @@
 import pytest
 
-from entities.company import Company, Source
+from entities.company import Company, Owner, Source
 from koryta import setup_context
 from pipelines import Companies
 from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP
@@ -72,9 +72,12 @@ EXPECTED_COMPANIES = {
             "42.99.Z",
             "43.2.",
         ],
+        form="SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
         children=[],
-        parents=[],
+        # The gmina of Słupia Konecka.
+        parents=[Owner(krs=None, teryt="2605062")],
         is_public=True,
+        supervisory_organ="rada_nadzorcza",
     ),
     "0000156806": Company(
         krs="0000156806",
@@ -84,8 +87,20 @@ EXPECTED_COMPANIES = {
         nip="5260251517",
         # Leading zero, and the reason `dtype` pins these as strings.
         regon="010053589",
-        sources=[Source("rejestr-io", "rejestr.io")],
+        activity=["49.41.Z", "49.42.Z", "52.21.Z", "52.10.B"],
+        form="SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        sources=[
+            Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None),
+            Source("rejestr-io", "rejestr.io"),
+        ],
+        # C. Hartwig Warszawa, the state's forwarder, and C.H. Development.
+        parents=[
+            Owner(krs="0000062574", teryt=None),
+            Owner(krs="0000346295", teryt=None),
+        ],
         is_public=True,
+        # A small company with no supervisory board.
+        supervisory_organ="brak",
     ),
     "0000459347": Company(
         krs="0000459347",
@@ -106,10 +121,14 @@ EXPECTED_COMPANIES = {
             "43.29.Z",
             "81.30.Z",
         ],
+        form="SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        parents=[Owner(krs=None, teryt="3017033")],
         # Its odpis names GMINA I MIASTO ODOLANOW as the owner, which is what sets
-        # this. Neither hardcoded source below does: the catalogue lists private
-        # companies too, and REGON is consulted only when the register is silent.
+        # this and the parent above. Neither hardcoded source below does: the
+        # catalogue lists private companies too, and REGON is consulted only
+        # when the register is silent.
         is_public=True,
+        supervisory_organ="rada_nadzorcza",
         sources=[
             Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None),
             Source(source="hardcoded", source_krs=None, reason="PUBLIC_COMPANIES_KRS"),
@@ -130,6 +149,8 @@ def test_expected_output(companies_map, companies_df, expected_company):
     # `sources` comes out of a set, and a company can carry more than one
     # hardcoded source, so the reason has to be part of the order too.
     company.sources.sort(key=lambda x: (x.source, x.reason or ""))
+    # `parents` in the order the register's files were read, which says nothing.
+    company.parents.sort(key=lambda x: (x.krs or "", x.teryt or ""))
     print(companies_df[companies_df["krs"] == expected_company.krs].iloc[0])
     print(company)
     print(expected_company)
