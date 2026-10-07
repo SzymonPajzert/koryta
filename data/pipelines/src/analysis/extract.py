@@ -5,7 +5,7 @@ from functools import cached_property
 import pandas as pd
 
 from analysis.people import PeopleEnriched
-from analysis.utils import as_sequence, drop_duplicates, empty_list_if_nan
+from analysis.utils import as_sequence, empty_list_if_nan
 from analysis.utils.elections import candidacy_teryt
 from entities.company_bodies import RADA_SPOLECZNA, supervisory_body
 from entities.company_categories import CATEGORY_VALUES, categories_for
@@ -536,7 +536,12 @@ details."
         )
         people_interesting = people[relevant]
 
-        df = drop_duplicates(people_interesting, "krs_name", "pkw_name", "wiki_name")
+        # Every row is a person of their own: one register entry each, or, for
+        # somebody only an odpis names, one name and birth date. This used to
+        # keep the first row of each KRS, PKW and Wikipedia name, which left out
+        # the namesakes after it - 12,397 people with an entry of their own on
+        # the 2026-10-07 inputs, 546 of them with a page no upload refreshed.
+        df = people_interesting
         print(f"Found {len(df)} people")
         return df
 
