@@ -162,7 +162,6 @@ def test_store_dedupes_and_names_by_crawl(tmp_path: Path) -> None:
         data=b"%PDF-1.4 fake",
         content_type="application/pdf",
         filename="1.pdf",
-        title="",
         chain=["https://bip.a.pl/"],
     )
     assert is_new
@@ -174,7 +173,6 @@ def test_store_dedupes_and_names_by_crawl(tmp_path: Path) -> None:
         data=b"%PDF-1.4 fake",
         content_type="application/pdf",
         filename="1.pdf",
-        title="",
         chain=[],
     )
     assert not is_new_again
@@ -193,7 +191,6 @@ def test_rewrap_recovers_a_truncated_bundle(tmp_path: Path) -> None:
         data=b"first",
         content_type="application/pdf",
         filename="one.pdf",
-        title="",
         chain=[],
     )
     store.flush()
@@ -222,7 +219,6 @@ def test_repair_parts_rewraps_stale_bundles(tmp_path: Path) -> None:
             data=f"data{i}".encode(),
             content_type="application/pdf",
             filename=f"{i}.pdf",
-            title="",
             chain=[],
         )
         bundles.append(row.bundle)
