@@ -433,6 +433,29 @@ def people_merged(
                 = TRY_CAST(names_count.teryt AS INTEGER)
 
     ),
+    wiki_kept AS (
+        -- A year-only article may not name another middle name than the
+        -- person's candidacy, either. Only a full date makes the article the
+        -- primary match; matched on a year, it is the weakest of the four
+        -- sources, and already yields to KRS's middle name above. Where KRS is
+        -- silent and silence gave the person both an article and a candidacy,
+        -- the two naming different middle names are two different people, and
+        -- the candidacy is the surer of them: PKW's middle name is what the
+        -- candidate wrote on the form, the article's whatever its lead says.
+        -- Andrzej Brzeziński, born 1947-01-22, on a Bydgoszcz municipal
+        -- company's board, was both the Andrzej Włodzimierz born 1947 who
+        -- stood for the SLD in 2010 and Andrzej Maciej, a Łódź historian
+        -- "ur. 1947"; the article goes.
+        SELECT w.* FROM wiki_match w
+        WHERE w.birth_date IS NOT NULL
+            OR NOT EXISTS (
+                SELECT 1 FROM pkw_match p
+                WHERE p.krs_row = w.krs_row
+                    AND NOT middle_names_agree(
+                        CAST(p.second_name AS VARCHAR), CAST(w.second_name AS VARCHAR)
+                    )
+            )
+    ),
     krs_pkw_wiki AS (
         SELECT
             kp.*,
@@ -441,7 +464,7 @@ def people_merged(
             w.is_polityk,
             w.wiki_score,
         FROM krs_pkw kp
-        LEFT JOIN wiki_match w USING (krs_row)
+        LEFT JOIN wiki_kept w USING (krs_row)
     ),
     koryta_candidates AS (
         -- Every page this person could already be, and how it was reached.
