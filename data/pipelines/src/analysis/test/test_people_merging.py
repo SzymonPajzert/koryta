@@ -526,9 +526,10 @@ def test_the_middle_name_krs_gives_outweighs_the_articles(ctx):
     assert list(result["wiki_name"]) == ["Jacek Artur Strojny"]
 
 
-def test_a_year_only_biography_does_not_speak_for_krs(ctx):
+def test_a_year_only_biography_yields_to_the_candidacy(ctx):
     """A year rules out almost nobody, so "ur. 1947" is not enough to refuse
-    PKW's Andrzej Włodzimierz Brzeziński to KRS's Andrzej Brzeziński."""
+    PKW's Andrzej Włodzimierz Brzeziński to KRS's Andrzej Brzeziński - it is
+    the article, naming Andrzej Maciej, that is somebody else's."""
     result = match_all(
         ctx,
         [krs_person("andrzej", "brzeziński", "1947-01-22")],
@@ -537,6 +538,20 @@ def test_a_year_only_biography_does_not_speak_for_krs(ctx):
     )
 
     assert candidacy_years(result) == ["2024"]
+    assert result["wiki_name"].isna().all()
+
+
+def test_a_year_only_biography_stays_beside_a_silent_candidacy(ctx):
+    """Silence on either side still contradicts nothing."""
+    result = match_all(
+        ctx,
+        [krs_person("andrzej", "brzeziński", "1947-01-22")],
+        [pkw_person("andrzej", "brzeziński", 1947)],
+        [article("Andrzej Maciej Brzeziński", "1947-00-00")],
+    )
+
+    assert candidacy_years(result) == ["2024"]
+    assert list(result["wiki_name"]) == ["Andrzej Maciej Brzeziński"]
 
 
 def match_koryta(ctx, krs: list[dict], koryta: list[dict]) -> pd.DataFrame:
