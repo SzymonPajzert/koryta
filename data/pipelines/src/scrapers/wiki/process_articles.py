@@ -424,28 +424,35 @@ def extract_from_article(
             links=[],
         )
     elif company:
-        name = article.get_infobox(lambda i: i.fields.get("nazwa", None))
+        # The article is about the company in its first company infobox. One
+        # further down is another company's - Raiffeisen-Leasing's article is
+        # the Austrian group's and carries Raiffeisen-Leasing Polska in a
+        # second infobox, Microsoft's carries Microsoft sp. z o.o. - and lends
+        # the article nothing: not its name or owners, and not its KRS number,
+        # which would turn every owner that links to the group's article into
+        # the subsidiary. An infobox of another kind describes the article's
+        # own subject from another side - LOT's airline infobox gives its
+        # owners as they are now, its company infobox as they were - so the
+        # owners are read from either, in the order of the page.
+        own = next(i for i in article.infoboxes if i.company_related)
+        boxes = [i for i in article.infoboxes if i is own or not i.company_related]
+
+        def field(extractor: typing.Callable[[Infobox], typing.Any | None]):
+            return next((v for i in boxes if (v := extractor(i)) is not None), None)
+
+        # The company infobox names the company as the register does, where an
+        # airline's or an airport's names the brand: Port Polska's article
+        # gives Centralny Port Komunikacyjny's number.
+        name = own.fields.get("nazwa") or field(lambda i: i.fields.get("nazwa") or None)
         return Company(
-            name=name if name is not None else article.title,
-            # The first infobox with a number gives the article's, as before.
-            # A number from another register leaves the article without one
-            # rather than handing over to the next infobox, which is another
-            # company's: Raiffeisen-Leasing's is the Austrian group's, then
-            # Raiffeisen-Leasing Polska's.
-            krs=next(
-                (
-                    i.krs_number
-                    for i in article.infoboxes
-                    if "numer rejestru" in i.fields
-                ),
-                None,
-            ),
+            name=name or article.title,
+            krs=own.krs_number,
             content_score=article.content_score,
             title=article.original_title,
             source=article_url(article.original_title),
             # Unresolved: who an entry is takes the whole dump to say, so
             # `scrape_wiki` fills that in once it has read every article.
-            shareholders=article.get_infobox(lambda i: i.shareholders or None) or [],
+            shareholders=field(lambda i: i.shareholders or None) or [],
             categories=list(
                 dict.fromkeys(
                     c.removeprefix("Kategoria:").strip() for c in article.categories
@@ -639,10 +646,10 @@ def resolve_shareholders(companies: list[Company], links: WikiLinks) -> None:
 
     Printed by kind, because the failure here is silent: a change to the
     parser or to how titles are written can turn every owner into a bare name
-    and nothing downstream would notice. On the 2026-08 dump 1,737 of 11,540
-    company articles list owners, and their 2,494 entries name a company by
+    and nothing downstream would notice. On the 2026-08 dump 1,731 of 11,540
+    company articles list owners, and their 2,484 entries name a company by
     KRS number 279 times, a territorial unit 110 times and the Treasury 89
-    times. The 2,016 left are people, funds, "pozostali" and the owners of
+    times. The 2,006 left are people, funds, "pozostali" and the owners of
     foreign companies, which most of the articles are about.
     """
     kinds: Counter[str] = Counter()

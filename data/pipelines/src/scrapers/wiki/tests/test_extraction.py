@@ -15,6 +15,7 @@ from scrapers.wiki.process_articles import (
     People,
     WikiArticle,
     extract,
+    extract_from_article,
 )
 from scrapers.wiki.shareholders import article_url
 from util.lists import TEST_FILES
@@ -187,7 +188,9 @@ COMPANIES_EXPECTED = {
     ),
     "Port lotniczy Warszawa-Modlin": wiki_company(
         "Port lotniczy Warszawa-Modlin",
-        "Port Lotniczy Warszawa-Modlin",
+        # The company's infobox, the one with the KRS number - not the
+        # airport's, first on the page.
+        "Mazowiecki Port Lotniczy Warszawa-Modlin Sp. z o.o.",
         "0000184990",
         1,
         # "– 30,44 proc.": a stake after the name, in words.
@@ -380,3 +383,62 @@ def test_only_a_krs_number_is_taken_for_one(fields, expected):
     infobox = Infobox(template.filter_templates()[0])
 
     assert infobox.krs_number == expected
+
+
+def test_a_second_company_infobox_lends_the_article_nothing():
+    # Raiffeisen-Leasing's article: the Austrian group, then its Polish
+    # subsidiary, the only one of the two with a KRS number.
+    article = WikiArticle.parse_text(
+        "Raiffeisen-Leasing",
+        "{{Przedsiębiorstwo infobox\n"
+        " |nazwa = Raiffeisen-Leasing GmbH\n"
+        " |państwo = Austria\n"
+        " |udziałowcy = [[Raiffeisen Bank International]]\n"
+        " |rejestr = Sąd Handlowy w Wiedniu\n"
+        " |numer rejestru = FN 55858w\n"
+        "}}\n"
+        "== Raiffeisen-Leasing Polska ==\n"
+        "{{Przedsiębiorstwo infobox\n"
+        " |nazwa = Raiffeisen-Leasing Polska S.A.\n"
+        " |państwo = Polska\n"
+        " |udziałowcy = \n"
+        " |rejestr = KRS\n"
+        " |numer rejestru = 0000032423\n"
+        "}}\n",
+    )
+
+    company = extract_from_article(article)
+
+    assert isinstance(company, Company)
+    assert (company.name, company.krs) == ("Raiffeisen-Leasing GmbH", None)
+    assert [s.name for s in company.shareholders] == ["Raiffeisen Bank International"]
+
+
+def test_an_infobox_of_another_kind_speaks_for_the_company():
+    # LOT's article: the airline's infobox, with the owners as they are now,
+    # then the company's, with its KRS number and the owners as they were.
+    article = WikiArticle.parse_text(
+        "Polskie Linie Lotnicze LOT",
+        "{{Linia lotnicza infobox\n"
+        " |nazwa = Polskie Linie Lotnicze LOT\n"
+        " |udziałowcy = Skarb Państwa 69,30%<br/>[[Polska Grupa Lotnicza]] 30,7%\n"
+        "}}\n"
+        "{{Przedsiębiorstwo infobox\n"
+        " |nazwa = Polskie Linie Lotnicze LOT SA\n"
+        " |udziałowcy = [[Polska Grupa Lotnicza|Polska Grupa Lotnicza S.A.]]\n"
+        " |rejestr = KRS\n"
+        " |numer rejestru = 0000056844\n"
+        "}}\n",
+    )
+
+    company = extract_from_article(article)
+
+    assert isinstance(company, Company)
+    assert (company.name, company.krs) == (
+        "Polskie Linie Lotnicze LOT SA",
+        "0000056844",
+    )
+    assert [(s.name, s.share) for s in company.shareholders] == [
+        ("Skarb Państwa", 69.3),
+        ("Polska Grupa Lotnicza", 30.7),
+    ]

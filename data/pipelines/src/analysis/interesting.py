@@ -340,7 +340,7 @@ def wiki_article_for(
     this far: `Infobox.krs_number` leaves it out.)
 
     Measured over the 467 site companies an article gives the KRS number of
-    (the 2026-08 dump against the 2026-10-07 register): 448 are linked and 19
+    (the 2026-08 dump against the 2026-10-07 register): 449 are linked and 18
     left out. About half of those are the cases above; the rest are companies
     renamed since the article was written - Presspublica is Gremi Media now -
     whose link a reader can still add by hand.
