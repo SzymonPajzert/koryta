@@ -537,10 +537,17 @@ class SiteSnapshot:
             else:
                 written["supervisoryBody"] = body
 
-        if payload.get("legal_form"):
-            written["legalForm"] = payload["legal_form"]
-        if payload.get("supervisory_organ"):
-            written["supervisoryOrgan"] = payload["supervisory_organ"]
+        # Written when the payload has one and left alone when it has not: the
+        # register's form and organ, and the company's Wikipedia article - which
+        # is overwritten when the pipelines find one, as a person's link is (see
+        # `updatedPerson` in `frontend/server/api/ingest/person.post.ts`).
+        for key, field_name in (
+            ("legal_form", "legalForm"),
+            ("supervisory_organ", "supervisoryOrgan"),
+            ("wikipedia", "wikipedia"),
+        ):
+            if payload.get(key):
+                written[field_name] = payload[key]
 
         for key, value in written.items():
             current = data.get(key)

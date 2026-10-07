@@ -157,6 +157,21 @@ class TestTheNode:
             == []
         )
 
+    def test_a_wikipedia_link_the_node_lacks_is_a_change(self):
+        link = "https://pl.wikipedia.org/wiki/PKP_Szybka_Kolej_Miejska_w_Trójmieście"
+        assert changes(payload(wikipedia=link)) == [COMPANY_FIELDS]
+        assert (
+            changes(
+                payload(wikipedia=link), node_rows=nodes(company={"wikipedia": link})
+            )
+            == []
+        )
+
+    def test_a_payload_with_no_article_leaves_a_stored_link_alone(self):
+        # A reader can link an article the pipelines never matched.
+        link = "https://pl.wikipedia.org/wiki/SKM_Trójmiasto"
+        assert changes(payload(), node_rows=nodes(company={"wikipedia": link})) == []
+
     def test_a_node_with_no_approved_revision_is_always_written(self):
         # Approving is what points the node at a revision, so one with nothing
         # to point at is written whatever it says.
