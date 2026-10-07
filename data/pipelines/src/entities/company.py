@@ -92,7 +92,7 @@ class Company:
     #: decides. See `scrapers.krs.organs`.
     supervisory_organ: str | None = None
     #: The company's own article on pl.wikipedia.org, when one gives its KRS
-    #: number and agrees about its name - see `wiki_article_for` in
+    #: number and agrees about its name - see `wiki_articles_for` in
     #: `analysis.interesting`.
     #: Only `Companies` sets it; the register knows nothing of Wikipedia.
     wikipedia: str | None = None

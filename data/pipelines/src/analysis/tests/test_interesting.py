@@ -1,6 +1,7 @@
 """What `Companies` writes to companies_merged."""
 
 import pandas as pd
+import pytest
 
 from analysis.interesting import Companies
 from entities.company import Company as KrsCompany
@@ -89,19 +90,17 @@ def test_a_company_takes_the_address_and_categories_of_its_own_article():
 def test_an_article_naming_the_company_otherwise_is_not_its_own():
     """A KRS number in an infobox is not always the company's own article.
 
-    Macica Serbska gives the number of a Warsaw legal clinic.
+    Elektrocieplownia Bialystok's gives the number of Enea Cieplo, which runs
+    the plant.
     """
     df = merge(
-        KrsCompany(
-            krs="0000030253",
-            name="STUDENCKI OŚRODEK POMOCY PRAWNEJ PRZY WYDZIALE PRAWA",
-        ),
-        articles=[article("Maćica Serbska", "0000030253")],
+        KrsCompany(krs="0000121456", name="ENEA CIEPŁO"),
+        articles=[article("Elektrociepłownia Białystok", "0000121456")],
     )
 
-    clinic = row(df, "0000030253")
-    assert clinic["wikipedia"] is None
-    assert list(clinic["wiki_categories"]) == []
+    operator = row(df, "0000121456")
+    assert operator["wikipedia"] is None
+    assert list(operator["wiki_categories"]) == []
 
 
 def test_of_two_articles_giving_one_number_the_company_s_own_wins():
@@ -117,6 +116,65 @@ def test_of_two_articles_giving_one_number_the_company_s_own_wins():
     assert row(df, "0000032334")["wikipedia"].endswith(
         "PGE_Górnictwo_i_Energetyka_Konwencjonalna"
     )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_of_two_articles_that_agree_the_one_whose_title_does_wins(reverse):
+    """The power station's infobox names its operator, word for word."""
+    articles = [
+        article(
+            "Elektrownia Bełchatów",
+            "0000032334",
+            name="PGE Górnictwo i Energetyka Konwencjonalna S.A. Oddział Elektrownia"
+            " Bełchatów",
+        ),
+        article("PGE Górnictwo i Energetyka Konwencjonalna", "0000032334"),
+    ]
+    df = merge(
+        KrsCompany(krs="0000032334", name="PGE GÓRNICTWO I ENERGETYKA KONWENCJONALNA"),
+        articles=articles[::-1] if reverse else articles,
+    )
+
+    assert row(df, "0000032334")["wikipedia"].endswith(
+        "PGE_Górnictwo_i_Energetyka_Konwencjonalna"
+    )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_a_tie_goes_the_same_way_whatever_order_the_articles_come_in(reverse):
+    articles = [
+        article("Śląsk Wrocław (piłka nożna kobiet)", "0000070008"),
+        article("Śląsk Wrocław (piłka nożna)", "0000070008"),
+    ]
+    df = merge(
+        KrsCompany(krs="0000070008", name='WROCŁAWSKI KLUB SPORTOWY "ŚLĄSK WROCŁAW"'),
+        articles=articles[::-1] if reverse else articles,
+    )
+
+    assert row(df, "0000070008")["wikipedia"].endswith("Śląsk_Wrocław_(piłka_nożna)")
+
+
+def test_the_owners_come_from_the_first_of_its_articles_to_list_any():
+    """COIG's article lists none; the one under its old name does."""
+    df = merge(
+        KrsCompany(krs="0000092497", name="COIG"),
+        articles=[
+            article(
+                "Centralny Ośrodek Informatyki Górnictwa",
+                "0000092497",
+                WikiShareholder("WASKO SA", None, 85.0),
+                WikiShareholder("Skarb Państwa", None, 15.0, skarb_panstwa=True),
+                name="COIG S.A.",
+            ),
+            article("COIG", "0000092497", name="COIG S.A."),
+        ],
+    )
+
+    coig = row(df, "0000092497")
+    assert coig["wikipedia"].endswith("/COIG")
+    assert list(coig["parents"]) == [
+        {"krs": None, "teryt": SKARB_PANSTWA, "source": "wiki"}
+    ]
 
 
 def test_a_name_inside_the_longer_one_agrees():

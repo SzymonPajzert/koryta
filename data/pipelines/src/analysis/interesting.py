@@ -30,7 +30,7 @@ class Companies(Pipeline[Company]):
     company's KRS number and agrees about its name lends it three things: its
     address (`wikipedia`), its categories (`wiki_categories`, the sector a
     reader filed it under) and, where the register names no owner at all, the
-    owners its infobox lists. See `wiki_article_for` and `wiki_owners`.
+    owners its infobox lists. See `wiki_articles_for` and `wiki_owners`.
     """
 
     filename = "companies_merged"
@@ -94,11 +94,12 @@ class Companies(Pipeline[Company]):
 
             krs = krs_companies.get(krs_id)
             articles = wiki_companies.get(krs_id, [])
-            wiki = wiki_article_for(krs.name if krs is not None else None, articles)
+            own = wiki_articles_for(krs.name if krs is not None else None, articles)
+            wiki = own[0] if own else None
             if articles and wiki is None:
                 disagreeing.append(
                     f"{krs_id} {krs.name if krs is not None else ''!s} - "
-                    + ", ".join(str(a.title) for a in articles)
+                    + ", ".join(sorted(str(a.title) for a in articles))
                 )
 
             teryt_code = None
@@ -111,7 +112,8 @@ class Companies(Pipeline[Company]):
                 wiki_report["with an article"] += 1
                 if not parents:
                     parents = wiki_owners(
-                        wiki.shareholders,
+                        # The first of its articles to list any.
+                        next((a.shareholders for a in own if a.shareholders), []),
                         krs_id,
                         jst_index,
                         teryt_code[:2] if isinstance(teryt_code, str) else None,
@@ -277,7 +279,7 @@ class CompanyMerger:
 
 
 #: How alike an article's name and the register's have to be for the article
-#: to be the company's own - see `wiki_article_for`.
+#: to be the company's own - see `wiki_articles_for`.
 NAME_AGREEMENT = 0.6
 
 #: Legal forms, which one name spells out and the other abbreviates or drops.
@@ -313,23 +315,46 @@ def name_agreement(register_name: str, article: Wikipedia) -> float:
     how alike the two are as strings.
     """
     register = _comparable(register_name)
-    best = 0.0
-    for candidate in (article.title, article.name):
-        words = _comparable(candidate)
-        if not words or not register:
-            continue
-        shorter, longer = sorted((words, register), key=len)
-        if set(shorter) <= set(longer):
-            return 1.0
-        ratio = difflib.SequenceMatcher(None, " ".join(words), " ".join(register))
-        best = max(best, ratio.ratio())
-    return best
+    return max(_agreement(register, article.title), _agreement(register, article.name))
 
 
-def wiki_article_for(
+def _agreement(register: list[str], candidate: str | None) -> float:
+    words = _comparable(candidate)
+    if not words or not register:
+        return 0.0
+    shorter, longer = sorted((words, register), key=len)
+    if set(shorter) <= set(longer):
+        return 1.0
+    return difflib.SequenceMatcher(None, " ".join(words), " ".join(register)).ratio()
+
+
+def _rank(register_name: str, article: Wikipedia) -> tuple[float, float, int, str]:
+    """Orders the articles that give one KRS number, the company's own first.
+
+    By how well the name agrees; between two that agree as well, by how well
+    the title alone does - PGE GiEK's own article before Elektrownia
+    Belchatow's, whose infobox gives the operator's name - then by the
+    shorter title, which is the whole rather than a part of it - Slask
+    Wroclaw's club before its women's team, ArcelorMittal Poland before its
+    Zdzieszowice works - and last by the title itself. `ProcessWiki` hands
+    the articles back in whatever order its workers finish them, and a tie
+    went to whichever came first: a different article from one night to the
+    next.
+    """
+    title = article.title or ""
+    return (
+        -name_agreement(register_name, article),
+        -_agreement(_comparable(register_name), title),
+        len(title),
+        title,
+    )
+
+
+def wiki_articles_for(
     register_name: str | None, articles: list[Wikipedia]
-) -> Wikipedia | None:
-    """The company's own article, among the ones that give its KRS number.
+) -> list[Wikipedia]:
+    """The company's own articles, among the ones that give its KRS number,
+    the one to link first.
 
     An infobox's KRS number is an editor's claim and almost always a true one,
     but it is not always on the company's own article. A power station gives
@@ -344,15 +369,15 @@ def wiki_article_for(
     left out. About half of those are the cases above; the rest are companies
     renamed since the article was written - Presspublica is Gremi Media now -
     whose link a reader can still add by hand.
+
+    Now and then two are the company's own, and they need not know the same:
+    COIG's article lists no owners, the one under its old name, Centralny
+    Osrodek Informatyki Gornictwa, lists WASKO and the Treasury.
     """
-    if not articles:
-        return None
     if not register_name:
-        return articles[0] if len(articles) == 1 else None
-    best = max(articles, key=lambda article: name_agreement(register_name, article))
-    if name_agreement(register_name, best) < NAME_AGREEMENT:
-        return None
-    return best
+        return list(articles) if len(articles) == 1 else []
+    ranked = sorted(articles, key=lambda article: _rank(register_name, article))
+    return [a for a in ranked if name_agreement(register_name, a) >= NAME_AGREEMENT]
 
 
 #: How an article names a local government that the register names directly:
