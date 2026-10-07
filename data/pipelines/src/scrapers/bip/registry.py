@@ -8,10 +8,24 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 
 from entities.util import NormalizedParse
-from scrapers.bip.types import RegistryEntry
 from scrapers.stores import HostRow
+
+
+@dataclass(frozen=True)
+class RegistryEntry:
+    """One row of the official gov.pl BIP registry."""
+
+    entry_id: str
+    name: str
+    url: str
+    host: str
+    teryt: str
+    place: str
+    email: str
+
 
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 
