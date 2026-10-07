@@ -144,6 +144,7 @@ def match_pkw(ctx, krs: list[dict], pkw: list[dict]) -> pd.DataFrame:
             columns=[
                 "first_name",
                 "last_name",
+                "second_name",
                 "birth_year",
                 "birth_date",
                 "full_name",
@@ -402,6 +403,44 @@ def test_a_namesake_the_first_name_rules_out_leaves_one_match(ctx):
     assert list(result["wiki_name"]) == ["Dariusz Popławski (wicewojewoda)"]
 
 
+def test_a_year_only_biography_naming_another_middle_name_is_somebody_else(ctx):
+    """The bug: Ryszard Jan Piasecki carried Ryszard Tomasz Piasecki's article.
+
+    Both were born in 1951, which is all the article says, so the middle name
+    is the one thing telling them apart - and it says they are two people.
+    """
+    result = match(
+        ctx,
+        [krs_person("ryszard", "piasecki", "1951-04-19", second="jan")],
+        [article("Ryszard Tomasz Piasecki", "1951-00-00")],
+    )
+
+    assert result["wiki_name"].isna().all()
+
+
+def test_a_year_only_biography_giving_an_initial_still_matches(ctx):
+    """Wikipedia writes some middle names as initials: "Andrzej W. Nowak"."""
+    result = match(
+        ctx,
+        [krs_person("andrzej", "nowak", "1974-11-10", second="wojciech")],
+        [article("Andrzej W. Nowak", "1974-00-00")],
+    )
+
+    assert list(result["wiki_name"]) == ["Andrzej W. Nowak"]
+
+
+def test_a_qualifier_in_brackets_is_not_a_middle_name(ctx):
+    """What an article's title adds in brackets says what the person is, not
+    what they are called, so it contradicts no middle name."""
+    result = match(
+        ctx,
+        [krs_person("andrzej", "sikora", "1946-12-01", second="jan")],
+        [article("Andrzej Sikora (ur. 1946)", "1946-00-00")],
+    )
+
+    assert list(result["wiki_name"]) == ["Andrzej Sikora (ur. 1946)"]
+
+
 def match_koryta(ctx, krs: list[dict], koryta: list[dict]) -> pd.DataFrame:
     """Run the merge over KRS and the site's own pages."""
     return people_merged(
@@ -411,6 +450,7 @@ def match_koryta(ctx, krs: list[dict], koryta: list[dict]) -> pd.DataFrame:
             columns=[
                 "first_name",
                 "last_name",
+                "second_name",
                 "birth_year",
                 "birth_date",
                 "full_name",
@@ -679,6 +719,7 @@ def test_a_person_with_no_spelling_has_no_name():
 WIKI_COLUMNS = [
     "first_name",
     "last_name",
+    "second_name",
     "birth_year",
     "birth_date",
     "full_name",

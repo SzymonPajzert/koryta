@@ -1,4 +1,5 @@
 import math
+import re
 
 import pandas as pd
 
@@ -115,6 +116,33 @@ def preferred_spelling(
     return min(names, key=preference)
 
 
+def middle_names_agree(krs: str | None, wiki: str | None) -> bool:
+    """Whether a Wikipedia biography's middle names leave room for KRS's.
+
+    The article's are whatever its lead has between the first name and the
+    surname, so a qualifier ("(polityk)") or an initial ("W.") is among them
+    often enough. Words in brackets name nobody, an initial stands for any name
+    it begins, and silence on either side contradicts nothing.
+    """
+
+    def names(text: str | None) -> list[str]:
+        text = re.sub(r"\(.*?\)", " ", text or "")
+        return re.findall(r"[^\W\d_]+\.?", text.lower())
+
+    def same(a: str, b: str) -> bool:
+        a, b = a.rstrip("."), b.rstrip(".")
+        return (
+            a == b
+            or (len(a) == 1 and b.startswith(a))
+            or (len(b) == 1 and a.startswith(b))
+        )
+
+    ours, theirs = names(krs), names(wiki)
+    if not ours or not theirs:
+        return True
+    return any(same(a, b) for a in ours for b in theirs)
+
+
 class PeopleMerged(Pipeline):
     filename = "people_merged"
 
@@ -155,6 +183,11 @@ def people_merged(
     con.create_function(
         "preferred_spelling",
         preferred_spelling,
+        null_handling="special",  # type: ignore
+    )
+    con.create_function(
+        "middle_names_agree",
+        middle_names_agree,
         null_handling="special",  # type: ignore
     )
 
@@ -298,6 +331,13 @@ def people_merged(
         -- threshold by three thousandths. Nine of the ten year-only matches
         -- that leant on the threshold were somebody else; of the seven with a
         -- full date, none were.
+        --
+        -- For the same reason a year-only article may not name another middle
+        -- name than KRS does. Ryszard Jan Piasecki was given Ryszard Tomasz
+        -- Piasecki's biography, Andrzej Jan Nowak Andrzej Wojciech Nowak's -
+        -- Wikipedia titles that one "Andrzej W. Nowak" because there are
+        -- several. Silence on either side still matches, as it does for PKW;
+        -- 7 of the 549 year-only matches on 2026-10-07 contradicted it.
         SELECT
             k.krs_row,
             w.*
@@ -311,6 +351,9 @@ def people_merged(
                 ELSE
                     k.birth_year = w.birth_year
                     AND k.first_name = w.first_name
+                    AND middle_names_agree(
+                        CAST(k.second_name AS VARCHAR), CAST(w.second_name AS VARCHAR)
+                    )
             END
     ),
     wiki_match AS (

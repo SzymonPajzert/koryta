@@ -172,6 +172,7 @@ def test_people_merged_keeps_every_post_of_a_person_spelled_two_ways(ctx):
             columns=[
                 "first_name",
                 "last_name",
+                "second_name",
                 "birth_year",
                 "birth_date",
                 "full_name",
