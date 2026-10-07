@@ -110,6 +110,7 @@ class World:
         self.candidates: list[build.Candidate] = []
         self.already_sent: set[tuple[str, str]] = set()
         self.memory_since: list[str] = []
+        self.targeted: Targeted = Targeted()
 
     def run(self) -> RecordingRun:
         [run] = self.runs

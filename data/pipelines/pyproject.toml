@@ -121,6 +121,13 @@ dependencies = [
     "plotly (>=6.9.0,<7.0.0)",
     "pytest-fast-first (>=1.0.5,<2.0.0)",
     "aiohttp (>=3.14.1,<4.0.0)",
+    "olefile==0.47",
+    "onnxruntime==1.30.0",
+    "opencv-python-headless==5.0.0.93",
+    "pillow==12.3.0",
+    "pymupdf==1.28.2",
+    "pypdfium2==5.13.0",
+    "rapidocr-onnxruntime==1.4.4",
 ]
 
 [project.scripts]
@@ -129,6 +136,7 @@ koryta = "koryta:main"
 koryta_uploader = "uploader:main"
 koryta_pipelines = "pipelines:main"
 koryta_crawl = "crawl_cli:main"
+koryta_scrape_bip = "bip_cli:main"
 koryta_scraper = "scraper:main"
 koryta_scrape_krs = "scraper:scrape_krs"
 koryta_scrape_krs_free = "jobs.krs_scrape_free:main"
@@ -188,6 +196,24 @@ test = [
     "types-networkx (>=3.6.1.20260724,<4.0.0.0)",
 ]
 
+# rapidocr-onnxruntime 1.4.4 declares Python <3.13 and the GUI opencv-python,
+# but runs fine on this headless 3.13 host (that is what tools/ocrenv proved).
+# Static metadata replaces both for the resolver; the wheel itself is py3-none.
+[[tool.uv.dependency-metadata]]
+name = "rapidocr-onnxruntime"
+version = "1.4.4"
+requires-python = ">=3.8"
+requires-dist = [
+    "pyclipper>=1.2.1",
+    "onnxruntime>=1.7.0",
+    "opencv-python-headless>=4.5.1.48",
+    "numpy>=1.19.3",
+    "six>=1.15.0",
+    "Shapely>=1.7.1",
+    "PyYAML",
+    "Pillow",
+]
+
 [tool.mypy]
 python_version = "3.13"
 mypy_path = "src"
@@ -206,6 +232,15 @@ module = [
     "pymodulon.*",
     "adjustText.*",
     "joblib",
+    # Heavy OCR/PDF deps ship no type stubs; typed as Any so mypy does not
+    # fail on the lazily imported modules.
+    "cv2.*",
+    "PIL.*",
+    "olefile.*",
+    "pymupdf.*",
+    "pypdfium2.*",
+    "rapidocr_onnxruntime.*",
+    "xlrd.*",
 ]
 ignore_missing_imports = true
 
@@ -282,7 +317,10 @@ name = "Pipelines do not fetch"
 type = "forbidden"
 source_modules = ["scrapers", "analysis"]
 forbidden_modules = ["requests", "curl_cffi"]
-ignore_imports = ["scrapers.article.crawler -> curl_cffi"]
+# The article crawler's HTTP GET (and BIP's) now goes through the single
+# curl_cffi wrapper in scrapers/common/fetch.py, so that is the grandfathered
+# module, not scrapers.article.crawler.
+ignore_imports = ["scrapers.common.fetch -> curl_cffi"]
 
 [[tool.importlinter.contracts]]
 name = "Do not import external packages"
@@ -315,7 +353,6 @@ forbidden_modules = [
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.interesting",
     "scrapers.article.test_postgres_queue -> os",
-    "scrapers.article.postgres_queue -> os",
     "scrapers.article.scripts.bench_crawl -> sys",
     "scrapers.article.scripts.bench_crawl -> os",
     "scrapers.article.scripts.bench_crawl -> io",
@@ -326,9 +363,12 @@ ignore_imports = [
     # Joining local versioned output paths for --force-download-shared-cache
     "scrapers.stores -> os",
     "scrapers.cru.config -> os",
-    # In-memory tar extraction of GCS blobs and URL joining for link discovery
+    # In-memory tar extraction of GCS blobs
     "scrapers.article.pipelines.pipeline_utils -> io",
-    "scrapers.article.crawler -> urllib",
+    # Absolute link resolution (shared link extractor + BIP classifier)
+    "scrapers.common.links -> urllib",
+    # DSN from env, same vars as the article crawler
+    "scrapers.common.pg -> os",
     # pypdf reads a seekable stream and will not take bytes, so an odpis
     # fetched into memory has to be wrapped before it can be parsed. No file is
     # opened here -- the PDF never touches disk, which is the point.
