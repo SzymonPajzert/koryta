@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 import mwparserfromhell
 import pandas as pd
 from memoized_property import memoized_property  # type: ignore
-from regex import search
+from regex import match, search
 from tqdm import tqdm
 
 from entities.company import Wikipedia as Company
@@ -85,6 +85,39 @@ REQUIRED_WORDS = [
 REGION_INFOBOXES = ("Polskie miasto", "Polska jednostka administracyjna", "Województwo")
 
 
+#: An infobox's `państwo` names the wojewodztwo instead of the country now and
+#: then: "śląskie", "województwo warmińsko-mazurskie".
+_VOIVODESHIPS = (
+    "dolnośląskie",
+    "kujawsko-pomorskie",
+    "lubelskie",
+    "lubuskie",
+    "łódzkie",
+    "małopolskie",
+    "mazowieckie",
+    "opolskie",
+    "podkarpackie",
+    "podlaskie",
+    "pomorskie",
+    "śląskie",
+    "świętokrzyskie",
+    "warmińsko-mazurskie",
+    "wielkopolskie",
+    "zachodniopomorskie",
+)
+
+
+def is_polish_country(country: str) -> bool:
+    """Whether an infobox's `państwo` is Poland: "PL-PM", "POL", "Polska", a
+    wojewodztwo, or nothing at all."""
+    text = country.strip()
+    if not text:
+        return True
+    if match(r"(PL(-|$)|POL$|POLSKA\b)", text.upper()):
+        return True
+    return any(voivodeship in text.lower() for voivodeship in _VOIVODESHIPS)
+
+
 @dataclass(frozen=True)
 class WikiRegion:
     """A city, gmina, powiat or wojewodztwo article, and the unit it is."""
@@ -149,14 +182,43 @@ class Infobox:
         return "rejestr" in self.fields or "numer rejestru" in self.fields
 
     @memoized_property
+    def krs_number(self) -> str | None:
+        """`numer rejestru`, when the register it numbers is KRS.
+
+        A foreign company's infobox gives its own register's number in the
+        same field - Orange its French SIREN, 380129866 - and five to ten
+        digits padded to ten read as a KRS number like any other, so an owner
+        linking to Orange's article came out as KRS 0380129866. Of the 3,279
+        infoboxes on the 2026-08-31 dump that give such a number, 1,986 name
+        KRS as the register and about 80 name another: IČO, SIREN, a
+        Handelsregister, REGON or NIP. Of the 1,210 naming none, the country
+        is Polish for 1,173 and foreign for 25, so with no register named the
+        country decides, and a missing one is taken for Polish. A register
+        field with no words in it names no register either: AGRO
+        Ubezpieczenia's holds its NIP, beside a KRS number and "Polska".
+
+        None for a number from another register; the field as it stands, ""
+        included, otherwise.
+        """
+        number = self.fields.get("numer rejestru")
+        if not number:
+            return number
+        register = self.fields.get("rejestr", "").strip().lower()
+        if search(r"[^\W\d_]", register):
+            return (
+                number if "krs" in register or "krajowy rejestr" in register else None
+            )
+        return number if is_polish_country(self.fields.get("państwo", "")) else None
+
+    @memoized_property
     def teryt(self) -> str | None:
         """The territorial unit a city, gmina or powiat infobox is about."""
         if self.inf_type not in REGION_INFOBOXES:
             return None
         for name in ("TERYT", "TERC"):
-            match = search(r"\d+", self.fields.get(name, ""))
-            if match:
-                return normalize_teryt(match.group(0))
+            code = search(r"\d+", self.fields.get(name, ""))
+            if code:
+                return normalize_teryt(code.group(0))
         return None
 
     @memoized_property
@@ -365,7 +427,19 @@ def extract_from_article(
         name = article.get_infobox(lambda i: i.fields.get("nazwa", None))
         return Company(
             name=name if name is not None else article.title,
-            krs=article.get_infobox(lambda i: i.fields.get("numer rejestru", None)),
+            # The first infobox with a number gives the article's, as before.
+            # A number from another register leaves the article without one
+            # rather than handing over to the next infobox, which is another
+            # company's: Raiffeisen-Leasing's is the Austrian group's, then
+            # Raiffeisen-Leasing Polska's.
+            krs=next(
+                (
+                    i.krs_number
+                    for i in article.infoboxes
+                    if "numer rejestru" in i.fields
+                ),
+                None,
+            ),
             content_score=article.content_score,
             title=article.original_title,
             source=article_url(article.original_title),
@@ -567,8 +641,8 @@ def resolve_shareholders(companies: list[Company], links: WikiLinks) -> None:
     parser or to how titles are written can turn every owner into a bare name
     and nothing downstream would notice. On the 2026-08 dump 1,737 of 11,540
     company articles list owners, and their 2,494 entries name a company by
-    KRS number 305 times, a territorial unit 110 times and the Treasury 89
-    times. The 1,990 left are people, funds, "pozostali" and the owners of
+    KRS number 279 times, a territorial unit 110 times and the Treasury 89
+    times. The 2,016 left are people, funds, "pozostali" and the owners of
     foreign companies, which most of the articles are about.
     """
     kinds: Counter[str] = Counter()

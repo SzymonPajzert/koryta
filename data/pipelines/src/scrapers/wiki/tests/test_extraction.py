@@ -3,6 +3,7 @@ import itertools
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import mwparserfromhell
 import pytest
 
 from entities.company import WikiShareholder
@@ -10,6 +11,7 @@ from scrapers.stores import LocalFile
 from scrapers.tests.mocks import get_test_context, nested_dict, setup_test_context
 from scrapers.wiki.process_articles import (
     Company,
+    Infobox,
     People,
     WikiArticle,
     extract,
@@ -344,3 +346,37 @@ def test_all_tested(filename, ctx):
         return
 
     assert False  # Not found in any categories
+
+
+@pytest.mark.parametrize(
+    "fields,expected",
+    [
+        ("|rejestr = KRS |numer rejestru = 0000271591 |państwo = PL-PM", "0000271591"),
+        (
+            "|rejestr = [[Krajowy Rejestr Sądowy|KRS]] |numer rejestru = 0000271591",
+            "0000271591",
+        ),
+        # Orange's article, whose number read as KRS 0380129866.
+        ("|rejestr = SIREN |numer rejestru = 380129866 |państwo = Francja", None),
+        ("|rejestr = IČO |numer rejestru = 45274649 |państwo = CZE", None),
+        # No register named: the country decides, and none at all is Polish.
+        ("|numer rejestru = 0000057019 |państwo = POL", "0000057019"),
+        ("|numer rejestru = 0000057019 |państwo = śląskie", "0000057019"),
+        ("|numer rejestru = 0000057019", "0000057019"),
+        ("|numer rejestru = 86891 |państwo = DE-BY", None),
+        # A Polish register that is not KRS: its number is not a KRS number.
+        ("|rejestr = REGON |numer rejestru = 017415570 |państwo = Polska", None),
+        # A register field holding a number names no register: AGRO
+        # Ubezpieczenia's has its NIP there.
+        (
+            "|rejestr = 113-24-01-245 |numer rejestru = 0000145607 |państwo = Polska",
+            "0000145607",
+        ),
+        ("|rejestr = KRS |numer rejestru = ", ""),
+    ],
+)
+def test_only_a_krs_number_is_taken_for_one(fields, expected):
+    template = mwparserfromhell.parse(f"{{{{Przedsiębiorstwo infobox {fields}}}}}")
+    infobox = Infobox(template.filter_templates()[0])
+
+    assert infobox.krs_number == expected
