@@ -1,9 +1,9 @@
 """robots.txt handling shared by both crawlers.
 
 `RobotsCache` is the single implementation: it tries https then http, treats a
-missing/empty robots.txt as allow-all, unreachable as deny, exposes
-Crawl-delay, and caches per host (thread-safe — fetcher threads share it).
-`WebImpl` keeps the old Context-facing method delegating here.
+missing/empty robots.txt as allow-all, an unreachable host or an error status
+(403/5xx/429) as deny, and caches per host (thread-safe — fetcher threads share
+it). `WebImpl` keeps the old Context-facing method delegating here.
 """
 
 import threading
@@ -14,8 +14,6 @@ from urllib.robotparser import RobotFileParser
 from curl_cffi import requests as cffi_requests
 
 from scrapers.stores import Context, Web
-
-_EMPTY = RobotFileParser()  # no rules -> allow everything
 
 
 def _host_of(url: str) -> str:
@@ -45,6 +43,7 @@ class RobotsCache:
                 return self._parsers[host]
         parser: RobotFileParser | None = None
         reachable = False
+        allow_all = False
         for scheme in ("https", "http"):
             try:
                 response = cffi_requests.get(
@@ -57,14 +56,15 @@ class RobotsCache:
                 continue
             reachable = True
             if response.status_code == 404 or not response.text.strip():
-                parser = None
+                allow_all = True
                 break
             if response.status_code == 200:
                 parser = RobotFileParser()
                 parser.parse(response.text.splitlines())
                 break
         with self._lock:
-            if not reachable:
+            # Unreachable, or an error status (403/5xx/429): deny.
+            if not reachable or (parser is None and not allow_all):
                 self._unreachable.add(host)
             self._parsers[host] = parser
         return parser

@@ -9,27 +9,22 @@ contract "Do not import external packages").
 import io
 import zipfile
 
-import requests
+from scrapers.common.fetch import http_get
 
 # `https://www.gov.pl/web/bip/spis` redirects here and serves a ZIP holding
 # subjects.xml (13k+ rows). Measured 2026-09: 1.5 MB ZIP, 9.8 MB XML.
 REGISTRY_URL = "https://www.gov.pl/web/bip/spis"
-ARCHIVE_URL = "https://www.gov.pl/web/bip/archiwum"
 SUBJECTS_XML_NAME = "subjects.xml"
 
 USER_AGENT = "koryta.pl-pipeline/1.0 (+https://github.com/SzymonPajzert/koryta)"
 
 
 def fetch_registry_zip(url: str = REGISTRY_URL, timeout: float = 120) -> bytes:
-    """Download the registry ZIP. gov.pl needs TLS verification relaxed."""
-    response = requests.get(
-        url,
-        headers={"User-Agent": USER_AGENT},
-        timeout=timeout,
-        verify=False,
-    )
-    response.raise_for_status()
-    return response.content
+    """Download the registry ZIP through the shared (TLS-verified) HTTP client."""
+    result = http_get(url, timeout=timeout, user_agent=USER_AGENT)
+    if not result.ok:
+        raise RuntimeError(f"registry download failed: {result.status} {result.error}")
+    return result.content
 
 
 def extract_subjects_xml(

@@ -43,7 +43,6 @@ class UrlRow:
     content_type: str = ""
     size: int = 0
     sha256: str = ""
-    title: str = ""
     last_status: int = 0
 
 
@@ -57,7 +56,6 @@ class DocRow:
     content_type: str
     size: int
     filename: str
-    title: str
     bundle: str
     chain: list[str] = field(default_factory=list)
 

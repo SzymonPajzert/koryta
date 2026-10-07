@@ -89,7 +89,6 @@ class LocalBundleStore:
         data: bytes,
         content_type: str,
         filename: str,
-        title: str,
         chain: list[str],
     ) -> tuple[DocRow, bool]:
         """Store one document. Returns (row, is_new_blob)."""
@@ -101,7 +100,6 @@ class LocalBundleStore:
                 data=data,
                 content_type=content_type,
                 filename=filename,
-                title=title,
                 chain=chain,
             )
 
@@ -114,7 +112,6 @@ class LocalBundleStore:
         data: bytes,
         content_type: str,
         filename: str,
-        title: str,
         chain: list[str],
     ) -> tuple[DocRow, bool]:
         digest = hashlib.sha256(data).hexdigest()
@@ -142,7 +139,6 @@ class LocalBundleStore:
             content_type=content_type,
             size=len(data),
             filename=filename,
-            title=title,
             bundle=bundle_path,
             chain=chain,
         )
