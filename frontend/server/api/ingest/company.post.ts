@@ -117,6 +117,13 @@ export default defineEventHandler(async (event) => {
   // it.
   if (body.supervisory_organ)
     revisionData.supervisoryOrgan = body.supervisory_organ;
+  // The company's own Wikipedia article, as the pipelines matched it by KRS
+  // number - `wiki_article_for` in data/pipelines/src/analysis/interesting.py.
+  // On the terms a person's link is (`updatedPerson` in ingest/person.post.ts):
+  // written whenever a payload has one, and left alone when it has not, which
+  // keeps a link a reader added to a company the pipelines found no article
+  // for.
+  if (body.wikipedia) revisionData.wikipedia = body.wikipedia;
   // A human answer wins. KRS cannot see who owns a spółka akcyjna, so the
   // scrapers' `false` is "no evidence" rather than "privately owned", and
   // re-running an ingest must not undo somebody who knew better.

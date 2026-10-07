@@ -90,6 +90,12 @@ export const companyRequestSchema = z.object({
    * sides ship: `z.object` is not strict, so an unknown key is dropped silently
    * with a 200, exactly as `committee` was below. */
   supervisory_organ: z.enum(supervisoryOrgans).optional(),
+  /** The company's own article on pl.wikipedia.org - see `Company.wikipedia`.
+   *
+   * Written whenever a payload carries one, on the terms a person's link is
+   * (`updatedPerson` in `server/api/ingest/person.post.ts`); absent leaves the
+   * stored link alone, which may be one a reader added. */
+  wikipedia: z.string().optional(),
 });
 
 export type CompanyRequest = {
@@ -105,6 +111,7 @@ export type CompanyRequest = {
   is_public?: boolean;
   legal_form?: string;
   supervisory_organ?: SupervisoryOrgan;
+  wikipedia?: string;
 };
 
 const employmentRequestSchema = z.object({
@@ -374,6 +381,7 @@ export const companyEditSchema = z.object({
   krsNumber: z.string().optional(),
   regonNumber: identifierField(normalizeRegon, isValidRegon, "REGON"),
   nipNumber: identifierField(normalizeNip, isValidNip, "NIP"),
+  wikipedia: z.string().optional(),
   isPublic: z.boolean().optional(),
   categories: z
     .array(
@@ -390,6 +398,7 @@ export const companyEditSchema = z.object({
     | "krsNumber"
     | "regonNumber"
     | "nipNumber"
+    | "wikipedia"
     | "isPublic"
     | "categories"
   >

@@ -59,6 +59,35 @@ describe("CardCompanySummary", () => {
     expect(wrapper.find("a.v-chip--link").exists()).toBe(true);
   });
 
+  it("links the company's Wikipedia article when it has one", async () => {
+    const wrapper = await mountSuspended(CompanySummary, {
+      props: {
+        company: {
+          ...company,
+          wikipedia: "https://pl.wikipedia.org/wiki/Energa",
+        } as Company,
+        location: "Powiat Testowy",
+      },
+    });
+
+    const link = wrapper.find("[data-testid='company-wikipedia'] a");
+    expect(link.attributes("href")).toBe(
+      "https://pl.wikipedia.org/wiki/Energa",
+    );
+    expect(link.attributes("target")).toBe("_blank");
+    expect(link.text()).toContain("Artykuł z Wikipedii");
+  });
+
+  it("says nothing about Wikipedia when there is no article", async () => {
+    const wrapper = await mountSuspended(CompanySummary, {
+      props: { company, location: "Powiat Testowy" },
+    });
+
+    expect(wrapper.find("[data-testid='company-wikipedia']").exists()).toBe(
+      false,
+    );
+  });
+
   it("leaves the name as text on the company's own page", async () => {
     // place/DetailView renders this card as the heading of the page it links
     // to, and a heading that links to itself is a dead end.

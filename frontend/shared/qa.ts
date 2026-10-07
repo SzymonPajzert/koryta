@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "firma-z-wikipedii",
+    title: "Wikipedia na stronie firmy: link, właściciele i branża",
+    description:
+      "Strona firmy linkuje jej artykuł w Wikipedii, tak jak strona osoby - dobrany po numerze KRS podanym w artykule. Spółkom akcyjnym, którym rejestr nie podaje akcjonariuszy, właścicieli bierzemy z artykułu, a firmom bez branży z kodów PKD - branżę z jego kategorii.",
+    steps: [
+      "Po najbliższym imporcie firm otwórz stronę Energi - obok KRS ma być „Wikipedia: Artykuł z Wikipedii”, w „Właścicielach” Orlen, a wśród kategorii Energetyka.",
+      "Kliknij „Zaproponuj zmianę” na stronie dowolnej firmy - pod numerem NIP ma być pole „Link do Wikipedii”.",
+    ],
+    area: "public",
+  },
+  {
     id: "admin-procesy-noc-wstrzymana",
     title: "Procesy: noc, która coś wstrzymała, wymaga uwagi",
     description:

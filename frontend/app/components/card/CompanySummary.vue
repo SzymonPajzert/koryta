@@ -49,6 +49,23 @@
           </a>
           <template v-else>{{ identifier.value }}</template>
         </span>
+        <!-- Beside the registers, the way a person's page carries the link:
+             found by the pipelines through the KRS number the article gives,
+             or added by a reader through the form below. -->
+        <span v-if="company.wikipedia" data-testid="company-wikipedia">
+          <strong>Wikipedia:&nbsp;</strong>
+          <!-- The span keeps the text from starting with a space: Vue keeps
+               the leading whitespace of a text node that begins on a line of
+               its own, and on an underlined link it shows. -->
+          <a
+            :href="company.wikipedia"
+            target="_blank"
+            class="text-decoration-underline"
+          >
+            <span>Artykuł z Wikipedii</span>
+            <v-icon :icon="mdiOpenInNew" size="small" class="ml-1" />
+          </a>
+        </span>
         <span v-if="location">
           <strong>Lokalizacja:</strong> {{ location }}
         </span>

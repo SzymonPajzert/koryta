@@ -124,6 +124,14 @@
                 :rules="[identifierRule(isValidNip, 'NIP')]"
                 class="mb-2"
               />
+              <v-text-field
+                v-model="editData.wikipedia"
+                label="Link do Wikipedii"
+                hint="Pełny link do artykułu o tej instytucji"
+                persistent-hint
+                :rules="[urlRule]"
+                class="mb-2"
+              />
               <v-select
                 v-model="editData.isPublic"
                 :items="ownershipOptions"
@@ -392,6 +400,11 @@ async function submit() {
         if (editData[field] || props.entity?.[field]) {
           body[field] = editData[field];
         }
+      }
+      // Sent on the identifiers' terms: once there is something to say, so a
+      // wrong link can be cleared but a company with none gains no blank field.
+      if (editData.wikipedia || props.entity?.wikipedia) {
+        body.wikipedia = editData.wikipedia;
       }
       // Left out when unanswered, so that "nie wiem" does not get recorded as
       // somebody having decided the place is private.
