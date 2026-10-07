@@ -403,8 +403,18 @@ def test_krs_present(krs, ctx):
 
 
 def test_andrzej_jan_sikora_duplicated(df_all):
-    # Filter for Andrzej Jan Sikora - we expect two people
-    sikora_records = df_all[df_all["krs_name"] == "Andrzej Jan Sikora"]
+    """Two men named Andrzej Jan Sikora, born in 1946 and 1950: two rows.
+
+    Found by the name KRS gives them rather than by `krs_name`, which is one
+    of the ways the sources spell it. Since the odpisy speak for most of the
+    elder's companies, every entry of his reads "Andrzej Sikora", with "Jan" as
+    the second name, and on 2026-10-07 this test lost him that way.
+    """
+    sikora_records = df_all[
+        (df_all["base_first_name"] == "andrzej")
+        & (df_all["second_name"] == "jan")
+        & (df_all["base_last_name"] == "sikora")
+    ]
     assert len(sikora_records) == 2, (
         f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
     )
