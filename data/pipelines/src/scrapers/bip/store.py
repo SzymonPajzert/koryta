@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scrapers.bip.types import DocRow
+from scrapers.stores import DocRow
 
 
 @dataclass
