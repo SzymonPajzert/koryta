@@ -330,6 +330,7 @@ def people_merged(
         -- nobody.
         SELECT
             k.krs_row,
+            k.birth_year as krs_birth_year,
             p.*,
             CASE
                 WHEN k.second_name = p.second_name
@@ -359,31 +360,51 @@ def people_merged(
                         ))))
     ),
     pkw_match AS (
-        -- Which of those to believe.
-        --
-        -- A middle name the two sources agree on outranks one only half of
-        -- them knows, so nobody who already had a match can be pulled off it
-        -- by a looser one - 4292 people have both kinds and would otherwise be
-        -- up for grabs.
-        --
-        -- Silence identifies somebody only when it leaves exactly one
-        -- candidate. Where it leaves several the honest answer is "one of
-        -- these four Piotr Mrozińskis", and picking by score would hang a
-        -- stranger's career on the page - the same harm
-        -- `drop_contradictory_candidacies` drops candidacies to avoid, so it
-        -- is answered the same way: no match rather than a guessed one.
-        --
-        -- Per person, and only per person. A candidacy that fits several
-        -- people goes to each of them: PKW knows a year, give or take one, so
-        -- it cannot say which of two namesakes stood, and leaving it with
-        -- neither made the reviewers look it up again by hand. Which of them
-        -- it belongs to is theirs to judge on the page. With every register
-        -- entry a person of its own, 1,299 candidacies of 2026-10-07 fit two
-        -- or more people.
+        -- Which of those to believe: every one of them. A record nothing above
+        -- says is somebody else - no middle name the person's contradicts, no
+        -- birth year more than one off - goes to the person, however many
+        -- other people it fits and however many records fit them. Szymon,
+        -- 2026-10-07: "if we don't have any point of information to say that
+        -- the two records don't match in PKW, they should be attached". PKW
+        -- has one person as several records often enough - Maciej Wyszyński
+        -- three times, Hanna Suchocka silent in the 1990s and named in 2011 -
+        -- and taking the record whose middle name agreed threw the rest of a
+        -- career away, while silence that left several records took none of
+        -- them: 2,843 people on 2026-10-07, 7,199 records between them. Which
+        -- candidacies are whose is the reviewers' to judge on the page, where
+        -- removing one is how they say so.
         SELECT * FROM pkw_candidates
-        QUALIFY second_name_tier = min(second_name_tier) OVER (PARTITION BY krs_row)
-            AND (second_name_tier = 0
-                OR count(*) OVER (PARTITION BY krs_row) = 1)
+    ),
+    pkw_attached AS (
+        -- One row per person, as a page has one. The record that fits best
+        -- names them - an agreeing middle name, then the nearest birth year -
+        -- and the candidacies of every record they could be go with it;
+        -- `pkw_records` lists those records, the way reviewers will see them.
+        SELECT
+            best.* EXCLUDE (krs_birth_year) REPLACE (every.elections AS elections),
+            every.pkw_records
+        FROM (
+            SELECT * FROM pkw_match
+            QUALIFY row_number() OVER (
+                PARTITION BY krs_row
+                ORDER BY second_name_tier,
+                    abs(krs_birth_year - birth_year) NULLS LAST,
+                    birth_year NULLS LAST,
+                    list_sort(full_name)
+            ) = 1
+        ) best
+        JOIN (
+            SELECT
+                krs_row,
+                list_sort(list_distinct(flatten(list(elections)))) AS elections,
+                list_sort(list(
+                    preferred_spelling(full_name, first_name, second_name, last_name)
+                    || ' '
+                    || coalesce(CAST(CAST(birth_year AS INTEGER) AS VARCHAR), '?')
+                )) AS pkw_records
+            FROM pkw_match
+            GROUP BY krs_row
+        ) every USING (krs_row)
     ),
     krs_pkw AS (
         SELECT
@@ -415,7 +436,7 @@ def people_merged(
             END as unique_chance,
             *,
         FROM krs_numbered k
-        LEFT JOIN pkw_match p USING (krs_row)
+        LEFT JOIN pkw_attached p USING (krs_row)
         LEFT JOIN first_name_freq_table p_fn ON k.first_name = p_fn.first_name
         LEFT JOIN first_name_freq_table p_sn ON k.second_name = p_sn.first_name
         LEFT JOIN names_count_by_region_table names_count
