@@ -473,9 +473,9 @@ def public_through_wiki_owners(
     queue = list(marked)
     while queue:
         for child in children.get(queue.pop(0), []):
-            company = by_krs.get(child)
-            if company is not None and not company.is_public:
-                company.is_public = True
+            subsidiary = by_krs.get(child)
+            if subsidiary is not None and not subsidiary.is_public:
+                subsidiary.is_public = True
                 marked.append(child)
                 queue.append(child)
     return marked
