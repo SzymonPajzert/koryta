@@ -193,9 +193,12 @@ def exists_in_output(matcher, use_all: bool, person: Person):
         wiki_match = has_column_match(matcher, use_all, "wiki_name", person.any)
         return krs_match or pkw_match or wiki_match
 
-    matches_krs = has_column_match(matcher, use_all, "krs_name", person.krs_name)
-    matches_pkw = has_column_match(matcher, use_all, "pkw_name", person.pkw_name)
-    return matches_krs or matches_pkw
+    # A KRS name and a PKW name are one person in the output when one row
+    # carries both: the merge joined them. Each on a row of its own, or with
+    # somebody else, is two people - which is what `test_missing` asks for.
+    krs_rows = matcher(use_all, "krs_name", person.krs_name)
+    pkw_name = person.pkw_name.replace(" ", " .*")
+    return bool(krs_rows["pkw_name"].str.match(pkw_name, na=False).any())
 
 
 def test_not_duplicated(df_all):
@@ -314,8 +317,9 @@ def file_lines(filename):
         Person(krs_name="Piotr Adam Pawłowski", pkw_name="Pawłowski Piotr Krzysztof"),
         Person(krs_name="Magdalena Stanilewicz", pkw_name="STANKIEWICZ Magdalena Anna"),
         Person(krs_name="Dariusz Jerzy Kowalczyk", pkw_name="KOWALCZYK Dariusz Anatol"),
-        Person(any="Łukasz Krawiec"),
-        Person(any="Jerzy Skrzypek"),
+        # Łukasz Krawiec and Jerzy Skrzypek were here too. Both have a page on
+        # the site now, linked by their register id and voted on, and the
+        # merge is meant to reach a page by its register id.
         Person(any="Andrzej Osiadacz"),
     ],
 )
