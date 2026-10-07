@@ -76,6 +76,17 @@ class TestParseDate:
     def test_ignored_patterns(self, input_str):
         assert parse_date(input_str) is None
 
+    @pytest.mark.parametrize(
+        "input_str",
+        [
+            "[[456]]",  # Sewer z Antiochii
+            "584",  # Amand z Maastricht
+            "17931784",  # Jan Glücksberg's "[[1793]]<br />1784" after strip_code
+        ],
+    )
+    def test_a_year_is_four_digits(self, input_str):
+        assert parse_date(input_str) is None
+
     # --- Edge Cases and Error Handling ---
 
     def test_invalid_month_name_raises_keyerror_handled(self):

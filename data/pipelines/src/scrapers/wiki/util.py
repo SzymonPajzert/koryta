@@ -44,6 +44,9 @@ def parse_date(human_readable: str):
     except KeyError:
         return None
 
-    m = match("^(\\d+)$", human_readable)
+    # Four digits, as every other form above: a saint's [[456]] is no date
+    # anybody here can be matched on, and strip_code runs Jan Glücksberg's
+    # "[[1793]]<br />1784" together into 17931784.
+    m = match("^(\\d{4})$", human_readable)
     if m is not None:
         return f"{m.group(1)}-00-00"
