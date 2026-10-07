@@ -7,6 +7,7 @@ from analysis.people import PeopleEnriched
 from conductor import setup_context
 from entities.company import KRS
 from koryta import Pipeline
+from scrapers.krs.odpis_people import fold
 from scrapers.stores import CloudStorage
 from scrapers.stores.file import DownloadableFile
 from stores.config import tests
@@ -144,6 +145,8 @@ IGNORE_FAILURES: list[str] = [
     "Stafan Wilkanowicz",
     "Waldemar Hudomięcki",
     "Waldemar Miśko",
+    # Włodzimierz Pawlik in KRS, born the day his article gives.
+    "Włodek Pawlik",
     "Wojciech Grochowski",
     "Wojciech Ćwikliński",
     "Łukasz Porażyński",
@@ -234,7 +237,9 @@ def get_words(name):
     if not isinstance(name, str):
         return set()
     name = re.sub(r"\(.*?\)", "", name)
-    return set(re.findall(r"\b\w+\b", name.lower()))
+    # Without diacritics: "Slawomir Czarniecki" is the title of his Wikipedia
+    # article, and an entry typed without Polish letters is the same name.
+    return set(re.findall(r"\b\w+\b", fold(name)))
 
 
 def no_diff_sets(a, b):
