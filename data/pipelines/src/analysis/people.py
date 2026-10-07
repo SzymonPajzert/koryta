@@ -416,16 +416,22 @@ def people_merged(
         -- register id with another page and 36 had had a second person's
         -- written over them, all of it because a name was being treated as
         -- though it identified somebody.
+        --
+        -- From the KRS person, once each. Joined from `krs_pkw_wiki` it came
+        -- once per PKW candidate, and a person PKW has twice - Andrzej
+        -- Wyszyński, entry 1291534, as two silent records born 1954 and 1955 -
+        -- counted as two candidates for his own page, which `koryta_match`
+        -- then refused as not unique.
         SELECT
-            kpw.krs_row,
+            k.krs_row,
             ko.koryta_id,
             ko.full_name as koryta_name,
             coalesce(ko.rejestrio_id, '') != ''
-                AND list_contains(kpw.rejestrio_id, ko.rejestrio_id) as by_register
-        FROM krs_pkw_wiki kpw
+                AND list_contains(k.rejestrio_id, ko.rejestrio_id) as by_register
+        FROM krs_numbered k
         JOIN koryta_people ko ON (
             (coalesce(ko.rejestrio_id, '') != ''
-                AND list_contains(kpw.rejestrio_id, ko.rejestrio_id))
+                AND list_contains(k.rejestrio_id, ko.rejestrio_id))
             OR (
                 -- Only for a page carrying no register link at all - 868 of
                 -- them. Where the page has one and it is somebody else's, that
@@ -438,10 +444,10 @@ def people_merged(
                 -- out of the join altogether - losing exactly the people the
                 -- name fallback is here for.
                 coalesce(ko.rejestrio_id, '') = ''
-                AND jaro_winkler_similarity(kpw.base_first_name, ko.first_name) > 0.95
+                AND jaro_winkler_similarity(k.first_name, ko.first_name) > 0.95
                 AND (
-                    jaro_winkler_similarity(kpw.base_last_name, ko.last_name) > 0.95
-                    OR jaro_winkler_similarity(kpw.base_last_name, ko.tail_name) > 0.95
+                    jaro_winkler_similarity(k.last_name, ko.last_name) > 0.95
+                    OR jaro_winkler_similarity(k.last_name, ko.tail_name) > 0.95
                 )
             )
         )

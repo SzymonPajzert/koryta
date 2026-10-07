@@ -631,6 +631,34 @@ def test_two_krs_rows_carrying_one_register_id_both_reach_the_page(ctx):
     assert list(result["koryta_id"]) == ["node-1", "node-1"]
 
 
+def test_a_person_pkw_has_twice_still_reaches_their_page(ctx):
+    """The bug: Andrzej Wyszyński, entry 1291534, was never matched to his page.
+
+    PKW has him as two records with no middle name, born 1954 and 1955, and
+    KRS gives none either, so both stayed his candidates. The page match was
+    made once per candidate, and the one page found twice read as two pages.
+    """
+    result = people_merged(
+        ctx,
+        pd.DataFrame([krs_person("andrzej", "wyszyński", "1954-08-05")]),
+        pd.DataFrame(columns=WIKI_COLUMNS),
+        pd.DataFrame(
+            [
+                pkw_person("andrzej", "wyszyński", 1954, years=("2010",)),
+                pkw_person("andrzej", "wyszyński", 1955, years=("2014",)),
+            ]
+        ),
+        pd.DataFrame(
+            [koryta_person("Andrzej Wyszyński", "node-1", rejestrio_id="1")],
+            columns=KORYTA_COLUMNS,
+        ),
+        pd.DataFrame(columns=["last_name", "teryt", "count"]),
+        pd.DataFrame(columns=["first_name", "p"]),
+    )
+
+    assert list(result["koryta_id"]) == ["node-1"]
+
+
 # ------------------------------------------ two register entries, two people
 # After krs-people-full-birth-date's tests, counted by person.
 def registered(person: dict, rejestrio_id: str) -> dict:
