@@ -23,6 +23,10 @@ class Source:
 class Owner:
     krs: Optional[str]
     teryt: Optional[str]
+    #: Where the owner was read from. None is the register itself; "wiki" is
+    #: the `udziałowcy` of the company's Wikipedia article, which `Companies`
+    #: falls back to only where the register names no owner at all.
+    source: Literal["wiki"] | None = None
 
 
 def display_name(name: str | None, city: str | None) -> str | None:
@@ -87,6 +91,15 @@ class Company:
     #: 719 of 1,192 SPZOZ file no organ at all - so it reports rather than
     #: decides. See `scrapers.krs.organs`.
     supervisory_organ: str | None = None
+    #: The company's own article on pl.wikipedia.org, when one gives its KRS
+    #: number and agrees about its name - see `wiki_article_for` in
+    #: `analysis.interesting`.
+    #: Only `Companies` sets it; the register knows nothing of Wikipedia.
+    wikipedia: str | None = None
+    #: That article's categories, without the "Kategoria:" prefix: the
+    #: sector a reader filed the company under, which
+    #: `entities.company_categories` reads beside the PKD codes.
+    wiki_categories: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         """Ensures the KRS ID is zero-padded to 10 digits."""

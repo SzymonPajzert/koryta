@@ -126,6 +126,8 @@ def test_the_merge_output_keeps_the_owners_krs_found():
     pipeline.scraped_companies = FakeKrs()  # type: ignore[assignment]
     pipeline.hardcoded_companies = FakeEmpty()  # type: ignore[assignment]
     pipeline.teryt_pipeline = FakeTeryt()  # type: ignore[assignment]
+    pipeline.jst = FakeTeryt()  # type: ignore[assignment]
+    pipeline.wiki_companies = lambda ctx: []  # type: ignore[method-assign]
 
     df = pipeline.process(None)  # type: ignore[arg-type]
 
@@ -158,6 +160,8 @@ def test_the_merge_output_keeps_the_legal_form():
     pipeline.scraped_companies = FakeKrs()  # type: ignore[assignment]
     pipeline.hardcoded_companies = FakeEmpty()  # type: ignore[assignment]
     pipeline.teryt_pipeline = FakeTeryt()  # type: ignore[assignment]
+    pipeline.jst = FakeTeryt()  # type: ignore[assignment]
+    pipeline.wiki_companies = lambda ctx: []  # type: ignore[method-assign]
 
     df = pipeline.process(None)  # type: ignore[arg-type]
 
