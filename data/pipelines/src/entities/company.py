@@ -112,13 +112,48 @@ class KorytaCompany:
 
 
 @dataclass
+class WikiShareholder:
+    """One owner a Wikipedia infobox lists under `udziałowcy`.
+
+    `name` is the entry as the article writes it, with its links reduced to
+    their text and its references and stake taken out. `article` is the article
+    it links to, when it links to exactly one, and `share` the stake in per
+    cent, when the article gives one.
+
+    The last three say who the entry is, and at most one of them is set:
+    `skarb_panstwa` for the Polish Treasury, `krs` for a company whose own
+    article gives its KRS number, `teryt` for a gmina, powiat or wojewodztwo.
+    `scrapers.wiki.shareholders` fills them from the dump - through the link,
+    or through an article titled the way the entry is written - and `Companies`
+    tries what is left against the TERYT register by name. An entry none of
+    them reaches is a person, a fund or a foreign company, and stays a name.
+    """
+
+    name: str
+    article: str | None = None
+    share: float | None = None
+    krs: str | None = None
+    teryt: str | None = None
+    skarb_panstwa: bool = False
+
+
+@dataclass
 class Wikipedia:
     name: str
     content_score: int
     krs: str | None
     city: str | None = None
-    owner_articles: list[str] = field(default_factory=list)
-    owner_text: str | None = None
+    #: The article's title, as the dump has it. Two articles can give the same
+    #: KRS number - a power station names its operator's - and the title is
+    #: half of what tells them apart.
+    title: str | None = None
+    #: The article's address, built the way `entities.person.Wikipedia.source`
+    #: is.
+    source: str | None = None
+    #: The infobox's `udziałowcy`, entry by entry, in the article's order.
+    shareholders: list[WikiShareholder] = field(default_factory=list)
+    #: The article's categories, without the "Kategoria:" prefix.
+    categories: list[str] = field(default_factory=list)
 
 
 @dataclass
