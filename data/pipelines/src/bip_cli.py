@@ -21,9 +21,9 @@ from tqdm import tqdm
 from scrapers.bip.bip_queue import PostgresBipQueue
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
-from scrapers.bip.store import LocalBundleStore, rewrap_part
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import BipQueue
+from stores.bip_bundles import LocalBundleStore, rewrap_part
 from stores.bip_registry import download_subjects_xml
 from stores.web import RobotsCache
 

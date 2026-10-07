@@ -1253,35 +1253,56 @@ class RunStats:
         }
 
 
-class BipQueue(typing.Protocol):
+class BipQueue(metaclass=ABCMeta):
     """The BIP frontier interface (`scrapers.bip.bip_queue.PostgresBipQueue`)."""
 
-    def ensure_schema(self) -> None: ...
+    @abstractmethod
+    def ensure_schema(self) -> None:
+        raise NotImplementedError()
 
-    def upsert_hosts(self, hosts: list[HostRow]) -> tuple[int, int]: ...
+    @abstractmethod
+    def upsert_hosts(self, hosts: list[HostRow]) -> tuple[int, int]:
+        raise NotImplementedError()
 
+    @abstractmethod
     def select_hosts(
         self, *, freshness_seconds: int | None, limit: int
-    ) -> list[HostRow]: ...
+    ) -> list[HostRow]:
+        raise NotImplementedError()
 
-    def start_host(self, host: str, crawl_id: str) -> None: ...
+    @abstractmethod
+    def start_host(self, host: str, crawl_id: str) -> None:
+        raise NotImplementedError()
 
+    @abstractmethod
     def bump_host(
         self, host: str, *, pages: int = 0, docs: int = 0, cap_hit: bool = False
-    ) -> None: ...
+    ) -> None:
+        raise NotImplementedError()
 
-    def host_pending(self, host: str) -> int: ...
+    @abstractmethod
+    def host_pending(self, host: str) -> int:
+        raise NotImplementedError()
 
-    def finalize_host(self, host: str, status: str) -> None: ...
+    @abstractmethod
+    def finalize_host(self, host: str, status: str) -> None:
+        raise NotImplementedError()
 
-    def queue_url(self, row: UrlRow, *, requeue: bool = False) -> bool: ...
+    @abstractmethod
+    def queue_url(self, row: UrlRow, *, requeue: bool = False) -> bool:
+        raise NotImplementedError()
 
-    def queue_urls(self, rows: list[UrlRow], *, requeue: bool = False) -> int: ...
+    @abstractmethod
+    def queue_urls(self, rows: list[UrlRow], *, requeue: bool = False) -> int:
+        raise NotImplementedError()
 
+    @abstractmethod
     def claim_urls(
         self, worker_id: str, *, hosts: list[str], limit: int, lock_seconds: int
-    ) -> list[UrlRow]: ...
+    ) -> list[UrlRow]:
+        raise NotImplementedError()
 
+    @abstractmethod
     def mark_url(
         self,
         url: str,
@@ -1292,20 +1313,37 @@ class BipQueue(typing.Protocol):
         size: int = 0,
         sha256: str = "",
         skip_reason: str = "",
-    ) -> None: ...
+    ) -> None:
+        raise NotImplementedError()
 
-    def record_docs(self, docs: list[DocRow], crawl_id: str) -> int: ...
+    @abstractmethod
+    def record_docs(self, docs: list[DocRow], crawl_id: str) -> int:
+        raise NotImplementedError()
 
-    def docs_for_bundle(self, bundle: str) -> list[tuple[str, str]]: ...
+    @abstractmethod
+    def docs_for_bundle(self, bundle: str) -> list[tuple[str, str]]:
+        raise NotImplementedError()
 
-    def delete_docs(self, shas: list[str]) -> int: ...
+    @abstractmethod
+    def delete_docs(self, shas: list[str]) -> int:
+        raise NotImplementedError()
 
-    def doc_bundle(self, sha256: str) -> str | None: ...
+    @abstractmethod
+    def doc_bundle(self, sha256: str) -> str | None:
+        raise NotImplementedError()
 
-    def start_run(self, run_id: str) -> None: ...
+    @abstractmethod
+    def start_run(self, run_id: str) -> None:
+        raise NotImplementedError()
 
-    def finish_run(self, run_id: str, stats: RunStats) -> None: ...
+    @abstractmethod
+    def finish_run(self, run_id: str, stats: RunStats) -> None:
+        raise NotImplementedError()
 
-    def recent_rates(self, window_minutes: int = 60) -> dict[str, float]: ...
+    @abstractmethod
+    def recent_rates(self, window_minutes: int = 60) -> dict[str, float]:
+        raise NotImplementedError()
 
-    def stats(self) -> dict[str, object]: ...
+    @abstractmethod
+    def stats(self) -> dict[str, object]:
+        raise NotImplementedError()

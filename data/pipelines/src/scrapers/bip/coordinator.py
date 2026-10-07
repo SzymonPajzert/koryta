@@ -17,7 +17,7 @@ from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from scrapers.bip.classify import (
     filename_from_url,
@@ -27,11 +27,13 @@ from scrapers.bip.classify import (
     looks_like_document,
     normalize_url,
 )
-from scrapers.bip.store import LocalBundleStore
 from scrapers.common.fetch import HttpResult, http_get
 from scrapers.common.links import extract_link_pairs
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.stores import BipQueue, HostRow, RunStats, UrlRow
+
+if TYPE_CHECKING:
+    from stores.bip_bundles import LocalBundleStore
 
 logger = logging.getLogger(__name__)
 
