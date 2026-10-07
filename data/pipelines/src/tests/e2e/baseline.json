@@ -1,11 +1,6 @@
 {
   "_comment": "Bands the nightly pipeline run is checked against. Numbers come from an observed run, not from anyone's guess: run the pipelines, then pytest with KORYTA_E2E_UPDATE_BASELINE=1, then commit the diff. An entry whose rows is null is reported but not enforced.",
   "outputs": {
-    "committee_parties": {
-      "format": "jsonl",
-      "non_null": {},
-      "rows": null
-    },
     "companies_merged": {
       "format": "jsonl",
       "non_null": {},
