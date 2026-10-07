@@ -631,6 +631,95 @@ def test_two_krs_rows_carrying_one_register_id_both_reach_the_page(ctx):
     assert list(result["koryta_id"]) == ["node-1", "node-1"]
 
 
+# ------------------------------------------ two register entries, two people
+# After krs-people-full-birth-date's tests, counted by person.
+def registered(person: dict, rejestrio_id: str) -> dict:
+    return {**person, "rejestrio_id": [rejestrio_id]}
+
+
+JAN_FEBRUARY = registered(krs_person("jan", "nowak", "1970-02-08"), "7")
+JAN_NOVEMBER = registered(krs_person("jan", "nowak", "1970-11-30"), "8")
+
+
+@pytest.mark.parametrize("order", [1, -1])
+def test_namesakes_born_the_same_year_are_both_kept_in_either_order(ctx, order):
+    """It kept one row per name and birth year, so whichever the row order
+    put second went missing, register entry and posts with it."""
+    result = match_koryta(ctx, [JAN_FEBRUARY, JAN_NOVEMBER][::order], [])
+
+    assert sorted(result["birth_date"]) == ["1970-02-08", "1970-11-30"]
+
+
+def test_a_candidacy_two_namesakes_could_have_stood_for_goes_to_neither(ctx):
+    """PKW knows the year, give or take one; it cannot say which of the two stood.
+
+    Each of them alone would take it. Both at once would put one candidacy on
+    two people, so neither does.
+    """
+    february_1971 = registered(krs_person("jan", "nowak", "1971-02-08"), "8")
+    result = match_pkw(
+        ctx, [JAN_FEBRUARY, february_1971], [pkw_person("jan", "nowak", 1970)]
+    )
+
+    assert result["pkw_name"].isna().all()
+
+
+def test_two_entries_born_the_same_day_are_two_claimants(ctx):
+    """One name and one birth date under two register entries: two people as
+    far as anybody can tell, so the candidacy is neither's."""
+    twin = registered(krs_person("jan", "nowak", "1970-02-08"), "8")
+    result = match_pkw(ctx, [JAN_FEBRUARY, twin], [pkw_person("jan", "nowak", 1970)])
+
+    assert len(result) == 2
+    assert result["pkw_name"].isna().all()
+
+
+def test_the_namesake_whose_middle_name_agrees_keeps_the_candidacy(ctx):
+    """Unless one of them claims it by a middle name both sources agree on."""
+    adam = registered(krs_person("jan", "nowak", "1970-02-08", second="adam"), "7")
+    result = match_pkw(
+        ctx, [adam, JAN_NOVEMBER], [pkw_person("jan", "nowak", 1970, second="adam")]
+    ).set_index("birth_date")
+
+    assert result.loc["1970-02-08", "pkw_name"] == "jan adam nowak"
+    assert pd.isna(result.loc["1970-11-30", "pkw_name"])
+
+
+def test_a_namesake_set_aside_for_ambiguity_still_counts_as_a_claimant(ctx):
+    """Jan Piotr fits two candidacies and so takes neither, but he could still be
+    the Jan Nowak of 1970 - which is no more Jan Adam's for that."""
+    adam = registered(krs_person("jan", "nowak", "1970-02-08", second="adam"), "7")
+    piotr = registered(krs_person("jan", "nowak", "1971-03-01", second="piotr"), "8")
+    result = match_pkw(
+        ctx,
+        [adam, piotr],
+        [pkw_person("jan", "nowak", 1970), pkw_person("jan", "nowak", 1972)],
+    )
+
+    assert result["pkw_name"].isna().all()
+
+
+def test_namesakes_born_the_same_day_are_both_kept_whatever_they_score(ctx):
+    """Only one of them matches the candidacy; that must not cost the other his row."""
+    robert = registered(krs_person("janusz", "kowalczyk", "1962-01-01", "robert"), "1")
+    piotr = registered(krs_person("janusz", "kowalczyk", "1962-01-01", "piotr"), "2")
+    result = match_pkw(
+        ctx, [robert, piotr], [pkw_person("janusz", "kowalczyk", 1962, second="robert")]
+    )
+
+    assert sorted(i for ids in result["rejestrio_id"] for i in ids) == ["1", "2"]
+    assert list(result["pkw_name"].dropna()) == ["janusz robert kowalczyk"]
+
+
+def test_a_year_only_biography_two_namesakes_fit_is_neither_of_theirs(ctx):
+    """The same for Wikipedia: "ur. 1970" fits both Jan Nowaks, so neither."""
+    result = match(
+        ctx, [JAN_FEBRUARY, JAN_NOVEMBER], [article("Jan Nowak", "1970-00-00")]
+    )
+
+    assert result["wiki_name"].isna().all()
+
+
 # ------------------------------------------------- which spelling names the row
 def spelled(first: str, last: str, birth_date: str, second: str, *names: str) -> dict:
     """A KRS person whose register entries spell them as `names`, in that order."""
