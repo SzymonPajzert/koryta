@@ -654,6 +654,70 @@ describe("api/ingest/company", () => {
     );
   });
 
+  it("stores the Wikipedia article the pipelines matched", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "0000271591",
+      name: "ENERGA",
+      wikipedia: "https://pl.wikipedia.org/wiki/Energa",
+    });
+    mockGet.mockResolvedValue({ empty: true, docs: [] });
+    mockDoc.mockReturnValue(mockRef);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      mockRef,
+      {
+        name: "ENERGA",
+        type: "place",
+        krsNumber: "0000271591",
+        wikipedia: "https://pl.wikipedia.org/wiki/Energa",
+      },
+      { automatic: true, approve: true, published: true },
+    );
+  });
+
+  it("leaves a link a reader added alone when the payload has none", async () => {
+    // The pipelines match an article only where it gives the company's KRS
+    // number and agrees about its name, so a payload without one is "found
+    // nothing", not "there is no article".
+    mockReadBody.mockResolvedValue({ krs: "0000134482", name: "GREMI MEDIA" });
+    const existingRef = { id: "existing-id" };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          ref: existingRef,
+          data: () => ({
+            wikipedia: "https://pl.wikipedia.org/wiki/Presspublica",
+            published: true,
+          }),
+        },
+      ],
+    });
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      existingRef,
+      {
+        name: "GREMI MEDIA",
+        type: "place",
+        krsNumber: "0000134482",
+        wikipedia: "https://pl.wikipedia.org/wiki/Presspublica",
+      },
+      expect.objectContaining({ automatic: true }),
+    );
+  });
+
   it("rejects an organ name the site does not understand", async () => {
     // An enum rather than a free string, so a value nothing can filter on is a
     // 400 rather than a row that quietly never matches. Safe only because the

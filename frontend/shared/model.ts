@@ -385,6 +385,14 @@ export interface Company extends Omit<Node, "type"> {
   /** NIP, the tax identifier: ten digits. The other identifier an institution
    * outside KRS still has. */
   nipNumber?: string;
+  /** The company's article on pl.wikipedia.org, as `Person.wikipedia` is a
+   * person's.
+   *
+   * The pipelines fill it in where an article gives the company's KRS number
+   * and agrees about its name - see `wiki_article_for` in
+   * `data/pipelines/src/analysis/interesting.py` - and a reader can add or
+   * correct it from the page. */
+  wikipedia?: string;
   // TODO populate this field
   location?: string;
   /** PKD codes from KRS, e.g. "86.10.Z" */
