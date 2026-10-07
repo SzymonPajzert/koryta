@@ -320,6 +320,12 @@ export interface JobDefinition {
    * and listed by what each captured. A triggered job without it, an import
    * started by hand, is as good as its newest run. */
   captures?: true;
+  /** Its `partial` is work held back for somebody to look at, not a backlog
+   * the next run carries on with. The night is the one: its steps leave
+   * their backlogs to the next night without making it partial, and it ends
+   * partial only when it held a step - the people kept off the site by a
+   * test that broke, or by a missing export - or was stopped. */
+  partialIsHeld?: true;
   title: string;
   /** One or two sentences: what it does and what it changes. */
   summary: string;
@@ -443,6 +449,7 @@ export const JOBS: readonly JobDefinition[] = [
   {
     id: "nightly",
     kind: "scheduled",
+    partialIsHeld: true,
     title: "Noc na maszynie koryta-nightly",
     summary:
       "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, wysyła do 100 osób na stronę, a potem oceny modeli.",
@@ -456,7 +463,7 @@ export const JOBS: readonly JobDefinition[] = [
     graceMinutes: 30,
     tasks: ["merge-nightly-vm", "create-nightly-vm", "first-night-on-the-vm"],
     notes: [
-      "Krok, który się nie uda, nie kończy nocy - wstrzymuje tylko kroki zależne. Osób nie wysyła bez dzisiejszej kopii bazy, bez udanego przeliczenia albo gdy test, który przechodził poprzedniej nocy, dziś nie przechodzi.",
+      "Krok, który się nie uda, nie kończy nocy - wstrzymuje tylko kroki zależne. Osób nie wysyła bez dzisiejszej kopii bazy, bez udanego przeliczenia albo gdy test, który przechodził poprzedniej nocy, dziś nie przechodzi - taka noc kończy się jako „Wstrzymane kroki” i wymaga uwagi.",
       "Podsumowanie każdej nocy jest w koryta-pl-sharedcache/jobs/nightly/runs/, a cały log w jobs/nightly/logs/.",
     ],
   },
@@ -858,6 +865,7 @@ export const JOB_HEALTH = [
   "stalled",
   "failed",
   "late",
+  "held",
   "stale",
   "partial",
   "stopped",
@@ -879,6 +887,7 @@ export const isProblem = (status: JobHealthStatus) =>
   status === "stalled" ||
   status === "failed" ||
   status === "late" ||
+  status === "held" ||
   status === "stale";
 
 const worse = (a: JobHealth, b: JobHealth) =>
@@ -1062,6 +1071,23 @@ function stateDetail(run: JobRun, now: Date): string {
   }
 }
 
+/** A step a run names as held, among the lines the night reports as its
+ * errors: one for each step that did not simply succeed, `<step>: <state> -
+ * <reason>` (`Night.end` in data/pipelines/src/jobs/nightly). */
+const HELD_STEP = /^\w+: held\b/;
+
+/** When a run that held work back finished, and the first step it held, with
+ * why. The step comes from its errors before its stop reason: until the night
+ * named the step that decided its state, its stop reason was its first
+ * problem in step order - the checks' routine failures, which come before
+ * the upload they hold. */
+function heldDetail(run: JobRun, now: Date): string {
+  const when = shortWarsawTime(run.finishedAt ?? run.heartbeatAt, now);
+  const reason =
+    run.errors.find((line) => HELD_STEP.test(line)) ?? run.stopReason;
+  return `Wstrzymane kroki: ${when}${reason ? ` (${reason})` : ""}.`;
+}
+
 function capturesHealth(
   runs: JobRun[],
   definition: JobDefinition,
@@ -1143,6 +1169,8 @@ export function jobHealth(
         };
   } else if (latest.state === "failed") {
     health = { status: "failed", detail: stateDetail(latest, now) };
+  } else if (latest.state === "partial" && definition.partialIsHeld) {
+    health = { status: "held", detail: heldDetail(latest, now) };
   } else if (definition.kind === "ongoing") {
     health = {
       status: "stopped",

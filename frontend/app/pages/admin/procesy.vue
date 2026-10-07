@@ -275,8 +275,8 @@ const problemEntries = computed(() =>
 );
 
 /** The block takes the colour of the worst problem: red for anything broken
- * or silent, amber when the worst is a mirror falling behind, green when
- * there is nothing to look at. */
+ * or silent, amber when the worst is a mirror falling behind or a night that
+ * held a step back, green when there is nothing to look at. */
 const focusTone = computed(() => {
   const worst = problemEntries.value[0];
   return worst ? jobHealthConfig[worst.health.status].tone : "success";

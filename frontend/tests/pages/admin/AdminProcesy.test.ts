@@ -451,6 +451,67 @@ describe("/admin/procesy", () => {
     expect(page.find("[data-row-panel]").exists()).toBe(false);
   });
 
+  it("counts a night that held a step back as needing a look", async () => {
+    // As the night of 7 October reported itself: partial, the upload held by
+    // a test that broke, behind the checks' known failures.
+    mockAuthRequest.mockImplementation(async () => {
+      const data = overview();
+      data.jobs.push({
+        id: "nightly",
+        record: {
+          lastRunId: "n-run",
+          lastStartedAt: "2026-10-02T02:30:00.000Z",
+          lastScheduledAt: "2026-10-02T02:30:00.000Z",
+          lastSucceededAt: "2026-10-01T04:21:00.000Z",
+        },
+        probe: null,
+        runs: [
+          run({
+            id: "n-run",
+            job: "nightly",
+            state: "partial",
+            trigger: "schedule",
+            host: "koryta-nightly",
+            startedAt: "2026-10-02T02:30:00.000Z",
+            heartbeatAt: "2026-10-02T03:54:00.000Z",
+            finishedAt: "2026-10-02T03:54:00.000Z",
+            stopReason: "tests: partial - 10 nie przechodzi",
+            errors: [
+              "tests: partial - 10 nie przechodzi",
+              "people: held - wstrzymane: nowe błędy testów: t::sikora",
+              "scores: held - wstrzymane: nowe błędy testów: t::sikora",
+            ],
+            exitCode: 75,
+          }),
+        ],
+      });
+      return data;
+    });
+    const page = await mountPage();
+    const focus = page.get("[data-problem-count]");
+    expect(focus.attributes("data-count")).toBe("4");
+    // After what broke, before a mirror falling behind.
+    expect(focus.findAll("a").map((a) => a.text())).toEqual([
+      "Zapis artykułu z rozszerzenia",
+      "Zapytania do rejestr.io (płatne)",
+      "Noc na maszynie koryta-nightly",
+      "Kompresja lustra KRS",
+    ]);
+
+    const row = rowOf(page, "nightly");
+    expect(row.attributes("data-health")).toBe("held");
+    expect(row.get("[data-health-chip]").text()).toBe("Wstrzymane kroki");
+    expect(row.get("[data-health-detail]").text()).toBe(
+      "Wstrzymane kroki: 05:54 (people: held - wstrzymane: nowe błędy testów: t::sikora).",
+    );
+    // Open by itself, its run named as the row is - not "niedokończony".
+    expect(isOpen(page, "nightly")).toBe(true);
+    expect(row.get('[data-run="n-run"] [data-run-chip]').text()).toBe(
+      "wstrzymane kroki",
+    );
+    expect(page.find('[data-stat="partial"]').exists()).toBe(false);
+  });
+
   it("shows what the server could not read", async () => {
     const page = await mountPage();
     expect(page.get("[data-jobs-problem]").text()).toContain(

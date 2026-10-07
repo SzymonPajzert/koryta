@@ -1053,6 +1053,39 @@ describe("jobHealth", () => {
       });
     });
 
+    it("needs a look at a night that held a step back, and names the step", () => {
+      // As the night of 7 October reported itself: the checks' known
+      // failures come first in step order, and were its stop reason; the
+      // upload they held is further down its errors.
+      const night = definition({ partialIsHeld: true });
+      const held = run({
+        state: "partial",
+        startedAt: "2026-10-02T22:30:00.000Z",
+        finishedAt: "2026-10-03T00:10:00.000Z",
+        stopReason: "tests: partial - 10 nie przechodzi",
+        errors: [
+          "tests: partial - 10 nie przechodzi",
+          "people: held - wstrzymane: nowe błędy testów: a::b",
+          "scores: held - wstrzymane: nowe błędy testów: a::b",
+        ],
+        exitCode: 75,
+      });
+      expect(health(night, [held], LIVE)).toEqual({
+        status: "held",
+        detail:
+          "Wstrzymane kroki: 02:10 (people: held - wstrzymane: nowe błędy testów: a::b).",
+      });
+      expect(isProblem(health(night, [held], LIVE).status)).toBe(true);
+      // Stopped with nothing held, it says what stopped it.
+      const stopped = { ...held, stopReason: "SIGTERM", errors: [] };
+      expect(health(night, [stopped], LIVE)).toEqual({
+        status: "held",
+        detail: "Wstrzymane kroki: 02:10 (SIGTERM).",
+      });
+      // Any other job's partial is a backlog the next run carries on with.
+      expect(health(nightly, [held], LIVE).status).toBe("partial");
+    });
+
     it("looks only at the newest run", () => {
       const failedBefore = run({
         state: "failed",
@@ -1116,6 +1149,9 @@ describe("jobHealth", () => {
         expect(health(nightly, [failed], LIVE).status).toBe("failed");
         const partial = { ...lastNight, state: "partial" as const };
         expect(health(nightly, [partial], LIVE).status).toBe("late");
+        // Tonight not starting matters more than what last night held.
+        const night = definition({ partialIsHeld: true });
+        expect(health(night, [partial], LIVE).status).toBe("late");
       });
     });
   });
@@ -1353,7 +1389,7 @@ describe("jobHealth", () => {
 
 describe("isProblem", () => {
   it("is what needs someone to look", () => {
-    const problems = ["stalled", "failed", "late", "stale"] as const;
+    const problems = ["stalled", "failed", "late", "held", "stale"] as const;
     const fine = [
       "partial",
       "stopped",
@@ -1487,6 +1523,15 @@ describe("JOBS", () => {
     for (const job of JOBS.filter((job) => job.captures)) {
       expect(job.kind, job.id).toBe("triggered");
     }
+  });
+
+  it("reads only the night's partial as work held back", () => {
+    // The jobs it runs end partial with a backlog every other night - the
+    // scrape after its hour, the upload at its cap - and that is how they
+    // work, not something to look at.
+    expect(
+      JOBS.filter((job) => job.partialIsHeld).map((job) => job.id),
+    ).toEqual(["nightly"]);
   });
 
   it("gives the captures a queue allowance", () => {
