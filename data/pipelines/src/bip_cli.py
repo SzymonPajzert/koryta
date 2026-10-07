@@ -18,11 +18,12 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from scrapers.bip.bip_queue import BipQueue
+from scrapers.bip.bip_queue import PostgresBipQueue
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.bip.store import LocalBundleStore, rewrap_part
 from scrapers.common.pg import PostgresClient
+from scrapers.stores import BipQueue
 from stores.bip_registry import download_subjects_xml
 from stores.web import RobotsCache
 
@@ -67,7 +68,7 @@ def ingest_registry(
 def cmd_crawl(args: argparse.Namespace) -> int:
     root = Path(args.out)
     pg = PostgresClient.from_env(max_size=4)
-    bip_queue = BipQueue(pg)
+    bip_queue = PostgresBipQueue(pg)
     if not args.no_registry and bip_queue.stats().get("hosts", 0) == 0:
         print("bip_hosts is empty; ingesting the gov.pl registry...", flush=True)
         entries, inserted, updated, source = ingest_registry(
@@ -178,7 +179,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
     pg = PostgresClient.from_env()
     try:
         counts = repair_parts(
-            BipQueue(pg),
+            PostgresBipQueue(pg),
             Path(args.out),
             older_than_minutes=args.older_than_minutes,
             keep_missing=args.keep_missing,
@@ -196,7 +197,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
 def cmd_stats(args: argparse.Namespace) -> int:
     pg = PostgresClient.from_env()
     try:
-        bip_queue = BipQueue(pg)
+        bip_queue = PostgresBipQueue(pg)
         stats = bip_queue.stats()
         rates = bip_queue.recent_rates()
     finally:
