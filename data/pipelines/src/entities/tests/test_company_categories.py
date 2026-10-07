@@ -429,3 +429,88 @@ class TestMainCodeRules(unittest.TestCase):
             categories_for("0000027173", ["49.31.Z", "49.39.Z"]),
             ["koleje", "komunikacja-miejska"],
         )
+
+
+class TestWikipediaCategories(unittest.TestCase):
+    """The categories of a company's Polish article, where the register is silent.
+
+    Category lists copied from the article as the 2026-08 dump has it.
+    """
+
+    def test_a_holding_company_takes_its_sector_from_its_article(self):
+        # KRS 0000271591, Energa: a group holding company, PKD 70.10, which
+        # reaches no sector by its codes
+        self.assertEqual(
+            categories_for(
+                "0000271591",
+                ["70.10.Z"],
+                wiki_categories=["Orlen", "Przedsiębiorstwa energetyczne w Polsce"],
+            ),
+            ["energetyka"],
+        )
+
+    def test_a_category_split_by_region_matches_by_prefix(self):
+        # KRS 0000178672, Elektrownia Wiatrowa Kamiensk
+        self.assertEqual(
+            categories_for(
+                "0000178672",
+                [],
+                wiki_categories=[
+                    "Elektrownie w województwie łódzkim",
+                    "Elektrownie wiatrowe w Polsce",
+                ],
+            ),
+            ["energetyka"],
+        )
+
+    def test_the_register_s_answer_is_not_added_to(self):
+        # KRS 0000056473, MPEC Nowy Sacz: a heat plant by its main code. To
+        # plwiki it is an energy company too, which this filter keeps apart.
+        self.assertEqual(
+            categories_for(
+                "0000056473",
+                ["35.30.Z"],
+                wiki_categories=["Przedsiębiorstwa energetyczne w Polsce"],
+            ),
+            ["cieplownictwo"],
+        )
+
+    def test_an_exclusion_holds_against_the_article_too(self):
+        # KRS 0000071545, Veolia Term: heat, filed as an energy company
+        self.assertEqual(
+            categories_for(
+                "0000071545",
+                [],
+                wiki_categories=["Przedsiębiorstwa energetyczne w Polsce"],
+            ),
+            [],
+        )
+        # KRS 0000024788, TK Telekom: still filed under the PKP group it left
+        self.assertEqual(
+            categories_for("0000024788", [], wiki_categories=["Spółki grupy PKP"]),
+            [],
+        )
+
+    def test_a_combined_heat_and_power_plant_is_both(self):
+        # KRS 0000020183, Elektrocieplownia EC Nowa
+        self.assertEqual(
+            categories_for(
+                "0000020183",
+                [],
+                wiki_categories=[
+                    "Elektrociepłownie",
+                    "Elektrownie w województwie śląskim",
+                ],
+            ),
+            ["cieplownictwo", "energetyka"],
+        )
+
+    def test_a_category_nobody_mapped_places_nothing(self):
+        self.assertEqual(
+            categories_for(
+                "0000489456",
+                ["70.10.Z"],
+                wiki_categories=["Polskie przedsiębiorstwa zbrojeniowe"],
+            ),
+            [],
+        )

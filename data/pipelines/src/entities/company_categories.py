@@ -90,6 +90,13 @@ class Category:
     register and carry no `przedmiotDzialalnosci` for any rule to read.
 
     A company satisfying any of the four is in the category.
+
+    `wikipedia` is a fifth way in, and a weaker one: categories of the
+    company's Polish Wikipedia article, matched as prefixes. It is read only
+    for a company none of the four places anywhere - see `categories_for` -
+    because a group holding company declares 70.10 and so reaches no sector
+    by its codes, while its article files it under the one it is in: that is
+    how Energa and PGE Polska Grupa Energetyczna come to be in `energetyka`.
     """
 
     value: str
@@ -98,6 +105,7 @@ class Category:
     pkd_main_prefixes: tuple[str, ...] = ()
     pkd_all_of: tuple[tuple[str, ...], ...] = ()
     forms: tuple[str, ...] = ()
+    wikipedia: tuple[str, ...] = ()
     include: tuple[Override, ...] = ()
     exclude: tuple[Override, ...] = ()
 
@@ -285,6 +293,21 @@ KOLEJE = Category(
     # rolling-stock repair sits, but it also holds water utilities and an
     # orthopaedic workshop, so the repair shops are named individually below.
     pkd_prefixes=("49.10", "49.11", "49.12", "49.20", "42.12", "30.20"),
+    # Read only for a company nothing else places. 9 site companies on the
+    # 2026-08 dump: the rail-freight arms of chemical and fuel groups (Orlen
+    # KolTrans, Grupa Azoty Chemkol, Euronaft Trzebinia, DB Schenker Rail
+    # Coaltran), PKP companies filed by group as the overrides below are
+    # (WARS, Elester, CS Natura Tour, CS Szkolenie i Doradztwo), and H.
+    # Cegielski's rolling stock. Betrans and TK Telekom would make eleven and
+    # are excluded below: the first already was, and the second left the
+    # group its article still files it under.
+    wikipedia=(
+        "Przewoźnicy kolejowi w Polsce",
+        "Zarządcy infrastruktury kolejowej w Polsce",
+        "Spółki grupy PKP",
+        "Przedsiębiorstwa kolejowe",
+        "Producenci taboru kolejowego w Polsce",
+    ),
     include=(
         Override(
             "0000019193",
@@ -553,6 +576,12 @@ KOLEJE = Category(
             "Betrans",
             "PGE GiEK's road haulier, PKD 49.41; the rail code serves a mine siding",
         ),
+        Override(
+            "0000024788",
+            "TK Telekom",
+            "a telecom, Netia's since PKP sold it; its article is still filed "
+            "under Spolki grupy PKP",
+        ),
     ),
 )
 
@@ -571,6 +600,11 @@ CIEPLOWNICTWO = Category(
     # 57 of these are also in `wodociagi`, and that is right rather than a
     # collision: a gmina multi-utility supplies heat and water on one licence.
     pkd_main_prefixes=("35.30",),
+    # Read only for a company nothing else places: 3 site companies on the
+    # 2026-08 dump, all of them combined heat and power plants - EC Nowa, PGE
+    # Elektrocieplownia Lublin-Wrotkow, Elektrocieplownia Kielce - which are
+    # in `energetyka` by their "Elektrownie" category as well, and are both.
+    wikipedia=("Elektrociepłownie", "Ciepłownie"),
 )
 
 ENERGETYKA = Category(
@@ -588,11 +622,44 @@ ENERGETYKA = Category(
     # 35.30 is deliberately absent: heat is `cieplownictwo` above. 35.2x is
     # gas, which is 14 companies and too few to be a filter of its own.
     pkd_main_prefixes=("35.11", "35.12", "35.13", "35.14", "35.15", "35.16"),
+    # Read only for a company nothing else places. It is for the two groups:
+    # Energa and PGE Polska Grupa Energetyczna declare 70.10, holding company,
+    # and reached no sector at all before. Measured over the 2026-08 dump it
+    # places 12 site companies, the groups among them with the power stations
+    # and the nuclear developer, which declare nothing that places them either.
+    # "Przedsiebiorstwa energetyczne" is wider than this category - heat and
+    # gas are energy to plwiki and not to this filter - and four of the twelve
+    # are excluded below for it.
+    wikipedia=(
+        "Elektrownie",
+        "Energetyka jądrowa w Polsce",
+        "Przedsiębiorstwa energetyczne w Polsce",
+    ),
     exclude=(
         Override(
             "0000541901",
             "PGE Energetyka Kolejowa Holding",
             "PKD 64.21; traction power, and already in `koleje`",
+        ),
+        Override(
+            "0000071545",
+            "Veolia Term",
+            "heat supply; plwiki files it as an energy company",
+        ),
+        Override(
+            "0000338294",
+            "Przedsiebiorstwo Energetyki Cieplnej",
+            "heat supply, owned by PGNiG; plwiki files it as an energy company",
+        ),
+        Override(
+            "0000734483",
+            "Duon Dystrybucja",
+            "gas distribution; plwiki files it as an energy company",
+        ),
+        Override(
+            "0000651242",
+            "ElectroMobility Poland",
+            "the Izera electric car; plwiki files it as an energy company",
         ),
     ),
 )
@@ -630,6 +697,17 @@ KOMUNIKACJA_MIEJSKA = Category(
     # runs both a tram network and a bus fleet is in both categories, which is
     # what it is.
     pkd_main_prefixes=("49.31", "49.39"),
+    # Read only for a company nothing else places, which is also what keeps
+    # "Operatorzy publicznego transportu zbiorowego" off the regional
+    # railways it covers too: those have their rail code. 4 site companies on
+    # the 2026-08 dump - Tramwaje Podmiejskie, two PKS and Lubelskie Dworce,
+    # the PKS bus stations.
+    wikipedia=(
+        "Przedsiębiorstwo Komunikacji Samochodowej",
+        "Przewoźnicy KZK GOP",
+        "Operatorzy publicznego transportu zbiorowego w ",
+        "Komunikacja miejska w ",
+    ),
 )
 
 SPORT = Category(
@@ -734,10 +812,29 @@ def matches_form(form: str | None, forms: tuple[str, ...]) -> bool:
     return any(normalized == f.strip().upper() for f in forms)
 
 
+def matches_wikipedia(
+    wiki_categories: list[str] | None, prefixes: tuple[str, ...]
+) -> bool:
+    """Whether any of an article's categories starts with any of `prefixes`.
+
+    Prefixes rather than whole names because plwiki splits a category by
+    region: "Elektrownie w wojewodztwie slaskim", "Operatorzy publicznego
+    transportu zbiorowego w wojewodztwie lodzkim".
+    """
+    if not wiki_categories or not prefixes:
+        return False
+    return any(
+        category.startswith(prefix)
+        for category in wiki_categories
+        for prefix in prefixes
+    )
+
+
 def categories_for(
     krs: str | None,
     activity: list[str] | None,
     form: str | None = None,
+    wiki_categories: list[str] | None = None,
 ) -> list[str]:
     """Every category a company belongs to, in `COMPANY_CATEGORIES` order.
 
@@ -749,6 +846,15 @@ def categories_for(
     assembled before the field was parsed does not carry it, and a company whose
     form is unknown should keep the categories its PKD codes give it rather than
     losing them - so a missing `form` narrows the answer, never widens it.
+
+    `wiki_categories` are the categories of the company's Wikipedia article,
+    and they are read only when nothing else places the company anywhere. The
+    register is what this module trusts; an article is a reader's filing, and
+    a broader one - to plwiki a heat plant is an energy company - so it fills a
+    gap rather than adding to an answer. On the 2026-08 dump it places 21 of
+    the 299 site companies with an article and no sector of their own - 27
+    before the six it got wrong were excluded by KRS. The rest are in
+    sectors the filter has no category for: arms, chemicals, mining, finance.
 
     Returns a list rather than a set so the value is stable from one run to the
     next - it ends up in a Firestore document that a diff is taken against.
@@ -768,4 +874,11 @@ def categories_for(
             or matches_form(form, category.forms)
         ):
             result.append(category.value)
-    return result
+    if result:
+        return result
+    return [
+        category.value
+        for category in COMPANY_CATEGORIES
+        if not (normalized is not None and normalized in category.excluded_krs)
+        and matches_wikipedia(wiki_categories, category.wikipedia)
+    ]
