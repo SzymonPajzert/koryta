@@ -468,13 +468,16 @@ def people_merged(
         FROM all_sources
     ),
     max_scores AS (
+        -- Per KRS person. Grouped by name and birth date, it dropped whichever
+        -- of two register entries with one name and one birth date scored lower.
         SELECT
+            krs_row as max_krs_row,
             base_first_name,
             base_last_name,
             birth_date,
             MAX(overall_score) as max_score
         FROM scored
-        GROUP BY base_first_name, base_last_name, birth_date
+        GROUP BY krs_row, base_first_name, base_last_name, birth_date
     ),
     unique_krs AS (
         SELECT
@@ -491,18 +494,23 @@ def people_merged(
             is_polityk,
             *
         FROM max_scores LEFT JOIN scored ON (
-            max_scores.base_first_name = scored.base_first_name
-            AND max_scores.base_last_name = scored.base_last_name
-            AND max_scores.birth_date = scored.birth_date
+            max_scores.max_krs_row = scored.krs_row
             AND max_scores.max_score = scored.overall_score
         )
+        -- One row per KRS person: the join above fans a person out over their
+        -- PKW candidates, and this keeps the best of them. It kept one row per
+        -- name and birth year, so of two register entries called the same and
+        -- born the same year it dropped one - whichever the row order put
+        -- second. Two entries are two people, however alike they are called.
         QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY krs_name, birth_year
+            PARTITION BY krs_row
             ORDER BY overall_score DESC,
-            ABS(birth_year - pkw_birth_year)
-        ASC NULLS LAST) = 1
+            ABS(birth_year - pkw_birth_year) ASC NULLS LAST,
+            pkw_name ASC NULLS LAST,
+            pkw_birth_year ASC NULLS LAST
+        ) = 1
     )
-    SELECT * FROM unique_krs
+    SELECT * EXCLUDE (max_krs_row) FROM unique_krs
     ORDER BY mistake_odds DESC, overall_score DESC,
         koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """

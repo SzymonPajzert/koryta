@@ -729,12 +729,12 @@ collapsed_people: typing.Counter[str] = collections.Counter()
 def one_register_entry(rejestr_ids: typing.Sequence) -> str:
     """The register entry to file this row under, of the ones it carries.
 
-    A row carrying two is two people. `create_people_table` groups by name and
-    birth *year*, and smooths years within one of each other across the whole
-    partition, so two strangers who share a name and were born a year apart come
-    out as one row holding both their register entries - and `any_value` has
-    already picked one of their birth dates arbitrarily by then. The pipeline's
-    own invariant test puts the floor at 135 such people
+    A row carrying two is two people. KRS people used to be grouped by name and
+    birth *year*, years within one of each other smoothed together, so two
+    strangers who shared a name and were born a year apart came out as one row
+    holding both their register entries: 913 rows on 2026-10-07. They are
+    grouped by the register entry now, one row each, and this should not see a
+    second entry - the site still holds what earlier uploads did, though
     (`KNOWN_CONTRADICTIONS` in `tests/pipelines/test_invariants.py`).
 
     Nothing here can undo that, and taking one entry is still better than
