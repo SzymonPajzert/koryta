@@ -564,6 +564,14 @@ def scrape_wiki(ctx: Context):
                         with open(f"tests/wiki/{title}.xml", "w") as out:
                             out.write(ET.tostring(elem, encoding="unicode"))
 
+                    # Articles only. A template's documentation fills in its
+                    # infobox by way of example - KGHM's KRS number and owner
+                    # under "Szablon:Przedsiębiorstwo infobox/opis" - and a
+                    # WikiProject's drafts copy a person's article whole.
+                    is_article = (
+                        elem.findtext("{http://www.mediawiki.org/xml/export-0.11/}ns")
+                        == "0"
+                    )
                     redirect = elem.find(
                         "{http://www.mediawiki.org/xml/export-0.11/}redirect"
                     )
@@ -573,17 +581,14 @@ def scrape_wiki(ctx: Context):
                         # owners reaches the article giving Orlen's KRS
                         # number. Its text is one link, which no worker has
                         # anything to do with.
-                        ns = elem.findtext(
-                            "{http://www.mediawiki.org/xml/export-0.11/}ns"
-                        )
                         source = normalize_title(title)
                         target = normalize_title(redirect.get("title"))
-                        if ns == "0" and source and target:
+                        if is_article and source and target:
                             redirects[source] = target
                         elem.clear()
                         continue
 
-                    if title and revision:
+                    if is_article and title and revision:
                         wikitext = revision.findtext(
                             "{http://www.mediawiki.org/xml/export-0.11/}text"
                         )
