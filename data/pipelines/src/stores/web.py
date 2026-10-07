@@ -1,9 +1,10 @@
 """robots.txt handling shared by both crawlers.
 
 `RobotsCache` is the single implementation: it tries https then http, treats a
-missing/empty robots.txt as allow-all, an unreachable host or an error status
-(403/5xx/429) as deny, and caches per host (thread-safe — fetcher threads share
-it). `WebImpl` keeps the old Context-facing method delegating here.
+missing/empty robots.txt as allow-all, an unreachable host or a hard error
+status (403/5xx) as deny, and caches per host (thread-safe — fetcher threads
+share it). 429 is rate limiting, not a robots verdict, so it is not cached as
+a deny. `WebImpl` keeps the old Context-facing method delegating here.
 """
 
 import threading
@@ -55,7 +56,9 @@ class RobotsCache:
             except Exception:
                 continue
             reachable = True
-            if response.status_code == 404 or not response.text.strip():
+            # 404 (no robots) and 429 (rate limited, not a verdict) allow;
+            # 200 parses; anything else is a hard error and denies.
+            if response.status_code in (404, 429) or not response.text.strip():
                 allow_all = True
                 break
             if response.status_code == 200:

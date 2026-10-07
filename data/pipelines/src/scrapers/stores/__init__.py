@@ -1179,3 +1179,133 @@ def iterate_pipeline[T](
             # TODO - I don't think we need this, try to remove it.
             config=Config(cast=[int, float, str, bool]),
         )
+
+
+# -- BIP crawler queue --------------------------------------------------------
+#
+# The interface the BIP coordinator talks to, so another implementation could
+# be swapped in, mirroring `CrawlQueue` for the article crawler.
+
+
+@dataclass(frozen=True)
+class HostRow:
+    """One BIP host, deduplicated from the registry rows."""
+
+    host: str
+    name: str
+    source_url: str
+    teryt: str
+    entry_count: int
+    status: str = "new"
+    crawl_id: str = ""
+
+
+@dataclass(frozen=True)
+class UrlRow:
+    """A queued or fetched URL and what the crawl learned about it."""
+
+    url: str
+    host: str
+    kind: str  # page | doc
+    discovered_from: str = ""
+    depth: int = 0
+    section: str = ""
+    anchor_text: str = ""
+    content_type: str = ""
+    size: int = 0
+    sha256: str = ""
+    last_status: int = 0
+
+
+@dataclass(frozen=True)
+class DocRow:
+    """A stored document blob and the chain that led to it."""
+
+    sha256: str
+    url: str
+    host: str
+    content_type: str
+    size: int
+    filename: str
+    bundle: str
+    chain: list[str] = field(default_factory=list)
+
+
+@dataclass
+class RunStats:
+    hosts_finalized: int = 0
+    pages_fetched: int = 0
+    docs_new: int = 0
+    docs_seen: int = 0
+    errors: int = 0
+    skipped: int = 0
+    bytes_stored: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        return {
+            "hosts_finalized": self.hosts_finalized,
+            "pages_fetched": self.pages_fetched,
+            "docs_new": self.docs_new,
+            "docs_seen": self.docs_seen,
+            "errors": self.errors,
+            "skipped": self.skipped,
+            "bytes_stored": self.bytes_stored,
+        }
+
+
+class BipQueue(typing.Protocol):
+    """The BIP frontier interface (`scrapers.bip.bip_queue.PostgresBipQueue`)."""
+
+    def ensure_schema(self) -> None: ...
+
+    def upsert_hosts(self, hosts: list[HostRow]) -> tuple[int, int]: ...
+
+    def select_hosts(
+        self, *, freshness_seconds: int | None, limit: int
+    ) -> list[HostRow]: ...
+
+    def start_host(self, host: str, crawl_id: str) -> None: ...
+
+    def bump_host(
+        self, host: str, *, pages: int = 0, docs: int = 0, cap_hit: bool = False
+    ) -> None: ...
+
+    def host_pending(self, host: str) -> int: ...
+
+    def finalize_host(self, host: str, status: str) -> None: ...
+
+    def queue_url(self, row: UrlRow, *, requeue: bool = False) -> bool: ...
+
+    def queue_urls(self, rows: list[UrlRow], *, requeue: bool = False) -> int: ...
+
+    def claim_urls(
+        self, worker_id: str, *, hosts: list[str], limit: int, lock_seconds: int
+    ) -> list[UrlRow]: ...
+
+    def mark_url(
+        self,
+        url: str,
+        *,
+        state: str,
+        status: int = 0,
+        content_type: str = "",
+        size: int = 0,
+        sha256: str = "",
+        skip_reason: str = "",
+    ) -> None: ...
+
+    def record_docs(self, docs: list[DocRow], crawl_id: str) -> int: ...
+
+    def docs_for_bundle(self, bundle: str) -> list[tuple[str, str]]: ...
+
+    def delete_docs(self, shas: list[str]) -> int: ...
+
+    def doc_bundle(self, sha256: str) -> str | None: ...
+
+    def start_run(self, run_id: str) -> None: ...
+
+    def finish_run(self, run_id: str, stats: RunStats) -> None: ...
+
+    def recent_rates(self, window_minutes: int = 60) -> dict[str, float]: ...
+
+    def stats(self) -> dict[str, object]: ...

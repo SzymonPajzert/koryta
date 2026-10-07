@@ -19,7 +19,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
-from scrapers.bip.bip_queue import BipQueue
 from scrapers.bip.classify import (
     filename_from_url,
     host_of,
@@ -29,10 +28,10 @@ from scrapers.bip.classify import (
     normalize_url,
 )
 from scrapers.bip.store import LocalBundleStore
-from scrapers.bip.types import HostRow, RunStats, UrlRow
 from scrapers.common.fetch import HttpResult, http_get
 from scrapers.common.links import extract_link_pairs
 from scrapers.common.ratelimit import HostTokenBucket
+from scrapers.stores import BipQueue, HostRow, RunStats, UrlRow
 
 logger = logging.getLogger(__name__)
 
