@@ -106,6 +106,10 @@ IGNORE_FAILURES: list[str] = [
     "Grzegorz Michał Pastuszko",
     "Hubert Cichocki",
     "Izabela Kucińska-Świgost",
+    # Jacek Janusz Strojny to KRS and PKW, Jacek Artur to his article - his all
+    # the same: born the same day, on Ciepłownia Łańcut's supervisory board in
+    # 2010-2020 by both KRS and the article.
+    "Jacek Artur Strojny",
     "Jacek Krawiec",
     "Jacek Skórski",
     "Jakub Szurski",

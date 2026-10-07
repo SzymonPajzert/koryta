@@ -116,31 +116,36 @@ def preferred_spelling(
     return min(names, key=preference)
 
 
-def middle_names_agree(krs: str | None, wiki: str | None) -> bool:
-    """Whether a Wikipedia biography's middle names leave room for KRS's.
+def _middle_names(text: str | None) -> list[str]:
+    text = re.sub(r"\(.*?\)", " ", text or "")
+    return re.findall(r"[^\W\d_]+\.?", text.lower())
+
+
+def _same_name(a: str, b: str) -> bool:
+    a, b = a.rstrip("."), b.rstrip(".")
+    return (
+        a == b or (len(a) == 1 and b.startswith(a)) or (len(b) == 1 and a.startswith(b))
+    )
+
+
+def middle_names_confirm(ours: str | None, wiki: str | None) -> bool:
+    """Whether both sides name a middle name, and a Wikipedia biography's is ours.
 
     The article's are whatever its lead has between the first name and the
     surname, so a qualifier ("(polityk)") or an initial ("W.") is among them
-    often enough. Words in brackets name nobody, an initial stands for any name
-    it begins, and silence on either side contradicts nothing.
+    often enough. Words in brackets name nobody, and an initial stands for any
+    name it begins.
     """
+    mine, theirs = _middle_names(ours), _middle_names(wiki)
+    return any(_same_name(a, b) for a in mine for b in theirs)
 
-    def names(text: str | None) -> list[str]:
-        text = re.sub(r"\(.*?\)", " ", text or "")
-        return re.findall(r"[^\W\d_]+\.?", text.lower())
 
-    def same(a: str, b: str) -> bool:
-        a, b = a.rstrip("."), b.rstrip(".")
-        return (
-            a == b
-            or (len(a) == 1 and b.startswith(a))
-            or (len(b) == 1 and a.startswith(b))
-        )
-
-    ours, theirs = names(krs), names(wiki)
-    if not ours or not theirs:
+def middle_names_agree(ours: str | None, wiki: str | None) -> bool:
+    """Whether a Wikipedia biography's middle names leave room for ours: they
+    confirm them, or either side is silent - silence contradicts nothing."""
+    if not _middle_names(ours) or not _middle_names(wiki):
         return True
-    return any(same(a, b) for a in ours for b in theirs)
+    return middle_names_confirm(ours, wiki)
 
 
 class PeopleMerged(Pipeline):
@@ -190,6 +195,11 @@ def people_merged(
         middle_names_agree,
         null_handling="special",  # type: ignore
     )
+    con.create_function(
+        "middle_names_confirm",
+        middle_names_confirm,
+        null_handling="special",  # type: ignore
+    )
 
     print("--- Imported table sizes ---")
     for table in [
@@ -213,6 +223,83 @@ def people_merged(
         -- itself is the identity.
         SELECT row_number() OVER () as krs_row, * FROM krs_people
     ),
+    wiki_candidates AS (
+        -- Every biography this KRS person could be.
+        --
+        -- Match on the day where the article gives one, and on the year where
+        -- it does not. Without the second branch a biography that says only
+        -- "ur. 1959" cannot match anybody: KRS knows every person's full date
+        -- of birth, so equality always fails. With the year dropped instead of
+        -- the day, it would match every namesake of any age.
+        --
+        -- How exact the first name has to be depends on which branch let the
+        -- row through, because the two carry very different weight. A full
+        -- date agreeing to the day is strong enough on its own that an
+        -- approximate name costs nothing and earns its keep on KRS typos
+        -- ("Józedf Jan Malec"), short forms (Alek/Aleksander) and
+        -- transliteration (Gennadij/Hennadij). A year alone rules out almost
+        -- nobody, so the first name is the only thing left telling two people
+        -- apart and it has to be exact. Marzena Słomka was given Marek
+        -- Słomka's article on the strength of a shared "mar":
+        -- jaro_winkler_similarity('marzena', 'marek') is 0.8533, over the
+        -- threshold by three thousandths. Nine of the ten year-only matches
+        -- that leant on the threshold were somebody else; of the seven with a
+        -- full date, none were.
+        --
+        -- For the same reason a year-only article may not name another middle
+        -- name than KRS does. Ryszard Jan Piasecki was given Ryszard Tomasz
+        -- Piasecki's biography, Andrzej Jan Nowak Andrzej Wojciech Nowak's -
+        -- Wikipedia titles that one "Andrzej W. Nowak" because there are
+        -- several. Silence on either side still matches, as it does for PKW;
+        -- 7 of the 549 year-only matches on 2026-10-07 contradicted it.
+        SELECT
+            k.krs_row,
+            w.*
+        FROM krs_numbered k
+        JOIN wiki_people w
+            ON k.last_name = w.last_name
+            AND CASE
+                WHEN w.birth_date IS NOT NULL THEN
+                    k.birth_date = w.birth_date
+                    AND jaro_winkler_similarity(k.first_name, w.first_name) > 0.85
+                ELSE
+                    k.birth_year = w.birth_year
+                    AND k.first_name = w.first_name
+                    AND middle_names_agree(
+                        CAST(k.second_name AS VARCHAR), CAST(w.second_name AS VARCHAR)
+                    )
+            END
+    ),
+    wiki_match AS (
+        -- Which of those to believe - and where more than one fits, none of
+        -- them. Two articles the join cannot tell apart are two people it
+        -- cannot tell apart, and there is nothing to choose between "Robert
+        -- Kwiatkowski (urzędnik)" and "Robert Kwiatkowski (polityk)" but the
+        -- score, which would hang a stranger's biography on the page. The same
+        -- harm `pkw_match` refuses to risk, refused the same way.
+        --
+        -- And, as there, the other way round: an article two KRS people fit -
+        -- a year that fits two namesakes, or a date two register entries share
+        -- - is neither of theirs.
+        SELECT * FROM wiki_candidates
+        QUALIFY count(*) OVER (PARTITION BY krs_row) = 1
+            AND count(*) OVER (PARTITION BY source) = 1
+    ),
+    wiki_dated AS (
+        -- The middle names of the article matched to the day, where it names
+        -- any - a qualifier in brackets ("(polityk)", "(ur. 1962)") is not
+        -- one. PKW is held to them below where KRS names none.
+        SELECT * FROM (
+            SELECT
+                krs_row,
+                nullif(trim(regexp_replace(
+                    CAST(second_name AS VARCHAR), '[(][^)]*[)]', ' ', 'g'
+                )), '') as wiki_second_name
+            FROM wiki_match
+            WHERE birth_date IS NOT NULL
+        )
+        WHERE wiki_second_name IS NOT NULL
+    ),
     pkw_candidates AS (
         -- Every PKW record this KRS person could be, with how much of the name
         -- actually agreed.
@@ -223,6 +310,24 @@ def people_merged(
         -- the other is not: Jarosław Wieszołek is "jarosław maciej" to PKW and
         -- plain "jarosław" to KRS, and requiring the two to agree exactly cost
         -- him all three of his candidacies.
+        --
+        -- Where KRS is silent, the article matched to the day speaks for it.
+        -- A full date and a name are the most any source here says about who
+        -- somebody is, against PKW's name and a year give or take one, so the
+        -- article is the primary match (Szymon, 2026-10-07): a candidacy
+        -- naming another middle name than the article's is somebody else's,
+        -- and one naming the same is as good as one KRS agrees with. Andrzej
+        -- Pietrzyk, born 1953-08-24, is "Andrzej Bartłomiej" to his biography,
+        -- and silence gave him the one 1953 "Andrzej Bolesław" PKW has, a
+        -- candidate in Jaworze; five people on 2026-10-07 had a candidacy
+        -- their article contradicted, and 22 gained one the article confirms
+        -- that silence had left to nobody - Andrzej Sebastian Duda among them.
+        -- A record silent on the middle name stays as good as before, though
+        -- KRS's middle name would rank it lower: PKW often has one person as
+        -- two silent records, and silence picks nobody out of two - Hanna
+        -- Suchocka would lose her 1991-1997 candidacies to her 2011 one.
+        -- A year-only article does not speak here: the year rules out almost
+        -- nobody.
         SELECT
             k.krs_row,
             p.*,
@@ -231,16 +336,27 @@ def people_merged(
                     OR ((k.second_name IS NULL OR k.second_name = '')
                         AND (p.second_name IS NULL OR p.second_name = ''))
                 THEN 0
+                WHEN (k.second_name IS NULL OR k.second_name = '')
+                    AND w.wiki_second_name IS NOT NULL
+                    AND middle_names_confirm(
+                        CAST(p.second_name AS VARCHAR), w.wiki_second_name
+                    )
+                THEN 0
                 ELSE 1
             END as second_name_tier
         FROM krs_numbered k
+        LEFT JOIN wiki_dated w USING (krs_row)
         JOIN pkw_people p ON (
             ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
             AND k.last_name = p.last_name
             AND k.first_name = p.first_name
             AND (k.second_name = p.second_name
-                OR (k.second_name IS NULL OR k.second_name = '')
-                OR (p.second_name IS NULL OR p.second_name = ''))
+                OR (p.second_name IS NULL OR p.second_name = '')
+                OR ((k.second_name IS NULL OR k.second_name = '')
+                    AND (w.wiki_second_name IS NULL
+                        OR middle_names_agree(
+                            CAST(p.second_name AS VARCHAR), w.wiki_second_name
+                        ))))
     ),
     pkw_match AS (
         -- Which of those to believe.
@@ -316,68 +432,6 @@ def people_merged(
             AND TRY_CAST(list_extract(p.teryt_wojewodztwo, 1) AS INTEGER)
                 = TRY_CAST(names_count.teryt AS INTEGER)
 
-    ),
-    wiki_candidates AS (
-        -- Every biography this KRS person could be.
-        --
-        -- Match on the day where the article gives one, and on the year where
-        -- it does not. Without the second branch a biography that says only
-        -- "ur. 1959" cannot match anybody: KRS knows every person's full date
-        -- of birth, so equality always fails. With the year dropped instead of
-        -- the day, it would match every namesake of any age.
-        --
-        -- How exact the first name has to be depends on which branch let the
-        -- row through, because the two carry very different weight. A full
-        -- date agreeing to the day is strong enough on its own that an
-        -- approximate name costs nothing and earns its keep on KRS typos
-        -- ("Józedf Jan Malec"), short forms (Alek/Aleksander) and
-        -- transliteration (Gennadij/Hennadij). A year alone rules out almost
-        -- nobody, so the first name is the only thing left telling two people
-        -- apart and it has to be exact. Marzena Słomka was given Marek
-        -- Słomka's article on the strength of a shared "mar":
-        -- jaro_winkler_similarity('marzena', 'marek') is 0.8533, over the
-        -- threshold by three thousandths. Nine of the ten year-only matches
-        -- that leant on the threshold were somebody else; of the seven with a
-        -- full date, none were.
-        --
-        -- For the same reason a year-only article may not name another middle
-        -- name than KRS does. Ryszard Jan Piasecki was given Ryszard Tomasz
-        -- Piasecki's biography, Andrzej Jan Nowak Andrzej Wojciech Nowak's -
-        -- Wikipedia titles that one "Andrzej W. Nowak" because there are
-        -- several. Silence on either side still matches, as it does for PKW;
-        -- 7 of the 549 year-only matches on 2026-10-07 contradicted it.
-        SELECT
-            k.krs_row,
-            w.*
-        FROM krs_numbered k
-        JOIN wiki_people w
-            ON k.last_name = w.last_name
-            AND CASE
-                WHEN w.birth_date IS NOT NULL THEN
-                    k.birth_date = w.birth_date
-                    AND jaro_winkler_similarity(k.first_name, w.first_name) > 0.85
-                ELSE
-                    k.birth_year = w.birth_year
-                    AND k.first_name = w.first_name
-                    AND middle_names_agree(
-                        CAST(k.second_name AS VARCHAR), CAST(w.second_name AS VARCHAR)
-                    )
-            END
-    ),
-    wiki_match AS (
-        -- Which of those to believe - and where more than one fits, none of
-        -- them. Two articles the join cannot tell apart are two people it
-        -- cannot tell apart, and there is nothing to choose between "Robert
-        -- Kwiatkowski (urzędnik)" and "Robert Kwiatkowski (polityk)" but the
-        -- score, which would hang a stranger's biography on the page. The same
-        -- harm `pkw_match` refuses to risk, refused the same way.
-        --
-        -- And, as there, the other way round: an article two KRS people fit -
-        -- a year that fits two namesakes, or a date two register entries share
-        -- - is neither of theirs.
-        SELECT * FROM wiki_candidates
-        QUALIFY count(*) OVER (PARTITION BY krs_row) = 1
-            AND count(*) OVER (PARTITION BY source) = 1
     ),
     krs_pkw_wiki AS (
         SELECT

@@ -441,6 +441,104 @@ def test_a_qualifier_in_brackets_is_not_a_middle_name(ctx):
     assert list(result["wiki_name"]) == ["Andrzej Sikora (ur. 1946)"]
 
 
+# ------------------------------- an article matched to the day speaks for KRS
+def match_all(ctx, krs: list[dict], pkw: list[dict], articles: list[dict]):
+    """Run the merge over KRS, PKW and Wikipedia together, for what one says
+    about the others."""
+    return people_merged(
+        ctx,
+        pd.DataFrame(krs),
+        people_wiki_merged(ctx, pd.DataFrame(articles)),
+        pd.DataFrame(pkw),
+        no_koryta(),
+        pd.DataFrame(columns=["last_name", "teryt", "count"]),
+        pd.DataFrame(columns=["first_name", "p"]),
+    )
+
+
+def test_a_dated_biography_refuses_a_candidacy_naming_another_middle_name(ctx):
+    """The bug: Andrzej Pietrzyk, born 1953-08-24, stood in Jaworze in 2010.
+
+    KRS names no middle name for him, so the one Andrzej Pietrzyk PKW has born
+    in 1953 was his by silence - "Andrzej Bolesław", while his biography,
+    matched to the day, calls him "Andrzej Bartłomiej". A full date outweighs
+    PKW's year give or take one, so the candidacy is somebody else's.
+    """
+    result = match_all(
+        ctx,
+        [krs_person("andrzej", "pietrzyk", "1953-08-24")],
+        [pkw_person("andrzej", "pietrzyk", 1953, second="bolesław", years=("2010",))],
+        [article("Andrzej Bartłomiej Pietrzyk", "1953-08-24")],
+    )
+
+    assert candidacy_years(result) == []
+    assert list(result["wiki_name"]) == ["Andrzej Bartłomiej Pietrzyk"]
+
+
+def test_a_dated_biography_picks_the_candidacy_silence_could_not(ctx):
+    """Andrzej Duda, born 1972-05-16, had no candidacy: KRS names no middle
+    name, and silence picks nobody out of two Andrzej Dudas born 1971-1972.
+    His biography calls him "Andrzej Sebastian", which one of them is."""
+    result = match_all(
+        ctx,
+        [krs_person("andrzej", "duda", "1972-05-16")],
+        [
+            pkw_person("andrzej", "duda", 1972, second="sebastian", years=("2015",)),
+            pkw_person("andrzej", "duda", 1971, second="jan", years=("2018",)),
+        ],
+        [article("Andrzej Sebastian Duda", "1972-05-16")],
+    )
+
+    assert candidacy_years(result) == ["2015"]
+
+
+def test_a_dated_biography_leaves_a_silent_candidacy_alone(ctx):
+    """Hanna Suchocka is "Hanna Stanisława" to her article and plain "Hanna" in
+    both of PKW's records of her. Ranked below a middle name the article names,
+    as KRS's would rank them, two silent records would decide nothing, and she
+    would lose her candidacies to a rule meant to make them surer."""
+    result = match_all(
+        ctx,
+        [krs_person("hanna", "suchocka", "1946-04-03")],
+        [
+            pkw_person("hanna", "suchocka", 1946, years=("1991", "1993", "1997")),
+            pkw_person("hanna", "suchocka", None, years=("2011",)),
+        ],
+        [article("Hanna Stanisława Suchocka", "1946-04-03")],
+    )
+
+    assert candidacy_years(result) == ["1991", "1993", "1997"]
+
+
+def test_the_middle_name_krs_gives_outweighs_the_articles(ctx):
+    """Jacek Janusz Strojny to KRS and to PKW, Jacek Artur to his article -
+    which is his all the same: born the same day, on the same supervisory board
+    (Ciepłownia Łańcut, 2010-2020). The article speaks only where KRS is silent,
+    so the candidacy both official sources agree on stays."""
+    result = match_all(
+        ctx,
+        [krs_person("jacek", "strojny", "1977-06-23", second="janusz")],
+        [pkw_person("jacek", "strojny", 1977, second="janusz")],
+        [article("Jacek Artur Strojny", "1977-06-23")],
+    )
+
+    assert candidacy_years(result) == ["2024"]
+    assert list(result["wiki_name"]) == ["Jacek Artur Strojny"]
+
+
+def test_a_year_only_biography_does_not_speak_for_krs(ctx):
+    """A year rules out almost nobody, so "ur. 1947" is not enough to refuse
+    PKW's Andrzej Włodzimierz Brzeziński to KRS's Andrzej Brzeziński."""
+    result = match_all(
+        ctx,
+        [krs_person("andrzej", "brzeziński", "1947-01-22")],
+        [pkw_person("andrzej", "brzeziński", 1947, second="włodzimierz")],
+        [article("Andrzej Maciej Brzeziński", "1947-00-00")],
+    )
+
+    assert candidacy_years(result) == ["2024"]
+
+
 def match_koryta(ctx, krs: list[dict], koryta: list[dict]) -> pd.DataFrame:
     """Run the merge over KRS and the site's own pages."""
     return people_merged(
