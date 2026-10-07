@@ -62,6 +62,59 @@ def unique_probability(
     return math.exp(-n * p_combined)
 
 
+def preferred_spelling(
+    spellings: list[str] | None,
+    first_name: str | None,
+    second_name: str | None,
+    last_name: str | None,
+) -> str | None:
+    """The one of a person's spellings the merge calls them by, the same every run.
+
+    `full_name` is a `list_distinct` aggregate, which duckdb hands over in hash
+    order, and `krs_name` and `pkw_name` were its first element. Of the 8,152
+    KRS people spelled the same two or more ways on the nights of 2026-10-06
+    and 10-07, 3,638 changed `krs_name` overnight, and with it which namesake
+    `unique_krs` kept and which tests passed: Tomasz Marcin Sikora, born in
+    1973, was a row one run and gone the next, whenever his name came out as
+    "Tomasz Sikora" - the name of the biathlete born that year.
+
+    Preferred, in order:
+    1. a spelling with the first name and surname the row was grouped by. For a
+       register id those are what `create_people_table` chose, and what PKW is
+       matched against, so "Marcin Golański" rather than the copy typed
+       without Polish letters;
+    2. one with the row's middle name as well, which tells namesakes apart;
+    3. not in capitals;
+    4. the fewest words, then the alphabet, so that a tie has an answer.
+
+    What a new page is called is `payloads.person.canonical_name`'s to decide;
+    this is only the merge's name for the row.
+    """
+    names = [
+        str(name).strip() for name in spellings or [] if name and str(name).strip()
+    ]
+    if not names:
+        return None
+
+    def words(text: str | None) -> set[str]:
+        return set((text or "").lower().split())
+
+    grouped_as = words(first_name) | words(last_name)
+    middle = words(second_name)
+
+    def preference(name: str):
+        written = words(name)
+        return (
+            not grouped_as <= written,
+            not (middle and middle <= written),
+            name.isupper(),
+            len(name.split()),
+            name,
+        )
+
+    return min(names, key=preference)
+
+
 class PeopleMerged(Pipeline):
     filename = "people_merged"
 
@@ -97,6 +150,11 @@ def people_merged(
     con.create_function(
         "unique_probability",
         unique_probability,
+        null_handling="special",  # type: ignore
+    )
+    con.create_function(
+        "preferred_spelling",
+        preferred_spelling,
         null_handling="special",  # type: ignore
     )
 
@@ -172,8 +230,12 @@ def people_merged(
     ),
     krs_pkw AS (
         SELECT
-            k.full_name[1] as krs_name,
-            p.full_name[1] as pkw_name,
+            preferred_spelling(
+                k.full_name, k.first_name, k.second_name, k.last_name
+            ) as krs_name,
+            preferred_spelling(
+                p.full_name, p.first_name, p.second_name, p.last_name
+            ) as pkw_name,
             k.birth_year as birth_year,
             k.first_name as base_first_name, -- Carry base names for subsequent joins
             k.last_name as base_last_name,
