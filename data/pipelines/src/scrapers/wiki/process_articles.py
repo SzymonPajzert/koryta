@@ -12,9 +12,24 @@ from regex import search
 from tqdm import tqdm
 
 from entities.company import Wikipedia as Company
+from entities.company import WikiShareholder
 from entities.person import Wikipedia as People
-from scrapers.stores import Context, Pipeline
+from scrapers.stores import (
+    Context,
+    LocalFile,
+    Pipeline,
+    VersionedBackup,
+    backup_disabled,
+)
 from scrapers.wiki.dump import dump_bytes, wiki_dump, wiki_workers
+from scrapers.wiki.shareholders import (
+    WikiLinks,
+    article_url,
+    clean_krs,
+    normalize_teryt,
+    normalize_title,
+    parse_shareholders,
+)
 from scrapers.wiki.util import parse_date
 from util.lists import WIKI_POLITICAL_LINKS
 from util.polish import LOWER, UPPER
@@ -53,7 +68,29 @@ REQUIRED_WORDS = [
     "Przedsiębiorstwo",
     "przedsiębiorstwo",
     "Instytucja państwowa",
+    # An association or a club gives its KRS number in a "numer rejestru" of
+    # its own infobox, and 48 of the site's foundations and associations have
+    # an article that does.
+    "numer rejestru",
+    # Not parsed for themselves but for the TERYT code they carry, which is
+    # how `[[Konin]]` among a company's owners becomes the gmina it is - see
+    # `scrapers.wiki.shareholders`.
+    "Polskie miasto infobox",
+    "jednostka administracyjna infobox",
+    "Województwo infobox",
 ]
+
+#: The infoboxes of the territorial units an owner can be: a city carries its
+#: gmina's TERYT code as `TERYT`, a gmina or powiat its own as `TERC`.
+REGION_INFOBOXES = ("Polskie miasto", "Polska jednostka administracyjna", "Województwo")
+
+
+@dataclass(frozen=True)
+class WikiRegion:
+    """A city, gmina, powiat or wojewodztwo article, and the unit it is."""
+
+    title: str
+    teryt: str
 
 
 @dataclass
@@ -73,13 +110,18 @@ class Infobox:
         self.inf_type = infobox.name.split("infobox")[0].strip()
         self.fields = {}
         self.field_links = {}
+        #: `udziałowcy`, entry by entry, before anything is resolved. Parsed
+        #: here, off the wikitext, because the plain `fields` value has lost
+        #: the links and line breaks the entries are told apart by.
+        self.shareholders: list[WikiShareholder] = []
         for param in infobox.params:
-            self.fields[param.name.strip_code().strip()] = (
-                param.value.strip_code().strip()
-            )
-            self.field_links[param.name.strip_code().strip()] = [
+            name = param.name.strip_code().strip()
+            self.fields[name] = param.value.strip_code().strip()
+            self.field_links[name] = [
                 str(link.title) for link in param.value.filter_wikilinks()
             ]
+            if name == "udziałowcy":
+                self.shareholders = parse_shareholders(param.value)
 
         self.person_related = (
             "imię i nazwisko" in self.fields
@@ -102,7 +144,20 @@ class Infobox:
 
     @memoized_property
     def company_related(self) -> bool:
-        return "rejestr" in self.fields
+        # An association's or a club's infobox has "numer rejestru" with no
+        # "rejestr" beside it, and is as much a place on the site as a company.
+        return "rejestr" in self.fields or "numer rejestru" in self.fields
+
+    @memoized_property
+    def teryt(self) -> str | None:
+        """The territorial unit a city, gmina or powiat infobox is about."""
+        if self.inf_type not in REGION_INFOBOXES:
+            return None
+        for name in ("TERYT", "TERC"):
+            match = search(r"\d+", self.fields.get(name, ""))
+            if match:
+                return normalize_teryt(match.group(0))
+        return None
 
     @memoized_property
     def birth_iso(self):
@@ -285,7 +340,9 @@ class Stats:
                 self.ingest_infobox(infobox)
 
 
-def extract_from_article(article: WikiArticle) -> People | Company | None:
+def extract_from_article(
+    article: WikiArticle,
+) -> People | Company | WikiRegion | None:
     person = article.about_person
     company = article.about_company
 
@@ -306,29 +363,29 @@ def extract_from_article(article: WikiArticle) -> People | Company | None:
         )
     elif company:
         name = article.get_infobox(lambda i: i.fields.get("nazwa", None))
-        owner_links = article.get_infobox(
-            lambda i: i.field_links.get("udziałowcy", None)
-        )
-        owner_text = None
-        if owner_links is None:
-            owner_links = []
-        if len(owner_links) == 0:
-            owner_text = article.get_infobox(lambda i: i.fields.get("udziałowcy", None))
-            if owner_text == "":
-                owner_text = None
-
         return Company(
             name=name if name is not None else article.title,
             krs=article.get_infobox(lambda i: i.fields.get("numer rejestru", None)),
             content_score=article.content_score,
-            owner_articles=owner_links,
-            owner_text=owner_text,
+            title=article.original_title,
+            source=article_url(article.original_title),
+            # Unresolved: who an entry is takes the whole dump to say, so
+            # `scrape_wiki` fills that in once it has read every article.
+            shareholders=article.get_infobox(lambda i: i.shareholders or None) or [],
+            categories=list(
+                dict.fromkeys(
+                    c.removeprefix("Kategoria:").strip() for c in article.categories
+                )
+            ),
         )
 
+    teryt = article.get_infobox(lambda i: i.teryt)
+    if teryt is not None:
+        return WikiRegion(title=article.original_title, teryt=teryt)
     return None
 
 
-def extract(elem: ET.Element) -> People | Company | None:
+def extract(elem: ET.Element) -> People | Company | WikiRegion | None:
     article = WikiArticle.parse(elem)
     if article is None:
         return None
@@ -346,6 +403,10 @@ def process_article_worker(args):
         return None
 
 
+#: The second file `ProcessWiki` writes, beside `person_wikipedia`.
+COMPANY_ARTICLES = "company_wikipedia"
+
+
 class ProcessWiki(Pipeline[People]):
     filename = "person_wikipedia"  # TODO support two filenames
     confirm_run = True
@@ -357,9 +418,34 @@ class ProcessWiki(Pipeline[People]):
         companies.sort(key=lambda x: x.content_score, reverse=True)
 
         comp_df = pd.DataFrame([asdict(c) for c in companies])
-        self.write_dataframe(ctx, comp_df, "company_wikipedia", "jsonl")
+        self.write_dataframe(ctx, comp_df, COMPANY_ARTICLES, "jsonl")
 
         return pd.DataFrame([asdict(p) for p in people])
+
+
+def read_company_articles(ctx: Context) -> pd.DataFrame:
+    """`ProcessWiki`'s company articles: on disk, else the shared cache's newest.
+
+    A second file rather than a pipeline's output, so neither the refresh
+    policy nor the restore `Pipeline.read` does knows it exists - which is why
+    the nightly, holding ProcessWiki at what the shared cache has, has never had
+    it on disk. Read from the cache into memory and not written down: it is a
+    few hundred kilobytes, and a copy left on a machine that never runs
+    ProcessWiki would go stale without anything noticing.
+
+    Raises FileNotFoundError when there is no copy to read anywhere.
+    """
+    local = LocalFile(f"{COMPANY_ARTICLES}/{COMPANY_ARTICLES}.jsonl", "versioned")
+    # Read as text: a KRS number read as a number loses its leading zeros.
+    dtype = {"krs": str, "title": str, "name": str, "source": str}
+    try:
+        return ctx.io.read_data(local).read_dataframe("jsonl", dtype=dtype)
+    except FileNotFoundError:
+        if backup_disabled():
+            raise
+    return ctx.io.read_data(VersionedBackup(COMPANY_ARTICLES)).read_dataframe(
+        "jsonl", dtype=dtype
+    )
 
 
 def scrape_wiki(ctx: Context):
@@ -397,6 +483,25 @@ def scrape_wiki(ctx: Context):
                         with open(f"tests/wiki/{title}.xml", "w") as out:
                             out.write(ET.tostring(elem, encoding="unicode"))
 
+                    redirect = elem.find(
+                        "{http://www.mediawiki.org/xml/export-0.11/}redirect"
+                    )
+                    if redirect is not None:
+                        # Kept for where it points and nothing else: it is
+                        # how `[[Polski Koncern Naftowy Orlen]]` among Energa's
+                        # owners reaches the article giving Orlen's KRS
+                        # number. Its text is one link, which no worker has
+                        # anything to do with.
+                        ns = elem.findtext(
+                            "{http://www.mediawiki.org/xml/export-0.11/}ns"
+                        )
+                        source = normalize_title(title)
+                        target = normalize_title(redirect.get("title"))
+                        if ns == "0" and source and target:
+                            redirects[source] = target
+                        elem.clear()
+                        continue
+
                     if title and revision:
                         wikitext = revision.findtext(
                             "{http://www.mediawiki.org/xml/export-0.11/}text"
@@ -409,6 +514,8 @@ def scrape_wiki(ctx: Context):
 
         people = []
         companies = []
+        regions: list[WikiRegion] = []
+        redirects: dict[str, str] = {}
 
         with multiprocessing.Pool(processes=wiki_workers()) as pool:
             for pair in pool.imap_unordered(
@@ -416,7 +523,9 @@ def scrape_wiki(ctx: Context):
             ):
                 if pair:
                     entity, article = pair
-                    if entity:
+                    if isinstance(entity, WikiRegion):
+                        regions.append(entity)
+                    elif entity:
                         if isinstance(entity, People):
                             people.append(entity)
                         elif isinstance(entity, Company):
@@ -425,4 +534,59 @@ def scrape_wiki(ctx: Context):
 
     print("🎉 Processing complete.")
     print(stats)
+    resolve_shareholders(companies, link_index(companies, regions, redirects))
     return people, companies
+
+
+def link_index(
+    companies: list[Company], regions: list[WikiRegion], redirects: dict[str, str]
+) -> WikiLinks:
+    """What every title an owner can link to is, out of one pass of the dump."""
+    krs: dict[str, str] = {}
+    for company in companies:
+        title = normalize_title(company.title)
+        number = clean_krs(company.krs)
+        if title and number:
+            krs[title] = number
+    teryt: dict[str, str] = {}
+    for region in regions:
+        title = normalize_title(region.title)
+        if title:
+            teryt[title] = region.teryt
+    print(
+        f"Owners can link to {len(krs)} company articles with a KRS number and "
+        f"{len(teryt)} territorial units, through {len(redirects)} redirects"
+    )
+    return WikiLinks(redirects=redirects, krs=krs, teryt=teryt)
+
+
+def resolve_shareholders(companies: list[Company], links: WikiLinks) -> None:
+    """Says who each company's listed owners are, now the whole dump is read.
+
+    Printed by kind, because the failure here is silent: a change to the
+    parser or to how titles are written can turn every owner into a bare name
+    and nothing downstream would notice. On the 2026-08 dump 1,737 of 11,540
+    company articles list owners, and their 2,494 entries name a company by
+    KRS number 305 times, a territorial unit 110 times and the Treasury 89
+    times. The 1,990 left are people, funds, "pozostali" and the owners of
+    foreign companies, which most of the articles are about.
+    """
+    kinds: Counter[str] = Counter()
+    for company in companies:
+        own_krs = clean_krs(company.krs)
+        company.shareholders = [
+            links.resolve(shareholder, own_krs) for shareholder in company.shareholders
+        ]
+        for shareholder in company.shareholders:
+            if shareholder.skarb_panstwa:
+                kinds["the Treasury"] += 1
+            elif shareholder.krs:
+                kinds["a company by KRS"] += 1
+            elif shareholder.teryt:
+                kinds["a territorial unit"] += 1
+            else:
+                kinds["a name only"] += 1
+    listing = sum(1 for company in companies if company.shareholders)
+    print(f"{listing} of {len(companies)} company articles list their owners:")
+    for kind, count in kinds.most_common():
+        print(f"  {count:6d}  {kind}")
