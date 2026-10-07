@@ -12,6 +12,7 @@ import {
   mdiHelpCircleOutline,
   mdiLightningBoltOutline,
   mdiMinusCircleOutline,
+  mdiPauseCircleOutline,
   mdiProgressClock,
   mdiSignalOff,
   mdiStopCircleOutline,
@@ -36,7 +37,7 @@ import {
  * `shared/jobs.ts`. The row's rail, its chip and the summary strip at the top
  * read the same table, so a job has one colour wherever it is counted. */
 
-/** Worst first, like `JOB_HEALTH`. The four `isProblem` statuses are the only
+/** Worst first, like `JOB_HEALTH`. The five `isProblem` statuses are the only
  * red and amber ones that ask for a look; the two calmer ambers say "it
  * stopped, and that may be fine". `summary` is how the strip at the top labels
  * a count of them - a column heading, so it never has to agree with a
@@ -62,6 +63,14 @@ export const jobHealthConfig: Record<
     summary: "nie wystartowały",
     icon: mdiClockAlertOutline,
     tone: "danger",
+  },
+  // Amber like a mirror falling behind: nothing broke - a guard held the
+  // night's upload - but the site is a night behind until somebody looks.
+  held: {
+    title: "Wstrzymane kroki",
+    summary: "ze wstrzymanymi krokami",
+    icon: mdiPauseCircleOutline,
+    tone: "warning",
   },
   stale: {
     title: "Nieaktualne",
@@ -129,11 +138,22 @@ export const stalledRunConfig: Record<
   queued: { title: "nikt nie podjął", icon: mdiSignalOff, tone: "danger" },
 };
 
+/** A finished run of a job whose `partial` is work held back - the night -
+ * named as its row is, rather than as a backlog left for the next run. */
+export const heldRunConfig: { title: string; icon: string; tone: RowTone } = {
+  title: "wstrzymane kroki",
+  icon: mdiPauseCircleOutline,
+  tone: "warning",
+};
+
 /** The run's chip: its state, unless it says it is going and has stopped
- * saying so. */
+ * saying so, or it is the night's `partial`. */
 export function runChip(
   run: JobRun,
-  definition: Pick<JobDefinition, "heartbeatMinutes" | "queuedMinutes">,
+  definition: Pick<
+    JobDefinition,
+    "heartbeatMinutes" | "queuedMinutes" | "partialIsHeld"
+  >,
   now: Date,
 ) {
   if (
@@ -141,6 +161,9 @@ export function runChip(
     isStalled(run, definition, now)
   ) {
     return { ...stalledRunConfig[run.state], stalled: true };
+  }
+  if (run.state === "partial" && definition.partialIsHeld) {
+    return { ...heldRunConfig, stalled: false };
   }
   return { ...runStateConfig[run.state], stalled: false };
 }

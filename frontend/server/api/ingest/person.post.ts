@@ -5,6 +5,7 @@ import {
   createRevisionTransaction,
   proposeRevisionTransaction,
   revisionChangesNothing,
+  sameStoredValue,
   withoutInternalFields,
 } from "~~/server/utils/revisions";
 import {
@@ -13,7 +14,12 @@ import {
   edgeIdentity,
   enrichedEdge,
   findEdgeMatches,
+  type EdgeLike,
 } from "~~/server/utils/edges";
+import {
+  edgeRevisions,
+  publishEdgeInBatch,
+} from "~~/server/utils/edgePublication";
 import { resolveMergedNode } from "~~/server/utils/merge";
 import { electionPositions } from "~~/shared/misc";
 import type {
@@ -23,7 +29,7 @@ import type {
   ElectionPosition,
   NodeType,
 } from "~~/shared/model";
-import { pageIsPublic } from "~~/shared/model";
+import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
 import {
   personRequestSchema,
   type EntityResult,
@@ -131,6 +137,13 @@ export default defineEventHandler(async (event) => {
     const articlesResult: EntityResult[] = [];
     const electionsResult: EntityResult[] = [];
     const unplacedElections: UnplacedElection[] = [];
+
+    ctx.verifiedEmployments = await verifiedEmployments(
+      ctx,
+      personDoc,
+      body,
+      companyIDs,
+    );
 
     const companiesResult: EntityResult[] = await Promise.all(
       body.companies.map(async (company, index) => {
@@ -320,6 +333,16 @@ class Context {
    */
   readonly claimedEdgeIds = new Map<string, string>();
 
+  /** Whether each company the payload names is live, by node id, as the
+   * company lookup read it. A relation cannot be live while one of its ends is
+   * a draft, so this is what an employment's publication waits on. */
+  readonly companyPublished = new Map<string, boolean>();
+
+  /** The person's employment edges as stored, by id - present only when the
+   * payload may put the person's jobs on the site without a review. See
+   * `verifiedEmployments`. */
+  verifiedEmployments: Map<string, FirebaseFirestore.DocumentData> | undefined;
+
   constructor(
     readonly db: FirebaseFirestore.Firestore,
     readonly user: { uid: string },
@@ -333,12 +356,12 @@ class Context {
   }
 }
 
-async function createEmployment(
-  ctx: Context,
+/** The edge one row of `companies` asserts. */
+function employmentEdge(
   personId: string,
   employment: EmploymentRequest,
   companyId: string,
-): Promise<EntityResult> {
+): Edge {
   const edgeData: Edge = {
     type: "employed",
     name: employment.role, // TODO check that the role is always populated
@@ -347,8 +370,24 @@ async function createEmployment(
   };
   if (employment.start) edgeData.start_date = employment.start;
   if (employment.end) edgeData.end_date = employment.end;
+  return edgeData;
+}
 
-  const edgeId = await findEdgeOrCreate(ctx, edgeData);
+async function createEmployment(
+  ctx: Context,
+  personId: string,
+  employment: EmploymentRequest,
+  companyId: string,
+): Promise<EntityResult> {
+  const edgeData = employmentEdge(personId, employment, companyId);
+
+  // Both ends have to be live for the relation to be: a company still in
+  // draft leaves the job for whoever publishes the company, who reviews its
+  // relations in the same dialog.
+  const verified =
+    ctx.verifiedEmployments !== undefined &&
+    ctx.companyPublished.get(companyId) === true;
+  const edgeId = await findEdgeOrCreate(ctx, edgeData, false, verified);
 
   return {
     nodeId: companyId,
@@ -554,6 +593,9 @@ async function createElection(
  * Makes sure the companies are already present.
  * If not, fails with 404 with the missing KRS numbers
  *
+ * Whether each company is live goes into `ctx.companyPublished` on the way:
+ * the lookup reads the document anyway, so knowing it costs nothing more.
+ *
  * @param db Connection to firestore DB
  * @param companies
  * @returns
@@ -565,11 +607,13 @@ async function lookupCompanyIDs(
   const failingLookup: string[] = [];
   const companyIDsUnfiltered: (string | undefined)[] = await Promise.all(
     employments.map(async (employment) => {
-      const node = await lookupNode(ctx, "krsNumber", employment.krs);
+      const node = await lookupNodeDoc(ctx, "krsNumber", employment.krs);
       if (!node) {
         failingLookup.push(employment.krs);
+        return undefined;
       }
-      return node;
+      ctx.companyPublished.set(node.id, pageIsPublic(node.data() ?? {}));
+      return node.id;
     }),
   );
   return {
@@ -720,6 +764,10 @@ async function findEdgeOrCreate(
   /** Whether a change to an edge that already exists may be written straight
    * out, rather than left for a reviewer. See `createElection`. */
   vouched: boolean = false,
+  /** Whether the relation itself needs no reviewer: a new edge is written
+   * approved and live, and a stored one still waiting for its first review is
+   * approved and put live as it stands. See `verifiedEmployments`. */
+  verified: boolean = false,
 ) {
   // Counted before the first await, so the concurrent employments dispatched
   // through Promise.all cannot interleave between the read and the write.
@@ -753,6 +801,7 @@ async function findEdgeOrCreate(
   )[occurrence];
   if (existing) {
     ctx.claimedEdgeIds.set(existing, identity);
+    if (verified) await approveWaitingEdge(ctx, existing);
     return existing;
   }
 
@@ -823,9 +872,168 @@ async function findEdgeOrCreate(
   const edgeRef = ctx.db.collection("edges").doc(edgeDocumentId(edge, copy));
   createRevisionTransaction(ctx.db, ctx.batch, ctx.user, edgeRef, edge, {
     automatic: true,
-    approve: ctx.autoapprove,
-    published: ctx.autoapprove,
+    approve: ctx.autoapprove || verified,
+    published: ctx.autoapprove || verified,
   });
+  if (verified) {
+    console.info(
+      `[ingest] approved employment ${edgeRef.id} on its register entry`,
+    );
+  }
   ctx.claimedEdgeIds.set(edgeRef.id, identity);
   return edgeRef.id;
+}
+
+/** The person's stored employments, when this payload may put the person's
+ * jobs on the site without a reviewer; undefined when it may not.
+ *
+ * A person who is already published, and whose page is linked to a register
+ * entry, needs nobody to review the jobs that entry lists: the register is the
+ * source, and the link is what says the entry is this person. So:
+ *
+ * 1. The page is live. Publishing a person is a reviewer's decision about who
+ *    they are; a draft has had no such decision.
+ * 2. The payload is that register entry's: the page's `rejestrIo` names the
+ *    payload's entry (`registerEntry`), or the page has none and adopts the
+ *    payload's now. A page linking a different entry is never verified,
+ *    whatever matched it.
+ * 3. The payload restates at least one job the page already shows - the same
+ *    company, role and start date as one of its live employments.
+ *
+ * The third is what makes the second worth anything when the link is new. A
+ * page without one gets it from this very request on nothing but a name
+ * (`lookupPersonDoc`; `people_merged` sends `korytaId` for a name that fits a
+ * single page), and the revision carrying it is approved because the page is
+ * live - so "the approved revision has the link" would hold for a namesake as
+ * well. That is the case this rule was first asked about: Łukasz Żelewski's
+ * page had no register link until the 10-06 run adopted one by name, in the
+ * request that added his KGHM seat. What vouched for him was the rest of that
+ * payload - four of its seven jobs were on his page already, published since
+ * March, and the other three are the ones a reviewer approved by hand within
+ * the half hour. A namesake's entry restates nothing a reviewer published, and
+ * the right person's nearly always does: of the 970 published pages the 10-06
+ * run's payloads reach with the page's own register entry or a new one, 802
+ * restate a live job. Of the 572 adopting the link, 135 restate none. Those
+ * wait for a reviewer, and once one of their jobs is published the next run
+ * takes the rest.
+ *
+ * The stored employments come back with the answer because they are read for
+ * it anyway, and approving a stored edge needs its document.
+ *
+ * TODO: a PESEL fingerprint match is the same evidence as a `rejestrIo` one -
+ * rejestr.io keys people by PESEL, one to one. It counts once the fingerprint
+ * is stored; see the task ingest-person-by-pesel-fingerprint.
+ */
+async function verifiedEmployments(
+  ctx: Context,
+  personDoc: FirebaseFirestore.DocumentSnapshot | undefined,
+  body: PersonRequest,
+  companyIDs: string[],
+): Promise<Map<string, FirebaseFirestore.DocumentData> | undefined> {
+  const stored = personDoc?.data();
+  if (!personDoc || !stored || !pageIsPublic(stored)) return undefined;
+  if (!body.rejestrIo) return undefined;
+  const linked = registerEntry(stored.rejestrIo);
+  if (linked && linked !== registerEntry(body.rejestrIo)) return undefined;
+
+  const snapshot = await ctx.db
+    .collection("edges")
+    .where("source", "==", personDoc.id)
+    .where("type", "==", "employed")
+    .get();
+  const employments = new Map<string, FirebaseFirestore.DocumentData>(
+    snapshot.docs.map((doc) => [doc.id, doc.data()]),
+  );
+
+  const shown = new Set<string>();
+  for (const edge of employments.values()) {
+    if (pageIsPublic(edge)) shown.add(edgeIdentity(edge as EdgeLike));
+  }
+  const restated = body.companies.filter((employment, index) => {
+    const companyId = companyIDs[index];
+    return (
+      companyId !== undefined &&
+      shown.has(
+        edgeIdentity(employmentEdge(personDoc.id, employment, companyId)),
+      )
+    );
+  }).length;
+  if (restated === 0) return undefined;
+
+  console.info(
+    `[ingest] ${body.name}: jobs verified by ${body.rejestrIo} (${restated} already published)`,
+  );
+  return employments;
+}
+
+/** The register entry a rejestr.io link names: its number, where it has one.
+ *
+ * The pipelines send `https://rejestr.io/osoby/<number>`. A link pasted from a
+ * browser carries the person's name after the number, or a trailing slash, and
+ * 10 published pages store one of those. Read as written, eight of them looked
+ * linked to some other entry than the payloads the 10-06 run had for them,
+ * which named the very same number. Anything else is compared as written.
+ */
+function registerEntry(link: unknown): string | undefined {
+  if (typeof link !== "string" || !link) return undefined;
+  return /rejestr\.io\/osoby\/(\d+)/.exec(link)?.[1] ?? link;
+}
+
+/** Approves and publishes a stored employment the payload restates, if it is
+ * still waiting for its first review.
+ *
+ * That is how a job left for a reviewer reaches the site once its person is
+ * verified: one sent before this rule existed, or before a reviewer published
+ * the job that corroborates the link. Nothing anybody has decided is reopened.
+ * A live edge is done with; an approved one that is not live was approved and
+ * kept off the site by somebody, or taken off it; a rejected revision is a
+ * reviewer's no; and a revision not written automatically is a person's word
+ * on the relation. Each of those stays theirs.
+ *
+ * The newest revision is approved only where it says exactly what the edge
+ * does, so what goes live is what the page would show - as `publishEdgeInBatch`
+ * does for a reviewer, without the audit row an administrator's decision
+ * gets.
+ */
+async function approveWaitingEdge(ctx: Context, edgeId: string) {
+  const stored = ctx.verifiedEmployments?.get(edgeId);
+  if (!stored) return;
+  if (
+    pageIsPublic(stored) ||
+    stored.deleted === true ||
+    approvedRevisionId(stored.revision_id)
+  ) {
+    return;
+  }
+
+  const revisions = await edgeRevisions(ctx.db, edgeId);
+  if (
+    revisions.some(
+      (revision) =>
+        revision.status === "rejected" || revision.update_automatic !== true,
+    )
+  ) {
+    return;
+  }
+  const candidate = revisions[0];
+  if (
+    !candidate ||
+    !sameStoredValue(
+      withoutInternalFields(candidate.data as Record<string, unknown>),
+      withoutInternalFields(stored),
+    )
+  ) {
+    return;
+  }
+
+  publishEdgeInBatch(
+    ctx.db,
+    ctx.batch,
+    ctx.db.collection("edges").doc(edgeId),
+    stored,
+    candidate,
+    ctx.user,
+    false,
+  );
+  console.info(`[ingest] approved waiting employment ${edgeId}`);
 }
