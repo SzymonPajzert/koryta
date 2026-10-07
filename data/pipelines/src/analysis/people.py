@@ -1,8 +1,6 @@
 import math
 import re
 
-import pandas as pd
-
 from analysis.people_koryta_merged import PeopleKorytaMerged
 from analysis.people_krs_merged import PeopleKRSMerged
 from analysis.people_pkw_merged import PeoplePKWMerged
@@ -12,11 +10,6 @@ from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
 from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, LocalFile, Pipeline
-
-pd.set_option("display.max_rows", None)
-pd.set_option("display.max_columns", None)
-pd.set_option("display.width", None)
-
 
 krs_file = LocalFile("people_krs.jsonl", "versioned")
 wiki_file = LocalFile("people_wiki.jsonl", "versioned")
