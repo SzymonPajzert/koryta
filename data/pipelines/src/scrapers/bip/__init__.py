@@ -2,7 +2,7 @@
 
 from scrapers.bip.bip_queue import PostgresBipQueue
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
-from scrapers.bip.types import RegistryEntry
+from scrapers.bip.registry import RegistryEntry
 from scrapers.stores import BipQueue, DocRow, HostRow, RunStats, UrlRow
 
 __all__ = [
