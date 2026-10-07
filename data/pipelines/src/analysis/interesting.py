@@ -165,6 +165,14 @@ class Companies(Pipeline[Company]):
         )
         for line in disagreeing:
             print(f"  {line}")
+
+        marked = public_through_wiki_owners(outputs, krs_companies)
+        print(
+            f"Wikipedia: {len(marked)} companies are public through an owner "
+            "only an article names, or through a company that is: "
+            + ", ".join(marked[:20])
+            + (", ..." if len(marked) > 20 else "")
+        )
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
 
     def graph(self, ctx: Context):
@@ -411,6 +419,66 @@ def wiki_owners(
         if owner is not None and owner not in owners:
             owners.append(owner)
     return owners
+
+
+def public_through_wiki_owners(
+    companies: list[Company], register: dict[str, Company]
+) -> list[str]:
+    """Marks public every company an article gives a public owner, and below.
+
+    A public owner is the Treasury, a gmina, powiat or wojewodztwo, or a
+    company that is public itself, and any stake will do. Szymon, 2026-10-07,
+    on the 22 site companies this decided: "even the minority stakeholder is
+    enough as a decision maker that could influence them". It is the rule the
+    register's own owners already follow - `CompaniesKRS.propagate_is_public`
+    marks every child of a public company public whatever the stake - so PKP
+    Cargo (33% PKP) is public on the same terms as a spolka with a gmina among
+    its wspolnicy. Which public owners hold only a minority is not recorded
+    yet; that is task track-minority-public-ownership.
+
+    Then carried down every ownership edge, the register's and the articles'
+    alike, from the companies this marks and from no other: CompaniesKRS has
+    already walked the register's own from its own public companies, and could
+    not start from these, never having seen an article. So a company an
+    article makes public makes its subsidiaries public, and one whose article
+    names a company another article made public is public in turn.
+
+    `register` is CompaniesKRS's output by KRS number, for the subsidiaries
+    rejestr.io lists under a company rather than the parents an odpis lists
+    over it. Returns the KRS numbers it marked, in the order it marked them.
+    """
+    by_krs = {company.krs: company for company in companies}
+    children: dict[str, list[str]] = {}
+    for company in register.values():
+        for child in company.children:
+            children.setdefault(company.krs, []).append(child)
+    for company in companies:
+        for owner in company.parents:
+            if owner.krs:
+                children.setdefault(owner.krs, []).append(company.krs)
+
+    marked: list[str] = []
+    for company in companies:
+        if company.is_public:
+            continue
+        wiki = [owner for owner in company.parents if owner.source == "wiki"]
+        # `teryt` is a gmina, powiat or wojewodztwo, or the Treasury's sentinel.
+        if any(
+            owner.teryt or (owner.krs in by_krs and by_krs[owner.krs].is_public)
+            for owner in wiki
+        ):
+            company.is_public = True
+            marked.append(company.krs)
+
+    queue = list(marked)
+    while queue:
+        for child in children.get(queue.pop(0), []):
+            company = by_krs.get(child)
+            if company is not None and not company.is_public:
+                company.is_public = True
+                marked.append(child)
+                queue.append(child)
+    return marked
 
 
 REMOVABLE_SUFFIXES = [

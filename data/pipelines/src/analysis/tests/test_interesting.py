@@ -254,3 +254,115 @@ def test_a_company_only_wikipedia_knows_is_not_added():
     )
 
     assert df["krs"].tolist() == [ENERGA]
+
+
+def test_a_public_owner_only_the_article_names_makes_the_company_public():
+    """Any stake will do: Szymon's call on 2026-10-07, and the register's rule.
+
+    PKP Cargo's article gives PKP S.A. 33%; COIG's gives the Treasury 15%.
+    """
+    pkp = KrsCompany(krs="0000019193", name="POLSKIE KOLEJE PAŃSTWOWE", is_public=True)
+    df = merge(
+        pkp,
+        KrsCompany(krs="0000027702", name="PKP CARGO"),
+        KrsCompany(krs="0000092497", name="COIG"),
+        KrsCompany(krs="0000047612", name="ŚLĄSKIE CENTRUM LOGISTYKI"),
+        articles=[
+            article(
+                "PKP Cargo",
+                "0000027702",
+                WikiShareholder(
+                    "PKP S.A.", "Polskie Koleje Państwowe", 33.0, krs="0000019193"
+                ),
+                WikiShareholder("podmioty prywatne", None, 67.0),
+            ),
+            article(
+                "COIG",
+                "0000092497",
+                WikiShareholder("WASKO SA", None, 85.0),
+                WikiShareholder("Skarb Państwa", None, 15.0, skarb_panstwa=True),
+            ),
+            article(
+                "Śląskie Centrum Logistyki",
+                "0000047612",
+                WikiShareholder("Miasto Gliwice", "Gliwice", teryt="2466011"),
+            ),
+        ],
+    )
+
+    assert row(df, "0000027702")["is_public"]
+    assert row(df, "0000092497")["is_public"]
+    assert row(df, "0000047612")["is_public"]
+
+
+def test_an_article_naming_only_private_owners_changes_nothing():
+    df = merge(
+        KrsCompany(krs="0000002000", name="FIRMA"),
+        KrsCompany(krs="0000001000", name="WŁAŚCICIEL"),
+        articles=[
+            article(
+                "Firma",
+                "0000002000",
+                WikiShareholder("Właściciel", "Właściciel", 100.0, krs="0000001000"),
+                WikiShareholder("Zygmunt Solorz-Żak", "Zygmunt Solorz-Żak"),
+            )
+        ],
+    )
+
+    assert not row(df, "0000002000")["is_public"]
+
+
+def test_a_company_an_article_makes_public_makes_what_it_owns_public():
+    """Down the register's edges as well as the articles'.
+
+    CompaniesKRS walked the register's edges from its own public companies
+    only, so Polimex Mostostal's subsidiaries were left private with it.
+    """
+    polimex = KrsCompany(
+        krs="0000022460", name="POLIMEX MOSTOSTAL", children=["0000000003"]
+    )
+    df = merge(
+        KrsCompany(krs="0000012483", name="ENEA", is_public=True),
+        polimex,
+        # Owned through its own odpis, and through rejestr.io's list above.
+        KrsCompany(
+            krs="0000000002",
+            name="POLIMEX ENERGETYKA",
+            parents=[Owner(krs="0000022460", teryt=None)],
+        ),
+        KrsCompany(krs="0000000003", name="POLIMEX BUDOWNICTWO"),
+        articles=[
+            article(
+                "Polimex Mostostal",
+                "0000022460",
+                WikiShareholder("ENEA SA", "Enea", krs="0000012483"),
+            )
+        ],
+    )
+
+    assert row(df, "0000022460")["is_public"]
+    assert row(df, "0000000002")["is_public"]
+    assert row(df, "0000000003")["is_public"]
+
+
+def test_an_owner_another_article_made_public_counts():
+    """Whichever order the two come in."""
+    df = merge(
+        KrsCompany(krs="0000000010", name="SPÓŁKA CÓRKA"),
+        KrsCompany(krs="0000000020", name="SPÓŁKA MATKA"),
+        articles=[
+            article(
+                "Spółka córka",
+                "0000000010",
+                WikiShareholder("Spółka matka", "Spółka matka", krs="0000000020"),
+            ),
+            article(
+                "Spółka matka",
+                "0000000020",
+                WikiShareholder("Skarb Państwa", skarb_panstwa=True),
+            ),
+        ],
+    )
+
+    assert row(df, "0000000020")["is_public"]
+    assert row(df, "0000000010")["is_public"]
