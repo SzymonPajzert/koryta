@@ -1,13 +1,19 @@
 """Which Wikipedia biography, if any, the KRS↔PKW join attaches to a person."""
 
 import io
+import itertools
 from types import SimpleNamespace
 
 import duckdb
 import pandas as pd
 import pytest
 
-from analysis.people import PeopleMerged, people_merged, unique_probability
+from analysis.people import (
+    PeopleMerged,
+    people_merged,
+    preferred_spelling,
+    unique_probability,
+)
 from analysis.people_wiki_merged import people_wiki_merged
 from scrapers.stores import Context, ProcessPolicy
 from scrapers.stores.file import VersionedBackup
@@ -583,6 +589,90 @@ def test_two_krs_rows_carrying_one_register_id_both_reach_the_page(ctx):
     )
 
     assert list(result["koryta_id"]) == ["node-1", "node-1"]
+
+
+# ------------------------------------------------- which spelling names the row
+def spelled(first: str, last: str, birth_date: str, second: str, *names: str) -> dict:
+    """A KRS person whose register entries spell them as `names`, in that order."""
+    return {
+        **krs_person(first, last, birth_date, second=second),
+        "full_name": list(names),
+    }
+
+
+def test_a_namesake_spelled_two_ways_keeps_his_row(ctx):
+    """The bug: Tomasz Marcin Sikora, born 1973-02-26, was a row one night and
+    gone the next.
+
+    His entries read "Tomasz Sikora" and "Tomasz Marcin Sikora", and `krs_name`
+    was whichever of the two duckdb listed first. As "Tomasz Sikora" he shared
+    a name and a birth year with the biathlete born that December, and
+    `unique_krs` keeps one row per name and year.
+    """
+    result = match_koryta(
+        ctx,
+        [
+            spelled(
+                "tomasz",
+                "sikora",
+                "1973-02-26",
+                "marcin",
+                "Tomasz Sikora",
+                "Tomasz Marcin Sikora",
+            ),
+            spelled("tomasz", "sikora", "1973-12-21", "wacław", "Tomasz Sikora"),
+        ],
+        [],
+    )
+
+    assert sorted(result["krs_name"]) == ["Tomasz Marcin Sikora", "Tomasz Sikora"]
+
+
+def test_the_name_is_the_spelling_the_row_was_matched_by(ctx):
+    """Marcin Golański's entries are typed with Polish letters and without.
+
+    `create_people_table` gives his register id the spelling with them, and
+    PKW is matched against that - so the row's name has to be that one too,
+    not the copy typed without them that happened to be listed first.
+    """
+    result = match_pkw(
+        ctx,
+        [
+            spelled(
+                "marcin",
+                "golański",
+                "1978-11-08",
+                "jerzy",
+                "Marcin Golanski",
+                "Marcin Golański",
+            )
+        ],
+        [pkw_person("marcin", "golański", 1978, second="jerzy")],
+    )
+
+    assert list(result["krs_name"]) == ["Marcin Golański"]
+    assert candidacy_years(result) == ["2024"]
+
+
+@pytest.mark.parametrize(
+    "names",
+    list(
+        itertools.permutations(
+            ["Andrzej Sikora", "ANDRZEJ JAN SIKORA", "Andrzej Jan Sikora"]
+        )
+    ),
+)
+def test_the_spelling_does_not_depend_on_the_order_it_comes_in(names):
+    """The middle name, then not shouting - whichever order duckdb lists them."""
+    assert (
+        preferred_spelling(list(names), "andrzej", "jan", "sikora")
+        == "Andrzej Jan Sikora"
+    )
+
+
+def test_a_person_with_no_spelling_has_no_name():
+    assert preferred_spelling(None, "jan", None, "nowak") is None
+    assert preferred_spelling([None, " "], "jan", None, "nowak") is None
 
 
 # ---------------------------------------- the surname count, however it is read
