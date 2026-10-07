@@ -660,7 +660,8 @@ def test_a_person_pkw_has_twice_still_reaches_their_page(ctx):
 
 
 # ------------------------------------------ two register entries, two people
-# After krs-people-full-birth-date's tests, counted by person.
+# After krs-people-full-birth-date's tests. A PKW candidacy goes to everyone it
+# fits, and the reviewers judge whose it is.
 def registered(person: dict, rejestrio_id: str) -> dict:
     return {**person, "rejestrio_id": [rejestrio_id]}
 
@@ -678,53 +679,46 @@ def test_namesakes_born_the_same_year_are_both_kept_in_either_order(ctx, order):
     assert sorted(result["birth_date"]) == ["1970-02-08", "1970-11-30"]
 
 
-def test_a_candidacy_two_namesakes_could_have_stood_for_goes_to_neither(ctx):
+def test_a_candidacy_two_namesakes_could_have_stood_for_goes_to_both(ctx):
     """PKW knows the year, give or take one; it cannot say which of the two stood.
 
-    Each of them alone would take it. Both at once would put one candidacy on
-    two people, so neither does.
+    So both get it, and the reviewers judge on the page whose it is - rather
+    than look it up again by hand for whichever of them it was.
     """
     february_1971 = registered(krs_person("jan", "nowak", "1971-02-08"), "8")
     result = match_pkw(
         ctx, [JAN_FEBRUARY, february_1971], [pkw_person("jan", "nowak", 1970)]
     )
 
-    assert result["pkw_name"].isna().all()
+    assert list(result["pkw_name"]) == ["jan nowak", "jan nowak"]
 
 
-def test_two_entries_born_the_same_day_are_two_claimants(ctx):
-    """One name and one birth date under two register entries: two people as
-    far as anybody can tell, so the candidacy is neither's."""
-    twin = registered(krs_person("jan", "nowak", "1970-02-08"), "8")
-    result = match_pkw(ctx, [JAN_FEBRUARY, twin], [pkw_person("jan", "nowak", 1970)])
-
-    assert len(result) == 2
-    assert result["pkw_name"].isna().all()
-
-
-def test_the_namesake_whose_middle_name_agrees_keeps_the_candidacy(ctx):
-    """Unless one of them claims it by a middle name both sources agree on."""
+def test_a_namesake_silent_on_the_middle_name_gets_the_candidacy_too(ctx):
+    """A middle name is weighed per person, not across people: Jan Adam agrees
+    with the candidacy, and the Jan Nowak born in November, with no middle name
+    on record, fits it as well."""
     adam = registered(krs_person("jan", "nowak", "1970-02-08", second="adam"), "7")
     result = match_pkw(
         ctx, [adam, JAN_NOVEMBER], [pkw_person("jan", "nowak", 1970, second="adam")]
     ).set_index("birth_date")
 
     assert result.loc["1970-02-08", "pkw_name"] == "jan adam nowak"
-    assert pd.isna(result.loc["1970-11-30", "pkw_name"])
+    assert result.loc["1970-11-30", "pkw_name"] == "jan adam nowak"
 
 
-def test_a_namesake_set_aside_for_ambiguity_still_counts_as_a_claimant(ctx):
-    """Jan Piotr fits two candidacies and so takes neither, but he could still be
-    the Jan Nowak of 1970 - which is no more Jan Adam's for that."""
+def test_ambiguity_is_judged_per_person(ctx):
+    """Jan Piotr fits two candidacies and so takes neither - "one of these" is
+    no answer for one page. Jan Adam fits one of them, and takes it."""
     adam = registered(krs_person("jan", "nowak", "1970-02-08", second="adam"), "7")
     piotr = registered(krs_person("jan", "nowak", "1971-03-01", second="piotr"), "8")
     result = match_pkw(
         ctx,
         [adam, piotr],
         [pkw_person("jan", "nowak", 1970), pkw_person("jan", "nowak", 1972)],
-    )
+    ).set_index("birth_date")
 
-    assert result["pkw_name"].isna().all()
+    assert result.loc["1970-02-08", "pkw_name"] == "jan nowak"
+    assert pd.isna(result.loc["1971-03-01", "pkw_name"])
 
 
 def test_namesakes_born_the_same_day_are_both_kept_whatever_they_score(ctx):

@@ -213,10 +213,6 @@ def people_merged(
         -- itself is the identity.
         SELECT row_number() OVER () as krs_row, * FROM krs_people
     ),
-    pkw_numbered AS (
-        -- The same for PKW, so a candidacy can be asked who else claims it.
-        SELECT row_number() OVER () as pkw_row, * FROM pkw_people
-    ),
     pkw_candidates AS (
         -- Every PKW record this KRS person could be, with how much of the name
         -- actually agreed.
@@ -238,7 +234,7 @@ def people_merged(
                 ELSE 1
             END as second_name_tier
         FROM krs_numbered k
-        JOIN pkw_numbered p ON (
+        JOIN pkw_people p ON (
             ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
             AND k.last_name = p.last_name
             AND k.first_name = p.first_name
@@ -246,17 +242,7 @@ def people_merged(
                 OR (k.second_name IS NULL OR k.second_name = '')
                 OR (p.second_name IS NULL OR p.second_name = ''))
     ),
-    pkw_claimants AS (
-        -- Who else could each candidacy be, counted before anybody is set
-        -- aside below: a namesake left with no match because several fit him
-        -- could still be the one who stood for this.
-        SELECT
-            *,
-            min(second_name_tier) OVER (PARTITION BY pkw_row) as pkw_best_tier,
-            count(*) OVER (PARTITION BY pkw_row, second_name_tier) as pkw_claimants
-        FROM pkw_candidates
-    ),
-    pkw_per_person AS (
+    pkw_match AS (
         -- Which of those to believe.
         --
         -- A middle name the two sources agree on outranks one only half of
@@ -270,23 +256,18 @@ def people_merged(
         -- stranger's career on the page - the same harm
         -- `drop_contradictory_candidacies` drops candidacies to avoid, so it
         -- is answered the same way: no match rather than a guessed one.
-        SELECT * FROM pkw_claimants
+        --
+        -- Per person, and only per person. A candidacy that fits several
+        -- people goes to each of them: PKW knows a year, give or take one, so
+        -- it cannot say which of two namesakes stood, and leaving it with
+        -- neither made the reviewers look it up again by hand. Which of them
+        -- it belongs to is theirs to judge on the page. With every register
+        -- entry a person of its own, 1,299 candidacies of 2026-10-07 fit two
+        -- or more people.
+        SELECT * FROM pkw_candidates
         QUALIFY second_name_tier = min(second_name_tier) OVER (PARTITION BY krs_row)
             AND (second_name_tier = 0
                 OR count(*) OVER (PARTITION BY krs_row) = 1)
-    ),
-    pkw_match AS (
-        -- And unique the other way: a candidacy two KRS people could each be
-        -- goes to neither, unless one of them claims it by a middle name both
-        -- sources agree on. Two register entries are two people, and PKW knows
-        -- a year, give or take one, so it cannot say which of two namesakes
-        -- stood; a candidacy on both would put one career on two pages. With
-        -- each entry a row of its own, 1,299 candidacies of 2026-10-07 had two
-        -- or more. The rule is krs-people-full-birth-date's, counted by person
-        -- rather than by birth date.
-        SELECT * EXCLUDE (pkw_row, pkw_best_tier, pkw_claimants)
-        FROM pkw_per_person
-        WHERE second_name_tier = pkw_best_tier AND pkw_claimants = 1
     ),
     krs_pkw AS (
         SELECT
