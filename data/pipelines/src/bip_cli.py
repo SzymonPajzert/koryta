@@ -64,21 +64,6 @@ def ingest_registry(
     return len(entries), inserted, updated, source
 
 
-def cmd_registry(args: argparse.Namespace) -> int:
-    pg = PostgresClient.from_env()
-    try:
-        entries, inserted, updated, source = ingest_registry(
-            BipQueue(pg), args.xml_cache, refresh=args.refresh
-        )
-        hosts = BipQueue(pg).stats().get("hosts")
-    finally:
-        pg.close()
-    print(f"source:        {source}")
-    print(f"registry rows: {entries}")
-    print(f"hosts:         {hosts} (inserted {inserted}, updated {updated})")
-    return 0
-
-
 def cmd_crawl(args: argparse.Namespace) -> int:
     root = Path(args.out)
     pg = PostgresClient.from_env(max_size=4)
@@ -234,11 +219,6 @@ def cmd_stats(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="koryta_scrape_bip")
     sub = parser.add_subparsers(dest="command", required=True)
-
-    registry = sub.add_parser("registry", help="ingest the gov.pl BIP registry")
-    registry.add_argument("--xml-cache", type=Path, default=DEFAULT_XML_CACHE)
-    registry.add_argument("--refresh", action="store_true")
-    registry.set_defaults(func=cmd_registry)
 
     crawl = sub.add_parser("crawl", help="crawl hosts and harvest documents")
     crawl.add_argument("--out", type=Path, default=DEFAULT_OUT)

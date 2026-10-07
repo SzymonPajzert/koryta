@@ -37,7 +37,6 @@ from scrapers.common.ratelimit import HostTokenBucket
 logger = logging.getLogger(__name__)
 
 PROGRESS_EVERY_S = 30.0
-_TERMINAL = ("fetched", "error", "skipped")
 
 
 @dataclass
@@ -266,7 +265,6 @@ class BipCoordinator:
             data=result.content,
             content_type=result.content_type,
             filename=filename_from_url(row.url),
-            title="",
             chain=[row.discovered_from, row.url],
         )
         self.bip_queue.record_docs([doc], active.crawl_id)
