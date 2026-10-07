@@ -10,7 +10,8 @@ import re
 import xml.etree.ElementTree as ET
 
 from entities.util import NormalizedParse
-from scrapers.bip.types import HostRow, RegistryEntry
+from scrapers.bip.types import RegistryEntry
+from scrapers.stores import HostRow
 
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 

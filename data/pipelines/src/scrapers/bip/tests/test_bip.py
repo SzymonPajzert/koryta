@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import cast
 
 from bip_cli import repair_parts
-from scrapers.bip.bip_queue import BipQueue
 from scrapers.bip.classify import (
     host_of,
     is_document_url,
@@ -17,10 +16,10 @@ from scrapers.bip.classify import (
 from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions, _ActiveHost
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.bip.store import LocalBundleStore, rewrap_part
-from scrapers.bip.types import DocRow, HostRow, UrlRow
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import extract_link_pairs, extract_links
 from scrapers.common.ratelimit import HostTokenBucket
+from scrapers.stores import BipQueue, DocRow, HostRow, UrlRow
 
 REGISTRY_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <resultset>

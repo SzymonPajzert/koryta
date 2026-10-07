@@ -14,8 +14,8 @@ import random
 
 from psycopg import sql
 
-from scrapers.bip.types import DocRow, HostRow, RunStats, UrlRow
 from scrapers.common.pg import PostgresClient
+from scrapers.stores import DocRow, HostRow, RunStats, UrlRow
 
 # Postgres btree rejects index entries over ~2704 bytes; urls.url is the primary
 # key, so over-long URLs (tracking blobs, encoded payloads) are never real
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS bip_runs (
 """
 
 
-class BipQueue:
+class PostgresBipQueue:
     def __init__(self, pg: PostgresClient) -> None:
         self.pg = pg
         self.ensure_schema()
