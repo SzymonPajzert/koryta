@@ -77,7 +77,8 @@ class CommitteeParties(Pipeline):
 
     def process(self, ctx: Context):
         return pd.DataFrame.from_records([])
-        # TODO reenable CommitteeParties
+        # TODO reenable CommitteeParties, and put committee_parties back in
+        # tests/e2e/baseline.json's outputs so the nightly checks it again
         df = self.people_pkw_merged.read_or_process(ctx)
         df = flatten_parties(df)
 
