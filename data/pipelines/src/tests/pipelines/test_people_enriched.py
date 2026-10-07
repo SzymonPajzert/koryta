@@ -446,9 +446,8 @@ def test_adam_smoter_deduplication(df_all):
 
 
 def test_teresa_zieba_deduplication(df_all):
+    """Two women: register entries 1774530, born 1959-05-23, on boards, and
+    1643010, born 1958-03-22, a prokurent. Grouped by name, with birth years
+    a year apart taken as one, they were one person with both careers."""
     zieba_records = df_all[df_all["krs_name"] == "Teresa Zięba"]
-    assert len(zieba_records) == 1, (
-        f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
-    )
-    # Check birth year is 1959 (or 1958, but we expect one)
-    assert zieba_records.iloc[0]["birth_year"] in [1958, 1959]
+    assert sorted(zieba_records["birth_year"].astype(int)) == [1958, 1959]

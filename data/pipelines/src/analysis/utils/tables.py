@@ -18,9 +18,12 @@ def create_people_table(
     Pass kwargs to struct_pack each argument according to the passed dict
 
     `identity` names a column of the raw table that says outright who a row is,
-    as rejestr.io's person id does. Every row carrying the same value is given
-    the same spelling of the name before anything is grouped by the name, so
-    somebody the sources spell two ways stays one person.
+    as rejestr.io's person id does: rows sharing a value are one person, rows
+    with two values are two people whatever they are called, and each person is
+    one row, spelled one way. A row without a value is somebody's only when
+    exactly one value has its name and its full `birth_date`, which the raw
+    table then needs; otherwise it is grouped with the rows of the same name
+    and date.
     """
 
     kwargs_select_list = [
@@ -62,9 +65,65 @@ def create_people_table(
 
     spelled = "raw_with_second_name"
     one_spelling_per_identity = ""
+    partition_names = "PARTITION BY first_name, last_name, derived_second_name"
+    effective_birth_year = f"""CASE
+                    WHEN (MAX(birth_year) OVER ({partition_names}) -
+                          MIN(birth_year) OVER ({partition_names})) <= 1 THEN
+                        MAX(birth_year) OVER ({partition_names})
+                    ELSE
+                        birth_year
+                END"""
+    person_key = person_key_join = ""
     if identity is not None:
         spelled = "raw_spelled"
+        # Each person's own year: the window above moves a year towards a
+        # namesake's, and a person is one value or one name and date here.
+        effective_birth_year = "birth_year"
+        person_key = ", person_key"
+        person_key_join = "AND non_null.person_key = nulls.person_key"
         one_spelling_per_identity = f"""
+        adoptable AS (
+            -- Who a row without an identity is: an odpis seat whose PESEL
+            -- matched nobody rejestr.io lists at that company. The PESEL gives
+            -- the date, so the one identity with the same name and date is the
+            -- same person - unless a middle name says otherwise, or two
+            -- identities fit, in which case it is neither.
+            SELECT
+                r.first_name,
+                r.last_name,
+                r.birth_date,
+                r.derived_second_name,
+                min(i.{identity}) as adopted
+            FROM (
+                SELECT DISTINCT first_name, last_name, birth_date, derived_second_name
+                FROM raw_with_second_name
+                WHERE {identity} IS NULL
+            ) r
+            JOIN (
+                SELECT DISTINCT
+                    {identity}, first_name, last_name, birth_date, derived_second_name
+                FROM raw_with_second_name
+                WHERE {identity} IS NOT NULL
+            ) i
+                ON i.first_name = r.first_name
+                AND i.last_name = r.last_name
+                AND i.birth_date = r.birth_date
+                AND (coalesce(r.derived_second_name, '') = ''
+                    OR coalesce(i.derived_second_name, '') = ''
+                    OR i.derived_second_name = r.derived_second_name)
+            GROUP BY ALL
+            HAVING count(DISTINCT i.{identity}) = 1
+        ),
+        raw_identified AS (
+            SELECT r.* REPLACE (coalesce(r.{identity}, a.adopted) as {identity})
+            FROM raw_with_second_name r
+            LEFT JOIN adoptable a
+                ON r.{identity} IS NULL
+                AND a.first_name = r.first_name
+                AND a.last_name = r.last_name
+                AND a.birth_date = r.birth_date
+                AND a.derived_second_name IS NOT DISTINCT FROM r.derived_second_name
+        ),
         spellings AS (
             -- Each way one person's name is written, and how well its middle
             -- name is attested: one the source wrote out, then the source
@@ -86,7 +145,7 @@ def create_people_table(
                     concat_ws(' ', first_name, derived_second_name, last_name),
                     '[^ąćęłńóśźż]', '', 'g')) as polish_letters,
                 count(*) as written
-            FROM raw_with_second_name
+            FROM raw_identified
             WHERE {identity} IS NOT NULL
             GROUP BY ALL
         ),
@@ -104,19 +163,25 @@ def create_people_table(
             ) = 1
         ),
         raw_spelled AS (
-            SELECT r.* REPLACE (
-                coalesce(s.first_name, r.first_name) as first_name,
-                coalesce(s.last_name, r.last_name) as last_name,
-                CASE
-                    WHEN s.{identity} IS NULL THEN r.derived_second_name
-                    ELSE s.derived_second_name
-                END as derived_second_name
-            )
-            FROM raw_with_second_name r
+            SELECT
+                r.* REPLACE (
+                    coalesce(s.first_name, r.first_name) as first_name,
+                    coalesce(s.last_name, r.last_name) as last_name,
+                    CASE
+                        WHEN s.{identity} IS NULL THEN r.derived_second_name
+                        ELSE s.derived_second_name
+                    END as derived_second_name
+                ),
+                -- Who the row is, for the grouping below: its identity, or
+                -- failing one its date - the name is grouped on anyway.
+                coalesce(
+                    CAST(r.{identity} AS VARCHAR),
+                    'born ' || CAST(r.birth_date AS VARCHAR)
+                ) as person_key
+            FROM raw_identified r
             LEFT JOIN spelling s ON r.{identity} = s.{identity}
         ),"""
 
-    partition_names = "PARTITION BY first_name, last_name, derived_second_name"
     con.execute(
         f"""
         CREATE OR REPLACE TABLE {tbl_name} AS
@@ -135,35 +200,30 @@ def create_people_table(
         raw_filled_birth_year AS (
             SELECT
                 *,
-                CASE
-                    WHEN (MAX(birth_year) OVER ({partition_names}) - 
-                          MIN(birth_year) OVER ({partition_names})) <= 1 THEN
-                        MAX(birth_year) OVER ({partition_names})
-                    ELSE
-                        birth_year
-                END as effective_birth_year
+                {effective_birth_year} as effective_birth_year
             FROM {spelled}
         ),
         null_second_names AS (
             SELECT
                 first_name,
                 last_name,
-                effective_birth_year as birth_year
+                effective_birth_year as birth_year{person_key}
                 {agg_select_str}
             FROM raw_filled_birth_year
             WHERE derived_second_name IS NULL OR derived_second_name = ''
-            GROUP BY first_name, last_name, effective_birth_year
+            GROUP BY first_name, last_name, effective_birth_year{person_key}
         ),
         non_null_second_names AS (
             SELECT
                 first_name,
                 last_name,
                 effective_birth_year as birth_year,
-                derived_second_name
+                derived_second_name{person_key}
                 {agg_select_str}
             FROM raw_filled_birth_year
             WHERE derived_second_name IS NOT NULL AND derived_second_name != ''
-            GROUP BY first_name, last_name, effective_birth_year, derived_second_name
+            GROUP BY first_name, last_name, effective_birth_year,
+                derived_second_name{person_key}
         )
         SELECT
             coalesce(non_null.first_name, nulls.first_name) as first_name,
@@ -177,5 +237,6 @@ def create_people_table(
         AND non_null.last_name = nulls.last_name
         AND (non_null.birth_year = nulls.birth_year
             OR (non_null.birth_year IS NULL AND nulls.birth_year IS NULL))
+        {person_key_join}
         """
     )
