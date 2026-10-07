@@ -1,7 +1,7 @@
 """Postgres-backed URL queue (bip_queue) for the BIP crawler.
 
-Tables `bip_hosts` / `bip_urls` / `bip_docs` / `bip_runs` are created once by
-hand (DDL in `scrapers/bip/schema.sql`); this class never creates schema.
+The four `bip_*` tables are created automatically on first use (like the
+article crawler's queue); no manual `psql` step.
 
 The coordinator is the only writer, so the API is deliberately coarse: claim a
 batch of URLs, mark results, keep per-host counters and finalize hosts.
@@ -22,10 +22,81 @@ from scrapers.common.pg import PostgresClient
 # pages. Same guard as the article crawler's queue.
 MAX_URL_BYTES = 2000
 
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS bip_hosts (
+  host           text PRIMARY KEY,
+  name           text NOT NULL DEFAULT '',
+  source_url     text NOT NULL DEFAULT '',
+  teryt          text NOT NULL DEFAULT '',
+  entry_count    int  NOT NULL DEFAULT 1,
+  status         text NOT NULL DEFAULT 'new',
+  pages_fetched  int  NOT NULL DEFAULT 0,
+  docs_fetched   int  NOT NULL DEFAULT 0,
+  cap_hit        bool NOT NULL DEFAULT false,
+  crawl_id       text NOT NULL DEFAULT '',
+  first_seen     timestamptz NOT NULL DEFAULT now(),
+  last_crawled   timestamptz
+);
+CREATE TABLE IF NOT EXISTS bip_urls (
+  url            text PRIMARY KEY,
+  host           text NOT NULL,
+  kind           text NOT NULL DEFAULT 'page',
+  discovered_from text NOT NULL DEFAULT '',
+  depth          int  NOT NULL DEFAULT 0,
+  section        text NOT NULL DEFAULT '',
+  anchor_text    text NOT NULL DEFAULT '',
+  content_type   text NOT NULL DEFAULT '',
+  size           bigint NOT NULL DEFAULT 0,
+  sha256         text NOT NULL DEFAULT '',
+  last_status    int  NOT NULL DEFAULT 0,
+  state          text NOT NULL DEFAULT 'queued',
+  skip_reason    text,
+  attempts       int  NOT NULL DEFAULT 0,
+  locked_by      text,
+  locked_until   timestamptz,
+  first_seen     timestamptz NOT NULL DEFAULT now(),
+  last_checked   timestamptz,
+  last_seen      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bip_urls_host_idx ON bip_urls (host, state);
+CREATE INDEX IF NOT EXISTS bip_urls_host_depth_queue_idx
+  ON bip_urls (host, depth, first_seen) WHERE state = 'queued';
+CREATE TABLE IF NOT EXISTS bip_docs (
+  sha256         text PRIMARY KEY,
+  url            text NOT NULL,
+  host           text NOT NULL,
+  content_type   text NOT NULL DEFAULT '',
+  size           bigint NOT NULL DEFAULT 0,
+  filename       text NOT NULL DEFAULT '',
+  bundle         text NOT NULL DEFAULT '',
+  chain          jsonb NOT NULL DEFAULT '[]',
+  crawl_id       text NOT NULL DEFAULT '',
+  first_seen     timestamptz NOT NULL DEFAULT now(),
+  last_seen      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bip_docs_host_idx ON bip_docs (host);
+CREATE TABLE IF NOT EXISTS bip_runs (
+  run_id     text PRIMARY KEY,
+  started    timestamptz NOT NULL DEFAULT now(),
+  finished   timestamptz,
+  hosts_done int NOT NULL DEFAULT 0,
+  pages      int NOT NULL DEFAULT 0,
+  docs_new   int NOT NULL DEFAULT 0,
+  docs_seen  int NOT NULL DEFAULT 0,
+  errors     int NOT NULL DEFAULT 0
+);
+"""
+
 
 class BipQueue:
     def __init__(self, pg: PostgresClient) -> None:
         self.pg = pg
+        self.ensure_schema()
+
+    def ensure_schema(self) -> None:
+        for statement in _SCHEMA.split(";"):
+            if statement.strip():
+                self.pg.execute(statement)
 
     # -- hosts ---------------------------------------------------------------
     def upsert_hosts(self, hosts: list[HostRow]) -> tuple[int, int]:
@@ -337,7 +408,6 @@ class BipQueue:
         content_type: str = "",
         size: int = 0,
         sha256: str = "",
-        title: str = "",
         skip_reason: str = "",
     ) -> None:
         self.pg.execute(
@@ -348,11 +418,10 @@ class BipQueue:
                    skip_reason = NULLIF(%s, ''),
                    content_type = COALESCE(NULLIF(%s, ''), content_type),
                    size = %s,
-                   sha256 = COALESCE(NULLIF(%s, ''), sha256),
-                   title = COALESCE(NULLIF(%s, ''), title)
+                   sha256 = COALESCE(NULLIF(%s, ''), sha256)
              WHERE url = %s
             """,
-            (state, status, skip_reason, content_type, size, sha256, title, url),
+            (state, status, skip_reason, content_type, size, sha256, url),
         )
 
     # -- documents -----------------------------------------------------------
@@ -366,9 +435,9 @@ class BipQueue:
                 cur.execute(
                     """
                     INSERT INTO bip_docs
-                        (sha256, url, host, content_type, size, filename, title,
+                        (sha256, url, host, content_type, size, filename,
                          bundle, chain, crawl_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (sha256) DO UPDATE
                        SET bundle = EXCLUDED.bundle,
                            url = EXCLUDED.url,
@@ -382,7 +451,6 @@ class BipQueue:
                         row.content_type,
                         row.size,
                         row.filename,
-                        row.title,
                         row.bundle,
                         json.dumps(row.chain),
                         crawl_id,
