@@ -1,17 +1,22 @@
 import dataclasses
+import difflib
+import re
 import typing
+from collections import Counter
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
-from entities.company import Company, Owner, Source, Wikipedia
+from entities.company import Company, Owner, Source, Wikipedia, WikiShareholder
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
-from scrapers.map.teryt import Teryt
-from scrapers.stores import Context, LocalFile, Pipeline
-from scrapers.wiki.process_articles import ProcessWiki
+from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex, normalise
+from scrapers.map.teryt import Jst, Teryt
+from scrapers.stores import Context, Pipeline, iterate_pipeline
+from scrapers.wiki.process_articles import read_company_articles
+from scrapers.wiki.shareholders import clean_krs
 
 
 class Companies(Pipeline[Company]):
@@ -19,6 +24,13 @@ class Companies(Pipeline[Company]):
     This pipeline lists all companies we're aware of and either provides
     a full information on the given company or lists what information
     we're missing on it.
+
+    Beside the register it reads the company articles of the Polish Wikipedia,
+    which `ProcessWiki` takes out of the dump. An article that gives a
+    company's KRS number and agrees about its name lends it three things: its
+    address (`wikipedia`), its categories (`wiki_categories`, the sector a
+    reader filed it under) and, where the register names no owner at all, the
+    owners its infobox lists. See `wiki_article_for` and `wiki_owners`.
     """
 
     filename = "companies_merged"
@@ -29,8 +41,8 @@ class Companies(Pipeline[Company]):
 
     scraped_companies: CompaniesKRS
     hardcoded_companies: CompaniesHardcoded
-    wiki_pipeline: ProcessWiki
     teryt_pipeline: Teryt
+    jst: Jst
 
     @property
     def output_class(self):
@@ -42,24 +54,28 @@ class Companies(Pipeline[Company]):
         """
         self.teryt_pipeline.read_or_process(ctx)
         self.cities_to_teryt = getattr(self.teryt_pipeline, "cities_to_teryt", {})
+        self.jst.read_or_process(ctx)
+        jst_index: JstIndex | None = getattr(self.jst, "index", None)
         graph = self.graph(ctx)
 
         children_of_hardcoded = self.children_of_hardcoded(ctx, graph)
-        wiki_companies = {
-            str(c.krs).zfill(10): c
-            for c in self.wiki_companies(ctx)
-            if not pd.isna(c.krs)
-        }
+        wiki_companies: dict[str, list[Wikipedia]] = {}
+        for article in self.wiki_companies(ctx):
+            article_krs = clean_krs(article.krs)
+            if article_krs is not None:
+                wiki_companies.setdefault(article_krs, []).append(article)
         krs_companies = {
             c.krs: c for c in self.scraped_companies.read_or_process_list(ctx)
         }
 
-        all_krs = (
-            set(krs_companies.keys())
-            | set(wiki_companies.keys())
-            | set(children_of_hardcoded)
-        )
+        # Not the Wikipedia companies: an article lends what it knows to a
+        # company the register has, and never adds one. A company known only
+        # from an article has no PKD codes and no legal form, and its payload
+        # would write an empty category list over whatever the site holds.
+        all_krs = set(krs_companies.keys()) | set(children_of_hardcoded)
 
+        wiki_report: Counter[str] = Counter()
+        disagreeing: list[str] = []
         outputs = []
         # Sorted, so the same companies are written in the same order every
         # run. key=str: a NaN, skipped just below, does not compare with a str.
@@ -77,12 +93,31 @@ class Companies(Pipeline[Company]):
             )
 
             krs = krs_companies.get(krs_id)
-            wiki = wiki_companies.get(krs_id)
+            articles = wiki_companies.get(krs_id, [])
+            wiki = wiki_article_for(krs.name if krs is not None else None, articles)
+            if articles and wiki is None:
+                disagreeing.append(
+                    f"{krs_id} {krs.name if krs is not None else ''!s} - "
+                    + ", ".join(str(a.title) for a in articles)
+                )
 
             teryt_code = None
             if krs is not None:
                 teryt_code = krs.teryt_code
             merge = CompanyMerger(krs, wiki)
+
+            parents = list(krs.parents) if krs is not None else []
+            if wiki is not None:
+                wiki_report["with an article"] += 1
+                if not parents:
+                    parents = wiki_owners(
+                        wiki.shareholders,
+                        krs_id,
+                        jst_index,
+                        teryt_code[:2] if isinstance(teryt_code, str) else None,
+                    )
+                    if parents:
+                        wiki_report["owners from the article"] += 1
 
             outputs.append(
                 Company(
@@ -114,11 +149,22 @@ class Companies(Pipeline[Company]):
                     # to. Dropped here until now - the TODO that stood in this
                     # spot - which is why `CompaniesPayloads` emitted no owners
                     # however hard it looked for them, and why `RegionPayloads`
-                    # found no gmina worth a node.
-                    parents=krs.parents if krs is not None else [],
+                    # found no gmina worth a node. The article's owners only
+                    # where the register names none - see `wiki_owners`.
+                    parents=parents,
+                    wikipedia=wiki.source if wiki is not None else None,
+                    wiki_categories=list(wiki.categories) if wiki is not None else [],
                 )
             )
 
+        print(
+            f"Wikipedia: {wiki_report['with an article']} companies have an "
+            f"article of their own, and {wiki_report['owners from the article']} "
+            f"of them take their owners from it; {len(disagreeing)} articles give "
+            "a company's KRS number under another name and are left out:"
+        )
+        for line in disagreeing:
+            print(f"  {line}")
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
 
     def graph(self, ctx: Context):
@@ -137,18 +183,36 @@ class Companies(Pipeline[Company]):
                 krs_to_owner_teryts[desc].update(row.teryts)
         return graph
 
-    def wiki_companies(self, ctx: Context) -> typing.Iterable[Wikipedia]:
-        # TODO reenable reading wikipedia companies
-        return
+    def wiki_companies(self, ctx: Context) -> list[Wikipedia]:
+        """`ProcessWiki`'s company articles, or none when there is nothing to read.
 
-        self.wiki_pipeline.read_or_process(ctx)
-        # TODO this could be a method on a pipeline
-        wiki_companies_file = LocalFile(
-            "company_wikipedia/company_wikipedia.jsonl", "versioned"
-        )
-        df = ctx.io.read_data(wiki_companies_file).read_dataframe("jsonl")
-        for row in df.itertuples(index=False):
-            yield Wikipedia(*row)
+        None is a run without Wikipedia rather than a failed one: the register
+        is the source of record and everything an article adds is optional.
+        So a machine with no copy of the articles, and a copy written before
+        they carried an address and owners, both merge without them - and say
+        so, with the command that fixes it.
+
+        Read rather than declared as a dependency, on purpose. A declared
+        `ProcessWiki` is read or run before `process` whether or not anything
+        uses it, so this pipeline used to start a twelve-minute parse of the
+        dump wherever `person_wikipedia` was missing - which it never reads -
+        and rewrite the tracked fixtures in tests/wiki on the way. The articles
+        change with a dump twice a month; the night rebuilds this every day.
+        """
+        try:
+            df = read_company_articles(ctx)
+        except FileNotFoundError as e:
+            print(f"No Wikipedia company articles to merge, so none are: {e}")
+            return []
+        missing = {"title", "source", "shareholders", "categories"} - set(df.columns)
+        if missing:
+            print(
+                f"The Wikipedia company articles predate {sorted(missing)}, so "
+                "none are merged; `koryta ProcessWiki --refresh ProcessWiki` "
+                "writes them anew"
+            )
+            return []
+        return list(iterate_pipeline(df, Wikipedia))
 
     def children_of_hardcoded(self, ctx: Context, graph: CompanyGraph) -> list[str]:
         children_of_hardcoded_set = graph.all_descendants(
@@ -202,6 +266,151 @@ class CompanyMerger:
         if len(result) == 0:
             result = [Source("hardcoded")]
         return result
+
+
+#: How alike an article's name and the register's have to be for the article
+#: to be the company's own - see `wiki_article_for`.
+NAME_AGREEMENT = 0.6
+
+#: Legal forms, which one name spells out and the other abbreviates or drops.
+#: Normalised, as `scrapers.map.jst.normalise` writes them.
+_LEGAL_FORMS = (
+    "SPOLKA Z OGRANICZONA ODPOWIEDZIALNOSCIA",
+    "SPOLKA AKCYJNA",
+    "SPOLKA KOMANDYTOWA",
+    "SPOLKA JAWNA",
+    "SP Z O O",
+    "S A",
+    "SA",
+    "SP K",
+    "W LIKWIDACJI",
+    "W UPADLOSCI",
+)
+
+
+def _comparable(name: str | None) -> list[str]:
+    """A name's words, the way two spellings of one company's name share them."""
+    text = normalise(re.sub(r"\(.*?\)", " ", name or ""))
+    text = re.sub(r"\s+", " ", " " + re.sub(r"[^A-Z0-9 ]", " ", text) + " ")
+    for form in _LEGAL_FORMS:
+        text = text.replace(f" {form} ", " ")
+    return text.split()
+
+
+def name_agreement(register_name: str, article: Wikipedia) -> float:
+    """How well an article's title or infobox name agrees with the register's.
+
+    1 when every word of the shorter name is among the longer's - "Naftoport"
+    and PRZEDSIEBIORSTWO PRZELADUNKU PALIW PLYNNYCH "NAFTOPORT" - and otherwise
+    how alike the two are as strings.
+    """
+    register = _comparable(register_name)
+    best = 0.0
+    for candidate in (article.title, article.name):
+        words = _comparable(candidate)
+        if not words or not register:
+            continue
+        shorter, longer = sorted((words, register), key=len)
+        if set(shorter) <= set(longer):
+            return 1.0
+        ratio = difflib.SequenceMatcher(None, " ".join(words), " ".join(register))
+        best = max(best, ratio.ratio())
+    return best
+
+
+def wiki_article_for(
+    register_name: str | None, articles: list[Wikipedia]
+) -> Wikipedia | None:
+    """The company's own article, among the ones that give its KRS number.
+
+    An infobox's KRS number is an editor's claim and almost always a true one,
+    but it is not always on the company's own article. A power station gives
+    its operator's number - Elektrownia Rybnik is filed under PGE Energia
+    Ciepla's - a company's predecessors keep theirs - Soda-Matwy and
+    Janikosoda, both Soda Polska Ciech now - and once in a while it is a typo:
+    Macica Serbska, a Sorbian cultural society, gives a Warsaw legal clinic's.
+    So the names have to agree as well, by `NAME_AGREEMENT`.
+
+    Measured over the 469 site companies an article gives the KRS number of
+    (the 2026-08 dump against the 2026-10-07 register): 445 agree, 3 have no
+    name in the register to disagree with, and 21 are left out. About half of
+    those are the cases above; the rest are companies renamed since the article
+    was written - Presspublica is Gremi Media now - whose link a reader can
+    still add by hand.
+    """
+    if not articles:
+        return None
+    if not register_name:
+        return articles[0] if len(articles) == 1 else None
+    best = max(articles, key=lambda article: name_agreement(register_name, article))
+    if name_agreement(register_name, best) < NAME_AGREEMENT:
+        return None
+    return best
+
+
+#: How an article names a local government that the register names directly:
+#: by its office, or as its samorzad. Rewritten to what `JstIndex` reads.
+_JST_SPELLINGS = (
+    ("URZAD MARSZALKOWSKI WOJEWODZTWA ", "WOJEWODZTWO "),
+    ("SAMORZAD WOJEWODZTWA ", "WOJEWODZTWO "),
+    ("URZAD MIASTA ", "MIASTO "),
+    ("URZAD MIEJSKI W ", "GMINA MIEJSKA W "),
+    ("POWIAT GRODZKI ", "MIASTO NA PRAWACH POWIATU "),
+    ("M.ST. ", "MIASTO STOLECZNE "),
+    ("M. ST. ", "MIASTO STOLECZNE "),
+)
+
+
+def _register_spelling(name: str) -> str:
+    text = normalise(name)
+    for prefix, replacement in _JST_SPELLINGS:
+        if text.startswith(prefix):
+            return replacement + text[len(prefix) :]
+    return text
+
+
+def wiki_owners(
+    shareholders: list[WikiShareholder],
+    krs: str,
+    jst: JstIndex | None,
+    seat_wojewodztwo: str | None,
+) -> list[Owner]:
+    """The owners an article lists, as the `Owner`s an edge can be drawn from.
+
+    Read only for a company the register names no owner of: where the register
+    speaks it is current and the article may not be. The register publishes a
+    spolka akcyjna's shareholders only when there is a single one, so this is
+    mostly the SAs - Energa, Polimex Mostostal, PGZ, the special economic
+    zones.
+
+    An entry `ProcessWiki` has resolved is taken as it is. One it could not is
+    tried against the TERYT register by name, the way `company_from_api_krs`
+    reads a shareholder - "Gmina Miasta Gdansk" is no article's title - once
+    the ways an article names a local government and the register does not are
+    rewritten. The Treasury is not taken from that pass: `JstIndex` reads
+    anything starting "Skarb Panstwa" as ours, and plwiki writes the Estonian
+    one that way. An entry nobody can place is a person, a fund or a foreign
+    company, and not something the site has a node for.
+    """
+    owners: list[Owner] = []
+    for shareholder in shareholders:
+        owner = None
+        if shareholder.skarb_panstwa:
+            owner = Owner(krs=None, teryt=SKARB_PANSTWA, source="wiki")
+        elif shareholder.krs:
+            if shareholder.krs != krs:
+                owner = Owner(krs=shareholder.krs, teryt=None, source="wiki")
+        elif shareholder.teryt:
+            owner = Owner(krs=None, teryt=shareholder.teryt, source="wiki")
+        elif jst is not None:
+            resolved = jst.resolve(
+                _register_spelling(shareholder.name), seat_wojewodztwo
+            )
+            if resolved and resolved not in (AMBIGUOUS, SKARB_PANSTWA):
+                owner = Owner(krs=None, teryt=resolved, source="wiki")
+        if owner is not None and owner not in owners:
+            owners.append(owner)
+    return owners
 
 
 REMOVABLE_SUFFIXES = [

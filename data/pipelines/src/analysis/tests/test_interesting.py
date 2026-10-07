@@ -1,7 +1,56 @@
 """What `Companies` writes to companies_merged."""
 
+import pandas as pd
+
 from analysis.interesting import Companies
 from entities.company import Company as KrsCompany
+from entities.company import Owner, Wikipedia, WikiShareholder
+from scrapers.map.jst import SKARB_PANSTWA, JstIndex, Unit
+
+ENERGA = "0000271591"
+ORLEN = "0000028860"
+PKM = "0000371625"
+
+
+class _Fake:
+    """A dependency of `Companies` that answers with what it was given."""
+
+    def __init__(self, rows=(), **attributes):
+        self.rows = list(rows)
+        self.__dict__.update(attributes)
+
+    def read_or_process_list(self, ctx):
+        return self.rows
+
+    def read_or_process(self, ctx):
+        return None
+
+
+def merge(*companies, articles=(), jst=None) -> pd.DataFrame:
+    """`Companies.process` over these register entries and Wikipedia articles."""
+    pipeline = Companies()
+    pipeline.scraped_companies = _Fake(companies)  # type: ignore[assignment]
+    pipeline.hardcoded_companies = _Fake()  # type: ignore[assignment]
+    pipeline.teryt_pipeline = _Fake(cities_to_teryt={})  # type: ignore[assignment]
+    pipeline.jst = _Fake(index=jst)  # type: ignore[assignment]
+    pipeline.wiki_companies = lambda ctx: list(articles)  # type: ignore[method-assign]
+    return pipeline.process(None)  # type: ignore[arg-type]
+
+
+def article(title, krs, *shareholders, name=None, categories=()):
+    return Wikipedia(
+        name=name or title,
+        content_score=1,
+        krs=krs,
+        title=title,
+        source=f"https://pl.wikipedia.org/wiki/{title.replace(' ', '_')}",
+        shareholders=list(shareholders),
+        categories=list(categories),
+    )
+
+
+def row(df: pd.DataFrame, krs: str) -> dict:
+    return df[df["krs"] == krs].iloc[0].to_dict()
 
 
 def test_the_merge_writes_the_companies_in_the_same_order_every_run():
@@ -9,29 +58,199 @@ def test_the_merge_writes_the_companies_in_the_same_order_every_run():
 
     The KRS numbers are gathered in a set, which iterates differently every run.
     """
-
-    class FakeKrs:
-        def read_or_process_list(self, ctx):
-            return [
-                KrsCompany(krs=krs)
-                for krs in ["0000300000", "0000100000", "0000200000"]
-            ]
-
-    class FakeEmpty:
-        def read_or_process_list(self, ctx):
-            return []
-
-    class FakeTeryt:
-        cities_to_teryt: dict[str, str] = {}
-
-        def read_or_process(self, ctx):
-            return None
-
-    pipeline = Companies()
-    pipeline.scraped_companies = FakeKrs()  # type: ignore[assignment]
-    pipeline.hardcoded_companies = FakeEmpty()  # type: ignore[assignment]
-    pipeline.teryt_pipeline = FakeTeryt()  # type: ignore[assignment]
-
-    df = pipeline.process(None)  # type: ignore[arg-type]
+    df = merge(
+        *(KrsCompany(krs=krs) for krs in ["0000300000", "0000100000", "0000200000"])
+    )
 
     assert df["krs"].tolist() == ["0000100000", "0000200000", "0000300000"]
+
+
+def test_a_company_takes_the_address_and_categories_of_its_own_article():
+    df = merge(
+        KrsCompany(krs=ENERGA, name="ENERGA SPÓŁKA AKCYJNA"),
+        articles=[
+            article(
+                "Energa",
+                ENERGA,
+                name="Energa SA",
+                categories=["Przedsiębiorstwa energetyczne w Polsce", "Orlen"],
+            )
+        ],
+    )
+
+    energa = row(df, ENERGA)
+    assert energa["wikipedia"] == "https://pl.wikipedia.org/wiki/Energa"
+    assert list(energa["wiki_categories"]) == [
+        "Przedsiębiorstwa energetyczne w Polsce",
+        "Orlen",
+    ]
+
+
+def test_an_article_naming_the_company_otherwise_is_not_its_own():
+    """A KRS number in an infobox is not always the company's own article.
+
+    Macica Serbska gives the number of a Warsaw legal clinic.
+    """
+    df = merge(
+        KrsCompany(
+            krs="0000030253",
+            name="STUDENCKI OŚRODEK POMOCY PRAWNEJ PRZY WYDZIALE PRAWA",
+        ),
+        articles=[article("Maćica Serbska", "0000030253")],
+    )
+
+    clinic = row(df, "0000030253")
+    assert clinic["wikipedia"] is None
+    assert list(clinic["wiki_categories"]) == []
+
+
+def test_of_two_articles_giving_one_number_the_company_s_own_wins():
+    """A power station's article gives its operator's KRS number."""
+    df = merge(
+        KrsCompany(krs="0000032334", name="PGE GÓRNICTWO I ENERGETYKA KONWENCJONALNA"),
+        articles=[
+            article("Elektrownia Bełchatów", "0000032334"),
+            article("PGE Górnictwo i Energetyka Konwencjonalna", "0000032334"),
+        ],
+    )
+
+    assert row(df, "0000032334")["wikipedia"].endswith(
+        "PGE_Górnictwo_i_Energetyka_Konwencjonalna"
+    )
+
+
+def test_a_name_inside_the_longer_one_agrees():
+    df = merge(
+        KrsCompany(
+            krs="0000065348",
+            name='PRZEDSIĘBIORSTWO PRZEŁADUNKU PALIW PŁYNNYCH "NAFTOPORT"',
+        ),
+        articles=[article("Naftoport", "65348")],
+    )
+
+    assert row(df, "0000065348")["wikipedia"].endswith("/Naftoport")
+
+
+def test_the_article_owners_stand_in_only_where_the_register_names_none():
+    """The register is current where it speaks; the article may not be.
+
+    An SA's shareholders are in the register only when there is one, so
+    Energa's 90.92% PKN Orlen is nowhere but the article.
+    """
+    listed = article(
+        "Energa",
+        ENERGA,
+        WikiShareholder(
+            "PKN ORLEN S.A.", "Polski Koncern Naftowy Orlen", 90.92, krs=ORLEN
+        ),
+        WikiShareholder("mniejszościowi akcjonariusze", None, 9.08),
+    )
+    register_owner = Owner(krs="0000059307", teryt=None)
+
+    silent = row(
+        merge(KrsCompany(krs=ENERGA, name="ENERGA"), articles=[listed]), ENERGA
+    )
+    speaking = row(
+        merge(
+            KrsCompany(krs=ENERGA, name="ENERGA", parents=[register_owner]),
+            articles=[listed],
+        ),
+        ENERGA,
+    )
+
+    assert list(silent["parents"]) == [{"krs": ORLEN, "teryt": None, "source": "wiki"}]
+    assert list(speaking["parents"]) == [
+        {"krs": "0000059307", "teryt": None, "source": None}
+    ]
+
+
+def test_the_article_owners_become_the_register_s_kinds_of_owner():
+    """A gmina written out in words is found in the TERYT register by name.
+
+    Pomorska Kolej Metropolitalna lists its owners as "94,17% - Urzad
+    Marszalkowski Wojewodztwa Pomorskiego" and "5,83% - Gmina Miasta Gdanska",
+    neither of them linked: the office is rewritten to the wojewodztwo it
+    serves, and the gmina is resolved like a register entry.
+    """
+    jst = JstIndex(
+        [
+            Unit("22", "POMORSKIE", "wojewodztwo", None, "22"),
+            Unit("2261011", "Gdańsk", "gmina", "1", "22"),
+        ]
+    )
+    df = merge(
+        KrsCompany(krs=PKM, name="POMORSKA KOLEJ METROPOLITALNA", teryt_code="2261"),
+        articles=[
+            article(
+                "Pomorska Kolej Metropolitalna",
+                PKM,
+                WikiShareholder(
+                    "Urząd Marszałkowski Województwa Pomorskiego", share=94.17
+                ),
+                WikiShareholder("Gmina Miasta Gdańska", share=5.83),
+                WikiShareholder("Skarb Państwa", skarb_panstwa=True),
+                WikiShareholder("Miasto Gdańsk", "Gdańsk", teryt="2261011"),
+            )
+        ],
+        jst=jst,
+    )
+
+    owners = [(p["krs"], p["teryt"]) for p in row(df, PKM)["parents"]]
+    # Gdansk once: the article lists it twice, in words and as a link.
+    assert owners == [(None, "22"), (None, "2261011"), (None, SKARB_PANSTWA)]
+
+
+def test_nobody_the_site_has_a_node_for_is_no_owner():
+    """People, funds and foreign treasuries stay names.
+
+    `JstIndex` reads any name starting "Skarb Panstwa" as the Treasury, and
+    plwiki writes Estonia's as "skarb panstwa Estonii" - which is why the
+    Treasury is only ever taken from `ProcessWiki`'s stricter reading.
+    """
+    jst = JstIndex([Unit("2261011", "Gdańsk", "gmina", "1", "22")])
+    df = merge(
+        KrsCompany(krs="0000000001", name="EESTI ENERGIA"),
+        articles=[
+            article(
+                "Eesti Energia",
+                "0000000001",
+                WikiShareholder("skarb państwa Estonii"),
+                WikiShareholder("Zygmunt Solorz-Żak", "Zygmunt Solorz-Żak", 65.96),
+                WikiShareholder("Nationale-Nederlanden OFE", None, 5.4),
+            )
+        ],
+        jst=jst,
+    )
+
+    assert list(row(df, "0000000001")["parents"]) == []
+
+
+def test_a_company_does_not_own_itself():
+    df = merge(
+        KrsCompany(krs="0000069910", name="EUROPOL GAZ"),
+        articles=[
+            article(
+                "System Gazociągów Tranzytowych „EuRoPol Gaz”",
+                "0000069910",
+                WikiShareholder("Orlen", "Orlen", 48.0, krs=ORLEN),
+                WikiShareholder("EuRoPol Gaz", None, 52.0, krs="0000069910"),
+                name="EuRoPol Gaz",
+            )
+        ],
+    )
+
+    assert [p["krs"] for p in row(df, "0000069910")["parents"]] == [ORLEN]
+
+
+def test_a_company_only_wikipedia_knows_is_not_added():
+    """An article lends to a company the register has, and never adds one.
+
+    One known only from an article has no codes and no form, and its payload
+    would write an empty category list over whatever the site holds.
+    """
+    df = merge(
+        KrsCompany(krs=ENERGA, name="ENERGA"),
+        articles=[article("Energa", ENERGA), article("Orlen", ORLEN)],
+    )
+
+    assert df["krs"].tolist() == [ENERGA]
