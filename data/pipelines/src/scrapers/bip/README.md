@@ -32,6 +32,10 @@ Download the gov.pl BIP registry ZIP and upsert its hosts.
 koryta_scrape_bip registry [--xml-cache PATH] [--refresh]
 ```
 
+`crawl` runs this automatically when `bip_hosts` is empty, so a fresh database
+only needs `crawl`. Use `registry` (with `--refresh`) to pick up changes to the
+official list.
+
 - `--xml-cache` (default `bip_crawl_out/registry/subjects.xml`) — the unpacked
   XML is cached here; without `--refresh` the cache is reused.
 - Dedupes rows by host, keeps the root-path entry as the host's name/seed, and
@@ -49,6 +53,8 @@ koryta_scrape_bip crawl \
 ```
 
 - `--out` (default `bip_crawl_out`) — bundle tree.
+- `--xml-cache` / `--refresh-registry` / `--no-registry` — control the
+  automatic registry ingest when `bip_hosts` is empty.
 - `--workers` — concurrent fetchers (default 8).
 - `--max-active-hosts` — hosts in flight at once (default 50).
 - `--hosts` — cap hosts this run; `--freshness` — re-crawl `ok` hosts older

@@ -44,30 +44,38 @@ def parse_freshness(value: str | None) -> int | None:
     return amount * (86400 if unit == "d" else 3600)
 
 
-def cmd_registry(args: argparse.Namespace) -> int:
-    cache: Path = args.xml_cache
-    if cache.exists() and not args.refresh:
-        xml = cache.read_bytes()
-        source = f"cache {cache}"
+def ingest_registry(
+    bip_queue: BipQueue, xml_cache: Path, *, refresh: bool
+) -> tuple[int, int, int, str]:
+    """Load the gov.pl registry into `bip_hosts`.
+
+    Returns (registry rows, hosts inserted, hosts updated, source).
+    """
+    if xml_cache.exists() and not refresh:
+        xml = xml_cache.read_bytes()
+        source = f"cache {xml_cache}"
     else:
         xml = download_subjects_xml()
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_bytes(xml)
+        xml_cache.parent.mkdir(parents=True, exist_ok=True)
+        xml_cache.write_bytes(xml)
         source = "gov.pl"
     entries = parse_subjects_xml(xml)
-    hosts = hosts_from_entries(entries)
+    inserted, updated = bip_queue.upsert_hosts(hosts_from_entries(entries))
+    return len(entries), inserted, updated, source
+
+
+def cmd_registry(args: argparse.Namespace) -> int:
     pg = PostgresClient.from_env()
     try:
-        inserted, updated = BipQueue(pg).upsert_hosts(hosts)
-        stats = BipQueue(pg).stats()
+        entries, inserted, updated, source = ingest_registry(
+            BipQueue(pg), args.xml_cache, refresh=args.refresh
+        )
+        hosts = BipQueue(pg).stats().get("hosts")
     finally:
         pg.close()
     print(f"source:        {source}")
-    print(f"registry rows: {len(entries)}")
-    print(
-        f"hosts:         {stats.get('hosts')} "
-        f"(inserted {inserted}, updated {updated})"
-    )
+    print(f"registry rows: {entries}")
+    print(f"hosts:         {hosts} (inserted {inserted}, updated {updated})")
     return 0
 
 
@@ -75,6 +83,16 @@ def cmd_crawl(args: argparse.Namespace) -> int:
     root = Path(args.out)
     pg = PostgresClient.from_env(max_size=4)
     bip_queue = BipQueue(pg)
+    if not args.no_registry and bip_queue.stats().get("hosts", 0) == 0:
+        print("bip_hosts is empty; ingesting the gov.pl registry...", flush=True)
+        entries, inserted, updated, source = ingest_registry(
+            bip_queue, args.xml_cache, refresh=args.refresh_registry
+        )
+        print(
+            f"registry: {entries} rows -> {inserted} hosts inserted, "
+            f"{updated} updated ({source})",
+            flush=True,
+        )
     if not args.no_repair:
         # A SIGKILL/crash leaves .part bundles behind (SIGTERM flushes them).
         # Re-wrap them before crawling so their bytes are kept, not re-fetched.
@@ -224,6 +242,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     crawl = sub.add_parser("crawl", help="crawl hosts and harvest documents")
     crawl.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    crawl.add_argument("--xml-cache", type=Path, default=DEFAULT_XML_CACHE)
+    crawl.add_argument(
+        "--refresh-registry",
+        action="store_true",
+        help="re-download the registry when bootstrapping an empty host table",
+    )
+    crawl.add_argument(
+        "--no-registry",
+        action="store_true",
+        help="do not bootstrap the host table from the registry when it is empty",
+    )
     crawl.add_argument("--workers", type=int, default=8)
     crawl.add_argument("--max-active-hosts", type=int, default=50)
     crawl.add_argument("--hosts", type=int, default=None, help="limit hosts this run")
