@@ -387,6 +387,12 @@ NODE_FIELDS = [
     "content",
     "wikipedia",
     "rejestrIo",
+    # Filled in once and never rewritten (`updatedPerson`), so a payload
+    # carrying one teaches the node nothing when it has a date already. Left
+    # out, every page with a date read as a node the payload would change -
+    # which is all the 33 `unchanged` answers of the 2026-10-08 night were -
+    # and 1,111 of that night's 10,301 planned had nothing else to send.
+    "birthDate",
     "krsNumber",
     "sourceURL",
     "teryt",
@@ -415,8 +421,8 @@ NODE_FIELDS = [
 NODE_LIST_FIELDS = frozenset({"parties", "activity", "categories", "isPublic"})
 
 #: What an edge has to carry to be compared with one the pipeline is about to
-#: send: the pair and type it is looked up by, and every discriminator any edge
-#: type declares in `frontend/server/utils/edges.ts`.
+#: send: the pair and type it is looked up by, and every discriminator and
+#: annotation any edge type declares in `frontend/server/utils/edges.ts`.
 EDGE_FIELDS = [
     "id",
     "type",
@@ -430,11 +436,17 @@ EDGE_FIELDS = [
     "party",
     "committee",
     "term",
+    # A candidacy's annotation: whether it took the seat. Left out, every win
+    # already stored read as one the payload would add.
+    "elected",
     # Read only by the seat check: a seat somebody has removed is not a
     # competing claim, so the ingest writes the correct one over it. Every
     # other lookup counts a removed edge as present, the way `findEdge` does.
     "deleted",
 ]
+
+#: The edge columns that are booleans rather than strings.
+EDGE_BOOLEAN_FIELDS = frozenset({"deleted", "elected"})
 
 
 class KorytaExport(Pipeline):
@@ -486,9 +498,10 @@ class KorytaEdges(KorytaExport):
     """Every edge on koryta.pl: who worked where, who stood where, who is named."""
 
     collection_name = "edges"
-    #: `deleted` is a boolean; pinning it to `str` on the way back off disk
-    #: would make every edge's removal flag the truthy string "False".
-    dtype = {name: str for name in EDGE_FIELDS if name != "deleted"}
+    #: `deleted` and `elected` are booleans; pinning them to `str` on the way
+    #: back off disk would make every edge's flags the truthy string "False".
+    #: Unpinned they come back as 1.0, 0.0 and NaN (`site.FLAG_FIELDS`).
+    dtype = {name: str for name in EDGE_FIELDS if name not in EDGE_BOOLEAN_FIELDS}
     fields = EDGE_FIELDS
 
 
