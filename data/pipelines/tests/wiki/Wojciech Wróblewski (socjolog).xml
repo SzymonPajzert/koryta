@@ -3,22 +3,20 @@
     <ns0:ns>0</ns0:ns>
     <ns0:id>1090003</ns0:id>
     <ns0:revision>
-      <ns0:id>79402694</ns0:id>
-      <ns0:parentid>77446773</ns0:parentid>
-      <ns0:timestamp>2026-03-27T09:43:24Z</ns0:timestamp>
+      <ns0:id>80163596</ns0:id>
+      <ns0:parentid>80163584</ns0:parentid>
+      <ns0:timestamp>2026-07-11T11:16:42Z</ns0:timestamp>
       <ns0:contributor>
-        <ns0:username>SchlurcherBot</ns0:username>
-        <ns0:id>1371053</ns0:id>
+        <ns0:username>Yutyo77764</ns0:username>
+        <ns0:id>616986</ns0:id>
       </ns0:contributor>
-      <ns0:minor />
-      <ns0:comment>Bot: http → https</ns0:comment>
-      <ns0:origin>79402694</ns0:origin>
+      <ns0:origin>80163596</ns0:origin>
       <ns0:model>wikitext</ns0:model>
       <ns0:format>text/x-wiki</ns0:format>
-      <ns0:text bytes="10321" sha1="8hu1msj2x3sip010d3cnxp0fdg7sbab" xml:space="preserve">{{Polityk infobox
+      <ns0:text bytes="10459" sha1="4p8py22vtd2oylfczqyclanwnql9cfx" xml:space="preserve">{{Polityk infobox
  | polityk             = Wojciech Wróblewski
- | grafika             = 
- | opis grafiki        = 
+ | grafika             = WojciechWroblewski.png
+ | opis grafiki        = Wojciech Wróblewski (1990)
  | data urodzenia      = [[6 września]] [[1957]]
  | miejsce urodzenia   = [[Mielec]]
  | data śmierci        = 
@@ -38,9 +36,10 @@
  | 3 od                = 1990
  | 3 do                = 1994
  | odznaczenia         = {{Order|OOP|KK}} {{Order|OWKG|KK}} {{Order|MOMPN|Z}} {{Order|OBG|2}} {{Order|OKZM|1}} [[Plik:LTU Lithuania Millennium Star BAR.svg|40px|Gwiazda Tysiąclecia Litwy]] [[Plik:LTU Lithuanian Diplomacy Star BAR.svg|40px|Gwiazda Dyplomacji Litwy]]
- | commons             = 
+ | commons             = Category:Wojciech Wróblewski (sociologist)
  | quote               = 
- | imię i nazwisko     = 
+ | imię i nazwisko     = Wojciech Wróblewski
+ | news                = 
 }}
 '''Wojciech Franciszek Wróblewski''' (ur. [[6 września]] [[1957]] w [[Mielec|Mielcu]]) – polski socjolog, [[Samorząd terytorialny w Polsce|samorządowiec]], [[dyplomata]], instruktor harcerski ([[harcmistrz]], [[Harcerz Rzeczypospolitej]]).
 
@@ -99,7 +98,7 @@ W latach 2005–2009 doradca ds. strategii w [[Polski Koncern Naftowy Orlen|Pols
 [[Kategoria:Przedstawiciele dyplomatyczni III Rzeczypospolitej na Litwie]]
 [[Kategoria:Uczestnicy Okrągłego Stołu (strona solidarnościowa)]]
 [[Kategoria:Urodzeni w 1958]]</ns0:text>
-      <ns0:sha1>8hu1msj2x3sip010d3cnxp0fdg7sbab</ns0:sha1>
+      <ns0:sha1>4p8py22vtd2oylfczqyclanwnql9cfx</ns0:sha1>
     </ns0:revision>
   </ns0:page>
   
