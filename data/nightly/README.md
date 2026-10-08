@@ -42,7 +42,8 @@ fetching everything again.
 
 rejestr.io charges 0.05 PLN a call, so the night buys only what the free
 sources cannot give (`--scope fallback`), before the rebuild, so that what it
-buys reaches the same night's people:
+buys reaches the same night's people - who send those pages first, right after
+the new hires:
 
 - the person feeds of the people somebody marked interesting - a vote on the
   site, or the hardcoded list - which no register says;
@@ -74,12 +75,20 @@ People: at most 100 a night (`--max-uploads`), in this order
 1. somebody the site has no page for, with a public post that began in the
    last 30 days and has not ended - the page is created unpublished, so they
    reach the review queue, not the site;
-2. a published page the payload would change;
-3. any other page the payload would change.
+2. a page the payload would change, of somebody whose rejestr.io feed was
+   bought in the last 7 days (`--bought-days`) - by `krs_paid` or by hand, as
+   the crawl bucket's names say - so what was paid for reaches the site that
+   night, or the night after a hand run or a held night. A page only: the
+   feeds are bought by name, so a bought entry without a page is most likely
+   a namesake's, and nobody but a new hire gets a page;
+3. a published page the payload would change;
+4. any other page the payload would change.
 
 Newest news first inside each. A payload sent unchanged in the last 30 days
 is left alone (`--resend-after`), so a pending update or a party a human took
 off a page does not take a slot every night - and is not put back every night.
+That keeps the second tier to the week's purchases not yet sent: a bought
+person whose payload went up unchanged is left alone like anybody else.
 
 Scores: after the people, every scoring model (`analysis/scores`) is rebuilt
 and its shortlist reconciled with the votes it holds on the site - a changed
