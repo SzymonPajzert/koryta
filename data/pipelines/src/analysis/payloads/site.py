@@ -52,6 +52,11 @@ INTERNAL_FIELDS = frozenset(
 #: `frontend/server/utils/edges.ts`.
 FOLDED_FIELDS = frozenset({"committee"})
 
+#: Fields stored as booleans, which a frame read back off jsonl holds as 1.0,
+#: 0.0 and NaN. `false` is a blank, as `field` in `server/utils/edges.ts` reads
+#: it: an edit form's unticked box, not a recorded defeat.
+FLAG_FIELDS = frozenset({"elected"})
+
 
 @dataclass(frozen=True)
 class EdgeSemantics:
@@ -187,6 +192,8 @@ def field(edge: typing.Mapping[str, typing.Any], name: str) -> typing.Any:
         return None
     if isinstance(value, float) and math.isnan(value):
         return None
+    if name in FLAG_FIELDS:
+        return True if value == 1 else None
     if isinstance(value, str):
         if not value:
             return None
