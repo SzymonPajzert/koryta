@@ -48,6 +48,7 @@ from analysis.payloads.site import (
     edge_identity,
     semantics,
 )
+from analysis.payloads.site import field as stored_value
 from conductor import setup_context
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 
@@ -108,6 +109,7 @@ class Implied:
                 "election_year": self._year(stored),
                 "party": stored.get("party"),
                 "committee": stored.get("committee"),
+                "elected": stored_value(stored, "elected"),
             }
             for target, stored in self.out[(node_id, "election")]
         ]
@@ -125,6 +127,7 @@ class Implied:
             "parties": _as_list(node.get("parties")),
             "wikipedia": node.get("wikipedia"),
             "rejestrIo": node.get("rejestrIo"),
+            "birthDate": node.get("birthDate"),
         }
 
     def company(self, node: dict) -> dict:
