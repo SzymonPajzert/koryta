@@ -25,12 +25,20 @@ A company's run creates pages for the company's people the site lacks, and
 only those; a person's run creates none.
 
 `--scope priority` builds both halves at once and sends, up to the cap, the
-new hires the site lacks first, then the published pages that would change,
-then the rest, newest news first in each (`analysis.payloads.priority`). It
-leaves alone a payload it already sent unchanged in the last `--resend-after`
-days: an update a reviewer has not yet approved, or a party a human took off a
-page, still reads as a change against the export, and sent every night it
-would take a slot each night and undo the human each time.
+new hires the site lacks first, then the pages of the people whose rejestr.io
+feed was bought in the last `--bought-days` days, then the published pages
+that would change, then the rest, newest news first in each
+(`analysis.payloads.priority`). It leaves alone a payload it already sent
+unchanged in the last `--resend-after` days: an update a reviewer has not yet
+approved, or a party a human took off a page, still reads as a change against
+the export, and sent every night it would take a slot each night and undo the
+human each time.
+
+What was bought is read off the crawl bucket, which files every rejestr.io
+answer under the day it was bought, whoever bought it (`bought_since`). A week
+of it rather than the day, so that a feed a hand run bought after the night's
+upload, or one bought on a night whose people step was held, still goes first
+the night after; a page whose payload went up since is left alone as sent.
 
 A run builds the payloads (phase "paczki"), writes them to the shared cache as
 one write-once part - `jobs/people_import/payloads/date=<day>/<run>.jsonl.gz`,
@@ -94,12 +102,13 @@ from jobs.people_import.payloads import (
     pipeline_names,
 )
 from scrapers.koryta.created import SENT_LOG
+from scrapers.krs.coverage import parse_person_connections_url
 from scrapers.stores import ProcessPolicy
 from stores.config import pesel_salt
 from stores.job_requests import PEOPLE_REQUEST, Request, read_request
 from stores.job_runs import ERROR_CHARS, ERRORS_KEPT, FinalState, JobRun
 from stores.koryta_login import TokenSource, token_source
-from stores.storage import SHARED_BUCKET, Client, warsaw_tz
+from stores.storage import CRAWLED_BUCKET, SHARED_BUCKET, Client, warsaw_tz
 from uploader import (
     PERSON_COUNTERS,
     Args,
@@ -120,6 +129,9 @@ RUNS_PREFIX = "jobs/people_import/runs/"
 #: the scoring models can rate the pages a run created before the next export
 #: has them (`scrapers.koryta.created`, which owns the name).
 SENT_PREFIX = SENT_LOG.prefix
+#: Where the crawl bucket keeps the person feeds bought from rejestr.io, each
+#: answer under the day it was bought (`jobs.krs_common.upload_result`).
+PERSON_FEEDS = "hostname=rejestr.io/api/v2/osoby/"
 
 #: Where submit_people.sh uploads for production.
 DEFAULT_ENDPOINT = "https://autopush.koryta.pl"
@@ -233,6 +245,10 @@ class RunSummary:
     created: list[str] = field(default_factory=list)
     #: A priority run: how many of the planned are in each tier.
     tiers: dict[str, int] = field(default_factory=dict)
+    #: A priority run: the people whose rejestr.io feed was bought within
+    #: --bought-days. Those with a page the payload would change are the
+    #: `bought` tier.
+    bought_people: int = 0
     #: A priority run: payloads left out as sent unchanged within --resend-after.
     already_sent: int = 0
     #: A priority run: the gs:// path of what it took (`SENT_PREFIX`).
@@ -363,6 +379,24 @@ def sent_recently(client: "Client", since: str) -> set[tuple[str, str]]:
                 row = json.loads(line)
                 seen.add((row["person"], row["payload"]))
     return seen
+
+
+def bought_since(client: "Client", since: str) -> set[str]:
+    """The rejestr.io ids of the people whose feed was bought on `since`
+    (YYYY-MM-DD) or later - by `koryta_scrape_krs_paid`, at night or by hand.
+
+    Read off the names the answers are stored under, which end in the day of
+    the purchase, rather than off the paid job's summaries: a run killed
+    before it wrote one has still bought what it stored. Some 5,000 names in
+    October 2026, a few seconds to list.
+    """
+    bucket = client.storage_client.bucket(CRAWLED_BUCKET)
+    bought: set[str] = set()
+    for blob in bucket.list_blobs(prefix=PERSON_FEEDS):
+        feed = parse_person_connections_url(blob.name)
+        if feed is not None and feed[1] >= since:
+            bought.add(feed[0])
+    return bought
 
 
 def plan_priority(
@@ -554,8 +588,16 @@ class PeopleImport:
         left out, the new hires cut at --max-new."""
         args = self.args
         today = datetime.now(warsaw_tz).date()
+        bought_from = (today - timedelta(days=args.bought_days)).isoformat()
+        bought = bought_since(self.client(), bought_from)
+        self.summary.bought_people = len(bought)
+        print(f"Bought from rejestr.io since {bought_from}: {len(bought)} people")
         candidates = build_priority(
-            args.koryta_date, refresh_policy(args.refresh), today, args.recent_days
+            args.koryta_date,
+            refresh_policy(args.refresh),
+            today,
+            args.recent_days,
+            bought,
         )
         already: set[tuple[str, str]] = set()
         if args.resend_after:
@@ -830,7 +872,8 @@ def parser() -> argparse.ArgumentParser:
         default="on-koryta",
         help="on-koryta, the default, refreshes the pages the site has; "
         "not-on-koryta adds the people it has not, and needs --max-new; "
-        "priority sends new hires first, then published pages, then the rest "
+        "priority sends new hires first, then the pages of the people bought "
+        "from rejestr.io, then published pages, then the rest "
         "(analysis.payloads.priority).",
     )
     parser.add_argument(
@@ -847,6 +890,14 @@ def parser() -> argparse.ArgumentParser:
         default=30,
         help="Priority: a new hire is somebody without a page whose public post "
         "began within this many days and has not ended. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--bought-days",
+        type=non_negative_int,
+        default=7,
+        help="Priority: right after the new hires, the pages of the people whose "
+        "rejestr.io feed was bought within this many days, ahead of the "
+        "published pages. 0: today's alone. Default: %(default)s.",
     )
     parser.add_argument(
         "--resend-after",

@@ -1,4 +1,5 @@
-"""Who a capped people upload sends first: new hires, published pages, the rest."""
+"""Who a capped people upload sends first: new hires, the people bought from
+rejestr.io, published pages, the rest."""
 
 from dataclasses import asdict
 from datetime import date
@@ -6,11 +7,13 @@ from datetime import date
 import pandas as pd
 
 from analysis.payloads.priority import (
+    BOUGHT,
     NEW_HIRE,
     ON_SITE,
     PUBLISHED,
     newest_public_start,
     prioritised,
+    register_id,
 )
 from analysis.payloads.site import UNRESOLVED_REGION, SiteSnapshot
 from entities.composite import Company, Election, Person
@@ -126,6 +129,7 @@ def test_new_hires_then_published_then_the_rest_each_newest_first():
         site,
         public_krs={PUBLIC},
         published_ids={"pub"},
+        bought=set(),
         today=TODAY,
         recent_days=30,
     )
@@ -178,8 +182,109 @@ def test_people_without_a_recent_public_post_or_a_change_are_left_out():
         site,
         public_krs={PUBLIC},
         published_ids=set(),
+        bought=set(),
         today=TODAY,
         recent_days=30,
     )
 
     assert picks == []
+
+
+# ---------------------------------------------------------------------------
+# The people bought from rejestr.io
+
+
+def test_a_page_bought_for_goes_after_the_new_hires_and_before_the_published():
+    site = snapshot(
+        stored_person("pub", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        stored_person("pub-bought", "Ewa Lis", "https://rejestr.io/osoby/3"),
+        stored_person("draft-bought", "Olga Wilk", "https://rejestr.io/osoby/4"),
+        stored_person("draft", "Piotr Sowa", "https://rejestr.io/osoby/5"),
+    )
+    hire = person(
+        "Anna Nowak",
+        "https://rejestr.io/osoby/2",
+        Company(krs=PUBLIC, start="2026-09-10"),
+    )
+    published = person(
+        "Jan Kowalski",
+        "https://rejestr.io/osoby/1",
+        Company(krs=PUBLIC, start="2026-09-01"),
+    )
+    published_bought = person(
+        "Ewa Lis",
+        "https://rejestr.io/osoby/3",
+        Company(krs=PRIVATE, start="2019-05-01"),
+    )
+    draft_bought = person(
+        "Olga Wilk",
+        "https://rejestr.io/osoby/4",
+        Company(krs=PRIVATE, start="2026-08-01"),
+    )
+    draft = person(
+        "Piotr Sowa",
+        "https://rejestr.io/osoby/5",
+        Company(krs=PRIVATE, start="2026-09-20"),
+    )
+
+    picks = prioritised(
+        [hire],
+        [draft, published, published_bought, draft_bought],
+        site,
+        public_krs={PUBLIC},
+        published_ids={"pub", "pub-bought"},
+        # A new hire bought as well is still a new hire.
+        bought={"2", "3", "4"},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    # Published or not, newest news first, and ahead of anything newer in
+    # the tiers after.
+    assert [(p.person.name, p.tier, p.since) for p in picks] == [
+        ("Anna Nowak", NEW_HIRE, "2026-09-10"),
+        ("Olga Wilk", BOUGHT, "2026-08-01"),
+        ("Ewa Lis", BOUGHT, "2019-05-01"),
+        ("Jan Kowalski", PUBLISHED, "2026-09-01"),
+        ("Piotr Sowa", ON_SITE, "2026-09-20"),
+    ]
+
+
+def test_somebody_bought_goes_only_onto_a_page_the_payload_would_change():
+    site = snapshot(
+        stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        edges=(employed("p1", "place-public", "2020-01-01"),),
+    )
+    unchanged = person(
+        "Jan Kowalski",
+        "https://rejestr.io/osoby/1",
+        Company(krs=PUBLIC, role="Prezes", start="2020-01-01"),
+    )
+    # The feeds are bought by name, so one bought for somebody without a page
+    # may be a namesake's: nobody but a new hire gets a page.
+    namesake = person(
+        "Jan Kowalski",
+        "https://rejestr.io/osoby/7",
+        Company(krs=PRIVATE, start="2026-09-30"),
+    )
+
+    picks = prioritised(
+        [namesake],
+        [unchanged],
+        site,
+        public_krs={PUBLIC},
+        published_ids={"p1"},
+        bought={"1", "7"},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert picks == []
+
+
+def test_a_payload_is_filed_under_the_id_its_register_link_ends_in():
+    assert register_id(person("Jan", "https://rejestr.io/osoby/2479295")) == "2479295"
+    assert register_id(person("Jan", "https://rejestr.io/osoby/2479295/")) == (
+        "2479295"
+    )
+    assert register_id(person("Jan", None)) is None  # type: ignore[arg-type]

@@ -1,21 +1,30 @@
 """Who a capped upload sends first.
 
 While the daily people import is rolled out it sends at most a hundred people
-a night, so the order decides who reaches the site at all. Three tiers, each
+a night, so the order decides who reaches the site at all. Four tiers, each
 sent whole before the next:
 
 1. `NEW_HIRE` - somebody the site has no page for, holding a post at a public
    company that began in the last `recent_days` and has not ended: the people
    the site exists to show, at the moment they are news. Created unpublished,
    so they arrive in the queue for a reviewer rather than on the site.
-2. `PUBLISHED` - a published page the payload would change. What readers see.
-3. `ON_SITE` - an unpublished page the payload would change.
+2. `BOUGHT` - a page the payload would change, of somebody whose rejestr.io
+   feed was bought lately (`bought`). The night pays for the feeds of the
+   people somebody marked interesting so that what they hold reaches the
+   site; behind the published pages they waited weeks for it - on 2026-10-08
+   the nine in the night's plan stood between 154th and 8,196th of 10,301, at
+   a hundred a night. A page only: the feeds are bought by name
+   (`ScrapeRejestrIO.people_to_scrape`), so one bought for somebody without a
+   page is likely a namesake's - 8 of the 17 people bought 2026-10-06 to 10-08
+   were - and nobody but a new hire gets a page here.
+3. `PUBLISHED` - a published page the payload would change. What readers see.
+4. `ON_SITE` - an unpublished page the payload would change.
 
 Inside a tier the newest news first: a hire by the start of their newest post,
 a page by the newest dated fact the upload would add (`dated_changes`). A
 change with no date - a party, a birth date - goes after every dated one.
 
-The new-hire tier is `missing_from_koryta` and the other two
+The new-hire tier is `missing_from_koryta` and the other three
 `matching_one_page`, with their guards: nobody here is someone a run of either
 scope would not have sent.
 """
@@ -28,9 +37,10 @@ from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, day_of
 from entities.composite import Person
 
 NEW_HIRE = "new_hire"
+BOUGHT = "bought"
 PUBLISHED = "published"
 ON_SITE = "on_site"
-TIERS = (NEW_HIRE, PUBLISHED, ON_SITE)
+TIERS = (NEW_HIRE, BOUGHT, PUBLISHED, ON_SITE)
 
 
 @dataclass(frozen=True)
@@ -61,6 +71,14 @@ def newest_public_start(
     return max(starts, default=None)
 
 
+def register_id(person: Person) -> str | None:
+    """The rejestr.io id a payload is filed under: the end of its `rejestrIo`
+    link, `https://rejestr.io/osoby/<id>`."""
+    if not person.rejestrIo:
+        return None
+    return person.rejestrIo.rstrip("/").rsplit("/", 1)[-1]
+
+
 def newest_change(
     snapshot: SiteSnapshot, payload: typing.Mapping[str, typing.Any]
 ) -> tuple[bool, str | None]:
@@ -89,6 +107,7 @@ def prioritised(
     *,
     public_krs: typing.Container[str],
     published_ids: typing.Container[str],
+    bought: typing.Container[str],
     today: date,
     recent_days: int,
 ) -> list[Pick]:
@@ -96,7 +115,8 @@ def prioritised(
 
     `new` is what `missing_from_koryta` kept and `on_site` what
     `matching_one_page` kept, both from the same payloads and `snapshot`.
-    `published_ids` are the node ids of the published person pages.
+    `published_ids` are the node ids of the published person pages, `bought`
+    the rejestr.io ids of the people whose feed was bought lately.
     """
     since = (today - timedelta(days=recent_days)).isoformat()
     hires = [
@@ -105,6 +125,7 @@ def prioritised(
         if (start := newest_public_start(person, public_krs, since)) is not None
     ]
 
+    paid_for: list[Pick] = []
     published: list[Pick] = []
     unpublished: list[Pick] = []
     for person in on_site:
@@ -113,14 +134,22 @@ def prioritised(
         if not writes:
             continue
         stored = snapshot.person_for(payload)
-        if stored is not None and str(stored.get("id")) in published_ids:
+        if register_id(person) in bought:
+            paid_for.append(Pick(person, BOUGHT, newest))
+        elif stored is not None and str(stored.get("id")) in published_ids:
             published.append(Pick(person, PUBLISHED, newest))
         else:
             unpublished.append(Pick(person, ON_SITE, newest))
 
     print(
         f"Priority: {len(hires)} new hires (a public post since {since}), "
+        f"{len(paid_for)} pages of people bought from rejestr.io, "
         f"{len(published)} published and {len(unpublished)} unpublished pages "
         f"to change"
     )
-    return newest_first(hires) + newest_first(published) + newest_first(unpublished)
+    return (
+        newest_first(hires)
+        + newest_first(paid_for)
+        + newest_first(published)
+        + newest_first(unpublished)
+    )

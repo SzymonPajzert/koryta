@@ -19,7 +19,7 @@ The steps, in order (`STEPS`):
                 free sources cannot give - the people somebody marked
                 interesting, and the companies whose odpis did not come - at
                 most --paid-max-calls a day; before the reprocess, so what it
-                buys reaches tonight's people
+                buys reaches tonight's people, who send those pages first
     reprocess   every pipeline rebuilt, as the CI nightly does, less the ones
                 whose sources change with a dump or an election rather than
                 overnight; each output backed up to the shared cache under
@@ -28,7 +28,8 @@ The steps, in order (`STEPS`):
     outputs     the outputs against their baseline (src/tests/e2e)
     invariants  the database invariants over tonight's export
     people      koryta_people_import --scope priority --max-uploads 100: new
-                hires first, then published pages, then the rest
+                hires first, then the pages of the people rejestr.io was paid
+                for this week, then published pages, then the rest
     scores      koryta_score_import: every scoring model rebuilt over the
                 day's newest export and the pages the people step has just
                 created, and its votes reconciled with the site's
