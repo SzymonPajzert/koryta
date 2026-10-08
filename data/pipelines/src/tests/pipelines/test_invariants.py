@@ -1474,12 +1474,23 @@ def test_a_later_revision_never_drops_a_field(revisions):
     node. An endpoint that only knows some of the fields therefore has to layer
     them over `baseNodeFields` first, and a revision that skipped that step
     silently deletes everything it did not know about.
+
+    What a revision replaces is the page as the last applied revision left it,
+    so that is what each one is compared with. A pending or rejected proposal
+    never was the page: next to it a later revision drops nothing. Compared
+    with it, the count went from 17 to 52 overnight on 2026-10-07, when the
+    partiesSource backfill stamped 143 pending proposals and every revision
+    written after one of them seemed to lose the field.
     """
     # One article, oYkxDlD1KfkO96p6PIwK, whose January 2026 edit lost the
     # `estimates` field the previous revision carried. It is still on the node
     # only because that revision was never approved; approving it would run the
-    # `set` and drop the field for good.
-    KNOWN_DROPS = 1
+    # `set` and drop the field for good. Three more from August 2026, all
+    # applied: an upload's revision of Anna Derlukiewicz (enSvS2jSoLIqQmwUdy9I)
+    # without the `content` the one before it had, `committee` lost from
+    # election edge Gm2XbS1oTAmdH7GP1yEi by an approved edit, and `shortName`
+    # from article 0XrffRWh3d3es3ZYjAm4 by migration:backfill-article-dates.
+    KNOWN_DROPS = 4
 
     # Bookkeeping the node owns rather than the revision, listed in
     # server/utils/revisions.ts as INTERNAL_FIELDS. They are regenerated or
@@ -1502,26 +1513,52 @@ def test_a_later_revision_never_drops_a_field(revisions):
         if document_id and isinstance(revision.get("data"), dict):
             by_document[document_id].append(revision)
 
+    def applied(revision: dict) -> bool:
+        """Whether the revision was written over its document.
+
+        An approved one was. So was an automatic one when it was filed,
+        whatever its status says, unless it is a `proposal_` one, which files
+        without writing. A revision with no status predates statuses (August
+        2026) and is taken as applied, which is what this test assumed of every
+        revision before. A document's first revision created it, pending or not.
+        """
+        if revision.get("status") in (None, "approved"):
+            return True
+        return revision.get("update_automatic") is True and not str(
+            revision.get("id", "")
+        ).startswith("proposal_")
+
+    # backfill-parties-source.ts (2026-10-06) stamped `partiesSource` into the
+    # pending human revisions after the fact, a page's creating one among them,
+    # and gave the page the field through a revision of its own. So a pending
+    # revision standing for the page it created does not say the page had it.
+    stamped_later = {"partiesSource"}
+
     dropped = []
     for document_id, history in by_document.items():
-        if len(history) < 2:
-            continue
-        history = sorted(history, key=lambda r: str(r.get("update_time")))
-        for earlier, later in zip(history, history[1:]):
-            lost = {
-                field
-                for field, value in earlier["data"].items()
-                if field not in internal
-                and value not in (None, "", [], {})
-                and field not in later["data"]
-            }
-            if lost:
-                dropped.append((document_id, earlier["id"], later["id"], sorted(lost)))
+        page = None
+        for revision in sorted(history, key=lambda r: str(r.get("update_time"))):
+            if page is not None:
+                unknown = stamped_later if page.get("status") == "pending" else set()
+                lost = {
+                    field
+                    for field, value in page["data"].items()
+                    if field not in internal
+                    and field not in unknown
+                    and value not in (None, "", [], {})
+                    and field not in revision["data"]
+                }
+                if lost:
+                    dropped.append(
+                        (document_id, page["id"], revision["id"], sorted(lost))
+                    )
+            if page is None or applied(revision):
+                page = revision
 
     assert len(dropped) <= KNOWN_DROPS, (
-        f"{len(dropped)} revisions drop a field their predecessor had, which "
+        f"{len(dropped)} revisions drop a field the page they replace had, which "
         f"erases it from the node once approved - up from the {KNOWN_DROPS} "
-        f"known one. As (document, earlier, later, lost fields): "
+        f"known ones. As (document, applied before it, revision, lost fields): "
         f"{sample(dropped, 5)}"
     )
 
