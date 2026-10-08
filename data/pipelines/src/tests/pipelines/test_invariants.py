@@ -992,21 +992,31 @@ def test_edge_stats_cover_every_edge_of_the_node(nodes, edges):
     `stats` field whatever, and were created in mid-2025. computeNodes is not
     scheduled, so a node only ever gets stats if something else recomputes it -
     which is the open question the branch left rather than a new defect.
+
+    Since 2026-09-02 that something is `sweepEdgeStats`: `onEdgeWritten` marks
+    an edge's source and the sweep recomputes it from the edges it is the
+    source of, leaving out the deleted ones. This used to expect what a full
+    `computeNodeStats` run writes instead - deleted edges included, and every
+    edge's target listing itself - and so grew with every soft delete and every
+    company the people import creates (only ever a target, never swept): 312
+    nodes on the 2026-10-06 export, 761 two days later, not one of them missing
+    a live edge.
     """
-    # `computeNodeStats` indexes an edge under both of its ends and then takes
-    # the target of each, so a node that is only ever a target still lists
-    # itself. Mirrored here rather than corrected: the point is to check the
-    # stored index against the edges, not to redesign it.
+    # The self entry only a full computeNodes writes is left unchecked: the
+    # readers of `targetNodeIds` (the person table's filters, the timeline, a
+    # region's seats) all read a person's or a region's list, never a company
+    # listing itself.
     expected: dict[str, set[str]] = collections.defaultdict(set)
     for edge in edges:
+        if edge.get("deleted") is True:
+            continue
         expected[edge["source"]].add(edge["target"])
-        expected[edge["target"]].add(edge["target"])
 
-    # 49 places and one person on the 2026-08-02 export. The 36 with no stats
-    # at all are the ones `test_is_approved_matches_the_approved_revision`
-    # counts; the other 14 have stats that predate an edge. Goes to zero once
-    # /api/stats/computeNodes has covered them.
-    UNCOMPUTED_NODES = 50
+    # None on the 2026-10-07 and 2026-10-08 exports. The sweep runs once a
+    # minute, so an edge written while the export runs can be in it before its
+    # source's stats are; as for `test_notes_count_matches_the_notes`, a few
+    # are lag, more are a sweep that has stopped.
+    RECOMPUTE_LAG = 5
 
     incomplete = []
     for document in nodes:
@@ -1016,10 +1026,11 @@ def test_edge_stats_cover_every_edge_of_the_node(nodes, edges):
         if missing:
             incomplete.append((document["id"], sample(missing, 3)))
 
-    assert len(incomplete) <= UNCOMPUTED_NODES, (
-        f"{len(incomplete)} nodes have edge targets missing from "
+    assert len(incomplete) <= RECOMPUTE_LAG, (
+        f"{len(incomplete)} nodes have live edge targets missing from "
         f"stats.edges.all.targetNodeIds, so the table filters cannot find them, "
-        f"up from the {UNCOMPUTED_NODES} known ones: {sample(incomplete, 5)}"
+        f"more than the {RECOMPUTE_LAG} the sweep's lag explains: "
+        f"{sample(incomplete, 5)}"
     )
 
 
