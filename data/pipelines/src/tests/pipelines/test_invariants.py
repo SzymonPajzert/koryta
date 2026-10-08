@@ -1159,15 +1159,24 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes):
     two are recorded at different depths. Two kinds of election in one year are
     two contests - 2024 held both the local and the european ones - so the
     office has to match too.
+
+    Only reviewed candidacies count, the ones `pageIsPublic` shows a visitor.
+    Since 2026-10-07 a person is sent every PKW record nothing contradicts, and
+    several namesakes' records can each fit one person, so the upload files
+    some in two places at once on purpose: unpublished, for a reviewer to
+    reject. Counted with them, this read 152 on the 2026-10-08 export, all but
+    24 of them waiting in the queue.
     """
-    # `drop_contradictory_candidacies` stops these being published; the stored
-    # ones go once the affected people are re-ingested.
-    KNOWN_CONTRADICTIONS = 135
+    # 24 on 18 published pages on the 2026-10-08 export, among them Mariusz
+    # Michał Wiśniewski, whose two June candidacies for 2014 (Poznań, powiat
+    # grójecki) were approved on 2026-10-07. In each, one of the two is somebody
+    # else's; the count goes down as reviewers unpublish them.
+    KNOWN_CONTRADICTIONS = 24
 
     nodes_by_id = {node["id"]: node for node in nodes}
     regions: dict[tuple, set[str]] = collections.defaultdict(set)
     for edge in edges:
-        if edge.get("type") != "election":
+        if edge.get("type") != "election" or not page_is_public(edge):
             continue
         teryt = nodes_by_id.get(edge["target"], {}).get("teryt")
         if not teryt:
