@@ -14,11 +14,14 @@ import pytest
 
 import jobs.people_import as job
 from analysis.payloads.target import NEW, Targeted
+from entities.person import RejestrIOKey
+from jobs.krs_common import answer_name
 from jobs.people_import import payloads as build
+from scrapers.krs.scrape import PEOPLE_QUERIES, RejestrIOQuery
 from scrapers.stores import ProcessPolicy
 from stores import job_requests
 from stores.job_requests import Request
-from stores.storage import SHARED_BUCKET
+from stores.storage import CRAWLED_BUCKET, SHARED_BUCKET
 from uploader import Args, PersonUploader
 
 ENDPOINT = "https://autopush.koryta.pl"
@@ -106,10 +109,13 @@ class World:
         self.runs: list[RecordingRun] = []
         self.built: list[dict] = []
         self.tokens = Tokens(self.events)
-        #: A priority run's build, and what it remembers sending.
+        #: A priority run's build, what it remembers sending, and who the
+        #: crawl bucket says was bought from rejestr.io.
         self.candidates: list[build.Candidate] = []
         self.already_sent: set[tuple[str, str]] = set()
         self.memory_since: list[str] = []
+        self.bought: set[str] = set()
+        self.bought_since: list[str] = []
         #: What a run asked for one page's people is told to send.
         self.targeted = Targeted()
 
@@ -719,12 +725,18 @@ def candidate(name: str, tier: str, since: str | None = None) -> build.Candidate
 
 @pytest.fixture
 def priority(world, monkeypatch) -> World:
-    """The world, with a priority build and a memory of what was sent."""
+    """The world, with a priority build, a memory of what was sent, and the
+    people bought lately."""
 
-    def build_priority(koryta_date, policy, today, recent_days):
+    def build_priority(koryta_date, policy, today, recent_days, bought):
         world.events.append("build")
         world.built.append(
-            {"date": koryta_date, "today": today, "recent_days": recent_days}
+            {
+                "date": koryta_date,
+                "today": today,
+                "recent_days": recent_days,
+                "bought": set(bought),
+            }
         )
         return list(world.candidates)
 
@@ -732,8 +744,13 @@ def priority(world, monkeypatch) -> World:
         world.memory_since.append(since)
         return set(world.already_sent)
 
+    def bought_since(client, since):
+        world.bought_since.append(since)
+        return set(world.bought)
+
     monkeypatch.setattr(job, "build_priority", build_priority)
     monkeypatch.setattr(job, "sent_recently", sent_recently)
+    monkeypatch.setattr(job, "bought_since", bought_since)
     return world
 
 
@@ -743,7 +760,7 @@ def sent_part(world: World) -> list[dict]:
     return [json.loads(line) for line in lines]
 
 
-HIRE, PUBLISHED, ON_SITE = "new_hire", "published", "on_site"
+HIRE, BOUGHT, PUBLISHED, ON_SITE = "new_hire", "bought", "published", "on_site"
 
 
 def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
@@ -760,7 +777,7 @@ def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
     assert code == job.EXIT_TRY_LATER
     assert priority.sent() == ["Anna Nowak", "Beata Kos", "Jan Kowalski"]
     summary = priority.summary()
-    assert summary["tiers"] == {HIRE: 2, PUBLISHED: 1, ON_SITE: 1}
+    assert summary["tiers"] == {HIRE: 2, BOUGHT: 0, PUBLISHED: 1, ON_SITE: 1}
     assert (summary["state"], summary["stopped"]) == ("partial", "limit")
     assert summary["created"] == ["Anna Nowak (p)", "Beata Kos (p)"]
     assert [
@@ -784,7 +801,12 @@ def test_new_hires_past_max_new_make_room_for_the_pages_after_them(priority):
     assert job.main(["--scope", "priority", "--max-new", "1"]) == 0
 
     assert priority.sent() == ["Anna Nowak", "Jan Kowalski"]
-    assert priority.summary()["tiers"] == {HIRE: 1, PUBLISHED: 1, ON_SITE: 0}
+    assert priority.summary()["tiers"] == {
+        HIRE: 1,
+        BOUGHT: 0,
+        PUBLISHED: 1,
+        ON_SITE: 0,
+    }
 
 
 def test_a_payload_sent_unchanged_lately_is_left_out(priority):
@@ -869,23 +891,25 @@ def test_what_the_site_refused_is_not_remembered_as_sent(priority):
 def test_a_priority_dry_run_shows_the_tiers_and_writes_nothing(priority, capsys):
     priority.candidates = [
         candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Olga Wilk", BOUGHT),
         candidate("Jan Kowalski", PUBLISHED),
         candidate("Ewa Lis", ON_SITE),
     ]
 
-    assert job.main(["--scope", "priority", "--dry-run", "--max-uploads", "2"]) == 0
+    assert job.main(["--scope", "priority", "--dry-run", "--max-uploads", "3"]) == 0
 
     assert priority.sent() == []
     assert priority.objects == {}
     out = capsys.readouterr().out
-    assert "The first 2 (--max-uploads) by tier:" in out
-    assert "'new_hire': 1, 'published': 1, 'on_site': 0" in out
+    assert "The first 3 (--max-uploads) by tier:" in out
+    assert "'new_hire': 1, 'bought': 1, 'published': 1, 'on_site': 0" in out
 
 
 def test_a_priority_run_may_create_as_many_pages_as_it_sends():
     args = job.parse_args(["--scope", "priority", "--max-uploads", "100"])
 
     assert (args.max_new, args.recent_days, args.resend_after) == (100, 30, 30)
+    assert args.bought_days == 7
     assert job.parse_args(["--scope", "priority", "--max-new", "10"]).max_new == 10
 
 
@@ -899,6 +923,83 @@ def test_planning_keeps_the_order_and_tells_a_person_from_their_payload():
 
     assert [c.payload["name"] for c in planned] == ["Anna Nowak", "Jan Kowalski"]
     assert skipped == 1
+
+
+# ---------------------------------------------------------------------------
+# A priority run: the people bought from rejestr.io
+
+
+def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, capsys):
+    priority.bought = {"Lis", "Wilk"}
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Ewa Lis", BOUGHT, "2026-08-01"),
+        candidate("Jan Kowalski", PUBLISHED),
+    ]
+    priority.answers = [person("created"), person("updated"), person("updated")]
+
+    assert job.main(["--scope", "priority"]) == 0
+
+    assert priority.sent() == ["Anna Nowak", "Ewa Lis", "Jan Kowalski"]
+    # The build is told whose feeds were bought, a week back from today.
+    [built] = priority.built
+    assert built["bought"] == {"Lis", "Wilk"}
+    [since] = priority.bought_since
+    assert (built["today"] - date.fromisoformat(since)).days == 7
+    summary = priority.summary()
+    assert summary["tiers"] == {HIRE: 1, BOUGHT: 1, PUBLISHED: 1, ON_SITE: 0}
+    # Two bought, one of them with a page to change.
+    assert summary["bought_people"] == 2
+    assert [(row["name"], row["tier"]) for row in sent_part(priority)] == [
+        ("Anna Nowak", HIRE),
+        ("Ewa Lis", BOUGHT),
+        ("Jan Kowalski", PUBLISHED),
+    ]
+    out = capsys.readouterr().out
+    assert (
+        "Planned by tier: {'new_hire': 1, 'bought': 1, 'published': 1, "
+        "'on_site': 0}" in out
+    )
+
+
+def test_bought_days_0_takes_todays_purchases_alone(priority):
+    priority.candidates = [candidate("Anna Nowak", PUBLISHED)]
+    priority.answers = [person("updated")]
+
+    assert job.main(["--scope", "priority", "--bought-days", "0"]) == 0
+
+    [built] = priority.built
+    assert priority.bought_since == [built["today"].isoformat()]
+
+
+def test_who_was_bought_is_read_off_the_names_the_answers_are_stored_under():
+    def stored(person_id: str, day: str) -> list[str]:
+        # Named as the paid job names what it buys: both feeds of a person.
+        feeds = RejestrIOQuery(
+            person=RejestrIOKey(person_id), queries=list(PEOPLE_QUERIES)
+        )
+        return [answer_name(url, day) for url in feeds.urls()]
+
+    names = [
+        *stored("1134749", "2026-10-08"),
+        *stored("2447520", "2026-10-07"),
+        *stored("1037389", "2026-10-06"),  # before the day asked for
+        "hostname=rejestr.io/api/v2/org/0000012345/krs-powiazania/"
+        "aktualnosc_aktualne/date=2026-10-08",
+    ]
+
+    class Bucket:
+        def list_blobs(self, prefix):
+            return [SimpleNamespace(name=n) for n in names if n.startswith(prefix)]
+
+    class Storage:
+        def bucket(self, name):
+            assert name == CRAWLED_BUCKET
+            return Bucket()
+
+    client = typing.cast(job.Client, SimpleNamespace(storage_client=Storage()))
+
+    assert job.bought_since(client, "2026-10-07") == {"1134749", "2447520"}
 
 
 # ---------------------------------------------------------------------------

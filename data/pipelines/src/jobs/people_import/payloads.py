@@ -8,6 +8,7 @@ through JSON and back the way it went through the pipe.
 
 import json
 import sys
+from collections.abc import Container
 from dataclasses import asdict, dataclass
 from datetime import date
 
@@ -92,9 +93,15 @@ def build_payloads(
 
 
 def build_priority(
-    koryta_date: str | None, policy: ProcessPolicy, today: date, recent_days: int
+    koryta_date: str | None,
+    policy: ProcessPolicy,
+    today: date,
+    recent_days: int,
+    bought: Container[str],
 ) -> list[Candidate]:
     """Every payload a priority run may send, in the order it sends them.
+
+    `bought` are the rejestr.io ids of the people whose feed was bought lately.
 
     Built as `build_payloads` builds, flags on sys.argv included, then each
     payload made what the pipe would have carried: through a one-row frame and
@@ -107,7 +114,9 @@ def build_priority(
     try:
         ctx, dumper = setup_context(required_resources(PeoplePayloads), policy=policy)
         try:
-            picks = Pipeline.create(PeoplePayloads).prioritised(ctx, today, recent_days)
+            picks = Pipeline.create(PeoplePayloads).prioritised(
+                ctx, today, recent_days, bought
+            )
         finally:
             dumper.dump_pandas()
     finally:

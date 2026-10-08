@@ -153,13 +153,21 @@ class PeoplePayloads(Pipeline[Person]):
             self._snapshot = SiteSnapshot.read(ctx, self.args.koryta_date)
         return self._snapshot
 
-    def prioritised(self, ctx: Context, today: date, recent_days: int) -> list[Pick]:
+    def prioritised(
+        self,
+        ctx: Context,
+        today: date,
+        recent_days: int,
+        bought: typing.Container[str],
+    ) -> list[Pick]:
         """Both halves of `--all` in the order a capped upload sends them.
 
-        New hires the site lacks first, then the published pages that would
-        change, then the other pages that would - see `analysis.payloads.priority`.
-        One build for what would otherwise take two runs, `--not-on-koryta` and
-        `--on-koryta --only-changed`, each guarded as that run would be.
+        New hires the site lacks first, then the pages of the people whose
+        rejestr.io feed was bought lately (`bought`, by their ids), then the
+        published pages that would change, then the other pages that would -
+        see `analysis.payloads.priority`. One build for what would otherwise
+        take two runs, `--not-on-koryta` and `--on-koryta --only-changed`,
+        each guarded as that run would be.
         """
         people_df = self.registered_people(ctx)
         payloads = [
@@ -172,6 +180,7 @@ class PeoplePayloads(Pipeline[Person]):
             snapshot,
             public_krs=self.people.public_companies(ctx),
             published_ids=self.published_people(ctx),
+            bought=bought,
             today=today,
             recent_days=recent_days,
         )
