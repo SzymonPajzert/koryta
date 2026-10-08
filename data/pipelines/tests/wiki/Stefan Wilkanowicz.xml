@@ -3,19 +3,18 @@
     <ns0:ns>0</ns0:ns>
     <ns0:id>493668</ns0:id>
     <ns0:revision>
-      <ns0:id>78228401</ns0:id>
-      <ns0:parentid>77083891</ns0:parentid>
-      <ns0:timestamp>2025-12-05T06:48:29Z</ns0:timestamp>
+      <ns0:id>80061966</ns0:id>
+      <ns0:parentid>78228401</ns0:parentid>
+      <ns0:timestamp>2026-06-25T07:31:53Z</ns0:timestamp>
       <ns0:contributor>
-        <ns0:username>SchlurcherBot</ns0:username>
-        <ns0:id>1371053</ns0:id>
+        <ns0:username>Mika58</ns0:username>
+        <ns0:id>161794</ns0:id>
       </ns0:contributor>
-      <ns0:minor />
-      <ns0:comment>Bot: http → https</ns0:comment>
-      <ns0:origin>78228401</ns0:origin>
+      <ns0:comment>uzupełnienie</ns0:comment>
+      <ns0:origin>80061966</ns0:origin>
       <ns0:model>wikitext</ns0:model>
       <ns0:format>text/x-wiki</ns0:format>
-      <ns0:text bytes="6672" sha1="601g2ti7qfdjh48oj4rf4sv5wff15cy" xml:space="preserve">{{Biogram infobox
+      <ns0:text bytes="6736" sha1="5qct6op4kpy64cm1lrquzbncbob8saa" xml:space="preserve">{{Biogram infobox
  |imię i nazwisko           = Stefan Wilkanowicz
  |grafika                   = 2008.06.22. Stefan Wilkanowicz Fot Mariusz Kubik 01.JPG
  |opis grafiki              = Stefan Wilkanowicz (2008)
@@ -64,11 +63,12 @@ Odznaczony Krzyżem Oficerskim (2006)&lt;ref&gt;{{Monitor Polski|2007|9|97}}&lt;
 [[Kategoria:Odznaczeni Krzyżem Komandorskim Orderu Odrodzenia Polski (III Rzeczpospolita)]]
 [[Kategoria:Odznaczeni Krzyżem Oficerskim Orderu Odrodzenia Polski (III Rzeczpospolita)]]
 [[Kategoria:Polacy odznaczeni Orderem Świętego Sylwestra]]
+[[Kategoria:Laureaci nagrody „Ślad” im. bp. Jana Chrapka]]
 [[Kategoria:Pochowani na tynieckim cmentarzu parafialnym]]
 [[Kategoria:Wspierający Apel 64]]
 [[Kategoria:Urodzeni w 1924]]
 [[Kategoria:Zmarli w 2022]]</ns0:text>
-      <ns0:sha1>601g2ti7qfdjh48oj4rf4sv5wff15cy</ns0:sha1>
+      <ns0:sha1>5qct6op4kpy64cm1lrquzbncbob8saa</ns0:sha1>
     </ns0:revision>
   </ns0:page>
   
