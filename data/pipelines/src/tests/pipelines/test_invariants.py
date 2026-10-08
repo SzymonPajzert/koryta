@@ -39,9 +39,21 @@ pytestmark = pytest.mark.e2e
 # Node and edge types the frontend knows how to render, from `shared/model.ts`.
 # `topic` is the newest and the reason `nodeTypes` there is a tuple the zod
 # enums derive from: four handlers had written the list out by hand and none of
-# them was found by the compiler when it was added.
+# them was found by the compiler when it was added. `seat` (a company's
+# registered seat, split out of `owns` on 2026-08-29) and `tagged` (article ->
+# topic) joined `edgeTypes` there without joining this list, so every seat the
+# company ingest wrote read as an unknown type: 5,452 of them on 2026-10-08.
 NODE_TYPES = {"person", "place", "article", "region", "topic"}
-EDGE_TYPES = {"employed", "connection", "mentions", "owns", "comment", "election"}
+EDGE_TYPES = {
+    "employed",
+    "connection",
+    "mentions",
+    "owns",
+    "seat",
+    "comment",
+    "election",
+    "tagged",
+}
 
 # Which node types an edge type may join, from `app/composables/useEdgeTypes.ts`,
 # which is what the edit UI offers. `owns` also builds the region tree
@@ -66,6 +78,8 @@ EDGE_ENDPOINT_TYPES: dict[str, set[tuple[str, str]]] = {
         ("place", "article"),
     },
     "owns": {("place", "place"), ("region", "place"), ("region", "region")},
+    "seat": {("region", "place")},
+    "tagged": {("article", "topic")},
 }
 
 # Edge types that assert a relationship rather than an occurrence: the pair and
@@ -1035,7 +1049,7 @@ def test_edge_endpoints_exist(edges, node_ids):
 
 
 def test_edge_types_are_known(edges):
-    """Only the six edge types `shared/model.ts` declares may be stored."""
+    """Only the edge types `shared/model.ts` declares may be stored."""
     # 64 `source` and 3 `mentioned_person` edges. `source` predates article
     # nodes and points at a legacy blob; `mentioned_person` is the *UI* name for
     # an article->person `mentions` edge (see `useEdgeTypes.ts`), written to the
