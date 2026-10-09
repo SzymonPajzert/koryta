@@ -12,9 +12,8 @@ direct first, and a company carries the first one that fits:
   `CompaniesKRS` uses, so a name it can place here it places there too.
 - **a public body outside KRS** - a union of gminas, the metropolis, a state
   agency, fund or forest. They own companies under their own names and have no
-  KRS number for the parent test below to follow, so they are named here.
-  Deliberately a closed list: a prefix like "AGENCJA" or "INSTYTUT" is as often
-  an advertising agency as a state one.
+  KRS number for the parent test below to follow, so they are named, in
+  `public_bodies`, the closed list `CompaniesKRS` reads too.
 - **a company already known to be public**, by its KRS number: anything
   `CompaniesKRS` marks public, and anything this finds, followed to a fixed
   point, so a subsidiary of a subsidiary of a gmina's holding company arrives
@@ -35,8 +34,9 @@ import pandas as pd
 
 from scrapers.krs.columns import is_public, padded_krs
 from scrapers.krs.list import CompaniesKRS
+from scrapers.krs.public_bodies import public_body
 from scrapers.krs.register import STATUS_OK, KRSRegisterEntries, owner_share
-from scrapers.map.jst import SKARB_PANSTWA, JstIndex, normalise
+from scrapers.map.jst import SKARB_PANSTWA, JstIndex
 from scrapers.map.teryt import Jst
 from scrapers.stores import Context, Pipeline
 
@@ -45,52 +45,6 @@ REASON_SKARB_PANSTWA = "skarb_panstwa"
 REASON_JST = "jst"
 REASON_PUBLIC_BODY = "public_body"
 REASON_PUBLIC_PARENT = "public_parent"
-
-#: Public legal persons that own companies without a KRS number of their own,
-#: as the start of their normalised name. Found by reading every owner in a
-#: 1,750-entry sample of the register that was neither a person, a company nor
-#: a government `JstIndex` places - KOWR was the one public name among 137 -
-#: plus the bodies `names_an_owner` already names as the ones REGON has to
-#: answer for.
-PUBLIC_BODY_PREFIXES = (
-    # Unions of local governments, which hold utilities for their members.
-    "ZWIAZEK GMIN",
-    "ZWIAZEK MIEDZYGMINNY",
-    "MIEDZYGMINNY ZWIAZEK",
-    "ZWIAZEK POWIATOW",
-    "ZWIAZEK POWIATOWO",
-    "ZWIAZEK KOMUNALNY",
-    "KOMUNALNY ZWIAZEK",
-    "ZWIAZEK KOMUNIKACYJNY",
-    "GORNOSLASKO-ZAGLEBIOWSKA METROPOLIA",
-    "GORNOSLASKO - ZAGLEBIOWSKA METROPOLIA",
-    "METROPOLIA",
-    # State agencies and funds.
-    "KRAJOWY OSRODEK WSPARCIA ROLNICTWA",
-    "AGENCJA NIERUCHOMOSCI ROLNYCH",
-    "AGENCJA WLASNOSCI ROLNEJ SKARBU PANSTWA",
-    "AGENCJA MIENIA WOJSKOWEGO",
-    "WOJSKOWA AGENCJA MIESZKANIOWA",
-    "AGENCJA RESTRUKTURYZACJI I MODERNIZACJI ROLNICTWA",
-    "PANSTWOWE GOSPODARSTWO LESNE",
-    "LASY PANSTWOWE",
-    "PANSTWOWE GOSPODARSTWO WODNE",
-    "NARODOWY FUNDUSZ OCHRONY SRODOWISKA",
-    "WOJEWODZKI FUNDUSZ OCHRONY SRODOWISKA",
-    "BANK GOSPODARSTWA KRAJOWEGO",
-    "NARODOWY BANK POLSKI",
-    "ZAKLAD UBEZPIECZEN SPOLECZNYCH",
-    "PANSTWOWY FUNDUSZ REHABILITACJI",
-    "POLSKA AKADEMIA NAUK",
-    "SIEC BADAWCZA LUKASIEWICZ",
-    "NARODOWE CENTRUM BADAN I ROZWOJU",
-)
-
-
-def public_body(name: str) -> bool:
-    """Whether an owner's name is one of `PUBLIC_BODY_PREFIXES`."""
-    text = normalise(name).strip(' "')
-    return any(text.startswith(prefix) for prefix in PUBLIC_BODY_PREFIXES)
 
 
 @dataclass
