@@ -142,6 +142,9 @@ function publishedNode(name: string) {
   return { name, published: true };
 }
 
+/** A job of node-1's, as the edge and the revision that wrote it both say. */
+const employment = { source: "node-1", target: "node-2", type: "employed" };
+
 describe("api/edges/byNode", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -258,8 +261,8 @@ describe("api/edges/byNode", () => {
   });
 
   it("flags an unpublished relation that still has a proposal waiting", async () => {
-    // Publishing such an edge settles its proposal too, and the dialog says so
-    // - which it can only do if the handler looked the proposal up.
+    // The dialog says so - which it can only do if the handler looked the
+    // proposal up.
     stored["nodes/node-2"] = publishedNode("Firma A");
     stored["edges/e-1"] = {
       source: "node-1",
@@ -447,16 +450,12 @@ describe("api/edges/byNode", () => {
     // relation as a proposal awaiting a verdict said the same thing about all
     // of them and was wrong about most.
     stored["nodes/node-2"] = publishedNode("Firma A");
-    stored["edges/e-1"] = {
-      source: "node-1",
-      target: "node-2",
-      type: "employed",
-    };
+    stored["edges/e-1"] = { ...employment };
     stored["revisions/rev-1"] = {
       node_id: "e-1",
       status: "approved",
       update_time: "2026-01-01T00:00:00.000Z",
-      data: {},
+      data: employment,
     };
 
     const relations = byId(await callHandler());
@@ -469,22 +468,49 @@ describe("api/edges/byNode", () => {
 
   it("still says so when a revision really is awaiting a verdict", async () => {
     stored["nodes/node-2"] = publishedNode("Firma A");
-    stored["edges/e-1"] = {
-      source: "node-1",
-      target: "node-2",
-      type: "employed",
-    };
+    stored["edges/e-1"] = { ...employment };
     stored["revisions/rev-1"] = {
       node_id: "e-1",
       status: "pending",
       update_time: "2026-01-01T00:00:00.000Z",
-      data: {},
+      data: employment,
     };
 
     const relations = byId(await callHandler());
 
     expect(relations["e-1"]).toMatchObject({
       revisionToApprove: "rev-1",
+      hasPendingRevision: true,
+    });
+  });
+
+  it("never offers to approve a proposal the relation does not hold", async () => {
+    // Publishing leaves such a proposal waiting, so the dialog must not say
+    // the newest revision will be approved: it is still waiting afterwards.
+    stored["nodes/node-2"] = publishedNode("Firma A");
+    stored["edges/e-1"] = {
+      source: "node-1",
+      target: "node-2",
+      type: "election",
+      start_date: "2024-01-01",
+    };
+    stored["revisions/proposal_e-1_x"] = {
+      node_id: "e-1",
+      status: "pending",
+      update_time: "2026-09-01T00:00:00.000Z",
+      data: {
+        source: "node-1",
+        target: "node-2",
+        type: "election",
+        start_date: "2024-01-01",
+        committee: "KWW Nasza Gmina",
+      },
+    };
+
+    const relations = byId(await callHandler());
+
+    expect(relations["e-1"]).toMatchObject({
+      revisionToApprove: null,
       hasPendingRevision: true,
     });
   });

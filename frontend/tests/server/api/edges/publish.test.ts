@@ -129,11 +129,15 @@ function node(name: string, published = true) {
   return { name, type: "person", published, revision_id: "revisions/r" };
 }
 
+/** What the edge `seedPublishableEdge` stores says, and so what a revision it
+ * holds states - publishing only ever approves a revision the edge holds. */
+const written = { source: "a", target: "b", type: "connection" };
+
 /** The usual case: one edge between two published pages. */
 function seedPublishableEdge() {
   stored["nodes/a"] = node("Anna Nowak");
   stored["nodes/b"] = node("Orlen");
-  stored["edges/e1"] = { source: "a", target: "b", type: "connection" };
+  stored["edges/e1"] = { ...written };
 }
 
 /** What the batch wrote to the edge document. */
@@ -167,7 +171,7 @@ describe("api/edges/publish", () => {
     expect(result).toMatchObject({ published: true, edge_ids: ["e1"] });
   });
 
-  it("settles the relation's outstanding proposal in the same commit", async () => {
+  it("settles the revision the relation was written by, in the same commit", async () => {
     // Publishing a relation is the review of it. Leaving the revision pending
     // would keep the queue showing work on an edge that is already live.
     seedPublishableEdge();
@@ -176,7 +180,7 @@ describe("api/edges/publish", () => {
       collection: "edges",
       status: "pending",
       update_time: "2026-01-01T00:00:00.000Z",
-      data: { source: "a", target: "b" },
+      data: written,
     };
 
     const result = await handler({} as never);
@@ -195,19 +199,19 @@ describe("api/edges/publish", () => {
     expect(result).toMatchObject({ approved: ["rev-1"] });
   });
 
-  it("approves the newest proposal when several are waiting", async () => {
+  it("approves the newest revision when several are waiting", async () => {
     seedPublishableEdge();
     stored["revisions/old"] = {
       node_id: "e1",
       status: "pending",
       update_time: "2025-01-01T00:00:00.000Z",
-      data: {},
+      data: written,
     };
     stored["revisions/new"] = {
       node_id: "e1",
       status: "pending",
       update_time: "2026-06-01T00:00:00.000Z",
-      data: {},
+      data: written,
     };
 
     const result = await handler({} as never);
@@ -229,7 +233,7 @@ describe("api/edges/publish", () => {
       node_id: "e1",
       status: "approved",
       update_time: "2026-01-01T00:00:00.000Z",
-      data: { source: "a", target: "b" },
+      data: written,
     };
 
     const result = await handler({} as never);
@@ -246,7 +250,7 @@ describe("api/edges/publish", () => {
     stored["revisions/legacy"] = {
       node_id: "e1",
       update_time: "2026-01-01T00:00:00.000Z",
-      data: { source: "a", target: "b" },
+      data: written,
     };
 
     const result = await handler({} as never);
@@ -262,18 +266,108 @@ describe("api/edges/publish", () => {
       node_id: "e1",
       status: "rejected",
       update_time: "2026-06-01T00:00:00.000Z",
-      data: {},
+      data: written,
     };
     stored["revisions/older"] = {
       node_id: "e1",
       status: "pending",
       update_time: "2025-01-01T00:00:00.000Z",
-      data: {},
+      data: written,
     };
 
     const result = await handler({} as never);
 
     expect(result).toMatchObject({ approved: ["older"] });
+  });
+
+  describe("a proposal the relation does not hold", () => {
+    /** A candidacy as the ingest wrote it, and the committee it proposed
+     * afterwards - the shape of 30 of the 32 approvals publishing faked by
+     * 2026-10-06. */
+    const candidacy = {
+      source: "a",
+      target: "b",
+      type: "election",
+      name: "kandydatura",
+      position: "Samorząd",
+      start_date: "2024-01-01",
+    };
+
+    beforeEach(() => {
+      seedPublishableEdge();
+      stored["edges/e1"] = { ...candidacy, published: false };
+      stored["revisions/written"] = {
+        node_id: "e1",
+        collection: "edges",
+        status: "pending",
+        update_time: "2026-06-01T00:00:00.000Z",
+        data: candidacy,
+      };
+      stored["revisions/proposal_e1_committee"] = {
+        node_id: "e1",
+        collection: "edges",
+        status: "pending",
+        update_automatic: true,
+        update_time: "2026-09-01T00:00:00.000Z",
+        data: { ...candidacy, committee: "KWW Nasza Gmina" },
+      };
+    });
+
+    it("stays pending, and the relation goes up as the revision it holds", async () => {
+      // The proposal is the newest, and adopting it marked it approved with
+      // its committee never written - so it left the queue unapplied, and the
+      // next upload, still finding no committee, proposed it again.
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ approved: ["written"] });
+      expect(edgeUpdate()).toEqual({
+        published: true,
+        revision_id: expect.objectContaining({ id: "written" }),
+      });
+      expect(mockBatchUpdate).not.toHaveBeenCalledWith(
+        "revisions/proposal_e1_committee",
+        expect.anything(),
+      );
+    });
+
+    it("stays pending when it is the only revision there is", async () => {
+      delete stored["revisions/written"];
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ published: true, approved: [] });
+      expect(edgeUpdate()).toEqual({ published: true });
+      expect(mockBatchUpdate).not.toHaveBeenCalledWith(
+        "revisions/proposal_e1_committee",
+        expect.anything(),
+      );
+      expect(auditEntries().map((entry) => entry.action)).toEqual(["publish"]);
+    });
+
+    it("stays pending when it would change a field the relation already has", async () => {
+      // A contributor's correction of the year, filed on 09-06 and shown as
+      // approved from 09-08 without the edge ever changing.
+      stored["revisions/proposal_e1_committee"]!.data = {
+        ...candidacy,
+        start_date: "2014-01-01",
+      };
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ approved: ["written"] });
+    });
+
+    it("stays pending when it would take a field away", async () => {
+      // A contributor unticking a win files the candidacy without `elected`,
+      // and every field it does state is still on the edge.
+      stored["edges/e1"] = { ...candidacy, elected: true, published: false };
+      stored["revisions/written"]!.data = { ...candidacy, elected: true };
+      stored["revisions/proposal_e1_committee"]!.data = candidacy;
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ approved: ["written"] });
+    });
   });
 
   it("publishes on the document alone when every revision was rejected", async () => {
@@ -455,7 +549,7 @@ describe("api/edges/publish", () => {
       node_id: "e1",
       status: "pending",
       update_time: "2026-01-01T00:00:00.000Z",
-      data: {},
+      data: written,
     };
 
     await handler({} as never);

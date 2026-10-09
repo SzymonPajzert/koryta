@@ -272,6 +272,36 @@ export function sameStoredValue(a: unknown, b: unknown): boolean {
   );
 }
 
+/** Whether a stored document says exactly what a revision says.
+ *
+ * The question to ask before calling a revision the one a document is shown
+ * by - before its `revision_id` points there, or it is marked approved on the
+ * strength of the document. A revision `createRevisionTransaction` wrote
+ * passes: the document is its data plus the fields the document owns, which
+ * `withoutInternalFields` takes off again. A proposal does not until somebody
+ * applies it, because `proposeRevisionTransaction` leaves the document alone,
+ * so the committee or the correction it carries is exactly what the document
+ * lacks.
+ *
+ * Equal, rather than "every field the revision states is on the document",
+ * because a proposal can take a field away: a contributor unticking a win
+ * files a revision with no `elected` at all, which every field of a candidacy
+ * still carrying `elected: true` would agree with. The price is 167 draft
+ * edges on the 10-09 export whose `update_time` and `update_user` an old edit
+ * path stamped straight onto the edge: none of their revisions states those,
+ * so none is held, and publishing one leaves it pointing at no revision, which
+ * is how an edge written before revisions has always been published.
+ */
+export function holdsRevision(
+  stored: Record<string, unknown>,
+  data: unknown,
+): boolean {
+  return sameStoredValue(
+    withoutInternalFields((data ?? {}) as Record<string, unknown>),
+    withoutInternalFields(stored),
+  );
+}
+
 /** The document a revision write leaves behind, bar the pointer to the revision
  * itself.
  *

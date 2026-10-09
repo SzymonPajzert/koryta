@@ -3,6 +3,7 @@ import {
   applyRevision,
   getRevisionsForNodes,
   createRevisionTransaction,
+  holdsRevision,
   INTERNAL_FIELDS,
   proposalId,
   proposeRevisionTransaction,
@@ -868,6 +869,76 @@ describe("proposeRevisionTransaction", () => {
       expect(batch.update).not.toHaveBeenCalled();
       expect(batch.set).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("holdsRevision", () => {
+  const candidacy = {
+    source: "p",
+    target: "r",
+    type: "election",
+    start_date: "2024-01-01",
+  };
+
+  it("holds the revision it was written from, whatever it owns besides", () => {
+    expect(
+      holdsRevision(
+        {
+          ...candidacy,
+          published: true,
+          revision_id: { path: "revisions/r1" },
+          stats: { votes: 2 },
+        },
+        candidacy,
+      ),
+    ).toBe(true);
+  });
+
+  it("does not hold a proposal that adds a field", () => {
+    // The committee proposals publishing used to mark approved.
+    expect(
+      holdsRevision(candidacy, { ...candidacy, committee: "KWW Nasza Gmina" }),
+    ).toBe(false);
+  });
+
+  it("does not hold a proposal that changes a field", () => {
+    expect(
+      holdsRevision(candidacy, { ...candidacy, start_date: "2014-01-01" }),
+    ).toBe(false);
+  });
+
+  it("does not hold a proposal that takes a field away", () => {
+    // A contributor unticking a win: the null is dropped on the way to
+    // Firestore, so the proposal is the candidacy without `elected`, and every
+    // field it does state is still on the edge.
+    expect(holdsRevision({ ...candidacy, elected: true }, candidacy)).toBe(
+      false,
+    );
+  });
+
+  it("does not hold a revision stating null for a field the document lacks", () => {
+    expect(holdsRevision(candidacy, { ...candidacy, committee: null })).toBe(
+      false,
+    );
+  });
+
+  it("ignores the fields a revision should never have carried", () => {
+    expect(
+      holdsRevision(candidacy, {
+        ...candidacy,
+        revision_id: "revisions/elsewhere",
+        published: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("compares by value, whatever order the fields were assembled in", () => {
+    expect(
+      holdsRevision(
+        { ...candidacy, references: [{ url: "a", title: "b" }] },
+        { references: [{ title: "b", url: "a" }], ...candidacy },
+      ),
+    ).toBe(true);
   });
 });
 

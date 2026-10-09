@@ -25,8 +25,9 @@ export type NodeRelation = {
   otherPublished: boolean;
   published: boolean;
   /** The revision publishing this relation would approve, when it points at
-   * none of its own yet. Null when the edge already has an approved revision,
-   * or has no revision at all and will be published on its document alone. */
+   * none of its own yet: the newest one it already holds. Null when the edge
+   * already has an approved revision, or holds none and will be published on
+   * its document alone - a proposal it does not hold is never this. */
   revisionToApprove: string | null;
   /** Whether a revision of this relation is genuinely still awaiting a verdict,
    * as opposed to merely not being pointed at. */
@@ -107,7 +108,11 @@ export default defineEventHandler(async (event): Promise<NodeRelations> => {
       otherName,
       otherPublished,
       published: pageIsPublic(edge),
-      revisionToApprove: publishCandidateRevision(candidates)?.id ?? null,
+      revisionToApprove:
+        publishCandidateRevision(
+          candidates,
+          edge as unknown as Record<string, unknown>,
+        )?.id ?? null,
       hasPendingRevision: hasPendingRevision(candidates),
       // The subject page is the one being published, so only the far end can
       // hold a relation back. A self-edge has no far end, and is therefore

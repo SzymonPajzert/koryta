@@ -7,6 +7,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Edge, Revision } from "~~/shared/model";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
 import { recordAudit } from "~~/server/utils/audit";
+import { holdsRevision } from "~~/server/utils/revisions";
 
 /** What an edge needs before it can be shown to the public.
  *
@@ -161,23 +162,39 @@ export async function edgeRevisionsForMany(
 
 /** The revision to approve when publishing an edge that points at none.
  *
- * The newest one that has not been rejected - *not* the newest still marked
- * pending. An edge can carry an approved revision without pointing at it: the
- * pointer is written by whatever applied the revision, and the ingest paths,
- * the dedupe script and every document written before `status` existed have all
- * left the two out of step. Asking for `status === "pending"` found nothing for
- * those, so the relation had no candidate and the reviewer was told a proposal
- * was waiting on a queue that would never clear.
+ * The newest one that has not been rejected and that the edge already holds -
+ * *not* the newest still marked pending. An edge can carry an approved
+ * revision without pointing at it: the pointer is written by whatever applied
+ * the revision, and the ingest paths, the dedupe script and every document
+ * written before `status` existed have all left the two out of step. Asking
+ * for `status === "pending"` found nothing for those, so the relation had no
+ * candidate and the reviewer was told a proposal was waiting on a queue that
+ * would never clear.
+ *
+ * Held, because publishing changes who may see the edge and not what it says.
+ * A proposal says something the edge does not - `proposeRevisionTransaction`
+ * leaves the edge alone - and it is also the revision most likely to be the
+ * newest, since the pipeline files its committee proposals after the
+ * candidacy. Taking the newest regardless had marked 33 committee proposals
+ * and corrections approved by 2026-10-09 without any of them reaching its
+ * edge, so they left the review queue unapplied, and the ingest, still finding
+ * the edge without its committee, proposed it again. A proposal the edge does
+ * not hold stays pending, in /admin/rewizje#powiazania, for whoever approves
+ * it to apply.
  *
  * A rejected revision is skipped rather than resurrected - somebody said no to
- * it, and publishing the relation is not a reason to undo that. If every
- * revision was rejected there is no candidate, and the edge is published on the
+ * it, and publishing the relation is not a reason to undo that. Where no
+ * revision qualifies there is no candidate, and the edge is published on the
  * strength of its own document.
  */
 export function publishCandidateRevision(
   revisions: (Revision & { id: string })[],
+  stored: Record<string, unknown>,
 ): (Revision & { id: string }) | undefined {
-  return revisions.find((revision) => revision.status !== "rejected");
+  return revisions.find(
+    (revision) =>
+      revision.status !== "rejected" && holdsRevision(stored, revision.data),
+  );
 }
 
 /** Whether somebody is actually waiting on a verdict for this relation.
@@ -200,9 +217,16 @@ export function hasPendingRevision(
  *
  * Publishing a relation *is* the review of it: the reviewer looked at the claim
  * and decided the public should see it. So an edge whose `revision_id` is unset
- * is pointed at its newest un-rejected revision in the same commit, and that
- * revision is marked approved - see `publishCandidateRevision` for why the
- * newest *pending* one is the wrong thing to look for.
+ * is pointed at the newest un-rejected revision it already holds, in the same
+ * commit, and that revision is marked approved - see `publishCandidateRevision`
+ * for which revision that is and why. A proposal the edge does not hold is
+ * left pending: publishing is a decision about the edge as it stands, and
+ * approving the proposal, which is what would put it on the edge, is a
+ * separate one.
+ *
+ * The edge's revisions come in rather than a revision picked by the caller,
+ * so the rule is this function's to keep and no caller can hand it a
+ * proposal to adopt.
  *
  * An edge that predates the revision machinery has neither pointer nor
  * revision, and is published on the strength of the document itself; refusing
@@ -215,7 +239,9 @@ export function publishEdgeInBatch(
   batch: WriteBatch,
   edgeRef: DocumentReference,
   stored: Record<string, unknown>,
-  candidate: (Revision & { id: string }) | undefined,
+  /** Every revision of the edge, newest first, as `edgeRevisions` and
+   * `edgeRevisionsForMany` return them. */
+  revisions: (Revision & { id: string })[],
   user: { uid: string },
   /** False for the ingest publishing on its own authority. The audit log is a
    * record of administrators' decisions, and an automatic approval is already
@@ -226,7 +252,10 @@ export function publishEdgeInBatch(
   const update: Record<string, unknown> = { published: true };
   let approvedRevision: string | null = null;
 
-  if (!approvedRevisionId(stored.revision_id) && candidate) {
+  const candidate = approvedRevisionId(stored.revision_id)
+    ? undefined
+    : publishCandidateRevision(revisions, stored);
+  if (candidate) {
     const revisionRef = db.collection("revisions").doc(candidate.id);
     const timestamp = Timestamp.now();
     batch.update(revisionRef, {
@@ -254,7 +283,8 @@ export function publishEdgeInBatch(
 
   // `update`, not `set`: unlike applying a revision this changes who may see
   // the edge, not what it says, and the stored document already holds the
-  // approved snapshot. A full overwrite here would drop `votes` and `stats`.
+  // approved snapshot - `publishCandidateRevision` makes sure of that. A full
+  // overwrite here would drop `votes` and `stats`.
   batch.update(edgeRef, update);
   if (audit) {
     recordAudit(
@@ -316,9 +346,9 @@ export async function fetchEdgesForNode(
 
 /** How many edges share one commit.
  *
- * Each edge costs an update plus an audit row, and approving its proposal adds
- * two more, so 100 edges stay under Firestore's 500-write batch limit in the
- * worst case.
+ * Each edge costs an update plus an audit row, and approving the revision it
+ * holds adds two more, so 100 edges stay under Firestore's 500-write batch
+ * limit in the worst case.
  */
 export const EDGE_PUBLISH_CHUNK = 100;
 
