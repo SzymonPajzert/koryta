@@ -10,15 +10,15 @@ sent whole before the next:
    so they arrive in the queue for a reviewer rather than on the site.
 2. `BOUGHT` - a page the payload would change, of somebody whose rejestr.io
    feed was bought lately (`bought`). The night pays for the feeds of the
-   people somebody marked interesting so that what they hold reaches the
-   site; behind the published pages they waited weeks for it - on 2026-10-08
-   the nine in the night's plan stood between 154th and 8,196th of 10,301, at
-   a hundred a night. A page only: a vote on a page without a rejestr.io link
-   still buys every entry of the page's name
-   (`ScrapeRejestrIO.people_to_scrape`), so one bought for somebody without a
-   page is likely a namesake's - 8 of the 17 people bought 2026-10-06 to 10-08
-   were, back when every vote was matched by name - and nobody but a new hire
-   gets a page here.
+   people somebody marked interesting, or whose page was put live, so that
+   what they hold reaches the site; behind the published pages they waited
+   weeks for it - on 2026-10-08 the nine in the night's plan stood between
+   154th and 8,196th of 10,301, at a hundred a night. A page only: a vote on
+   a page without a rejestr.io link, and publishing one, still buy every
+   entry of the page's name (`ScrapeRejestrIO.people_to_scrape`), so one
+   bought for somebody without a page is likely a namesake's - 8 of the 17
+   people bought 2026-10-06 to 10-08 were, back when every vote was matched
+   by name - and nobody but a new hire gets a page here.
 3. `NOTED_MISSING` - a page the payload would change, on which a reader noted
    that data is missing ("Brakuje danych") and no admin has closed the entry:
    on the page itself, or on the page of a company the payload names. The
