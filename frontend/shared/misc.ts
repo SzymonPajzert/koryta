@@ -183,7 +183,7 @@ export function partyChipPaint(
  * Failing that `OTHER_PARTY` - also for a party with no colour of its own,
  * Razem among them, because from the reader's side that is exactly what it
  * is: a tie to a party the site does not paint. Undefined only for somebody
- * with no party at all, who is then the plain person blue and nothing else. */
+ * with no party at all, who is then the plain person grey and nothing else. */
 export function paintedParty(
   held: string[] | Record<string, string> | undefined | null,
   colors: Record<string, string> = partyColors,

@@ -109,7 +109,7 @@ describe("GraphContainer unit tests", () => {
     // PO is nobody's here, and a legend listing all eight parties would be
     // longer than the graph it explains.
     expect(legend.text()).not.toContain("PO");
-    // The plain blue stops being "a person" once a colour means something -
+    // The plain grey stops being "a person" once a colour means something -
     // and with „Inne” on a line of its own, what it means is no party at all.
     expect(legend.text()).toContain("Osoba: brak partii");
     expect(legend.text()).not.toContain("inne / brak partii");
