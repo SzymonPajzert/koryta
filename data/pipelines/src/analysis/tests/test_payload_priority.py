@@ -1,14 +1,19 @@
 """Who a capped people upload sends first: new hires, the people bought from
-rejestr.io, published pages, the rest."""
+rejestr.io, the pages somebody left a note on, published pages, the rest."""
 
+import sys
 from dataclasses import asdict
 from datetime import date
+from unittest.mock import patch
 
 import pandas as pd
 
+from analysis.payloads.person import PeoplePayloads
 from analysis.payloads.priority import (
     BOUGHT,
     NEW_HIRE,
+    NOTED,
+    NOTED_MISSING,
     ON_SITE,
     PUBLISHED,
     newest_public_start,
@@ -17,6 +22,8 @@ from analysis.payloads.priority import (
 )
 from analysis.payloads.site import UNRESOLVED_REGION, SiteSnapshot
 from entities.composite import Company, Election, Person
+from entities.person import PageNote
+from scrapers.koryta.download import KorytaNotes
 
 TODAY = date(2026, 10, 4)
 PUBLIC = "0000000001"
@@ -130,6 +137,7 @@ def test_new_hires_then_published_then_the_rest_each_newest_first():
         public_krs={PUBLIC},
         published_ids={"pub"},
         bought=set(),
+        noted={},
         today=TODAY,
         recent_days=30,
     )
@@ -183,6 +191,7 @@ def test_people_without_a_recent_public_post_or_a_change_are_left_out():
         public_krs={PUBLIC},
         published_ids=set(),
         bought=set(),
+        noted={},
         today=TODAY,
         recent_days=30,
     )
@@ -235,6 +244,7 @@ def test_a_page_bought_for_goes_after_the_new_hires_and_before_the_published():
         published_ids={"pub", "pub-bought"},
         # A new hire bought as well is still a new hire.
         bought={"2", "3", "4"},
+        noted={},
         today=TODAY,
         recent_days=30,
     )
@@ -275,11 +285,182 @@ def test_somebody_bought_goes_only_onto_a_page_the_payload_would_change():
         public_krs={PUBLIC},
         published_ids={"p1"},
         bought={"1", "7"},
+        noted={},
         today=TODAY,
         recent_days=30,
     )
 
     assert picks == []
+
+
+# ---------------------------------------------------------------------------
+# The pages somebody left a note on
+
+
+def test_a_noted_page_goes_after_the_bought_and_data_noted_missing_first():
+    site = snapshot(
+        stored_person("pub", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        stored_person("bought", "Ewa Lis", "https://rejestr.io/osoby/3"),
+        stored_person("missing", "Olga Wilk", "https://rejestr.io/osoby/4"),
+        stored_person("asked", "Piotr Sowa", "https://rejestr.io/osoby/5"),
+        stored_person("both", "Adam Kos", "https://rejestr.io/osoby/6"),
+    )
+    published = person(
+        "Jan Kowalski",
+        "https://rejestr.io/osoby/1",
+        Company(krs=PUBLIC, start="2026-09-01"),
+    )
+    bought = person(
+        "Ewa Lis",
+        "https://rejestr.io/osoby/3",
+        Company(krs=PRIVATE, start="2019-05-01"),
+    )
+    missing = person(
+        "Olga Wilk",
+        "https://rejestr.io/osoby/4",
+        elections=[
+            Election(election_type="Samorząd", election_year="2024", teryt="1465")
+        ],
+    )
+    asked = person(
+        "Piotr Sowa",
+        "https://rejestr.io/osoby/5",
+        Company(krs=PRIVATE, start="2026-09-20"),
+    )
+    both = person("Adam Kos", "https://rejestr.io/osoby/6", parties=["PSL"])
+
+    picks = prioritised(
+        [],
+        [published, asked, both, missing, bought],
+        site,
+        public_krs={PUBLIC},
+        published_ids={"pub", "missing"},
+        bought={"3"},
+        noted={
+            "missing": frozenset({"missing"}),
+            "asked": frozenset({"change_request"}),
+            "both": frozenset({"change_request", "missing"}),
+            # Bought as well: the tier before.
+            "bought": frozenset({"missing"}),
+        },
+        today=TODAY,
+        recent_days=30,
+    )
+
+    # Published or not, and ahead of anything newer in the tiers after.
+    assert [(p.person.name, p.tier, p.since) for p in picks] == [
+        ("Ewa Lis", BOUGHT, "2019-05-01"),
+        ("Olga Wilk", NOTED_MISSING, "2024-01-01"),
+        ("Adam Kos", NOTED_MISSING, None),
+        ("Piotr Sowa", NOTED, "2026-09-20"),
+        ("Jan Kowalski", PUBLISHED, "2026-09-01"),
+    ]
+
+
+def test_a_note_on_a_company_counts_for_the_pages_whose_payload_names_it():
+    site = snapshot(
+        stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        stored_person("p2", "Ewa Lis", "https://rejestr.io/osoby/3"),
+        stored_person("p3", "Olga Wilk", "https://rejestr.io/osoby/4"),
+    )
+    at_the_company = person(
+        "Jan Kowalski",
+        "https://rejestr.io/osoby/1",
+        Company(krs=PUBLIC, start="2019-01-01"),
+    )
+    elsewhere = person(
+        "Ewa Lis",
+        "https://rejestr.io/osoby/3",
+        Company(krs=PRIVATE, start="2026-09-01"),
+    )
+    # A company the site has no page for has no note either.
+    at_a_new_company = person(
+        "Olga Wilk",
+        "https://rejestr.io/osoby/4",
+        Company(krs="0000000099", start="2026-09-02"),
+    )
+
+    picks = prioritised(
+        [],
+        [elsewhere, at_a_new_company, at_the_company],
+        site,
+        public_krs={PUBLIC},
+        published_ids=set(),
+        bought=set(),
+        noted={"place-public": frozenset({"missing"})},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert [(p.person.name, p.tier) for p in picks] == [
+        ("Jan Kowalski", NOTED_MISSING),
+        ("Olga Wilk", ON_SITE),
+        ("Ewa Lis", ON_SITE),
+    ]
+
+
+def test_a_noted_page_the_payload_would_not_change_is_left_out():
+    site = snapshot(
+        stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        edges=(employed("p1", "place-public", "2020-01-01"),),
+    )
+    unchanged = person(
+        "Jan Kowalski",
+        "https://rejestr.io/osoby/1",
+        Company(krs=PUBLIC, role="Prezes", start="2020-01-01"),
+    )
+
+    picks = prioritised(
+        [],
+        [unchanged],
+        site,
+        public_krs={PUBLIC},
+        published_ids=set(),
+        bought=set(),
+        noted={"p1": frozenset({"missing"}), "place-public": frozenset({"missing"})},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert picks == []
+
+
+def test_the_open_notes_are_read_by_page_off_the_export_s_output(tmp_path):
+    """What `noted_pages` reads is `KorytaNotes`' output, read back off disk
+    with its dtypes: a page id of digits keeps its zeros, and an entry an admin
+    has closed - or a source nobody asked anything of - is no note at all."""
+    entries = [
+        PageNote("p1", "missing", "", True),
+        PageNote("p1", "source", "", False),
+        PageNote("p2", "change_request", "", True),
+        PageNote("p2", "missing", "resolved", False),
+        PageNote("p3", "source", "unresolved", True),
+        PageNote("p4", "missing", "resolved", False),
+        PageNote("0042", "missing", "", True),
+    ]
+    path = tmp_path / "koryta_notes.jsonl"
+    pd.DataFrame.from_records([asdict(e) for e in entries]).to_json(
+        path, orient="records", lines=True
+    )
+    read = pd.read_json(path, lines=True, dtype=KorytaNotes.dtype)
+
+    with patch.object(sys, "argv", ["koryta", "PeoplePayloads", "--all"]):
+        with patch.object(KorytaNotes, "read_or_process", return_value=read):
+            noted = PeoplePayloads().noted_pages(None)
+
+    assert noted == {
+        "p1": {"missing"},
+        "p2": {"change_request"},
+        "p3": {"source"},
+        "0042": {"missing"},
+    }
+
+
+def test_no_notes_read_back_is_no_note_on_any_page():
+    # An empty output reads back off disk as a frame without columns.
+    with patch.object(sys, "argv", ["koryta", "PeoplePayloads", "--all"]):
+        with patch.object(KorytaNotes, "read_or_process", return_value=pd.DataFrame()):
+            assert PeoplePayloads().noted_pages(None) == {}
 
 
 def test_a_payload_is_filed_under_the_id_its_register_link_ends_in():

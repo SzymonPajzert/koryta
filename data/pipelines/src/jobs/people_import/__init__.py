@@ -26,13 +26,15 @@ only those; a person's run creates none.
 
 `--scope priority` builds both halves at once and sends, up to the cap, the
 new hires the site lacks first, then the pages of the people whose rejestr.io
-feed was bought in the last `--bought-days` days, then the published pages
-that would change, then the rest, newest news first in each
-(`analysis.payloads.priority`). It leaves alone a payload it already sent
-unchanged in the last `--resend-after` days: an update a reviewer has not yet
-approved, or a party a human took off a page, still reads as a change against
-the export, and sent every night it would take a slot each night and undo the
-human each time.
+feed was bought in the last `--bought-days` days, then the pages with a note
+no admin has closed - on the page, or on a company the payload names - those
+saying data is missing first, then the published pages that would change,
+then the rest, newest news first in each (`analysis.payloads.priority`). The
+notes are this morning's export's, as the pages are. It leaves alone a payload
+it already sent unchanged in the last `--resend-after` days: an update a
+reviewer has not yet approved, or a party a human took off a page, still reads
+as a change against the export, and sent every night it would take a slot each
+night and undo the human each time.
 
 What was bought is read off the crawl bucket, which files every rejestr.io
 answer under the day it was bought, whoever bought it (`bought_since`). A week
@@ -873,7 +875,8 @@ def parser() -> argparse.ArgumentParser:
         help="on-koryta, the default, refreshes the pages the site has; "
         "not-on-koryta adds the people it has not, and needs --max-new; "
         "priority sends new hires first, then the pages of the people bought "
-        "from rejestr.io, then published pages, then the rest "
+        "from rejestr.io, then the pages with an open note (data noted missing "
+        "first), then published pages, then the rest "
         "(analysis.payloads.priority).",
     )
     parser.add_argument(
