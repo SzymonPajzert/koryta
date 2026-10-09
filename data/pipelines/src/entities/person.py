@@ -42,8 +42,9 @@ class KRS:
     #: What rejestr.io called the entry this row came from: ``osoba``, or
     #: ``osoba-bez-pesel`` for somebody it holds no PESEL for. The latter never
     #: carries a birth date or a sex, which is why it is worth recording rather
-    #: than inferring from the empty fields. It is a property of the response
-    #: and not of the person - 59 ids in the crawl arrive as both.
+    #: than inferring from the empty fields. It also says which numbering `id`
+    #: is in: the two shapes are numbered apart, and the 96 ids that arrive as
+    #: both on 2026-10-09 are two people each (`scrapers.krs.list.PERSON_TYPES`).
     rejestrio_type: str | None = None
     #: The day the response this row came from was crawled, ISO. An odpis pełny
     #: tells the same story for free, and which of the two is newer decides

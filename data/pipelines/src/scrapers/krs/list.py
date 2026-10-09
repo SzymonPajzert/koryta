@@ -77,9 +77,18 @@ class Post:
 #: and 6,227 board, supervisory and proxy seats, so `people_to_scrape` could not
 #: see them and `companies_without_names` did not know their companies existed.
 #:
-#: They stop at `PeopleKRS`. `PeopleKRSMerged` selects
-#: ``WHERE birth_date IS NOT NULL`` (analysis/people_krs_merged.py:39), which
-#: none of them satisfy, so nothing published changes by admitting them here.
+#: They stop at `PeopleKRS`: `PeopleKRSMerged` keeps nobody without a birth
+#: date. Where an odpis prints the date in the PESEL's place
+#: (`odpis_pdf.printed_birth_date`), the person goes on from the odpis instead,
+#: as somebody no rejestr.io entry names. An ``osoba-bez-pesel`` id cannot name
+#: them anywhere else:
+#:
+#: - it is not an ``osoba`` id. rejestr.io numbers the two shapes apart: on the
+#:   2026-10-09 night 96 numbers were both, never once under the same name, and
+#:   the feeds bought at ``/osoby/<n>`` for three ``osoba-bez-pesel`` numbers
+#:   list somebody else's companies;
+#: - it does not follow a person between companies. None of the 5,343 sat at
+#:   two, while 511 names sat under two ids or more.
 PERSON_TYPES = frozenset({"osoba", "osoba-bez-pesel"})
 
 

@@ -24,6 +24,12 @@ that is the newer source having seen an entry the older had not.
   PESEL fingerprint carries that identity to the person's other companies, and
   gives one spelling to somebody the register wrote two ways. The fingerprint
   goes no further than this module.
+- Somebody without a PESEL takes no rejestr.io identity. The odpis prints
+  some of them a birth date in the PESEL's place, but rejestr.io's
+  ``osoba-bez-pesel`` entry has no date to match it on, and its id names
+  nobody past its one company (`scrapers.krs.list.PERSON_TYPES`). Dated, they
+  go on as people only the odpis names; undated, `PeopleKRSMerged` drops them
+  as it drops the entry.
 - A rejestr.io person the newer odpis does not name keeps rejestr.io's rows.
   An odpis pełny names everybody who ever held a seat, struck out or not, so
   somebody missing from it is the parser's miss or a spelling no rule above
