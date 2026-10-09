@@ -42,6 +42,7 @@ day's bulletin: `--new-registrations --reads 0`, the backlog's pace waiting on `
 ## krs_odpis
 1. Reads the company part of `ScrapeRejestrIO` (person feeds stay paid), KRS numbers from `--krs-file`, or every company `CompaniesKRS` knows (`--graph`)
 1. With `--changed-since DAY`, keeps only the companies the bulletin (`KRSUpdates`) names on or after that day - the weekly refresh
+1. With `--missing public` (and `--graph`), then adds the graph's public companies with no odpis pełny on file, which the bulletin may never name again; `--missing all` the private ones after them. Never asked before last unanswered (`KrsOdpisAttempts`); one the service said is in neither register is left out. `--max` caps them all together
 1. Skips companies whose odpis pełny is on file, unless the bulletin names the entry since
 1. Asks the ministry's public KRS search service for each odpis pełny, politely, stopping when the service tires
 1. Writes every PDF to the crawl bucket, and a record of every attempt to the shared cache (`jobs/krs_odpis/runs/`)
@@ -51,7 +52,7 @@ the company history `krs_scrape_paid` buys from rejestr.io - and `PeopleKRSCombi
 rejestr.io's for every company where the odpis is the newer of the two, on the way to `PeopleMerged`.
 
 ## nightly
-1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis`, `krs_scrape_paid --scope fallback --max-calls 50`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100` and `score_import`
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis --missing public`, `krs_scrape_paid --scope fallback --max-calls 50`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100` and `score_import`
 1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
 1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
 

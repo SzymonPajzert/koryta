@@ -5,6 +5,9 @@
     koryta_krs_odpis --graph --changed-since 2026-09-25
                                            # every company the pipelines know that
                                            # the bulletin names since that day
+    koryta_krs_odpis --graph --changed-since 2026-10-08 --missing public --max 300
+                                           # the night's: and then the public
+                                           # companies with no odpis on file
     python -m jobs.krs_odpis --dry-run     # report the plan, ask nothing
 
 The free half of what `koryta_scrape_krs_paid` buys about a company. An odpis
@@ -26,8 +29,12 @@ job; or the KRS numbers in a file; or, with ``--graph``, every company in
 odpis. ``--changed-since`` keeps only those the bulletin names on or after a
 day, which is the weekly refresh: the register's entries are in the odpis the
 day they are made, where rejestr.io's lag them. An odpis already on file is
-asked for again only when the bulletin names the entry since. At most
-``--max`` companies a run.
+asked for again only when the bulletin names the entry since. ``--missing
+public`` then adds the graph's public companies with no odpis on file at all,
+which the bulletin may never name again (``--missing all``: the private ones
+after them); a company the service last said is in neither register is left
+out. At most ``--max`` companies a run, all of these together: the service
+slows down after about 1,000 documents a run.
 
 Stopping is free at any point: Ctrl+C or SIGTERM ends the run after the
 document in hand, and a document is in the bucket before it is counted. One
@@ -58,6 +65,7 @@ from datetime import date, datetime
 from functools import partial
 from pathlib import Path
 
+import pandas as pd
 import requests
 from uuid_extensions import uuid7str  # type: ignore
 
@@ -66,19 +74,29 @@ from jobs.krs_common import PINNED, REFRESH_PIPELINES
 from jobs.krs_odpis import crawl, search, store
 from jobs.krs_odpis.log import FLUSH_EVERY, RunLog
 from jobs.krs_odpis.plan import (
+    MISSING,
+    MISSING_ALL,
     Candidate,
     Plan,
     changed_since,
     from_graph,
     from_queries,
+    joined,
     read_krs_file,
     register_hints,
     report,
     select,
+    without_odpis,
 )
 from scrapers.krs import odpis_files
+from scrapers.krs.columns import padded_krs
 from scrapers.krs.list import CompaniesKRS
-from scrapers.krs.odpis_attempts import RUN_BUCKET, RUN_LOG, STATUSES
+from scrapers.krs.odpis_attempts import (
+    RUN_BUCKET,
+    RUN_LOG,
+    STATUSES,
+    KrsOdpisAttempts,
+)
 from scrapers.krs.scrape import KRSAlreadyScraped, ScrapeRejestrIO, settled_registers
 from scrapers.krs.updates import KRSUpdates, latest_changes
 from scrapers.stores import Context, ProcessPolicy
@@ -150,6 +168,14 @@ def parser() -> argparse.ArgumentParser:
         help="Only the companies the KRS bulletin names on or after this day.",
     )
     parser.add_argument(
+        "--missing",
+        choices=MISSING,
+        help="With --graph: after the companies --changed-since keeps, ask "
+        "about the graph's public companies with no odpis pełny on file "
+        "(public), or the private ones after them too (all), under the same "
+        "--max.",
+    )
+    parser.add_argument(
         "--max",
         type=int,
         default=DEFAULT_MAX,
@@ -192,6 +218,13 @@ class Sources:
 
     updates: KRSUpdates = field(default_factory=KRSUpdates)
     scraped: KRSAlreadyScraped = field(default_factory=KRSAlreadyScraped)
+    #: The odpisy on file, from one listing of the bucket a run.
+    listed: dict[str, odpis_files.StoredOdpis] | None = None
+
+    def stored(self, ctx: Context) -> dict[str, odpis_files.StoredOdpis]:
+        if self.listed is None:
+            self.listed = odpis_files.stored_odpisy(ctx)
+        return self.listed
 
 
 def queue_candidates(ctx: Context, sources: Sources) -> list[Candidate]:
@@ -201,8 +234,27 @@ def queue_candidates(ctx: Context, sources: Sources) -> list[Candidate]:
     return candidates
 
 
-def graph_candidates(ctx: Context) -> list[Candidate]:
-    return from_graph(CompaniesKRS().read_or_process(ctx))
+def graph_companies(ctx: Context) -> pd.DataFrame:
+    return CompaniesKRS().read_or_process(ctx)
+
+
+def last_attempts(ctx: Context) -> dict[str, str]:
+    """KRS number to how the newest attempt the run record holds ended."""
+    attempts = KrsOdpisAttempts().read_or_process(ctx)
+    if attempts is None or attempts.empty:
+        return {}
+    return dict(zip(padded_krs(attempts["krs"]), attempts["status"].astype(str)))
+
+
+def missing_candidates(
+    ctx: Context, companies: pd.DataFrame, sources: Sources, scope: str
+) -> list[Candidate]:
+    return without_odpis(
+        companies,
+        sources.stored(ctx),
+        last_attempts(ctx),
+        private=scope == MISSING_ALL,
+    )
 
 
 def bulletin_changes(ctx: Context, sources: Sources) -> dict[str, str]:
@@ -217,13 +269,15 @@ def make_plan(
     limit: int,
     sources: Sources,
 ) -> Plan:
-    stored = odpis_files.stored_odpisy(ctx)
+    stored = sources.stored(ctx)
     settled = settled_registers(sources.scraped.read_or_process(ctx))
     return select(candidates, stored, changes, register_hints(settled), today, limit)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.missing and not args.graph:
+        parser().error("--missing asks about the graph's companies: add --graph")
     if args.no_backup:
         os.environ["DISABLE_BACKUP"] = "1"
     # Pipelines read sys.argv themselves - PeoplePKW takes --limit, and anything
@@ -237,6 +291,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     # on the other routes the bulletin is read before anything else.
     queue = not (args.krs_file or args.graph)
     refresh = set(REFRESH_PIPELINES) if queue else {"KRSUpdates"}
+    if args.missing:
+        # The fold of this job's own record, which grows with every run.
+        refresh.add("KrsOdpisAttempts")
     # The queue's people half is the paid job's, so its merge is held: rebuilt
     # under this job it was 42 s and most of a 10 GB peak on 2026-10-02.
     ctx, _ = setup_context(policy=ProcessPolicy(refresh, exclude_refresh=set(PINNED)))
@@ -247,10 +304,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.krs_file:
         candidates, source = read_krs_file(Path(args.krs_file)), args.krs_file
     elif args.graph:
-        candidates, source = graph_candidates(ctx), "CompaniesKRS"
+        companies = graph_companies(ctx)
+        candidates, source = from_graph(companies), "CompaniesKRS"
     if args.changed_since:
         candidates = changed_since(candidates, changes, args.changed_since)
         source += f" the bulletin names since {args.changed_since}"
+    if args.missing:
+        named = len(candidates)
+        gap = missing_candidates(ctx, companies, sources, args.missing)
+        candidates = joined(candidates, gap)
+        more = len(candidates) - named
+        source += f", then {more:,} more ({args.missing}) with no odpis on file"
     plan = make_plan(ctx, candidates, changes, warsaw_day(), args.max, sources)
     print(report(plan, candidates, source))
     if args.dry_run or not plan.asks:

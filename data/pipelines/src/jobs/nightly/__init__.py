@@ -23,7 +23,8 @@ The steps, in order (`STEPS`):
                 a powiat sets up reaches the crawl - and --register-backlog
                 reads of the rest (none until decide-register-sweep-pace)
     krs_odpis   koryta_krs_odpis for the companies the bulletin named since
-                yesterday
+                yesterday, then the public companies with no odpis on file -
+                --odpis-max in all
     krs_paid    koryta_scrape_krs_paid --scope fallback: rejestr.io for what the
                 free sources cannot give - the people somebody marked
                 interesting, and the companies whose odpis did not come - at
@@ -63,9 +64,18 @@ night; only the steps that depend on it are held:
 the public owns is in the crawl's queue after tonight's reprocess
 (`CompaniesPublicByRegister`, the `public_owner` door of `ScrapeRejestrIO`);
 the next night's `krs_free` fetches its odpis aktualny, which puts it in
-`CompaniesKRS`. The step stops itself `REGISTER_MARGIN` minutes inside its time
-limit, so a backlog bigger than a night is left to the next one rather than cut
-off mid-read.
+`CompaniesKRS`, and the night after, `krs_odpis` asks for its odpis pełny as a
+public company with none on file. The step stops itself `REGISTER_MARGIN`
+minutes inside its time limit, so a backlog bigger than a night is left to the
+next one rather than cut off mid-read.
+
+`krs_odpis` asks first for the graph's companies the bulletin named since
+yesterday - 57-70 a night from 2026-10-06 to 10-09 - and with what is left of
+`--odpis-max` for the public ones that have no odpis pełny on file at all: a
+company that came into the graph after its last register entry is not named by
+the bulletin until its next one, so `--changed-since` alone does not ask for
+it. The private ones wait behind `--odpis-missing all`. The service slows down
+after about 1,000 documents a run; `--odpis-max` caps the step, gap and all.
 
 `krs_paid` holds nothing back, and nothing holds it: the people go up with or
 without what it bought. It needs the rejestr.io key - REJESTR_KEY, else the
@@ -159,6 +169,12 @@ HELD = (
 #: rate the pages a run by hand created - is read only if they are rebuilt; on
 #: a night with one export they read the same again, in about a minute.
 SCORES_REFRESH = ("KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores")
+
+#: `--odpis-missing`: which graph companies with no odpis pełny on file the
+#: odpis step asks about after the bulletin's - the public ones (the
+#: default), all of them, or none.
+ODPIS_MISSING_NONE = "none"
+ODPIS_MISSING = ("public", "all", ODPIS_MISSING_NONE)
 
 #: Minutes the register step leaves itself inside its time limit: it stops
 #: asking, writes what it read and reports, rather than be stopped mid-read -
@@ -748,10 +764,16 @@ class Night:
             "--graph",
             "--changed-since",
             yesterday,
+            *self.odpis_missing(),
             "--max",
             str(self.args.odpis_max),
         ]
         return self.judge_job(*self.process(step, argv))
+
+    def odpis_missing(self) -> list[str]:
+        if self.args.odpis_missing == ODPIS_MISSING_NONE:
+            return []
+        return ["--missing", self.args.odpis_missing]
 
     def step_krs_paid(self, step: Step) -> tuple[str, str, int | None]:
         if not self.args.paid_max_calls:
@@ -921,8 +943,13 @@ class Night:
             "krs_free": f"koryta_scrape_krs_free --max-minutes {self.args.krs_minutes}",
             "krs_register": "koryta_krs_register_owners "
             + " ".join(self.register_argv(step.minutes)[1:]),
-            "krs_odpis": "koryta_krs_odpis --graph --changed-since <yesterday> "
-            f"--max {self.args.odpis_max}",
+            "krs_odpis": " ".join(
+                [
+                    "koryta_krs_odpis --graph --changed-since <yesterday>",
+                    *self.odpis_missing(),
+                    f"--max {self.args.odpis_max}",
+                ]
+            ),
             "krs_paid": "koryta_scrape_krs_paid --scope fallback --max-calls "
             f"{self.args.paid_max_calls} (the key from {REJESTR_SECRET})",
             "reprocess": "koryta " + " ".join(reprocess_argv()[1:]),
@@ -1106,7 +1133,17 @@ def parser() -> argparse.ArgumentParser:
         "--odpis-max",
         type=positive_int,
         default=300,
-        help="Odpisy pełne asked for at most. Default: %(default)s.",
+        help="Odpisy pełne asked for at most, the companies with none on file "
+        "included. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--odpis-missing",
+        choices=ODPIS_MISSING,
+        default="public",
+        help="After the companies the bulletin named, the odpis step asks for "
+        "the graph's public companies with no odpis pełny on file (public), "
+        "the private ones after them too (all), or neither (none). "
+        "Default: %(default)s.",
     )
     parser.add_argument(
         "--paid-max-calls",
