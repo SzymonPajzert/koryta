@@ -7,11 +7,9 @@ and returns what it left out, so the uploader is what has to say so: a fix that
 turns a visible 500 into a silent omission is not a fix.
 """
 
-import collections
 import json
 from unittest.mock import MagicMock
 
-import uploader as uploader_module
 from uploader import PersonUploader, sendable_elections
 
 
@@ -140,16 +138,14 @@ def test_a_candidacy_without_a_year_is_not_sent():
     assert sendable_elections([candidacy(None), candidacy("")]) == []
 
 
-def test_the_request_carries_the_1998_candidacy(monkeypatch):
-    sent = {}
+def test_the_request_carries_the_1998_candidacy():
+    # Read off the uploader's own session, which is what posts: patching
+    # `requests.post` stopped reaching the request once the uploader was given
+    # one, and the test then failed on a body it never saw.
+    instance = uploader()
+    instance.session.post.return_value = response(personId="NaL8BaRWt3EaLMN6sxaq")
 
-    def post(url, data, headers):
-        sent["body"] = json.loads(data)
-        return response(personId="NaL8BaRWt3EaLMN6sxaq")
-
-    monkeypatch.setattr(uploader_module.requests, "post", post)
-
-    uploader().submit_payload(
+    instance.submit_payload(
         "http://localhost:3000/api/ingest/person",
         {
             "name": "Adam Jan Kosior",
@@ -163,7 +159,8 @@ def test_the_request_carries_the_1998_candidacy(monkeypatch):
         },
     )
 
-    assert sent["body"]["elections"] == [
+    sent = json.loads(instance.session.post.call_args.kwargs["data"])
+    assert sent["elections"] == [
         candidacy("2002", teryt="1463", committee="KWW PRAWY RADOM"),
         candidacy("1998", teryt="1463"),
     ]
