@@ -9,6 +9,7 @@ from scrapers.krs.register import (
     REASON_FAILED,
     REASON_MOVED,
     REASON_NEVER,
+    REASON_NEW,
     RESPONSE_LOG,
     STATUS_FAILED,
     STATUS_NOT_FOUND,
@@ -209,13 +210,82 @@ def ledger(*rows: tuple[str, str, str]) -> pd.DataFrame:
     )
 
 
-def test_a_first_sweep_reads_the_oldest_numbers_first():
+def test_a_first_sweep_reads_the_newest_days_registrations_then_the_oldest_numbers():
+    """With no answer yet the log begins with the bulletin's newest day."""
     due = due_for_a_read(
         ledger(),
-        bulletin(("0000900000", "2026-09-01"), ("225512", "2026-08-13")),
+        bulletin(
+            ("0000900000", "2026-09-01"),
+            ("0000900001", "2026-09-01"),
+            ("0000000300", "2026-09-01"),
+            ("225512", "2026-08-13"),
+            ("0000899999", "2026-08-13"),
+        ),
     )
 
-    assert due == ["0000225512", "0000900000"]
+    assert due == [
+        "0000900000",
+        "0000900001",
+        "0000000300",
+        "0000225512",
+        "0000899999",
+    ]
+
+
+def test_numbers_registered_since_the_log_began_come_first_lowest_first():
+    """The log began 2026-09-28; the bulletin had named up to 1,269,278."""
+    due = queue_for_a_read(
+        ledger(
+            ("0001269300", "2026-09-29", STATUS_OK),  # new, and answered
+            ("0001269400", "2026-09-29", STATUS_FAILED),  # new, no answer yet
+            ("0000000400", "2026-09-28", STATUS_OK),  # moved on 2026-10-01
+            ("0000900000", "2026-09-28", STATUS_FAILED),
+        ),
+        bulletin(
+            ("0001269278", "2026-09-26"),
+            ("0000000400", "2026-10-01"),
+            ("0000000200", "2026-10-01"),
+            ("0001270100", "2026-10-01"),
+            ("0001269300", "2026-09-28"),
+            ("0001269400", "2026-09-29"),
+            ("0001269500", "2026-10-02"),
+            # Given out before the log began, named only after: the backlog.
+            ("0001269100", "2026-10-02"),
+        ),
+    )
+
+    assert [(q.krs, q.reason) for q in due] == [
+        ("0001269400", REASON_NEW),
+        ("0001269500", REASON_NEW),
+        ("0001270100", REASON_NEW),
+        ("0000900000", REASON_FAILED),
+        ("0000000400", REASON_MOVED),
+        ("0000000200", REASON_NEVER),
+        ("0001269100", REASON_NEVER),
+        ("0001269278", REASON_NEVER),
+    ]
+
+
+def test_the_line_stays_where_the_log_began_whatever_was_read_since():
+    """A hand run reads 1,270,500 out of turn; what lies below it is still new."""
+    due = queue_for_a_read(
+        ledger(
+            ("0000000500", "2026-09-28", STATUS_OK),
+            ("0001270500", "2026-10-05", STATUS_OK),
+        ),
+        bulletin(
+            ("0001269278", "2026-09-26"),
+            ("0001270500", "2026-10-01"),
+            ("0001270100", "2026-10-02"),
+            ("0001270200", "2026-10-02"),
+        ),
+    )
+
+    assert [(q.krs, q.reason) for q in due] == [
+        ("0001270100", REASON_NEW),
+        ("0001270200", REASON_NEW),
+        ("0001269278", REASON_NEVER),
+    ]
 
 
 def test_failures_then_moved_entries_then_new_ones():
