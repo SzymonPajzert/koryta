@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 from entities.company import KorytaCompany
 from entities.person import Koryta as Person
-from entities.person import PersonFact, PersonVote, is_pipeline_uid
+from entities.person import PageNote, PersonFact, PersonVote, is_pipeline_uid
 from scrapers.stores import (
     CloudStorage,
     Context,
@@ -550,6 +550,71 @@ class KorytaVotes(Pipeline[PersonVote]):
             )
 
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
+
+
+#: What `KorytaNotes` keeps of a note entry, which is not what it says.
+NOTE_FIELDS = [field.name for field in dataclasses.fields(PageNote)]
+
+
+class KorytaNotes(Pipeline[PageNote]):
+    """The notes readers left on the site's pages, an entry a row.
+
+    Kept for which pages somebody is waiting on, and for what: a correction,
+    data they found missing (`PageNote`). Not the text, the link or the author:
+    nothing reads them here, and an output is backed up to the shared cache.
+    """
+
+    date: str | None = None
+    dtype = {"node_id": str, "kind": str, "admin_status": str}
+
+    def __init__(self, date: str | None = None) -> None:
+        super().__init__()
+        self.date = date or CURRENT_DATE
+
+    @memoized_property
+    def filename(self) -> str:
+        return f"koryta_notes_{self.date}"
+
+    def process(self, ctx: Context):
+        df, _ = FirestoreCollection.latest_on_or_before(ctx, "notes", date=self.date)
+
+        outputs = []
+        for data in df.to_dict(orient="records"):
+            node_id = data.get("nodeId")
+            entries = data.get("sources")
+            # Nothing validates what a client writes into a note, and a field
+            # one document lacks is a NaN once the export is a DataFrame.
+            if _missing(node_id) or not str(node_id).strip():
+                continue
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                kind = _note_word(entry.get("kind")) or "source"
+                status = _note_word(entry.get("adminStatus"))
+                outputs.append(
+                    PageNote(
+                        node_id=str(node_id).strip(),
+                        kind=kind,
+                        admin_status=status,
+                        # `noteNeedsAction` in frontend/shared/model.ts: an
+                        # admin's word decides, and until there is one any
+                        # kind but a source is somebody asking for something.
+                        open=status == "unresolved" if status else kind != "source",
+                    )
+                )
+
+        pages = len({note.node_id for note in outputs})
+        print(f"Read {len(outputs)} note entries on {pages} pages")
+        return pd.DataFrame.from_records(
+            [dataclasses.asdict(o) for o in outputs], columns=NOTE_FIELDS
+        )
+
+
+def _note_word(value: object) -> str:
+    """A note entry's `kind` or `adminStatus`, "" when it has none."""
+    return "" if _missing(value) else str(value).strip()
 
 
 class KorytaFacts(Pipeline[PersonFact]):

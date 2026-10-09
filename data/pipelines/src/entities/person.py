@@ -99,6 +99,28 @@ class PersonVote:
 
 
 @dataclass
+class PageNote:
+    """One entry of a note a reader left on a page - a person's, a company's,
+    an article's - without what it says, where it points or who wrote it.
+
+    A note is one reader's on one page and holds a list of entries, each
+    triaged by an admin on its own (`NoteSource` in `frontend/shared/model.ts`).
+    """
+
+    #: The page the note is on.
+    node_id: str
+    #: "source", something the reader read; "change_request", a correction
+    #: they want made ("Do poprawy"); "missing", data they noticed is absent
+    #: ("Brakuje danych"). An entry written before kinds existed is a source.
+    kind: str
+    #: "resolved" or "unresolved" once an admin has said, "" until then.
+    admin_status: str
+    #: Whether it still waits on an admin, as the site reads it
+    #: (`noteNeedsAction`): what an admin said, else any kind but a source.
+    open: bool
+
+
+@dataclass
 class PersonFact:
     """One extracted fact the site has matched to a person already in the graph.
 
