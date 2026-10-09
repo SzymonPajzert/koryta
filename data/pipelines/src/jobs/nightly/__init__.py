@@ -6,6 +6,9 @@
     koryta_nightly --skip krs_odpis   # all but this one; repeatable
     koryta_nightly --max-uploads 300  # more people, once the first nights look right
     koryta_nightly --paid-max-calls 0 # buy nothing from rejestr.io tonight
+    koryta_nightly --register-backlog 2000
+                                      # the register's backlog too, not only
+                                      # the day's new registrations
 
 The steps, in order (`STEPS`):
 
@@ -13,6 +16,12 @@ The steps, in order (`STEPS`):
     export      wait for tonight's 04:00 Firestore export to finish; the people
                 are compared with it, so it has to be tonight's
     krs_free    koryta_scrape_krs_free: the bulletin, then api-krs
+    krs_register
+                koryta_krs_register_owners --new-registrations: api-krs's odpis
+                of every company the bulletin says was registered since the
+                register's log began, for who owns it - so that one a gmina or
+                a powiat sets up reaches the crawl - and --register-backlog
+                reads of the rest (none until decide-register-sweep-pace)
     krs_odpis   koryta_krs_odpis for the companies the bulletin named since
                 yesterday
     krs_paid    koryta_scrape_krs_paid --scope fallback: rejestr.io for what the
@@ -49,6 +58,14 @@ night; only the steps that depend on it are held:
   values) fail every night and do not hold it.
 - `scores` needs the same, and not the people: their outcome only decides
   which new pages there are to rate as well.
+
+`krs_register` holds nothing back, and nothing holds it. A company it finds
+the public owns is in the crawl's queue after tonight's reprocess
+(`CompaniesPublicByRegister`, the `public_owner` door of `ScrapeRejestrIO`);
+the next night's `krs_free` fetches its odpis aktualny, which puts it in
+`CompaniesKRS`. The step stops itself `REGISTER_MARGIN` minutes inside its time
+limit, so a backlog bigger than a night is left to the next one rather than cut
+off mid-read.
 
 `krs_paid` holds nothing back, and nothing holds it: the people go up with or
 without what it bought. It needs the rejestr.io key - REJESTR_KEY, else the
@@ -143,6 +160,11 @@ HELD = (
 #: a night with one export they read the same again, in about a minute.
 SCORES_REFRESH = ("KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores")
 
+#: Minutes the register step leaves itself inside its time limit: it stops
+#: asking, writes what it read and reports, rather than be stopped mid-read -
+#: a read that keeps failing takes up to three 30 s tries in each register.
+REGISTER_MARGIN = 5
+
 #: The secret the paid step reads its rejestr.io key from, unless
 #: KORYTA_REJESTR_SECRET names another; an empty one switches the step off.
 REJESTR_SECRET = "rejestr-io-key"
@@ -227,6 +249,9 @@ STEPS = (
     Step("compress", "lustro", 20, always=True),
     Step("export", "kopia bazy", 90),
     Step("krs_free", "KRS", 75),
+    # A night's new registrations are 2-3 minutes; the first night after the
+    # register's log began, 2,286 of them, about twenty.
+    Step("krs_register", "rejestr KRS", 30),
     Step("krs_odpis", "odpisy", 45),
     Step("krs_paid", "rejestr.io", 30),
     Step("reprocess", "potoki", 150),
@@ -702,6 +727,20 @@ class Night:
         ]
         return self.judge_job(*self.process(step, argv))
 
+    def register_argv(self, minutes: float) -> list[str]:
+        return [
+            bin_path("koryta_krs_register_owners"),
+            "--new-registrations",
+            "--reads",
+            str(self.args.register_backlog),
+            "--max-minutes",
+            f"{max(1.0, minutes - REGISTER_MARGIN):.0f}",
+        ]
+
+    def step_krs_register(self, step: Step) -> tuple[str, str, int | None]:
+        argv = self.register_argv(self.minutes_for(step))
+        return self.judge_job(*self.process(step, argv))
+
     def step_krs_odpis(self, step: Step) -> tuple[str, str, int | None]:
         yesterday = (warsaw_now() - timedelta(days=1)).date().isoformat()
         argv = [
@@ -873,13 +912,15 @@ class Night:
         print(f"The night, as it would run now ({len(steps)} steps):")
         for step in steps:
             limit = f"at most {step.minutes:.0f} min"
-            print(f"  {step.name:<11} {limit}: {self.describe(step)}")
+            print(f"  {step.name:<12} {limit}: {self.describe(step)}")
         return 0
 
     def describe(self, step: Step) -> str:
         commands = {
             "export": "wait for tonight's export (its .overall_export_metadata)",
             "krs_free": f"koryta_scrape_krs_free --max-minutes {self.args.krs_minutes}",
+            "krs_register": "koryta_krs_register_owners "
+            + " ".join(self.register_argv(step.minutes)[1:]),
             "krs_odpis": "koryta_krs_odpis --graph --changed-since <yesterday> "
             f"--max {self.args.odpis_max}",
             "krs_paid": "koryta_scrape_krs_paid --scope fallback --max-calls "
@@ -1048,6 +1089,17 @@ def parser() -> argparse.ArgumentParser:
         type=positive_int,
         default=60,
         help="The free KRS scrape stops asking after this many minutes. "
+        "Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--register-backlog",
+        type=positive_int,
+        default=0,
+        help="Register entries read a night besides the day's new "
+        "registrations: failed reads, entries the register has moved on from, "
+        "then the ~700k never read, oldest number first. About 2,500 reads, "
+        "the new ones included, fit the step's time; what does not is the "
+        "next night's. How many is task decide-register-sweep-pace. "
         "Default: %(default)s.",
     )
     parser.add_argument(

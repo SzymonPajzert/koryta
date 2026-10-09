@@ -29,9 +29,15 @@ It asks nothing, stops at once when rejestr.io refuses the account (exit 1), lea
 left for the next run (exit 75), and writes a run summary to the shared cache (`jobs/krs_scrape_paid/runs/`).
 
 ## krs_register_owners
-1. Reads output of `KRSRegisterEntries` pipeline
-1. Continues crawl of the api-krs endpoint to find owners of the companies
-1. Writes on failure or partial flushes to RESPONSE_LOG (sharedcache bucket, job output)
+1. Rebuilds `KRSRegisterQueue` from the bulletin (`KRSUpdates`) and the fold of its own log (`KRSRegisterEntries`): the numbers registered since the log began that have no answer yet, then failed reads, then answers the register has moved on from, then the numbers never read, oldest first
+1. Asks api-krs for the odpis aktualny of each: with `--new-registrations` every new registration, then `--reads N` more; without it, `--reads N` from the head
+1. Appends every answer, verbatim, to its log as write-once parts (`jobs/krs_register_owners/responses/` in the shared cache), flushing as it goes
+1. Stops after the read in hand at `--max-minutes` (exit 75), on SIGTERM or Ctrl+C, or after 20 failures in a row (exit 75, reported as failed)
+
+`CompaniesPublicByRegister` picks the publicly owned companies out of the fold, and `ScrapeRejestrIO` queues them for
+the free scrape (`public_owner`). Runs nightly as the step `krs_register`, after `krs_scrape_free` has fetched the
+day's bulletin: `--new-registrations --reads 0`, the backlog's pace waiting on `decide-register-sweep-pace` - see
+[data/nightly/README.md](../../../nightly/README.md).
 
 ## krs_odpis
 1. Reads the company part of `ScrapeRejestrIO` (person feeds stay paid), KRS numbers from `--krs-file`, or every company `CompaniesKRS` knows (`--graph`)
@@ -45,7 +51,7 @@ the company history `krs_scrape_paid` buys from rejestr.io - and `PeopleKRSCombi
 rejestr.io's for every company where the odpis is the newer of the two, on the way to `PeopleMerged`.
 
 ## nightly
-1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_odpis`, `krs_scrape_paid --scope fallback --max-calls 50`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100` and `score_import`
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis`, `krs_scrape_paid --scope fallback --max-calls 50`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100` and `score_import`
 1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
 1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
 
@@ -161,7 +167,7 @@ handed out, `/admin/procesy#przebieg-<runId>`, follows the run from the click to
 What reports: `krs_scrape_free` (not `--dry-run`), `score_import` (not `--dry-run`), `krs_scrape_paid` (once the
 bill is accepted; with `--max-calls`, every run but `--dry-run`, a run with
 nothing to buy too), `krs_odpis` (not `--dry-run`), `krs_register_owners` (not
-`--dry-run` or `--reads 0`), the article crawl, `koryta_crawl`, `people_import`
+`--dry-run`, nor `--reads 0` without `--new-registrations`), the article crawl, `koryta_crawl`, `people_import`
 (a `--dry-run` too) and `koryta_uploader --submit`, under `people_import`,
 `company_import`, `score_import` or `extraction_import` by `--type` (not
 `computeNodes`). A job the page's registry (`JOBS` in `frontend/shared/jobs.ts`)

@@ -331,6 +331,34 @@ def test_sigterm_is_a_partial_run(monkeypatch):
     assert (end["state"], end["stop_reason"], end["done"]) == ("partial", "SIGTERM", 1)
 
 
+def test_out_of_time_is_a_partial_run_left_to_the_next(monkeypatch):
+    """The night's step: `--max-minutes` inside its time limit, so the job
+    stops itself, flushes and reports rather than be killed mid-read."""
+    monkeypatch.setattr(job, "ask", lambda session, krs, *args: a_read(krs))
+    ticks = iter([0.0, 30.0, 61.0, 90.0])
+    bucket = Bucket()
+    status = RecordingRun()
+
+    code = job.read_register(
+        ["1", "2", "3", "4"],
+        ResponseLog(bucket.put, "run-1"),
+        0,
+        "run-1",
+        status=status,  # type: ignore[arg-type]
+        deadline=60.0,
+        tick=lambda: next(ticks),
+    )
+
+    assert code == job.EXIT_TRY_LATER
+    assert [r.krs for r in bucket.reads()] == ["1", "2"]
+    end = status.ending()
+    assert (end["state"], end["stop_reason"], end["done"]) == (
+        "partial",
+        job.DEADLINE,
+        2,
+    )
+
+
 def test_ctrl_c_is_a_partial_run(monkeypatch):
     def interrupted_on_the_second(krs):
         if krs == "2":
@@ -370,11 +398,95 @@ def a_queue(monkeypatch):
     monkeypatch.setattr(job, "KRSRegisterQueue", Queue)
 
 
-@pytest.mark.parametrize("argv", [["--reads", "0"], ["--reads", "5", "--dry-run"]])
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--reads", "0"],
+        ["--reads", "5", "--dry-run"],
+        ["--new-registrations", "--dry-run"],
+    ],
+)
 def test_a_run_that_asks_nothing_reports_nothing(runs, a_queue, argv):
     assert job.main(argv) == 0
 
     assert runs == []
+
+
+def queue_of(*rows: tuple[str, str]) -> pd.DataFrame:
+    return pd.DataFrame(rows, columns=["krs", "reason"])
+
+
+def test_the_new_registrations_are_read_whole_then_the_backlog_counted():
+    queue = queue_of(
+        ("1270100", "new"),
+        ("1270200", "new"),
+        ("900000", "failed"),
+        ("400", "moved"),
+        ("200", "never"),
+    )
+
+    assert job.to_read(queue, 0, new_registrations=True) == [
+        "0001270100",
+        "0001270200",
+    ]
+    assert job.to_read(queue, 2, new_registrations=True) == [
+        "0001270100",
+        "0001270200",
+        "0000900000",
+        "0000000400",
+    ]
+    # By hand, --reads counts from the head, new registrations included.
+    assert job.to_read(queue, 3, new_registrations=False) == [
+        "0001270100",
+        "0001270200",
+        "0000900000",
+    ]
+    assert job.to_read(queue_of(("200", "never")), 0, new_registrations=True) == []
+
+
+def test_a_night_with_no_new_registrations_still_reports_its_run(monkeypatch, runs):
+    """A weekend's bulletin registers nobody; the page should still see the
+    night ran rather than wonder whether it did."""
+
+    class Queue:
+        def read_or_process(self, ctx):
+            return queue_of(("200", "never"))
+
+    class Client:
+        def create_object(self, *args, **kwargs):
+            raise AssertionError("nothing to write")
+
+    monkeypatch.setattr(job, "setup_context", lambda **kwargs: ("ctx", None))
+    monkeypatch.setattr(job, "KRSRegisterQueue", Queue)
+    monkeypatch.setattr(job, "Client", Client)
+
+    assert job.main(["--new-registrations", "--reads", "0"]) == 0
+
+    [run] = runs
+    assert run.kwargs["total"] == 0
+    end = run.ending()
+    assert (end["state"], end["done"]) == ("succeeded", 0)
+
+
+def test_the_time_limit_counts_from_the_jobs_start(monkeypatch, runs, a_queue):
+    """The queue's rebuild - the bulletin, the ledger - is inside the limit."""
+    seen: dict = {}
+    monkeypatch.setattr(job.time, "monotonic", lambda: 1000.0)
+
+    def read_register(todo, log, interval, run, status=None, deadline=None):
+        seen.update(todo=todo, deadline=deadline)
+        return 0
+
+    class Client:
+        def create_object(self, *args, **kwargs):
+            raise AssertionError("nothing is written here")
+
+    monkeypatch.setattr(job, "Client", Client)
+    monkeypatch.setattr(job, "read_register", read_register)
+
+    assert job.main(["--new-registrations", "--max-minutes", "25"]) == 0
+
+    assert seen == {"todo": ["0000000001", "0000000002"], "deadline": 2500.0}
 
 
 def test_a_run_is_reported_under_its_log_run_id(monkeypatch, runs, a_queue):
@@ -384,8 +496,8 @@ def test_a_run_is_reported_under_its_log_run_id(monkeypatch, runs, a_queue):
         def create_object(self, *args, **kwargs):
             raise AssertionError("nothing is written here")
 
-    def read_register(todo, log, interval, run, status=None):
-        seen.update(todo=todo, run=run, status=status)
+    def read_register(todo, log, interval, run, status=None, deadline=None):
+        seen.update(todo=todo, run=run, status=status, deadline=deadline)
         return 0
 
     monkeypatch.setattr(job, "Client", Client)
@@ -398,4 +510,5 @@ def test_a_run_is_reported_under_its_log_run_id(monkeypatch, runs, a_queue):
     assert run.kwargs == {"run_id": seen["run"], "unit": "odczytów", "total": 2}
     assert seen["status"] is run
     assert seen["todo"] == ["0000000001", "0000000002"]
+    assert seen["deadline"] is None
     assert run.calls[-1] == ("exit", {"raised": None})

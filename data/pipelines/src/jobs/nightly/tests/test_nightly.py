@@ -19,6 +19,7 @@ STALE = "2026-10-03T02:00:04.120Z"
 #: What the processes would answer, by the entry point's name.
 GOOD = {
     "koryta_scrape_krs_free": 0,
+    "koryta_krs_register_owners": 0,
     "koryta_krs_odpis": 0,
     "koryta_scrape_krs_paid": 0,
     "koryta": 0,
@@ -166,6 +167,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "compressor",
         "compressor",
         "koryta_scrape_krs_free",
+        "koryta_krs_register_owners",
         "koryta_krs_odpis",
         "koryta_scrape_krs_paid",
         "koryta",
@@ -353,6 +355,44 @@ def test_what_the_paid_step_leaves_or_breaks_does_not_hold_the_people(world):
 
     assert world.steps()["krs_paid"] == ("failed", "kod wyjścia 1")
     assert world.steps()["people"] == ("succeeded", "")
+
+
+def test_the_register_reads_the_days_new_registrations_and_no_backlog(world):
+    night.main([])
+
+    argv, _ = world.command("koryta_krs_register_owners")
+    assert "--new-registrations" in argv
+    # The backlog's pace is decide-register-sweep-pace's: none until then.
+    assert argv[argv.index("--reads") + 1] == "0"
+    # Inside the step's 30 minutes, so the job stops itself, writes what it
+    # read and reports, rather than be stopped mid-read.
+    assert argv[argv.index("--max-minutes") + 1] == "25"
+
+    world.commands.clear()
+    world.objects.clear()
+    night.main(["--register-backlog", "2000"])
+
+    argv, _ = world.command("koryta_krs_register_owners")
+    assert argv[argv.index("--reads") + 1] == "2000"
+
+
+def test_what_the_register_step_leaves_or_breaks_holds_nothing(world):
+    world.codes["koryta_krs_register_owners"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["krs_register"] == ("partial", "zostało na następny raz")
+    assert world.steps()["people"] == ("succeeded", "")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_krs_register_owners"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["krs_register"] == ("failed", "kod wyjścia 1")
+    for step in ("krs_odpis", "krs_paid", "reprocess", "people", "scores"):
+        assert world.steps()[step] == ("succeeded", ""), step
 
 
 def test_the_mirror_is_made_one_host_at_a_time(world):
@@ -559,6 +599,10 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     assert "koryta_people_import --scope priority --max-uploads 100" in out
     assert "koryta_score_import" in out
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
+    assert (
+        "koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25"
+        in out
+    )
 
 
 def test_past_the_stop_by_only_compress_and_tidy_run(world, monkeypatch):
