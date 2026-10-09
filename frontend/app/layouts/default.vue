@@ -224,6 +224,7 @@
     </v-container>
     <HomeAppFooter class="mt-auto w-100" />
     <FeedbackLauncher />
+    <MailOptInPrompt />
   </v-main>
 </template>
 
