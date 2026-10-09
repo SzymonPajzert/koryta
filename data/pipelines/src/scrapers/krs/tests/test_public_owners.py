@@ -95,6 +95,20 @@ def test_a_state_agency_without_a_krs_number():
     assert found[0] == REASON_PUBLIC_BODY
 
 
+def test_the_state_housing_land_bank_is_public():
+    # The only owner the register names for SIM "KZN-Zachodni" (0000920074).
+    found = direct_public_owner(
+        entry(
+            "0000920074",
+            owner("KRAJOWY ZASÓB NIERUCHOMOŚCI Z SIEDZIBĄ W WARSZAWIE"),
+        ),
+        pomorskie(),
+    )
+
+    assert found is not None
+    assert found[0] == REASON_PUBLIC_BODY
+
+
 def test_an_agency_is_not_a_state_agency_by_its_first_word():
     assert not public_body('AGENCJA REKLAMOWA "GRAFITI" SPÓŁKA Z O.O.')
     assert not public_body("DOLCE VITA FUNDACJA RODZINNA")
