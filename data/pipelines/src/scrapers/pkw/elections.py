@@ -278,6 +278,19 @@ committee_to_party: dict[str, list[str]] = {
     'komitet wyborczy "unia wolności i unia polityki realnej"': [OTHER_PARTY],
     "koalicja aws - chrześcijańskie forum rop": [OTHER_PARTY],
     "komitet wyborczy koalicja aws - chrześcijańskie forum rop": [OTHER_PARTY],
+    # Ruch Odbudowy Polski. Its 1997 Sejm and Senat lists were registered by the
+    # party's board, 'Zarząd Główny ROP', which registered lists in three
+    # places in 1998 too. Two more 1998 lists carry the party's own name, one of
+    # them its Biecz branch's. In 2005 it stood as part of Ruch Patriotyczny.
+    "zarząd główny ruchu odbudowy polski": [OTHER_PARTY],
+    "zarzad glowny ruchu odbudowy polski": [OTHER_PARTY],
+    "ruch odbudowy polski": [OTHER_PARTY],
+    '"ruch odbudowy polski"-ogniwo biecz': [OTHER_PARTY],
+    # Ruch Patriotyczny, the party ROP, Ruch Katolicko-Narodowy, Przymierze dla
+    # Polski and Liga Obrony Suwerenności formed as a federation in April 2005.
+    # It stood for the Sejm that year in all sixteen voivodeships and for the
+    # Senat in five. Not Ruch Patriotyczny „Ojczyzna” of 1998, next.
+    "komitet wyborczy ruch patriotyczny": [OTHER_PARTY],
     # Liga Polskich Rodzin.
     "kw liga polskich rodzin": [OTHER_PARTY],
     "komitet wyborczy liga polskich rodzin": [OTHER_PARTY],
@@ -288,8 +301,7 @@ committee_to_party: dict[str, list[str]] = {
     "komitet wyborczy wyborców kukiz'15": [OTHER_PARTY],
     "komitet wyborczy wyborców kukiz15 do senatu": [OTHER_PARTY],
     # Ruch Patriotyczny „Ojczyzna”, which stood in all sixteen sejmiks in 1998.
-    # Not 'Komitet Wyborczy Ruch Patriotyczny', another party's 2005 Sejm list,
-    # nor 'Niezależny Ruch Patriotyczny Ojczyzna', one town's list.
+    # Not 'Niezależny Ruch Patriotyczny Ojczyzna', one town's list.
     "komitet wyborczy ruch patriotyczny ojczyzna": [OTHER_PARTY],
     'komitet wyborczy ruch patriotyczny "ojczyzna"': [OTHER_PARTY],
     'komitet wyborczy "ruch patriotyczny ojczyzna"': [OTHER_PARTY],
@@ -300,6 +312,7 @@ committee_to_party: dict[str, list[str]] = {
     'ruch patriotyczny "ojczyzna"': [OTHER_PARTY],
     '"ruch patriotyczny ojczyzna"': [OTHER_PARTY],
     "ruch patriotyczny-ojczyzna": [OTHER_PARTY],
+    'ruch patriotyczyny "ojczyzna"': [OTHER_PARTY],
     "patriet wyborczy ruch patriotyczny ojczyzna": [OTHER_PARTY],
     "pomitet wyborczy ruch patriotyczny ojczyzna": [OTHER_PARTY],
     "patriotyvyborczy ruch patriotyczny ojczyzna": [OTHER_PARTY],
