@@ -29,9 +29,11 @@ that is the newer source having seen an entry the older had not.
   outputs: no payload, sent part, request or log line carries it.
 - rejestr.io lists somebody twice now and then: two ids, one name, one birth
   date, one post. Where the odpis names one person there with that name and
-  day, both ids are that person's, and the odpis rows are written once per id
-  so that each id stays on the record (ids 126307 and 715231 at 0000127464, on
-  the 2026-10-09 night).
+  day, it matches both ids and its rows are written once per id, so each entry
+  keeps the post, its own spelling and the PESEL. The two stay two people all
+  the same (`PeopleKRSMerged`): two rejestr.io entries are never one, and the
+  run names the pair for a reviewer to merge their pages by hand (ids 126307
+  and 715231 at 0000127464, on the 2026-10-09 night).
 - Somebody without a PESEL takes no rejestr.io identity. The odpis prints
   some of them a birth date in the PESEL's place, but rejestr.io's
   ``osoba-bez-pesel`` entry has no date to match it on, and its id names
@@ -206,8 +208,9 @@ def match_rejestrio(rejestrio: pd.DataFrame, posts: pd.DataFrame) -> pd.DataFram
     Except where the candidates are one name: the same first name, surname and
     birth date, and no two middle names. That is rejestr.io listing one person
     twice, and the odpis, which names everybody who held a seat, naming one
-    person there under that name says so. Each id is matched, so a person can
-    come out with two (`with_identities`).
+    person there under that name says so. Each id is matched, and the odpis
+    row written once for each (`with_identities`); the entries stay two
+    people (`analysis.people_krs_merged.person_keys`).
 
     One row per (employed_krs, pesel_fingerprint, id), with the rejestr.io
     person's `IDENTITY`.
@@ -275,7 +278,8 @@ def with_identities(posts: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     the spelling of its newest seat, so a surname written without diacritics in
     2004 and with them in 2019 is one person and not two. A row's id is the
     one its own company matched, else the fingerprint's; where its company
-    matched two (`match_rejestrio`), the row is written once for each.
+    matched two (`match_rejestrio`), the row is written once for each, under
+    each entry's own spelling, as they stay two people.
     """
     posts = posts.reset_index(drop=True)
     printed = posts.dropna(subset=["pesel_fingerprint"])
@@ -287,6 +291,10 @@ def with_identities(posts: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     ).drop_duplicates("pesel_fingerprint", keep="last")
     names = newest.set_index("pesel_fingerprint")[list(IDENTITY)]
     names["id"] = None
+    # Each entry's identity: the spelling of the first company it matched at.
+    spelled = matches.drop_duplicates(["pesel_fingerprint", "id"])[
+        ["pesel_fingerprint", *IDENTITY]
+    ]
 
     if not matches.empty:
         sizes = matches.groupby(["pesel_fingerprint", "id"]).size().rename("n")
@@ -297,10 +305,9 @@ def with_identities(posts: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
             ["pesel_fingerprint", "n", "number", "id"],
             ascending=[True, False, True, True],
         ).drop_duplicates("pesel_fingerprint")
-        known = preferred.merge(
-            matches.drop_duplicates(["pesel_fingerprint", "id"]),
-            on=["pesel_fingerprint", "id"],
-        ).set_index("pesel_fingerprint")[list(IDENTITY)]
+        known = preferred.merge(spelled, on=["pesel_fingerprint", "id"]).set_index(
+            "pesel_fingerprint"
+        )[list(IDENTITY)]
         names.loc[known.index, list(IDENTITY)] = known
 
     has_print = posts["pesel_fingerprint"].notna()
@@ -308,12 +315,17 @@ def with_identities(posts: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     for column in IDENTITY:
         posts.loc[has_print, column] = keyed.map(names[column]).to_numpy()
     if not matches.empty:
-        own = matches[["employed_krs", "pesel_fingerprint", "id"]].rename(
-            columns={"id": "id_own"}
+        mine = {column: f"{column}_own" for column in IDENTITY}
+        own = (
+            matches[["employed_krs", "pesel_fingerprint", "id"]]
+            .merge(spelled, on=["pesel_fingerprint", "id"])
+            .rename(columns=mine)
         )
         posts = posts.merge(own, on=["employed_krs", "pesel_fingerprint"], how="left")
-        posts["id"] = posts["id_own"].where(posts["id_own"].notna(), posts["id"])
-        posts = posts.drop(columns="id_own")
+        matched = posts["id_own"].notna()
+        for column, theirs in mine.items():
+            posts[column] = posts[theirs].where(matched, posts[column])
+        posts = posts.drop(columns=list(mine.values()))
     return posts
 
 
@@ -427,7 +439,8 @@ def report(rejestrio, posts, matches, from_odpis, kept, added, unnamed) -> None:
     torn = sorted(str(id) for id, n in prints_of_id.items() if n > 1)
     print(
         f"  {matches['id'].nunique():,} rejestr.io ids have a PESEL fingerprint; "
-        f"{len(shared):,} fingerprints are two ids or more, one person each: "
+        f"{len(shared):,} fingerprints are two ids or more, kept apart as an "
+        f"entry each for a reviewer to merge: "
         f"{'; '.join(shared) or 'none'}. {len(torn):,} ids have two fingerprints"
         + (f": {', '.join(torn)}" if torn else "")
     )

@@ -70,8 +70,14 @@ def person_keys(krs: pd.DataFrame) -> pd.Series:
     conflict either way. So rows sharing either are one person, transitively:
     an odpis row holds both, and links a rejestr.io row of the same id at a
     company with no odpis on file to the odpis rows of the same PESEL
-    elsewhere. Two rejestr.io ids that one PESEL matched are one person too
-    (`match_rejestrio`), and keep both ids.
+    elsewhere.
+
+    Except that two rejestr.io entries are never one person, whatever joins
+    them (rejestr-io-entry-is-one-person). Where one PESEL matched two ids -
+    rejestr.io listing somebody twice, as 126307 and 715231 at 0000127464 on
+    the 2026-10-09 night (`match_rejestrio`) - each id stays a person of its
+    own, the PESEL on both, and `combine` names the pair for a reviewer to
+    merge their pages by hand.
 
     A person known by a PESEL alone and one known by a rejestr.io id alone are
     one person where they share a first name, a surname and a full birth date,
@@ -83,22 +89,34 @@ def person_keys(krs: pd.DataFrame) -> pd.Series:
     The value is the person's least key, `p:<fingerprint>` where they have a
     PESEL and `r:<id>` where only an id. A row with neither - somebody without
     a PESEL whom the odpis gives a printed birth date - is None, and grouped by
-    name and date as before (`create_people_table`).
+    name and date as before (`create_people_table`). A PESEL two entries share
+    is keyed with the entry, `p:<fingerprint>/<id>`, so it joins neither to the
+    other.
     """
+    ids, prints, dates = (
+        [_present(value) for value in _column(krs, name)]
+        for name in ("id", "pesel_fingerprint", "birth_date")
+    )
+    # An undated row is left out, as a name alone tells nobody apart. Its id
+    # is rejestr.io's `osoba-bez-pesel` number, which names another person
+    # than the `osoba` of the same number.
+    entries_of: dict[str, set[str]] = defaultdict(set)
+    for id, printed, born in zip(ids, prints, dates):
+        if id is not None and printed is not None and born is not None:
+            entries_of[printed].add(id)
+
     people = _People()
     rows: list[str | None] = []
-    for id, printed, born in zip(
-        _column(krs, "id"),
-        _column(krs, "pesel_fingerprint"),
-        _column(krs, "birth_date"),
-    ):
-        # An undated row is left out below, as a name alone tells nobody
-        # apart. Its id is rejestr.io's `osoba-bez-pesel` number, which names
-        # another person than the `osoba` of the same number.
+    for id, printed, born in zip(ids, prints, dates):
+        if born is None:
+            rows.append(None)
+            continue
+        if printed is not None and id is not None and len(entries_of[printed]) > 1:
+            printed = f"{printed}/{id}"
         keys = [
             f"{kind}:{value}"
-            for kind, value in (("r", _present(id)), ("p", _present(printed)))
-            if value is not None and _present(born) is not None
+            for kind, value in (("r", id), ("p", printed))
+            if value is not None
         ]
         for key in keys:
             people.add(key)

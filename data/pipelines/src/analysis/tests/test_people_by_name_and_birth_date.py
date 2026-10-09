@@ -15,6 +15,7 @@ from analysis.payloads.person import (
     another_pesels_page,
     matching_one_page,
     missing_from_koryta,
+    report_shared_pesel,
 )
 from analysis.payloads.site import (
     BY_NAME,
@@ -249,7 +250,6 @@ def row(**fields) -> pd.Series:
         "pesel_fingerprint": [F],
         "birth_date": BORN,
         "koryta_id": None,
-        "koryta_rejestrio_id": None,
         "employment": [],
         "elections": [],
     }
@@ -281,11 +281,24 @@ def test_a_page_found_by_the_name_alone_is_not_sent_as_theirs():
     assert payload_of(rejestrio_id=["5"], koryta_id="anna").korytaId == "anna"
 
 
-def test_one_pesel_under_two_entries_keeps_the_one_its_page_links():
-    both = ["126307", "715231"]
+def test_two_entries_of_one_pesel_go_out_as_two_people_named_for_a_reviewer(capsys):
+    """Ids 126307 and 715231 share a PESEL. Each goes out under its own entry,
+    never merged, and the run names the pair - not the PESEL - for a reviewer."""
+    rows = [
+        row(rejestrio_id=["715231"]),
+        row(rejestrio_id=["126307"]),
+        row(rejestrio_id=["5"], pesel_fingerprint=[G]),
+    ]
+    payloads = [payload_of(**dict(one)) for one in rows]
 
-    assert payload_of(rejestrio_id=both).rejestrIo == "https://rejestr.io/osoby/126307"
-    assert (
-        payload_of(rejestrio_id=both, koryta_rejestrio_id=715231.0).rejestrIo
-        == "https://rejestr.io/osoby/715231"
-    )
+    report_shared_pesel(payloads, rows)
+
+    assert [one.rejestrIo for one in payloads] == [
+        f"{REGISTER}715231",
+        f"{REGISTER}126307",
+        f"{REGISTER}5",
+    ]
+    out = capsys.readouterr().out
+    assert "1 PESELs are two rejestr.io entries or more" in out
+    assert out.rstrip().endswith(": 126307, 715231")
+    assert F not in out and G not in out
