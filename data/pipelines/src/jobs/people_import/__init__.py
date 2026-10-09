@@ -36,6 +36,14 @@ reviewer has not yet approved, or a party a human took off a page, still reads
 as a change against the export, and sent every night it would take a slot each
 night and undo the human each time.
 
+Of the new hires, the people only an odpis names - no rejestr.io entry, so the
+ingest finds them by their name and birth date alone - take at most a tenth of
+the run (`--max-new-odpis-only`). Planned over the 2026-10-09 night's data,
+the first plan to let them in, they were 109 of 118 new hires, a month of them
+at once, and took every one of the 100 slots from the bought, noted and
+published pages behind them. A tenth also keeps the pages made this way few
+enough to check by hand the morning after; it grows with `--max-uploads`.
+
 What was bought is read off the crawl bucket, which files every rejestr.io
 answer under the day it was bought, whoever bought it (`bought_since`). A week
 of it rather than the day, so that a feed a hand run bought after the night's
@@ -407,17 +415,32 @@ def bought_since(client: "Client", since: str) -> set[str]:
     return bought
 
 
+#: One in this many of a priority run's sends may be a new hire only an odpis
+#: names, unless `--max-new-odpis-only` says otherwise (the module's docstring).
+ODPIS_ONLY_PER = 10
+
+
+def only_an_odpis_names(payload: Mapping[str, typing.Any]) -> bool:
+    """Whether the payload is somebody with no rejestr.io entry, whom the
+    ingest finds by their name and birth date alone."""
+    return not payload.get("rejestrIo") and not payload.get("korytaId")
+
+
 def plan_priority(
-    candidates: Sequence[Candidate], already_sent: set[tuple[str, str]], max_new: int
+    candidates: Sequence[Candidate],
+    already_sent: set[tuple[str, str]],
+    max_new: int,
+    max_new_odpis_only: int | None = None,
 ) -> tuple[list[Candidate], int]:
     """What a priority run sends, in order, and how many it left out as sent.
 
     Out: a payload already taken unchanged (`already_sent`), and the new hires
     past `max_new` - so a night with more of them than it may create still
-    gets to the pages after them.
+    gets to the pages after them - and, among those, the ones only an odpis
+    names past `max_new_odpis_only`, for the same reason.
     """
     planned: list[Candidate] = []
-    skipped = hires = 0
+    skipped = hires = odpis_only = 0
     for candidate in candidates:
         if (
             person_key(candidate.payload),
@@ -426,9 +449,16 @@ def plan_priority(
             skipped += 1
             continue
         if candidate.tier == NEW_HIRE:
-            if hires >= max_new:
+            by_name = only_an_odpis_names(candidate.payload)
+            if hires >= max_new or (
+                by_name
+                and max_new_odpis_only is not None
+                and odpis_only >= max_new_odpis_only
+            ):
                 continue
             hires += 1
+            if by_name:
+                odpis_only += 1
         planned.append(candidate)
     return planned, skipped
 
@@ -593,7 +623,8 @@ class PeopleImport:
 
     def plan(self) -> list[dict]:
         """A priority run's payloads, in sending order: built, the already sent
-        left out, the new hires cut at --max-new."""
+        left out, the new hires cut at --max-new, the ones only an odpis names
+        at --max-new-odpis-only."""
         args = self.args
         today = datetime.now(warsaw_tz).date()
         bought_from = (today - timedelta(days=args.bought_days)).isoformat()
@@ -612,7 +643,7 @@ class PeopleImport:
             since = (today - timedelta(days=args.resend_after)).isoformat()
             already = sent_recently(self.client(), since)
         planned, self.summary.already_sent = plan_priority(
-            candidates, already, args.max_new
+            candidates, already, args.max_new, args.max_new_odpis_only
         )
         self.tiers = [candidate.tier for candidate in planned]
         counts = Counter(self.tiers)
@@ -621,6 +652,26 @@ class PeopleImport:
             f"Planned by tier: {self.summary.tiers}; left out as sent unchanged "
             f"in the last {args.resend_after} days: {self.summary.already_sent}"
         )
+
+        def by_name(found: Sequence[Candidate]) -> list[Candidate]:
+            return [
+                candidate
+                for candidate in found
+                if candidate.tier == NEW_HIRE and only_an_odpis_names(candidate.payload)
+            ]
+
+        unsent = [
+            candidate
+            for candidate in by_name(candidates)
+            if (person_key(candidate.payload), payload_hash(candidate.payload))
+            not in already
+        ]
+        if unsent:
+            print(
+                f"New hires only an odpis names: {len(by_name(planned))} of "
+                f"{len(unsent)} planned (--max-new-odpis-only "
+                f"{args.max_new_odpis_only})"
+            )
         return [candidate.payload for candidate in planned]
 
     def plan_request(self, request: Request) -> list[dict]:
@@ -931,6 +982,14 @@ def parser() -> argparse.ArgumentParser:
         "--max-uploads; a page made for anybody else stops it as failed.",
     )
     parser.add_argument(
+        "--max-new-odpis-only",
+        type=non_negative_int,
+        help="Priority: the most new hires only an odpis names - no rejestr.io "
+        "entry, so the ingest finds them by their name and birth date alone - "
+        "a run sends, within --max-new. Default: a tenth of --max-uploads, "
+        "rounded up.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Build the payloads and report how many; send nothing and write "
@@ -989,6 +1048,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         args.scope = REQUEST
     if args.max_new is None:
         args.max_new = args.max_uploads if args.scope == PRIORITY else 0
+    if args.max_new_odpis_only is None and args.scope == PRIORITY:
+        args.max_new_odpis_only = -(-args.max_uploads // ODPIS_ONLY_PER)
     if args.scope == "not-on-koryta" and args.max_new <= 0:
         parse.error(
             "--scope not-on-koryta creates a page for everybody it sends; say "
