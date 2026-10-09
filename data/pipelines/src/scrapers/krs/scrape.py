@@ -14,7 +14,7 @@ from analysis.interesting import Companies
 from analysis.people import PeopleMerged
 from entities.company import KRS
 from entities.person import RejestrIOKey
-from scrapers.koryta.download import KorytaPeople, KorytaVotes
+from scrapers.koryta.download import KorytaPeople, KorytaPublished, KorytaVotes
 from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.columns import is_public, normalise
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
@@ -66,6 +66,9 @@ REASON_REFRESH = "refresh"
 REASON_MISSING_NAME = "missing_name"
 REASON_MISSING_REGISTER_ENTRY = "missing_register_entry"
 REASON_INTERESTING_PERSON = "interesting_person"
+#: The page was published since `PUBLISHED_SINCE`. Its own row rather than
+#: `interesting_person`'s, so the bill says what moving the day back costs.
+REASON_PUBLISHED_PERSON = "published_person"
 #: A query whose caller recorded nothing. Reported rather than dropped, so the
 #: rows of the breakdown always add up to what is about to be spent.
 REASON_UNRECORDED = "unrecorded"
@@ -81,7 +84,9 @@ REASON_PRECEDENCE = (
     REASON_OWNED,
     REASON_MISSING_NAME,
     REASON_MISSING_REGISTER_ENTRY,
+    # A vote first: what publishing adds is the people nobody voted for.
     REASON_INTERESTING_PERSON,
+    REASON_PUBLISHED_PERSON,
     REASON_UNRECORDED,
 )
 
@@ -873,30 +878,70 @@ def linked_entry(link: typing.Any) -> str | None:
     return found.group(1) if found else None
 
 
-def interesting_pages(
-    votes: pd.DataFrame, pages: pd.DataFrame
-) -> tuple[dict[str, dict], set[str]]:
-    """What the interesting votes ask for: the entries the voted pages link,
-    each with the page linking it, and the names of the voted pages that carry
-    no link (`ScrapeRejestrIO.people_to_scrape`)."""
-    by_id = {str(page["id"]): page for page in pages.to_dict("records")}
-    linked: dict[str, dict] = {}
-    names: set[str] = set()
+#: The day from which a published page buys what a vote for it would: a page
+#: published since is bought as one somebody voted interesting is
+#: (`ScrapeRejestrIO.people_to_scrape`). A day rather than a span, so a run
+#: reads one export, and one that never changes (`KorytaPublished`); moved
+#: back a step at a time, so each step's bill is seen before the next. The
+#: first, 2026-07-11, was 90 days before it was set: 360 pages published
+#: since, 218 people the votes had not queued, 436 calls (21.80 PLN). Every
+#: published page was 1,093 people and 109.30 PLN that day: 420 by a page's
+#: link, 673 by the name of one of the 668 pages without one. None counts
+#: every published page, as 2025-12-11 would - the first export, when no page
+#: was public yet; an earlier day has no export to read.
+PUBLISHED_SINCE: str | None = "2026-07-11"
+
+
+def voted_interesting(votes: pd.DataFrame) -> list[str]:
+    """The pages a reader voted interesting, each once, in the votes' order."""
+    pages: dict[str, None] = {}
     for _, row in votes.iterrows():
         person_koryta_id = row.get("person_koryta_id")
         if not person_koryta_id or person_koryta_id == "":
             continue
-        interesting = row.get("interesting", 0)
-        if interesting > 0:
-            page = by_id.get(str(person_koryta_id))
-            if page is None:
-                continue
-            entry = linked_entry(page.get("rejestrIo"))
-            name = page.get("full_name")
-            if entry is not None:
-                linked.setdefault(entry, page)
-            elif isinstance(name, str) and name:
-                names.add(name)
+        if row.get("interesting", 0) > 0:
+            pages.setdefault(str(person_koryta_id), None)
+    return list(pages)
+
+
+def published_since(
+    pages: pd.DataFrame, public_before: pd.DataFrame | None
+) -> set[str]:
+    """The pages published now that were not public on `PUBLISHED_SINCE`
+    (`public_before`), or every published page when there is no such day.
+
+    Published now is `is_public`, as the people step reads it
+    (`PeoplePayloads.published_people`).
+    """
+    if pages.empty or "is_public" not in pages:
+        return set()
+    published = set(pages.loc[is_public(pages["is_public"]), "id"].astype(str))
+    # A day when no page was public reads back off disk with no columns.
+    if public_before is None or public_before.empty:
+        return published
+    return published - set(public_before["id"].astype(str))
+
+
+def interesting_pages(
+    page_ids: typing.Iterable[str], pages: pd.DataFrame
+) -> tuple[dict[str, dict], set[str]]:
+    """What the interesting pages ask for: the entries they link, each with
+    the page linking it, and the names of those that carry no link
+    (`ScrapeRejestrIO.people_to_scrape`). A page the export lacks asks for
+    nothing."""
+    by_id = {str(page["id"]): page for page in pages.to_dict("records")}
+    linked: dict[str, dict] = {}
+    names: set[str] = set()
+    for page_id in page_ids:
+        page = by_id.get(str(page_id))
+        if page is None:
+            continue
+        entry = linked_entry(page.get("rejestrIo"))
+        name = page.get("full_name")
+        if entry is not None:
+            linked.setdefault(entry, page)
+        elif isinstance(name, str) and name:
+            names.add(name)
     return linked, names
 
 
@@ -911,8 +956,8 @@ def misnamed_links(
     linked: typing.Mapping[str, typing.Mapping[str, typing.Any]],
     entry_names: typing.Mapping[str, typing.Collection[str]],
 ) -> list[tuple[str, typing.Mapping[str, typing.Any], list[str]]]:
-    """The voted pages whose linked entry goes by another first or last name,
-    as (entry, page, the entry's names).
+    """The voted or published pages whose linked entry goes by another first
+    or last name, as (entry, page, the entry's names).
 
     Bought as linked all the same - the link is the page's word on who it is -
     and named in the run's log rather than hedged by buying the namesakes
@@ -936,12 +981,13 @@ def misnamed_links(
 def report_misnamed_links(
     misnamed: typing.Sequence[tuple[str, typing.Mapping[str, typing.Any], list[str]]],
 ) -> None:
-    """Name the voted pages whose link may point at somebody else."""
+    """Name the voted or published pages whose link may point at somebody
+    else."""
     if not misnamed:
         return
     print(
-        f"{len(misnamed)} voted pages link a rejestr.io entry of another name, "
-        f"bought as linked - check the link:"
+        f"{len(misnamed)} voted or published pages link a rejestr.io entry of "
+        f"another name, bought as linked - check the link:"
     )
     for entry, page, names in misnamed[:MISNAMED_LINKS_REPORTED]:
         print(
@@ -1268,8 +1314,14 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         return results
 
     def people_to_scrape(self, ctx: Context) -> set[RejestrIOKey]:
-        """The people whose rejestr.io feeds are owed: the hardcoded list, and
-        whoever a reader marked interesting.
+        """The people whose rejestr.io feeds are owed: the hardcoded list,
+        whoever a reader marked interesting, and whoever's page was published
+        since `PUBLISHED_SINCE`.
+
+        Publishing a page says what a vote for it says - this person matters -
+        so the two buy alike. Until 2026-10-09 only a vote bought anything: of
+        the 360 pages published since 2026-07-11, 224 had none, and none of the
+        218 people only they ask for had a feed.
 
         A vote is on a page, and a page carrying a rejestr.io link says which
         entry it is - one entry is one person - so that entry alone is bought.
@@ -1288,16 +1340,41 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         for person in scraped_people:
             self.person_reasons.setdefault(str(person.id), set()).add(REASON_HARDCODED)
 
-        # TODO this matching rejestr.io to names logic is duplicated
-        # We should merge it in one of the pipelines
-        linked, interesting_names = interesting_pages(
-            self.koryta_votes.read_or_process(ctx),
-            self.koryta_people.read_or_process(ctx),
-        )
+        pages = self.koryta_people.read_or_process(ctx)
+        window = f"since {PUBLISHED_SINCE}" if PUBLISHED_SINCE else "at any time"
+        asked = [
+            (
+                REASON_INTERESTING_PERSON,
+                "voted interesting",
+                voted_interesting(self.koryta_votes.read_or_process(ctx)),
+            ),
+            (
+                REASON_PUBLISHED_PERSON,
+                f"published {window}",
+                sorted(published_since(pages, self.public_before(ctx))),
+            ),
+        ]
+        # The entries the pages link, each with the first page linking it, and
+        # the names of the pages without a link, each with why it is asked for.
+        linked: dict[str, dict] = {}
+        interesting_names: dict[str, set[str]] = {}
+        for reason, label, page_ids in asked:
+            reason_linked, reason_names = interesting_pages(page_ids, pages)
+            print(
+                f"Pages {label}: {len(page_ids)}, {len(reason_linked)} rejestr.io "
+                f"entries by their link, {len(reason_names)} names of pages "
+                f"without one"
+            )
+            for entry, page in reason_linked.items():
+                linked.setdefault(entry, page)
+                self.person_reasons.setdefault(entry, set()).add(reason)
+            for name in reason_names:
+                interesting_names.setdefault(name, set()).add(reason)
         for entry in linked:
             scraped_people.add(RejestrIOKey(id=entry))
-            self.person_reasons.setdefault(entry, set()).add(REASON_INTERESTING_PERSON)
 
+        # TODO this matching rejestr.io to names logic is duplicated
+        # We should merge it in one of the pipelines
         people_merged_df = self.people_all.read_or_process(ctx)
         for _, row in people_merged_df.iterrows():
             koryta_name = row.get("koryta_name")
@@ -1305,8 +1382,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                 rejestr_ids = row.get("rejestrio_id", [])
                 if len(rejestr_ids) > 0:
                     scraped_people.add(RejestrIOKey(id=str(rejestr_ids[0])))
-                    self.person_reasons.setdefault(str(rejestr_ids[0]), set()).add(
-                        REASON_INTERESTING_PERSON
+                    self.person_reasons.setdefault(str(rejestr_ids[0]), set()).update(
+                        interesting_names[koryta_name]
                     )
 
         people_krs_df = self.people.read_or_process(ctx)
@@ -1316,14 +1393,10 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                 rejestrio_id = row.get("id")
                 if rejestrio_id:
                     scraped_people.add(RejestrIOKey(id=str(rejestrio_id)))
-                    self.person_reasons.setdefault(str(rejestrio_id), set()).add(
-                        REASON_INTERESTING_PERSON
+                    self.person_reasons.setdefault(str(rejestrio_id), set()).update(
+                        interesting_names[full_name]
                     )
 
-        print(
-            f"Interesting people: {len(linked)} by their page's rejestr.io link, "
-            f"{len(interesting_names)} names of pages without one"
-        )
         entry_names: dict[str, set[str]] = {}
         for rejestrio_id, full_name in zip(
             people_krs_df["id"], people_krs_df["full_name"]
@@ -1334,6 +1407,17 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
         print(f"People to scrape: {len(scraped_people)} {get_head(scraped_people, 10)}")
         return scraped_people
+
+    def public_before(self, ctx: Context) -> pd.DataFrame | None:
+        """The pages that were public on `PUBLISHED_SINCE`, or None when every
+        published page counts.
+
+        Not a source of the class: a source is built without arguments, and
+        this one is the export of a day that only the module names.
+        """
+        if PUBLISHED_SINCE is None:
+            return None
+        return KorytaPublished(PUBLISHED_SINCE).read_or_process(ctx)
 
     def companies_told_by_the_odpis(self, ctx: Context) -> set[str]:
         """The companies whose rejestr.io feeds the odpis on file makes redundant.

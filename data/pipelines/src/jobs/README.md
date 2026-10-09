@@ -22,9 +22,10 @@ the bulletin names no entry after: `krs_odpis` gets those for free. So run `krs_
 
 By hand it buys the whole queue, after Enter and a question before each call. At night it runs as
 `--scope fallback --max-calls 50`: only what the free sources cannot give - the person feeds of the people somebody
-marked interesting, and the connections of the companies whose odpis pełny `krs_odpis` asked for and did not get
-(`KrsOdpisAttempts`, the fold of its run record) - people first, then public companies, at most 50 calls a day. What
-the crawl bucket already holds from rejestr.io that day counts against the cap, so it is the day's, not the run's.
+marked interesting or whose page was published since `PUBLISHED_SINCE`, and the connections of the companies whose
+odpis pełny `krs_odpis` asked for and did not get (`KrsOdpisAttempts`, the fold of its run record) - people first,
+then public companies, at most 50 calls a day. What the crawl bucket already holds from rejestr.io that day counts
+against the cap, so it is the day's, not the run's.
 It asks nothing, stops at once when rejestr.io refuses the account (exit 1), leaves what the cap or a failed call
 left for the next run (exit 75), and writes a run summary to the shared cache (`jobs/krs_scrape_paid/runs/`).
 
