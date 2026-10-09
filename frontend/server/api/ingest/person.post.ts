@@ -22,7 +22,7 @@ import {
   publishEdgeInBatch,
 } from "~~/server/utils/edgePublication";
 import { resolveMergedNode } from "~~/server/utils/merge";
-import { electionPositions } from "~~/shared/misc";
+import { electionPositions, sortParties } from "~~/shared/misc";
 import type {
   Edge,
   Article,
@@ -272,8 +272,10 @@ function updatedPerson(
     const storedParties = Array.isArray(stored.parties)
       ? (stored.parties as string[])
       : [];
-    const parties = [...new Set([...storedParties, ...(body.parties ?? [])])];
-    parties.sort();
+    // By name with „Inne” last, the order the pipeline sends them in.
+    const parties = sortParties(
+      new Set([...storedParties, ...(body.parties ?? [])]),
+    );
     if (parties.length > storedParties.length) learned.parties = parties;
   }
 

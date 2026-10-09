@@ -798,6 +798,16 @@ describe("carriedFields", () => {
     ).toEqual({ parties: ["PSL", "PiS"].sort() });
   });
 
+  it("puts „Inne” after the named parties it carries", () => {
+    // Chips are drawn in stored order; by name alone the grey one would lead.
+    expect(
+      carriedFields(
+        { parties: ["PiS"], type: "person" },
+        { parties: ["Inne"], type: "person" },
+      ),
+    ).toEqual({ parties: ["PiS", "Inne"] });
+  });
+
   it("fills in a field the survivor has nothing for", () => {
     expect(
       carriedFields(

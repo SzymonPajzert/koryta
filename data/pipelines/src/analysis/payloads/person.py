@@ -25,7 +25,7 @@ from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
 from scrapers.koryta.download import KorytaNotes, KorytaPeople
 from scrapers.krs.columns import is_public
-from scrapers.pkw.elections import parties_of_committee
+from scrapers.pkw.elections import parties_of_committee, party_sort_key
 from scrapers.stores import Context, Pipeline
 from util.polish import adds_middle_names, format_person_name
 
@@ -361,7 +361,7 @@ class PeoplePayloads(Pipeline[Person]):
         content = ""
         # The committees name everybody who ever stood for one, which is the
         # only party evidence left once the hardcoded lists are gone.
-        party = sorted(set(parties_from_committees(elections)))
+        party = parties_from_committees(elections)
 
         wiki_name = get_scalar("wiki_name")
         wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
@@ -698,11 +698,14 @@ def parties_from_committees(elections: list[Election]) -> list[str]:
 
     A coalition counts as both of its parties. The candidate stood on a joint
     list, which is what PKW recorded and all anybody can say from it.
+
+    In the order the site stores them in, `party_sort_key`'s: „Inne” after the
+    parties it is the remainder of.
     """
     parties: set[str] = set()
     for election in elections:
         parties.update(parties_of_committee(election.committee))
-    return sorted(parties)
+    return sorted(parties, key=party_sort_key)
 
 
 def unmapped_committees(elections: list[Election]) -> list[str]:

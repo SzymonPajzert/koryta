@@ -5,6 +5,7 @@ import {
   parties,
   partyChipPaint,
   partyColors,
+  sortParties,
 } from "../../shared/misc";
 import { AA_TEXT, contrastRatio, readableInkOn } from "../../shared/colors";
 
@@ -40,6 +41,34 @@ describe("parties", () => {
     expect(OTHER_PARTY).toBe("Inne");
     expect(parties.at(-1)).toBe(OTHER_PARTY);
     expect(parties.filter((party) => party === OTHER_PARTY)).toHaveLength(1);
+  });
+});
+
+describe("sortParties", () => {
+  /** Chips are drawn in stored order, and by name alone „Inne” comes ahead of
+   * Konfederacja, PO, PSL, PiS and SLD: a page that gained it beside PiS
+   * would have led with the grey chip. */
+  it("puts „Inne” after the named parties", () => {
+    expect(sortParties(["PiS", OTHER_PARTY])).toEqual(["PiS", OTHER_PARTY]);
+    expect(sortParties([OTHER_PARTY, "PO"])).toEqual(["PO", OTHER_PARTY]);
+    expect(sortParties(["PSL", OTHER_PARTY, "Konfederacja"])).toEqual([
+      "Konfederacja",
+      "PSL",
+      OTHER_PARTY,
+    ]);
+  });
+
+  /** The order every stored list without „Inne” already has, so sorting one
+   * again changes nothing. */
+  it("keeps the rest in the order a plain sort gives", () => {
+    const named = ["SLD", "PiS", "Bezpartyjni Samorządowcy", "PO", "PSL"];
+    expect(sortParties(named)).toEqual([...named].sort());
+  });
+
+  it("takes a set and leaves its argument alone", () => {
+    const held = [OTHER_PARTY, "PiS"];
+    expect(sortParties(new Set(held))).toEqual(["PiS", OTHER_PARTY]);
+    expect(held).toEqual([OTHER_PARTY, "PiS"]);
   });
 });
 

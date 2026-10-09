@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
+from scrapers.pkw.elections import party_sort_key
 from scrapers.stores import Context
 from util.polish import adds_middle_names
 
@@ -483,7 +484,8 @@ class SiteSnapshot:
         if data.get("partiesSource") != "manual":
             stored_parties = _as_list(data.get("parties"))
             parties = sorted(
-                set(stored_parties) | set(_as_list(payload.get("parties")))
+                set(stored_parties) | set(_as_list(payload.get("parties"))),
+                key=party_sort_key,
             )
             if len(parties) > len(stored_parties):
                 learned["parties"] = parties

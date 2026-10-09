@@ -49,6 +49,24 @@ export const parties = [
   OTHER_PARTY,
 ];
 
+/** A person's parties in the order they are stored in: by name, with
+ * `OTHER_PARTY` last.
+ *
+ * Every chip list draws a person's parties in stored order, and by name alone
+ * „Inne” sorts ahead of Konfederacja, PO, PSL, PiS and SLD - so a page that
+ * gained it beside PiS would lead with the grey chip, the remainder ahead of
+ * the party it is the remainder of. The pipeline stores the same order
+ * (`party_sort_key` in `data/pipelines/src/scrapers/pkw/elections.py`), and
+ * the rest stay by name so no list without „Inne” changes. */
+export function sortParties(held: Iterable<string>): string[] {
+  return [...held].sort((a, b) => {
+    if (a === b) return 0;
+    if (a === OTHER_PARTY) return 1;
+    if (b === OTHER_PARTY) return -1;
+    return a < b ? -1 : 1;
+  });
+}
+
 /** Party names that stand for the same thing, folded to one key.
  *
  * SLD and Nowa Lewica are the same lineage - the party renamed in 2021 - and
@@ -158,10 +176,10 @@ export function partyChipPaint(
 /** The party whose colour a person is drawn in - on the graph, where the dot's
  * colour is all a reader has to go on.
  *
- * The first party with a colour of its own, passing over `OTHER_PARTY`: a
- * person's parties are stored in the order somebody picked them, or sorted by
- * name where `ingest/person` merged them - either way „Inne” can come ahead of
- * PiS - and a named party says more than the remainder does.
+ * The first party with a colour of its own, passing over `OTHER_PARTY`: the
+ * ingest and a merge store „Inne” last (`sortParties`), but a list somebody
+ * picked by hand is stored in the order they picked it, so „Inne” can still
+ * come ahead of PiS - and a named party says more than the remainder does.
  * Failing that `OTHER_PARTY` - also for a party with no colour of its own,
  * Razem among them, because from the reader's side that is exactly what it
  * is: a tie to a party the site does not paint. Undefined only for somebody

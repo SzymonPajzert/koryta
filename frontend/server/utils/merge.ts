@@ -17,6 +17,7 @@ import { recordAudit } from "./audit";
 // also loaded by scripts/migrate/merge-duplicate-people.ts under plain tsx,
 // where there is no auto-import and a missing one is a ReferenceError at
 // runtime that typecheck cannot see.
+import { sortParties } from "../../shared/misc";
 import { asArray } from "../../shared/model";
 import { isPipelineUid } from "../../shared/stats";
 
@@ -214,12 +215,12 @@ export function carriedFields(
 ): Record<string, unknown> {
   const carried: Record<string, unknown> = {};
 
-  const parties = [
-    ...new Set([
+  const parties = sortParties(
+    new Set([
       ...asArray<string>(survivor.parties as string[]),
       ...asArray<string>(duplicate.parties as string[]),
     ]),
-  ].sort();
+  );
   if (parties.length > asArray<string>(survivor.parties as string[]).length) {
     carried.parties = parties;
   }
