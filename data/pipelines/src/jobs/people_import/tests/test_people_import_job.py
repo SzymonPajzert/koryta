@@ -819,6 +819,63 @@ def test_new_hires_past_max_new_make_room_for_the_pages_after_them(priority):
     }
 
 
+def odpis_only(name: str, since: str | None = None) -> build.Candidate:
+    """A new hire with no rejestr.io entry: the ingest finds them by their name
+    and birth date alone."""
+    payload = {"name": name, "companies": [], "birthDate": "1971-03-14"}
+    return build.Candidate(payload, HIRE, since)
+
+
+def test_new_hires_only_an_odpis_names_leave_the_run_to_the_pages_after_them(
+    priority, capsys
+):
+    """On the 2026-10-09 night 109 of 118 new hires were people only an odpis
+    names, and at --max-new = --max-uploads = 100 they took all 100 slots."""
+    priority.candidates = [
+        odpis_only("Anna Nowak", "2026-10-01"),
+        candidate("Beata Kos", HIRE, "2026-09-30"),
+        odpis_only("Celina Lis", "2026-09-20"),
+        odpis_only("Dorota Wilk", "2026-09-10"),
+        candidate("Olga Sowa", BOUGHT),
+        candidate("Jan Kowalski", PUBLISHED),
+    ]
+    priority.answers = [person("created")] * 2 + [person("updated")] * 2
+
+    argv = ["--scope", "priority", "--max-uploads", "10", "--max-new-odpis-only", "1"]
+    assert job.main(argv) == 0
+
+    assert priority.sent() == ["Anna Nowak", "Beata Kos", "Olga Sowa", "Jan Kowalski"]
+    assert priority.summary()["tiers"][HIRE] == 2
+    assert "New hires only an odpis names: 1 of 3 planned" in capsys.readouterr().out
+
+
+def test_a_tenth_of_a_priority_run_may_be_people_only_an_odpis_names():
+    def cap(*argv: str) -> int | None:
+        return job.parse_args(["--scope", "priority", *argv]).max_new_odpis_only
+
+    assert cap("--max-uploads", "100") == 10
+    assert cap("--max-uploads", "5") == 1
+    assert cap("--max-uploads", "0") == 0
+    assert cap("--max-uploads", "100", "--max-new-odpis-only", "40") == 40
+    assert job.parse_args(["--max-uploads", "100"]).max_new_odpis_only is None
+
+
+def test_planning_counts_only_the_new_hires_without_an_entry_to_their_cap():
+    hires = [odpis_only("Anna Nowak"), candidate("Beata Kos", HIRE)]
+    hires += [odpis_only("Celina Lis"), candidate("Ewa Lis", HIRE)]
+
+    def names(max_new: int, max_new_odpis_only: int) -> list[str]:
+        planned, _ = job.plan_priority(hires, set(), max_new, max_new_odpis_only)
+        return [c.payload["name"] for c in planned]
+
+    assert names(max_new=5, max_new_odpis_only=1) == [
+        "Anna Nowak",
+        "Beata Kos",
+        "Ewa Lis",
+    ]
+    assert names(max_new=2, max_new_odpis_only=5) == ["Anna Nowak", "Beata Kos"]
+
+
 def test_a_payload_sent_unchanged_lately_is_left_out(priority):
     unchanged = candidate("Anna Nowak", HIRE, "2026-09-30")
     changed = candidate("Jan Kowalski", PUBLISHED)
