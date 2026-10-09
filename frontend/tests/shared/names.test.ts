@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { addsMiddleNames, normalizePersonName } from "../../shared/names";
+import {
+  addsMiddleNames,
+  normalizePersonName,
+  personNameKeys,
+} from "../../shared/names";
 
 describe("normalizePersonName", () => {
   it("ignores case and diacritics", () => {
@@ -70,5 +74,36 @@ describe("addsMiddleNames", () => {
     ["Jan Maria Kowalski", ""],
   ])("does not take %s as more of %s", (full, short) => {
     expect(addsMiddleNames(full, short)).toBe(false);
+  });
+});
+
+describe("personNameKeys", () => {
+  it("is the whole name alone for a first name and a surname", () => {
+    expect(personNameKeys("Rafał Trzaskowski")).toEqual(["rafal trzaskowski"]);
+  });
+
+  it("adds the name an article uses for one with a middle name", () => {
+    expect(personNameKeys("Antoni Ignacy Sikoń")).toEqual([
+      "antoni ignacy sikon",
+      "antoni sikon",
+    ]);
+  });
+
+  it("keeps both halves of a double surname written with a space", () => {
+    expect(personNameKeys("Urszula Lucyna Wach Górny")).toEqual([
+      "urszula lucyna wach gorny",
+      "urszula wach gorny",
+      "urszula gorny",
+    ]);
+  });
+
+  it("never cuts a hyphenated surname in half", () => {
+    expect(personNameKeys("Anna Kowalska-Nowak")).toEqual([
+      "anna kowalska nowak",
+    ]);
+  });
+
+  it("has no key for a name with nothing in it", () => {
+    expect(personNameKeys("  ")).toEqual([]);
   });
 });

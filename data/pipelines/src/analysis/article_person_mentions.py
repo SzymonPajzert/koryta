@@ -97,6 +97,26 @@ def _name_tuple(name: str) -> tuple[str, ...]:
     return tuple(normalize_text(t) for t in str(name).split())
 
 
+def _name_forms(name: str) -> list[tuple[str, ...]]:
+    """The word sequences an article may name this person by.
+
+    The whole name, and for a page with a middle name the two shorter forms the
+    site's `personNameKeys` links facts by: without the second word, and the
+    first word with the last. A page carries every given name the register
+    knows and an article almost never does - it writes "Antoni Sikoń" about
+    Antoni Ignacy Sikoń - so indexed by the whole name alone he was found in
+    none of them. Several people answering to one short form are each kept or
+    not by the proof that follows, as two people of one name already are; the
+    judge is told a missing middle name is no reason to refuse.
+    """
+    words = str(name).split()
+    forms = [words]
+    if len(words) > 2:
+        forms.append([words[0], *words[2:]])
+        forms.append([words[0], words[-1]])
+    return list(dict.fromkeys(_name_tuple(" ".join(form)) for form in forms))
+
+
 def _tags_from_ld_json(ld_json: Any) -> list[str]:
     """Keywords and article sections from a stored ld+json blob (incl. @graph)."""
     tags: list[str] = []
@@ -505,7 +525,7 @@ def _load_index_and_profiles(
         person_id = _person_id(row)
         if not person_id:
             continue
-        index.add(display, [_name_tuple(display)])
+        index.add(display, _name_forms(display))
 
         profile = PersonProfile()
         profile.woj = {
@@ -524,7 +544,7 @@ def _load_index_and_profiles(
         profiles.add(display, person_id, profile)
     for survivor_display, duplicates in aliases.items():
         for dup_display in duplicates:
-            index.add(survivor_display, [_name_tuple(dup_display)])
+            index.add(survivor_display, _name_forms(dup_display))
     if merged:
         print(
             f"Aliased {merged:,} merged-away people onto their survivors "
