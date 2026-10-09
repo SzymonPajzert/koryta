@@ -180,3 +180,21 @@ def test_a_title_struck_off_after_the_purchase_inherits_it():
         POLSKA_PRESS,
         title,
     }
+
+
+def test_the_output_says_which_companies_are_struck_off():
+    child = org(
+        PGNIG_SERWIS,
+        holding("PASYWNY", "2022-11-15", "2025-08-27"),
+        struck="2025-08-27",
+    )
+    pipeline = CompaniesKRS()
+    for blob_name, items in parent_feed(child):
+        pipeline.process_rejestrio_blob(blob_name, items, NO_POSTAL_CODES)
+
+    frame = pipeline.frame(list(pipeline.companies.values()))
+
+    assert dict(zip(frame["krs"], frame["struck_off"])) == {
+        PGNIG_SERWIS: True,
+        ORLEN: False,
+    }

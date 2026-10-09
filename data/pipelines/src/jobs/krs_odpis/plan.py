@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 from scrapers.krs import odpis_files
-from scrapers.krs.columns import is_public
+from scrapers.krs.columns import flag, is_public
 from scrapers.krs.odpis_attempts import ABSENT
 from scrapers.krs.scrape import QueryType, RejestrIOQuery
 
@@ -156,16 +156,29 @@ def without_odpis(
     never asked at all: 739 live companies held only that feed on 2026-10-09.
 
     The public ones first, and the rest only with `private`. Within each, the
-    companies never asked come before those whose last attempt got no answer,
-    so a few that keep failing do not hold up the rest. One whose last answer
-    was that neither register has the number (`attempts`: KRS to the newest
-    attempt's status) is left out: it would answer the same every night.
+    live companies come before those the register has struck off
+    (`CompaniesKRS`'s `struck_off`): a live company's odpis names the board it
+    has now. The struck-off owner rule makes public many old companies of the
+    state groups, which the graph's order - the KRS number's - puts first: on
+    2026-10-09 they were 1,252 of the 4,153 public ones in the gap, and 130 to
+    184 of each of the first seven nights' ~235 asks. The service gives a
+    struck-off company's odpis too, with the boards it had, so they are asked
+    for after. Within those, the companies never asked come before those whose
+    last attempt got no answer, so a few that keep failing do not hold up the
+    rest. One whose last answer was that neither register has the number
+    (`attempts`: KRS to the newest attempt's status) is left out: it would
+    answer the same every night.
     """
     krs = companies["krs"].astype(str).str.zfill(10)
-    public = is_public(
-        companies.get("is_public", pd.Series(False, index=companies.index))
-    )
-    groups = [krs[public]] + ([krs[~public]] if private else [])
+    unknown = pd.Series(False, index=companies.index)
+    public = is_public(companies.get("is_public", unknown))
+    # An output written before the column existed: all of them live, which
+    # is the order the gap had then.
+    struck = flag(companies.get("struck_off", unknown))
+    owners = [public] + ([~public] if private else [])
+    groups = [
+        krs[owned & standing] for owned in owners for standing in (~struck, struck)
+    ]
     ordered: list[str] = []
     for group in groups:
         gap = [

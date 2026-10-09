@@ -71,11 +71,12 @@ next one rather than cut off mid-read.
 
 `krs_odpis` asks first for the graph's companies the bulletin named since
 yesterday - 57-70 a night from 2026-10-06 to 10-09 - and with what is left of
-`--odpis-max` for the public ones that have no odpis pełny on file at all: a
-company that came into the graph after its last register entry is not named by
-the bulletin until its next one, so `--changed-since` alone does not ask for
-it. The private ones wait behind `--odpis-missing all`. The service slows down
-after about 1,000 documents a run; `--odpis-max` caps the step, gap and all.
+`--odpis-max` for the public ones that have no odpis pełny on file at all,
+the live ones before those struck off: a company that came into the graph after
+its last register entry is not named by the bulletin until its next one, so
+`--changed-since` alone does not ask for it. The private ones wait behind
+`--odpis-missing all`. The service slows down after about 1,000 documents a
+run; `--odpis-max` caps the step, gap and all.
 
 `krs_paid` holds nothing back, and nothing holds it: the people go up with or
 without what it bought. It needs the rejestr.io key - REJESTR_KEY, else the

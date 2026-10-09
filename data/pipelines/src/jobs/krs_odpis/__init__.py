@@ -31,10 +31,11 @@ day, which is the weekly refresh: the register's entries are in the odpis the
 day they are made, where rejestr.io's lag them. An odpis already on file is
 asked for again only when the bulletin names the entry since. ``--missing
 public`` then adds the graph's public companies with no odpis on file at all,
-which the bulletin may never name again (``--missing all``: the private ones
-after them); a company the service last said is in neither register is left
-out. At most ``--max`` companies a run, all of these together: the service
-slows down after about 1,000 documents a run.
+which the bulletin may never name again, the live ones before those struck off
+(``--missing all``: the private ones after them); a company the service last
+said is in neither register is left out. At most ``--max`` companies a run,
+all of these together: the service slows down after about 1,000 documents a
+run.
 
 Stopping is free at any point: Ctrl+C or SIGTERM ends the run after the
 document in hand, and a document is in the bucket before it is counted. One

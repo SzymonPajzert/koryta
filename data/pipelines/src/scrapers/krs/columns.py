@@ -83,6 +83,14 @@ def is_public(flags: pd.Series) -> pd.Series:
     had. Missing reads as false: not knowing who owns a company is not knowing
     that the public does.
     """
+    return flag(flags)
+
+
+def flag(flags: pd.Series) -> pd.Series:
+    """A yes/no column as actual booleans, read as `is_public` reads its own.
+
+    Missing reads as false, as does any text but "true" and "1".
+    """
     if pd.api.types.is_bool_dtype(flags) or pd.api.types.is_numeric_dtype(flags):
         return flags.fillna(False).astype(bool)
     # Anything else is read as text, which on this pandas is the dtype a column
