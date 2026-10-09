@@ -1567,6 +1567,20 @@ def _collapse_between_articles(
     return deduped
 
 
+def _person_name_keys(name: str | None) -> list[str]:
+    """Match the website's personNameKeys (names.ts): the whole name, and for
+    one with a middle name the shorter ones an article uses - without the
+    second word, and the first word with the last. Words as they are spaced,
+    so a hyphenated surname is never cut in half."""
+    words = (name or "").split()
+    spellings = [name or ""]
+    if len(words) > 2:
+        spellings.append(" ".join([words[0], *words[2:]]))
+        spellings.append(" ".join([words[0], words[-1]]))
+    keys = (_normalize_person_name(spelling) for spelling in spellings)
+    return list(dict.fromkeys(key for key in keys if key))
+
+
 def _fact_matches_koryta(
     fact: dict[str, Any],
     url: str,
@@ -1574,17 +1588,22 @@ def _fact_matches_koryta(
     koryta_name_by_id: dict[str, str],
 ) -> bool:
     """Whether a fact's person (subject for relations) matches one of the
-    article's confirmed koryta people by normalized name — the same match the
-    website ingest uses to link a fact to a person page.
+    article's confirmed koryta people by name — the same match the website
+    ingest uses to link a fact to a person page (`matchPeopleByName`): one of
+    the person's `_person_name_keys`, so "Antoni Sikoń" for a page named Antoni
+    Ignacy Sikoń, and one no other confirmed person answers to, since the site
+    links a fact to nobody rather than guess between two.
     """
     subject = fact.get("person") or fact.get("subject")
     if not subject or not koryta_ids:
         return False
     normed = _normalize_person_name(subject)
-    return any(
-        _normalize_person_name(koryta_name_by_id.get(pid)) == normed
+    named = {
+        pid
         for pid in koryta_ids
-    )
+        if normed in _person_name_keys(koryta_name_by_id.get(pid))
+    }
+    return len(named) == 1
 
 
 def _load_facts(path: Path) -> dict[str, list[dict[str, Any]]]:

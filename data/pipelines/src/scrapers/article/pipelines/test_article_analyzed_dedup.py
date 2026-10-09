@@ -836,6 +836,33 @@ def test_fact_matches_koryta_subject_for_relation():
     assert not _fact_matches_koryta(fact, "a.pl/1", [], names)
 
 
+def test_fact_matches_koryta_past_the_middle_name_the_page_carries():
+    """The page has every given name the register knows; an article has two."""
+    names = {
+        "sikon": "Antoni Ignacy Sikoń",
+        "wach": "Urszula Lucyna Wach Górny",
+        "kowalska": "Anna Kowalska-Nowak",
+    }
+    ids = list(names)
+    sikon = employment("Antoni Sikoń", "Orlen", "prezes")
+    assert _fact_matches_koryta(sikon, "a.pl/1", ids, names)
+    wach = employment("Urszula Wach-Górny", "Rada Miasta", "radna")
+    assert _fact_matches_koryta(wach, "a.pl/1", ids, names)
+    # A hyphenated surname is never cut in half.
+    nowak = employment("Anna Nowak", "Orlen", "prezes")
+    assert not _fact_matches_koryta(nowak, "a.pl/1", ids, names)
+
+
+def test_fact_matches_koryta_nobody_when_two_confirmed_people_answer():
+    """The site links such a fact to nobody rather than guess, so it is not a
+    match the pipeline may keep a fact for either."""
+    names = {"a": "Jan Kowalski", "b": "Jan Maria Kowalski"}
+    short = employment("Jan Kowalski", "Orlen", "prezes")
+    assert not _fact_matches_koryta(short, "a.pl/1", ["a", "b"], names)
+    full = employment("Jan Maria Kowalski", "Orlen", "prezes")
+    assert _fact_matches_koryta(full, "a.pl/1", ["a", "b"], names)
+
+
 def test_fact_person_uses_person_then_subject():
     assert _fact_person(
         employment("Jan Kowalski", "Orlen", "prezes"), {"jan kowalski": "k1"}

@@ -377,6 +377,34 @@ def test_load_index_keeps_unmerged_people_when_column_absent():
     assert index.find_in_text("Anna Nowak") == {"Anna Nowak"}
 
 
+def test_load_index_finds_a_person_by_the_name_an_article_uses():
+    """A page carries every given name the register knows; an article
+    writes two of them, and the whole name alone matched none of it."""
+    rows = [
+        _person_row("p1", "Antoni Ignacy Sikoń"),
+        _person_row("p2", "Urszula Lucyna Wach Górny"),
+    ]
+    index, _ = _load_index_and_profiles(rows, {}, {})
+    found = index.find_in_text("Prezes Antoni Sikoń powiedział")
+    assert found == {"Antoni Ignacy Sikoń"}
+    found = index.find_in_text("radna Urszula Wach Górny")
+    assert found == {"Urszula Lucyna Wach Górny"}
+    assert index.find_in_text("Antoni Ignacy Sikoń") == {"Antoni Ignacy Sikoń"}
+
+
+def test_load_index_offers_a_short_name_to_everybody_it_fits():
+    """Two candidates, each kept or not by the proof, as namesakes are."""
+    rows = [
+        _person_row("p1", "Jan Kowalski"),
+        _person_row("p2", "Jan Maria Kowalski"),
+    ]
+    index, _ = _load_index_and_profiles(rows, {}, {})
+    found = index.find_in_text("Jan Kowalski")
+    assert found == {"Jan Kowalski", "Jan Maria Kowalski"}
+    # The whole name is not a run the shorter page's name sits inside.
+    assert index.find_in_text("Jan Maria Kowalski") == {"Jan Maria Kowalski"}
+
+
 def test_load_index_drops_a_merged_name_with_no_survivor():
     rows = [_person_row("p2", "Anna Nowak", merged_into="gone")]
     index, _ = _load_index_and_profiles(rows, {}, {})
