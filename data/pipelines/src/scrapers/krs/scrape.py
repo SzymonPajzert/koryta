@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import typing
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
@@ -30,6 +31,7 @@ from scrapers.stores import (
     iterate_pipeline_dict,
 )
 from scrapers.stores.file import DownloadableFile
+from util.polish import remove_polish_diacritics
 
 
 class QueryType(Enum):
@@ -849,6 +851,105 @@ def public_krs_ids(companies: pd.DataFrame) -> set[str]:
     return set(str(krs).zfill(10) for krs in public)
 
 
+#: The entry a page's rejestr.io link names. Pages hold the link as pasted -
+#: `https://rejestr.io/osoby/<number>`, with a trailing slash, or with the
+#: person's name after the number - and it is read as `PeopleKorytaMerged`
+#: and the ingest read it.
+LINKED_ENTRY = re.compile(r"rejestr\.io/osoby/(\d+)")
+
+#: How many misnamed links a run names. Enough to start fixing them.
+MISNAMED_LINKS_REPORTED = 20
+
+
+def linked_entry(link: typing.Any) -> str | None:
+    """The rejestr.io entry a page's link names, or None for no link.
+
+    `Any` because the value comes off a frame, where a page without a link
+    holds NaN rather than None.
+    """
+    if not isinstance(link, str):
+        return None
+    found = LINKED_ENTRY.search(link)
+    return found.group(1) if found else None
+
+
+def interesting_pages(
+    votes: pd.DataFrame, pages: pd.DataFrame
+) -> tuple[dict[str, dict], set[str]]:
+    """What the interesting votes ask for: the entries the voted pages link,
+    each with the page linking it, and the names of the voted pages that carry
+    no link (`ScrapeRejestrIO.people_to_scrape`)."""
+    by_id = {str(page["id"]): page for page in pages.to_dict("records")}
+    linked: dict[str, dict] = {}
+    names: set[str] = set()
+    for _, row in votes.iterrows():
+        person_koryta_id = row.get("person_koryta_id")
+        if not person_koryta_id or person_koryta_id == "":
+            continue
+        interesting = row.get("interesting", 0)
+        if interesting > 0:
+            page = by_id.get(str(person_koryta_id))
+            if page is None:
+                continue
+            entry = linked_entry(page.get("rejestrIo"))
+            name = page.get("full_name")
+            if entry is not None:
+                linked.setdefault(entry, page)
+            elif isinstance(name, str) and name:
+                names.add(name)
+    return linked, names
+
+
+def first_and_last(name: str) -> tuple[str, str] | None:
+    """A name's first and last word, with what the register writes either way
+    folded away: case, the Polish letters and a hyphen."""
+    words = remove_polish_diacritics(name).replace("-", " ").casefold().split()
+    return (words[0], words[-1]) if words else None
+
+
+def misnamed_links(
+    linked: typing.Mapping[str, typing.Mapping[str, typing.Any]],
+    entry_names: typing.Mapping[str, typing.Collection[str]],
+) -> list[tuple[str, typing.Mapping[str, typing.Any], list[str]]]:
+    """The voted pages whose linked entry goes by another first or last name,
+    as (entry, page, the entry's names).
+
+    Bought as linked all the same - the link is the page's word on who it is -
+    and named in the run's log rather than hedged by buying the namesakes
+    too: a wrong link is a reviewer's to fix, and the namesakes' feeds would
+    be paid for whether it was wrong or not. A middle name, the register's
+    capitals or a hyphen are not another name - the 44 voted pages of
+    2026-10-09 whose entry was spelled otherwise all differed only so. An
+    entry `PeopleKRS` does not hold yet has no name to compare.
+    """
+    found = []
+    for entry, page in sorted(linked.items()):
+        names = entry_names.get(entry)
+        page_name = page.get("full_name")
+        if not names or not isinstance(page_name, str):
+            continue
+        if first_and_last(page_name) not in {first_and_last(n) for n in names}:
+            found.append((entry, page, sorted(names)))
+    return found
+
+
+def report_misnamed_links(
+    misnamed: typing.Sequence[tuple[str, typing.Mapping[str, typing.Any], list[str]]],
+) -> None:
+    """Name the voted pages whose link may point at somebody else."""
+    if not misnamed:
+        return
+    print(
+        f"{len(misnamed)} voted pages link a rejestr.io entry of another name, "
+        f"bought as linked - check the link:"
+    )
+    for entry, page, names in misnamed[:MISNAMED_LINKS_REPORTED]:
+        print(
+            f"  {page.get('full_name')} (page {page.get('id')}) links "
+            f"rejestr.io/osoby/{entry}: {', '.join(names)}"
+        )
+
+
 @dataclass
 class CostBreakdown:
     subjects: int
@@ -1167,6 +1268,18 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         return results
 
     def people_to_scrape(self, ctx: Context) -> set[RejestrIOKey]:
+        """The people whose rejestr.io feeds are owed: the hardcoded list, and
+        whoever a reader marked interesting.
+
+        A vote is on a page, and a page carrying a rejestr.io link says which
+        entry it is - one entry is one person - so that entry alone is bought.
+        Matched by the page's name instead, one vote bought every namesake
+        rejestr.io holds: four Krzysztof Owczareks for one page, and 110 of
+        the 580 entries the votes queued on 2026-10-09. None of them gets a
+        page, since the people step creates pages for new hires only. A page
+        without a link is still matched by name, the one thing it has, and a
+        reviewer tells its namesakes apart.
+        """
         self.person_reasons = {}
         scraped_people = set(
             RejestrIOKey(id=person_id)
@@ -1175,25 +1288,15 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         for person in scraped_people:
             self.person_reasons.setdefault(str(person.id), set()).add(REASON_HARDCODED)
 
-        koryta_votes_df = self.koryta_votes.read_or_process(ctx)
-        koryta_people_df = self.koryta_people.read_or_process(ctx)
-
-        koryta_id_to_name = dict(
-            zip(koryta_people_df["id"], koryta_people_df["full_name"])
-        )
-
         # TODO this matching rejestr.io to names logic is duplicated
         # We should merge it in one of the pipelines
-        interesting_names = set()
-        for _, row in koryta_votes_df.iterrows():
-            person_koryta_id = row.get("person_koryta_id")
-            if not person_koryta_id or person_koryta_id == "":
-                continue
-            interesting = row.get("interesting", 0)
-            if interesting > 0:
-                name = koryta_id_to_name.get(str(person_koryta_id))
-                if name:
-                    interesting_names.add(name)
+        linked, interesting_names = interesting_pages(
+            self.koryta_votes.read_or_process(ctx),
+            self.koryta_people.read_or_process(ctx),
+        )
+        for entry in linked:
+            scraped_people.add(RejestrIOKey(id=entry))
+            self.person_reasons.setdefault(entry, set()).add(REASON_INTERESTING_PERSON)
 
         people_merged_df = self.people_all.read_or_process(ctx)
         for _, row in people_merged_df.iterrows():
@@ -1216,6 +1319,18 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                     self.person_reasons.setdefault(str(rejestrio_id), set()).add(
                         REASON_INTERESTING_PERSON
                     )
+
+        print(
+            f"Interesting people: {len(linked)} by their page's rejestr.io link, "
+            f"{len(interesting_names)} names of pages without one"
+        )
+        entry_names: dict[str, set[str]] = {}
+        for rejestrio_id, full_name in zip(
+            people_krs_df["id"], people_krs_df["full_name"]
+        ):
+            if str(rejestrio_id) in linked and isinstance(full_name, str):
+                entry_names.setdefault(str(rejestrio_id), set()).add(full_name)
+        report_misnamed_links(misnamed_links(linked, entry_names))
 
         print(f"People to scrape: {len(scraped_people)} {get_head(scraped_people, 10)}")
         return scraped_people
