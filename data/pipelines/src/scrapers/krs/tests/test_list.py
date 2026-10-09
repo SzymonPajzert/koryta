@@ -674,6 +674,36 @@ def test_being_in_the_catalogue_alone_is_not_public_ownership():
     assert public == set()
 
 
+def test_a_public_body_the_register_names_makes_a_company_public():
+    # PKM Swierklaniec, the metropolitan union's; Stadnina Koni Janów Podlaski,
+    # KOWR's. Neither owner is a government JstIndex places, and neither has a
+    # KRS number to follow, so REGON's code was the only way either was public.
+    kowr = {"nazwa": "KRAJOWY OŚRODEK WSPARCIA ROLNICTWA", "krs": {"krs": ""}}
+    public = public_after(
+        [
+            owned("0000019110", SPZOO, wspolnicy=[GZM]),
+            owned("0000109401", SPZOO, wspolnicy=[kowr]),
+        ],
+        regon_public=set(),
+    )
+
+    assert public == {"0000019110", "0000109401"}
+
+
+def test_a_public_body_with_a_krs_number_is_followed_as_a_parent():
+    # Only the parent test reaches it, as in the register door: an institute
+    # is public by its own odpis, which this one is not in the crawl to give.
+    institute = {
+        "nazwa": "SIEĆ BADAWCZA ŁUKASIEWICZ - INSTYTUT TECHNOLOGII",
+        "krs": {"krs": "0000000043"},
+    }
+    public = public_after(
+        [owned("0000000041", SPZOO, wspolnicy=[institute])], regon_public=set()
+    )
+
+    assert public == set()
+
+
 def test_a_subsidiary_inherits_what_regon_said_of_its_parent():
     # GPW is an SA with several shareholders; EKOENERGIA SILESIA names it as
     # its owner, so it goes public with it rather than on its own evidence.
