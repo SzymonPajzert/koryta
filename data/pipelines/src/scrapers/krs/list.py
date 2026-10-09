@@ -14,6 +14,7 @@ from entities.person import KRS as KrsPerson
 from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
 from scrapers.krs.graph import PARENT_RELATION, QueryRelation
 from scrapers.krs.organs import supervision_kind
+from scrapers.krs.researched_owners import RESEARCHED_OWNERS
 from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Jst, Teryt, normalize_unit_name
@@ -510,6 +511,40 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             added += 1
         return added
 
+    def add_researched_owners(self) -> int:
+        """Mark public the companies `RESEARCHED_OWNERS` names, with their owners.
+
+        A company by its KRS number is joined like an owner the register names,
+        so it carries the flag down to whatever the company owns; a gmina,
+        powiat, województwo or the Treasury becomes a `teryt` owner, as
+        `company_from_api_krs` makes one. A company the crawl does not describe
+        is left out rather than waited on. Returns how many it marked.
+        """
+        marked = 0
+        for krs, researched in RESEARCHED_OWNERS.items():
+            company = self.companies.get(krs)
+            if company is None:
+                continue
+            company.is_public = True
+            marked += 1
+            for owner in researched.owners:
+                if owner.krs is not None:
+                    known = owner.krs in self.companies
+                    if known and Owner(owner.krs, None) not in company.parents:
+                        self.add_relation(owner.krs, krs)
+                    continue
+                if self.jst_index is None:
+                    continue
+                # The company's own województwo settles a name two units share,
+                # as it does for an odpis: Powiat Świdnicki is in two of them.
+                seat = (company.teryt_code or "")[:2] or None
+                resolved = self.jst_index.resolve(owner.name, seat)
+                if resolved is None or resolved == AMBIGUOUS:
+                    continue
+                if Owner(krs=None, teryt=resolved) not in company.parents:
+                    company.parents.append(Owner(krs=None, teryt=resolved))
+        return marked
+
     def process_api_krs_blob(
         self, blob_name: str, data, postal_codes: DataFrame
     ) -> None:
@@ -629,6 +664,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             f"Owners at strike-off: {added} holdings joined, over "
             f"{len(self.struck_off)} struck-off companies"
         )
+        marked = self.add_researched_owners()
+        print(f"Researched owners: {marked} of {len(RESEARCHED_OWNERS)} companies")
 
         public_krss = self.compute_public_krss(hardcoded)
         parent_to_children = self.build_parent_to_children()
