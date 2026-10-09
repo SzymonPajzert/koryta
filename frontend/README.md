@@ -257,16 +257,46 @@ firebase ext:install firebase/firestore-send-email --project koryta-pl
 Answer its prompts with the collection this app writes to and the database the
 rest of the app uses — they are not the defaults:
 
-| Parameter          | Value                                    |
-| ------------------ | ---------------------------------------- |
-| Firestore instance | `koryta-pl` (**not** `(default)`)        |
-| Email documents    | `mail`                                   |
-| Cloud Functions    | `europe-west1`                           |
-| Default FROM       | an address on a domain with SPF and DKIM |
+| Parameter                   | Value                                        |
+| --------------------------- | -------------------------------------------- |
+| Firestore Instance ID       | `koryta-pl` (**not** `(default)`)            |
+| Firestore Instance Location | `europe-central2` — the functions run there  |
+| Email documents collection  | `mail`                                       |
+| Default FROM address        | an address on a domain with SPF and DKIM     |
+| Default REPLY-TO address    | one somebody reads: campaigns invite replies |
+
+The extension acts on documents as they are written, never on the ones already
+there, so whatever queued up before it was installed stays unsent.
 
 `firestore.rules` denies every client read and write on `mail`; the documents
 pair an address with a message and only the admin SDK and the extension have
 any business there.
+
+### Campaigns
+
+`/admin/mailing`, the owner's, writes one message and sends it to many
+accounts: the pilot first, then everybody else. The rules are in
+`shared/campaigns.ts`:
+
+- **Who can get one** — an administrator, as a message to the team, unless they
+  switched "Wiadomości dla zespołu" off on `/profil`; anybody else only if they
+  switched the campaign's topic on, on `/profil` or in the one-time prompt
+  signed-in readers are shown (`components/mail/OptInPrompt.vue`). Confirmed
+  addresses only, as for notifications. The server decides this again for each
+  recipient before queueing: the page's checkboxes are a suggestion.
+- **Once per person** — each message is `mail/campaign_<id>_<uid>`, made with
+  `create`, so sending a campaign again only reaches whoever has not had it.
+  The owner's tests are `mail/campaignTest_<id>_<ms>`, "[Test]" in the subject.
+- **Leaving** — every message links to `/wypisz` with the reader's token
+  (`mailTokens/{uid}`, server-only, made on the first send) and carries
+  `List-Unsubscribe` and `List-Unsubscribe-Post` headers, so a mail client's own
+  unsubscribe button works without opening the site (RFC 8058). The page asks
+  before it acts, since mail scanners open every link.
+- **What came of it** — the page reads back the extension's `delivery.state`
+  per message, counts recipients seen on the site after their message was
+  queued and who left through the campaign's link. Links into the site carry
+  `utm_source=newsletter&utm_medium=email&utm_campaign=<id>`, so Plausible
+  splits visits by campaign.
 
 ## Agent tools
 

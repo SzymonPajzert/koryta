@@ -55,6 +55,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // The owner's campaigns (/admin/mailing) and the secret each recipient's
+    // unsubscribe links carry. Both go through /api/admin/mail/* and
+    // /api/mail/unsubscribe with the admin SDK. A campaign lists who it was sent
+    // to, and a token lets anybody holding it take that person off a list, so
+    // neither is anybody's to read from the client. Unmatched paths are denied
+    // anyway; spelled out for the same reason as `mail`.
+    match /mailCampaigns/{campaignId} {
+      allow read, write: if false;
+    }
+
+    match /mailTokens/{uid} {
+      allow read, write: if false;
+    }
+
     // One document per finished UTC day, holding what everybody did on it -
     // written and read only by /api/stats/activity through the admin SDK, which
     // these rules do not apply to. Closed to the client on both sides: reading
