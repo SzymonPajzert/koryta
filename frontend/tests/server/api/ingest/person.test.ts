@@ -5,6 +5,7 @@ import {
 } from "../../../../server/utils/revisions";
 import { edgeDocumentId, type EdgeLike } from "../../../../server/utils/edges";
 import handler from "../../../../server/api/ingest/person.post";
+import { generateChunksLower } from "../../../../shared/search";
 
 // Mock dependencies
 const mockGet = vi.fn();
@@ -1164,9 +1165,17 @@ describe("api/ingest/person", () => {
       // every person it names all along - 106,020 of them, 100% coverage - and
       // exactly 1 of the 6,115 stored people had one, because the payload
       // dataclass had nowhere to put it and this schema stripped it.
-      personExists({ name: "Test Person", type: "person", parties: [] });
+      // Found by its register entry: by the name alone, a page with no date
+      // could be anybody of that name, and the ingest holds the person back.
+      personExists({
+        name: "Test Person",
+        type: "person",
+        parties: [],
+        rejestrIo: "https://rejestr.io/osoby/1",
+      });
       mockReadBody.mockResolvedValue({
         name: "Test Person",
+        rejestrIo: "https://rejestr.io/osoby/1",
         birthDate: "1967-09-20",
         companies: [],
         elections: [],
@@ -1230,14 +1239,18 @@ describe("api/ingest/person", () => {
       // A date of birth does not change, so a stored one is either right or is
       // somebody's correction of the register - and unlike `wikipedia` there is
       // no version of it that gets better on the next run.
+      // Found by its register entry. By the name, another birth date is
+      // another person.
       personExists({
         name: "Test Person",
         type: "person",
         parties: [],
         birthDate: "1967-09-21",
+        rejestrIo: "https://rejestr.io/osoby/1",
       });
       mockReadBody.mockResolvedValue({
         name: "Test Person",
+        rejestrIo: "https://rejestr.io/osoby/1",
         birthDate: "1967-09-20",
         companies: [],
         elections: [],
@@ -1417,6 +1430,47 @@ describe("api/ingest/person, a candidacy the site cannot place", () => {
   });
 });
 
+type Constraint = [field: string, op: string, value: unknown];
+
+/** A query on a fake `nodes` collection, answered by filtering what is
+ * stored rather than by returning whatever was queued next: equality, and
+ * `array-contains-any` on the name index, computed on the spot as
+ * `generateChunksLower` writes it. `limit` as Firestore applies it. */
+function filteringQuery(
+  nodes: () => Record<string, Record<string, unknown>>,
+  constraints: Constraint[],
+  limit?: number,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  const passes = (
+    data: Record<string, unknown>,
+    [field, op, value]: Constraint,
+  ) => {
+    if (op !== "array-contains-any") return data[field] === value;
+    const chunks =
+      field === "nameChunksLower" && typeof data.name === "string"
+        ? generateChunksLower(data.name)
+        : [];
+    return (value as string[]).some((one) => chunks.includes(one));
+  };
+  return {
+    where: (field: string, op: string, value: unknown) =>
+      filteringQuery(nodes, [...constraints, [field, op, value]], limit),
+    limit: (n: number) => filteringQuery(nodes, constraints, n),
+    get: async () => {
+      const docs = Object.entries(nodes())
+        .filter(([, data]) => constraints.every((one) => passes(data, one)))
+        .map(([id, data]) => ({
+          id,
+          ref: { id, parent: nodesParent },
+          data: () => data,
+        }));
+      const kept = limit === undefined ? docs : docs.slice(0, limit);
+      return { empty: kept.length === 0, docs: kept };
+    },
+  };
+}
+
 describe("api/ingest/person, one register entry is one human", () => {
   /** The `nodes` collection, keyed by id. The lookups this suite is about are
    * equality queries with a `type` filter, so the fake answers them by
@@ -1425,25 +1479,8 @@ describe("api/ingest/person, one register entry is one human", () => {
   let nodes: Record<string, Record<string, unknown>> = {};
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function fakeQuery(constraints: [string, unknown][]): any {
-    return {
-      where: (field: string, _op: string, value: unknown) =>
-        fakeQuery([...constraints, [field, value]]),
-      limit: () => fakeQuery(constraints),
-      get: async () => {
-        const docs = Object.entries(nodes)
-          .filter(([, data]) =>
-            constraints.every(([field, value]) => data[field] === value),
-          )
-          .map(([id, data]) => ({
-            id,
-            ref: { id, parent: nodesParent },
-            data: () => data,
-          }));
-        // `limit(1)`, the way the endpoint asks for it.
-        return { empty: docs.length === 0, docs: docs.slice(0, 1) };
-      },
-    };
+  function fakeQuery(constraints: Constraint[]): any {
+    return filteringQuery(() => nodes, constraints);
   }
 
   function payload(body: Record<string, unknown>) {
@@ -1478,8 +1515,8 @@ describe("api/ingest/person, one register entry is one human", () => {
         data: () => (id === undefined ? undefined : nodes[id]),
       }),
     }));
-    mockWhere.mockImplementation((field: string, _op: string, value: unknown) =>
-      fakeQuery([[field, value]]),
+    mockWhere.mockImplementation((field: string, op: string, value: unknown) =>
+      fakeQuery([[field, op, value]]),
     );
   });
 
@@ -1715,6 +1752,251 @@ describe("api/ingest/person, one register entry is one human", () => {
   });
 });
 
+describe("api/ingest/person, somebody only an odpis names: the name and the birth date", () => {
+  /** As in the suite above: a fake `nodes` collection answering by filter. */
+  let nodes: Record<string, Record<string, unknown>> = {};
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function fakeQuery(constraints: Constraint[]): any {
+    return filteringQuery(() => nodes, constraints);
+  }
+
+  /** A payload as the pipeline sends one for somebody with no rejestr.io
+   * entry: a name and the birth date their PESEL gives, nothing else. */
+  function payload(body: Record<string, unknown> = {}) {
+    mockReadBody.mockResolvedValue({
+      name: "Anna Maria Nowak",
+      birthDate: "1971-03-14",
+      parties: [],
+      companies: [],
+      elections: [],
+      ...body,
+    });
+  }
+
+  function person(fields: Record<string, unknown>) {
+    return { type: "person", parties: [], ...fields };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockResolvedValue({ uid: "test-user-id", datascience: true });
+    nodes = {};
+    mockDoc.mockReset();
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "new-doc-id",
+      parent: nodesParent,
+      ref: mockRef,
+      get: async () => ({
+        id: id ?? "new-doc-id",
+        exists: id !== undefined && nodes[id] !== undefined,
+        data: () => (id === undefined ? undefined : nodes[id]),
+      }),
+    }));
+    mockWhere.mockImplementation((field: string, op: string, value: unknown) =>
+      fakeQuery([[field, op, value]]),
+    );
+  });
+
+  it("lands on the page of that name and birth date", async () => {
+    // The page an earlier night made for them, which has no link either.
+    nodes.anna = person({ name: "Anna Maria Nowak", birthDate: "1971-03-14" });
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ personId: "anna", person: "unchanged" });
+    expect(createRevisionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("finds the page past its Polish letters and a middle name it lacks", async () => {
+    nodes.anna = person({ name: "Anna Nowak", birthDate: "1971-03-14" });
+    nodes.ania = person({ name: "Ánna Nówak", birthDate: "1971-03-15" });
+    payload({ name: "Anna Maria Nowák" });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("anna");
+  });
+
+  it("lands on a linked page of that name and birth date", async () => {
+    // 12 people only an odpis named on 2026-10-09 shared name and date with a
+    // linked page. The pipeline holds back the ones the page's entry has
+    // another PESEL for, so what reaches here is that entry's person.
+    nodes.linked = person({
+      name: "Anna Maria Nowak",
+      birthDate: "1971-03-14",
+      rejestrIo: "https://rejestr.io/osoby/5",
+    });
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("linked");
+  });
+
+  it("opens a page of its own beside a namesake born on another day", async () => {
+    // 147 people only an odpis named on 2026-10-09, sharing a name only with
+    // pages born on another day.
+    nodes.other = person({ name: "Anna Maria Nowak", birthDate: "1980-01-01" });
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ personId: "new-doc-id", person: "created" });
+    expect(createRevisionTransaction).toHaveBeenCalledWith(
+      mockDb,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        name: "Anna Maria Nowak",
+        birthDate: "1971-03-14",
+      }),
+      expect.anything(),
+    );
+    expect(
+      (createRevisionTransaction as any).mock.calls[0][4],
+    ).not.toHaveProperty("rejestrIo");
+  });
+
+  it("does not take a namesake with another middle name for them", async () => {
+    nodes.other = person({ name: "Anna Ewa Nowak", birthDate: "1971-03-14" });
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.person).toBe("created");
+  });
+
+  it("holds the person back where a page of the name stores no birth date", async () => {
+    // It could be them or a namesake, and a wrong guess hangs a stranger's
+    // posts on a real page. Nothing is written.
+    nodes.undated = person({ name: "Anna Nowak" });
+    payload();
+
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 409,
+      message: expect.stringContaining("no birth date"),
+    });
+    expect(createRevisionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("holds the person back where two pages share the name and the date", async () => {
+    nodes.one = person({ name: "Anna Maria Nowak", birthDate: "1971-03-14" });
+    nodes.two = person({ name: "Anna Nowak", birthDate: "1971-03-14" });
+    payload();
+
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 409 });
+    expect(createRevisionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("counts a merged page and its survivor as one page", async () => {
+    nodes.tombstone = person({
+      name: "Anna Maria Nowak",
+      birthDate: "1971-03-14",
+      merged_into: "survivor",
+    });
+    nodes.survivor = person({ name: "Anna Nowak", birthDate: "1971-03-14" });
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("survivor");
+  });
+
+  it("leaves a page linking another entry to that entry's person", async () => {
+    // Two register entries are two people, name and date notwithstanding.
+    nodes.linked = person({
+      name: "Anna Maria Nowak",
+      birthDate: "1971-03-14",
+      rejestrIo: "https://rejestr.io/osoby/5",
+    });
+    nodes.undated = person({
+      name: "Anna Nowak",
+      rejestrIo: "https://rejestr.io/osoby/6",
+    });
+    payload({ rejestrIo: "https://rejestr.io/osoby/7" });
+
+    const result = await handler({} as any);
+
+    expect(result.person).toBe("created");
+  });
+
+  it("adopts the entry onto an unlinked page of that name and date", async () => {
+    nodes.anna = person({ name: "Anna Maria Nowak", birthDate: "1971-03-14" });
+    payload({ rejestrIo: "https://rejestr.io/osoby/7" });
+
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ personId: "anna", person: "updated" });
+    expect(createRevisionTransaction).toHaveBeenCalledWith(
+      mockDb,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ rejestrIo: "https://rejestr.io/osoby/7" }),
+      expect.anything(),
+    );
+  });
+
+  it("holds the person back behind a linked page of the name with no birth date", async () => {
+    // 177 of the 191 held on 2026-10-09: the page's entry is born on some day
+    // the site does not store, so it could be them as much as a namesake.
+    nodes.linked = person({
+      name: "Anna Nowak",
+      rejestrIo: "https://rejestr.io/osoby/5",
+    });
+    payload();
+
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("still adopts an entry onto an unlinked page of its exact name with no date", async () => {
+    // The name fallback, unchanged for a payload with a register entry: 447
+    // entries reached such pages on 2026-10-09, 103 of them published.
+    nodes.stary = person({ name: "Anna Maria Nowak" });
+    payload({ rejestrIo: "https://rejestr.io/osoby/7" });
+
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ personId: "stary", person: "updated" });
+  });
+
+  it("never puts an entry on a page of its name that stores another birth date", async () => {
+    nodes.other = person({ name: "Anna Maria Nowak", birthDate: "1980-01-01" });
+    payload({ rejestrIo: "https://rejestr.io/osoby/7" });
+
+    const result = await handler({} as any);
+
+    expect(result.person).toBe("created");
+  });
+
+  it("never matches a company carrying the name", async () => {
+    nodes.place = { type: "place", name: "Anna Maria Nowak" };
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.person).toBe("created");
+  });
+
+  it("matches by the exact name alone with neither a date nor an entry, as before", async () => {
+    // Today's rule for a caller that sends neither: the first page of that
+    // exact name, whatever it links and whenever its person was born.
+    nodes.linked = person({
+      name: "Anna Maria Nowak",
+      birthDate: "1980-01-01",
+      rejestrIo: "https://rejestr.io/osoby/5",
+    });
+    payload({ birthDate: undefined });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("linked");
+  });
+});
+
 describe("api/ingest/person, jobs from the register entry a published page links", () => {
   /** Every collection the request reads, keyed by id. Answered by filtering,
    * like the suite above, because what matters here is which stored edges and
@@ -1836,6 +2118,8 @@ describe("api/ingest/person, jobs from the register entry a published page links
           name: "Łukasz Żelewski",
           parties: ["PO"],
           rejestrIo: "https://rejestr.io/osoby/1398014",
+          // What a link-less page is found by: the name and this date.
+          birthDate: "1962-12-08",
           published: true,
         },
         arp: {

@@ -24,6 +24,35 @@ export function normalizePersonName(name: string): string {
     .trim();
 }
 
+/** The text with its Polish letters written plain: "Żelewski" is "Zelewski".
+ * Case and everything else as it was, unlike `normalizePersonName`. */
+export function withoutDiacritics(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{Mn}/gu, "")
+    .replace(/ł/g, "l")
+    .replace(/Ł/g, "L");
+}
+
+/** Whether two spellings name one person, as far as names alone can say.
+ *
+ * The same once folded (`normalizePersonName`), or one with given names
+ * written into the other (`addsMiddleNames`): "Łukasz Żelewski", "Lukasz
+ * Zelewski" and "Łukasz Jan Żelewski" agree; "Jan Adam Nowak" and "Jan Piotr
+ * Nowak" do not - a middle name each, and not the same one.
+ *
+ * Never enough on its own to say who somebody is: the ingest pairs it with a
+ * full birth date (`lookupPersonDoc`). `names_agree` in
+ * `data/pipelines/src/util/polish.py` is the same rule, and predicts that
+ * match against the export.
+ */
+export function namesAgree(one: string, other: string): boolean {
+  const a = normalizePersonName(one);
+  const b = normalizePersonName(other);
+  if (!a || !b) return false;
+  return a === b || addsMiddleNames(a, b) || addsMiddleNames(b, a);
+}
+
 /** Whether `full` is `short` with given names written in after the first.
  *
  * rejestr.io spells one register entry the way each company's filing has it,
