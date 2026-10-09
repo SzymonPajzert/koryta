@@ -15,10 +15,12 @@ The basis says how settled a row is.
   code), `wikipedia_owner` (an owner only the company's article names), and
   `evidence_not_public` for a company nobody public owns, founded or joins.
   These are checked against `companies_merged` every time.
-- A proposal waiting on his decision: `proposed_public_founder`,
-  `proposed_public_members` (decide-public-foundations-and-associations) and
-  `proposed_formerly_public` (decide-formerly-public-companies). They are
-  skipped until `checked` is filled.
+- A proposal: `proposed_public_founder`, `proposed_public_members`
+  (decide-public-foundations-and-associations), `proposed_formerly_public`
+  (decide-formerly-public-companies) and `proposed_not_public` (chambers and
+  guilds whose members nobody has checked). They are always skipped. Checking
+  one only records the answer; the row is enforced once the change that makes
+  the pipeline agree also turns its basis into a rule.
 
 Where the pipeline gets a row wrong today, `known_gap` names the task that will
 fix it, and the row is an expected failure. It is strict: when the fix lands
@@ -26,9 +28,10 @@ the row passes, the run goes red, and the fix removes `known_gap` in the same
 change. So the night's tests step sees a new failure only when an expectation
 breaks or a gap closes, never from rows that were already wrong.
 
-Filling `checked` on a proposal the pipeline does not yet agree with makes the
-row fail; give it a `known_gap` in the same edit. `formerly_public` rows stay
-skipped even when checked: nothing records a "public until" date yet.
+Filling `checked` never turns the night red: `yes` changes nothing, and a
+correction (another status, or a note) skips the row until it is applied to
+`expected`. `formerly_public` rows stay skipped: nothing records a "public
+until" date yet.
 """
 
 import csv
@@ -58,7 +61,10 @@ PROPOSALS = (
     "proposed_public_founder",
     "proposed_public_members",
     "proposed_formerly_public",
+    "proposed_not_public",
 )
+#: The bases a `not_public` row may have.
+NOT_PUBLIC_BASES = ("evidence_not_public", "proposed_not_public")
 KRS = re.compile(r"\d{10}")
 #: A Firestore id, for a page with no KRS number (Ministerstwo Obrony Narodowej).
 NODE_ID = re.compile(r"[A-Za-z0-9]{20}")
@@ -83,15 +89,15 @@ class Expected:
 
     @property
     def status(self) -> str:
-        """`expected`, unless Szymon wrote another status into `checked`."""
-        return self.checked if self.checked in STATUSES else self.expected
+        return self.expected
 
     @property
     def why_skipped(self) -> str | None:
         """Why the pipeline cannot be held to this row yet, or None if it can."""
-        if self.basis in PROPOSALS and not self.checked:
-            return f"awaiting Szymon's check: {self.basis}"
-        if self.checked and self.checked != "yes" and self.checked not in STATUSES:
+        if self.basis in PROPOSALS:
+            checked = f", checked: {self.checked}" if self.checked else ""
+            return f"proposal ({self.basis}{checked}): not enforced until a rule"
+        if self.checked and self.checked != "yes":
             return f"Szymon's correction, not applied to the row yet: {self.checked}"
         if self.status == "formerly_public":
             return "nothing records a 'public until' date yet"
@@ -149,7 +155,7 @@ def test_the_file_is_well_formed():
             problems.append(f"{where}: public_until goes with formerly_public only")
         if row.public_until and not PARTIAL_DATE.fullmatch(row.public_until):
             problems.append(f"{where}: public_until {row.public_until!r} is not a date")
-        if (row.basis == "evidence_not_public") != (row.expected == "not_public"):
+        if (row.basis in NOT_PUBLIC_BASES) != (row.expected == "not_public"):
             problems.append(f"{where}: {row.expected} on {row.basis}")
         if row.checked and row.checked != "yes" and row.checked not in STATUSES:
             # Not a problem, only a correction waiting to be applied: say so.
