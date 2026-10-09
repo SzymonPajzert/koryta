@@ -54,6 +54,11 @@ def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
             id as rejestrio_id,
             full_name
         FROM krs_data
+        -- Nobody without a full birth date: a name alone tells no two people
+        -- apart. That drops every rejestr.io `osoba-bez-pesel` entry (5,343 on
+        -- the 2026-10-09 night), but not everybody without a PESEL: where an
+        -- odpis prints the birth date instead, its row has one: 236 people come
+        -- in that way on that night's data (scrapers/krs/list.py, PERSON_TYPES).
         WHERE birth_date IS NOT NULL AND first_name IS NOT NULL
             AND last_name IS NOT NULL
         """

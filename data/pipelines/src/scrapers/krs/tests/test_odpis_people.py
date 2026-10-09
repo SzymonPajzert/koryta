@@ -436,3 +436,99 @@ def test_each_person_keeps_their_own_birth_year(ctx):
         (BORN, 1970),
         ("1971-03-03", 1971),
     ]
+
+
+# ------------------------------------------------- somebody without a PESEL
+#: The day an odpis prints in place of a PESEL (`odpis_pdf.printed_birth_date`).
+PRINTED = "1967-11-05"
+
+
+def unprinted(krs=A, surname="DEMETER BUBALO", given="ZDRAVKA", **kwargs):
+    """A seat whose identifier field prints a birth date in place of a PESEL."""
+    fields = {"birth_date": PRINTED, "sex": None, "pesel_fingerprint": None}
+    return seat(krs=krs, surname=surname, given=given, **{**fields, **kwargs})
+
+
+def undated(krs=A, first="Zdravka", last="Demeter Bubalo", id="70", **kwargs):
+    """A rejestr.io entry it holds no PESEL for: a name and nothing else."""
+    fields = {"birth_date": None, "sex": None, "rejestrio_type": "osoba-bez-pesel"}
+    return person(krs=krs, first=first, last=last, id=id, **{**fields, **kwargs})
+
+
+def test_somebody_without_a_pesel_comes_in_on_the_day_the_odpis_prints(ctx):
+    """As somebody only the odpis names. rejestr.io's entry for them has no
+    birth date to come in with, and its id is no ``/osoby/`` id."""
+    combined = restored(combine(people(undated()), seats(unprinted()), graph={A}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [([], PRINTED, [A])]
+
+
+def test_somebody_with_neither_a_pesel_nor_a_printed_day_is_still_left_out(ctx):
+    odpisy = seats(unprinted(birth_date=None))
+    combined = restored(combine(people(undated()), odpisy, graph={A}))
+
+    assert people_krs_merged(ctx, combined).empty
+
+
+def test_one_name_on_two_printed_days_is_two_people(ctx):
+    rejestrio = people(undated(krs=A, id="70"), undated(krs=B, id="71"))
+    odpisy = seats(unprinted(krs=A), unprinted(krs=B, birth_date="1971-01-01"))
+    combined = restored(combine(rejestrio, odpisy, graph={A, B}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        ([], PRINTED, [A]),
+        ([], "1971-01-01", [B]),
+    ]
+
+
+def test_one_name_on_one_printed_day_at_two_companies_is_one_person(ctx):
+    """rejestr.io gives somebody without a PESEL an entry per company: on the
+    2026-10-09 night no ``osoba-bez-pesel`` id sat at two companies, while 511
+    names sat under two ids or more. The name and the day tie the seats."""
+    rejestrio = people(undated(krs=A, id="70"), undated(krs=B, id="71"))
+    odpisy = seats(unprinted(krs=A), unprinted(krs=B))
+    combined = restored(combine(rejestrio, odpisy, graph={A, B}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [([], PRINTED, [A, B])]
+
+
+def test_an_osoba_bez_pesel_id_is_not_the_osoba_with_that_number(ctx):
+    """rejestr.io numbers the two shapes apart. On the 2026-10-09 night 96
+    numbers were both, never under one name, and ``/osoby/<n>`` was the
+    ``osoba``'s. Neither lends the other a birth date or a post."""
+    rejestrio = people(person(krs=A, id="7"), undated(krs=B, id="7"))
+    combined = restored(combine(rejestrio, seats(unprinted(krs=B)), graph={A, B}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        ([], PRINTED, [B]),
+        (["7"], BORN, [A]),
+    ]
+
+
+def test_the_printed_day_joins_the_entry_the_register_later_gave_a_pesel(ctx):
+    """A board member the register later wrote down with a PESEL holds a second
+    seat, which rejestr.io lists as an ``osoba`` with the date the PESEL
+    decodes to. The first seat prints that same day, so its post joins them;
+    5 entries took posts this way on the 2026-10-09 night."""
+    later = {"birth_date": PRINTED, "sex": "F", "date_added": "2024-01-01"}
+    rejestrio = people(
+        undated(id="70"),
+        person(
+            id="7",
+            first="Zdravka",
+            last="Demeter Bubalo",
+            employed_start="2024-01-01",
+            **{k: v for k, v in later.items() if k != "date_added"},
+        ),
+    )
+    odpisy = seats(
+        unprinted(date_removed="2024-01-01"),
+        seat(surname="DEMETER BUBALO", given="ZDRAVKA", **later),
+    )
+    combined = restored(combine(rejestrio, odpisy, graph={A}))
+    [row] = people_krs_merged(ctx, combined).to_dict("records")
+
+    assert list(row["rejestrio_id"]) == ["7"]
+    assert sorted(
+        (e["employed_start"], e["employed_end"]) for e in row["employment"]
+    ) == [("2020-01-10", "2024-01-01"), ("2024-01-01", None)]
