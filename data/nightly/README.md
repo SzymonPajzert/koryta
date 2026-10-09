@@ -47,8 +47,10 @@ buys reaches the same night's people - who send those pages first, right after
 the new hires:
 
 - the person feeds of the people somebody marked interesting - a vote on the
-  site, or the hardcoded list - which no register says. A vote buys the entry
-  its page links; a page without a link is matched by name, namesakes and all;
+  site, a page published since `PUBLISHED_SINCE` (2026-07-11, moved back a step
+  at a time; `scrapers/krs/scrape.py`), or the hardcoded list - which no
+  register says. A vote or a publication buys the entry the page links; a page
+  without a link is matched by name, namesakes and all;
 - the connections of a company whose odpis pełny `krs_odpis` asked for and did
   not get: the gateway or the network ate it twice, or the service answered
   with something the job could not take (`KrsOdpisAttempts`, the fold of the

@@ -5,6 +5,7 @@ import pytest
 
 from entities.company import KRS
 from entities.person import RejestrIOKey
+from scrapers.krs import scrape
 from scrapers.krs.scrape import (
     ORG_CONNECTION_METHODS,
     REASON_INTERESTING_PERSON,
@@ -12,6 +13,7 @@ from scrapers.krs.scrape import (
     REASON_OWNED,
     REASON_PERSON_FEED,
     REASON_PUBLIC_OWNER,
+    REASON_PUBLISHED_PERSON,
     REASON_REFRESH,
     REASON_UNRECORDED,
     KRSScraped,
@@ -24,6 +26,7 @@ from scrapers.krs.scrape import (
     leave_to_the_odpis,
     linked_entry,
     misnamed_links,
+    published_since,
     save_org_connections,
     told_by_the_odpis,
 )
@@ -541,13 +544,17 @@ def test_the_queue_reads_what_the_site_takes_from_an_odpis():
     assert scraper.companies_told_by_the_odpis(None) == {"0000000029"}  # type: ignore[arg-type]
 
 
-def _people(pages, votes, krs_people=(), merged=()):
+def _people(pages, votes, krs_people=(), merged=(), published=(), public_before=()):
     """`people_to_scrape` over these pages, votes and register rows, as the
-    entries it queues."""
+    entries it queues: `published` the ids of the pages published now, and
+    `public_before` of those already public on `PUBLISHED_SINCE`."""
     scraper = ScrapeRejestrIO()
     scraper.__dict__["hardcoded_people"] = _Frame(pd.DataFrame(columns=["id"]))
-    scraper.__dict__["koryta_people"] = _Frame(
-        pd.DataFrame(pages, columns=["id", "full_name", "rejestrIo"])
+    people = pd.DataFrame(pages, columns=["id", "full_name", "rejestrIo"])
+    people["is_public"] = people["id"].isin(list(published))
+    scraper.__dict__["koryta_people"] = _Frame(people)
+    scraper.__dict__["public_before"] = lambda ctx: pd.DataFrame(
+        {"id": list(public_before)}, columns=["id"]
     )
     scraper.__dict__["koryta_votes"] = _Frame(
         pd.DataFrame(votes, columns=["person_koryta_id", "interesting"])
@@ -618,6 +625,90 @@ def test_only_a_vote_for_interesting_buys_anything():
     )
 
     assert queued == set()
+
+
+def test_a_page_published_since_the_day_buys_what_a_vote_would():
+    """Nobody voted, but a reviewer put the page live."""
+    scraper, queued = _people(
+        pages=[("page", "Krzysztof Owczarek", "https://rejestr.io/osoby/270186")],
+        votes=[],
+        krs_people=OWCZAREKS,
+        published=["page"],
+    )
+
+    assert queued == {"270186"}
+    assert scraper.person_reasons == {"270186": {REASON_PUBLISHED_PERSON}}
+
+
+def test_a_published_page_without_a_link_is_matched_by_name_as_a_voted_one_is():
+    scraper, queued = _people(
+        pages=[("page", "Krzysztof Owczarek", None)],
+        votes=[],
+        krs_people=OWCZAREKS,
+        published=["page"],
+    )
+
+    assert queued == {"270186", "395543", "688265"}
+    assert set(map(frozenset, scraper.person_reasons.values())) == {
+        frozenset({REASON_PUBLISHED_PERSON})
+    }
+
+
+def test_a_page_public_on_the_day_already_waits_for_the_day_to_move_back():
+    _, queued = _people(
+        pages=[("page", "Krzysztof Owczarek", "https://rejestr.io/osoby/270186")],
+        votes=[],
+        krs_people=OWCZAREKS,
+        published=["page"],
+        public_before=["page"],
+    )
+
+    assert queued == set()
+
+
+def test_a_page_voted_and_published_is_billed_as_voted():
+    """The published row of the bill is what publishing adds to the votes."""
+    scraper, _ = _people(
+        pages=[("page", "Krzysztof Owczarek", "https://rejestr.io/osoby/270186")],
+        votes=[("page", 1)],
+        krs_people=OWCZAREKS,
+        published=["page"],
+    )
+    query = RejestrIOQuery(
+        person=RejestrIOKey(id="270186"),
+        queries=[QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE],
+        reasons=sorted(scraper.person_reasons["270186"]),
+    )
+
+    assert scraper.person_reasons["270186"] == {
+        REASON_INTERESTING_PERSON,
+        REASON_PUBLISHED_PERSON,
+    }
+    assert query.primary_reason == REASON_INTERESTING_PERSON
+
+
+def test_published_since_is_published_now_and_not_on_the_day():
+    pages = pd.DataFrame(
+        {
+            "id": ["new", "old", "draft", "taken down"],
+            # As a frame read without its dtypes has it: the string "False"
+            # is not a published page.
+            "is_public": [True, True, "False", False],
+        }
+    )
+    before = pd.DataFrame({"id": ["old", "taken down"]})
+
+    assert published_since(pages, before) == {"new"}
+    assert published_since(pages, None) == {"new", "old"}
+    # A day when no page was public: written as no rows, read back as no
+    # columns either.
+    assert published_since(pages, pd.DataFrame()) == {"new", "old"}
+
+
+def test_without_a_day_every_published_page_counts(monkeypatch):
+    monkeypatch.setattr(scrape, "PUBLISHED_SINCE", None)
+
+    assert ScrapeRejestrIO().public_before(None) is None  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(

@@ -33,9 +33,9 @@ def fallback(
     """The person feeds, and the company feeds of the companies in `failed`.
 
     A person is in the queue only when somebody marked them interesting - a
-    human's vote on the site, or the hardcoded list
-    (`ScrapeRejestrIO.people_to_scrape`) - and which other companies a person
-    sits in is nothing a free source says.
+    human's vote on the site, a page put live since `PUBLISHED_SINCE`, or the
+    hardcoded list (`ScrapeRejestrIO.people_to_scrape`) - and which other
+    companies a person sits in is nothing a free source says.
 
     A company is left out unless the free odpis was asked for and did not come
     (`failed`, from `KrsOdpisAttempts`). One the odpis job has not asked about
@@ -55,9 +55,11 @@ def order(
 ) -> list[RejestrIOQuery]:
     """People first, then the companies the public owns, then the rest.
 
-    People first: each was asked for by somebody, and there are a few a day.
-    Then public companies, the ones a page is likeliest to show - the order the
-    odpis job asks the graph in. The queue's own order stands within each.
+    People first: each was asked for by somebody, and there are a few a day -
+    but for the nights after `PUBLISHED_SINCE` moves back: 2026-07-11 queued
+    218 people at once, nine nights of a 50-call cap. Then public companies,
+    the ones a page is likeliest to show - the order the odpis job asks the
+    graph in. The queue's own order stands within each.
     """
 
     def rank(query: RejestrIOQuery) -> int:
