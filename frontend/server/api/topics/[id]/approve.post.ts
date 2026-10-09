@@ -5,7 +5,6 @@ import { requireAdmin } from "~~/server/utils/auth";
 import { applyRevision } from "~~/server/utils/revisions";
 import {
   edgeRevisionsForMany,
-  publishCandidateRevision,
   publishEdgeInBatch,
 } from "~~/server/utils/edgePublication";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
@@ -75,7 +74,8 @@ export default defineEventHandler(async (event) => {
   }
 
   // 2. The tags. Now that the topic is live both ends of each are, so the rule
-  //    holds and `publishEdgeInBatch` settles any proposal each still carries.
+  //    holds, and `publishEdgeInBatch` approves the revision each tag already
+  //    holds. A proposal to change one stays pending for a reviewer.
   const edgeIds = Array.from(new Set(body.edgeIds ?? []));
   if (edgeIds.length === 0) return { topicId, published: true, tags: 0 };
 
@@ -97,7 +97,7 @@ export default defineEventHandler(async (event) => {
       batch,
       snap.ref,
       stored,
-      publishCandidateRevision(candidates.get(snap.id) ?? []),
+      candidates.get(snap.id) ?? [],
       user,
     );
     published += 1;

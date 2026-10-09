@@ -5,7 +5,6 @@ import {
   createRevisionTransaction,
   proposeRevisionTransaction,
   revisionChangesNothing,
-  sameStoredValue,
   withoutInternalFields,
   type ProposalOutcome,
 } from "~~/server/utils/revisions";
@@ -19,6 +18,7 @@ import {
 } from "~~/server/utils/edges";
 import {
   edgeRevisions,
+  publishCandidateRevision,
   publishEdgeInBatch,
 } from "~~/server/utils/edgePublication";
 import { resolveMergedNode } from "~~/server/utils/merge";
@@ -1018,10 +1018,11 @@ function registerEntry(link: unknown): string | undefined {
  * reviewer's no; and a revision not written automatically is a person's word
  * on the relation. Each of those stays theirs.
  *
- * The newest revision is approved only where it says exactly what the edge
- * does, so what goes live is what the page would show - as `publishEdgeInBatch`
- * does for a reviewer, without the audit row an administrator's decision
- * gets.
+ * The newest revision is approved only where the edge already holds it, so
+ * what goes live is what the page would show - `publishEdgeInBatch`'s rule for
+ * a reviewer, without the audit row an administrator's decision gets. Only the
+ * newest: an older revision the edge holds would put the job up past a newer
+ * one saying something else, which is a change nobody has looked at.
  */
 async function approveWaitingEdge(ctx: Context, edgeId: string) {
   const stored = ctx.verifiedEmployments?.get(edgeId);
@@ -1043,23 +1044,15 @@ async function approveWaitingEdge(ctx: Context, edgeId: string) {
   ) {
     return;
   }
-  const candidate = revisions[0];
-  if (
-    !candidate ||
-    !sameStoredValue(
-      withoutInternalFields(candidate.data as Record<string, unknown>),
-      withoutInternalFields(stored),
-    )
-  ) {
-    return;
-  }
+  const newest = revisions.slice(0, 1);
+  if (!publishCandidateRevision(newest, stored)) return;
 
   publishEdgeInBatch(
     ctx.db,
     ctx.batch,
     ctx.db.collection("edges").doc(edgeId),
     stored,
-    candidate,
+    newest,
     ctx.user,
     false,
   );

@@ -4,7 +4,6 @@ import { requireAdmin } from "~~/server/utils/auth";
 import {
   EDGE_PUBLISH_CHUNK,
   edgeRevisionsForMany,
-  publishCandidateRevision,
   publishEdgeInBatch,
   resolveEdgeEndpoints,
   unpublishEdgeInBatch,
@@ -22,9 +21,11 @@ const bodyValidator = z.object({
 /** Puts relations on the site, or takes them off it.
  *
  * Bulk because that is how the decision is actually made: a reviewer publishes
- * a page and the relations that came with it in one go. Publishing also settles
- * each edge's outstanding proposal, which is what makes "zatwierdź powiązania
- * razem z węzłem" one click rather than two screens.
+ * a page and the relations that came with it in one go. Publishing also
+ * approves the newest revision each edge already holds - usually the one it
+ * was written by - which is what makes "zatwierdź powiązania razem z węzłem"
+ * one click rather than two screens. A proposal to change an edge is not held
+ * by it and stays in the queue; see `publishCandidateRevision`.
  *
  * The endpoints-must-be-published rule is enforced here and not only in the
  * form that greys the ineligible ones out: the check the UI ran is already
@@ -114,7 +115,7 @@ export default defineEventHandler(async (event) => {
       batch,
       db.collection("edges").doc(edge.id),
       edge as unknown as Record<string, unknown>,
-      publishCandidateRevision(revisions.get(edge.id) ?? []),
+      revisions.get(edge.id) ?? [],
       user,
     );
     if (result.approvedRevision) approved.push(result.approvedRevision);

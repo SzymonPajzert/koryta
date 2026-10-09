@@ -2025,6 +2025,30 @@ describe("api/ingest/person, jobs from the register entry a published page links
     expect(batchUpdate).not.toHaveBeenCalled();
   });
 
+  it("leaves the job when only an older revision says what it says", async () => {
+    // The newest revision is what the pipeline last said about the job.
+    // Putting the job up on an older one would publish it past a change
+    // nobody has looked at.
+    waitingSeat();
+    store.revisions!.later = {
+      ...store.revisions!.proposal,
+      data: {
+        type: "employed",
+        name: "Rada Nadzorcza",
+        source: "zelewski",
+        target: "kghm",
+        start_date: "2026-02-09",
+        end_date: "2026-03-18",
+      },
+      update_time: "2026-10-07T06:22:31.053Z",
+    };
+    payload();
+
+    await handler({} as any);
+
+    expect(batchUpdate).not.toHaveBeenCalled();
+  });
+
   it("publishes only a revision that says what the stored job says", async () => {
     // Approving the revision points the edge at it; one saying something else
     // would put up a version of the job nobody wrote to the page.
