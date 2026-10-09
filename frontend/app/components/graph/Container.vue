@@ -283,11 +283,12 @@ const legend = computed(() => [
     key: "person",
     entity: "person",
     // Said in full as soon as anybody on the canvas is coloured by party:
-    // this blue is not "a person", it is a person with no party, and that is
-    // exactly what a reader looking at a blue dot next to a navy one is trying
+    // this grey is not "a person", it is a person with no party, and that is
+    // exactly what a reader looking at a grey dot next to a navy one is trying
     // to work out. It used to say „inne / brak partii”, because a party
-    // `shared/misc` gives no colour was blue too; that is „Inne” now, grey and
-    // named on a line of its own, so the blue is left with no party alone.
+    // `shared/misc` gives no colour was painted like the partyless too; that
+    // is „Inne” now, a paler grey named on a line of its own, so this grey is
+    // left with no party alone.
     label: partyKeys.value.length > 0 ? "Osoba: brak partii" : "Osoba",
     shape: "circle",
     color: NODE_COLORS.person as string,

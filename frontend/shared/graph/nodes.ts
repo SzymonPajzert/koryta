@@ -11,8 +11,12 @@ import { paintedParty } from "../misc";
  * on screen. */
 export const NODE_COLORS = {
   /** Somebody with no party at all. The party ones come from `shared/misc`,
-   * „Inne” and a party with no colour of its own among them. */
-  person: "#4466cc",
+   * „Inne” and a party with no colour of its own among them.
+   *
+   * Grey, the #898781 the charts already give „bez partii” (`ink.muted` in
+   * app/utils/chartTheme.ts), and 2.00:1 from „Inne”'s paler grey. It was a
+   * blue, which a reader took for PiS's or Konfederacja's navy (#fb-wg0Zsc). */
+  person: "#898781",
   place: "#6b7a83",
   region: "#3f7d58",
 } as const;
@@ -21,12 +25,12 @@ export function personNode(
   person: Person,
   partyColors: Record<string, string>,
 ): Node {
-  // Falls back on the plain person blue rather than on nothing. A party with
+  // Falls back on the plain person grey rather than on nothing. A party with
   // no colour here - one the pipeline knows and `shared/misc` does not, Razem
   // among them - used to leave `color` undefined, and an svg shape with no
   // fill is drawn black: a node that read as a party of its own, and a legend
   // that could not name it. `paintedParty` now draws such a party as „Inne”,
-  // so the blue is left meaning no party at all.
+  // so the grey is left meaning no party at all.
   const party = paintedParty(person.parties, partyColors);
   const color = ((party ? partyColors[party] : undefined) ??
     NODE_COLORS.person) as Node["color"];

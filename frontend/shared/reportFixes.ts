@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na grafie osoba bez partii jest szara, a nie niebieska, więc nie myli się już z granatem PiS i Konfederacji. Legenda podpisuje ją „Osoba: brak partii”; jaśniejsza szarość to nadal „Inne”.",
+    fixes: ["wg0ZscDcClubfyTEn5pB"],
+  },
+  {
+    change:
       "„Czeka na decyzję” na /admin/rewizje ma przełącznik „Wszystkie · Bez moich”, który chowa Twoje propozycje - działa dopiero po wdrożeniu czterech nowych indeksów z firestore.indexes.json.",
     fixes: ["xAOt17Oj1PJB6t34O9if"],
   },
