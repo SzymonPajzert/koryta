@@ -160,6 +160,7 @@ class PeoplePayloads(Pipeline[Person]):
         somebody with another PESEL (`another_pesels_page`)."""
         rows = [row for _, row in people_df.iterrows()]
         payloads = [self.map_person_payload(ctx, row) for row in rows]
+        report_shared_pesel(payloads, rows)
         prints = self.prints_of_register(ctx, people_df)
         another_pesel.clear()
         kept = [
@@ -418,11 +419,7 @@ class PeoplePayloads(Pipeline[Person]):
         birth_date = _iso_date(get_scalar("birth_date"))
 
         prints = pesel_prints(row)
-        rejestr_id = one_register_entry(
-            as_sequence(row.get("rejestrio_id")),
-            prints,
-            linked=_register_id(row.get("koryta_rejestrio_id")),
-        )
+        rejestr_id = one_register_entry(as_sequence(row.get("rejestrio_id")))
         if len(prints) > 1:
             two_pesels[str(name)] += 1
         # Somebody only an odpis names has none. The ingest finds them by their
@@ -622,14 +619,32 @@ def pesel_prints(row: pd.Series) -> frozenset[str]:
     )
 
 
-def _register_id(value: typing.Any) -> str | None:
-    """A rejestr.io id off a frame, or None: a column of ids with a gap in it
-    comes back off jsonl as floats, and 126307.0 is entry 126307."""
-    if value is None or (isinstance(value, float) and math.isnan(value)):
-        return None
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    return str(value) or None
+def report_shared_pesel(payloads: list[Person], rows: list[pd.Series]) -> None:
+    """Name the rejestr.io entries sent as people of their own that share a
+    PESEL with another: rejestr.io listing somebody twice.
+
+    Two entries are never one person to the pipeline, nor merged by it
+    (rejestr-io-entry-is-one-person), so each goes under its own entry, and
+    may get a page of its own. Whether those pages are one person's is for a
+    reviewer, who merges them by hand. Names the entries, never the PESEL.
+    """
+    entries: dict[str, set[str]] = collections.defaultdict(set)
+    for payload, row in zip(payloads, rows):
+        entry = register_entry(payload.rejestrIo)
+        if entry is not None:
+            for printed in pesel_prints(row):
+                entries[printed].add(entry)
+    shared = sorted(
+        ", ".join(sorted(ids, key=by_number))
+        for ids in entries.values()
+        if len(ids) > 1
+    )
+    if shared:
+        print(
+            f"{len(shared)} PESELs are two rejestr.io entries or more, each sent "
+            f"as a person of its own for a reviewer to merge their pages: "
+            + "; ".join(shared[:COLLAPSED_PEOPLE_REPORTED])
+        )
 
 
 #: Payloads left out for landing on somebody else's page, by name.
@@ -965,33 +980,27 @@ collapsed_people: typing.Counter[str] = collections.Counter()
 #: Rows carrying two PESEL fingerprints - two people in one row - by name.
 two_pesels: typing.Counter[str] = collections.Counter()
 
-#: Rows of one PESEL under two rejestr.io entries or more, by the entries:
-#: rejestr.io listing one person twice (`match_rejestrio`). One person each.
-shared_pesel: typing.Counter[str] = collections.Counter()
+
+def by_number(entry: str) -> tuple[int, int | str]:
+    """Register entries in numeric order where they are numbers, so 1956879
+    does not sort before 383093, and the rest after them as text."""
+    return (0, int(entry)) if entry.isdigit() else (1, entry)
 
 
-def one_register_entry(
-    rejestr_ids: typing.Sequence,
-    prints: typing.AbstractSet[str] = frozenset(),
-    linked: str | None = None,
-) -> str | None:
+def one_register_entry(rejestr_ids: typing.Sequence) -> str | None:
     """The register entry to file this row under, of the ones it carries, or
     None for somebody only an odpis names, who has none.
 
-    Several entries under one PESEL are one person rejestr.io lists twice:
-    ids 126307 and 715231 at 0000127464 on the 2026-10-09 night. The row keeps
-    both; the payload carries the one the person's page already links
-    (`linked`, which `people_merged` matched the page by), else the lowest, so
-    that the page is never re-linked from one to the other. Counted in
-    `shared_pesel`, not as a collapse.
-
-    Otherwise a row carrying two is two people. KRS people used to be grouped
-    by name and birth *year*, years within one of each other smoothed together, so two
-    strangers who shared a name and were born a year apart came out as one row
-    holding both their register entries: 913 rows on 2026-10-07. They are
-    grouped by the register entry now, one row each, and this should not see a
-    second entry - the site still holds what earlier uploads did, though
-    (`KNOWN_CONTRADICTIONS` in `tests/pipelines/test_invariants.py`).
+    A row carrying two is two people. Where one PESEL matched both, that is
+    rejestr.io listing somebody twice, and `PeopleKRSMerged` keeps the two
+    entries two rows (`person_keys`), so it never reaches here. KRS people
+    used to be grouped by name and birth *year*, years within one of each
+    other smoothed together, so two strangers who shared a name and were born
+    a year apart came out as one row holding both their register entries: 913
+    rows on 2026-10-07. They are grouped by the register entry now, one row
+    each, and this should not see a second entry - the site still holds what
+    earlier uploads did, though (`KNOWN_CONTRADICTIONS` in
+    `tests/pipelines/test_invariants.py`).
 
     Nothing here can undo that, and taking one entry is still better than
     inventing a third: what it costs is the second person's identity, which is
@@ -1012,10 +1021,7 @@ def one_register_entry(
     ids = [str(value) for value in rejestr_ids if str(value)]
     if not ids:
         return None
-    ids.sort(key=lambda value: (0, int(value)) if value.isdigit() else (1, value))
-    if len(ids) > 1 and len(prints) == 1:
-        shared_pesel[", ".join(ids)] += 1
-        return linked if linked in ids else ids[0]
+    ids.sort(key=by_number)
     if len(ids) > 1:
         collapsed_people[", ".join(ids)] += 1
     return ids[0]
@@ -1029,13 +1035,6 @@ def report_collapsed_people() -> None:
     picked. There is no way to tell them apart from here - the register entries
     are the only evidence, and only one of them survives into the payload.
     """
-    if shared_pesel:
-        print(
-            f"{sum(shared_pesel.values())} payloads are one PESEL under several "
-            f"rejestr.io entries - rejestr.io listing one person twice - and "
-            f"carry the entry their page links, else the lowest: "
-            + "; ".join(sorted(shared_pesel))
-        )
     if two_pesels:
         print(
             f"{sum(two_pesels.values())} payloads carry two PESELs, two people "

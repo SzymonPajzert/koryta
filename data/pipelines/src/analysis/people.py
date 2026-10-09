@@ -151,8 +151,6 @@ def middle_names_agree(ours: str | None, wiki: str | None) -> bool:
 
 class PeopleMerged(Pipeline):
     filename = "people_merged"
-    # An id, with gaps: read back as a number it would come out 126307.0.
-    dtype = {"koryta_rejestrio_id": str}
 
     people_krs: PeopleKRSMerged
     people_wiki: PeopleWikiMerged
@@ -509,10 +507,6 @@ def people_merged(
             k.krs_row,
             ko.koryta_id,
             ko.full_name as koryta_name,
-            -- The register entry the page links, of the person's: one PESEL
-            -- can be two entries, rejestr.io listing one person twice, and
-            -- the payload has to name the one the page already has.
-            nullif(ko.rejestrio_id, '') as koryta_rejestrio_id,
             coalesce(ko.rejestrio_id, '') != ''
                 AND list_contains(k.rejestrio_id, ko.rejestrio_id) as by_register
         FROM krs_numbered k
@@ -572,7 +566,6 @@ def people_merged(
             kpw.*,
             km.koryta_id,
             km.koryta_name,
-            km.koryta_rejestrio_id,
         FROM krs_pkw_wiki kpw
         LEFT JOIN koryta_match km USING (krs_row)
     ),
@@ -684,7 +677,6 @@ def remove_duplicates(ctx: Context, df):
 
 class PeopleEnriched(Pipeline):
     filename = "people_enriched"
-    dtype = PeopleMerged.dtype
 
     people_merged: PeopleMerged
     companies_krs: CompaniesKRS
