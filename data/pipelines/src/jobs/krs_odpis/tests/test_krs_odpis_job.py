@@ -138,6 +138,34 @@ def test_the_gap_is_the_graphs_public_companies_with_no_odpis_on_file():
     assert [c.krs for c in everybody] == [D, B, E, F]
 
 
+def test_the_gap_asks_for_the_live_companies_before_the_struck_off_ones():
+    companies = pd.DataFrame(
+        {
+            "krs": [A, B, C, D, E, F],
+            "is_public": [True, True, True, False, False, False],
+            # The graph's order is the KRS number's, so the old companies of a
+            # state group, struck off long since, come first in it.
+            "struck_off": [True, True, False, True, False, False],
+        }
+    )
+    attempts = {B: "gateway", C: "gateway"}
+
+    gap = plan.without_odpis(companies, set(), attempts)
+
+    # The never-asked before the unanswered within each, live or struck off.
+    assert [c.krs for c in gap] == [C, A, B]
+    everybody = plan.without_odpis(companies, set(), attempts, private=True)
+    assert [c.krs for c in everybody] == [C, A, B, E, F, D]
+
+
+def test_a_graph_written_before_struck_off_existed_reads_all_live():
+    companies = pd.DataFrame({"krs": [A, B], "is_public": [True, True]})
+    as_text = companies.assign(struck_off=["False", "True"])
+
+    assert [c.krs for c in plan.without_odpis(companies, set(), {})] == [A, B]
+    assert [c.krs for c in plan.without_odpis(as_text, set(), {})] == [A, B]
+
+
 def test_the_gap_reads_a_public_flag_however_it_came_back():
     companies = pd.DataFrame({"krs": [29, "31"], "is_public": ["True", "False"]})
 

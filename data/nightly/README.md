@@ -100,14 +100,19 @@ graph's companies the bulletin named since yesterday - 57 to 70 a night from
 (`--odpis-max`) it asks for the public companies that have no odpis pełny on
 file at all (`--missing public`): a company that came into the graph after its
 last register entry is not named by the bulletin until its next one, which may
-be years off, so the bulletin alone does not bring its odpis. On 2026-10-09 that was 3,078 of the 5,298 public
-companies, about 13 nights at ~235 a night; afterwards it is whatever enters
-the graph. Among them are 402 of the 739 live companies whose only source was
-rejestr.io's historical feed. Companies never asked come first, then those
-whose last attempt got no answer; one the service said is in neither register
-is not asked again.
+be years off, so the bulletin alone does not bring its odpis. On 2026-10-09 that
+was 4,153 of the 6,612 public companies: 2,901 live and 1,252 the register has
+struck off. The live ones go first, about 13 nights at ~235 a night, with 402
+of the 739 live companies whose only source was rejestr.io's historical feed
+among them. The struck-off ones - 1,050 of them public only since the
+struck-off owner rule - follow in about 5 more: the service gives their odpis
+too, with the boards they had. In the graph's order, which is the KRS number's, they would
+have taken 130 to 184 of each of the first seven nights. Afterwards it is
+whatever enters the graph. Within each, companies never asked come first, then
+those whose last attempt got no answer; one the service said is in neither
+register is not asked again.
 
-The private companies with none on file - 10,170 more on 2026-10-09, about 43
+The private companies with none on file - 9,095 more on 2026-10-09, about 39
 nights after the public ones - wait for `--odpis-missing all`. The service slows
 down after about 1,000 documents a run, which `--odpis-max` keeps the step well
 under, gap and all. An odpis that does not come is what `krs_paid` buys

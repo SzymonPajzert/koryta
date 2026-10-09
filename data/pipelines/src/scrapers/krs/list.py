@@ -682,7 +682,21 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         output = self.build_output(hardcoded)
 
         self.check_awaiting()
-        return DataFrame.from_records([dataclasses.asdict(c) for c in output])
+        return self.frame(output)
+
+    def frame(self, output: list[KrsCompany]) -> DataFrame:
+        """The companies as written, with whether each is struck off.
+
+        `struck_off` is a column rather than a field of `Company`, which every
+        company pipeline shares: it is for what reads this output, as
+        `krs_odpis` does to ask for a live company's odpis before a struck-off
+        one's. True where rejestr.io says the register has struck the company
+        off (`struck_off_after`); `Companies` reads rows into `Company` and
+        drops it.
+        """
+        frame = DataFrame.from_records([dataclasses.asdict(c) for c in output])
+        frame["struck_off"] = [c.krs in self.struck_off for c in output]
+        return frame
 
     def check_awaiting(self):
         for k, vs in self.awaiting_relations.items():
