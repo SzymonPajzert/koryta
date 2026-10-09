@@ -1108,6 +1108,48 @@ describe("api/ingest/person", () => {
       );
     });
 
+    it("writes in the middle name the register knows and the page left out", async () => {
+      // The pipeline used to name a page with the shortest spelling the
+      // register had, and nothing wrote the rest in afterwards: 492 pages were
+      // "Antoni Sikoń" for Antoni Ignacy Sikoń on 2026-10-09.
+      personExists({ name: "Antoni Sikoń", type: "person", parties: [] });
+      mockReadBody.mockResolvedValue({
+        name: "Antoni Ignacy Sikoń",
+        companies: [],
+        elections: [],
+      });
+
+      await handler({} as any);
+
+      expect(createRevisionTransaction).toHaveBeenCalledWith(
+        mockDb,
+        expect.anything(),
+        expect.objectContaining({ uid: "test-user-id" }),
+        expect.anything(),
+        expect.objectContaining({ name: "Antoni Ignacy Sikoń" }),
+        expect.objectContaining({ automatic: true }),
+      );
+    });
+
+    it.each([
+      // The page has more than the payload: a name is never shortened.
+      ["Antoni Ignacy Sikoń", "Antoni Sikoń"],
+      // Another spelling, which may be a reviewer's.
+      ["Anna Kowalska", "Anna Maria Nowak"],
+      ["Kamil Barczyk", "KAMIL SEBASTIAN BARCZYK"],
+    ])("leaves %s alone when the payload says %s", async (stored, sent) => {
+      personExists({ name: stored, type: "person", parties: [] });
+      mockReadBody.mockResolvedValue({
+        name: sent,
+        companies: [],
+        elections: [],
+      });
+
+      await handler({} as any);
+
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+    });
+
     it("does not rewrite a birth date the node already carries", async () => {
       // A date of birth does not change, so a stored one is either right or is
       // somebody's correction of the register - and unlike `wikipedia` there is

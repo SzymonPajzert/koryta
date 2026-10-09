@@ -28,6 +28,7 @@ import pandas as pd
 
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.stores import Context
+from util.polish import adds_middle_names
 
 #: Fields a node owns rather than states, which a revision never carries. The
 #: ingest strips these off the stored document before comparing, so we do too.
@@ -453,11 +454,24 @@ class SiteSnapshot:
 
         # Filled in, never rewritten, so a payload restating a date the node
         # already carries writes nothing and must not keep the payload alive.
-        # `updatedPerson` is the only field with this rule; the rest above are
-        # last-write-wins.
+        # In `updatedPerson` this and the name below have that rule; the rest
+        # above are last-write-wins.
         birth_date = field(payload, "birthDate")
         if birth_date and not data.get("birthDate"):
             learned["birthDate"] = birth_date
+
+        # Written into, never rewritten, which is the birth date's rule again:
+        # a name that only adds middle names to the stored one is learned, and
+        # any other difference writes nothing - so it must not keep the payload
+        # either, or every page whose spelling a reviewer settled would be sent
+        # every night.
+        name, stored_name = payload.get("name"), data.get("name")
+        if (
+            isinstance(name, str)
+            and isinstance(stored_name, str)
+            and adds_middle_names(name, stored_name)
+        ):
+            learned["name"] = name
 
         return any(value != data.get(key) for key, value in learned.items())
 

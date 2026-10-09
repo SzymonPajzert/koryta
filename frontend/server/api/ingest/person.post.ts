@@ -30,6 +30,7 @@ import type {
   NodeType,
 } from "~~/shared/model";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
+import { addsMiddleNames } from "~~/shared/names";
 import {
   personRequestSchema,
   type EntityResult,
@@ -280,6 +281,18 @@ function updatedPerson(
   // next run. Leaving it alone also keeps a re-ingest from writing a revision
   // per person for a value nobody disputed.
   if (body.birthDate && !stored.birthDate) learned.birthDate = body.birthDate;
+  // Written into, never rewritten. The pipeline names a person with every given
+  // name the register knows, and a page made when it took the shortest spelling
+  // instead - "Antoni Sikoń" for Antoni Ignacy Sikoń - stayed short: 492 pages
+  // on 2026-10-09, 73 of them live. A name that only adds middle names to the
+  // stored one is taken; any other difference is not, since the stored spelling
+  // may be a reviewer's and the register's is not the better one by default.
+  if (
+    typeof stored.name === "string" &&
+    addsMiddleNames(body.name, stored.name)
+  ) {
+    learned.name = body.name;
+  }
 
   const changed = Object.entries(learned).some(
     ([key, value]) => JSON.stringify(value) !== JSON.stringify(stored[key]),
