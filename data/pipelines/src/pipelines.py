@@ -38,6 +38,7 @@ from scrapers.koryta.download import (
     KorytaEdges,
     KorytaFacts,
     KorytaNodes,
+    KorytaNotes,
     KorytaPeople,
     KorytaVotes,
 )
@@ -102,6 +103,7 @@ PIPELINES = [
     KorytaEdges,
     KorytaFacts,
     KorytaNodes,
+    KorytaNotes,
     KorytaPeople,
     KorytaPeopleCreated,
     KorytaVotes,
