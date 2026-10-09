@@ -8,7 +8,14 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from entities.company import Company, Owner, Source, Wikipedia, WikiShareholder
+from entities.company import (
+    Company,
+    Owner,
+    Source,
+    Wikipedia,
+    WikiShareholder,
+    short_name,
+)
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
@@ -257,7 +264,9 @@ class CompanyMerger:
             name = self.wiki.name
         if name is None:
             return None
-        return remove_company_suffix(name)
+        # The same shortening the register's names had in `CompaniesKRS`,
+        # where a name from an article - "Orlen S.A." - has not had it.
+        return short_name(name)
 
     @property
     def city(self) -> str | None:
@@ -503,24 +512,6 @@ def public_through_wiki_owners(
                 marked.append(child)
                 queue.append(child)
     return marked
-
-
-REMOVABLE_SUFFIXES = [
-    "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
-    "Sp. z o.o.",
-    "SPÓŁKA AKCYJNA",
-    "SA",
-    "S.A.",
-]
-
-
-def remove_company_suffix(name: str) -> str:
-    upper = name.upper()
-    for suffix in REMOVABLE_SUFFIXES:
-        if upper.endswith(suffix.upper()):
-            name = name[: -len(suffix)]
-            return name.rstrip()
-    return name
 
 
 # TODO is there a pythonic way

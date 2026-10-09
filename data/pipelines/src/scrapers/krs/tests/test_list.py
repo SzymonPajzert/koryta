@@ -372,6 +372,51 @@ def test_company_from_rejestrio_reads_the_postal_code_it_is_given():
     assert company.teryt_code == "061701"
 
 
+def test_company_from_rejestrio_shortens_the_full_name_itself():
+    """rejestr.io's `skrocona` drops whatever legal form ends the name, and
+    with it the status after it - OPOLSKA IZBA GOSPODARCZA was "OPOLSKA"."""
+    chamber = company_from_rejestrio(
+        {
+            "numery": {"krs": "0000034612"},
+            "nazwy": {"pelna": "OPOLSKA IZBA GOSPODARCZA", "skrocona": "OPOLSKA"},
+        }
+    )
+    radio = company_from_rejestrio(
+        {
+            "numery": {"krs": "0000121087"},
+            "nazwy": {
+                "pelna": 'POLSKIE RADIO - REGIONALNA ROZGŁOŚNIA W SZCZECINIE "PR '
+                'SZCZECIN" SPÓŁKA AKCYJNA W LIKWIDACJI',
+                "skrocona": 'POLSKIE RADIO - REGIONALNA ROZGŁOŚNIA W SZCZECINIE "PR '
+                'SZCZECIN"',
+            },
+        }
+    )
+    assert chamber.name == "OPOLSKA IZBA GOSPODARCZA"
+    assert radio.name == (
+        'POLSKIE RADIO - REGIONALNA ROZGŁOŚNIA W SZCZECINIE "PR SZCZECIN" W LIKWIDACJI'
+    )
+
+
+def test_company_from_rejestrio_falls_back_to_the_short_name():
+    company = company_from_rejestrio(
+        {"numery": {"krs": "0000000001"}, "nazwy": {"skrocona": "SPÓŁKA"}}
+    )
+    assert company.name == "SPÓŁKA"
+
+
+def test_company_from_api_krs_shortens_the_name_the_same_way():
+    """The same name from either source, so which crawl is read first - it is
+    rejestr.io's - does not decide what the site calls a company."""
+    data = odpis(forma="SPÓŁKA AKCYJNA", dzial3=HOSPITAL_PKD)
+    data["odpis"]["dane"]["dzial1"]["danePodmiotu"]["nazwa"] = (
+        '"PKP INTERCITY" SPÓŁKA AKCYJNA'
+    )
+    company = company_from_api_krs(NO_POSTAL_CODES, NO_TERYT, data)
+    assert company is not None
+    assert company.name == "PKP INTERCITY"
+
+
 # ─── what a hospital is told apart by ──────────────────────
 #
 # A publicly owned hospital is either an SPZOZ, whose rada społeczna sits for

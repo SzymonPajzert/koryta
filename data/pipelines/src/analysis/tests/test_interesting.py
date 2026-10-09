@@ -66,6 +66,26 @@ def test_the_merge_writes_the_companies_in_the_same_order_every_run():
     assert df["krs"].tolist() == ["0000100000", "0000200000", "0000300000"]
 
 
+@pytest.mark.parametrize("name", ["ZAKSA", "EKSTRAKLASA", "EUROREGION NYSA"])
+def test_the_merge_does_not_cut_sa_off_a_name_that_ends_in_it(name):
+    """The suffix list this replaced matched "SA" without a word boundary, so
+    the site called the volleyball club ZAKSA "ZAK"."""
+    df = merge(KrsCompany(krs="0000195237", name=name))
+
+    assert row(df, "0000195237")["name"] == name
+
+
+def test_a_name_from_an_article_loses_its_form_too():
+    # A company the register gave no name is named by its article, which
+    # writes the form the way the register never does.
+    df = merge(
+        KrsCompany(krs=ENERGA),
+        articles=[article("Energa", ENERGA, name="Energa S.A.")],
+    )
+
+    assert row(df, ENERGA)["name"] == "Energa"
+
+
 def test_a_company_takes_the_address_and_categories_of_its_own_article():
     df = merge(
         KrsCompany(krs=ENERGA, name="ENERGA SPÓŁKA AKCYJNA"),

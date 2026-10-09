@@ -1,5 +1,6 @@
 """Data classes for representing companies and KRS entities."""
 
+import re
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
@@ -27,6 +28,141 @@ class Owner:
     #: the `udziałowcy` of the company's Wikipedia article, which `Companies`
     #: falls back to only where the register names no owner at all.
     source: Literal["wiki"] | None = None
+
+
+#: The commercial company forms, spelled out, as a name in the register ends
+#: with them. Spelled loosely because the register is: "SPÓLKA AKCYJNA",
+#: "OGRANICZONA ODPOWIEDZIALNOŚCIĄ" and "KOMANDYTOWA- AKCYJNA" all occur in it.
+_COMMERCIAL_FORMS = (
+    r"(?:PROSTA\s+)?SP[ÓO][ŁL]KA\s+AKCYJNA",
+    r"SP[ÓO][ŁL]KA\s+KOMANDYTOW[OA]\s*-?\s*AKCYJNA",
+    r"SP[ÓO][ŁL]KA\s+Z\s+OGRANICZON[ĄA]\s+ODPOWIEDZIALNO[ŚS]CI[ĄA]",
+    r"SP[ÓO][ŁL]KA\s+Z\s+O\.\s*O\.?",
+    r"SP[ÓO][ŁL]KA\s+KOMANDYTOWA",
+    r"SP[ÓO][ŁL]KA\s+JAWNA",
+    r"SP[ÓO][ŁL]KA\s+PARTNERSKA",
+)
+
+#: The same, abbreviated, the way an article or a person writes them - and
+#: now and then the register, "KIELECKA GIEŁDA ROLNA S.A.".
+_ABBREVIATED_FORMS = (
+    r"SP\.\s*Z\s*O\.\s*O\.?",
+    r"SP\.\s*K\.?",
+    r"SP\.\s*J\.?",
+    r"S\.\s*K\.\s*A\.?",
+    r"S\.\s*A\.?",
+    r"SA",
+)
+
+#: One of them at the very end of a name. A form spelled out may follow a
+#: space, a dash, a comma or a closing quote - '"OKNOTAR"SPÓŁKA Z OGRANICZONĄ
+#: ODPOWIEDZIALNOŚCIĄ' is how the register spells that one. An abbreviation
+#: only a space or a comma: "AGENCJA INWESTYCYJNA CORP-SA" is a name, and
+#: "ZAKSA" a volleyball club rather than "ZAK" plus "SA".
+_TRAILING_FORM = re.compile(
+    r"(?:(?:\s*[-–—,]\s*|\s+|(?<=[\"”]))(?:"
+    + "|".join(_COMMERCIAL_FORMS)
+    + r")|(?:\s*,\s*|\s+)(?:"
+    + "|".join(_ABBREVIATED_FORMS)
+    + r"))\.?\s*$",
+    re.IGNORECASE,
+)
+
+#: What the register appends to a company being wound up: part of its name for
+#: as long as that lasts (KSH art. 274), and worth a reader's knowing.
+_TRAILING_STATUS = re.compile(
+    r"(?:\s*[-–—,]\s*|\s+|(?<=[\"”]))(?P<quoted>[\"„”]\s*)?"
+    r"(?P<status>W\s+(?:LIKWIDACJI|RESTRUKTURYZACJI"
+    r"|UPAD[ŁL]O[ŚS]CI(?:\s+(?:LIKWIDACYJNEJ|UK[ŁL]ADOWEJ))?))"
+    r"(?(quoted)[\"”])\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _nested(text: str, opening: str, closing: str) -> bool:
+    """Whether the quotes in `text` open and close in pairs.
+
+    One character can open and close, as '"' does, so a quote after a space
+    (or at the start) is read as opening one and any other as closing one."""
+    depth = 0
+    for i, char in enumerate(text):
+        if opening == closing == char:
+            if i == 0 or text[i - 1].isspace() or text[i - 1] in "(-":
+                depth += 1
+            else:
+                depth -= 1
+        elif char == opening:
+            depth += 1
+        elif char == closing:
+            depth -= 1
+        if depth < 0:
+            return False
+    return depth == 0
+
+
+#: Quotes that wrap a whole name, opening and closing.
+_QUOTES = (('"', '"'), ("„", "”"), ("„", '"'), (",,", "''"))
+
+
+def _unquoted(name: str) -> str:
+    """The name inside one pair of quotes that wraps all of it, else the name.
+
+    '"PKP INTERCITY"' is PKP INTERCITY, and '"PRZEDSIĘBIORSTWO KOMUNALNE
+    "SANIKOM""' is PRZEDSIĘBIORSTWO KOMUNALNE "SANIKOM", but '"KZN" -
+    "LUBUSKIE"' is two quoted words and stays as it is."""
+    for opening, closing in _QUOTES:
+        if not (name.startswith(opening) and name.endswith(closing)):
+            continue
+        inner = name[len(opening) : len(name) - len(closing)].strip()
+        if inner and _nested(inner, '"', '"') and _nested(inner, "„", "”"):
+            return inner
+    return name
+
+
+def short_name(name: str | None) -> str | None:
+    """A company's registered name, without the commercial form it ends with.
+
+    "ORLEN SPÓŁKA AKCYJNA" is ORLEN, and "PKP INTERCITY" SPÓŁKA AKCYJNA is PKP
+    INTERCITY: the form is a suffix the register requires and a reader does not
+    need, and the quotes are the register's way of setting a name off from it.
+
+    Only the commercial forms go. rejestr.io's own short name drops whatever
+    the register files as the legal form, wherever it is the end of the name,
+    and that is the noun of a good many names: OPOLSKA IZBA GOSPODARCZA came
+    out as "OPOLSKA", KRAJOWA IZBA GOSPODARCZA as "KRAJOWA", POWIATOWY
+    SAMODZIELNY PUBLICZNY ZAKŁAD OPIEKI ZDROWOTNEJ as "POWIATOWY". A chamber,
+    a foundation, an association or an SPZOZ keeps its whole name here.
+
+    It also dropped the status, and that is kept. "W LIKWIDACJI" is part of a
+    name for as long as the company is being wound up, and the one thing on a
+    page that says so: POLSKIE RADIO - REGIONALNA ROZGŁOŚNIA W SZCZECINIE "PR
+    SZCZECIN" SPÓŁKA AKCYJNA W LIKWIDACJI is "... "PR SZCZECIN" W LIKWIDACJI".
+
+    Whitespace is collapsed, since the register breaks long names over lines.
+    A name that would be left empty is returned whole.
+    """
+    if not name:
+        return name
+    base = " ".join(name.split())
+    statuses: list[str] = []
+    while True:
+        before = base
+        while (status := _TRAILING_STATUS.search(base)) and base[
+            : status.start()
+        ].strip():
+            statuses.insert(0, " ".join(status["status"].split()))
+            base = base[: status.start()].strip()
+        # Not when what is left ends in a status of its own: in "TARASY
+        # OSIEDLE SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ W LIKWIDACJI SPÓŁKA
+        # KOMANDYTOWA" it is the partner being wound up, not the company.
+        if (form := _TRAILING_FORM.search(base)) and (
+            rest := base[: form.start()].strip()
+        ):
+            if not _TRAILING_STATUS.search(rest):
+                base = rest
+        base = _unquoted(base)
+        if base == before:
+            return " ".join([base, *statuses])
 
 
 def display_name(name: str | None, city: str | None) -> str | None:
