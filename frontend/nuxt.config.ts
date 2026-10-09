@@ -154,6 +154,8 @@ export default defineNuxtConfig({
       "/plik",
       // Signed-in only, and it names contributors next to what they did.
       "/aktywnosc",
+      // Reached from a campaign's footer, with the reader's token in the link.
+      "/wypisz",
       // Renders nothing server-side (the whole template is <ClientOnly>), so it
       // has no indexable content to lose, and every entity URL 301s into it
       // with its own ?krs=/?teryt=. That is the bulk of the crawl budget.
@@ -364,6 +366,10 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { swr: 3600 },
     "/admin/**": { ssr: false },
+    // The link carries the reader's unsubscribe token. Rendered in the browser
+    // only, so no HTML with a token in it is ever built where a cache could
+    // keep it.
+    "/wypisz": { ssr: false },
 
     // `/lista` was removed in "Remove /lista, and point what linked to it at
     // the table", and 404ed from then on - but it kept ranking. Search Console

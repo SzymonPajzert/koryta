@@ -209,6 +209,23 @@ export const GOALS = {
     props: [],
   },
 
+  // --- Mail ------------------------------------------------------------
+  // The one-time question signed-in readers are asked about campaign mail.
+  // With `utm_campaign` on every link inside a campaign, these say whether the
+  // list grows and whether mail brings anybody back.
+  "mail-prompt:shown": {
+    description:
+      "A signed-in reader who never answered was asked whether they want mail from the site. The denominator for `mail-prompt:answer`.",
+    props: [],
+    // Shown because a page loaded, not because the reader did anything.
+    passive: true,
+  },
+  "mail-prompt:answer": {
+    description:
+      "Reader answered the mail question. `answer` is `yes` or `no`.",
+    props: ["answer"],
+  },
+
   // --- Experiments -------------------------------------------------------
   "experiment:assigned": {
     description:

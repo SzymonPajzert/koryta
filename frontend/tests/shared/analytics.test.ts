@@ -58,6 +58,7 @@ describe("the goal vocabulary", () => {
     expect(passive).toEqual([
       "cta:shown",
       "experiment:assigned",
+      "mail-prompt:shown",
       "tabela:no-results",
       "tabela:open",
     ]);

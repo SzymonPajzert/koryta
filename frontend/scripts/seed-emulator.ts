@@ -276,6 +276,16 @@ async function seedDatabase() {
     batch.set(ref, { ...fact, createdAt: new Date(fact.createdAt) });
   }
 
+  // The seeded reader has answered the mail question already - no to both
+  // topics - so the one-time prompt signed-in readers are asked it in
+  // (components/mail/OptInPrompt.vue) stays out of every screenshot and spec
+  // that signs in as them. mail_campaign.spec.ts asks a fresh account instead.
+  batch.set(
+    db.collection("users").doc("test-user"),
+    { newsletter: { callsToAction: false, recentPeople: false } },
+    { merge: true },
+  );
+
   await batch.commit();
   console.log("Database seeded successfully!");
 

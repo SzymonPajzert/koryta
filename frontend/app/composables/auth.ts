@@ -13,18 +13,19 @@ import {
 } from "vuefire";
 import { collection, doc, getFirestore } from "firebase/firestore";
 import type { NotificationPreferences } from "~~/shared/notifications";
+import type { CampaignTopic } from "~~/shared/campaigns";
 
-export type NewsletterPreferences = {
-  /** Notify about recently found people. */
-  recentPeople?: boolean;
-  /** Notify about calls to action. */
-  callsToAction?: boolean;
-};
+/** Which campaign topics a reader asked for - see `shared/campaigns.ts`.
+ * Absent means never asked, which is no. */
+export type NewsletterPreferences = Partial<Record<CampaignTopic, boolean>>;
 
 export type UserConfig = {
   photoURL?: string;
   displayName?: string;
   newsletter?: NewsletterPreferences;
+  /** Administrators only: campaigns sent to the team, which reach them
+   * without a newsletter topic. Absent means yes. */
+  teamMail?: boolean;
   /** Mail about what happened to this user's own contributions. Separate from
    * `newsletter`, which is broadcast to whoever asked for it: these default to
    * on and are read by the server before it queues anything. */
