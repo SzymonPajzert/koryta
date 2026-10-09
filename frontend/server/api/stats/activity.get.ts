@@ -2,25 +2,14 @@ import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getOptionalUser } from "~~/server/utils/auth";
-import { collectActivityEvents } from "~~/server/utils/activityEvents";
 import {
   identify,
   readPublicProfiles,
   type ContributorIdentity,
 } from "~~/server/utils/contributors";
-import {
-  dayStartIso,
-  ensureDailyRollups,
-  mergeRollups,
-  mergeTruncated,
-  rollupForDay,
-  splitSettledDays,
-  type DailyRollup,
-} from "~~/server/utils/activityRollup";
-import {
-  daysBetween,
-  type ActivityAggregate,
-} from "~~/server/utils/activityStats";
+import { mergeRollups, mergeTruncated } from "~~/server/utils/activityRollup";
+import { loadActivityRollups } from "~~/server/utils/activityWindow";
+import type { ActivityAggregate } from "~~/server/utils/activityStats";
 import {
   activityRanges,
   defaultActivityRange,
@@ -231,40 +220,8 @@ function present(
  */
 const cachedWindow = defineCachedFunction(
   async (days: number): Promise<WindowedActivity> => {
-    const until = new Date();
-    const since = new Date(until);
-    since.setUTCDate(since.getUTCDate() - (days - 1));
-    since.setUTCHours(0, 0, 0, 0);
-
-    const window = {
-      since: since.toISOString().slice(0, 10),
-      until: until.toISOString().slice(0, 10),
-      days,
-    };
-
     const db = getFirestore("koryta-pl");
-
-    // A settled day is counted once and kept; the tail of the window is read
-    // live, because a vote stamped by a slow browser clock can still land in it.
-    // `daysBetween` ends on `until`, which is today, so `live` is never empty.
-    const spanned = daysBetween(window.since, window.until);
-    const { settled, live } = splitSettledDays(spanned, until);
-    const [past, current] = await Promise.all([
-      ensureDailyRollups(db, settled),
-      collectActivityEvents(db, {
-        sinceIso: dayStartIso(live[0] ?? window.until),
-      }),
-    ]);
-
-    // One scan covers every live day; `rollupForDay` keeps only the events that
-    // fall on the day it is given, so handing it the same list per day is what
-    // splits them.
-    const rollups: DailyRollup[] = [
-      ...past,
-      ...live.map((day) =>
-        rollupForDay(day, current.events, current.truncated),
-      ),
-    ];
+    const { window, spanned, rollups } = await loadActivityRollups(db, days);
 
     const aggregate = mergeRollups(spanned, rollups);
     const ranked = aggregate.contributors.slice(0, LEADERBOARD_SIZE);
