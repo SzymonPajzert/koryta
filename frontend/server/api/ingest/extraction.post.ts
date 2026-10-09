@@ -3,7 +3,7 @@ import { logger } from "firebase-functions/logger";
 import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
 import type { ExtractionFact } from "~~/shared/model";
-import { normalizePersonName } from "~~/shared/names";
+import { normalizePersonName, personNameKeys } from "~~/shared/names";
 import { normalizeUrl } from "~~/shared/url";
 import { z } from "zod";
 
@@ -257,11 +257,16 @@ async function readPeople(
   return people;
 }
 
-/** One article's confirmed people, keyed by their normalized name.
+/** One article's confirmed people, keyed by the names a fact may call them.
  *
- * A name that two of them share is dropped rather than guessed at: the whole
+ * Each under their whole name and the shorter ones an article uses for a name
+ * with a middle one in it (`personNameKeys`): a fact about Antoni Ignacy Sikoń
+ * says "Antoni Sikoń".
+ *
+ * A key that two of them share is dropped rather than guessed at: the whole
  * point of the flag on the card is that a namesake is easy to match wrongly, so
- * a case we already know is ambiguous should not be asserted at all.
+ * a case we already know is ambiguous should not be asserted at all. That
+ * includes a page named "Jan Kowalski" beside one named "Jan Maria Kowalski".
  */
 function matchPeopleByName(
   korytaIds: string[] | undefined,
@@ -272,10 +277,10 @@ function matchPeopleByName(
   for (const id of korytaIds ?? []) {
     const person = peopleById.get(id);
     if (!person) continue;
-    const key = normalizePersonName(person.name);
-    if (!key) continue;
-    if (byName.has(key) && byName.get(key)!.id !== id) ambiguous.add(key);
-    byName.set(key, person);
+    for (const key of personNameKeys(person.name)) {
+      if (byName.has(key) && byName.get(key)!.id !== id) ambiguous.add(key);
+      byName.set(key, person);
+    }
   }
   for (const key of ambiguous) byName.delete(key);
   return byName;

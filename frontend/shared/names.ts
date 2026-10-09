@@ -56,3 +56,30 @@ export function addsMiddleNames(full: string, short: string): boolean {
   if (kept < shorter.length) return false;
   return !added.some((word) => word === shorter[0] || word === shorter.at(-1));
 }
+
+/** The keys a fact's spelling of a person may meet their page's name under.
+ *
+ * A page carries every given name the register knows, and an article almost
+ * never does: it writes "Antoni Sikoń" about Antoni Ignacy Sikoń, and matched
+ * on the whole name alone the fact was left off his page. So besides the whole
+ * name, the name without its second word - "Urszula Lucyna Wach Górny" is
+ * Urszula Wach Górny in print, a double surname written with a space - and
+ * the first word with the last.
+ *
+ * Loose, and only where looseness is safe: the keys are compared against the
+ * handful of people a matcher has already confirmed an article is about, and
+ * a key two of them share names neither (`matchPeopleByName`). Words are taken
+ * as they are spaced, so a hyphenated surname is never cut in half.
+ *
+ * `_person_name_keys` in the article pipeline is the same rule, so a fact the
+ * pipeline keeps as matched is one this links.
+ */
+export function personNameKeys(name: string): string[] {
+  const words = name.split(/\s+/).filter(Boolean);
+  const spellings = [name];
+  if (words.length > 2) {
+    spellings.push([words[0], ...words.slice(2)].join(" "));
+    spellings.push([words[0], words.at(-1)].join(" "));
+  }
+  return [...new Set(spellings.map(normalizePersonName))].filter(Boolean);
+}

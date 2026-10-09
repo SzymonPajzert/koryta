@@ -415,6 +415,107 @@ describe("api/ingest/extraction", () => {
       expect(mockBatchSet.mock.calls[0]![1]).not.toHaveProperty("personNodeId");
     });
 
+    it("links a fact that leaves out the middle name the page carries", async () => {
+      // The page has every given name the register knows; the article, as
+      // articles do, has two of them.
+      personNodes.set("sikon-id", {
+        name: "Antoni Ignacy Sikoń",
+        type: "person",
+      });
+      personNodes.set("wach-id", {
+        name: "Urszula Lucyna Wach Górny",
+        type: "person",
+      });
+      mockReadBody.mockResolvedValue({
+        articles: [
+          {
+            url: "example.com/a",
+            domain: "example.com",
+            title: null,
+            publication_date: null,
+            tag: "v26",
+            koryta_ids: ["sikon-id", "wach-id"],
+            extracted_facts: [
+              {
+                url: "example.com/a",
+                justification: "prezes Antoni Sikoń",
+                fact_type: "employment",
+                person: "Antoni Sikoń",
+                organization: "Orlen",
+              },
+              {
+                url: "example.com/a",
+                justification: "radna Urszula Wach-Górny",
+                fact_type: "employment",
+                person: "Urszula Wach-Górny",
+                organization: "Rada Miasta",
+              },
+            ],
+          },
+        ],
+      });
+
+      await handler({} as any);
+
+      expect(mockBatchSet).toHaveBeenNthCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({
+          personNodeId: "sikon-id",
+          personNodeName: "Antoni Ignacy Sikoń",
+        }),
+      );
+      expect(mockBatchSet).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        expect.objectContaining({ personNodeId: "wach-id" }),
+      );
+    });
+
+    it("asserts nothing when the short name is another confirmed person's too", async () => {
+      personNodes.set("kowalski-a", { name: "Jan Kowalski", type: "person" });
+      personNodes.set("kowalski-b", {
+        name: "Jan Maria Kowalski",
+        type: "person",
+      });
+      mockReadBody.mockResolvedValue({
+        articles: [
+          {
+            url: "example.com/a",
+            domain: "example.com",
+            title: null,
+            publication_date: null,
+            tag: "v26",
+            koryta_ids: ["kowalski-a", "kowalski-b"],
+            extracted_facts: [
+              {
+                url: "example.com/a",
+                justification: "bo tak",
+                fact_type: "employment",
+                person: "Jan Kowalski",
+                organization: "Orlen",
+              },
+              {
+                url: "example.com/a",
+                justification: "bo tak",
+                fact_type: "employment",
+                person: "Jan Maria Kowalski",
+                organization: "Orlen",
+              },
+            ],
+          },
+        ],
+      });
+
+      await handler({} as any);
+
+      expect(mockBatchSet.mock.calls[0]![1]).not.toHaveProperty("personNodeId");
+      // The whole name still says which of the two it is.
+      expect(mockBatchSet.mock.calls[1]![1]).toEqual(
+        expect.objectContaining({ personNodeId: "kowalski-b" }),
+      );
+    });
+
     it("ignores an id that is not a person", async () => {
       personNodes.set("orlen-id", { name: "Jan Kowalski", type: "place" });
       mockReadBody.mockResolvedValue({
