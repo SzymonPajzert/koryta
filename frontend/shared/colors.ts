@@ -228,6 +228,8 @@ export const email = {
   text: "#1c1c1c",
   rule: "#e0e0e0",
   muted: "#666666",
+  /** The box a campaign puts its numbers in. */
+  panel: "#f3f6f2",
 } as const;
 
 /**
