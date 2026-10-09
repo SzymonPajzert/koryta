@@ -74,6 +74,7 @@ column headers interleave with the data at arbitrary points, including inside a
 person's block -- so they are dropped by matching, not by position.
 """
 
+import datetime
 import io
 import re
 import typing
@@ -258,7 +259,8 @@ class OdpisPerson:
     funkcja: str | None
     #: Decoded from the PESEL. The number itself is deliberately *not* a field
     #: here -- it is read, decoded and dropped inside `parse_people`, so a
-    #: record cannot carry it even by accident.
+    #: record cannot carry it even by accident. For somebody the register holds
+    #: no PESEL for, the day it prints in its place (`printed_birth_date`).
     birth_date: str | None
     sex: str | None
     #: HMAC of the PESEL under the caller's key, or None when no key was
@@ -579,6 +581,31 @@ def _identifier(value: str) -> tuple[str | None, bool]:
     return None, False
 
 
+#: A day as the register prints one: ``05.11.1967``.
+_PRINTED_DAY_RE = re.compile(r"(?<!\d)(\d{2})\.(\d{2})\.(\d{4})(?!\d)")
+
+
+def printed_birth_date(value: str) -> str | None:
+    """The birth date the identifier field prints in place of a PESEL, ISO.
+
+    The label says it: "Numer PESEL lub data urodzenia". Somebody the register
+    holds no PESEL for -- a foreign national, mostly -- is written
+    ``------, 05.11.1967``, and somebody it holds neither for is ``------``:
+    in the 12,082 odpisy cached on 2026-10-09, 583 values the first way and
+    8,722 the second. Day first, as Polish dates are written: of the 10 people
+    printed this way whose name and year also come with a PESEL, 8 print the
+    day it decodes to, 1 the day and month swapped and 1 another day. A day
+    that is not a real one is None, as a PESEL encoding one is.
+    """
+    match = _PRINTED_DAY_RE.search(value)
+    if match is None:
+        return None
+    try:
+        return datetime.date(int(match[3]), int(match[2]), int(match[1])).isoformat()
+    except ValueError:
+        return None
+
+
 def _fingerprint(
     pesel: str | None, salt: str | None, sink: dict[str, str] | None
 ) -> str | None:
@@ -682,6 +709,12 @@ def parse_people(
                 _identifier(identifier.value) if identifier else (None, False)
             )
             facts = pesel_util.facts(pesel)
+            if facts is not None:
+                birth_date: str | None = facts.birth_date
+            elif pesel is None and not is_company and identifier is not None:
+                birth_date = printed_birth_date(identifier.value)
+            else:
+                birth_date = None
 
             given_group = current.get("given")
             given = given_group.effective if given_group else None
@@ -708,7 +741,7 @@ def parse_people(
                         salt,
                         pesel_sink,
                     ),
-                    birth_date=facts.birth_date if facts else None,
+                    birth_date=birth_date,
                     sex=facts.sex if facts else None,
                     pesel_fingerprint=_fingerprint(pesel, salt, pesel_sink),
                     has_pesel=pesel is not None,

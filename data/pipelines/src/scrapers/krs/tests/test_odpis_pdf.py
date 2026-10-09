@@ -401,6 +401,64 @@ def test_a_seat_held_by_a_body_has_a_regon_and_no_birth_date(people):
     assert shareholder.sex is None
 
 
+def foreign_board(identifier: str) -> str:
+    """A board of one, whose identifier field reads `identifier`."""
+    return f"""
+Dział 2
+Rubryka 1 ­ Organ uprawniony do reprezentacji podmiotu
+1
+1.Nazwa organu uprawnionego do
+reprezentowania podmiotu
+1
+-
+ZARZĄD
+Podrubryka 1
+Dane osób wchodzących w skład organu
+1
+1.Nazwisko / Nazwa lub Firma
+4
+-
+DEMETER BUBALO
+2.Imiona
+4
+-
+ZDRAVKA
+3.Numer PESEL/REGON lub data
+urodzenia
+4
+-
+{identifier}
+5.Funkcja w organie
+reprezentującym
+4
+-
+PREZES ZARZĄDU
+"""
+
+
+def test_without_a_pesel_the_register_prints_the_birth_date_in_its_place():
+    """The label says so: "Numer PESEL lub data urodzenia". A foreign director
+    has no PESEL, and the date is all there is to tell two of them apart."""
+    [person] = parse_people(foreign_board("------, 05.11.1967"), krs="1", salt="s")
+    assert person.birth_date == "1967-11-05"
+    assert not person.has_pesel
+    assert not person.is_company
+    assert person.sex is None
+    assert person.pesel_fingerprint is None
+
+
+def test_the_wrapped_label_left_in_the_value_does_not_hide_the_date():
+    [person] = parse_people(foreign_board("------, 05.11.1967 urodzenia"), krs="1")
+    assert person.birth_date == "1967-11-05"
+
+
+@pytest.mark.parametrize("identifier", ["------", "------, 31.02.1967", ""])
+def test_neither_a_pesel_nor_a_real_day_is_no_birth_date(identifier):
+    [person] = parse_people(foreign_board(identifier), krs="1")
+    assert person.birth_date is None
+    assert not person.has_pesel
+
+
 def test_no_pesel_is_ever_carried_on_the_record(people):
     """The decode happens in memory; the number must not survive it."""
     for person in people:
