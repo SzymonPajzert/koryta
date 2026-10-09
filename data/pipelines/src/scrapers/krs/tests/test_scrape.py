@@ -1,6 +1,7 @@
 from datetime import date
 
 import pandas as pd
+import pytest
 
 from entities.company import KRS
 from entities.person import RejestrIOKey
@@ -21,6 +22,8 @@ from scrapers.krs.scrape import (
     cost_breakdown,
     filter_paid_by_people_changes,
     leave_to_the_odpis,
+    linked_entry,
+    misnamed_links,
     save_org_connections,
     told_by_the_odpis,
 )
@@ -536,3 +539,134 @@ def test_the_queue_reads_what_the_site_takes_from_an_odpis():
     )
 
     assert scraper.companies_told_by_the_odpis(None) == {"0000000029"}  # type: ignore[arg-type]
+
+
+def _people(pages, votes, krs_people=(), merged=()):
+    """`people_to_scrape` over these pages, votes and register rows, as the
+    entries it queues."""
+    scraper = ScrapeRejestrIO()
+    scraper.__dict__["hardcoded_people"] = _Frame(pd.DataFrame(columns=["id"]))
+    scraper.__dict__["koryta_people"] = _Frame(
+        pd.DataFrame(pages, columns=["id", "full_name", "rejestrIo"])
+    )
+    scraper.__dict__["koryta_votes"] = _Frame(
+        pd.DataFrame(votes, columns=["person_koryta_id", "interesting"])
+    )
+    scraper.__dict__["people"] = _Frame(
+        pd.DataFrame(krs_people, columns=["id", "full_name"])
+    )
+    scraper.__dict__["people_all"] = _Frame(
+        pd.DataFrame(merged, columns=["koryta_name", "rejestrio_id"])
+    )
+    queued = scraper.people_to_scrape(None)  # type: ignore[arg-type]
+    return scraper, {str(person.id) for person in queued}
+
+
+OWCZAREKS = [
+    ("270186", "Krzysztof Owczarek"),
+    ("395543", "Krzysztof Owczarek"),
+    ("688265", "Krzysztof Owczarek"),
+]
+
+
+def test_a_vote_buys_the_entry_the_page_links_and_none_of_its_namesakes():
+    """One vote on Krzysztof Owczarek's page bought four Krzysztof Owczareks."""
+    scraper, queued = _people(
+        pages=[("page", "Krzysztof Owczarek", "https://rejestr.io/osoby/270186")],
+        votes=[("page", 1)],
+        krs_people=OWCZAREKS,
+        merged=[("Krzysztof Owczarek", ["395543"])],
+    )
+
+    assert queued == {"270186"}
+    assert scraper.person_reasons == {"270186": {REASON_INTERESTING_PERSON}}
+
+
+def test_a_page_without_a_link_is_still_matched_by_name():
+    """The name is all it has, so every namesake goes to a reviewer."""
+    _, queued = _people(
+        pages=[("page", "Krzysztof Owczarek", None)],
+        votes=[("page", 1)],
+        krs_people=OWCZAREKS,
+    )
+
+    assert queued == {"270186", "395543", "688265"}
+
+
+def test_a_page_spelling_a_middle_name_still_gets_the_entry_it_links():
+    """The register writes "Bartosz Polaczek", so a name match found nobody."""
+    _, queued = _people(
+        pages=[
+            (
+                "page",
+                "Bartosz Miłosz Polaczek",
+                "https://rejestr.io/osoby/1509017",
+            )
+        ],
+        votes=[("page", 1)],
+        krs_people=[("1509017", "Bartosz Polaczek")],
+    )
+
+    assert queued == {"1509017"}
+
+
+def test_only_a_vote_for_interesting_buys_anything():
+    _, queued = _people(
+        pages=[("page", "Krzysztof Owczarek", "https://rejestr.io/osoby/270186")],
+        votes=[("page", 0), ("a page the export lacks", 1)],
+        krs_people=OWCZAREKS,
+    )
+
+    assert queued == set()
+
+
+@pytest.mark.parametrize(
+    ("link", "entry"),
+    [
+        ("https://rejestr.io/osoby/270186", "270186"),
+        ("https://rejestr.io/osoby/270186/", "270186"),
+        ("https://rejestr.io/osoby/270186/krzysztof-owczarek", "270186"),
+        ("https://rejestr.io/krs/0000012345", None),
+        ("", None),
+        (None, None),
+        (float("nan"), None),
+    ],
+)
+def test_the_entry_a_link_names(link, entry):
+    assert linked_entry(link) == entry
+
+
+@pytest.mark.parametrize(
+    ("page", "registered"),
+    [
+        ("Tomasz Jerzy Kotajny", "Tomasz Kotajny"),  # a middle name
+        ("Igor Radziewicz Winnicki", "IGOR RADZIEWICZ WINNICKI"),  # capitals
+        ("Barbara Misterska-Dragan", "Barbara Misterska Dragan"),  # a hyphen
+        ("Grzegorz Gwóźdź", "Grzegorz Gwozdz"),  # no Polish letters
+    ],
+)
+def test_a_name_written_otherwise_is_not_another_name(page, registered):
+    linked = {"1": {"id": "page", "full_name": page}}
+
+    assert misnamed_links(linked, {"1": [registered]}) == []
+
+
+def test_a_link_to_another_name_is_bought_as_linked_and_named_in_the_log(capsys):
+    """A wrong link is a reviewer's to fix; buying its namesakes would not."""
+    _, queued = _people(
+        pages=[("page", "Krzysztof Owczarek", "https://rejestr.io/osoby/999")],
+        votes=[("page", 1)],
+        krs_people=[*OWCZAREKS, ("999", "Adam Nowak")],
+    )
+
+    assert queued == {"999"}
+    assert (
+        "Krzysztof Owczarek (page page) links rejestr.io/osoby/999: Adam Nowak"
+        in capsys.readouterr().out
+    )
+
+
+def test_an_entry_the_register_rows_lack_has_no_name_to_disagree_with():
+    linked = {"1124887": {"id": "page", "full_name": "Janusz Pancerz"}}
+
+    assert misnamed_links(linked, {}) == []
