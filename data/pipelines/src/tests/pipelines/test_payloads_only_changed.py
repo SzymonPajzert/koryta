@@ -137,14 +137,41 @@ def test_a_person_the_site_does_not_have_is_kept():
 def test_a_new_spelling_of_a_stored_person_is_not_a_new_person():
     """The name is not the identity, and this is the whole duplicate bug.
 
-    The pipeline picks a name out of a `list_distinct` whose order is a hash, so
-    one human is "Andrzej Golimont" one run and "Andrzej Marcin Golimont" the
-    next. Reading the second as somebody new is what filed 170 people under two
-    pages each; the register entry is what says they are one.
+    The pipeline picked a name out of a `list_distinct` whose order is a hash,
+    so one human was "Andrzej Golimont" one run and "Andrzej Marcin Golimont"
+    the next. Reading the second as somebody new is what filed 170 people under
+    two pages each; the register entry is what says they are one. The most a
+    fuller spelling does to the page is give it the middle name.
     """
     snapshot = SiteSnapshot(nodes(), edges())
 
-    assert snapshot.changes(payload(name="Jan Marek Kowalski")) == []
+    assert snapshot.changes(payload(name="Jan Marek Kowalski")) == [PERSON_FIELDS]
+    assert snapshot.changes(payload(name="Jan Kowalsky")) == []
+
+
+def test_a_middle_name_the_page_left_out_is_kept():
+    """`updatedPerson` writes it in: 492 pages were made from the short form
+    of a name the register also spells in full."""
+    snapshot = SiteSnapshot(nodes(person={"name": "Antoni Sikoń"}), edges())
+
+    assert snapshot.changes(payload(name="Antoni Ignacy Sikoń")) == [PERSON_FIELDS]
+
+
+@pytest.mark.parametrize(
+    ("stored", "sent"),
+    [
+        # The page has more than the payload; a name is never shortened.
+        ("Antoni Ignacy Sikoń", "Antoni Sikoń"),
+        # Another spelling, which `updatedPerson` leaves to whoever wrote the
+        # page's - and which would otherwise keep the payload every night.
+        ("Anna Kowalska", "Anna Maria Nowak"),
+        ("Kamil Barczyk", "KAMIL SEBASTIAN BARCZYK"),
+    ],
+)
+def test_a_name_the_ingest_would_not_take_is_dropped(stored, sent):
+    snapshot = SiteSnapshot(nodes(person={"name": stored}), edges())
+
+    assert snapshot.changes(payload(name=sent)) == []
 
 
 def test_a_namesake_with_another_register_entry_is_a_new_person():

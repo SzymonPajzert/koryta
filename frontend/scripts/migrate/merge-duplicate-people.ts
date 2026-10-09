@@ -215,11 +215,11 @@ function nameLength(doc: QueryDocumentSnapshot): number {
  *      dry run has to name the same survivor the real run will, or reading the
  *      dry run proves nothing.
  *
- * Note that this decides which page *survives*, not what it ends up called: an
- * existing page is never renamed by an upload, so preferring the longer name
- * here keeps the register's fuller spelling, while `canonical_name` in the
- * pipeline gives a *new* page the shorter one. The two are about different
- * pages and do not have to agree.
+ * Note that this decides which page *survives*, not what it ends up called.
+ * The two agree anyway: `canonical_name` in the pipeline names a page with the
+ * fullest spelling the register has, and an upload renames an existing page
+ * only to write such a middle name in (`updatedPerson`) - so preferring the
+ * longer name here keeps the spelling the pipeline would have chosen.
  */
 function pickSurvivor(group: Candidate[]): Candidate {
   const published = group.filter((c) => pageIsPublic(c.doc.data()));
