@@ -302,6 +302,21 @@ def merge_people(ctx, krs: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def test_people_merged_never_prints_a_pesel_fingerprint(ctx, capsys):
+    """It prints a sample of every input, and the KRS people now carry their
+    salted PESEL - which no log line may show."""
+    printed = "f" * 32
+    krs = merge(
+        ctx, [{**post(None, "Jan", "Nowak", "", A), "pesel_fingerprint": printed}]
+    )
+    assert list(krs["pesel_fingerprint"][0]) == [printed]
+
+    merged = merge_people(ctx, krs)
+
+    assert printed not in capsys.readouterr().out
+    assert list(merged["pesel_fingerprint"][0]) == [printed]
+
+
 def test_people_merged_keeps_two_entries_with_one_name_and_birth_year(ctx):
     """`unique_krs` kept one row per name and birth year: of the two Tomasz
     Sikoras born in 1973 under one name, it dropped one."""

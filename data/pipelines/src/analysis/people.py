@@ -10,6 +10,7 @@ from analysis.people_wiki_merged import PeopleWikiMerged
 from analysis.utils import read_enriched
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
+from scrapers.krs.odpis_people import NEVER_SHOWN
 from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, LocalFile, Pipeline
 
@@ -211,7 +212,8 @@ def people_merged(
         "first_name_freq_table",
     ]:
         print(f"{table}: {con.sql(f'SELECT COUNT(*) FROM {table}').fetchall()}")
-        print(con.sql(f"SELECT * FROM {table} LIMIT 10").df())
+        sample = con.sql(f"SELECT * FROM {table} LIMIT 10").df()
+        print(sample.drop(columns=list(NEVER_SHOWN), errors="ignore"))
         print("\n\n")
 
     print("--- Running the long running query ---")
