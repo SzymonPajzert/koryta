@@ -27,7 +27,7 @@ from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.columns import is_public
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
-from util.polish import format_person_name
+from util.polish import adds_middle_names, format_person_name
 
 #: How many unrecognised committees to name when reporting what the party
 #: mapping is missing. Enough to act on, short enough to read.
@@ -705,24 +705,43 @@ def canonical_name(values: typing.Iterable) -> str | None:
     the next, and so how he became two pages. 7,026 register ids carry two
     spellings differing by exactly that middle name.
 
-    Ordered rather than picked, and by what makes a readable page rather than by
-    the string alone:
+    So the spellings alone decide, never their order:
 
-    1. fewest words - the short form, which is what the press, PKW and
-       Wikipedia use, and what somebody searching types;
-    2. not written in capitals - the register shouts about 14 of these
-       ("GRZEGORZ GWOZDZ"), and a bare sort would prefer the shouting because
-       capitals sort first;
-    3. lexical, so the tie has an answer at all.
+    1. the short form, to start from: the fewest words, then not in capitals -
+       the register shouts about 14 of these ("GRZEGORZ GWOZDZ"), and a bare
+       sort would prefer them because capitals sort first - then the alphabet;
+    2. then the fullest spelling that only writes given names into it
+       (`adds_middle_names`, case aside): "Andrzej Marcin Golimont" over
+       "Andrzej Golimont", and the most of them where there are several.
 
-    An existing page is never renamed by an upload - `updatedPerson` does not
-    touch `name` - so this decides what a *new* page is called, and settles it
-    the same way every run.
+    The page carries the whole name wherever the register knows it. Where there
+    is no room for it - a label on the graph - the site shortens it as it draws
+    (`shortPersonName` in `frontend/shared/names.ts`), and a search finds a
+    person past their middle name. This used to stop at step 1, so a page
+    made from the short form never learned the middle name, the one thing
+    that tells two namesakes apart: 5,519 of the 138,693 payloads of
+    2026-10-09 come out fuller by step 2.
+
+    Starting from the short form keeps the rest of the choice where it was: a
+    spelling with another surname - a maiden name, a typo - is never taken for
+    being longer, so step 2 changes no surname and no first name.
+
+    An existing page is renamed by an upload only to write a middle name into
+    it (`updatedPerson`), so this decides what a new page is called and what an
+    existing one can grow into, the same way every run.
     """
     names = [str(value).strip() for value in values if str(value).strip()]
     if not names:
         return None
-    return min(names, key=lambda name: (len(name.split()), name.isupper(), name))
+    short = min(names, key=lambda name: (len(name.split()), name.isupper(), name))
+    fuller = [
+        name for name in names if adds_middle_names(name.casefold(), short.casefold())
+    ]
+    return min(
+        fuller,
+        key=lambda name: (-len(name.split()), name.isupper(), name),
+        default=short,
+    )
 
 
 #: How many collapsed rows to name in the run report.
