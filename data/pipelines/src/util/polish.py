@@ -182,6 +182,42 @@ def format_person_name(name: str) -> str:
     return re.sub(r"\S+", word, name)
 
 
+def adds_middle_names(full: str, short: str) -> bool:
+    """Whether `full` is `short` with given names written in after the first.
+
+    rejestr.io spells one register entry the way each company's filing has it,
+    with the middle name and without: "Antoni Sikoń" at one company, "Antoni
+    Ignacy Sikoń" at the next. The longer one is the same name, more of it. So
+    `full` has to begin and end with the words `short` does and keep every word
+    of it, in order and as written, adding words only in between. A spelling
+    that changes anything - another surname, a typo, the case of a word - is a
+    different spelling, which this does not vouch for.
+
+    A word the register typed twice is not a middle name either: "Mirosław
+    Dywan Dywan" is a filing's slip, not a man whose middle name is his surname.
+
+    Compared exactly as written; a caller to whom case does not matter folds
+    both sides first. `addsMiddleNames` in `frontend/shared/names.ts` is the
+    same rule, and the two have to agree: the ingest renames a page by that one,
+    and `--only-changed` predicts the rename by this one.
+    """
+    longer, shorter = full.split(), short.split()
+    if len(shorter) < 2 or len(longer) <= len(shorter):
+        return False
+    if longer[0] != shorter[0] or longer[-1] != shorter[-1]:
+        return False
+    added: list[str] = []
+    kept = 0
+    for word in longer:
+        if kept < len(shorter) and word == shorter[kept]:
+            kept += 1
+        else:
+            added.append(word)
+    if kept < len(shorter):
+        return False
+    return not any(word in (shorter[0], shorter[-1]) for word in added)
+
+
 def parse_polish_date(date_string: str) -> Optional[date]:
     if not date_string:
         return None
