@@ -1,6 +1,6 @@
 import pytest
 
-from util.polish import PkwFormat, format_person_name, parse_name
+from util.polish import PkwFormat, adds_middle_names, format_person_name, parse_name
 
 
 def all_configurations(first_name, middle_name, last_name):
@@ -119,3 +119,34 @@ def test_format_person_name_is_idempotent(raw):
     """
     once = format_person_name(raw)
     assert format_person_name(once) == once
+
+
+@pytest.mark.parametrize(
+    ("full", "short", "expected"),
+    [
+        # The register's two spellings of one entry, the reason this exists.
+        ("Antoni Ignacy Sikoń", "Antoni Sikoń", True),
+        ("Jan Maria Józef Kowalski", "Jan Kowalski", True),
+        ("Jan Maria Józef Kowalski", "Jan Maria Kowalski", True),
+        # The words between the first name and the surname are not checked for
+        # being given names: a double surname written with a space is a fuller
+        # spelling of the same woman as well.
+        ("Anna Nowak Kowalska", "Anna Kowalska", True),
+        ("Piotr Jan van der Coghen", "Piotr van der Coghen", True),
+        # Anything that changes a word is another spelling, not more of this one.
+        ("Anna Maria Nowak", "Anna Kowalska", False),
+        ("Łukasz Jan Nowak", "Lukasz Nowak", False),
+        ("Kamil Sebastian Barczyk", "KAMIL BARCZYK", False),
+        ("Jan Kowalski Nowak", "Jan Kowalski", False),
+        # A slip of the register's, not a middle name.
+        ("Mirosław Dywan Dywan", "Mirosław Dywan", False),
+        ("Jan Jan Kowalski", "Jan Kowalski", False),
+        # Nothing added, or nothing to add to.
+        ("Jan Kowalski", "Jan Kowalski", False),
+        ("Jan Kowalski", "Jan Maria Kowalski", False),
+        ("Jan Maria Kowalski", "Kowalski", False),
+        ("Jan Maria Kowalski", "", False),
+    ],
+)
+def test_adds_middle_names(full, short, expected):
+    assert adds_middle_names(full, short) is expected

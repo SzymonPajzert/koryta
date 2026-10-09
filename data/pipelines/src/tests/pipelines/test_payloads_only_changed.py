@@ -637,10 +637,37 @@ class TestOneRegisterEntry:
 class TestCanonicalName:
     """Which spelling a person whose sources disagree gets called on the site."""
 
-    def test_the_middle_name_is_left_out(self):
+    def test_the_middle_name_is_kept(self):
         assert (
             canonical_name(["Andrzej Marcin Golimont", "Andrzej Golimont"])
-            == "Andrzej Golimont"
+            == "Andrzej Marcin Golimont"
+        )
+
+    def test_the_most_given_names_win(self):
+        assert (
+            canonical_name(
+                ["Jan Maria Kowalski", "Jan Kowalski", "Jan Maria Józef Kowalski"]
+            )
+            == "Jan Maria Józef Kowalski"
+        )
+
+    def test_a_shouted_short_form_still_gains_its_middle_name(self):
+        """Kamil Barczyk's page was made "KAMIL BARCZYK" from these two (report
+        ZPDRstUlzvztjywjtym2), and the middle name had to be typed in by hand.
+        The capitals are `format_person_name`'s to undo; this keeps the name."""
+        assert (
+            canonical_name(["KAMIL BARCZYK", "Kamil Sebastian Barczyk"])
+            == "Kamil Sebastian Barczyk"
+        )
+
+    def test_another_surname_is_not_preferred_for_being_longer(self):
+        """A maiden name with a middle name is longer, and is not the name the
+        short form picked: nobody's surname changes for a middle name."""
+        assert canonical_name(["Anna Kowalska", "Anna Maria Nowak"]) == "Anna Kowalska"
+
+    def test_a_surname_typed_twice_is_not_a_middle_name(self):
+        assert canonical_name(["Mirosław Dywan Dywan", "Mirosław Dywan"]) == (
+            "Mirosław Dywan"
         )
 
     def test_the_choice_does_not_depend_on_the_order_it_arrives_in(self):
