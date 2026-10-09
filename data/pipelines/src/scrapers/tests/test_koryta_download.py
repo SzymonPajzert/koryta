@@ -22,6 +22,7 @@ from scrapers.koryta.download import (
     KorytaNodes,
     KorytaNotes,
     KorytaPeople,
+    KorytaPublished,
     KorytaVotes,
     export_timestamp,
 )
@@ -190,6 +191,54 @@ class TestPipelinesFallBack(unittest.TestCase):
 
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["krs"], "0000123456")
+
+
+class TestKorytaPublished(unittest.TestCase):
+    """Who was public on a day gone by, by the rule the site had that day."""
+
+    def published(self, *documents: dict) -> list[str]:
+        with patch.object(
+            FirestoreCollection,
+            "process",
+            exports_on({"2026-07-11": pd.DataFrame(list(documents))}),
+        ):
+            df = KorytaPublished(date="2026-07-11").process(mock_ctx())
+        return list(df["id"])
+
+    def test_published_says_whether_a_page_is_live(self):
+        ids = self.published(
+            {"id": "live", "published": True},
+            {"id": "approved, kept hidden", "published": False, "revision_id": "r"},
+            {"id": "removed", "published": True, "deleted": True},
+        )
+
+        self.assertEqual(ids, ["live"])
+
+    def test_before_published_an_approved_revision_made_a_page_public(self):
+        # The exports up to 2026-07-22 carry neither `published` nor - before
+        # June - `stats.isApproved`.
+        ids = self.published(
+            {"id": "approved", "revision_id": "r1"},
+            {"id": "never approved", "revision_id": None},
+            {"id": "blank", "revision_id": ""},
+            {"id": "no field"},
+        )
+
+        self.assertEqual(ids, ["approved"])
+
+    def test_a_page_written_before_the_backfill_falls_back_alone(self):
+        ids = self.published(
+            {"id": "migrated", "published": False, "revision_id": "r1"},
+            {"id": "not yet", "revision_id": "r2"},
+        )
+
+        self.assertEqual(ids, ["not yet"])
+
+    def test_one_file_a_day(self):
+        self.assertEqual(
+            KorytaPublished(date="2026-07-11").filename,
+            "koryta_published_2026-07-11",
+        )
 
 
 class TestKorytaNotes(unittest.TestCase):
@@ -418,6 +467,10 @@ class TestExportDtypes(unittest.TestCase):
             {"id": "edge-1", "type": "election", "term": "2024"},
         )
         self.assertEqual(row["term"], "2024")
+
+    def test_a_page_id_of_digits_stays_a_string(self):
+        row = self.round_trip(KorytaPublished(), {"id": "0123"})
+        self.assertEqual(row["id"], "0123")
 
 
 class TestExportTimestamp(unittest.TestCase):
