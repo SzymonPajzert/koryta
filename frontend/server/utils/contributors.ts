@@ -34,7 +34,9 @@ export type ContributorIdentity = {
  * Both claims, not `newAdmin` alone: ending a trial by demoting the account
  * leaves nothing to monitor, and a stray `newAdmin` on an account that is no
  * longer an administrator must not put it back on the list. */
-function isNewAdmin(claims: Record<string, unknown> | undefined): boolean {
+export function isNewAdmin(
+  claims: Record<string, unknown> | undefined,
+): boolean {
   return claims?.admin === true && claims.newAdmin === true;
 }
 
