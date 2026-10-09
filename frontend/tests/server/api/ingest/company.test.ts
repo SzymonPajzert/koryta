@@ -354,6 +354,87 @@ describe("api/ingest/company", () => {
     );
   });
 
+  it("leaves a name a person gave the company alone", async () => {
+    // The register spells it in capitals and the pipelines add the town, so a
+    // payload would put "STAWY MILICKIE (Ruda Sułowska)" back over what
+    // somebody typed. Everything else the payload says still lands.
+    mockReadBody.mockResolvedValue({
+      krs: "0000378062",
+      name: "STAWY MILICKIE (Ruda Sułowska)",
+      is_public: true,
+    });
+    const existingRef = { id: "existing-id", parent: nodesParent };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          ref: existingRef,
+          data: () => ({
+            name: "Stawy Milickie",
+            nameSource: "manual",
+            published: true,
+          }),
+        },
+      ],
+    });
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      existingRef,
+      {
+        name: "Stawy Milickie",
+        nameSource: "manual",
+        type: "place",
+        krsNumber: "0000378062",
+        isPublic: true,
+      },
+      expect.objectContaining({ automatic: true }),
+    );
+  });
+
+  it("renames a company whose name the pipelines wrote", async () => {
+    // No marker, so the name is the register's, and the register's newer one
+    // replaces it: CAPITAL PARTNERS is BUMECH DEFENSE PARTNERS now.
+    mockReadBody.mockResolvedValue({
+      krs: "0000110394",
+      name: "BUMECH DEFENSE PARTNERS (Warszawa)",
+    });
+    const existingRef = { id: "existing-id", parent: nodesParent };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          ref: existingRef,
+          data: () => ({
+            name: "CAPITAL PARTNERS (Warszawa)",
+            published: true,
+          }),
+        },
+      ],
+    });
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      existingRef,
+      {
+        name: "BUMECH DEFENSE PARTNERS (Warszawa)",
+        type: "place",
+        krsNumber: "0000110394",
+      },
+      expect.objectContaining({ automatic: true }),
+    );
+  });
+
   it("stores the categories the pipelines worked out", async () => {
     // The site used to derive these from the PKD codes below. It does not any
     // more - a register code says what a company does rather than what sector

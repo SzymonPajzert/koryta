@@ -104,6 +104,19 @@ class TestTheNode:
     def test_a_new_name_is_a_change(self):
         assert changes(payload(name="PKP SKM")) == [COMPANY_FIELDS]
 
+    def test_a_name_a_person_gave_is_not_overwritten(self):
+        # `nameSource: "manual"` makes the ingest keep the stored name, so the
+        # register's capitals and the town are not a change.
+        assert (
+            changes(
+                payload(name="STAWY MILICKIE (Ruda Sułowska)"),
+                node_rows=nodes(
+                    company={"name": "Stawy Milickie", "nameSource": "manual"}
+                ),
+            )
+            == []
+        )
+
     def test_a_payload_without_an_ownership_answer_leaves_the_flag_alone(self):
         # `CompaniesPayloads` leaves `is_public` out where no odpis says who
         # owns the company, and the ingest then keeps what it holds.

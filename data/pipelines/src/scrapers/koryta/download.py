@@ -397,9 +397,10 @@ NODE_FIELDS = [
     "sourceURL",
     "teryt",
     # What a company payload can write, on the terms `company.post.ts` sets.
-    # The two `...Source` markers are not compared with anything: they say a
+    # The `...Source` markers are not compared with anything: they say a
     # person has answered, and the ingest then declines to write the field they
     # answered, so a payload disagreeing with a manual answer is not a change.
+    "nameSource",
     "activity",
     "categories",
     "categoriesSource",

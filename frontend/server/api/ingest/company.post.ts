@@ -56,6 +56,16 @@ export default defineEventHandler(async (event) => {
     type: "place",
     krsNumber: body.krs,
   };
+  // A name a person gave the company wins, on the terms `isPublic` and
+  // `categories` do below. The register spells every name in capitals and the
+  // pipelines add the town, so a payload would put "STAWY MILICKIE (Ruda
+  // Sułowska)" back over the "Stawy Milickie" somebody typed, and "POLSKIE LNG
+  // (Świnoujście)" over the "Polskie LNG (wykreślone)" that says what the
+  // register no longer does. `nameSource` is set by `/api/revisions/create`
+  // when a proposal changes the name, and on a page a person creates.
+  if (revisionData.nameSource === "manual" && stored?.name) {
+    revisionData.name = stored.name;
+  }
   if (body.activity && body.activity.length > 0) {
     revisionData.activity = body.activity;
   }
