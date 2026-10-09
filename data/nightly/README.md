@@ -81,14 +81,22 @@ People: at most 100 a night (`--max-uploads`), in this order
    night, or the night after a hand run or a held night. A page only: the
    feeds are bought by name, so a bought entry without a page is most likely
    a namesake's, and nobody but a new hire gets a page;
-3. a published page the payload would change;
-4. any other page the payload would change.
+3. a page the payload would change, on which somebody noted that data is
+   missing ("Brakuje danych") and no admin has closed the entry - on the page
+   itself, or on the page of a company the payload names: the night sends no
+   company payloads, so what a company lacks comes up as its people's posts;
+4. the same for any other note entry still open: a correction ("Do poprawy"),
+   or an entry an admin marked unresolved;
+5. a published page the payload would change;
+6. any other page the payload would change.
 
 Newest news first inside each. A payload sent unchanged in the last 30 days
 is left alone (`--resend-after`), so a pending update or a party a human took
 off a page does not take a slot every night - and is not put back every night.
 That keeps the second tier to the week's purchases not yet sent: a bought
-person whose payload went up unchanged is left alone like anybody else.
+person whose payload went up unchanged is left alone like anybody else. And a
+note nobody closes puts its page first only when there is something new to
+send it.
 
 Scores: after the people, every scoring model (`analysis/scores`) is rebuilt
 and its shortlist reconciled with the votes it holds on the site - a changed
