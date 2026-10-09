@@ -14,6 +14,7 @@ from entities.person import KRS as KrsPerson
 from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
 from scrapers.krs.graph import PARENT_RELATION, QueryRelation
 from scrapers.krs.organs import supervision_kind
+from scrapers.krs.public_bodies import public_body
 from scrapers.krs.researched_owners import RESEARCHED_OWNERS
 from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
 from scrapers.map.postal_codes import PostalCodes
@@ -916,6 +917,14 @@ def company_from_api_krs(  # noqa: PLR0915
                 parent_krs = w["krs"]["krs"]
                 if parent_krs and parent_krs != "0000000000":
                     owners.append(Owner(krs=parent_krs, teryt=None))
+                    continue
+
+            if public_body(w["nazwa"]):
+                # A union of gminas, the metropolis, or a state agency, fund or
+                # bank: public, with neither a region nor a KRS number to draw
+                # an edge to. Wodociągi Kieleckie (a union of gminas) and the
+                # KOWR stud farms read as private without it.
+                is_public = True
 
         identyfikatory = dzial1.get("danePodmiotu", {}).get("identyfikatory", {})
         nip = identyfikatory.get("nip")
