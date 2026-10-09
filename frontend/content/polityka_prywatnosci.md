@@ -18,6 +18,16 @@ Cel: Wysyłanie informacji o nowych artykułach, działaniach statutowych, inicj
 
 Podstawa prawna: Twoja dobrowolna zgoda (art. 6 ust. 1 lit. a RODO). Zgodę możesz wycofać w każdej chwili.
 
+Zgodę wyrażasz osobno dla każdego tematu - w ustawieniach profilu albo w okienku, w którym pytamy o nią po zalogowaniu - i piszemy tylko na adres, którego posiadanie potwierdzisz. Wiadomość może zawierać podsumowanie Twojej aktywności w Serwisie, np. liczbę Twoich ocen z ostatnich 90 dni. Odnotowujemy, czy wiadomość została wysłana i czy ktoś wypisał się za pomocą linku w niej.
+
+### W celu kontaktu z zespołem Serwisu:
+
+Jakie dane? Adres e-mail osób, którym nadaliśmy uprawnienia administratora Serwisu.
+
+Cel: Wiadomości o pracy zespołu - o tym, gdzie potrzebna jest pomoc, i o zmianach w Serwisie.
+
+Podstawa prawna: Prawnie uzasadniony interes Administratora (art. 6 ust. 1 lit. f RODO), polegający na koordynowaniu pracy osób współtworzących Serwis. Możesz w każdej chwili sprzeciwić się tym wiadomościom - wypisać się linkiem z każdej z nich albo wyłączyć je w ustawieniach profilu.
+
 ### W celach analitycznych i statystycznych:
 
 Jakie dane? Adres IP, dane o przeglądarce, systemie operacyjnym, przybliżona lokalizacja, dane z plików cookies.
@@ -29,6 +39,8 @@ Podstawa prawna: Prawnie uzasadniony interes Administratora (art. 6 ust. 1 lit. 
 ## 3. Jak długo przechowujemy Twoje dane?
 
 Dane przetwarzane na podstawie Twojej zgody (adres e-mail dla Newslettera) przechowujemy do momentu wycofania przez Ciebie tej zgody.
+
+Adres e-mail używany do wiadomości dla zespołu przetwarzamy, dopóki masz uprawnienia administratora Serwisu albo do wniesienia przez Ciebie sprzeciwu.
 
 Dane analityczne przechowujemy przez okres niezbędny do realizacji celów, w jakich zostały zebrane.
 
