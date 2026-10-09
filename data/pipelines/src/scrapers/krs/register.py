@@ -254,11 +254,56 @@ class RegisterRead:
 COLUMNS = list(RegisterEntry.__dataclass_fields__)
 
 
+def log_began(ledger: pd.DataFrame, named: pd.DataFrame) -> str:
+    """The day the log began, as an ISO day: the ledger's oldest answer.
+
+    An answer is replaced only by a newer one, and the import of the 2026-09-28
+    sweep put 25,136 answers on that day, most of them about companies the
+    bulletin will not name again - so the day stays put.
+
+    With no answer yet, the newest day of the bulletin: the first run then
+    begins with that day's registrations, and the log has begun.
+    """
+    if not ledger.empty:
+        days = iso_dates(ledger["swept"])
+        days = days[days != ""]
+        if len(days):
+            return str(days.min())
+    return str(named["date"].max())
+
+
+def registered_before(named: pd.DataFrame, day: str) -> int | None:
+    """The highest KRS number the bulletin named before `day`.
+
+    The court gives the numbers out in order, so every number above it was
+    registered on `day` or since. None when the bulletin names nothing before
+    the day: then no number can be told apart as new.
+    """
+    earlier = named.loc[named["date"] < day, "krs"]
+    if earlier.empty:
+        return None
+    return int(pd.to_numeric(earlier).max())
+
+
 def due_for_a_read(ledger: pd.DataFrame, updates: pd.DataFrame) -> list[str]:
     """The KRS numbers owed a read, in the order to read them.
 
-    Three kinds, in this order:
+    Four kinds, in this order (`queue_for_a_read` names them):
 
+    - **new**: a number registered since the log began - above the highest
+      number the bulletin named before the log's first day - that has no
+      answer yet, never read or only failed, lowest first. Nothing else reaches
+      a new company: it is in no seed list and no feed, and the old-first walk
+      below gets to it last, ~700k reads in. A working day's bulletin names
+      231-307 of them (2026-09-29 to 10-08), and the night reads every one
+      (`jobs.krs_register_owners --new-registrations`).
+      The line is where the log began, not the highest number read so far.
+      The bulletin often names a number days after the court gave it out:
+      56-122 of a working day's new numbers are below the highest named the
+      day before. Read up to the highest number read so far, the nights of
+      09-28 to 10-08 would have left 667 of the 2,286 registrations since
+      the log began below that line, in the backlog. Nor does this line move
+      when a hand run or a pool reads a high number out of turn;
     - a read that failed, because it is a known gap and is usually cheap to
       close;
     - an answer the register has moved on from - named in the bulletin on or
@@ -266,28 +311,13 @@ def due_for_a_read(ledger: pd.DataFrame, updates: pd.DataFrame) -> list[str]:
       entry made that afternoon is invisible to a read that morning. An owner
       may be what changed. The re-read carries a later date, so it cannot
       loop: the bulletin for a day is only fetched once the day is over;
-    - a number never read, **oldest first**. The queue is 700k long and the
-      prize is sparse, and the prize is old: 53% of the publicly owned spółki
-      in the public-service catalogue have a KRS number under 200,000 and 86%
-      under 500,000, against a third of the register. Reading in number order
-      gets to most of them in a fraction of the time.
+    - a number never read, **oldest first**: the backlog. The queue is 700k
+      long and the prize is sparse, and the prize is old: 53% of the publicly
+      owned spółki in the public-service catalogue have a KRS number under
+      200,000 and 86% under 500,000, against a third of the register. Reading
+      in number order gets to most of them in a fraction of the time.
     """
-    if updates.empty:
-        return []
-    changed = normalise(updates, "date").groupby("krs")["date"].max()
-    if ledger.empty:
-        return sorted(changed.index, key=int)
-
-    swept = pd.Series(iso_dates(ledger["swept"]).values, index=ledger["krs"])
-    status = pd.Series(ledger["status"].values, index=ledger["krs"])
-    failed = sorted(status[status == STATUS_FAILED].index, key=int)
-
-    known = changed[changed.index.isin(swept.index)]
-    moved = known[known >= swept.reindex(known.index)]
-    moved_ids = sorted(set(moved.index) - set(failed), key=int)
-
-    never = sorted(set(changed.index) - set(swept.index), key=int)
-    return failed + moved_ids + never
+    return [queued.krs for queued in queue_for_a_read(ledger, updates)]
 
 
 #: How two answers about the same number compare when they came at the same
@@ -371,6 +401,8 @@ class QueuedRead:
     reason: str
 
 
+#: Registered since the log began, and no answer yet - always at the head.
+REASON_NEW = "new"
 REASON_FAILED = "failed"
 REASON_MOVED = "moved"
 REASON_NEVER = "never"
@@ -378,21 +410,35 @@ REASON_NEVER = "never"
 
 def queue_for_a_read(ledger: pd.DataFrame, updates: pd.DataFrame) -> list[QueuedRead]:
     """`due_for_a_read`, with the reason each number is in it."""
-    due = due_for_a_read(ledger, updates)
+    if updates.empty:
+        return []
     if ledger.empty:
-        return [QueuedRead(krs, REASON_NEVER) for krs in due]
-    status = dict(zip(ledger["krs"], ledger["status"]))
-    return [
-        QueuedRead(
-            krs,
-            REASON_NEVER
-            if krs not in status
-            else REASON_FAILED
-            if status[krs] == STATUS_FAILED
-            else REASON_MOVED,
-        )
-        for krs in due
-    ]
+        ledger = pd.DataFrame(columns=["krs", "swept", "status"])
+    named = normalise(updates, "date")
+    changed = named.groupby("krs")["date"].max()
+    line = registered_before(named, log_began(ledger, named))
+
+    swept = pd.Series(iso_dates(ledger["swept"]).values, index=ledger["krs"])
+    status = pd.Series(ledger["status"].values, index=ledger["krs"])
+    failed = set(status[status == STATUS_FAILED].index)
+    answered = set(status.index) - failed
+
+    above: set[str] = (
+        {krs for krs in changed.index if int(krs) > line} if line is not None else set()
+    )
+    new = sorted(above - answered, key=int)
+
+    known = changed[changed.index.isin(swept.index)]
+    moved = known[known >= swept.reindex(known.index)]
+    moved_ids = sorted(set(moved.index) - failed, key=int)
+
+    never = sorted(set(changed.index) - set(swept.index) - set(new), key=int)
+    return (
+        [QueuedRead(krs, REASON_NEW) for krs in new]
+        + [QueuedRead(krs, REASON_FAILED) for krs in sorted(failed - set(new), key=int)]
+        + [QueuedRead(krs, REASON_MOVED) for krs in moved_ids]
+        + [QueuedRead(krs, REASON_NEVER) for krs in never]
+    )
 
 
 class KRSRegisterEntries(Pipeline[RegisterEntry]):
