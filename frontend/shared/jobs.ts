@@ -452,7 +452,7 @@ export const JOBS: readonly JobDefinition[] = [
     partialIsHeld: true,
     title: "Noc na maszynie koryta-nightly",
     summary:
-      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, wysyła do 100 osób na stronę, a potem oceny modeli.",
+      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, wysyła do 100 osób na stronę, a potem oceny modeli.",
     runsOn:
       "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza - data/nightly",
     command: "koryta_nightly",
@@ -527,12 +527,20 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "scheduled",
     title: "Przegląd rejestru KRS (właściciele)",
     summary:
-      "Czyta po kolei odpisy aktualne z api-krs dla całego biuletynu, szukając spółek samorządów i Skarbu Państwa, do których nie prowadzi żadne inne wejście crawla.",
-    runsOn: "Ręcznie, partiami",
-    command: "koryta_krs_register_owners --reads 20000",
-    scheduleNote: "Tempo i miejsce do ustalenia (zostało ok. 690 tys. wpisów)",
+      "Czyta odpisy aktualne z api-krs, szukając spółek samorządów i Skarbu Państwa, do których nie prowadzi żadne inne wejście crawla: co noc każdą spółkę, którą biuletyn podaje jako nowo zarejestrowaną, a resztę rejestru - od najstarszych numerów - w tempie, które dopiero trzeba ustalić.",
+    runsOn:
+      "Krok nocy na VM koryta-nightly (koryta_nightly), po bezpłatnym KRS; zaległości ręcznie, partiami",
+    command:
+      "koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25",
+    schedule: { dailyAt: "04:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
-    tasks: ["import-register-sweep-to-log", "decide-register-sweep-pace"],
+    // Rusza po bezpłatnym KRS, który ma na siebie godzinę.
+    graceMinutes: 90,
+    tasks: ["decide-register-sweep-pace"],
+    notes: [
+      "Nowych rejestracji jest 230-310 w dzień roboczy, w weekend żadnej - to dwie, trzy minuty. Noc bez nowych też się zgłasza, z zerem odczytów.",
+      "Zaległości (ok. 700 tys. numerów nigdy nieczytanych) noc czyta dopiero z --register-backlog, którego tempo czeka na decyzję. Po 25 minutach krok sam kończy i resztę zostawia na następną noc (wtedy „niedokończony”).",
+    ],
   },
   {
     id: "compressor",
