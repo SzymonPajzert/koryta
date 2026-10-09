@@ -104,6 +104,13 @@ class TestTheNode:
     def test_a_new_name_is_a_change(self):
         assert changes(payload(name="PKP SKM")) == [COMPANY_FIELDS]
 
+    def test_a_payload_without_an_ownership_answer_leaves_the_flag_alone(self):
+        # `CompaniesPayloads` leaves `is_public` out where no odpis says who
+        # owns the company, and the ingest then keeps what it holds.
+        without = {k: v for k, v in payload().items() if k != "is_public"}
+        assert changes(without) == []
+        assert changes(without, node_rows=nodes(company={"isPublic": False})) == []
+
     def test_a_new_category_is_a_change(self):
         assert changes(payload(categories=["koleje", "szpitale"])) == [COMPANY_FIELDS]
 
@@ -366,3 +373,29 @@ def test_the_pipeline_drops_the_companies_the_site_already_matches(
     # The owner's node says nothing the payload says, so it is kept; the
     # company the site already matches is dropped.
     assert list(result["krs"]) == [OWNER_KRS]
+
+
+def test_a_struck_off_company_is_not_turned_private(mock_ctx, monkeypatch):
+    """MAZOWIECKI REGIONALNY FUNDUSZ POŻYCZKOWY, the case this was found by.
+
+    Public on the site since August, and struck off since, so api-krs answers
+    204 and the merge knows the company from rejestr.io alone: no odpis, no
+    owner, `is_public` false by default. The payload used to send that false,
+    which the ingest would have written over the site's true. It now says
+    nothing about ownership, so here there is nothing to upload at all."""
+    struck_off = {
+        **ENRICHED_COMPANIES[0],
+        "is_public": False,
+        "sources": [{"source": "rejestr-io", "source_krs": "rejestr.io"}],
+    }
+    pipeline = _companies_payloads(True, monkeypatch)
+    pipeline.companies = _FixedPipeline([struck_off])  # type: ignore[assignment]
+    site = nodes(company={"supervisoryBody": None, "isPublic": True})
+    snapshot = SiteSnapshot(site, edges())
+    monkeypatch.setattr(
+        SiteSnapshot, "read", classmethod(lambda cls, ctx, date=None: snapshot)
+    )
+
+    result = pipeline.process(mock_ctx)
+
+    assert list(result["krs"]) == []
