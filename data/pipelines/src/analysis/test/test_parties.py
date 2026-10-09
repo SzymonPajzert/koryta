@@ -107,6 +107,11 @@ def test_a_separate_party_with_a_similar_name_gets_no_party():
         "KOMITET WYBORCZY WYBORCÓW „KUKIZ'15”",
         "KOMITET WYBORCZY WYBORCÓW KUKIZ'15",
         "KOMITET WYBORCZY RUCH PATRIOTYCZNY OJCZYZNA",
+        # ROP's 1997 Sejm and Senat lists, and the 2005 federation it joined.
+        "ZARZĄD GŁÓWNY RUCHU ODBUDOWY POLSKI",
+        "Zarzad Glowny Ruchu Odbudowy Polski",
+        "RUCH ODBUDOWY POLSKI",
+        "KOMITET WYBORCZY RUCH PATRIOTYCZNY",
         "KONFEDERACJA POLSKI NIEPODLEGŁEJ",
         "KW KONSERWATYWNO-LIBERALNA PARTIA UNIA POLITYKI REALNEJ",
         "KOMITET WYBORCZY POLSKA PARTIA PRACY - SIERPIEŃ 80",
@@ -217,6 +222,7 @@ def test_case_and_spacing_do_not_matter(committee):
         'KOMITET WYBORCZY "ZIEMIA KAMIEŃSKA AWS-UPR-UW-RPN"',
         "KOMITET WYBORCZY UNII WOLNOŚCI I UPR KIELCE NASZE MIASTO",
         "KOMITET WYBORCZY WYBORCÓW PRAWE MIASTO I KUKIZ'15",
+        "KOMITET WYBORCZY NIEZALEŻNY RUCH PATRIOTYCZNY OJCZYZNA",
         # Not Lepper's party at all.
         'SAMOOBRONA EKOLOGICZNA ROLNIKÓW "PRONATURA"',
     ],
