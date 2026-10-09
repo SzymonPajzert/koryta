@@ -367,6 +367,67 @@ describe("api/revisions/create, place edits", () => {
       activity: { "0": "49.31.Z" },
     });
   });
+
+  it("marks a company's name as given by hand when a person changes it", async () => {
+    // The marker is what stops the next company ingest putting the register's
+    // capitals, and the town it adds, back over what somebody typed.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "STAWY MILICKIE (Ruda Sułowska)",
+      krsNumber: "0000378062",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "stawy",
+      name: "Stawy Milickie",
+      krsNumber: "0000378062",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      name: "Stawy Milickie",
+      nameSource: "manual",
+    });
+  });
+
+  it("does not pin a name the proposal passes through unchanged", async () => {
+    // The form always sends the name. Pinning every name stated would freeze
+    // the register's spelling on every page anybody has answered anything on,
+    // and a company renamed in KRS would keep its old name here for good.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "CAPITAL PARTNERS (Warszawa)",
+      isPublic: false,
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "capital",
+      name: "CAPITAL PARTNERS (Warszawa)",
+      isPublic: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({ isPublic: true });
+    expect(writtenRevision().data).not.toHaveProperty("nameSource");
+  });
+
+  it("does not mark a person's name, which no ingest overwrites", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Edward Delewicz",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "delewicz",
+      name: "Edward Delewicz Jr",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).not.toHaveProperty("nameSource");
+  });
 });
 
 describe("api/revisions/create, proposing a new entry", () => {
@@ -398,6 +459,9 @@ describe("api/revisions/create, proposing a new entry", () => {
       krsNumber: "0000999888",
       isPublic: true,
       isPublicSource: "manual",
+      // Named by the person who created it, so an upload of the company
+      // the KRS number points at does not rename it.
+      nameSource: "manual",
     });
   });
 

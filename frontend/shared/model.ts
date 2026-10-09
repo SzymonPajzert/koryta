@@ -374,6 +374,15 @@ export type NodeMaybeRich = {
 
 export interface Company extends Omit<Node, "type"> {
   type: "place";
+  /** Where `name` came from, so an ingest does not overwrite a human.
+   *
+   * Absent means the pipelines wrote it: the register's name, in its capitals,
+   * with the town where two companies share one. Set by
+   * `/api/revisions/create` when a proposal changes the name, and on a page a
+   * person creates - not merely when one states it, since the edit form always
+   * does. Names people gave before the marker existed were stamped after the
+   * fact by `scripts/migrate/backfill-name-source.ts`. */
+  nameSource?: "manual";
   krsNumber?: string;
   /** REGON, from the statistical register: nine digits, or fourteen for a
    * local unit of an entity.

@@ -564,12 +564,17 @@ class SiteSnapshot:
         """Whether the node itself would gain a revision.
 
         The `...Source: "manual"` markers are why this cannot be a plain
-        comparison: a person who has set a company's categories or said who
-        owns it has the last word, and the ingest then declines to write the
-        payload's answer at all - so disagreeing with them is not a change.
+        comparison: a person who has named a company, set its categories or
+        said who owns it has the last word, and the ingest then declines to
+        write the payload's answer at all - so disagreeing with them is not a
+        change. "Stawy Milickie" against the register's "STAWY MILICKIE (Ruda
+        Sułowska)" is none.
         """
         data = {k: v for k, v in stored.items() if k not in INTERNAL_FIELDS}
-        written: dict[str, typing.Any] = {"name": payload.get("name")}
+        named_by_hand = data.get("nameSource") == "manual" and data.get("name")
+        written: dict[str, typing.Any] = (
+            {} if named_by_hand else {"name": payload.get("name")}
+        )
 
         # An empty `activity` is a payload that found no codes rather than one
         # asserting there are none, and the ingest leaves the stored list alone.

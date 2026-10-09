@@ -93,6 +93,20 @@ export default defineEventHandler(async (event) => {
     if (dataFields.parties !== undefined) {
       dataFields.partiesSource = "manual";
     }
+
+    // A company's name, on the same terms, so that `ingest/company` does not
+    // put the register's capitals back over it. Only when the proposal changes
+    // the name, though: the form always sends one, so stamping every proposal
+    // that states it would pin the register's spelling on every page anybody
+    // has corrected anything on, and a company renamed in KRS would never be
+    // renamed here. A page a person creates is named by them.
+    if (
+      proposableType(baseFields) === "place" &&
+      typeof dataFields.name === "string" &&
+      dataFields.name !== baseFields.name
+    ) {
+      dataFields.nameSource = "manual";
+    }
   }
 
   // User-submitted fields override the base node fields. Sanitized here rather
