@@ -55,21 +55,35 @@ describe("personLabel", () => {
     expect(personLabel("Jan Kowalski", RING)).toBe("Jan Kowalski");
   });
 
-  it("keeps the surname by dropping the middle name to an initial", () => {
-    // Wrapped on width alone this was "Sławomir Andrzej…" - two given names
-    // and no way to tell which Sławomir.
+  it("draws the first name and the surname, not the middle one", () => {
+    // The page carries every given name the register knows; the caption is
+    // what the press would call him.
     expect(personLabel("Sławomir Andrzej Nowicki", RING)).toBe(
-      "Sławomir A.\nNowicki",
+      "Sławomir\nNowicki",
     );
   });
 
-  it("gives up the given names too, where the middle ones were not enough", () => {
+  it("does so where the page's own node has room for more", () => {
+    expect(personLabel("Sławomir Andrzej Nowicki")).toBe("Sławomir Nowicki");
+  });
+
+  it("keeps both halves of a double surname written with a space", () => {
+    // "Benc" is nobody's first name, so it is not taken for a middle one.
+    expect(personLabel("Zuzanna Benc Szczepaniak", RING)).toBe(
+      "Zuzanna Benc\nSzczepaniak",
+    );
+    expect(personLabel("Urszula Lucyna Wach Górny", RING)).toBe(
+      "Urszula Wach\nGórny",
+    );
+  });
+
+  it("gives up the given name too, where the first name and surname do not fit", () => {
     expect(
       personLabel("Aleksandra Katarzyna Wiśniewska", {
-        maxChars: 10,
-        maxLines: 2,
+        maxChars: 13,
+        maxLines: 1,
       }),
-    ).toBe("A. K.\nWiśniewska");
+    ).toBe("A. Wiśniewska");
   });
 
   it("shortens a two-word name whose first word is the long one", () => {
@@ -80,11 +94,5 @@ describe("personLabel", () => {
     const wrapped = personLabel("Jan Rozwadowski-Kwiatkowski", RING);
     expect(wrapped.endsWith("…")).toBe(true);
     expect(wrapped.split("\n")).toHaveLength(2);
-  });
-
-  it("leaves the full name where the page's own node has room", () => {
-    expect(personLabel("Sławomir Andrzej Nowicki")).toBe(
-      "Sławomir Andrzej\nNowicki",
-    );
   });
 });

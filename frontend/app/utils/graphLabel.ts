@@ -1,3 +1,5 @@
+import { shortPersonName } from "~~/shared/names";
+
 /** How wide a label line may get before it is broken, in characters.
  *
  * Not a measurement - the graph draws at whatever zoom the reader has - but a
@@ -56,15 +58,21 @@ export function wrapLabel(
   return kept.join("\n");
 }
 
-/** The name of a person, cut where it still names them.
+/** The name of a person, as short as still names them.
+ *
+ * A page carries every given name the register knows, and a circle on the
+ * graph is captioned by the first name and the surname alone
+ * (`shortPersonName`): "Antoni Ignacy Sikoń" is "Antoni Sikoń" there, as the
+ * press would write him, and the page one click away says the rest.
  *
  * The outer ring of a two hop graph is drawn at fourteen characters over two
- * lines, and a Pole with two given names does not fit: wrapped by width alone,
- * "Sławomir Andrzej Kowalski" becomes "Sławomir Andrzej…", which identifies
- * nobody - what the ellipsis ate is the surname, the one part that tells two
- * Sławomirs apart. So before giving up the end of a name, give up its middle:
- * the middle names shrink to initials, and if that is still too long the given
- * names do too. "S. A. Kowalski" is a person; "Sławomir Andrzej…" is not.
+ * lines, and even a first name and a surname can be too long for it: wrapped by
+ * width alone, "Bogusław-Aleksander Nowak" is broken inside its first word, and
+ * a longer one ends in an ellipsis that ate the surname - the one part that
+ * tells two Bogusławs apart. So before giving up the end of a name, give up its
+ * front: the given names shrink to initials. "B. Nowak" is a person;
+ * "Bogusław-Aleks…" is not. A middle word `shortPersonName` could not tell
+ * from a surname is kept, and shrinks to its initial the same way.
  *
  * Only for the circles. An institution's name is long at the front as well as
  * at the back and its initials would say nothing, so it keeps `wrapLabel`.
@@ -73,7 +81,8 @@ export function personLabel(
   name: string,
   { maxChars = MAX_CHARS, maxLines = MAX_LINES } = {},
 ): string {
-  const words = name.split(/\s+/).filter(Boolean);
+  const short = shortPersonName(name);
+  const words = short.split(/\s+/).filter(Boolean);
   const shorten = (from: number) => [
     ...words.slice(0, from),
     ...words.slice(from, -1).map((word) => `${[...word][0]}.`),
@@ -85,10 +94,10 @@ export function personLabel(
   // fourteen-character line can do.
   const candidates =
     words.length > 2
-      ? [name, shorten(1).join(" "), shorten(0).join(" ")]
+      ? [short, shorten(1).join(" "), shorten(0).join(" ")]
       : words.length === 2
-        ? [name, shorten(0).join(" ")]
-        : [name];
+        ? [short, shorten(0).join(" ")]
+        : [short];
 
   let wrapped = wrapLabel(candidates[0]!, { maxChars, maxLines });
   for (const candidate of candidates) {

@@ -3,6 +3,7 @@ import {
   addsMiddleNames,
   normalizePersonName,
   personNameKeys,
+  shortPersonName,
 } from "../../shared/names";
 
 describe("normalizePersonName", () => {
@@ -105,5 +106,30 @@ describe("personNameKeys", () => {
 
   it("has no key for a name with nothing in it", () => {
     expect(personNameKeys("  ")).toEqual([]);
+  });
+});
+
+describe("shortPersonName", () => {
+  it.each([
+    ["Antoni Ignacy Sikoń", "Antoni Sikoń"],
+    ["Jan Maria Józef Kowalski", "Jan Kowalski"],
+    // Read without regard to case; the name keeps its own.
+    ["KAMIL SEBASTIAN BARCZYK", "KAMIL BARCZYK"],
+    // The middle name goes, both halves of the surname stay.
+    ["Urszula Lucyna Wach Górny", "Urszula Wach Górny"],
+  ])("shortens %s to %s", (name, short) => {
+    expect(shortPersonName(name)).toBe(short);
+  });
+
+  it.each([
+    // A double surname written with a space: "Benc" is nobody's first name.
+    "Zuzanna Benc Szczepaniak",
+    "Anna Kowalska-Nowak",
+    "Piotr van der Coghen",
+    // A title is not a first name, so what follows it is not a middle one.
+    "ks. Michał Olszewski",
+    "Jan Kowalski",
+  ])("leaves %s whole", (name) => {
+    expect(shortPersonName(name)).toBe(name);
   });
 });
