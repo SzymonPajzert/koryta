@@ -886,6 +886,19 @@ def test_what_was_sent_names_the_page_each_person_went_to(priority):
     ]
 
 
+def test_somebody_only_an_odpis_names_is_remembered_by_name_and_birth_date():
+    """No link and no page id: two such people may share a name, never a name
+    and a day - and their PESEL is not the pipeline's to write down here."""
+    odpis_only = {"name": "Anna Nowak", "birthDate": "1971-03-14"}
+
+    assert job.person_key(odpis_only) == "Anna Nowak 1971-03-14"
+    assert job.person_key({**odpis_only, "birthDate": "1980-01-01"}) != (
+        job.person_key(odpis_only)
+    )
+    assert job.person_key({**odpis_only, "korytaId": "page"}) == "page"
+    assert job.person_key({"name": "Anna Nowak"}) == "Anna Nowak"
+
+
 def test_what_the_site_refused_is_not_remembered_as_sent(priority):
     priority.candidates = [
         candidate("Jan Kowalski", PUBLISHED),

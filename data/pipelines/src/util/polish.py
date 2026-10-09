@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import date, datetime
 from enum import Enum
 from typing import Optional
@@ -216,6 +217,35 @@ def adds_middle_names(full: str, short: str) -> bool:
     if kept < len(shorter):
         return False
     return not any(word in (shorter[0], shorter[-1]) for word in added)
+
+
+def normalize_person_name(name: str | None) -> str:
+    """A person's name without what two spellings of it may differ by: case,
+    diacritics (``ł`` too), and anything between the words - a hyphen, a dot.
+
+    `normalizePersonName` in `frontend/shared/names.ts`, which the ingest
+    compares names by, and has to stay it.
+    """
+    text = unicodedata.normalize("NFD", name or "")
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = text.replace("ł", "l").replace("Ł", "l").lower()
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
+
+
+def names_agree(one: str | None, other: str | None) -> bool:
+    """Whether two spellings name one person, as far as names can: the same
+    once folded (`normalize_person_name`), or one with given names written into
+    the other (`adds_middle_names`). "Łukasz Żelewski", "Lukasz Zelewski" and
+    "Łukasz Jan Żelewski" agree; "Jan Adam Nowak" and "Jan Piotr Nowak" do not.
+
+    `namesAgree` in `frontend/shared/names.ts`: the ingest matches a person by
+    name and birth date with it, and `SiteSnapshot` predicts that match with
+    this.
+    """
+    a, b = normalize_person_name(one), normalize_person_name(other)
+    if not a or not b:
+        return False
+    return a == b or adds_middle_names(a, b) or adds_middle_names(b, a)
 
 
 def parse_polish_date(date_string: str) -> Optional[date]:

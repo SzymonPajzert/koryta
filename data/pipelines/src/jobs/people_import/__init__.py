@@ -353,11 +353,17 @@ def refresh_policy(asked: Sequence[str] | None) -> ProcessPolicy:
 
 def person_key(payload: Mapping[str, typing.Any]) -> str:
     """Who a payload is about, as steadily as the payload can say: the
-    register link, else the page it names, else the name."""
-    for key in ("rejestrIo", "korytaId", "name"):
+    register link, else the page it names, else the name with the birth date.
+
+    Somebody only an odpis names has neither link nor page id, and two of them
+    can share a name; the ingest tells them apart by the day, and so does this.
+    Their PESEL, which tells them apart in the pipeline, is never written here.
+    """
+    for key in ("rejestrIo", "korytaId"):
         if payload.get(key):
             return str(payload[key])
-    return ""
+    name, born = payload.get("name") or "", payload.get("birthDate")
+    return f"{name} {born}" if born else str(name)
 
 
 def payload_hash(payload: Mapping[str, typing.Any]) -> str:
