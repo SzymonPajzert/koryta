@@ -104,8 +104,9 @@ from scrapers.stores import Context, ProcessPolicy
 from stores.job_runs import ERRORS_KEPT, FinalState, JobRun
 from stores.storage import CRAWLED_BUCKET, Client, warsaw_tz
 
-#: Held for the length of a crawl. The CRU crawl's scripts predate it and do
-#: not take it; do not run them beside this job.
+#: Held for the length of a crawl, by this job and by `jobs.krs_nip`, which asks
+#: the same service. The CRU crawl's scripts predate it and do not take it; do
+#: not run them beside either.
 LOCK = Path.home() / ".cache/koryta/locks/wyszukiwarka-krs-api.lock"
 
 #: How many companies a run asks about at most. A clean session of the service
