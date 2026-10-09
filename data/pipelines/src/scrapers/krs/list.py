@@ -8,7 +8,7 @@ from typing import Type
 
 from pandas import DataFrame
 
-from entities.company import KRS, Owner, Source
+from entities.company import KRS, Owner, Source, short_name
 from entities.company import Company as KrsCompany
 from entities.person import KRS as KrsPerson
 from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
@@ -686,7 +686,11 @@ class CompaniesKRS(Pipeline[KrsCompany]):
 
 def company_from_rejestrio(data: dict, pcs: DataFrame | None = None) -> KrsCompany:
     krs = data["numery"]["krs"]
-    name = data["nazwy"]["skrocona"]
+    # The full name, shortened by `short_name` rather than taken as rejestr.io
+    # shortens it: its `skrocona` drops whatever legal form the name ends with
+    # and the status after it, so OPOLSKA IZBA GOSPODARCZA was "OPOLSKA".
+    nazwy = data["nazwy"]
+    name = short_name(nazwy.get("pelna")) or nazwy.get("skrocona")
     city = data.get("adres", {}).get("miejscowosc", "")
     teryt_code = None
     if "adres" in data and "teryt" in data["adres"] and data["adres"]["teryt"]:
@@ -919,7 +923,7 @@ def company_from_api_krs(  # noqa: PLR0915
 
         return KrsCompany(
             krs=krs,
-            name=nazwa,
+            name=short_name(nazwa),
             city=miejscowosc,
             teryt_code=teryt_code,
             nip=nip,
