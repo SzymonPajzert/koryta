@@ -358,6 +358,57 @@ def test_upload_payloads_company_shape(mock_ctx, monkeypatch):
     assert by_krs["0000999999"]["categories"] == ["szpitale"]
 
 
+def test_a_company_is_called_private_only_over_an_odpis(mock_ctx, monkeypatch):
+    """`is_public: false` is an answer only where the register was read.
+
+    Without an odpis - struck off, so api-krs answers 204, or never asked -
+    nothing could have named a public owner, and the false is a default. The
+    ingest writes `is_public` over anything not set by hand, so sending it
+    turned a public company private; it is left out instead. `true` is
+    evidence wherever it came from, and is always sent."""
+    odpis = {"source": "api-krs", "source_krs": "api-krs.ms.gov.pl"}
+    rejestr_io = {"source": "rejestr-io", "source_krs": "rejestr.io"}
+    pipeline = Pipeline.create(CompaniesPayloads)
+    pipeline.companies = MockPipeline(
+        [
+            {
+                # MAZOWIECKI REGIONALNY FUNDUSZ POŻYCZKOWY: struck off.
+                "krs": "0000224180",
+                "name": "MAZOWIECKI REGIONALNY FUNDUSZ POŻYCZKOWY",
+                "is_public": False,
+                "sources": [rejestr_io],
+            },
+            {
+                "krs": "0000000001",
+                "name": "PRYWATNA",
+                "is_public": False,
+                "sources": [odpis, rejestr_io],
+            },
+            {
+                # Public by REGON's code, with no odpis read.
+                "krs": "0000000111",
+                "name": "WIELKOPOLSKA SPÓŁKA GAZOWNICTWA",
+                "is_public": True,
+                "sources": [rejestr_io],
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [{"krs": krs} for krs in ("0000224180", "0000000001", "0000000111")]
+        ),
+    )
+
+    by_krs = {
+        row["krs"]: row for row in pipeline.process(mock_ctx).to_dict(orient="records")
+    }
+
+    assert pd.isna(by_krs["0000224180"]["is_public"])
+    assert by_krs["0000000001"]["is_public"] is False
+    assert by_krs["0000000111"]["is_public"] is True
+
+
 def test_the_treasury_travels_as_a_flag_not_as_an_owner(mock_ctx, monkeypatch):
     """The Treasury is neither a company nor a territory.
 

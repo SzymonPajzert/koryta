@@ -38,6 +38,43 @@ def add_register_fields(payload: dict, form: str | None, organ) -> None:
         payload["supervisory_organ"] = organ.strip()
 
 
+def read_an_odpis(row: dict) -> bool:
+    """Whether the register's current extract of the company was read.
+
+    `CompaniesKRS` records an `api-krs` source for a company only when the
+    newest answer api-krs gave was an odpis. A company struck off answers 204
+    and one in neither register 404, both stored as "Not Found", and one never
+    asked has nothing stored at all - and in each case nothing was read that
+    could say who owns it.
+    """
+    sources = row.get("sources")
+    if not isinstance(sources, (list, np.ndarray)):
+        return False
+    return any(
+        isinstance(source, dict) and source.get("source") == "api-krs"
+        for source in sources
+    )
+
+
+def add_is_public(payload: dict, row: dict) -> None:
+    """Whether the public sector owns the company, where anything says so.
+
+    `true` is always sent: it comes from an owner the register names, from
+    REGON's ownership code, from a hardcoded list or from a public parent, and
+    any of those is evidence. `false` is sent only over an odpis that was read
+    and named no public owner. Without one it is a default rather than an
+    answer, and sending it flipped MAZOWIECKI REGIONALNY FUNDUSZ POŻYCZKOWY
+    (0000224180), public on the site since August, to private once api-krs
+    began answering 204 for it: the ingest writes `is_public` over anything
+    not marked `isPublicSource: "manual"`. Left out, the stored flag stands.
+    """
+    is_public = row.get("is_public")
+    if isinstance(is_public, (bool, np.bool_)) and is_public:
+        payload["is_public"] = True
+    elif read_an_odpis(row):
+        payload["is_public"] = False
+
+
 def wiki_categories(row: dict) -> list[str]:
     """The categories of the company's Wikipedia article, as `Companies` read
     them - see `entities.company_categories.categories_for` for what of them
@@ -200,11 +237,6 @@ class CompaniesPayloads(Pipeline):
             if not isinstance(activity, (list, np.ndarray)):
                 activity = []
 
-            is_public = row.get("is_public")
-            is_public = (
-                bool(is_public) if isinstance(is_public, (bool, np.bool_)) else False
-            )
-
             form = row.get("form")
             form = form if isinstance(form, str) and form.strip() else None
 
@@ -238,11 +270,11 @@ class CompaniesPayloads(Pipeline):
                     krs, list(activity), form, wiki_categories(row)
                 ),
                 "supervisory_body": supervisory_body(form),
-                "is_public": is_public,
                 "owners": owners,
                 "owner_teryts": owner_teryts,
                 "owner_skarb_panstwa": skarb_panstwa,
             }
+            add_is_public(payload, row)
             add_register_fields(payload, form, row.get("supervisory_organ"))
             add_wikipedia(payload, row.get("wikipedia"))
 
