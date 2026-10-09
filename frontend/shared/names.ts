@@ -1,3 +1,5 @@
+import { GIVEN_NAMES } from "./givenNames";
+
 /** A person's name reduced to what two spellings of the same person share.
  *
  * The extraction pipeline writes the name as the article spelled it, and the
@@ -82,4 +84,27 @@ export function personNameKeys(name: string): string[] {
     spellings.push([words[0], words.at(-1)].join(" "));
   }
   return [...new Set(spellings.map(normalizePersonName))].filter(Boolean);
+}
+
+/** A person's name without the given names after the first, for a view with
+ * no room for them.
+ *
+ * A page carries every given name the register knows - "Antoni Ignacy Sikoń" -
+ * and a label on the graph has room for about two words. The middle names are
+ * what a reader can spare: the first name and the surname are what the press
+ * uses, and the surname is what tells two Antonis apart.
+ *
+ * Which words are middle names the string does not say - "Zuzanna Benc
+ * Szczepaniak" is a double surname written with a space - so a word is dropped
+ * only while it is a given name somebody in the register is called
+ * (`GIVEN_NAMES`), and only after a first word that is one as well: "ks. Michał
+ * Olszewski" keeps both. A name it cannot read that way comes back whole.
+ */
+export function shortPersonName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const given = (word: string) => GIVEN_NAMES.has(word.toLowerCase());
+  if (words.length < 3 || !given(words[0]!)) return words.join(" ");
+  let surname = 1;
+  while (surname < words.length - 1 && given(words[surname]!)) surname += 1;
+  return [words[0], ...words.slice(surname)].join(" ");
 }
