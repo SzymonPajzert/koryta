@@ -326,6 +326,58 @@ class KorytaPeople(Pipeline[Person]):
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
 
 
+def was_public(page: dict) -> bool:
+    """Whether a person page was public in an export, by the rule of its day.
+
+    The site's rule is `pageIsPublic` in frontend/shared/model.ts: a removed
+    page is hidden, and `published` says the rest. `published` exists since
+    2026-07-22; before it a page was public once a revision of it had been
+    approved, and `revision_id` is what the field was backfilled from on
+    2026-08-08. Not `stats.isApproved`, the site's copy of the answer that
+    `KorytaPeople` keeps: no export before June 2026 carries it, and the 884
+    pages public on 2026-04-01 all lack it.
+    """
+    deleted = page.get("deleted")
+    if not _missing(deleted) and bool(deleted):
+        return False
+    published = page.get("published")
+    if not _missing(published):
+        return bool(published)
+    revision = page.get("revision_id")
+    return not _missing(revision) and bool(revision)
+
+
+class KorytaPublished(Pipeline):
+    """The ids of the person pages that were public in the export of `date`.
+
+    For a day gone by, which `KorytaPeople` cannot answer (`was_public`).
+    Today's export grows through the day, but a past day's never changes, so
+    nor does this once it has run: `ScrapeRejestrIO` reads it for one day,
+    `PUBLISHED_SINCE`, from disk or the shared cache after the first run.
+    """
+
+    dtype = {"id": str}
+    date: str
+
+    def __init__(self, date: str | None = None) -> None:
+        super().__init__()
+        self.date = date or CURRENT_DATE
+
+    @memoized_property
+    def filename(self) -> str:
+        return f"koryta_published_{self.date}"
+
+    def process(self, ctx: Context):
+        df, date_read = FirestoreCollection.latest_on_or_before(
+            ctx, "nodes", "person", self.date
+        )
+        ids = sorted(
+            str(page["id"]) for page in df.to_dict(orient="records") if was_public(page)
+        )
+        print(f"Person pages public in the {date_read} export: {len(ids)} of {len(df)}")
+        return pd.DataFrame({"id": ids}, columns=["id"])
+
+
 class KorytaCompanies(Pipeline[KorytaCompany]):
     """Lists companies (place nodes) already submitted to koryta.pl.
 
