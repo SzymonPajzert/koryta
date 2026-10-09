@@ -153,18 +153,18 @@
           </v-card-text>
         </v-card>
 
-        <v-card class="mb-4" rounded="lg">
+        <v-card class="mb-4" rounded="lg" data-newsletter-card>
           <v-card-title>Newsletter</v-card-title>
           <v-card-subtitle class="text-wrap">
-            Newsletter jest w przygotowaniu — wybierz już teraz, co chcesz
-            otrzymywać, a odezwiemy się, gdy ruszy.
+            Maile od koryta.pl, tylko na tematy, które tu wybierzesz. Z każdej
+            wiadomości wypiszesz się też jednym kliknięciem.
           </v-card-subtitle>
           <v-card-text>
             <v-switch
               v-model="newsletterRecentPeople"
               color="primary"
-              label="Nowo znalezione osoby"
-              hint="Powiadomienia o osobach niedawno dodanych do serwisu"
+              :label="campaignTopicLabels.recentPeople.title"
+              :hint="campaignTopicLabels.recentPeople.hint"
               persistent-hint
               :loading="savingNewsletter"
               @update:model-value="saveNewsletter"
@@ -172,11 +172,24 @@
             <v-switch
               v-model="newsletterCallsToAction"
               color="primary"
-              label="Wezwania do działania"
-              hint="Informacje, gdzie Twoja pomoc jest najbardziej potrzebna"
+              :label="campaignTopicLabels.callsToAction.title"
+              :hint="campaignTopicLabels.callsToAction.hint"
               persistent-hint
               :loading="savingNewsletter"
               @update:model-value="saveNewsletter"
+            />
+            <!-- Administrators are written to as a team without signing up
+                 for a topic (shared/campaigns.ts); this is how they stop it. -->
+            <v-switch
+              v-if="isAdmin"
+              v-model="teamMail"
+              color="primary"
+              label="Wiadomości dla zespołu"
+              hint="Jako administrator dostajesz maile o pracy zespołu, także bez zapisu na powyższe tematy"
+              persistent-hint
+              :loading="savingTeamMail"
+              data-team-mail-switch
+              @update:model-value="saveTeamMail"
             />
           </v-card-text>
         </v-card>
@@ -228,6 +241,7 @@ import {
   publicProfileEnabled,
   publicProfileLabel,
 } from "~~/shared/profile";
+import { campaignTopicLabels } from "~~/shared/campaigns";
 
 definePageMeta({
   middleware: "auth",
@@ -237,7 +251,7 @@ useHead({
   title: "Twój profil - koryta.pl",
 });
 
-const { user, userConfig, logout } = useAuthState();
+const { user, userConfig, logout, isAdmin } = useAuthState();
 // The database `useAuthState` reads the same document from, and the one the
 // server checks before sending mail. See the note in composables/auth.ts.
 const firestore = getFirestore(useFirebaseApp(), "koryta-pl");
@@ -407,7 +421,8 @@ const saveNotifications = async () => {
   }
 };
 
-// Newsletter preferences (placeholder - stored, no emails sent yet)
+// Newsletter topics. Campaigns are sent to a topic only to those who switched
+// it on here or said yes to the prompt in the layout - see shared/campaigns.ts.
 const newsletterRecentPeople = ref(false);
 const newsletterCallsToAction = ref(false);
 const savingNewsletter = ref(false);
@@ -441,6 +456,36 @@ const saveNewsletter = async () => {
     notify("Nie udało się zapisać preferencji.", "error");
   } finally {
     savingNewsletter.value = false;
+  }
+};
+
+// Team mail: on unless an administrator turned it off.
+const teamMail = ref(true);
+const savingTeamMail = ref(false);
+
+watch(
+  () => userConfig?.data?.value?.teamMail,
+  (choice) => {
+    teamMail.value = choice !== false;
+  },
+  { immediate: true },
+);
+
+const saveTeamMail = async () => {
+  if (!user.value) return;
+  savingTeamMail.value = true;
+  try {
+    await setDoc(
+      doc(firestore, "users", user.value.uid),
+      { teamMail: teamMail.value },
+      { merge: true },
+    );
+    notify("Zapisano preferencje powiadomień.");
+  } catch (err) {
+    console.error("Failed to save team mail preference:", err);
+    notify("Nie udało się zapisać preferencji.", "error");
+  } finally {
+    savingTeamMail.value = false;
   }
 };
 

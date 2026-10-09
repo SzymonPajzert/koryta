@@ -50,7 +50,9 @@ describe("the goal vocabulary", () => {
     // Not a law of nature, but a tripwire: goals are created one at a time in
     // the dashboard by hand, and the moment this list is tedious to set up,
     // somebody has spelled a dimension into a name that belongs in a property.
-    expect(ALL_GOALS.length).toBeLessThan(30);
+    // Moved from under 30 to 30 for the two mail-prompt goals: being asked and
+    // answering are two events, not one with a dimension in its name.
+    expect(ALL_GOALS.length).toBeLessThanOrEqual(30);
   });
 
   it("marks exactly the goals that fire without a reader doing anything", () => {
@@ -61,6 +63,7 @@ describe("the goal vocabulary", () => {
     expect(passive).toEqual([
       "cta:shown",
       "experiment:assigned",
+      "mail-prompt:shown",
       "tabela:no-results",
       "tabela:open",
       "teaser:shown",
