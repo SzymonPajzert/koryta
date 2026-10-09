@@ -79,9 +79,9 @@ People: at most 100 a night (`--max-uploads`), in this order
 2. a page the payload would change, of somebody whose rejestr.io feed was
    bought in the last 7 days (`--bought-days`) - by `krs_paid` or by hand, as
    the crawl bucket's names say - so what was paid for reaches the site that
-   night, or the night after a hand run or a held night. A page only: the
-   feeds are bought by name, so a bought entry without a page is most likely
-   a namesake's, and nobody but a new hire gets a page;
+   night, or the night after a hand run or a held night. A page only: a page
+   without a link is still bought by name, so a bought entry without a page
+   is most likely a namesake's, and nobody but a new hire gets a page;
 3. a page the payload would change, on which somebody noted that data is
    missing ("Brakuje danych") and no admin has closed the entry - on the page
    itself, or on the page of a company the payload names: the night sends no
