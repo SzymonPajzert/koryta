@@ -30,6 +30,11 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na grafie osoba bez partii jest szara, a nie niebieska, więc nie myli się już z granatem PiS i Konfederacji. Legenda podpisuje ją „Osoba: brak partii”; jaśniejsza szarość to nadal „Inne”.",
+    fixes: ["wg0ZscDcClubfyTEn5pB"],
+  },
+  {
+    change:
       "Na pasku nad grafem przycisk „Opisy na liniach” ma zawsze ten sam napis, a pole wyboru przy napisie pokazuje, czy opisy są włączone. Kliknięcie nie zmienia już jego szerokości, więc przyciski nie przeskakują między rzędami, a na telefonie „2 kroki” mieści się w pasku zamiast być uciętym.",
     fixes: ["60beJLEWtp6lNuWyz15L"],
   },
