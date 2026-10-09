@@ -7,6 +7,8 @@
 !package-lock.json
 !src/**/verified_selectors.json
 !src/**/article_url_regexes.json
+# A test's expectations, kept as a table to check and edit by hand.
+!src/tests/pipelines/expected_public_companies.csv
 
 .coverage
 
