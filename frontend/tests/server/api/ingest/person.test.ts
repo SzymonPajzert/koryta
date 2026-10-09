@@ -1049,6 +1049,29 @@ describe("api/ingest/person", () => {
       );
     });
 
+    it("stores „Inne” after the named parties", async () => {
+      // Chips are drawn in stored order, and by name alone „Inne” comes ahead
+      // of PiS: the page would lead with the grey chip.
+      personExists({ name: "Test Person", type: "person", parties: ["PiS"] });
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        parties: ["Inne"],
+        companies: [],
+        elections: [],
+      });
+
+      await handler({} as any);
+
+      expect(createRevisionTransaction).toHaveBeenCalledWith(
+        mockDb,
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ parties: ["PiS", "Inne"] }),
+        expect.anything(),
+      );
+    });
+
     it("writes nothing when it has nothing new to say", async () => {
       // Otherwise every nightly run leaves a revision on every person.
       personExists({ name: "Test Person", type: "person", parties: ["PiS"] });

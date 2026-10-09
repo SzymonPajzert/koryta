@@ -182,13 +182,28 @@ def test_an_inne_candidacy_carries_inne_on_its_edge_and_is_vouched_for():
 
 
 def test_a_person_who_also_stood_for_a_named_party_keeps_it():
-    """„Inne” goes beside PiS rather than instead of it."""
+    """„Inne” goes beside PiS rather than instead of it - and after it."""
     assert parties_from_committees(
         [
             candidacy("KOMITET WYBORCZY AKCJA WYBORCZA SOLIDARNOŚĆ"),
             candidacy("KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ"),
         ]
-    ) == [OTHER_PARTY, "PiS"]
+    ) == ["PiS", OTHER_PARTY]
+
+
+def test_inne_comes_after_every_named_party():
+    """The site draws a person's chips in this order, and by name alone „Inne”
+    would lead ahead of Konfederacja, PO, PSL, PiS and SLD. The named parties
+    keep the order by name they always had."""
+    assert parties_from_committees(
+        [
+            candidacy("KW LIGA POLSKICH RODZIN"),
+            candidacy("KOMITET WYBORCZY SOJUSZ LEWICY DEMOKRATYCZNEJ"),
+            candidacy("KOMITET WYBORCZY KONFEDERACJA WOLNOŚĆ I NIEPODLEGŁOŚĆ"),
+            candidacy("KOMITET WYBORCZY BEZPARTYJNI SAMORZĄDOWCY"),
+            candidacy("KOMITET WYBORCZY PLATFORMA OBYWATELSKA RP"),
+        ]
+    ) == ["Bezpartyjni Samorządowcy", "Konfederacja", "PO", "SLD", OTHER_PARTY]
 
 
 @pytest.mark.parametrize(

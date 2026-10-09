@@ -43,6 +43,18 @@ def normalise_committee(committee: str) -> str:
 OTHER_PARTY = "Inne"
 
 
+def party_sort_key(party: str) -> tuple[bool, str]:
+    """The order a person's parties are stored in: by name, `OTHER_PARTY` last.
+
+    The site draws a person's party chips in stored order, and by name alone
+    „Inne” comes ahead of Konfederacja, PO, PSL, PiS and SLD - so a page that
+    gains it beside PiS would lead with the grey chip, which is to say with the
+    remainder. `sortParties` in `frontend/shared/misc.ts` is the same order for
+    what the ingest and a merge write.
+    """
+    return (party == OTHER_PARTY, party)
+
+
 #: Which national party or parties a committee stands for.
 #:
 #: Exact names, not substrings. Local committees borrow national brands - 'KWW
