@@ -24,6 +24,9 @@ export type EdgeUpdated = {
   applied: boolean;
   /** Nothing was written because the relation already said exactly this. */
   unchanged: boolean;
+  /** Nothing was written because the caller's own proposal of exactly this is
+   * still waiting; `revision_id` is that proposal. */
+  duplicate: boolean;
 };
 
 /** Corrects what one relation says: the role, the dates, the committee.
@@ -105,25 +108,38 @@ export default defineEventHandler(async (event): Promise<EdgeUpdated> => {
       approve: isAdmin,
     })
   ) {
-    return { edge_id, revision_id: null, applied: false, unchanged: true };
+    return {
+      edge_id,
+      revision_id: null,
+      applied: false,
+      unchanged: true,
+      duplicate: false,
+    };
   }
 
   const batch = db.batch();
 
   if (!isAdmin) {
-    const { revisionRef } = proposeRevisionTransaction(
+    // Filed under the caller's uid. Their own proposal of this, still
+    // waiting, is handed back rather than filed twice - the way
+    // /api/revisions/create answers a node proposal made again - and one a
+    // reviewer has answered gets a second ask beside it rather than having
+    // the verdict overwritten.
+    const { revisionRef, outcome } = await proposeRevisionTransaction(
       db,
       batch,
       user,
       edgeRef,
       data,
     );
-    await batch.commit();
+    const duplicate = outcome === "unchanged";
+    if (!duplicate) await batch.commit();
     return {
       edge_id,
       revision_id: revisionRef.id,
       applied: false,
       unchanged: false,
+      duplicate,
     };
   }
 
@@ -155,5 +171,6 @@ export default defineEventHandler(async (event): Promise<EdgeUpdated> => {
     revision_id: revisionRef.id,
     applied: true,
     unchanged: false,
+    duplicate: false,
   };
 });

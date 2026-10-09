@@ -5,7 +5,11 @@ import type {
   WriteBatch,
 } from "firebase-admin/firestore";
 import type { Edge, Node, Revision } from "~~/shared/model";
-import { pageIsPublic, revisionCollection } from "../../shared/model";
+import {
+  pageIsPublic,
+  revisionCollection,
+  revisionIsPending,
+} from "../../shared/model";
 import { recordAudit } from "./audit";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
@@ -567,6 +571,25 @@ export function proposalId(
   return `proposal_${targetId}_${digest}`;
 }
 
+/** What `proposeRevisionTransaction` did with an offer. */
+export type ProposalOutcome =
+  /** Nothing stood at its address, so it is filed there now - or, for a
+   * person asking again what a reviewer has already answered, under an
+   * address of its own. */
+  | "created"
+  /** A proposal still waiting stood there saying something else, and now
+   * says this. */
+  | "refreshed"
+  /** A proposal still waiting already says exactly this. Nothing written. */
+  | "unchanged"
+  /** A reviewer has approved or rejected the pipeline's proposal. Nothing
+   * written: the same ask is not asked again. */
+  | "decided";
+
+export interface ProposalResult extends BatchResult {
+  outcome: ProposalOutcome;
+}
+
 /** Record a change to a document that already exists, without making it.
  *
  * `createRevisionTransaction` cannot express this. It writes the revision's
@@ -581,8 +604,25 @@ export function proposalId(
  * change it should call `createRevisionTransaction` with `approve` instead, and
  * pass the target's current `published` through so applying a change neither
  * publishes a document that was awaiting review nor hides one that was live.
+ *
+ * Reads the address before it writes, because a restatement is not a new ask.
+ * This used to `set` the address whatever stood there, so every night the
+ * people import re-sent a person it put `pending` back over a reviewer's
+ * verdict and deleted `review_user`, `review_time` and `reject_reason`: 14
+ * approvals by 2026-10-09, five of them Marian Trela's in the first live
+ * import. A rejection would have come back the same way. Now:
+ *
+ * - nothing there: the proposal is filed with `create`, which fails the batch
+ *   rather than overwrite one that appeared since the read;
+ * - one still waiting: only `data` and `update_time` move, and only if what it
+ *   proposes has changed. A restatement of the same offer writes nothing, so
+ *   it no longer reshuffles /admin/rewizje#powiazania, which is ordered by
+ *   `update_time`;
+ * - one a reviewer answered: the pipeline's is left exactly as it is. A
+ *   person's restatement is a second ask, filed beside it, the way
+ *   /api/revisions/create files one about a node.
  */
-export function proposeRevisionTransaction(
+export async function proposeRevisionTransaction(
   db: Firestore,
   batch: WriteBatch,
   user: { uid: string },
@@ -594,31 +634,69 @@ export function proposeRevisionTransaction(
      * answer than the caller's. See `proposalId`. */
     key?: string;
   } = {},
-): BatchResult {
+): Promise<ProposalResult> {
+  const automatic = options.automatic === true;
+
   // A proposal is addressed by what it proposes, not by when it was made. An
   // applied revision is history and each one is its own record; a proposal is a
   // standing offer, and the pipeline restates it on every run until somebody
   // acts on it. With a fresh id each time, the unrecognised committees - the
   // majority, since `committee_to_party` names about sixty - would add a
   // revision per candidacy per night, forever.
+  //
+  // A person's proposal is addressed by who made it as well. Two contributors
+  // proposing the same correction are two proposals, and sharing one document
+  // handed the first one's work to whoever came second - the reason
+  // /api/revisions/create puts the uid in a node proposal's address. The
+  // pipeline is one proposer restating one offer, so its address stays bare.
+  const address = automatic ? targetRef.id : `${targetRef.id}_${user.uid}`;
   const revisionRef = db
     .collection("revisions")
-    .doc(proposalId(targetRef.id, data, options.key));
+    .doc(proposalId(address, data, options.key));
+  const standing = await revisionRef.get();
 
+  const proposed = sanitizeFirestoreData(data);
+  const timestamp = Timestamp.now();
   const revision: Revision = {
     node_id: targetRef.id,
-    data: sanitizeFirestoreData(data),
-    update_time: Timestamp.now(),
+    data: proposed,
+    update_time: timestamp,
     update_user: user.uid,
     collection: targetRef.parent.id === "edges" ? "edges" : "nodes",
     status: "pending",
   };
   // Unconditionally, for the reason given in `createRevisionTransaction`.
-  revision.update_automatic = options.automatic === true;
+  revision.update_automatic = automatic;
 
-  batch.set(revisionRef, revision);
+  if (!standing.exists) {
+    batch.create(revisionRef, revision);
+    return { revisionRef, targetRef, outcome: "created" };
+  }
 
-  return { revisionRef, targetRef };
+  const stored = standing.data() ?? {};
+  if (!revisionIsPending(stored)) {
+    if (automatic) return { revisionRef, targetRef, outcome: "decided" };
+    const askedAgain = db.collection("revisions").doc();
+    batch.create(askedAgain, revision);
+    return { revisionRef: askedAgain, targetRef, outcome: "created" };
+  }
+
+  if (sameStoredValue(stored.data, proposed)) {
+    return { revisionRef, targetRef, outcome: "unchanged" };
+  }
+
+  // On condition that nobody has touched it since the read, so a verdict
+  // landing in between fails this batch instead of having its proposal
+  // rewritten under it. The next run reads the verdict and leaves it alone.
+  const refresh = { data: proposed, update_time: timestamp };
+  if (standing.updateTime) {
+    batch.update(revisionRef, refresh, {
+      lastUpdateTime: standing.updateTime,
+    });
+  } else {
+    batch.update(revisionRef, refresh);
+  }
+  return { revisionRef, targetRef, outcome: "refreshed" };
 }
 
 export async function getRevisionsForNodes(

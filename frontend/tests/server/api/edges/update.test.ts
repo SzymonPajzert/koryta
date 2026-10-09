@@ -1,8 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../../server/api/edges/update.post";
-import { withoutInternalFields } from "../../../../server/utils/revisions";
+import {
+  proposalId,
+  sanitizeFirestoreData,
+  withoutInternalFields,
+} from "../../../../server/utils/revisions";
 import { revisionChanges } from "../../../../shared/revisionChanges";
 
+/** Every write the batch was given, `set` or `create` alike - a proposal is
+ * filed with `create`, so it cannot overwrite one already standing. */
 const mockBatchSet = vi.fn();
 const mockCommit = vi.fn();
 const mockCacheClear = vi.fn();
@@ -34,6 +40,8 @@ const mockDb = {
   })),
   batch: vi.fn(() => ({
     set: (ref: { path: string }, data: unknown) => mockBatchSet(ref.path, data),
+    create: (ref: { path: string }, data: unknown) =>
+      mockBatchSet(ref.path, data),
     update: vi.fn(),
     commit: mockCommit,
   })),
@@ -147,6 +155,69 @@ describe("api/edges/update", () => {
       // does not draw for that edge type.
       expect(data.start_date).toBe("2019-01-01");
       expect(data.end_date).toBe("");
+    });
+
+    /** The snapshot a contributor renaming the job to „prezes zarządu" files. */
+    function renamed() {
+      return sanitizeFirestoreData({
+        ...withoutInternalFields(stored["edges/e1"]!),
+        name: "prezes zarządu",
+      }) as Record<string, unknown>;
+    }
+
+    it("files the same fix from two contributors as two proposals", async () => {
+      // One shared document handed the first contributor's proposal to
+      // whoever made it second.
+      await handler({} as never);
+      currentUser = { uid: "second-reader" };
+      await handler({} as never);
+
+      const paths = mockBatchSet.mock.calls.map((call) => call[0]);
+      expect(paths).toEqual([
+        `revisions/${proposalId("e1_reader-uid", renamed())}`,
+        `revisions/${proposalId("e1_second-reader", renamed())}`,
+      ]);
+    });
+
+    it("hands a contributor back their own proposal still waiting", async () => {
+      const id = proposalId("e1_reader-uid", renamed());
+      stored[`revisions/${id}`] = {
+        node_id: "e1",
+        collection: "edges",
+        data: renamed(),
+        status: "pending",
+        update_user: "reader-uid",
+      };
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ revision_id: id, duplicate: true });
+      expect(mockBatchSet).not.toHaveBeenCalled();
+      expect(mockCommit).not.toHaveBeenCalled();
+    });
+
+    it("files a second ask beside one a reviewer has answered", async () => {
+      // A rejection stays on the record it was given to; asking again is a
+      // new proposal, not an edit of the old one.
+      const id = proposalId("e1_reader-uid", renamed());
+      stored[`revisions/${id}`] = {
+        node_id: "e1",
+        collection: "edges",
+        data: renamed(),
+        status: "rejected",
+        reject_reason: "brak źródła",
+        update_user: "reader-uid",
+      };
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({
+        revision_id: "generated-1",
+        duplicate: false,
+      });
+      expect(mockBatchSet).toHaveBeenCalledTimes(1);
+      expect(mockBatchSet.mock.calls[0]![0]).toBe("revisions/generated-1");
+      expect(revisionWrite()).toMatchObject({ status: "pending" });
     });
   });
 
