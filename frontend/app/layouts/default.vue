@@ -65,7 +65,8 @@
         <!-- The panel and two of the inboxes it lists, under the panel's own
              names; the third, "Zgłoszenia", is under "Zespół" with the QA list
              and its problems, since a problem found there is a report too.
-             "Zadania" is the owner's own list, shown to him alone. "Procesy",
+             "Zadania" is the owner's own list and "Mailing" the owner's
+             campaigns, both shown to the owner alone. "Procesy",
              the jobs' progress next to it, is the datascience group's, and
              the group is not only administrators: somebody in it alone gets
              the menu with that one entry, and none of the panel's.
@@ -117,6 +118,12 @@
               :prepend-icon="mdiSitemapOutline"
               to="/admin/zadania"
               title="Zadania"
+            />
+            <v-list-item
+              v-if="isOwner"
+              :prepend-icon="mdiEmailFastOutline"
+              to="/admin/mailing"
+              title="Mailing"
             />
             <v-list-item
               v-if="isDatascience"
@@ -232,6 +239,7 @@ import {
   mdiMessageAlertOutline,
   mdiSitemapOutline,
   mdiCogSyncOutline,
+  mdiEmailFastOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
