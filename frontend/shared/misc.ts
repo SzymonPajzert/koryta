@@ -16,7 +16,9 @@ export const OTHER_PARTY = "Inne";
  *
  * Kept in step with `committee_to_party` in
  * `data/pipelines/src/scrapers/pkw/elections.py`, which is where the pipeline
- * decides what to call a party. SLD is separate from Nowa Lewica on purpose:
+ * decides what to call a party. It files the national parties the site does
+ * not name - AWS, Samoobrona, UW, LPR, Kukiz'15 and the like - under
+ * `OTHER_PARTY`, never a local list. SLD is separate from Nowa Lewica on purpose:
  * they are the same party renamed in 2021, but somebody who stood on an SLD
  * list in 2001 was not a member of a party that did not exist yet, and the
  * election it comes from is the whole of the evidence.

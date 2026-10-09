@@ -35,6 +35,14 @@ def normalise_committee(committee: str) -> str:
     return " ".join(committee.lower().split())
 
 
+#: A tie to a national party the site does not name: AWS, Samoobrona, UW, LPR
+#: and the rest of the parties that have since dissolved or stayed small. The
+#: site stores and filters it like any party and draws it greyed out
+#: (`OTHER_PARTY` in `frontend/shared/misc.ts`), so it says that somebody stood
+#: for a party without putting them beside PiS or PO.
+OTHER_PARTY = "Inne"
+
+
 #: Which national party or parties a committee stands for.
 #:
 #: Exact names, not substrings. Local committees borrow national brands - 'KWW
@@ -48,9 +56,6 @@ def normalise_committee(committee: str) -> str:
 #: Both the full names and the abbreviations are here because PKW uses both;
 #: `normalise_committee` settles case and spacing, nothing else.
 committee_to_party: dict[str, list[str]] = {
-    # "komitet wyborczy akcja wyborcza solidarność": ["AWS"],
-    # "zarząd unii wolności": ["UW"],
-    # "kw samoobrona rzeczypospolitej polskiej": ["Samoobrona"],
     "komitet wyborczy prawo i sprawiedliwość": ["PiS"],
     'komitet wyborczy "prawo i sprawiedliwość"': ["PiS"],
     "kw prawo i sprawiedliwość": ["PiS"],
@@ -147,6 +152,232 @@ committee_to_party: dict[str, list[str]] = {
     "kw stowarzyszenie „bezpartyjni samorządowcy”": ["Bezpartyjni Samorządowcy"],
     "komitet wyborczy wyborców bezpartyjni samorządowcy-normalna polska"
     " w normalnej europie": ["Bezpartyjni Samorządowcy"],
+    #
+    # The national parties the site does not name, as `OTHER_PARTY`.
+    #
+    # Every spelling person_pkw holds is here, down to a single candidate. PKW
+    # took the 1998 lists from each gmina's own commission, which typed the
+    # national committee as it saw fit - in quotes or out, with "(AWS)" after
+    # it or before, with a garbled first word ('womitet', 'rygielt wyborczy').
+    # Each of those is the national committee misread, not a local one.
+    #
+    # A joint list of these parties, or of one of them with a party the site
+    # does not name, is „Inne” too, on the rule the SLD lists above follow. A
+    # joint list with a party the site does name keeps that party: Przymierze
+    # Społeczne above is PSL, though KPEiR stood on it. A list that joined a
+    # party's town branch with a group of the town's own ('Ziemia Kamieńska
+    # AWS-UPR-UW-RPN', 'Kielce Nasze Miasto', 'Lubelskie Forum Samorządowe - Unia
+    # Wolności') is a local list and gets nothing, like the KWWs in 2024 that
+    # borrow Trzecia Droga's name.
+    #
+    # Akcja Wyborcza Solidarność. AWS Prawicy was its list in 2001.
+    "komitet wyborczy akcja wyborcza solidarność": [OTHER_PARTY],
+    "komitet wyborczy akcja wyborcza solidarnosc": [OTHER_PARTY],
+    'komitet wyborczy "akcja wyborcza solidarność"': [OTHER_PARTY],
+    'komitet wyborczy"akcja wyborcza solidarność"': [OTHER_PARTY],
+    'komitet wyborczy" akcja wyborcza solidarność "': [OTHER_PARTY],
+    'komitet wyborczy akcja wyborcza solidarność"': [OTHER_PARTY],
+    'komitet wyborczy akcja wyborcza "solidarność"': [OTHER_PARTY],
+    'komitet wyborczy akcja "wyborcza solidarność"': [OTHER_PARTY],
+    'komitet wyborczy akcja wyborcza "solidarność" h': [OTHER_PARTY],
+    'komitet wyborczy "akcja wyborcza solidarność" (aws)': [OTHER_PARTY],
+    'komitet wyborczy"akcja wyborcza solidarność(aws)"': [OTHER_PARTY],
+    'komitet wyborczy "akcja wyborcza solidarność(aws)': [OTHER_PARTY],
+    'komitet wyborczy "akcja wyborcza solidarność" - aws': [OTHER_PARTY],
+    'komitet wyborczy "akcja wyborcza solidarność" aws': [OTHER_PARTY],
+    'komitet wyborczy"akcja wyborcza solidarność"/aws/': [OTHER_PARTY],
+    'komitet wyborczy "akcja wyborcza solidarność" /aws/': [OTHER_PARTY],
+    'komitet wyborczy akcja wyborcza solidarność "aws"': [OTHER_PARTY],
+    'komitet wyborczy akcja wyborcza "solidarność" (aws)': [OTHER_PARTY],
+    "komitet wyborczy akcja wyborcza solidarność aws": [OTHER_PARTY],
+    "komitet wyborczy akcja wyborcza solidarność (aws)": [OTHER_PARTY],
+    "komitet wyborczy akcja wyborcza solidarność /aws/": [OTHER_PARTY],
+    "komitet wyborczy aws": [OTHER_PARTY],
+    "komitet wyborczy akcji wyborczej solidarność": [OTHER_PARTY],
+    'komitet wyborczy akcji wyborczej "solidarność"': [OTHER_PARTY],
+    'komitet wyborczy akcji wyborczej "solidarność" aws': [OTHER_PARTY],
+    'komitet wyborczy akcji wyborczej"solidarność': [OTHER_PARTY],
+    "komitet wyborczy akcji wyborczwj solidarność": [OTHER_PARTY],
+    'komitet "akcji wyborczej solidarność"': [OTHER_PARTY],
+    "komitet wyborczy-akcja wyborcza solidarność": [OTHER_PARTY],
+    "komitet wyborczy - akcja wyborcza solidarność": [OTHER_PARTY],
+    "komitet wyborczy akcja wyborcza solidarnoˇć": [OTHER_PARTY],
+    'komitet wyborczy "akcja wyborzcza solidarność"': [OTHER_PARTY],
+    "komitet wyborczy akcja wyborcza solidarność akcja wyborcza solidarność": [
+        OTHER_PARTY
+    ],
+    "komitet wyborczy akcja wyborcza solidarność"
+    " komitet wyborczy akcja wyborcza solidarność": [OTHER_PARTY],
+    "komitet wyborczy akcja wyborcza solidarność 00-154 warszawa ul. dzielna 7": [
+        OTHER_PARTY
+    ],
+    "komitet wyborczy akcja wyborcza solidarność-skl": [OTHER_PARTY],
+    "krajowy komitet wyborczy akcja wyborcza solidarność": [OTHER_PARTY],
+    'krajowy komitet wyborczy akcja wyborcza solidarność "aws"': [OTHER_PARTY],
+    "krajowy komitet akcja wyborcza solidarność": [OTHER_PARTY],
+    "krajowy wyborczy akcja wyborcza solidarność": [OTHER_PARTY],
+    "akcja wyborcza solidarność": [OTHER_PARTY],
+    '"akcja wyborcza solidarność"': [OTHER_PARTY],
+    'akcja wyborcza "solidarność"': [OTHER_PARTY],
+    "akcja wyborcza solidarność (aws)": [OTHER_PARTY],
+    "akcja wyborcza solidarność /aws/": [OTHER_PARTY],
+    "akcja wyborcza solidarność/aws/": [OTHER_PARTY],
+    "akcja wyborcza solidarność/aws/ solidarność": [OTHER_PARTY],
+    "akcja wyborcza solidarność - komitet wyborczy koalicyjny": [OTHER_PARTY],
+    "akcja wyborcz solidarność - komitet wyborczy koalicyjny": [OTHER_PARTY],
+    "[komitet wyborczy akcja wyborcza solidarność": [OTHER_PARTY],
+    '"omitet wyborczy akcja wyborcza solidarność': [OTHER_PARTY],
+    "womitet wyborczy akcja wyborcza solidarność": [OTHER_PARTY],
+    "wyborczy akcja wyborcza solidarność": [OTHER_PARTY],
+    "rygielt wyborczy akcja wyborcza solidarność": [OTHER_PARTY],
+    "mieczkowskiorczy akcja wyborcza solidarność": [OTHER_PARTY],
+    "koalicyjny komitet wyborczy - akcja wyborcza solidarność prawicy": [OTHER_PARTY],
+    # Samoobrona, under each name it stood by: Samoobrona - Leppera in 1993,
+    # Przymierze Samoobrona in 1997, Nasz Dom Polska - Samoobrona Andrzeja
+    # Leppera in 2010-11, and its splinters Samoobrona Patriotyczna and
+    # Samoobrona Odrodzenie. From 2002, 'KW' or 'Komitet Wyborczy' without
+    # 'Wyborców' is a party's own committee, wherever it ran. The 1998
+    # 'Samoobrona' lists ran in five voivodeships, so they are the party's too.
+    # Not 'Samoobrona Ekologiczna Rolników „Pronatura”', 'Samoobrona Tatrzańska'
+    # or a KWW that only borrows the word.
+    "kw samoobrona rzeczypospolitej polskiej": [OTHER_PARTY],
+    "komitet wyborczy samoobrona rzeczypospolitej polskiej": [OTHER_PARTY],
+    "komitet wyborczy samoobrona rzeczpospolitej polskiej": [OTHER_PARTY],
+    "kw samoobrona rp": [OTHER_PARTY],
+    "kw samoobrona": [OTHER_PARTY],
+    "komitet wyborczy samoobrona": [OTHER_PARTY],
+    'komitet wyborczy "samoobrona"': [OTHER_PARTY],
+    "komitet wyborczy \"samoobrona'": [OTHER_PARTY],
+    "samoobrona - leppera": [OTHER_PARTY],
+    "krajowy komitet wyborczy samoobrona - leppera": [OTHER_PARTY],
+    "rada krajowa przymierze samoobrona": [OTHER_PARTY],
+    "komitet wyborczy nasz dom polska - samoobrona andrzeja leppera": [OTHER_PARTY],
+    "komitet wyborczy nasz dom polska-samoobrona andrzeja leppera": [OTHER_PARTY],
+    "komitet wyborczy samoobrona patriotyczna": [OTHER_PARTY],
+    "komitet wyborczy samoobrona odrodzenie": [OTHER_PARTY],
+    # Unia Wolności. In 1997 and 1998 its lists were registered by the party's
+    # board, 'Zarząd Unii Wolności'. Unia Demokratyczna, which it grew out of in
+    # 1994, is not here: nobody has decided it.
+    "zarząd unii wolności": [OTHER_PARTY],
+    "zarząd unii wolności.": [OTHER_PARTY],
+    "zarzad unii wolnosci": [OTHER_PARTY],
+    "zarząd unii wolnośc": [OTHER_PARTY],
+    "zarząd unia wolności": [OTHER_PARTY],
+    "unia wolności zarząd krajowy": [OTHER_PARTY],
+    "komitet wyborczy zarządu unii wolności": [OTHER_PARTY],
+    "komitet wyborczy unii wolności": [OTHER_PARTY],
+    "komitet wyborczy unia wolności": [OTHER_PARTY],
+    'komitet wyborczy "unia wolności"': [OTHER_PARTY],
+    "komitet unii wolności": [OTHER_PARTY],
+    "unia wolności": [OTHER_PARTY],
+    "unii wolności": [OTHER_PARTY],
+    # Joint 1998 lists of AWS, UW and UPR with each other, or with ROP and SKL.
+    "komitet wyborczy rs aws-uw": [OTHER_PARTY],
+    "komitet wyborczy koalicja unia wolności - upr": [OTHER_PARTY],
+    'komitet wyborczy "koalicja unia wolności - upr"': [OTHER_PARTY],
+    'komitet wyborczy "unia wolności i unia polityki realnej"': [OTHER_PARTY],
+    "koalicja aws - chrześcijańskie forum rop": [OTHER_PARTY],
+    "komitet wyborczy koalicja aws - chrześcijańskie forum rop": [OTHER_PARTY],
+    # Liga Polskich Rodzin.
+    "kw liga polskich rodzin": [OTHER_PARTY],
+    "komitet wyborczy liga polskich rodzin": [OTHER_PARTY],
+    # Kukiz'15: the Sejm list of 2015, the sejmik lists of 2018 in all sixteen
+    # voivodeships, and its Senat committee of 2019. Not the town KWWs of 2018
+    # that put the name beside their own.
+    "komitet wyborczy wyborców „kukiz'15”": [OTHER_PARTY],
+    "komitet wyborczy wyborców kukiz'15": [OTHER_PARTY],
+    "komitet wyborczy wyborców kukiz15 do senatu": [OTHER_PARTY],
+    # Ruch Patriotyczny „Ojczyzna”, which stood in all sixteen sejmiks in 1998.
+    # Not 'Komitet Wyborczy Ruch Patriotyczny', another party's 2005 Sejm list,
+    # nor 'Niezależny Ruch Patriotyczny Ojczyzna', one town's list.
+    "komitet wyborczy ruch patriotyczny ojczyzna": [OTHER_PARTY],
+    'komitet wyborczy ruch patriotyczny "ojczyzna"': [OTHER_PARTY],
+    'komitet wyborczy "ruch patriotyczny ojczyzna"': [OTHER_PARTY],
+    'komitet wyborczy"ruch patriotyczny ojczyzna"': [OTHER_PARTY],
+    'komitet wyborczy "ruchu patriotycznego ojczyzna"': [OTHER_PARTY],
+    '"komitet wyborczy ruch patriotyczny ojczyzna"': [OTHER_PARTY],
+    "ruch patriotyczny ojczyzna": [OTHER_PARTY],
+    'ruch patriotyczny "ojczyzna"': [OTHER_PARTY],
+    '"ruch patriotyczny ojczyzna"': [OTHER_PARTY],
+    "ruch patriotyczny-ojczyzna": [OTHER_PARTY],
+    "patriet wyborczy ruch patriotyczny ojczyzna": [OTHER_PARTY],
+    "pomitet wyborczy ruch patriotyczny ojczyzna": [OTHER_PARTY],
+    "patriotyvyborczy ruch patriotyczny ojczyzna": [OTHER_PARTY],
+    # Konfederacja Polski Niepodległej, and the KPN - Obóz Patriotyczny that
+    # split from it.
+    "konfederacja polski niepodległej": [OTHER_PARTY],
+    'komitet wyborczy "konfederacja polski niepodległej"': [OTHER_PARTY],
+    "kw konfederacji polski niepodległej": [OTHER_PARTY],
+    "rada polityczna konfederacji polski niepodległej": [OTHER_PARTY],
+    "ogólnopolski komitet wyborczy konfederacji polski niepodległej": [OTHER_PARTY],
+    "komitet wyborczy konfederacja polski niepodległej - obóz patriotyczny": [
+        OTHER_PARTY
+    ],
+    # Unia Polityki Realnej, also under its long name, Konserwatywno-Liberalna
+    # Partia UPR, and its 2010 joint list with Prawica Rzeczypospolitej.
+    # 'Platforma Janusza Korwin-Mikke' (2005) is left to the decision on
+    # Konfederacja's predecessors.
+    "unia polityki realnej": [OTHER_PARTY],
+    "komitet wyborczy unia polityki realnej": [OTHER_PARTY],
+    "komitet wyborczy unii polityki realnej": [OTHER_PARTY],
+    "k-lp unia polityki realnej": [OTHER_PARTY],
+    "konserwatywno-liberalna partia unia polityki realnej": [OTHER_PARTY],
+    "kw konserwatywno-liberalna partia unia polityki realnej": [OTHER_PARTY],
+    "kw konserwatywno-liberalnej partii unia polityki realnej": [OTHER_PARTY],
+    "rada główna konserwatywno-liberalnej partii unia polityki realnej": [OTHER_PARTY],
+    "rada główna konserwatywno - liberalnej partii unia polityki realnej": [
+        OTHER_PARTY
+    ],
+    "rada główna konserwatywno-liberanlnej partii unia polityki realnej": [OTHER_PARTY],
+    "rada główna konserwatywno-liberalna partii unii polityki realnej": [OTHER_PARTY],
+    "rada glowna konserwatywno-liberalnej partii unia polityki realnej": [OTHER_PARTY],
+    "prezydium rady głównej konserwatywno-liberalnej partii unia polityki realnej": [
+        OTHER_PARTY
+    ],
+    "prezydium rady głównej konserwatywno-liberalnej partii unii polityki realnej": [
+        OTHER_PARTY
+    ],
+    "prezydium rady głównej konserwatywno liberalnej partii unii polityki realnej": [
+        OTHER_PARTY
+    ],
+    "prezydium rady głównej konserwatywno-liberalnej partii polityki"
+    " realnej-warszawa": [OTHER_PARTY],
+    "koalicyjny komitet wyborczy prawica rzeczypospolitej - upr": [OTHER_PARTY],
+    # Polska Partia Pracy, and the longer name it stood under from 2010.
+    "komitet wyborczy polska partia pracy": [OTHER_PARTY],
+    "komitet wyborczy polska partia pracy - sierpień 80": [OTHER_PARTY],
+    # Ruch Palikota, renamed Twój Ruch in 2013, and its 2014 European list with
+    # Europa Plus.
+    "komitet wyborczy ruch palikota": [OTHER_PARTY],
+    "komitet wyborczy twój ruch": [OTHER_PARTY],
+    "koalicyjny komitet wyborczy europa plus twój ruch": [OTHER_PARTY],
+    # Polska Jest Najważniejsza. Not PiS: it split from PiS in 2010 and stood
+    # against it in 2011.
+    "komitet wyborczy polska jest najważniejsza": [OTHER_PARTY],
+    # KPEiR: two parties share the abbreviation - Krajowa Partia Emerytów i
+    # Rencistów and Krajowe Porozumienie Emerytów i Rencistów RP - and both are
+    # here, with the Partia's 2004 European list with PLD.
+    "kw krajowej partii emerytów i rencistów": [OTHER_PARTY],
+    "komitet wyborczy krajowa partia emerytów i rencistów": [OTHER_PARTY],
+    "komitet wyborczy krajowej partii emerytów i rencistów": [OTHER_PARTY],
+    "rada naczelna krajowej partii emerytów i rencistów": [OTHER_PARTY],
+    "rada naczelna krajowej partii emerytow i rencistow": [OTHER_PARTY],
+    "krajowa partia emerytów i rencistów-rada oddziału miejskiego": [OTHER_PARTY],
+    "koalicyjny komitet wyborczy kpeir-pld": [OTHER_PARTY],
+    "prezydium rady naczelnej krajowego porozumienia emerytów i rencistów"
+    " rzeczypospolitej polskiej": [OTHER_PARTY],
+    "prezydium rady naczelnej krajowego porozumienia emerytow i rencistow"
+    " rzeczypospolitej polskiej": [OTHER_PARTY],
+    "kw krajowego porozumienia emerytów i rencistów rzeczypospolitej polskiej": [
+        OTHER_PARTY
+    ],
+    "kw krajowego porozumienia emerytów i rencistów rp": [OTHER_PARTY],
+    # Solidarna Polska and Porozumienie, on the lists they ran under their own
+    # names. Most of the time both stood on PiS's lists, which say PiS. Polska
+    # Razem is what Porozumienie was called until 2017.
+    "komitet wyborczy solidarna polska zbigniewa ziobro": [OTHER_PARTY],
+    "komitet wyborczy polska razem jarosława gowina": [OTHER_PARTY],
+    "komitet wyborczy porozumienie jarosława gowina": [OTHER_PARTY],
 }
 
 
