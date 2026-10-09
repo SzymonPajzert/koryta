@@ -12,7 +12,7 @@ from entities.company import KRS, Owner, Source
 from entities.company import Company as KrsCompany
 from entities.person import KRS as KrsPerson
 from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
-from scrapers.krs.graph import QueryRelation
+from scrapers.krs.graph import PARENT_RELATION, QueryRelation
 from scrapers.krs.organs import supervision_kind
 from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
 from scrapers.map.postal_codes import PostalCodes
@@ -246,6 +246,59 @@ def is_owned_by_queried(item: dict, unknown: typing.Counter[str] | None = None) 
     return any(children)
 
 
+def struck_off_after(item: dict) -> str | None:
+    """The day of a struck-off company's last entry before it was struck off.
+
+    rejestr.io describes a company the same way on every feed that lists it, and
+    `stan.czy_wykreslona` says whether the register has struck it off. The last
+    entry before the strike-off is where a merger strikes out the owners, if the
+    strike-off itself does not. None for a company still in the register, and
+    for one rejestr.io gives no dates for.
+    """
+    if not (item.get("stan") or {}).get("czy_wykreslona"):
+        return None
+    wpisy = item.get("krs_wpisy") or {}
+    return wpisy.get("najnowszy_przed_wykresleniem_data") or wpisy.get("najnowszy_data")
+
+
+def past_ownership(queried: str, item: dict) -> typing.Iterator[tuple[str, str, str]]:
+    """`(owner, owned, ended)` for each shareholding a historical feed lists.
+
+    The feed is `queried`'s and `item` is one company on it. Which of the two
+    held the shares is read off `kierunek` as in `QueryRelation.is_child`:
+    PASYWNY means the queried company did, AKTYWNY that the item did. A holding
+    with no end date is not historical, and says nothing here.
+    """
+    krs = (item.get("numery") or {}).get("krs")
+    if not krs:
+        return
+    for conn in item.get("krs_powiazania_kwerendowane") or []:
+        ended = conn.get("data_koniec")
+        if not ended or conn.get("typ") not in PARENT_RELATION:
+            continue
+        if conn.get("kierunek") == "PASYWNY":
+            yield queried, krs, ended
+        elif conn.get("kierunek") == "AKTYWNY":
+            yield krs, queried, ended
+
+
+#: Owners that became public only part-way through their history, with the day
+#: they did, so that a company they owned and struck off before then does not
+#: inherit being public from them - see `CompaniesKRS.add_owners_at_strike_off`.
+#: Everything else is taken to have been public all along, which is true of the
+#: state groups that hold nearly all the companies this reaches.
+BECAME_PUBLIC: dict[str, str] = {
+    # POLSKA PRESS: ORLEN entered as its sole wspólnik on 2021-09-15 (odpis
+    # pełny); before that a German publisher held it. 21 of the 22 companies it
+    # held to their strike-off were struck off before then.
+    "0000002408": "2021-09-15",
+    # POLIMEX MOSTOSTAL: Enea, Energa, PGE and PGNiG Technologie took up its new
+    # shares on 2017-01-20. 17 of the 27 companies it held to their strike-off
+    # went before that. https://media.enea.pl/pr/341921/enea-energa-pge-i-pgnig-objely-akcje-polimeksu-mostostal
+    "0000022460": "2017-01-20",
+}
+
+
 class CompaniesKRS(Pipeline[KrsCompany]):
     filename = "company_krs"
     # These are written as strings and have to be read back as strings. Without
@@ -266,6 +319,11 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.unknown_relations: typing.Counter[str] = collections.Counter()
         #: KRS numbers whose odpis says who owns them - see `names_an_owner`.
         self.owner_on_record: set[str] = set()
+        #: Each struck-off company rejestr.io has described, with the day of its
+        #: last entry before the strike-off - see `struck_off_after`.
+        self.struck_off: dict[str, str] = {}
+        #: The shareholdings the historical feeds list, `(owner, owned, ended)`.
+        self.past_owners: list[tuple[str, str, str]] = []
 
     @property
     def output_class(self) -> Type:
@@ -392,17 +450,65 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     continue
                 c = self.add_company(company_from_rejestrio(item, postal_codes))
                 self.add_company_source(c.krs, blob_name)
+                self.note_struck_off(c.krs, item)
 
                 if "aktualnosc_aktualne" in blob_name:
                     if parent is not None and is_owned_by_queried(
                         item, self.unknown_relations
                     ):
                         self.add_relation(parent.id, c.krs)
+                elif "aktualnosc_historyczne" in blob_name and parent is not None:
+                    self.past_owners.extend(past_ownership(parent.id, item))
 
         elif "/org" in blob_name:
             c = company_from_rejestrio(data, postal_codes)
             self.add_company(c)
             self.add_company_source(c.krs, blob_name)
+            self.note_struck_off(c.krs, data)
+
+    def note_struck_off(self, krs: str, item: dict) -> None:
+        """Remember `krs` as struck off, if rejestr.io says it is."""
+        last = struck_off_after(item)
+        if last is not None:
+            self.struck_off[krs] = max(last, self.struck_off.get(krs, last))
+
+    def add_owners_at_strike_off(self) -> int:
+        """Give each struck-off company the owners it had when it was struck off.
+
+        Ownership is read off the current-connections feeds only, and a company
+        struck off has none: a subsidiary merged into its parent, or an entry
+        closed by a change of legal form, ends with nobody owning it. api-krs has
+        no current extract of it either - it answers 204 - so nothing said who
+        owned it, and a company the state held all its life read as private.
+        PGNiG SERWIS (0000373975), Orlen's until it was merged in 2025, is one;
+        LOTOS OIL and WĘGLOKOKS KRAJ are others. People on the site worked
+        there while it was public, which is what the flag is for.
+
+        The historical feeds still list those holdings, with the day each ended,
+        from both sides: the parent's feed has the child as PASYWNY, the child's
+        own has the parent as AKTYWNY. An owner whose holding ended no earlier
+        than the company's last entry before the strike-off held it to the end;
+        one whose holding ended before that had sold it. Checked against the
+        odpis pełny of 65 struck-off companies this reaches: the owner it picks
+        is among the owners the register strikes out last, every time.
+
+        Only companies already known are joined, so a holding never waits on a
+        company nothing else describes (`check_awaiting` would end the run).
+        """
+        added = 0
+        for owner, owned, ended in self.past_owners:
+            last = self.struck_off.get(owned)
+            if last is None or ended < last:
+                continue
+            if last < BECAME_PUBLIC.get(owner, last):
+                continue
+            if owner not in self.companies or owned not in self.companies:
+                continue
+            if any(p.krs == owner for p in self.companies[owned].parents):
+                continue
+            self.add_relation(owner, owned)
+            added += 1
+        return added
 
     def process_api_krs_blob(
         self, blob_name: str, data, postal_codes: DataFrame
@@ -517,6 +623,12 @@ class CompaniesKRS(Pipeline[KrsCompany]):
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
             self.process_api_krs_blob(blob_name, data, postal_codes)
+
+        added = self.add_owners_at_strike_off()
+        print(
+            f"Owners at strike-off: {added} holdings joined, over "
+            f"{len(self.struck_off)} struck-off companies"
+        )
 
         public_krss = self.compute_public_krss(hardcoded)
         parent_to_children = self.build_parent_to_children()
