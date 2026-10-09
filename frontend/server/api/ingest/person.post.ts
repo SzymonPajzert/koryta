@@ -7,6 +7,7 @@ import {
   revisionChangesNothing,
   sameStoredValue,
   withoutInternalFields,
+  type ProposalOutcome,
 } from "~~/server/utils/revisions";
 import {
   addsOnlyAnnotations,
@@ -202,6 +203,10 @@ export default defineEventHandler(async (event) => {
       // the list is what makes a total worth anything: 300 candidacies from
       // the 1990s is the shape of the data, and 300 from 2024 is a bug.
       ...(unplacedElections.length > 0 ? { unplacedElections } : {}),
+      // Also omitted when there are none, which is the usual case.
+      ...(Object.keys(ctx.proposals).length > 0
+        ? { proposals: ctx.proposals }
+        : {}),
       status: "ok",
     };
   } finally {
@@ -355,6 +360,12 @@ class Context {
    * payload may put the person's jobs on the site without a review. See
    * `verifiedEmployments`. */
   verifiedEmployments: Map<string, FirebaseFirestore.DocumentData> | undefined;
+
+  /** What became of each change this request proposed rather than wrote, by
+   * outcome. A night re-sends hundreds of people whose candidacies already
+   * have a proposal standing, and "filed 3, 40 already waiting, 2 answered by
+   * a reviewer" is what tells a re-send from new work. */
+  readonly proposals: Partial<Record<ProposalOutcome, number>> = {};
 
   constructor(
     readonly db: FirebaseFirestore.Firestore,
@@ -855,7 +866,10 @@ async function findEdgeOrCreate(
         },
       );
     } else {
-      proposeRevisionTransaction(
+      // A reviewer's answer to this offer stands: the same key is the same
+      // ask, so one approved or rejected is left as it is rather than asked
+      // again on every send. See `proposeRevisionTransaction`.
+      const { outcome } = await proposeRevisionTransaction(
         ctx.db,
         ctx.batch,
         ctx.user,
@@ -870,6 +884,7 @@ async function findEdgeOrCreate(
           key: identity,
         },
       );
+      ctx.proposals[outcome] = (ctx.proposals[outcome] ?? 0) + 1;
     }
     return edgeRef.id;
   }

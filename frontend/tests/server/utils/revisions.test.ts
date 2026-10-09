@@ -624,64 +624,250 @@ describe("withoutInternalFields", () => {
 });
 
 describe("proposeRevisionTransaction", () => {
-  const user = { uid: "test-user" };
+  const pipeline = { uid: "pipeline-people-import" };
   const targetRef = {
     id: "edge-1",
     parent: { id: "edges" },
   } as unknown as DocumentReference;
   const data = { source: "p", target: "r", type: "election", party: "PiS" };
+  /** What the pipeline files a candidacy's proposal under, see `proposalId`. */
+  const key = "same-candidacy";
+  const address = proposalId("edge-1", data, key);
+
+  /** The revisions collection as the read before the write finds it. */
+  let standing: Record<string, Record<string, unknown>>;
+  let batch: {
+    create: ReturnType<typeof vi.fn>;
+    set: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
+  let generated: number;
+  /** The update time every stored proposal reads back with. */
+  const readAt = { seconds: 1 };
+
+  const db = {
+    collection: () => ({
+      doc: (id?: string) => {
+        const docId = id ?? `generated-${++generated}`;
+        return {
+          id: docId,
+          get: async () => ({
+            exists: standing[docId] !== undefined,
+            data: () => standing[docId],
+            updateTime: standing[docId] ? readAt : undefined,
+          }),
+        };
+      },
+    }),
+  } as unknown as Firestore;
+
+  function propose(
+    options: { automatic?: boolean; key?: string } = { automatic: true, key },
+    user = pipeline,
+    proposed: Record<string, unknown> = data,
+    target = targetRef,
+  ) {
+    return proposeRevisionTransaction(
+      db,
+      batch as unknown as WriteBatch,
+      user,
+      target,
+      proposed,
+      options,
+    );
+  }
+
+  /** Every write the batch was asked for, of any kind. */
+  function writes() {
+    return [
+      ...batch.create.mock.calls,
+      ...batch.set.mock.calls,
+      ...batch.update.mock.calls,
+    ];
+  }
+
+  /** A proposal of `data` already filed at the pipeline's address. */
+  function filed(fields: Record<string, unknown>) {
+    standing[address] = {
+      node_id: "edge-1",
+      collection: "edges",
+      data,
+      update_time: "2026-09-01T00:00:00.000Z",
+      update_user: pipeline.uid,
+      update_automatic: true,
+      status: "pending",
+      ...fields,
+    };
+  }
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(mockCollection().doc).mockReturnValue({
-      id: "new-rev-id",
-    } as unknown as DocumentReference);
+    standing = {};
+    generated = 0;
+    batch = { create: vi.fn(), set: vi.fn(), update: vi.fn() };
   });
 
-  it("leaves the live document alone", () => {
+  it("files a new proposal and leaves the live document alone", async () => {
     // createRevisionTransaction cannot do this: it writes the target either
     // way, so it can record a change to a document being created but cannot
     // propose one about a document that is already there.
-    proposeRevisionTransaction(mockDb, mockBatch, user, targetRef, data, {
-      automatic: true,
-    });
+    const result = await propose();
 
-    expect(mockBatch.set).toHaveBeenCalledTimes(1);
-    const [ref, written] = vi.mocked(mockBatch.set).mock.calls[0]!;
+    expect(result.outcome).toBe("created");
+    expect(writes()).toHaveLength(1);
+    const [ref, written] = batch.create.mock.calls[0]!;
     expect(ref).not.toBe(targetRef);
     expect(written).toMatchObject({
       node_id: "edge-1",
       data,
-      update_user: "test-user",
+      update_user: "pipeline-people-import",
       update_automatic: true,
       status: "pending",
       collection: "edges",
     });
   });
 
-  it("says which collection the target is in", () => {
+  it("says which collection the target is in", async () => {
     // `node_id` is the target's id whatever the target is, so this is the only
     // thing that makes "the pending changes to edges" a query.
-    proposeRevisionTransaction(
-      mockDb,
-      mockBatch,
-      user,
-      { id: "node-1", parent: { id: "nodes" } } as unknown as DocumentReference,
-      data,
-    );
-    expect(vi.mocked(mockBatch.set).mock.calls[0]![1]).toMatchObject({
+    await propose(undefined, pipeline, data, {
+      id: "node-1",
+      parent: { id: "nodes" },
+    } as unknown as DocumentReference);
+
+    expect(batch.create.mock.calls[0]![1]).toMatchObject({
       collection: "nodes",
     });
   });
 
-  it("addresses a standing proposal by what it proposes", () => {
+  it("addresses the pipeline's proposal by what it proposes", async () => {
     // `committee_to_party` names about sixty committees, so most
     // candidacies stay pending; with a fresh id per run the pipeline would add
     // a revision per candidacy per night, forever.
-    proposeRevisionTransaction(mockDb, mockBatch, user, targetRef, data);
-    expect(vi.mocked(mockCollection().doc)).toHaveBeenCalledWith(
-      proposalId("edge-1", data),
-    );
+    const result = await propose();
+
+    expect(result.revisionRef.id).toBe(address);
+  });
+
+  it("writes nothing when a waiting proposal already says this", async () => {
+    // What a night re-sending a person mostly does. Rewriting it anyway moved
+    // `update_time`, which is what /admin/rewizje#powiazania is ordered by.
+    filed({});
+
+    const result = await propose();
+
+    expect(result.outcome).toBe("unchanged");
+    expect(writes()).toEqual([]);
+  });
+
+  it("moves only the content and its time when a waiting proposal said something else", async () => {
+    // The same candidacy, but the stored edge it builds on has learned a
+    // field since. Nothing about who filed it or where it stands changes.
+    filed({ data: { ...data, party: "PO" } });
+
+    const result = await propose();
+
+    expect(result.outcome).toBe("refreshed");
+    expect(batch.create).not.toHaveBeenCalled();
+    expect(batch.set).not.toHaveBeenCalled();
+    expect(batch.update).toHaveBeenCalledTimes(1);
+    const [ref, written, precondition] = batch.update.mock.calls[0]!;
+    expect(ref.id).toBe(address);
+    expect(Object.keys(written).sort()).toEqual(["data", "update_time"]);
+    expect(written.data).toEqual(data);
+    // A verdict landing between the read and the commit fails the batch
+    // instead of having its proposal rewritten under it.
+    expect(precondition).toEqual({ lastUpdateTime: readAt });
+  });
+
+  it("leaves an approved proposal as the reviewer left it", async () => {
+    // Writing it again is what put 14 approvals back to pending by 2026-10-09
+    // and deleted who had given them.
+    filed({
+      status: "approved",
+      review_user: "reviewer",
+      review_time: "2026-09-02T00:00:00.000Z",
+    });
+
+    const result = await propose();
+
+    expect(result.outcome).toBe("decided");
+    expect(writes()).toEqual([]);
+  });
+
+  it("leaves a rejected proposal rejected, reason and all", async () => {
+    // The same key is the same ask. A rejection the next upload undid would
+    // send the reviewer the same candidacy every night.
+    filed({
+      status: "rejected",
+      review_user: "reviewer",
+      reject_reason: "inna osoba",
+    });
+
+    const result = await propose();
+
+    expect(result.outcome).toBe("decided");
+    expect(writes()).toEqual([]);
+  });
+
+  it("reads a proposal stored before statuses as still waiting", async () => {
+    filed({ status: undefined });
+
+    expect((await propose()).outcome).toBe("unchanged");
+  });
+
+  describe("a person's proposal", () => {
+    const anna = { uid: "anna" };
+    const piotr = { uid: "piotr" };
+
+    it("is filed under their uid, so two people proposing one fix are two proposals", async () => {
+      // One shared document handed the first contributor's proposal to
+      // whoever made it second.
+      const first = await propose({}, anna);
+      const second = await propose({}, piotr);
+
+      expect(first.revisionRef.id).toBe(proposalId("edge-1_anna", data));
+      expect(second.revisionRef.id).toBe(proposalId("edge-1_piotr", data));
+      expect(batch.create.mock.calls[0]![1]).toMatchObject({
+        update_user: "anna",
+        update_automatic: false,
+      });
+    });
+
+    it("comes back to them unwritten while it is still waiting", async () => {
+      standing[proposalId("edge-1_anna", data)] = {
+        node_id: "edge-1",
+        data,
+        status: "pending",
+        update_user: "anna",
+      };
+
+      const result = await propose({}, anna);
+
+      expect(result).toMatchObject({ outcome: "unchanged" });
+      expect(result.revisionRef.id).toBe(proposalId("edge-1_anna", data));
+      expect(writes()).toEqual([]);
+    });
+
+    it("asked again after a verdict is a second ask, filed beside the first", async () => {
+      // The way /api/revisions/create treats a node proposal made again: the
+      // verdict stays on the record it was given to.
+      standing[proposalId("edge-1_anna", data)] = {
+        node_id: "edge-1",
+        data,
+        status: "rejected",
+        reject_reason: "brak źródła",
+        update_user: "anna",
+      };
+
+      const result = await propose({}, anna);
+
+      expect(result).toMatchObject({ outcome: "created" });
+      expect(result.revisionRef.id).toBe("generated-1");
+      expect(batch.create).toHaveBeenCalledTimes(1);
+      expect(batch.create.mock.calls[0]![0].id).toBe("generated-1");
+      expect(batch.update).not.toHaveBeenCalled();
+      expect(batch.set).not.toHaveBeenCalled();
+    });
   });
 });
 

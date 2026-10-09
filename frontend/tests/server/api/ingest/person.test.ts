@@ -89,9 +89,12 @@ vi.mock("../../../../server/utils/revisions", async (importOriginal) => {
       revisionRef: { id: "mock-revision-id", path: "mock/path" },
       targetRef: { id: "mock-target-id", path: "mock/target/path" },
     })),
-    proposeRevisionTransaction: vi.fn(() => ({
+    // Async, because the real one reads the proposal's address before it
+    // writes anything there.
+    proposeRevisionTransaction: vi.fn(async () => ({
       revisionRef: { id: "mock-revision-id", path: "mock/path" },
       targetRef: { id: "mock-target-id", path: "mock/target/path" },
+      outcome: "created",
     })),
   };
 });
@@ -522,6 +525,36 @@ describe("api/ingest/person", () => {
       expect(
         vi.mocked(proposeRevisionTransaction).mock.calls[0]![5],
       ).toMatchObject({ automatic: true });
+    });
+
+    it("says what became of the proposals it made", async () => {
+      // A reviewer's answer stands, so restating an answered candidacy writes
+      // nothing - and the response is the only place a run can count that.
+      personWithStoredEdges([storedCandidacy]);
+      mockReadBody.mockResolvedValue(
+        payload({
+          election_year: "2024",
+          committee: "Komitet Wyborczy Wyborców Wspólny Kalisz",
+        }),
+      );
+      vi.mocked(proposeRevisionTransaction).mockResolvedValueOnce({
+        revisionRef: { id: "proposal_stored-0_x" },
+        targetRef: { id: "stored-0" },
+        outcome: "decided",
+      } as never);
+
+      const result = await handler({} as any);
+
+      expect(result).toMatchObject({ proposals: { decided: 1 } });
+    });
+
+    it("says nothing about proposals when it made none", async () => {
+      personWithStoredEdges([storedCandidacy]);
+      mockReadBody.mockResolvedValue(payload({ election_year: "2024" }));
+
+      const result = await handler({} as any);
+
+      expect(result).not.toHaveProperty("proposals");
     });
 
     it("keeps a candidacy off the public site if that is where it was", async () => {
