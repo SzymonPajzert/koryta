@@ -51,6 +51,14 @@ Then `KrsOdpisSeats` and `KrsOdpisEntries` read the PDFs into dated seats and ea
 the company history `krs_scrape_paid` buys from rejestr.io - and `PeopleKRSCombined` puts the seats in place of
 rejestr.io's for every company where the odpis is the newer of the two, on the way to `PeopleMerged`.
 
+## krs_nip
+1. Reads a file of NIPs, one a line - a source that names bodies by NIP rather than KRS, like a crawl of BIPs
+1. Skips every NIP the crawl bucket already holds an answer for, "not in the register" included
+1. Asks the same search service `krs_odpis` uses which register entries hold each of the rest, politely, under the
+   same one-crawler-per-IP lock
+1. Writes every answer to the crawl bucket (`hostname=wyszukiwarka-krs-api.ms.gov.pl/api/wyszukiwarka/krs/nip/`)
+1. Writes a table of the entries found - KRS, register, NIP, name, city - that `krs_odpis --krs-file` reads as it is
+
 ## nightly
 1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis --missing public`, `krs_scrape_paid --scope fallback --max-calls 50`, every pipeline rebuilt (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100` and `score_import`
 1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
