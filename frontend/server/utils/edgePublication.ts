@@ -5,9 +5,12 @@ import type {
 } from "firebase-admin/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Edge, Revision } from "~~/shared/model";
-import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
-import { recordAudit } from "~~/server/utils/audit";
-import { holdsRevision } from "~~/server/utils/revisions";
+// Relative rather than through `~~/`, like revisions.ts: plain tsx cannot
+// resolve the alias, and scripts/migrate/repair-unapplied-proposal-approvals.ts
+// picks a revision for an edge by the same rule publishing does.
+import { approvedRevisionId, pageIsPublic } from "../../shared/model";
+import { recordAudit } from "./audit";
+import { holdsRevision } from "./revisions";
 
 /** What an edge needs before it can be shown to the public.
  *
