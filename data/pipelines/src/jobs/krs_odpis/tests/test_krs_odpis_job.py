@@ -113,6 +113,65 @@ def test_the_graph_puts_its_public_companies_first():
     ]
 
 
+E, F = "0000000047", "0000000053"
+
+
+def test_the_gap_is_the_graphs_public_companies_with_no_odpis_on_file():
+    companies = pd.DataFrame(
+        {
+            "krs": [A, B, C, D, E, F],
+            "is_public": [True, True, True, True, False, False],
+        }
+    )
+    stored = {A}  # on file: not in the gap, whatever the bulletin says
+    # B last went unanswered; C is in neither register, and would say so
+    # again every night; D, E and F were never asked.
+    attempts = {A: "fetched", B: "gateway", C: "absent"}
+
+    gap = plan.without_odpis(companies, stored, attempts)
+
+    assert [(c.krs, c.reason) for c in gap] == [
+        (D, plan.REASON_NO_ODPIS),
+        (B, plan.REASON_NO_ODPIS),
+    ]
+    everybody = plan.without_odpis(companies, stored, attempts, private=True)
+    assert [c.krs for c in everybody] == [D, B, E, F]
+
+
+def test_the_gap_reads_a_public_flag_however_it_came_back():
+    companies = pd.DataFrame({"krs": [29, "31"], "is_public": ["True", "False"]})
+
+    assert [c.krs for c in plan.without_odpis(companies, set(), {})] == [A]
+
+
+def test_a_company_in_two_lists_is_asked_about_once_for_the_first_reason():
+    first = [plan.Candidate(A, plan.REASON_GRAPH)]
+    then = [plan.Candidate(A, plan.REASON_NO_ODPIS), plan.Candidate(B, "x")]
+
+    assert plan.joined(first, then) == [
+        plan.Candidate(A, plan.REASON_GRAPH),
+        plan.Candidate(B, "x"),
+    ]
+
+
+def test_the_cap_covers_the_gap_too():
+    """The bulletin's companies first; the gap takes what is left of --max."""
+    changed = [plan.Candidate(k, plan.REASON_GRAPH) for k in (A, B)]
+    gap = [plan.Candidate(k, plan.REASON_NO_ODPIS) for k in (C, D, E)]
+    held = {A: stored(A, "2026-09-14")}  # on file, unchanged since
+
+    the_plan = plan.select(
+        plan.joined(changed, gap), held, {A: "2026-09-13"}, {}, TODAY, limit=3
+    )
+
+    assert [(a.krs, a.reason) for a in the_plan.asks] == [
+        (B, plan.REASON_GRAPH),
+        (C, plan.REASON_NO_ODPIS),
+        (D, plan.REASON_NO_ODPIS),
+    ]
+    assert (the_plan.held, the_plan.deferred) == (1, 1)
+
+
 def test_changed_since_keeps_what_the_bulletin_names_on_or_after_the_day():
     candidates = [plan.Candidate(k, "graph") for k in (A, B, C)]
     changes = {A: "2026-09-25", B: "2026-09-24"}
@@ -582,15 +641,57 @@ def test_the_weekly_refresh_asks_about_the_graph_the_bulletin_names(
     offline, monkeypatch, capsys
 ):
     monkeypatch.setattr(
-        job,
-        "graph_candidates",
-        lambda ctx: plan.from_graph(pd.DataFrame({"krs": [A, B, C]})),
+        job, "graph_companies", lambda ctx: pd.DataFrame({"krs": [A, B, C]})
     )
     argv = ["--graph", "--changed-since", "2026-09-25", "--dry-run"]
     assert job.main(argv) == 0
     out = capsys.readouterr().out
     assert "1 companies from CompaniesKRS the bulletin names since 2026-09-25" in out
     assert "Asking about 1" in out
+    # Without --missing the run record is not read.
+    assert "KrsOdpisAttempts" not in offline[0].refresh_pipelines
+
+
+def test_the_nights_run_asks_the_public_companies_with_no_odpis_after(
+    offline, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        job,
+        "graph_companies",
+        lambda ctx: pd.DataFrame(
+            {"krs": [A, B, C, D], "is_public": [True, True, False, True]}
+        ),
+    )
+    # A is named by the bulletin today; B and D have nothing on file, and
+    # the service last said D is in neither register.
+    monkeypatch.setattr(job.odpis_files, "stored_odpisy", lambda ctx: {C: None})
+    monkeypatch.setattr(job, "last_attempts", lambda ctx: {D: "absent"})
+    asked: list = []
+    monkeypatch.setattr(
+        job,
+        "make_plan",
+        lambda ctx, candidates, changes, today, limit, sources: (
+            asked.extend(candidates)
+            or plan.select(candidates, {}, changes, {}, today, limit)
+        ),
+    )
+    argv = ["--graph", "--changed-since", TODAY, "--missing", "public", "--dry-run"]
+
+    assert job.main(argv) == 0
+
+    assert [(c.krs, c.reason) for c in asked] == [
+        (A, plan.REASON_GRAPH),
+        (B, plan.REASON_NO_ODPIS),
+    ]
+    # The run record is folded afresh: tonight's attempts are in it.
+    assert "KrsOdpisAttempts" in offline[0].refresh_pipelines
+    assert "then 1 more (public) with no odpis on file" in capsys.readouterr().out
+
+
+def test_the_gap_is_the_graphs_only(capsys):
+    with pytest.raises(SystemExit):
+        job.main(["--missing", "public", "--dry-run"])
+    assert "add --graph" in capsys.readouterr().err
 
 
 def test_a_day_that_is_not_a_day_is_refused(capsys):

@@ -395,6 +395,33 @@ def test_what_the_register_step_leaves_or_breaks_holds_nothing(world):
         assert world.steps()[step] == ("succeeded", ""), step
 
 
+def test_the_odpisy_go_to_the_bulletins_companies_then_public_ones_with_none(
+    world, capsys
+):
+    night.main([])
+
+    argv, _ = world.command("koryta_krs_odpis")
+    assert argv[1:3] == ["--graph", "--changed-since"]
+    # The gap the bulletin never closes, public only by default, and under
+    # the step's one cap: the service tires after ~1,000 documents a run.
+    assert argv[argv.index("--missing") + 1] == "public"
+    assert argv[argv.index("--max") + 1] == "300"
+
+    for scope, expected in (("all", ["--missing", "all"]), ("none", [])):
+        world.commands.clear()
+        world.objects.clear()
+        night.main(["--odpis-missing", scope, "--only", "krs_odpis"])
+
+        argv, _ = world.command("koryta_krs_odpis")
+        assert argv[4:-2] == expected, scope
+
+    night.main(["--dry-run", "--only", "krs_odpis"])
+    assert (
+        "koryta_krs_odpis --graph --changed-since <yesterday> --missing public "
+        "--max 300" in capsys.readouterr().out
+    )
+
+
 def test_the_mirror_is_made_one_host_at_a_time(world):
     night.main([])
 

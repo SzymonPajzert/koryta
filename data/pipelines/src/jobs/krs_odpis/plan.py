@@ -8,13 +8,15 @@ request, so every rule is tested on its own.
 import re
 import typing
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 
 from scrapers.krs import odpis_files
+from scrapers.krs.columns import is_public
+from scrapers.krs.odpis_attempts import ABSENT
 from scrapers.krs.scrape import QueryType, RejestrIOQuery
 
 #: What the paid job buys about a company that the odpis now tells for free:
@@ -32,6 +34,13 @@ PLN_PER_CALL = 0.05
 
 REASON_FILE = "krs_file"
 REASON_GRAPH = "graph"
+#: A company of the graph with no odpis pełny on file (`without_odpis`).
+REASON_NO_ODPIS = "no_odpis"
+
+#: Which of those a run asks about too (`--missing`): the public ones, or all.
+MISSING_PUBLIC = "public"
+MISSING_ALL = "all"
+MISSING = (MISSING_PUBLIC, MISSING_ALL)
 
 _KRS_LINE = re.compile(r"^\d{10}$")
 
@@ -130,6 +139,55 @@ def changed_since(
 ) -> list[Candidate]:
     """The candidates whose entry the bulletin names on or after `since`, an ISO day."""
     return [c for c in candidates if changes.get(c.krs, "") >= since]
+
+
+def without_odpis(
+    companies: pd.DataFrame,
+    stored: Collection[str],
+    attempts: Mapping[str, str],
+    private: bool = False,
+) -> list[Candidate]:
+    """The graph's companies with no odpis pełny on file, in the order to ask.
+
+    The gap the bulletin does not close. `--changed-since` asks a company only
+    once the bulletin names it again, so one that came into the graph after its
+    last register entry - a public owner's company found by the register job,
+    one a feed names, one that holds only rejestr.io's historical feed - was
+    never asked at all: 739 live companies held only that feed on 2026-10-09.
+
+    The public ones first, and the rest only with `private`. Within each, the
+    companies never asked come before those whose last attempt got no answer,
+    so a few that keep failing do not hold up the rest. One whose last answer
+    was that neither register has the number (`attempts`: KRS to the newest
+    attempt's status) is left out: it would answer the same every night.
+    """
+    krs = companies["krs"].astype(str).str.zfill(10)
+    public = is_public(
+        companies.get("is_public", pd.Series(False, index=companies.index))
+    )
+    groups = [krs[public]] + ([krs[~public]] if private else [])
+    ordered: list[str] = []
+    for group in groups:
+        gap = [
+            k
+            for k in dict.fromkeys(group)
+            if k not in stored and attempts.get(k) != ABSENT
+        ]
+        ordered += [k for k in gap if k not in attempts]
+        ordered += [k for k in gap if k in attempts]
+    return [Candidate(krs=k, reason=REASON_NO_ODPIS) for k in dict.fromkeys(ordered)]
+
+
+def joined(*lists: Iterable[Candidate]) -> list[Candidate]:
+    """The candidates of each list in turn, a company only where it comes first."""
+    seen: set[str] = set()
+    out: list[Candidate] = []
+    for candidates in lists:
+        for candidate in candidates:
+            if candidate.krs not in seen:
+                seen.add(candidate.krs)
+                out.append(candidate)
+    return out
 
 
 def register_hints(settled: Mapping[str, set[QueryType]]) -> dict[str, str]:
