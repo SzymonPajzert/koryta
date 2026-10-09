@@ -12,7 +12,14 @@ import pandas as pd
 from analysis.extract import Extract
 from analysis.payloads.election import get_election_type
 from analysis.payloads.priority import MISSING, Pick, prioritised
-from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
+from analysis.payloads.site import (
+    BY_NAME_AND_DATE,
+    IDENTIFIED,
+    INFORMATIONAL_REASONS,
+    SiteSnapshot,
+    field,
+    register_entry,
+)
 from analysis.payloads.target import (
     PageTarget,
     Targeted,
@@ -27,7 +34,12 @@ from scrapers.koryta.download import KorytaNotes, KorytaPeople
 from scrapers.krs.columns import is_public
 from scrapers.pkw.elections import parties_of_committee, party_sort_key
 from scrapers.stores import Context, Pipeline
-from util.polish import adds_middle_names, format_person_name
+from util.polish import (
+    adds_middle_names,
+    format_person_name,
+    names_agree,
+    normalize_person_name,
+)
 
 #: How many unrecognised committees to name when reporting what the party
 #: mapping is missing. Enough to act on, short enough to read.
@@ -40,6 +52,7 @@ class PeoplePayloads(Pipeline[Person]):
 
     people: Extract
     _snapshot: SiteSnapshot | None = None
+    _prints: dict[str, frozenset[str]] | None = None
 
     @cached_property
     def args(self):
@@ -100,7 +113,13 @@ class PeoplePayloads(Pipeline[Person]):
 
     def process(self, ctx: Context):
         people_df = self.registered_people(ctx)
-        result = [self.map_person_payload(ctx, row) for _, row in people_df.iterrows()]
+        args = self.args
+        if args.on_koryta or args.not_on_koryta or args.only_changed:
+            result = self.payloads_of(ctx, people_df, self.site_snapshot(ctx))
+        else:
+            result = [
+                self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
+            ]
         if self.args.on_koryta:
             result = self.only_on_koryta(ctx, result)
         if self.args.not_on_koryta:
@@ -129,18 +148,47 @@ class PeoplePayloads(Pipeline[Person]):
         )
 
     def registered_people(self, ctx: Context) -> pd.DataFrame:
-        """The people Extract selected that carry a rejestr.io entry.
+        """The people Extract selected that the ingest can tell apart: by a
+        rejestr.io entry, or by their name and full birth date
+        (`identifiable`)."""
+        return identifiable(self.people.read_or_process(ctx))[0]
 
-        Since the odpis seats are folded into the people, some rows are people
-        only an odpis names, with no register entry at all. The ingest
-        identifies a person by their page, then their register entry, then
-        their name - so one of these would land on a namesake's page, or open a
-        second page for somebody already there. Left out and counted, until
-        the ingest has a way to identify them (task
-        payloads-handle-odpis-only-people); before, `one_register_entry` raised
-        at the first one and no payload was built at all.
-        """
-        return only_registered(self.people.read_or_process(ctx))[0]
+    def payloads_of(
+        self, ctx: Context, people_df: pd.DataFrame, snapshot: SiteSnapshot
+    ) -> list[Person]:
+        """Each row's payload, less the ones that would land on the page of
+        somebody with another PESEL (`another_pesels_page`)."""
+        rows = [row for _, row in people_df.iterrows()]
+        payloads = [self.map_person_payload(ctx, row) for row in rows]
+        prints = self.prints_of_register(ctx, people_df)
+        another_pesel.clear()
+        kept = [
+            payload
+            for payload, row in zip(payloads, rows)
+            if not another_pesels_page(snapshot, payload, pesel_prints(row), prints)
+        ]
+        report_another_pesel()
+        return kept
+
+    def prints_of_register(
+        self, ctx: Context, selected: pd.DataFrame
+    ) -> dict[str, frozenset[str]]:
+        """The PESEL fingerprints known for each rejestr.io id, off every KRS
+        person (`PeopleEnriched`) rather than the ones Extract `selected`: a
+        page's id may be somebody Extract left out. Kept in memory, never
+        written out."""
+        if self._prints is None:
+            enriched = getattr(self.people, "people", None)
+            people = enriched.read_or_process(ctx) if enriched is not None else selected
+            found: dict[str, set[str]] = collections.defaultdict(set)
+            if "pesel_fingerprint" in people and "rejestrio_id" in people:
+                for ids, prints in zip(
+                    people["rejestrio_id"], people["pesel_fingerprint"]
+                ):
+                    for id in as_sequence(ids):
+                        found[str(id)].update(str(p) for p in as_sequence(prints))
+            self._prints = {id: frozenset(p) for id, p in found.items() if p}
+        return self._prints
 
     def site_snapshot(self, ctx: Context) -> SiteSnapshot:
         """The export both filters read, read once.
@@ -171,10 +219,9 @@ class PeoplePayloads(Pipeline[Person]):
         each guarded as that run would be.
         """
         people_df = self.registered_people(ctx)
-        payloads = [
-            self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
-        ]
         snapshot = self.site_snapshot(ctx)
+        payloads = self.payloads_of(ctx, people_df, snapshot)
+        report_collapsed_people()
         return prioritised(
             missing_from_koryta(payloads, snapshot),
             matching_one_page(payloads, snapshot),
@@ -202,17 +249,15 @@ class PeoplePayloads(Pipeline[Person]):
             people_df = people_df[
                 [row_is_about(row, target) for _, row in people_df.iterrows()]
             ]
-        people_df, odpis_only = only_registered(people_df)
-        payloads = [
-            self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
-        ]
+        people_df, unidentifiable = identifiable(people_df)
         snapshot = self.site_snapshot(ctx)
+        payloads = self.payloads_of(ctx, people_df, snapshot)
         if target.kind == "company":
             assert target.krs is not None
             result = for_company(payloads, snapshot, target.krs)
         else:
             result = for_person(payloads, snapshot, target)
-        result.left_out += odpis_only
+        result.left_out += unidentifiable + len(people_df) - len(payloads)
         print(
             f"For {target.kind} {target.node_id}: {result.matched} in the data, "
             f"{len(result.new)} to create, {len(result.changed)} to change, "
@@ -372,14 +417,28 @@ class PeoplePayloads(Pipeline[Person]):
 
         birth_date = _iso_date(get_scalar("birth_date"))
 
-        rejestr_id = one_register_entry(row["rejestrio_id"])
-        rejestrIo = f"https://rejestr.io/osoby/{rejestr_id}"
+        prints = pesel_prints(row)
+        rejestr_id = one_register_entry(
+            as_sequence(row.get("rejestrio_id")),
+            prints,
+            linked=_register_id(row.get("koryta_rejestrio_id")),
+        )
+        if len(prints) > 1:
+            two_pesels[str(name)] += 1
+        # Somebody only an odpis names has none. The ingest finds them by their
+        # name and birth date; the PESEL that keys them stays here.
+        rejestrIo = f"https://rejestr.io/osoby/{rejestr_id}" if rejestr_id else None
 
         # The page this person is already on, where `people_merged` could say so
         # without guessing. It is the site's own primary key, so the ingest can
         # match on it outright instead of inferring identity from a name or even
         # from the register link - which 868 pages do not carry.
-        koryta_id = get_scalar("koryta_id")
+        #
+        # Not for somebody with no register entry: `people_merged` found their
+        # page by the name alone, and taken at its word the id would put them on
+        # a namesake's page born on another day. The ingest decides by the name
+        # and the birth date together (`lookupPersonDoc`).
+        koryta_id = get_scalar("koryta_id") if rejestr_id else None
         if isinstance(koryta_id, float) and math.isnan(koryta_id):
             koryta_id = None
         koryta_id = str(koryta_id) if koryta_id else None
@@ -516,21 +575,94 @@ def _extract_elections(row: pd.Series) -> list[Election]:
     return elections
 
 
-def only_registered(people_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """The rows carrying a rejestr.io entry, and how many were left out
-    (`PeoplePayloads.registered_people` says why)."""
+def identifiable(people_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """The rows the ingest can tell apart, and how many were left out.
+
+    A rejestr.io entry identifies a person outright. Somebody only an odpis
+    names has none: the pipeline knows them by their PESEL
+    (`analysis.people_krs_merged.person_keys`), which never leaves it, and the
+    ingest finds them by their name and the full birth date the PESEL gives
+    (`lookupPersonDoc`). They were left out of every payload build until the
+    ingest could: 6,475 people on 2026-10-09, 2,274 of them in a current seat.
+
+    A row with neither an entry nor a full birth date would be matched by the
+    name alone, onto any namesake's page; it is still left out, and counted.
+    `PeopleKRSMerged` keeps nobody without a birth date, so there should be
+    none.
+    """
     if people_df.empty or "rejestrio_id" not in people_df:
         return people_df, 0
     registered = people_df["rejestrio_id"].map(
         lambda ids: any(str(value) for value in as_sequence(ids))
     )
-    left_out = int((~registered).sum())
-    if left_out:
-        print(
-            f"Leaving out {left_out} people only an odpis names: no rejestr.io "
-            f"entry for the ingest to identify them by"
+    dated = (
+        people_df["birth_date"].map(lambda value: _iso_date(value) is not None)
+        if "birth_date" in people_df
+        else pd.Series(False, index=people_df.index)
+    )
+    kept = registered | dated
+    left_out = int((~kept).sum())
+    print(
+        f"{int((kept & ~registered).sum())} people only an odpis names go by "
+        f"their name and birth date"
+        + (
+            f"; leaving out {left_out} with neither a rejestr.io entry nor a birth date"
+            if left_out
+            else ""
         )
-    return people_df[registered], left_out
+    )
+    return people_df[kept], left_out
+
+
+def pesel_prints(row: pd.Series) -> frozenset[str]:
+    """The PESEL fingerprints a row carries: one, none, or - two people
+    collapsed into one row - several. Never written out (`identifiable`)."""
+    return frozenset(
+        str(value) for value in as_sequence(row.get("pesel_fingerprint")) if value
+    )
+
+
+def _register_id(value: typing.Any) -> str | None:
+    """A rejestr.io id off a frame, or None: a column of ids with a gap in it
+    comes back off jsonl as floats, and 126307.0 is entry 126307."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value) or None
+
+
+#: Payloads left out for landing on somebody else's page, by name.
+another_pesel: typing.Counter[str] = collections.Counter()
+
+
+def another_pesels_page(
+    snapshot: SiteSnapshot,
+    payload: Person,
+    prints: typing.AbstractSet[str],
+    prints_of_register: typing.Mapping[str, typing.AbstractSet[str]],
+) -> bool:
+    """Whether the payload would land on the page of a rejestr.io entry whose
+    PESEL is not this person's, and so is left out (counted in
+    `another_pesel`).
+
+    It happens by name and birth date: somebody only an odpis names, born the
+    same day as a namesake whose page links an entry the odpisy give another
+    PESEL. The ingest, which never sees a PESEL, would take them for one
+    person; here they are two, so the payload waits for a reviewer to make a
+    page by hand rather than writing onto the namesake's.
+    """
+    if not prints:
+        return False
+    page = snapshot.person_for(asdict(payload))
+    if page is None:
+        return False
+    linked = register_entry(field(page, "rejestrIo"))
+    theirs = prints_of_register.get(linked) if linked else None
+    if not theirs or theirs & prints:
+        return False
+    another_pesel[str(payload.name)] += 1
+    return True
 
 
 #: The columns a person's name may be read from, in `map_person_payload`'s order.
@@ -574,25 +706,22 @@ def identified_by(snapshot: SiteSnapshot, payload: typing.Mapping) -> bool:
     """Whether `person_for` would resolve this payload by something that is an
     identity, rather than falling back to the name.
 
-    The first two branches of `lookupPersonDoc`, in its order: the node id, then
-    the register link. A name is not on that list - it is what 170 people are
-    filed under two pages each by.
+    The first three branches of `lookupPersonDoc`, in its order: the node id,
+    the register link, then the name together with the full birth date. A
+    name alone is not on that list - it is what 170 people are filed under two
+    pages each by.
     """
-    koryta_id = field(payload, "korytaId")
-    if koryta_id is not None and snapshot.people_by_id.get(str(koryta_id)):
-        return True
-    register = field(payload, "rejestrIo")
-    return register is not None and bool(snapshot.people.get(str(register)))
+    return snapshot.resolve(payload).how in IDENTIFIED
 
 
 def matching_one_page(payloads: list[Person], snapshot: SiteSnapshot) -> list[Person]:
     """The payloads the ingest would land on a page rather than create.
 
-    `SiteSnapshot.person_for` is `lookupPersonDoc` transcribed, so it is the
-    only thing that can answer this: the ingest resolves by node id, then by
-    register link, and only then by name - and a page whose register link
-    *disagrees* with the payload's is not a match at all, however the two names
-    are spelled.
+    `SiteSnapshot.resolve` is `lookupPersonDoc` transcribed, so it is the only
+    thing that can answer this: the ingest resolves by node id, then by
+    register link, then by name and birth date, and only then by the name -
+    and a page whose register link *disagrees* with the payload's is not a
+    match at all, however the two names are spelled.
 
     The name fallback is the one branch that can still pool two people onto one
     page, and it only fires where neither side has a register link to go on.
@@ -600,20 +729,36 @@ def matching_one_page(payloads: list[Person], snapshot: SiteSnapshot) -> list[Pe
     names one person in the payloads *and* one page on the site. Where it names
     several the payload is dropped rather than resolved: which of four Piotr
     Mrozińskis a page is about is not a question the payloads can answer, and a
-    wrong candidacy on a real page is a worse outcome than a missing one. Both
-    counts are reported, because they are the part of the backlog a run leaves.
+    wrong candidacy on a real page is a worse outcome than a missing one.
+
+    A name and a birth date pool two people only where another payload reaches
+    the same page, by them or by anything else; the one that came by them is
+    dropped then, for the same reason. So is a payload the ingest would hold
+    back. Every count is reported, because they are the part of the backlog a
+    run leaves.
     """
     candidates = collections.Counter(person.name for person in payloads)
+    resolved = [snapshot.resolve(asdict(person)) for person in payloads]
+    # How many payloads reach each page, by whatever means.
+    reaching = collections.Counter(
+        str(found.page.get("id")) for found in resolved if found.page is not None
+    )
 
     result: list[Person] = []
     created = 0
+    held: typing.Counter[str] = collections.Counter()
     ambiguous: set[str] = set()
-    for person in payloads:
-        payload = asdict(person)
-        stored = snapshot.person_for(payload)
-        if stored is None:
+    for person, found in zip(payloads, resolved):
+        if found.held:
+            held[found.how] += 1
+        elif found.page is None:
             created += 1
-        elif identified_by(snapshot, payload):
+        elif found.how == BY_NAME_AND_DATE:
+            if reaching[str(found.page.get("id"))] == 1:
+                result.append(person)
+            else:
+                ambiguous.add(person.name)
+        elif found.how in IDENTIFIED:
             result.append(person)
         elif candidates[person.name] == 1 and snapshot.people_named[person.name] == 1:
             result.append(person)
@@ -624,6 +769,7 @@ def matching_one_page(payloads: list[Person], snapshot: SiteSnapshot) -> list[Pe
         f"{len(result)} of {len(payloads)} payloads land on a page the site "
         f"already has; {created} would be created by the ingest and are "
         f"dropped, {len(ambiguous)} names left alone as several people share them"
+        + "".join(f"; {count} {how}" for how, count in sorted(held.items()))
     )
     return result
 
@@ -647,19 +793,38 @@ def missing_from_koryta(payloads: list[Person], snapshot: SiteSnapshot) -> list[
 
     Namesakes the site already has separate pages for are not this case - those
     payloads resolve, so they never reach here.
+
+    A payload with a birth date lands on a page just created only where the
+    name agrees and the day is the same (`lookupByNameAndBirthDate`), so two of
+    them collide only then, and only where one of the two has no register link
+    for the ingest to tell them apart by. A payload the ingest would hold back
+    is no new person either: it is left out, and counted.
     """
     unlinked_names = {
         person.name for person in payloads if field(asdict(person), "rejestrIo") is None
     }
     candidates = collections.Counter(person.name for person in payloads)
+    colliding = born_namesakes(
+        [person for person in payloads if person.birthDate is not None]
+    )
 
     result: list[Person] = []
     stored_count = 0
+    held: typing.Counter[str] = collections.Counter()
     ambiguous: set[str] = set()
     for person in payloads:
-        if snapshot.person_for(asdict(person)) is not None:
+        found = snapshot.resolve(asdict(person))
+        if found.held:
+            held[found.how] += 1
+        elif found.page is not None:
             stored_count += 1
-        elif candidates[person.name] > 1 and person.name in unlinked_names:
+        elif id(person) in colliding:
+            ambiguous.add(f"{person.name} {person.birthDate}")
+        elif (
+            person.birthDate is None
+            and candidates[person.name] > 1
+            and person.name in unlinked_names
+        ):
             ambiguous.add(person.name)
         else:
             result.append(person)
@@ -669,8 +834,29 @@ def missing_from_koryta(payloads: list[Person], snapshot: SiteSnapshot) -> list[
         f"does not have; {stored_count} already have a page and are dropped, "
         f"{len(ambiguous)} names left alone as several payloads share them "
         f"with no register link to tell them apart"
+        + "".join(f"; {count} {how}" for how, count in sorted(held.items()))
     )
     return result
+
+
+def born_namesakes(payloads: list[Person]) -> set[int]:
+    """The payloads (by `id`) that the ingest could put on one page between
+    them: born the same day, under names that agree (`names_agree`), and not
+    both carrying a register link - two links are two people to the ingest."""
+    groups: dict[tuple[str, str, str], list[Person]] = collections.defaultdict(list)
+    for person in payloads:
+        words = normalize_person_name(person.name).split()
+        if words:
+            groups[(words[0], words[-1], str(person.birthDate))].append(person)
+    colliding: set[int] = set()
+    for group in groups.values():
+        for i, one in enumerate(group):
+            for other in group[i + 1 :]:
+                if one.rejestrIo and other.rejestrIo:
+                    continue
+                if names_agree(one.name, other.name):
+                    colliding.update((id(one), id(other)))
+    return colliding
 
 
 def party_of_candidacy(committee: str | None) -> str | None:
@@ -776,11 +962,31 @@ COLLAPSED_PEOPLE_REPORTED = 20
 collapsed_people: typing.Counter[str] = collections.Counter()
 
 
-def one_register_entry(rejestr_ids: typing.Sequence) -> str:
-    """The register entry to file this row under, of the ones it carries.
+#: Rows carrying two PESEL fingerprints - two people in one row - by name.
+two_pesels: typing.Counter[str] = collections.Counter()
 
-    A row carrying two is two people. KRS people used to be grouped by name and
-    birth *year*, years within one of each other smoothed together, so two
+#: Rows of one PESEL under two rejestr.io entries or more, by the entries:
+#: rejestr.io listing one person twice (`match_rejestrio`). One person each.
+shared_pesel: typing.Counter[str] = collections.Counter()
+
+
+def one_register_entry(
+    rejestr_ids: typing.Sequence,
+    prints: typing.AbstractSet[str] = frozenset(),
+    linked: str | None = None,
+) -> str | None:
+    """The register entry to file this row under, of the ones it carries, or
+    None for somebody only an odpis names, who has none.
+
+    Several entries under one PESEL are one person rejestr.io lists twice:
+    ids 126307 and 715231 at 0000127464 on the 2026-10-09 night. The row keeps
+    both; the payload carries the one the person's page already links
+    (`linked`, which `people_merged` matched the page by), else the lowest, so
+    that the page is never re-linked from one to the other. Counted in
+    `shared_pesel`, not as a collapse.
+
+    Otherwise a row carrying two is two people. KRS people used to be grouped
+    by name and birth *year*, years within one of each other smoothed together, so two
     strangers who shared a name and were born a year apart came out as one row
     holding both their register entries: 913 rows on 2026-10-07. They are
     grouped by the register entry now, one row each, and this should not see a
@@ -805,8 +1011,11 @@ def one_register_entry(rejestr_ids: typing.Sequence) -> str:
     """
     ids = [str(value) for value in rejestr_ids if str(value)]
     if not ids:
-        raise ValueError("A person payload needs at least one rejestr.io entry")
+        return None
     ids.sort(key=lambda value: (0, int(value)) if value.isdigit() else (1, value))
+    if len(ids) > 1 and len(prints) == 1:
+        shared_pesel[", ".join(ids)] += 1
+        return linked if linked in ids else ids[0]
     if len(ids) > 1:
         collapsed_people[", ".join(ids)] += 1
     return ids[0]
@@ -820,6 +1029,18 @@ def report_collapsed_people() -> None:
     picked. There is no way to tell them apart from here - the register entries
     are the only evidence, and only one of them survives into the payload.
     """
+    if shared_pesel:
+        print(
+            f"{sum(shared_pesel.values())} payloads are one PESEL under several "
+            f"rejestr.io entries - rejestr.io listing one person twice - and "
+            f"carry the entry their page links, else the lowest: "
+            + "; ".join(sorted(shared_pesel))
+        )
+    if two_pesels:
+        print(
+            f"{sum(two_pesels.values())} payloads carry two PESELs, two people "
+            f"in one row: " + ", ".join(sorted(two_pesels))
+        )
     if not collapsed_people:
         return
     total = sum(collapsed_people.values())
@@ -830,6 +1051,17 @@ def report_collapsed_people() -> None:
     )
     for entries, count in collapsed_people.most_common(COLLAPSED_PEOPLE_REPORTED):
         print(f"  {count:6d}  {entries}")
+
+
+def report_another_pesel() -> None:
+    """Name the people left out for landing on a page of another PESEL."""
+    if not another_pesel:
+        return
+    print(
+        f"Leaving out {sum(another_pesel.values())} people who would land by "
+        f"name and birth date on the page of a rejestr.io entry with another "
+        f"PESEL: " + ", ".join(sorted(another_pesel)[:COLLAPSED_PEOPLE_REPORTED])
+    )
 
 
 def report_unmapped_committees(unmapped: typing.Counter[str]) -> None:

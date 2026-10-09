@@ -17,6 +17,7 @@ from analysis.payloads.person import (
     canonical_name,
     collapsed_people,
     one_register_entry,
+    shared_pesel,
 )
 from analysis.payloads.site import (
     ENRICHED_CANDIDACY,
@@ -668,9 +669,29 @@ class TestOneRegisterEntry:
         assert one_register_entry(["abc", "123"]) == "123"
         assert one_register_entry(["abc", "abd"]) == "abc"
 
-    def test_a_row_with_no_entry_at_all_is_an_error(self):
-        with pytest.raises(ValueError):
-            one_register_entry([])
+    def test_somebody_only_an_odpis_names_has_no_entry(self):
+        assert one_register_entry([]) is None
+        assert one_register_entry([], frozenset({"a" * 32})) is None
+
+    def test_one_pesel_under_two_entries_files_under_the_one_its_page_links(self):
+        """Ids 126307 and 715231: rejestr.io listing one person twice, which
+        their one PESEL says. The page keeps the entry it links."""
+        shared_pesel.clear()
+        collapsed_people.clear()
+        one_pesel = frozenset({"a" * 32})
+
+        assert one_register_entry(["715231", "126307"], one_pesel) == "126307"
+        assert (
+            one_register_entry(["126307", "715231"], one_pesel, linked="715231")
+            == "715231"
+        )
+        # A link to neither is no reason to move off the lowest.
+        assert one_register_entry(["126307", "715231"], one_pesel, linked="1") == (
+            "126307"
+        )
+        assert dict(shared_pesel) == {"126307, 715231": 3}
+        assert not collapsed_people
+        shared_pesel.clear()
 
     def test_a_collapsed_row_is_reported_rather_than_dropped(self):
         collapsed_people.clear()

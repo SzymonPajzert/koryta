@@ -1,6 +1,12 @@
 import pytest
 
-from util.polish import PkwFormat, adds_middle_names, format_person_name, parse_name
+from util.polish import (
+    PkwFormat,
+    adds_middle_names,
+    format_person_name,
+    names_agree,
+    parse_name,
+)
 
 
 def all_configurations(first_name, middle_name, last_name):
@@ -150,3 +156,24 @@ def test_format_person_name_is_idempotent(raw):
 )
 def test_adds_middle_names(full, short, expected):
     assert adds_middle_names(full, short) is expected
+
+
+# The same table as `namesAgree` in frontend/tests/shared/names.test.ts: the
+# ingest matches by that rule, and `SiteSnapshot` predicts it by this one.
+@pytest.mark.parametrize(
+    ("one", "other", "expected"),
+    [
+        ("Łukasz Żelewski", "Lukasz Zelewski", True),
+        ("Łukasz Jan Żelewski", "Lukasz Zelewski", True),
+        ("Lukasz Zelewski", "ŁUKASZ JAN ŻELEWSKI", True),
+        ("Anna Kowalska-Nowak", "Anna Kowalska Nowak", True),
+        ("Anna Nowak Kowalska", "Anna Kowalska", True),
+        ("Jan Adam Nowak", "Jan Piotr Nowak", False),
+        ("Anna Nowak", "Anna Kowalska", False),
+        ("Jan Kowalski", "Jan Kowalski Nowak", False),
+        ("Jan Kowalski", "", False),
+    ],
+)
+def test_names_agree(one, other, expected):
+    assert names_agree(one, other) is expected
+    assert names_agree(other, one) is expected

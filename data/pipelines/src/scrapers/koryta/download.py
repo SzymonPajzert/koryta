@@ -414,6 +414,10 @@ NODE_FIELDS = [
     # thing, so a payload for one is never dropped - see
     # `revisionChangesNothing` in `frontend/server/utils/revisions.ts`.
     "revision_id",
+    # The page a duplicate was merged into. A tombstone keeps its name and
+    # birth date, so the ingest's name-and-date lookup follows it to the page
+    # it stands for rather than counting the two as two people.
+    "merged_into",
 ]
 
 #: The node columns that are not strings. `parties`, `activity` and

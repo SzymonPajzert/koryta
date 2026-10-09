@@ -19,8 +19,9 @@ loses a fact and nobody would see it go.
 """
 
 import math
+import re
 import typing
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 import numpy as np
@@ -29,7 +30,7 @@ import pandas as pd
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.pkw.elections import party_sort_key
 from scrapers.stores import Context
-from util.polish import adds_middle_names
+from util.polish import adds_middle_names, names_agree, normalize_person_name
 
 #: Fields a node owns rather than states, which a revision never carries. The
 #: ingest strips these off the stored document before comparing, so we do too.
@@ -185,6 +186,54 @@ Edge = dict[str, typing.Any]
 #: dates from (`SiteSnapshot.dated_changes`), or None when it has no date.
 Change = tuple[str, str | None]
 
+#: How `lookupPersonDoc` reaches a person's page, or why it does not
+#: (`SiteSnapshot.resolve`).
+BY_PAGE_ID = "korytaId"
+BY_REGISTER = "rejestrIo"
+BY_NAME_AND_DATE = "name and birth date"
+BY_NAME = "name"
+NOT_ON_SITE = "not on koryta.pl"
+#: The two answers the ingest refuses with a 409 rather than guess between.
+HELD_SEVERAL = "held: several pages of that name and birth date"
+HELD_UNDATED = "held: a page of that name stores no birth date"
+HELD = (HELD_SEVERAL, HELD_UNDATED)
+#: What identifies a person, as against a name alone.
+IDENTIFIED = (BY_PAGE_ID, BY_REGISTER, BY_NAME_AND_DATE)
+
+
+@dataclass(frozen=True)
+class Resolution:
+    """Where a payload lands (`page`) and how, or why it lands nowhere."""
+
+    page: dict | None
+    how: str
+
+    @property
+    def held(self) -> bool:
+        return self.how in HELD
+
+
+def register_entry(link: typing.Any) -> str | None:
+    """The number of a rejestr.io link, or the link as written where it has
+    none - `registerEntry` in `person.post.ts`, so that a link pasted from a
+    browser, with the person's name after the number, is the same entry."""
+    if not isinstance(link, str) or not link:
+        return None
+    found = re.search(r"rejestr\.io/osoby/(\d+)", link)
+    return found.group(1) if found else link
+
+
+def links_another_entry(stored: typing.Any, sent: typing.Any) -> bool:
+    """Whether a page links another register entry than the payload names."""
+    page, payload = register_entry(stored), register_entry(sent)
+    return page is not None and payload is not None and page != payload
+
+
+def surname_key(name: typing.Any) -> str:
+    """The folded last word of a name, which a page's namesakes share."""
+    words = normalize_person_name(name if isinstance(name, str) else "").split()
+    return words[-1] if words else ""
+
 
 def day_of(value: typing.Any) -> str | None:
     """A payload's date as `YYYY-MM-DD`, or None for no date at all.
@@ -330,6 +379,11 @@ class SiteSnapshot:
         #: others would otherwise be lost - and a name shared by two pages is
         #: exactly where the name fallback must not be trusted.
         self.people_named: typing.Counter[str] = Counter()
+        #: People by the birth date they store, and by the folded last word of
+        #: their name: what the ingest reads a person with no register entry
+        #: by (`lookupByNameAndBirthDate`).
+        self.people_born: dict[str, list[dict]] = defaultdict(list)
+        self.people_by_surname: dict[str, list[dict]] = defaultdict(list)
         self.companies: dict[str, str] = {}
         #: The same companies as `self.companies`, whole rather than by id.
         #: `CompaniesPayloads` compares fields; the person payload only ever
@@ -363,6 +417,9 @@ class SiteSnapshot:
                     # link at all.
                     self.people_by_name.setdefault(str(node["name"]), node)
                     self.people_named[str(node["name"])] += 1
+                    self.people_by_surname[surname_key(node["name"])].append(node)
+                if (born := day_of(field(node, "birthDate"))) is not None:
+                    self.people_born[born].append(node)
             elif node_type == "place" and "krsNumber" in node:
                 self.companies.setdefault(str(node["krsNumber"]), node_id)
                 self.company_nodes.setdefault(str(node["krsNumber"]), node)
@@ -390,7 +447,13 @@ class SiteSnapshot:
         )
 
     def person_for(self, payload: typing.Mapping[str, typing.Any]) -> dict | None:
-        """The stored person this payload would land on, or None for a new one.
+        """The stored person this payload would land on, or None for a new one
+        - or for one the ingest would hold back (`resolve`)."""
+        return self.resolve(payload).page
+
+    def resolve(self, payload: typing.Mapping[str, typing.Any]) -> Resolution:
+        """The stored person this payload would land on, and how; or that it
+        is a new one, or one the ingest holds back with a 409.
 
         Mirrors `lookupPersonDoc` in `frontend/server/api/ingest/person.post.ts`
         exactly, and has to: this filter exists to predict what an upload would
@@ -401,8 +464,10 @@ class SiteSnapshot:
         The node id first where the payload carries one, because that is the
         page and there is nothing left to work out. Then the register link,
         because that is the identity - the name is not, and matching on it
-        exactly is what filed 170 people under two pages each. The name only as
-        a fallback, and only onto somebody the site has no register link for,
+        exactly is what filed 170 people under two pages each. Then, for a
+        payload with a birth date, the name and the date together
+        (`_by_name_and_date`). The name alone only as a fallback for a payload
+        with neither, and only onto somebody the site has no register link for,
         because a page carrying a *different* link is a different human however
         the two are spelled.
         """
@@ -410,22 +475,103 @@ class SiteSnapshot:
         if koryta_id is not None:
             stored = self.people_by_id.get(str(koryta_id))
             if stored is not None:
-                return stored
+                return Resolution(stored, BY_PAGE_ID)
 
         register = field(payload, "rejestrIo")
         if register is not None:
             stored = self.people.get(str(register))
             if stored is not None:
-                return stored
+                return Resolution(stored, BY_REGISTER)
 
+        born = day_of(field(payload, "birthDate"))
+        if born is not None:
+            return self._by_name_and_date(payload, born)
+        return self._by_name(payload, None)
+
+    def _by_name(
+        self, payload: typing.Mapping[str, typing.Any], born: str | None
+    ) -> Resolution:
+        """`lookupByName`: the first page of the payload's exact name, unless it
+        links another register entry, or stores a birth date and the payload's
+        is another."""
+        register = field(payload, "rejestrIo")
         by_name = self.people_by_name.get(str(payload.get("name")))
         if by_name is None:
-            return None
-
+            return Resolution(None, NOT_ON_SITE)
+        stored = day_of(field(by_name, "birthDate"))
+        if born is not None and stored is not None and stored != born:
+            return Resolution(None, NOT_ON_SITE)
         stored_register = field(by_name, "rejestrIo")
         if register is None or stored_register is None:
-            return by_name
-        return by_name if str(stored_register) == str(register) else None
+            return Resolution(by_name, BY_NAME)
+        if str(stored_register) == str(register):
+            return Resolution(by_name, BY_NAME)
+        return Resolution(None, NOT_ON_SITE)
+
+    def _by_name_and_date(
+        self, payload: typing.Mapping[str, typing.Any], born: str
+    ) -> Resolution:
+        """`lookupByNameAndBirthDate`: the one page whose name agrees with the
+        payload's (`names_agree`) and which stores the same birth date; held
+        where two do. A page linking another register entry than the payload's
+        is never a match.
+
+        Where none does, a payload with a register entry goes on to the name
+        alone (`_by_name`), and one without is held wherever a page of the name
+        stores no birth date at all.
+
+        Wider than the ingest where it cannot be exact: the ingest finds the
+        undated namesakes through the search index by the surname as written,
+        and this by the folded surname, so it may hold back a person the
+        ingest would take - never the other way round.
+        """
+        name, register = payload.get("name"), field(payload, "rejestrIo")
+        dated: dict[str, dict] = {}
+        undated: set[str] = set()
+
+        def consider(node: dict) -> None:
+            if not names_agree(node.get("name"), name):
+                return
+            page = self._survivor(node)
+            if page is None:
+                return
+            if links_another_entry(field(page, "rejestrIo"), register):
+                return
+            stored = day_of(field(page, "birthDate"))
+            if stored is None:
+                undated.add(str(page.get("id")))
+            elif stored == born:
+                dated[str(page.get("id"))] = page
+
+        for node in self.people_born.get(born, ()):
+            consider(node)
+        if len(dated) == 1:
+            return Resolution(next(iter(dated.values())), BY_NAME_AND_DATE)
+        if dated:
+            return Resolution(None, HELD_SEVERAL)
+        if register is not None:
+            return self._by_name(payload, born)
+        for node in self.people_by_surname.get(surname_key(name), ()):
+            consider(node)
+        if len(dated) == 1 and not undated:
+            return Resolution(next(iter(dated.values())), BY_NAME_AND_DATE)
+        if dated or undated:
+            return Resolution(None, HELD_UNDATED)
+        return Resolution(None, NOT_ON_SITE)
+
+    def _survivor(self, node: dict) -> dict | None:
+        """The page a merged one was folded into, as `resolveMergedNode`
+        follows `merged_into`; the node itself where it was not merged."""
+        seen = {str(node.get("id"))}
+        while (target := field(node, "merged_into")) is not None:
+            if str(target) in seen:
+                return node
+            seen.add(str(target))
+            following = self.people_by_id.get(str(target))
+            if following is None:
+                return None
+            node = following
+        return node
 
     def changes(self, payload: typing.Mapping[str, typing.Any]) -> list[str]:
         """What uploading this payload would write. Empty means it is a no-op.
