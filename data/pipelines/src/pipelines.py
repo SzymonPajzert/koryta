@@ -2,6 +2,7 @@ from analysis.article_person_mentions import ArticlePersonMentions
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
+from analysis.likely_public import CompaniesLikelyPublic
 from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.scores import (
@@ -71,6 +72,7 @@ PIPELINES = [
     CompaniesKRS,
     Companies,
     CompaniesKMGP,
+    CompaniesLikelyPublic,
     CompaniesPayloads,
     CompaniesPublicByRegister,
     CompanyScores,
