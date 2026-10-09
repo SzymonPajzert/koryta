@@ -11,7 +11,7 @@ import pandas as pd
 
 from analysis.extract import Extract
 from analysis.payloads.election import get_election_type
-from analysis.payloads.priority import Pick, prioritised
+from analysis.payloads.priority import MISSING, Pick, prioritised
 from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
 from analysis.payloads.target import (
     PageTarget,
@@ -23,7 +23,7 @@ from analysis.payloads.target import (
 from analysis.utils import as_sequence
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
-from scrapers.koryta.download import KorytaPeople
+from scrapers.koryta.download import KorytaNotes, KorytaPeople
 from scrapers.krs.columns import is_public
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
@@ -164,6 +164,7 @@ class PeoplePayloads(Pipeline[Person]):
 
         New hires the site lacks first, then the pages of the people whose
         rejestr.io feed was bought lately (`bought`, by their ids), then the
+        pages with a note still open - data noted missing first - then the
         published pages that would change, then the other pages that would -
         see `analysis.payloads.priority`. One build for what would otherwise
         take two runs, `--not-on-koryta` and `--on-koryta --only-changed`,
@@ -181,6 +182,7 @@ class PeoplePayloads(Pipeline[Person]):
             public_krs=self.people.public_companies(ctx),
             published_ids=self.published_people(ctx),
             bought=bought,
+            noted=self.noted_pages(ctx),
             today=today,
             recent_days=recent_days,
         )
@@ -229,6 +231,23 @@ class PeoplePayloads(Pipeline[Person]):
         if people.empty or "is_public" not in people:
             return set()
         return set(people.loc[is_public(people["is_public"]), "id"].astype(str))
+
+    def noted_pages(self, ctx: Context) -> dict[str, frozenset[str]]:
+        """The kinds of the note entries still open on each page the export
+        shows one on: "missing", "change_request", or a "source" an admin
+        marked unresolved (`KorytaNotes`)."""
+        notes = KorytaNotes(self.args.koryta_date).read_or_process(ctx)
+        if notes.empty or "node_id" not in notes:
+            return {}
+        kinds: dict[str, set[str]] = collections.defaultdict(set)
+        for note in notes[notes["open"].astype(bool)].itertuples():
+            kinds[str(note.node_id)].add(str(note.kind))
+        print(
+            f"Open notes on {len(kinds)} pages, "
+            f"{sum(MISSING in k for k in kinds.values())} of them saying data "
+            f"is missing"
+        )
+        return {page: frozenset(k) for page, k in kinds.items()}
 
     def only_changed(self, ctx: Context, people: list[Person]) -> list[Person]:
         """The payloads that would write something, and a note of what.

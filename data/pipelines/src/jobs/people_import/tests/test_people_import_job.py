@@ -761,6 +761,7 @@ def sent_part(world: World) -> list[dict]:
 
 
 HIRE, BOUGHT, PUBLISHED, ON_SITE = "new_hire", "bought", "published", "on_site"
+MISSING, NOTED = "noted_missing", "noted"
 
 
 def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
@@ -777,7 +778,14 @@ def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
     assert code == job.EXIT_TRY_LATER
     assert priority.sent() == ["Anna Nowak", "Beata Kos", "Jan Kowalski"]
     summary = priority.summary()
-    assert summary["tiers"] == {HIRE: 2, BOUGHT: 0, PUBLISHED: 1, ON_SITE: 1}
+    assert summary["tiers"] == {
+        HIRE: 2,
+        BOUGHT: 0,
+        MISSING: 0,
+        NOTED: 0,
+        PUBLISHED: 1,
+        ON_SITE: 1,
+    }
     assert (summary["state"], summary["stopped"]) == ("partial", "limit")
     assert summary["created"] == ["Anna Nowak (p)", "Beata Kos (p)"]
     assert [
@@ -804,6 +812,8 @@ def test_new_hires_past_max_new_make_room_for_the_pages_after_them(priority):
     assert priority.summary()["tiers"] == {
         HIRE: 1,
         BOUGHT: 0,
+        MISSING: 0,
+        NOTED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }
@@ -902,7 +912,10 @@ def test_a_priority_dry_run_shows_the_tiers_and_writes_nothing(priority, capsys)
     assert priority.objects == {}
     out = capsys.readouterr().out
     assert "The first 3 (--max-uploads) by tier:" in out
-    assert "'new_hire': 1, 'bought': 1, 'published': 1, 'on_site': 0" in out
+    assert (
+        "'new_hire': 1, 'bought': 1, 'noted_missing': 0, 'noted': 0, "
+        "'published': 1, 'on_site': 0" in out
+    )
 
 
 def test_a_priority_run_may_create_as_many_pages_as_it_sends():
@@ -947,7 +960,14 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
     [since] = priority.bought_since
     assert (built["today"] - date.fromisoformat(since)).days == 7
     summary = priority.summary()
-    assert summary["tiers"] == {HIRE: 1, BOUGHT: 1, PUBLISHED: 1, ON_SITE: 0}
+    assert summary["tiers"] == {
+        HIRE: 1,
+        BOUGHT: 1,
+        MISSING: 0,
+        NOTED: 0,
+        PUBLISHED: 1,
+        ON_SITE: 0,
+    }
     # Two bought, one of them with a page to change.
     assert summary["bought_people"] == 2
     assert [(row["name"], row["tier"]) for row in sent_part(priority)] == [
@@ -957,8 +977,54 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
     ]
     out = capsys.readouterr().out
     assert (
-        "Planned by tier: {'new_hire': 1, 'bought': 1, 'published': 1, "
-        "'on_site': 0}" in out
+        "Planned by tier: {'new_hire': 1, 'bought': 1, 'noted_missing': 0, "
+        "'noted': 0, 'published': 1, 'on_site': 0}" in out
+    )
+
+
+# ---------------------------------------------------------------------------
+# A priority run: the pages somebody left a note on
+
+
+def test_the_noted_pages_go_up_after_the_bought_in_tiers_of_their_own(priority):
+    priority.candidates = [
+        candidate("Ewa Lis", BOUGHT, "2026-08-01"),
+        candidate("Olga Wilk", MISSING, "2024-01-01"),
+        candidate("Piotr Sowa", NOTED),
+        candidate("Jan Kowalski", PUBLISHED, "2026-09-01"),
+    ]
+    priority.answers = [person("updated")] * 3
+
+    assert job.main(["--scope", "priority", "--max-uploads", "3"]) == (
+        job.EXIT_TRY_LATER
+    )
+
+    assert priority.sent() == ["Ewa Lis", "Olga Wilk", "Piotr Sowa"]
+    assert priority.summary()["tiers"] == {
+        HIRE: 0,
+        BOUGHT: 1,
+        MISSING: 1,
+        NOTED: 1,
+        PUBLISHED: 1,
+        ON_SITE: 0,
+    }
+    assert [(row["name"], row["tier"]) for row in sent_part(priority)] == [
+        ("Ewa Lis", BOUGHT),
+        ("Olga Wilk", MISSING),
+        ("Piotr Sowa", NOTED),
+    ]
+
+
+def test_a_page_made_for_somebody_noted_stops_the_run(priority):
+    # The noted are pages the site has: one created is the identity lookup
+    # missing somebody, as for any page but a new hire's.
+    priority.candidates = [candidate("Olga Wilk", MISSING)]
+    priority.answers = [person("created", "new-node")]
+
+    assert job.main(["--scope", "priority"]) == job.EXIT_FAILED
+
+    assert priority.summary()["stopped"].startswith(
+        "utworzył stronę dla osoby, która już ma"
     )
 
 
