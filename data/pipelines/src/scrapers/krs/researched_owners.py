@@ -2,12 +2,14 @@
 
 KRS names the shareholders of a spółka akcyjna only when there is exactly one,
 so an SA held by Poczta Polska and Asseco, or by a city and its voivodeship,
-reads as owned by nobody, and REGON's code covers few of them. Each company
-here was found by `CompaniesLikelyPublic` - several people on the site worked
-there, all of them scored as koryciarz - and its owners were then read off a
-source that says so, given beside it: the company's own shareholder page, its
-parent's group page, a stock-exchange disclosure, a voivodeship's or city's
-own page, the press where nothing better exists.
+reads as owned by nobody, and REGON's code covers few of them; nor does it
+name a shareholder under 10% of a spółka z o.o. Each company here was found by
+`CompaniesLikelyPublic` - several people on the site worked there, all of them
+scored as koryciarz - or, for SIM "KZN-Wielkopolska", by the BIP NIP list, and
+its owners were then read off a source that says so, given beside it: the
+company's own shareholder page, its parent's group page, a stock-exchange
+disclosure, a voivodeship's or city's own page, the press where nothing better
+exists.
 
 Owners are written the way an odpis writes them, so that `CompaniesKRS` treats
 them like one: a company by its KRS number becomes an ownership edge, which
@@ -274,9 +276,43 @@ RESEARCHED_OWNERS: dict[str, Researched] = {
         "https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/0000920074?rejestr=P&format=json",
     ),
     # PGO "EKO-MAZURY": owned by a union of gminas, which `JstIndex` does not
-    # place. Only the register sweep's `public_body` reads such owners.
+    # place. `public_bodies` names such owners, so the register alone now makes
+    # it public in `CompaniesKRS` too; this keeps the source on record.
     "0000289055": Researched(
         (ResearchedOwner('ZWIĄZEK MIĘDZYGMINNY "GOSPODARKA KOMUNALNA"'),),
         "https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/0000289055?rejestr=P&format=json",
+    ),
+    # SPOŁECZNA INICJATYWA MIESZKANIOWA "KZN-WIELKOPOLSKA": the Treasury through
+    # KZN and 22 gminas, as its own page lists its members' meeting. The register
+    # names none of them, each holding under 10%.
+    "0000991780": Researched(
+        (
+            ResearchedOwner(
+                "SKARB PAŃSTWA REPREZENTOWANY PRZEZ KRAJOWY ZASÓB NIERUCHOMOŚCI"
+            ),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA BOJANOWO"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA CZŁOPA"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA DĄBIE"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA KACZORY"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA KROBIA"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA KROTOSZYN"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA KRZYWIŃ"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA ŁOBŻENICA"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA MIEJSKA GÓRKA"),
+            ResearchedOwner("GMINA WIEJSKA MIELESZYN"),
+            ResearchedOwner("GMINA WIEJSKA MIEŚCISKO"),
+            ResearchedOwner("GMINA WIEJSKA OSTROWITE"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA OSTRZESZÓW"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA PLESZEW"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA PRZEDECZ"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA RAWICZ"),
+            ResearchedOwner("GMINA WIEJSKA SIEROSZEWICE"),
+            ResearchedOwner("GMINA MIEJSKA SŁUPCA"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA SOMPOLNO"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA TRZCIANKA"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA TUCZNO"),
+            ResearchedOwner("GMINA MIEJSKO-WIEJSKA WOLSZTYN"),
+        ),
+        "https://simkzn-wielkopolska.pl/o-nas/",
     ),
 }
