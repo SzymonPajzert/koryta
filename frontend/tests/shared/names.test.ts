@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   addsMiddleNames,
+  namesAgree,
   normalizePersonName,
   personNameKeys,
   shortPersonName,
+  withoutDiacritics,
 } from "../../shared/names";
 
 describe("normalizePersonName", () => {
@@ -75,6 +77,33 @@ describe("addsMiddleNames", () => {
     ["Jan Maria Kowalski", ""],
   ])("does not take %s as more of %s", (full, short) => {
     expect(addsMiddleNames(full, short)).toBe(false);
+  });
+});
+
+// The same table as `test_names_agree` in data/pipelines/src/tests/test_polish.py:
+// the ingest matches by this rule and the pipeline predicts it by that one.
+describe("namesAgree", () => {
+  it.each([
+    ["Łukasz Żelewski", "Lukasz Zelewski", true],
+    ["Łukasz Jan Żelewski", "Lukasz Zelewski", true],
+    ["Lukasz Zelewski", "ŁUKASZ JAN ŻELEWSKI", true],
+    ["Anna Kowalska-Nowak", "Anna Kowalska Nowak", true],
+    ["Anna Nowak Kowalska", "Anna Kowalska", true],
+    ["Jan Adam Nowak", "Jan Piotr Nowak", false],
+    ["Anna Nowak", "Anna Kowalska", false],
+    ["Jan Kowalski", "Jan Kowalski Nowak", false],
+    ["Jan Kowalski", "", false],
+  ])("%s and %s: %s", (one, other, expected) => {
+    expect(namesAgree(one, other)).toBe(expected);
+    expect(namesAgree(other, one)).toBe(expected);
+  });
+});
+
+describe("withoutDiacritics", () => {
+  it("writes the Polish letters plain and keeps the rest", () => {
+    expect(withoutDiacritics("Łukasz Żelewski-Kąkol")).toBe(
+      "Lukasz Zelewski-Kakol",
+    );
   });
 });
 

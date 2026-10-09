@@ -31,7 +31,11 @@ import type {
   NodeType,
 } from "~~/shared/model";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
-import { addsMiddleNames } from "~~/shared/names";
+import {
+  addsMiddleNames,
+  namesAgree,
+  withoutDiacritics,
+} from "~~/shared/names";
 import {
   personRequestSchema,
   type EntityResult,
@@ -724,17 +728,27 @@ async function lookupNodeDoc(
  *    merged away since the export the pipeline read is not a page to write to.
  * 2. The register entry. Exact, and enough: two spellings of one entry are one
  *    person whatever they are called.
- * 3. Failing that, the name - but only onto a page that has *no* register entry
- *    of its own. 880 people predate the pipeline sending one, and refusing to
- *    match them would give every one of them a second page on the next run. The
- *    match adopts the entry, so it happens once per person.
- * 4. A page whose register entry is a *different* one is not a match, however
- *    the two are spelled. That is the whole of the collapse bug: it is what
- *    used to put two strangers who share a name on one page, and let the second
- *    of them overwrite the first's `rejestrIo` on the way in.
+ * 3. Failing that, with a birth date, the name and the date together
+ *    (`lookupByNameAndBirthDate`). It is how a person only an odpis names is
+ *    found: the pipeline keys them by their PESEL, which never leaves it, and
+ *    sends their name and the date the PESEL gives.
+ * 4. Failing that, the name - but only onto a page that has *no* register
+ *    entry of its own, and no birth date other than the payload's
+ *    (`lookupByName`). 880 people predate the pipeline sending an entry, and
+ *    refusing to match them would give every one of them a second page on the
+ *    next run. The match adopts the entry, so it happens once per person.
+ *    A payload with neither an entry nor a page id does not get this far
+ *    where it has a birth date: a namesake's page that stores none holds it
+ *    back instead (`lookupByNameAndBirthDate`).
  *
- * A payload with neither id still matches by name alone. Nothing else
- * identifies it, and the pipelines are not the only callers.
+ * A page whose register entry is a *different* one is never a match, however
+ * the two are spelled. That is the whole of the collapse bug: it is what used
+ * to put two strangers who share a name on one page, and let the second of
+ * them overwrite the first's `rejestrIo` on the way in.
+ *
+ * A payload with neither a register entry nor a birth date still matches by
+ * the name alone, onto the first page of that exact name whatever it links.
+ * Nothing else identifies it, and the pipelines are not the only callers.
  */
 async function lookupPersonDoc(
   ctx: Context,
@@ -760,12 +774,148 @@ async function lookupPersonDoc(
     if (byRegister) return byRegister;
   }
 
+  if (body.birthDate) return lookupByNameAndBirthDate(ctx, body);
+  return lookupByName(ctx, body);
+}
+
+/** The first page of the payload's exact name, as the ingest has always
+ * matched one: unless it links another register entry than the payload's, or
+ * stores a birth date and the payload's is another. */
+async function lookupByName(
+  ctx: Context,
+  body: PersonRequest,
+): Promise<FirebaseFirestore.DocumentSnapshot | undefined> {
   const byName = await lookupNodeDoc(ctx, "name", body.name, "person");
   if (!byName) return undefined;
 
-  const storedRegister = byName.data()?.rejestrIo;
+  const stored = byName.data();
+  if (
+    body.birthDate &&
+    stored?.birthDate &&
+    stored.birthDate !== body.birthDate
+  ) {
+    return undefined;
+  }
+  const storedRegister = stored?.rejestrIo;
   if (!body.rejestrIo || !storedRegister) return byName;
   return storedRegister === body.rejestrIo ? byName : undefined;
+}
+
+/** The page of the person of this name born on this day, if the site has it.
+ *
+ * Read by the date, which few pages share, and narrowed to the ones whose
+ * name agrees with the payload's (`namesAgree`): folded, and past a middle
+ * name one side writes and the other does not. A page of the name storing
+ * another birth date is somebody else - 26 of the people only an odpis named
+ * on 2026-10-09 shared a name only with such pages - so the payload gets a
+ * page of its own. A page linking another register entry than the payload's
+ * is never a match either.
+ *
+ * Two pages of that name and day are a 409, nothing written: which of them
+ * the payload is about is a reviewer's question.
+ *
+ * Where no page has the day, a payload with a register entry goes on to the
+ * name alone (`lookupByName`), the way 447 entries on 2026-10-09 still
+ * reached unlinked pages that store no birth date - 103 of them published.
+ * One without an entry - somebody only an odpis names - is held back with a
+ * 409 instead wherever a page of the name stores no birth date: that page
+ * could be theirs or a namesake's, and a wrong guess hangs a stranger's posts
+ * on a real page. 191 people on 2026-10-09; 177 of them wait behind linked
+ * pages, which learn their date when their own payload next goes out. The
+ * pipeline leaves them out before sending (`SiteSnapshot.resolve`), so this is
+ * the guard for a page made since the export it read.
+ */
+async function lookupByNameAndBirthDate(
+  ctx: Context,
+  body: PersonRequest,
+): Promise<FirebaseFirestore.DocumentSnapshot | undefined> {
+  const dated = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+  const undated = new Set<string>();
+
+  /** Where a page of the name leaves the payload, followed through a merge. */
+  async function consider(doc: FirebaseFirestore.DocumentSnapshot) {
+    const stored = doc.data();
+    if (!isNamesake(stored, body)) return;
+    let page: FirebaseFirestore.DocumentSnapshot | undefined = doc;
+    if (stored?.merged_into) {
+      page = (await resolveMergedNode(ctx.db, doc.id)).snapshot;
+    }
+    const data = page?.data();
+    if (!page || data?.type !== "person") return;
+    if (linksAnotherEntry(data.rejestrIo, body.rejestrIo)) return;
+    if (!data.birthDate) undated.add(page.id);
+    else if (data.birthDate === body.birthDate) dated.set(page.id, page);
+  }
+
+  const born = await ctx.db
+    .collection("nodes")
+    .where("birthDate", "==", body.birthDate)
+    .get();
+  for (const doc of born.docs) {
+    if (doc.data().birthDate === body.birthDate) await consider(doc);
+  }
+  if (dated.size === 1) return [...dated.values()][0];
+  if (dated.size > 1) {
+    throw conflict(
+      `${body.name}, born ${body.birthDate}: ${dated.size} pages share the name ` +
+        `and the date (${[...dated.keys()].join(", ")}); held`,
+    );
+  }
+  if (body.rejestrIo) return lookupByName(ctx, body);
+
+  // Every page of the name, the dated ones again: a merged page found here
+  // can stand for a survivor born that day, which the date did not reach.
+  for (const doc of await namesakes(ctx, body.name)) await consider(doc);
+  if (dated.size === 1 && undated.size === 0) return [...dated.values()][0];
+  if (dated.size + undated.size > 0) {
+    throw conflict(
+      `${body.name}, born ${body.birthDate}: pages of that name store no birth ` +
+        `date to tell (${[...undated, ...dated.keys()].join(", ")}); held`,
+    );
+  }
+  return undefined;
+}
+
+/** Whether a stored node is a person whose name agrees with the payload's. */
+function isNamesake(
+  stored: FirebaseFirestore.DocumentData | undefined,
+  body: PersonRequest,
+): boolean {
+  return (
+    stored?.type === "person" &&
+    typeof stored.name === "string" &&
+    namesAgree(stored.name, body.name)
+  );
+}
+
+/** Whether a page links another register entry than the payload names. */
+function linksAnotherEntry(stored: unknown, sent: string | undefined): boolean {
+  const page = registerEntry(stored);
+  const payload = registerEntry(sent);
+  return page !== undefined && payload !== undefined && page !== payload;
+}
+
+/** Every node carrying a word the name ends in, as `/api/search` indexes
+ * them (`generateChunksLower`): the surname as written and with its Polish
+ * letters written plain, so a page typed without them is found too. Wider
+ * than the namesakes - a surname is a prefix of longer ones, and companies
+ * are indexed alike - so the caller narrows them by the name. */
+async function namesakes(
+  ctx: Context,
+  name: string,
+): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+  const surname = name.trim().toLowerCase().split(/\s+/).at(-1);
+  if (!surname) return [];
+  const spellings = [...new Set([surname, withoutDiacritics(surname)])];
+  const snapshot = await ctx.db
+    .collection("nodes")
+    .where("nameChunksLower", "array-contains-any", spellings)
+    .get();
+  return snapshot.docs;
+}
+
+function conflict(message: string) {
+  return createError({ statusCode: 409, message });
 }
 
 /** The edge recording this fact, creating it if the database has no such edge.
@@ -950,9 +1100,9 @@ async function findEdgeOrCreate(
  * The stored employments come back with the answer because they are read for
  * it anyway, and approving a stored edge needs its document.
  *
- * TODO: a PESEL fingerprint match is the same evidence as a `rejestrIo` one -
- * rejestr.io keys people by PESEL, one to one. It counts once the fingerprint
- * is stored; see the task ingest-person-by-pesel-fingerprint.
+ * A payload with no register entry - somebody only an odpis names, found by
+ * name and birth date - is never verified: the PESEL that identifies them
+ * stays in the pipeline, and a name and a date are what a namesake has too.
  */
 async function verifiedEmployments(
   ctx: Context,
