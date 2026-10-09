@@ -20,6 +20,7 @@ from scrapers.koryta.download import (
     KorytaCompanies,
     KorytaEdges,
     KorytaNodes,
+    KorytaNotes,
     KorytaPeople,
     KorytaVotes,
     export_timestamp,
@@ -189,6 +190,117 @@ class TestPipelinesFallBack(unittest.TestCase):
 
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["krs"], "0000123456")
+
+
+class TestKorytaNotes(unittest.TestCase):
+    """A reader's note is a list of entries on one page; the pipeline keeps a
+    row per entry, saying which page, what kind, and whether it is still open."""
+
+    def notes(self, *documents: dict) -> pd.DataFrame:
+        with patch.object(
+            FirestoreCollection,
+            "process",
+            exports_on({"2026-10-09": pd.DataFrame(list(documents))}),
+        ):
+            return KorytaNotes(date="2026-10-09").process(mock_ctx())
+
+    def test_an_entry_a_row_and_nothing_of_what_it_says(self):
+        df = self.notes(
+            {
+                "userUid": "reader",
+                "nodeId": "person-1",
+                "createdAt": "2026-08-21T10:00:00.000Z",
+                "sources": [
+                    {"note": "Brakuje wyborów", "kind": "missing"},
+                    {"note": "Jego linkedin", "url": "https://example.com/x"},
+                    {"note": "Duplikat", "kind": "change_request"},
+                ],
+            },
+            {
+                "userUid": "other",
+                "nodeId": "place-1",
+                "sources": [{"note": "Brakuje zarządu", "kind": "missing"}],
+            },
+        )
+
+        self.assertEqual(list(df.columns), ["node_id", "kind", "admin_status", "open"])
+        self.assertEqual(
+            df.to_dict(orient="records"),
+            [
+                {
+                    "node_id": "person-1",
+                    "kind": "missing",
+                    "admin_status": "",
+                    "open": True,
+                },
+                # Written before kinds existed, or with none: a source, which
+                # asks nobody for anything.
+                {
+                    "node_id": "person-1",
+                    "kind": "source",
+                    "admin_status": "",
+                    "open": False,
+                },
+                {
+                    "node_id": "person-1",
+                    "kind": "change_request",
+                    "admin_status": "",
+                    "open": True,
+                },
+                {
+                    "node_id": "place-1",
+                    "kind": "missing",
+                    "admin_status": "",
+                    "open": True,
+                },
+            ],
+        )
+
+    def test_an_admin_s_word_decides_whether_an_entry_is_open(self):
+        df = self.notes(
+            {
+                "userUid": "reader",
+                "nodeId": "person-1",
+                "sources": [
+                    {"note": "a", "kind": "missing", "adminStatus": "resolved"},
+                    {
+                        "note": "b",
+                        "url": "https://example.com/y",
+                        "adminStatus": "unresolved",
+                    },
+                    {
+                        "note": "c",
+                        "kind": "change_request",
+                        "adminStatus": "unresolved",
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(
+            list(zip(df["kind"], df["admin_status"], df["open"])),
+            [
+                ("missing", "resolved", False),
+                ("source", "unresolved", True),
+                ("change_request", "unresolved", True),
+            ],
+        )
+
+    def test_a_note_on_no_page_or_with_no_entries_is_left_out(self):
+        df = self.notes(
+            {"userUid": "a", "nodeId": None, "sources": [{"kind": "missing"}]},
+            {"userUid": "b", "nodeId": "person-2"},
+            {"userUid": "c", "nodeId": "person-3", "sources": ["not an entry", None]},
+            {"userUid": "d", "nodeId": "person-4", "sources": [{"kind": "missing"}]},
+        )
+
+        self.assertEqual(list(df["node_id"]), ["person-4"])
+
+    def test_no_entries_at_all_is_an_empty_frame_with_the_columns(self):
+        df = self.notes({"userUid": "a", "nodeId": "person-1", "sources": []})
+
+        self.assertTrue(df.empty)
+        self.assertEqual(list(df.columns), ["node_id", "kind", "admin_status", "open"])
 
 
 class TestWantedBlobs(unittest.TestCase):
