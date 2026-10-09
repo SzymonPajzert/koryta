@@ -229,7 +229,54 @@ def test_the_newer_source_speaks_for_each_company_and_only_the_graph_counts():
     assert sources == {A: {SOURCE_REJESTRIO}, B: {SOURCE_ODPIS}, C: {SOURCE_ODPIS}}
     at_b = combined[combined["employed_krs"] == B].set_index("last_name")["id"]
     assert at_b["Kowalski"] == "2" and pd.isna(at_b["Zieliński"])
-    assert "pesel_fingerprint" not in combined.columns
+
+
+def test_every_row_says_whose_pesel_it_is_where_anybody_knows():
+    """An odpis row its own; a rejestr.io row the one its id was matched to,
+    at whichever company; a rejestr.io row of an id no odpis named, none."""
+    rejestrio = people(
+        person(krs=A, id="1"),
+        person(krs=C, id="1", crawled_on="2026-09-20"),  # no odpis of C
+        person(krs=C, id="2", last="Kowalski", crawled_on="2026-09-20"),
+    )
+    combined = combine(
+        rejestrio, seats(seat(krs=A, pesel_fingerprint="a" * 32)), {A, C}
+    )
+    rows = sorted(
+        (krs, id, None if pd.isna(printed) else printed)
+        for krs, id, printed in zip(
+            combined["employed_krs"], combined["id"], combined["pesel_fingerprint"]
+        )
+    )
+    assert rows == [(A, "1", "a" * 32), (C, "1", "a" * 32), (C, "2", None)]
+
+
+def test_one_person_rejestrio_lists_twice_is_both_ids():
+    """Ids 126307 and 715231: one name, one birth date, one post at one company,
+    and one person in its odpis. Both ids are that person's, and both stay."""
+    rejestrio = people(
+        person(krs=A, id="715231", second_names="Marek"),
+        person(krs=A, id="126307", second_names="Marek"),
+    )
+    posts = posts_from_seats(seats(seat(krs=A, given="JAN MAREK")))
+    matches = match_rejestrio(rejestrio, posts)
+    assert sorted(matches["id"]) == ["126307", "715231"]
+
+    combined = combine(rejestrio, seats(seat(krs=A, given="JAN MAREK")), graph={A})
+    assert sorted(zip(combined["id"], combined["source"])) == [
+        ("126307", SOURCE_ODPIS),
+        ("715231", SOURCE_ODPIS),
+    ]
+
+
+def test_two_ids_with_two_middle_names_are_no_match():
+    """One first name, surname and birth date, but two middle names: two
+    people, whichever of them the odpis names."""
+    rejestrio = people(
+        person(krs=A, id="1", second_names="Adam"),
+        person(krs=A, id="2", second_names="Piotr"),
+    )
+    assert match_rejestrio(rejestrio, posts_from_seats(seats(seat()))).empty
 
 
 def test_somebody_the_newer_odpis_does_not_name_keeps_rejestrios_rows():
@@ -376,16 +423,98 @@ def test_an_odpis_namesake_born_on_another_day_is_another_person(ctx):
 def test_an_odpis_namesake_born_on_the_same_day_stays_one_person(ctx):
     """Name and date agree, so they stay one row: a probable duplicate.
 
-    The fingerprints differ only because rejestr.io's Jan Nowak has none yet: no
-    odpis of A is on file. Fetching it gives the evidence - his fingerprint at A
-    - but nothing here reads fingerprints, so the row stays one either way until
-    a later step acts on them.
+    rejestr.io's Jan Nowak has no fingerprint yet: no odpis of A is on file.
+    When the odpisy behind 2,882 such pairs were fetched, 2,867 named the very
+    PESEL and none another, so the PESEL known at B is taken for his.
     """
     rejestrio = people(person(krs=A, id="7"))
     odpisy = seats(seat(krs=B, pesel_fingerprint="e" * 32))
     combined = restored(combine(rejestrio, odpisy, graph={A, B}))
+    [row] = people_krs_merged(ctx, combined).to_dict("records")
 
     assert posts_by_row(people_krs_merged(ctx, combined)) == [(["7"], BORN, [A, B])]
+    assert list(row["pesel_fingerprint"]) == ["e" * 32]
+
+
+def test_a_namesake_born_that_day_with_another_pesel_is_another_person(ctx):
+    """The odpis of A is on file and gives rejestr.io's Jan Nowak his PESEL, so
+    the Jan Nowak at B born the same day, with another, is somebody else."""
+    rejestrio = people(person(krs=A, id="7"))
+    odpisy = seats(
+        seat(krs=A, pesel_fingerprint="a" * 32),
+        seat(krs=B, pesel_fingerprint="e" * 32),
+    )
+    combined = restored(combine(rejestrio, odpisy, graph={A, B}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        ([], BORN, [B]),
+        (["7"], BORN, [A]),
+    ]
+
+
+def test_two_people_only_odpisy_name_with_one_name_and_birth_date_are_two(ctx):
+    """Two PESELs are two people. Grouped by name and birth date, as everybody
+    only an odpis names used to be, they were one row and one payload."""
+    odpisy = seats(
+        seat(krs=A, pesel_fingerprint="a" * 32),
+        seat(krs=B, pesel_fingerprint="b" * 32),
+    )
+    combined = restored(combine(people(), odpisy, graph={A, B}))
+    merged = people_krs_merged(ctx, combined)
+
+    assert posts_by_row(merged) == [([], BORN, [A]), ([], BORN, [B])]
+    assert sorted(list(p) for p in merged["pesel_fingerprint"]) == [
+        ["a" * 32],
+        ["b" * 32],
+    ]
+
+
+def test_a_register_entry_two_pesels_could_be_joins_neither(ctx):
+    """Two people only the odpisy name, and one rejestr.io entry whose company
+    has no odpis on file, all with one name and birth date: the entry is one of
+    them at most, and which one nothing says."""
+    rejestrio = people(person(krs=C, id="7", crawled_on="2026-09-20"))
+    odpisy = seats(
+        seat(krs=A, pesel_fingerprint="a" * 32),
+        seat(krs=B, pesel_fingerprint="b" * 32),
+    )
+    combined = restored(combine(rejestrio, odpisy, graph={A, B, C}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        ([], BORN, [A]),
+        ([], BORN, [B]),
+        (["7"], BORN, [C]),
+    ]
+
+
+def test_one_pesel_carries_its_register_entry_to_a_company_without_an_odpis(ctx):
+    """Matched at A, Ewa Grajek's id is also her row at C, whose odpis is not on
+    file, and her PESEL is her row at B, where rejestr.io lists nobody."""
+    rejestrio = people(
+        person(krs=A, first="Ewa", last="Grajek", id="9"),
+        person(krs=C, first="Ewa", last="Grajek", id="9", crawled_on="2026-09-20"),
+    )
+    odpisy = seats(
+        seat(krs=A, surname="GRAJEK", given="EWA"),
+        seat(krs=B, surname="GRAJEK", given="EWA"),
+    )
+    combined = restored(combine(rejestrio, odpisy, graph={A, B, C}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [(["9"], BORN, [A, B, C])]
+
+
+def test_one_person_rejestrio_lists_twice_is_one_person_with_both_ids(ctx):
+    rejestrio = people(
+        person(krs=A, id="715231", second_names="Marek"),
+        person(krs=A, id="126307", second_names="Marek"),
+    )
+    combined = restored(
+        combine(rejestrio, seats(seat(krs=A, given="JAN MAREK")), graph={A})
+    )
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        (["126307", "715231"], BORN, [A])
+    ]
 
 
 def test_two_register_entries_born_the_same_year_are_two_people(ctx):

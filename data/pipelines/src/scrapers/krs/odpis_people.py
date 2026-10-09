@@ -22,8 +22,16 @@ that is the newer source having seen an entry the older had not.
 - An odpis person who is a rejestr.io person at the same company keeps
   rejestr.io's spelling and id, so a page linked by that id stays linked; the
   PESEL fingerprint carries that identity to the person's other companies, and
-  gives one spelling to somebody the register wrote two ways. The fingerprint
-  goes no further than this module.
+  gives one spelling to somebody the register wrote two ways.
+- Every row says whose PESEL it is where anybody knows: an odpis row its own
+  fingerprint, a rejestr.io row the fingerprint its id was matched to.
+  `PeopleKRSMerged` keys people by it. It goes no further than the pipelines'
+  outputs: no payload, sent part, request or log line carries it.
+- rejestr.io lists somebody twice now and then: two ids, one name, one birth
+  date, one post. Where the odpis names one person there with that name and
+  day, both ids are that person's, and the odpis rows are written once per id
+  so that each id stays on the record (ids 126307 and 715231 at 0000127464, on
+  the 2026-10-09 night).
 - Somebody without a PESEL takes no rejestr.io identity. The odpis prints
   some of them a birth date in the PESEL's place, but rejestr.io's
   ``osoba-bez-pesel`` entry has no date to match it on, and its id names
@@ -84,8 +92,13 @@ SOURCE_ODPIS = "odpis"
 #: `PeopleKRS`'s columns, in its order.
 KRS_COLUMNS = tuple(KrsPerson.__dataclass_fields__)
 
-#: Those, and where each row came from.
-COLUMNS = (*KRS_COLUMNS, "source")
+#: Those, where each row came from, and whose PESEL it is (`combine`).
+COLUMNS = (*KRS_COLUMNS, "source", "pesel_fingerprint")
+
+#: The columns the people's frames carry that no log line may print: the
+#: salted PESEL. The key that made it is never rotated, so a fingerprint in a
+#: log is as good as one on a page to whoever holds the key.
+NEVER_SHOWN = ("pesel_fingerprint",)
 
 #: How the list of entries records a company struck off one register while it
 #: lives on in the other: "WYKREŚLENIE Z REJESTRU PRZEDSIĘBIORCÓW". Leaving the
@@ -160,7 +173,7 @@ def posts_from_seats(seats: pd.DataFrame) -> pd.DataFrame:
                 "pesel_fingerprint": _text(seat.pesel_fingerprint),
             }
         )
-    return pd.DataFrame.from_records(rows, columns=[*COLUMNS, "pesel_fingerprint"])
+    return pd.DataFrame.from_records(rows, columns=list(COLUMNS))
 
 
 def _tier(first: str, last: str, first_r: str, last_r: str) -> int | None:
@@ -190,8 +203,14 @@ def match_rejestrio(rejestrio: pd.DataFrame, posts: pd.DataFrame) -> pd.DataFram
     tier are no match, and neither is a rejestr.io person two odpis people
     would claim: guessing would hang one person's posts on another's page.
 
-    One row per (employed_krs, pesel_fingerprint), with the rejestr.io person's
-    `IDENTITY`.
+    Except where the candidates are one name: the same first name, surname and
+    birth date, and no two middle names. That is rejestr.io listing one person
+    twice, and the odpis, which names everybody who held a seat, naming one
+    person there under that name says so. Each id is matched, so a person can
+    come out with two (`with_identities`).
+
+    One row per (employed_krs, pesel_fingerprint, id), with the rejestr.io
+    person's `IDENTITY`.
     """
     person = ["employed_krs", "pesel_fingerprint"]
     theirs = {c: f"r_{c}" for c in IDENTITY}
@@ -220,7 +239,26 @@ def match_rejestrio(rejestrio: pd.DataFrame, posts: pd.DataFrame) -> pd.DataFram
     pairs = pairs.dropna(subset=["tier"])
     best = pairs.groupby(person)["tier"].transform("min")
     pairs = pairs[pairs["tier"] == best].drop_duplicates(subset=[*person, "r_id"])
-    pairs = pairs[pairs.groupby(person)["r_id"].transform("size") == 1]
+    pairs = pairs.assign(
+        r_name=pd.Series(
+            [
+                f"{fold(first)}|{fold(last)}"
+                for first, last in zip(pairs["r_first_name"], pairs["r_last_name"])
+            ],
+            index=pairs.index,
+            dtype=object,
+        ),
+        r_middle=pd.Series(
+            [fold(_text(middle)) or None for middle in pairs["r_second_names"]],
+            index=pairs.index,
+            dtype=object,
+        ),
+    )
+    candidates = pairs.groupby(person)
+    one_name = (candidates["r_name"].transform("nunique") == 1) & (
+        candidates["r_middle"].transform("nunique") <= 1
+    )
+    pairs = pairs[(candidates["r_id"].transform("size") == 1) | one_name]
     claimed = pairs.groupby(["employed_krs", "r_id"])["pesel_fingerprint"]
     pairs = pairs[claimed.transform("size") == 1]
     ours = {v: k for k, v in theirs.items()}
@@ -236,7 +274,8 @@ def with_identities(posts: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     person it matched most often, on every row it has. One never matched keeps
     the spelling of its newest seat, so a surname written without diacritics in
     2004 and with them in 2019 is one person and not two. A row's id is the
-    one its own company matched, else the fingerprint's.
+    one its own company matched, else the fingerprint's; where its company
+    matched two (`match_rejestrio`), the row is written once for each.
     """
     posts = posts.reset_index(drop=True)
     printed = posts.dropna(subset=["pesel_fingerprint"])
@@ -250,14 +289,14 @@ def with_identities(posts: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     names["id"] = None
 
     if not matches.empty:
-        counts = matches.groupby(["pesel_fingerprint", "id"]).size().rename("n")
-        preferred = (
-            counts.reset_index()
-            .sort_values(
-                ["pesel_fingerprint", "n", "id"], ascending=[True, False, True]
-            )
-            .drop_duplicates("pesel_fingerprint")
-        )
+        sizes = matches.groupby(["pesel_fingerprint", "id"]).size().rename("n")
+        counts = sizes.reset_index()
+        # The lowest id of a tie by its number, so 99 comes before 100.
+        counts["number"] = pd.to_numeric(counts["id"], errors="coerce")
+        preferred = counts.sort_values(
+            ["pesel_fingerprint", "n", "number", "id"],
+            ascending=[True, False, True, True],
+        ).drop_duplicates("pesel_fingerprint")
         known = preferred.merge(
             matches.drop_duplicates(["pesel_fingerprint", "id"]),
             on=["pesel_fingerprint", "id"],
@@ -269,13 +308,12 @@ def with_identities(posts: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     for column in IDENTITY:
         posts.loc[has_print, column] = keyed.map(names[column]).to_numpy()
     if not matches.empty:
-        own = posts.merge(
-            matches[["employed_krs", "pesel_fingerprint", "id"]],
-            on=["employed_krs", "pesel_fingerprint"],
-            how="left",
-            suffixes=("", "_own"),
-        )["id_own"]
-        posts["id"] = own.where(own.notna(), posts["id"]).to_numpy()
+        own = matches[["employed_krs", "pesel_fingerprint", "id"]].rename(
+            columns={"id": "id_own"}
+        )
+        posts = posts.merge(own, on=["employed_krs", "pesel_fingerprint"], how="left")
+        posts["id"] = posts["id_own"].where(posts["id_own"].notna(), posts["id"])
+        posts = posts.drop(columns="id_own")
     return posts
 
 
@@ -310,6 +348,12 @@ def combine(
 
     `struck` names the companies whose odpis on file stands in for nobody
     (`struck_off_one_register`).
+
+    A rejestr.io row takes the fingerprint its id was matched to, at any
+    company, so the row says whose PESEL it is where the odpis of its own
+    company is not on file. An id matched to two fingerprints - none on the
+    2026-10-09 night, of 75,587 matched - takes neither: which of the two its
+    rows are is not something to guess.
     """
     rejestrio = rejestrio.reindex(columns=list(KRS_COLUMNS))
     posts = posts_from_seats(seats)
@@ -317,6 +361,22 @@ def combine(
     matches = match_rejestrio(rejestrio, posts)
     posts = with_identities(posts, matches)
     from_odpis = odpis_companies(rejestrio, posts)
+    prints = matches.groupby("id")["pesel_fingerprint"].unique()
+    print_of_id = {
+        str(id): values[0] for id, values in prints.items() if len(values) == 1
+    }
+    # Dated rows only: an undated one is an `osoba-bez-pesel` entry, whose
+    # number names somebody else than the `osoba` of the same number.
+    rejestrio = rejestrio.assign(
+        pesel_fingerprint=pd.Series(
+            [
+                print_of_id.get(str(id)) if pd.notna(id) and pd.notna(born) else None
+                for id, born in zip(rejestrio["id"], rejestrio["birth_date"])
+            ],
+            index=rejestrio.index,
+            dtype=object,
+        )
+    )
 
     named = set(zip(matches["employed_krs"], matches["id"]))
     unnamed = pd.Series(
@@ -335,17 +395,18 @@ def combine(
         [kept.reindex(columns=list(COLUMNS)), added.reindex(columns=list(COLUMNS))],
         ignore_index=True,
     )
-    assert "pesel_fingerprint" not in combined.columns
     return combined
 
 
 def report(rejestrio, posts, matches, from_odpis, kept, added, unnamed) -> None:
+    """What `combine` did, in counts and rejestr.io ids - never a fingerprint."""
     covered = set(rejestrio["employed_krs"])
     odpis_cos = set(posts["employed_krs"])
     replaced = from_odpis & covered
     people = posts.dropna(subset=["pesel_fingerprint"]).drop_duplicates(
         ["employed_krs", "pesel_fingerprint"]
     )
+    matched = matches.drop_duplicates(["employed_krs", "pesel_fingerprint"])
     print(
         f"  Odpisy of {len(odpis_cos):,} companies in the graph: "
         f"{len(from_odpis - covered):,} rejestr.io has nothing for, "
@@ -353,8 +414,22 @@ def report(rejestrio, posts, matches, from_odpis, kept, added, unnamed) -> None:
         f"{len(odpis_cos - from_odpis):,} where rejestr.io is."
     )
     print(
-        f"  {len(matches):,} of {len(people):,} odpis people at their company are "
+        f"  {len(matched):,} of {len(people):,} odpis people at their company are "
         f"a rejestr.io person there and keep that identity."
+    )
+    ids_of_print = matches.groupby("pesel_fingerprint")["id"].unique()
+    shared = sorted(
+        ", ".join(sorted(map(str, ids), key=lambda id: (len(id), id)))
+        for ids in ids_of_print
+        if len(ids) > 1
+    )
+    prints_of_id = matches.groupby("id")["pesel_fingerprint"].nunique()
+    torn = sorted(str(id) for id, n in prints_of_id.items() if n > 1)
+    print(
+        f"  {matches['id'].nunique():,} rejestr.io ids have a PESEL fingerprint; "
+        f"{len(shared):,} fingerprints are two ids or more, one person each: "
+        f"{'; '.join(shared) or 'none'}. {len(torn):,} ids have two fingerprints"
+        + (f": {', '.join(torn)}" if torn else "")
     )
     print(
         f"  Rows: {len(kept):,} from rejestr.io, {len(added):,} from odpisy "
@@ -386,7 +461,9 @@ class PeopleKRSCombined(Pipeline):
     """`PeopleKRS`, with every odpis on file standing in where it is newer."""
 
     filename = "person_krs_combined"
-    dtype = {**PeopleKRS.dtype}
+    # Text: a fingerprint is 32 hex digits, and one that happens to be all
+    # digits would come back off jsonl as a number.
+    dtype = {**PeopleKRS.dtype, "pesel_fingerprint": str}
 
     people_krs: PeopleKRS
     seats: KrsOdpisSeats

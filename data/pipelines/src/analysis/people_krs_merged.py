@@ -1,7 +1,10 @@
+import typing
+from collections import defaultdict
+
 import pandas as pd
 
 from analysis.utils.tables import create_people_table
-from scrapers.krs.odpis_people import PeopleKRSCombined
+from scrapers.krs.odpis_people import PeopleKRSCombined, fold
 from scrapers.stores import Context, LocalFile, Pipeline
 
 krs_file = LocalFile("person_krs.jsonl", "versioned")
@@ -17,8 +20,155 @@ class PeopleKRSMerged(Pipeline):
         return people_krs_merged(ctx, krs_data)
 
 
+def _present(value: typing.Any) -> str | None:
+    """A cell as text, or None for an empty one (None, NaN, "")."""
+    if value is None or (not isinstance(value, str) and pd.isna(value)):
+        return None
+    return str(value) or None
+
+
+class _People:
+    """Union-find over the keys rows are known by: `p:<fingerprint>` and
+    `r:<rejestr.io id>`. A person's value is their least key."""
+
+    def __init__(self) -> None:
+        self.parent: dict[str, str] = {}
+
+    def add(self, key: str) -> None:
+        self.parent.setdefault(key, key)
+
+    def find(self, key: str) -> str:
+        root = key
+        while self.parent[root] != root:
+            root = self.parent[root]
+        while self.parent[key] != root:
+            self.parent[key], key = root, self.parent[key]
+        return root
+
+    def union(self, one: str, other: str) -> None:
+        a, b = self.find(one), self.find(other)
+        if a != b:
+            self.parent[max(a, b)] = min(a, b)
+
+    def kinds(self) -> dict[str, set[str]]:
+        """Which kinds of key ("p", "r") each person is known by."""
+        kinds: dict[str, set[str]] = defaultdict(set)
+        for key in self.parent:
+            kinds[self.find(key)].add(key[0])
+        return kinds
+
+
+def _column(krs: pd.DataFrame, name: str) -> list:
+    return list(krs[name]) if name in krs else [None] * len(krs)
+
+
+def person_keys(krs: pd.DataFrame) -> pd.Series:
+    """Who each row is: one value per person, None where the row cannot say.
+
+    The salted PESEL (`pesel_fingerprint`) is a person's id, and a rejestr.io
+    id joins it one to one - 75,587 ids on the 2026-10-09 night, with no
+    conflict either way. So rows sharing either are one person, transitively:
+    an odpis row holds both, and links a rejestr.io row of the same id at a
+    company with no odpis on file to the odpis rows of the same PESEL
+    elsewhere. Two rejestr.io ids that one PESEL matched are one person too
+    (`match_rejestrio`), and keep both ids.
+
+    A person known by a PESEL alone and one known by a rejestr.io id alone are
+    one person where they share a first name, a surname and a full birth date,
+    no middle name tells them apart, and neither has another such partner. The
+    id's companies have no odpis on file to say so outright; when the odpisy
+    behind 2,882 such pairs were fetched, 2,867 named the very PESEL and none
+    another (the other 15 for reasons of their own).
+
+    The value is the person's least key, `p:<fingerprint>` where they have a
+    PESEL and `r:<id>` where only an id. A row with neither - somebody without
+    a PESEL whom the odpis gives a printed birth date - is None, and grouped by
+    name and date as before (`create_people_table`).
+    """
+    people = _People()
+    rows: list[str | None] = []
+    for id, printed, born in zip(
+        _column(krs, "id"),
+        _column(krs, "pesel_fingerprint"),
+        _column(krs, "birth_date"),
+    ):
+        # An undated row is left out below, as a name alone tells nobody
+        # apart. Its id is rejestr.io's `osoba-bez-pesel` number, which names
+        # another person than the `osoba` of the same number.
+        keys = [
+            f"{kind}:{value}"
+            for kind, value in (("r", _present(id)), ("p", _present(printed)))
+            if value is not None and _present(born) is not None
+        ]
+        for key in keys:
+            people.add(key)
+        if len(keys) == 2:
+            people.union(*keys)
+        rows.append(keys[0] if keys else None)
+    _join_by_name_and_date(krs, rows, people)
+    return pd.Series(
+        [people.find(key) if key is not None else None for key in rows],
+        index=krs.index,
+        dtype=object,
+    )
+
+
+def _join_by_name_and_date(
+    krs: pd.DataFrame, rows: list[str | None], people: _People
+) -> None:
+    """Join each person known by a PESEL alone to the one person known by a
+    rejestr.io id alone with their name and birth date, where neither has
+    another such partner and no middle name tells them apart."""
+    named: dict[str, set[tuple[str, str, str]]] = defaultdict(set)
+    middles: dict[str, set[str]] = defaultdict(set)
+    for key, first, last, born, middle in zip(
+        rows,
+        _column(krs, "first_name"),
+        _column(krs, "last_name"),
+        _column(krs, "birth_date"),
+        _column(krs, "second_names"),
+    ):
+        if key is None or (born := _present(born)) is None:
+            continue
+        root = people.find(key)
+        named[root].add((fold(first), fold(last), born[:10]))
+        if folded := fold(_present(middle)):
+            middles[root].add(folded)
+
+    kinds = people.kinds()
+    by_name: dict[tuple[str, str, str], list[str]] = defaultdict(list)
+    for root, names in named.items():
+        if kinds[root] == {"r"}:
+            for name in names:
+                by_name[name].append(root)
+
+    partners: dict[str, set[str]] = defaultdict(set)
+    for root, names in named.items():
+        if kinds[root] != {"p"}:
+            continue
+        for other in {other for name in names for other in by_name.get(name, ())}:
+            if (
+                not middles[root]
+                or not middles[other]
+                or middles[root] & middles[other]
+            ):
+                partners[root].add(other)
+                partners[other].add(root)
+    for root, others in list(partners.items()):
+        if root.startswith("p:") and len(others) == 1:
+            (other,) = others
+            if len(partners[other]) == 1:
+                people.union(root, other)
+
+
 def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
     con = ctx.con
+    krs_data = krs_data.assign(person=person_keys(krs_data))
+    if "pesel_fingerprint" not in krs_data:
+        # A copy of PeopleKRSCombined from before it kept the fingerprint, or a
+        # run without the key: nobody is known by a PESEL.
+        krs_data = krs_data.assign(pesel_fingerprint=None)
+    krs_data["pesel_fingerprint"] = krs_data["pesel_fingerprint"].map(_present)
 
     con.execute(
         """
@@ -52,6 +202,8 @@ def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
             employed_role,
             employed_for,
             id as rejestrio_id,
+            CAST(pesel_fingerprint AS VARCHAR) as pesel_fingerprint,
+            CAST(person AS VARCHAR) as person,
             full_name
         FROM krs_data
         -- Nobody without a full birth date: a name alone tells no two people
@@ -67,18 +219,17 @@ def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
     create_people_table(
         con,
         "krs_people",
-        # The register id says who a row is, so all of one id's rows are
-        # spelled alike before the name groups them. rejestr.io writes a
-        # person the way each company's entry has it - without Polish letters,
-        # under a maiden name, with the middle name and without - and in the
-        # 2026-10-01 crawl 87 ids came out split over two rows each. 60 were
-        # one person spelled two ways. The other 27 were worse: an entry
-        # missing its middle name had joined every namesake born the same
-        # year, so a stranger's row carried the id and the post. 13 of those
-        # remain, ids written without a middle name at every company, which
-        # leaves nothing to tell which namesake they belong with.
-        identity="rejestrio_id",
-        to_list=["rejestrio_id", "full_name"],
+        # Who a row is (`person_keys`): the PESEL, which a rejestr.io id joins
+        # one to one. rejestr.io writes a person the way each company's entry
+        # has it - without Polish letters, under a maiden name, with the
+        # middle name and without - so grouped by the name, one person came
+        # out as several rows: 87 ids split over two rows each in the
+        # 2026-10-01 crawl. The other way round, an entry missing its middle
+        # name joined every namesake born the same year, a stranger's post and
+        # id with it; and two people only the odpisy name, with one name and
+        # one birth date, were one row.
+        identity="person",
+        to_list=["rejestrio_id", "full_name", "pesel_fingerprint"],
         any_vals=["birth_date"],
         employment={
             "employed_krs": "employed_krs",
