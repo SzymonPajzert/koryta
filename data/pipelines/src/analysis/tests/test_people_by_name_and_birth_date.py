@@ -344,15 +344,32 @@ def test_two_people_of_one_name_and_birth_date_are_left_out_together():
     """The second would land on the page the first was just given."""
     site = snapshot()
     one, other = person(), person("Anna Nowak")
-    linked, unlinked = person(register="osoby/1"), person()
     entries = [person(register="osoby/1"), person(register="osoby/2")]
 
     assert missing_from_koryta([one, other], site) == []
-    assert missing_from_koryta([linked, unlinked], site) == []
     # Two register entries are two people to the ingest, and so are two days.
     assert missing_from_koryta(entries, site) == entries
     apart = [person(), person(born="1980-01-01")]
     assert missing_from_koryta(apart, site) == apart
+
+
+def test_of_a_linked_and_an_unlinked_namesake_only_the_unlinked_waits():
+    """The linked one makes a page with its link, which nothing else lands
+    on while its namesake is held; Jan Król, entry 1016065, and Jörn-Erik
+    Mantz, 3356429, were held for theirs on 2026-10-10."""
+    linked, unlinked = person(register="osoby/1"), person("Anna Nowak")
+    third = person("Anna M. Nowak")
+
+    assert missing_from_koryta([linked, unlinked], snapshot()) == [linked]
+    assert missing_from_koryta([unlinked, third, linked], snapshot()) == [linked]
+
+    # And the next run, with the linked one's page made, the namesake reaches
+    # it by name and date, where the link reaches it too: left alone.
+    made = snapshot(
+        page("made", "Anna Maria Nowak", birthDate=BORN, rejestrIo="osoby/1")
+    )
+    assert missing_from_koryta([linked, unlinked], made) == []
+    assert matching_one_page([linked, unlinked], made) == [linked]
 
 
 def test_two_payloads_reaching_one_page_by_name_and_date_are_both_left_out():

@@ -823,7 +823,8 @@ def missing_from_koryta(payloads: list[Person], snapshot: SiteSnapshot) -> list[
     A payload with a birth date lands on a page just created only where the
     name agrees and the day is the same (`lookupByNameAndBirthDate`), so two of
     them collide only then, and only where one of the two has no register link
-    for the ingest to tell them apart by. A payload the ingest would hold back
+    for the ingest to tell them apart by - which one is left out, its linked
+    namesake sent (`born_namesakes`). A payload the ingest would hold back
     is no new person either: it is left out, and counted.
     """
     unlinked_names = {
@@ -866,9 +867,19 @@ def missing_from_koryta(payloads: list[Person], snapshot: SiteSnapshot) -> list[
 
 
 def born_namesakes(payloads: list[Person]) -> set[int]:
-    """The payloads (by `id`) that the ingest could put on one page between
-    them: born the same day, under names that agree (`names_agree`), and not
-    both carrying a register link - two links are two people to the ingest."""
+    """The payloads (by `id`) to hold back so the ingest cannot put two of them
+    on one page: born the same day, under names that agree (`names_agree`),
+    and not both carrying a register link - two links are two people to the
+    ingest.
+
+    Of such a pair, the one without a link is held and the one with it goes.
+    The linked payload makes a page carrying its link and the date, which its
+    namesake would land on by name and birth date. Held, the namesake is not
+    there to; on the next run it reaches by name and date the page the other's
+    link reaches, which `matching_one_page` leaves alone. Holding both, as
+    this did, kept a register entry off the site for a stranger sharing its
+    name and birthday: 2 of the 6 payloads it held on 2026-10-10.
+    """
     groups: dict[tuple[str, str, str], list[Person]] = collections.defaultdict(list)
     for person in payloads:
         words = normalize_person_name(person.name).split()
@@ -881,7 +892,9 @@ def born_namesakes(payloads: list[Person]) -> set[int]:
                 if one.rejestrIo and other.rejestrIo:
                     continue
                 if names_agree(one.name, other.name):
-                    colliding.update((id(one), id(other)))
+                    colliding.update(
+                        id(person) for person in (one, other) if not person.rejestrIo
+                    )
     return colliding
 
 
