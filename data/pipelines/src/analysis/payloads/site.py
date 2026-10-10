@@ -534,10 +534,17 @@ class SiteSnapshot:
         with neither, and only onto somebody the site has no register link for,
         because a page carrying a *different* link is a different human however
         the two are spelled.
+
+        Every branch follows a merge to the page that survived it, as the
+        ingest does (`resolveMergedNode`, `lookupNodeDoc`): a tombstone keeps
+        the name and the link it was found by, and nothing is written to it.
+        Read as found, 77 of the 145,696 payloads of 2026-10-10 reached a
+        merged page by their link and were counted there - as changes to a
+        page nobody sees, and not as one more payload reaching its survivor.
         """
         koryta_id = field(payload, "korytaId")
         if koryta_id is not None:
-            stored = self.people_by_id.get(str(koryta_id))
+            stored = self._found(self.people_by_id.get(str(koryta_id)))
             if stored is not None:
                 if self._born_elsewhere(stored, payload):
                     return Resolution(None, HELD_BORN)
@@ -545,7 +552,7 @@ class SiteSnapshot:
 
         register = field(payload, "rejestrIo")
         if register is not None:
-            stored = self.people.get(str(register))
+            stored = self._found(self.people.get(str(register)))
             if stored is not None:
                 return Resolution(stored, BY_REGISTER)
 
@@ -576,9 +583,9 @@ class SiteSnapshot:
         double surname with a space (`spaced_surname`)."""
         register = field(payload, "rejestrIo")
         name = str(payload.get("name"))
-        by_name = self.people_by_name.get(name)
+        by_name = self._found(self.people_by_name.get(name))
         if by_name is None:
-            by_name = self.people_by_name.get(spaced_surname(name))
+            by_name = self._found(self.people_by_name.get(spaced_surname(name)))
         if by_name is None:
             return Resolution(None, NOT_ON_SITE)
         stored = day_of(field(by_name, "birthDate"))
@@ -656,6 +663,13 @@ class SiteSnapshot:
                 return None
             node = following
         return node
+
+    def _found(self, node: dict | None) -> dict | None:
+        """The page a lookup that found `node` lands on: its survivor where it
+        was merged (`_survivor`), None where it found nothing - or a merge
+        into a page the export has no person for, which `lookupNodeDoc`
+        treats as nothing found and goes on past."""
+        return None if node is None else self._survivor(node)
 
     def changes(self, payload: typing.Mapping[str, typing.Any]) -> list[str]:
         """What uploading this payload would write. Empty means it is a no-op.
