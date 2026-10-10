@@ -567,6 +567,40 @@ def test_a_namesake_of_the_very_surname_goes_before_one_taken_on(ctx):
     ]
 
 
+@pytest.mark.parametrize(
+    ("other_entry", "odpis_surname", "expected"),
+    [
+        # Entry 9's Justyna Ryfa, whom the odpis of C gives another PESEL.
+        (person(krs=C, id="9", first="Justyna", last="Ryfa"), "RYFA", [C]),
+        # The same, joined to the odpis of C by name and date: entry 9 is at D,
+        # which has none on file.
+        (person(krs=D, id="9", first="Justyna", last="Ryfa"), "RAKOWSKA", [C, D]),
+    ],
+)
+def test_a_surname_taken_on_joins_no_entry_another_pesel_could_be(
+    ctx, other_entry, odpis_surname, expected
+):
+    """Justyna Ryfa Rakowska, entry 7, may be the Justyna of the odpis of B
+    or the Justyna Ryfa whose PESEL is another: rejestr.io lists somebody twice
+    now and then. Somebody known by a PESEL and an entry is never joined to
+    another entry, but may be the one id-only person, so neither is guessed."""
+    rejestrio = people(
+        person(krs=A, id="7", first="Justyna", last="Ryfa Rakowska"),
+        other_entry,
+    )
+    odpisy = seats(
+        seat(krs=B, surname=odpis_surname, given="JUSTYNA"),
+        seat(krs=C, surname="RYFA", given="JUSTYNA", pesel_fingerprint="e" * 32),
+    )
+    combined = restored(combine(rejestrio, odpisy, graph={A, B, C, D}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        ([], BORN, [B]),
+        (["7"], BORN, [A]),
+        (["9"], BORN, expected),
+    ]
+
+
 def test_a_namesake_born_that_day_with_another_pesel_is_another_person(ctx):
     """The odpis of A is on file and gives rejestr.io's Jan Nowak his PESEL, so
     the Jan Nowak at B born the same day, with another, is somebody else."""

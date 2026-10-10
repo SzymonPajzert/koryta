@@ -202,41 +202,57 @@ def _join_by_name_and_date(
         for root, names in named.items()
         if kinds[root] in ({"p"}, {"r"}) and not exact[root]
     }
-    _join_partners(_extended_surnames(unnamed, kinds, agree), people)
+    _join_partners(_extended_surnames(named, unnamed, kinds, agree), people)
 
 
 def _extended_surnames(
     named: dict[str, set[tuple[str, str, str]]],
+    unnamed: typing.Container[str],
     kinds: dict[str, set[str]],
     agree: typing.Callable[[str, str], bool],
 ) -> dict[str, set[str]]:
-    """The partners of each person known by a PESEL alone among the people
-    known by an id alone: the same first name and birth date, under a surname
-    one of the two extends (`surname_extends`), and no middle name apart."""
+    """The partners of each `unnamed` person known by a PESEL alone among the
+    `unnamed` people known by an id alone: the same first name and birth date,
+    under a surname one of the two extends (`surname_extends`), and no middle
+    name apart.
+
+    Everybody else who fits by the first name, the date and the surname, as
+    written or extended, counts against the pair without being a partner: a
+    person known by a PESEL and an entry both, or one left to the exact name
+    or joined by it. Entry 7's Justyna Ryfa Rakowska may be the Justyna Ryfa
+    only an odpis names, or the Justyna Ryfa whose PESEL entry 9 carries -
+    rejestr.io lists somebody twice now and then - and the second is never
+    joined to entry 7, two entries being two people. With both there, which
+    one entry 7 is would be a guess, and a wrong one hangs a stranger's posts
+    on the entry's page. None of the five joined on 2026-10-10 had such a
+    rival.
+    """
     by_first: dict[tuple[str, str], list[tuple[str, str]]] = defaultdict(list)
     for root, names in named.items():
-        if kinds[root] == {"r"}:
+        if "r" in kinds[root]:
             for first, last, born in names:
                 by_first[(first, born)].append((root, last))
     partners: dict[str, set[str]] = defaultdict(set)
     for root, names in named.items():
-        if kinds[root] != {"p"}:
+        if "p" not in kinds[root]:
             continue
         for first, last, born in names:
             for other, theirs in by_first.get((first, born), ()):
-                if surname_extends(last, theirs) and agree(root, other):
+                fits = last == theirs or surname_extends(last, theirs)
+                if other != root and fits and agree(root, other):
                     partners[root].add(other)
                     partners[other].add(root)
-    return partners
+    return {root: others for root, others in partners.items() if root in unnamed}
 
 
 def _join_partners(partners: dict[str, set[str]], people: _People) -> None:
     """Join each person known by a PESEL alone to their one partner, where
-    the partner has no other."""
+    the partner has no other - and is a candidate at all: a rival left out of
+    `partners` is never joined."""
     for root, others in list(partners.items()):
         if root.startswith("p:") and len(others) == 1:
             (other,) = others
-            if len(partners[other]) == 1:
+            if len(partners.get(other, ())) == 1:
                 people.union(root, other)
 
 
