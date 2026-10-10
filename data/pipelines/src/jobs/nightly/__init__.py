@@ -452,10 +452,21 @@ def newest_export(client: Client, lookback: int = 5) -> str | None:
         if (match := EXPORT_FOLDER.search(prefix.removeprefix(EXPORT_PREFIX)))
     )
     for stamp in reversed(stamps[-lookback:]):
-        marker = f"{EXPORT_PREFIX}date={stamp}/date={stamp}.overall_export_metadata"
-        if bucket.blob(marker).exists():
+        if bucket.blob(export_marker(stamp)).exists():
             return stamp
     return None
+
+
+def export_marker(stamp: str) -> str:
+    """The blob Firestore writes last into the export taken at `stamp`."""
+    return f"{EXPORT_PREFIX}date={stamp}/date={stamp}.overall_export_metadata"
+
+
+def export_finished(client: Client, stamp: str) -> datetime | None:
+    """When the export taken at `stamp` finished writing - when its marker
+    was written, two or three minutes after the stamp - or None without one."""
+    blob = client.storage_client.bucket(CRAWLED_BUCKET).get_blob(export_marker(stamp))
+    return blob.updated if blob is not None else None
 
 
 def export_time(stamp: str) -> datetime:
