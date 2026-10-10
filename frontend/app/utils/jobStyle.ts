@@ -266,6 +266,9 @@ const COUNTER_LABELS: Record<string, string> = {
   employments_created: "nowych zatrudnień",
   companies_created: "dodanych firm",
   unplaced: "nieumieszczonych kandydatur",
+  // Changes the ingest did not write - a job end the site keeps its own of -
+  // which the run's summary lists one by one.
+  dropped_changes: "niezapisanych zmian",
   planned: "w paczce",
   // people_request: what of the page's people the run found and left, in the
   // order the run's card lists them.

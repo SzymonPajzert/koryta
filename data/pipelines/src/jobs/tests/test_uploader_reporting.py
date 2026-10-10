@@ -39,7 +39,7 @@ class Response:
         return self.body
 
 
-def person(outcome="updated", created=0, unplaced=0) -> Response:
+def person(outcome="updated", created=0, unplaced=0, dropped=()) -> Response:
     """What `/api/ingest/person` answers for a person it took."""
     body: dict = {
         "personId": "p1",
@@ -55,7 +55,20 @@ def person(outcome="updated", created=0, unplaced=0) -> Response:
         body["unplacedElections"] = [
             {"election_type": "Sejm", "election_year": "1993", "expected": True}
         ] * unplaced
+    if dropped:
+        body["droppedChanges"] = list(dropped)
     return Response(200, body)
+
+
+#: A job end the site kept its own of, as `/api/ingest/person` reports it.
+KEPT_END = {
+    "edgeId": "e1",
+    "krs": "0000073772",
+    "field": "end_date",
+    "stored": "2026-07-01",
+    "sent": "2026-08-25",
+    "reason": "kept",
+}
 
 
 def missing(*krs: str) -> Response:
@@ -210,11 +223,42 @@ def test_a_person_run_counts_what_the_site_did_with_each_person(runs):
             "employments_created": 2,
             "companies_created": 0,
             "unplaced": 1,
+            "dropped_changes": 0,
             "failed": 0,
             "skipped": 1,
         },
         "done": 4,
     }
+
+
+def test_a_change_the_site_did_not_write_is_counted_and_printed(runs, capsys):
+    """Every one printed as it comes, so the run's log says which and why."""
+    removed = dict(KEPT_END, edgeId="e2", stored=None, reason="removed")
+    session = Session(person=[person(dropped=[KEPT_END, removed]), person()])
+
+    submit("person", people("Anna Konieczyńska", "Jan Kowalski"), session)
+
+    [run] = runs
+    assert run.ending()["counters"]["dropped_changes"] == 2
+    assert run.ending()["state"] == "succeeded"
+    err = capsys.readouterr().err
+    assert (
+        "Anna Konieczyńska: 0000073772 end_date: site 2026-07-01, payload "
+        "2026-08-25 (the site's is kept; edge e1)"
+    ) in err
+    assert (
+        "Anna Konieczyńska: 0000073772 end_date: site -, payload 2026-08-25 "
+        "(the job is removed; edge e2)"
+    ) in err
+
+
+def test_a_site_from_before_the_field_reports_no_dropped_change(runs):
+    session = Session(person=[Response(200, {"personId": "p1", "person": "updated"})])
+
+    submit("person", people("Anna Nowak"), session)
+
+    [run] = runs
+    assert run.ending()["counters"]["dropped_changes"] == 0
 
 
 def test_a_missing_company_is_created_first_and_the_person_sent_again(

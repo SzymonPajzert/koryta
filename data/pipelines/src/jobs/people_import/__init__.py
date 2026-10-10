@@ -253,6 +253,11 @@ class RunSummary:
     #: Pages the run created, as "<name> (<node id>)". An --on-koryta run
     #: should have none, and the first is one too many (`--max-new`).
     created: list[str] = field(default_factory=list)
+    #: What the site did not write, as the ingest reported it
+    #: (`droppedChanges`), with the person's name and page: a job end the site
+    #: keeps its own of, or one on a removed job. The page's `dropped_changes`
+    #: counter says how many; this says which.
+    dropped: list[dict] = field(default_factory=list)
     #: A priority run: how many of the planned are in each tier.
     tiers: dict[str, int] = field(default_factory=dict)
     #: A priority run: the people whose rejestr.io feed was bought within
@@ -757,6 +762,10 @@ class PeopleImport:
                     if result.outcome == "created":
                         page = f"{payload['name']} ({result.person_id})"
                         self.summary.created.append(page)
+                    self.summary.dropped += [
+                        {"name": payload["name"], "node": result.person_id, **change}
+                        for change in result.dropped
+                    ]
                 ending.done = n + 1
                 self.status.progress(ending.done, counters=self.counters())
                 if result is not None and self.tiers is not None:
