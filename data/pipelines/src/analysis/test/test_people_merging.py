@@ -996,6 +996,72 @@ def test_a_year_only_biography_two_namesakes_fit_is_neither_of_theirs(ctx):
     assert result["wiki_name"].isna().all()
 
 
+# ---------------------------------------------------------- double surnames
+def test_a_double_surname_written_with_a_space_finds_pkws_hyphen(ctx):
+    """The bug: Władysław Kosiniak-Kamysz's page had none of his Sejm seats.
+
+    The register keeps a double surname as two parts, which rejestr.io prints
+    with a space between them and PKW with a hyphen: "kosiniak kamysz" against
+    "kosiniak-kamysz". Compared as written, 52 of the 6,000 register people
+    with a space in the surname had any PKW record on 2026-10-10.
+    """
+    result = match_pkw(
+        ctx,
+        [krs_person("władysław", "kosiniak kamysz", "1981-08-10")],
+        [
+            pkw_person(
+                "władysław",
+                "kosiniak-kamysz",
+                1981,
+                second="marcin",
+                years=("2019", "2023"),
+            )
+        ],
+    )
+
+    assert candidacy_years(result) == ["2019", "2023"]
+
+
+def test_a_hyphen_with_spaces_round_it_is_the_same_surname(ctx):
+    """Either source types one now and then: "Pakuła - Błoch" in the register,
+    "Żmuda - Trzebiatowski" on PKW's lists."""
+    result = match_pkw(
+        ctx,
+        [krs_person("iwona", "pakuła - błoch", "1970-05-05")],
+        [pkw_person("iwona", "pakuła-błoch", 1970)],
+    )
+
+    assert candidacy_years(result) == ["2024"]
+
+
+def test_folding_the_separator_joins_nothing_else(ctx):
+    """A Kosiniak and a Kamysz are other people, and so is a Kosiniak-Kamysz
+    born two years later."""
+    result = match_pkw(
+        ctx,
+        [krs_person("władysław", "kosiniak kamysz", "1981-08-10")],
+        [
+            pkw_person("władysław", "kosiniak", 1981, years=("2010",)),
+            pkw_person("władysław", "kamysz", 1981, years=("2014",)),
+            pkw_person("władysław", "kosiniakkamysz", 1981, years=("2018",)),
+            pkw_person("władysław", "kosiniak-kamysz", 1983, years=("2024",)),
+        ],
+    )
+
+    assert candidacy_years(result) == []
+
+
+def test_a_double_surname_written_with_a_space_finds_its_biography(ctx):
+    """Wikipedia writes the hyphen too, and none of the 6,000 had an article."""
+    result = match(
+        ctx,
+        [krs_person("władysław", "kosiniak kamysz", "1981-08-10")],
+        [article("Władysław Marcin Kosiniak-Kamysz", "1981-08-10")],
+    )
+
+    assert list(result["wiki_name"]) == ["Władysław Marcin Kosiniak-Kamysz"]
+
+
 # ------------------------------------------------- which spelling names the row
 def spelled(first: str, last: str, birth_date: str, second: str, *names: str) -> dict:
     """A KRS person whose register entries spell them as `names`, in that order."""
