@@ -153,6 +153,17 @@ def is_removed(document: dict) -> bool:
     return document.get("deleted") is True
 
 
+def timestamp_key(value) -> str:
+    """A stored timestamp as text that sorts in time order.
+
+    The export hands back Firestore timestamps as datetimes; a stamp somebody
+    wrote as text instead is brought to the same shape, so the two compare.
+    """
+    if isinstance(value, datetime.datetime):
+        return value.replace(tzinfo=None).isoformat()
+    return str(value or "").replace("Z", "").replace(" ", "T")
+
+
 def stats_of(document: dict) -> dict:
     """The document's `stats` sub-document, or an empty mapping."""
     stats = document.get("stats")
@@ -297,6 +308,34 @@ def extractions(snapshot):
 @pytest.fixture(scope="session")
 def notes(snapshot):
     return snapshot.collection("notes")
+
+
+@pytest.fixture(scope="session")
+def entered_by_hand(revisions) -> set[str]:
+    """The documents a person created through the site rather than an ingest.
+
+    Told by the document's first revision, since `update_automatic` is on every
+    one (`test_every_revision_says_whether_a_person_made_it`). The December 2025
+    backfill that minted a revision for every document without one marked them
+    as a person's, which they were: every employment stored then had been
+    typed in. A document with no revision at all is not counted as a person's,
+    so nothing goes unchecked for want of a history.
+    """
+    first: dict[str, dict] = {}
+    for revision in revisions:
+        document_id = reference_id(revision.get("node_id"))
+        if not document_id:
+            continue
+        held = first.get(document_id)
+        if held is None or timestamp_key(revision.get("update_time")) < timestamp_key(
+            held.get("update_time")
+        ):
+            first[document_id] = revision
+    return {
+        document_id
+        for document_id, revision in first.items()
+        if revision.get("update_automatic") is False
+    }
 
 
 @pytest.fixture(scope="session")
@@ -1345,7 +1384,7 @@ def test_one_spell_of_employment_is_stored_once(edges):
     )
 
 
-def test_employment_says_what_the_person_did(edges):
+def test_employment_says_what_the_person_did(edges, entered_by_hand):
     """Every `employed` edge carries a role.
 
     The role is half of what tells two spells apart - `EDGE_SEMANTICS` keys an
@@ -1360,19 +1399,29 @@ def test_employment_says_what_the_person_did(edges):
     2026-06-19 and became its prokurent the same day, appeared to have *joined*
     ESV9 that day. `KRS_RELATION_ROLES` now decides which connections are posts
     and what each one is called.
+
+    So this asks the ingests. A person adding a post through the site may leave
+    the role blank - `RelationDetailFields` puts no rule on it, and an article
+    often names the company and not the post - and a role nobody knew is not a
+    regression that should hold the night's upload.
     """
     # Written before KRS_RELATION_ROLES existed. 240 on the 2026-07-28 export,
     # 246 on the 2026-08-02 one - the table decides nothing until it ships, so
     # every nightly run still writes a few more.
-    KNOWN_ROLELESS = 246
 
-    # 249 on 2026-10-09 counting removals as well: three role-less copies were
-    # taken down in August and October, two by merge-duplicate-people.
+    #
+    # 193 of them on 2026-10-09 came from an ingest and are still live: 249
+    # counted everything, three of them removed since (two by
+    # merge-duplicate-people) and 53 entered by hand - 42 typed in in December
+    # 2025, 8 in January 2026 and three facts from articles in August.
+    KNOWN_ROLELESS = 193
+
     roleless = [
         edge["id"]
         for edge in edges
         if edge.get("type") == "employed"
         and not is_removed(edge)
+        and edge["id"] not in entered_by_hand
         and not edge.get("name")
     ]
 
@@ -1383,7 +1432,7 @@ def test_employment_says_what_the_person_did(edges):
 
 
 @pytest.mark.parametrize("edge_type", DATED_EDGE_TYPES)
-def test_a_dated_edge_says_when_it_began(edges, edge_type):
+def test_a_dated_edge_says_when_it_began(edges, entered_by_hand, edge_type):
     """An edge that records a period has to say when the period started.
 
     Nothing raises when it does not. `calculateExperience` skips an interval it
@@ -1399,6 +1448,13 @@ def test_a_dated_edge_says_when_it_began(edges, edge_type):
     from the election year (`${election.election_year}-01-01`), so it cannot
     write one without it, and no export has ever held one. An employment can be
     entered by hand, where the date field is optional.
+
+    Which is why only what an ingest wrote is counted. `relationDateRule`
+    accepts an empty start, an article that names a post rarely says when it
+    began, and the site prints "?" for it - so a person leaving the date blank
+    is the form working, not a defect to hold the night's upload over. The
+    count used to include them and could only grow: every fact promoted from an
+    article review added one.
     """
     # 195 employment edges on the 2026-08-03 export. Nearly all of them are old:
     # 183 in December 2025, when 183 was *every* employment stored, and still 184
@@ -1410,13 +1466,20 @@ def test_a_dated_edge_says_when_it_began(edges, edge_type):
     # It is a budget rather than a ceiling: the article-extraction path has no
     # date field at all - none of the 244 employment extractions carries one -
     # so every fact promoted from a review lands here until it gains one.
-    UNDATED = {"employed": 195, "election": 0}
+    #
+    # Counted as an ingest's only, 11 on 2026-10-09: the July uploads above,
+    # nine of them unpublished. The other 193 live ones were typed in - 181
+    # before 2026, one in January and 11 in August and September, ten of those
+    # facts from articles - and so was the one undated candidacy, a
+    # „wicestarosta” post entered as an election.
+    UNDATED = {"employed": 11, "election": 0}
 
     undated = [
         edge["id"]
         for edge in edges
         if edge.get("type") == edge_type
         and not is_removed(edge)
+        and edge["id"] not in entered_by_hand
         and not has_date(edge, "start_date")
     ]
     budget = UNDATED[edge_type]
@@ -1614,13 +1677,9 @@ def test_a_later_revision_never_drops_a_field(revisions):
         placed where it was filed, to be compared with the page it was offered
         against.
         """
-        stamp = revision.get("update_time")
         if revision.get("status") == "approved" and revision.get("review_time"):
-            stamp = revision["review_time"]
-        if isinstance(stamp, datetime.datetime):
-            return stamp.replace(tzinfo=None).isoformat()
-        # A stamp stored as text rather than as a timestamp, in the same shape.
-        return str(stamp or "").replace("Z", "").replace(" ", "T")
+            return timestamp_key(revision["review_time"])
+        return timestamp_key(revision.get("update_time"))
 
     # backfill-parties-source.ts (2026-10-06) stamped `partiesSource` into the
     # pending human revisions after the fact, a page's creating one among them,
