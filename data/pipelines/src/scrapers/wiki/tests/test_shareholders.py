@@ -229,6 +229,26 @@ def test_the_krs_number_out_of_what_an_infobox_writes(raw, expected):
     assert clean_krs(expected) == expected
 
 
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # French numbers, from mp's company_wikipedia of 2026-08-06, written
+        # before `Infobox.krs_number` left a foreign register's out.
+        ("562 063 347 RCS Nanterre", None),
+        ("B 950 020 206", None),
+        # Made up: a NIP in groups, alone and after the KRS number.
+        ("NIP 526 025 07 13", None),
+        ("KRS 0000045705 NIP 526 025 07 13", "0000045705"),
+        # Made up: a padded number in groups after a year.
+        ("2001 0000 800 698", "0000800698"),
+    ],
+)
+def test_groups_are_one_number_only_when_they_make_ten_digits(raw, expected):
+    """A group starting with a zero is padding only at the head of ten digits;
+    in the middle of another number it would read as a KRS number of its own."""
+    assert clean_krs(raw) == expected
+
+
 def test_a_town_in_a_mixed_gmina_is_the_gmina():
     """Grodkow's own code is the town half; its companies are the gmina's."""
     assert normalize_teryt("1601034") == "1601033"
