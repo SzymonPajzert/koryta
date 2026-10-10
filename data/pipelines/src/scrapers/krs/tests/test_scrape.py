@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 import pandas as pd
@@ -416,8 +417,65 @@ class _NoPersonFeeds:
             return []
 
 
-def _queue(companies=None, by_register=None, scraped=None):
+class _Blob:
+    def __init__(self, content: str):
+        self.content = content
+
+    def read_string(self) -> str:
+        return self.content
+
+
+class _PersonFeeds:
+    """A context whose bucket holds these person feeds: number -> the KRS
+    numbers of the companies the feed lists."""
+
+    def __init__(self, feeds: dict[str, list[str]]):
+        blobs = [
+            (
+                f"hostname=rejestr.io/api/v2/osoby/{number}/krs-powiazania/"
+                f"aktualnosc_aktualne/date=2026-10-06",
+                _Blob(
+                    json.dumps(
+                        [
+                            {"typ": "organizacja", "numery": {"krs": krs}}
+                            for krs in listed
+                        ]
+                    )
+                ),
+            )
+            for number, listed in feeds.items()
+        ]
+
+        class io:
+            @staticmethod
+            def read_many(ref):
+                return blobs
+
+        self.io = io
+
+
+def _queue(
+    companies=None,
+    by_register=None,
+    scraped=None,
+    ctx=None,
+    krs_people=(),
+    pages=(),
+    hardcoded=(),
+):
+    """`companies_to_scrape` over these sources: `krs_people` rows
+    (id, name, rejestrio_type), `pages` (id, name, rejestrIo) and the ids of
+    the hardcoded people."""
     scraper = ScrapeRejestrIO()
+    scraper.__dict__["people"] = _Frame(
+        pd.DataFrame(krs_people, columns=["id", "full_name", "rejestrio_type"])
+    )
+    scraper.__dict__["koryta_people"] = _Frame(
+        pd.DataFrame(pages, columns=["id", "full_name", "rejestrIo"])
+    )
+    scraper.__dict__["hardcoded_people"] = _Frame(
+        pd.DataFrame({"id": list(hardcoded)}, columns=["id"])
+    )
     scraper.__dict__["hardcoded_companies"] = _NoSeeds()
     scraper.__dict__["already_scraped"] = _StubScraped(
         scraped if scraped is not None else _scraped()
@@ -430,7 +488,7 @@ def _queue(companies=None, by_register=None, scraped=None):
     scraper.__dict__["public_by_register"] = _Frame(
         by_register if by_register is not None else pd.DataFrame(columns=["krs"])
     )
-    return scraper, scraper.companies_to_scrape(_NoPersonFeeds())  # type: ignore[arg-type]
+    return scraper, scraper.companies_to_scrape(ctx or _NoPersonFeeds())  # type: ignore[arg-type]
 
 
 def test_a_company_only_the_register_knows_is_queued():
@@ -468,6 +526,55 @@ def test_a_public_company_with_its_connections_is_not_bought_again():
     )
 
     assert "0001251428" not in queue
+
+
+#: BB INVEST, which only the feed bought at /osoby/2900081 lists - the osoba
+#: of that number's, bought for an Anna Hetman without a PESEL.
+BB_INVEST = "0000921420"
+HETMAN_WITHOUT_PESEL = ("2900081", "Anna Hetman", WITHOUT_PESEL)
+
+
+def test_a_feed_bought_for_an_entry_without_a_pesel_queues_nothing(capsys):
+    scraper, queue = _queue(
+        ctx=_PersonFeeds({"2900081": [BB_INVEST], "614388": ["0000002790"]}),
+        krs_people=[HETMAN_WITHOUT_PESEL, ("614388", "Anna Hetman", "osoba")],
+    )
+
+    assert BB_INVEST not in queue
+    assert scraper.company_reasons == {"0000002790": {REASON_PERSON_FEED}}
+    assert "left unread: ['2900081']" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("pages", "hardcoded", "krs_people"),
+    [
+        # A page links it: an osoba no crawled company lists yet.
+        ([("page", "Maciej Tuszakowski", "https://rejestr.io/osoby/2900081")], [], []),
+        # The hardcoded list names it.
+        ([], ["2900081"], []),
+        # An osoba of the crawl has the number too, and the feed is theirs.
+        ([], [], [("2900081", "Marcin Piżuch", "osoba")]),
+    ],
+)
+def test_a_feed_whose_number_is_an_osoba_s_is_read(pages, hardcoded, krs_people):
+    _, queue = _queue(
+        ctx=_PersonFeeds({"2900081": [BB_INVEST]}),
+        krs_people=[HETMAN_WITHOUT_PESEL, *krs_people],
+        pages=pages,
+        hardcoded=hardcoded,
+    )
+
+    assert BB_INVEST in queue
+
+
+def test_a_page_named_as_the_entry_without_a_pesel_vouches_for_no_feed():
+    _, queue = _queue(
+        ctx=_PersonFeeds({"2900081": [BB_INVEST]}),
+        krs_people=[HETMAN_WITHOUT_PESEL],
+        pages=[("page", "Anna Hetman", "https://rejestr.io/osoby/2900081")],
+    )
+
+    assert BB_INVEST not in queue
 
 
 # ------------------------------------------------ what the odpis tells for free
