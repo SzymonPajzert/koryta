@@ -931,6 +931,45 @@ def test_the_pipeline_keeps_only_the_people_the_site_lacks(mock_ctx, monkeypatch
     assert list(result["name"]) == ["Anna Nowak"]
 
 
+def test_the_pipeline_compares_a_spell_extract_repeats_once(mock_ctx, monkeypatch):
+    """A spell Extract states twice is one row by the time it is compared.
+
+    Robert Marian Soszyński's Polskie LNG board seat, as every plan from
+    2026-10-06 to 2026-10-10 carried it: from 2015-08-28, once ending that day
+    and once on 2016-03-14. Against the one edge the site should hold, the
+    second row read as a spell the site lacks (`NEW_EMPLOYMENT`) and kept the
+    payload - and the ingest, which stores a row per row, wrote it a second
+    time. `one_row_per_spell` sends it once, so there is nothing to write.
+    """
+    seat = {
+        "employed_krs": "0000123456",
+        "employed_role": "Prezes",
+        "employed_start": "2020-01-01",
+    }
+    pipeline = _people_payloads(only_changed=True)
+    pipeline.people = _FixedPipeline(  # type: ignore[assignment]
+        [
+            {
+                "krs_name": "Jan Kowalski",
+                "rejestrio_id": ["123"],
+                "employment": [
+                    dict(seat, employed_end="2020-01-01"),
+                    dict(seat, employed_end="2024-03-01"),
+                ],
+                "elections": [],
+            }
+        ]
+    )
+    snapshot = SiteSnapshot(
+        nodes(), edges(dict(STORED_EMPLOYMENT, end_date="2024-03-01"))
+    )
+    monkeypatch.setattr(
+        SiteSnapshot, "read", classmethod(lambda cls, ctx, date=None: snapshot)
+    )
+
+    assert pipeline.process(mock_ctx).empty
+
+
 def test_a_column_another_document_fills_is_not_a_value_here():
     """Every row of an export carries every column the collection has.
 
