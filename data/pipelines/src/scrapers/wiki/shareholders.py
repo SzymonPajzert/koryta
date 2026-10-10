@@ -152,21 +152,83 @@ def article_url(title: str) -> str:
     return f"https://pl.wikipedia.org/wiki/{title.replace(' ', '_')}"
 
 
+#: A number padded with zeros and split into groups by spaces, the way an
+#: article writes one now and then: "KRS 00000 12355", "0000 800 698". Not by
+#: a line break, which is two numbers; and not unpadded, which would glue a
+#: short number to the date after it.
+_SPACED_DIGITS = re.compile(r"(?<!\d)0\d*(?:[^\S\n]+\d+)+")
+
+#: A run of digits, unless a hyphen joins it to more. That is how a NIP or a
+#: foreign register writes its number, and KRS never does: Spokey's
+#: "731-11-59-686", and Bank Leumi's Israeli "52-001807-8", whose middle read
+#: as KRS 0000001807.
+_DIGITS = re.compile(r"(?<!\d)(?<!\d-)\d+(?!\d)(?!-\d)")
+
+#: A label naming another register, before the number it gives. REGON is the
+#: statistics office's: Ochocianie's "Regon 363637905" read as KRS 0363637905.
+#: RHB is the Rejestr Handlowy, dzial B, the court register KRS replaced in
+#: 2001, which the banks wound up before then still give: Gecobank's
+#: "RHB 26431" read as KRS 0000026431. HRA/HRB is a German Handelsregister,
+#: FN an Austrian Firmenbuch, CHE a Swiss company number.
+_OTHER_REGISTER = re.compile(r"\b(?:REGON|NIP|RH[AB]|HR[AB]|FN|CHE)\b", re.IGNORECASE)
+
+#: Said right after a number, that it is the one in force: "(od 2011)".
+_CURRENT = re.compile(r"\W*(?:od\b|obecn|aktualn)", re.IGNORECASE)
+
+#: Above the highest KRS number for a long while yet. The register numbers in
+#: sequence from 2001, and the highest the site held in 2026-10 was
+#: 0001269577; a number with eight significant digits or more is a REGON, which
+#: has nine, or a NIP, which has ten. Four articles give one bare - Boryszew
+#: ERG gives Boryszew's NIP, 8370000634 - and the old reading took each for a
+#: KRS number.
+_KRS_LIMIT = 10_000_000
+
+
+def _join_spaced(match: re.Match) -> str:
+    """Digit groups joined into one number for as long as it fits in ten."""
+    numbers: list[str] = []
+    for group in match.group(0).split():
+        if numbers and len(numbers[-1]) + len(group) <= 10:
+            numbers[-1] += group
+        else:
+            numbers.append(group)
+    return " ".join(numbers)
+
+
 def clean_krs(raw) -> str | None:
     """The KRS number an infobox gives, padded to ten digits, or None.
 
     The field is free text like the rest. Almost every one is the bare number,
-    but some say "KRS 0000123456" or carry a reference; the first run of five
-    to ten digits is the number, and anything shorter is a year or a stray
-    footnote.
+    but some say "KRS 0000123456" or carry a reference, and 34 of the 3,183 on
+    the 2026-08-31 dump are something else again: two numbers, a number split
+    into groups, another register's. A run of five to ten digits is a number,
+    and anything shorter is a year or a stray footnote. Of several, the one
+    said to be in force, else the last: Telewizja Polsat's "0000046163
+    (2001–2011) 0000388899 (od 2011)" and Morele.net's "0000305832 (do
+    2011)0000390511" both name the current one second.
+
+    A number it gives reads back as itself, so a file `ProcessWiki` wrote
+    before it cleaned the column and one written after go through the same
+    reader.
     """
     if not isinstance(raw, str):
         return None
-    match = re.search(r"(?<!\d)(\d{5,10})(?!\d)", raw)
-    if match is None:
+    text = _SPACED_DIGITS.sub(_join_spaced, raw)
+    numbers: list[tuple[str, bool]] = []
+    previous = 0
+    for match in _DIGITS.finditer(text):
+        label = text[previous : match.start()]
+        previous = match.end()
+        digits = match.group(0)
+        if _OTHER_REGISTER.search(label) or not 5 <= len(digits) <= 10:
+            continue
+        if not 0 < int(digits) < _KRS_LIMIT:
+            continue
+        current = _CURRENT.match(text, match.end()) is not None
+        numbers.append((digits.zfill(10), current))
+    if not numbers:
         return None
-    krs = match.group(1).zfill(10)
-    return None if krs == "0000000000" else krs
+    return next((krs for krs, current in reversed(numbers) if current), numbers[-1][0])
 
 
 def normalize_teryt(code: str | None) -> str | None:

@@ -179,6 +179,56 @@ def test_krs_numbers_come_out_padded():
     assert clean_krs(None) is None
 
 
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("KRS: 0000381344", "0000381344"),
+        ("KRS\t0000115148", "0000115148"),
+        (
+            "0000113533 Sąd Rejonowy Poznań – Nowe Miasto i Wilda w Poznaniu",
+            "0000113533",
+        ),
+        # Struck off or superseded, and still the only number the article has.
+        ("0000263110 (wykreślenie z rejestru 2010-05-04)", "0000263110"),
+        ("0000299712 (do 7 lipca 2014r.)", "0000299712"),
+        # Split into groups: MPK Nowy Sacz's is a site company, public, and
+        # its article went unmerged for it.
+        ("KRS 00000 12355", "0000012355"),
+        ("00000 39 470", "0000039470"),
+        ("0000 800 698", "0000800698"),
+        # Made up: an unpadded number is not glued to the year after it.
+        ("271591 2001", "0000271591"),
+        # Of two, the one said to be in force; else the last.
+        ("0000046163 (2001–2011) 0000388899 (od 2011)", "0000388899"),
+        ("0000305832 (do 2011)0000390511", "0000390511"),
+        ("0000022635 / 0000048664", "0000048664"),
+        # Another register's: REGON, the pre-2001 Rejestr Handlowy.
+        ("Regon 363637905", None),
+        ("REGON 387915998", None),
+        ("RHB 26431", None),
+        ("RHB: 836", None),
+        # Made up: the KRS number beside a REGON.
+        ("KRS 0000271591, REGON 012345678", "0000271591"),
+        # A NIP, a REGON or a foreign number, bare: too long for KRS, or
+        # hyphenated. Bank Leumi's "52-001807-8" read as KRS 0000001807, the
+        # Gryfino county hospital.
+        ("8370000634", None),
+        ("691535355", None),
+        ("731-11-59-686", None),
+        ("52-001807-8", None),
+        ("Rejestr Komisariatu Rządu nr 695", None),
+        ("0000000000", None),
+    ],
+)
+def test_the_krs_number_out_of_what_an_infobox_writes(raw, expected):
+    """Real `numer rejestru` values from the 2026-08-31 dump, but for the two
+    made up. A number read again comes out the same: the night's merge
+    reads files written both before `ProcessWiki` cleaned the column and
+    after."""
+    assert clean_krs(raw) == expected
+    assert clean_krs(expected) == expected
+
+
 def test_a_town_in_a_mixed_gmina_is_the_gmina():
     """Grodkow's own code is the town half; its companies are the gmina's."""
     assert normalize_teryt("1601034") == "1601033"
