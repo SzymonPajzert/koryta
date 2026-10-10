@@ -180,6 +180,26 @@ class TestPipelinesFallBack(unittest.TestCase):
         self.assertEqual(df.iloc[0]["full_name"], "Jan Kowalski")
         self.assertTrue(df.iloc[0]["is_public"])
 
+    def test_people_carry_the_birth_date_their_page_stores(self):
+        # The edit form's empty field is "", which 106 pages store on
+        # 2026-10-10: no date, as a page without the field has none.
+        export = pd.DataFrame(
+            [
+                {"id": "hetman", "name": "Krzysztof Hetman", "birthDate": "1974-06-27"},
+                {"id": "blank", "name": "Jan Kowalski", "birthDate": ""},
+                {"id": "none", "name": "Jan Nowak", "birthDate": None},
+            ]
+        )
+        with patch.object(
+            FirestoreCollection, "process", exports_on({"2026-10-10": export})
+        ):
+            df = KorytaPeople(date="2026-10-10").process(mock_ctx())
+
+        dated = df.dropna(subset=["birth_date"])
+        self.assertEqual(
+            dict(zip(dated["id"], dated["birth_date"])), {"hetman": "1974-06-27"}
+        )
+
     def test_companies_fall_back_as_they_always_did(self):
         yesterday = pd.DataFrame(
             [{"id": "place-1", "krsNumber": "0000123456", "revision_id": "r1"}]

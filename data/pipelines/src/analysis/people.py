@@ -201,6 +201,10 @@ def people_merged(
         middle_names_confirm,
         null_handling="special",  # type: ignore
     )
+    if "birth_date" not in koryta_people.columns:
+        # A `PeopleKorytaMerged` from before 2026-10-10, restored from the
+        # shared cache: no page's date, so no name match is refused on one.
+        koryta_people = koryta_people.assign(birth_date=None)
 
     print("--- Imported table sizes ---")
     for table in [
@@ -529,6 +533,22 @@ def people_merged(
                 AND (
                     jaro_winkler_similarity(k.last_name, ko.last_name) > 0.95
                     OR jaro_winkler_similarity(k.last_name, ko.tail_name) > 0.95
+                )
+                -- Nor where the page stores the day its person was born and
+                -- the register gives this one another: a name is what
+                -- namesakes share. Krzysztof Hetman's page, the PSL MEP born
+                -- 1974-06-27, was the only candidate of entry 1203566, a
+                -- Krzysztof Hetman born 1963-10-10, and the 2026-10-10 payload
+                -- was planned to link the live page to him. A page storing
+                -- only a year is held to the year; one storing no date, as
+                -- 375 of the 378 unlinked pages matched that day do, still
+                -- matches by the name.
+                AND coalesce(
+                    starts_with(
+                        CAST(k.birth_date AS VARCHAR),
+                        CAST(ko.birth_date AS VARCHAR)
+                    ),
+                    true
                 )
             )
         )

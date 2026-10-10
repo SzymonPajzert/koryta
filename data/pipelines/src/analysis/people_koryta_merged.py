@@ -9,20 +9,26 @@ class PeopleKorytaMerged(Pipeline):
     # register link store an empty one, and "" is not a number: if every page
     # were linked, the restore would re-infer the column as integers, and
     # DuckDB would refuse the merge's `list_contains(kpw.rejestrio_id,
-    # ko.rejestrio_id)` - a list of text against a number.
-    dtype = {"rejestrio_id": str, "koryta_id": str}
+    # ko.rejestrio_id)` - a list of text against a number. `birth_date` is
+    # compared as text too, and most pages store none.
+    dtype = {"rejestrio_id": str, "koryta_id": str, "birth_date": str}
     koryta_pipeline: KorytaPeople
 
     def process(self, ctx: Context):
         con = ctx.con
 
-        koryta_data = self.koryta_pipeline.read_or_process(ctx)  # noqa: F841
+        koryta_data = self.koryta_pipeline.read_or_process(ctx)
+        if "birth_date" not in koryta_data.columns:
+            # A `KorytaPeople` built before 2026-10-10, restored from the
+            # shared cache: no page's date, so no name match is refused on one.
+            koryta_data = koryta_data.assign(birth_date=None)
 
         con.execute(
             """
             CREATE OR REPLACE TABLE koryta_people AS
-            -- A page has no birth year, so this cannot be a base to join the
-            -- other sources on the way `krs_people` is. It is joined onto them
+            -- Most pages store no birth date - 1,833 of the 10,907 on
+            -- 2026-10-10 do - so this cannot be a base to join the other
+            -- sources on the way `krs_people` is. It is joined onto them
             -- afterwards, to answer one question: which page is this person
             -- already on?
             --
@@ -44,6 +50,12 @@ class PeopleKorytaMerged(Pipeline):
             -- the right one for a double surname written with a space
             -- ("Malgorzata Pietrzak Sikorska"), which the register stores whole
             -- in `last_name`.
+            --
+            -- The birth date is for the same pages: a name is what namesakes
+            -- share, and a page that stores the day its person was born is not
+            -- a register entry born on another (`koryta_candidates`). A full
+            -- date or a bare year; anything else is no date, and refuses
+            -- nothing.
             SELECT DISTINCT
                 lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
                 lower(regexp_extract(full_name, '(\\S+)$', 1)) as last_name,
@@ -57,7 +69,12 @@ class PeopleKorytaMerged(Pipeline):
                 coalesce(regexp_extract(rejestrIo, 'osoby/([0-9]+)', 1), '')
                     as rejestrio_id,
                 id as koryta_id,
-                full_name
+                full_name,
+                nullif(regexp_extract(
+                    trim(CAST(birth_date AS VARCHAR)),
+                    '^([0-9]{4}(-[0-9]{2}-[0-9]{2})?)$',
+                    1
+                ), '') as birth_date
             FROM koryta_data
             WHERE full_name IS NOT NULL
             """
