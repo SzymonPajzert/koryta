@@ -335,6 +335,30 @@ def test_pages_beyond_max_new_stop_the_run(world):
     assert len(end["errors"]) == 3
 
 
+def test_what_the_site_did_not_write_is_listed_in_the_summary(world):
+    """Counted on the page, and named in the summary: who, which job, why."""
+    kept = {
+        "edgeId": "e1",
+        "krs": "0000073772",
+        "field": "end_date",
+        "stored": "2026-07-01",
+        "sent": None,
+        "reason": "kept",
+    }
+    answered = person("updated", "n1")
+    answered.body["droppedChanges"] = [kept]
+    world.payloads = people(2)
+    world.answers = [answered, person()]
+
+    assert job.main([]) == 0
+
+    end = world.run().ending()
+    assert end["state"] == "succeeded"
+    assert end["errors"] == []
+    assert end["counters"]["dropped_changes"] == 1
+    assert world.summary()["dropped"] == [{"name": "Osoba 1", "node": "n1", **kept}]
+
+
 def test_pages_within_max_new_are_listed_but_are_no_error(world):
     world.payloads = people(2)
     world.answers = [person("created", "n1"), person()]

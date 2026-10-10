@@ -4,7 +4,7 @@ import json
 import sys
 import time
 import typing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import requests
@@ -52,6 +52,7 @@ PERSON_COUNTERS = (
     "employments_created",
     "companies_created",
     "unplaced",
+    "dropped_changes",
     "failed",
     "skipped",
 )
@@ -93,6 +94,9 @@ class PersonResult:
     companies_created: int = 0
     #: Candidacies the site took the person without.
     unplaced: int = 0
+    #: What the site kept its own value over, as the ingest reports it in
+    #: `droppedChanges`: a job end it holds otherwise, or one on a removed job.
+    dropped: list[dict] = field(default_factory=list)
     #: For a failed one: "<status> <answer>", or the exception.
     error: str = ""
     #: The node the site filed the person under.
@@ -140,6 +144,32 @@ def json_object(resp: requests.Response) -> dict:
     except ValueError:
         return {}
     return body if isinstance(body, dict) else {}
+
+
+def dropped_changes(body: dict) -> list[dict]:
+    """What the answer says the site did not write (`droppedChanges`).
+
+    Read defensively, like `count_unplaced`: a site deployed before the field
+    existed answers without it, and that is nothing to report.
+    """
+    found = body.get("droppedChanges")
+    if not isinstance(found, list):
+        return []
+    return [change for change in found if isinstance(change, dict)]
+
+
+def dropped_line(change: dict) -> str:
+    """One change the site did not write, as the run's log prints it."""
+    why = (
+        "the job is removed"
+        if change.get("reason") == "removed"
+        else "the site's is kept"
+    )
+    return (
+        f"{change.get('krs') or '?'} {change.get('field')}: site "
+        f"{change.get('stored') or '-'}, payload {change.get('sent') or '-'} "
+        f"({why}; edge {change.get('edgeId')})"
+    )
 
 
 def missing_companies(resp: requests.Response) -> list[str]:
@@ -688,6 +718,7 @@ class PersonUploader(CompanyUploader):
             employments_created=len(employments),
             companies_created=companies_created,
             unplaced=unplaced,
+            dropped=dropped_changes(body),
             person_id=str(person_id) if person_id else None,
         )
 
@@ -697,6 +728,11 @@ class PersonUploader(CompanyUploader):
         self.counts["employments_created"] += result.employments_created
         self.counts["companies_created"] += result.companies_created
         self.counts["unplaced"] += result.unplaced
+        # Each one printed as it comes: few, and every one is a disagreement
+        # between the register and the site that somebody should read.
+        self.counts["dropped_changes"] += len(result.dropped)
+        for change in result.dropped:
+            print(f"{name}: {dropped_line(change)}", file=sys.stderr)
         if result.outcome == "failed" and len(self.errors) < ERRORS_KEPT:
             self.errors.append(f"{name}: {result.error}")
 
