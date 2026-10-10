@@ -68,6 +68,7 @@ from scrapers.krs.odpis_history import (
     PeselKeyMissing,
 )
 from scrapers.stores import Context, Pipeline, ProcessPolicy
+from util.polish import adds_middle_names
 
 
 #: The parser's roles (`odpis_pdf.ROLE_BY_RUBRYKA`) that are posts, named as
@@ -143,12 +144,33 @@ def fold(name) -> str:
     return " ".join(text.replace("-", " ").lower().split())
 
 
+def full_name(given: list[str], surname: str) -> str:
+    """Every given name and the surname, as rejestr.io's ``imiona_i_nazwisko``
+    has them: "Anna Maria Kowalska-Nowak".
+
+    The first given name and the surname alone, as this used to be, made the
+    page of somebody only an odpis names short, where Szymon's rule since
+    2026-10-09 is to carry the middle name: it is what tells two namesakes
+    apart (`payloads.person.canonical_name`). 3,161 of the 7,001 people only
+    an odpis named on 2026-10-10 have one.
+
+    Only a spelling `adds_middle_names` takes for more of the short one, the
+    rule `addsMiddleNames` renames a page and `namesAgree` finds one by; a
+    given name repeated, or one that is the surname, would make a name that
+    finds neither the short page nor its namesakes, so it stays short.
+    """
+    first = given[0] if given else ""
+    short = f"{first} {surname}".strip()
+    full = " ".join([*given, surname]).strip()
+    return full if adds_middle_names(full, short) else short
+
+
 def posts_from_seats(seats: pd.DataFrame) -> pd.DataFrame:
     """Every seat that is a post, as a `PeopleKRS` row, with its PESEL fingerprint.
 
     The names are re-cased the way rejestr.io gives them, and split the same
     way: the first given name, the others as second names, and a full name of
-    the first and the surname alone.
+    them all and the surname (`full_name`).
     """
     is_post = seats["role"].isin(list(POST_BY_ROLE))
     is_person = ~seats["is_company"].eq(True)
@@ -164,7 +186,7 @@ def posts_from_seats(seats: pd.DataFrame) -> pd.DataFrame:
                 "id": None,
                 "first_name": first,
                 "last_name": last,
-                "full_name": f"{first} {last}".strip(),
+                "full_name": full_name(given, last),
                 "employed_krs": seat.krs,
                 "employed_start": start,
                 "employed_end": end,

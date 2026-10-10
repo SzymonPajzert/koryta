@@ -25,6 +25,7 @@ from scrapers.krs.odpis_people import (
     with_identities,
 )
 from stores.file import FromBytesIO
+from util.polish import adds_middle_names, names_agree
 
 A, B, C, D = "0000000029", "0000000031", "0000000041", "0000000043"
 BORN = "1970-02-08"
@@ -88,7 +89,7 @@ def test_a_seat_becomes_the_row_rejestrio_would_give():
         "last_name": "Kowalska-Nowak",
         "second_names": "Maria",
     }
-    assert row["full_name"] == "Anna Kowalska-Nowak"
+    assert row["full_name"] == "Anna Maria Kowalska-Nowak"
     assert (row["employed_role"], row["employed_start"], row["employed_end"]) == (
         "Zarząd",
         "2020-01-10",
@@ -99,6 +100,30 @@ def test_a_seat_becomes_the_row_rejestrio_would_give():
         SOURCE_ODPIS,
         None,
     )
+
+
+def test_the_full_name_carries_the_middle_names_a_page_can_be_renamed_to():
+    """A page made from the short name is found by the full one
+    (`namesAgree`) and renamed to it (`addsMiddleNames`)."""
+    names = posts_from_seats(
+        seats(
+            seat(given="JAN MAREK PIOTR"),
+            seat(given="JAN"),
+            # Neither is more of "Jan Nowak": a given name twice, and one
+            # that is the surname. They stay short, to stay findable.
+            seat(given="JAN JAN"),
+            seat(given="JAN NOWAK"),
+        )
+    )["full_name"]
+
+    assert list(names) == [
+        "Jan Marek Piotr Nowak",
+        "Jan Nowak",
+        "Jan Nowak",
+        "Jan Nowak",
+    ]
+    assert adds_middle_names("Jan Marek Piotr Nowak", "Jan Nowak")
+    assert names_agree("Jan Marek Piotr Nowak", "JAN NOWAK")
 
 
 def test_only_posts_held_by_people_are_rows():
