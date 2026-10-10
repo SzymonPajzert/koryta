@@ -210,7 +210,6 @@ import {
   counterValue,
   jobAnchor,
   KNOWN_COUNTERS,
-  otherDefinition,
   progressShare,
   progressText,
   runChip,
@@ -220,6 +219,7 @@ import {
   formatDuration,
   isFinished,
   jobDefinition,
+  otherDefinition,
   runAnchor,
   runLink,
   shortWarsawTime,
@@ -245,9 +245,7 @@ const { run, error, load } = useOpsRun(toRef(props, "runId"));
 const definition = computed(() => {
   const job = run.value?.job;
   if (!job) return null;
-  return (
-    jobDefinition(job) ?? otherDefinition({ id: job, runs: [], record: null })
-  );
+  return jobDefinition(job) ?? otherDefinition({ id: job, runs: [] });
 });
 
 const jobTitle = computed(() => definition.value?.title ?? "Proces");

@@ -8,12 +8,16 @@ import {
   JOBS_COLLECTION,
   JOB_RUNS_COLLECTION,
   CAPTURE_WINDOW_DAYS,
+  RECENT_RUNS,
   RUNS_SHOWN,
   RUN_STATES,
   captureRun,
   compareRunsNewest,
+  jobRecordFromData,
   jobRunFromData,
+  lastRunsMissing,
   mirrorWrites,
+  runsByJob,
 } from "~~/shared/jobs";
 import type {
   CaptureStats,
@@ -38,11 +42,6 @@ import { CRAWLED_BUCKET } from "~~/server/utils/crawledBucket";
 
 export const COMPRESSED_BUCKET = "koryta-pl-compressed";
 
-/** Reported runs read per request. Runs are documents per run, not per
- * heartbeat, so this is a few months of nightly jobs; a job whose newest run
- * is older still comes back through its `jobs/{id}` record. */
-const RECENT_RUNS = 300;
-
 /** Newest captures shown; older ones still waiting or running are added on
  * top of these, since those are the ones that need looking at. */
 const CAPTURES_SHOWN = 20;
@@ -50,11 +49,6 @@ const OPEN_CAPTURES = 20;
 
 const iso = (value: unknown): unknown =>
   value instanceof Timestamp ? value.toDate().toISOString() : value;
-
-const isoOrNull = (value: unknown): string | null => {
-  const plain = iso(value);
-  return typeof plain === "string" && plain ? plain : null;
-};
 
 /** A map field with its `at` as an ISO string - a request's and a dispatch's. */
 const withIsoAt = (value: unknown): unknown =>
@@ -75,12 +69,12 @@ export function runFromDoc(id: string, data: DocumentData): JobRun | null {
 }
 
 export function recordFromDoc(data: DocumentData): JobRecord {
-  return {
-    lastRunId: typeof data.lastRunId === "string" ? data.lastRunId : null,
-    lastStartedAt: isoOrNull(data.lastStartedAt),
-    lastScheduledAt: isoOrNull(data.lastScheduledAt),
-    lastSucceededAt: isoOrNull(data.lastSucceededAt),
-  };
+  return jobRecordFromData({
+    ...data,
+    lastStartedAt: iso(data.lastStartedAt),
+    lastScheduledAt: iso(data.lastScheduledAt),
+    lastSucceededAt: iso(data.lastSucceededAt),
+  });
 }
 
 const opsDb = () => getFirestore(OPS_DATABASE);
@@ -100,16 +94,7 @@ export async function reportedRuns(): Promise<{
     db.collection(JOBS_COLLECTION).get(),
   ]);
 
-  const runs = new Map<string, JobRun[]>();
-  const add = (run: JobRun | null) => {
-    if (!run) return;
-    const list = runs.get(run.job) ?? [];
-    if (list.some((known) => known.id === run.id)) return;
-    list.push(run);
-    runs.set(run.job, list);
-  };
-  for (const doc of runSnapshot.docs) add(runFromDoc(doc.id, doc.data()));
-
+  const recent = runSnapshot.docs.map((doc) => runFromDoc(doc.id, doc.data()));
   const records = new Map<string, JobRecord>();
   for (const doc of recordSnapshot.docs) {
     records.set(doc.id, recordFromDoc(doc.data()));
@@ -117,23 +102,18 @@ export async function reportedRuns(): Promise<{
 
   // A job that has not run lately has fallen out of the recent window; its
   // record still names its newest run.
-  const missing = [...records.entries()]
-    .filter(
-      ([job, record]) =>
-        record.lastRunId &&
-        !runs.get(job)?.some((run) => run.id === record.lastRunId),
-    )
-    .map(([, record]) =>
-      db.collection(JOB_RUNS_COLLECTION).doc(record.lastRunId!),
-    );
+  const missing = lastRunsMissing(records.values(), recent);
+  const older: (JobRun | null)[] = [];
   if (missing.length) {
-    for (const doc of await db.getAll(...missing)) {
-      if (doc.exists) add(runFromDoc(doc.id, doc.data()!));
+    const refs = missing.map((id) =>
+      db.collection(JOB_RUNS_COLLECTION).doc(id),
+    );
+    for (const doc of await db.getAll(...refs)) {
+      if (doc.exists) older.push(runFromDoc(doc.id, doc.data()!));
     }
   }
 
-  for (const list of runs.values()) list.sort(compareRunsNewest);
-  return { runs, records };
+  return { runs: runsByJob([...recent, ...older]), records };
 }
 
 /** The newest captures and any older ones still open, as runs, with a week's

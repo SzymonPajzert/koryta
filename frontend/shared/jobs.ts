@@ -622,6 +622,27 @@ export const JOBS: readonly JobDefinition[] = [
 
 export const jobDefinition = (id: string) => JOBS.find((job) => job.id === id);
 
+/** A definition for a job `JOBS` does not list, so its runs can be shown and
+ * judged like any other. Its kind is guessed from how its newest run started:
+ * a site event means triggered, anything else is read as a scheduled job with
+ * no schedule - plain succeeded / partial / failed, with no clock to miss. An
+ * unknown job read as ongoing would turn amber after every finished run. */
+export function otherDefinition(
+  view: Pick<JobView, "id" | "runs">,
+): JobDefinition {
+  const kind: JobKind =
+    view.runs[0]?.trigger === "event" ? "triggered" : "scheduled";
+  return {
+    id: view.id,
+    kind,
+    title: view.id,
+    summary:
+      "Zgłasza uruchomienia, ale nie ma go w rejestrze jobów (JOBS w shared/jobs.ts), więc nie ma opisu ani harmonogramu.",
+    runsOn: view.runs[0]?.host ?? "nie wiadomo",
+    heartbeatMinutes: 15,
+  };
+}
+
 /** What a job's own document keeps. A short history of runs cannot answer
  * "has this ever run on its schedule" or "when did it last work". */
 export interface JobRecord {
@@ -629,6 +650,65 @@ export interface JobRecord {
   lastStartedAt: string | null;
   lastScheduledAt: string | null;
   lastSucceededAt: string | null;
+}
+
+/** A job's record from its document's data with the times already strings:
+ * the server turns the admin SDK's Timestamps into ISO strings, and the
+ * agents' tools get the REST API's, which run to the microsecond. Both come
+ * out as the same millisecond ISO string; one `Date` cannot read is no time. */
+export function jobRecordFromData(data: Record<string, unknown>): JobRecord {
+  const time = (value: unknown) => {
+    if (typeof value !== "string" || !value) return null;
+    const millis = Date.parse(value);
+    return Number.isNaN(millis) ? null : new Date(millis).toISOString();
+  };
+  return {
+    lastRunId: typeof data.lastRunId === "string" ? data.lastRunId : null,
+    lastStartedAt: time(data.lastStartedAt),
+    lastScheduledAt: time(data.lastScheduledAt),
+    lastSucceededAt: time(data.lastSucceededAt),
+  };
+}
+
+/** Reported runs read at once, newest first by start, by the page and by the
+ * agents' `jobs_status` alike. Runs are documents per run, not per heartbeat,
+ * so this is a few months of nightly jobs; a job whose newest run is older
+ * still comes back through its `jobs/{id}` record (`lastRunsMissing`). */
+export const RECENT_RUNS = 300;
+
+/** The newest runs the records name that `runs` - the recent window - does
+ * not hold: jobs that have not run lately, whose runs have to be read one by
+ * one. */
+export function lastRunsMissing(
+  records: Iterable<JobRecord>,
+  runs: Iterable<JobRun | null>,
+): string[] {
+  const read = new Set<string>();
+  for (const run of runs) if (run) read.add(run.id);
+  const missing = new Set<string>();
+  for (const { lastRunId } of records) {
+    if (lastRunId && !read.has(lastRunId)) missing.add(lastRunId);
+  }
+  return [...missing];
+}
+
+/** Runs by job, each job's newest first. A run read twice - in the recent
+ * window and again through a record - is kept once, and a null, a document
+ * `jobRunFromData` could not read, not at all. */
+export function runsByJob(
+  runs: Iterable<JobRun | null>,
+): Map<string, JobRun[]> {
+  const byJob = new Map<string, JobRun[]>();
+  const seen = new Set<string>();
+  for (const run of runs) {
+    if (!run || seen.has(run.id)) continue;
+    seen.add(run.id);
+    const list = byJob.get(run.job) ?? [];
+    list.push(run);
+    byJob.set(run.job, list);
+  }
+  for (const list of byJob.values()) list.sort(compareRunsNewest);
+  return byJob;
 }
 
 export interface MirrorHostState {

@@ -1,9 +1,9 @@
 import { onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue";
 import { authRequest } from "~/composables/auth";
-import { otherDefinition } from "~/utils/jobStyle";
 import {
   JOBS,
   isFinished,
+  otherDefinition,
   type JobDefinition,
   type JobRun,
   type JobView,
