@@ -107,18 +107,18 @@ COMPANIES_EXPECTED = {
     "Biuro Maklerskie PKO Banku Polskiego": wiki_company(
         "Biuro Maklerskie PKO Banku Polskiego",
         "Biuro Maklerskie PKO Banku Polskiego",
-        "",
+        None,
         1,
     ),
     # TODO support parsing pages like this one
     "Grupa kapitałowa PWN": None,
     "Kopalnia Węgla Kamiennego „Śląsk”": wiki_company(
-        "Kopalnia Węgla Kamiennego „Śląsk”", "Kopalnia Węgla Kamiennego Śląsk", "", 1
+        "Kopalnia Węgla Kamiennego „Śląsk”", "Kopalnia Węgla Kamiennego Śląsk", None, 1
     ),
     "Miejski Zakład Komunikacji w Koninie": wiki_company(
         "Miejski Zakład Komunikacji w Koninie",
         "Miejski Zakład Komunikacji w Koninie Sp. z o.o.",
-        "",
+        None,
         1,
         # "Miasto [[Konin]]": the words around a link are part of the name.
         WikiShareholder("Miasto Konin", "Konin"),
@@ -126,7 +126,7 @@ COMPANIES_EXPECTED = {
     "Miejskie Przedsiębiorstwo Komunikacyjne we Wrocławiu": wiki_company(
         "Miejskie Przedsiębiorstwo Komunikacyjne we Wrocławiu",
         "Miejskie Przedsiębiorstwo Komunikacyjne sp. z o.o. we Wrocławiu",
-        "",
+        None,
         1,
         WikiShareholder("Miasto Wrocław"),
     ),

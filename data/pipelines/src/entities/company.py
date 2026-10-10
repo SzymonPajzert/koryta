@@ -290,6 +290,11 @@ class WikiShareholder:
 class Wikipedia:
     name: str
     content_score: int
+    #: The KRS number the infobox gives, ten digits, as `clean_krs` reads it.
+    #: Older files hold the field as written instead - "KRS 00000 12355",
+    #: "Regon 363637905"; every one in the shared cache in 2026-10 does - so
+    #: every reader still passes it through `clean_krs`, and the next change
+    #: to that can be measured on them.
     krs: str | None
     city: str | None = None
     #: The article's title, as the dump has it. Two articles can give the same

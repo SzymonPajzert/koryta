@@ -446,7 +446,11 @@ def extract_from_article(
         name = own.fields.get("nazwa") or field(lambda i: i.fields.get("nazwa") or None)
         return Company(
             name=name or article.title,
-            krs=own.krs_number,
+            # The number, not the field. Written as it stood - "KRS 00000
+            # 12355", "Regon 363637905" - it left every reader to clean it
+            # again, and failed the night's check that the column is digits
+            # on 34 articles.
+            krs=clean_krs(own.krs_number),
             content_score=article.content_score,
             title=article.original_title,
             source=article_url(article.original_title),
@@ -631,9 +635,8 @@ def link_index(
     krs: dict[str, str] = {}
     for company in companies:
         title = normalize_title(company.title)
-        number = clean_krs(company.krs)
-        if title and number:
-            krs[title] = number
+        if title and company.krs:
+            krs[title] = company.krs
     teryt: dict[str, str] = {}
     for region in regions:
         title = normalize_title(region.title)
@@ -659,9 +662,9 @@ def resolve_shareholders(companies: list[Company], links: WikiLinks) -> None:
     """
     kinds: Counter[str] = Counter()
     for company in companies:
-        own_krs = clean_krs(company.krs)
         company.shareholders = [
-            links.resolve(shareholder, own_krs) for shareholder in company.shareholders
+            links.resolve(shareholder, company.krs)
+            for shareholder in company.shareholders
         ]
         for shareholder in company.shareholders:
             if shareholder.skarb_panstwa:
