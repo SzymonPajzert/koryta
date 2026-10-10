@@ -615,6 +615,24 @@ def test_with_no_record_each_rebuildable_held_pipeline_is_rebuilt_once(world):
     assert [name for name in world.ran() if name.startswith("koryta ")] == []
 
 
+def test_an_entry_edited_into_something_else_is_no_record(world):
+    record = world.built_from()
+    record["PeoplePKW"] = "rebuild me"
+    record["Regions"]["sources"] = None
+    night.write_built_from(str(world.state / night.BUILT_FROM), record)
+
+    assert night.main([]) == 0
+
+    # Those two are due once, the rest are as recorded, and the step goes on
+    # past both rather than failing on the first.
+    assert world.summary()["rebuilt"] == {
+        "Regions": "pierwsza przebudowa tutaj",
+        "PeoplePKW": "pierwsza przebudowa tutaj",
+    }
+    assert world.steps()["rebuild_held"][0] == "succeeded"
+    assert world.built_from()["PeoplePKW"]["sources"]
+
+
 def test_a_failed_rebuild_puts_the_held_copy_back_and_holds_nothing(world):
     world.trees["data/pipelines/src/scrapers/pkw"] = "a-new-tree"
     world.trees["data/pipelines/src/scrapers/map/postal_codes.py"] = "a-new-blob"

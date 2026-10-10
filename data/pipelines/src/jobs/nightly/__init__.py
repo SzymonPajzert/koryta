@@ -511,7 +511,16 @@ def read_built_from(path: str) -> dict[str, dict]:
             record = json.load(f)
     except (OSError, ValueError):
         return {}
-    return record if isinstance(record, dict) else {}
+    if not isinstance(record, dict):
+        return {}
+    # Nor is an entry somebody's edit has made into something else - the
+    # README has them take one out to force a rebuild. That pipeline is due
+    # once, rather than the step failing on it and leaving the rest unchecked.
+    return {
+        name: built
+        for name, built in record.items()
+        if isinstance(built, dict) and isinstance(built.get("sources"), dict)
+    }
 
 
 def write_built_from(path: str, record: dict[str, dict]) -> None:
