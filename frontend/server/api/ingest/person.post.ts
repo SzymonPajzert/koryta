@@ -347,18 +347,21 @@ function updatedPerson(
 /** The payload's rejestr.io link, where the page links another entry and so
  * keeps its own.
  *
- * Only a `korytaId` brings a payload here: every other way `lookupPersonDoc`
- * finds a page passes over one that links another entry. `people_merged`
- * sends the id of the page it matched a row to, and a row holding two entries
- * is filed under one of them (`one_register_entry`), so the page of one
- * person was reached under the other's link. Tadeusz Rozpara's is the case
- * this was asked about. His page - president of Bełchatów in 1994-2002 -
- * links https://rejestr.io/osoby/1220490, whose seats are in Bełchatów's
- * companies and whose birth date, 1953-12-01, the page stores too. The 10-06
- * `people_merged` grouped him by name and a birth year within one with a
- * namesake born 1952-04-25, entry 670747, and the payload went out under the
- * lower number. Written as it came, his live page would have been linked to a
- * stranger, and the revision approved because the page is live.
+ * A `korytaId` is what brings a payload here: every other way
+ * `lookupPersonDoc` finds a page passes over one that links another entry,
+ * short of the register lookup landing on a merged page whose survivor links
+ * another - which none of the 173 merged people of the 2026-10-10 export
+ * does. `people_merged` sends the id of the page it matched a row to, and a
+ * row holding two entries is filed under one of them (`one_register_entry`),
+ * so the page of one person was reached under the other's link. Tadeusz
+ * Rozpara's is the case this was asked about. His page - president of
+ * Bełchatów in 1994-2002 - links https://rejestr.io/osoby/1220490, whose
+ * seats are in Bełchatów's companies and whose birth date, 1953-12-01, the
+ * page stores too. The 10-06 `people_merged` grouped him by name and a birth
+ * year within one with a namesake born 1952-04-25, entry 670747, and the
+ * payload went out under the lower number. Written as it came, his live page
+ * would have been linked to a stranger, and the revision approved because the
+ * page is live.
  *
  * Of the 9,539 payloads of that run's plan, 12 reached a page under another
  * entry's link this way, every one of them such a row; 20 more named the
