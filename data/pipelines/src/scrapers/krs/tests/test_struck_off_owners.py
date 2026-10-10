@@ -238,12 +238,14 @@ def owner_seat(
     removed_on=None,
     stated_on="2026-10-07",
     role="jedyny_akcjonariusz",
+    added_by=None,
 ):
     """An owner as `KrsOdpisSeats` lists one, its missing cells read back as NaN."""
     return {
         "krs": krs,
         "role": role,
         "surname": name,
+        "entry_added": added_by if added_by is not None else math.nan,
         "entry_removed": removed_by if removed_by is not None else math.nan,
         "date_removed": removed_on if removed_on is not None else math.nan,
         "stated_on": stated_on,
@@ -332,6 +334,37 @@ def test_an_odpis_older_than_the_last_entries_cannot_say_who_held_it_at_the_end(
 
     assert public_of(run(struck_off(PZG, "2017-04-28"), listed_before)) == set()
     assert public_of(run(struck_off(PZG, "2017-04-28"), listed_after)) == {PZG}
+
+
+def test_an_owner_the_last_entry_replaced_with_another_had_passed_it_on():
+    # POLSKIE KOLEJE LINOWE: entry 27, its last before the strike-off, struck
+    # out the Treasury and entered PKP S.A., which held it until entry 28.
+    pkl = "0000079964"
+    pipeline = run(
+        struck_off(pkl, "2008-08-19"),
+        owner_seat(pkl, "SKARB PAŃSTWA", "27", "2008-08-19"),
+        owner_seat(pkl, "PKP S.A.", "28", "2008-12-16", added_by="27"),
+    )
+
+    assert public_of(pipeline) == set()
+    assert pipeline.companies[pkl].parents == []
+
+
+def test_an_owner_entered_again_under_another_name_still_holds_it():
+    pipeline = run(
+        struck_off(PZG, "2017-04-28"),
+        owner_seat(PZG, "SKARB PAŃSTWA", "30", "2017-04-28"),
+        owner_seat(
+            PZG,
+            "SKARB PAŃSTWA - MINISTER SKARBU PAŃSTWA",
+            "34",
+            "2018-01-29",
+            added_by="30",
+        ),
+    )
+
+    assert public_of(pipeline) == {PZG}
+    assert pipeline.companies[PZG].parents == [Owner(krs=None, teryt=SKARB_PANSTWA)]
 
 
 def test_a_private_owner_at_the_end_passes_nothing_on():
