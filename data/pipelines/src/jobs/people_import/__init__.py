@@ -230,8 +230,9 @@ TAKEN = ("created", "updated", "unchanged")
 REFRESH_NONE = "none"
 
 #: The hour, Warsaw time, of the site's daily export (`scheduledFirestoreExport`
-#: in frontend/functions/src/index.ts). Each one from 2026-09-30 to 10-10 is
-#: stamped within the minute after it, and was done within three.
+#: in frontend/functions/src/index.ts). Each one from 2026-09-29 to 10-10 is
+#: stamped within the minute after it, and was done two to four minutes after
+#: its stamp: 10-09's, the slowest, at 04:04:10.
 EXPORT_HOUR = 4
 
 #: The export `--on-koryta` and `--only-changed` compare the payloads with

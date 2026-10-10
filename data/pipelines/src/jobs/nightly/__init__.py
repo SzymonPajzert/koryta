@@ -464,7 +464,7 @@ def export_marker(stamp: str) -> str:
 
 def export_finished(client: Client, stamp: str) -> datetime | None:
     """When the export taken at `stamp` finished writing - when its marker
-    was written, two or three minutes after the stamp - or None without one."""
+    was written, two to four minutes after the stamp - or None without one."""
     blob = client.storage_client.bucket(CRAWLED_BUCKET).get_blob(export_marker(stamp))
     return blob.updated if blob is not None else None
 
