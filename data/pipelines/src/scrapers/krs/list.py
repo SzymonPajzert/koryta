@@ -90,7 +90,11 @@ class Post:
 #:   list somebody else's companies;
 #: - it does not follow a person between companies. None of the 5,343 sat at
 #:   two, while 511 names sat under two ids or more.
-PERSON_TYPES = frozenset({"osoba", "osoba-bez-pesel"})
+#:
+#: Nor is one worth buying a feed for: ``/osoby/<n>`` answers for the ``osoba``
+#: numbered n (`ScrapeRejestrIO.people_to_scrape`).
+WITHOUT_PESEL = "osoba-bez-pesel"
+PERSON_TYPES = frozenset({"osoba", WITHOUT_PESEL})
 
 
 def posts_held(item: dict, unknown: typing.Counter[str] | None = None) -> list[Post]:
