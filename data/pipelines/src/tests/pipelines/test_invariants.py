@@ -26,6 +26,7 @@ marked ``e2e`` and deselected by default. Run it with::
 """
 
 import collections
+import datetime
 
 import pytest
 
@@ -1490,16 +1491,28 @@ def test_a_later_revision_never_drops_a_field(revisions):
     with it, the count went from 17 to 52 overnight on 2026-10-07, when the
     partiesSource backfill stamped 143 pending proposals and every revision
     written after one of them seemed to lose the field.
+
+    And the page a revision replaced is the one standing when it was *applied*,
+    which for an approved revision is when it was approved - `applyRevision`
+    writes it then, whenever it was filed. Ordered by filing instead, a proposal
+    approved days after the people import's revision of that page reads as
+    the page the import's revision replaced. Two did on 2026-10-09: proposals
+    for Bartosz Zawieja (filed 10-07, approved 10-09) and Wojciech Bochnak
+    (approved 10-09 after the night's revision was filed), and the night held
+    its upload on the "loss" of `partiesSource`, `content` and `education`
+    that both pages still carry.
     """
     # One article, oYkxDlD1KfkO96p6PIwK, whose January 2026 edit lost the
     # `estimates` field the previous revision carried. It is still on the node
     # only because that revision was never approved; approving it would run the
-    # `set` and drop the field for good. Three more from August 2026, all
-    # applied: an upload's revision of Anna Derlukiewicz (enSvS2jSoLIqQmwUdy9I)
-    # without the `content` the one before it had, `committee` lost from
-    # election edge Gm2XbS1oTAmdH7GP1yEi by an approved edit, and `shortName`
-    # from article 0XrffRWh3d3es3ZYjAm4 by migration:backfill-article-dates.
-    KNOWN_DROPS = 4
+    # `set` and drop the field for good. Two more from August 2026, both
+    # applied: `committee` lost from election edge Gm2XbS1oTAmdH7GP1yEi by an
+    # approved edit, and `shortName` from article 0XrffRWh3d3es3ZYjAm4 by
+    # migration:backfill-article-dates. A fourth, an upload's revision of Anna
+    # Derlukiewicz (enSvS2jSoLIqQmwUdy9I) without the `content` of the one
+    # filed before it, was the same misreading: that one was approved on 08-30,
+    # the day after the upload, and the content is on her page.
+    KNOWN_DROPS = 3
 
     # Bookkeeping the node owns rather than the revision, listed in
     # server/utils/revisions.ts as INTERNAL_FIELDS. They are regenerated or
@@ -1537,6 +1550,23 @@ def test_a_later_revision_never_drops_a_field(revisions):
             revision.get("id", "")
         ).startswith("proposal_")
 
+    def applied_at(revision: dict) -> str:
+        """When the revision was written over its document, as a sortable stamp.
+
+        An approved revision was written when it was approved: `applyRevision`
+        sets the document and stamps `review_time` in one batch. Anything else
+        that was applied was applied as it was filed, and one that was not is
+        placed where it was filed, to be compared with the page it was offered
+        against.
+        """
+        stamp = revision.get("update_time")
+        if revision.get("status") == "approved" and revision.get("review_time"):
+            stamp = revision["review_time"]
+        if isinstance(stamp, datetime.datetime):
+            return stamp.replace(tzinfo=None).isoformat()
+        # A stamp stored as text rather than as a timestamp, in the same shape.
+        return str(stamp or "").replace("Z", "").replace(" ", "T")
+
     # backfill-parties-source.ts (2026-10-06) stamped `partiesSource` into the
     # pending human revisions after the fact, a page's creating one among them,
     # and gave the page the field through a revision of its own. So a pending
@@ -1546,7 +1576,7 @@ def test_a_later_revision_never_drops_a_field(revisions):
     dropped = []
     for document_id, history in by_document.items():
         page = None
-        for revision in sorted(history, key=lambda r: str(r.get("update_time"))):
+        for revision in sorted(history, key=applied_at):
             if page is not None:
                 unknown = stamped_later if page.get("status") == "pending" else set()
                 lost = {
