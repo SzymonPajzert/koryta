@@ -788,15 +788,23 @@ class SiteSnapshot:
             )
             if len(parties) > len(stored_parties):
                 learned["parties"] = parties
-        for key in ("content", "wikipedia", "rejestrIo"):
+        for key in ("content", "wikipedia"):
             value = field(payload, key)
             if value:
                 learned[key] = value
+        # Learned where the page links no entry, or this one spelled another
+        # way; a page linking another entry keeps its link (`droppedLink`), so
+        # the payload writes nothing there. Counted, it would be sent every
+        # night: a payload reaches such a page by its `korytaId` alone, and
+        # nothing it sends changes the link.
+        register = field(payload, "rejestrIo")
+        if register and not links_another_entry(data.get("rejestrIo"), register):
+            learned["rejestrIo"] = register
 
         # Filled in, never rewritten, so a payload restating a date the node
         # already carries writes nothing and must not keep the payload alive.
-        # In `updatedPerson` this and the name below have that rule; the rest
-        # above are last-write-wins.
+        # In `updatedPerson` this and the name below have that rule; the
+        # content and the Wikipedia link above are last-write-wins.
         birth_date = field(payload, "birthDate")
         if birth_date and not data.get("birthDate"):
             learned["birthDate"] = birth_date
