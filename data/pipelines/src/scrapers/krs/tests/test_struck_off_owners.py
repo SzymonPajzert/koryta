@@ -8,6 +8,7 @@ pełny on file, which names the rest - `CompaniesKRS.add_public_owners_on_file`.
 import math
 
 import pandas as pd
+import pytest
 from pandas import DataFrame
 
 from entities.company import KRS, Owner
@@ -394,6 +395,26 @@ def test_without_the_pesel_key_the_run_goes_on_with_the_feeds_alone():
     pipeline.odpis_seats = NoKey()  # type: ignore[assignment]
 
     assert pipeline.seats_on_file(ctx=None) is None  # type: ignore[arg-type]
+
+
+def test_the_sources_read_before_the_run_leave_the_odpisy_to_it():
+    # `run_pipeline` reads every source before `process`, and there the seats
+    # raised before `seats_on_file` could catch it: without the key and with
+    # nothing to restore, CompaniesKRS failed rather than keep to the feeds.
+    pipeline = CompaniesKRS()
+    read = []
+    for name, source in pipeline.dependencies.items():
+        source.read_or_process = lambda ctx, name=name: read.append(name)
+
+    def no_key(ctx):
+        raise PeselKeyMissing("No PESEL key.")
+
+    pipeline.odpis_seats.read_or_process = no_key
+    pipeline.odpis_entries.read_or_process = lambda ctx: pytest.fail("every PDF")
+
+    pipeline.preprocess_sources(ctx=None, policy=None)
+
+    assert set(read) == set(pipeline.dependencies) - {"odpis_seats", "odpis_entries"}
 
 
 # ─── struck off by the odpis, where rejestr.io has not caught up ────────
