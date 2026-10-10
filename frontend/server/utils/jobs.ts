@@ -79,7 +79,9 @@ export function recordFromDoc(data: DocumentData): JobRecord {
 
 const opsDb = () => getFirestore(OPS_DATABASE);
 
-/** Every job's newest reported runs, newest first, and its record. */
+/** Every job's newest reported runs, newest first, and its record. The
+ * agents' `jobs_status` (scripts/mcp/jobs.ts) reads them the same way, over
+ * REST, so that it judges the same newest run the page does. */
 export async function reportedRuns(): Promise<{
   runs: Map<string, JobRun[]>;
   records: Map<string, JobRecord>;

@@ -14,8 +14,13 @@
  * written. Two agents joining two tasks in opposite directions at once cannot
  * both succeed: the second transaction is aborted, reads again and is refused.
  *
+ * The jobs report their runs to the same database (`jobRuns`, `jobs`; see
+ * shared/jobs.ts), so the same account reads those for `jobs_status` - and
+ * only reads them: nothing here writes a run.
+ *
  * With FIRESTORE_EMULATOR_HOST set it uses that emulator instead.
  */
+import { JOBS_COLLECTION, JOB_RUNS_COLLECTION } from "../../shared/jobs";
 import {
   OPS_DATABASE,
   TASKS_COLLECTION,
@@ -25,6 +30,7 @@ import {
 import {
   decodeFields,
   impersonatedToken,
+  type Doc,
   type RestValue,
 } from "./firestore-reader";
 
@@ -141,18 +147,20 @@ const LOST_RACE = /ABORTED|ALREADY_EXISTS|FAILED_PRECONDITION/;
 /** How many times a transaction is tried before giving up. */
 const ATTEMPTS = 5;
 
-export function restTaskStore(options: {
+/** Where the ops database is and how to reach it. */
+export type OpsConnection = {
   /** `https://firestore.googleapis.com`, or the emulator's `http://host:port`. */
   origin: string;
   token: () => Promise<string>;
   source: string;
   fetch?: typeof fetch;
-}): TaskStore {
-  const send = options.fetch ?? fetch;
-  const url = (path: string) => `${options.origin}/v1/${DOCUMENTS}${path}`;
+};
 
-  const post = async (path: string, body: unknown) =>
-    send(url(path), {
+/** A POST to the database's documents: `:runQuery`, `:commit` and so on. */
+function poster(options: OpsConnection) {
+  const send = options.fetch ?? fetch;
+  return async (path: string, body: unknown) =>
+    send(`${options.origin}/v1/${DOCUMENTS}${path}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${await options.token()}`,
@@ -160,6 +168,10 @@ export function restTaskStore(options: {
       },
       body: JSON.stringify(body),
     });
+}
+
+export function restTaskStore(options: OpsConnection): TaskStore {
+  const post = poster(options);
 
   /** The response when it succeeded, null when it lost a race. */
   async function attempt(path: string, body: unknown) {
@@ -239,19 +251,101 @@ export function restTaskStore(options: {
   };
 }
 
-export function connectTasks(env: NodeJS.ProcessEnv = process.env): TaskStore {
+/** What the jobs have reported (shared/jobs.ts), as stored: times are the
+ * REST API's ISO strings, and nothing is parsed yet. */
+export type JobReports = {
+  source: string;
+  /** The newest runs of every job, newest first by start. */
+  recentRuns(limit: number): Promise<Doc[]>;
+  /** Every run of one job, in no particular order. An equality filter alone
+   * is answered by the index Firestore keeps on every field; ordered by start
+   * as well, it would want a composite index the ops database does not have.
+   * A job reports a run or two a night, so all of them is a few hundred. */
+  runsOf(job: string): Promise<Doc[]>;
+  /** Those of `ids` that exist, in no particular order. */
+  runs(ids: readonly string[]): Promise<Doc[]>;
+  /** Every job's `jobs/{id}` record. */
+  records(): Promise<Doc[]>;
+};
+
+const toDoc = (doc: RestDocument): Doc => ({
+  id: doc.name.slice(doc.name.lastIndexOf("/") + 1),
+  data: decodeFields(doc.fields),
+});
+
+export function restJobReports(options: OpsConnection): JobReports {
+  const post = poster(options);
+
+  async function query(structuredQuery: unknown): Promise<Doc[]> {
+    const response = await post(":runQuery", { structuredQuery });
+    if (!response.ok) throw await failure(response, options.source);
+    const rows = (await response.json()) as { document?: RestDocument }[];
+    return rows.flatMap((row) => (row.document ? [toDoc(row.document)] : []));
+  }
+
+  return {
+    source: options.source,
+
+    recentRuns: (limit) =>
+      query({
+        from: [{ collectionId: JOB_RUNS_COLLECTION }],
+        orderBy: [
+          { field: { fieldPath: "startedAt" }, direction: "DESCENDING" },
+        ],
+        limit,
+      }),
+
+    runsOf: (job) =>
+      query({
+        from: [{ collectionId: JOB_RUNS_COLLECTION }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "job" },
+            op: "EQUAL",
+            value: { stringValue: job },
+          },
+        },
+      }),
+
+    async runs(ids) {
+      if (ids.length === 0) return [];
+      // An id is one path segment. Anything else would name a document in
+      // some other collection.
+      const bad = ids.find((id) => !/^[^/]+$/.test(id));
+      if (bad !== undefined) throw new Error(`Not a run id: "${bad}"`);
+      const response = await post(":batchGet", {
+        documents: ids.map((id) => `${DOCUMENTS}/${JOB_RUNS_COLLECTION}/${id}`),
+      });
+      if (!response.ok) throw await failure(response, options.source);
+      const rows = (await response.json()) as { found?: RestDocument }[];
+      return rows.flatMap((row) => (row.found ? [toDoc(row.found)] : []));
+    },
+
+    records: () => query({ from: [{ collectionId: JOBS_COLLECTION }] }),
+  };
+}
+
+/** The ops database: in production as `ops-writer`, or in the emulator. One
+ * connection serves the tasks and the job reports alike, so that they share
+ * the token gcloud mints. */
+export function opsConnection(
+  env: NodeJS.ProcessEnv = process.env,
+): OpsConnection {
   const emulator = env.FIRESTORE_EMULATOR_HOST;
   if (emulator) {
-    return restTaskStore({
+    return {
       origin: `http://${emulator}`,
       token: async () => "owner",
       source: `the Firestore emulator at ${emulator} (database ${OPS_DATABASE})`,
-    });
+    };
   }
   const account = env.KORYTA_OPS_WRITER || DEFAULT_WRITER;
-  return restTaskStore({
+  return {
     origin: "https://firestore.googleapis.com",
     token: impersonatedToken(account),
     source: `production (${PROJECT}/${OPS_DATABASE}) as ${account}`,
-  });
+  };
 }
+
+export const connectTasks = (env: NodeJS.ProcessEnv = process.env): TaskStore =>
+  restTaskStore(opsConnection(env));

@@ -370,3 +370,18 @@ To load a list of tasks - the harvest of open items from the agents' notes,
 say - `scripts/ops/import-tasks.ts <file.json>` writes each task that is not
 there yet, as `ops-writer`, or into the emulator when `FIRESTORE_EMULATOR_HOST`
 is set. It never changes a task that exists.
+
+### How the jobs are doing
+
+The jobs report their runs to the same database (`jobRuns`, `jobs`; see
+`shared/jobs.ts`), and the same server reads them back for agents - a morning
+check, say - the way `/admin/procesy` shows them to the owner:
+
+- `jobs_status` — one line per job: its health as the page judges it
+  (`jobHealth`), the page's reason, and its newest run. `job` lists one job's
+  newest runs with their counters; `run` gives one run whole, errors included.
+
+It reads as `ops-writer` and writes nothing. What the page reads outside that
+database it leaves out and says so: the extension's captures (`articlePages`)
+and the compressor and Firestore export, which the page watches through their
+buckets.

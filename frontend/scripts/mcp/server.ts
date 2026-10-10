@@ -1,22 +1,24 @@
 /** An MCP server that lets Claude agents read koryta's production data - the
- * feedback queue on /admin/opinie - and keep the owner's task list on
- * /admin/zadania.
+ * feedback queue on /admin/opinie, how the jobs on /admin/procesy are doing -
+ * and keep the owner's task list on /admin/zadania.
  *
  * The site's data it can only read, and it hands on nothing that says who
  * wrote a report. The task list is the one thing it writes, and that lives in
- * a database of its own (see `ops-store.ts`).
+ * a database of its own (see `ops-store.ts`), next to the runs the jobs
+ * report, which it reads.
  *
  * `/.mcp.json` registers it for every session in the repo, so its tools show
  * up as `mcp__koryta__feedback_queue`, `mcp__koryta__task_add` and so on.
  * Reads of the site go out as the `firestore-reader` account (see
- * `firestore-reader.ts`), the task list as `ops-writer`, or both to the
- * emulator named by FIRESTORE_EMULATOR_HOST.
+ * `firestore-reader.ts`), the task list and the job runs as `ops-writer`, or
+ * all of it to the emulator named by FIRESTORE_EMULATOR_HOST.
  *
  * stdout is the protocol: anything logged goes to stderr.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { RUNS_SHOWN } from "../../shared/jobs";
 import {
   TASK_KINDS,
   TASK_STATUSES,
@@ -25,7 +27,8 @@ import {
 } from "../../shared/tasks";
 import { feedbackGet, feedbackQueue } from "./feedback";
 import { connect } from "./firestore-reader";
-import { connectTasks } from "./ops-store";
+import { jobsStatus } from "./jobs";
+import { opsConnection, restJobReports, restTaskStore } from "./ops-store";
 import {
   agentActor,
   taskAdd,
@@ -36,9 +39,11 @@ import {
 } from "./tasks";
 
 const db = connect();
-const tasks = connectTasks();
+const ops = opsConnection();
+const tasks = restTaskStore(ops);
+const jobReports = restJobReports(ops);
 const actor = agentActor();
-const server = new McpServer({ name: "koryta", version: "1.1.0" });
+const server = new McpServer({ name: "koryta", version: "1.2.0" });
 
 const READ_ONLY = {
   readOnlyHint: true,
@@ -136,6 +141,57 @@ server.registerTool(
     annotations: READ_ONLY,
   },
   ({ ids }) => answer(() => feedbackGet(db, ids)),
+);
+
+server.registerTool(
+  "jobs_status",
+  {
+    title: "Jobs",
+    description:
+      "How the jobs that change koryta's data are doing - the night on the " +
+      "koryta-nightly VM, the KRS scrapes, the imports, the people runs asked " +
+      "for on a page - read live from production and judged as " +
+      "/admin/procesy judges them (`jobHealth` in frontend/shared/jobs.ts). " +
+      "One line per job, in the page's order: its health, the page's reason " +
+      "for it (in Polish), and its newest run - state, start, how long it " +
+      "took, progress, why it stopped. Health, worst first: `stalled` (says " +
+      "it is going, has gone quiet), `failed`, `late` (missed its scheduled " +
+      "start), `held` (the night kept a step back - the upload - for " +
+      "somebody to look at), `stale`, `partial` (stopped with a backlog the " +
+      "next run carries on), `stopped`, `running`, `ok`, `never` (has " +
+      "reported nothing), `unknown`; the first five need a look. `job` lists " +
+      "one job's newest runs with their counters; `run` gives one run whole, " +
+      "its counters and errors included. Not read here, being outside the " +
+      "account's grant: the extension's captures, and the compressor and the " +
+      "Firestore export, which the page watches through their buckets. Link " +
+      "a run as https://koryta.pl/admin/procesy#przebieg-<id>. Read-only.",
+    inputSchema: {
+      job: z
+        .string()
+        .optional()
+        .describe(
+          "A job's id (`nightly`, `krs_scrape_free`, `people_import`...) or " +
+            "a link to its row (…/admin/procesy#proces-<id>): its health, " +
+            "record and newest runs",
+        ),
+      runs: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .default(RUNS_SHOWN)
+        .describe("With `job`: how many of its runs, newest first"),
+      run: z
+        .string()
+        .optional()
+        .describe(
+          "A run's id - its jobRuns document - or a link to it " +
+            "(…/admin/procesy#przebieg-<id>): everything it reported",
+        ),
+    },
+    annotations: READ_ONLY,
+  },
+  (args) => answer(() => jobsStatus(jobReports, args)),
 );
 
 const TASKS_EXPLAINED =
