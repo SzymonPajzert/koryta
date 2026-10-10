@@ -789,7 +789,7 @@ def test_a_person_pkw_has_twice_still_reaches_their_page(ctx):
 def site_pages(ctx, pages: pd.DataFrame) -> pd.DataFrame:
     """`PeopleKorytaMerged` over these `KorytaPeople` rows."""
     merged = PeopleKorytaMerged()
-    merged.koryta_pipeline = SimpleNamespace(read_or_process=lambda ctx: pages)
+    merged.koryta_pipeline = SimpleNamespace(read_or_process=lambda ctx: pages)  # type: ignore[assignment]
     return merged.process(ctx).set_index("koryta_id")
 
 
