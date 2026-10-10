@@ -48,6 +48,14 @@ PUBLIC_BODY_PREFIXES = (
     "PANSTWOWE GOSPODARSTWO WODNE",
     "NARODOWY FUNDUSZ OCHRONY SRODOWISKA",
     "WOJEWODZKI FUNDUSZ OCHRONY SRODOWISKA",
+    # The Treasury's restructuring fund. A closed-end fund is registered with
+    # the court's fund register, not KRS, so its companies name it with no
+    # number: it held ENERGOMONTAŻ-PÓŁNOC GDYNIA (0000017026) from 2013 to the
+    # day the company was struck off in 2016 (odpis pełny, entries 34-46).
+    "MARS FUNDUSZ INWESTYCYJNY ZAMKNIETY",
+    # The bank guarantee fund, a state legal person set up by statute. Sole
+    # shareholder of DRUGI BANK BFG (0000825574) until it was struck off.
+    "BANKOWY FUNDUSZ GWARANCYJNY",
     "BANK GOSPODARSTWA KRAJOWEGO",
     "NARODOWY BANK POLSKI",
     "ZAKLAD UBEZPIECZEN SPOLECZNYCH",
