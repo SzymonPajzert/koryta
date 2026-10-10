@@ -573,17 +573,17 @@ def one_row_per_spell(companies: list[Company]) -> list[Company]:
     stored copy a row's end lands on (`fillAnnotations`) no longer depends on
     the order the rows came in.
 
-    A row with no start is left as it is: nothing says which spell it is, so
-    two of them are not known to be one. The 10-10 payloads carry none.
+    Two rows with no start are one spell as well. The ingest reads them as one
+    identity - a missing `start_date` is a null in `edgeIdentity` - so it would
+    store the second as a second copy, which the invariant above counts as a
+    duplicate. An undated row is never folded into a dated one, though:
+    `employed` is not enrichable, because a missing start means nobody knows
+    when the spell began. The 10-10 payloads carry no undated row.
     """
     rows: list[Company] = []
     first_of: dict[tuple, int] = {}
     for company in companies:
-        started = day_of(company.start)
-        if started is None:
-            rows.append(company)
-            continue
-        spell = (company.krs, company.role or None, started)
+        spell = (company.krs, company.role or None, day_of(company.start))
         if spell not in first_of:
             first_of[spell] = len(rows)
             rows.append(company)
