@@ -50,6 +50,8 @@ PERSON_COUNTERS = (
     "updated",
     "unchanged",
     "employments_created",
+    "employments_published",
+    "candidacies_created",
     "companies_created",
     "unplaced",
     "dropped_changes",
@@ -89,6 +91,12 @@ class PersonResult:
     status: int | None = None
     #: Employments the site did not have before this upload.
     employments_created: int = 0
+    #: Employments this upload put on the site without a reviewer: a new job
+    #: of a person the ingest verified, or a stored one waiting for its first
+    #: review that it approved. The ones a night publishes by itself.
+    employments_published: int = 0
+    #: Candidacies the site did not have before this upload.
+    candidacies_created: int = 0
     #: Companies created first, because the payload named them and the site
     #: had no page for them to hang the employment on.
     companies_created: int = 0
@@ -156,6 +164,20 @@ def dropped_changes(body: dict) -> list[dict]:
     if not isinstance(found, list):
         return []
     return [change for change in found if isinstance(change, dict)]
+
+
+def flagged(body: dict, rows: str, flag: str) -> int:
+    """How many of the answer's `rows` (`companies`, `elections`) say `flag`.
+
+    Only `True` counts. Until 2026-10-10 the ingest answered `created: false`
+    for every job and candidacy, whatever it wrote, and no `published` at all,
+    so a site deployed before then reads as 0 of each - which is what it has
+    always reported - rather than as an error mid-upload.
+    """
+    found = body.get(rows)
+    if not isinstance(found, list):
+        return 0
+    return sum(1 for row in found if isinstance(row, dict) and row.get(flag) is True)
 
 
 def dropped_line(change: dict) -> str:
@@ -705,17 +727,14 @@ class PersonUploader(CompanyUploader):
         body = json_object(resp)
         outcome = body.get("person")
         person_id = body.get("personId")
-        employments = [
-            company
-            for company in body.get("companies") or []
-            if isinstance(company, dict) and company.get("created") is True
-        ]
         return PersonResult(
             # A site from before the field was added said only that it took
             # the person, and taking is a write as far as anyone can tell.
             outcome if outcome in ANSWERED else "updated",
             status=resp.status_code,
-            employments_created=len(employments),
+            employments_created=flagged(body, "companies", "created"),
+            employments_published=flagged(body, "companies", "published"),
+            candidacies_created=flagged(body, "elections", "created"),
             companies_created=companies_created,
             unplaced=unplaced,
             dropped=dropped_changes(body),
@@ -726,6 +745,8 @@ class PersonUploader(CompanyUploader):
         """Add one person's upload to what the run has counted."""
         self.counts[result.outcome] += 1
         self.counts["employments_created"] += result.employments_created
+        self.counts["employments_published"] += result.employments_published
+        self.counts["candidacies_created"] += result.candidacies_created
         self.counts["companies_created"] += result.companies_created
         self.counts["unplaced"] += result.unplaced
         # Each one printed as it comes: few, and every one is a disagreement

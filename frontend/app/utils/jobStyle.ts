@@ -263,6 +263,10 @@ const COUNTER_LABELS: Record<string, string> = {
   updated: "zaktualizowanych",
   unchanged: "bez zmian",
   employments_created: "nowych zatrudnień",
+  // Jobs the ingest put live without a reviewer: a verified person's new job,
+  // or a waiting one it approved. New or not, so not a part of the above.
+  employments_published: "zatrudnień opublikowanych bez przeglądu",
+  candidacies_created: "nowych kandydatur",
   companies_created: "dodanych firm",
   unplaced: "nieumieszczonych kandydatur",
   // Changes the ingest did not write - a job end the site keeps its own of -
