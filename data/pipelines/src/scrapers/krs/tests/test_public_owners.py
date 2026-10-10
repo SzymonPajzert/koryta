@@ -109,6 +109,15 @@ def test_the_state_housing_land_bank_is_public():
     assert found[0] == REASON_PUBLIC_BODY
 
 
+def test_the_state_funds_outside_krs_are_public():
+    # As the odpisy pełne of ENERGOMONTAŻ-PÓŁNOC GDYNIA (0000017026) and DRUGI
+    # BANK BFG (0000825574) name their last owners.
+    assert public_body("MARS FUNDUSZ INWESTYCYJNY ZAMKNIĘTY")
+    assert public_body("BANKOWY FUNDUSZ GWARANCYJNY")
+    # A closed-end fund is not public for being one.
+    assert not public_body("SILESIA HOUSE FUNDUSZ INWESTYCYJNY ZAMKNIĘTY")
+
+
 def test_an_agency_is_not_a_state_agency_by_its_first_word():
     assert not public_body('AGENCJA REKLAMOWA "GRAFITI" SPÓŁKA Z O.O.')
     assert not public_body("DOLCE VITA FUNDACJA RODZINNA")
