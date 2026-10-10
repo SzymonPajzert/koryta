@@ -198,10 +198,13 @@ BY_REGISTER = "rejestrIo"
 BY_NAME_AND_DATE = "name and birth date"
 BY_NAME = "name"
 NOT_ON_SITE = "not on koryta.pl"
-#: The two answers the ingest refuses with a 409 rather than guess between.
+#: The answers the ingest refuses with a 409 rather than guess between.
 HELD_SEVERAL = "held: several pages of that name and birth date"
 HELD_UNDATED = "held: a page of that name stores no birth date"
-HELD = (HELD_SEVERAL, HELD_UNDATED)
+#: And the one it refuses outright: the page the payload names is somebody
+#: born on another day (`refuseAnotherBirthDate`).
+HELD_BORN = "held: the page the payload names stores another birth date"
+HELD = (HELD_SEVERAL, HELD_UNDATED, HELD_BORN)
 #: What identifies a person, as against a name alone.
 IDENTIFIED = (BY_PAGE_ID, BY_REGISTER, BY_NAME_AND_DATE)
 
@@ -232,6 +235,24 @@ def links_another_entry(stored: typing.Any, sent: typing.Any) -> bool:
     """Whether a page links another register entry than the payload names."""
     page, payload = register_entry(stored), register_entry(sent)
     return page is not None and payload is not None and page != payload
+
+
+def iso_birth_date(value: typing.Any) -> str | None:
+    """`YYYY-MM-DD`, or a bare `YYYY`, as written; None for anything else."""
+    if not isinstance(value, str):
+        return None
+    date = value.strip()
+    return date if re.fullmatch(r"\d{4}(-\d{2}-\d{2})?", date) else None
+
+
+def born_another_day(stored: typing.Any, sent: typing.Any) -> bool:
+    """Whether a page's birth date and a payload's are two different days -
+    `bornAnotherDay` in `person.post.ts`: compared to the precision both have,
+    a bare year with the other side's year, and no date contradicting none."""
+    page, payload = iso_birth_date(stored), iso_birth_date(sent)
+    if page is None or payload is None:
+        return False
+    return not page.startswith(payload) and not payload.startswith(page)
 
 
 def surname_key(name: typing.Any) -> str:
@@ -490,7 +511,9 @@ class SiteSnapshot:
         node the upload was never going to touch.
 
         The node id first where the payload carries one, because that is the
-        page and there is nothing left to work out. Then the register link,
+        page and there is nothing left to work out - unless the page stores
+        another birth date than the payload's, which the ingest refuses with a
+        409 rather than look further (`_born_elsewhere`). Then the register link,
         because that is the identity - the name is not, and matching on it
         exactly is what filed 170 people under two pages each. Then, for a
         payload with a birth date, the name and the date together
@@ -503,6 +526,8 @@ class SiteSnapshot:
         if koryta_id is not None:
             stored = self.people_by_id.get(str(koryta_id))
             if stored is not None:
+                if self._born_elsewhere(stored, payload):
+                    return Resolution(None, HELD_BORN)
                 return Resolution(stored, BY_PAGE_ID)
 
         register = field(payload, "rejestrIo")
@@ -515,6 +540,19 @@ class SiteSnapshot:
         if born is not None:
             return self._by_name_and_date(payload, born)
         return self._by_name(payload, None)
+
+    @staticmethod
+    def _born_elsewhere(page: dict, payload: typing.Mapping[str, typing.Any]) -> bool:
+        """`refuseAnotherBirthDate`: whether the page a payload names by its
+        `korytaId` stores another birth date than the payload's, and does not
+        link the payload's own register entry - which would make it the page
+        whatever date it stores."""
+        sent = register_entry(field(payload, "rejestrIo"))
+        if sent is not None and register_entry(field(page, "rejestrIo")) == sent:
+            return False
+        return born_another_day(
+            field(page, "birthDate"), day_of(field(payload, "birthDate"))
+        )
 
     def _by_name(
         self, payload: typing.Mapping[str, typing.Any], born: str | None

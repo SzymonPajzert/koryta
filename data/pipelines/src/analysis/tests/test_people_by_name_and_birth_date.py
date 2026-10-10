@@ -6,7 +6,7 @@ included, and the cases mirror `frontend/tests/server/api/ingest/person.test.ts`
 The fingerprints are made up; none reaches a payload.
 """
 
-from dataclasses import asdict, fields
+from dataclasses import asdict, fields, replace
 
 import pandas as pd
 
@@ -20,6 +20,8 @@ from analysis.payloads.person import (
 from analysis.payloads.site import (
     BY_NAME,
     BY_NAME_AND_DATE,
+    BY_PAGE_ID,
+    HELD_BORN,
     HELD_SEVERAL,
     HELD_UNDATED,
     NOT_ON_SITE,
@@ -180,6 +182,56 @@ def test_neither_a_date_nor_an_entry_matches_by_the_exact_name_as_before():
     )
 
     assert resolve(site, person(born=None)) == ("linked", BY_NAME)
+
+
+# ------------------------------------------- the page the payload names
+HETMAN = page(
+    "hetman", "Krzysztof Hetman", birthDate="1974-06-27", rejestrIo="", published=True
+)
+
+
+def namesake(**fields) -> Person:
+    """The 2026-10-10 payload of entry 1203566, named onto the MEP's page."""
+    entry = person("Krzysztof Hetman", "1963-10-10", f"{REGISTER}1203566")
+    return replace(entry, **{"korytaId": "hetman", **fields})
+
+
+def test_a_page_the_payload_names_born_on_another_day_holds_it_back():
+    """`refuseAnotherBirthDate`: a 409, and no other page looked for."""
+    site = snapshot(HETMAN, page("other", "Krzysztof Hetman", birthDate="1963-10-10"))
+
+    assert resolve(site, namesake()) == (None, HELD_BORN)
+    assert matching_one_page([namesake()], site) == []
+    assert missing_from_koryta([namesake()], site) == []
+
+
+def test_a_page_the_payload_names_is_held_to_the_year_it_stores_alone():
+    assert resolve(snapshot({**HETMAN, "birthDate": "1974"}), namesake()) == (
+        None,
+        HELD_BORN,
+    )
+    assert resolve(snapshot({**HETMAN, "birthDate": "1963"}), namesake()) == (
+        "hetman",
+        BY_PAGE_ID,
+    )
+
+
+def test_a_page_the_payload_names_with_no_birth_date_is_still_the_page():
+    for stored in ("", None):
+        site = snapshot({**HETMAN, "birthDate": stored})
+
+        assert resolve(site, namesake()) == ("hetman", BY_PAGE_ID)
+    assert resolve(snapshot(HETMAN), namesake(birthDate=None)) == (
+        "hetman",
+        BY_PAGE_ID,
+    )
+
+
+def test_a_page_linking_the_payloads_own_entry_is_the_page_whatever_its_date():
+    """One entry is one human; the page's date is a reviewer's to fix."""
+    site = snapshot({**HETMAN, "rejestrIo": f"{REGISTER}1203566/krzysztof-hetman"})
+
+    assert resolve(site, namesake()) == ("hetman", BY_PAGE_ID)
 
 
 # ------------------------------------------------------ the run's guards
