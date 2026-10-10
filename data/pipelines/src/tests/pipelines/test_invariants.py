@@ -1640,12 +1640,13 @@ def test_a_later_revision_never_drops_a_field(revisions):
     And the page a revision replaced is the one standing when it was *applied*,
     which for an approved revision is when it was approved - `applyRevision`
     writes it then, whenever it was filed. Ordered by filing instead, a proposal
-    approved days after the people import's revision of that page reads as
-    the page the import's revision replaced. Two did on 2026-10-09: proposals
-    for Bartosz Zawieja (filed 10-07, approved 10-09) and Wojciech Bochnak
-    (approved 10-09 after the night's revision was filed), and the night held
-    its upload on the "loss" of `partiesSource`, `content` and `education`
-    that both pages still carry.
+    approved after the people import's revision of that page reads as the page
+    the import's revision replaced. Two did on 2026-10-09: Bartosz Zawieja's,
+    filed on 10-07 a minute before a people import's revision of his page and
+    approved on 10-09, and Wojciech Bochnak's, filed six minutes before a
+    one-person import of his page that morning and approved an hour and a half
+    after it. The evening's hand run of the night held its upload on the "loss"
+    of `partiesSource`, `content` and `education` that both pages still carry.
     """
     # One article, oYkxDlD1KfkO96p6PIwK, whose January 2026 edit lost the
     # `estimates` field the previous revision carried. It is still on the node
