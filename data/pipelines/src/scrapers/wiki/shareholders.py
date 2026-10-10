@@ -162,11 +162,13 @@ def article_url(title: str) -> str:
 #: and 0000020206, and a NIP written "526 025 07 13" KRS 0000250713.
 _SPACED_DIGITS = re.compile(r"(?<!\d)0\d*(?:[^\S\n]+\d+)+")
 
-#: A run of digits, unless a hyphen joins it to more. That is how a NIP or a
+#: A run of digits, or several a hyphen joins. The second is how a NIP or a
 #: foreign register writes its number, and KRS never does: Spokey's
 #: "731-11-59-686", and Bank Leumi's Israeli "52-001807-8", whose middle read
-#: as KRS 0000001807.
-_DIGITS = re.compile(r"(?<!\d)(?<!\d-)\d+(?!\d)(?!-\d)")
+#: as KRS 0000001807. Matched all the same, and passed over, so that the label
+#: before it ends with it: in "NIP 731-11-59-686, KRS 0000123456" the NIP is
+#: not the KRS number's label.
+_DIGITS = re.compile(r"\d+(?:-\d+)*")
 
 #: A label naming another register, before the number it gives. REGON is the
 #: statistics office's: Ochocianie's "Regon 363637905" read as KRS 0363637905.
@@ -226,7 +228,9 @@ def clean_krs(raw) -> str | None:
         label = text[previous : match.start()]
         previous = match.end()
         digits = match.group(0)
-        if _OTHER_REGISTER.search(label) or not 5 <= len(digits) <= 10:
+        if "-" in digits or _OTHER_REGISTER.search(label):
+            continue
+        if not 5 <= len(digits) <= 10:
             continue
         if not 0 < int(digits) < _KRS_LIMIT:
             continue
