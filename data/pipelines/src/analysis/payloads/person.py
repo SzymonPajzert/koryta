@@ -115,7 +115,7 @@ class PeoplePayloads(Pipeline[Person]):
     def process(self, ctx: Context):
         people_df = self.registered_people(ctx)
         args = self.args
-        if args.on_koryta or args.not_on_koryta or args.only_changed:
+        if args.on_koryta or args.not_on_koryta:
             result = self.payloads_of(ctx, people_df, self.site_snapshot(ctx))
         else:
             result = self.unscoped_payloads(ctx, people_df)
@@ -170,8 +170,16 @@ class PeoplePayloads(Pipeline[Person]):
 
         So the export is read where the run selects anybody without an entry,
         and not otherwise: a run of linked people alone is as it was.
+
+        `--only-changed` is no scope either: it drops the payloads that would
+        write nothing, and keeps the new people with the stored. Such a run
+        read the export, but put a person without an entry through
+        `payloads_of` alone, and to `only_changed` a person the ingest would
+        hold, and either of two namesakes born the same day, is a new person
+        to send. Over the 2026-10-10 outputs `--all --only-changed` sent all
+        7,001 too; it leaves out the same 206 now.
         """
-        if registered(people_df).all():
+        if registered(people_df).all() and not self.args.only_changed:
             return [
                 self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
             ]
