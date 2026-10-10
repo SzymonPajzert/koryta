@@ -5,6 +5,7 @@ from dataclasses import asdict
 
 import pytest
 
+from analysis import article_person_mentions
 from analysis.article_person_mentions import (
     JudgeCache,
     PersonProfile,
@@ -20,6 +21,7 @@ from analysis.article_person_mentions import (
     _parse_multi_verdict,
     _parse_verdict,
     _party_match_terms,
+    _person_krs_map,
     _rejestr_io_id,
     _resolve_merged,
     _stem,
@@ -132,6 +134,33 @@ def test_employed_krs_resolves_via_rejestrio():
         _employed_krs({"rejestrIo": "https://rejestr.io/osoby/999"}, person_krs)
         == set()
     )
+
+
+def test_a_link_takes_no_company_of_the_entry_without_a_pesel_of_its_number(
+    tmp_path, monkeypatch
+):
+    """/osoby/2830475 is Rafał Duchniewski; Boerre Longum, without a PESEL,
+    has the same number at another company (2026-10-10)."""
+    rows = [
+        {"id": "2830475", "employed_krs": "0000053695", "rejestrio_type": "osoba"},
+        {
+            "id": "2830475",
+            "employed_krs": "0000077982",
+            "rejestrio_type": "osoba-bez-pesel",
+        },
+        # Written before the type was: an osoba.
+        {"id": "270186", "employed_krs": "0000012345"},
+    ]
+    (tmp_path / "person_krs").mkdir()
+    (tmp_path / "person_krs" / "person_krs.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in rows)
+    )
+    monkeypatch.setattr(article_person_mentions, "VERSIONED_DIR", str(tmp_path))
+
+    assert _person_krs_map() == {
+        "2830475": {"0000053695"},
+        "270186": {"0000012345"},
+    }
 
 
 class FakeDomainMap:
