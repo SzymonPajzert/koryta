@@ -407,6 +407,18 @@ async function jobDetail(
  * database, as the feedback tools keep reporters' uids there. */
 const withoutUid = ({ by: _uid, ...shown }: RunRequest) => shown;
 
+/** A document as stored, with the same uid cut out of its request: one the
+ * page cannot read is handed on whole, and a request the site wrote names
+ * who asked (`requestPeopleRun` in server/utils/jobRequests.ts). */
+function storedWithoutUid(data: Record<string, unknown>) {
+  const { request } = data;
+  if (!request || typeof request !== "object" || Array.isArray(request)) {
+    return data;
+  }
+  const { by: _uid, ...shown } = request as Record<string, unknown>;
+  return { ...data, request: shown };
+}
+
 /** One run, everything it reported. */
 async function runDetail(
   store: JobReports,
@@ -431,7 +443,7 @@ async function runDetail(
           "This document has no job, state or start time that can be read, " +
           "so /admin/procesy does not show it either.",
         id,
-        data: doc.data,
+        data: storedWithoutUid(doc.data),
       },
       null,
       2,

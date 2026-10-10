@@ -331,6 +331,28 @@ describe("jobsStatus: one run", () => {
     expect(junk.data).toEqual({ state: "running" });
   });
 
+  it("keeps the uid out of a run it cannot read, too", async () => {
+    // A request the site queued, whose start time a job overwrote with
+    // something Date cannot read: handed on as stored, minus who asked.
+    const { reports } = memoryReports([
+      {
+        id: "req-junk",
+        data: {
+          job: "people_request",
+          state: "queued",
+          startedAt: "soon",
+          request: { nodeId: "abc", by: "uid-of-the-owner", byName: "Szymon" },
+        },
+      },
+    ]);
+    const text = await jobsStatus(reports, { run: "req-junk" }, NOW);
+    expect(text).not.toContain("uid-of-the-owner");
+    expect(JSON.parse(text).data.request).toEqual({
+      nodeId: "abc",
+      byName: "Szymon",
+    });
+  });
+
   it("takes a job or a run, not both", async () => {
     const { reports } = memoryReports([]);
     await expect(
