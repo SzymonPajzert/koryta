@@ -17,7 +17,11 @@ from entities.person import RejestrIOKey
 from scrapers.koryta.download import KorytaPeople, KorytaPublished, KorytaVotes
 from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.columns import is_public, normalise
-from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
+from scrapers.krs.coverage import (
+    PersonFeedCoverage,
+    RejestrIOCoverage,
+    parse_person_connections_url,
+)
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.list import WITHOUT_PESEL, CompaniesKRS, PeopleKRS
 from scrapers.krs.odpis_people import PeopleKRSCombined, odpis_days
@@ -1250,6 +1254,37 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
             return KRSSet()
         return KRSSet(KRS(id=str(krs).zfill(10)) for krs in found["krs"])
 
+    def feeds_bought_without_pesel(self, ctx: Context) -> set[str]:
+        """The numbers whose person feed, in the bucket, was bought for an
+        entry without a PESEL: known to `PeopleKRS` only as one, and named by
+        no page's link - but as that entry (`meant_without_pesel`) - nor by
+        the hardcoded list.
+
+        Such a feed is the osoba of that number's (`people_to_scrape`), whom
+        nobody asked for, so the companies it lists are no reason to buy
+        anything. 2900081, bought 2026-10-06 for an Anna Hetman without a
+        PESEL, lists BB INVEST (0000921420), and every paid queue of 10-09/10
+        held it under person_feed; 3256221 lists 0001115997. No other feed
+        lists either. A link still vouches for its number, as it does in
+        `people_to_scrape`: an osoba no crawled company lists has no row as
+        one until its feed is read. A number an osoba of the crawl also has is
+        read as before, since its feed is that osoba's. The one such feed
+        bought for an entry without a PESEL, 2900112's, lists three companies
+        crawled already.
+        """
+        osoba, without_pesel = names_by_entry(self.people.read_or_process(ctx))
+        vouched = set(
+            self.hardcoded_people.read_or_process(ctx)["id"].astype(str).to_list()
+        )
+        pages = self.koryta_people.read_or_process(ctx)
+        for page in pages.to_dict("records"):
+            entry = linked_entry(page.get("rejestrIo"))
+            if entry is not None and not meant_without_pesel(
+                entry, page.get("full_name"), osoba, without_pesel
+            ):
+                vouched.add(entry)
+        return set(without_pesel) - set(osoba) - vouched
+
     def companies_to_scrape(self, ctx: Context) -> KRSSet:
         """The companies worth a rejestr.io query, and why each one is here.
 
@@ -1271,10 +1306,16 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
             starters.add(krs)
             self._record_reason(krs.id, REASON_PUBLIC_OWNER)
 
+        strangers = self.feeds_bought_without_pesel(ctx)
+        unread: set[str] = set()
         for blob_name, blob in ctx.io.read_many(
             CloudStorage(prefix="hostname=rejestr.io")
         ):
             if "osoby" in blob_name and "krs-powiazania" in blob_name:
+                feed = parse_person_connections_url(blob_name)
+                if feed is not None and feed[0] in strangers:
+                    unread.add(feed[0])
+                    continue
                 try:
                     data = json.loads(blob.read_string())
                     for item in data:
@@ -1287,6 +1328,11 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                                 )
                 except Exception as e:
                     print(f"Error parsing {blob_name}: {e}")
+        if unread:
+            print(
+                f"Person feeds bought for an entry without a PESEL, left unread: "
+                f"{sorted(unread)}"
+            )
 
         if self.args.children:
             children = self.owned_by_the_public(ctx)
