@@ -358,9 +358,9 @@ def unidentified_seat(start: str, end: str | None) -> dict:
 def test_a_person_without_a_pesel_is_still_a_person(context):
     """The bug this guards: 3,912 people held 6,227 seats nothing could see.
 
-    `people_to_scrape` reads this pipeline to decide whose rejestr.io feed to
-    buy, and `companies_without_names` reads it to find companies at all, so
-    dropping them hid both the people and their companies from the scraper.
+    `companies_without_names` reads this pipeline to find companies at all, so
+    dropping them hid their companies from the scraper. Their feeds are not
+    bought (`people_to_scrape`): ``/osoby/<n>`` is the osoba numbered n.
     """
     ctx, _ = context(
         {
