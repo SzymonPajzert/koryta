@@ -500,6 +500,73 @@ def test_an_odpis_namesake_born_on_the_same_day_stays_one_person(ctx):
     assert list(row["pesel_fingerprint"]) == ["e" * 32]
 
 
+def test_a_surname_taken_on_or_dropped_is_still_the_one_entry(ctx):
+    """Justyna Monika Ryfa in her newest odpis, the Justyna Monika Ryfa
+    Rakowska of entry 2740942 at a company with none on file; Patrycja Griffin
+    Knoblauch, entry 162449's Patrycja Griffin. Five such on 2026-10-10, each
+    a second identity - and a second page - until now."""
+    rejestrio = people(
+        person(krs=A, id="7", first="Justyna", last="Ryfa Rakowska"),
+        person(krs=C, id="8", first="Patrycja", last="Griffin"),
+    )
+    odpisy = seats(
+        seat(krs=B, surname="RYFA", given="JUSTYNA MONIKA"),
+        seat(
+            krs=D,
+            surname="GRIFFIN-KNOBLAUCH",
+            given="PATRYCJA",
+            pesel_fingerprint="e" * 32,
+        ),
+    )
+    combined = restored(combine(rejestrio, odpisy, graph={A, B, C, D}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        (["7"], BORN, [A, B]),
+        (["8"], BORN, [C, D]),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("entries", "odpis_surname", "given"),
+    [
+        # A word shared is not a surname taken on: a typo, or two people.
+        ([("7", "Wollik Litwin")], "WOLLIK-LITTWIN", "MONIKA"),
+        # Two entries it could be.
+        ([("7", "Ryfa Rakowska"), ("8", "Ryfa Nowak")], "RYFA", "JUSTYNA"),
+        # A middle name apart.
+        ([("7", "Ryfa Rakowska")], "RYFA", "JUSTYNA MONIKA"),
+    ],
+)
+def test_a_surname_taken_on_joins_only_one_entry_with_nothing_against_it(
+    ctx, entries, odpis_surname, given
+):
+    first = given.split()[0].title()
+    rejestrio = people(
+        *(
+            person(krs=A, id=id, first=first, last=last, second_names="Ewa")
+            for id, last in entries
+        )
+    )
+    odpisy = seats(seat(krs=B, surname=odpis_surname, given=given))
+    combined = restored(combine(rejestrio, odpisy, graph={A, B}))
+
+    assert ([], BORN, [B]) in posts_by_row(people_krs_merged(ctx, combined))
+
+
+def test_a_namesake_of_the_very_surname_goes_before_one_taken_on(ctx):
+    rejestrio = people(
+        person(krs=A, id="7"),
+        person(krs=C, id="8", last="Nowak Kos"),
+    )
+    odpisy = seats(seat(krs=B))
+    combined = restored(combine(rejestrio, odpisy, graph={A, B, C}))
+
+    assert posts_by_row(people_krs_merged(ctx, combined)) == [
+        (["7"], BORN, [A, B]),
+        (["8"], BORN, [C]),
+    ]
+
+
 def test_a_namesake_born_that_day_with_another_pesel_is_another_person(ctx):
     """The odpis of A is on file and gives rejestr.io's Jan Nowak his PESEL, so
     the Jan Nowak at B born the same day, with another, is somebody else."""

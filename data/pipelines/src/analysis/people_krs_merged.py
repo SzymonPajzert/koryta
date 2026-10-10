@@ -84,7 +84,9 @@ def person_keys(krs: pd.DataFrame) -> pd.Series:
     no middle name tells them apart, and neither has another such partner. The
     id's companies have no odpis on file to say so outright; when the odpisy
     behind 2,882 such pairs were fetched, 2,867 named the very PESEL and none
-    another (the other 15 for reasons of their own).
+    another (the other 15 for reasons of their own). Where neither has such a
+    namesake, a surname one of the two extends will do instead
+    (`_join_by_name_and_date`).
 
     The value is the person's least key, `p:<fingerprint>` where they have a
     PESEL and `r:<id>` where only an id. A row with neither - somebody without
@@ -136,7 +138,19 @@ def _join_by_name_and_date(
 ) -> None:
     """Join each person known by a PESEL alone to the one person known by a
     rejestr.io id alone with their name and birth date, where neither has
-    another such partner and no middle name tells them apart."""
+    another such partner and no middle name tells them apart.
+
+    Failing any such namesake, on either side, to the one with their first
+    name and birth date under a surname one of the two extends: Justyna
+    Monika Ryfa, as her newest odpis has her, is the Justyna Monika Ryfa
+    Rakowska of entry 2740942. Five people on the 2026-10-10 night, all a
+    married name added or dropped; without it each would have had a page of
+    her own beside the entry's, since the ingest's `namesAgree` holds the
+    surname to the last word. Of the 85,303 PESELs on that night's rows, one
+    first name and birth date came under two such surnames 11 times, always
+    one PESEL, never two. A person known by a PESEL alone has no entry, so
+    this joins no two entries (rejestr-io-entry-is-one-person).
+    """
     named: dict[str, set[tuple[str, str, str]]] = defaultdict(set)
     middles: dict[str, set[str]] = defaultdict(set)
     for key, first, last, born, middle in zip(
@@ -160,23 +174,79 @@ def _join_by_name_and_date(
             for name in names:
                 by_name[name].append(root)
 
+    def agree(root: str, other: str) -> bool:
+        return (
+            not middles[root]
+            or not middles[other]
+            or bool(middles[root] & middles[other])
+        )
+
+    # Who has a namesake on the other side at all, before the middle names
+    # are asked: a person with one is left to the exact name.
+    exact: dict[str, set[str]] = defaultdict(set)
     partners: dict[str, set[str]] = defaultdict(set)
     for root, names in named.items():
         if kinds[root] != {"p"}:
             continue
         for other in {other for name in names for other in by_name.get(name, ())}:
-            if (
-                not middles[root]
-                or not middles[other]
-                or middles[root] & middles[other]
-            ):
+            exact[root].add(other)
+            exact[other].add(root)
+            if agree(root, other):
                 partners[root].add(other)
                 partners[other].add(root)
+    _join_partners(partners, people)
+
+    # Then a surname written in part, among the people left with no namesake.
+    unnamed = {
+        root: names
+        for root, names in named.items()
+        if kinds[root] in ({"p"}, {"r"}) and not exact[root]
+    }
+    _join_partners(_extended_surnames(unnamed, kinds, agree), people)
+
+
+def _extended_surnames(
+    named: dict[str, set[tuple[str, str, str]]],
+    kinds: dict[str, set[str]],
+    agree: typing.Callable[[str, str], bool],
+) -> dict[str, set[str]]:
+    """The partners of each person known by a PESEL alone among the people
+    known by an id alone: the same first name and birth date, under a surname
+    one of the two extends (`surname_extends`), and no middle name apart."""
+    by_first: dict[tuple[str, str], list[tuple[str, str]]] = defaultdict(list)
+    for root, names in named.items():
+        if kinds[root] == {"r"}:
+            for first, last, born in names:
+                by_first[(first, born)].append((root, last))
+    partners: dict[str, set[str]] = defaultdict(set)
+    for root, names in named.items():
+        if kinds[root] != {"p"}:
+            continue
+        for first, last, born in names:
+            for other, theirs in by_first.get((first, born), ()):
+                if surname_extends(last, theirs) and agree(root, other):
+                    partners[root].add(other)
+                    partners[other].add(root)
+    return partners
+
+
+def _join_partners(partners: dict[str, set[str]], people: _People) -> None:
+    """Join each person known by a PESEL alone to their one partner, where
+    the partner has no other."""
     for root, others in list(partners.items()):
         if root.startswith("p:") and len(others) == 1:
             (other,) = others
             if len(partners[other]) == 1:
                 people.union(root, other)
+
+
+def surname_extends(one: str, other: str) -> bool:
+    """Whether one folded surname is the other with words added: "ryfa" and
+    "ryfa rakowska", "griffin knoblauch" and "griffin" - a hyphen is a space
+    by now (`fold`). Sharing a word is not enough: "wollik littwin" and
+    "wollik litwin" is a typo or two people, not a surname taken on."""
+    a, b = set(one.split()), set(other.split())
+    return bool(a) and bool(b) and (a < b or b < a)
 
 
 def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
