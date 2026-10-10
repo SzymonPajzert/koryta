@@ -861,14 +861,24 @@ class PeopleImport:
         return [candidate.payload for candidate in candidates]
 
     def dry_run(self, payloads: list[dict]) -> int:
-        names = ", ".join(str(payload.get("name")) for payload in payloads[:3])
-        more = ", ..." if len(payloads) > 3 else ""
+        """Say what a run would send - the first --max-uploads of the plan, as
+        `send` stops there - and end as a trial. The dry run of the first
+        whole night, 2026-10-05, said 9,542 people of a run capped at 100."""
+        sent = min(len(payloads), self.args.max_uploads)
+        named = payloads[: min(sent, 3)]
+        names = ", ".join(str(payload.get("name")) for payload in named)
+        more = ", ..." if sent > 3 else ""
+        capped = (
+            f", the first {sent:,} of {len(payloads):,} planned (--max-uploads)"
+            if sent < len(payloads)
+            else ""
+        )
         print(
-            f"Dry run: {len(payloads):,} people would be sent to "
-            f"{self.args.endpoint}" + (f": {names}{more}" if payloads else "")
+            f"Dry run: {sent:,} people would be sent to {self.args.endpoint}"
+            + capped
+            + (f": {names}{more}" if sent else "")
         )
         if self.tiers is not None and self.request is None:
-            sent = min(len(payloads), self.args.max_uploads)
             first = Counter(self.tiers[:sent])
             print(
                 f"The first {sent} (--max-uploads) by tier: "
