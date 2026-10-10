@@ -6,6 +6,7 @@ from datetime import date
 import pandas as pd
 
 from analysis.payloads.site import (
+    ENDED_EMPLOYMENT,
     MISSING_COMPANY,
     NEW_CANDIDACY,
     NEW_EMPLOYMENT,
@@ -75,6 +76,22 @@ def test_a_new_employment_dates_from_its_start():
 
     assert site.dated_changes(payload) == [(NEW_EMPLOYMENT, "2026-09-15")]
     assert site.changes(payload) == [NEW_EMPLOYMENT]
+
+
+def test_the_end_of_a_stored_job_dates_from_the_day_it_ended():
+    site = snapshot(
+        stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        edges=(employed("p1", "place-public", "2025-02-13"),),
+    )
+    payload = asdict(
+        person(
+            "Jan Kowalski",
+            "https://rejestr.io/osoby/1",
+            Company(krs=PUBLIC, role="Prezes", start="2025-02-13", end="2026-08-25"),
+        )
+    )
+
+    assert site.dated_changes(payload) == [(ENDED_EMPLOYMENT, "2026-08-25")]
 
 
 def test_a_company_the_site_lacks_dates_from_the_post_too():

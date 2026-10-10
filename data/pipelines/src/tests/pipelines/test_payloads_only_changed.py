@@ -19,6 +19,7 @@ from analysis.payloads.person import (
     one_register_entry,
 )
 from analysis.payloads.site import (
+    ENDED_EMPLOYMENT,
     ENRICHED_CANDIDACY,
     MISSING_COMPANY,
     NEW_CANDIDACY,
@@ -352,9 +353,50 @@ def test_a_third_repeated_row_is_still_a_fact_the_site_lacks():
     ) == [NEW_EMPLOYMENT]
 
 
-def test_an_end_date_does_not_make_a_second_spell():
-    """`end_date` is learned later, so one spell closed since is one spell."""
+def test_an_end_date_is_learned_onto_the_stored_spell():
+    """`end_date` is learned later, so one spell closed since is one spell -
+    and the end is written onto it, so the payload is kept.
+
+    This used to assert the payload was dropped, mirroring an ingest that read
+    the exact match as nothing to do and left the job current on the site for
+    good (Anna Konieczyńska's KARR seat, closed in the register on 2026-08-25).
+    """
     snapshot = SiteSnapshot(nodes(), edges(STORED_EMPLOYMENT))
+    closed = dict(EMPLOYMENT, end="2024-03-01")
+
+    assert snapshot.changes(payload(companies=[closed])) == [ENDED_EMPLOYMENT]
+
+
+def test_an_end_the_site_already_holds_is_dropped():
+    stored = dict(STORED_EMPLOYMENT, end_date="2024-03-01")
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    closed = dict(EMPLOYMENT, end="2024-03-01")
+
+    assert snapshot.changes(payload(companies=[closed])) == []
+
+
+def test_another_end_than_the_stored_one_is_dropped():
+    """The ingest fills a blank end and never rewrites one."""
+    stored = dict(STORED_EMPLOYMENT, end_date="2024-01-31")
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    closed = dict(EMPLOYMENT, end="2024-03-01")
+
+    assert snapshot.changes(payload(companies=[closed])) == []
+
+
+def test_a_job_the_payload_sends_open_is_not_reopened():
+    stored = dict(STORED_EMPLOYMENT, end_date="2024-03-01")
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+
+    assert snapshot.changes(payload(companies=[EMPLOYMENT])) == []
+
+
+@pytest.mark.parametrize("deleted", [True, 1.0])
+def test_a_removed_job_learns_no_end(deleted):
+    """The ingest leaves a removed edge as it is; `deleted` reads back off a
+    frame on disk as 1.0."""
+    stored = dict(STORED_EMPLOYMENT, deleted=deleted)
+    snapshot = SiteSnapshot(nodes(), edges(stored))
     closed = dict(EMPLOYMENT, end="2024-03-01")
 
     assert snapshot.changes(payload(companies=[closed])) == []
