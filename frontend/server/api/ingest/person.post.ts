@@ -951,7 +951,10 @@ async function findEdgeOrCreate(
   const occurrence = ctx.edgeOccurrences.get(identity) ?? 0;
   ctx.edgeOccurrences.set(identity, occurrence + 1);
 
-  const { same, enrichable, ids } = await findEdgeMatches(ctx.db, edge);
+  const { same, enrichable, ids, documents } = await findEdgeMatches(
+    ctx.db,
+    edge,
+  );
 
   // The n-th row of this identity onto the n-th stored edge that says it, out
   // of those no *other* identity has taken.
@@ -977,7 +980,8 @@ async function findEdgeOrCreate(
   )[occurrence];
   if (existing) {
     ctx.claimedEdgeIds.set(existing, identity);
-    if (verified) await approveWaitingEdge(ctx, existing);
+    const published = verified && (await approveWaitingEdge(ctx, existing));
+    fillAnnotations(ctx, existing, documents.get(existing), edge, published);
     return existing;
   }
 
@@ -1062,6 +1066,52 @@ async function findEdgeOrCreate(
   }
   ctx.claimedEdgeIds.set(edgeRef.id, identity);
   return edgeRef.id;
+}
+
+/** Writes onto a stored edge what the row says about the same episode and the
+ * edge does not say yet: a job's end, on a job stored while it was held.
+ *
+ * The row matched the edge on every field that says which episode it is, so
+ * the end is not a second spell but this one, closed since. Read as an exact
+ * match and nothing more, it was dropped: Anna Konieczyńska's KARR board seat
+ * was stored open on 2026-05-28, the register closed it on 2026-08-25, and
+ * the payloads saying so left the seat on her page as current. Only blanks
+ * are filled (`enrichedEdge`), so an end somebody typed in, or an earlier
+ * run's, stands. A removed edge is left as it is.
+ *
+ * The write keeps the edge's review state. A job that is live, or approved,
+ * shows its document, so the revision behind it is approved with the change -
+ * as an update to a live person is. A job still waiting for its first review
+ * takes the end as a waiting revision it holds, which is the one a reviewer,
+ * or `approveWaitingEdge` once the person is verified, then puts live.
+ * `published` says `approveWaitingEdge` has just done that in this batch.
+ */
+function fillAnnotations(
+  ctx: Context,
+  edgeId: string,
+  stored: Record<string, unknown> | undefined,
+  edge: Edge,
+  published: boolean,
+) {
+  if (!stored || stored.deleted === true) return;
+  if (!addsOnlyAnnotations(stored, edge)) return;
+
+  const document = published ? { ...stored, published: true } : stored;
+  createRevisionTransaction(
+    ctx.db,
+    ctx.batch,
+    ctx.user,
+    ctx.db.collection("edges").doc(edgeId),
+    enrichedEdge(withoutInternalFields(stored), edge),
+    {
+      automatic: true,
+      approve:
+        ctx.autoapprove ||
+        pageIsPublic(document) ||
+        approvedRevisionId(document.revision_id) !== undefined,
+      stored: document,
+    },
+  );
 }
 
 /** The person's stored employments, when this payload may put the person's
@@ -1175,16 +1225,22 @@ function registerEntry(link: unknown): string | undefined {
  * a reviewer, without the audit row an administrator's decision gets. Only the
  * newest: an older revision the edge holds would put the job up past a newer
  * one saying something else, which is a change nobody has looked at.
+ *
+ * Whether it published the job, which `fillAnnotations` needs to know: a job
+ * learning its end in the same request goes live with it.
  */
-async function approveWaitingEdge(ctx: Context, edgeId: string) {
+async function approveWaitingEdge(
+  ctx: Context,
+  edgeId: string,
+): Promise<boolean> {
   const stored = ctx.verifiedEmployments?.get(edgeId);
-  if (!stored) return;
+  if (!stored) return false;
   if (
     pageIsPublic(stored) ||
     stored.deleted === true ||
     approvedRevisionId(stored.revision_id)
   ) {
-    return;
+    return false;
   }
 
   const revisions = await edgeRevisions(ctx.db, edgeId);
@@ -1194,10 +1250,10 @@ async function approveWaitingEdge(ctx: Context, edgeId: string) {
         revision.status === "rejected" || revision.update_automatic !== true,
     )
   ) {
-    return;
+    return false;
   }
   const newest = revisions.slice(0, 1);
-  if (!publishCandidateRevision(newest, stored)) return;
+  if (!publishCandidateRevision(newest, stored)) return false;
 
   publishEdgeInBatch(
     ctx.db,
@@ -1209,4 +1265,5 @@ async function approveWaitingEdge(ctx: Context, edgeId: string) {
     false,
   );
   console.info(`[ingest] approved waiting employment ${edgeId}`);
+  return true;
 }
