@@ -50,8 +50,17 @@ def test_the_kept_row_stays_where_the_spell_first_came():
     assert one_row_per_spell(rows) == [spell("2017-10-11"), other]
 
 
-def test_two_undated_rows_are_not_known_to_be_one_spell():
+def test_two_undated_rows_of_one_role_are_one_spell():
+    """The ingest reads both as one identity, a null `start_date`, and would
+    store the second as a second copy of it."""
     rows = [spell("2010-01-01", start=None), spell("2012-01-01", start=None)]
+
+    assert one_row_per_spell(rows) == [spell("2012-01-01", start=None)]
+
+
+def test_an_undated_row_stays_beside_a_dated_one():
+    """`employed` is not enrichable: a missing start is not the dated spell."""
+    rows = [spell("2016-03-14"), spell(start=None)]
 
     assert one_row_per_spell(rows) == rows
 
