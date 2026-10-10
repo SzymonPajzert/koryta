@@ -1438,3 +1438,109 @@ describe("api/ingest/company, re-run over a company nothing has changed", () => 
     expect(createRevisionTransaction).not.toHaveBeenCalled();
   });
 });
+
+describe("api/ingest/company, a KRS number a retired page still carries", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockResolvedValue(caller);
+    mockWhere.mockReturnValue(queryMock);
+    queryMock.where.mockReturnValue(queryMock);
+    queryMock.limit.mockReturnValue(queryMock);
+  });
+
+  /** The ref a revision was written to. */
+  function revisionTarget() {
+    return vi.mocked(createRevisionTransaction).mock.calls[0]?.[3];
+  }
+
+  it("writes to the live page rather than a removed one that sorts first", async () => {
+    // A removal keeps the document and its `krsNumber`, and `limit(1)` took
+    // whichever page had the lowest id - so the register went on landing on a
+    // page readers could no longer see.
+    mockReadBody.mockResolvedValue({ krs: "0000081135", name: "THERMA" });
+    const removedRef = { id: "A-removed", parent: nodesParent };
+    const liveRef = { id: "b-live", parent: nodesParent };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          ref: removedRef,
+          data: () => ({ krsNumber: "0000081135", deleted: true }),
+        },
+        {
+          ref: liveRef,
+          data: () => ({ krsNumber: "0000081135", published: true }),
+        },
+      ],
+    });
+
+    const result = await handler({} as any);
+
+    expect(revisionTarget()).toBe(liveRef);
+    expect(result).toMatchObject({ id: "b-live", company: "updated" });
+  });
+
+  it("keeps writing to a removed page rather than making the company anew", async () => {
+    // `CompaniesPayloads` re-sends every number the export holds, removed
+    // pages included. Treated as unknown, a removed company would come back
+    // the next night as a fresh, published page.
+    mockReadBody.mockResolvedValue({ krs: "0000081135", name: "THERMA" });
+    const removedRef = { id: "removed", parent: nodesParent };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          ref: removedRef,
+          data: () => ({
+            krsNumber: "0000081135",
+            name: "Therma",
+            deleted: true,
+            published: false,
+          }),
+        },
+      ],
+    });
+
+    await handler({} as any);
+
+    expect(mockDoc).not.toHaveBeenCalled();
+    expect(revisionTarget()).toBe(removedRef);
+    expect(
+      vi.mocked(createRevisionTransaction).mock.calls[0]?.[5],
+    ).toMatchObject({ approve: false, published: false });
+  });
+
+  it("follows a merged-away page to the one that replaced it", async () => {
+    mockReadBody.mockResolvedValue({ krs: "0000013874", name: "CRK" });
+    const survivorRef = { id: "survivor", parent: nodesParent };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          ref: { id: "tombstone", parent: nodesParent },
+          data: () => ({
+            krsNumber: "0000013874",
+            deleted: true,
+            merged_into: "survivor",
+          }),
+        },
+      ],
+    });
+    mockDoc.mockImplementation((id: string) => ({
+      id,
+      parent: nodesParent,
+      get: async () => ({
+        id,
+        ref: id === "survivor" ? survivorRef : { id, parent: nodesParent },
+        exists: id === "survivor",
+        data: () =>
+          id === "survivor" ? { name: "CRK", published: true } : undefined,
+      }),
+    }));
+
+    const result = await handler({} as any);
+
+    expect(revisionTarget()).toBe(survivorRef);
+    expect(result).toMatchObject({ id: "survivor", company: "updated" });
+  });
+});

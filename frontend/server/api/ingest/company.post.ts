@@ -12,6 +12,7 @@ import {
 } from "#shared/api";
 import { pageIsPublic, type EdgeType } from "#shared/model";
 import { edgeDocumentId, findEdge } from "~~/server/utils/edges";
+import { lookupCompanyByKrs } from "~~/server/utils/companies";
 
 /** The site's „Skarb Państwa" node.
  *
@@ -382,7 +383,11 @@ async function createEdge(
  * created. The caller needs it twice over - as the base the payload's fields
  * are layered onto, and as the state to carry through the `set` that writes the
  * revision - and this query has already read it, so returning it saves a second
- * read of every company in the pipeline. */
+ * read of every company in the pipeline.
+ *
+ * A removed or merged-away page is passed over for a live one with the
+ * number, and a merged-away one followed to the page that replaced it - see
+ * `lookupCompanyByKrs`. */
 async function findCompanyByKRS(
   db: FirebaseFirestore.Firestore,
   krs: string,
@@ -392,19 +397,10 @@ async function findCompanyByKRS(
   publish: boolean;
   stored?: Record<string, unknown>;
 }> {
-  // Check if company already exists
-  const existingQuery = await db
-    .collection("nodes")
-    .where("krsNumber", "==", krs)
-    .limit(1)
-    .get();
+  const doc = await lookupCompanyByKrs(db, krs);
 
-  if (!existingQuery.empty) {
-    const doc = existingQuery.docs[0];
-    if (!doc) {
-      throw new Error("Unexpected empty docs array");
-    }
-    const stored = doc.data();
+  if (doc) {
+    const stored = doc.data() ?? {};
     return { ref: doc.ref, publish: pageIsPublic(stored), stored };
   } else if (createNew) {
     return { ref: db.collection("nodes").doc(), publish: true };

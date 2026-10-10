@@ -22,6 +22,7 @@ import {
   publishEdgeInBatch,
 } from "~~/server/utils/edgePublication";
 import { resolveMergedNode } from "~~/server/utils/merge";
+import { lookupCompanyByKrs } from "~~/server/utils/companies";
 import { electionPositions, sortParties } from "~~/shared/misc";
 import type {
   Edge,
@@ -650,6 +651,11 @@ async function createElection(
  * Whether each company is live goes into `ctx.companyPublished` on the way:
  * the lookup reads the document anyway, so knowing it costs nothing more.
  *
+ * By `lookupCompanyByKrs`, the one the company ingest uses, so a job is filed
+ * under the page the register's own upload writes to: the live page rather
+ * than a removed one beside it, and through a merge to the page that replaced
+ * it.
+ *
  * @param db Connection to firestore DB
  * @param companies
  * @returns
@@ -661,7 +667,7 @@ async function lookupCompanyIDs(
   const failingLookup: string[] = [];
   const companyIDsUnfiltered: (string | undefined)[] = await Promise.all(
     employments.map(async (employment) => {
-      const node = await lookupNodeDoc(ctx, "krsNumber", employment.krs);
+      const node = await lookupCompanyByKrs(ctx.db, employment.krs);
       if (!node) {
         failingLookup.push(employment.krs);
         return undefined;

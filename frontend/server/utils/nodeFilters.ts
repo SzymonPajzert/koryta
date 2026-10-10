@@ -2,6 +2,7 @@
 // TODO remove this and fix the typing
 
 import { applyPartiesFilter, fetchNodes } from "~~/server/utils/fetch";
+import { isRetiredPage } from "~~/server/utils/companies";
 import { asArray } from "~~/shared/model";
 import { isInWojewodztwo, isWojewodztwoTeryt } from "~~/shared/teryt";
 
@@ -169,6 +170,10 @@ export async function buildStructuralFilterOps(
         .where("krsNumber", "in", chunk)
         .get();
       for (const doc of chunkPlaces.docs) {
+        // A removed page keeps its number and, unlike a merged one, its
+        // relations - so its people would answer for a company the site no
+        // longer shows. The page a merge kept carries the number itself.
+        if (isRetiredPage(doc.data())) continue;
         placeIds.add(doc.id);
       }
     }

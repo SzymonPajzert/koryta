@@ -60,9 +60,12 @@ const locationEdges = [
 function mockDb({
   regionByTeryt,
   placesByKrs = [],
+  removedPlaces = [],
 }: {
   regionByTeryt?: string;
   placesByKrs?: string[];
+  /** Pages among `placesByKrs` taken down by an approved removal. */
+  removedPlaces?: string[];
 } = {}) {
   mockCollection.mockImplementation((name: string) => {
     const clauses: { field: string; op: string; value: unknown }[] = [];
@@ -93,7 +96,10 @@ function mockDb({
       }
       return Promise.resolve({
         empty: placesByKrs.length === 0,
-        docs: placesByKrs.map((id) => ({ id })),
+        docs: placesByKrs.map((id) => ({
+          id,
+          data: () => (removedPlaces.includes(id) ? { deleted: true } : {}),
+        })),
       });
     };
     return query;
@@ -415,6 +421,27 @@ describe("buildStructuralFilterOps, company level filters", () => {
       "urzednik",
       "lekarz",
     ]);
+  });
+
+  it("leaves out a company page somebody removed", async () => {
+    // A removal keeps the document, its KRS number and its relations - unlike a
+    // merge, which moves them - so without this an old `krs` link would go on
+    // listing people under a company the site no longer shows.
+    mockDb({
+      placesByKrs: ["szpitalWarszawa", "szpitalUsuniety"],
+      removedPlaces: ["szpitalUsuniety"],
+    });
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { krs: ["0000000001"] },
+      "approved",
+    );
+
+    const nodes = [
+      worker("lekarz", ["szpitalWarszawa"]),
+      worker("pielegniarka", ["szpitalUsuniety"]),
+    ];
+    expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual(["lekarz"]);
   });
 
   it("intersects KRS with category as well", async () => {

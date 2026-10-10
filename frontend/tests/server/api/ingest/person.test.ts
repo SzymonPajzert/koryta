@@ -2465,6 +2465,31 @@ describe("api/ingest/person, jobs from the register entry a published page links
     });
   });
 
+  it("files a job under the live company page, not a removed one the query finds first", async () => {
+    // A removal keeps the page's `krsNumber`, and the lookup used to take
+    // whichever page with that number came back first - so the seat would be
+    // drawn to a company nobody can open, and missing from the one they can.
+    store.nodes = {
+      "kghm-removed": {
+        type: "place",
+        name: "KGHM (duplikat)",
+        krsNumber: "0000023302",
+        deleted: true,
+        delete_reason: "duplikat",
+      },
+      ...store.nodes,
+    };
+    payload();
+
+    await handler({} as any);
+
+    expect(newSeat()).toMatchObject({ approve: true, published: true });
+    const targets = vi
+      .mocked(createRevisionTransaction)
+      .mock.calls.map(([, , , ref]) => (ref as unknown as { id: string }).id);
+    expect(targets.some((id) => id.includes("kghm-removed"))).toBe(false);
+  });
+
   it("trusts a link adopted in the same request when the page already shows one of the entry's jobs", async () => {
     // Żelewski's page had no register link before the 10-06 run adopted one by
     // name. The job his page already showed is what says it is him.
