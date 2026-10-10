@@ -45,6 +45,7 @@ from scrapers.article.pipelines.pipeline_utils import (
     llm_model,
 )
 from scrapers.koryta.download import KorytaPeople, _missing
+from scrapers.krs.list import WITHOUT_PESEL
 from scrapers.stores import (
     LLM,
     VERSIONED_DIR,
@@ -451,6 +452,12 @@ def _person_krs_map() -> dict[str, set[str]]:
     Loads ``person_krs.jsonl`` (the rejestr.io person -> KRS employment mapping)
     once, keyed by the numeric rejestr.io person id so a koryta ``rejestrIo``
     URL can be resolved to the company numbers its owner works at.
+
+    The osoby only. A ``rejestrIo`` URL, ``/osoby/<n>``, is the osoba numbered
+    n, and rejestr.io numbers its entries without a PESEL apart
+    (`scrapers.krs.list.PERSON_TYPES`): read with them, 18 pages on 2026-10-10
+    took a stranger's company each - Rafał Duchniewski's link, 2830475, also
+    Boerre Longum's seat at 0000077982.
     """
     mapping: dict[str, set[str]] = {}
     path = Path(VERSIONED_DIR) / "person_krs" / "person_krs.jsonl"
@@ -466,6 +473,8 @@ def _person_krs_map() -> dict[str, set[str]]:
                     continue
                 pid = row.get("id")
                 krs = row.get("employed_krs")
+                if row.get("rejestrio_type") == WITHOUT_PESEL:
+                    continue
                 if pid is not None and krs:
                     mapping.setdefault(str(pid), set()).add(str(krs))
     except FileNotFoundError:
