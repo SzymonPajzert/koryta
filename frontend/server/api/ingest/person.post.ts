@@ -44,6 +44,7 @@ import {
 import {
   personRequestSchema,
   type DroppedChange,
+  type DroppedLink,
   type EntityResult,
   type ElectionRequest,
   type EmploymentRequest,
@@ -114,6 +115,14 @@ export default defineEventHandler(async (event) => {
       // listing, which is the one thing a scraper re-run must never do.
       const stored = personDoc?.data() ?? {};
       const published = pageIsPublic(stored);
+      const refusedLink = droppedLink(personId, stored, body);
+      if (refusedLink) {
+        ctx.dropped.push(refusedLink);
+        console.warn(
+          `[ingest] ${body.name}: page ${personId} links ${refusedLink.stored}; ` +
+            `kept over the payload's ${refusedLink.sent}`,
+        );
+      }
       const revision = updatedPerson(stored, body);
       if (revision) {
         const options = {
@@ -304,7 +313,11 @@ function updatedPerson(
 
   if (body.content) learned.content = body.content;
   if (body.wikipedia) learned.wikipedia = body.wikipedia;
-  if (body.rejestrIo) learned.rejestrIo = body.rejestrIo;
+  // Learned where the page links no entry, or links this one spelled another
+  // way - never over another entry's (`droppedLink`).
+  if (body.rejestrIo && !linksAnotherEntry(stored.rejestrIo, body.rejestrIo)) {
+    learned.rejestrIo = body.rejestrIo;
+  }
   // Filled in, never rewritten. A date of birth does not change, so a stored
   // one is either right or is somebody's correction of what the register says -
   // and unlike `wikipedia` there is no version of this that gets better on the
@@ -329,6 +342,54 @@ function updatedPerson(
     ([key, value]) => JSON.stringify(value) !== JSON.stringify(stored[key]),
   );
   return changed ? { ...stored, ...learned } : undefined;
+}
+
+/** The payload's rejestr.io link, where the page links another entry and so
+ * keeps its own.
+ *
+ * Only a `korytaId` brings a payload here: every other way `lookupPersonDoc`
+ * finds a page passes over one that links another entry. `people_merged`
+ * sends the id of the page it matched a row to, and a row holding two entries
+ * is filed under one of them (`one_register_entry`), so the page of one
+ * person was reached under the other's link. Tadeusz Rozpara's is the case
+ * this was asked about. His page - president of Bełchatów in 1994-2002 -
+ * links https://rejestr.io/osoby/1220490, whose seats are in Bełchatów's
+ * companies and whose birth date, 1953-12-01, the page stores too. The 10-06
+ * `people_merged` grouped him by name and a birth year within one with a
+ * namesake born 1952-04-25, entry 670747, and the payload went out under the
+ * lower number. Written as it came, his live page would have been linked to a
+ * stranger, and the revision approved because the page is live.
+ *
+ * Of the 9,539 payloads of that run's plan, 12 reached a page under another
+ * entry's link this way, every one of them such a row; 20 more named the
+ * page's own entry spelled another way (`registerEntry`), which is a
+ * normalisation and is written.
+ *
+ * Every page that links an entry, not only the live ones. The revision lands
+ * on the node whatever its review state - a draft's waits for a reviewer, but
+ * the document is rewritten with it - and the node's link is what the next
+ * payload of the page's own entry is looked up by, so a draft relinked to a
+ * stranger gives its own person a second page on the next run. One register
+ * entry is one person at every stage; a page linked to the wrong one is a
+ * reviewer's to change, through the edit form.
+ *
+ * The rest of the payload is written as before. Its jobs are not taken as the
+ * page's entry's (`verifiedEmployments` refuses a page linking another), so
+ * they wait for a reviewer.
+ */
+function droppedLink(
+  nodeId: string,
+  stored: Record<string, unknown>,
+  body: PersonRequest,
+): DroppedLink | undefined {
+  if (!linksAnotherEntry(stored.rejestrIo, body.rejestrIo)) return undefined;
+  return {
+    nodeId,
+    field: "rejestrIo",
+    stored: String(stored.rejestrIo),
+    sent: String(body.rejestrIo),
+    reason: "another-entry",
+  };
 }
 
 function createPerson(body: Partial<Person>): Person {
@@ -393,8 +454,9 @@ class Context {
    * a reviewer" is what tells a re-send from new work. */
   readonly proposals: Partial<Record<ProposalOutcome, number>> = {};
 
-  /** What the payload said about a stored job that this request did not
-   * write, and why - see `droppedEnd`. */
+  /** What the payload said that this request did not write, and why: about
+   * a stored job (`droppedEnd`), or the person's register link
+   * (`droppedLink`). */
   readonly dropped: DroppedChange[] = [];
 
   constructor(
@@ -450,7 +512,9 @@ async function createEmployment(
   // The edge lookup knows which stored job it kept; the row knows the company
   // it named, which is what the uploader's log can be read by.
   for (const change of ctx.dropped) {
-    if (change.edgeId === edgeId) change.krs = employment.krs;
+    if (change.field === "end_date" && change.edgeId === edgeId) {
+      change.krs = employment.krs;
+    }
   }
 
   return {
@@ -858,6 +922,8 @@ async function lookupNodeDoc(
  *    guess - and it is the one identifier that works for the 868 people with no
  *    register entry at all. Followed through `merged_into`, because a page
  *    merged away since the export the pipeline read is not a page to write to.
+ *    Nor does it relink the page: one linking another entry keeps its link
+ *    (`droppedLink`).
  * 2. The register entry. Exact, and enough: two spellings of one entry are one
  *    person whatever they are called.
  * 3. Failing that, with a birth date, the name and the date together

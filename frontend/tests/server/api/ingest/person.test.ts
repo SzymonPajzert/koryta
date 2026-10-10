@@ -2255,6 +2255,125 @@ describe("api/ingest/person, one register entry is one human", () => {
 
     expect(result.personId).toBe("pawel");
   });
+
+  describe("a page reached by its id under another entry's link", () => {
+    // Tadeusz Rozpara's, as the 10-06 plan had it: `people_merged` grouped him
+    // with a namesake born a year earlier, and the payload for his page went
+    // out under the namesake's entry.
+    const OWN = "https://rejestr.io/osoby/1220490";
+    const NAMESAKE = "https://rejestr.io/osoby/670747";
+
+    beforeEach(() => {
+      nodes.rozpara = {
+        type: "person",
+        name: "Tadeusz Rozpara",
+        rejestrIo: OWN,
+        parties: ["SLD"],
+        published: true,
+      };
+    });
+
+    /** The data of the revision written to the person, if one was. */
+    function writtenPerson() {
+      const call = vi.mocked(createRevisionTransaction).mock.calls[0];
+      return call?.[4] as Record<string, unknown> | undefined;
+    }
+
+    it("keeps the page's link and writes the rest of the payload", async () => {
+      payload({
+        name: "Tadeusz Rozpara",
+        korytaId: "rozpara",
+        rejestrIo: NAMESAKE,
+        birthDate: "1953-12-01",
+      });
+
+      const result = await handler({} as any);
+
+      expect(result.personId).toBe("rozpara");
+      expect(result.person).toBe("updated");
+      expect(writtenPerson()).toMatchObject({
+        rejestrIo: OWN,
+        birthDate: "1953-12-01",
+      });
+      expect(result.droppedChanges).toEqual([
+        {
+          nodeId: "rozpara",
+          field: "rejestrIo",
+          stored: OWN,
+          sent: NAMESAKE,
+          reason: "another-entry",
+        },
+      ]);
+    });
+
+    it("writes nothing when the link is all the payload would change, and says so", async () => {
+      payload({
+        name: "Tadeusz Rozpara",
+        korytaId: "rozpara",
+        rejestrIo: NAMESAKE,
+      });
+
+      const result = await handler({} as any);
+
+      expect(result.person).toBe("unchanged");
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+      expect(result.droppedChanges).toEqual([
+        expect.objectContaining({
+          field: "rejestrIo",
+          reason: "another-entry",
+        }),
+      ]);
+    });
+
+    it("keeps a draft's link as well", async () => {
+      // The revision would wait for a reviewer, but the node is rewritten with
+      // it, and the link is what the page's own entry finds it by next run.
+      nodes.rozpara!.published = false;
+      payload({
+        name: "Tadeusz Rozpara",
+        korytaId: "rozpara",
+        rejestrIo: NAMESAKE,
+        birthDate: "1953-12-01",
+      });
+
+      const result = await handler({} as any);
+
+      expect(writtenPerson()).toMatchObject({ rejestrIo: OWN });
+      expect(result.droppedChanges).toHaveLength(1);
+    });
+
+    it.each([
+      ["the person's name after the number", `${OWN}/tadeusz-rozpara`],
+      ["a trailing slash", `${OWN}/`],
+    ])(
+      "writes the bare link over the same entry spelled with %s",
+      async (_, spelled) => {
+        // Eight published pages in the 10-06 plan: the same entry, and the
+        // write only normalises it.
+        nodes.rozpara!.rejestrIo = spelled;
+        payload({
+          name: "Tadeusz Rozpara",
+          korytaId: "rozpara",
+          rejestrIo: OWN,
+        });
+
+        const result = await handler({} as any);
+
+        expect(writtenPerson()).toMatchObject({ rejestrIo: OWN });
+        expect(result).not.toHaveProperty("droppedChanges");
+      },
+    );
+
+    it("still adopts a link onto a page that has none", async () => {
+      delete nodes.rozpara!.rejestrIo;
+      payload({ name: "Tadeusz Rozpara", korytaId: "rozpara", rejestrIo: OWN });
+
+      const result = await handler({} as any);
+
+      expect(writtenPerson()).toMatchObject({ rejestrIo: OWN });
+      expect(result).not.toHaveProperty("droppedChanges");
+    });
+  });
 });
 
 describe("api/ingest/person, somebody only an odpis names: the name and the birth date", () => {

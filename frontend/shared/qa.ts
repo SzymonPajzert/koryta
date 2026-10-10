@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "import-nie-podmienia-wpisu-rejestru",
+    title: "Import nie podmienia wpisu rejestr.io na stronie osoby",
+    description:
+      "Import mógł zamienić link do rejestr.io na stronie osoby na wpis jej imiennika - tak wyglądały dane Tadeusza Rozpary z 6.10. Teraz link strony zostaje, a import zgłasza tę zmianę w przebiegu jako niezapisaną; ten sam wpis zapisany inaczej (z nazwiskiem po numerze) nadal jest poprawiany.",
+    steps: [
+      "Na stronie Tadeusza Rozpary kliknij „Wyślij dane tej osoby”, a gdy wysyłka się skończy, odśwież stronę - link do rejestr.io ma dalej prowadzić do wpisu 1220490.",
+    ],
+    link: "/entity/person/msll649JpWZMJ7K1yR4f",
+    area: "admin",
+  },
+  {
     id: "dwa-miejsca-w-jednych-wyborach",
     title: "Ostrzeżenie przed kandydaturami w dwóch miejscach naraz",
     description:
