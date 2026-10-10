@@ -103,7 +103,8 @@ class PersonResult:
     #: Candidacies the site took the person without.
     unplaced: int = 0
     #: What the site kept its own value over, as the ingest reports it in
-    #: `droppedChanges`: a job end it holds otherwise, or one on a removed job.
+    #: `droppedChanges`: a job end it holds otherwise, one on a removed job, or
+    #: a rejestr.io link naming another entry than the page's.
     dropped: list[dict] = field(default_factory=list)
     #: For a failed one: "<status> <answer>", or the exception.
     error: str = ""
@@ -182,6 +183,15 @@ def flagged(body: dict, rows: str, flag: str) -> int:
 
 def dropped_line(change: dict) -> str:
     """One change the site did not write, as the run's log prints it."""
+    if change.get("reason") == "another-entry":
+        # The person's own link, not a job's: the page links one rejestr.io
+        # entry and the payload named another, which the site never takes for
+        # the same human.
+        return (
+            f"{change.get('field')}: site {change.get('stored') or '-'}, payload "
+            f"{change.get('sent') or '-'} (another register entry; the page's is "
+            f"kept; node {change.get('nodeId')})"
+        )
     why = (
         "the job is removed"
         if change.get("reason") == "removed"

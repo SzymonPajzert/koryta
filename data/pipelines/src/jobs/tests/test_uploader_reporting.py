@@ -320,6 +320,33 @@ def test_a_change_the_site_did_not_write_is_counted_and_printed(runs, capsys):
     ) in err
 
 
+def test_a_link_the_site_kept_over_another_entry_is_counted_and_printed(runs, capsys):
+    """The person's own link rather than a job's, so the node, not an edge.
+
+    Tadeusz Rozpara's page links one entry, and the 10-06 plan's payload for it
+    named a namesake's.
+    """
+    refused = {
+        "nodeId": "msll649JpWZMJ7K1yR4f",
+        "field": "rejestrIo",
+        "stored": "https://rejestr.io/osoby/1220490",
+        "sent": "https://rejestr.io/osoby/670747",
+        "reason": "another-entry",
+    }
+    session = Session(person=[person("unchanged", dropped=[refused])])
+
+    submit("person", people("Tadeusz Rozpara"), session)
+
+    [run] = runs
+    assert run.ending()["counters"]["dropped_changes"] == 1
+    assert run.ending()["state"] == "succeeded"
+    assert (
+        "Tadeusz Rozpara: rejestrIo: site https://rejestr.io/osoby/1220490, "
+        "payload https://rejestr.io/osoby/670747 (another register entry; the "
+        "page's is kept; node msll649JpWZMJ7K1yR4f)"
+    ) in capsys.readouterr().err
+
+
 def test_a_site_from_before_the_field_reports_no_dropped_change(runs):
     session = Session(person=[Response(200, {"personId": "p1", "person": "updated"})])
 
