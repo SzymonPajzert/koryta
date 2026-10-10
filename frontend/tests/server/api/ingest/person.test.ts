@@ -2378,4 +2378,145 @@ describe("api/ingest/person, jobs from the register entry a published page links
 
     expect(batchUpdate).not.toHaveBeenCalled();
   });
+
+  describe("a stored job the register has closed since", () => {
+    const seat = {
+      type: "employed",
+      name: "Rada Nadzorcza",
+      source: "zelewski",
+      target: "kghm",
+      start_date: "2026-02-09",
+    };
+
+    /** The payload with both jobs, the KGHM seat ended on `end`. */
+    function closedSeat(end: string | undefined = "2026-08-25") {
+      payload({
+        companies: [
+          {
+            krs: "0000004441",
+            role: "Zarząd",
+            start: "2007-05-10",
+            end: "2024-10-04",
+          },
+          {
+            krs: "0000023302",
+            role: "Rada Nadzorcza",
+            start: "2026-02-09",
+            end,
+          },
+        ],
+      });
+    }
+
+    /** Every revision written onto a stored edge, by its id. */
+    function writtenOnto(edgeId: string) {
+      return vi
+        .mocked(createRevisionTransaction)
+        .mock.calls.filter(
+          ([, , , ref]) => (ref as unknown as { id: string }).id === edgeId,
+        );
+    }
+
+    it("writes the end onto a draft's job and leaves it waiting", async () => {
+      // Anna Konieczyńska's KARR seat, 10-10: stored open on 05-28, closed in
+      // the register on 08-25, and restated with the end by a request the
+      // ingest answered without writing it. Her page is a draft.
+      store.nodes!.zelewski!.published = false;
+      waitingSeat();
+      closedSeat();
+
+      await handler({} as any);
+
+      expect(writtenOnto("seat")).toEqual([
+        [
+          expect.anything(),
+          expect.anything(),
+          expect.anything(),
+          expect.objectContaining({ id: "seat" }),
+          { ...seat, end_date: "2026-08-25" },
+          { automatic: true, approve: false, stored: store.edges!.seat },
+        ],
+      ]);
+      // On the stored spell, not beside it.
+      expect(newSeat()).toBeUndefined();
+      expect(batchUpdate).not.toHaveBeenCalled();
+    });
+
+    it("approves the end of a live job with it", async () => {
+      // The site shows a live job as stored, so what it shows has to be what
+      // the approved revision says.
+      store.edges!.seat = {
+        ...seat,
+        published: true,
+        revision_id: "revisions/seat-approved",
+      };
+      closedSeat();
+
+      await handler({} as any);
+
+      const [call] = writtenOnto("seat");
+      expect(call?.[4]).toEqual({ ...seat, end_date: "2026-08-25" });
+      expect(call?.[5]).toMatchObject({ approve: true });
+    });
+
+    it("puts a verified person's waiting job live with its end", async () => {
+      // `approveWaitingEdge` publishes the job as it stood, and the end goes
+      // on top in the same batch - after it, so the end is what stays live.
+      waitingSeat();
+      closedSeat();
+
+      await handler({} as any);
+
+      expect(batchUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "seat", parent: { id: "edges" } }),
+        expect.objectContaining({ published: true }),
+      );
+      const [call] = writtenOnto("seat");
+      expect(call?.[4]).toEqual({ ...seat, end_date: "2026-08-25" });
+      expect(call?.[5]).toMatchObject({
+        approve: true,
+        stored: expect.objectContaining({ published: true }),
+      });
+      expect(
+        vi.mocked(createRevisionTransaction).mock.invocationCallOrder.at(-1),
+      ).toBeGreaterThan(Math.max(...batchUpdate.mock.invocationCallOrder));
+    });
+
+    it("leaves an end already stored as it is", async () => {
+      // Somebody's correction, or an earlier run's reading of the register.
+      store.edges!.seat = { ...seat, end_date: "2026-07-01", published: true };
+      closedSeat();
+
+      await handler({} as any);
+
+      expect(writtenOnto("seat")).toEqual([]);
+    });
+
+    it("does not reopen a job the payload sends without an end", async () => {
+      store.edges!.seat = { ...seat, end_date: "2026-07-01", published: true };
+      closedSeat(undefined);
+
+      await handler({} as any);
+
+      expect(writtenOnto("seat")).toEqual([]);
+    });
+
+    it("leaves a removed job removed", async () => {
+      store.edges!.seat = { ...seat, deleted: true };
+      closedSeat();
+
+      await handler({} as any);
+
+      expect(writtenOnto("seat")).toEqual([]);
+    });
+
+    it("writes nothing onto a job whose end it already holds", async () => {
+      // The ARP board seat in every payload above: stored with its end.
+      closedSeat();
+
+      await handler({} as any);
+
+      expect(writtenOnto("arp-board")).toEqual([]);
+    });
+  });
 });

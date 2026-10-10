@@ -88,6 +88,11 @@ export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
   // differ in `start_date`, which is what "employed there again after a break"
   // means.
   //
+  // Learned later is also why it is an annotation: a spell stored while it was
+  // held learns its end from the first payload that has one. Without that a
+  // job stayed current on the site for good once stored, whatever the register
+  // said since - see `fillAnnotations` in the person ingest.
+  //
   // Not enrichable: a missing `start_date` here means "nobody knows when this
   // began", not "the pipeline had it and dropped it". Letting a dated spell
   // absorb an undated one would merge two facts that a reviewer may well have
@@ -97,6 +102,7 @@ export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
     discriminators: ["name", "start_date"],
     identicalMeansSame: true,
     enrichable: false,
+    annotations: ["end_date"],
   },
 
   // A candidacy, and the one type where identical fields prove nothing. Much of
@@ -445,6 +451,8 @@ export function addsOnlyAnnotations(
  * `enrichable` carries the stored document, not just its id: the caller has to
  * fill its blanks to build the revision, and re-reading it would be a second
  * round trip against a collection this request has pending writes for.
+ * `documents` has every sibling's, for the same reason: an exact match of a
+ * type that is not enrichable is in `same`, and can still learn an annotation.
  *
  * `ids` is every sibling, which the caller needs to avoid creating a new edge
  * on top of one of them - see `edgeDocumentId`.
@@ -456,6 +464,7 @@ export async function findEdgeMatches(
   same: string[];
   enrichable: { id: string; stored: Record<string, unknown> }[];
   ids: Set<string>;
+  documents: Map<string, Record<string, unknown>>;
 }> {
   const snapshot = await db
     .collection("edges")
@@ -469,10 +478,12 @@ export async function findEdgeMatches(
   const same: string[] = [];
   const enrichable: { id: string; stored: Record<string, unknown> }[] = [];
   const ids = new Set<string>();
+  const documents = new Map<string, Record<string, unknown>>();
 
   for (const doc of snapshot.docs) {
     ids.add(doc.id);
     const stored = doc.data();
+    documents.set(doc.id, stored);
     if (edgeIdentity(stored as EdgeLike) === identity) {
       // The same episode, by every field that says which episode it is. It can
       // still be missing an annotation the payload carries - whether the
@@ -507,7 +518,7 @@ export async function findEdgeMatches(
   // committee is arbitrary, but it must not be arbitrary *differently* twice.
   same.sort();
   enrichable.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return { same, enrichable, ids };
+  return { same, enrichable, ids, documents };
 }
 
 /** Every stored edge asserting the same thing as `edge`, by id.

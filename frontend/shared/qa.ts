@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "import-zapisuje-koniec-zatrudnienia",
+    title: "Import zapisuje koniec zatrudnienia",
+    description:
+      "Zatrudnienie zapisane, gdy ktoś jeszcze pełnił funkcję, zostawało na stronie jako bieżące, nawet gdy rejestr podawał już datę odejścia. Teraz import dopisuje tę datę do zapisanego zatrudnienia, a datę wpisaną wcześniej zostawia bez zmian.",
+    steps: [
+      "Na stronie Anny Ewy Konieczyńskiej kliknij „Wyślij dane tej osoby”, a gdy wysyłka się skończy, odśwież stronę - zarząd Karkonoskiej Agencji Rozwoju Regionalnego ma mieć koniec 25.08.2026.",
+    ],
+    link: "/entity/person/sVbstV6fWxhYrZawvh7M",
+    area: "admin",
+  },
+  {
     id: "admin-procesy-rejestr-nowe-spolki",
     title: "Procesy: nowo zarejestrowane spółki czytane co noc",
     description:

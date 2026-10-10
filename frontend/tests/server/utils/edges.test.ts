@@ -264,9 +264,41 @@ describe("the result of a candidacy", () => {
     // Nothing to add is not "only annotations to add".
     expect(addsOnlyAnnotations(won, won)).toBe(false);
     // A type with no annotations never takes the shortcut.
+    expect(addsOnlyAnnotations(owns, { ...owns, end_date: "2020-01-01" })).toBe(
+      false,
+    );
+  });
+});
+
+describe("the end of a spell of employment", () => {
+  const ended: EdgeLike = { ...spell, end_date: "2026-08-25" };
+
+  it("is learned onto the stored spell rather than making a second one", () => {
+    // A job stored while it was held stays one job once the register closes
+    // it, and the end is worth writing.
+    expect(edgeIdentity(ended)).toBe(edgeIdentity(spell));
+    expect(edgeRelation(spell, ended)).toBe("enriches");
+    expect(addsOnlyAnnotations(spell, ended)).toBe(true);
+  });
+
+  it("never rewrites an end already stored", () => {
+    // Somebody's correction, or an earlier run's reading, stands.
+    expect(edgeRelation(ended, { ...spell, end_date: "2026-09-01" })).toBe(
+      "conflict",
+    );
     expect(
-      addsOnlyAnnotations(spell, { ...spell, end_date: "2020-01-01" }),
+      addsOnlyAnnotations(ended, { ...spell, end_date: "2026-09-01" }),
     ).toBe(false);
+  });
+
+  it("is not reopened by a payload that has no end", () => {
+    expect(edgeRelation(ended, spell)).toBe("same");
+    expect(addsOnlyAnnotations(ended, spell)).toBe(false);
+  });
+
+  it("reads the edit form's blank end as no end", () => {
+    // /api/edges/create writes "" for a box left empty.
+    expect(addsOnlyAnnotations({ ...spell, end_date: "" }, ended)).toBe(true);
   });
 });
 
@@ -388,5 +420,18 @@ describe("findEdgeMatches", () => {
       withCommittee,
     );
     expect(ids).toEqual(new Set(["stored-0", "stored-1"]));
+  });
+
+  it("matches a job learning its end exactly, and hands back its document", async () => {
+    // Still `same`, not `enrichable`: which stored spell a row takes is decided
+    // by the occurrence count, as for any exact match, and the caller fills the
+    // end in on the one it takes.
+    const { same, enrichable, documents } = await findEdgeMatches(
+      dbWith([spell]),
+      { ...spell, end_date: "2026-08-25" },
+    );
+    expect(same).toEqual(["stored-0"]);
+    expect(enrichable).toEqual([]);
+    expect(documents.get("stored-0")).toEqual(spell);
   });
 });
