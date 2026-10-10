@@ -249,6 +249,24 @@ def test_groups_are_one_number_only_when_they_make_ten_digits(raw, expected):
     assert clean_krs(raw) == expected
 
 
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # Made up: a hyphenated NIP and its label, then the KRS number.
+        ("NIP 731-11-59-686, KRS 0000123456", "0000123456"),
+        ("NIP: 526-025-07-13 KRS 0000045705", "0000045705"),
+        # Real, from mp's file of 2026-08-06: still no KRS number in them.
+        ("06-10-000065", None),
+        ("556188-7562", None),
+        ("EI nr 77-51367n dnia 06.08.2002", None),
+    ],
+)
+def test_a_label_ends_with_the_hyphenated_number_it_gives(raw, expected):
+    """A hyphenated number is no KRS number, and its label is not the next
+    number's."""
+    assert clean_krs(raw) == expected
+
+
 def test_a_town_in_a_mixed_gmina_is_the_gmina():
     """Grodkow's own code is the town half; its companies are the gmina's."""
     assert normalize_teryt("1601034") == "1601033"
