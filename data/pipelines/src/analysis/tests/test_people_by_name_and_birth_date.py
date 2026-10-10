@@ -7,6 +7,7 @@ The fingerprints are made up; none reaches a payload.
 """
 
 from dataclasses import asdict, fields, replace
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -468,3 +469,55 @@ def test_two_entries_of_one_pesel_go_out_as_two_people_named_for_a_reviewer(caps
     assert "1 PESELs are two rejestr.io entries or more" in out
     assert out.rstrip().endswith(": 126307, 715231")
     assert F not in out and G not in out
+
+
+# ------------------------------------------------------- a run with no scope
+def unscoped(rows: list[pd.Series], site: SiteSnapshot | None, prints=None):
+    """What `koryta PeoplePayloads` with no scope would send, by name."""
+    pipeline = Pipeline.create(PeoplePayloads)
+    people = pd.DataFrame(rows)
+    pipeline.people = SimpleNamespace(read_or_process=lambda ctx: people)  # type: ignore[assignment]
+    pipeline._prints = prints or {}
+    if site is None:
+
+        def unread(ctx):
+            raise AssertionError("read the export")
+
+        pipeline.site_snapshot = unread  # type: ignore[method-assign]
+    else:
+        pipeline._snapshot = site
+    return pipeline.unscoped_payloads(None, people)  # type: ignore[arg-type]
+
+
+def test_a_run_with_no_scope_guards_the_people_only_an_odpis_names(capsys):
+    """submit_people.sh pipes such a run into the uploader: 4 of the 7,001
+    people only an odpis names went out unguarded on the 2026-10-10 outputs
+    where a scoped run holds them, besides the 202 the ingest would refuse."""
+    site = snapshot(
+        page("undated", "Ewa Kowalska"),
+        page("linked", "Jan Zieliński", birthDate=BORN, rejestrIo=f"{REGISTER}5"),
+    )
+    rows = [
+        # Born the same day under agreeing names: one page between them.
+        row(full_name=["Anna Maria Nowak"]),
+        row(full_name=["Anna Nowak"], pesel_fingerprint=[G]),
+        # Held by the ingest, behind a page that stores no birth date.
+        row(full_name=["Ewa Kowalska"], pesel_fingerprint=["b" * 32]),
+        # On the page of an entry the odpisy give another PESEL.
+        row(full_name=["Jan Zieliński"], pesel_fingerprint=["c" * 32]),
+        row(full_name=["Adam Wiśniewski"], pesel_fingerprint=["d" * 32]),
+        row(full_name=["Piotr Nowak"], rejestrio_id=["7"], pesel_fingerprint=[]),
+    ]
+
+    sent = unscoped(rows, site, prints={"5": frozenset({"e" * 32})})
+
+    assert [one.name for one in sent] == ["Adam Wiśniewski", "Piotr Nowak"]
+    out = capsys.readouterr().out
+    assert "1 of 4 people only an odpis names go by name and birth date" in out
+    assert "2 left out: one name and birth date with another payload" in out
+
+
+def test_a_run_of_linked_people_alone_reads_no_export():
+    rows = [row(full_name=["Piotr Nowak"], rejestrio_id=["7"], pesel_fingerprint=[])]
+
+    assert [one.rejestrIo for one in unscoped(rows, None)] == [f"{REGISTER}7"]

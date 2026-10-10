@@ -118,9 +118,7 @@ class PeoplePayloads(Pipeline[Person]):
         if args.on_koryta or args.not_on_koryta or args.only_changed:
             result = self.payloads_of(ctx, people_df, self.site_snapshot(ctx))
         else:
-            result = [
-                self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
-            ]
+            result = self.unscoped_payloads(ctx, people_df)
         if self.args.on_koryta:
             result = self.only_on_koryta(ctx, result)
         if self.args.not_on_koryta:
@@ -153,6 +151,34 @@ class PeoplePayloads(Pipeline[Person]):
         rejestr.io entry, or by their name and full birth date
         (`identifiable`)."""
         return identifiable(self.people.read_or_process(ctx))[0]
+
+    def unscoped_payloads(self, ctx: Context, people_df: pd.DataFrame) -> list[Person]:
+        """Each row's payload, for a run given no scope: everybody selected,
+        new and stored alike - with the people only an odpis names guarded as
+        a scoped run guards them (`payloads_of`, `safe_by_name_and_date`).
+
+        Such a run reads no export, and is what `submit_people.sh` pipes into
+        the uploader. That was safe while every payload carried a rejestr.io
+        entry, which nobody else's page can be found by. Somebody only an
+        odpis names goes by their name and birth date instead, and only the
+        export says where those land: on a namesake's page linking an entry
+        the odpisy give another PESEL, on a page another payload of the run
+        reaches too, or on the page the run is about to make for a namesake
+        born that day. A plain --all over the 2026-10-10 outputs sent all
+        7,001 of them; 206 are left out now - 4 for a namesake born the same
+        day, and 202 the ingest would refuse anyway.
+
+        So the export is read where the run selects anybody without an entry,
+        and not otherwise: a run of linked people alone is as it was.
+        """
+        if registered(people_df).all():
+            return [
+                self.map_person_payload(ctx, row) for _, row in people_df.iterrows()
+            ]
+        snapshot = self.site_snapshot(ctx)
+        return safe_by_name_and_date(
+            self.payloads_of(ctx, people_df, snapshot), snapshot
+        )
 
     def payloads_of(
         self, ctx: Context, people_df: pd.DataFrame, snapshot: SiteSnapshot
@@ -600,18 +626,16 @@ def identifiable(people_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     """
     if people_df.empty or "rejestrio_id" not in people_df:
         return people_df, 0
-    registered = people_df["rejestrio_id"].map(
-        lambda ids: any(str(value) for value in as_sequence(ids))
-    )
+    linked = registered(people_df)
     dated = (
         people_df["birth_date"].map(lambda value: _iso_date(value) is not None)
         if "birth_date" in people_df
         else pd.Series(False, index=people_df.index)
     )
-    kept = registered | dated
+    kept = linked | dated
     left_out = int((~kept).sum())
     print(
-        f"{int((kept & ~registered).sum())} people only an odpis names go by "
+        f"{int((kept & ~linked).sum())} people only an odpis names go by "
         f"their name and birth date"
         + (
             f"; leaving out {left_out} with neither a rejestr.io entry nor a birth date"
@@ -620,6 +644,18 @@ def identifiable(people_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         )
     )
     return people_df[kept], left_out
+
+
+def registered(people_df: pd.DataFrame) -> pd.Series:
+    """Which rows carry a rejestr.io entry: the ones `map_person_payload`
+    gives a `rejestrIo` (`one_register_entry`)."""
+    if "rejestrio_id" not in people_df:
+        return pd.Series(False, index=people_df.index, dtype=bool)
+    return (
+        people_df["rejestrio_id"]
+        .map(lambda ids: any(str(value) for value in as_sequence(ids)))
+        .astype(bool)
+    )
 
 
 def pesel_prints(row: pd.Series) -> frozenset[str]:
@@ -864,6 +900,48 @@ def missing_from_koryta(payloads: list[Person], snapshot: SiteSnapshot) -> list[
         + "".join(f"; {count} {how}" for how, count in sorted(held.items()))
     )
     return result
+
+
+def safe_by_name_and_date(
+    payloads: list[Person], snapshot: SiteSnapshot
+) -> list[Person]:
+    """The payloads, less those of the people only an odpis names that
+    `matching_one_page` and `missing_from_koryta` would both leave out.
+
+    For a run given no scope, which sends the stored and the new together.
+    Somebody without a rejestr.io entry goes by their name and birth date, so
+    they wait where the ingest would hold them, where another payload reaches
+    the page they would land on, or where the page is to be made in the same
+    run for a namesake born that day (`born_namesakes`). A payload with an
+    entry goes as it always has. Counted, by why.
+    """
+    resolved = [snapshot.resolve(asdict(person)) for person in payloads]
+    reaching = collections.Counter(
+        str(found.page.get("id")) for found in resolved if found.page is not None
+    )
+    colliding = born_namesakes(
+        [person for person in payloads if person.birthDate is not None]
+    )
+    kept: list[Person] = []
+    left: typing.Counter[str] = collections.Counter()
+    for person, found in zip(payloads, resolved):
+        if register_entry(person.rejestrIo) is not None:
+            kept.append(person)
+        elif found.held:
+            left[found.how] += 1
+        elif found.page is None and id(person) in colliding:
+            left["one name and birth date with another payload"] += 1
+        elif found.page is not None and reaching[str(found.page.get("id"))] > 1:
+            left["a page another payload reaches"] += 1
+        else:
+            kept.append(person)
+    unlinked = sum(register_entry(person.rejestrIo) is None for person in payloads)
+    print(
+        f"{unlinked - sum(left.values())} of {unlinked} people only an odpis "
+        f"names go by name and birth date"
+        + "".join(f"; {count} left out: {why}" for why, count in sorted(left.items()))
+    )
+    return kept
 
 
 def born_namesakes(payloads: list[Person]) -> set[int]:
