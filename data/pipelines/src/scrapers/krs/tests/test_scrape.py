@@ -6,6 +6,7 @@ import pytest
 from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.krs import scrape
+from scrapers.krs.list import WITHOUT_PESEL
 from scrapers.krs.scrape import (
     ORG_CONNECTION_METHODS,
     REASON_INTERESTING_PERSON,
@@ -26,6 +27,7 @@ from scrapers.krs.scrape import (
     leave_to_the_odpis,
     linked_entry,
     misnamed_links,
+    names_by_entry,
     published_since,
     save_org_connections,
     told_by_the_odpis,
@@ -547,7 +549,8 @@ def test_the_queue_reads_what_the_site_takes_from_an_odpis():
 def _people(pages, votes, krs_people=(), merged=(), published=(), public_before=()):
     """`people_to_scrape` over these pages, votes and register rows, as the
     entries it queues: `published` the ids of the pages published now, and
-    `public_before` of those already public on `PUBLISHED_SINCE`."""
+    `public_before` of those already public on `PUBLISHED_SINCE`. A register
+    row is (id, name) or (id, name, rejestrio_type)."""
     scraper = ScrapeRejestrIO()
     scraper.__dict__["hardcoded_people"] = _Frame(pd.DataFrame(columns=["id"]))
     people = pd.DataFrame(pages, columns=["id", "full_name", "rejestrIo"])
@@ -560,7 +563,10 @@ def _people(pages, votes, krs_people=(), merged=(), published=(), public_before=
         pd.DataFrame(votes, columns=["person_koryta_id", "interesting"])
     )
     scraper.__dict__["people"] = _Frame(
-        pd.DataFrame(krs_people, columns=["id", "full_name"])
+        pd.DataFrame(
+            [(*row, None)[:3] for row in krs_people],
+            columns=["id", "full_name", "rejestrio_type"],
+        )
     )
     scraper.__dict__["people_all"] = _Frame(
         pd.DataFrame(merged, columns=["koryta_name", "rejestrio_id"])
@@ -761,3 +767,84 @@ def test_an_entry_the_register_rows_lack_has_no_name_to_disagree_with():
     linked = {"1124887": {"id": "page", "full_name": "Janusz Pancerz"}}
 
     assert misnamed_links(linked, {}) == []
+
+
+# ------------------------------------------------- entries without a PESEL
+#: rejestr.io numbers its entries without a PESEL apart from its osoby: 2697087
+#: is both, two people (2026-10-09).
+STANCZUK = ("2697087", "Grzegorz Stańczuk", "osoba")
+COHEN = ("2697087", "Lior Cohen", WITHOUT_PESEL)
+
+
+def test_a_name_never_buys_an_entry_without_a_pesel(capsys):
+    """2900081 is an Anna Hetman without a PESEL, on a board in 2001-2003.
+    Bought by the name of the PO politician's page, its feed listed BB INVEST,
+    a company neither of them sat in."""
+    _, queued = _people(
+        pages=[("page", "Anna Hetman", None)],
+        votes=[("page", 1)],
+        krs_people=[
+            ("614388", "Anna Hetman", "osoba"),
+            ("2900081", "Anna Hetman", WITHOUT_PESEL),
+        ],
+    )
+
+    assert queued == {"614388"}
+    assert "Entries without a PESEL not bought: 1 ['2900081']" in (
+        capsys.readouterr().out
+    )
+
+
+def test_a_number_two_entries_share_is_bought_for_its_osoba_alone():
+    _, for_the_osoba = _people(
+        pages=[("page", "Grzegorz Stańczuk", None)],
+        votes=[],
+        krs_people=[COHEN, STANCZUK],
+        published=["page"],
+    )
+    _, for_the_other = _people(
+        pages=[("page", "Lior Cohen", None)],
+        votes=[],
+        krs_people=[COHEN, STANCZUK],
+        published=["page"],
+    )
+
+    assert for_the_osoba == {"2697087"}
+    assert for_the_other == set()
+
+
+def test_a_link_its_page_names_as_the_entry_without_a_pesel_buys_nothing():
+    """/osoby/2697087 is Grzegorz Stańczuk's feed, not Lior Cohen's."""
+    _, queued = _people(
+        pages=[("page", "Lior Cohen", "https://rejestr.io/osoby/2697087")],
+        votes=[("page", 1)],
+        krs_people=[COHEN, STANCZUK],
+    )
+
+    assert queued == set()
+
+
+def test_a_link_to_a_number_known_only_without_a_pesel_still_names_an_osoba(
+    capsys,
+):
+    """Maciej Tuszakowski's page links 2788562, which `PeopleKRS` knows only as
+    Monika Ruggli without a PESEL: an osoba no crawled company lists. Nor is
+    her name another name for the link to be checked against."""
+    _, queued = _people(
+        pages=[("page", "Maciej Tuszakowski", "https://rejestr.io/osoby/2788562")],
+        votes=[("page", 1)],
+        krs_people=[("2788562", "Monika Ruggli", WITHOUT_PESEL)],
+    )
+
+    assert queued == {"2788562"}
+    assert "Monika Ruggli" not in capsys.readouterr().out
+
+
+def test_a_register_row_without_a_type_is_an_osoba():
+    """`PeopleKRS` took no other shape until it recorded which a row was."""
+    osoba, without_pesel = names_by_entry(
+        pd.DataFrame({"id": ["270186"], "full_name": ["Krzysztof Owczarek"]})
+    )
+
+    assert osoba == {"270186": {"Krzysztof Owczarek"}}
+    assert without_pesel == {}
