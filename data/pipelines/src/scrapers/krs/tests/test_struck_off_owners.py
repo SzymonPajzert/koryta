@@ -17,6 +17,7 @@ from scrapers.krs.list import (
     held_to_the_end,
     past_ownership,
     struck_off_after,
+    struck_off_on_file,
 )
 from scrapers.krs.odpis_history import PeselKeyMissing
 from scrapers.map.jst import SKARB_PANSTWA, JstIndex
@@ -393,3 +394,131 @@ def test_without_the_pesel_key_the_run_goes_on_with_the_feeds_alone():
     pipeline.odpis_seats = NoKey()  # type: ignore[assignment]
 
     assert pipeline.seats_on_file(ctx=None) is None  # type: ignore[arg-type]
+
+
+# ─── struck off by the odpis, where rejestr.io has not caught up ────────
+
+MRFP = "0000224180"
+STRUCK_OFF_KRS = "WYKREŚLENIE Z KRAJOWEGO REJESTRU SĄDOWEGO"
+
+
+def entries(krs: str, *rows: tuple[str, str, str]) -> list[dict]:
+    """`KrsOdpisEntries` rows of one odpis: (number, day, description)."""
+    return [
+        {"krs": krs, "number": number, "entry_date": day, "description": what}
+        for number, day, what in rows
+    ]
+
+
+def test_the_odpis_strikes_off_with_its_last_entry():
+    on_file = pd.DataFrame(
+        entries(
+            MRFP,
+            ("9", "2026-06-30", "ZMIANA DANYCH W REJESTRZE"),
+            ("92", "2026-07-02", "ZMIANA DANYCH W REJESTRZE"),
+            ("93", "2026-09-10", STRUCK_OFF_KRS),
+        )
+    )
+
+    # Ordered by number, not as text: "9" is not the entry before "93".
+    assert struck_off_on_file(on_file) == {MRFP: "2026-07-02"}
+
+
+def test_an_odpis_that_goes_on_after_a_strike_off_is_a_live_company():
+    on_file = pd.DataFrame(
+        entries(
+            "0000037375",
+            ("22", "2005-05-02", "ZMIANA DANYCH W REJESTRZE"),
+            ("23", "2005-06-21", STRUCK_OFF_KRS),
+            ("24", "2006-01-10", "ZMIANA DANYCH W REJESTRZE"),
+        )
+    )
+
+    assert struck_off_on_file(on_file) == {}
+
+
+def test_leaving_the_register_of_companies_for_associations_is_not_a_strike_off():
+    on_file = pd.DataFrame(
+        entries(
+            "0000002843",
+            ("9", "2010-01-04", "ZMIANA DANYCH W REJESTRZE"),
+            ("10", "2010-04-13", "WYKREŚLENIE Z REJESTRU PRZEDSIĘBIORCÓW"),
+        )
+    )
+
+    assert struck_off_on_file(on_file) == {}
+
+
+def test_a_strike_off_that_is_the_only_entry_stands_in_for_the_one_before():
+    on_file = pd.DataFrame(entries(MRFP, ("1", "2004-12-17", STRUCK_OFF_KRS)))
+
+    assert struck_off_on_file(on_file) == {MRFP: "2004-12-17"}
+
+
+def mazowieckie() -> JstIndex:
+    rows = [("14", None, None, None, "MAZOWIECKIE")]
+    return JstIndex.from_terc(
+        pd.DataFrame(rows, columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"])
+    )
+
+
+def test_a_company_rejestr_io_still_lists_takes_its_owner_at_the_odpis_strike_off():
+    # MAZOWIECKI REGIONALNY FUNDUSZ POŻYCZKOWY: struck off on 2026-09-10, and
+    # still in the register on rejestr.io's feeds of 09-28.
+    pipeline = CompaniesKRS()
+    pipeline.jst_index = mazowieckie()
+    pipeline.process_rejestrio_blob(
+        feed("0000000001", "aktualne"), [org(MRFP)], NO_POSTAL_CODES
+    )
+    noted = pipeline.note_struck_off_on_file(
+        pd.DataFrame(
+            entries(
+                MRFP,
+                ("92", "2026-07-02", "ZMIANA DANYCH W REJESTRZE"),
+                ("93", "2026-09-10", STRUCK_OFF_KRS),
+            )
+            + entries("0000000999", ("5", "2020-01-01", STRUCK_OFF_KRS))
+        )
+    )
+    pipeline.add_public_owners_on_file(
+        pd.DataFrame(
+            [
+                owner_seat(
+                    MRFP,
+                    "WOJEWÓDZTWO MAZOWIECKIE",
+                    "93",
+                    "2026-09-10",
+                    "2026-10-02",
+                    "wspolnik",
+                )
+            ]
+        )
+    )
+
+    # A company the run does not know is not added to it.
+    assert noted == 1
+    assert pipeline.struck_off == {MRFP: "2026-07-02"}
+    assert public_of(pipeline) == {MRFP}
+    assert pipeline.companies[MRFP].parents == [Owner(krs=None, teryt="14")]
+
+
+def test_rejestr_io_and_the_odpis_agreeing_note_the_company_once():
+    pipeline = CompaniesKRS()
+    pipeline.process_rejestrio_blob(
+        feed("0000000001", "historyczne"),
+        [org(PGNIG_SERWIS, struck="2025-08-27")],
+        NO_POSTAL_CODES,
+    )
+
+    noted = pipeline.note_struck_off_on_file(
+        pd.DataFrame(
+            entries(
+                PGNIG_SERWIS,
+                ("40", "2025-08-27", "ZMIANA DANYCH W REJESTRZE"),
+                ("41", "2025-09-03", STRUCK_OFF_KRS),
+            )
+        )
+    )
+
+    assert noted == 0
+    assert pipeline.struck_off == {PGNIG_SERWIS: "2025-08-27"}

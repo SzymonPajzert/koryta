@@ -6,6 +6,7 @@ import typing
 from datetime import datetime
 from typing import Type
 
+import pandas as pd
 from pandas import DataFrame
 
 from entities.company import KRS, Owner, Source, short_name
@@ -26,7 +27,11 @@ from scrapers.krs.data import (
     treasury_stakes,
 )
 from scrapers.krs.graph import PARENT_RELATION, QueryRelation
-from scrapers.krs.odpis_history import KrsOdpisSeats, PeselKeyMissing
+from scrapers.krs.odpis_history import (
+    KrsOdpisEntries,
+    KrsOdpisSeats,
+    PeselKeyMissing,
+)
 from scrapers.krs.organs import supervision_kind
 from scrapers.krs.public_bodies import public_body
 from scrapers.krs.researched_owners import FUND_HOLDERS, RESEARCHED_OWNERS
@@ -497,6 +502,36 @@ def held_to_the_end(
     return bool(stated_on) and stated_on >= last
 
 
+#: How an odpis describes the entry that strikes a company off KRS altogether.
+#: Not "WYKREŚLENIE Z REJESTRU PRZEDSIĘBIORCÓW": that one moves it to the
+#: register of associations, where it lives on.
+STRUCK_OFF_KRS = "WYKREŚLENIE Z KRAJOWEGO REJESTRU SĄDOWEGO"
+
+
+def struck_off_on_file(entries: DataFrame) -> dict[str, str]:
+    """KRS number to the day of its last entry before the strike-off, per the odpis.
+
+    `entries` is `KrsOdpisEntries`: the list of entries that opens each odpis
+    pełny on file. A company is struck off where its last entry is
+    `STRUCK_OFF_KRS`. Only the last: in 15 of the odpisy on file on 2026-10-10
+    entries follow such a strike-off - it was set aside - and those companies
+    are live. Where the strike-off is the only entry, its own day stands in.
+    """
+    frame = DataFrame(
+        {
+            "krs": padded_krs(entries["krs"]),
+            "number": pd.to_numeric(entries["number"], errors="coerce"),
+            "day": iso_dates(entries["entry_date"]),
+            "what": entries["description"].fillna("").astype(str).str.strip(),
+        }
+    )
+    frame = frame.dropna(subset=["number"]).sort_values(["krs", "number"])
+    frame["before"] = frame.groupby("krs")["day"].shift(1)
+    last = frame.groupby("krs").tail(1)
+    struck = last[last["what"].str.upper().str.startswith(STRUCK_OFF_KRS)]
+    return dict(zip(struck["krs"], struck["before"].fillna(struck["day"])))
+
+
 class CompaniesKRS(Pipeline[KrsCompany]):
     filename = "company_krs"
     # These are written as strings and have to be read back as strings. Without
@@ -515,6 +550,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     hardcoded_companies: CompaniesHardcoded
     teryt: Teryt
     odpis_seats: KrsOdpisSeats
+    odpis_entries: KrsOdpisEntries
 
     def __init__(self) -> None:
         super().__init__()
@@ -690,6 +726,24 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         last = struck_off_after(item)
         if last is not None:
             self.struck_off[krs] = max(last, self.struck_off.get(krs, last))
+
+    def note_struck_off_on_file(self, entries: DataFrame) -> int:
+        """Remember as struck off each known company its odpis pełny says is.
+
+        rejestr.io says it only as of its own crawl, and a company struck off
+        since reads as live there: MAZOWIECKI REGIONALNY FUNDUSZ POŻYCZKOWY
+        (0000224180) was struck off on 2026-09-10, and rejestr.io's feeds of
+        09-28 still had it in the register. The odpis fetched on 10-02 ends
+        with the strike-off. Returns how many companies only the odpis said it
+        of.
+        """
+        noted = 0
+        for krs, last in struck_off_on_file(entries).items():
+            if krs not in self.companies:
+                continue
+            noted += krs not in self.struck_off
+            self.struck_off[krs] = max(last, self.struck_off.get(krs, last))
+        return noted
 
     def add_owners_at_strike_off(self) -> int:
         """Give each struck-off company the owners it had when it was struck off.
@@ -1047,12 +1101,19 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
             self.process_api_krs_blob(blob_name, data, postal_codes)
 
+        seats = self.seats_on_file(ctx)
+        if seats is not None:
+            # Only with the seats: the entries are built from every odpis on
+            # file, which a CI runner without the PESEL key never reads.
+            noted = self.note_struck_off_on_file(
+                self.odpis_entries.read_or_process(ctx)
+            )
+            print(f"Struck off by the odpis on file alone: {noted} companies")
         added = self.add_owners_at_strike_off()
         print(
             f"Owners at strike-off: {added} holdings joined, over "
             f"{len(self.struck_off)} struck-off companies"
         )
-        seats = self.seats_on_file(ctx)
         if seats is not None:
             found = self.add_public_owners_on_file(seats)
             print(f"Public owners at strike-off on file: {found} companies")
@@ -1076,7 +1137,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         company pipeline shares: it is for what reads this output, as
         `krs_odpis` does to ask for a live company's odpis before a struck-off
         one's. True where rejestr.io says the register has struck the company
-        off (`struck_off_after`); `Companies` reads rows into `Company` and
+        off (`struck_off_after`), or the odpis pełny on file does
+        (`struck_off_on_file`); `Companies` reads rows into `Company` and
         drops it.
         """
         frame = DataFrame.from_records([dataclasses.asdict(c) for c in output])
