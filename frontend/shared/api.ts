@@ -300,6 +300,30 @@ export type UnplacedElection = {
   expected: boolean;
 };
 
+/** A change the payload asked for that the ingest did not write, and why.
+ *
+ * The ingest fills in the end of a job stored while it was held, and never
+ * rewrites one already stored or touches a removed job (`fillAnnotations` in
+ * `server/api/ingest/person.post.ts`). Where the payload says otherwise, the
+ * site's value stands, and saying so is what lets the uploader log it rather
+ * than the disagreement passing in silence.
+ */
+export type DroppedChange = {
+  /** The stored job the payload's row matched. */
+  edgeId: string;
+  /** The company, as the payload names it. */
+  krs?: string;
+  field: "end_date";
+  /** The site's value; null for a job it holds as current. */
+  stored: string | null;
+  /** The payload's; null for a row that names no end, which the register
+   * lists as current. */
+  sent: string | null;
+  /** `kept`: the site's end stands. `removed`: the job was removed, and the
+   * ingest leaves it as it is. */
+  reason: "kept" | "removed";
+};
+
 /** Fields a user may propose for a person node, whether creating a new one
  * or editing an existing one.
  *

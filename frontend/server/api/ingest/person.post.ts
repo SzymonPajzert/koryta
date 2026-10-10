@@ -38,6 +38,7 @@ import {
 } from "~~/shared/names";
 import {
   personRequestSchema,
+  type DroppedChange,
   type EntityResult,
   type ElectionRequest,
   type EmploymentRequest,
@@ -211,6 +212,9 @@ export default defineEventHandler(async (event) => {
       ...(Object.keys(ctx.proposals).length > 0
         ? { proposals: ctx.proposals }
         : {}),
+      // And again: what the payload said that the site kept its own value
+      // over, for the uploader to log.
+      ...(ctx.dropped.length > 0 ? { droppedChanges: ctx.dropped } : {}),
       status: "ok",
     };
   } finally {
@@ -373,6 +377,10 @@ class Context {
    * a reviewer" is what tells a re-send from new work. */
   readonly proposals: Partial<Record<ProposalOutcome, number>> = {};
 
+  /** What the payload said about a stored job that this request did not
+   * write, and why - see `droppedEnd`. */
+  readonly dropped: DroppedChange[] = [];
+
   constructor(
     readonly db: FirebaseFirestore.Firestore,
     readonly user: { uid: string },
@@ -418,6 +426,11 @@ async function createEmployment(
     ctx.verifiedEmployments !== undefined &&
     ctx.companyPublished.get(companyId) === true;
   const edgeId = await findEdgeOrCreate(ctx, edgeData, false, verified);
+  // The edge lookup knows which stored job it kept; the row knows the company
+  // it named, which is what the uploader's log can be read by.
+  for (const change of ctx.dropped) {
+    if (change.edgeId === edgeId) change.krs = employment.krs;
+  }
 
   return {
     nodeId: companyId,
@@ -1085,6 +1098,9 @@ async function findEdgeOrCreate(
  * takes the end as a waiting revision it holds, which is the one a reviewer,
  * or `approveWaitingEdge` once the person is verified, then puts live.
  * `published` says `approveWaitingEdge` has just done that in this batch.
+ *
+ * What it does not write it reports (`droppedEnd`), so a disagreement between
+ * the register and the site is logged by the uploader rather than lost.
  */
 function fillAnnotations(
   ctx: Context,
@@ -1093,7 +1109,10 @@ function fillAnnotations(
   edge: Edge,
   published: boolean,
 ) {
-  if (!stored || stored.deleted === true) return;
+  if (!stored) return;
+  const dropped = droppedEnd(edgeId, stored, edge);
+  if (dropped) ctx.dropped.push(dropped);
+  if (stored.deleted === true) return;
   if (!addsOnlyAnnotations(stored, edge)) return;
 
   const document = published ? { ...stored, published: true } : stored;
@@ -1112,6 +1131,37 @@ function fillAnnotations(
       stored: document,
     },
   );
+}
+
+/** The job end a row states that the ingest does not write, if there is one.
+ *
+ * A job's only: in a register row a blank end is a statement - the register
+ * lists the job as current - where a blank `elected` says nothing at all. So a
+ * row with no end against a stored one is reported as well; it is how an end a
+ * crawl once stamped shows up against a register that never said it.
+ */
+function droppedEnd(
+  edgeId: string,
+  stored: Record<string, unknown>,
+  edge: Edge,
+): DroppedChange | undefined {
+  if (edge.type !== "employed") return undefined;
+  const kept = endOf(stored.end_date);
+  const sent = endOf(edge.end_date);
+  if (kept === sent) return undefined;
+  if (stored.deleted === true) {
+    return { edgeId, field: "end_date", stored: kept, sent, reason: "removed" };
+  }
+  // A blank the row fills in is written, not dropped.
+  if (kept === null) return undefined;
+  return { edgeId, field: "end_date", stored: kept, sent, reason: "kept" };
+}
+
+/** An end as the two sides can be compared by: the edit form's "" is none. */
+function endOf(value: unknown): string | null {
+  if (value === undefined || value === null || value === "" || value === false)
+    return null;
+  return String(value);
 }
 
 /** The person's stored employments, when this payload may put the person's
