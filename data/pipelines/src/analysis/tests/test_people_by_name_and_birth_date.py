@@ -472,11 +472,23 @@ def test_two_entries_of_one_pesel_go_out_as_two_people_named_for_a_reviewer(caps
 
 
 # ------------------------------------------------------- a run with no scope
-def unscoped(rows: list[pd.Series], site: SiteSnapshot | None, prints=None):
-    """What `koryta PeoplePayloads` with no scope would send, by name."""
+def unscoped_run(
+    rows: list[pd.Series],
+    site: SiteSnapshot | None,
+    prints=None,
+    only_changed: bool = False,
+) -> PeoplePayloads:
+    """`koryta PeoplePayloads` over these rows, given neither scope."""
     pipeline = Pipeline.create(PeoplePayloads)
     people = pd.DataFrame(rows)
     pipeline.people = SimpleNamespace(read_or_process=lambda ctx: people)  # type: ignore[assignment]
+    # The flags come off the process's own argv, which a test does not have.
+    pipeline.__dict__["args"] = SimpleNamespace(
+        only_changed=only_changed,
+        on_koryta=False,
+        not_on_koryta=False,
+        koryta_date=None,
+    )
     pipeline._prints = prints or {}
     if site is None:
 
@@ -486,7 +498,13 @@ def unscoped(rows: list[pd.Series], site: SiteSnapshot | None, prints=None):
         pipeline.site_snapshot = unread  # type: ignore[method-assign]
     else:
         pipeline._snapshot = site
-    return pipeline.unscoped_payloads(None, people)  # type: ignore[arg-type]
+    return pipeline
+
+
+def unscoped(rows: list[pd.Series], site: SiteSnapshot | None, prints=None):
+    """What `koryta PeoplePayloads` with no scope would send, by name."""
+    pipeline = unscoped_run(rows, site, prints)
+    return pipeline.unscoped_payloads(None, pd.DataFrame(rows))  # type: ignore[arg-type]
 
 
 def test_a_run_with_no_scope_guards_the_people_only_an_odpis_names(capsys):
@@ -521,3 +539,21 @@ def test_a_run_of_linked_people_alone_reads_no_export():
     rows = [row(full_name=["Piotr Nowak"], rejestrio_id=["7"], pesel_fingerprint=[])]
 
     assert [one.rejestrIo for one in unscoped(rows, None)] == [f"{REGISTER}7"]
+
+
+def test_only_changed_alone_guards_the_people_only_an_odpis_names_too():
+    """To `only_changed` a person the ingest would hold, and both of two
+    namesakes born the same day, are new people to send: `ONLY_CHANGED=1
+    submit_people.sh` sent them, 206 on the 2026-10-10 outputs."""
+    site = snapshot(page("undated", "Ewa Kowalska"))
+    rows = [
+        row(full_name=["Anna Maria Nowak"]),
+        row(full_name=["Anna Nowak"], pesel_fingerprint=[G]),
+        row(full_name=["Ewa Kowalska"], pesel_fingerprint=["b" * 32]),
+        row(full_name=["Adam Wiśniewski"], pesel_fingerprint=["d" * 32]),
+        row(full_name=["Piotr Nowak"], rejestrio_id=["7"], pesel_fingerprint=[]),
+    ]
+
+    sent = unscoped_run(rows, site, only_changed=True).process(None)  # type: ignore[arg-type]
+
+    assert list(sent["name"]) == ["Adam Wiśniewski", "Piotr Nowak"]
