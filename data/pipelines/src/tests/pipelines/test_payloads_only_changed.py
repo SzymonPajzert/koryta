@@ -356,6 +356,46 @@ def test_a_rejestr_io_link_the_node_lacks_is_kept():
     assert snapshot.changes(payload()) == [PERSON_FIELDS]
 
 
+def test_another_entry_than_the_page_links_is_not_a_change():
+    """`droppedLink`: the page keeps its link, so the payload writes nothing.
+
+    Only a `korytaId` reaches such a page - Tadeusz Rozpara's, in the 10-06
+    plan, under a namesake's entry. Counted as news, the payload would be sent
+    every night to change nothing.
+    """
+    snapshot = SiteSnapshot(nodes(), edges())
+
+    assert (
+        snapshot.changes(
+            payload(korytaId=PERSON_ID, rejestrIo="https://rejestr.io/osoby/456")
+        )
+        == []
+    )
+
+
+def test_another_entry_does_not_stop_the_rest_being_learned():
+    snapshot = SiteSnapshot(nodes(), edges())
+
+    assert snapshot.changes(
+        payload(
+            korytaId=PERSON_ID,
+            rejestrIo="https://rejestr.io/osoby/456",
+            birthDate="1953-12-01",
+        )
+    ) == [PERSON_FIELDS]
+
+
+@pytest.mark.parametrize(
+    "spelled",
+    ["https://rejestr.io/osoby/123/jan-kowalski", "https://rejestr.io/osoby/123/"],
+)
+def test_the_page_s_own_entry_spelled_another_way_is_still_learned(spelled):
+    """The same entry, and the ingest writes the bare link over it."""
+    snapshot = SiteSnapshot(nodes(person={"rejestrIo": spelled}), edges())
+
+    assert snapshot.changes(payload(korytaId=PERSON_ID)) == [PERSON_FIELDS]
+
+
 def test_a_birth_date_the_node_lacks_is_kept():
     snapshot = SiteSnapshot(nodes(), edges())
 
