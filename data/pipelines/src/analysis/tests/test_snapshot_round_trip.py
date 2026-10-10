@@ -183,3 +183,34 @@ def test_a_stored_end_is_read_as_the_ingest_reads_it(tmp_path, stored, expected)
     snapshot = SiteSnapshot(nodes, edges)
 
     assert snapshot.changes(payload(companies=[ENDED])) == expected
+
+
+@pytest.mark.parametrize(
+    ("duplicate", "expected"),
+    [
+        # Removed as „duplikat”: the ingest passes over it for the live page.
+        ({"deleted": True}, "place-1"),
+        # Merged away, from before a merge took the number off.
+        ({"deleted": True, "merged_into": "place-1"}, "place-1"),
+        # Two live pages: the first, which is where the ingest writes.
+        ({}, "place-0"),
+    ],
+)
+def test_a_retired_company_page_is_passed_over_as_the_ingest_does(
+    tmp_path, duplicate, expected
+):
+    """`lookupCompanyByKrs` steps over a removed page that sorts first, so
+    the snapshot has to be able to see `deleted` to do the same. Cut from the
+    export, a removed page read as live, and every job at the company as one
+    the upload would file on that page instead - each of them news every
+    night, against a cap of 100 people."""
+    removed = dict(COMPANY, id="place-0", name="Duplikat", **duplicate)
+    edges = through_the_export([STORED_JOB, OTHER_EDGE], KorytaEdges, tmp_path)
+    nodes = through_the_export([PERSON, removed, COMPANY], KorytaNodes, tmp_path)
+
+    snapshot = SiteSnapshot(nodes, edges)
+
+    assert snapshot.companies[COMPANY["krsNumber"]] == expected
+    if expected == "place-1":
+        job = {"krs": COMPANY["krsNumber"], "role": "Zarząd", "start": "2025-02-13"}
+        assert snapshot.changes(payload(companies=[job])) == []

@@ -485,12 +485,20 @@ NODE_FIELDS = [
     # birth date, so the ingest's name-and-date lookup follows it to the page
     # it stands for rather than counting the two as two people.
     "merged_into",
+    # Whether the page was removed. `lookupCompanyByKrs` steps over a removed
+    # company page for a live one with the same number, and so must
+    # `SiteSnapshot` (`is_retired`); without the column a removed page that
+    # sorts first read as the page the upload writes to.
+    "deleted",
 ]
 
 #: The node columns that are not strings. `parties`, `activity` and
-#: `categories` are lists and `isPublic` a boolean, and pinning any of them to
-#: `str` on the way back off disk turns them into `"['PiS']"` and `"True"`.
-NODE_LIST_FIELDS = frozenset({"parties", "activity", "categories", "isPublic"})
+#: `categories` are lists and `isPublic` and `deleted` booleans, and pinning any
+#: of them to `str` on the way back off disk turns them into `"['PiS']"` and
+#: `"True"`.
+NODE_LIST_FIELDS = frozenset(
+    {"parties", "activity", "categories", "isPublic", "deleted"}
+)
 
 #: What an edge has to carry to be compared with one the pipeline is about to
 #: send: the pair and type it is looked up by, and every discriminator and
