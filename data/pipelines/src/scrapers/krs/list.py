@@ -75,8 +75,8 @@ class Post:
 #: no PESEL for - a foreign national, or an entry old enough to predate the
 #: number - and it arrives with a name and nothing else: no birth date, no sex.
 #: Accepting only the first shape dropped 6,606 entries covering 3,912 people
-#: and 6,227 board, supervisory and proxy seats, so `people_to_scrape` could not
-#: see them and `companies_without_names` did not know their companies existed.
+#: and 6,227 board, supervisory and proxy seats, so `companies_without_names`
+#: did not know their companies existed.
 #:
 #: They stop at `PeopleKRS`: `PeopleKRSMerged` keeps nobody without a birth
 #: date. Where an odpis prints the date in the PESEL's place
@@ -92,7 +92,9 @@ class Post:
 #:   two, while 511 names sat under two ids or more.
 #:
 #: Nor is one worth buying a feed for: ``/osoby/<n>`` answers for the ``osoba``
-#: numbered n (`ScrapeRejestrIO.people_to_scrape`).
+#: numbered n. `ScrapeRejestrIO.people_to_scrape` reads them only to leave them
+#: out - a page's name matching one buys nothing - and `companies_to_scrape`
+#: takes no company off a feed bought for one before 2026-10-10.
 WITHOUT_PESEL = "osoba-bez-pesel"
 PERSON_TYPES = frozenset({"osoba", WITHOUT_PESEL})
 
