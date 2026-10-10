@@ -85,6 +85,13 @@ def test_required_field_present(revisions, node_type, field, budget):
         data = node_data(revision)
         if data is None or data.get("type") != node_type:
             continue
+        # A removal restates the document it takes down, so it has exactly the
+        # fields that document had: taking down an election edge that never
+        # said which office it was is the repair of a known gap, not a new one.
+        # Three of each on 2026-10-09 - duplicates removed as „duplikat” in
+        # September and October, and two merged away by merge-duplicate-people.
+        if data.get("deleted") is True:
+            continue
         total += 1
         if field not in data:
             missing.append(revision["id"])

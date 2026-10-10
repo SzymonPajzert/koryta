@@ -138,6 +138,18 @@ def has_date(document: dict, field: str) -> bool:
     return value is not None
 
 
+def is_removed(document: dict) -> bool:
+    """Whether the document was taken down by an approved removal.
+
+    A removal is a soft delete: the document stays in its collection with
+    `deleted: true` and every reader on the site skips it. So a broken document
+    somebody removed is the repair of a defect rather than one more of them,
+    and the checks that count defects leave it out - or removing a duplicate as
+    „duplikat” reads as a new duplicate the night it happens.
+    """
+    return document.get("deleted") is True
+
+
 def stats_of(document: dict) -> dict:
     """The document's `stats` sub-document, or an empty mapping."""
     stats = document.get("stats")
@@ -158,7 +170,7 @@ def page_is_public(document: dict) -> bool:
     absent flag is a draft, which is what makes losing the field a way to
     unpublish a page by accident rather than a no-op.
     """
-    if document.get("deleted") is True:
+    if is_removed(document):
         return False
     return document.get("published") is True
 
@@ -823,6 +835,7 @@ def test_person_names_are_capitalised(nodes):
         (document["id"], document["name"])
         for document in nodes
         if document.get("type") == "person"
+        and not is_removed(document)
         and isinstance(document.get("name"), str)
         and document["name"].strip()
         and format_person_name(document["name"]) != document["name"]
@@ -1227,7 +1240,7 @@ def test_occurrence_edges_may_repeat(edges):
 
     groups: dict[tuple, list[str]] = collections.defaultdict(list)
     for edge in edges:
-        if edge.get("type") != "election":
+        if edge.get("type") != "election" or is_removed(edge):
             continue
         if edge.get("position") not in single_seat:
             continue
@@ -1270,11 +1283,17 @@ def test_one_spell_of_employment_is_stored_once(edges):
     # 205 on the 2026-07-28 export, 211 on the 2026-08-02 one: neither guard is
     # deployed yet, so the nightly run still adds about one a day and this
     # number is a measurement rather than a ceiling.
-    DUPLICATED_SPELLS = 211
+    #
+    # 207 on 2026-10-09, counting only the copies still live - the ones removed
+    # by hand as „duplikat” are the repair. One of the 207 is new since 10-07:
+    # the people import wrote Robert Marian Soszyński's 2015 Zarząd spell at
+    # Polskie LNG twice in one request, once ending on the day it began, because
+    # the payload carried both rows and the ingest stores a row per row.
+    DUPLICATED_SPELLS = 207
 
     groups: dict[tuple, list[str]] = collections.defaultdict(list)
     for edge in edges:
-        if edge.get("type") != "employed":
+        if edge.get("type") != "employed" or is_removed(edge):
             continue
         groups[
             (
@@ -1317,10 +1336,14 @@ def test_employment_says_what_the_person_did(edges):
     # every nightly run still writes a few more.
     KNOWN_ROLELESS = 246
 
+    # 249 on 2026-10-09 counting removals as well: three role-less copies were
+    # taken down in August and October, two by merge-duplicate-people.
     roleless = [
         edge["id"]
         for edge in edges
-        if edge.get("type") == "employed" and not edge.get("name")
+        if edge.get("type") == "employed"
+        and not is_removed(edge)
+        and not edge.get("name")
     ]
 
     assert len(roleless) <= KNOWN_ROLELESS, (
@@ -1362,7 +1385,9 @@ def test_a_dated_edge_says_when_it_began(edges, edge_type):
     undated = [
         edge["id"]
         for edge in edges
-        if edge.get("type") == edge_type and not has_date(edge, "start_date")
+        if edge.get("type") == edge_type
+        and not is_removed(edge)
+        and not has_date(edge, "start_date")
     ]
     budget = UNDATED[edge_type]
 
