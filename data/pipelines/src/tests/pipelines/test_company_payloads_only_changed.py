@@ -294,6 +294,52 @@ class TestTheSeat:
         assert changes(payload(teryt_code="9999")) == []
 
 
+class TestARetiredPage:
+    """`lookupCompanyByKrs`: the ingest steps over a removed or merged-away page
+    holding the number, so comparing the payload with one would keep it alive
+    every night against a page the upload never writes to."""
+
+    def frame(self, *rows):
+        return pd.DataFrame.from_records(list(rows))
+
+    def test_a_removed_page_sorting_first_is_not_the_one_compared(self):
+        removed = company_node(
+            id="place-0", name="Duplikat", deleted=True, revision_id=None
+        )
+        assert changes(payload(), node_rows=self.frame(removed, company_node())) == []
+
+    def test_a_merged_away_page_answers_with_the_page_it_was_merged_into(self):
+        tombstone = company_node(
+            id="place-0", deleted=True, merged_into=COMPANY_ID, revision_id=None
+        )
+        snapshot = SiteSnapshot(self.frame(tombstone, company_node()), edges())
+
+        assert snapshot.companies[KRS] == COMPANY_ID
+        assert snapshot.company_changes(payload()) == []
+
+    def test_a_survivor_without_the_number_is_given_it(self):
+        # The ingest follows the merge and writes the number it looked the
+        # company up by, rather than making the company a third page.
+        tombstone = company_node(
+            id="place-0", deleted=True, merged_into=COMPANY_ID, revision_id=None
+        )
+        survivor = company_node()
+        del survivor["krsNumber"]
+        snapshot = SiteSnapshot(self.frame(tombstone, survivor), edges())
+
+        assert snapshot.companies[KRS] == COMPANY_ID
+        assert snapshot.company_changes(payload()) == [COMPANY_FIELDS]
+
+    def test_a_number_only_a_removed_page_holds_stays_with_that_page(self):
+        # The ingest goes on writing to it, hidden, rather than making the
+        # company a fresh page and undoing the removal.
+        removed = company_node(deleted=True)
+        snapshot = SiteSnapshot(self.frame(removed), edges())
+
+        assert snapshot.companies[KRS] == COMPANY_ID
+        assert snapshot.company_changes(payload()) == []
+
+
 class _FixedPipeline(Pipeline):
     filename = "mock"
 

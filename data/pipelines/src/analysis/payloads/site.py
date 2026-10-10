@@ -394,6 +394,16 @@ def fills_annotations(
     )
 
 
+def is_retired(node: typing.Mapping[str, typing.Any]) -> bool:
+    """Whether a page is out of use: removed, or merged into another.
+
+    `isRetiredPage` in `frontend/server/utils/companies.ts`. Both keep their
+    document, so an export still carries them. `deleted` is True off a fresh
+    frame and 1.0 off one read back from disk.
+    """
+    return node.get("deleted") == 1 or field(node, "merged_into") is not None
+
+
 def _records(df: pd.DataFrame) -> list[dict]:
     """The frame's rows as dicts, with the columns a row does not fill dropped.
 
@@ -449,6 +459,7 @@ class SiteSnapshot:
         #: queries anything.
         self.node_ids: set[str] = set()
         self.articles: dict[str, str] = {}
+        places: list[dict] = []
 
         for node in _records(nodes):
             node_id = str(node.get("id", ""))
@@ -474,13 +485,14 @@ class SiteSnapshot:
                     self.people_by_surname[surname_key(node["name"])].append(node)
                 if (born := day_of(field(node, "birthDate"))) is not None:
                     self.people_born[born].append(node)
-            elif node_type == "place" and "krsNumber" in node:
-                self.companies.setdefault(str(node["krsNumber"]), node_id)
-                self.company_nodes.setdefault(str(node["krsNumber"]), node)
+            elif node_type == "place":
+                places.append(node)
             elif node_type == "region" and "teryt" in node:
                 self.regions.setdefault(str(node["teryt"]), node_id)
             elif node_type == "article" and "sourceURL" in node:
                 self.articles.setdefault(str(node["sourceURL"]), node_id)
+
+        self._index_companies(places)
 
         self.edges: dict[tuple, list[dict]] = {}
         for edge in _records(edges):
@@ -491,6 +503,37 @@ class SiteSnapshot:
             # several indistinguishable candidacies gets matched is arbitrary
             # but not arbitrary differently twice. Same reason here.
             siblings.sort(key=lambda edge: str(edge.get("id", "")))
+
+    def _index_companies(self, places: list[dict]) -> None:
+        """`companies` and `company_nodes`, keyed by KRS number the way
+        `lookupCompanyByKrs` in `frontend/server/utils/companies.ts` picks a
+        page for one.
+
+        The first page with the number that is still in use - the export is in
+        document id order, which is the order the ingest's query reads them in.
+        Failing that, the page a merged-away one points at. Failing that, the
+        first retired page, which is where the ingest goes on writing so that a
+        removal is not undone by a fresh page.
+        """
+        by_id = {str(node["id"]): node for node in places}
+        retired = []
+        for node in places:
+            if "krsNumber" not in node:
+                continue
+            if is_retired(node):
+                retired.append(node)
+                continue
+            self.companies.setdefault(str(node["krsNumber"]), str(node["id"]))
+            self.company_nodes.setdefault(str(node["krsNumber"]), node)
+        for node in retired:
+            survivor = _follow_merges(node, by_id)
+            if survivor is None or is_retired(survivor):
+                continue
+            self.companies.setdefault(str(node["krsNumber"]), str(survivor["id"]))
+            self.company_nodes.setdefault(str(node["krsNumber"]), survivor)
+        for node in retired:
+            self.companies.setdefault(str(node["krsNumber"]), str(node["id"]))
+            self.company_nodes.setdefault(str(node["krsNumber"]), node)
 
     @classmethod
     def read(cls, ctx: Context, date: str | None = None) -> "SiteSnapshot":
@@ -776,7 +819,10 @@ class SiteSnapshot:
         # `revisionChangesNothing`.
         if not stored.get("revision_id"):
             reasons.append(COMPANY_UNAPPROVED)
-        if self._company_learns(stored, payload):
+        # The ingest also writes the number it looked the company up by, which
+        # is news only on a page reached through a merge whose survivor never
+        # had one.
+        if field(stored, "krsNumber") is None or self._company_learns(stored, payload):
             reasons.append(COMPANY_FIELDS)
 
         company_id = str(stored["id"])
@@ -1158,6 +1204,22 @@ class _EdgeMatcher:
                 return "enriches"
 
         return "new"
+
+
+def _follow_merges(node: dict, by_id: typing.Mapping[str, dict]) -> dict | None:
+    """The page at the end of a node's `merged_into` chain, as
+    `resolveMergedNode` follows it; None where the chain leads off the export.
+    A cycle stops on the page it was reached from, as it does there."""
+    seen = {str(node.get("id"))}
+    while (target := field(node, "merged_into")) is not None:
+        if str(target) in seen:
+            return node
+        seen.add(str(target))
+        following = by_id.get(str(target))
+        if following is None:
+            return None
+        node = following
+    return node
 
 
 def _as_list(value: typing.Any) -> list:

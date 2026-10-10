@@ -960,28 +960,32 @@ def test_array_fields_are_stored_as_arrays(nodes):
 
 
 def test_companies_are_not_duplicated_by_krs(nodes):
-    """One company node per KRS number.
+    """One company page in use per KRS number.
 
-    Both the company ingest and the KRS table filter look a company up with
-    `where("krsNumber", "==", krs).limit(1)`, so a second node with the same
-    number is unreachable: ingests land on whichever copy Firestore returns
-    first and the other silently keeps stale data.
+    The ingests look a company up by its number and take the first page in use
+    that has it (`lookupCompanyByKrs` in frontend/server/utils/companies.ts), so
+    a second live page with the same number is unreachable: the uploads land on
+    whichever sorts first and the other silently keeps stale data.
 
-    A removed or merged-away copy is still counted: neither lookup skips
-    `deleted`, and a merge leaves the tombstone its `krsNumber`.
+    A removed or merged-away page is not counted: the lookups step over it, and
+    a merge takes the number off a company tombstone anyway. Counting one would
+    read removing a duplicate as „duplikat” as a new duplicate the night it
+    happens - see `is_removed`.
     """
     # Two on 2026-10-09, both a company page somebody created by hand for a
-    # register the site already had - nothing on that path asks the KRS number
-    # first. „Therma” (BnTvgqabfOXJFyuzFi8t, 2026-08-24) beside the uploaded
+    # register the site already had - nothing on that path asked the KRS number
+    # first, and /api/revisions/create now refuses it. „Therma”
+    # (BnTvgqabfOXJFyuzFi8t, 2026-08-24) beside the uploaded
     # v9eUDB9lGr62mj4r4Trq for 0000081135, both published, and „Centrum
     # Rozwoju Komunalnego S.A.” (G5YGSqENIsJYuKMSaaQx, 2026-10-06, a pending
     # draft) beside the published nGhA6sL2jA1HFfyJWHFw for 0000013874. Merging
-    # each pair takes this to zero once the merge stops leaving the number on
-    # the tombstone, or the lookups start following `merged_into`.
+    # each pair through the site takes this to zero.
     KNOWN_DUPLICATES = 2
 
     counts = collections.Counter(
-        document["krsNumber"] for document in nodes if document.get("krsNumber")
+        document["krsNumber"]
+        for document in nodes
+        if document.get("krsNumber") and not is_removed(document)
     )
     duplicated = {krs: count for krs, count in counts.items() if count > 1}
 
