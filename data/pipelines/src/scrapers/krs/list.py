@@ -842,13 +842,27 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         edge, and `public_body` names the rest. An owner with a KRS number is
         left to the feeds, as the seats do not carry the number.
 
+        An owner struck out by an entry that entered somebody else had passed
+        its stake on, though by the day it passes the test. POLSKIE KOLEJE
+        LINOWE (0000079964) is one: entry 27 of 2008-08-19, its last before the
+        strike-off, struck out the Treasury and entered PKP S.A., which held it
+        until entry 28 struck the company off. On the seats of 2026-10-10, 18 of
+        the 823 owners at struck-off companies that pass the test by the day
+        were replaced like that.
+
         Returns how many companies it found a public owner for.
         """
         found: set[str] = set()
         owners = seats.loc[seats["role"].isin(OWNER_ROLES)]
+        krss = padded_krs(owners["krs"])
+        names = owners["surname"].map(_cell)
+        entered: dict[tuple[str, str], set[str]] = collections.defaultdict(set)
+        for krs, name, entry in zip(krss, names, owners["entry_added"].map(_cell)):
+            if entry:
+                entered[krs, entry].add(name)
         for krs, name, entry_removed, removed, stated_on in zip(
-            padded_krs(owners["krs"]),
-            owners["surname"].map(_cell),
+            krss,
+            names,
             owners["entry_removed"].map(_cell),
             iso_dates(owners["date_removed"]),
             iso_dates(owners["stated_on"]),
@@ -858,6 +872,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             if last is None or company is None or not name:
                 continue
             if not held_to_the_end(entry_removed, removed, stated_on, last):
+                continue
+            if entry_removed and entered.get((krs, entry_removed), set()) - {name}:
                 continue
             if self.mark_public_owner(company, name):
                 found.add(krs)
