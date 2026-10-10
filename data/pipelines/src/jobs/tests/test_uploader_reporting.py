@@ -338,6 +338,30 @@ def test_some_refusals_make_the_run_partial_and_say_who(runs):
     assert end["counters"]["failed"] == 1
 
 
+def test_a_person_held_back_is_counted_printed_and_named_with_the_reason(runs, capsys):
+    """A 409 is how the ingest holds a person back: a page of the name with no
+    birth date to tell, or - Krzysztof Hetman's on 2026-10-10 - the page the
+    payload names storing another birth date. Its reason reaches the page."""
+    held = Response(
+        409,
+        {
+            "url": "/api/ingest/person",
+            "statusCode": 409,
+            "statusMessage": "",
+            "message": "Krzysztof Hetman, born 1963-10-10: the page the payload "
+            "names (Nd153mxyMKYahquOIsiI) stores 1974-06-27; held",
+        },
+    )
+    session = Session(person=[person(), held])
+
+    submit("person", people("Anna Nowak", "Krzysztof Hetman"), session)
+
+    end = runs[0].ending()
+    assert (end["state"], end["counters"]["failed"]) == ("partial", 1)
+    assert end["errors"] == [f"Krzysztof Hetman: 409 {held.text}"]
+    assert "stores 1974-06-27; held" in capsys.readouterr().err
+
+
 def test_every_person_refused_is_the_site_refusing_the_run(runs):
     forbidden = Response(403, {"message": "You need to be a member of datascience"})
     session = Session(person=[forbidden, forbidden])
