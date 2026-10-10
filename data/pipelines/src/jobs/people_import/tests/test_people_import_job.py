@@ -599,6 +599,29 @@ def test_a_dry_run_builds_counts_and_reports_but_sends_and_writes_nothing(
     }
 
 
+def test_a_dry_run_says_how_many_the_cap_would_send(world, capsys):
+    """The 2026-10-05 night's said 9,542 people of a run capped at 100."""
+    world.payloads = people(5)
+
+    assert job.main(["--dry-run", "--max-uploads", "2"]) == 0
+
+    assert (
+        f"Dry run: 2 people would be sent to {ENDPOINT}, the first 2 of 5 planned "
+        "(--max-uploads): Osoba 1, Osoba 2\n"
+    ) in capsys.readouterr().out
+
+
+def test_a_dry_run_within_the_cap_names_the_first_three(world, capsys):
+    world.payloads = people(4)
+
+    assert job.main(["--dry-run"]) == 0
+
+    assert (
+        f"Dry run: 4 people would be sent to {ENDPOINT}: Osoba 1, Osoba 2, "
+        "Osoba 3, ...\n"
+    ) in capsys.readouterr().out
+
+
 # ---------------------------------------------------------------------------
 # Flags, and what reaches the pipelines
 
