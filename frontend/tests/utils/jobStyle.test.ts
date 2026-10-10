@@ -147,6 +147,7 @@ describe("counters", () => {
       ...["ok", "struck_off", "not_found", "logged"],
       ...["stored", "not_html", "errors", "rate_limited", "discovered"],
       ...["created", "updated", "unchanged", "employments_created"],
+      ...["employments_published", "candidacies_created"],
       ...["companies_created", "unplaced", "failed", "skipped", "planned"],
       "dropped_changes",
       // people_import --request: what of a page's people it found.

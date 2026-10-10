@@ -39,16 +39,39 @@ class Response:
         return self.body
 
 
-def person(outcome="updated", created=0, unplaced=0, dropped=()) -> Response:
-    """What `/api/ingest/person` answers for a person it took."""
+def person(
+    outcome="updated",
+    created=0,
+    unplaced=0,
+    dropped=(),
+    published=0,
+    candidacies=0,
+) -> Response:
+    """What `/api/ingest/person` answers for a person it took: `created` new
+    jobs and `published` put live, counted from the first row each - a job can
+    be either, both or neither - and `candidacies` new candidacies."""
     body: dict = {
         "personId": "p1",
         "person": outcome,
         "companies": [
-            {"nodeId": f"c{n}", "krs": f"{n:010d}", "created": n < created}
-            for n in range(max(created, 1))
+            {
+                "nodeId": f"c{n}",
+                "krs": f"{n:010d}",
+                "edgeId": f"job{n}",
+                "created": n < created,
+                "published": n < published,
+            }
+            for n in range(max(created, published, 1))
         ],
-        "elections": [],
+        "elections": [
+            {
+                "nodeId": f"r{n}",
+                "edgeId": f"bid{n}",
+                "created": True,
+                "published": False,
+            }
+            for n in range(candidacies)
+        ],
         "status": "ok",
     }
     if unplaced:
@@ -221,6 +244,8 @@ def test_a_person_run_counts_what_the_site_did_with_each_person(runs):
             "updated": 1,
             "unchanged": 1,
             "employments_created": 2,
+            "employments_published": 0,
+            "candidacies_created": 0,
             "companies_created": 0,
             "unplaced": 1,
             "dropped_changes": 0,
@@ -229,6 +254,49 @@ def test_a_person_run_counts_what_the_site_did_with_each_person(runs):
         },
         "done": 4,
     }
+
+
+def test_a_person_run_counts_the_jobs_it_put_live_and_the_new_candidacies(runs):
+    """Edge writes the person's own outcome does not show. Every one of the
+    17 people the 10-07 evening run answered `unchanged` had edges written:
+    90 new jobs and 35 new candidacies among them."""
+    session = Session(
+        person=[
+            # A new job written live, a waiting one approved, and two bids.
+            person("unchanged", created=1, published=2, candidacies=2),
+            person("updated", created=2, candidacies=1),
+        ]
+    )
+
+    submit("person", people("Łukasz Żelewski", "Jan Kowalski"), session)
+
+    counters = runs[0].ending()["counters"]
+    assert (counters["unchanged"], counters["updated"]) == (1, 1)
+    assert counters["employments_created"] == 3
+    assert counters["employments_published"] == 2
+    assert counters["candidacies_created"] == 3
+
+
+def test_a_site_from_before_the_flags_counts_no_new_job_or_candidacy(runs):
+    """Its every job and candidacy said `created: false`, and none said
+    `published`: what it has always reported, rather than an error."""
+    before = {
+        "personId": "p1",
+        "person": "updated",
+        "companies": [{"nodeId": "c1", "krs": "0000023302", "created": False}],
+        "elections": [{"nodeId": "r1", "edgeId": "e1", "created": False}],
+        "status": "ok",
+    }
+    garbled = {"personId": "p2", "person": "updated", "companies": "?"}
+    session = Session(person=[Response(200, before), Response(200, garbled)])
+
+    submit("person", people("Anna Nowak", "Jan Kowalski"), session)
+
+    counters = runs[0].ending()["counters"]
+    assert counters["updated"] == 2
+    assert counters["employments_created"] == 0
+    assert counters["employments_published"] == 0
+    assert counters["candidacies_created"] == 0
 
 
 def test_a_change_the_site_did_not_write_is_counted_and_printed(runs, capsys):
