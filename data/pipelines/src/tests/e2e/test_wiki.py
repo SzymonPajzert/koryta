@@ -38,7 +38,8 @@ def people(read_output):
 
 @pytest.fixture(scope="session")
 def companies(read_output):
-    return read_output("company_wikipedia")
+    # As text: once every value is a number, pandas reads the column as one.
+    return read_output("company_wikipedia", dtype={"krs": str})
 
 
 def test_people_schema_matches_entity(people):
@@ -112,9 +113,9 @@ def test_companies_have_a_name(companies):
 
 
 def test_company_krs_numbers_are_digits(companies):
-    # An infobox with an empty "numer rejestru" comes through as "" rather than
-    # None -- unlike owner_text, which extract_from_article normalises. Absent
-    # either way, so it is not what this test is about.
+    # A file written before ProcessWiki cleaned the column has "" for an empty
+    # "numer rejestru" rather than None. Absent either way, so it is not what
+    # this test is about.
     krs = companies["krs"].dropna()
     krs = krs[krs.str.strip() != ""]
     if krs.empty:

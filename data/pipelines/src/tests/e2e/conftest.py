@@ -107,12 +107,17 @@ def output_path(name: str, fmt: str = "jsonl") -> Path:
 
 @pytest.fixture(scope="session")
 def read_output():
-    """Reads one pipeline's output, skipping the test if the run didn't make it."""
+    """Reads one pipeline's output, skipping the test if the run didn't make it.
 
-    cache: dict[tuple[str, str], pd.DataFrame] = {}
+    `dtype` names the columns to read as they are written rather than as
+    pandas guesses: a column of KRS numbers and nothing else reads as numbers,
+    and loses its leading zeros.
+    """
 
-    def read(name: str, fmt: str = "jsonl") -> pd.DataFrame:
-        key = (name, fmt)
+    cache: dict[tuple, pd.DataFrame] = {}
+
+    def read(name: str, fmt: str = "jsonl", dtype: dict | None = None) -> pd.DataFrame:
+        key = (name, fmt, tuple(sorted((dtype or {}).items())))
         if key in cache:
             return cache[key]
 
@@ -124,9 +129,9 @@ def read_output():
             pytest.skip(message)
 
         if fmt == "jsonl":
-            df = pd.read_json(path, lines=True)
+            df = pd.read_json(path, lines=True, dtype=dtype or True)
         elif fmt == "csv":
-            df = pd.read_csv(path)
+            df = pd.read_csv(path, dtype=dtype)
         else:
             raise ValueError(f"Unsupported format {fmt}")
 

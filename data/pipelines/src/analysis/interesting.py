@@ -68,6 +68,8 @@ class Companies(Pipeline[Company]):
         children_of_hardcoded = self.children_of_hardcoded(ctx, graph)
         wiki_companies: dict[str, list[Wikipedia]] = {}
         for article in self.wiki_companies(ctx):
+            # Clean already, unless the file predates `ProcessWiki` cleaning
+            # it - the night reads the shared cache's copy, which can.
             article_krs = clean_krs(article.krs)
             if article_krs is not None:
                 wiki_companies.setdefault(article_krs, []).append(article)
