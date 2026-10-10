@@ -6,7 +6,6 @@ import {
   jobKindConfig,
   jobProbeConfig,
   KNOWN_COUNTERS,
-  otherDefinition,
   plural,
   progressShare,
   progressText,
@@ -278,35 +277,6 @@ describe("schedules", () => {
       "codziennie o 00:30 czasu warszawskiego",
     );
     expect(scheduleText({})).toBeNull();
-  });
-});
-
-describe("otherDefinition", () => {
-  it("makes a row out of nothing but runs", () => {
-    const definition = otherDefinition({
-      id: "people_upload",
-      runs: [run({ job: "people_upload", trigger: "manual" })],
-      record: null,
-    });
-    expect(definition).toMatchObject({
-      id: "people_upload",
-      title: "people_upload",
-      kind: "scheduled",
-      heartbeatMinutes: 15,
-      runsOn: "predator",
-    });
-  });
-
-  it("guesses the kind from how the newest run started", () => {
-    const kindOf = (trigger: JobRun["trigger"]) =>
-      otherDefinition({ id: "x", runs: [run({ trigger })], record: null }).kind;
-    expect(kindOf("schedule")).toBe("scheduled");
-    expect(kindOf("event")).toBe("triggered");
-    expect(kindOf("manual")).toBe("scheduled");
-    expect(kindOf(null)).toBe("scheduled");
-    expect(otherDefinition({ id: "x", runs: [], record: null }).kind).toBe(
-      "scheduled",
-    );
   });
 });
 

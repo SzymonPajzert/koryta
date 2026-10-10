@@ -27,7 +27,6 @@ import {
   type JobKind,
   type JobProbe,
   type JobRun,
-  type JobView,
   type RunProgress,
   type RunState,
   type RunTrigger,
@@ -369,25 +368,6 @@ export function scheduleText(definition: Pick<JobDefinition, "schedule">) {
       ? "czasu warszawskiego"
       : `(${schedule.timeZone})`;
   return `codziennie o ${schedule.dailyAt} ${zone}`;
-}
-
-/** A definition for a job `JOBS` does not list, so its runs can be shown and
- * judged like any other. Its kind is guessed from how its newest run started:
- * a site event means triggered, anything else is read as a scheduled job with
- * no schedule - plain succeeded / partial / failed, with no clock to miss. An
- * unknown job read as ongoing would turn amber after every finished run. */
-export function otherDefinition(view: JobView): JobDefinition {
-  const kind: JobKind =
-    view.runs[0]?.trigger === "event" ? "triggered" : "scheduled";
-  return {
-    id: view.id,
-    kind,
-    title: view.id,
-    summary:
-      "Zgłasza uruchomienia, ale nie ma go w rejestrze jobów (JOBS w shared/jobs.ts), więc nie ma opisu ani harmonogramu.",
-    runsOn: view.runs[0]?.host ?? "nie wiadomo",
-    heartbeatMinutes: 15,
-  };
 }
 
 /** The anchor a row is reached by: `/admin/procesy#proces-<id>`. */

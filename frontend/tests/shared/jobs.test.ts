@@ -13,14 +13,18 @@ import {
   isStalled,
   jobDefinition,
   jobHealth,
+  jobRecordFromData,
   jobRunFromData,
   lagDays,
+  lastRunsMissing,
   mirrorWrites,
   missedSlot,
   nextSlot,
+  otherDefinition,
   previousSlot,
   runAnchor,
   runLink,
+  runsByJob,
   scheduleIsLive,
   shortWarsawTime,
   taskLink,
@@ -1477,6 +1481,115 @@ describe("mirrorWrites", () => {
     );
     expect(rejestr!.newerData).toBeNull();
     expect(krs).not.toHaveProperty("newerData");
+  });
+});
+
+describe("otherDefinition", () => {
+  const newest = (fields: Partial<JobRun> = {}) =>
+    run({
+      state: "succeeded",
+      startedAt: "2026-10-02T08:00:00.000Z",
+      ...fields,
+    });
+
+  it("makes a row out of nothing but runs", () => {
+    const definition = otherDefinition({
+      id: "people_upload",
+      runs: [
+        newest({ job: "people_upload", trigger: "manual", host: "predator" }),
+      ],
+    });
+    expect(definition).toMatchObject({
+      id: "people_upload",
+      title: "people_upload",
+      kind: "scheduled",
+      heartbeatMinutes: 15,
+      runsOn: "predator",
+    });
+  });
+
+  it("guesses the kind from how the newest run started", () => {
+    const kindOf = (trigger: JobRun["trigger"]) =>
+      otherDefinition({ id: "x", runs: [newest({ trigger })] }).kind;
+    expect(kindOf("schedule")).toBe("scheduled");
+    expect(kindOf("event")).toBe("triggered");
+    expect(kindOf("manual")).toBe("scheduled");
+    expect(kindOf(null)).toBe("scheduled");
+    expect(otherDefinition({ id: "x", runs: [] }).kind).toBe("scheduled");
+  });
+});
+
+describe("jobRecordFromData", () => {
+  it("evens the REST API's microseconds out to the server's milliseconds", () => {
+    expect(
+      jobRecordFromData({
+        lastRunId: "a2",
+        lastStartedAt: "2026-10-01T22:30:00.123456Z",
+        lastScheduledAt: "2026-10-01T22:30:00.000Z",
+        lastSucceededAt: "2026-09-30T23:00:00Z",
+        lastState: "running",
+      }),
+    ).toEqual({
+      lastRunId: "a2",
+      lastStartedAt: "2026-10-01T22:30:00.123Z",
+      lastScheduledAt: "2026-10-01T22:30:00.000Z",
+      lastSucceededAt: "2026-09-30T23:00:00.000Z",
+    });
+  });
+
+  it("reads anything else as nothing", () => {
+    expect(
+      jobRecordFromData({
+        lastRunId: 7,
+        lastStartedAt: "soon",
+        lastScheduledAt: "",
+      }),
+    ).toEqual({
+      lastRunId: null,
+      lastStartedAt: null,
+      lastScheduledAt: null,
+      lastSucceededAt: null,
+    });
+  });
+});
+
+describe("runsByJob / lastRunsMissing", () => {
+  const reported = (id: string, job: string, startedAt: string) =>
+    run({ id, job, state: "succeeded", startedAt });
+  const record = (lastRunId: string | null): JobRecord => ({
+    ...LIVE,
+    lastRunId,
+  });
+
+  it("groups runs per job, newest first, each run once", () => {
+    const a1 = reported("a1", "krs_scrape_free", "2026-09-30T22:30:00.000Z");
+    const a2 = reported("a2", "krs_scrape_free", "2026-10-01T22:30:00.000Z");
+    const b1 = reported("b1", "krs_scrape_paid", "2026-09-15T08:00:00.000Z");
+    const byJob = runsByJob([a1, null, b1, a2, a1]);
+    expect([...byJob.keys()]).toEqual(["krs_scrape_free", "krs_scrape_paid"]);
+    expect(byJob.get("krs_scrape_free")!.map((r) => r.id)).toEqual([
+      "a2",
+      "a1",
+    ]);
+    expect(byJob.get("krs_scrape_paid")!.map((r) => r.id)).toEqual(["b1"]);
+  });
+
+  it("names the newest runs the window does not hold, once each", () => {
+    const window = [
+      reported("chatty-000", "chatty", "2026-10-02T09:00:00.000Z"),
+      null,
+    ];
+    expect(
+      lastRunsMissing(
+        [
+          record("chatty-000"),
+          record("old-free"),
+          record(null),
+          record("old-free"),
+        ],
+        window,
+      ),
+    ).toEqual(["old-free"]);
   });
 });
 
