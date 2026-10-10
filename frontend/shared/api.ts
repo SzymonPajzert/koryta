@@ -266,9 +266,25 @@ export type PersonRequest = {
   elections?: Array<ElectionRequest>;
 };
 
+/** One row of the request, as the ingest answers it: the node the row named
+ * and the edge it landed on.
+ *
+ * `created` is about the edge for a job or a candidacy - the row is the
+ * relation, and the node it names was there already - and about the node for
+ * an article, whose URL the request may be the first to name. It was `false`
+ * for every job until 2026-10-10, so the uploader's „nowych zatrudnień” read 0
+ * on every night: the 10-06 run among them, which gave Łukasz Żelewski three
+ * new jobs.
+ */
 export type EntityResult = {
   nodeId: string;
   created: boolean;
+  /** Whether this request put the edge on the site without a reviewer: a job
+   * of a verified person written live (`verifiedEmployments`), or one already
+   * stored and waiting that it approved. An edge that was live already is not:
+   * nothing about it changed. Absent from an article's result, and from an
+   * ingest deployed before 2026-10-10. */
+  published?: boolean;
   edgeId?: string;
   krs?: string;
 };

@@ -871,10 +871,72 @@ describe("api/ingest/person", () => {
         }),
       );
 
-      await handler({} as any);
+      const result = await handler({} as any);
 
       expect(proposeRevisionTransaction).not.toHaveBeenCalled();
       expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+      // New, and left for a reviewer: a candidacy is never verified.
+      expect(result.elections).toEqual([
+        expect.objectContaining({ created: true, published: false }),
+      ]);
+    });
+
+    it("says it created only the candidacy it wrote beside the stored one", async () => {
+      // The rows of "does not let a bare row re-take the candidacy it just
+      // enriched": the first fills in the stored candidacy, the second is a
+      // second bid. A night counts the second alone as new.
+      personWithStoredEdges([storedCandidacy]);
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        parties: [],
+        companies: [],
+        elections: [
+          {
+            election_type: "Samorząd",
+            teryt: "1465",
+            election_year: "2024",
+            committee: "Komitet Wyborczy Prawo i Sprawiedliwość",
+            party_from_committee: true,
+          },
+          { election_type: "Samorząd", teryt: "1465", election_year: "2024" },
+        ],
+      });
+      mockGet.mockResolvedValueOnce({
+        empty: false,
+        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
+      });
+      mockGet.mockResolvedValueOnce({
+        empty: false,
+        docs: [{ id: "stored-0", data: () => storedCandidacy }],
+      });
+
+      const result = await handler({} as any);
+
+      expect(
+        result.elections!.map(({ created, published }) => ({
+          created,
+          published,
+        })),
+      ).toEqual([
+        { created: false, published: false },
+        { created: true, published: false },
+      ]);
+    });
+
+    it("says nothing was created for a candidacy restated as stored", async () => {
+      personWithStoredEdges([storedCandidacy]);
+      mockReadBody.mockResolvedValue(payload({ election_year: "2024" }));
+
+      const result = await handler({} as any);
+
+      expect(result.elections).toEqual([
+        {
+          nodeId: "teryt1465",
+          edgeId: "stored-0",
+          created: false,
+          published: false,
+        },
+      ]);
     });
   });
 
@@ -2722,6 +2784,89 @@ describe("api/ingest/person, jobs from the register entry a published page links
 
       expect(writtenOnto("arp-board")).toEqual([]);
       expect(result).not.toHaveProperty("droppedChanges");
+    });
+  });
+
+  describe("what the answer says it did with each row", () => {
+    /** The answer's row for the company of that KRS number. */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function job(result: any, krs: string) {
+      return result.companies.find((row: { krs?: string }) => row.krs === krs);
+    }
+
+    it("says it created the new seat and put it live, and neither of a job the page shows", async () => {
+      // The 10-06 run gave Żelewski three new jobs and answered `created:
+      // false` for every one, so the night counted no new job at all.
+      payload();
+
+      const result = await handler({} as any);
+
+      expect(job(result, "0000023302")).toMatchObject({
+        created: true,
+        published: true,
+      });
+      expect(job(result, "0000004441")).toMatchObject({
+        created: false,
+        published: false,
+      });
+    });
+
+    it("says a new job it left for a reviewer was created and not put live", async () => {
+      store.nodes!.zelewski!.published = false;
+      payload();
+
+      const result = await handler({} as any);
+
+      expect(job(result, "0000023302")).toMatchObject({
+        created: true,
+        published: false,
+      });
+    });
+
+    it("says a waiting job it approved went live, though it was not new", async () => {
+      waitingSeat();
+      payload();
+
+      const result = await handler({} as any);
+
+      expect(job(result, "0000023302")).toEqual({
+        nodeId: "kghm",
+        krs: "0000023302",
+        edgeId: "seat",
+        created: false,
+        published: true,
+      });
+    });
+
+    it("says nothing went live for a waiting job it left waiting", async () => {
+      waitingSeat({}, { status: "rejected", reject_reason: "inna osoba" });
+      payload();
+
+      const result = await handler({} as any);
+
+      expect(job(result, "0000023302")).toMatchObject({
+        edgeId: "seat",
+        created: false,
+        published: false,
+      });
+    });
+
+    it("keeps an article's created about the article, not the mention", async () => {
+      // Both mentions are new edges; only the second URL is a new node.
+      store.nodes!.article = {
+        type: "article",
+        name: "",
+        sourceURL: "https://example.pl/a",
+      };
+      payload({ sources: ["https://example.pl/a", "https://example.pl/b"] });
+
+      const result = await handler({} as any);
+
+      expect(result.articles).toEqual([
+        expect.objectContaining({ nodeId: "article", created: false }),
+        expect.objectContaining({ nodeId: "new-nodes-id", created: true }),
+      ]);
+      expect(result.articles[0]).not.toHaveProperty("published");
     });
   });
 });

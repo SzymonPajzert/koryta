@@ -425,7 +425,12 @@ async function createEmployment(
   const verified =
     ctx.verifiedEmployments !== undefined &&
     ctx.companyPublished.get(companyId) === true;
-  const edgeId = await findEdgeOrCreate(ctx, edgeData, false, verified);
+  const { edgeId, created, published } = await findEdgeOrCreate(
+    ctx,
+    edgeData,
+    false,
+    verified,
+  );
   // The edge lookup knows which stored job it kept; the row knows the company
   // it named, which is what the uploader's log can be read by.
   for (const change of ctx.dropped) {
@@ -435,7 +440,8 @@ async function createEmployment(
   return {
     nodeId: companyId,
     krs: employment.krs,
-    created: false,
+    created,
+    published,
     edgeId,
   };
 }
@@ -477,7 +483,9 @@ async function createArticle(
     target: articleId,
     type: "mentions",
   };
-  const edgeId = await findEdgeOrCreate(ctx, edgeData);
+  // `created` stays the article node's: an article is the one row here that
+  // can name a node the site does not have yet.
+  const { edgeId } = await findEdgeOrCreate(ctx, edgeData);
 
   return {
     nodeId: articleId,
@@ -610,7 +618,7 @@ async function createElection(
   // that exact committee - a candidacy carrying one has nothing left to review.
   // An unrecognised committee is usually a one-gmina KWW and harmless, but it
   // is also where a newly-worded national committee hides, so those wait.
-  const edgeId = await findEdgeOrCreate(
+  const { edgeId, created, published } = await findEdgeOrCreate(
     ctx,
     edgeData,
     election.party_from_committee ?? false,
@@ -625,7 +633,8 @@ async function createElection(
     placed: {
       nodeId: regionId,
       edgeId,
-      created: false,
+      created,
+      published,
     },
   };
 }
@@ -1021,6 +1030,9 @@ function conflict(message: string) {
  * row is matched against the n-th stored edge, so re-sending the payload maps
  * each row back onto the edge it made last time and the collection stops at
  * `max(rows in the payload, edges already stored)` - never fewer, never more.
+ *
+ * Says what it did to the edge as well as which one it is (`EdgeOutcome`),
+ * because only this function knows which of the three ways it went.
  */
 async function findEdgeOrCreate(
   ctx: Context,
@@ -1032,7 +1044,7 @@ async function findEdgeOrCreate(
    * approved and live, and a stored one still waiting for its first review is
    * approved and put live as it stands. See `verifiedEmployments`. */
   verified: boolean = false,
-) {
+): Promise<EdgeOutcome> {
   // Counted before the first await, so the concurrent employments dispatched
   // through Promise.all cannot interleave between the read and the write.
   const identity = edgeIdentity(edge);
@@ -1070,7 +1082,7 @@ async function findEdgeOrCreate(
     ctx.claimedEdgeIds.set(existing, identity);
     const published = verified && (await approveWaitingEdge(ctx, existing));
     fillAnnotations(ctx, existing, documents.get(existing), edge, published);
-    return existing;
+    return { edgeId: existing, created: false, published };
   }
 
   // Nothing says this, but something may say a poorer version of it. Only
@@ -1130,7 +1142,8 @@ async function findEdgeOrCreate(
       );
       ctx.proposals[outcome] = (ctx.proposals[outcome] ?? 0) + 1;
     }
-    return edgeRef.id;
+    // Written onto with the visibility it had, so nothing went live.
+    return { edgeId: edgeRef.id, created: false, published: false };
   }
 
   // A new document, at an id no stored edge already occupies. Normally
@@ -1142,10 +1155,11 @@ async function findEdgeOrCreate(
   while (ids.has(edgeDocumentId(edge, copy))) copy++;
 
   const edgeRef = ctx.db.collection("edges").doc(edgeDocumentId(edge, copy));
+  const published = ctx.autoapprove || verified;
   createRevisionTransaction(ctx.db, ctx.batch, ctx.user, edgeRef, edge, {
     automatic: true,
-    approve: ctx.autoapprove || verified,
-    published: ctx.autoapprove || verified,
+    approve: published,
+    published,
   });
   if (verified) {
     console.info(
@@ -1153,8 +1167,29 @@ async function findEdgeOrCreate(
     );
   }
   ctx.claimedEdgeIds.set(edgeRef.id, identity);
-  return edgeRef.id;
+  return { edgeId: edgeRef.id, created: true, published };
 }
+
+/** What `findEdgeOrCreate` did with one row.
+ *
+ * Its callers used to get the edge's id and nothing else, and reported every
+ * job and candidacy as `created: false` - so the night's „nowych zatrudnień”
+ * read 0 whatever it wrote. On 10-10 it read 0 for a night that created 15
+ * pages, and 0 for the KARR request that created 38. The uploader counts
+ * what this says.
+ */
+type EdgeOutcome = {
+  edgeId: string;
+  /** No stored edge said this, or a poorer version of it, so a new document
+   * was written. A stored edge the row only fills in or proposes a change to
+   * is not new, and neither is a removed one the row restates. */
+  created: boolean;
+  /** The request put the edge on the site without a reviewer: a new one
+   * written live (`verified` or `autoapprove`), or a stored one still waiting
+   * for its first review that `approveWaitingEdge` approved. False for an
+   * edge already live, which nothing here changed the visibility of. */
+  published: boolean;
+};
 
 /** Writes onto a stored edge what the row says about the same episode and the
  * edge does not say yet: a job's end, on a job stored while it was held.
