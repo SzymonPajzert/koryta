@@ -219,8 +219,13 @@ jobs:
               # Both read every stored odpis, one object at a time -- ~8,300
               # PDFs, the better part of an hour on a cold runner -- and the
               # seats need the PESEL key, which the runner does not hold.
-              # PeopleKRSCombined still asks for the seats; without the key
-              # it says so and takes rejestr.io's people alone.
+              # Excluding them only takes them off the top-level list, and
+              # PeopleKRSCombined still builds the seats. It does so inside
+              # its process rather than before it (preprocess_sources), so
+              # the missing key fails them before any document is read, the
+              # pipeline says so and takes rejestr.io's people alone, and the
+              # entries are never read. Until 2026-10-10 the seats were built
+              # before process, and the missing key failed the whole run.
               KrsOdpisEntries
               KrsOdpisSeats
               # Writes nothing - it prints how koryta.pl exports differ - and
