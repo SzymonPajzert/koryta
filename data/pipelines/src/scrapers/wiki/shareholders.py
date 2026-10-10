@@ -154,8 +154,12 @@ def article_url(title: str) -> str:
 
 #: A number padded with zeros and split into groups by spaces, the way an
 #: article writes one now and then: "KRS 00000 12355", "0000 800 698". Not by
-#: a line break, which is two numbers; and not unpadded, which would glue a
-#: short number to the date after it.
+#: a line break, which is two numbers; not unpadded, which would glue a short
+#: number to the date after it; and only where the groups make all ten digits
+#: of a padded number. Another number written in groups can have one that
+#: starts with a zero in the middle: Christofle's SIREN, "562 063 347 RCS
+#: Nanterre", and Fast Concept Car's "B 950 020 206" would give KRS 0000063347
+#: and 0000020206, and a NIP written "526 025 07 13" KRS 0000250713.
 _SPACED_DIGITS = re.compile(r"(?<!\d)0\d*(?:[^\S\n]+\d+)+")
 
 #: A run of digits, unless a hyphen joins it to more. That is how a NIP or a
@@ -185,14 +189,16 @@ _KRS_LIMIT = 10_000_000
 
 
 def _join_spaced(match: re.Match) -> str:
-    """Digit groups joined into one number for as long as it fits in ten."""
-    numbers: list[str] = []
+    """Digit groups joined into one number where together they make ten."""
+    runs: list[list[str]] = []
     for group in match.group(0).split():
-        if numbers and len(numbers[-1]) + len(group) <= 10:
-            numbers[-1] += group
+        if runs and len("".join(runs[-1])) + len(group) <= 10:
+            runs[-1].append(group)
         else:
-            numbers.append(group)
-    return " ".join(numbers)
+            runs.append([group])
+    return " ".join(
+        "".join(run) if len("".join(run)) == 10 else " ".join(run) for run in runs
+    )
 
 
 def clean_krs(raw) -> str | None:
