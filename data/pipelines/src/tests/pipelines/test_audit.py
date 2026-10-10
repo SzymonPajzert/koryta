@@ -14,10 +14,15 @@ log that has come loose from what happened.
 
 The collection did not exist before this shipped, and `read_collection` returns
 an empty list for a collection the export has no directory for. So this file
-passes vacuously against any earlier export and starts having teeth with the
-first deploy - which is deliberate, and is why `test_audit_log_is_written_once_
-pages_are_being_published` states the condition under which emptiness is itself
-the failure.
+passes vacuously against any export without it - which is deliberate, and is
+why `test_audit_log_is_written_once_pages_are_being_published` states the
+condition under which emptiness is itself the failure.
+
+And every export so far has been without it. The scheduled export names the
+collections it takes, and `audit` was not among them until 2026-10, so that
+test failed every night accusing `recordAudit` of a write nobody had checked:
+the log was there, the export was not looking. It now skips while the export
+lacks the collection, and has teeth from the first export that has it.
 
 Reading the export needs credentials and a download, so the whole file is
 marked ``e2e`` and deselected by default. Run it with::
@@ -38,11 +43,28 @@ pytestmark = pytest.mark.e2e
 # From `shared/audit.ts`. Kept as a literal rather than parsed out of the
 # TypeScript so that adding an action there has to be a deliberate change here
 # too - a new kind of admin decision is exactly the thing worth noticing.
-AUDIT_ACTIONS = {"approve", "reject", "publish", "unpublish"}
+# `delete`, `merge` and `split` joined it there without joining this list, and
+# would have read as malformed entries the first night the log was exported.
+AUDIT_ACTIONS = {
+    "approve",
+    "reject",
+    "publish",
+    "unpublish",
+    "delete",
+    "merge",
+    "split",
+}
 
-#: The actions that settle a revision, and so must name one. `publish` and
-#: `unpublish` change who may see a page rather than what it says, and name none.
-REVISION_ACTIONS = {"approve", "reject"}
+#: The actions that always name a revision: the two that settle one, and a
+#: removal, which `/api/edges/delete` files as a revision of its own.
+REVISION_ACTIONS = {"approve", "reject", "delete"}
+
+#: The actions that name one only sometimes. A publication changes who may see
+#: a page rather than what it says, and `/api/nodes/publish` files it bare -
+#: but one filed in the same step as an approval ("zatwierdź i opublikuj", a
+#: relation published from the queue) names the revision it went out with.
+#: `merge` and `split` name none: they move relations, not revisions.
+SOMETIMES_REVISION_ACTIONS = {"publish", "unpublish"}
 
 AUDIT_COLLECTIONS = {"nodes", "edges"}
 
@@ -108,16 +130,18 @@ def test_every_entry_names_who_decided_and_when(audit):
 
 
 def test_only_revision_decisions_name_a_revision(audit):
-    """`revision_id` is present exactly for the actions that settle one.
+    """`revision_id` is present for the actions that settle one, and only there.
 
     Both directions matter. An approval with no revision does not say what was
-    approved; a publication carrying one implies the page went live *because*
-    of that revision, which is the conflation this whole change undid.
+    approved; a merge carrying one implies a revision explains where the
+    relations went, which none does. A publication is the one action that may
+    go either way - see `SOMETIMES_REVISION_ACTIONS`.
     """
     wrong = [
         (entry["id"], entry.get("action"), entry.get("revision_id"))
         for entry in audit
-        if (entry.get("revision_id") is not None)
+        if entry.get("action") not in SOMETIMES_REVISION_ACTIONS
+        and (entry.get("revision_id") is not None)
         != (entry.get("action") in REVISION_ACTIONS)
     ]
 
@@ -158,7 +182,7 @@ def test_every_entry_points_at_a_document_that_exists(audit, snapshot):
 
 
 def test_every_settled_revision_belongs_to_the_document_it_settled(audit, snapshot):
-    """An approval must name a revision *of the target it claims*.
+    """An entry that names a revision must name one *of the target it claims*.
 
     This is what tells a log that records real decisions from one that records
     plausible-looking noise: the two ids in an entry have to agree with each
@@ -172,7 +196,7 @@ def test_every_settled_revision_belongs_to_the_document_it_settled(audit, snapsh
 
     mismatched = []
     for entry in audit:
-        if entry.get("action") not in REVISION_ACTIONS:
+        if entry.get("revision_id") is None:
             continue
         revision_id = reference_id(entry.get("revision_id"))
         revision = revisions.get(revision_id)
@@ -206,6 +230,13 @@ def test_audit_log_is_written_once_pages_are_being_published(audit, snapshot):
     `review_user` is written by `applyRevision` and by the reject endpoint,
     both of which file an entry in the same batch.
     """
+    if not snapshot.exports("audit"):
+        pytest.skip(
+            "the export did not take the audit collection - it is not in "
+            "scheduledFirestoreExport's collectionIds yet - so its being empty "
+            "says nothing about recordAudit"
+        )
+
     reviewed = [
         document["id"]
         for document in snapshot.collection("revisions")

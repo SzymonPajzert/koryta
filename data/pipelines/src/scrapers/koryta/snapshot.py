@@ -82,6 +82,24 @@ def latest_export(ctx: Context, max_lookback: int = 5) -> str:
     )
 
 
+def is_exported(ctx: Context, date: str, collection: str) -> bool:
+    """Whether the export taken at ``date`` includes ``collection`` at all.
+
+    `read_collection` cannot tell: it returns an empty list both for a
+    collection exported empty and for one the export never took. And the
+    scheduled export takes only the collections it names (`collectionIds` in
+    `frontend/functions/src/index.ts`), so a collection added to the site is
+    missing from every export until it is named there and the functions are
+    deployed. Firestore writes a directory, with a metadata file of its own,
+    for every collection it was asked for.
+    """
+    ref = CloudStorage(
+        prefix=f"{DUMP_PREFIX}/date={date}/all_namespaces/kind_{collection}/",
+        binary=True,
+    )
+    return any(True for _ in ctx.io.list_files(ref))
+
+
 def read_collection(ctx: Context, date: str, collection: str) -> list[dict]:
     """Every document of ``collection`` in the export taken at ``date``.
 
@@ -156,6 +174,10 @@ class Snapshot:
         if name not in self._collections:
             self._collections[name] = read_collection(self.ctx, self.date, name)
         return self._collections[name]
+
+    def exports(self, name: str) -> bool:
+        """Whether the export took the collection, as against holding none of it."""
+        return is_exported(self.ctx, self.date, name)
 
     def ids(self, name: str) -> set[str]:
         return {document["id"] for document in self.collection(name)}
