@@ -97,8 +97,8 @@ class EdgeSemantics:
     #: Fields that say something about the episode without saying *which*
     #: episode it is. They enrich - filling one in is a reason to write - but
     #: never take part in `edge_identity`, so learning one cannot move an edge
-    #: to another document. Mirrors `annotations` in server/utils/edges.ts;
-    #: `elected` is the one that exists.
+    #: to another document. Mirrors `annotations` in server/utils/edges.ts:
+    #: a candidacy's `elected`, and a job's `end_date`.
     annotations: tuple[str, ...] = ()
 
 
@@ -111,7 +111,11 @@ EDGE_SEMANTICS: dict[str, EdgeSemantics] = {
     "mentions": EdgeSemantics("state", (), False),
     "comment": EdgeSemantics("state", (), False),
     "source": EdgeSemantics("state", (), False),
-    "employed": EdgeSemantics("occurrence", ("name", "start_date"), False),
+    # `end_date` is learned after the job is stored: an annotation, filled in
+    # on the stored spell by `fillAnnotations` in `person.post.ts`.
+    "employed": EdgeSemantics(
+        "occurrence", ("name", "start_date"), False, ("end_date",)
+    ),
     "election": EdgeSemantics(
         "occurrence",
         ("position", "start_date", "party", "committee", "term"),
@@ -154,6 +158,7 @@ NEW_PERSON = "person not on koryta.pl"
 PERSON_FIELDS = "person node learns a field"
 MISSING_COMPANY = "company not on koryta.pl"
 NEW_EMPLOYMENT = "employment not stored"
+ENDED_EMPLOYMENT = "stored employment learns its end"
 NEW_CANDIDACY = "candidacy not stored"
 ENRICHED_CANDIDACY = "stored candidacy learns a field"
 MISSING_ARTICLE = "article not on koryta.pl"
@@ -338,6 +343,29 @@ def edge_relation(
 def meets_enrich_floor(stored: typing.Mapping[str, typing.Any]) -> bool:
     required = ENRICH_FLOOR.get(str(stored.get("type")), ())
     return all(field(stored, name) is not None for name in required)
+
+
+def fills_annotations(
+    stored: typing.Mapping[str, typing.Any],
+    incoming: typing.Mapping[str, typing.Any],
+) -> bool:
+    """Whether the ingest writes onto a stored edge it matched exactly.
+
+    `fillAnnotations` in `person.post.ts`: everything the row adds is an
+    annotation - a job's end, on a job stored while it was held - and the edge
+    has not been removed. `deleted` is True off a fresh frame and 1.0 off one
+    read back from disk.
+    """
+    if stored.get("deleted") == 1:
+        return False
+    rules = semantics(incoming.get("type"))
+
+    def adds(name: str) -> bool:
+        return field(stored, name) is None and field(incoming, name) is not None
+
+    return any(adds(name) for name in rules.annotations) and not any(
+        adds(name) for name in rules.discriminators
+    )
 
 
 def _records(df: pd.DataFrame) -> list[dict]:
@@ -585,10 +613,11 @@ class SiteSnapshot:
     def dated_changes(self, payload: typing.Mapping[str, typing.Any]) -> list[Change]:
         """`changes`, each with the day the fact it writes dates from.
 
-        An employment the site lacks dates from its start, a candidacy from the
-        first day of its election year; the person's own fields and a mention
-        carry no date (None). It is how a capped upload sends the newest news
-        first (`analysis.payloads.priority`): the day a post began, not the day
+        An employment the site lacks dates from its start, the end of one it
+        holds from the day it ended, a candidacy from the first day of its
+        election year; the person's own fields and a mention carry no date
+        (None). It is how a capped upload sends the newest news first
+        (`analysis.payloads.priority`): the day a post began, not the day
         anybody noticed, since neither the crawl nor the export says when a
         fact first arrived.
         """
@@ -906,8 +935,14 @@ class SiteSnapshot:
                 edge["start_date"] = company["start"]
             if company.get("end"):
                 edge["end_date"] = company["end"]
-            if matcher.place(edge) != "same":
-                reasons.append((NEW_EMPLOYMENT, started))
+            match matcher.place(edge):
+                case "same":
+                    pass
+                case "enriches":
+                    # The news is the end, so that is the day it dates from.
+                    reasons.append((ENDED_EMPLOYMENT, day_of(company.get("end"))))
+                case _:
+                    reasons.append((NEW_EMPLOYMENT, started))
         return reasons
 
     def _mention_changes(
@@ -1062,8 +1097,11 @@ class _EdgeMatcher:
             if self.claimed.get(str(stored.get("id")), identity) == identity
         ]
         if occurrence < len(unclaimed):
-            self.claimed[str(unclaimed[occurrence].get("id"))] = identity
-            return "same"
+            taken = unclaimed[occurrence]
+            self.claimed[str(taken.get("id"))] = identity
+            # Matched exactly and still a write: the ingest fills in what the
+            # row says about the episode and the edge does not (`fillAnnotations`).
+            return "enriches" if fills_annotations(taken, edge) else "same"
 
         for candidate in enrichable:
             if str(candidate.get("id")) not in self.claimed:

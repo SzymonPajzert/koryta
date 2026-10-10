@@ -14,7 +14,12 @@ import dataclasses
 import pandas as pd
 import pytest
 
-from analysis.payloads.site import EDGE_SEMANTICS, ENRICHED_CANDIDACY, SiteSnapshot
+from analysis.payloads.site import (
+    EDGE_SEMANTICS,
+    ENDED_EMPLOYMENT,
+    ENRICHED_CANDIDACY,
+    SiteSnapshot,
+)
 from entities.composite import Person
 from scrapers.koryta.download import KorytaEdges, KorytaExport, KorytaNodes
 
@@ -132,3 +137,49 @@ def test_a_stored_result_is_read_as_the_ingest_reads_it(tmp_path, elected, expec
     snapshot = SiteSnapshot(nodes, stored)
 
     assert snapshot.changes(payload(elections=[WON])) == expected
+
+
+COMPANY = {"id": "place-1", "type": "place", "name": "KARR", "krsNumber": "0000073772"}
+STORED_JOB = {
+    "id": "edge-employed-1",
+    "type": "employed",
+    "source": "person-1",
+    "target": "place-1",
+    "name": "Zarząd",
+    "start_date": "2025-02-13",
+}
+#: A job ended elsewhere, so the column holds dates as a real export's does.
+ENDED_ELSEWHERE = dict(
+    STORED_JOB, id="edge-employed-2", target="place-2", end_date="2013-02-25"
+)
+ENDED = {
+    "krs": "0000073772",
+    "role": "Zarząd",
+    "start": "2025-02-13",
+    "end": "2026-08-25",
+}
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        # Stored while held: the end is news, and an open job's missing end has
+        # to read back as a blank for the plan to see it.
+        ({}, [ENDED_EMPLOYMENT]),
+        # Stored with that end: nothing to write.
+        ({"end_date": "2026-08-25"}, []),
+        # Removed: the ingest leaves it as it is, and `deleted` reads back 1.0.
+        ({"deleted": True}, []),
+    ],
+)
+def test_a_stored_end_is_read_as_the_ingest_reads_it(tmp_path, stored, expected):
+    edges = through_the_export(
+        [dict(STORED_JOB, **stored), ENDED_ELSEWHERE, OTHER_EDGE],
+        KorytaEdges,
+        tmp_path,
+    )
+    nodes = through_the_export([PERSON, COMPANY], KorytaNodes, tmp_path)
+
+    snapshot = SiteSnapshot(nodes, edges)
+
+    assert snapshot.changes(payload(companies=[ENDED])) == expected
