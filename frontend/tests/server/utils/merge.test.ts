@@ -763,6 +763,91 @@ describe("applyNodeMerge", () => {
 
     expect(updates.map((call) => call[0])).toEqual(["nodes/dup"]);
   });
+
+  /** A merge with nothing but fields to carry, onto the survivor given. */
+  function carryOnto(
+    duplicate: Record<string, unknown>,
+    survivor: Record<string, unknown>,
+  ) {
+    applyNodeMerge(
+      db,
+      batch,
+      { uid: "admin-uid" },
+      { ...plan, edges: [], carried: carriedFields(duplicate, survivor) },
+      "Powód",
+      new Map(),
+      survivor,
+    );
+  }
+
+  it("files the stated list in the survivor's history exactly as it lands on the page", async () => {
+    // The revision is what the next approval writes back over the node, so a
+    // marker or a list only the node carried would be lost on that write.
+    carryOnto(
+      { type: "person", parties: ["PSL"], partiesSource: "manual" },
+      {
+        type: "person",
+        name: "Jan Kowalski",
+        parties: ["PSL", "Polska 2050"],
+        published: true,
+        stats: { isApproved: true },
+      },
+    );
+
+    const revision = writtenTo("revisions/");
+    expect(revision).toMatchObject({
+      node_id: "surv",
+      collection: "nodes",
+      status: "approved",
+      data: { parties: ["PSL"], partiesSource: "manual" },
+    });
+    expect(wrote("nodes/surv")).toMatchObject({
+      parties: ["PSL"],
+      partiesSource: "manual",
+      published: true,
+    });
+  });
+
+  it("writes nothing onto a survivor whose stated list was all that differed", async () => {
+    // No revision at all, so a survivor still waiting for review stays in
+    // that queue rather than being approved by a merge that changed nothing.
+    carryOnto(
+      { type: "person", parties: ["SLD"] },
+      {
+        type: "person",
+        name: "Jacek Wojciech Piętniewicz",
+        parties: ["Nowa Lewica"],
+        partiesSource: "manual",
+        published: false,
+      },
+    );
+
+    expect(wrote("nodes/surv")).toBeUndefined();
+    expect(writtenTo("revisions/")).toBeUndefined();
+  });
+
+  it("carries a stated list onto a draft without publishing it", async () => {
+    // A page the pipeline created has no approved revision. The merge files
+    // its own as approved - it always has, on the admin's authority - but
+    // visibility is the stored page's, not something a merge decides.
+    carryOnto(
+      { type: "person", parties: ["PiS"], partiesSource: "manual" },
+      { type: "person", name: "Anna Nowak", parties: [], published: false },
+    );
+
+    expect(writtenTo("revisions/")).toMatchObject({
+      status: "approved",
+      data: { parties: ["PiS"], partiesSource: "manual" },
+    });
+    expect(wrote("nodes/surv")).toMatchObject({
+      parties: ["PiS"],
+      partiesSource: "manual",
+      published: false,
+      revision_id: expect.objectContaining({
+        path: expect.stringMatching(/^revisions\//),
+      }),
+    });
+  });
 });
 
 describe("carriedFields", () => {
@@ -806,6 +891,85 @@ describe("carriedFields", () => {
         { parties: ["Inne"], type: "person" },
       ),
     ).toEqual({ parties: ["PiS", "Inne"] });
+  });
+
+  it("leaves a party list a person stated on the survivor exactly as it is", () => {
+    // Jacek Wojciech Piętniewicz: a reviewer set his list to Nowa Lewica on
+    // 2026-08-27, and the 08-31 merge put SLD back from the tombstone "Jacek
+    // Piętniewicz". The union is what `partiesSource` keeps away from a list.
+    expect(
+      carriedFields(
+        { parties: ["SLD"], type: "person" },
+        { parties: ["Nowa Lewica"], partiesSource: "manual", type: "person" },
+      ),
+    ).toEqual({});
+  });
+
+  it("keeps the survivor's stated list over the duplicate's, when both were stated", () => {
+    // Which page survives is the admin's choice, and so is whose word stands.
+    expect(
+      carriedFields(
+        { parties: ["PSL", "Polska 2050"], partiesSource: "manual" },
+        { parties: ["PSL"], partiesSource: "manual" },
+      ),
+    ).toEqual({});
+  });
+
+  it("carries a list a person stated on the duplicate over one the pipeline wrote, pinned", () => {
+    // A coalition committee puts both its parties on everybody who ran for
+    // it; the person who wrote "PSL" left Polska 2050 out on purpose. Taken in
+    // the order they gave, „Inne” first included - it is not re-sorted.
+    expect(
+      carriedFields(
+        { parties: ["Inne", "PSL"], partiesSource: "manual" },
+        { parties: ["PSL", "Polska 2050"] },
+      ),
+    ).toEqual({ parties: ["Inne", "PSL"], partiesSource: "manual" });
+  });
+
+  it("pins a stated „no party” over the pipeline's list", () => {
+    // An empty list is an answer, the way `/api/revisions/create` treats it.
+    expect(
+      carriedFields(
+        { parties: [], partiesSource: "manual" },
+        { parties: ["SLD"] },
+      ),
+    ).toEqual({ parties: [], partiesSource: "manual" });
+  });
+
+  it("only pins a survivor that already lists what the duplicate's person stated", () => {
+    expect(
+      carriedFields(
+        { parties: ["PSL"], partiesSource: "manual" },
+        { parties: ["PSL"] },
+      ),
+    ).toEqual({ partiesSource: "manual" });
+  });
+
+  it("spells out the list it pins on a survivor that stores none", () => {
+    // Without `parties` the revision would pin a list it does not state, and a
+    // pre-07-28 numbered-key map is not the array the filters match against.
+    expect(carriedFields({ parties: [], partiesSource: "manual" }, {})).toEqual(
+      { parties: [], partiesSource: "manual" },
+    );
+    expect(
+      carriedFields(
+        { parties: ["PiS"], partiesSource: "manual" },
+        { parties: { 0: "PiS" } },
+      ),
+    ).toEqual({ parties: ["PiS"], partiesSource: "manual" });
+  });
+
+  it("never carries the marker on its own, which would pin a list nobody stated", () => {
+    // The fill-in used to copy `partiesSource` onto a survivor lacking it,
+    // beside the union - pinning the pipeline's parties and the person's
+    // together. Any value but "manual" is not a person's word either.
+    expect(
+      carriedFields(
+        { parties: ["SLD"], partiesSource: "pipeline" },
+        { parties: ["Nowa Lewica"] },
+      ),
+    ).toEqual({ parties: ["Nowa Lewica", "SLD"] });
   });
 
   it("fills in a field the survivor has nothing for", () => {

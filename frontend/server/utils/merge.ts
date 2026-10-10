@@ -11,7 +11,11 @@ import {
   meetsEnrichFloor,
   type EdgeLike,
 } from "./edges";
-import { createRevisionTransaction, withoutInternalFields } from "./revisions";
+import {
+  createRevisionTransaction,
+  sameStoredValue,
+  withoutInternalFields,
+} from "./revisions";
 import { recordAudit } from "./audit";
 // Imported explicitly rather than left to Nuxt's auto-import: this module is
 // also loaded by scripts/migrate/merge-duplicate-people.ts under plain tsx,
@@ -201,9 +205,31 @@ export function votesToMove(
  *
  * `parties` is a set union, for the reason `updatedPerson` gives: two runs can
  * each find a different half of somebody's career and neither is a correction
- * of the other. Everything else is filled in only where the survivor has
- * nothing, so the surviving page never has a value overwritten - a merge is not
- * the place to overrule a reviewer.
+ * of the other - but only between two lists the pipeline wrote. A list a person
+ * stated carries `partiesSource: "manual"`, and a union is exactly what that
+ * marker exists to keep away from it: `merge-duplicate-people.ts` put SLD back
+ * onto Jacek Wojciech Piętniewicz (`UWBvtNHew8R26Z989nOG`) on 2026-08-31, four
+ * days after a reviewer had set his list to Nowa Lewica, because the tombstone
+ * "Jacek Piętniewicz" still said SLD. `backfill-parties-source.ts` took it off
+ * again on 10-06, and the ingest has kept off pinned lists since a3a54374, so
+ * the merge - the admin button included - was the one way left to widen one.
+ * 537 person pages carried the marker on the 10-08 export. So:
+ *
+ * - the survivor's list is pinned: it stays exactly as it is. Which page
+ *   survives is the admin's choice, and a list somebody stated there is not
+ *   the merge's to add to, even from another person's list on the duplicate.
+ * - only the duplicate's is pinned: the duplicate's list replaces the
+ *   survivor's, and the marker comes with it. A person's word on somebody's
+ *   parties outranks the pipeline's, the same order the ingest keeps.
+ * - neither is: the union, as before.
+ *
+ * `partiesSource` is decided there and nowhere else. Left to the fill-in below
+ * it was copied onto an unpinned survivor beside the union, which pinned a list
+ * no person had stated.
+ *
+ * Everything else is filled in only where the survivor has nothing, so the
+ * surviving page never has a value overwritten - a merge is not the place to
+ * overrule a reviewer.
  *
  * `name` is deliberately not carried. Which page survives *is* the decision
  * about what it is called, and renaming it here would quietly undo the choice
@@ -215,18 +241,34 @@ export function carriedFields(
 ): Record<string, unknown> {
   const carried: Record<string, unknown> = {};
 
-  const parties = sortParties(
-    new Set([
-      ...asArray<string>(survivor.parties as string[]),
-      ...asArray<string>(duplicate.parties as string[]),
-    ]),
-  );
-  if (parties.length > asArray<string>(survivor.parties as string[]).length) {
-    carried.parties = parties;
+  const survivorParties = asArray<string>(survivor.parties as string[]);
+  const duplicateParties = asArray<string>(duplicate.parties as string[]);
+  const survivorPinned = survivor.partiesSource === "manual";
+  if (!survivorPinned && duplicate.partiesSource === "manual") {
+    // In the order the person put them, which is the order their chips are
+    // drawn in. Skipped only where the survivor stores this very array: one
+    // with no `parties` field at all, or the same names in a pre-07-28
+    // numbered-key map, would otherwise end up pinned to a list it does not
+    // spell out - and an empty list is an answer to pin, not nothing.
+    if (!sameStoredValue(survivor.parties, duplicateParties)) {
+      carried.parties = duplicateParties;
+    }
+    carried.partiesSource = "manual";
+  } else if (!survivorPinned) {
+    const parties = sortParties(
+      new Set([...survivorParties, ...duplicateParties]),
+    );
+    if (parties.length > survivorParties.length) carried.parties = parties;
   }
 
   for (const [key, value] of Object.entries(withoutInternalFields(duplicate))) {
-    if (key === "parties" || key === "name" || key === "type") continue;
+    if (
+      key === "parties" ||
+      key === "partiesSource" ||
+      key === "name" ||
+      key === "type"
+    )
+      continue;
     if (value === undefined || value === null || value === "") continue;
     const held = survivor[key];
     if (held === undefined || held === null || held === "")

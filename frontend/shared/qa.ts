@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "scalanie-zostawia-partie-wpisane-recznie",
+    title: "Scalanie stron nie dopisuje partii do listy wpisanej ręcznie",
+    description:
+      "Scalenie dwóch stron jednej osoby dopisywało partie duplikatu do listy, którą ktoś poprawił ręcznie - tak SLD wróciło do Jacka Wojciecha Piętniewicza. Teraz ręcznie wpisana lista na stronie, która zostaje, się nie zmienia, a ręcznie wpisana lista z duplikatu zastępuje tę z importu zamiast się z nią sumować.",
+    steps: [
+      "Przy najbliższym scaleniu („Ta strona to duplikat”), w którym strona, która zostaje, ma partie poprawione ręcznie: po „Scal na stałe” jej lista partii ma być taka jak przed scaleniem, nawet gdy duplikat miał inną partię.",
+      "Gdy ręcznie poprawione partie ma tylko duplikat, strona, która zostaje, ma po scaleniu pokazać jego listę, a nie sumę obu.",
+    ],
+    area: "admin",
+  },
+  {
     id: "wyszukiwarka-drugi-czlon-nazwiska",
     title: "Wyszukiwarka znajduje nazwisko dwuczłonowe po drugim członie",
     description:

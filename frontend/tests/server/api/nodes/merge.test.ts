@@ -260,6 +260,44 @@ describe("api/nodes/merge", () => {
     });
   });
 
+  it("leaves a party list a person stated on the surviving page alone", async () => {
+    // The admin button runs the same `carriedFields` the 08-31 migration did,
+    // which put SLD back onto Jacek Wojciech Piętniewicz's Nowa Lewica.
+    stored["nodes/dup"] = { ...stored["nodes/dup"], parties: ["SLD"] };
+    stored["nodes/surv"] = {
+      ...stored["nodes/surv"],
+      parties: ["Nowa Lewica"],
+      partiesSource: "manual",
+    };
+
+    const result = await handler({} as never);
+
+    expect(result.plan.carried).toEqual({});
+    expect(wrote("nodes/surv")).toBeUndefined();
+  });
+
+  it("puts the duplicate's stated list on the survivor, pinned, page and revision alike", async () => {
+    stored["nodes/dup"] = {
+      ...stored["nodes/dup"],
+      parties: ["PSL"],
+      partiesSource: "manual",
+    };
+    stored["nodes/surv"] = {
+      ...stored["nodes/surv"],
+      parties: ["PSL", "Polska 2050"],
+    };
+
+    await handler({} as never);
+
+    const pinned = { parties: ["PSL"], partiesSource: "manual" };
+    expect(wrote("nodes/surv")).toMatchObject({ ...pinned, published: true });
+    expect(writtenTo("revisions/")).toMatchObject({
+      node_id: "surv",
+      status: "approved",
+      data: pinned,
+    });
+  });
+
   it("drops the cached pages, which still list the duplicate", async () => {
     // The entity and graph endpoints are cached per handler for six hours, so
     // both pages would otherwise keep their old relations all day.
