@@ -1,6 +1,12 @@
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  Timestamp,
+  type Firestore,
+} from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
+import { isRetiredPage, lookupCompanyByKrs } from "~~/server/utils/companies";
+import { generateEntityUrl } from "~~/app/composables/slugs";
 import {
   baseNodeFields,
   proposalId,
@@ -109,6 +115,23 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // One page per company. Both KRS duplicates on the site on 2026-10-09 were
+  // made here, for a register the site already had: „Therma” (0000081135),
+  // created on 08-24 beside the page the upload had made, and Centrum Rozwoju
+  // Komunalnego (0000013874), on 10-06. Nothing asked the number first, and a
+  // new page is written to `nodes` at once - pending, but holding the number -
+  // so the uploads can land on it: the 08-29 company ingest renamed the
+  // hand-made „Therma”. Asked only when the number is new to this page, so a
+  // page of one of those pairs can still be edited until the two are merged.
+  if (
+    proposableType(baseFields) === "place" &&
+    typeof dataFields.krsNumber === "string" &&
+    dataFields.krsNumber !== "" &&
+    dataFields.krsNumber !== baseFields.krsNumber
+  ) {
+    await refuseTakenKrs(db, dataFields.krsNumber, nodeRef.id, isNewNode);
+  }
+
   // User-submitted fields override the base node fields. Sanitized here rather
   // than on the way into the document, because the two guards below compare it
   // against what is stored, and stored data has already been through this.
@@ -194,6 +217,42 @@ export default defineEventHandler(async (event) => {
 
   return { id: revisionRef.id, node_id: nodeRef.id, duplicate: false };
 });
+
+/** Turns the proposal down when another page in use already has this KRS
+ * number, naming that page so the person can go and propose there instead.
+ *
+ * Found the way the ingests find a company (`lookupCompanyByKrs`), so the page
+ * named is the one the next upload would write to, and a merged-away page
+ * hands its number to the page that replaced it. A page that was only removed
+ * does not hold its number against a new one: the ingests stay with it just so
+ * as not to undo the removal by themselves, and a person making the company a
+ * page again is a decision rather than an accident - once there is a live
+ * page, the uploads go to it. The page's id and address travel in `data` for
+ * the dialog to link to.
+ */
+async function refuseTakenKrs(
+  db: Firestore,
+  krsNumber: string,
+  nodeId: string,
+  isNewNode: boolean,
+): Promise<void> {
+  const holder = await lookupCompanyByKrs(db, krsNumber);
+  if (!holder || holder.id === nodeId) return;
+  const data = holder.data() ?? {};
+  if (isRetiredPage(data)) return;
+
+  const name = typeof data.name === "string" ? data.name : holder.id;
+  const url = generateEntityUrl("place", holder.id, name);
+  throw createError({
+    statusCode: 409,
+    message: isNewNode
+      ? `Firma o numerze KRS ${krsNumber} ma już stronę: „${name}”. ` +
+        "Zaproponuj zmianę na tamtej stronie zamiast zakładać nową."
+      : `Numer KRS ${krsNumber} ma już strona „${name}”. Jeśli to ta sama ` +
+        "firma, obie strony trzeba scalić - jedna firma ma jedną stronę.",
+    data: { node_id: holder.id, name, url },
+  });
+}
 
 /** The kind of node a proposal is for, out of the kinds anyone may propose.
  *

@@ -188,7 +188,14 @@
               rows="5"
             />
           </v-form>
-          <v-alert v-if="error" type="error" class="mt-2">{{ error }}</v-alert>
+          <v-alert v-if="error" type="error" class="mt-2">
+            {{ error }}
+            <div v-if="errorPage" class="mt-2">
+              <NuxtLink :to="errorPage.url" @click="dialog = false">
+                Przejdź do strony „{{ errorPage.name }}”
+              </NuxtLink>
+            </div>
+          </v-alert>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -264,6 +271,10 @@ const dialog = ref(false);
 const loginDialog = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
+/** The page an error is about, when the server named one - a company that
+ * already has the KRS number typed here - so the reader can go and propose
+ * there instead. */
+const errorPage = ref<{ url: string; name: string } | null>(null);
 const user = useCurrentUser();
 const router = useRouter();
 const route = useRoute();
@@ -375,6 +386,7 @@ async function submit() {
 
   loading.value = true;
   error.value = null;
+  errorPage.value = null;
 
   try {
     const body: Record<string, unknown> = {
@@ -468,9 +480,16 @@ async function submit() {
     // FetchError's own `message` wraps it in the method and the url - so a
     // reader who proposed a change that changes nothing was being told
     // `[POST] "/api/revisions/create": 400 ...` rather than why.
-    const message = (e as { data?: { message?: string } } | null)?.data
-      ?.message;
+    const body = (
+      e as {
+        data?: { message?: string; data?: { url?: string; name?: string } };
+      } | null
+    )?.data;
+    const message = body?.message;
     error.value = message || (e instanceof Error ? e.message : "Wystąpił błąd");
+    const page = body?.data;
+    errorPage.value =
+      page?.url && page.name ? { url: page.url, name: page.name } : null;
   } finally {
     loading.value = false;
   }

@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "numer-krs-ma-juz-inna-strona",
+    title: "Nowa firma nie dostaje numeru KRS, który ma już inna strona",
+    description:
+      "Propozycja nowej instytucji, albo nowego numeru KRS na stronie, z numerem, który ma już inna strona, jest odrzucana z nazwą tamtej strony i linkiem do niej - tak powstały podwójne strony „Therma” i Centrum Rozwoju Komunalnego. Numer wpisany krócej, np. 81135, zapisuje się jako 0000081135.",
+    steps: [
+      "Zalogowany wpisz w wyszukiwarce „Therma testowa”, wybierz „Dodaj instytucję lub spółkę” i podaj KRS 81135 - okno ma odmówić, nazwać stronę „Therma” i dać link do niej.",
+      "W tym samym oknie wpisz jako KRS „brak” - pole ma od razu pokazać „Numer KRS jest niepoprawny”.",
+    ],
+    area: "contributor",
+  },
+  {
     id: "wyszukiwarka-drugi-czlon-nazwiska",
     title: "Wyszukiwarka znajduje nazwisko dwuczłonowe po drugim członie",
     description:

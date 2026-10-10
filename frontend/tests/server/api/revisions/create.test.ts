@@ -8,8 +8,22 @@ const mockDoc = vi.fn();
 /** What `revisions/<deterministic id>` holds. Empty unless a test says the
  * caller has proposed this before. */
 const mockGet = vi.fn();
+/** The pages that carry each KRS number, as the duplicate check queries them.
+ * None unless a test puts one there. */
+let pagesByKrs: Record<
+  string,
+  { id: string; data: Record<string, unknown> }[]
+> = {};
+const mockWhere = vi.fn((_field: string, _op: string, krs: string) => ({
+  get: async () => ({
+    docs: (pagesByKrs[krs] ?? []).map((page) => ({
+      id: page.id,
+      data: () => page.data,
+    })),
+  }),
+}));
 const mockDb = {
-  collection: vi.fn(() => ({ doc: mockDoc })),
+  collection: vi.fn(() => ({ doc: mockDoc, where: mockWhere })),
   batch: vi.fn(() => ({ set: mockSet, commit: mockCommit })),
 };
 
@@ -779,5 +793,131 @@ describe("api/revisions/create, the same change twice", () => {
 
     expect(proposedRevisionId()).toBeUndefined();
     expect(result.id).toBe("generated-id");
+  });
+});
+
+describe("api/revisions/create, a KRS number another page already has", () => {
+  /** The uploaded „Therma”, which the hand-made page of 08-24 duplicated. */
+  const therma = {
+    id: "v9eUDB9lGr62mj4r4Trq",
+    data: {
+      type: "place",
+      name: 'PRZEDSIĘBIORSTWO KOMUNALNE "THERMA"',
+      krsNumber: "0000081135",
+      published: true,
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    pagesByKrs = {};
+    mockGet.mockResolvedValue({ exists: false });
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      get: mockGet,
+    }));
+  });
+
+  it("refuses a new company page for a number the site has, naming the page that has it", async () => {
+    // How both duplicates on the site began: „Therma” on 08-24 and Centrum
+    // Rozwoju Komunalnego on 10-06, each made by hand for a register the
+    // upload had already given a page.
+    pagesByKrs["0000081135"] = [therma];
+    mockReadBody.mockResolvedValue({
+      type: "place",
+      name: "Therma",
+      krsNumber: "81135",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 409,
+      message: expect.stringContaining(
+        'ma już stronę: „PRZEDSIĘBIORSTWO KOMUNALNE "THERMA"”',
+      ),
+      data: {
+        node_id: "v9eUDB9lGr62mj4r4Trq",
+        url: expect.stringContaining("v9eUDB9lGr62mj4r4Trq"),
+      },
+    });
+    // Asked by the number as the register prints it, not as typed.
+    expect(mockWhere).toHaveBeenCalledWith("krsNumber", "==", "0000081135");
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("refuses giving an existing page a number another page has", async () => {
+    pagesByKrs["0000081135"] = [therma];
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Therma Bielsko",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "BnTvgqabfOXJFyuzFi8t",
+      name: "Therma Bielsko",
+      krsNumber: "0000081135",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 409,
+      message: expect.stringContaining("trzeba scalić"),
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("lets a page of an existing pair be edited without its number standing in the way", async () => {
+    // Both „Therma” pages hold 0000081135 until somebody merges them, and
+    // either may need a correction before then. The number is not new to the
+    // page, so nothing is asked.
+    pagesByKrs["0000081135"] = [therma];
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Therma",
+      krsNumber: "0000081135",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "BnTvgqabfOXJFyuzFi8t",
+      name: "Therma",
+      krsNumber: "0000081135",
+      isPublic: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(mockWhere).not.toHaveBeenCalled();
+    expect(mockCommit).toHaveBeenCalled();
+  });
+
+  it("does not hold a number against a new page when the only page with it was removed", async () => {
+    // A removal is a decision that the page should not be there; the number
+    // is free, and the ingests no longer write to that page either.
+    pagesByKrs["0000081135"] = [
+      { id: "removed", data: { ...therma.data, deleted: true } },
+    ];
+    mockReadBody.mockResolvedValue({
+      type: "place",
+      name: "Therma",
+      krsNumber: "0000081135",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenNode()).toMatchObject({ krsNumber: "0000081135" });
+  });
+
+  it("creates a page for a number nobody has", async () => {
+    mockReadBody.mockResolvedValue({
+      type: "place",
+      name: "Lubelskie Koleje sp. z o.o.",
+      krsNumber: "0000999888",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(mockWhere).toHaveBeenCalledWith("krsNumber", "==", "0000999888");
+    expect(writtenNode()).toMatchObject({ krsNumber: "0000999888" });
   });
 });
