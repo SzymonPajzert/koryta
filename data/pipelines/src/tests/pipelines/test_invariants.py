@@ -103,7 +103,10 @@ STATE_EDGE_TYPES = {"owns", "mentions", "comment", "source"}
 # string, which is what a form leaves behind, and none holds a value.
 DATED_EDGE_TYPES = ("employed", "election")
 
-VOTE_CATEGORIES = {"interesting", "quality", "correct", "insufficient"}
+# `VoteCategory` in `shared/model.ts`. `wrongPerson` - "To nie ta osoba", a
+# reader saying an extracted fact was matched to a namesake - joined it on
+# 2026-08-25 without joining this list, and its five votes read as a typo.
+VOTE_CATEGORIES = {"interesting", "quality", "correct", "insufficient", "wrongPerson"}
 
 EXTRACTION_FACT_TYPES = {
     "employment",
@@ -223,8 +226,17 @@ def compute_vote_stats(votes: list[dict]) -> dict:
     return aggregate
 
 
-def stale_aggregates(documents: dict[str, dict], votes_by_target: dict[str, list]):
-    """Targets whose stored `stats.votes` disagrees with the votes cast on them."""
+def stale_aggregates(
+    documents: dict[str, dict],
+    votes_by_target: dict[str, list],
+    predates: frozenset[str] = frozenset(),
+):
+    """Targets whose stored `stats.votes` disagrees with the votes cast on them.
+
+    `predates` names counters an aggregate may lack because it was last written
+    before the site learned to keep them. A missing one is not a difference; one
+    that is there and wrong still is.
+    """
     stale = []
     for target_id, votes in votes_by_target.items():
         document = documents.get(target_id)
@@ -237,6 +249,8 @@ def stale_aggregates(documents: dict[str, dict], votes_by_target: dict[str, list
         # breakdown, rather than tallies; the recomputation deliberately
         # reproduces neither.
         for key in set(expected) | (set(stored) - {"lastVotedAt", "models"}):
+            if key in predates and key not in stored:
+                continue
             got = stored.get(key)
             want = expected.get(key, 0)
             # A counter that was never written is a zero, not a difference; the
@@ -357,7 +371,15 @@ def test_extraction_vote_stats_match_the_votes_cast(extractions, votes_by_extrac
     them.
     """
     by_id = {document["id"]: document for document in extractions}
-    stale = stale_aggregates(by_id, votes_by_extraction)
+    # `humanCount` is on every fact voted on since the trigger learned it in
+    # September, and on none voted on before: 646 of the 757 on 2026-10-09, last
+    # voted on in July and August. backfill-vote-human-count.ts recomputed nodes
+    # only, and the site knows - `factVoterCount` falls back to `humanVoted` for
+    # an aggregate without one. So a fact lacking the counter is an old one, not
+    # a stale one; a fact whose counter is wrong still fails.
+    stale = stale_aggregates(
+        by_id, votes_by_extraction, predates=frozenset({"humanCount"})
+    )
 
     assert not stale, (
         f"{len(stale)}/{len(votes_by_extraction)} voted-on extractions have a "
@@ -486,19 +508,27 @@ def test_node_vote_stats_match_the_votes_cast(nodes, votes_by_node):
     )
 
 
-def test_is_approved_matches_the_approved_revision(nodes):
-    """`stats.isApproved` is a copy of `!!revision_id` and must stay one.
+def test_is_approved_matches_whether_the_page_is_public(nodes):
+    """`stats.isApproved` is a copy of `pageIsPublic` and must stay one.
 
-    The two are read in different places - `isApproved` by the tagging-progress
-    counters, `revision_id` by `pageIsPublic`, which decides whether a logged out
-    visitor sees the page at all - so if they disagree the site contradicts
-    itself about whether a person is published.
+    The two are read in different places - `isApproved` by every listing
+    (`/api/nodes` filters on it) and by the tagging-progress counters,
+    `pageIsPublic` by whatever decides whether a logged out visitor sees the
+    page at all - so if they disagree the site contradicts itself: a live page
+    missing from every list that leads to it, or a listed one that answers
+    "Strona nieznaleziona".
+
+    It used to be a copy of `!!revision_id`, back when an approved revision was
+    what made a page public, and this test said so until 2026-10-09. Since
+    `published` became the flag, the `onNodeWritten` trigger and
+    `withSeededNodeStats` both write `pageIsPublic`, and the old rule failed on
+    1,082 nodes that agree with the new one: 984 seeded regions, public with no
+    revision, and 98 unpublished people whose import revision was applied.
     """
     mismatched = [
         document["id"]
         for document in nodes
-        if bool(document.get("revision_id"))
-        != bool(stats_of(document).get("isApproved"))
+        if page_is_public(document) != (stats_of(document).get("isApproved") is True)
     ]
 
     assert not mismatched, (
@@ -1725,33 +1755,48 @@ def test_one_note_per_user_and_node(notes):
 
 
 def test_notes_count_matches_the_notes(notes, nodes):
-    """`stats.notesCount` counts the *sources* across a node's notes.
+    """`stats.notesCount` says what the node's notes hold.
 
-    It is what the table's "has sources" column and the tagging-progress
-    breakdown read, neither of which touches the notes collection.
+    It is what the table's notes column and the tagging-progress breakdown
+    read, neither of which touches the notes collection.
 
-    Unlike `stats.votes`, no trigger maintains this: it is only refreshed when
-    someone runs /api/stats/computeNodes, which nothing in the repository calls.
-    A node or two is therefore normally behind - the 2026-06-28 export had one -
-    and the tolerance is there for that. A larger number means the recompute has
-    not been run for a long time, not that a single edit went wrong.
+    Two writers keep it, and they do not count the same thing.
+    `computeNodeStats` - /api/stats/computeNodes, which somebody runs by hand -
+    counts the *sources* across a node's notes. The `onNoteWritten` trigger in
+    `functions/src/notes.ts`, which runs on every note written, counts the
+    *notes*. So a node holds whichever count its last writer wrote: on
+    2026-10-09, 188 nodes held the source count and 20 the note count - each of
+    those 20 with a note written since the last recompute - and not one held
+    anything else. Until the two agree, either is a current value, and only a
+    count that is neither is stale.
+
+    A node or two is normally behind - the 2026-06-28 export had one - and the
+    tolerance is there for that. A larger number means something stopped
+    counting, not that a single edit went wrong.
     """
     RECOMPUTE_LAG = 5
 
     sources_by_node: collections.Counter = collections.Counter()
+    notes_by_node: collections.Counter = collections.Counter()
     for note in notes:
         sources = note.get("sources")
         sources_by_node[note.get("nodeId")] += len(sources) if sources else 0
+        notes_by_node[note.get("nodeId")] += 1
 
     wrong = [
-        (document["id"], stats_of(document).get("notesCount"), expected)
+        (
+            document["id"],
+            stored,
+            (sources_by_node[document["id"]], notes_by_node[document["id"]]),
+        )
         for document in nodes
-        if (expected := sources_by_node[document["id"]])
-        != stats_of(document).get("notesCount", 0)
+        if (stored := stats_of(document).get("notesCount", 0))
+        not in (sources_by_node[document["id"]], notes_by_node[document["id"]])
     ]
 
     assert len(wrong) <= RECOMPUTE_LAG, (
-        f"{len(wrong)} nodes have a stats.notesCount that does not match their "
-        f"notes, more than the {RECOMPUTE_LAG} a normal recompute lag explains. "
-        f"As (node, stored, actual): {sample(wrong, 5)}"
+        f"{len(wrong)} nodes have a stats.notesCount that is neither the number of "
+        f"their notes nor the number of sources in them, more than the "
+        f"{RECOMPUTE_LAG} a normal recompute lag explains. "
+        f"As (node, stored, (sources, notes)): {sample(wrong, 5)}"
     )
