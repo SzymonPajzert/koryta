@@ -21,6 +21,11 @@ class Koryta:
     #: chain (the site resolves it on write). A node carrying it is a tombstone,
     #: not a person, so no mention or fact may be linked to it.
     merged_into: str | None = None
+    #: The page's `birthDate` as stored - `YYYY-MM-DD` for every dated page of
+    #: the 2026-10-10 export - or None where it stores none, or "". What tells
+    #: the page's person from a namesake the register has under the same name
+    #: (`koryta_candidates` in `analysis.people`).
+    birth_date: str | None = None
 
 
 @dataclass

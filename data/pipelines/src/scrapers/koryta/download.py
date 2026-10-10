@@ -280,6 +280,20 @@ def _merged_into(data: dict) -> str | None:
     return text or None
 
 
+def _birth_date(data: dict) -> str | None:
+    """The birth date a person page stores, or None for none.
+
+    106 pages of the 2026-10-10 export store "" - the edit form's empty field -
+    which is no date, and an export from before the field existed has none at
+    all, NaN once it has been through a frame.
+    """
+    value = data.get("birthDate")
+    if _missing(value):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 class KorytaPeople(Pipeline[Person]):
     date: str
 
@@ -319,6 +333,7 @@ class KorytaPeople(Pipeline[Person]):
                     teryt_wojewodztwo=teryt_wojewodztwo,
                     teryt_powiat=teryt_powiat,
                     merged_into=_merged_into(data),
+                    birth_date=_birth_date(data),
                 )
             )
 

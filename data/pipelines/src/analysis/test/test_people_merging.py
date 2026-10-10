@@ -14,6 +14,7 @@ from analysis.people import (
     preferred_spelling,
     unique_probability,
 )
+from analysis.people_koryta_merged import PeopleKorytaMerged
 from analysis.people_wiki_merged import people_wiki_merged
 from scrapers.stores import Context, ProcessPolicy
 from scrapers.stores.file import VersionedBackup
@@ -110,10 +111,16 @@ KORYTA_COLUMNS = [
     "rejestrio_id",
     "koryta_id",
     "full_name",
+    "birth_date",
 ]
 
 
-def koryta_person(full_name: str, koryta_id: str, rejestrio_id: str = "") -> dict:
+def koryta_person(
+    full_name: str,
+    koryta_id: str,
+    rejestrio_id: str | None = "",
+    birth_date: str | None = None,
+) -> dict:
     """One person node already on the site, as `PeopleKorytaMerged` leaves it."""
     words = full_name.split()
     return {
@@ -123,6 +130,7 @@ def koryta_person(full_name: str, koryta_id: str, rejestrio_id: str = "") -> dic
         "rejestrio_id": rejestrio_id,
         "koryta_id": koryta_id,
         "full_name": full_name,
+        "birth_date": birth_date,
     }
 
 
@@ -778,6 +786,126 @@ def test_a_person_pkw_has_twice_still_reaches_their_page(ctx):
     assert list(result["koryta_id"]) == ["node-1"]
 
 
+def site_pages(ctx, pages: pd.DataFrame) -> pd.DataFrame:
+    """`PeopleKorytaMerged` over these `KorytaPeople` rows."""
+    merged = PeopleKorytaMerged()
+    merged.koryta_pipeline = SimpleNamespace(read_or_process=lambda ctx: pages)
+    return merged.process(ctx).set_index("koryta_id")
+
+
+def test_a_page_s_birth_date_is_carried_where_it_reads_as_one(ctx):
+    """106 pages of the 2026-10-10 export store "", which is no date."""
+    stored = {
+        "full": "1974-06-27",
+        "year": "1974",
+        "blank": "",
+        "typed": "27.06.1974",
+        "none": None,
+    }
+    pages = pd.DataFrame(
+        [
+            {
+                "id": key,
+                "full_name": "Jan Kowalski",
+                "rejestrIo": None,
+                "birth_date": value,
+            }
+            for key, value in stored.items()
+        ]
+    )
+
+    born = site_pages(ctx, pages)["birth_date"]
+
+    assert {key: value for key, value in born.items() if isinstance(value, str)} == {
+        "full": "1974-06-27",
+        "year": "1974",
+    }
+
+
+def test_a_koryta_people_from_before_birth_dates_still_merges(ctx):
+    pages = pd.DataFrame(
+        [{"id": "node-1", "full_name": "Jan Kowalski", "rejestrIo": None}]
+    )
+
+    assert site_pages(ctx, pages)["birth_date"].isna().all()
+
+
+HETMAN_1963 = {
+    **krs_person("krzysztof", "hetman", "1963-10-10"),
+    "rejestrio_id": ["1203566"],
+}
+
+
+def test_a_page_born_on_another_day_is_not_this_person_by_name(ctx):
+    """Krzysztof Hetman's page, the PSL MEP born 1974-06-27 with no register
+    link, was the only page entry 1203566 - a Krzysztof Hetman born
+    1963-10-10 - fitted by name, and the 2026-10-10 payload carried its id."""
+    result = match_koryta(
+        ctx,
+        [HETMAN_1963],
+        [koryta_person("Krzysztof Hetman", "node-1", birth_date="1974-06-27")],
+    )
+
+    assert list(result["koryta_id"]) == [None]
+
+
+def test_a_page_born_on_the_day_is_still_this_person_by_name(ctx):
+    result = match_koryta(
+        ctx,
+        [HETMAN_1963],
+        [koryta_person("Krzysztof Hetman", "node-1", birth_date="1963-10-10")],
+    )
+
+    assert list(result["koryta_id"]) == ["node-1"]
+
+
+@pytest.mark.parametrize("stored, matched", [("1974", None), ("1963", "node-1")])
+def test_a_page_storing_only_a_year_is_held_to_the_year(ctx, stored, matched):
+    result = match_koryta(
+        ctx,
+        [HETMAN_1963],
+        [koryta_person("Krzysztof Hetman", "node-1", birth_date=stored)],
+    )
+
+    assert list(result["koryta_id"]) == [matched]
+
+
+def test_the_register_link_wins_over_a_birth_date_the_page_stores(ctx):
+    """One entry is one human. Seven pages on 2026-10-10 link their entry and
+    store another date - Jarosław Andrzej Marszałek's 1967-11-21 against the
+    register's 1967-01-21 - and that is a reviewer's to fix, not a reason to
+    lose the page."""
+    result = match_koryta(
+        ctx,
+        [HETMAN_1963],
+        [
+            koryta_person(
+                "Krzysztof Hetman", "node-1", rejestrio_id="1203566", birth_date="1974"
+            )
+        ],
+    )
+
+    assert list(result["koryta_id"]) == ["node-1"]
+
+
+def test_the_namesake_a_date_rules_out_leaves_the_page_to_the_other(ctx):
+    """A page born on another day is not a candidate at all, so it no longer
+    counts against the one namesake born on the page's day."""
+    result = match_koryta(
+        ctx,
+        [
+            krs_person("jerzy", "kaczmarek", "1943-01-01"),
+            krs_person("jerzy", "kaczmarek", "1968-01-01"),
+        ],
+        [koryta_person("Jerzy Kaczmarek", "node-1", birth_date="1968-01-01")],
+    )
+
+    matched = result.dropna(subset=["koryta_id"])
+    assert dict(zip(matched["birth_date"], matched["koryta_id"])) == {
+        "1968-01-01": "node-1"
+    }
+
+
 # ------------------------------------------ two register entries, two people
 # After krs-people-full-birth-date's tests. A PKW candidacy goes to everyone it
 # fits, and the reviewers judge whose it is.
@@ -1066,6 +1194,14 @@ UNLINKED = koryta_person("Halina Czapla", "node-2")
     [
         pytest.param([LINKED, UNLINKED], id="as-the-site-is"),
         pytest.param([LINKED], id="every-page-linked"),
+        # Backed up before the pages' birth dates were carried, 2026-10-10.
+        pytest.param(
+            [
+                {k: v for k, v in page.items() if k != "birth_date"}
+                for page in (LINKED, UNLINKED)
+            ],
+            id="backup-without-birth-dates",
+        ),
     ],
 )
 def test_a_cold_run_restores_what_the_merge_reads_and_still_merges(

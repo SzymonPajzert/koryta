@@ -98,8 +98,9 @@ CASES = [
             "rejestrio_id": "1403676",
             "koryta_id": "3kQ9xV1bT0mZpL8sWc2R",
             "full_name": "Anna Maria Nowak",
+            "birth_date": "1974",
         },
-        ["rejestrio_id", "koryta_id"],
+        ["rejestrio_id", "koryta_id", "birth_date"],
         id="people-koryta-merged-ids",
     ),
 ]
