@@ -19,7 +19,7 @@ from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.columns import is_public, normalise
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
-from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.list import WITHOUT_PESEL, CompaniesKRS, PeopleKRS
 from scrapers.krs.odpis_people import PeopleKRSCombined, odpis_days
 from scrapers.krs.people_parsing import is_not_found
 from scrapers.krs.public_owners import CompaniesPublicByRegister
@@ -952,6 +952,62 @@ def first_and_last(name: str) -> tuple[str, str] | None:
     return (words[0], words[-1]) if words else None
 
 
+def names_by_entry(
+    people: pd.DataFrame,
+) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """The names `PeopleKRS` holds under each rejestr.io number: of its
+    ``osoba`` entries, and of its ``osoba-bez-pesel`` ones.
+
+    Apart, because rejestr.io numbers the two apart
+    (`scrapers.krs.list.PERSON_TYPES`): 2697087 is Grzegorz Stańczuk as an
+    osoba and Lior Cohen without a PESEL. A row without a type is an osoba:
+    `PeopleKRS` took no other shape until it recorded which one a row was.
+    """
+    osoba: dict[str, set[str]] = {}
+    without_pesel: dict[str, set[str]] = {}
+    if people.empty:
+        return osoba, without_pesel
+    kinds = (
+        people["rejestrio_type"]
+        if "rejestrio_type" in people
+        else pd.Series(None, index=people.index, dtype=object)
+    )
+    for entry, name, kind in zip(people["id"], people["full_name"], kinds):
+        if pd.isna(entry) or not isinstance(name, str):
+            continue
+        names = without_pesel if kind == WITHOUT_PESEL else osoba
+        names.setdefault(str(entry), set()).add(name)
+    return osoba, without_pesel
+
+
+def meant_without_pesel(
+    entry: str,
+    page_name: typing.Any,
+    osoba: typing.Mapping[str, typing.Collection[str]],
+    without_pesel: typing.Mapping[str, typing.Collection[str]],
+) -> bool:
+    """Whether a page linking rejestr.io/osoby/`entry` means the entry of that
+    number without a PESEL: named as it is, and not as the osoba of that
+    number is (`names_by_entry`).
+
+    Only the name can say so. On its own a link names an osoba, even one whose
+    number `PeopleKRS` knows only without a PESEL: an osoba no crawled company
+    lists. Of the 18 pages linking a number some entry without a PESEL has on
+    2026-10-10, 17 were named as the osoba of the number, and Maciej
+    Tuszakowski's, linking 2788562, as nobody `PeopleKRS` holds under it: that
+    is Monika Ruggli without a PESEL. Bought, a link its page's name does mean
+    otherwise would be somebody else's feed.
+    """
+    name = first_and_last(page_name) if isinstance(page_name, str) else None
+    if name is None:
+        return False
+
+    def named(names: typing.Mapping[str, typing.Collection[str]]) -> bool:
+        return name in {first_and_last(n) for n in names.get(entry, ())}
+
+    return named(without_pesel) and not named(osoba)
+
+
 def misnamed_links(
     linked: typing.Mapping[str, typing.Mapping[str, typing.Any]],
     entry_names: typing.Mapping[str, typing.Collection[str]],
@@ -1331,6 +1387,17 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         page, since the people step creates pages for new hires only. A page
         without a link is still matched by name, the one thing it has, and a
         reviewer tells its namesakes apart.
+
+        Never to an entry without a PESEL. `/osoby/<n>` answers for the osoba
+        numbered n, and rejestr.io numbers the entries without a PESEL apart
+        (`scrapers.krs.list.PERSON_TYPES`), so matching one by name bought a
+        stranger's feed. Three were bought for voted pages before 2026-10-10:
+        2900081 for Anna Hetman's, 2900112 for Krystian Probierz's and 3256221
+        for Ryszard Jaśkowski's, and none of the three feeds lists the company
+        the entry sat in. Two more were a name away that day: the public pages
+        of Grzegorz Janik and Marek Beroud, without a link. A page whose link
+        and name both point at such an entry is left out as well
+        (`meant_without_pesel`), though none did that day.
         """
         self.person_reasons = {}
         scraped_people = set(
@@ -1340,6 +1407,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         for person in scraped_people:
             self.person_reasons.setdefault(str(person.id), set()).add(REASON_HARDCODED)
 
+        people_krs_df = self.people.read_or_process(ctx)
+        osoba_names, without_pesel_names = names_by_entry(people_krs_df)
         pages = self.koryta_people.read_or_process(ctx)
         window = f"since {PUBLISHED_SINCE}" if PUBLISHED_SINCE else "at any time"
         asked = [
@@ -1358,6 +1427,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         # the names of the pages without a link, each with why it is asked for.
         linked: dict[str, dict] = {}
         interesting_names: dict[str, set[str]] = {}
+        # The entries without a PESEL left out, by a page's link or by a name.
+        without_pesel: set[str] = set()
         for reason, label, page_ids in asked:
             reason_linked, reason_names = interesting_pages(page_ids, pages)
             print(
@@ -1366,6 +1437,11 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                 f"without one"
             )
             for entry, page in reason_linked.items():
+                if meant_without_pesel(
+                    entry, page.get("full_name"), osoba_names, without_pesel_names
+                ):
+                    without_pesel.add(entry)
+                    continue
                 linked.setdefault(entry, page)
                 self.person_reasons.setdefault(entry, set()).add(reason)
             for name in reason_names:
@@ -1375,6 +1451,9 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
         # TODO this matching rejestr.io to names logic is duplicated
         # We should merge it in one of the pipelines
+        #
+        # No entry without a PESEL comes this way: `PeopleKRSMerged` keeps
+        # nobody without a birth date, and none of them has one.
         people_merged_df = self.people_all.read_or_process(ctx)
         for _, row in people_merged_df.iterrows():
             koryta_name = row.get("koryta_name")
@@ -1386,24 +1465,29 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                         interesting_names[koryta_name]
                     )
 
-        people_krs_df = self.people.read_or_process(ctx)
         for _, row in people_krs_df.iterrows():
             full_name = row.get("full_name")
             if full_name in interesting_names:
                 rejestrio_id = row.get("id")
-                if rejestrio_id:
+                if rejestrio_id and row.get("rejestrio_type") == WITHOUT_PESEL:
+                    without_pesel.add(str(rejestrio_id))
+                elif rejestrio_id:
                     scraped_people.add(RejestrIOKey(id=str(rejestrio_id)))
                     self.person_reasons.setdefault(str(rejestrio_id), set()).update(
                         interesting_names[full_name]
                     )
+        # Less any number bought all the same, for the osoba it also is.
+        left_out = without_pesel - {str(person.id) for person in scraped_people}
+        if left_out:
+            print(
+                f"Entries without a PESEL not bought: {len(left_out)} "
+                f"{sorted(left_out)[:10]} - /osoby/ of their number is "
+                f"somebody else"
+            )
 
-        entry_names: dict[str, set[str]] = {}
-        for rejestrio_id, full_name in zip(
-            people_krs_df["id"], people_krs_df["full_name"]
-        ):
-            if str(rejestrio_id) in linked and isinstance(full_name, str):
-                entry_names.setdefault(str(rejestrio_id), set()).add(full_name)
-        report_misnamed_links(misnamed_links(linked, entry_names))
+        # The osoba's names alone: the entry without a PESEL of the number the
+        # link names is somebody else, so their name says nothing of the link.
+        report_misnamed_links(misnamed_links(linked, osoba_names))
 
         print(f"People to scrape: {len(scraped_people)} {get_head(scraped_people, 10)}")
         return scraped_people
