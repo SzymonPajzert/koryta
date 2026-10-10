@@ -3,7 +3,7 @@ import collections
 import math
 import re
 import typing
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import date, datetime
 from functools import cached_property
 
@@ -18,6 +18,7 @@ from analysis.payloads.site import (
     IDENTIFIED,
     INFORMATIONAL_REASONS,
     SiteSnapshot,
+    day_of,
     field,
     register_entry,
 )
@@ -547,7 +548,60 @@ def _extract_companies(row: pd.Series) -> list[Company]:
                         end=c.get("end") or c.get("employed_end"),
                     )
                 )
-    return companies
+    return one_row_per_spell(companies)
+
+
+def one_row_per_spell(companies: list[Company]) -> list[Company]:
+    """The employment rows with each spell stated once.
+
+    `EDGE_SEMANTICS` keys an employment on the company, the role and the day
+    it began; the end is learned later and fills in the spell it closes. So
+    two rows agreeing on those three are one spell. The ingest stores a row
+    per row, though - `findEdgeOrCreate` places the n-th row of an identity on
+    the n-th stored edge, so the second row is a second edge - and a payload
+    that carries one spell twice writes it twice. Every people plan from
+    2026-10-06 to 2026-10-10 had two such people, both on the Polskie LNG board
+    (0000345690) from 2015-08-28 with an extra row ending that same day: Robert
+    Marian Soszyński, who left on 2016-03-14, and Jan Chadam, on 2017-10-11.
+    The 10-07 run stored Soszyński's spell twice in one request
+    (`test_one_spell_of_employment_is_stored_once`).
+
+    The rows collapse onto the first, which keeps the end that says the most:
+    a closed one over an open one, since the register lists a current job with
+    no end, and the later of two. Collapsed here rather than in the ingest so
+    that `SiteSnapshot` predicts against the payload that is sent, and which
+    stored copy a row's end lands on (`fillAnnotations`) no longer depends on
+    the order the rows came in.
+
+    A row with no start is left as it is: nothing says which spell it is, so
+    two of them are not known to be one. The 10-10 payloads carry none.
+    """
+    rows: list[Company] = []
+    first_of: dict[tuple, int] = {}
+    for company in companies:
+        started = day_of(company.start)
+        if started is None:
+            rows.append(company)
+            continue
+        spell = (company.krs, company.role or None, started)
+        if spell not in first_of:
+            first_of[spell] = len(rows)
+            rows.append(company)
+            continue
+        kept = rows[first_of[spell]]
+        rows[first_of[spell]] = replace(kept, end=later_end(kept.end, company.end))
+    return rows
+
+
+def later_end(one: typing.Any, other: typing.Any) -> typing.Any:
+    """Of two ends of one spell, the one that says the most: an end over none,
+    and the later of two (`one_row_per_spell`)."""
+    first, second = day_of(one), day_of(other)
+    if first is None:
+        return other
+    if second is None:
+        return one
+    return other if second > first else one
 
 
 def _committee(value: typing.Any) -> str | None:
