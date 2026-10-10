@@ -757,7 +757,10 @@ async function lookupNodeDoc(
  * A page whose register entry is a *different* one is never a match, however
  * the two are spelled. That is the whole of the collapse bug: it is what used
  * to put two strangers who share a name on one page, and let the second of
- * them overwrite the first's `rejestrIo` on the way in.
+ * them overwrite the first's `rejestrIo` on the way in. Nor is a page the
+ * `korytaId` names that stores another birth date than the payload's, short
+ * of linking the payload's own entry: that is a 409, nothing written
+ * (`refuseAnotherBirthDate`).
  *
  * A payload with neither a register entry nor a birth date still matches by
  * the name alone, onto the first page of that exact name whatever it links.
@@ -771,7 +774,10 @@ async function lookupPersonDoc(
     const { snapshot } = await resolveMergedNode(ctx.db, body.korytaId);
     // Type-checked like every other lookup here: an id that has come to name a
     // company since the export would otherwise take a person's parties.
-    if (snapshot?.exists && snapshot.data()?.type === "person") return snapshot;
+    if (snapshot?.exists && snapshot.data()?.type === "person") {
+      refuseAnotherBirthDate(snapshot, body);
+      return snapshot;
+    }
     console.info(
       `[ingest] korytaId ${body.korytaId} names no person; falling back`,
     );
@@ -789,6 +795,52 @@ async function lookupPersonDoc(
 
   if (body.birthDate) return lookupByNameAndBirthDate(ctx, body);
   return lookupByName(ctx, body);
+}
+
+/** A 409 for a page the payload names by its `korytaId` that stores another
+ * birth date than the payload's.
+ *
+ * `people_merged` sends the id of a page it matched without having to choose
+ * between two, and for a page with no register link that match is the name
+ * alone (`koryta_candidates`), made until 2026-10-10 without a look at the
+ * birth date the page stores. Krzysztof Hetman's is the case this was asked
+ * about. His page - the PSL MEP, born 1974-06-27, published, linking
+ * Wikipedia and no register entry - was tied by name to rejestr.io entry
+ * 1203566, a Krzysztof Hetman born 1963-10-10 who sat on a board at KRS
+ * 0000087470 in 2006-2021. Sent as planned on 10-10, the payload would have
+ * linked the live page to the namesake in a revision approved because the
+ * page is live, and left the namesake's seat on it for a reviewer.
+ *
+ * Refused whole rather than written in part: a page of somebody born on
+ * another day is somebody else's, so nothing the payload says - the link, the
+ * date, the name, the jobs - is the page's. Nor does it fall back to the
+ * other lookups: the payload was planned onto this page, and a page made for
+ * it instead stops the night (`people_import`'s guardrail). A 409 is how the
+ * ingest already holds a person back for a reviewer
+ * (`lookupByNameAndBirthDate`), and the uploader counts it as failed, prints
+ * it and keeps it among the run's errors on /admin/procesy. Reported as a
+ * dropped field instead, the person would count as taken, and the night's
+ * sent log would leave the payload alone for a month.
+ *
+ * Not where the page links the payload's own register entry: one entry is
+ * one human, and the register lookup would land on that page anyway. The
+ * date the page stores is kept there, as it always is (`updatedPerson`).
+ * Seven pages of the 10-10 export are reached that way storing another date
+ * than their entry's - four of them a namesake's date, a namesake with an
+ * entry of his own - and they are a reviewer's to straighten out.
+ */
+function refuseAnotherBirthDate(
+  page: FirebaseFirestore.DocumentSnapshot,
+  body: PersonRequest,
+) {
+  const stored = page.data();
+  const entry = registerEntry(body.rejestrIo);
+  if (entry !== undefined && registerEntry(stored?.rejestrIo) === entry) return;
+  if (!bornAnotherDay(stored?.birthDate, body.birthDate)) return;
+  throw conflict(
+    `${body.name}, born ${body.birthDate}: the page the payload names ` +
+      `(${page.id}) stores ${stored?.birthDate}; held`,
+  );
 }
 
 /** The first page of the payload's exact name, as the ingest has always
@@ -906,6 +958,29 @@ function linksAnotherEntry(stored: unknown, sent: string | undefined): boolean {
   const page = registerEntry(stored);
   const payload = registerEntry(sent);
   return page !== undefined && payload !== undefined && page !== payload;
+}
+
+/** Whether a page's birth date and a payload's are two different days.
+ *
+ * Compared to the precision both have: a year alone is compared with the
+ * year of the other side, so a page storing "1974" is born on another day
+ * than a payload born in 1963 but not than one born 1974-06-27. No date, ""
+ * and a date in any other shape say nothing, and contradict nothing. Every
+ * dated page of the 2026-10-10 export stores a full date (1,833; 106 store
+ * ""), and both writers - this ingest and the edit form - take nothing else,
+ * so the year is for a page written some other way. */
+function bornAnotherDay(stored: unknown, sent: unknown): boolean {
+  const page = isoBirthDate(stored);
+  const payload = isoBirthDate(sent);
+  if (page === undefined || payload === undefined) return false;
+  return !page.startsWith(payload) && !payload.startsWith(page);
+}
+
+/** `YYYY-MM-DD`, or a bare `YYYY`, as written; undefined for anything else. */
+function isoBirthDate(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const date = value.trim();
+  return /^\d{4}(-\d{2}-\d{2})?$/.test(date) ? date : undefined;
 }
 
 /** Every node carrying a word the name ends in, as `/api/search` indexes

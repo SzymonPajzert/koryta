@@ -1732,6 +1732,143 @@ describe("api/ingest/person, one register entry is one human", () => {
     expect(result.personId).toBe("pawel");
   });
 
+  describe("a page the korytaId names that stores another birth date", () => {
+    // Krzysztof Hetman's page, as the 2026-10-10 export has it: the MEP, live,
+    // no register link. The night's payload tied it by name to a namesake.
+    beforeEach(() => {
+      nodes.hetman = {
+        type: "person",
+        name: "Krzysztof Hetman",
+        birthDate: "1974-06-27",
+        rejestrIo: "",
+        wikipedia: "https://pl.wikipedia.org/wiki/Krzysztof_Hetman",
+        parties: ["PSL"],
+        published: true,
+      };
+      nodes.company = {
+        type: "place",
+        name: "Spółka",
+        krsNumber: "0000087470",
+        published: true,
+      };
+    });
+
+    function namesake(body: Record<string, unknown> = {}) {
+      payload({
+        name: "Krzysztof Hetman",
+        korytaId: "hetman",
+        rejestrIo: "https://rejestr.io/osoby/1203566",
+        birthDate: "1963-10-10",
+        companies: [
+          {
+            krs: "0000087470",
+            role: "Zarząd",
+            start: "2006-11-24",
+            end: "2021-06-24",
+          },
+        ],
+        ...body,
+      });
+    }
+
+    it("holds the payload back, nothing written", async () => {
+      namesake();
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
+        message: expect.stringContaining("(hetman) stores 1974-06-27"),
+      });
+      // Neither the link nor the date nor the namesake's board seat.
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+      expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+    });
+
+    it("does not look for another page instead", async () => {
+      // The payload was planned onto this page, so which other one it belongs
+      // on is a reviewer's question - and a page made for it would stop the
+      // night.
+      nodes.other = {
+        type: "person",
+        name: "Krzysztof Hetman",
+        birthDate: "1963-10-10",
+        parties: [],
+      };
+      namesake();
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
+      });
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+    });
+
+    it("holds it back where the page stores only a year, and another", async () => {
+      nodes.hetman = { ...nodes.hetman, birthDate: "1974" };
+      namesake();
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
+      });
+    });
+
+    it("takes a payload born in the year the page stores alone", async () => {
+      nodes.hetman = { ...nodes.hetman, birthDate: "1963" };
+      namesake();
+
+      const result = await handler({} as any);
+
+      expect(result.personId).toBe("hetman");
+    });
+
+    it("takes the payload where the page stores no birth date", async () => {
+      // 106 pages of the 10-10 export store "" - no date is no contradiction.
+      nodes.hetman = { ...nodes.hetman, birthDate: "" };
+      namesake();
+
+      const result = await handler({} as any);
+
+      expect(result.personId).toBe("hetman");
+    });
+
+    it("takes the payload born on the day the page stores", async () => {
+      namesake({ birthDate: "1974-06-27" });
+
+      const result = await handler({} as any);
+
+      expect(result.personId).toBe("hetman");
+    });
+
+    it("takes a payload with no birth date, as before", async () => {
+      namesake({ birthDate: undefined });
+
+      const result = await handler({} as any);
+
+      expect(result.personId).toBe("hetman");
+    });
+
+    it("takes the payload of the register entry the page links, keeping its date", async () => {
+      // One entry is one human: Jarosław Andrzej Marszałek's page links his
+      // entry and stores 1967-11-21, the register 1967-01-21. The date stays
+      // the page's, as a stored one always does.
+      nodes.hetman = {
+        ...nodes.hetman,
+        rejestrIo: "https://rejestr.io/osoby/1203566/krzysztof-hetman",
+      };
+      namesake();
+
+      const result = await handler({} as any);
+
+      expect(result.personId).toBe("hetman");
+      expect(createRevisionTransaction).not.toHaveBeenCalledWith(
+        mockDb,
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ birthDate: "1963-10-10" }),
+        expect.anything(),
+      );
+    });
+  });
+
   it("falls back to the register entry when the korytaId names nothing", async () => {
     // A page deleted since the export, or an id from a stale run.
     nodes.pawel = {
