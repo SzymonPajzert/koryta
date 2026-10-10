@@ -11,8 +11,10 @@ from pandas import DataFrame
 from entities.company import KRS, Owner, Source, short_name
 from entities.company import Company as KrsCompany
 from entities.person import KRS as KrsPerson
+from scrapers.krs.columns import iso_dates, padded_krs
 from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
 from scrapers.krs.graph import PARENT_RELATION, QueryRelation
+from scrapers.krs.odpis_history import KrsOdpisSeats, PeselKeyMissing
 from scrapers.krs.organs import supervision_kind
 from scrapers.krs.public_bodies import public_body
 from scrapers.krs.researched_owners import RESEARCHED_OWNERS
@@ -310,6 +312,38 @@ BECAME_PUBLIC: dict[str, str] = {
 }
 
 
+#: The roles an odpis pełny names a company's owners under
+#: (`odpis_pdf.ROLE_BY_RUBRYKA`): the wspólnicy of a spółka z o.o. and the sole
+#: shareholder of a spółka akcyjna.
+OWNER_ROLES = ("wspolnik", "jedyny_akcjonariusz")
+
+
+def _cell(value) -> str:
+    """A seat's cell as text, or "" where pandas read it back as NaN."""
+    return value if isinstance(value, str) else ""
+
+
+def held_to_the_end(
+    entry_removed: str, removed: str, stated_on: str, last: str
+) -> bool:
+    """Whether an owner an odpis pełny lists still held the company on `last`.
+
+    `last` is the day of the company's last entry before the strike-off, as in
+    `CompaniesKRS.add_owners_at_strike_off`, and the test is the one it puts to
+    a holding: an owner struck out that day or later held the company to the
+    end. Most were struck out by the strike-off itself - GMINA MIASTA GDAŃSKA
+    from GDAŃSKIE WODOCIĄGI by entry 102 - and an owner struck out by an entry
+    the document's own list gives no day for is not taken to have.
+
+    An owner the odpis still lists counts only where the odpis speaks for a day
+    no earlier than `last`: one fetched before the company's last entries
+    cannot say what they changed.
+    """
+    if entry_removed:
+        return bool(removed) and removed >= last
+    return bool(stated_on) and stated_on >= last
+
+
 class CompaniesKRS(Pipeline[KrsCompany]):
     filename = "company_krs"
     # These are written as strings and have to be read back as strings. Without
@@ -321,6 +355,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     jst: Jst
     hardcoded_companies: CompaniesHardcoded
     teryt: Teryt
+    odpis_seats: KrsOdpisSeats
 
     def __init__(self) -> None:
         super().__init__()
@@ -505,6 +540,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
 
         Only companies already known are joined, so a holding never waits on a
         company nothing else describes (`check_awaiting` would end the run).
+        The feeds list companies alone; an owner that is a government or a
+        public body is read off the odpis, by `add_public_owners_on_file`.
         """
         added = 0
         for owner, owned, ended in self.past_owners:
@@ -520,6 +557,82 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             self.add_relation(owner, owned)
             added += 1
         return added
+
+    def seats_on_file(self, ctx: Context) -> DataFrame | None:
+        """`KrsOdpisSeats`, or None where it can be neither built nor restored.
+
+        The seats are fingerprinted with the PESEL key, so without it and with
+        no copy to restore - a CI runner - there are none, and the run says so
+        rather than failing: the struck-off companies are then left to the
+        historical feeds, as `PeopleKRSCombined` leaves the people to
+        rejestr.io.
+        """
+        try:
+            return self.odpis_seats.read_or_process(ctx)
+        except PeselKeyMissing as missing:
+            print(f"  [WARN] {missing} No struck-off company gets an owner off it.")
+            return None
+
+    def add_public_owners_on_file(self, seats: DataFrame) -> int:
+        """Mark public each struck-off company its odpis names a public owner of.
+
+        `add_owners_at_strike_off` reads the owners off rejestr.io's historical
+        feeds, and those list companies with a KRS number and nothing else. So a
+        company a gmina, the Treasury or a state agency held until it was struck
+        off had no owner at all, and read as private: GDAŃSKIE WODOCIĄGI
+        (0000006553, GMINA MIASTA GDAŃSKA's until 2025), POZNAŃSKIE ZAKŁADY
+        GRAFICZNE (0000020197, the Treasury's until 2018), TDM "ARRTRANS"
+        (0000065042, KOWR's until 2025).
+
+        The odpis pełny on file still names them: it keeps every owner the
+        register ever listed, with the entries that added and struck out each
+        (`KrsOdpisSeats`, under `OWNER_ROLES`). An owner that held the company
+        to the end (`held_to_the_end`) is read as `company_from_api_krs` reads a
+        current one: a gmina, a powiat, a województwo or the Treasury becomes a
+        `teryt` owner, a name two units share makes the company public with no
+        edge, and `public_body` names the rest. An owner with a KRS number is
+        left to the feeds, as the seats do not carry the number.
+
+        Returns how many companies it found a public owner for.
+        """
+        found: set[str] = set()
+        owners = seats.loc[seats["role"].isin(OWNER_ROLES)]
+        for krs, name, entry_removed, removed, stated_on in zip(
+            padded_krs(owners["krs"]),
+            owners["surname"].map(_cell),
+            owners["entry_removed"].map(_cell),
+            iso_dates(owners["date_removed"]),
+            iso_dates(owners["stated_on"]),
+        ):
+            last = self.struck_off.get(krs)
+            company = self.companies.get(krs)
+            if last is None or company is None or not name:
+                continue
+            if not held_to_the_end(entry_removed, removed, stated_on, last):
+                continue
+            if self.mark_public_owner(company, name):
+                found.add(krs)
+        return len(found)
+
+    def mark_public_owner(self, company: KrsCompany, name: str) -> bool:
+        """Make `company` public if `name` is a public owner; whether it was one.
+
+        The reading `company_from_api_krs` gives an owner without a KRS number,
+        and the edge it draws: a government's TERYT code, or the Treasury's
+        sentinel. The company's own województwo settles a name two units
+        share, as `add_researched_owners` does.
+        """
+        seat = (company.teryt_code or "")[:2] or None
+        index = self.jst_index
+        resolved = index.resolve(name, seat) if index is not None else None
+        if resolved and resolved != AMBIGUOUS:
+            owner = Owner(krs=None, teryt=resolved)
+            if owner not in company.parents:
+                company.parents.append(owner)
+        elif not resolved and not public_body(name):
+            return False
+        company.is_public = True
+        return True
 
     def add_researched_owners(self) -> int:
         """Mark public the companies `RESEARCHED_OWNERS` names, with their owners.
@@ -674,6 +787,10 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             f"Owners at strike-off: {added} holdings joined, over "
             f"{len(self.struck_off)} struck-off companies"
         )
+        seats = self.seats_on_file(ctx)
+        if seats is not None:
+            found = self.add_public_owners_on_file(seats)
+            print(f"Public owners at strike-off on file: {found} companies")
         marked = self.add_researched_owners()
         print(f"Researched owners: {marked} of {len(RESEARCHED_OWNERS)} companies")
 

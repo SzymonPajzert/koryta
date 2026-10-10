@@ -1,18 +1,25 @@
 """A struck-off company keeps the owner it had when it was struck off.
 
-Read off rejestr.io's historical feeds, the only place a struck-off company's
-owners are still listed - see `CompaniesKRS.add_owners_at_strike_off`.
+Read off rejestr.io's historical feeds, which list the owners that are
+companies - see `CompaniesKRS.add_owners_at_strike_off` - and off the odpis
+pełny on file, which names the rest - `CompaniesKRS.add_public_owners_on_file`.
 """
 
+import math
+
+import pandas as pd
 from pandas import DataFrame
 
 from entities.company import KRS, Owner
 from scrapers.krs.list import (
     BECAME_PUBLIC,
     CompaniesKRS,
+    held_to_the_end,
     past_ownership,
     struck_off_after,
 )
+from scrapers.krs.odpis_history import PeselKeyMissing
+from scrapers.map.jst import SKARB_PANSTWA, JstIndex
 
 NO_POSTAL_CODES = DataFrame({"city": [], "postal_code": [], "teryt": []})
 
@@ -198,3 +205,191 @@ def test_the_output_says_which_companies_are_struck_off():
         PGNIG_SERWIS: True,
         ORLEN: False,
     }
+
+
+# ─── an owner that is not a company: read off the odpis on file ────────
+#
+# The historical feeds list companies with a KRS number and nothing else, so a
+# company a gmina, the Treasury or a state agency held to its strike-off had no
+# owner at all. The odpis pełny names them, as owner seats (`KrsOdpisSeats`).
+
+GDANSKIE_WODOCIAGI = "0000006553"
+PZG = "0000020197"
+TDM_ARRTRANS = "0000065042"
+
+
+def pomorskie() -> JstIndex:
+    rows = [
+        ("22", None, None, None, "POMORSKIE"),
+        ("22", "61", None, None, "Gdańsk"),
+        ("22", "61", "01", "1", "Gdańsk"),
+    ]
+    return JstIndex.from_terc(
+        pd.DataFrame(rows, columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"])
+    )
+
+
+def owner_seat(
+    krs,
+    name,
+    removed_by=None,
+    removed_on=None,
+    stated_on="2026-10-07",
+    role="jedyny_akcjonariusz",
+):
+    """An owner as `KrsOdpisSeats` lists one, its missing cells read back as NaN."""
+    return {
+        "krs": krs,
+        "role": role,
+        "surname": name,
+        "entry_removed": removed_by if removed_by is not None else math.nan,
+        "date_removed": removed_on if removed_on is not None else math.nan,
+        "stated_on": stated_on,
+    }
+
+
+def run(feeds: list[tuple[str, list[dict]]], *seats: dict) -> CompaniesKRS:
+    """A run over these feeds that then read these owner seats."""
+    pipeline = CompaniesKRS()
+    pipeline.jst_index = pomorskie()
+    for blob_name, items in feeds:
+        pipeline.process_rejestrio_blob(blob_name, items, NO_POSTAL_CODES)
+    pipeline.add_owners_at_strike_off()
+    pipeline.add_public_owners_on_file(pd.DataFrame(list(seats)))
+    return pipeline
+
+
+def struck_off(krs: str, last: str) -> list[tuple[str, list[dict]]]:
+    """A feed listing `krs` as struck off, its last entry before that on `last`."""
+    return [(feed("0000000001", "historyczne"), [org(krs, struck=last)])]
+
+
+def public_of(pipeline: CompaniesKRS) -> set[str]:
+    seeds = pipeline.compute_public_krss({})
+    pipeline.propagate_is_public(seeds, pipeline.build_parent_to_children())
+    return {krs for krs, c in pipeline.companies.items() if c.is_public}
+
+
+def test_a_gmina_that_held_it_to_the_strike_off_makes_it_public():
+    # GDAŃSKIE WODOCIĄGI: the city's from entry 80 until entry 102 struck the
+    # company off on 2025-07-10; its last entry before that was 2025-06-27.
+    pipeline = run(
+        struck_off(GDANSKIE_WODOCIAGI, "2025-06-27"),
+        owner_seat(GDANSKIE_WODOCIAGI, "GMINA MIASTA GDAŃSKA", "102", "2025-07-10"),
+    )
+
+    assert public_of(pipeline) == {GDANSKIE_WODOCIAGI}
+    assert pipeline.companies[GDANSKIE_WODOCIAGI].parents == [
+        Owner(krs=None, teryt="2261011")
+    ]
+
+
+def test_the_treasury_is_recorded_as_the_owner():
+    pipeline = run(
+        struck_off(PZG, "2017-04-28"),
+        owner_seat(PZG, "SKARB PAŃSTWA - MINISTER SKARBU PAŃSTWA", "34", "2018-01-29"),
+    )
+
+    assert public_of(pipeline) == {PZG}
+    assert pipeline.companies[PZG].parents == [Owner(krs=None, teryt=SKARB_PANSTWA)]
+
+
+def test_a_state_agency_makes_it_public_with_nothing_to_draw_an_edge_to():
+    # TDM "ARRTRANS": KOWR's from 2023 to its strike-off in 2025.
+    pipeline = run(
+        struck_off(TDM_ARRTRANS, "2025-02-10"),
+        owner_seat(
+            TDM_ARRTRANS, "KRAJOWY OŚRODEK WSPARCIA ROLNICTWA", "65", "2025-04-29"
+        ),
+    )
+
+    assert public_of(pipeline) == {TDM_ARRTRANS}
+    assert pipeline.companies[TDM_ARRTRANS].parents == []
+
+
+def test_an_owner_struck_out_before_the_last_entry_had_sold_it():
+    pipeline = run(
+        struck_off(TDM_ARRTRANS, "2025-02-10"),
+        owner_seat(TDM_ARRTRANS, "SKARB PAŃSTWA", "9", "2004-09-17"),
+    )
+
+    assert public_of(pipeline) == set()
+
+
+def test_an_owner_struck_out_on_a_day_the_odpis_does_not_give_did_not_hold_it():
+    pipeline = run(
+        struck_off(PZG, "2017-04-28"), owner_seat(PZG, "SKARB PAŃSTWA", removed_by="34")
+    )
+
+    assert public_of(pipeline) == set()
+
+
+def test_an_odpis_older_than_the_last_entries_cannot_say_who_held_it_at_the_end():
+    listed_before = owner_seat(PZG, "SKARB PAŃSTWA", stated_on="2016-12-01")
+    listed_after = owner_seat(PZG, "SKARB PAŃSTWA", stated_on="2017-05-02")
+
+    assert public_of(run(struck_off(PZG, "2017-04-28"), listed_before)) == set()
+    assert public_of(run(struck_off(PZG, "2017-04-28"), listed_after)) == {PZG}
+
+
+def test_a_private_owner_at_the_end_passes_nothing_on():
+    pipeline = run(
+        struck_off(PZG, "2017-04-28"),
+        owner_seat(PZG, "DRUKARNIA SPÓŁKA AKCYJNA", "34", "2018-01-29"),
+        owner_seat(PZG, "KOWALSKI", "34", "2018-01-29", role="wspolnik"),
+    )
+
+    assert public_of(pipeline) == set()
+
+
+def test_a_board_member_is_not_an_owner():
+    pipeline = run(
+        struck_off(PZG, "2017-04-28"),
+        owner_seat(PZG, "SKARB PAŃSTWA", "34", "2018-01-29", role="reprezentacja"),
+    )
+
+    assert public_of(pipeline) == set()
+
+
+def test_a_company_still_in_the_register_is_left_to_its_current_odpis():
+    pipeline = run(
+        [(feed("0000000001", "aktualne"), [org(GDANSKIE_WODOCIAGI)])],
+        owner_seat(GDANSKIE_WODOCIAGI, "GMINA MIASTA GDAŃSKA"),
+    )
+
+    assert public_of(pipeline) == set()
+
+
+def test_its_subsidiaries_struck_off_while_it_held_them_inherit_it():
+    # KOMPANIA WĘGLOWA, the Treasury's until it was struck off in 2017, and a
+    # subsidiary it held until that one was struck off in 2012.
+    kompania, subsidiary = "0000057506", "0000328385"
+    child = org(
+        subsidiary, holding("PASYWNY", "2008-01-02", "2012-06-01"), struck="2012-06-01"
+    )
+    pipeline = run(
+        [(feed(kompania, "historyczne"), [child])] + struck_off(kompania, "2017-05-23"),
+        owner_seat(kompania, "SKARB PAŃSTWA", "60", "2017-06-29"),
+    )
+
+    assert public_of(pipeline) == {kompania, subsidiary}
+
+
+def test_held_to_the_end_compares_against_the_last_entry_before_the_strike_off():
+    assert held_to_the_end("102", "2025-07-10", "2026-10-07", "2025-06-27")
+    assert held_to_the_end("101", "2025-06-27", "2026-10-07", "2025-06-27")
+    assert not held_to_the_end("80", "2023-01-05", "2026-10-07", "2025-06-27")
+    assert not held_to_the_end("102", "", "2026-10-07", "2025-06-27")
+    assert held_to_the_end("", "", "2025-06-27", "2025-06-27")
+    assert not held_to_the_end("", "", "", "2025-06-27")
+
+
+def test_without_the_pesel_key_the_run_goes_on_with_the_feeds_alone():
+    class NoKey:
+        def read_or_process(self, ctx):
+            raise PeselKeyMissing("No PESEL key.")
+
+    pipeline = CompaniesKRS()
+    pipeline.odpis_seats = NoKey()  # type: ignore[assignment]
+
+    assert pipeline.seats_on_file(ctx=None) is None  # type: ignore[arg-type]
