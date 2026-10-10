@@ -38,7 +38,7 @@ from scrapers.krs.researched_owners import FUND_HOLDERS, RESEARCHED_OWNERS
 from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Jst, Teryt, normalize_unit_name
-from scrapers.stores import CloudStorage, Context, Pipeline
+from scrapers.stores import CloudStorage, Context, Pipeline, ProcessPolicy
 from scrapers.stores.file import split_crawl_date
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
@@ -475,6 +475,10 @@ BECAME_PUBLIC: dict[str, str] = {
 #: shareholder of a spółka akcyjna.
 OWNER_ROLES = ("wspolnik", "jedyny_akcjonariusz")
 
+#: `CompaniesKRS`'s sources that only a machine with the PESEL key builds, read
+#: by `process` itself - see `CompaniesKRS.preprocess_sources`.
+ODPIS_SOURCES = ("odpis_seats", "odpis_entries")
+
 
 def _cell(value) -> str:
     """A seat's cell as text, or "" where pandas read it back as NaN."""
@@ -784,6 +788,24 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             self.add_relation(owner, owned)
             added += 1
         return added
+
+    def preprocess_sources(self, ctx: Context, policy: ProcessPolicy) -> bool:
+        """Read every source but the odpisy on file, which `process` reads.
+
+        `run_pipeline` reads each declared source before `process`, and the
+        seats raise PeselKeyMissing there on a machine with no PESEL key and
+        no copy to restore - the CI nightly, which runs `--no-backup` and holds
+        no key - so `seats_on_file` never had the chance to fall back to the
+        feeds, and CompaniesKRS failed with the 22 pipelines that read it. The
+        entries wait for the seats in `process`, for the reason given there.
+        """
+        refreshed = False
+        for name, dep in self.dependencies.items():
+            if name in ODPIS_SOURCES:
+                continue
+            dep.read_or_process(ctx)
+            refreshed = refreshed or dep._refreshed_execution
+        return refreshed
 
     def seats_on_file(self, ctx: Context) -> DataFrame | None:
         """`KrsOdpisSeats`, or None where it can be neither built nor restored.
