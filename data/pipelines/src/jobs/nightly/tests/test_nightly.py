@@ -655,10 +655,36 @@ def test_a_rebuild_with_no_copy_on_disk_to_keep_leaves_none(world):
 
     assert night.main([]) == 0
 
-    # The half it wrote is not taken for a held copy: the reprocess restores
-    # one, or builds it, as it did before.
-    assert world.output("PeoplePKW").read_text() == "half"
+    # The half it wrote is taken away: the reprocess reads whatever file
+    # stands there as "up to date", and restores the pipeline, or builds it,
+    # only when there is none - as it did before.
+    assert not world.output("PeoplePKW").exists()
     assert world.steps()["rebuild_held"][0] == "partial"
+    assert world.steps()["reprocess"] == ("succeeded", "")
+
+
+def test_a_rebuild_that_cannot_be_run_puts_the_held_copy_back(world, monkeypatch):
+    world.trees["data/pipelines/src/scrapers/pkw"] = "a-new-tree"
+    world.hold("PeoplePKW")
+    stream = night.stream
+
+    def no_disk_left(argv, env, timeout, log, on_start=lambda proc: None):
+        if argv[1:2] == ["PeoplePKW"]:
+            raise OSError(28, "No space left on device")
+        return stream(argv, env, timeout, log, on_start)
+
+    monkeypatch.setattr(night, "stream", no_disk_left)
+
+    assert night.main([]) == 0
+
+    # Back where the reprocess, which holds it, reads it - not restored over
+    # from the shared cache for want of a file.
+    assert world.output("PeoplePKW").read_text() == "held\n"
+    assert not os.path.exists(f"{world.output('PeoplePKW')}.held")
+    assert world.summary()["not_rebuilt"] == {
+        "PeoplePKW": "wyjątek OSError: [Errno 28] No space left on device"
+    }
+    assert world.steps()["people"] == ("succeeded", "")
 
 
 def test_the_rebuilds_share_the_steps_time(world, monkeypatch):

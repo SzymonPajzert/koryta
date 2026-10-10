@@ -545,6 +545,19 @@ def put_back_aside(output: str) -> bool:
     return True
 
 
+def undo_rebuild(output: str, held: bool) -> None:
+    """Leave the output as it was before a rebuild that did not come through:
+    the copy it moved aside put back, or, when there was none, whatever it
+    left taken away. A pipeline writes its output in place, so a run stopped
+    or failed mid-write leaves part of it; and the reprocess, which holds the
+    pipeline, reads any file standing there as up to date - it restores the
+    pipeline from the shared cache, or builds it, only when there is none."""
+    if held:
+        os.replace(output + ASIDE, output)
+    elif os.path.exists(output):
+        os.remove(output)
+
+
 def pytest_argv(*args: str, report: str) -> list[str]:
     return [
         sys.executable,
@@ -1142,7 +1155,14 @@ class Night:
             # again in place, so a rebuild stopped mid-write would leave half
             # of PeoplePKW's 751 MB where the held copy was.
             os.replace(output, aside)
-        code, timed_out = self.process(step, rebuild_argv(name), minutes=minutes)
+        try:
+            code, timed_out = self.process(step, rebuild_argv(name), minutes=minutes)
+        except BaseException:
+            # Not run, or not followed to its end - a full disk, say. The step
+            # says so; the reprocess finds the copy where it always was, not
+            # a gap it would fill from the shared cache.
+            undo_rebuild(output, held)
+            raise
         if timed_out:
             failed = "przekroczony czas"
         elif code != 0:
@@ -1154,13 +1174,14 @@ class Night:
                 os.remove(aside)
             self.log(f"{name}: rebuilt", step.name)
             return ""
+        undo_rebuild(output, held)
         if held:
-            os.replace(aside, output)
             self.log(f"{name}: {failed}; the copy on disk stays", step.name)
         else:
             self.log(
-                f"{name}: {failed}; there was no copy on disk to keep, so the "
-                "reprocess restores or builds one, as it did before",
+                f"{name}: {failed}; there was no copy on disk to keep, and what "
+                "it left is gone, so the reprocess restores or builds one, as "
+                "it did before",
                 step.name,
             )
         return failed
