@@ -154,6 +154,64 @@ def test_a_merged_page_and_its_survivor_are_one_page():
     assert resolve(site, person()) == ("survivor", BY_NAME_AND_DATE)
 
 
+def test_a_link_or_a_page_id_reaching_a_merged_page_lands_on_its_survivor():
+    """A tombstone keeps the link it was found by; the ingest follows the merge
+    (`lookupNodeDoc`, `resolveMergedNode`), and so does the plan: 77 payloads
+    of 2026-10-10 were counted on a merged page."""
+    site = snapshot(
+        page("tombstone", "Anna Nowak", rejestrIo=f"{REGISTER}5", merged_into="mid"),
+        page("mid", "Anna Nowak", merged_into="survivor"),
+        page("survivor", "Anna Maria Nowak", rejestrIo=f"{REGISTER}5"),
+    )
+    linked = person(born=None, register=f"{REGISTER}5")
+    by_id = Person(**{**asdict(person(born=None)), "korytaId": "tombstone"})
+
+    assert resolve(site, linked) == ("survivor", "rejestrIo")
+    assert resolve(site, by_id) == ("survivor", "korytaId")
+
+
+def test_a_merge_into_a_page_the_export_lacks_finds_nothing_and_goes_on():
+    tombstone = page(
+        "tombstone", "Anna Maria Nowak", rejestrIo=f"{REGISTER}5", merged_into="x"
+    )
+    linked = person(register=f"{REGISTER}5")
+
+    # Past the link, which finds the tombstone, to the page of that name and
+    # birth date.
+    site = snapshot(tombstone, page("anna", "Anna Maria Nowak", birthDate=BORN))
+    assert resolve(site, linked) == ("anna", BY_NAME_AND_DATE)
+    # And past the name, which finds it too, to nobody.
+    site = snapshot(tombstone)
+    assert resolve(site, linked) == (None, NOT_ON_SITE)
+
+
+def test_the_name_alone_lands_on_the_survivor_and_is_judged_by_it():
+    site = snapshot(
+        page("tombstone", "Anna Nowak", merged_into="survivor"),
+        page("survivor", "Anna Maria Nowak", rejestrIo=f"{REGISTER}5"),
+    )
+
+    assert resolve(site, person(born=None)) == ("survivor", BY_NAME)
+    # The survivor links another entry than the payload's, which the
+    # tombstone, linking none, would have let through.
+    assert resolve(site, person(born=None, register=f"{REGISTER}6")) == (
+        None,
+        NOT_ON_SITE,
+    )
+
+
+def test_a_page_its_link_reaches_through_a_merge_is_not_also_another_by_name():
+    """Counted on the tombstone, the survivor looked reached by the
+    name-and-date payload alone, which was sent to it."""
+    site = snapshot(
+        page("tombstone", "Anna Nowak", rejestrIo=f"{REGISTER}5", merged_into="anna"),
+        page("anna", "Anna Maria Nowak", birthDate=BORN),
+    )
+    hers = person(born=None, register=f"{REGISTER}5")
+
+    assert matching_one_page([hers, person()], site) == [hers]
+
+
 def test_a_page_linking_another_entry_is_neither_a_match_nor_a_doubt():
     site = snapshot(
         page(
