@@ -12,6 +12,8 @@ import pytest
 from scrapers.krs import odpis_files, odpis_history, odpis_pdf
 from scrapers.stores.file import DownloadableFile
 from util import pesel as pesel_util
+from util import progress
+from util.progress import Progress, duration
 
 
 def pesel(first_ten: str) -> str:
@@ -302,3 +304,74 @@ def test_a_seat_holding_a_pesel_is_not_kept():
     cache.put(odpis, ([{"krs": "0000000029", "funkcja": f"Z {PRESIDENT}"}], None))
 
     assert cache.get(odpis) is None
+
+
+# ------------------------------------------------- saying how far it has got
+class Clock:
+    """A clock that moves only when told to."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_a_cold_parse_says_how_far_it_has_got(monkeypatch, capsys):
+    monkeypatch.setattr(progress, "EVERY", 2)
+    ctx = FakeContext(held() | held(krs="31") | held(krs="33"))
+
+    odpis_history.KrsOdpisEntries().process(ctx)
+    cold = capsys.readouterr().out
+    odpis_history.KrsOdpisEntries().process(ctx)
+    warm = capsys.readouterr().out
+
+    assert "0 odpisy parsed before, 3 to parse" in cold
+    assert "  2/3 odpisy parsed" in cold
+    assert "  3 odpisy parsed in " in cold
+    assert "3 odpisy parsed before, 0 to parse" in warm
+    assert "odpisy parsed in" not in warm
+
+
+def test_progress_is_said_every_so_many_documents(capsys):
+    """At about the rate of 2026-10-09: four a second, 12,440 to parse."""
+    clock = Clock()
+    said = Progress(12_440, "odpisy parsed", every=500, seconds=3600, clock=clock)
+    for _ in range(1_000):
+        clock.now += 0.25
+        said.step()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "  500/12,440 odpisy parsed, 4.0/s, 49m 45s left",
+        "  1,000/12,440 odpisy parsed, 4.0/s, 47m 40s left",
+    ]
+
+
+def test_progress_is_said_every_minute_when_documents_come_slowly(capsys):
+    clock = Clock()
+    said = Progress(100, "odpisy parsed", every=500, seconds=60, clock=clock)
+    for _ in range(48):
+        clock.now += 2.5
+        said.step()
+    clock.now += 10
+    said.finish()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "  24/100 odpisy parsed, 0.4/s, 3m 10s left",
+        "  48/100 odpisy parsed, 0.4/s, 2m 10s left",
+        "  48 odpisy parsed in 2m 10s",
+    ]
+
+
+def test_nothing_parsed_says_nothing_at_the_end(capsys):
+    Progress(0, "odpisy parsed", clock=Clock()).finish()
+
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    ("seconds", "said"),
+    [(0, "0s"), (12.4, "12s"), (2465, "41m 05s"), (3720, "1h 02m"), (-3, "0s")],
+)
+def test_a_duration_reads_in_the_largest_two_units(seconds, said):
+    assert duration(seconds) == said

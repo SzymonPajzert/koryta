@@ -43,6 +43,7 @@ import pypdf
 from scrapers.krs import odpis_files, odpis_pdf, organs
 from scrapers.stores import PESEL_SALT_FILE, Context, Pipeline, pesel_salt
 from util import pesel as pesel_util
+from util.progress import Progress
 
 #: Parsing processes. One is left for the reader feeding them.
 WORKERS = max(1, min(8, multiprocessing.cpu_count() - 1))
@@ -194,16 +195,29 @@ def parse_stored(
     parse: Callable[[Document], Parsed],
     cache: ParsedCache,
 ) -> tuple[list[dict[str, typing.Any]], list[str]]:
-    """Every stored odpis's rows, in KRS order, parsing only what `cache` lacks."""
+    """Every stored odpis's rows, in KRS order, parsing only what `cache` lacks,
+    and saying how far it has got as it goes (`util.progress.Progress`).
+
+    A cold cache is a full re-parse, and between its first line and the
+    pipeline's end this used to say nothing: on 2026-10-09 the reprocess
+    logged "0 odpisy parsed before, 12,440 to parse" at 22:03:34 and then
+    nothing on the serial console for most of an hour, healthy all the while
+    (CPU 75%, three workers on four vCPUs). A hand run like it looks hung.
+    Any edit to the code `parser_version` reads does the same to both
+    pipelines.
+    """
     results: dict[str, Parsed] = {}
     for krs in sorted(stored):
         if (kept := cache.get(stored[krs])) is not None:
             results[krs] = kept
     todo = {krs: odpis for krs, odpis in stored.items() if krs not in results}
     print(f"  {len(results):,} odpisy parsed before, {len(todo):,} to parse")
+    progress = Progress(len(todo), "odpisy parsed")
     for doc, parsed in parse_each(documents(ctx, todo), parse):
         results[doc.krs] = parsed
         cache.put(todo[doc.krs], parsed)
+        progress.step()
+    progress.finish()
     return gather(results[krs] for krs in sorted(stored))
 
 
