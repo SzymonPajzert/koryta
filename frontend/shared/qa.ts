@@ -59,6 +59,16 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "scalenie-firm-a-numer-krs",
+    title: "Scalenie firm: numer KRS zostaje na stronie, która zostaje",
+    description:
+      "Strona firmy scalona z inną traci numer KRS - przechodzi on na stronę, która zostaje, jeśli ta go nie miała - więc import nie trafi już na duplikat. Dwóch stron o różnych numerach KRS nie da się scalić, bo to dwie spółki w rejestrze.",
+    steps: [
+      "Na stronie dowolnej spółki kliknij „Ta strona to duplikat”, wybierz jako drugą stronę inną spółkę i kliknij „Sprawdź, co się stanie” - ma się pojawić błąd „Strony mają różne numery KRS”.",
+    ],
+    area: "admin",
+  },
+  {
     id: "numer-krs-ma-juz-inna-strona",
     title: "Nowa firma nie dostaje numeru KRS, który ma już inna strona",
     description:

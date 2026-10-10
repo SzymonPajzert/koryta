@@ -1,7 +1,8 @@
-import type {
-  DocumentSnapshot,
-  Firestore,
-  WriteBatch,
+import {
+  FieldValue,
+  type DocumentSnapshot,
+  type Firestore,
+  type WriteBatch,
 } from "firebase-admin/firestore";
 import {
   edgeIdentity,
@@ -78,6 +79,9 @@ export type MergePlan = {
   /** What the duplicate knows and the survivor does not, to be written onto the
    * survivor rather than left on the tombstone. See `carriedFields`. */
   carried: Record<string, unknown>;
+  /** Whether the duplicate is a company page holding a KRS number, which the
+   * merge takes off the tombstone - see `applyNodeMerge`. */
+  drops_krs?: boolean;
 };
 
 /** How far `merged_into` is followed before the data is called broken.
@@ -441,6 +445,7 @@ export async function planNodeMerge(
     survivorId,
   );
 
+  const duplicateKrs = duplicateDoc?.data()?.krsNumber;
   return {
     duplicate_id: duplicateId,
     survivor_id: survivorId,
@@ -453,6 +458,9 @@ export async function planNodeMerge(
       duplicateDoc?.data() ?? {},
       survivorDoc?.data() ?? {},
     ),
+    ...(typeof duplicateKrs === "string" && duplicateKrs
+      ? { drops_krs: true }
+      : {}),
   };
 }
 
@@ -483,6 +491,26 @@ export function mergeRefusal(
   }
   if (typeof duplicateData.merged_into === "string") {
     return `Strona ${plan.duplicate_id} została już scalona z ${duplicateData.merged_into}.`;
+  }
+  // A KRS number is a company's identity the way a rejestr.io entry is a
+  // person's: two numbers are two companies in the register, however alike
+  // their pages read. Merged, the duplicate's number would be left on no page
+  // in use - `applyNodeMerge` takes it off the tombstone and the survivor
+  // keeps its own - so the next upload of it would make the company a fresh
+  // page, and the merge would be undone overnight.
+  const duplicateKrs = duplicateData.krsNumber;
+  const survivorKrs = survivorData.krsNumber;
+  if (
+    typeof duplicateKrs === "string" &&
+    typeof survivorKrs === "string" &&
+    duplicateKrs &&
+    survivorKrs &&
+    duplicateKrs !== survivorKrs
+  ) {
+    return (
+      `Strony mają różne numery KRS: ${duplicateKrs} i ${survivorKrs}. ` +
+      "To dwie spółki w rejestrze, a scalać można tylko dwie strony jednej."
+    );
   }
   return undefined;
 }
@@ -615,12 +643,27 @@ export function applyNodeMerge(
   // url still resolves, its votes and revisions still have something to hang
   // off, and `pageIsPublic` already reads `deleted` - so it leaves the public
   // site on the next read without anything else learning a new rule.
+  //
+  // Except its KRS number, which goes. Every reader of `krsNumber` looks a
+  // company up by it - both ingests, the person table's `krs` filter, and on
+  // the pipelines' side the upload's mirror of the site (`SiteSnapshot`), the
+  // list of companies the site has, and the nightly invariant that one number
+  // has one page - and left on the tombstone it is one more page with the
+  // number, which each of them would have to learn to step over. Nothing needs
+  // it there: the tombstone's url redirects by `merged_into`, not by number;
+  // the survivor has the number already or is given it by `carriedFields`,
+  // and `mergeRefusal` turns down two different ones; and the record of what
+  // the page was stays in its revisions, which this update does not touch. A
+  // person's tombstone still keeps its `rejestrIo` and name, which the person
+  // lookups step over by following `merged_into` (`lookupNodeDoc` in
+  // ingest/person.post.ts); no company tombstone exists yet to need that.
   const duplicateRef = db.collection("nodes").doc(plan.duplicate_id);
   batch.update(duplicateRef, {
     deleted: true,
     delete_reason: reason,
     merged_into: plan.survivor_id,
     published: false,
+    ...(plan.drops_krs ? { krsNumber: FieldValue.delete() } : {}),
   });
 
   recordAudit(

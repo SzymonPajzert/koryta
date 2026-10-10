@@ -315,6 +315,68 @@ describe("api/nodes/merge", () => {
     expect(wrote("nodes/dup")).toMatchObject({ merged_into: "final" });
   });
 
+  it("takes the KRS number off a company page it merges away", async () => {
+    // „Therma” on 2026-10-09: the page made by hand on 08-24 beside the one the
+    // upload had made, both holding 0000081135.
+    stored["nodes/dup"] = {
+      type: "place",
+      name: 'PRZEDSIĘBIORSTWO KOMUNALNE "THERMA" (Bielsko-Biała)',
+      krsNumber: "0000081135",
+      published: true,
+    };
+    stored["nodes/surv"] = {
+      type: "place",
+      name: 'PRZEDSIĘBIORSTWO KOMUNALNE "THERMA"',
+      krsNumber: "0000081135",
+      published: true,
+    };
+
+    const result = await handler({} as never);
+
+    expect(result.plan.drops_krs).toBe(true);
+    expect(wrote("nodes/dup")).toMatchObject({
+      merged_into: "surv",
+      krsNumber: "<delete>",
+    });
+  });
+
+  it("gives the number to a surviving page that had none", async () => {
+    // Carried like any field the survivor lacks, in the same batch that takes
+    // it off the tombstone - so the number never goes without a page.
+    stored["nodes/dup"] = {
+      type: "place",
+      name: "Centrum Rozwoju Komunalnego S.A.",
+      krsNumber: "0000013874",
+    };
+    stored["nodes/surv"] = {
+      type: "place",
+      name: "CENTRUM ROZWOJU KOMUNALNEGO (Ostrów Wielkopolski)",
+      published: true,
+    };
+
+    await handler({} as never);
+
+    expect(wrote("nodes/surv")).toMatchObject({ krsNumber: "0000013874" });
+    expect(wrote("nodes/dup")).toMatchObject({ krsNumber: "<delete>" });
+  });
+
+  it("leaves a person's tombstone with nothing taken off it but its visibility", async () => {
+    await handler({} as never);
+
+    expect(wrote("nodes/dup")).not.toHaveProperty("krsNumber");
+  });
+
+  it("refuses to merge two companies with different KRS numbers", async () => {
+    stored["nodes/dup"] = { type: "place", krsNumber: "0000081135" };
+    stored["nodes/surv"] = { type: "place", krsNumber: "0000013874" };
+
+    await expect(handler({} as never)).rejects.toMatchObject({
+      statusCode: 400,
+      message: expect.stringContaining("różne numery KRS"),
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
   it("refuses to merge a page with itself", async () => {
     request({ duplicate_id: "dup", survivor_id: "dup", reason: "Powód" });
 

@@ -572,6 +572,41 @@ describe("mergeRefusal", () => {
       ),
     ).toContain("c");
   });
+
+  it("refuses to fold one company in the register into another", async () => {
+    // Two numbers are two companies. Merged, the company ingest would follow
+    // the tombstone's number to the survivor and write it over the survivor's
+    // own, leaving that one with no page.
+    const refusal = mergeRefusal(
+      { duplicate_id: "a", survivor_id: "b" },
+      nodeSnap({ type: "place", krsNumber: "0000081135" }),
+      nodeSnap({ type: "place", krsNumber: "0000013874" }),
+    );
+
+    expect(refusal).toContain("0000081135");
+    expect(refusal).toContain("0000013874");
+  });
+
+  it("allows two pages of one company, or one with no number yet", async () => {
+    // „Therma” on 2026-10-09: both pages hold 0000081135.
+    expect(
+      mergeRefusal(
+        {
+          duplicate_id: "BnTvgqabfOXJFyuzFi8t",
+          survivor_id: "v9eUDB9lGr62mj4r4Trq",
+        },
+        nodeSnap({ type: "place", krsNumber: "0000081135" }),
+        nodeSnap({ type: "place", krsNumber: "0000081135" }),
+      ),
+    ).toBeUndefined();
+    expect(
+      mergeRefusal(
+        { duplicate_id: "a", survivor_id: "b" },
+        nodeSnap({ type: "place", krsNumber: "0000081135" }),
+        nodeSnap({ type: "place" }),
+      ),
+    ).toBeUndefined();
+  });
 });
 
 describe("applyNodeMerge", () => {
@@ -727,6 +762,28 @@ describe("applyNodeMerge", () => {
       delete_reason: "Jedna osoba, dwie strony",
       merged_into: "surv",
       published: false,
+    });
+  });
+
+  it("takes a company's KRS number off the tombstone", async () => {
+    // Left there it is a second page with the number for every reader that
+    // looks a company up by it - the ingests, the table's `krs` filter, the
+    // pipelines' mirror of the site and the invariant that counts them.
+    applyNodeMerge(
+      db,
+      batch,
+      { uid: "admin-uid" },
+      { ...plan, edges: [], drops_krs: true },
+      "Duplikat strony „Therma”",
+      new Map(),
+    );
+
+    expect(wrote("nodes/dup")).toEqual({
+      deleted: true,
+      delete_reason: "Duplikat strony „Therma”",
+      merged_into: "surv",
+      published: false,
+      krsNumber: "<delete>",
     });
   });
 
