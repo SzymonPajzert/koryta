@@ -322,6 +322,44 @@ describe("api/revisions/create, place edits", () => {
     });
   });
 
+  it("stores a KRS number in the ten digits the register prints", async () => {
+    // The form the company upload writes and both ingests look a company up
+    // by; "81135" as typed would be a page neither of them reaches.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Therma",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "therma",
+      name: "Therma",
+      krsNumber: "KRS 81135",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({ krsNumber: "0000081135" });
+  });
+
+  it("rejects a KRS number that is not one", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Therma",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "therma",
+      name: "Therma",
+      krsNumber: "brak",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Numer KRS jest niepoprawny",
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
   it("rejects an identifier whose check digit does not match", async () => {
     // Both registers checksum their numbers, so a typo is caught here rather
     // than stored as a plausible number that resolves to nobody.

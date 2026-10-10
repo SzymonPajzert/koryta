@@ -69,6 +69,27 @@ export function normalizeRegon(raw: string): string {
   return digitsOf(raw, false);
 }
 
+/** A KRS number as typed, in the ten zero-padded digits the register prints.
+ *
+ * That is the form every page the company upload writes carries - all 5,501
+ * on 2026-10-10 - and the form both ingests look a company up by. Stored as
+ * typed, "81135" is a page no lookup reaches and no duplicate check sees: the
+ * next upload of 0000081135 would make the company a second page. The number
+ * has no check digit, so this is as much as can be caught; anything that is not
+ * up to ten digits once the separators are gone is returned as it is, for
+ * `isValidKrs` to turn down. */
+export function normalizeKrs(raw: string): string {
+  const digits = digitsOf(raw, false).replace(/^KRS:?/, "");
+  return /^\d{1,10}$/.test(digits) ? digits.padStart(10, "0") : digits;
+}
+
+/** Whether a KRS number, as typed, names an entry: up to ten digits, not all
+ * of them nought. */
+export function isValidKrs(raw: string): boolean {
+  const digits = normalizeKrs(raw);
+  return /^\d{10}$/.test(digits) && digits !== "0000000000";
+}
+
 /** The weighted-sum check both registers use, modulo 11.
  *
  * REGON reads a remainder of 10 as a check digit of 0; NIP has no such digit,

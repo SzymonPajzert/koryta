@@ -9,8 +9,10 @@ import type {
 import type { SupervisoryOrgan } from "./companyOrgans";
 import { supervisoryOrgans } from "./companyOrgans";
 import {
+  isValidKrs,
   isValidNip,
   isValidRegon,
+  normalizeKrs,
   normalizeNip,
   normalizeRegon,
 } from "./identifiers";
@@ -382,6 +384,9 @@ export type PersonEditRequest = z.infer<typeof personEditSchema>;
  * being written to a node that nobody can then look up in the register. An
  * empty string is left alone: it is how the form clears a number that turned
  * out to be wrong.
+ *
+ * A KRS number goes the same way, padded to ten digits rather than
+ * checksummed - see `normalizeKrs`.
  */
 function identifierField(
   normalize: (raw: string) => string,
@@ -418,7 +423,7 @@ function identifierField(
 export const companyEditSchema = z.object({
   name: z.string().min(1, "Nazwa jest wymagana"),
   content: z.string().optional(),
-  krsNumber: z.string().optional(),
+  krsNumber: identifierField(normalizeKrs, isValidKrs, "KRS"),
   regonNumber: identifierField(normalizeRegon, isValidRegon, "REGON"),
   nipNumber: identifierField(normalizeNip, isValidNip, "NIP"),
   wikipedia: z.string().optional(),

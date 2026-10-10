@@ -106,6 +106,7 @@
                 label="Numer KRS"
                 hint="Numer w Krajowym Rejestrze Sądowym, jeśli podmiot jest w nim wpisany"
                 persistent-hint
+                :rules="[identifierRule(isValidKrs, 'KRS')]"
                 class="mb-2"
               />
               <v-text-field
@@ -218,7 +219,7 @@ import {
   companyCategories,
   isKnownCategory,
 } from "~~/shared/companyCategories";
-import { isValidNip, isValidRegon } from "~~/shared/identifiers";
+import { isValidKrs, isValidNip, isValidRegon } from "~~/shared/identifiers";
 
 const props = defineProps<{
   /** Omitted when proposing a brand new node instead of an edit. */
@@ -323,8 +324,9 @@ const editData = reactive({
 const urlRule = (value: string) =>
   !value || URL.canParse(value) || "Podaj pełny adres, razem z https://";
 
-/** Says so before the request rather than after it, since both numbers carry a
- * check digit and the server rejects a wrong one anyway. */
+/** Says so before the request rather than after it, since the server rejects
+ * a wrong number anyway: REGON and NIP carry a check digit, and a KRS number
+ * has to be up to ten digits. */
 const identifierRule =
   (isValid: (value: string) => boolean, register: string) => (value: string) =>
     !value || isValid(value) || `Numer ${register} jest niepoprawny`;

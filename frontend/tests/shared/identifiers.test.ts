@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   companyIdentifiers,
+  isValidKrs,
   isValidNip,
   isValidRegon,
+  normalizeKrs,
   normalizeNip,
   normalizeRegon,
 } from "../../shared/identifiers";
@@ -84,6 +86,41 @@ describe("normalisation", () => {
     // into a different one.
     expect(normalizeRegon("PL123456785")).toBe("PL123456785");
     expect(isValidRegon("PL123456785")).toBe(false);
+  });
+});
+
+describe("normalizeKrs", () => {
+  it("pads a number to the ten digits every uploaded page carries", () => {
+    // Stored as typed, "81135" is a page neither ingest finds by 0000081135,
+    // so the next company upload would give „Therma” another page.
+    expect(normalizeKrs("81135")).toBe("0000081135");
+    expect(normalizeKrs("0000081135")).toBe("0000081135");
+  });
+
+  it("drops the separators and the register's name", () => {
+    expect(normalizeKrs(" 0000 081-135 ")).toBe("0000081135");
+    expect(normalizeKrs("KRS 0000081135")).toBe("0000081135");
+    expect(normalizeKrs("krs: 81135")).toBe("0000081135");
+  });
+
+  it("leaves what is not a number for validation to turn down", () => {
+    expect(normalizeKrs("brak")).toBe("BRAK");
+    expect(normalizeKrs("00000811350")).toBe("00000811350");
+    expect(normalizeKrs("")).toBe("");
+  });
+});
+
+describe("isValidKrs", () => {
+  it("accepts a number as printed and as typed short", () => {
+    expect(isValidKrs("0000081135")).toBe(true);
+    expect(isValidKrs("81135")).toBe(true);
+  });
+
+  it("rejects free text, a number too long, and nought", () => {
+    expect(isValidKrs("brak")).toBe(false);
+    expect(isValidKrs("00000811350")).toBe(false);
+    expect(isValidKrs("0")).toBe(false);
+    expect(isValidKrs("")).toBe(false);
   });
 });
 
