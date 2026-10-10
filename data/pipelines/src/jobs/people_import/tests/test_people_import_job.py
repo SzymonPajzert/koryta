@@ -4,9 +4,11 @@ import argparse
 import gzip
 import json
 import math
+import os
 import sys
 import typing
-from datetime import date
+from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -17,14 +19,40 @@ from analysis.payloads.target import NEW, Targeted
 from entities.person import RejestrIOKey
 from jobs.krs_common import answer_name
 from jobs.people_import import payloads as build
+from scrapers.koryta.download import CURRENT_DATE, KorytaEdges, KorytaNodes
 from scrapers.krs.scrape import PEOPLE_QUERIES, RejestrIOQuery
 from scrapers.stores import ProcessPolicy
 from stores import job_requests
 from stores.job_requests import Request
-from stores.storage import CRAWLED_BUCKET, SHARED_BUCKET
+from stores.storage import CRAWLED_BUCKET, SHARED_BUCKET, warsaw_tz
 from uploader import Args, PersonUploader
 
 ENDPOINT = "https://autopush.koryta.pl"
+
+
+def warsaw(day: str, hour: int, minute: int = 0, second: int = 0) -> datetime:
+    return datetime.combine(
+        date.fromisoformat(day), time(hour, minute, second), tzinfo=warsaw_tz
+    )
+
+
+def stamp(moment: datetime) -> str:
+    """An export folder's stamp for an export taken at `moment`."""
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.242Z")
+
+
+def taken_at(moment: datetime) -> job.Export:
+    """An export taken at `moment`, done three minutes later."""
+    return job.Export(stamp(moment), moment + timedelta(minutes=3))
+
+
+#: The day the snapshot's frames are named after when no --koryta-date says.
+TODAY = CURRENT_DATE
+#: This morning's export, as Firestore stamps it.
+MORNING = warsaw(TODAY, 4, 0, 59)
+#: When the night's reprocess wrote the snapshot's frames.
+REPROCESS = warsaw(TODAY, 5, 26)
+YESTERDAY = (date.fromisoformat(TODAY) - timedelta(days=1)).isoformat()
 
 
 class Response:
@@ -96,9 +124,17 @@ class RecordingRun:
 
 
 class World:
-    """Everything the job touches, faked: the build, the bucket, the site."""
+    """Everything the job touches, faked: the build, the bucket, the site, the
+    clock, the newest export and the frames of it on disk."""
 
-    def __init__(self):
+    def __init__(self, versioned: Path):
+        #: Noon today, after this morning's export, and the frames the night
+        #: built from it.
+        self.clock = warsaw(TODAY, 12)
+        self.export: job.Export | None = taken_at(MORNING)
+        self.versioned = versioned
+        for pipeline in (KorytaNodes, KorytaEdges):
+            self.write_frame(pipeline(None), REPROCESS)
         #: What the build returns, or raises.
         self.payloads: list[dict] | BaseException = []
         #: What the site answers each person, in order; a callable is called.
@@ -123,6 +159,17 @@ class World:
         [run] = self.runs
         return run
 
+    def write_frame(self, pipeline, when: datetime | None) -> None:
+        """Put the pipeline's output on disk as written at `when`, or take it
+        off with None."""
+        path = self.versioned / pipeline.output_path()
+        if when is None:
+            path.unlink(missing_ok=True)
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n")
+        os.utime(path, (when.timestamp(), when.timestamp()))
+
     def sent(self) -> list[str]:
         return [e.removeprefix("send ") for e in self.events if e.startswith("send ")]
 
@@ -132,8 +179,8 @@ class World:
 
 
 @pytest.fixture
-def world(monkeypatch) -> World:
-    w = World()
+def world(monkeypatch, tmp_path) -> World:
+    w = World(tmp_path)
 
     def build_payloads(scope, koryta_date, policy):
         w.events.append("build")
@@ -180,6 +227,13 @@ def world(monkeypatch) -> World:
         w.runs.append(RecordingRun(job_id, **kwargs))
         return w.runs[-1]
 
+    def latest_export(client):
+        w.events.append("export")
+        return w.export
+
+    monkeypatch.setattr(job, "warsaw_now", lambda: w.clock)
+    monkeypatch.setattr(job, "latest_export", latest_export)
+    monkeypatch.setattr(job, "VERSIONED_DIR", str(w.versioned))
     monkeypatch.setattr(job, "build_payloads", build_payloads)
     monkeypatch.setattr(job, "Client", Bucket)
     monkeypatch.setattr(job, "make_uploader", make_uploader)
@@ -553,11 +607,11 @@ def test_the_jobs_flags_never_reach_the_pipelines(world, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["koryta_people_import", "--max-uploads", "5"])
     world.payloads = []
 
-    job.main(["--max-uploads", "5", "--koryta-date", "2026-10-01"])
+    job.main(["--max-uploads", "5", "--koryta-date", TODAY])
 
     [built] = world.built
     assert built["argv"] == ["koryta_people_import"]
-    assert (built["scope"], built["date"]) == ("on-koryta", "2026-10-01")
+    assert (built["scope"], built["date"]) == ("on-koryta", TODAY)
 
 
 def test_the_pipelines_see_the_cli_flags_and_only_while_they_run(monkeypatch):
@@ -707,6 +761,196 @@ def test_without_the_pesel_key_the_seats_are_restored_not_rebuilt(monkeypatch, a
 
     assert not policy.should_refresh("KrsOdpisSeats")
     assert policy.should_refresh("PeopleKRSCombined")
+
+
+# ---------------------------------------------------------------------------
+# The export the payloads are compared with
+
+
+def test_a_run_says_which_export_it_compared_with(world, capsys):
+    world.payloads = people(1)
+    world.answers = [person()]
+
+    assert job.main([]) == 0
+
+    assert world.events.index("export") < world.events.index("build")
+    assert world.summary()["export"] == stamp(MORNING)
+    # The night built both frames after the export was done: neither again.
+    [built] = world.built
+    assert not built["policy"].should_refresh("KorytaNodes")
+    assert not built["policy"].should_refresh("KorytaEdges")
+    assert f"Comparing with the export of {stamp(MORNING)}\n" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [[], ["--dry-run"], ["--scope", "not-on-koryta", "--max-new", "50"]],
+)
+def test_a_hand_run_between_midnight_and_four_is_refused(world, argv):
+    """Yesterday's export has none of the pages yesterday's night created:
+    compared with it, `not-on-koryta` would create them again."""
+    yesterdays = warsaw(YESTERDAY, 4, 0, 35)
+    world.clock = warsaw(TODAY, 2, 30)
+    world.export = taken_at(yesterdays)
+    world.payloads = people(1)
+
+    assert job.main(argv) == job.EXIT_FAILED
+
+    assert "build" not in world.events
+    assert world.sent() == []
+    end = world.run().ending()
+    assert (end["state"], end["exit_code"]) == ("failed", job.EXIT_FAILED)
+    assert end["stop_reason"] == (
+        f"brak dzisiejszej kopii bazy (najnowsza z {stamp(yesterdays)})"
+    )
+
+
+def test_no_finished_export_at_all_is_refused(world):
+    world.export = None
+    world.payloads = people(1)
+
+    assert job.main([]) == job.EXIT_FAILED
+
+    assert "build" not in world.events
+    assert world.summary()["stopped"] == "brak dzisiejszej kopii bazy (żadnej)"
+
+
+def test_a_koryta_date_that_is_not_the_newest_exports_day_is_refused(world):
+    world.payloads = people(1)
+
+    assert job.main(["--koryta-date", YESTERDAY]) == job.EXIT_FAILED
+
+    assert "build" not in world.events
+    assert world.run().ending()["stop_reason"] == (
+        f"porównanie z kopią bazy z {YESTERDAY}, a najnowsza jest z {stamp(MORNING)}"
+    )
+
+
+@pytest.mark.parametrize("refresh", [[], ["--refresh", "none"]])
+def test_a_frame_cached_under_todays_name_before_the_export_is_rebuilt(
+    world, refresh, capsys
+):
+    """A run at two built `koryta_nodes_<today>` from yesterday's export, the
+    only one there was; `--refresh none` would have taken it as it is."""
+    for pipeline in (KorytaNodes, KorytaEdges):
+        world.write_frame(pipeline(None), warsaw(TODAY, 2))
+    world.payloads = people(1)
+    world.answers = [person()]
+
+    assert job.main(refresh) == 0
+
+    [built] = world.built
+    assert built["policy"].should_refresh("KorytaNodes")
+    assert built["policy"].should_refresh("KorytaEdges")
+    if refresh:
+        assert built["policy"].refresh_pipelines == {"KorytaNodes", "KorytaEdges"}
+    out = capsys.readouterr().out
+    assert "rebuilding KorytaNodes, KorytaEdges, not built from it" in out
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        None,  # a fresh disk: restored, it would be whatever was uploaded last
+        MORNING + timedelta(minutes=1),  # read while the export was written
+    ],
+)
+def test_a_frame_not_written_after_the_export_was_done_is_rebuilt(world, written):
+    world.write_frame(KorytaEdges(None), written)
+    world.payloads = people(1)
+    world.answers = [person()]
+
+    assert job.main(["--refresh", "none"]) == 0
+
+    [built] = world.built
+    assert built["policy"].refresh_pipelines == {"KorytaEdges"}
+
+
+def test_a_request_in_the_afternoon_reads_the_export_the_night_built(asked):
+    asked.clock = warsaw(TODAY, 15)
+    plan_for(asked, ["Anna Nowak"], [])
+    asked.answers = [person("updated")]
+
+    assert job.main(["--request", "run-asked", "--refresh", "none"]) == 0
+
+    [built] = asked.built
+    assert built["policy"].refresh_pipelines == set()
+    assert asked.summary()["export"] == stamp(MORNING)
+
+
+def test_an_export_taken_by_hand_later_in_the_day_is_read_once_rebuilt(asked):
+    asked.clock = warsaw(TODAY, 15)
+    asked.export = taken_at(warsaw(TODAY, 14, 7, 8))
+    plan_for(asked, ["Anna Nowak"], [])
+    asked.answers = [person("updated")]
+
+    assert job.main(["--request", "run-asked", "--refresh", "none"]) == 0
+
+    [built] = asked.built
+    assert built["policy"].refresh_pipelines == {"KorytaNodes", "KorytaEdges"}
+    assert asked.summary()["export"] == stamp(warsaw(TODAY, 14, 7, 8))
+    assert asked.sent() == ["Anna Nowak"]
+
+
+@pytest.mark.parametrize(
+    ("taken", "at", "refused"),
+    [
+        # This morning's, stamped 02:00:59Z in summer...
+        (warsaw("2026-10-10", 4, 0, 59), warsaw("2026-10-10", 12), False),
+        # ...and 03:00:12Z in winter: four in Warsaw either way.
+        (warsaw("2026-11-10", 4, 0, 12), warsaw("2026-11-10", 12), False),
+        # One taken by hand since.
+        (warsaw("2026-10-10", 14, 7), warsaw("2026-10-10", 15), False),
+        # At half past two, before the night's export.
+        (warsaw("2026-10-09", 4, 0, 35), warsaw("2026-10-10", 2, 30), True),
+        # Taken by hand at a quarter to midnight: the night's run came after.
+        (warsaw("2026-10-09", 23, 45), warsaw("2026-10-10", 9), True),
+    ],
+)
+def test_only_an_export_taken_today_at_four_or_later_is_compared_with(
+    taken, at, refused
+):
+    export = taken_at(taken)
+
+    assert bool(job.export_refusal(export, export.stamp[:10], at)) == refused
+
+
+def test_the_newest_export_is_the_newest_finished_and_done_when_its_marker_was():
+    done = datetime(2026, 10, 10, 2, 3, 11, tzinfo=UTC)
+    markers = {
+        "2026-10-09T19:01:27.973Z": datetime(2026, 10, 9, 19, 4, 15, tzinfo=UTC),
+        "2026-10-10T02:00:59.242Z": done,
+    }
+
+    def stamp_of(name: str) -> str:
+        folder, marker = name.removeprefix("hostname=koryta.pl/").split("/")
+        assert marker == f"{folder}.overall_export_metadata"
+        return folder.removeprefix("date=")
+
+    class Listing(list):
+        prefixes = {f"hostname=koryta.pl/date={s}/" for s in markers} | {
+            "hostname=koryta.pl/date=2026-10-10T12:00:00.000Z/",  # still writing
+        }
+
+    class Bucket:
+        def list_blobs(self, prefix, delimiter):
+            return Listing()
+
+        def blob(self, name):
+            return SimpleNamespace(exists=lambda: stamp_of(name) in markers)
+
+        def get_blob(self, name):
+            found = markers.get(stamp_of(name))
+            return SimpleNamespace(updated=found) if found else None
+
+    class Storage:
+        def bucket(self, name):
+            assert name == CRAWLED_BUCKET
+            return Bucket()
+
+    client = typing.cast(job.Client, SimpleNamespace(storage_client=Storage()))
+
+    assert job.latest_export(client) == job.Export("2026-10-10T02:00:59.242Z", done)
 
 
 # ---------------------------------------------------------------------------

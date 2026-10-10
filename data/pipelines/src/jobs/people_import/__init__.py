@@ -56,6 +56,16 @@ so that what any day sent can be read back without diffing two exports, which
 is what the audit of the 2026-09-12 upload had to do - and then sends them one
 by one ("wysyłanie"), at the uploader's pace.
 
+Before it builds anything it finds the export the payloads will be compared
+with - who has a page, and what each page holds (`SNAPSHOT`) - and refuses,
+as failed, unless the newest finished export was taken today at 04:00 Warsaw
+time or later. Compared with an older one, `--only-changed` sends again what
+the last night's run put up, and `--scope not-on-koryta` creates again the
+pages it created. A frame of the export on disk that is not built from that
+one - cached under today's name between midnight and four, from the export
+before; or the morning's, after an export taken by hand later in the day - is
+rebuilt, whatever `--refresh` says (`PeopleImport.check_export`).
+
 It stops itself as failed on the two things that mean the site is not taking
 what it should:
 
@@ -73,10 +83,10 @@ in hand is done, and on Ctrl+C.
 
 Exit codes: 0 when everything planned was sent and taken; 75 when something is
 left for the next run (a limit, the deadline, SIGTERM, Ctrl+C, a few refused
-people); 1 for a crash or a guardrail stop. Each run writes a summary to
-gs://koryta-pl-sharedcache/jobs/people_import/runs/ and reports how it is going
-to koryta.pl/admin/procesy (`stores.job_runs`) - a dry run too, so that a trial
-week shows there what each day would have sent.
+people); 1 for a crash, a guardrail stop or an export too old to compare
+with. Each run writes a summary to gs://koryta-pl-sharedcache/jobs/people_import/runs/
+and reports how it is going to koryta.pl/admin/procesy (`stores.job_runs`) - a
+dry run too, so that a trial week shows there what each day would have sent.
 
 It signs in as `stores.koryta_login` decides; in production through
 `KORYTA_PIPELINE_UID`, so the revisions it files count as a robot's.
@@ -92,15 +102,16 @@ import sys
 import time
 import typing
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
 from analysis.payloads.priority import NEW_HIRE, TIERS
 from analysis.payloads.target import NEW, PageTarget
+from jobs.nightly import export_finished, export_time, newest_export
 from jobs.people_import.payloads import (
     PRIORITY,
     REQUEST,
@@ -112,9 +123,10 @@ from jobs.people_import.payloads import (
     pipeline_names,
 )
 from scrapers.koryta.created import SENT_LOG
+from scrapers.koryta.download import KorytaEdges, KorytaExport, KorytaNodes
 from scrapers.krs.coverage import parse_person_connections_url
-from scrapers.stores import ProcessPolicy
-from stores.config import pesel_salt
+from scrapers.stores import Pipeline, ProcessPolicy
+from stores.config import VERSIONED_DIR, pesel_salt
 from stores.job_requests import PEOPLE_REQUEST, Request, read_request
 from stores.job_runs import ERROR_CHARS, ERRORS_KEPT, FinalState, JobRun
 from stores.koryta_login import TokenSource, token_source
@@ -185,15 +197,15 @@ CREATING = (NEW_HIRE, NEW)
 #: and read none of them.
 #:
 #: `KorytaPeople` is named after the day, which does not make a backup under
-#: today's name today's export: a run before the 04:00 export builds it from the
-#: one before and uploads it under today's name.
+#: today's name today's export: a run before the 04:00 export would build it
+#: from the one before and upload it under today's name - which is why such a
+#: run is refused before it builds (`export_refusal`).
 #:
 #: Left to be reused: Wikipedia (`ProcessWiki`), PKW (`PeoplePKW`) and the name
 #: frequencies, which change with a dump or an election, not overnight. Out of
 #: reach: the export `--on-koryta` and `--only-changed` compare against
-#: (`KorytaNodes`, `KorytaEdges`) is read outside this tree, so a backup made
-#: under today's name before the export is taken as it is - which only a hand
-#: run between midnight and four makes.
+#: (`SNAPSHOT`) is read outside this tree; the run rebuilds it itself when the
+#: frame on disk is not built from the newest export (`stale_frames`).
 DEFAULT_REFRESH = (
     "PeopleKRS",
     "KrsOdpisSeats",
@@ -217,9 +229,24 @@ TAKEN = ("created", "updated", "unchanged")
 #: `--refresh none`: rebuild nothing, take every output on disk as it is.
 REFRESH_NONE = "none"
 
+#: The hour, Warsaw time, of the site's daily export (`scheduledFirestoreExport`
+#: in frontend/functions/src/index.ts). Each one from 2026-09-30 to 10-10 is
+#: stamped within the minute after it, and was done within three.
+EXPORT_HOUR = 4
+
+#: The export `--on-koryta` and `--only-changed` compare the payloads with
+#: (`analysis.payloads.site.SiteSnapshot`). The pipelines read it without
+#: naming it among their sources, so `--refresh` cannot reach it and
+#: `--refresh none` would take a frame of it as it is on disk.
+SNAPSHOT: tuple[type[KorytaExport], ...] = (KorytaNodes, KorytaEdges)
+
+
+def warsaw_now() -> datetime:
+    return datetime.now(warsaw_tz)
+
 
 def now() -> str:
-    return datetime.now(warsaw_tz).isoformat(timespec="seconds")
+    return warsaw_now().isoformat(timespec="seconds")
 
 
 def plural(n: int, one: str, few: str, many: str) -> str:
@@ -240,6 +267,8 @@ class RunSummary:
     finished: str = ""
     scope: str = ""
     endpoint: str = ""
+    #: The export the payloads were compared with, as its folder is stamped.
+    export: str = ""
     #: Payloads built: the people whose page this run would change.
     planned: int = 0
     counters: dict[str, int] = field(default_factory=dict)
@@ -340,11 +369,16 @@ def judge(ending: Ending, counts: Mapping[str, int]) -> tuple[FinalState, str, i
     return "succeeded", "", 0
 
 
-def refresh_policy(asked: Sequence[str] | None) -> ProcessPolicy:
+def refresh_policy(
+    asked: Sequence[str] | None, rebuild: Iterable[str] = ()
+) -> ProcessPolicy:
     """What the payloads are built under: `DEFAULT_REFRESH`, or the pipelines
     --refresh names in its place, less any `:Name`, which is held as it is.
     `none` rebuilds nothing: what is on disk is taken as it is - the nightly's
-    reprocess has rebuilt all of it minutes before."""
+    reprocess has rebuilt all of it minutes before.
+
+    And, whatever --refresh says, `rebuild`: the frames of the export that
+    are not built from the newest one (`stale_frames`)."""
     named = {name for name in asked or () if not name.startswith(":")}
     held = {name[1:] for name in asked or () if name.startswith(":")}
     refresh = named or set(DEFAULT_REFRESH)
@@ -361,7 +395,81 @@ def refresh_policy(asked: Sequence[str] | None) -> ProcessPolicy:
             "rather than rebuilding them"
         )
         held.add(SEATS)
-    return ProcessPolicy(refresh - held, exclude_refresh=held)
+    return ProcessPolicy((refresh - held) | set(rebuild), exclude_refresh=held)
+
+
+@dataclass(frozen=True)
+class Export:
+    """The site's newest finished export: when it was taken, and when done."""
+
+    #: As its folder is stamped, in UTC: "2026-10-10T02:00:59.242Z".
+    stamp: str
+    #: When Firestore wrote the marker it writes last; None if unreadable.
+    finished: datetime | None
+
+
+def latest_export(client: Client) -> Export | None:
+    """The newest export that has finished writing, as the night finds it
+    (`jobs.nightly.newest_export`), or None."""
+    stamp = newest_export(client)
+    if stamp is None:
+        return None
+    return Export(stamp, export_finished(client, stamp))
+
+
+def export_refusal(export: Export | None, day: str, at: datetime) -> str:
+    """Why a run at `at` may not compare the payloads with `export`, in the
+    page's language - as the night says it - or "" when it may.
+
+    The export has to be taken today, at `EXPORT_HOUR` or later: compared
+    with an older one, `--only-changed` sends again what the last night's run
+    put up - no-ops, but counted as changes - and `--scope not-on-koryta`
+    creates again the pages it created. That is a hand run between midnight
+    and four, or any run on a day the export failed. The night checks the
+    same at its level (`Night.step_export`); a run asked for on a page in the
+    afternoon reads the morning's export, or one taken by hand since.
+
+    And `day`, the day the snapshot's frames are named after - --koryta-date,
+    else today - has to be the export's: `KorytaExport` reads the newest
+    export of its day, and the day before when its own has none.
+    """
+    if export is None:
+        return "brak dzisiejszej kopii bazy (żadnej)"
+    today = at.astimezone(warsaw_tz)
+    since = today.replace(hour=EXPORT_HOUR, minute=0, second=0, microsecond=0)
+    if export_time(export.stamp) < since:
+        return f"brak dzisiejszej kopii bazy (najnowsza z {export.stamp})"
+    if day != export.stamp[:10]:
+        return f"porównanie z kopią bazy z {day}, a najnowsza jest z {export.stamp}"
+    return ""
+
+
+def frame_written(pipeline: Pipeline) -> datetime | None:
+    """When the pipeline's output on disk was written, or None without one."""
+    path = os.path.join(VERSIONED_DIR, pipeline.output_path())
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(path), UTC)
+    except FileNotFoundError:
+        return None
+
+
+def stale_frames(frames: Iterable[Pipeline], finished: datetime | None) -> list[str]:
+    """The names of the `frames` whose output on disk is not built from the
+    export that finished writing at `finished`: none on disk, or one written
+    before - built from the export before, or from this one half-written.
+
+    Missing is rebuilt rather than restored: the backup in the shared cache
+    under today's name may be one a run made before the export. Told by when
+    the file was written, not by what it holds, so one restored from such a
+    backup since, by some other run, passes; on the nightly VM nothing
+    restores them, since the reprocess builds them.
+    """
+    stale = []
+    for frame in frames:
+        written = frame_written(frame)
+        if finished is None or written is None or written < finished:
+            stale.append(frame.pipeline_name)
+    return stale
 
 
 def person_key(payload: Mapping[str, typing.Any]) -> str:
@@ -550,6 +658,8 @@ class PeopleImport:
         self.request: Request | None = None
         #: ...and what of the page's people it found and left, for the page.
         self.request_counts: dict[str, int] = {}
+        #: The frames of the export to rebuild before they are compared with.
+        self.rebuild: list[str] = []
 
     @property
     def dry(self) -> bool:
@@ -578,14 +688,16 @@ class PeopleImport:
             self.summary.target = self.request.describe()
             print(f"Asked for on the site: {self.summary.target}")
         tokens = None if self.dry else sign_in(args.endpoint)
+        if refusal := self.check_export():
+            print(f"Stopping: {refusal}")
+            self.summary.stopped = refusal
+            return self.end("failed", EXIT_FAILED)
         if self.request is not None:
             payloads = self.plan_request(self.request)
         elif args.scope == PRIORITY:
             payloads = self.plan()
         else:
-            payloads = build_payloads(
-                args.scope, args.koryta_date, refresh_policy(args.refresh)
-            )
+            payloads = build_payloads(args.scope, args.koryta_date, self.policy())
         self.summary.planned = len(payloads)
         self.status.progress(
             0,
@@ -626,19 +738,50 @@ class PeopleImport:
         )
         return self.end(state, code)
 
+    def check_export(self) -> str:
+        """Why the run may not compare the payloads with the newest export
+        (`export_refusal`), or "" - and then which frames of it on disk to
+        rebuild first (`stale_frames`).
+
+        Rebuilt rather than refused: the nightly VM's frames are built by its
+        reprocess within two hours of the export - at 05:26 on 2026-10-10 -
+        so a run asked for on a page later in the day rebuilds nothing, unless
+        an export was taken by hand since; and the two take a minute and a
+        quarter to rebuild.
+        """
+        export = latest_export(self.client())
+        frames = [pipeline(self.args.koryta_date) for pipeline in SNAPSHOT]
+        refusal = export_refusal(export, frames[0].date, warsaw_now())
+        if export is None or refusal:
+            return refusal
+        self.summary.export = export.stamp
+        self.rebuild = stale_frames(frames, export.finished)
+        print(
+            f"Comparing with the export of {export.stamp}"
+            + (
+                f"; rebuilding {', '.join(self.rebuild)}, not built from it"
+                if self.rebuild
+                else ""
+            )
+        )
+        return ""
+
+    def policy(self) -> ProcessPolicy:
+        return refresh_policy(self.args.refresh, self.rebuild)
+
     def plan(self) -> list[dict]:
         """A priority run's payloads, in sending order: built, the already sent
         left out, the new hires cut at --max-new, the ones only an odpis names
         at --max-new-odpis-only."""
         args = self.args
-        today = datetime.now(warsaw_tz).date()
+        today = warsaw_now().date()
         bought_from = (today - timedelta(days=args.bought_days)).isoformat()
         bought = bought_since(self.client(), bought_from)
         self.summary.bought_people = len(bought)
         print(f"Bought from rejestr.io since {bought_from}: {len(bought)} people")
         candidates = build_priority(
             args.koryta_date,
-            refresh_policy(args.refresh),
+            self.policy(),
             today,
             args.recent_days,
             bought,
@@ -690,7 +833,7 @@ class PeopleImport:
             register=request.register_number,
         )
         candidates, targeted = build_targeted(
-            target, self.args.koryta_date, refresh_policy(self.args.refresh)
+            target, self.args.koryta_date, self.policy()
         )
         self.tiers = [candidate.tier for candidate in candidates]
         # The people it was asked to add are exactly the pages it may create;
@@ -1011,8 +1154,9 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--koryta-date",
         type=iso_day,
-        help="The export (YYYY-MM-DD) --on-koryta and --only-changed compare "
-        "against. Default: the latest - in the night, the 04:00 one.",
+        help="The day (YYYY-MM-DD) of the export --on-koryta and --only-changed "
+        "compare against. Default: today. The run is refused unless the newest "
+        "finished export is of that day, taken at 04:00 today or later.",
     )
     parser.add_argument(
         "--refresh",
@@ -1022,7 +1166,8 @@ def parser() -> argparse.ArgumentParser:
         "of the default set (DEFAULT_REFRESH: the newest crawl and export, "
         "and what is built from them). ':NAME' holds one as it is, alone "
         "taking it out of the default set; 'all' rebuilds everything, 'none' "
-        "nothing.",
+        "nothing. The export compared against is rebuilt whatever this says "
+        "when the copy on disk is not built from the newest export.",
     )
     parser.add_argument(
         "--max-minutes",
