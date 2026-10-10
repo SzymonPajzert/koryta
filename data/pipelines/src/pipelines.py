@@ -16,6 +16,7 @@ from analysis.scores import (
     PeopleScoresTurnover,
 )
 from analysis.stats import Statistics
+from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.article.pipelines import (
     ArticleAnalyzed,
     ArticleDomainSelectors,
@@ -87,6 +88,7 @@ PIPELINES = [
     PeopleScoresSuccession,
     PeopleScoresTurnover,
     Extract,
+    FirstNameFreq,
     KRSAlreadyScraped,
     KRSCensoredPeople,
     KRSNeedsRefresh,
@@ -107,6 +109,7 @@ PIPELINES = [
     KorytaPeople,
     KorytaPeopleCreated,
     KorytaVotes,
+    NamesCountByRegion,
     PeopleEnriched,
     PeopleKRS,
     PeopleKRSCombined,
