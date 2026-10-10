@@ -2388,8 +2388,9 @@ describe("api/ingest/person, jobs from the register entry a published page links
       start_date: "2026-02-09",
     };
 
-    /** The payload with both jobs, the KGHM seat ended on `end`. */
-    function closedSeat(end: string | undefined = "2026-08-25") {
+    /** The payload with both jobs, the KGHM seat ended on `end`, or open
+     * for null. */
+    function closedSeat(end: string | null = "2026-08-25") {
       payload({
         companies: [
           {
@@ -2402,7 +2403,7 @@ describe("api/ingest/person, jobs from the register entry a published page links
             krs: "0000023302",
             role: "Rada Nadzorcza",
             start: "2026-02-09",
-            end,
+            ...(end ? { end } : {}),
           },
         ],
       });
@@ -2482,41 +2483,108 @@ describe("api/ingest/person, jobs from the register entry a published page links
       ).toBeGreaterThan(Math.max(...batchUpdate.mock.invocationCallOrder));
     });
 
-    it("leaves an end already stored as it is", async () => {
+    it("leaves an end already stored as it is, and says so", async () => {
       // Somebody's correction, or an earlier run's reading of the register.
+      // Kept, and reported for the uploader to log.
       store.edges!.seat = { ...seat, end_date: "2026-07-01", published: true };
       closedSeat();
 
-      await handler({} as any);
+      const result = await handler({} as any);
 
       expect(writtenOnto("seat")).toEqual([]);
+      expect(result.droppedChanges).toEqual([
+        {
+          edgeId: "seat",
+          krs: "0000023302",
+          field: "end_date",
+          stored: "2026-07-01",
+          sent: "2026-08-25",
+          reason: "kept",
+        },
+      ]);
     });
 
-    it("does not reopen a job the payload sends without an end", async () => {
+    it("does not reopen a job the payload sends without an end, and says so", async () => {
+      // A register row with no end lists the job as current: a disagreement
+      // worth a line in the log - it is what a crawl's stamped end looks like.
       store.edges!.seat = { ...seat, end_date: "2026-07-01", published: true };
-      closedSeat(undefined);
+      closedSeat(null);
 
-      await handler({} as any);
+      const result = await handler({} as any);
 
       expect(writtenOnto("seat")).toEqual([]);
+      expect(result.droppedChanges).toEqual([
+        expect.objectContaining({
+          edgeId: "seat",
+          stored: "2026-07-01",
+          sent: null,
+          reason: "kept",
+        }),
+      ]);
     });
 
-    it("leaves a removed job removed", async () => {
+    it("leaves a removed job removed, and says so", async () => {
       store.edges!.seat = { ...seat, deleted: true };
       closedSeat();
 
-      await handler({} as any);
+      const result = await handler({} as any);
 
       expect(writtenOnto("seat")).toEqual([]);
+      expect(result.droppedChanges).toEqual([
+        expect.objectContaining({
+          edgeId: "seat",
+          krs: "0000023302",
+          stored: null,
+          sent: "2026-08-25",
+          reason: "removed",
+        }),
+      ]);
+    });
+
+    it("reports nothing it wrote, nor a removed job restated as it is", async () => {
+      // The end it fills in is not dropped, and a removed job the payload
+      // says nothing new about has nothing to log.
+      store.edges!.seat = { ...seat, published: true };
+      store.edges!.board = {
+        type: "employed",
+        name: "Zarząd",
+        source: "zelewski",
+        target: "arp",
+        start_date: "2001-01-01",
+        deleted: true,
+      };
+      payload({
+        companies: [
+          {
+            krs: "0000004441",
+            role: "Zarząd",
+            start: "2007-05-10",
+            end: "2024-10-04",
+          },
+          { krs: "0000004441", role: "Zarząd", start: "2001-01-01" },
+          {
+            krs: "0000023302",
+            role: "Rada Nadzorcza",
+            start: "2026-02-09",
+            end: "2026-08-25",
+          },
+        ],
+      });
+
+      const result = await handler({} as any);
+
+      expect(writtenOnto("seat")).toHaveLength(1);
+      expect(result).not.toHaveProperty("droppedChanges");
     });
 
     it("writes nothing onto a job whose end it already holds", async () => {
       // The ARP board seat in every payload above: stored with its end.
       closedSeat();
 
-      await handler({} as any);
+      const result = await handler({} as any);
 
       expect(writtenOnto("arp-board")).toEqual([]);
+      expect(result).not.toHaveProperty("droppedChanges");
     });
   });
 });
