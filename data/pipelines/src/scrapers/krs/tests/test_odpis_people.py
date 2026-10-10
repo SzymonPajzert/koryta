@@ -357,6 +357,27 @@ def test_without_the_key_the_people_are_rejestrios_alone(capsys):
     assert "rejestr.io's alone" in capsys.readouterr().out
 
 
+def test_the_sources_read_before_the_run_leave_the_odpisy_to_it():
+    # `run_pipeline` reads every source before `process`, and there the seats
+    # raised before `process` could catch it: without the key and with nothing
+    # to restore - the GitHub nightly's full tier - the run failed rather than
+    # take rejestr.io's people alone.
+    pipeline = PeopleKRSCombined()
+    read = []
+    for name, source in pipeline.dependencies.items():
+        source.read_or_process = lambda ctx, name=name: read.append(name)
+
+    def no_key(ctx):
+        raise PeselKeyMissing("No PESEL key.")
+
+    pipeline.seats.read_or_process = no_key
+    pipeline.entries.read_or_process = lambda ctx: pytest.fail("read every PDF")
+
+    pipeline.preprocess_sources(ctx=None, policy=None)  # type: ignore[arg-type]
+
+    assert set(read) == set(pipeline.dependencies) - {"seats", "entries"}
+
+
 # ------------------------------------------------------ what reads them
 def restored(df: pd.DataFrame) -> pd.DataFrame:
     """The frame as a restore from the shared cache gives it back."""

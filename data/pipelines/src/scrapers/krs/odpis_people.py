@@ -67,7 +67,7 @@ from scrapers.krs.odpis_history import (
     KrsOdpisSeats,
     PeselKeyMissing,
 )
-from scrapers.stores import Context, Pipeline
+from scrapers.stores import Context, Pipeline, ProcessPolicy
 
 
 #: The parser's roles (`odpis_pdf.ROLE_BY_RUBRYKA`) that are posts, named as
@@ -107,6 +107,10 @@ NEVER_SHOWN = ("pesel_fingerprint",)
 #: KRS altogether is "WYKREŚLENIE Z KRAJOWEGO REJESTRU SĄDOWEGO", after which
 #: the odpis is the last word and stands.
 STRUCK_OFF_ONE_REGISTER = "WYKREŚLENIE Z REJESTRU "
+
+#: `PeopleKRSCombined`'s sources that only a machine with the PESEL key builds,
+#: read by `process` itself - see `PeopleKRSCombined.preprocess_sources`.
+ODPIS_SOURCES = ("seats", "entries")
 
 
 def struck_off_one_register(entries: pd.DataFrame) -> set[str]:
@@ -482,6 +486,26 @@ class PeopleKRSCombined(Pipeline):
     seats: KrsOdpisSeats
     entries: KrsOdpisEntries
     companies: CompaniesKRS
+
+    def preprocess_sources(self, ctx: Context, policy: ProcessPolicy) -> bool:
+        """Read every source but the odpisy on file, which `process` reads.
+
+        `run_pipeline` reads each declared source before `process`, and the
+        seats raise PeselKeyMissing there on a machine with no PESEL key and
+        no copy to restore - the GitHub nightly's full tier, which runs
+        `--no-backup` and holds no key. So the fallback in `process` was never
+        reached: the run failed before it started, and with it the 15
+        pipelines that read the people - `PeopleKRSMerged`, `Extract`, the
+        payloads and the scores among them. The entries wait for the seats in
+        `process` too, for the reason given there.
+        """
+        refreshed = False
+        for name, dep in self.dependencies.items():
+            if name in ODPIS_SOURCES:
+                continue
+            dep.read_or_process(ctx)
+            refreshed = refreshed or dep._refreshed_execution
+        return refreshed
 
     def process(self, ctx: Context) -> pd.DataFrame:
         rejestrio = self.people_krs.read_or_process(ctx)
