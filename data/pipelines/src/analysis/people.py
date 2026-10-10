@@ -205,6 +205,23 @@ def people_merged(
         # A `PeopleKorytaMerged` from before 2026-10-10, restored from the
         # shared cache: no page's date, so no name match is refused on one.
         koryta_people = koryta_people.assign(birth_date=None)
+    # A surname as the joins below compare a KRS one with PKW's and
+    # Wikipedia's: a hyphen, a space, or both, are one separator. The register
+    # keeps a double surname as two parts (`nazwiskoICzlon`,
+    # `nazwiskoIICzlon`), which rejestr.io and the odpis both print with a
+    # space between - "kosiniak kamysz" - and PKW and Wikipedia with a
+    # hyphen. Compared as written, Władysław Kosiniak-Kamysz's page had none
+    # of his Sejm seats and no biography, and nor had most of his kind: on
+    # 2026-10-10, of the 6,000 register people with a space in the surname 52
+    # had a PKW record and none an article, against 28 of the 165 written with
+    # a hyphen. Folded, 1,078 people gained a PKW record and 200 an article,
+    # and nobody lost one. A hyphen with spaces round it ("pakuła - błoch")
+    # and the odd en dash ("okła – drewnowicz") are the same separator.
+    # Nothing else is folded, and the rest of each join stands as it was.
+    con.execute(
+        "CREATE OR REPLACE TEMP MACRO surname_key(name) AS "
+        "trim(regexp_replace(name, '[ –-]+', ' ', 'g'))"
+    )
 
     print("--- Imported table sizes ---")
     for table in [
@@ -263,7 +280,7 @@ def people_merged(
             w.*
         FROM krs_numbered k
         JOIN wiki_people w
-            ON k.last_name = w.last_name
+            ON surname_key(k.last_name) = surname_key(w.last_name)
             AND CASE
                 WHEN w.birth_date IS NOT NULL THEN
                     k.birth_date = w.birth_date
@@ -355,7 +372,7 @@ def people_merged(
         LEFT JOIN wiki_dated w USING (krs_row)
         JOIN pkw_people p ON (
             ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
-            AND k.last_name = p.last_name
+            AND surname_key(k.last_name) = surname_key(p.last_name)
             AND k.first_name = p.first_name
             AND (k.second_name = p.second_name
                 OR (p.second_name IS NULL OR p.second_name = '')
