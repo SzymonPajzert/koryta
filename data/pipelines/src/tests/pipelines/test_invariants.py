@@ -968,9 +968,9 @@ def test_companies_are_not_duplicated_by_krs(nodes):
     whichever sorts first and the other silently keeps stale data.
 
     A removed or merged-away page is not counted: the lookups step over it, and
-    a merge takes the number off a company tombstone anyway. Counting one would
-    read removing a duplicate as „duplikat” as a new duplicate the night it
-    happens - see `is_removed`.
+    a merge takes the number off a company tombstone anyway. Counted, a
+    duplicate removed as „duplikat” would go on counting as one, though nothing
+    reads it any more - see `is_removed`.
     """
     # Two on 2026-10-09, both a company page somebody created by hand for a
     # register the site already had - nothing on that path asked the KRS number
