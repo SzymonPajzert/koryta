@@ -15,6 +15,7 @@
 downloaded*
 versioned*
 nightly-logs
+nightly-state
 models
 
 !src/**/*.json

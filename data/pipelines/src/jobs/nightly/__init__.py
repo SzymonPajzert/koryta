@@ -30,10 +30,15 @@ The steps, in order (`STEPS`):
                 interesting, and the companies whose odpis did not come - at
                 most --paid-max-calls a day; before the reprocess, so what it
                 buys reaches tonight's people, who send those pages first
+    rebuild_held
+                `koryta <Name> --refresh <Name>`, one at a time, for each
+                pipeline the reprocess holds whose code has changed since
+                this machine last built it (`REBUILT_ON_CHANGE`); one that
+                fails leaves the copy on disk as it was
     reprocess   every pipeline rebuilt, as the CI nightly does, less the ones
                 whose sources change with a dump or an election rather than
-                overnight; each output backed up to the shared cache under
-                USERNAME, which on the VM is `main`
+                overnight (`HELD`); each output backed up to the shared cache
+                under USERNAME, which on the VM is `main`
     tests       the pipeline tests over those outputs (src/tests/pipelines)
     outputs     the outputs against their baseline (src/tests/e2e)
     invariants  the database invariants over tonight's export
@@ -88,6 +93,22 @@ without what it bought. It needs the rejestr.io key - REJESTR_KEY, else the
 Secret Manager secret rejestr-io-key (KORYTA_REJESTR_SECRET names another) -
 which the step reads itself and gives the paid job alone, and is skipped
 without it.
+
+`rebuild_held` holds nothing back either. The reprocess keeps `HELD` at what
+is on disk, as their sources change with a dump or an election; but their code
+changes too, and until 2026-10 nothing noticed: PeoplePKW sat at an 08-28 build
+through eight commits to scrapers/pkw, and test_person_pkw failed every night
+for it. File times cannot tell - a restored backup's file is dated 1970, the
+tar member's time, and a restore on 10-05 of an 08-28 build would look newer
+than September's code anyway. So for each held pipeline the VM can rebuild in
+minutes the step asks git for the hashes of the paths it is built from
+(`git rev-parse HEAD:<path>`; the VM has a full clone), and rebuilds it on its
+own when they differ from the ones recorded in the state dir after its last
+build here - or when none are, so the first night after a pipeline joins the
+table rebuilds it once. The reprocess still holds it, and reads what the
+rebuild wrote. A rebuild that fails or runs out of time puts the copy back that
+was on disk before it, records nothing - so the next night tries again - and
+leaves the night's state alone: the step is partial, the people go up.
 
 The night starts at 04:30 Warsaw, after the export and after midnight UTC, so
 the compressor - which archives up to yesterday in UTC - takes the whole
@@ -157,7 +178,9 @@ EXCLUDED = (
 #: hand-made copy of the CRU database, not overnight. And rebuilt they would
 #: cost the night what it has not got - ProcessWiki parses a 3 GB dump for 40
 #: minutes, CruDump needs a Postgres or a dump file the VM does not hold.
-#: (Teryt is not here: it is never stored, so there is nothing to hold.)
+#: (Teryt is not here: it is never stored, so there is nothing to hold.) The
+#: ones in `REBUILT_ON_CHANGE` are rebuilt before the reprocess when their code
+#: changes, and held in it all the same.
 HELD = (
     "ProcessWiki",
     "PeoplePKW",
@@ -168,6 +191,69 @@ HELD = (
     "CruDump",
     "CruUmowy",
 )
+
+
+@dataclass(frozen=True)
+class Rebuildable:
+    """A held pipeline the night rebuilds when its code changes."""
+
+    #: Its output, versioned/<filename>/<filename>.jsonl.
+    filename: str
+    #: The paths in the repository its rows are computed from: its own module
+    #: and what decides what goes in them, not the framework that writes them.
+    sources: tuple[str, ...]
+
+
+#: The held pipelines the VM can rebuild in minutes, cheapest first, so that a
+#: slow one does not leave the rest to another night. Not ProcessWiki - 40
+#: minutes and a 2.9 GB dump, rebuilt by hand - and never CruDump, which needs
+#: the CRU Postgres. The times are rebuilds on predator on 2026-10-10, from
+#: downloads on disk; every one the shared cache keeps a copy of came out the
+#: same as that copy, row for row.
+REBUILT_ON_CHANGE: dict[str, Rebuildable] = {
+    # 1 s: the 4,348 units of the TERC file Teryt downloads anyway.
+    "Regions": Rebuildable("regions", ("data/pipelines/src/scrapers/map/teryt.py",)),
+    # 1 s: a 6.8 MB table of postal codes from GitHub.
+    "PostalCodes": Rebuildable(
+        "postal_codes", ("data/pipelines/src/scrapers/map/postal_codes.py",)
+    ),
+    # 3 s and 1 s: PESEL's counts of surnames (34 MB) and first names (1.5 MB)
+    # from dane.gov.pl, a DuckDB query over each.
+    "NamesCountByRegion": Rebuildable(
+        "names_count_by_region", ("data/pipelines/src/analysis/utils/names.py",)
+    ),
+    "FirstNameFreq": Rebuildable(
+        "first_name_freq", ("data/pipelines/src/analysis/utils/names.py",)
+    ),
+    # 71 s and 1.2 GB: the 807,179 contracts of CruDump's artifact (226 MB,
+    # from the shared cache; the VM never makes a new one) into 1.7 GB. Kept
+    # on this disk only (backup_to_shared_cache is off), so is its rebuild;
+    # no pipeline reads it, but the outputs check does (test_cru_live).
+    "CruUmowy": Rebuildable(
+        "cru_umowy",
+        ("data/pipelines/src/scrapers/cru", "data/pipelines/src/entities/cru.py"),
+    ),
+    # 173 s and 6.2 GB, once PKW's 121 files (773 MB) are downloaded. TERYT
+    # resolves its codes, parse_name splits its names, and the PKW entity is
+    # its row.
+    "PeoplePKW": Rebuildable(
+        "person_pkw",
+        (
+            "data/pipelines/src/scrapers/pkw",
+            "data/pipelines/src/scrapers/map/teryt.py",
+            "data/pipelines/src/util/polish.py",
+            "data/pipelines/src/entities/person.py",
+        ),
+    ),
+}
+
+#: In the state dir: for each pipeline in `REBUILT_ON_CHANGE`, the hashes of
+#: its sources when the night last built it, and the commit it built.
+BUILT_FROM = "held-built-from.json"
+#: night.sh's state dir, when systemd has not named it (STATE_DIRECTORY).
+VM_STATE = "/var/lib/koryta-nightly"
+#: The copy a rebuild has moved aside, put back should it fail.
+ASIDE = ".held"
 
 #: Read again by the scores step, whatever the reprocess built from them: the
 #: site's people, their votes and facts, and the company scores made of those.
@@ -256,6 +342,11 @@ class NightSummary:
     failures: dict[str, list[str]] = field(default_factory=dict)
     #: Tests failing tonight that passed on the last night that ran them.
     new_failures: list[str] = field(default_factory=list)
+    #: Held pipelines rebuilt before the reprocess, and why each was due.
+    rebuilt: dict[str, str] = field(default_factory=dict)
+    #: Held pipelines due a rebuild that did not get one, and why; the next
+    #: night tries again.
+    not_rebuilt: dict[str, str] = field(default_factory=dict)
     log: str = ""
     exit_code: int | None = None
 
@@ -281,6 +372,9 @@ STEPS = (
     Step("krs_register", "rejestr KRS", 30),
     Step("krs_odpis", "odpisy", 45),
     Step("krs_paid", "rejestr.io", 30),
+    # Nothing to do on most nights, a few git calls. The first night after it
+    # landed rebuilds all six, PeoplePKW perhaps after downloading PKW's files.
+    Step("rebuild_held", "stałe potoki", 30),
     Step("reprocess", "potoki", 150),
     Step("tests", "testy", 45),
     Step("outputs", "wyniki", 20),
@@ -352,6 +446,103 @@ def reprocess_argv() -> list[str]:
     # --assume-yes answers ProcessWiki's "runs long?" should it be missing
     # everywhere; --all is Extract's, which refuses to run without a scope.
     return [*argv, "--keep-going", "--assume-yes", "--all"]
+
+
+def rebuild_argv(name: str) -> list[str]:
+    """One held pipeline rebuilt on its own, the rest held as the reprocess
+    holds them, so that none is rebuilt along with it."""
+    argv = [bin_path("koryta"), name, "--refresh", name]
+    for other in HELD:
+        if other != name:
+            argv += ["--refresh", f":{other}"]
+    return argv
+
+
+def state_dir() -> str:
+    """Where the night keeps what it needs from one night to the next: on the
+    VM /var/lib/koryta-nightly, which systemd names in STATE_DIRECTORY for the
+    service and for a hand run given --property=StateDirectory, and which
+    night.sh falls back to; elsewhere a directory beside the logs."""
+    named = os.environ.get("STATE_DIRECTORY", "").split(":")[0]
+    if named:
+        return named
+    if os.access(VM_STATE, os.W_OK):
+        return VM_STATE
+    return os.path.join(PROJECT_ROOT, "nightly-state")
+
+
+def held_output(filename: str) -> str:
+    return os.path.join(VERSIONED_DIR, filename, f"{filename}.jsonl")
+
+
+def source_trees(
+    paths: Sequence[str], root: str = PROJECT_ROOT
+) -> tuple[dict[str, str] | None, str]:
+    """The hash git gives each path in the checked-out commit - a tree's for a
+    directory, a blob's for a file - or None, and why not: no git, no clone, a
+    path the commit does not have. The paths are the repository's, from its
+    top, whichever of its directories `root` is.
+
+    The commit's, not the working tree's: on the VM they are one, night.sh
+    checks out KORYTA_REF with --force.
+    """
+    try:
+        done = subprocess.run(
+            ["git", "-C", root, "rev-parse", *(f"HEAD:{path}" for path in paths)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, type(e).__name__
+    hashes = done.stdout.split()
+    if done.returncode != 0 or len(hashes) != len(paths):
+        said = (done.stderr or "").strip().splitlines()
+        return None, said[0][:200] if said else f"git {done.returncode}"
+    return dict(zip(paths, hashes)), ""
+
+
+def read_built_from(path: str) -> dict[str, dict]:
+    """What each held pipeline was last built from, by name; empty when there
+    is no record, or none that reads - every pipeline is then due once."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            record = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return record if isinstance(record, dict) else {}
+
+
+def write_built_from(path: str, record: dict[str, dict]) -> None:
+    """Written aside and renamed, so a night stopped mid-write leaves the
+    last record whole."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    partial = f"{path}.part"
+    with open(partial, "w", encoding="utf-8") as f:
+        json.dump(record, f, ensure_ascii=False, indent=1, sort_keys=True)
+    os.replace(partial, path)
+
+
+def why_rebuild(built: dict | None, trees: dict[str, str]) -> str:
+    """Why a held pipeline is due a rebuild, from what its last build here was
+    made from and what its sources are now; "" when it is not."""
+    if not built:
+        return "pierwsza przebudowa tutaj"
+    before = built.get("sources") or {}
+    changed = [path for path, tree in trees.items() if before.get(path) != tree]
+    return "zmiana w " + ", ".join(changed) if changed else ""
+
+
+def put_back_aside(output: str) -> bool:
+    """Put back the copy a rebuild moved aside, if one was left; whether one
+    was. Only a night killed mid-rebuild leaves one: whatever stands in its
+    place is that rebuild's, half-written perhaps."""
+    aside = output + ASIDE
+    if not os.path.exists(aside):
+        return False
+    os.replace(aside, output)
+    return True
 
 
 def pytest_argv(*args: str, report: str) -> list[str]:
@@ -769,8 +960,14 @@ class Night:
         return max(0.0, min(step.minutes, self.minutes_left()))
 
     def process(
-        self, step: Step, argv: Sequence[str], env: dict[str, str] | None = None
+        self,
+        step: Step,
+        argv: Sequence[str],
+        env: dict[str, str] | None = None,
+        minutes: float | None = None,
     ) -> tuple[int | None, bool]:
+        """Run one of the step's commands, in at most `minutes` - by default
+        the step's whole time, for a step that runs one."""
         full_env = {**os.environ, "PYTHONUNBUFFERED": "1", **(env or {})}
         self.log("$ " + " ".join(argv), step.name)
 
@@ -781,7 +978,7 @@ class Night:
             return stream(
                 argv,
                 full_env,
-                self.minutes_for(step) * 60,
+                (self.minutes_for(step) if minutes is None else minutes) * 60,
                 lambda line: self.log(line, step.name),
                 started,
             )
@@ -880,6 +1077,93 @@ class Night:
         # In the job's environment, never on its command line, which the
         # night's log prints.
         return self.judge_job(*self.process(step, argv, {"REJESTR_KEY": key}))
+
+    def step_rebuild_held(self, step: Step) -> tuple[str, str, int | None]:
+        """Rebuild, one by one, the held pipelines whose code changed since
+        their last build here; partial, never failed, when one is not."""
+        until = warsaw_now() + timedelta(minutes=self.minutes_for(step))
+        path = os.path.join(state_dir(), BUILT_FROM)
+        record = read_built_from(path)
+        rebuilt, missed = self.summary.rebuilt, self.summary.not_rebuilt
+        for name, spec in REBUILT_ON_CHANGE.items():
+            output = held_output(spec.filename)
+            if put_back_aside(output):
+                self.log(
+                    f"{name}: put back the copy a killed night moved aside", step.name
+                )
+            trees, why_not = source_trees(spec.sources)
+            if trees is None:
+                self.log(
+                    f"{name}: cannot tell if its code changed: {why_not}", step.name
+                )
+                missed[name] = f"nie odczytano kodu: {why_not}"
+                continue
+            why = why_rebuild(record.get(name), trees)
+            if not why:
+                continue
+            minutes = (until - warsaw_now()).total_seconds() / 60
+            if self.signalled or minutes < 1:
+                missed[name] = "SIGTERM" if self.signalled else "brak czasu"
+                self.log(f"{name}: {why}, but {missed[name]}; held as it is", step.name)
+                continue
+            self.log(f"{name}: {why}; rebuilding it", step.name)
+            try:
+                failed = self.rebuild(step, name, output, minutes)
+                if not failed:
+                    record[name] = {
+                        "sources": trees,
+                        "built": warsaw_now().isoformat(timespec="seconds"),
+                        "version": self.summary.version,
+                    }
+                    write_built_from(path, record)
+            except Exception as e:
+                # The disk's, not the pipeline's: whatever it is, the night
+                # goes on to the reprocess, which holds the pipeline anyway.
+                failed = f"wyjątek {type(e).__name__}: {e}"[:200]
+                self.log(f"{name}: {failed}", step.name)
+            if failed:
+                missed[name] = failed
+                continue
+            rebuilt[name] = why
+        done = "przebudowano: " + ", ".join(rebuilt) if rebuilt else ""
+        if missed:
+            said = ", ".join(f"{name} ({why})" for name, why in missed.items())
+            reason = f"nie przebudowano: {said} - zostają kopie z dysku"
+            return PARTIAL, "; ".join(filter(None, [reason, done])), None
+        return SUCCEEDED, done, None
+
+    def rebuild(self, step: Step, name: str, output: str, minutes: float) -> str:
+        """Rebuild one held pipeline on its own in at most `minutes`: "" when
+        it was, else why not - and then the copy that was on disk is back."""
+        aside = output + ASIDE
+        held = os.path.exists(output)
+        if held:
+            # Moved, not copied: a pipeline truncates its output and writes it
+            # again in place, so a rebuild stopped mid-write would leave half
+            # of PeoplePKW's 751 MB where the held copy was.
+            os.replace(output, aside)
+        code, timed_out = self.process(step, rebuild_argv(name), minutes=minutes)
+        if timed_out:
+            failed = "przekroczony czas"
+        elif code != 0:
+            failed = f"kod wyjścia {code}"
+        elif not os.path.exists(output):
+            failed = "nie zapisał wyniku"
+        else:
+            if held:
+                os.remove(aside)
+            self.log(f"{name}: rebuilt", step.name)
+            return ""
+        if held:
+            os.replace(aside, output)
+            self.log(f"{name}: {failed}; the copy on disk stays", step.name)
+        else:
+            self.log(
+                f"{name}: {failed}; there was no copy on disk to keep, so the "
+                "reprocess restores or builds one, as it did before",
+                step.name,
+            )
+        return failed
 
     def step_reprocess(self, step: Step) -> tuple[str, str, int | None]:
         code, timed_out = self.process(step, reprocess_argv())
@@ -1033,6 +1317,8 @@ class Night:
         return 0
 
     def describe(self, step: Step) -> str:
+        if step.name == "rebuild_held":
+            return self.describe_rebuilds()
         commands = {
             "export": "wait for tonight's export (its .overall_export_metadata)",
             "krs_free": f"koryta_scrape_krs_free --max-minutes {self.args.krs_minutes}",
@@ -1065,6 +1351,24 @@ class Night:
             f"{self.args.keep_days} days",
         }
         return commands[step.name]
+
+    def describe_rebuilds(self) -> str:
+        """The rebuilds the step would make now, and why each is due - read
+        from git and the record, both of which it leaves as they are."""
+        record = read_built_from(os.path.join(state_dir(), BUILT_FROM))
+        due, unknown = [], []
+        for name, spec in REBUILT_ON_CHANGE.items():
+            trees, _ = source_trees(spec.sources)
+            if trees is None:
+                unknown.append(name)
+            elif why := why_rebuild(record.get(name), trees):
+                due.append(f"{name} ({why})")
+        return (
+            "koryta <Name> --refresh <Name> for each held pipeline whose code "
+            "changed since its last build here; now "
+            + (", ".join(due) or "none")
+            + (f"; cannot tell for {', '.join(unknown)}" if unknown else "")
+        )
 
     def end(self) -> int:
         results = list(self.results.values())
@@ -1124,6 +1428,7 @@ class Night:
                 "udane": sum(r.state == SUCCEEDED for r in results),
                 "nieudane": sum(r.state == FAILED for r in results),
                 "nowe_bledy_testow": len(summary.new_failures),
+                "przebudowane": len(summary.rebuilt),
             },
             done=len(results),
             summary_path=path or None,

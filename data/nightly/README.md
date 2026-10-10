@@ -26,6 +26,7 @@ order, each with a time limit and its output in the night's log:
 | `krs_register` | `koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25`: who owns each newly registered company     |
 | `krs_odpis`    | `koryta_krs_odpis --graph --changed-since <yesterday> --missing public --max 300`: odpisy pełne, see below              |
 | `krs_paid`     | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give           |
+| `rebuild_held` | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)          |
 | `reprocess`    | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch and the slow static sources (`HELD`) |
 | `tests`        | `pytest src/tests/pipelines` over the night's outputs                                                                   |
 | `outputs`      | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                      |
@@ -120,6 +121,62 @@ down after about 1,000 documents a run, which `--odpis-max` keeps the step well
 under, gap and all. An odpis that does not come is what `krs_paid` buys
 rejestr.io's feeds for, so a gap company the gateway eats can cost two of its
 50 calls.
+
+## The held pipelines, when their code changes
+
+The reprocess holds eight pipelines at what is on disk (`HELD`): their sources
+change with a Wikipedia dump, an election, a GUS release or a hand-made copy of
+the CRU database, not overnight. Their code changes more often than that, and
+until 2026-10 nothing noticed: PeoplePKW sat at an 08-28 build through eight
+commits to `scrapers/pkw`, and `test_person_pkw` failed every night for it.
+
+`rebuild_held` rebuilds, before the reprocess, the six the VM can rebuild in
+minutes, when the code they are built from has changed (paths under
+`data/pipelines/src`; times from a rebuild on predator, 2026-10-10):
+
+| Pipeline             | Built from                                                                      | Rebuild              |
+| -------------------- | ------------------------------------------------------------------------------- | -------------------- |
+| `Regions`            | `scrapers/map/teryt.py`                                                         | 1 s                  |
+| `PostalCodes`        | `scrapers/map/postal_codes.py`                                                  | 1 s                  |
+| `NamesCountByRegion` | `analysis/utils/names.py`                                                       | 3 s, 0.8 GB          |
+| `FirstNameFreq`      | `analysis/utils/names.py`                                                       | 1 s                  |
+| `CruUmowy`           | `scrapers/cru`, `entities/cru.py`                                               | 71 s, 1.2 GB; 1.7 GB |
+| `PeoplePKW`          | `scrapers/pkw`, `scrapers/map/teryt.py`, `util/polish.py`, `entities/person.py` | 173 s, 6.2 GB        |
+
+Not `ProcessWiki` - 40 minutes parsing a 2.9 GB dump, rebuilt by hand - and
+never `CruDump`, which needs the CRU Postgres.
+
+For each, the step asks git for the hash of every path in the checked-out
+commit (`git rev-parse HEAD:<path>`) and compares them with the ones recorded
+in `/var/lib/koryta-nightly/held-built-from.json` after its last build here. A
+difference, or no record, and it runs `koryta <Name> --refresh <Name>` on its
+own, the other held pipelines held. The output is backed up as `main`, as the
+reprocess's are - all but CruUmowy's, which stays on this disk. The reprocess
+still holds the pipeline, and reads what the rebuild wrote. File times could
+not have told: a restored backup's file is dated 1970, the tar member's time.
+
+So the first night with the step rebuilds all six once: some five minutes when
+PKW's 121 files (773 MB) are already on the VM's disk, longer when PeoplePKW
+has to download them first.
+
+A rebuild that fails, or does not fit the step's 30 minutes, puts back the
+copy that was on disk before it and records nothing, so the next night tries
+again. The step is then partial - "nie przebudowano: PeoplePKW (kod wyjścia 1)
+- zostają kopie z dysku" - which neither fails the night nor holds the people.
+The night's summary lists what was rebuilt and why (`rebuilt`) and what was
+due and was not (`not_rebuilt`); /admin/procesy counts the rebuilds
+(`przebudowane`) and shows a partial step among the run's errors.
+
+A rebuilt pipeline can change what the checks find, and a test that newly
+fails holds the people as any other would: that is the change somebody has to
+look at. To have one rebuilt the next night whatever its code, take its entry
+out of `held-built-from.json`. What the step would rebuild now, without
+rebuilding anything:
+
+```bash
+sudo -u koryta /home/koryta/koryta/data/pipelines/.venv/bin/koryta_nightly \
+  --only rebuild_held --dry-run
+```
 
 ## What the night uploads, and what holds it back
 

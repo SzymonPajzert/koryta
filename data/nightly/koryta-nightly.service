@@ -19,7 +19,8 @@ User=koryta
 Group=koryta
 EnvironmentFile=/etc/koryta/nightly.env
 # /var/lib/koryta-nightly: the lock, the logs, the compressor binary, the
-# poweroff request. Owned by koryta, kept across boots.
+# poweroff request, what the held pipelines were last built from. Owned by
+# koryta, kept across boots; systemd names it to the night in STATE_DIRECTORY.
 StateDirectory=koryta-nightly
 ExecStart=/home/koryta/koryta/data/nightly/night.sh
 # Root ("+"), since powering off needs it. Runs after ExecStart however that

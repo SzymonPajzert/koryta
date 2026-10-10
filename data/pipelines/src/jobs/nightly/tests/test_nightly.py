@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -26,6 +27,8 @@ GOOD = {
     "koryta_people_import": 0,
     "koryta_score_import": 0,
     "compressor": 0,
+    # The held pipelines' rebuilds, as `koryta <Name>`.
+    **{f"koryta {name}": 0 for name in night.REBUILT_ON_CHANGE},
 }
 
 
@@ -66,12 +69,66 @@ class World:
         self.last: dict[str, list[str]] | None = {}
         self.export: str | None = FRESH
         self.commands: list[tuple[str, list[str], dict]] = []
+        #: The seconds each rebuild was given.
+        self.timeouts: dict[str, float] = {}
         self.objects: dict[str, bytes] = {}
         self.runs: list[RecordingRun] = []
         self.tmp = tmp_path
         #: Secret Manager, as the VM's account may read it.
         self.secrets: dict[str, str] = {night.REJESTR_SECRET: "a-key"}
         self.secrets_read: list[str] = []
+        #: The hash of each source path in the checked-out commit, and what is
+        #: said instead when there is none to read (`source_trees`).
+        self.trees: dict[str, str] = {}
+        self.unreadable = ""
+        self.state = tmp_path / "state"
+        self.versioned = tmp_path / "versioned"
+        #: Minutes each rebuild takes on the night's clock, when it has one.
+        self.rebuild_minutes = 0.0
+        self.clock: datetime | None = None
+
+    def tree(self, path: str) -> str:
+        return self.trees.get(path, "tree-of-" + path)
+
+    def source_trees(self, paths, root=None):
+        if self.unreadable:
+            return None, self.unreadable
+        return {path: self.tree(path) for path in paths}, ""
+
+    def built_from(self) -> dict:
+        return json.loads((self.state / night.BUILT_FROM).read_text())
+
+    def record_built(self, *names: str) -> None:
+        """Say these were last built here from their sources as they are."""
+        record = {
+            name: {
+                "sources": {
+                    path: self.tree(path)
+                    for path in night.REBUILT_ON_CHANGE[name].sources
+                },
+                "built": "2026-10-03T05:00:00+02:00",
+                "version": "abc",
+            }
+            for name in names
+        }
+        night.write_built_from(str(self.state / night.BUILT_FROM), record)
+
+    def output(self, name: str):
+        filename = night.REBUILT_ON_CHANGE[name].filename
+        return self.versioned / filename / f"{filename}.jsonl"
+
+    def hold(self, name: str) -> None:
+        """A copy of the pipeline's output on disk, as the nights keep it."""
+        self.output(name).parent.mkdir(parents=True, exist_ok=True)
+        self.output(name).write_text("held\n")
+
+    def rebuild(self, name: str, code: int) -> None:
+        """What `koryta <Name> --refresh <Name>` does to its output: writes it
+        anew, or half of it before it fails."""
+        self.output(name).parent.mkdir(parents=True, exist_ok=True)
+        self.output(name).write_text("rebuilt\n" if code == 0 else "half")
+        if self.clock is not None:
+            self.clock += timedelta(minutes=self.rebuild_minutes)
 
     def read_secret(self, name: str) -> tuple[str | None, str]:
         self.secrets_read.append(name)
@@ -115,6 +172,12 @@ def world(monkeypatch, tmp_path) -> World:
                 code = 1 if failed else 0
             w.commands.append((name, list(argv), dict(env)))
             return code, False
+        if name == "koryta" and argv[1] != "--all-pipelines":
+            name = f"koryta {argv[1]}"
+            w.commands.append((name, list(argv), dict(env)))
+            w.timeouts[name] = timeout
+            w.rebuild(argv[1], w.codes[name])
+            return w.codes[name], False
         w.commands.append((name, list(argv), dict(env)))
         return w.codes[name], False
 
@@ -153,6 +216,12 @@ def world(monkeypatch, tmp_path) -> World:
     monkeypatch.delenv("KORYTA_REJESTR_SECRET", raising=False)
     monkeypatch.setattr(night, "read_secret", w.read_secret)
     monkeypatch.setattr(sys, "argv", ["koryta_nightly"])
+    monkeypatch.setattr(night, "source_trees", w.source_trees)
+    monkeypatch.setattr(night, "VERSIONED_DIR", str(w.versioned))
+    monkeypatch.setenv("STATE_DIRECTORY", str(w.state))
+    # Every held pipeline built here from its code as it is: nothing to
+    # rebuild, unless a test says otherwise.
+    w.record_built(*night.REBUILT_ON_CHANGE)
     return w
 
 
@@ -475,6 +544,260 @@ def test_the_summary_and_the_log_land_in_the_shared_cache(world):
 
 
 # ---------------------------------------------------------------------------
+# The held pipelines, when their code changes
+
+
+def test_a_held_pipeline_whose_code_changed_is_rebuilt_alone_before_the_reprocess(
+    world,
+):
+    world.trees["data/pipelines/src/scrapers/pkw"] = "a-new-tree"
+    world.hold("PeoplePKW")
+
+    assert night.main([]) == 0
+
+    ran = world.ran()
+    assert ran.index("koryta PeoplePKW") == ran.index("koryta") - 1
+    assert [name for name in ran if name.startswith("koryta ")] == ["koryta PeoplePKW"]
+    argv, env = world.command("koryta PeoplePKW")
+    assert argv[1:4] == ["PeoplePKW", "--refresh", "PeoplePKW"]
+    # Nothing else held is rebuilt along with it.
+    for other in ("ProcessWiki", "CruDump", "Regions"):
+        assert f":{other}" in argv
+    assert ":PeoplePKW" not in argv
+    # Backed up as main, as the reprocess's outputs are, for everybody to
+    # restore.
+    assert env.get("DISABLE_BACKUP") != "1"
+    # And the reprocess still holds it, reading what the rebuild wrote.
+    argv, _ = world.command("koryta")
+    assert ":PeoplePKW" in argv
+    assert world.output("PeoplePKW").read_text() == "rebuilt\n"
+    assert not os.path.exists(f"{world.output('PeoplePKW')}.held")
+
+    why = "zmiana w data/pipelines/src/scrapers/pkw"
+    assert world.steps()["rebuild_held"] == ("succeeded", "przebudowano: PeoplePKW")
+    assert world.summary()["rebuilt"] == {"PeoplePKW": why}
+    assert world.summary()["not_rebuilt"] == {}
+    assert world.runs[-1].ending()["counters"]["przebudowane"] == 1
+    built = world.built_from()["PeoplePKW"]
+    assert built["sources"]["data/pipelines/src/scrapers/pkw"] == "a-new-tree"
+    assert built["sources"]["data/pipelines/src/util/polish.py"] == world.tree(
+        "data/pipelines/src/util/polish.py"
+    )
+
+    # The next night it is as recorded: nothing to do.
+    world.commands.clear()
+    world.objects.clear()
+
+    assert night.main([]) == 0
+
+    assert "koryta PeoplePKW" not in world.ran()
+    assert world.steps()["rebuild_held"] == ("succeeded", "")
+    assert world.runs[-1].ending()["counters"]["przebudowane"] == 0
+
+
+def test_with_no_record_each_rebuildable_held_pipeline_is_rebuilt_once(world):
+    (world.state / night.BUILT_FROM).unlink()
+
+    assert night.main([]) == 0
+
+    rebuilt = [name for name in world.ran() if name.startswith("koryta ")]
+    assert rebuilt == [f"koryta {name}" for name in night.REBUILT_ON_CHANGE]
+    # Not the wiki's 40 minutes, nor the dump only the CRU database gives.
+    assert "koryta ProcessWiki" not in rebuilt and "koryta CruDump" not in rebuilt
+    assert set(world.summary()["rebuilt"].values()) == {"pierwsza przebudowa tutaj"}
+    assert set(world.built_from()) == set(night.REBUILT_ON_CHANGE)
+
+    world.commands.clear()
+    world.objects.clear()
+
+    night.main([])
+
+    assert [name for name in world.ran() if name.startswith("koryta ")] == []
+
+
+def test_a_failed_rebuild_puts_the_held_copy_back_and_holds_nothing(world):
+    world.trees["data/pipelines/src/scrapers/pkw"] = "a-new-tree"
+    world.trees["data/pipelines/src/scrapers/map/postal_codes.py"] = "a-new-blob"
+    world.hold("PeoplePKW")
+    world.codes["koryta PeoplePKW"] = 1
+
+    assert night.main([]) == 0
+
+    # The half it wrote is gone, the copy the nights held is back.
+    assert world.output("PeoplePKW").read_text() == "held\n"
+    assert not os.path.exists(f"{world.output('PeoplePKW')}.held")
+    assert world.steps()["rebuild_held"] == (
+        "partial",
+        "nie przebudowano: PeoplePKW (kod wyjścia 1) - zostają kopie z dysku; "
+        "przebudowano: PostalCodes",
+    )
+    assert world.summary()["not_rebuilt"] == {"PeoplePKW": "kod wyjścia 1"}
+    for step in ("reprocess", "people", "scores"):
+        assert world.steps()[step] == ("succeeded", ""), step
+    ending = world.runs[-1].ending()
+    assert ending["state"] == "succeeded"
+    assert ending["errors"] == [
+        f"rebuild_held: partial - {world.steps()['rebuild_held'][1]}"
+    ]
+    # Nothing recorded, so the next night tries again.
+    built = world.built_from()
+    assert built["PeoplePKW"]["sources"]["data/pipelines/src/scrapers/pkw"] != (
+        "a-new-tree"
+    )
+    assert built["PostalCodes"]["sources"] == {
+        "data/pipelines/src/scrapers/map/postal_codes.py": "a-new-blob"
+    }
+
+
+def test_a_rebuild_with_no_copy_on_disk_to_keep_leaves_none(world):
+    world.trees["data/pipelines/src/scrapers/pkw"] = "a-new-tree"
+    world.codes["koryta PeoplePKW"] = 1
+
+    assert night.main([]) == 0
+
+    # The half it wrote is not taken for a held copy: the reprocess restores
+    # one, or builds it, as it did before.
+    assert world.output("PeoplePKW").read_text() == "half"
+    assert world.steps()["rebuild_held"][0] == "partial"
+
+
+def test_the_rebuilds_share_the_steps_time(world, monkeypatch):
+    (world.state / night.BUILT_FROM).unlink()
+    world.clock = datetime(2026, 10, 4, 5, 30, tzinfo=warsaw_tz)
+    world.rebuild_minutes = 15
+    monkeypatch.setattr(night, "warsaw_now", lambda: world.clock)
+
+    assert night.main(["--only", "rebuild_held"]) == 0
+
+    # Thirty minutes: all of them for the first, what is left for the next,
+    # and none for the rest - which the next night rebuilds.
+    assert world.timeouts == {"koryta Regions": 30 * 60, "koryta PostalCodes": 15 * 60}
+    names = list(night.REBUILT_ON_CHANGE)
+    assert list(world.summary()["rebuilt"]) == names[:2]
+    assert world.summary()["not_rebuilt"] == dict.fromkeys(names[2:], "brak czasu")
+    assert set(world.built_from()) == set(names[:2])
+
+
+def test_a_night_stopped_mid_rebuild_puts_the_held_copy_back(world, monkeypatch):
+    world.trees["data/pipelines/src/scrapers/map/teryt.py"] = "a-new-blob"
+    world.hold("Regions")
+    world.hold("PeoplePKW")
+    stream = night.stream
+
+    def stopped_in_the_rebuild(argv, env, timeout, log, on_start=lambda proc: None):
+        if argv[1:2] == ["Regions"]:
+            signal.raise_signal(signal.SIGTERM)
+            world.codes["koryta Regions"] = -15
+        return stream(argv, env, timeout, log, on_start)
+
+    monkeypatch.setattr(night, "stream", stopped_in_the_rebuild)
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.output("Regions").read_text() == "held\n"
+    assert world.summary()["not_rebuilt"] == {
+        "Regions": "kod wyjścia -15",
+        "PeoplePKW": "SIGTERM",
+    }
+    assert "koryta PeoplePKW" not in world.ran()
+    assert world.steps()["reprocess"] == ("skipped", "SIGTERM")
+
+
+def test_a_copy_a_killed_night_moved_aside_is_put_back_first(world):
+    out = world.output("PeoplePKW")
+    out.parent.mkdir(parents=True)
+    out.write_text("half")
+    (out.parent / f"{out.name}.held").write_text("held\n")
+
+    night.main(["--only", "rebuild_held"])
+
+    assert out.read_text() == "held\n"
+    assert not (out.parent / f"{out.name}.held").exists()
+
+
+def test_when_git_cannot_say_nothing_is_rebuilt_and_the_step_says_why(world):
+    world.unreadable = "fatal: not a git repository"
+    (world.state / night.BUILT_FROM).unlink()
+
+    assert night.main([]) == 0
+
+    assert [name for name in world.ran() if name.startswith("koryta ")] == []
+    assert world.steps()["rebuild_held"][0] == "partial"
+    assert world.summary()["not_rebuilt"]["PeoplePKW"] == (
+        "nie odczytano kodu: fatal: not a git repository"
+    )
+    assert world.steps()["people"] == ("succeeded", "")
+
+
+def test_the_dry_run_names_the_rebuilds_due_and_records_nothing(world, capsys):
+    world.trees["data/pipelines/src/analysis/utils/names.py"] = "a-new-blob"
+    before = world.built_from()
+
+    night.main(["--dry-run", "--only", "rebuild_held"])
+
+    out = capsys.readouterr().out
+    assert (
+        "now NamesCountByRegion (zmiana w data/pipelines/src/analysis/utils/names.py), "
+        "FirstNameFreq (zmiana w data/pipelines/src/analysis/utils/names.py)"
+    ) in out
+    assert world.ran() == [] and world.built_from() == before
+
+
+def test_source_trees_names_each_path_as_the_checked_out_commit_has_it(tmp_path):
+    if shutil.which("git") is None:
+        pytest.skip("no git")
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+    git += ["-c", "commit.gpgsign=false", "-C", str(tmp_path)]
+    (tmp_path / "data" / "pkw").mkdir(parents=True)
+    (tmp_path / "data" / "pkw" / "process.py").write_text("one\n")
+    (tmp_path / "polish.py").write_text("two\n")
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "."], check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "first"], check=True)
+
+    def trees():
+        # From a directory below the top, as the night runs from
+        # data/pipelines: the paths are still the repository's.
+        return night.source_trees(
+            ["data/pkw", "polish.py"], root=str(tmp_path / "data")
+        )
+
+    first, why = trees()
+    assert why == "" and first is not None and set(first) == {"data/pkw", "polish.py"}
+    # An edit nobody committed is not the checkout's code: the VM has none.
+    (tmp_path / "data" / "pkw" / "process.py").write_text("changed\n")
+    assert trees()[0] == first
+    subprocess.run([*git, "commit", "-q", "-am", "second"], check=True)
+    second, _ = trees()
+    assert second is not None
+    assert second["data/pkw"] != first["data/pkw"]
+    assert second["polish.py"] == first["polish.py"]
+
+    missing, why = night.source_trees(["data/gone"], root=str(tmp_path))
+    assert missing is None and "data/gone" in why
+    assert (
+        night.source_trees(["x"], root=str(tmp_path / "data" / "pkw" / "process.py"))[0]
+        is None
+    )
+
+
+def test_every_rebuildable_pipeline_is_held_and_its_sources_exist():
+    # Every pipeline's module, which the night itself never imports.
+    from pipelines import PIPELINES  # noqa: PLC0415
+
+    by_name = {pipeline.__name__: pipeline for pipeline in PIPELINES}
+    top = os.path.dirname(os.path.dirname(night.PROJECT_ROOT))
+    for name, spec in night.REBUILT_ON_CHANGE.items():
+        assert name in night.HELD, name
+        pipeline = by_name[name]
+        assert (pipeline.filename, pipeline.format) == (spec.filename, "jsonl"), name
+        for path in spec.sources:
+            assert os.path.exists(os.path.join(top, path)), path
+    assert "ProcessWiki" not in night.REBUILT_ON_CHANGE
+    assert "CruDump" not in night.REBUILT_ON_CHANGE
+
+
+# ---------------------------------------------------------------------------
 # What holds the upload
 
 
@@ -654,6 +977,10 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     out = capsys.readouterr().out
     assert "krs_odpis" not in out
     assert "koryta --all-pipelines" in out
+    assert (
+        "koryta <Name> --refresh <Name> for each held pipeline whose code changed "
+        "since its last build here; now none"
+    ) in out
     assert (
         "koryta_people_import --scope priority --max-uploads 100 "
         "--max-odpis-only-current 10" in out
