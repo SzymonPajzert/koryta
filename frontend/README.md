@@ -194,6 +194,108 @@ rollout's on koryta.pl. `/admin/opinie` shows the same line on the report, and
 the report's line carries the "czeka na sprawdzenie" icon until it is closed.
 `tests/shared/reportFixes.test.ts` checks the ids and links.
 
+## Blog
+
+`/blog` holds short pieces on what the data says about the people on the site.
+A post is a markdown file in `content/blog/`, and its file name is its url:
+`content/blog/radni-w-spolkach.md` is `/blog/radni-w-spolkach`. Start from
+`content/blog/wzor-wpisu.md`, which uses everything a post can (open
+`/blog/wzor-wpisu` locally to see it drawn).
+
+```mdc
+---
+title: "Ilu radnych zasiada w spółkach miejskich"
+description: "Lead: shown under the title, on /blog and in link previews."
+date: 2026-10-11
+authors: [Szymon Pajzert]
+tags: [spółki gminne] # optional
+image: /blog/radni-w-spolkach/okladka.png # optional, the link preview's picture
+draft: true # optional - see below
+---
+
+Text in markdown. Section headings start at `##`: the title is the page's `#`.
+```
+
+Pictures go under `public/blog/<slug>/` and are linked from `/blog/<slug>/…`.
+
+**Embeds.** Besides markdown, a post can use these (the full list of what each
+takes is `blogEmbeds` in `shared/blog.ts`):
+
+```mdc
+::stats
+---
+items:
+  - label: Osoby w zarządach
+    value: 5086
+  - label: Odsetek potwierdzonych
+    value: 4.8
+    unit: "%"
+---
+::
+
+::chart{title="Osoby według branży" source="KRS, październik 2026"}
+---
+categories: [Energetyka, Transport]
+series:
+  - name: Osoby
+    data: [120, 64]
+---
+::
+
+::composition{title="Skąd wiemy o powiązaniu"}
+---
+segments:
+  - label: KRS
+    value: 140
+  - label: Listy wyborcze
+    value: 72
+---
+::
+
+::callout{title="Jak liczyliśmy"}
+Any markdown.
+::
+
+:entity[Jan Kowalski]{id="1"} - a link to that page on the site
+```
+
+`::chart` also takes `type="line"`, `horizontal` (for long category names),
+`stacked`, `subtitle` and `unit`; every chart has a table of its numbers behind
+the toggle by its title. Series take the site's palette in a fixed order, so
+there is no colour to pick, and a chart stops at eight series. `:entity` takes
+the id at the end of the page's url; the link follows the page if it is renamed
+or merged, and drops to plain text if the page is unpublished.
+
+**Checking a post.** `tests/content/blogPosts.test.ts` holds every file to the
+rules above - the front matter, the url, no raw html, only the embeds above and
+only with the props they take - and names what is wrong:
+
+```bash
+npx vitest run tests/content
+```
+
+It runs in quick-check and CI, so a broken post does not get merged. Prettier
+skips `content/blog/` (see `.prettierignore`): it reads the YAML inside an
+embed as a list and rewrites it into something else.
+
+**Drafts.** `draft: true` keeps a post off `/blog` and answers its url with a
+404 in production. Local builds - `npm run dev:local`, the e2e and visual runs -
+list and serve drafts, marked „szkic”. A draft is not secret: the repository is
+public, and so is the build's content dump.
+
+**Publishing** is merging the file to `main` and rolling the site out.
+
+**How it is served.** Nuxt Content parses the files at build time. The pages
+read them through `/api/blog` and `/api/blog/[slug]`, not with
+`queryCollection` in the page: in the browser that downloads an 865 KB SQLite
+WebAssembly build plus the whole collection, on every navigation that reaches a
+post. The renderer is given the embeds as a map
+(`app/utils/blogEmbeds.ts`) rather than resolving them by name, so a post
+stored somewhere other than `content/` - written on the site by an author
+without push access, say - renders with the same components, and
+`validatePostBody` is the check that would stand between such a post and the
+page.
+
 ## Scripts reference
 
 | Script                        | Description                                             |
