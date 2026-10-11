@@ -61,10 +61,13 @@ with - who has a page, and what each page holds (`SNAPSHOT`) - and refuses,
 as failed, unless the newest finished export was taken today at 04:00 Warsaw
 time or later. Compared with an older one, `--only-changed` sends again what
 the last night's run put up, and `--scope not-on-koryta` creates again the
-pages it created. A frame of the export on disk that is not built from that
-one - cached under today's name between midnight and four, from the export
-before; or the morning's, after an export taken by hand later in the day - is
-rebuilt, whatever `--refresh` says (`PeopleImport.check_export`).
+pages it created. The night says which export its own export step took
+(`--export`), and its run takes that one, or a newer, in place of the rule,
+so the two never judge one export differently. A frame of the export on disk
+that is not built from the one compared with - cached under today's name
+between midnight and four, from the export before; or the morning's, after
+an export taken by hand later in the day - is rebuilt, whatever `--refresh`
+says (`PeopleImport.check_export`).
 
 It stops itself as failed on the two things that mean the site is not taking
 what it should:
@@ -418,7 +421,9 @@ def latest_export(client: Client) -> Export | None:
     return Export(stamp, export_finished(client, stamp))
 
 
-def export_refusal(export: Export | None, day: str, at: datetime) -> str:
+def export_refusal(
+    export: Export | None, day: str, at: datetime, accepted: str | None = None
+) -> str:
     """Why a run at `at` may not compare the payloads with `export`, in the
     page's language - as the night says it - or "" when it may.
 
@@ -433,9 +438,24 @@ def export_refusal(export: Export | None, day: str, at: datetime) -> str:
     And `day`, the day the snapshot's frames are named after - --koryta-date,
     else today - has to be the export's: `KorytaExport` reads the newest
     export of its day, and the day before when its own has none.
+
+    `accepted` (`--export`) is the stamp of an export the night's export step
+    has already taken as tonight's - any of the six hours before the night
+    (`--export-max-age`) - and stands in for both: the newest has to be that
+    one or a newer, and of `day` or a day before, whose export the frames
+    named `day` read when it has none of its own. Without it, a night forced
+    at three after an export taken by hand at eleven - or one whose 04:00
+    export failed after such a hand export - would run its invariants
+    against that export and then have its people step refuse the same one.
     """
     if export is None:
         return "brak dzisiejszej kopii bazy (żadnej)"
+    if accepted:
+        if export_time(export.stamp) < export_time(accepted):
+            return f"brak kopii bazy z {accepted} (najnowsza z {export.stamp})"
+        if export.stamp[:10] > day:
+            return f"porównanie z kopią bazy z {day}, a najnowsza jest z {export.stamp}"
+        return ""
     today = at.astimezone(warsaw_tz)
     since = today.replace(hour=EXPORT_HOUR, minute=0, second=0, microsecond=0)
     if export_time(export.stamp) < since:
@@ -752,7 +772,9 @@ class PeopleImport:
         """
         export = latest_export(self.client())
         frames = [pipeline(self.args.koryta_date) for pipeline in SNAPSHOT]
-        refusal = export_refusal(export, frames[0].date, warsaw_now())
+        refusal = export_refusal(
+            export, frames[0].date, warsaw_now(), accepted=self.args.export
+        )
         if export is None or refusal:
             return refusal
         self.summary.export = export.stamp
@@ -1082,6 +1104,12 @@ def iso_day(text: str) -> str:
     return date.fromisoformat(text).isoformat()
 
 
+def export_stamp(text: str) -> str:
+    """An export folder's stamp, as it is: `export_time` reads it later."""
+    export_time(text)
+    return text
+
+
 def parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="koryta_people_import",
@@ -1168,6 +1196,15 @@ def parser() -> argparse.ArgumentParser:
         help="The day (YYYY-MM-DD) of the export --on-koryta and --only-changed "
         "compare against. Default: today. The run is refused unless the newest "
         "finished export is of that day, taken at 04:00 today or later.",
+    )
+    parser.add_argument(
+        "--export",
+        type=export_stamp,
+        metavar="STAMP",
+        help="An export already taken as fresh enough, as its folder is stamped "
+        "(2026-10-10T02:00:59.242Z) - the night passes the one its export step "
+        "took. The run compares with it, or a newer one, in place of the rule "
+        "that the newest is today's, taken at 04:00 or later.",
     )
     parser.add_argument(
         "--refresh",

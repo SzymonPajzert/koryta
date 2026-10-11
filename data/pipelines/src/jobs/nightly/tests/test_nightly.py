@@ -232,6 +232,24 @@ def test_the_people_go_up_capped_in_priority_order_from_what_is_on_disk(world):
     assert "--dry-run" not in argv
 
 
+def test_the_people_compare_with_the_export_the_export_step_took(world, monkeypatch):
+    """A night forced at three, the 04:00 export not taken yet: the export
+    step takes one taken by hand at eleven, inside its six hours, and the
+    people step is told to compare with that one, which its own rule -
+    today's, at four or later - would refuse."""
+    eleven = "2026-10-03T21:00:12.004Z"
+    world.export = eleven
+    monkeypatch.setattr(
+        night, "utc_now", lambda: datetime.fromisoformat("2026-10-04T01:00:00+00:00")
+    )
+
+    assert night.main([]) == 0
+
+    assert world.steps()["export"] == ("succeeded", eleven)
+    argv, _ = world.command("koryta_people_import")
+    assert argv[argv.index("--export") + 1] == eleven
+
+
 def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
     night.main([])
 
@@ -614,6 +632,8 @@ def test_a_hand_run_of_one_step_is_not_held_by_the_steps_left_out(world):
     assert world.ran() == ["koryta_people_import"]
     argv, _ = world.command("koryta_people_import")
     assert argv[-1] == "--dry-run"
+    # No export step, no export to name: the job keeps its own rule.
+    assert "--export" not in argv
 
 
 def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
