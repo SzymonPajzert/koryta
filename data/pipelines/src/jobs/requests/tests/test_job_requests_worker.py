@@ -6,10 +6,17 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 import jobs.requests as worker_module
+from jobs.nightly import Export
 from jobs.requests import Lock, Worker, parser, within
 
 #: 12:00 in Warsaw, nowhere near the night.
 NOON = datetime(2026, 10, 6, 10, 0, tzinfo=UTC)
+#: 00:30 in Warsaw on the 6th: the 6th's export is three and a half hours off.
+HALF_PAST_MIDNIGHT = datetime(2026, 10, 5, 22, 30, tzinfo=UTC)
+
+#: The 6th's 04:00 export, done at 04:03, and the 5th's.
+TODAYS = Export("2026-10-06T02:00:35.112Z", datetime(2026, 10, 6, 2, 3, tzinfo=UTC))
+YESTERDAYS = Export("2026-10-05T02:00:41.950Z", datetime(2026, 10, 5, 2, 3, tzinfo=UTC))
 
 
 class Queue:
@@ -24,6 +31,8 @@ class Queue:
         self.ended: list[tuple[str, str, str]] = []
         #: Runs somebody else takes just before this worker's claim lands.
         self.taken_by_others: set[str] = set()
+        #: What each queued run was said to wait for, and when, in order.
+        self.waits: list[tuple[str, str, datetime]] = []
 
     def queued(self, client, limit=50):
         found = [
@@ -40,9 +49,20 @@ class Queue:
             run["host"] = "other@host"
         if run["state"] != "queued":
             return False
-        run.update(state="running", host=host)
+        run.update(state="running", host=host, waitingFor=None)
         self.claims.append(run_id)
         return True
+
+    def mark(self, client, run_id, *, waiting, now):
+        run = self.runs[run_id]
+        if run["state"] != "queued":
+            return False
+        run.update(waitingFor=waiting, heartbeatAt=now)
+        self.waits.append((run_id, waiting, now))
+        return True
+
+    def said(self) -> list[tuple[str, str]]:
+        return [(run_id, waiting) for run_id, waiting, _ in self.waits]
 
     def end(
         self, client, run_id, *, state="failed", reason, exit_code=None, now, errors=()
@@ -105,6 +125,20 @@ class Clock:
             self.worker.stopping = True
 
 
+class Bucket:
+    """The crawl bucket's newest finished export, as the worker asks for it."""
+
+    def __init__(self, export: Export | None | Exception = TODAYS):
+        self.export = export
+        self.looks = 0
+
+    def __call__(self) -> Export | None:
+        self.looks += 1
+        if isinstance(self.export, Exception):
+            raise self.export
+        return self.export
+
+
 @pytest.fixture
 def queue(monkeypatch) -> Queue:
     q = Queue()
@@ -112,6 +146,7 @@ def queue(monkeypatch) -> Queue:
     monkeypatch.setattr(worker_module, "claim", q.claim)
     monkeypatch.setattr(worker_module, "end_open_run", q.end)
     monkeypatch.setattr(worker_module, "running_on", q.running_on)
+    monkeypatch.setattr(worker_module, "mark_waiting", q.mark)
     monkeypatch.setattr(worker_module, "detect_host", lambda: "koryta@vm")
     return q
 
@@ -123,6 +158,7 @@ def make_worker(
     jobs: Jobs | None = None,
     clock: Clock | None = None,
     logged_in: bool = False,
+    bucket: Bucket | None = None,
 ) -> tuple[Worker, Jobs, Clock]:
     jobs = jobs or Jobs(queue)
     clock = clock or Clock()
@@ -134,6 +170,7 @@ def make_worker(
         sleep=clock.sleep,
         run=jobs,
         logged_in=lambda: logged_in,
+        find_export=bucket or Bucket(),
     )
     clock.worker = worker
     return worker, jobs, clock
@@ -155,6 +192,9 @@ def test_the_queue_is_run_oldest_first_each_run_claimed_once(queue):
         "60",
         "--max-uploads",
         "1000",
+        # The export the worker found, which the job then takes as it is.
+        "--export",
+        TODAYS.stamp,
     ]
     # Each job reported its own end, so the worker ended nothing.
     assert queue.ended == []
@@ -249,6 +289,9 @@ def test_a_run_waits_for_the_night_and_holds_the_busy_lock(queue, tmp_path):
     # While the job ran, both locks were the worker's.
     assert seen == [(False, False)]
     assert Lock(busy).free() and Lock(night).free()
+    # The page said what it waited for, once: a heartbeat every five minutes.
+    assert queue.said() == [("a", "night")]
+    assert queue.runs["a"]["waitingFor"] is None
 
 
 def test_sigterm_while_waiting_for_the_night_claims_nothing(queue, tmp_path):
@@ -267,10 +310,135 @@ def test_sigterm_while_waiting_for_the_night_claims_nothing(queue, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# The export the runs compare with
+
+
+def test_a_run_asked_for_before_the_export_stays_queued_and_says_so(queue):
+    """At half past midnight the newest export is yesterday's, which the job
+    would refuse: the run is not claimed, and the page says why it waits."""
+    queue.runs.update(Queue(("a", "people_request"), ("b", "people_request")).runs)
+    worker, jobs, clock = make_worker(
+        queue, ["--once"], clock=Clock(HALF_PAST_MIDNIGHT), bucket=Bucket(YESTERDAYS)
+    )
+
+    assert worker.run() == 0
+
+    assert queue.claims == [] and jobs.argv == [] and queue.ended == []
+    assert [run["state"] for run in queue.runs.values()] == ["queued", "queued"]
+    assert queue.said() == [("a", "export"), ("b", "export")]
+    assert {at for _, _, at in queue.waits} == {clock.now()}
+
+
+@pytest.mark.parametrize("bucket", [Bucket(None), Bucket(OSError("503 from GCS"))])
+def test_no_export_at_all_or_none_to_be_read_is_waited_for_too(queue, bucket):
+    queue.runs.update(Queue(("a", "people_request")).runs)
+    worker, jobs, _ = make_worker(queue, ["--once"], bucket=bucket)
+
+    worker.run()
+
+    assert jobs.argv == [] and queue.said() == [("a", "export")]
+
+
+def test_a_waiting_run_starts_once_the_export_is_done_and_names_it(queue):
+    """Asked for at 03:50, while the VM is kept up for the night: the
+    morning's export is done at 04:03, and the run goes at the next look,
+    told which export it was - the bucket asked once a minute meanwhile."""
+    queue.runs.update(Queue(("a", "people_request")).runs)
+    bucket = Bucket(YESTERDAYS)
+    clock = Clock(datetime(2026, 10, 6, 1, 50, tzinfo=UTC))
+    worker, jobs, _ = make_worker(
+        queue, ["--watch", "--poll-seconds", "20"], clock=clock, bucket=bucket
+    )
+    original = clock.sleep
+
+    def export_done(seconds):
+        original(seconds)
+        if clock.now() >= TODAYS.finished:
+            bucket.export = TODAYS
+        if queue.claims:
+            worker.stopping = True
+
+    worker.sleep = export_done
+    worker.run()
+
+    assert queue.claims == ["a"]
+    assert jobs.argv[0][-2:] == ["--export", TODAYS.stamp]
+    # 03:50 to 04:03, a look a minute: fourteen, the last one finding it.
+    assert bucket.looks == 14
+    # Said at 03:50, and its heartbeat written again at 03:55 and 04:00.
+    assert queue.said() == [("a", "export"), ("a", "export"), ("a", "export")]
+
+
+def test_an_export_found_good_is_not_looked_for_again_that_day(queue):
+    queue.runs.update(Queue(("a", "people_request"), ("b", "people_request")).runs)
+    bucket = Bucket(TODAYS)
+    worker, _, _ = make_worker(queue, ["--once"], bucket=bucket)
+
+    worker.run()
+
+    assert queue.claims == ["a", "b"] and bucket.looks == 1
+
+
+def test_midnight_between_two_runs_leaves_the_second_for_the_next_export(queue):
+    """The bucket looked at a minute before midnight, the first run going
+    past it: the second is judged again, not taken on the look's word."""
+    queue.runs.update(Queue(("a", "people_request"), ("b", "people_request")).runs)
+    jobs = Jobs(queue)
+    clock = Clock(datetime(2026, 10, 6, 21, 59, 30, tzinfo=UTC))  # 23:59:30
+    jobs.during.append(lambda run_id: setattr(clock, "seconds", clock.seconds + 40))
+    bucket = Bucket(TODAYS)
+    worker, _, _ = make_worker(queue, ["--once"], jobs=jobs, clock=clock, bucket=bucket)
+
+    worker.run()
+
+    assert queue.claims == ["a"]
+    assert queue.said() == [("b", "export")]
+    # Within the minute: the export it had was judged again, not looked up.
+    assert bucket.looks == 1
+
+
+def test_a_night_that_runs_past_midnight_leaves_the_run_for_the_next_export(
+    queue, tmp_path
+):
+    """A night by hand that held the lock from before midnight to after it:
+    the export the run was going to compare with is yesterday's now."""
+    night = str(tmp_path / "lock")
+    queue.runs.update(Queue(("a", "people_request")).runs)
+    held = Lock(night)
+    assert held.try_take()
+    clock = Clock(datetime(2026, 10, 6, 21, 50, tzinfo=UTC))  # 23:50 in Warsaw
+    worker, jobs, _ = make_worker(
+        queue, ["--once", "--lock", night, "--poll-seconds", "600"], clock=clock
+    )
+    original = clock.sleep
+
+    def night_ends(seconds):
+        original(seconds)
+        if clock.sleeps == 2:
+            held.release()
+
+    worker.sleep = night_ends
+    worker.run()
+
+    assert queue.claims == [] and jobs.argv == []
+    assert queue.runs["a"]["state"] == "queued"
+    assert queue.said() == [("a", "night"), ("a", "night"), ("a", "export")]
+
+
+# ---------------------------------------------------------------------------
 # Switching the VM off
 
 
-def watch(queue, tmp_path, *, at=NOON, logged_in=False, runs=1, night_held=False):
+def watch(
+    queue,
+    tmp_path,
+    *,
+    at=NOON,
+    logged_in=False,
+    runs=1,
+    night_held=False,
+    bucket: Bucket | None = None,
+):
     flag = tmp_path / "poweroff-requested"
     night = str(tmp_path / "lock")
     queue.runs.update(Queue(*[(f"r{n}", "people_request") for n in range(runs)]).runs)
@@ -292,6 +460,7 @@ def watch(queue, tmp_path, *, at=NOON, logged_in=False, runs=1, night_held=False
         ],
         clock=Clock(at),
         logged_in=logged_in,
+        bucket=bucket,
     )
     # A worker that never switches off is stopped after an hour of looking.
     clock.stop_after = 60
@@ -306,6 +475,38 @@ def test_after_its_runs_and_ten_idle_minutes_it_asks_for_the_vm_off(queue, tmp_p
     assert flag.exists()
     assert "koryta_job_requests" in flag.read_text()
     assert clock.sleeps == 10
+
+
+def test_runs_waiting_for_the_export_do_not_keep_the_vm_up_till_four(queue, tmp_path):
+    """Started by a request at half past midnight, with nothing it can run
+    before the morning's export: off after the ten idle minutes, the runs
+    left queued for the 04:15 boot - their heartbeat written every five."""
+    flag, clock = watch(
+        queue, tmp_path, at=HALF_PAST_MIDNIGHT, runs=2, bucket=Bucket(YESTERDAYS)
+    )
+
+    assert flag.exists() and clock.sleeps == 10
+    assert queue.claims == []
+    assert [run["state"] for run in queue.runs.values()] == ["queued", "queued"]
+    assert [(run_id, at - HALF_PAST_MIDNIGHT) for run_id, _, at in queue.waits] == [
+        (run_id, timedelta(minutes=minutes))
+        for minutes in (0, 5, 10)
+        for run_id in ("r0", "r1")
+    ]
+
+
+def test_runs_waiting_for_the_export_keep_the_vm_up_for_the_night(queue, tmp_path):
+    # At 03:50, with the export not done by 04:45: never off before that,
+    # as for any run - the schedule's 04:15 start finds the VM up.
+    flag, clock = watch(
+        queue,
+        tmp_path,
+        at=datetime(2026, 10, 6, 1, 50, tzinfo=UTC),
+        bucket=Bucket(YESTERDAYS),
+    )
+
+    assert flag.exists()
+    assert clock.now() == datetime(2026, 10, 6, 2, 45, tzinfo=UTC)
 
 
 def test_a_vm_nobodys_request_started_stays_up(queue, tmp_path):
