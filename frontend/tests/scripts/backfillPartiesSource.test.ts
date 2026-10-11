@@ -216,6 +216,29 @@ describe("decide", () => {
     ).toMatchObject({ action: "skip", reason: "deleted or merged" });
   });
 
+  it("does not read the empty list a page was created with as no party", () => {
+    // What the form sends untouched. 57 of the 83 pages marked "no party"
+    // that nobody had said anything about were marked by this script reading
+    // their creating revision that way.
+    const revisions = [
+      revision("created", 1, { parties: [] }),
+      revision("edit", 2, { status: "approved", reviewTime: 2 * DAY }),
+    ];
+    expect(
+      decide(node({ parties: [], revisionId: "edit" }), revisions),
+    ).toBeUndefined();
+  });
+
+  it("does not read an edit passing an empty list through as no party", () => {
+    const revisions = [
+      revision("created", 1, { parties: [] }),
+      approvedEdit("edit", 2, []),
+    ];
+    expect(
+      decide(node({ parties: [], revisionId: "edit" }), revisions),
+    ).toBeUndefined();
+  });
+
   it("pins an empty list, which is a person saying no party", () => {
     const revisions = [
       ingest("created", 1, ["PSL"]),
@@ -241,9 +264,22 @@ describe("proposalsToPin", () => {
   it("stamps the human proposals waiting for a reviewer", () => {
     const revisions = [
       revision("edit", 2, { status: "pending", parties: ["PSL"] }),
-      revision("new-page", 1, { status: "pending", parties: [] }),
+      revision("emptied", 1, { status: "pending", parties: [] }),
     ];
-    expect(proposalsToPin(revisions)).toEqual(["edit", "new-page"]);
+    expect(proposalsToPin(revisions, { parties: ["SLD"] })).toEqual([
+      "edit",
+      "emptied",
+    ]);
+  });
+
+  it("leaves an empty list on a page that has no party to take off", () => {
+    // A new page's creating proposal, or an edit of something else on a page
+    // with an empty list: the form sends [] either way.
+    const revisions = [
+      revision("new-page", 1, { status: "pending", parties: [] }),
+      revision("edit", 2, { status: "pending", parties: ["PSL"] }),
+    ];
+    expect(proposalsToPin(revisions, { parties: [] })).toEqual(["edit"]);
   });
 
   it("leaves decided, stamped and the pipeline's revisions alone", () => {
@@ -267,7 +303,7 @@ describe("proposalsToPin", () => {
       }),
       revision("no-parties", 7, { status: "pending" }),
     ];
-    expect(proposalsToPin(revisions)).toEqual([]);
+    expect(proposalsToPin(revisions, { parties: ["PSL"] })).toEqual([]);
   });
 
   it("leaves a revision from before statuses were recorded", () => {
@@ -275,6 +311,6 @@ describe("proposalsToPin", () => {
     // over. The migration repoints nodes itself, so taking "not pointed at"
     // for "pending" would find a fresh batch to stamp on every run.
     const revisions = [revision("backfill", 1, { parties: ["PSL"] })];
-    expect(proposalsToPin(revisions)).toEqual([]);
+    expect(proposalsToPin(revisions, { parties: ["PSL"] })).toEqual([]);
   });
 });

@@ -17,11 +17,13 @@ import { reportRemaining } from "../remaining";
  * parties on everybody who ran for it, so a list somebody wrote as "PSL" reads
  * "PSL, Polska 2050" after one Trzecia Droga candidacy. Since then
  * `/api/revisions/create` stamps `partiesSource: "manual"` on any person
- * proposal that states `parties` - which the edit form always does - and the
- * ingest leaves a stamped list alone. Nothing stated before that carries the
- * stamp. Against the 2026-10-06 export, 11 published pages show a party the
- * person who wrote their list had left out, and 435 more lists a person wrote
- * are still open to the union - which the nightly now runs for real.
+ * proposal that states `parties` - which the edit form always does, so since
+ * 2026-10-11 an empty list over an empty one no longer counts; see
+ * `saysSomething` - and the ingest leaves a stamped list alone. Nothing stated
+ * before that carries the stamp. Against the 2026-10-06 export, 11 published
+ * pages show a party the person who wrote their list had left out, and 435 more
+ * lists a person wrote are still open to the union - which the nightly now
+ * runs for real.
  *
  * So this stamps them, as if the rule had always been there. A person stated a
  * node's parties when a human revision that states them - not the pipeline's
@@ -116,6 +118,18 @@ function statesParties(revision: RevisionFacts): boolean {
   return isHuman(revision) && !revision.removal && !!revision.parties;
 }
 
+/** Whether a revision stating `parties` over a page that held `before` is the
+ * person's word on the list, by the rule `/api/revisions/create` follows since
+ * 2026-10-11: a list with a party on it is, and so is an empty one that takes
+ * the last party off. An empty list over an empty one is what the form sends
+ * untouched, and reading it as "no party" is what marked 83 pages nobody had
+ * said anything about - 57 of them by this script, from their creating
+ * revisions. `unstamp-default-empty-parties.ts` took the mark off again, and
+ * without this the dry run would count them as lists to pin. */
+function saysSomething(parties: string[], before: string[]): boolean {
+  return parties.length > 0 || before.length > 0;
+}
+
 /** When a revision's data last reached the node, or undefined if it never has.
  *
  * The pipeline's and the migrations' revisions are written to the node as they
@@ -175,7 +189,15 @@ export function decide(
     )
     .sort((a, b) => a.at - b.at);
 
-  const statements = reached.filter((entry) => statesParties(entry.revision));
+  const statements: typeof reached = [];
+  let before: string[] = [];
+  for (const entry of reached) {
+    const { parties } = entry.revision;
+    if (statesParties(entry.revision) && saysSomething(parties!, before)) {
+      statements.push(entry);
+    }
+    if (parties && !entry.revision.removal) before = parties;
+  }
   const stated = statements.at(-1);
   if (!stated) return undefined;
 
@@ -224,8 +246,9 @@ export function decide(
   return { action: "restore", parties: [...theirs] };
 }
 
-/** The human proposals to stamp: waiting for a reviewer, stating a list, not
- * yet pinned.
+/** The human proposals to stamp: waiting for a reviewer, stating a list - one
+ * with a party on it, or an empty one where the page has a party to take off
+ * (see `saysSomething`) - and not yet pinned.
  *
  * Waiting means stored as `pending`, which is what the review queue lists. A
  * revision with no status predates statuses, and not being pointed at does not
@@ -233,11 +256,15 @@ export function decide(
  * written over - and this migration repoints nodes itself, so reading it that
  * way would find more to stamp on every run.
  */
-export function proposalsToPin(revisions: RevisionFacts[]): string[] {
+export function proposalsToPin(
+  revisions: RevisionFacts[],
+  node: Pick<NodeFacts, "parties">,
+): string[] {
   return revisions
     .filter(
       (revision) =>
         statesParties(revision) &&
+        saysSomething(revision.parties!, node.parties) &&
         !revision.pinned &&
         revision.status === "pending",
     )
@@ -380,7 +407,7 @@ async function main() {
     const facts = docs.map(revisionFacts);
     if (node.pinned) alreadyPinned++;
 
-    const pending = new Set(proposalsToPin(facts));
+    const pending = new Set(proposalsToPin(facts, node));
     proposals.push(...docs.filter((revision) => pending.has(revision.id)));
 
     const decision = decide(node, facts);
