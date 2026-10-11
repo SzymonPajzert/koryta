@@ -220,6 +220,15 @@ async function confirm() {
 
 function dispatchText(run: JobRun): string {
   if (run.state !== "queued") return "";
+  // A run handed back that the machine has seen and cannot start yet: it
+  // was started, and is off again until the night when it waits for the
+  // export - "się uruchamia" would promise minutes.
+  if (run.waitingFor === "export") {
+    return "Czeka na dzisiejszą kopię bazy - ruszy, gdy będzie gotowa, najpóźniej po 04:15.";
+  }
+  if (run.waitingFor === "night") {
+    return "Maszynę zajmuje teraz noc - ruszy zaraz po niej.";
+  }
   if (run.dispatch?.ok) return "Maszyna się uruchamia.";
   if (run.dispatch?.error) {
     return "Maszyny nie udało się uruchomić - zlecenie zrobi najbliższa noc.";
