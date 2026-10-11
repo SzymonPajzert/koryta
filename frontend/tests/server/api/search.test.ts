@@ -193,8 +193,8 @@ describe("/api/search", () => {
 
   it("does not offer a page that was merged away as a duplicate", async () => {
     // A tombstone keeps its `nameChunksLower` - nothing clears them, and the
-    // trigger only rewrites them when the name changes - so the index goes on
-    // answering with the name it had. Offering it sends the reader to a
+    // trigger keeps them in step with the name it still has - so the index
+    // goes on answering with that name. Offering it sends the reader to a
     // redirect, and puts the duplicate back in front of them under the very
     // name the merge was meant to stop showing twice.
     respondWith({

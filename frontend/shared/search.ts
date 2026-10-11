@@ -19,7 +19,8 @@
  * attached to the front, so „ODPOWIEDZIALNOŚCIĄ” was indexed as
  * „\nodpowiedzialnością” and nothing anybody could type reached it. Thirty
  * names in the database are shaped like that; they pick this up the next time
- * their node is written, the trigger recomputing whatever no longer matches.
+ * their node is written, the trigger recomputing whatever no longer matches
+ * (`nameChunksToWrite`).
  *
  * Each part of a hyphenated word as well, after its first, which is a prefix
  * of the word already: "Bogusława Kupczak-Wiśniowska" is found by
@@ -61,6 +62,25 @@ export function generateChunksLower(name: string): string[] {
   }
 
   return Array.from(new Set(chunks));
+}
+
+/** The index a node of this name should carry, where `stored` is not already
+ * exactly it; undefined where it is.
+ *
+ * Compared on every write rather than only when the name changes, which is
+ * how the trigger used to decide: a change to how the index is cut then
+ * reached no page that kept its name, so the names flattened above were said
+ * to heal on their next write and 32 of the 33 still carried the broken
+ * index on 2026-10-11, six weeks after the fix. As exact as the array, order
+ * included, so what the trigger writes reads back as nothing to do and its
+ * own write ends there.
+ */
+export function nameChunksToWrite(
+  name: string,
+  stored: unknown,
+): string[] | undefined {
+  const chunks = generateChunksLower(name);
+  return JSON.stringify(stored) === JSON.stringify(chunks) ? undefined : chunks;
 }
 
 /** The words a typed query is matched by: lowercased, whitespace collapsed.

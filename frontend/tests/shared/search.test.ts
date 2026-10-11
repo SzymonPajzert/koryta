@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   anchorToken,
   generateChunksLower,
+  nameChunksToWrite,
   nameMatchesTokens,
   nameWords,
   searchTokens,
@@ -130,6 +131,39 @@ describe("generateChunksLower", () => {
       "rudni",
       "rudnik",
     ]);
+  });
+});
+
+describe("nameChunksToWrite", () => {
+  it("has nothing to write over the index the name already has", () => {
+    // Which is what ends the trigger's own write: it fires again on it.
+    const name = "Bogusława Kupczak-Wiśniowska";
+    expect(nameChunksToWrite(name, generateChunksLower(name))).toBeUndefined();
+  });
+
+  it("rewrites an index cut the old way, though the name has not changed", () => {
+    // What every hyphenated name stored before carries: no chunk past its
+    // first hyphen. "ka" to "kamysz" are the five appended for it - "k" was
+    // there already, off "kosiniak-kamysz".
+    const name = "Władysław Kosiniak-Kamysz";
+    const old = generateChunksLower(name).slice(0, -5);
+    expect(old).toContain("k");
+    expect(old).not.toContain("ka");
+    expect(nameChunksToWrite(name, old)).toContain("kamysz");
+  });
+
+  it("rewrites a missing index, and one stored as anything but the array", () => {
+    expect(nameChunksToWrite("Anna Nowak", undefined)).toContain("nowak");
+    expect(nameChunksToWrite("Anna Nowak", { 0: "anna" })).toContain("nowak");
+  });
+
+  it("rewrites the same chunks in another order", () => {
+    // Exact rather than as a set: one write for a page some other writer
+    // ordered differently, against a check as cheap as a string compare.
+    const chunks = generateChunksLower("Anna Nowak");
+    expect(nameChunksToWrite("Anna Nowak", [...chunks].reverse())).toEqual(
+      chunks,
+    );
   });
 });
 
