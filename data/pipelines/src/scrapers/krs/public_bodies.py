@@ -63,10 +63,37 @@ PUBLIC_BODY_PREFIXES = (
     "POLSKA AKADEMIA NAUK",
     "SIEC BADAWCZA LUKASIEWICZ",
     "NARODOWE CENTRUM BADAN I ROZWOJU",
+    # Two state research institutes the odpisy pełne name as the last owners of
+    # struck-off companies, which Szymon counted public on 2026-10-11: the
+    # antibiotics institute in Warsaw, which held BIOTON (0000121065) with
+    # Prokom until 2004, and the academy's space research centre, which held
+    # SPACECASE (0000519583) until 2026. A research institute is in KRS,
+    # but the seats keep no owner's number for the parent test to follow, and
+    # the academy's institutes are not in KRS at all. CBK is also written
+    # "CENTRUM BADAŃ KOSMICZNYCH PAN", which `PUBLIC_BODY_DESIGNATIONS` misses.
+    "INSTYTUT BIOTECHNOLOGII I ANTYBIOTYKOW",
+    "CENTRUM BADAN KOSMICZNYCH",
+)
+
+#: Statutory designations, read anywhere in an owner's name. Only a state
+#: research institute may call itself "państwowy instytut badawczy", and only
+#: the academy's own institutes are "... Polskiej Akademii Nauk"; the institutes
+#: in general are not taken, for the reason the module gives - "INSTYTUT
+#: TURYSTYKI SPÓŁKA Z O.O." is an owner on file too. On 2026-10-11 every owner
+#: name bearing either - in the odpisy pełne on file, the api-krs mirror and the
+#: 2026-09-28 register sweep - is such an institute: the institutes of
+#: zootechnics, plant breeding, environmental protection and natural fibres, the
+#: oncology institute and NASK; and of the academy's, CBK, the polymer centre in
+#: Zabrze, the agrophysics institute in Lublin and InLife in Olsztyn.
+PUBLIC_BODY_DESIGNATIONS = (
+    "PANSTWOWY INSTYTUT BADAWCZY",
+    "POLSKIEJ AKADEMII NAUK",
 )
 
 
 def public_body(name: str) -> bool:
-    """Whether an owner's name is one of `PUBLIC_BODY_PREFIXES`."""
+    """Whether an owner's name is a public body's: a known prefix, or a designation."""
     text = normalise(name).strip(' "')
-    return any(text.startswith(prefix) for prefix in PUBLIC_BODY_PREFIXES)
+    return any(text.startswith(prefix) for prefix in PUBLIC_BODY_PREFIXES) or any(
+        designation in text for designation in PUBLIC_BODY_DESIGNATIONS
+    )

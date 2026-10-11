@@ -118,6 +118,42 @@ def test_the_state_funds_outside_krs_are_public():
     assert not public_body("SILESIA HOUSE FUNDUSZ INWESTYCYJNY ZAMKNIĘTY")
 
 
+def test_the_two_state_institutes_szymon_named_are_public():
+    # The last owners of BIOTON (0000121065) and SPACECASE (0000519583) in
+    # their odpisy pełne, and CBK as other sources abbreviate it.
+    assert public_body("INSTYTUT BIOTECHNOLOGII I ANTYBIOTYKÓW")
+    assert public_body("CENTRUM BADAŃ KOSMICZNYCH POLSKIEJ AKADEMII NAUK")
+    assert public_body("CENTRUM BADAŃ KOSMICZNYCH PAN")
+
+
+def test_a_state_research_institute_or_an_academy_institute_by_its_designation():
+    assert public_body(
+        "NARODOWY INSTYTUT ONKOLOGII IM. MARII SKŁODOWSKIEJ-CURIE - "
+        "PAŃSTWOWY INSTYTUT BADAWCZY"
+    )
+    assert public_body('"INSTYTUT ZOOTECHNIKI - PAŃSTWOWY INSTYTUT BADAWCZY"')
+    # INOBIOTEK (0000678713)'s sole owner in the 2026-09-28 register sweep,
+    # whose KRS number is 0000000000: the academy's institutes are not in KRS.
+    found = direct_public_owner(
+        entry(
+            "0000678713",
+            owner(
+                "INLIFE INSTYTUT ROZRODU ZWIERZĄT I BADAŃ ŻYWNOŚCI "
+                "POLSKIEJ AKADEMII NAUK"
+            ),
+        ),
+        pomorskie(),
+    )
+    assert found is not None
+    assert found[0] == REASON_PUBLIC_BODY
+
+
+def test_an_institute_is_not_a_state_one_by_its_first_word():
+    # Both owners in the odpisy pełne on file.
+    assert not public_body("INSTYTUT TURYSTYKI SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ")
+    assert not public_body("EMC INSTYTUT MEDYCZNY SPÓŁKA AKCYJNA")
+
+
 def test_an_agency_is_not_a_state_agency_by_its_first_word():
     assert not public_body('AGENCJA REKLAMOWA "GRAFITI" SPÓŁKA Z O.O.')
     assert not public_body("DOLCE VITA FUNDACJA RODZINNA")
