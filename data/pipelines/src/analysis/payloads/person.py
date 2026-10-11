@@ -1,6 +1,7 @@
 import argparse
 import collections
 import math
+import re
 import typing
 from dataclasses import asdict
 from datetime import date, datetime
@@ -376,11 +377,21 @@ class PeoplePayloads(Pipeline[Person]):
                 return None
             return val
 
+        # The surnames of the PKW records and the Wikipedia article matched to
+        # this person, which hyphenate a double surname the register spaces.
+        surnames = [
+            *as_sequence(row.get("pkw_last_names")),
+            get_scalar("wiki_last_name"),
+        ]
+
         def get_name(key):
-            """`get_scalar`, except that a list is settled by `canonical_name`."""
+            """`get_scalar`, except that a list is settled by `canonical_name`,
+            and either takes the hyphen of a double surname from `surnames`."""
             val = row.get(key)
             if isinstance(val, (list, np.ndarray)):
-                return canonical_name(val)
+                return canonical_name(val, surnames)
+            if isinstance(val, str):
+                return hyphenate_surname(val, surnames)
             return val
 
         name = (
@@ -918,7 +929,70 @@ def unmapped_committees(elections: list[Election]) -> list[str]:
     ]
 
 
-def canonical_name(values: typing.Iterable) -> str | None:
+#: What a PKW record or a Wikipedia article may join the parts of a double
+#: surname with: a hyphen, an en dash now and then, spaces round either or not.
+#: "pakuła - błoch" and "okła – drewnowicz" are hyphens typed loosely, as
+#: `surname_key` in `people_merged` already reads them.
+SURNAME_SEPARATOR = re.compile(r"[\s–-]+")
+
+
+def hyphenate_surname(name: str, surnames: typing.Iterable) -> str:
+    """The name with its double surname joined by the hyphen its PKW record or
+    Wikipedia article writes, where one does.
+
+    The register keeps a double surname as two fields, `nazwiskoICzlon` and
+    `nazwiskoIICzlon`, and rejestr.io and the odpis print them with a space
+    between, so a page made from them is "Władysław Kosiniak Kamysz": of the
+    145,874 people `PeopleKRSMerged` gave on 2026-10-11, 165 had a hyphen in
+    the surname and 5,998 a space only. PKW and Wikipedia write the hyphen,
+    and a page should carry it too (Szymon, 2026-10-11). 1,187 payloads of
+    that day take it, 99 existing pages' titles with them.
+
+    `surnames` are the surnames of the records `people_merged` matched to the
+    person (`pkw_last_names`, `wiki_last_name`). Each names the same words as
+    the register's surname - the join compares them with every separator
+    folded - so where one ends the name, word for word with case aside, the
+    gaps between those words that it writes with a dash are written with a
+    hyphen. Only the separator changes: the words, their case and their order
+    are the register's.
+
+    Where two sources disagree - one PKW record "nowak-rudnik", another
+    "nowak rudnik" - a hyphen from any of them wins, whatever order they come
+    in. A space is what a source writes when it lost the hyphen, the register
+    always, and not a claim against one: 30,943 of PKW's records write a
+    surname with a hyphen against 1,296 with a space only, most of those a
+    particle ("von essen") no source hyphenates at all. 31 people of
+    2026-10-11 had PKW records both ways, Andrzej Żmuda Trzebiatowski among
+    them, and two had PKW's space against Wikipedia's hyphen.
+    """
+    words = name.split()
+    joined: set[int] = set()
+    for surname in surnames:
+        if not isinstance(surname, str):
+            continue
+        core = re.sub(r"^[\s–-]+|[\s–-]+$", "", surname)
+        parts = SURNAME_SEPARATOR.split(core)
+        gaps = SURNAME_SEPARATOR.findall(core)
+        start = len(words) - len(parts)
+        if len(parts) < 2 or start < 1:
+            continue
+        if [w.casefold() for w in words[start:]] != [p.casefold() for p in parts]:
+            continue
+        joined.update(
+            start + gap
+            for gap, between in enumerate(gaps)
+            if re.search("[–-]", between)
+        )
+    if not joined:
+        return name
+    return words[0] + "".join(
+        ("-" if gap in joined else " ") + word for gap, word in enumerate(words[1:])
+    )
+
+
+def canonical_name(
+    values: typing.Iterable, surnames: typing.Iterable = ()
+) -> str | None:
     """One name for a person whose sources spell them several ways.
 
     `full_name` is a `list_distinct` aggregate, so a person the register wrote
@@ -928,7 +1002,13 @@ def canonical_name(values: typing.Iterable) -> str | None:
     the next, and so how he became two pages. 7,026 register ids carry two
     spellings differing by exactly that middle name.
 
-    So the spellings alone decide, never their order:
+    Every spelling first takes the hyphen of a double surname from the PKW
+    records and the Wikipedia article matched to the person (`surnames`,
+    `hyphenate_surname`): "Anna Maria Nowak Rudnik" is "Anna Maria
+    Nowak-Rudnik" and "Anna Nowak Rudnik" "Anna Nowak-Rudnik", so the choice
+    below is between the same spellings as before, hyphenated alike.
+
+    Then the spellings alone decide, never their order:
 
     1. the short form, to start from: the fewest words, then not in capitals -
        the register shouts about 14 of these ("GRZEGORZ GWOZDZ"), and a bare
@@ -949,11 +1029,17 @@ def canonical_name(values: typing.Iterable) -> str | None:
     spelling with another surname - a maiden name, a typo - is never taken for
     being longer, so step 2 changes no surname and no first name.
 
-    An existing page is renamed by an upload only to write a middle name into
-    it (`updatedPerson`), so this decides what a new page is called and what an
-    existing one can grow into, the same way every run.
+    An existing page is renamed by an upload only to write a middle name or a
+    surname's hyphen into it (`updatedPerson`, `learns_name`), so this decides
+    what a new page is called and what an existing one can grow into, the same
+    way every run.
     """
-    names = [str(value).strip() for value in values if str(value).strip()]
+    surnames = list(surnames)
+    names = [
+        hyphenate_surname(str(value).strip(), surnames)
+        for value in values
+        if str(value).strip()
+    ]
     if not names:
         return None
     short = min(names, key=lambda name: (len(name.split()), name.isupper(), name))

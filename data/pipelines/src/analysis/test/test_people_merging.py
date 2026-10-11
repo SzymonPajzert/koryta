@@ -1060,6 +1060,26 @@ def test_a_double_surname_written_with_a_space_finds_its_biography(ctx):
     )
 
     assert list(result["wiki_name"]) == ["Władysław Marcin Kosiniak-Kamysz"]
+    # The surname as the article writes it, which the payload takes the hyphen
+    # from (`payloads.person.hyphenate_surname`).
+    assert list(result["wiki_last_name"]) == ["kosiniak-kamysz"]
+
+
+def test_every_matched_record_s_surname_is_carried_for_the_payload(ctx):
+    """`pkw_last_names`: the surnames of all the records attached, not only
+    the one that names the person, so a hyphen in any of them reaches the
+    payload whichever record ranked first."""
+    result = match_pkw(
+        ctx,
+        [krs_person("iwona", "pakuła błoch", "1970-05-05")],
+        [
+            pkw_person("iwona", "pakuła błoch", 1970, years=("2018",)),
+            pkw_person("iwona", "pakuła - błoch", 1970, years=("2024",)),
+        ],
+    )
+
+    assert candidacy_years(result) == ["2018", "2024"]
+    assert list(result["pkw_last_names"].iloc[0]) == ["pakuła - błoch", "pakuła błoch"]
 
 
 # ------------------------------------------------- which spelling names the row

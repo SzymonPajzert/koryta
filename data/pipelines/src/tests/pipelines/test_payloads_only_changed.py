@@ -16,6 +16,7 @@ from analysis.payloads import PeoplePayloads
 from analysis.payloads.person import (
     canonical_name,
     collapsed_people,
+    hyphenate_surname,
     one_register_entry,
 )
 from analysis.payloads.site import (
@@ -792,3 +793,99 @@ class TestCanonicalName:
     def test_nothing_to_choose_from_is_no_name(self):
         assert canonical_name([]) is None
         assert canonical_name(["", "   "]) is None
+
+
+class TestHyphenatedSurname:
+    """A double surname the register writes with a space takes the hyphen of the
+    PKW records and the Wikipedia article matched to the person (Szymon,
+    2026-10-11): "Władysław Kosiniak Kamysz" is "Władysław Kosiniak-Kamysz"."""
+
+    def test_pkw_s_hyphen_joins_the_register_s_space(self):
+        assert (
+            hyphenate_surname("Władysław Kosiniak Kamysz", ["kosiniak-kamysz"])
+            == "Władysław Kosiniak-Kamysz"
+        )
+
+    def test_the_middle_name_is_kept(self):
+        assert (
+            canonical_name(
+                ["Antoni Ignacy Nowak Rudnik", "Antoni Nowak Rudnik"], ["nowak-rudnik"]
+            )
+            == "Antoni Ignacy Nowak-Rudnik"
+        )
+
+    def test_a_spelling_the_register_hyphenated_still_gains_the_middle_name(self):
+        """Without PKW's hyphen the short "Anna Nowak-Rudnik" had no fuller
+        form: "Anna Maria Nowak Rudnik" ends in another word."""
+        spellings = ["Anna Maria Nowak Rudnik", "Anna Nowak-Rudnik"]
+
+        assert canonical_name(spellings) == "Anna Nowak-Rudnik"
+        assert canonical_name(spellings, ["nowak-rudnik"]) == "Anna Maria Nowak-Rudnik"
+
+    @pytest.mark.parametrize("surname", ["pakuła - błoch", "pakuła – błoch"])
+    def test_a_hyphen_typed_loosely_is_a_hyphen(self, surname):
+        assert hyphenate_surname("Iwona Pakuła Błoch", [surname]) == (
+            "Iwona Pakuła-Błoch"
+        )
+
+    @pytest.mark.parametrize(
+        "surnames", [["nowak rudnik", "nowak-rudnik"], ["nowak-rudnik", "nowak rudnik"]]
+    )
+    def test_a_hyphen_from_any_source_wins_whatever_the_order(self, surnames):
+        assert hyphenate_surname("Anna Nowak Rudnik", surnames) == "Anna Nowak-Rudnik"
+
+    def test_only_the_separator_changes(self):
+        """The words, their case and their order are the register's - the
+        capitals are `format_person_name`'s to undo."""
+        assert hyphenate_surname("ANNA NOWAK RUDNIK", ["nowak-rudnik"]) == (
+            "ANNA NOWAK-RUDNIK"
+        )
+        three_parts = hyphenate_surname(
+            "Jan Nowak Kowalski Rudnik", ["nowak-kowalski rudnik"]
+        )
+        assert three_parts == "Jan Nowak-Kowalski Rudnik"
+
+    @pytest.mark.parametrize(
+        ("name", "surnames"),
+        [
+            # A surname no source hyphenates.
+            ("Piotr van der Coghen", ["van der coghen"]),
+            ("Anna Nowak Rudnik", ["nowak rudnik", None, float("nan")]),
+            # Other words than the name ends in.
+            ("Anna Nowak Rudnik", ["nowak-rudnicka"]),
+            ("Anna Rudnik", ["nowak-rudnik"]),
+            ("Anna Nowak Rudnik Kowalska", ["nowak-rudnik"]),
+            # Nothing left for a first name.
+            ("Nowak Rudnik", ["nowak-rudnik"]),
+            # Written with the hyphen already.
+            ("Anna Nowak-Rudnik", ["nowak-rudnik"]),
+            ("Anna Nowak Rudnik", []),
+        ],
+    )
+    def test_nothing_else_is_joined(self, name, surnames):
+        assert hyphenate_surname(name, surnames) == name
+
+    def test_the_payload_takes_the_hyphen_of_pkw_or_wikipedia(self):
+        """`people_merged` carries the matched records' surnames as
+        `pkw_last_names` and `wiki_last_name`."""
+
+        def name_of(**fields) -> str:
+            row = pd.Series(
+                {
+                    "full_name": ["Władysław Marcin Kosiniak Kamysz"],
+                    "rejestrio_id": ["1"],
+                    "employment": [],
+                    "elections": [],
+                    **fields,
+                }
+            )
+            pipeline = Pipeline.create(PeoplePayloads)
+            return pipeline.map_person_payload(ctx=None, row=row).name  # type: ignore[arg-type]
+
+        assert name_of() == "Władysław Marcin Kosiniak Kamysz"
+        assert name_of(pkw_last_names=["kosiniak-kamysz"]) == (
+            "Władysław Marcin Kosiniak-Kamysz"
+        )
+        assert name_of(pkw_last_names=[], wiki_last_name="kosiniak-kamysz") == (
+            "Władysław Marcin Kosiniak-Kamysz"
+        )
