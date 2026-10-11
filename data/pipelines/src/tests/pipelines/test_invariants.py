@@ -1715,12 +1715,19 @@ def test_a_later_revision_never_drops_a_field(revisions):
     # revision standing for the page it created does not say the page had it.
     stamped_later = {"partiesSource"}
 
+    # unstamp-default-empty-parties.ts takes `partiesSource` back off the
+    # empty lists nobody stated - 83 pages on the 2026-10-09 evening export,
+    # marked as "no party" because the form sends `parties` untouched - and
+    # files the page without it. Leaving it out is what those revisions are for.
+    unstamped_by = {"migration:unstamp-default-empty-parties": {"partiesSource"}}
+
     dropped = []
     for document_id, history in by_document.items():
         page = None
         for revision in sorted(history, key=applied_at):
             if page is not None:
                 unknown = stamped_later if page.get("status") == "pending" else set()
+                unknown = unknown | unstamped_by.get(revision.get("update_user"), set())
                 lost = {
                     field
                     for field, value in page["data"].items()
