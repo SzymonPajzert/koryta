@@ -897,8 +897,8 @@ def test_person_names_are_capitalised(nodes):
     # The people uploaded in full capitals before `format_person_name` was added
     # to the pipeline on 2026-09-12. This said five, all unpublished, and that
     # the next ingest would rename them. It does not: the ingest only ever
-    # replaces a stored name with one that adds middle names to it
-    # (`addsMiddleNames`), so a stored spelling in capitals stays. Counted on
+    # replaces a stored name with one that adds middle names or a surname's
+    # hyphen to it (`learnsName`), so a stored spelling in capitals stays. Counted on
     # 2026-10-09 there are 30 live, every one created by an upload between
     # 08-18 and 09-10 and none since; one is published (Małgorzata Stępień).
     # Renaming them is a one-off migration, and then this goes to zero.

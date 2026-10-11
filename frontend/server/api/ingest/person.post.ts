@@ -32,7 +32,7 @@ import type {
 } from "~~/shared/model";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
 import {
-  addsMiddleNames,
+  learnsName,
   namesAgree,
   spacedSurname,
   withoutDiacritics,
@@ -300,13 +300,14 @@ function updatedPerson(
   // Written into, never rewritten. The pipeline names a person with every given
   // name the register knows, and a page made when it took the shortest spelling
   // instead - "Antoni Sikoń" for Antoni Ignacy Sikoń - stayed short: 492 pages
-  // on 2026-10-09, 73 of them live. A name that only adds middle names to the
-  // stored one is taken; any other difference is not, since the stored spelling
-  // may be a reviewer's and the register's is not the better one by default.
-  if (
-    typeof stored.name === "string" &&
-    addsMiddleNames(body.name, stored.name)
-  ) {
+  // on 2026-10-09, 73 of them live. So did the hyphen of a double surname,
+  // which the register cannot write and the pipeline takes from PKW or
+  // Wikipedia: 430 pages of 2026-10-11 were titled "Nowak Rudnik", and 99 of
+  // them have a payload with the hyphen. A name that only writes those into
+  // the stored one is taken (`learnsName`); any other difference is not, since
+  // the stored spelling may be a reviewer's and the register's is not the
+  // better one by default.
+  if (typeof stored.name === "string" && learnsName(body.name, stored.name)) {
     learned.name = body.name;
   }
 

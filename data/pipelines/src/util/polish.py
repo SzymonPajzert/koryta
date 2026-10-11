@@ -240,6 +240,34 @@ def spaced_surname(name: str) -> str:
     return " ".join(words[:-1] + words[-1].split("-"))
 
 
+def learns_name(name: str, stored: str) -> bool:
+    """Whether an upload naming `name` renames a page titled `stored`.
+
+    Only to write something into the stored name, never to rewrite it, since
+    the stored spelling may be a reviewer's: given names after the first
+    (`adds_middle_names`), and the hyphen of a double surname the page writes
+    with a space (`spaced_surname`) - "Anna Nowak Rudnik" becomes "Anna
+    Nowak-Rudnik". Szymon, 2026-10-11: a title carries the hyphen PKW or
+    Wikipedia gives, and the register cannot write one.
+
+    The two at once as well, "Anna Maria Nowak-Rudnik" over "Anna Nowak
+    Rudnik": each is a change taken on its own, and refused together the page
+    would no longer learn the middle name it takes from a payload without the
+    hyphen - 8 pages of 2026-10-11. Every word as written otherwise, case
+    included, and nothing a page hyphenates is ever spaced again.
+
+    `learnsName` in `frontend/shared/names.ts` is the same rule: the ingest
+    renames a page by that one, and `--only-changed` predicts the rename by
+    this one.
+    """
+    if adds_middle_names(name, stored):
+        return True
+    spaced = spaced_surname(name)
+    if spaced == name:
+        return False
+    return spaced == " ".join(stored.split()) or adds_middle_names(spaced, stored)
+
+
 def normalize_person_name(name: str | None) -> str:
     """A person's name without what two spellings of it may differ by: case,
     diacritics (``ł`` too), and anything between the words - a hyphen, a dot.

@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "nazwisko-dwuczlonowe-z-lacznikiem",
+    title: "Nazwisko dwuczłonowe z łącznikiem, jak w PKW i na Wikipedii",
+    description:
+      "Rejestr zapisuje nazwisko dwuczłonowe ze spacją („Kupczak Wiśniowska”), PKW i Wikipedia z łącznikiem. Strona osoby bierze teraz łącznik z jej rekordu PKW albo artykułu - także strona założona wcześniej, po najbliższym imporcie.",
+    steps: [
+      "Po najbliższym nocnym imporcie otwórz stronę Bogusławy Kupczak-Wiśniowskiej - w nagłówku nazwisko ma łącznik, nie spację.",
+    ],
+    link: "/entity/person/A7NEVnjbRJEf0hdLlAOL",
+    area: "public",
+  },
+  {
     id: "blog-wpisy-z-wykresami",
     title: "Blog: krótkie analizy z liczbami i wykresami",
     description:
