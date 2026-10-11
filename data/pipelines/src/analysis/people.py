@@ -402,10 +402,14 @@ def people_merged(
         -- One row per person, as a page has one. The record that fits best
         -- names them - an agreeing middle name, then the nearest birth year -
         -- and the candidacies of every record they could be go with it;
-        -- `pkw_records` lists those records, the way reviewers will see them.
+        -- `pkw_records` lists those records, the way reviewers will see them,
+        -- and `pkw_last_names` the surnames they write, which is where a
+        -- payload takes the hyphen of a double surname from
+        -- (`payloads.person.hyphenate_surname`).
         SELECT
             best.* EXCLUDE (krs_birth_year) REPLACE (every.elections AS elections),
-            every.pkw_records
+            every.pkw_records,
+            every.pkw_last_names
         FROM (
             SELECT * FROM pkw_match
             QUALIFY row_number() OVER (
@@ -424,7 +428,8 @@ def people_merged(
                     preferred_spelling(full_name, first_name, second_name, last_name)
                     || ' '
                     || coalesce(CAST(CAST(birth_year AS INTEGER) AS VARCHAR), '?')
-                )) AS pkw_records
+                )) AS pkw_records,
+                list_sort(list_distinct(list(last_name))) AS pkw_last_names
             FROM pkw_match
             GROUP BY krs_row
         ) every USING (krs_row)
@@ -504,6 +509,8 @@ def people_merged(
         SELECT
             kp.*,
             w.full_name as wiki_name,
+            -- The article's surname, for the same hyphen as `pkw_last_names`.
+            w.last_name as wiki_last_name,
             w.source as wiki_url,
             w.is_polityk,
             w.wiki_score,
