@@ -8,6 +8,7 @@ import {
   mdiClockAlertOutline,
   mdiClockOutline,
   mdiConsoleLine,
+  mdiDatabaseClockOutline,
   mdiGestureTap,
   mdiHelpCircleOutline,
   mdiLightningBoltOutline,
@@ -16,6 +17,7 @@ import {
   mdiProgressClock,
   mdiSignalOff,
   mdiStopCircleOutline,
+  mdiWeatherNight,
 } from "@mdi/js";
 import type { RowTone } from "~/composables/rowTone";
 import { formatCount } from "~/utils/chartTheme";
@@ -30,6 +32,7 @@ import {
   type RunProgress,
   type RunState,
   type RunTrigger,
+  type RunWaiting,
 } from "~~/shared/jobs";
 
 /** How /admin/procesy names and draws the statuses, states and kinds of
@@ -137,6 +140,20 @@ export const stalledRunConfig: Record<
   queued: { title: "nikt nie podjął", icon: mdiSignalOff, tone: "danger" },
 };
 
+/** A queued run the worker has seen and cannot start yet, named by what it
+ * waits for: the day's export, or the night on the machine. */
+export const waitingRunConfig: Record<
+  RunWaiting,
+  { title: string; icon: string; tone: RowTone }
+> = {
+  export: {
+    title: "czeka na kopię bazy",
+    icon: mdiDatabaseClockOutline,
+    tone: "neutral",
+  },
+  night: { title: "czeka na noc", icon: mdiWeatherNight, tone: "neutral" },
+};
+
 /** A finished run of a job whose `partial` is work held back - the night -
  * named as its row is, rather than as a backlog left for the next run. */
 export const heldRunConfig: { title: string; icon: string; tone: RowTone } = {
@@ -146,7 +163,8 @@ export const heldRunConfig: { title: string; icon: string; tone: RowTone } = {
 };
 
 /** The run's chip: its state, unless it says it is going and has stopped
- * saying so, or it is the night's `partial`. */
+ * saying so, it is queued and waits for something, or it is the night's
+ * `partial`. */
 export function runChip(
   run: JobRun,
   definition: Pick<
@@ -160,6 +178,9 @@ export function runChip(
     isStalled(run, definition, now)
   ) {
     return { ...stalledRunConfig[run.state], stalled: true };
+  }
+  if (run.state === "queued" && run.waitingFor) {
+    return { ...waitingRunConfig[run.waitingFor], stalled: false };
   }
   if (run.state === "partial" && definition.partialIsHeld) {
     return { ...heldRunConfig, stalled: false };

@@ -319,6 +319,22 @@ describe("jobsStatus: one run", () => {
     expect(JSON.stringify(answer)).not.toContain("uid-of-the-owner");
   });
 
+  it("says what a queued run waits for", async () => {
+    const waiting = runDoc("req-2", "people_request", "2026-10-10T06:20:00Z", {
+      state: "queued",
+      trigger: "request",
+      finishedAt: null,
+      heartbeatAt: "2026-10-10T06:58:00Z",
+      waitingFor: "night",
+    });
+    const { reports } = memoryReports([waiting]);
+    const answer = JSON.parse(await jobsStatus(reports, { run: "req-2" }, NOW));
+    expect(answer.run).toMatchObject({
+      status: "queued (request), waiting for the night to end",
+      stalled: false,
+    });
+  });
+
   it("says so when there is no such run, or it cannot be read", async () => {
     const { reports } = memoryReports([
       { id: "junk", data: { state: "running" } },
