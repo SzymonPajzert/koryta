@@ -22,7 +22,9 @@ from analysis.payloads.site import (
     BY_NAME,
     BY_NAME_AND_DATE,
     BY_PAGE_ID,
+    BY_REGISTER,
     HELD_BORN,
+    HELD_ENTRY,
     HELD_SEVERAL,
     HELD_UNDATED,
     NOT_ON_SITE,
@@ -352,6 +354,72 @@ def test_a_page_linking_the_payloads_own_entry_is_the_page_whatever_its_date():
     site = snapshot({**HETMAN, "rejestrIo": f"{REGISTER}1203566/krzysztof-hetman"})
 
     assert resolve(site, namesake()) == ("hetman", BY_PAGE_ID)
+
+
+# ---------------------------- a page reached under another entry's link
+ROZPARA = page(
+    "rozpara",
+    "Tadeusz Rozpara",
+    birthDate="1953-12-01",
+    rejestrIo=f"{REGISTER}1220490",
+    published=True,
+)
+
+
+def under_another_entry(**fields) -> Person:
+    """The 10-06 payload for Tadeusz Rozpara's page, under his namesake's
+    entry: `people_merged` had grouped the two."""
+    entry = person("Tadeusz Rozpara", "1953-12-01", f"{REGISTER}670747")
+    return replace(entry, **{"korytaId": "rozpara", **fields})
+
+
+def test_a_page_the_payload_names_linking_another_entry_holds_it_back():
+    """`refuseAnotherEntry`: a 409, and no other page looked for - not even
+    the one that links the payload's entry."""
+    site = snapshot(
+        ROZPARA, page("namesake", "Tadeusz Rozpara", rejestrIo=f"{REGISTER}670747")
+    )
+
+    assert resolve(site, under_another_entry()) == (None, HELD_ENTRY)
+    assert matching_one_page([under_another_entry()], site) == []
+    assert missing_from_koryta([under_another_entry()], site) == []
+
+
+def test_another_birth_date_is_the_hold_a_page_is_held_by_first():
+    """The ingest asks about the date first, and says so in its 409."""
+    site = snapshot(ROZPARA)
+
+    assert resolve(site, under_another_entry(birthDate="1952-04-25")) == (
+        None,
+        HELD_BORN,
+    )
+
+
+def test_the_pages_own_entry_spelled_another_way_is_still_the_page():
+    own = under_another_entry(rejestrIo=f"{REGISTER}1220490")
+    for spelled in (f"{REGISTER}1220490/tadeusz-rozpara", f"{REGISTER}1220490/"):
+        site = snapshot({**ROZPARA, "rejestrIo": spelled})
+
+        assert resolve(site, own) == ("rozpara", BY_PAGE_ID)
+    assert resolve(snapshot({**ROZPARA, "rejestrIo": ""}), under_another_entry()) == (
+        "rozpara",
+        BY_PAGE_ID,
+    )
+
+
+def test_an_entry_merged_into_a_page_linking_another_holds_it_back():
+    """The register lookup follows the merge, as `lookupNodeDoc` does."""
+    merged = page(
+        "merged",
+        "Tadeusz Rozpara",
+        rejestrIo=f"{REGISTER}670747",
+        merged_into="rozpara",
+    )
+    by_register = under_another_entry(korytaId=None)
+
+    assert resolve(snapshot(ROZPARA, merged), by_register) == (None, HELD_ENTRY)
+    survivor = {**ROZPARA, "rejestrIo": f"{REGISTER}670747"}
+    assert snapshot(merged, survivor).resolve(asdict(by_register)).how == BY_REGISTER
 
 
 # ------------------------------------------------------ the run's guards
