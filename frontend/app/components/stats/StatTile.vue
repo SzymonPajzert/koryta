@@ -23,7 +23,7 @@
         </v-tooltip>
       </span>
     </div>
-    <div class="stat-tile__value">{{ formatCompact(value) }}</div>
+    <div class="stat-tile__value">{{ formatCompact(value) }}{{ unitText }}</div>
     <div v-if="hint" class="text-caption text-medium-emphasis mt-1">
       {{ hint }}
     </div>
@@ -31,6 +31,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { NuxtLink } from "#components";
 import { formatCompact } from "~/utils/chartTheme";
 
@@ -39,7 +40,7 @@ import { formatCompact } from "~/utils/chartTheme";
  *
  * `color` is the dot beside the label, not the text - identity comes from a
  * coloured mark next to the words, never from colouring the words. */
-defineProps<{
+const props = defineProps<{
   label: string;
   value: number | null | undefined;
   /** A short line under the value. Anything longer belongs in `tooltip`. */
@@ -49,7 +50,14 @@ defineProps<{
   /** Series colour of whatever this tile counts, if it appears in a chart too. */
   color?: string;
   to?: string;
+  /** After the number: "%" sits against it, a word ("mln zł") gets a space. */
+  unit?: string;
 }>();
+
+const unitText = computed(() => {
+  if (!props.unit) return "";
+  return /^\p{L}/u.test(props.unit) ? ` ${props.unit}` : props.unit;
+});
 </script>
 
 <style scoped>

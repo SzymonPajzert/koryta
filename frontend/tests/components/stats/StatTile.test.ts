@@ -26,4 +26,17 @@ describe("StatsStatTile", () => {
     expect(wrapper.find("a").exists()).toBe(false);
     expect(wrapper.get("div.stat-tile").text()).toContain("Fakty z ekstrakcji");
   });
+
+  it("sets a symbol against the number and a word one space off", async () => {
+    // Blog posts put shares and sums in a tile: "4,8%", "12 mln zł".
+    const percent = await mountSuspended(StatTile, {
+      props: { label: "Odsetek", value: 4.8, unit: "%" },
+    });
+    expect(percent.get(".stat-tile__value").text()).toBe("4,8%");
+
+    const money = await mountSuspended(StatTile, {
+      props: { label: "Wynagrodzenia", value: 12, unit: "mln zł" },
+    });
+    expect(money.get(".stat-tile__value").text()).toBe("12 mln zł");
+  });
 });
