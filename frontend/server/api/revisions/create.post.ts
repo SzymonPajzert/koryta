@@ -8,7 +8,7 @@ import {
   sanitizeFirestoreData,
   withSeededNodeStats,
 } from "~~/server/utils/revisions";
-import { revisionIsPending } from "~~/shared/model";
+import { asArray, revisionIsPending } from "~~/shared/model";
 import {
   editSchemas,
   proposableNodeTypes,
@@ -87,10 +87,10 @@ export default defineEventHandler(async (event) => {
     // A person's parties, on the same terms. `ingest/person` unions what it
     // was handed into what is stored, so without this a removal is undone by
     // the next run - SLD came back onto a published page 59 minutes after a
-    // reviewer took it off. `undefined` rather than truthiness again: an empty
-    // array is somebody saying "no party", and it has to pin the field as
-    // firmly as a list does.
-    if (dataFields.parties !== undefined) {
+    // reviewer took it off. An emptied list is somebody saying "no party", and
+    // it has to pin the field as firmly as a list does - but only an emptied
+    // one; see `statesParties`.
+    if (statesParties(dataFields.parties, baseFields.parties)) {
       dataFields.partiesSource = "manual";
     }
 
@@ -194,6 +194,35 @@ export default defineEventHandler(async (event) => {
 
   return { id: revisionRef.id, node_id: nodeRef.id, duplicate: false };
 });
+
+/** Whether a proposal's `parties` is a person saying what the parties are,
+ * which is what earns the list `partiesSource: "manual"`.
+ *
+ * A list with something on it is, and so is an empty one that takes the place
+ * of a list that had something on it: that is somebody removing the last
+ * party. An empty list over an empty or absent one is not. The form sends
+ * `parties` whatever was done with the select, so it is what a page created
+ * without touching the select arrives with - and stamping it pinned "no party"
+ * on pages nobody had said anything about, which the ingest then never filled
+ * in from PKW. The same goes for an existing page whose list is empty and gets
+ * saved with something else changed. 83 of the 85 stamped empty lists on the
+ * 2026-10-09 evening export never had a party in any revision: 26 marked here,
+ * the other 57 by `backfill-parties-source.ts`, which read a page's creating
+ * revision the same way. Nothing in an empty list tells "no party" apart from
+ * "did not look", so the only empty list read as an answer is one somebody had
+ * to empty. `scripts/migrate/unstamp-default-empty-parties.ts` takes the mark
+ * off the pages the old rule gave it to.
+ *
+ * A restated non-empty list is still stamped, the way `categories` is: saying
+ * it by hand is how a reviewer confirms what a pipeline guessed.
+ */
+function statesParties(proposed: unknown, stored: unknown): boolean {
+  if (proposed === undefined) return false;
+  return (
+    asArray(proposed as string[]).length > 0 ||
+    asArray(stored as string[]).length > 0
+  );
+}
 
 /** The kind of node a proposal is for, out of the kinds anyone may propose.
  *

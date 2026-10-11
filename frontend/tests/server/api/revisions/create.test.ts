@@ -239,6 +239,146 @@ describe("api/revisions/create, place edits", () => {
     expect(writtenRevision().data).not.toHaveProperty("partiesSource");
   });
 
+  it("does not pin an empty list an edit passes through", async () => {
+    // The form sends `parties` whatever was done with the select, so a page
+    // whose list is empty arrives with [] when somebody fixes the birth date.
+    // Pinning that would stop the ingest ever filling the parties in from PKW,
+    // and it would put the mark straight back on a page
+    // unstamp-default-empty-parties.ts had taken it off.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Michał Głowacki",
+      parties: [],
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "glowacki",
+      name: "Michał Głowacki",
+      parties: [],
+      birthDate: "1971-03-02",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      parties: [],
+      birthDate: "1971-03-02",
+    });
+    expect(writtenRevision().data).not.toHaveProperty("partiesSource");
+  });
+
+  it("does not pin an empty list on a page that never had one", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Michał Głowacki",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "glowacki",
+      name: "Michał Głowacki",
+      parties: [],
+      education: "magister ekonomii",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).not.toHaveProperty("partiesSource");
+  });
+
+  it("turns down a re-save of an empty list that changes nothing else", async () => {
+    // The mark used to be the one difference such a save made, so "Zaproponuj"
+    // pressed on an untouched form filed a revision whose only effect was to
+    // pin "no party". Without the mark there is nothing left to review.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Michał Głowacki",
+      parties: [],
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "glowacki",
+      name: "Michał Głowacki",
+      parties: [],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Ta propozycja niczego nie zmienia - wpis już to zawiera.",
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("keeps the mark on a list somebody emptied before", async () => {
+    // A "no party" a person did state, by taking the last one off. The mark
+    // comes with the rest of the page, and nothing here takes it away.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Edward Delewicz",
+      parties: [],
+      partiesSource: "manual",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "delewicz",
+      name: "Edward Delewicz",
+      parties: [],
+      birthDate: "1980-01-01",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      parties: [],
+      partiesSource: "manual",
+    });
+  });
+
+  it("still pins a party list a person restates", async () => {
+    // As with categories: saying the pipeline's list again by hand is how a
+    // reviewer confirms it, and the mark is what keeps the next union off it.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Edward Delewicz",
+      parties: ["PSL"],
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "delewicz",
+      name: "Edward Delewicz",
+      parties: ["PSL"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      parties: ["PSL"],
+      partiesSource: "manual",
+    });
+  });
+
+  it("reads an emptied list stored the old way, as a map", async () => {
+    // Written before 2026-07-28, a list is stored as `{"0": "SLD"}`. Emptying
+    // it is still emptying it.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Edward Delewicz",
+      parties: { "0": "SLD" },
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "delewicz",
+      name: "Edward Delewicz",
+      parties: [],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      parties: [],
+      partiesSource: "manual",
+    });
+  });
+
   it("rejects a category the site does not offer", async () => {
     vi.mocked(baseNodeFields).mockResolvedValueOnce({
       type: "place",
@@ -482,6 +622,41 @@ describe("api/revisions/create, proposing a new entry", () => {
       published: false,
       stats: { isApproved: false, nodeGroupSize: 0 },
     });
+  });
+
+  it("does not pin the empty party list a new person is created with", async () => {
+    // What the form sends for a person whoever fills it in: the select starts
+    // empty and `parties` goes out either way. Stamped, it read as "in no
+    // party", and the ingest left it empty for good - 83 pages by 2026-10-09.
+    mockReadBody.mockResolvedValue({
+      type: "person",
+      name: "Zenon Nowy",
+      parties: [],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({ parties: [] });
+    expect(writtenRevision().data).not.toHaveProperty("partiesSource");
+    expect(writtenNode()).not.toHaveProperty("partiesSource");
+  });
+
+  it("pins the parties a new person is created with", async () => {
+    mockReadBody.mockResolvedValue({
+      type: "person",
+      name: "Zenon Nowy",
+      parties: ["PSL"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      parties: ["PSL"],
+      partiesSource: "manual",
+    });
+    expect(writtenNode()).toMatchObject({ partiesSource: "manual" });
   });
 
   it("creates an article with the address it lives at", async () => {

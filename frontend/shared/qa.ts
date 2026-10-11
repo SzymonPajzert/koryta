@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "pusta-lista-partii-nie-jest-odpowiedzia",
+    title: "Nieruszone pole partii nie znaczy „bez partii”",
+    description:
+      "Osoba dodana lub poprawiona bez ruszania pola „Przynależność partyjna” dostawała pustą listę oznaczoną jako podaną przez człowieka, więc import nigdy nie dopisywał jej partii z PKW. Teraz oznaczenie dostaje tylko lista z partią albo taka, z której ktoś usunął ostatnią.",
+    steps: [
+      "Zaproponuj dodanie osoby, nie ruszając pola partii, i otwórz /admin/rewizje/<id nowej strony> - wiersz partiesSource ma być pusty.",
+      "Zaproponuj zmianę osoby z partią i usuń ją z pola - w nowej rewizji partiesSource ma wartość „manual”.",
+    ],
+    area: "admin",
+  },
+  {
     id: "scalanie-zostawia-partie-wpisane-recznie",
     title: "Scalanie stron nie dopisuje partii do listy wpisanej ręcznie",
     description:

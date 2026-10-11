@@ -387,6 +387,9 @@ async function submit() {
     }
 
     if (type.value === "person") {
+      // Always sent, so that taking the last party off says "no party". An
+      // empty select over an empty list says nothing, and the server does not
+      // mark it as stated - see `statesParties` in revisions/create.
       body.parties = editData.parties;
       body.birthDate = editData.birthDate;
       body.education = editData.education;

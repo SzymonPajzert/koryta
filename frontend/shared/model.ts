@@ -319,8 +319,10 @@ export interface Person extends Omit<Node, "type"> {
    * set union, which can only widen - so a reviewer who removed a party had it
    * back within the hour, and there was no way to say "not this one". This is
    * the same escape hatch `isPublicSource` and `categoriesSource` are for
-   * companies, and it is set by `/api/revisions/create` whenever a person
-   * proposal states `parties` at all.
+   * companies, and it is set by `/api/revisions/create` when a person proposal
+   * states a list with a party on it, or empties one that had one. An empty
+   * list over an empty one is what the form sends untouched, so it is not
+   * marked; see `statesParties` there.
    *
    * Absent means the pipelines wrote it. Lists a person stated before this
    * marker existed were stamped after the fact by
