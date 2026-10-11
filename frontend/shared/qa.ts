@@ -64,7 +64,7 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Osoba dodana lub poprawiona bez ruszania pola „Przynależność partyjna” dostawała pustą listę oznaczoną jako podaną przez człowieka, więc import nigdy nie dopisywał jej partii z PKW. Teraz oznaczenie dostaje tylko lista z partią albo taka, z której ktoś usunął ostatnią.",
     steps: [
-      "Zaproponuj dodanie osoby, nie ruszając pola partii, i otwórz /admin/rewizje/<id nowej strony> - wiersz partiesSource ma być pusty.",
+      "Zaproponuj dodanie osoby, nie ruszając pola partii, i otwórz /admin/rewizje/<id nowej strony> - w tabeli nie ma wiersza partiesSource.",
       "Zaproponuj zmianę osoby z partią i usuń ją z pola - w nowej rewizji partiesSource ma wartość „manual”.",
     ],
     area: "admin",

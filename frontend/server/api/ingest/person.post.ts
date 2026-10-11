@@ -276,7 +276,8 @@ function updatedPerson(
   // removal on the very next run, which is how SLD came back onto a published
   // page an hour after a reviewer took it off. `partiesSource` is the same
   // marker `isPublicSource` is for a company, written by
-  // `/api/revisions/create` when a person proposal states `parties`.
+  // `/api/revisions/create` when a person proposal states a list with a party
+  // on it or empties one - not for the untouched empty list the form sends.
   if (stored.partiesSource !== "manual") {
     const storedParties = Array.isArray(stored.parties)
       ? (stored.parties as string[])
