@@ -125,7 +125,7 @@ def lookup_teryt_from_city(teryt, city: str, _: None) -> str:
 
 
 def lookup_teryt(teryt: Teryt, s: str, context: ElectionContext) -> str:
-    if context.election_type in [ElectionType.SAMORZADOWE, ElectionType.EUROPARLAMENT]:
+    if context.election_type == ElectionType.SAMORZADOWE:
         return ""  # We don't support looking up for samorządowe
     year = context.year
     if year < 2000:
@@ -137,7 +137,17 @@ def lookup_teryt(teryt: Teryt, s: str, context: ElectionContext) -> str:
         mapping = voting_district_to_city[year, context.election_type]
     except KeyError:
         raise ValueError(f"Unknown election: {context.year} {context.election_type}")
-    return lookup_teryt_from_city(teryt, str(mapping[int(s)]), None)
+    try:
+        district = int(s)
+    except ValueError:
+        # PKW numbered one 2004 European district "P" - Joanna Paul, who stood
+        # in Poznań. The file's "Siedziba OKW" column, read after this one,
+        # still places her; the 2009, 2014 and 2024 lists, which have no such
+        # column, number every row.
+        if context.election_type == ElectionType.EUROPARLAMENT:
+            return ""
+        raise
+    return lookup_teryt_from_city(teryt, str(mapping[district]), None)
 
 
 CSV_HEADERS: dict[str, SetField | None] = {
@@ -245,7 +255,11 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Jednostka": None,
     "Kandydat": None,
     "Kod gminy": SetField("teryt_candidacy"),
-    "Kod TERYT": SetField("teryt_candidacy"),
+    # Where the candidate lives. Only the 2019 European list has the column,
+    # right after "Miejscowość zamieszkania" and before "Gmina miejsca
+    # zamieszkania" - read as the candidacy, it filed every 2019 European run
+    # under the candidate's home powiat rather than the district they stood in.
+    "Kod TERYT": SetField("teryt_living"),
     "Komitet  wyborczy": SetField("party"),
     "Komitet lista nr": None,
     "Komitet Mandat": SetField("party"),

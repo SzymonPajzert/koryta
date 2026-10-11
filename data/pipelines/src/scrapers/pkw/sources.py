@@ -1,9 +1,10 @@
 import abc
 import typing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 from scrapers.pkw.elections import ElectionType
+from scrapers.pkw.headers import SetField
 from scrapers.stores import Context, File
 from scrapers.stores.file import DownloadableFile as FileSource
 from util.polish import PkwFormat
@@ -58,6 +59,10 @@ class InputSource:
     year: int
     name_format: PkwFormat
     election_type: ElectionType
+    #: Columns this file means something else by than `CSV_HEADERS` says,
+    #: laid over it for this file alone. Plain columns only: nothing here is
+    #: given the TERYT index, so a `from_teryt` field would have none.
+    headers: dict[str, SetField] = field(default_factory=dict)
 
     def __str__(self) -> str:
         return f"{self.year} {self.election_type}"
@@ -237,6 +242,11 @@ sources.extend(
             2019,
             PkwFormat.UNKNOWN,
             ElectionType.EUROPARLAMENT,
+            # The committee's name; "Typ" beside it says what kind it is. The
+            # 2014 council workbook calls its place "Nazwa" and its committee
+            # "Komitet", so the shared table cannot read the column either way,
+            # and every 2019 European candidacy went out without a committee.
+            headers={"Nazwa": SetField("party")},
         ),
         InputSource(
             FileSource(

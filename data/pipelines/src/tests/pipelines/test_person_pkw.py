@@ -31,14 +31,12 @@ def test_check_no_nulls(column, df):
     # TODO resolve them
     known_failures = {
         ("1994", "samorząd", "party"),
-        ("2019", "europarlament", "party"),
         ("1993", "senat", "teryt_candidacy"),
         ("1997", "sejm", "teryt_candidacy"),
         ("1997", "senat", "teryt_candidacy"),
         ("2001", "sejm", "teryt_candidacy"),
         ("2001", "senat", "teryt_candidacy"),
         ("2005", "senat", "teryt_candidacy"),
-        ("2009", "europarlament", "teryt_candidacy"),
         ("2010", "samorząd", "sex"),
         ("2001", "sejm", "birth_year"),
         ("2001", "senat", "birth_year"),
@@ -94,3 +92,48 @@ def test_check_no_whitespaces(column, df):
         if not isinstance(value, str):
             value = str(value)
         assert value.strip() == value, f"whitespaces in {row}"
+
+
+#: The województwo of each European district's seat - see `european_districts`.
+EUROPEAN_SEATS = {
+    "02",
+    "04",
+    "06",
+    "08",
+    "10",
+    "12",
+    "14",
+    "18",
+    "22",
+    "24",
+    "28",
+    "30",
+}
+
+
+def test_every_european_candidacy_is_placed_in_its_district(df):
+    """`test_check_no_nulls` lets an empty code through, and an empty code is
+    what the 2014 and 2024 lists carried until 2026-10 (2009's was null): the
+    ingest dropped every one of those candidacies for want of a place."""
+    european = df[df["election_type"] == "europarlamentu"]
+
+    assert set(european["election_year"].astype(str)) == {
+        "2004",
+        "2009",
+        "2014",
+        "2019",
+        "2024",
+    }
+    unplaced = european[~european["teryt_candidacy"].isin(EUROPEAN_SEATS)]
+    assert unplaced.empty, unplaced[["election_year", "pkw_name", "teryt_candidacy"]]
+
+
+def test_a_european_home_is_not_read_as_the_district(df):
+    """The 2019 and 2024 lists say where each candidate lives, and that is where
+    the 2019 runs were filed before the district was read."""
+    european = df[
+        (df["election_type"] == "europarlamentu")
+        & df["election_year"].astype(str).isin(["2019", "2024"])
+    ]
+
+    assert european["teryt_living"].str.fullmatch(r"\d{6}").all()
