@@ -115,6 +115,14 @@ def test_a_candidacy_with_no_recorded_residence_still_has_its_region(ctx):
 SOKOLKA = "2010"
 POWIAT_KLOBUCKI = "2404"
 WOJ_SLASKIE = "24"
+# Anna Paluch's okręg 14 and the Koprzywnica namesake's okręg 33: PKW files a
+# Sejm candidacy under the województwo, małopolskie and świętokrzyskie.
+MALOPOLSKIE = "12"
+SWIETOKRZYSKIE = "26"
+POWIAT_LIMANOWSKI = "1207"
+# Andrzej Jankowski's two 2010 candidacies, both in wielkopolskie.
+POWIAT_OSTROWSKI = "3017"
+LESZNO = "3063"
 
 
 def candidacies(*rows: dict) -> pd.DataFrame:
@@ -135,12 +143,42 @@ def candidacies(*rows: dict) -> pd.DataFrame:
     return pd.DataFrame([base | row for row in rows])
 
 
-def test_standing_in_two_powiats_in_one_election_drops_both(ctx):
+def paluch(*rows: dict) -> pd.DataFrame:
+    """Undated national runs of one name, as every Sejm list since 2001 is."""
+    return candidacies(
+        *(
+            {
+                "first_name": "Anna",
+                "last_name": "Paluch",
+                "middle_name": None,
+                "pkw_name": "Anna PALUCH",
+                "birth_year": None,
+                "election_type": "sejmu",
+            }
+            | row
+            for row in rows
+        )
+    )
+
+
+def records(merged: pd.DataFrame) -> list[list[str]]:
+    """Each record's candidacies as "year type place", records in a fixed order."""
+    return sorted(
+        sorted(
+            f"{e['election_year']} {e['election_type']} {candidacy_teryt(e) or '-'}"
+            for e in elections
+        )
+        for elections in merged["elections"]
+    )
+
+
+def test_standing_in_two_powiats_in_one_election_splits_the_record(ctx):
     """Two people, one record, and no way to tell which is the KRS person.
 
     Tomasz Wojciech Krasowski stands in Warszawa and in powiat sokólski in the
     same election, four elections running. One of the two careers belongs to
-    somebody else and nothing here can say which.
+    somebody else and nothing here can say which, so each is a record of its
+    own rather than neither being anybody's.
     """
     merged = people_pkw_merged(
         ctx,
@@ -150,12 +188,15 @@ def test_standing_in_two_powiats_in_one_election_drops_both(ctx):
         ),
     )
 
-    assert list(merged.iloc[0]["elections"]) == []
-    assert bool(merged.iloc[0]["elections_ambiguous"])
+    assert records(merged) == [
+        [f"2024 samorządu {WARSZAWA}"],
+        [f"2024 samorządu {SOKOLKA}"],
+    ]
+    assert merged["elections_ambiguous"].all()
 
 
-def test_the_rest_of_the_record_survives(ctx):
-    """Dropping the match outright would cost four points of overall_score."""
+def test_each_part_keeps_the_name_and_the_birth_year(ctx):
+    """So it fits the people the whole record did, and attaches the same way."""
     merged = people_pkw_merged(
         ctx,
         candidacies(
@@ -164,8 +205,121 @@ def test_the_rest_of_the_record_survives(ctx):
         ),
     )
 
-    assert list(merged.iloc[0]["full_name"]) == ["Tomasz Wojciech Krasowski"]
-    assert merged.iloc[0]["birth_year"] == 1970
+    assert [list(names) for names in merged["full_name"]] == [
+        ["Tomasz Wojciech Krasowski"],
+        ["Tomasz Wojciech Krasowski"],
+    ]
+    assert list(merged["birth_year"]) == [1970, 1970]
+    assert list(merged["second_name"]) == ["wojciech", "wojciech"]
+
+
+def test_a_namesakes_run_no_longer_takes_a_career_with_it(ctx):
+    """Anna Paluch's Sejm wins in okręg 14 against a 2023 run in okręg 33.
+
+    The two 2023 runs are two places in one election, which used to empty the
+    whole undated record. Split by województwo, her career in małopolskie -
+    the gmina council in powiat limanowski as well as the Sejm - is one record,
+    and the namesake's run another.
+    """
+    merged = people_pkw_merged(
+        ctx,
+        paluch(
+            {"teryt_candidacy": MALOPOLSKIE, "election_year": 2005},
+            {"teryt_candidacy": MALOPOLSKIE, "election_year": 2019},
+            {"teryt_candidacy": MALOPOLSKIE, "election_year": 2023},
+            {"teryt_candidacy": SWIETOKRZYSKIE, "election_year": 2023},
+            {
+                "teryt_candidacy": f"{POWIAT_LIMANOWSKI}01",
+                "election_year": 1998,
+                "election_type": "samorządu",
+            },
+        ),
+    )
+
+    assert records(merged) == [
+        [
+            f"1998 samorządu {POWIAT_LIMANOWSKI}",
+            f"2005 sejmu {MALOPOLSKIE}",
+            f"2019 sejmu {MALOPOLSKIE}",
+            f"2023 sejmu {MALOPOLSKIE}",
+        ],
+        [f"2023 sejmu {SWIETOKRZYSKIE}"],
+    ]
+
+
+def test_a_run_with_no_place_is_a_record_of_its_own(ctx):
+    """The European lists of 2009, 2014 and 2024 carry no teryt.
+
+    The run contradicts neither part and nothing says which it goes with.
+    Copied into both it would be two candidacies for reviewers to judge.
+    """
+    merged = people_pkw_merged(
+        ctx,
+        paluch(
+            {"teryt_candidacy": MALOPOLSKIE, "election_year": 2023},
+            {"teryt_candidacy": SWIETOKRZYSKIE, "election_year": 2023},
+            {
+                "teryt_candidacy": "",
+                "election_year": 2014,
+                "election_type": "europarlamentu",
+            },
+        ),
+    )
+
+    assert records(merged) == [
+        ["2014 europarlamentu -"],
+        [f"2023 sejmu {MALOPOLSKIE}"],
+        [f"2023 sejmu {SWIETOKRZYSKIE}"],
+    ]
+
+
+def test_two_powiats_of_one_wojewodztwo_split_by_powiat(ctx):
+    """Andrzej Jankowski in Ostrów Wielkopolski and in Leszno in 2010.
+
+    One record for wielkopolskie would still stand in two places, so the
+    województwo is split by powiat, and the sejmik run, which is in both,
+    goes in a record of its own. A run in another województwo is left whole.
+    """
+    merged = people_pkw_merged(
+        ctx,
+        candidacies(
+            {"teryt_candidacy": f"{POWIAT_OSTROWSKI}01", "election_year": 2010},
+            {"teryt_candidacy": f"{LESZNO}01", "election_year": 2010},
+            {"teryt_candidacy": f"{POWIAT_OSTROWSKI}01", "election_year": 2018},
+            {"teryt_candidacy": "300000", "election_year": 2014},
+            {"teryt_candidacy": f"{WARSZAWA}01", "election_year": 2018},
+        ),
+    )
+
+    assert records(merged) == [
+        [f"2010 samorządu {POWIAT_OSTROWSKI}", f"2018 samorządu {POWIAT_OSTROWSKI}"],
+        [f"2010 samorządu {LESZNO}"],
+        # The sejmik's own code at powiat depth, as `candidacy_teryt` reads it.
+        ["2014 samorządu 3000"],
+        [f"2018 samorządu {WARSZAWA}"],
+    ]
+
+
+def test_a_part_lists_only_where_its_own_candidacies_were(ctx):
+    """`people.py` counts a surname in the record's first województwo."""
+    merged = people_pkw_merged(
+        ctx,
+        candidacies(
+            {"teryt_candidacy": f"{WARSZAWA}01"},
+            {"teryt_candidacy": f"{SOKOLKA}01", "teryt_living": f"{SOKOLKA}02"},
+        ),
+    )
+
+    by_place = {
+        candidacy_teryt(elections[0]): (list(woj), list(powiat))
+        for elections, woj, powiat in zip(
+            merged["elections"], merged["teryt_wojewodztwo"], merged["teryt_powiat"]
+        )
+    }
+    assert by_place == {
+        WARSZAWA: (["14"], [WARSZAWA]),
+        SOKOLKA: (["20"], [SOKOLKA]),
+    }
 
 
 def test_standing_in_two_powiats_in_different_years_is_ordinary(ctx):
