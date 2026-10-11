@@ -11,9 +11,10 @@ direct first, and a company carries the first one that fits:
 - **a gmina, a powiat or a województwo** - `JstIndex.resolve`, the resolver
   `CompaniesKRS` uses, so a name it can place here it places there too.
 - **a public body outside KRS** - a union of gminas, the metropolis, a state
-  agency, fund or forest. They own companies under their own names and have no
-  KRS number for the parent test below to follow, so they are named, in
-  `public_bodies`, the closed list `CompaniesKRS` reads too.
+  agency, fund or forest, or a state research institute. They own companies
+  under their own names and have no KRS number for the parent test below to
+  follow, so they are named, in `public_bodies`, the list `CompaniesKRS` reads
+  too.
 - **a company already known to be public**, by its KRS number: anything
   `CompaniesKRS` marks public, and anything this finds, followed to a fixed
   point, so a subsidiary of a subsidiary of a gmina's holding company arrives
