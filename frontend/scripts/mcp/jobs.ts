@@ -133,6 +133,9 @@ function stateText(run: JobRun, definition: JobDefinition, now: Date) {
   if (run.state === "partial" && definition.partialIsHeld) {
     return `partial${trigger}, held steps back`;
   }
+  if (run.state === "queued" && run.waitingFor) {
+    return `queued${trigger}, waiting for ${run.waitingFor === "export" ? "today's export" : "the night to end"}`;
+  }
   return `${run.state}${trigger}`;
 }
 

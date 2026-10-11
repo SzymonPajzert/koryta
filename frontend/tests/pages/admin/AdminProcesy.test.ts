@@ -922,6 +922,35 @@ describe("/admin/procesy#przebieg-<id>", () => {
     expect(listed.text()).toContain("zlecone ze strony");
   });
 
+  it("says a run asked for before the morning export waits for it", async () => {
+    // 01:00 in Warsaw: asked for at 00:31, and at 00:40 the worker said the
+    // run waits for the export and switched the machine off.
+    vi.setSystemTime(new Date("2026-10-01T23:00:00.000Z"));
+    answer({
+      ...asked(),
+      startedAt: "2026-10-01T22:31:00.000Z",
+      heartbeatAt: "2026-10-01T22:40:00.000Z",
+      waitingFor: "export",
+      dispatch: {
+        mode: "vm",
+        at: "2026-10-01T22:31:01.000Z",
+        ok: true,
+        error: null,
+      },
+    });
+    const page = await mountAt("#przebieg-r-asked");
+
+    const card = page.get("[data-focus-run]");
+    expect(card.get("[data-focus-chip]").text()).toBe("czeka na kopię bazy");
+    expect(card.get("[data-focus-status]").text()).toBe(
+      "Czeka na dzisiejszą kopię bazy - w kolejce od 29 min.",
+    );
+    const dispatch = card.get("[data-focus-dispatch]").text();
+    expect(dispatch).toContain("wraca o 04:15");
+    expect(dispatch).not.toContain("Maszynę uruchomiono");
+    expect(card.find("[data-focus-redispatch]").exists()).toBe(false);
+  });
+
   it("follows the run until it ends, and then stops asking", async () => {
     let current = asked();
     mockAuthRequest.mockImplementation(async (url: string) =>

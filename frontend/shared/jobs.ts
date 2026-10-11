@@ -132,7 +132,25 @@ export interface JobRun {
   request?: RunRequest | null;
   /** A run asked for on a page: what came of starting the machine for it. */
   dispatch?: RunDispatch | null;
+  /** A queued run the worker has seen and cannot start yet: what it waits
+   * for. Only ever on a queued run. */
+  waitingFor?: RunWaiting | null;
 }
+
+/** What a queued run waits for, as the worker writes it on the run
+ * (`mark_waiting` in data/pipelines/src/stores/job_requests.py):
+ * - `export`: the day's 04:00 export, which the job compares the page's
+ *   people with and refuses when it is older. The worker switches the VM off
+ *   meanwhile, and the schedule's boot for the night brings it back.
+ * - `night`: the night, which holds the machine's lock. */
+export const RUN_WAITING = ["export", "night"] as const;
+export type RunWaiting = (typeof RUN_WAITING)[number];
+
+/** What a queued run waits for, as the page says it after "Czeka". */
+export const RUN_WAITING_TEXT: Record<RunWaiting, string> = {
+  export: "na dzisiejszą kopię bazy",
+  night: "na koniec nocy na maszynie",
+};
 
 /** What somebody asked for, on the page of a company or a person. */
 export interface RunRequest {
@@ -231,6 +249,7 @@ const runDataSchema = z.object({
     })
     .nullish()
     .catch(null),
+  waitingFor: z.enum(RUN_WAITING).nullish().catch(null),
 });
 
 /** A reported run as the page uses it, from a document's data with its times
@@ -292,6 +311,11 @@ export function jobRunFromData(id: string, data: unknown): JobRun | null {
       : {}),
     ...(run.dispatch
       ? { dispatch: { ...run.dispatch, error: run.dispatch.error ?? null } }
+      : {}),
+    // Said of a queued run only: a job that takes one on by hand, without a
+    // claim, leaves it on the document.
+    ...(run.waitingFor && run.state === "queued"
+      ? { waitingFor: run.waitingFor }
       : {}),
   };
 }
@@ -443,6 +467,7 @@ export const JOBS: readonly JobDefinition[] = [
     tasks: ["grant-site-starts-nightly-vm", "install-koryta-requests-worker"],
     notes: [
       "Porównuje paczki z porannym eksportem bazy: wysyła tylko to, co zmieniłoby stronę, i nie zgaduje po samym nazwisku, gdy dwie osoby się nie odróżniają.",
+      "Zlecenie sprzed porannego eksportu (północ-04:00) czeka na niego w kolejce: maszyna się wyłącza, a robi je po 04:15, gdy włącza się na noc.",
       "Maszyna wyłącza się sama 10 minut po ostatniej wysyłce - chyba że ktoś jest zalogowany albo zaraz zacznie się noc.",
     ],
   },
@@ -922,9 +947,25 @@ export function missedSlot(
     : due;
 }
 
+/** When a queued run was last heard from, as far as its allowance goes. One
+ * waiting for the day's export waits with the machine off - the worker does
+ * not keep it up until four - so its silence counts from the night's start,
+ * the schedule booting the machine for it at 04:15 with the export done;
+ * from then on the worker writes its heartbeat every five minutes. */
+function heardFrom(
+  run: Pick<JobRun, "state" | "heartbeatAt" | "waitingFor">,
+): number {
+  const said = Date.parse(run.heartbeatAt);
+  const night = JOBS.find((job) => job.id === "nightly")?.schedule;
+  if (run.state !== "queued" || run.waitingFor !== "export" || !night) {
+    return said;
+  }
+  return Math.max(said, nextSlot(night, new Date(said)).getTime());
+}
+
 /** Whether a run said to be going has gone quiet. */
 export function isStalled(
-  run: Pick<JobRun, "state" | "heartbeatAt">,
+  run: Pick<JobRun, "state" | "heartbeatAt" | "waitingFor">,
   definition: Pick<JobDefinition, "heartbeatMinutes" | "queuedMinutes">,
   now: Date,
 ): boolean {
@@ -933,7 +974,7 @@ export function isStalled(
     run.state === "queued"
       ? (definition.queuedMinutes ?? definition.heartbeatMinutes)
       : definition.heartbeatMinutes;
-  return now.getTime() - Date.parse(run.heartbeatAt) > limit * MINUTE;
+  return now.getTime() - heardFrom(run) > limit * MINUTE;
 }
 
 /** Whole days from `day` to the UTC day of `now`. */
@@ -1251,10 +1292,15 @@ export function jobHealth(
           status: "stalled",
           detail: `Brak sygnału od ${formatDuration(now.getTime() - Date.parse(latest.heartbeatAt))} (ostatni o ${shortWarsawTime(latest.heartbeatAt, now)}).`,
         }
-      : {
-          status: "running",
-          detail: `Trwa od ${shortWarsawTime(latest.startedAt, now)}${latest.phase ? ` - ${latest.phase}` : ""}.`,
-        };
+      : latest.state === "queued" && latest.waitingFor
+        ? {
+            status: "running",
+            detail: `Czeka ${RUN_WAITING_TEXT[latest.waitingFor]} (w kolejce od ${shortWarsawTime(latest.startedAt, now)}).`,
+          }
+        : {
+            status: "running",
+            detail: `Trwa od ${shortWarsawTime(latest.startedAt, now)}${latest.phase ? ` - ${latest.phase}` : ""}.`,
+          };
   } else if (latest.state === "failed") {
     health = { status: "failed", detail: stateDetail(latest, now) };
   } else if (latest.state === "partial" && definition.partialIsHeld) {

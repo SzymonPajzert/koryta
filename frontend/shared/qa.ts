@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zlecenie-czeka-na-kopie-bazy",
+    title: "Zlecenie sprzed 04:00 czeka na kopię bazy",
+    description:
+      "„Wyślij dane” kliknięte między północą a porannym eksportem kończyło się błędem „brak dzisiejszej kopii bazy”. Teraz czeka w kolejce - karta mówi „czeka na kopię bazy” - i rusza, gdy kopia jest gotowa, najpóźniej po 04:15, gdy maszyna włącza się na noc.",
+    steps: [
+      "Po północy kliknij na stronie spółki „Wyślij dane osób” i otwórz link do przebiegu - karta ma mieć „czeka na kopię bazy”, a rano przebieg ma być udany.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "wyszukiwarka-drugi-czlon-nazwiska",
     title: "Wyszukiwarka znajduje nazwisko dwuczłonowe po drugim członie",
     description:

@@ -330,6 +330,40 @@ describe("isStalled", () => {
       expect(stalled(state, "2026-09-01T00:00:00Z")).toBe(false);
     }
   });
+
+  describe("a request waiting for the morning export", () => {
+    // Last heard from at 00:40 on 3 October in Warsaw, when the worker
+    // switched the machine off; the night's boot is due before 04:30.
+    const waiting = {
+      state: "queued" as const,
+      heartbeatAt: "2026-10-02T22:40:00Z",
+      waitingFor: "export" as const,
+    };
+    const requests = { heartbeatMinutes: 45, queuedMinutes: 30 };
+    const quiet = (now: string, run: Parameters<typeof isStalled>[0]) =>
+      isStalled(run, requests, at(now));
+
+    it("is not stalled while the machine is off until the night", () => {
+      expect(quiet("2026-10-03T00:30:00Z", waiting)).toBe(false);
+      // 04:30 in Warsaw, and the allowance after it.
+      expect(quiet("2026-10-03T03:00:00Z", waiting)).toBe(false);
+      expect(quiet("2026-10-03T03:01:00Z", waiting)).toBe(true);
+    });
+
+    it("still waiting after the night, counts to the next one", () => {
+      // The export failed: last heard from at 07:05, after the night.
+      const said = { ...waiting, heartbeatAt: "2026-10-03T05:05:00Z" };
+      expect(quiet("2026-10-03T20:00:00Z", said)).toBe(false);
+      expect(quiet("2026-10-04T03:00:00Z", said)).toBe(false);
+      expect(quiet("2026-10-04T03:01:00Z", said)).toBe(true);
+    });
+
+    it("but waiting for the night, from its heartbeat alone", () => {
+      const night = { ...waiting, waitingFor: "night" as const };
+      expect(quiet("2026-10-02T23:10:00Z", night)).toBe(false);
+      expect(quiet("2026-10-02T23:11:00Z", night)).toBe(true);
+    });
+  });
 });
 
 describe("lagDays", () => {
@@ -590,6 +624,18 @@ describe("jobRunFromData: a run asked for on a page", () => {
         error: "403",
       },
     });
+  });
+
+  it("keeps what a queued run waits for, and only on a queued run", () => {
+    expect(
+      jobRunFromData("r1", { ...asked, waitingFor: "export" })?.waitingFor,
+    ).toBe("export");
+    expect(
+      jobRunFromData("r1", { ...asked, state: "running", waitingFor: "night" }),
+    ).not.toHaveProperty("waitingFor");
+    expect(
+      jobRunFromData("r1", { ...asked, waitingFor: "coffee" }),
+    ).not.toHaveProperty("waitingFor");
   });
 
   it("drops a request it cannot read rather than the run", () => {
@@ -887,6 +933,19 @@ describe("jobHealth", () => {
       expect(health(imports, [going])).toEqual({
         status: "running",
         detail: "Trwa od 11:50 - wysyłanie.",
+      });
+    });
+
+    it("says what a queued run waits for", () => {
+      const waiting = upload({
+        state: "queued",
+        startedAt: "2026-10-03T09:50:00.000Z",
+        heartbeatAt: "2026-10-03T09:58:00.000Z",
+        waitingFor: "night",
+      });
+      expect(health(imports, [waiting])).toEqual({
+        status: "running",
+        detail: "Czeka na koniec nocy na maszynie (w kolejce od 11:50).",
       });
     });
 
