@@ -10,3 +10,8 @@ functions/lib
 
 .firebase
 .agent
+# Blog posts are MDC, not plain markdown: prettier reads the YAML block inside
+# `::chart` / `::stats` as a list and a horizontal rule, and rewrites it into
+# something MDC parses differently - a chart's `unit` ended up inside its
+# series. tests/content/blogPosts.test.ts checks these files instead.
+content/blog
