@@ -4,6 +4,7 @@ from util.polish import (
     PkwFormat,
     adds_middle_names,
     format_person_name,
+    learns_name,
     names_agree,
     parse_name,
     spaced_surname,
@@ -201,3 +202,40 @@ def test_names_agree(one, other, expected):
 )
 def test_spaced_surname(name, expected):
     assert spaced_surname(name) == expected
+
+
+# The same table as `learnsName` in frontend/tests/shared/names.test.ts: the
+# ingest renames a page by that rule, and `--only-changed` predicts it by this.
+@pytest.mark.parametrize(
+    ("name", "stored", "expected"),
+    [
+        # A middle name, as before.
+        ("Antoni Ignacy Sikoń", "Antoni Sikoń", True),
+        # The hyphen the register cannot write, the reason this exists.
+        ("Anna Nowak-Rudnik", "Anna Nowak Rudnik", True),
+        ("Władysław Kosiniak-Kamysz", "Władysław Kosiniak Kamysz", True),
+        ("Jan Nowak-Kowalski-Rudnik", "Jan Nowak Kowalski Rudnik", True),
+        # Both at once: the page would otherwise stop learning the middle name.
+        ("Anna Maria Nowak-Rudnik", "Anna Nowak Rudnik", True),
+        # A word written in before the surname is taken as before ("Anna Nowak
+        # Kowalska" over "Anna Kowalska"), so with the hyphen too.
+        ("Anna Nowak-Kowalska", "Anna Kowalska", True),
+        ("Anna Maria Nowak-Rudnik", "Anna Nowak-Rudnik", True),
+        # A hyphen the page has is never spaced again.
+        ("Anna Nowak Rudnik", "Anna Nowak-Rudnik", False),
+        # Nor is a hyphen cover for another word, another case or another
+        # first name.
+        ("Anna Nowak-Rudnicka", "Anna Nowak Rudnik", False),
+        ("Anna NOWAK-Rudnik", "Anna Nowak Rudnik", False),
+        ("Anna Nowak-Rudnik", "Anna Nowak Rudnik Kowalska", False),
+        ("Anna Rudnik-Nowak", "Anna Nowak Rudnik", False),
+        ("Nowak-Rudnik", "Nowak Rudnik", False),
+        ("Anna-Maria Nowak", "Anna Maria Nowak", False),
+        # Nothing to learn.
+        ("Anna Nowak-Rudnik", "Anna Nowak-Rudnik", False),
+        ("Anna Nowak Rudnik", "Anna Nowak Rudnik", False),
+        ("Anna Nowak-Rudnik", "", False),
+    ],
+)
+def test_learns_name(name, stored, expected):
+    assert learns_name(name, stored) is expected

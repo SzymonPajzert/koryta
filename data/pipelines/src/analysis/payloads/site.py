@@ -31,7 +31,7 @@ from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.pkw.elections import party_sort_key
 from scrapers.stores import Context
 from util.polish import (
-    adds_middle_names,
+    learns_name,
     names_agree,
     normalize_person_name,
     spaced_surname,
@@ -726,15 +726,16 @@ class SiteSnapshot:
             learned["birthDate"] = birth_date
 
         # Written into, never rewritten, which is the birth date's rule again:
-        # a name that only adds middle names to the stored one is learned, and
-        # any other difference writes nothing - so it must not keep the payload
-        # either, or every page whose spelling a reviewer settled would be sent
-        # every night.
+        # a name that only adds middle names to the stored one, or the hyphen
+        # of a double surname the page writes with a space, is learned
+        # (`learns_name`), and any other difference writes nothing - so it
+        # must not keep the payload either, or every page whose spelling a
+        # reviewer settled would be sent every night.
         name, stored_name = payload.get("name"), data.get("name")
         if (
             isinstance(name, str)
             and isinstance(stored_name, str)
-            and adds_middle_names(name, stored_name)
+            and learns_name(name, stored_name)
         ):
             learned["name"] = name
 

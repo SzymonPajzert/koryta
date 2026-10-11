@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   addsMiddleNames,
+  learnsName,
   namesAgree,
   normalizePersonName,
   personNameKeys,
@@ -119,6 +120,42 @@ describe("spacedSurname", () => {
     ["", ""],
   ])("%s is %s", (name, expected) => {
     expect(spacedSurname(name)).toBe(expected);
+  });
+});
+
+// The same table as `test_learns_name` in data/pipelines/src/tests/test_polish.py:
+// `updatedPerson` renames a page by this rule and `--only-changed` predicts the
+// rename by that one.
+describe("learnsName", () => {
+  it.each([
+    // A middle name, as before.
+    ["Antoni Ignacy Sikoń", "Antoni Sikoń", true],
+    // The hyphen the register cannot write, the reason this exists.
+    ["Anna Nowak-Rudnik", "Anna Nowak Rudnik", true],
+    ["Władysław Kosiniak-Kamysz", "Władysław Kosiniak Kamysz", true],
+    ["Jan Nowak-Kowalski-Rudnik", "Jan Nowak Kowalski Rudnik", true],
+    // Both at once: the page would otherwise stop learning the middle name.
+    ["Anna Maria Nowak-Rudnik", "Anna Nowak Rudnik", true],
+    // A word written in before the surname is taken as before ("Anna Nowak
+    // Kowalska" over "Anna Kowalska"), so with the hyphen too.
+    ["Anna Nowak-Kowalska", "Anna Kowalska", true],
+    ["Anna Maria Nowak-Rudnik", "Anna Nowak-Rudnik", true],
+    // A hyphen the page has is never spaced again.
+    ["Anna Nowak Rudnik", "Anna Nowak-Rudnik", false],
+    // Nor is a hyphen cover for another word, another case or another first
+    // name.
+    ["Anna Nowak-Rudnicka", "Anna Nowak Rudnik", false],
+    ["Anna NOWAK-Rudnik", "Anna Nowak Rudnik", false],
+    ["Anna Nowak-Rudnik", "Anna Nowak Rudnik Kowalska", false],
+    ["Anna Rudnik-Nowak", "Anna Nowak Rudnik", false],
+    ["Nowak-Rudnik", "Nowak Rudnik", false],
+    ["Anna-Maria Nowak", "Anna Maria Nowak", false],
+    // Nothing to learn.
+    ["Anna Nowak-Rudnik", "Anna Nowak-Rudnik", false],
+    ["Anna Nowak Rudnik", "Anna Nowak Rudnik", false],
+    ["Anna Nowak-Rudnik", "", false],
+  ])("%s over %s: %s", (name, stored, expected) => {
+    expect(learnsName(name, stored)).toBe(expected);
   });
 });
 

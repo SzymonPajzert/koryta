@@ -159,6 +159,17 @@ def test_a_middle_name_the_page_left_out_is_kept():
 
 
 @pytest.mark.parametrize(
+    "sent", ["Anna Nowak-Rudnik", "Anna Maria Nowak-Rudnik", "Anna Maria Nowak Rudnik"]
+)
+def test_the_hyphen_of_a_double_surname_the_page_spaces_is_kept(sent):
+    """`updatedPerson` writes in the hyphen PKW or Wikipedia gives, as it does
+    a middle name, and the two together."""
+    snapshot = SiteSnapshot(nodes(person={"name": "Anna Nowak Rudnik"}), edges())
+
+    assert snapshot.changes(payload(name=sent)) == [PERSON_FIELDS]
+
+
+@pytest.mark.parametrize(
     ("stored", "sent"),
     [
         # The page has more than the payload; a name is never shortened.
@@ -167,6 +178,11 @@ def test_a_middle_name_the_page_left_out_is_kept():
         # page's - and which would otherwise keep the payload every night.
         ("Anna Kowalska", "Anna Maria Nowak"),
         ("Kamil Barczyk", "KAMIL SEBASTIAN BARCZYK"),
+        # A hyphen the page has is never spaced again, and a hyphen is never
+        # cover for another word or another case.
+        ("Anna Nowak-Rudnik", "Anna Nowak Rudnik"),
+        ("Anna Nowak Rudnik", "Anna Nowak-Rudnicka"),
+        ("Anna Nowak Rudnik", "Anna NOWAK-Rudnik"),
     ],
 )
 def test_a_name_the_ingest_would_not_take_is_dropped(stored, sent):

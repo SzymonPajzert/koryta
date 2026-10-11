@@ -96,8 +96,9 @@ export function addsMiddleNames(full: string, short: string): boolean {
  * odpis print them with a space between, so 430 pages of 2026-10-11 were
  * titled "Nowak Rudnik"; PKW and Wikipedia write the hyphen, and the pipeline
  * takes it from them. This is how a page titled the register's way is still
- * found under the hyphenated name. The surname is the last word, after a
- * first name: a hyphen anywhere else - "Jan-Paweł" - is not one.
+ * found under the hyphenated name, and renamed to it (`learnsName`). The
+ * surname is the last word, after a first name: a hyphen anywhere else -
+ * "Jan-Paweł" - is not one.
  *
  * `spaced_surname` in `data/pipelines/src/util/polish.py` is the same rule.
  */
@@ -106,6 +107,33 @@ export function spacedSurname(name: string): string {
   const surname = words.at(-1) ?? "";
   if (words.length < 2 || !/^[^-]+(-[^-]+)+$/.test(surname)) return name;
   return [...words.slice(0, -1), ...surname.split("-")].join(" ");
+}
+
+/** Whether an upload naming `name` renames a page titled `stored`.
+ *
+ * Only to write something into the stored name, never to rewrite it, since
+ * the stored spelling may be a reviewer's: given names after the first
+ * (`addsMiddleNames`), and the hyphen of a double surname the page writes
+ * with a space (`spacedSurname`) - "Anna Nowak Rudnik" becomes "Anna
+ * Nowak-Rudnik". Szymon, 2026-10-11: a title carries the hyphen PKW or
+ * Wikipedia gives, and the register cannot write one.
+ *
+ * The two at once as well, "Anna Maria Nowak-Rudnik" over "Anna Nowak
+ * Rudnik": each is a change taken on its own, and refused together the page
+ * would no longer learn the middle name it takes from a payload without the
+ * hyphen - 8 pages of 2026-10-11. Every word as written otherwise, case
+ * included, and nothing a page hyphenates is ever spaced again.
+ *
+ * `learns_name` in `data/pipelines/src/util/polish.py` is the same rule:
+ * `updatedPerson` renames by this one, and `--only-changed` predicts the
+ * rename by that one.
+ */
+export function learnsName(name: string, stored: string): boolean {
+  if (addsMiddleNames(name, stored)) return true;
+  const spaced = spacedSurname(name);
+  if (spaced === name) return false;
+  const storedWords = stored.split(/\s+/).filter(Boolean).join(" ");
+  return spaced === storedWords || addsMiddleNames(spaced, stored);
 }
 
 /** The keys a fact's spelling of a person may meet their page's name under.

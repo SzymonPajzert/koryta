@@ -1279,11 +1279,42 @@ describe("api/ingest/person", () => {
     });
 
     it.each([
+      // The register writes a double surname with a space and PKW and
+      // Wikipedia with the hyphen, which the pipeline takes from them.
+      ["Władysław Kosiniak Kamysz", "Władysław Kosiniak-Kamysz"],
+      // And a middle name with it, which the page would have taken alone.
+      ["Anna Nowak Rudnik", "Anna Maria Nowak-Rudnik"],
+    ])("writes the hyphen into %s: %s", async (stored, sent) => {
+      personExists({ name: stored, type: "person", parties: [] }, true);
+      mockReadBody.mockResolvedValue({
+        name: sent,
+        companies: [],
+        elections: [],
+      });
+
+      await handler({} as any);
+
+      expect(createRevisionTransaction).toHaveBeenCalledWith(
+        mockDb,
+        expect.anything(),
+        expect.objectContaining({ uid: "test-user-id" }),
+        expect.anything(),
+        expect.objectContaining({ name: sent }),
+        // Approved with the page, as any update to a live one is.
+        expect.objectContaining({ automatic: true, approve: true }),
+      );
+    });
+
+    it.each([
       // The page has more than the payload: a name is never shortened.
       ["Antoni Ignacy Sikoń", "Antoni Sikoń"],
       // Another spelling, which may be a reviewer's.
       ["Anna Kowalska", "Anna Maria Nowak"],
       ["Kamil Barczyk", "KAMIL SEBASTIAN BARCZYK"],
+      // A hyphen the page has is never spaced again, and a hyphen is not
+      // cover for another word.
+      ["Anna Nowak-Rudnik", "Anna Nowak Rudnik"],
+      ["Anna Nowak Rudnik", "Anna Nowak-Rudnicka"],
     ])("leaves %s alone when the payload says %s", async (stored, sent) => {
       personExists({ name: stored, type: "person", parties: [] });
       mockReadBody.mockResolvedValue({
