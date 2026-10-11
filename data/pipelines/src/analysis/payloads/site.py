@@ -140,7 +140,7 @@ UNKNOWN_SEMANTICS = EdgeSemantics(
 ENRICH_FLOOR: dict[str, tuple[str, ...]] = {"election": ("start_date",)}
 
 #: Candidacies the ingest silently skips for want of a region, rather than
-#: failing on. Mirrors `allowedFailingElections` in `person.post.ts`; a payload
+#: failing on. Mirrors `expectedMissingRegion` in `person.post.ts`; a payload
 #: whose only news is one of these is still news to nobody.
 ALLOWED_MISSING_REGION: tuple[tuple[str, str | None], ...] = (
     ("Samorząd", "1994"),
@@ -154,7 +154,6 @@ ALLOWED_MISSING_REGION: tuple[tuple[str, str | None], ...] = (
     ("Senat", "1997"),
     ("Senat", "2001"),
     ("Senat", "2005"),
-    ("Parlament Europejski", None),
 )
 
 #: Why a payload is worth sending. Counted per run so a report says what the
@@ -166,6 +165,7 @@ NEW_EMPLOYMENT = "employment not stored"
 ENDED_EMPLOYMENT = "stored employment learns its end"
 NEW_CANDIDACY = "candidacy not stored"
 ENRICHED_CANDIDACY = "stored candidacy learns a field"
+MOVED_CANDIDACY = "stored candidacy moves to the district it was stood in"
 MISSING_ARTICLE = "article not on koryta.pl"
 NEW_MENTION = "mention not stored"
 UNRESOLVED_REGION = "candidacy the ingest cannot place"
@@ -444,6 +444,8 @@ class SiteSnapshot:
         #: needs somewhere to point an employment at.
         self.company_nodes: dict[str, dict] = {}
         self.regions: dict[str, str] = {}
+        #: The same regions the other way round: the code of each by node id.
+        self.region_teryts: dict[str, str] = {}
         #: Every node id, for the one lookup that goes by id rather than by a
         #: field: `findRegionByTeryt` tries the document `teryt<code>` before it
         #: queries anything.
@@ -479,14 +481,20 @@ class SiteSnapshot:
                 self.company_nodes.setdefault(str(node["krsNumber"]), node)
             elif node_type == "region" and "teryt" in node:
                 self.regions.setdefault(str(node["teryt"]), node_id)
+                self.region_teryts[node_id] = str(node["teryt"])
             elif node_type == "article" and "sourceURL" in node:
                 self.articles.setdefault(str(node["sourceURL"]), node_id)
 
         self.edges: dict[tuple, list[dict]] = {}
+        #: Each person's candidacies wherever they were filed, for the one
+        #: lookup that is not by pair: `_misfiled_european`.
+        self.candidacies: dict[str, list[dict]] = defaultdict(list)
         for edge in _records(edges):
             pair = (edge.get("source"), edge.get("target"), edge.get("type"))
             self.edges.setdefault(pair, []).append(edge)
-        for siblings in self.edges.values():
+            if edge.get("type") == "election":
+                self.candidacies[str(edge.get("source"))].append(edge)
+        for siblings in [*self.edges.values(), *self.candidacies.values()]:
             # The ingest sorts its candidates by document id, so that which of
             # several indistinguishable candidacies gets matched is arbitrary
             # but not arbitrary differently twice. Same reason here.
@@ -1053,6 +1061,9 @@ class SiteSnapshot:
             if election.get("election_year"):
                 edge["start_date"] = f"{election['election_year']}-01-01"
 
+            if self._misfiled_european(matcher, edge):
+                reasons.append((MOVED_CANDIDACY, held))
+                continue
             match matcher.place(edge):
                 case "same":
                     pass
@@ -1061,6 +1072,38 @@ class SiteSnapshot:
                 case _:
                     reasons.append((NEW_CANDIDACY, held))
         return reasons
+
+    def _misfiled_european(self, matcher: "_EdgeMatcher", edge: Edge) -> bool:
+        """`moveMisfiledEuropeanCandidacy`: whether the ingest moves a stored
+        European candidacy to this one's district rather than placing this one.
+
+        A European district is whole województwa, so one stored under a powiat
+        or a gmina is the candidate's home, read as the place by older runs.
+        The ingest moves the first live one of the same year that nothing
+        contradicts, unless that year is already filed in the district.
+        """
+        if edge.get("position") != "Parlament Europejski" or not edge.get("start_date"):
+            return False
+        same_run = [
+            stored
+            for stored in self.candidacies.get(str(edge["source"]), [])
+            if stored.get("position") == edge["position"]
+            and field(stored, "start_date") == field(edge, "start_date")
+        ]
+        if any(stored.get("target") == edge["target"] for stored in same_run):
+            return False
+        for stored in same_run:
+            edge_id = str(stored.get("id"))
+            if stored.get("deleted") == 1 or edge_id in matcher.claimed:
+                continue
+            if edge_relation(stored, edge) == "conflict":
+                continue
+            teryt = self.region_teryts.get(str(stored.get("target")))
+            if teryt is None or len(teryt) <= 2:
+                continue
+            matcher.claimed[edge_id] = edge_identity(edge)
+            return True
+        return False
 
     def _region_of(self, election: typing.Mapping[str, typing.Any]):
         """The region node a candidacy hangs off, or why there is none.
