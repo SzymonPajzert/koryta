@@ -1,14 +1,16 @@
 """The public owners that are neither a government nor a company with a KRS number.
 
-Unions of gminas, the metropolis, and state agencies, funds and banks own
-companies under their own names. `JstIndex` places only gminas, powiaty,
-województwa and the Treasury, and the parent test follows only KRS numbers, so
-nothing else in the register says these owners are public. They are named
-here, for both readers of an owner's name: `CompaniesKRS`, which decides what
-the site marks public, and the register door, `public_owners`.
+Unions of gminas, the metropolis, state agencies, funds and banks, and state
+research institutes own companies under their own names. `JstIndex` places
+only gminas, powiaty, województwa and the Treasury, and the parent test follows
+only KRS numbers, so nothing else in the register says these owners are public.
+They are named here, for both readers of an owner's name: `CompaniesKRS`, which
+decides what the site marks public, and the register door, `public_owners`.
 
 Deliberately a closed list: a prefix like "AGENCJA" or "INSTYTUT" is as often
-an advertising agency as a state one.
+an advertising agency as a state one. The one opening in it is
+`PUBLIC_BODY_DESIGNATIONS`, two designations only a state research institute
+or one of the academy's may carry, read anywhere in a name.
 """
 
 from scrapers.map.jst import normalise
