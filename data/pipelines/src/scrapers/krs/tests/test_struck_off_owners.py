@@ -298,6 +298,19 @@ def test_the_treasury_is_recorded_as_the_owner():
     assert pipeline.companies[PZG].parents == [Owner(krs=None, teryt=SKARB_PANSTWA)]
 
 
+def test_the_minister_of_the_treasury_is_the_treasury():
+    # ZAKŁADY SIECI RYBACKICH: the minister its sole shareholder from entry 1
+    # until entry 29 struck the company off on 2016-11-30.
+    zsr = "0000036687"
+    pipeline = run(
+        struck_off(zsr, "2015-12-16"),
+        owner_seat(zsr, "MINISTER SKARBU PAŃSTWA W WARSZAWIE", "29", "2016-11-30"),
+    )
+
+    assert public_of(pipeline) == {zsr}
+    assert pipeline.companies[zsr].parents == [Owner(krs=None, teryt=SKARB_PANSTWA)]
+
+
 def test_a_state_agency_makes_it_public_with_nothing_to_draw_an_edge_to():
     # TDM "ARRTRANS": KOWR's from 2023 to its strike-off in 2025.
     pipeline = run(
