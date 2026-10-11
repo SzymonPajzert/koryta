@@ -2271,6 +2271,12 @@ describe("api/ingest/person, one register entry is one human", () => {
         parties: ["SLD"],
         published: true,
       };
+      nodes.company = {
+        type: "place",
+        name: "Spółka",
+        krsNumber: "0000012345",
+        published: true,
+      };
     });
 
     /** The data of the revision written to the person, if one was. */
@@ -2279,67 +2285,91 @@ describe("api/ingest/person, one register entry is one human", () => {
       return call?.[4] as Record<string, unknown> | undefined;
     }
 
-    it("keeps the page's link and writes the rest of the payload", async () => {
+    function namesake(body: Record<string, unknown> = {}) {
       payload({
         name: "Tadeusz Rozpara",
         korytaId: "rozpara",
         rejestrIo: NAMESAKE,
         birthDate: "1953-12-01",
+        companies: [{ krs: "0000012345", role: "Zarząd", start: "2010-01-01" }],
+        ...body,
       });
+    }
 
-      const result = await handler({} as any);
+    it("holds the payload back, nothing written", async () => {
+      namesake();
 
-      expect(result.personId).toBe("rozpara");
-      expect(result.person).toBe("updated");
-      expect(writtenPerson()).toMatchObject({
-        rejestrIo: OWN,
-        birthDate: "1953-12-01",
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
+        message:
+          "Tadeusz Rozpara, rejestr.io entry 670747: the page the payload " +
+          "names (rozpara) links entry 1220490; held",
       });
-      expect(result.droppedChanges).toEqual([
-        {
-          nodeId: "rozpara",
-          field: "rejestrIo",
-          stored: OWN,
-          sent: NAMESAKE,
-          reason: "another-entry",
-        },
-      ]);
-    });
-
-    it("writes nothing when the link is all the payload would change, and says so", async () => {
-      payload({
-        name: "Tadeusz Rozpara",
-        korytaId: "rozpara",
-        rejestrIo: NAMESAKE,
-      });
-
-      const result = await handler({} as any);
-
-      expect(result.person).toBe("unchanged");
+      // Neither the link nor the birth date nor the namesake's seat.
       expect(createRevisionTransaction).not.toHaveBeenCalled();
-      expect(result.droppedChanges).toEqual([
-        expect.objectContaining({
-          field: "rejestrIo",
-          reason: "another-entry",
-        }),
-      ]);
+      expect(proposeRevisionTransaction).not.toHaveBeenCalled();
     });
 
-    it("keeps a draft's link as well", async () => {
+    it("holds a draft's payload back as well", async () => {
       // The revision would wait for a reviewer, but the node is rewritten with
       // it, and the link is what the page's own entry finds it by next run.
       nodes.rozpara!.published = false;
-      payload({
-        name: "Tadeusz Rozpara",
-        korytaId: "rozpara",
-        rejestrIo: NAMESAKE,
-        birthDate: "1953-12-01",
+      namesake();
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
       });
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+    });
 
-      const result = await handler({} as any);
+    it("does not look for another page instead", async () => {
+      // The namesake's own page, which the register lookup would find: the
+      // payload was planned onto Rozpara's, so where it belongs is a
+      // reviewer's question.
+      nodes.namesake = {
+        type: "person",
+        name: "Tadeusz Rozpara",
+        rejestrIo: NAMESAKE,
+        parties: [],
+      };
+      namesake();
 
-      expect(writtenPerson()).toMatchObject({ rejestrIo: OWN });
-      expect(result.droppedChanges).toHaveLength(1);
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
+      });
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+    });
+
+    it("says the page stores another birth date first, where it does", async () => {
+      // The two guards together: the date is asked about first.
+      nodes.rozpara!.birthDate = "1953-12-01";
+      namesake({ birthDate: "1952-04-25" });
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
+        message: expect.stringContaining("(rozpara) stores 1953-12-01; held"),
+      });
+    });
+
+    it("holds back a payload whose entry was merged into a page linking another", async () => {
+      // The register lookup follows the merge, and the survivor is somebody
+      // else's page; none of the 173 merged people of the 10-10 export is.
+      nodes.tombstone = {
+        type: "person",
+        name: "Tadeusz Rozpara",
+        rejestrIo: NAMESAKE,
+        deleted: true,
+        merged_into: "rozpara",
+      };
+      namesake({ korytaId: undefined });
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
+        message: expect.stringContaining(
+          "the page its entry was merged into (rozpara) links entry 1220490",
+        ),
+      });
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -2359,8 +2389,8 @@ describe("api/ingest/person, one register entry is one human", () => {
 
         const result = await handler({} as any);
 
+        expect(result.personId).toBe("rozpara");
         expect(writtenPerson()).toMatchObject({ rejestrIo: OWN });
-        expect(result).not.toHaveProperty("droppedChanges");
       },
     );
 
@@ -2370,8 +2400,8 @@ describe("api/ingest/person, one register entry is one human", () => {
 
       const result = await handler({} as any);
 
+      expect(result.personId).toBe("rozpara");
       expect(writtenPerson()).toMatchObject({ rejestrIo: OWN });
-      expect(result).not.toHaveProperty("droppedChanges");
     });
   });
 });
@@ -2877,16 +2907,16 @@ describe("api/ingest/person, jobs from the register entry a published page links
     expect(newSeat()).toMatchObject({ approve: false, published: false });
   });
 
-  it("never trusts a payload from a register entry the page does not link", async () => {
+  it("never takes a payload from a register entry the page does not link", async () => {
     // `korytaId` reaches the page whatever entry it links, and the payload's is
-    // somebody else's.
+    // somebody else's: held back whole (`refuseAnotherEntry`), the seat with it.
     store.nodes!.zelewski!.rejestrIo = "https://rejestr.io/osoby/1";
     payload({ korytaId: "zelewski" });
 
-    const result = await handler({} as any);
-
-    expect(result.personId).toBe("zelewski");
-    expect(newSeat()).toMatchObject({ approve: false, published: false });
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    expect(newSeat()).toBeUndefined();
   });
 
   it("reads a link pasted from a browser as the entry it names", async () => {

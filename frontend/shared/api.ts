@@ -321,15 +321,11 @@ export type UnplacedElection = {
  *
  * The ingest fills in the end of a job stored while it was held, and never
  * rewrites one already stored or touches a removed job (`fillAnnotations` in
- * `server/api/ingest/person.post.ts`). Nor does it replace the rejestr.io
- * entry a page links with another (`droppedLink`). Where the payload says
- * otherwise, the site's value stands, and saying so is what lets the uploader
- * log it rather than the disagreement passing in silence.
+ * `server/api/ingest/person.post.ts`). Where the payload says otherwise, the
+ * site's value stands, and saying so is what lets the uploader log it rather
+ * than the disagreement passing in silence.
  */
-export type DroppedChange = DroppedEnd | DroppedLink;
-
-/** A job end the ingest left as the site holds it. */
-export type DroppedEnd = {
+export type DroppedChange = {
   /** The stored job the payload's row matched. */
   edgeId: string;
   /** The company, as the payload names it. */
@@ -343,20 +339,6 @@ export type DroppedEnd = {
   /** `kept`: the site's end stands. `removed`: the job was removed, and the
    * ingest leaves it as it is. */
   reason: "kept" | "removed";
-};
-
-/** A person's rejestr.io link the ingest kept over the payload's. */
-export type DroppedLink = {
-  /** The person's page. */
-  nodeId: string;
-  field: "rejestrIo";
-  /** The page's link, which stands. */
-  stored: string;
-  /** The payload's, which names another register entry. */
-  sent: string;
-  /** `another-entry`: the payload names another entry than the page links,
-   * and one entry is one human. */
-  reason: "another-entry";
 };
 
 /** Fields a user may propose for a person node, whether creating a new one
