@@ -1002,13 +1002,7 @@ def canonical_name(
     the next, and so how he became two pages. 7,026 register ids carry two
     spellings differing by exactly that middle name.
 
-    Every spelling first takes the hyphen of a double surname from the PKW
-    records and the Wikipedia article matched to the person (`surnames`,
-    `hyphenate_surname`): "Anna Maria Nowak Rudnik" is "Anna Maria
-    Nowak-Rudnik" and "Anna Nowak Rudnik" "Anna Nowak-Rudnik", so the choice
-    below is between the same spellings as before, hyphenated alike.
-
-    Then the spellings alone decide, never their order:
+    The spellings alone decide, never their order:
 
     1. the short form, to start from: the fewest words, then not in capitals -
        the register shouts about 14 of these ("GRZEGORZ GWOZDZ"), and a bare
@@ -1029,28 +1023,45 @@ def canonical_name(
     spelling with another surname - a maiden name, a typo - is never taken for
     being longer, so step 2 changes no surname and no first name.
 
+    The spelling chosen then takes the hyphen of a double surname from the PKW
+    records and the Wikipedia article matched to the person (`surnames`,
+    `hyphenate_surname`): "Anna Maria Nowak Rudnik" is "Anna Maria
+    Nowak-Rudnik". The steps count and sort the register's spellings, not the
+    hyphenated ones. A spelling whose surname the record does not end -
+    another surname, a typo, a copy without Polish letters - keeps its space,
+    and so a word more than a spelling that took the hyphen; counted after
+    hyphenating, "Anna Zawada Rudnik" and "Anna Rudnik", matched to PKW's
+    "zawada-rudnik", came out "Anna Rudnik", the first half of her surname
+    gone. Only step 2 looks at the hyphenated spellings too, so that one the
+    hyphen ends like the short form counts as fuller: "Anna Maria Nowak
+    Rudnik" over a short form the register already wrote "Anna
+    Nowak-Rudnik", which without PKW's hyphen ended in another word. Past
+    that middle name, the hyphen changes nothing but the separator.
+
     An existing page is renamed by an upload only to write a middle name or a
     surname's hyphen into it (`updatedPerson`, `learns_name`), so this decides
     what a new page is called and what an existing one can grow into, the same
     way every run.
     """
     surnames = list(surnames)
-    names = [
-        hyphenate_surname(str(value).strip(), surnames)
-        for value in values
-        if str(value).strip()
-    ]
+    names = [str(value).strip() for value in values if str(value).strip()]
     if not names:
         return None
+    hyphenated = {name: hyphenate_surname(name, surnames) for name in names}
     short = min(names, key=lambda name: (len(name.split()), name.isupper(), name))
-    fuller = [
-        name for name in names if adds_middle_names(name.casefold(), short.casefold())
+
+    def is_fuller(name: str) -> bool:
+        return adds_middle_names(name.casefold(), short.casefold()) or (
+            adds_middle_names(hyphenated[name].casefold(), hyphenated[short].casefold())
+        )
+
+    return hyphenated[
+        min(
+            (name for name in names if is_fuller(name)),
+            key=lambda name: (-len(name.split()), name.isupper(), name),
+            default=short,
+        )
     ]
-    return min(
-        fuller,
-        key=lambda name: (-len(name.split()), name.isupper(), name),
-        default=short,
-    )
 
 
 #: How many collapsed rows to name in the run report.
