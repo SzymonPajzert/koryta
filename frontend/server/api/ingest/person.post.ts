@@ -12,6 +12,7 @@ import {
   addsOnlyAnnotations,
   edgeDocumentId,
   edgeIdentity,
+  edgeRelation,
   enrichedEdge,
   findEdgeMatches,
   type EdgeLike,
@@ -523,7 +524,6 @@ const expectedMissingRegion: Partial<ElectionRequest>[] = [
   { election_type: "Senat", election_year: "1997" },
   { election_type: "Senat", election_year: "2001" },
   { election_type: "Senat", election_year: "2005" },
-  { election_type: "Parlament Europejski" },
 ];
 
 function isExpectedMissingRegion(election: ElectionRequest): boolean {
@@ -620,11 +620,10 @@ async function createElection(
   // that exact committee - a candidacy carrying one has nothing left to review.
   // An unrecognised committee is usually a one-gmina KWW and harmless, but it
   // is also where a newly-worded national committee hides, so those wait.
-  const { edgeId, created, published } = await findEdgeOrCreate(
-    ctx,
-    edgeData,
-    election.party_from_committee ?? false,
-  );
+  const vouched = election.party_from_committee ?? false;
+  const { edgeId, created, published } =
+    (await moveMisfiledEuropeanCandidacy(ctx, edgeData, vouched)) ??
+    (await findEdgeOrCreate(ctx, edgeData, vouched));
   if (!edgeId) {
     console.error(
       `Failed to place ${election.election_type} ${election.election_year ?? "?"} in ${regionId}`,
@@ -639,6 +638,87 @@ async function createElection(
       published,
     },
   };
+}
+
+/** A European Parliament candidacy stored under the candidate's home, moved to
+ * the district the payload places it in. Says what it did as `findEdgeOrCreate`
+ * does - an edge it neither created nor put live - or undefined when there is
+ * nothing to move and the candidacy takes the ordinary path.
+ *
+ * A European district is one or two whole województwa, so a candidacy filed
+ * under a powiat or a gmina is not where it was stood. It is where the
+ * candidate lives: the scrapers read the 2019 list's residence column as the
+ * candidacy's place, and earlier uploads filed 2024's under the residence too,
+ * for want of a district. 80 were stored that way on the 2026-10-11 export, 13
+ * of them published. Left there, the candidacy the payload now places would be
+ * written beside it - one run, in two places - and the misfiled one reads as a
+ * copy of any other run filed under its year and powiat: two were removed as
+ * „duplikat” for exactly that.
+ *
+ * Moved rather than replaced, so a live candidacy stays live and keeps its
+ * votes and history. Only a live one, and only where nothing contradicts: a
+ * committee or party that disagrees is somebody else's run and is left for a
+ * reviewer, and a removed one stays as its reviewer left it. The payload's
+ * other fields go in with the move where the ordinary path would write them
+ * straight out (`findEdgeOrCreate`); otherwise the next send offers them.
+ */
+async function moveMisfiledEuropeanCandidacy(
+  ctx: Context,
+  edge: Edge,
+  vouched: boolean,
+): Promise<EdgeOutcome | undefined> {
+  if (edge.position !== "Parlament Europejski" || !edge.start_date) {
+    return undefined;
+  }
+  const snapshot = await ctx.db
+    .collection("edges")
+    .where("source", "==", edge.source)
+    .where("type", "==", "election")
+    .get();
+  const sameRun = snapshot.docs
+    .filter((doc) => {
+      const stored = doc.data();
+      return (
+        stored.position === edge.position &&
+        stored.start_date === edge.start_date
+      );
+    })
+    // By code point, as `findEdgeMatches` orders its candidates and the
+    // pipeline's prediction of this (`_misfiled_european`) does.
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // Already in its district: the ordinary path finds it there.
+  if (sameRun.some((doc) => doc.data().target === edge.target)) {
+    return undefined;
+  }
+
+  for (const doc of sameRun) {
+    const stored = doc.data();
+    if (stored.deleted === true || ctx.claimedEdgeIds.has(doc.id)) continue;
+    if (edgeRelation(stored as EdgeLike, edge) === "conflict") continue;
+    const region = await ctx.db.collection("nodes").doc(stored.target).get();
+    const teryt = region.data()?.teryt;
+    // A województwo, which is where a district is filed, or no code to tell.
+    if (typeof teryt !== "string" || teryt.length <= 2) continue;
+
+    const moved = { ...withoutInternalFields(stored), target: edge.target };
+    const writeAll =
+      vouched || ctx.autoapprove || addsOnlyAnnotations(stored, edge);
+    createRevisionTransaction(
+      ctx.db,
+      ctx.batch,
+      ctx.user,
+      ctx.db.collection("edges").doc(doc.id),
+      writeAll ? enrichedEdge(moved, edge) : moved,
+      // Approved as the correction it is, and published or not as it was.
+      { automatic: true, approve: true, stored },
+    );
+    ctx.claimedEdgeIds.set(doc.id, edgeIdentity(edge));
+    console.info(
+      `[ingest] moved European candidacy ${doc.id} from ${stored.target} to ${edge.target}`,
+    );
+    return { edgeId: doc.id, created: false, published: false };
+  }
+  return undefined;
 }
 
 /** Lookup company node IDs for given employment relations.
