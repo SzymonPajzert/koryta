@@ -124,6 +124,15 @@ def test_the_state_funds_outside_krs_are_public():
     assert not public_body("SILESIA HOUSE FUNDUSZ INWESTYCYJNY ZAMKNIĘTY")
 
 
+def test_kghms_seventh_fund_is_public_through_kghm():
+    # STAROPOLANKA (0000579249)'s last owner, as its odpis pełny names it.
+    assert public_body("KGHM VII FUNDUSZ INWESTYCYJNY ZAMKNIĘTY AKTYWÓW NIEPUBLICZNYCH")
+    assert public_body(
+        "KGHM VII FUNDUSZ INWESTYCYJNY ZAMKNIĘTY AKTYWÓW NIEPUBLICZNYCH "
+        "Z SIEDZIBĄ WE WROCŁAWIU"
+    )
+
+
 def test_the_two_state_institutes_szymon_named_are_public():
     # The last owners of BIOTON (0000121065) and SPACECASE (0000519583) in
     # their odpisy pełne, and CBK as other sources abbreviate it.
