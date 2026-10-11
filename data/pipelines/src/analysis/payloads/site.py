@@ -208,10 +208,12 @@ NOT_ON_SITE = "not on koryta.pl"
 #: The answers the ingest refuses with a 409 rather than guess between.
 HELD_SEVERAL = "held: several pages of that name and birth date"
 HELD_UNDATED = "held: a page of that name stores no birth date"
-#: And the one it refuses outright: the page the payload names is somebody
-#: born on another day (`refuseAnotherBirthDate`).
+#: And the two it refuses outright: the page the payload names is somebody
+#: born on another day (`refuseAnotherBirthDate`), or the page it reaches
+#: links another register entry than its own (`refuseAnotherEntry`).
 HELD_BORN = "held: the page the payload names stores another birth date"
-HELD = (HELD_SEVERAL, HELD_UNDATED, HELD_BORN)
+HELD_ENTRY = "held: the page the payload reaches links another register entry"
+HELD = (HELD_SEVERAL, HELD_UNDATED, HELD_BORN, HELD_ENTRY)
 #: What identifies a person, as against a name alone.
 IDENTIFIED = (BY_PAGE_ID, BY_REGISTER, BY_NAME_AND_DATE)
 
@@ -578,14 +580,16 @@ class SiteSnapshot:
         The node id first where the payload carries one, because that is the
         page and there is nothing left to work out - unless the page stores
         another birth date than the payload's, which the ingest refuses with a
-        409 rather than look further (`_born_elsewhere`). Then the register link,
-        because that is the identity - the name is not, and matching on it
-        exactly is what filed 170 people under two pages each. Then, for a
-        payload with a birth date, the name and the date together
-        (`_by_name_and_date`). The name alone only as a fallback for a payload
-        with neither, and only onto somebody the site has no register link for,
-        because a page carrying a *different* link is a different human however
-        the two are spelled.
+        409 rather than look further (`_born_elsewhere`), or links another
+        register entry, which it refuses the same way (`_links_elsewhere`).
+        Then the register link, because that is the identity - the name is
+        not, and matching on it exactly is what filed 170 people under two
+        pages each - held as well where a merge leads from it to a page
+        linking another entry. Then, for a payload with a birth date, the name
+        and the date together (`_by_name_and_date`). The name alone only as a
+        fallback for a payload with neither, and only onto somebody the site
+        has no register link for, because a page carrying a *different* link
+        is a different human however the two are spelled.
 
         Every branch follows a merge to the page that survived it, as the
         ingest does (`resolveMergedNode`, `lookupNodeDoc`): a tombstone keeps
@@ -600,12 +604,16 @@ class SiteSnapshot:
             if stored is not None:
                 if self._born_elsewhere(stored, payload):
                     return Resolution(None, HELD_BORN)
+                if self._links_elsewhere(stored, payload):
+                    return Resolution(None, HELD_ENTRY)
                 return Resolution(stored, BY_PAGE_ID)
 
         register = field(payload, "rejestrIo")
         if register is not None:
             stored = self._found(self.people.get(str(register)))
             if stored is not None:
+                if self._links_elsewhere(stored, payload):
+                    return Resolution(None, HELD_ENTRY)
                 return Resolution(stored, BY_REGISTER)
 
         born = day_of(field(payload, "birthDate"))
@@ -624,6 +632,24 @@ class SiteSnapshot:
             return False
         return born_another_day(
             field(page, "birthDate"), day_of(field(payload, "birthDate"))
+        )
+
+    def _links_elsewhere(
+        self, page: dict, payload: typing.Mapping[str, typing.Any]
+    ) -> bool:
+        """`refuseAnotherEntry`: whether the page a payload reaches - followed
+        through a merge, as `resolveMergedNode` follows one - links another
+        register entry than the payload's.
+
+        By its `korytaId`, a `people_merged` row holding two entries did it:
+        Tadeusz Rozpara's page, linking 1220490, reached by a payload of his
+        namesake's 670747 in the 10-06 plan, one of 12. By the payload's own
+        link only through a merge, which none of the 173 merged people of the
+        2026-10-10 export makes. The same entry spelled another way is the
+        same entry (`register_entry`), and not held."""
+        survivor = self._survivor(page)
+        return survivor is not None and links_another_entry(
+            field(survivor, "rejestrIo"), field(payload, "rejestrIo")
         )
 
     def _by_name(
@@ -788,23 +814,15 @@ class SiteSnapshot:
             )
             if len(parties) > len(stored_parties):
                 learned["parties"] = parties
-        for key in ("content", "wikipedia"):
+        for key in ("content", "wikipedia", "rejestrIo"):
             value = field(payload, key)
             if value:
                 learned[key] = value
-        # Learned where the page links no entry, or this one spelled another
-        # way; a page linking another entry keeps its link (`droppedLink`), so
-        # the payload writes nothing there. Counted, it would be sent every
-        # night: a payload reaches such a page by its `korytaId` alone, and
-        # nothing it sends changes the link.
-        register = field(payload, "rejestrIo")
-        if register and not links_another_entry(data.get("rejestrIo"), register):
-            learned["rejestrIo"] = register
 
         # Filled in, never rewritten, so a payload restating a date the node
         # already carries writes nothing and must not keep the payload alive.
-        # In `updatedPerson` this and the name below have that rule; the
-        # content and the Wikipedia link above are last-write-wins.
+        # In `updatedPerson` this and the name below have that rule; the rest
+        # above are last-write-wins.
         birth_date = field(payload, "birthDate")
         if birth_date and not data.get("birthDate"):
             learned["birthDate"] = birth_date

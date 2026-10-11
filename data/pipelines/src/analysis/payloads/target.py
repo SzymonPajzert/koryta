@@ -29,7 +29,7 @@ from dataclasses import asdict, dataclass, field, replace
 import numpy as np
 
 from analysis.payloads.priority import ON_SITE
-from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot
+from analysis.payloads.site import HELD_ENTRY, INFORMATIONAL_REASONS, SiteSnapshot
 from analysis.payloads.site import field as stated
 from entities.composite import Person
 
@@ -167,14 +167,24 @@ def for_person(
             and _names_this_page(person, target)
         ]
 
-    # A payload that lands here by its page id but names another register
-    # entry than the page's would overwrite the page's link with it - two
+    # A payload that names this page by its id but another register entry
+    # than the page's is refused by the ingest (`refuseAnotherEntry`) - two
     # links are two humans (task stop-korytaid-overwriting-published-link).
+    # The snapshot holds it back (`HELD_ENTRY`), so `matching_one_page` left
+    # it out above; it is still the payload about this page, and it is what
+    # says why nothing goes. A page newer than the export has nothing to hold
+    # it by, so the same is asked of the page's own link.
     page = snapshot.people_by_id.get(target.node_id)
     page_register = (
         register_number(stated(page, "rejestrIo")) if page else target.register
     )
     conflicting = [
+        person
+        for person in payloads
+        if person.korytaId is not None
+        and str(person.korytaId) == target.node_id
+        and snapshot.resolve(asdict(person)).how == HELD_ENTRY
+    ] + [
         person
         for person in here
         if page_register
