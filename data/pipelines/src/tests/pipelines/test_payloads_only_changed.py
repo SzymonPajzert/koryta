@@ -23,6 +23,7 @@ from analysis.payloads.site import (
     ENDED_EMPLOYMENT,
     ENRICHED_CANDIDACY,
     MISSING_COMPANY,
+    MOVED_CANDIDACY,
     NEW_CANDIDACY,
     NEW_EMPLOYMENT,
     NEW_PERSON,
@@ -547,11 +548,87 @@ def test_reporting_an_unplaceable_candidacy_does_not_keep_the_payload(
 
 
 def test_a_candidacy_the_ingest_skips_is_dropped():
-    """A European bid carries no TERYT and the ingest drops it without failing."""
+    """PKW published no districts for the 1997 Sejm, so its candidacies carry
+    no TERYT, and the ingest drops one without failing."""
+    snapshot = SiteSnapshot(nodes(), edges())
+    sejm = dict(CANDIDACY, election_type="Sejm", election_year="1997", teryt=None)
+
+    assert snapshot.changes(payload(elections=[sejm])) == []
+
+
+def test_a_european_candidacy_without_a_district_is_reported():
+    """Every European list now names its district, so one without is a fault.
+
+    It used to be the expected case: the scrapers gave none of 2009, 2014 or
+    2024 a place, and the ingest dropped all of them without a word.
+    """
     snapshot = SiteSnapshot(nodes(), edges())
     european = dict(CANDIDACY, election_type="Parlament Europejski", teryt=None)
 
-    assert snapshot.changes(payload(elections=[european])) == []
+    assert snapshot.changes(payload(elections=[european])) == [UNRESOLVED_REGION]
+
+
+MAZOWIECKIE = {"id": "teryt14", "type": "region", "name": "mazowieckie", "teryt": "14"}
+
+#: A 2019 European run, in district 4, whose seat is Warszawa.
+EUROPEAN = dict(
+    CANDIDACY,
+    election_type="Parlament Europejski",
+    election_year="2019",
+    teryt="14",
+)
+
+#: The same run as the 2019 list's residence column filed it: under the
+#: candidate's home powiat, here the city of Warszawa.
+EUROPEAN_AT_HOME = dict(
+    STORED_CANDIDACY,
+    id="edge-european-1",
+    position="Parlament Europejski",
+    start_date="2019-01-01",
+)
+
+
+def test_a_european_candidacy_filed_under_the_home_powiat_moves():
+    """The ingest moves it to the district rather than storing the run twice."""
+    snapshot = SiteSnapshot(nodes(MAZOWIECKIE), edges(EUROPEAN_AT_HOME))
+
+    assert snapshot.changes(payload(elections=[EUROPEAN])) == [MOVED_CANDIDACY]
+
+
+def test_a_european_run_already_in_its_district_moves_nothing():
+    """Paweł Tomasz Kurek's 2024 run is stored twice under his home powiat. Once
+    one copy is in the district, the other stays where it is, for a reviewer."""
+    in_district = dict(EUROPEAN_AT_HOME, id="edge-european-2", target="teryt14")
+    snapshot = SiteSnapshot(nodes(MAZOWIECKIE), edges(EUROPEAN_AT_HOME, in_district))
+
+    assert snapshot.changes(payload(elections=[EUROPEAN])) == []
+
+
+def test_a_misfiled_run_for_another_committee_is_not_moved():
+    """A committee that disagrees is somebody else's run, not this one misfiled."""
+    elsewhere = dict(EUROPEAN_AT_HOME, committee="KW Inny Komitet")
+    snapshot = SiteSnapshot(nodes(MAZOWIECKIE), edges(elsewhere))
+    european = dict(EUROPEAN, committee="KW Prawo i Sprawiedliwość")
+
+    assert snapshot.changes(payload(elections=[european])) == [NEW_CANDIDACY]
+
+
+def test_a_removed_misfiled_run_is_not_moved():
+    """A removed edge stays as its reviewer left it, and the district gets the run."""
+    removed = dict(EUROPEAN_AT_HOME, deleted=True)
+    snapshot = SiteSnapshot(nodes(MAZOWIECKIE), edges(removed))
+
+    assert snapshot.changes(payload(elections=[EUROPEAN])) == [NEW_CANDIDACY]
+
+
+def test_a_sejm_run_is_never_moved():
+    """Only a European run is moved: its district is whole województwa, so one
+    under a powiat cannot be where it was stood. Other offices' runs stay put."""
+    sejm_at_home = dict(EUROPEAN_AT_HOME, position="Sejm")
+    snapshot = SiteSnapshot(nodes(MAZOWIECKIE), edges(sejm_at_home))
+    sejm = dict(EUROPEAN, election_type="Sejm")
+
+    assert snapshot.changes(payload(elections=[sejm])) == [NEW_CANDIDACY]
 
 
 def test_a_person_with_no_id_column_is_not_indexed():
