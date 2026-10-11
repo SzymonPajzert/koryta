@@ -406,6 +406,10 @@ def people_merged(
         -- and `pkw_last_names` the surnames they write, which is where a
         -- payload takes the hyphen of a double surname from
         -- (`payloads.person.hyphenate_surname`).
+        -- The parts of a record `split_records_by_place` split tie on all of
+        -- that, and the one with the most candidacies wins, so the region the
+        -- surname is counted in is where most of the career was, every run
+        -- alike: Anna Paluch's Sejm runs in małopolskie, not a namesake's one.
         SELECT
             best.* EXCLUDE (krs_birth_year) REPLACE (every.elections AS elections),
             every.pkw_records,
@@ -417,7 +421,9 @@ def people_merged(
                 ORDER BY second_name_tier,
                     abs(krs_birth_year - birth_year) NULLS LAST,
                     birth_year NULLS LAST,
-                    list_sort(full_name)
+                    list_sort(full_name),
+                    len(elections) DESC,
+                    list_sort(teryt_wojewodztwo)
             ) = 1
         ) best
         JOIN (
