@@ -18,6 +18,7 @@ import jobs.people_import as job
 from analysis.payloads.target import NEW, Targeted
 from entities.person import RejestrIOKey
 from jobs.krs_common import answer_name
+from jobs.nightly import Export
 from jobs.people_import import payloads as build
 from scrapers.koryta.download import CURRENT_DATE, KorytaEdges, KorytaNodes
 from scrapers.krs.scrape import PEOPLE_QUERIES, RejestrIOQuery
@@ -41,9 +42,9 @@ def stamp(moment: datetime) -> str:
     return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.242Z")
 
 
-def taken_at(moment: datetime) -> job.Export:
+def taken_at(moment: datetime) -> Export:
     """An export taken at `moment`, done three minutes later."""
-    return job.Export(stamp(moment), moment + timedelta(minutes=3))
+    return Export(stamp(moment), moment + timedelta(minutes=3))
 
 
 #: The day the snapshot's frames are named after when no --koryta-date says.
@@ -131,7 +132,7 @@ class World:
         #: Noon today, after this morning's export, and the frames the night
         #: built from it.
         self.clock = warsaw(TODAY, 12)
-        self.export: job.Export | None = taken_at(MORNING)
+        self.export: Export | None = taken_at(MORNING)
         self.versioned = versioned
         for pipeline in (KorytaNodes, KorytaEdges):
             self.write_frame(pipeline(None), REPROCESS)
@@ -995,7 +996,7 @@ def test_the_night_has_its_people_compared_with_the_export_it_took(world, argv, 
     ],
 )
 def test_an_export_named_is_compared_with_or_a_newer_one(newest, day, refusal):
-    export = job.Export(newest, None)
+    export = Export(newest, None)
     noon = warsaw("2026-10-10", 12)
 
     assert (
@@ -1047,7 +1048,7 @@ def test_the_newest_export_is_the_newest_finished_and_done_when_its_marker_was()
 
     client = typing.cast(job.Client, SimpleNamespace(storage_client=Storage()))
 
-    assert job.latest_export(client) == job.Export("2026-10-10T02:00:59.242Z", done)
+    assert job.latest_export(client) == Export("2026-10-10T02:00:59.242Z", done)
 
 
 # ---------------------------------------------------------------------------
