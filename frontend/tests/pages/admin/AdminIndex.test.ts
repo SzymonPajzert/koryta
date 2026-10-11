@@ -60,4 +60,51 @@ describe("/admin", () => {
 
     expect(newAdminsLink(wrapper)).toBeUndefined();
   });
+
+  it("opens each note waiting on an admin at its own entry in the notes queue", async () => {
+    // The card listed who the notes were about and nothing could be clicked,
+    // so the only way to act on one was to find it again on /admin/notatki.
+    claims.current = { admin: true };
+    mockAuthRequest.mockImplementation(async (url: string) => {
+      if (url !== "/api/admin/summary") throw new Error("not under test");
+      return {
+        feedback: { needsAction: 0, sample: [] },
+        notes: {
+          needsAction: 1,
+          uncategorized: 0,
+          sample: [
+            {
+              key: "note-1:3",
+              noteId: "note-1",
+              nodeId: "node-1",
+              name: "Jan Kowalski",
+              url: null,
+              note: "zła data urodzenia",
+              kind: "change_request",
+              adminType: null,
+            },
+          ],
+        },
+        revisions: {
+          unapproved: 0,
+          unapprovedManual: 0,
+          inspected: 0,
+          truncated: false,
+          sample: [],
+        },
+      };
+    });
+
+    const wrapper = await mountSuspended(AdminPage);
+    await flushPromises();
+
+    const row = wrapper
+      .findAllComponents({ name: "VListItem" })
+      .find((item) => item.text().includes("Jan Kowalski"));
+    expect(row).toBeDefined();
+    expect(row?.props("to")).toEqual({
+      path: "/admin/notatki",
+      query: { note: "note-1:3" },
+    });
+  });
 });

@@ -2,6 +2,7 @@ import { getFirestore, FieldPath } from "firebase-admin/firestore";
 import type { Firestore } from "firebase-admin/firestore";
 import { defineEventHandler } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { noteRowKey } from "~~/server/utils/notes";
 import { noteNeedsAction } from "~~/shared/model";
 import { compareNewest, isQueued, OPEN_CAP } from "~~/shared/feedbackQueue";
 import type {
@@ -40,6 +41,9 @@ export type AdminSummary = {
     // /admin/notatki/kategoryzacja.
     uncategorized: number;
     sample: {
+      // The entry's permalink key, so the dashboard can open this one entry
+      // in the queue rather than the whole note it sits in.
+      key: string;
       noteId: string;
       nodeId: string;
       name: string | null;
@@ -99,6 +103,7 @@ export default defineEventHandler(async (event): Promise<AdminSummary> => {
   let needsAction = 0;
   let uncategorized = 0;
   const noteSampleRaw: {
+    key: string;
     noteId: string;
     nodeId: string;
     url: string | null;
@@ -109,12 +114,13 @@ export default defineEventHandler(async (event): Promise<AdminSummary> => {
 
   for (const doc of notesSnap.docs) {
     const data = doc.data() as Note;
-    for (const source of data.sources || []) {
+    for (const [sourceIndex, source] of (data.sources || []).entries()) {
       if (!source.adminType && !source.adminTypeDeferred) uncategorized++;
       if (noteNeedsAction(source)) {
         needsAction++;
         if (noteSampleRaw.length < SAMPLE_SIZE) {
           noteSampleRaw.push({
+            key: noteRowKey(doc.id, sourceIndex),
             noteId: doc.id,
             nodeId: data.nodeId,
             url: source.url ?? null,

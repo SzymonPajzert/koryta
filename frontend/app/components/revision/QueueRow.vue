@@ -10,7 +10,7 @@
     <template #summary>
       <RevisionRowLine>
         <v-icon
-          class="flex-0-0"
+          class="queue-row__status flex-0-0"
           size="small"
           :icon="statusIcons[proposal.status]"
           :class="`text-ink-${statusTone[proposal.status]}`"
@@ -28,16 +28,27 @@
           {{ kindTag.label }}
         </span>
         <template #rest>
+          <!-- Who filed it and when, together and first: the "Zgłoszenie"
+               column the owner asked the queue to open with when it was a
+               table. First on a wide screen, where the styles below move them
+               up to the status; on a phone they open the second line, and the
+               name keeps the first to itself. -->
+          <span
+            class="queue-row__who text-body-2"
+            :title="who"
+            data-proposal-author
+          >
+            {{ who }}
+          </span>
+          <span class="queue-row__when text-caption text-medium-emphasis">
+            {{ formatDaysAgo(proposal.updateTime) }}
+          </span>
           <span
             v-if="fields"
             class="arow-side text-body-2 text-medium-emphasis"
             :title="fields"
           >
             {{ fields }}
-          </span>
-          <span class="arow-side text-body-2" :title="who">{{ who }}</span>
-          <span class="arow-fixed text-caption text-medium-emphasis">
-            {{ formatDaysAgo(proposal.updateTime) }}
           </span>
         </template>
       </RevisionRowLine>
@@ -46,10 +57,26 @@
     <template #meta>
       <AdminRowFact label="Autor">
         <UserChip :uid="proposal.updateUser" :user="proposal.author" />
+        <!-- Under the name it narrows the list to, rather than among the
+             buttons: it is a way to more of this person's proposals, not a
+             decision on this one. A pipeline uid has tens of thousands of
+             revisions, and the per-author scan stops at 500, so it is only
+             offered for a person. -->
+        <button
+          v-if="canFocusAuthor"
+          type="button"
+          class="queue-row__author-link arow-link"
+          data-focus-author
+          @click="emit('focus-author', proposal.updateUser)"
+        >
+          Wszystko od tej osoby
+        </button>
       </AdminRowFact>
       <AdminRowFact label="Kiedy">
-        {{ formatMoment(proposal.updateTime) }} ·
-        {{ formatDaysAgo(proposal.updateTime) }}
+        <RevisionPermalink :revision-id="proposal.id">{{
+          formatMoment(proposal.updateTime)
+        }}</RevisionPermalink>
+        · {{ formatDaysAgo(proposal.updateTime) }}
       </AdminRowFact>
       <AdminRowFact label="Rodzaj">
         {{ proposal.automatic ? "Pipeline" : "Od człowieka" }}
@@ -75,33 +102,22 @@
 
     <div class="d-flex flex-column ga-3">
       <RevisionTargetCell :proposal="proposal" />
-      <RevisionChangeCell :proposal="proposal" />
-      <!-- A pipeline uid has tens of thousands of revisions, and the per-author
-           scan stops at 500, so "everything from this author" is only offered
-           for a person. -->
-      <div v-if="canFocusAuthor">
-        <v-btn
-          variant="text"
-          size="small"
-          color="ink-sage"
-          :prepend-icon="mdiAccountSearchOutline"
-          data-focus-author
-          @click="emit('focus-author', proposal.updateUser)"
-        >
-          Wszystko od tej osoby
-        </v-btn>
-      </div>
+      <RevisionChangeCell
+        :proposal="proposal"
+        :full-comparison-to="comparisonTo"
+      />
     </div>
 
-    <template #footer>
+    <!-- The decisions and nothing else, the same ones on every proposal still
+         waiting for one, so the row has one kind of button - see
+         `RevisionReviewActions`. A settled proposal keeps its row, for its
+         permalink, but has nothing left to decide. -->
+    <template v-if="proposal.status === 'pending'" #footer>
       <RevisionReviewActions
         :proposal="proposal"
-        :reviewable="proposal.status === 'pending'"
         :loading="loading"
-        :full-comparison-to="comparisonTo"
         @approve="emit('approve', $event)"
         @reject="emit('reject')"
-        @permalink="emit('permalink')"
       />
     </template>
   </AdminExpandRow>
@@ -110,16 +126,20 @@
 <script setup lang="ts">
 /** One proposal in the review queue on /admin/rewizje, as a line that opens.
  *
- * The line says what a reviewer sorts by - where it stands, what it is filed
- * against, what kind of change, which fields, who, how long ago - and the open
- * row holds what they decide with: the diff, the entry it lands on, and the
- * decisions themselves. The queue used to send every row to the comparison
+ * The line says what a reviewer sorts by - where it stands, who filed it and
+ * how long ago, what it is filed against, what kind of change, which fields -
+ * and the open row holds what they decide with: the diff, the entry it lands
+ * on, and the decisions themselves. The queue used to send every row to the comparison
  * page for that, one button per row, because a table cell had no room for five
  * buttons; an open row has.
+ *
+ * Its buttons are the decisions only. Everything else in it that goes
+ * somewhere is a link on the thing it is about: the author's other proposals
+ * under their name, this proposal's own address on its date, the comparison
+ * under the diff, the entry on its name.
  */
 import { computed } from "vue";
 import {
-  mdiAccountSearchOutline,
   mdiCheckDecagramOutline,
   mdiClockOutline,
   mdiCloseCircleOutline,
@@ -150,7 +170,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   approve: [options: { publish: boolean }];
   reject: [];
-  permalink: [];
   "focus-author": [uid: string];
 }>();
 
@@ -252,3 +271,59 @@ const comparisonTo = computed(() =>
 const formatMoment = (value: string | null) =>
   value ? new Date(value).toLocaleString("pl-PL") : "-";
 </script>
+
+<style scoped>
+/* Who and when, which gives way to an ellipsis first; its title keeps the
+ * rest. */
+.queue-row__who {
+  flex: 0 1 auto;
+  max-width: 45%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-row__when {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* On one line, `RevisionRowLine` lets the second half take part in the first,
+ * so these two can be moved up to follow the status. At fixed widths, so what
+ * each proposal is about starts at the same place on every line, and the two
+ * read down the list as the table's first column did. */
+@media (min-width: 600px) {
+  .queue-row__status {
+    order: -2;
+  }
+
+  .queue-row__who {
+    order: -1;
+    flex: 0 0 9rem;
+    max-width: none;
+  }
+
+  .queue-row__when {
+    order: -1;
+    flex: 0 0 5.5rem;
+  }
+}
+
+/* A button, since it filters this page rather than going anywhere, drawn as
+ * the link it reads as - the one kind of button in the row is a decision. */
+.queue-row__author-link {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgb(var(--v-theme-ink-sage));
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+</style>

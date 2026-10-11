@@ -59,6 +59,30 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "rewizje-przyciski-tylko-do-decyzji",
+    title: "Rewizje: przyciski w rozwiniętej propozycji służą tylko do decyzji",
+    description:
+      "Na dole rozwiniętej propozycji na /admin/rewizje są tylko „Zatwierdź”, „Odrzuć” i - gdy strona nie jest jeszcze opublikowana - „Zatwierdź i opublikuj”, tak samo przy zmianie wpisu i przy zmianie powiązania. " +
+      "Porównanie to teraz link „Pełne porównanie” pod zmianami, data zgłoszenia jest linkiem do samej propozycji, a „Wszystko od tej osoby” jest pod autorem.",
+    steps: [
+      "Na /admin/rewizje rozwiń zmianę wpisu w „Czeka na decyzję”, a potem kliknij „Rozpatrz” przy dowolnej pozycji w „Zmiany powiązań” - obie propozycje mają mieć na dole te same przyciski, a zmiana wpisu także link „Pełne porównanie”, który otwiera porównanie z tą propozycją podświetloną.",
+    ],
+    link: "/admin/rewizje#kolejka",
+    area: "admin",
+    fixes: ["YsFCMqAsj9YIEQM2CKAr"],
+  },
+  {
+    id: "artykul-raz-mimo-dwoch-adresow",
+    title: "Artykuł zapisany pod dwoma adresami jest na liście raz",
+    description:
+      "„Artykuły, które o tym wspominają” pokazywały dwa razy artykuł dodany raz ze swojego adresu, a raz ze strony z komentarzami pod nim. Teraz jest jedna karta, o ile oba wpisy mają ten sam tytuł.",
+    steps: [
+      "Na stronie Dariusza Bielskiego artykuł z iswinoujscie.pl o podziękowaniu wyborcom ma być w sekcji „Artykuły, które o tym wspominają” tylko raz.",
+    ],
+    link: "/osoba/dariusz-bielski-WQgJ49xVVGnKQnlCoDCK",
+    area: "public",
+  },
+  {
     id: "import-zapisuje-koniec-zatrudnienia",
     title: "Import zapisuje koniec zatrudnienia",
     description:
@@ -852,9 +876,9 @@ export const QA_ITEMS: QaItem[] = [
       "prostu nic w niej nie rysuje.",
     steps: [
       "Otwórz stronę osoby z grafem, np. /osoba/boguslaw-nadolnik-aiEctjVbbp5CngABStah.",
-      "Kliknij „Opisy powiązań”.",
+      "Zaznacz „Opisy na liniach”.",
       "Nad liniami mają pojawić się podpisy, np. „Zatrudniony” albo „Startował w wyborach”.",
-      "Kliknij „Ukryj opisy” - podpisy znikają, a graf się nie przeładowuje.",
+      "Odznacz „Opisy na liniach” - podpisy znikają, a graf się nie przeładowuje.",
     ],
     link: "/osoba/boguslaw-nadolnik-aiEctjVbbp5CngABStah",
     area: "public",
@@ -1368,8 +1392,8 @@ export const QA_ITEMS: QaItem[] = [
       "przechodzeniu między stronami.",
     steps: [
       "Wejdź na stronę osoby z grafem i sprawdź, że linie są bez podpisów.",
-      "Kliknij „Opisy powiązań” na pasku nad grafem - przy liniach mają pojawić się napisy typu „pracuje” czy „kandydował”.",
-      "Przejdź na stronę innej osoby: podpisy mają zostać włączone, a przycisk ma mówić „Ukryj opisy”.",
+      "Zaznacz „Opisy na liniach” na pasku nad grafem - przy liniach mają pojawić się napisy typu „pracuje” czy „kandydował”.",
+      "Przejdź na stronę innej osoby: podpisy mają zostać włączone, a pole przy „Opisy na liniach” zaznaczone.",
     ],
     area: "public",
   },

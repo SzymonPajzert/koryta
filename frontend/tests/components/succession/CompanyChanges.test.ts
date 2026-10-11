@@ -159,6 +159,65 @@ describe("SuccessionCompanyChanges", () => {
     );
   });
 
+  it("says a seat went to another party, and which, on a tap", async () => {
+    const [handover] = turnover("2024-04-12", [
+      ["Tomasz Jachna", "Marcin Marzyński"],
+    ]);
+    handover!.left.parties = ["PiS"];
+    handover!.joined.parties = ["KO"];
+
+    response = { successions: [handover!], current: [], hidden: 0 };
+
+    const wrapper = await mountChanges();
+    const chip = wrapper.get('[data-testid="party-switch"]');
+
+    expect(chip.text()).toBe("inna partia");
+    // A phone has no hover, so the tooltip opens on a tap as well.
+    await chip.trigger("click");
+    await vi.waitUntil(() => document.body.textContent.includes("PiS → KO"), {
+      timeout: 2000,
+    });
+  });
+
+  it("reads „Inne” beside a named party as that party, and names neither „Inne”", async () => {
+    // „Inne” is where the parties with no colour of their own go since
+    // 2026-10-09: next to PiS it is not a second party to swing from, and on
+    // its own it is no party's name.
+    const [same, other] = turnover("2024-04-12", [
+      ["Tomasz Jachna", "Marcin Marzyński"],
+      ["Jakub Dziedzic", "Leszek Kosiorek"],
+    ]);
+    same!.left.parties = ["PiS"];
+    same!.joined.parties = ["Inne", "PiS"];
+    other!.left.parties = ["PiS"];
+    other!.joined.parties = ["Inne"];
+
+    response = { successions: [same!, other!], current: [], hidden: 0 };
+
+    const wrapper = await mountChanges();
+    const chips = wrapper.findAll('[data-testid="party-switch"]');
+
+    expect(chips).toHaveLength(1);
+    await chips[0]!.trigger("click");
+    await vi.waitUntil(
+      () => document.body.textContent.includes("PiS → inna, mniejsza partia"),
+      { timeout: 2000 },
+    );
+  });
+
+  it("claims no change of party when a side has none recorded", async () => {
+    const [handover] = turnover("2024-04-12", [
+      ["Tomasz Jachna", "Marcin Marzyński"],
+    ]);
+    handover!.left.parties = ["PiS"];
+
+    response = { successions: [handover!], current: [], hidden: 0 };
+
+    const wrapper = await mountChanges();
+
+    expect(wrapper.find('[data-testid="party-switch"]').exists()).toBe(false);
+  });
+
   it("splits the relay by role, Zarząd before Rada Nadzorcza", async () => {
     response = {
       successions: [

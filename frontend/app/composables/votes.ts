@@ -149,15 +149,59 @@ export function voteScaleSummary(category: VoteCategory): string | undefined {
  * lists drift - a model can be added, renamed or retired without this file
  * knowing - so `scoreModelLabel` falls back to the uid rather than showing
  * nothing, and an unlabelled model reads as a slightly ugly name instead of
- * disappearing from a breakdown that claims to be complete. */
-const scoreModelLabels: Record<string, string> = {
-  pipeline: "Publiczni pracodawcy",
-  "pipeline-pagerank": "Sieć powiązań",
-  "pipeline-together": "Wspólne zarządy",
-  "pipeline-turnover": "Posada po wyborach",
-  "pipeline-succession": "Następca na stanowisku",
-  "pipeline-capture": "Przejęta instytucja",
-  "pipeline-facts": "Artykuły w bazie",
+ * disappearing from a breakdown that claims to be complete.
+ *
+ * `label` is what the score breakdown in the table calls the model; `what` is
+ * the one line the FAQ on /pomoc gives it, which is the place a reader who
+ * met the name there can find out what it means. One entry holds both so the
+ * FAQ cannot list a different set of models from the one the breakdown
+ * names. Each `what` is the module docstring of its model boiled down to what
+ * it rewards, and reads on from „<label> - ”. */
+export const scoreModels: Record<string, { label: string; what: string }> = {
+  pipeline: {
+    label: "Publiczni pracodawcy",
+    what:
+      "jak wypadli sprawdzeni już ludzie ze spółek i instytucji, w których " +
+      "osoba pracuje, i ile razy sama kandydowała w wyborach.",
+  },
+  "pipeline-pagerank": {
+    label: "Sieć powiązań",
+    what:
+      "jak blisko ludzi, których już uznaliśmy za ciekawych, stoi osoba - " +
+      "przez wspólne zarządy i rady, także przez kilka osób po drodze.",
+  },
+  "pipeline-together": {
+    label: "Wspólne zarządy",
+    what:
+      "czy osoba zasiadała razem z kimś, kogo już uznaliśmy za ciekawego, w " +
+      "co najmniej dwóch różnych spółkach. Jedna wspólna spółka to przypadek, " +
+      "dwie to znajomość.",
+  },
+  "pipeline-turnover": {
+    label: "Posada po wyborach",
+    what:
+      "czy osoba dostała posadę w roku wyborów, w których kandydowała, albo " +
+      "rok później. Najwięcej znaczy posada w spółce publicznej z regionu, w " +
+      "którym startowała.",
+  },
+  "pipeline-succession": {
+    label: "Następca na stanowisku",
+    what:
+      "czy osoba zajęła miejsce w zarządzie albo radzie po kimś, kto " +
+      "startował z listy partii albo ma już u nas swoją stronę.",
+  },
+  "pipeline-capture": {
+    label: "Przejęta instytucja",
+    what:
+      "jaką część zarządu i rady, w których osoba zasiada, stanowią byli " +
+      "kandydaci w wyborach i ludzie już opisani na stronie.",
+  },
+  "pipeline-facts": {
+    label: "Artykuły w bazie",
+    what:
+      "ile artykułów w naszej bazie pisze o tej osobie i o czym: udział w " +
+      "aferze waży najwięcej, sama przynależność do partii najmniej.",
+  },
 };
 
 /** A readable name for the model behind one pipeline vote. */
@@ -165,7 +209,7 @@ export function scoreModelLabel(uid: string): string {
   // `|| uid` rather than `?? uid`: stripping the prefix off a bare "pipeline"
   // leaves an empty string, not undefined, and an unnamed row is worse than an
   // ugly one.
-  return scoreModelLabels[uid] || uid.replace(/^pipeline-?/, "") || uid;
+  return scoreModels[uid]?.label || uid.replace(/^pipeline-?/, "") || uid;
 }
 
 /** A vote targets a graph node or an extraction fact; the target picks which

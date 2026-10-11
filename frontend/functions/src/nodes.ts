@@ -23,7 +23,10 @@ export const onNodeWritten = onDocumentWritten(
 
     const updatePayload: Record<string, unknown> = {};
 
-    if (beforePublic !== afterPublic) {
+    // Not for a page merged away: it goes off the site in the same write that
+    // takes its stats off (server/utils/merge.ts), and an `isApproved: false`
+    // put back here would return it to every queue of unpublished people.
+    if (beforePublic !== afterPublic && afterData.deleted !== true) {
       // Avoid infinite loops by only updating if stats.isApproved doesn't match
       const currentStatsApproved = afterData.stats?.isApproved;
       if (currentStatsApproved !== afterPublic) {

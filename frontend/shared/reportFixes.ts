@@ -30,6 +30,59 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na szerokim ekranie linijka propozycji w „Czeka na decyzję” zaczyna się od tego, kto ją zgłosił i kiedy, a dopiero po nich mówi, czego dotyczy - tak jak pierwsza kolumna „Zgłoszenie” w dawnej tabeli.",
+    fixes: ["YsFCMqAsj9YIEQM2CKAr"],
+    link: "/admin/rewizje#kolejka",
+  },
+  {
+    change:
+      "Artykuł dodany z linku do strony w starym kodowaniu (ISO-8859-2, windows-1250) ma w tytule polskie litery zamiast „�”. Trzy zapisane już tytuły na stronie Dariusza Bielskiego poprawią się dopiero po wdrożeniu funkcji getPageMeta i uruchomieniu migracji refetch-garbled-article-titles - niezalogowani zobaczą je do 6 godzin później, chyba że pamięć podręczna zostanie wyczyszczona.",
+    fixes: ["3qIISyfU0iXo0Sus5bgJ"],
+    link: "/osoba/dariusz-bielski-WQgJ49xVVGnKQnlCoDCK",
+  },
+  {
+    change:
+      "Na pasku nad grafem przycisk „Opisy na liniach” ma zawsze ten sam napis, a pole wyboru przy napisie pokazuje, czy opisy są włączone. Kliknięcie nie zmienia już jego szerokości, więc przyciski nie przeskakują między rzędami, a na telefonie „2 kroki” mieści się w pasku zamiast być uciętym.",
+    fixes: ["60beJLEWtp6lNuWyz15L"],
+  },
+  {
+    change:
+      "Regulamin i polityka prywatności stoją w białym arkuszu z ramką na szarym tle, jak /o-nas i /pomoc, a adres e-mail i link do polityki są ciemnozielone zamiast bladozielonych.",
+    fixes: ["3MWd21zn85kJO5T13eNP"],
+  },
+  {
+    change:
+      "„Co nowego” na stronie głównej zaczyna się od ośmiu rzędów kafelków - 16 na komputerze i 8 na telefonie, zamiast całej porcji naraz (29 września było ich 37) - więc do stopki jest ponad dwa razy bliżej, a na telefonie cztery razy. „Pokaż więcej” dokłada po osiem rzędów.",
+    fixes: [
+      "DodgLGSXSPlZjVnyeteO",
+      "3PCLXqLV0Kk177sHP6i9",
+      "aWb3jMKRKD3sK7VDVwwe",
+    ],
+  },
+  {
+    change:
+      "Kolejka najłatwiejszego poziomu, posortowana po głosach, zaczyna się od osoby do sprawdzenia: strony scalone z inną (jak Geblewicz czy Pasoń) nie zajmują już w kolejkach miejsc, na których nic się nie pokazywało - od najbliższego przeliczenia statystyk (/api/stats/computeNodes).",
+    fixes: ["crR0DWk9Y1gTfy0vp2Mg"],
+    link: "/eksploruj/nowe?tier=1&order=votes",
+  },
+  {
+    change:
+      "W „Kto kogo zastąpił” chip „zmiana afiliacji” nazywa się teraz „inna partia”, a najechany albo stuknięty mówi, z której partii do której przeszło stanowisko, np. „PiS → PO”.",
+    fixes: ["w2IOzxln1HiguDBFzIpG"],
+  },
+  {
+    change:
+      "Odpowiedź na „Co liczą Wasze modele?” w FAQ na /pomoc wymienia wszystkie modele oceny i co każdy z nich nagradza.",
+    fixes: ["cEF1Mg7xRtR2iWuyyC70"],
+    link: "/pomoc",
+  },
+  {
+    change:
+      "W „Notatki wymagające działania” na /admin każdy wiersz otwiera swoją notatkę w kolejce notatek.",
+    fixes: ["OaW6NI6Acm7wpXWtcTCD"],
+  },
+  {
+    change:
       "Na grafie osoba bez partii jest szara, a nie niebieska, więc nie myli się już z granatem PiS i Konfederacji. Legenda podpisuje ją „Osoba: brak partii”; jaśniejsza szarość to nadal „Inne”.",
     fixes: ["wg0ZscDcClubfyTEn5pB"],
   },

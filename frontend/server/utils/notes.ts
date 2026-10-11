@@ -23,6 +23,13 @@ export function resetNoteNodeNames() {
   nameCache = { builtAt: 0, names: {} };
 }
 
+/** The key a note entry is addressed by - what `/admin/notatki?note=` looks an
+ * entry up by. Its place in the note's `sources`, because an entry has no id of
+ * its own. */
+export function noteRowKey(noteId: string, sourceIndex: number): string {
+  return `${noteId}:${sourceIndex}`;
+}
+
 /** Every note entry there is, newest first, with node names joined on.
  *
  * Firestore cannot order or filter on fields nested inside an array, and
@@ -57,7 +64,7 @@ export async function getNoteRows(db: Firestore): Promise<NoteRow[]> {
     const sources: Partial<NoteSource>[] = data.sources ?? [];
     sources.forEach((source, sourceIndex) => {
       rows.push({
-        key: `${doc.id}:${sourceIndex}`,
+        key: noteRowKey(doc.id, sourceIndex),
         noteId: doc.id,
         sourceIndex,
         nodeId: data.nodeId,
