@@ -30,7 +30,12 @@ import pandas as pd
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.pkw.elections import party_sort_key
 from scrapers.stores import Context
-from util.polish import adds_middle_names, names_agree, normalize_person_name
+from util.polish import (
+    adds_middle_names,
+    names_agree,
+    normalize_person_name,
+    spaced_surname,
+)
 
 #: Fields a node owns rather than states, which a revision never carries. The
 #: ingest strips these off the stored document before comparing, so we do too.
@@ -559,9 +564,13 @@ class SiteSnapshot:
     ) -> Resolution:
         """`lookupByName`: the first page of the payload's exact name, unless it
         links another register entry, or stores a birth date and the payload's
-        is another."""
+        is another. Failing one of the exact name, a page writing the payload's
+        double surname with a space (`spaced_surname`)."""
         register = field(payload, "rejestrIo")
-        by_name = self.people_by_name.get(str(payload.get("name")))
+        name = str(payload.get("name"))
+        by_name = self.people_by_name.get(name)
+        if by_name is None:
+            by_name = self.people_by_name.get(spaced_surname(name))
         if by_name is None:
             return Resolution(None, NOT_ON_SITE)
         stored = day_of(field(by_name, "birthDate"))
@@ -587,9 +596,10 @@ class SiteSnapshot:
         stores no birth date at all.
 
         Wider than the ingest where it cannot be exact: the ingest finds the
-        undated namesakes through the search index by the surname as written,
-        and this by the folded surname, so it may hold back a person the
-        ingest would take - never the other way round.
+        undated namesakes through the search index by the surname as written
+        (and a hyphenated one's last part), and this by the folded surname, so
+        it may hold back a person the ingest would take - never the other way
+        round.
         """
         name, register = payload.get("name"), field(payload, "rejestrIo")
         dated: dict[str, dict] = {}

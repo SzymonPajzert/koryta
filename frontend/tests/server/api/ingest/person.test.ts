@@ -1658,6 +1658,33 @@ describe("api/ingest/person, one register entry is one human", () => {
     );
   });
 
+  it("adopts the entry onto a page writing its double surname with a space", async () => {
+    // The pipeline hyphenates a double surname where PKW or Wikipedia does,
+    // and the page an earlier night made has the register's space. By the
+    // exact name alone it would get a second page.
+    nodes.stary = { type: "person", name: "Anna Nowak Rudnik", parties: [] };
+    payload({ name: "Anna Nowak-Rudnik", rejestrIo: "999999" });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("stary");
+    expect(revisionTargetId()).toBe("stary");
+  });
+
+  it("takes the page of the exact hyphenated name first", async () => {
+    nodes.spaced = { type: "person", name: "Anna Nowak Rudnik", parties: [] };
+    nodes.hyphenated = {
+      type: "person",
+      name: "Anna Nowak-Rudnik",
+      parties: [],
+    };
+    payload({ name: "Anna Nowak-Rudnik" });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("hyphenated");
+  });
+
   it("still matches by name when the payload names no register entry", async () => {
     // Nothing else identifies such a payload, and the pipelines that send a
     // `rejestrIo` are not the only callers.
@@ -2073,6 +2100,20 @@ describe("api/ingest/person, somebody only an odpis names: the name and the birt
     // posts on a real page. Nothing is written.
     nodes.undated = person({ name: "Anna Nowak" });
     payload();
+
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 409,
+      message: expect.stringContaining("no birth date"),
+    });
+    expect(createRevisionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("holds them back for an undated page writing their hyphen with a space", async () => {
+    // The search index cuts a name at its spaces, so this page carries
+    // "rudnik" and not "nowak-rudnik", and by the hyphenated word alone the
+    // payload would have opened a page beside it.
+    nodes.undated = person({ name: "Anna Nowak Rudnik" });
+    payload({ name: "Anna Nowak-Rudnik" });
 
     await expect(handler({} as any)).rejects.toMatchObject({
       statusCode: 409,
