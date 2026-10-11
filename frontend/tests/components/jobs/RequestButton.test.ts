@@ -194,6 +194,28 @@ describe("JobsRequestButton", () => {
     );
   });
 
+  it("says what a run handed back waits for, not that the machine starts", async () => {
+    mockAuthRequest.mockImplementation(
+      async (url: string, options: { method?: string }) =>
+        options.method === "GET"
+          ? { runs: [] }
+          : {
+              run: queued("r0", { waitingFor: "export" }),
+              reused: true,
+              link: "/admin/procesy#przebieg-r0",
+            },
+    );
+    await mountButton();
+    await openDialog();
+
+    inDialog('[data-testid="job-request-confirm"]')!.click();
+    await flushPromises();
+
+    const done = inDialog('[data-testid="job-request-done"]')!.textContent;
+    expect(done).toContain("Czeka na dzisiejszą kopię bazy");
+    expect(done).not.toContain("Maszyna się uruchamia");
+  });
+
   it("shows what the server refused with", async () => {
     mockAuthRequest.mockImplementation(
       async (url: string, options: { method?: string }) => {
