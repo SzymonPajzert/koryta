@@ -88,6 +88,26 @@ export function addsMiddleNames(full: string, short: string): boolean {
   return !added.some((word) => word === shorter[0] || word === shorter.at(-1));
 }
 
+/** The name with the hyphens of its surname written as spaces: "Anna Maria
+ * Nowak-Rudnik" is "Anna Maria Nowak Rudnik". Any other name comes back
+ * exactly as it was.
+ *
+ * The register keeps a double surname as two fields, and rejestr.io and the
+ * odpis print them with a space between, so 430 pages of 2026-10-11 were
+ * titled "Nowak Rudnik"; PKW and Wikipedia write the hyphen, and the pipeline
+ * takes it from them. This is how a page titled the register's way is still
+ * found under the hyphenated name. The surname is the last word, after a
+ * first name: a hyphen anywhere else - "Jan-Paweł" - is not one.
+ *
+ * `spaced_surname` in `data/pipelines/src/util/polish.py` is the same rule.
+ */
+export function spacedSurname(name: string): string {
+  const words = name.trim().split(/\s+/);
+  const surname = words.at(-1) ?? "";
+  if (words.length < 2 || !/^[^-]+(-[^-]+)+$/.test(surname)) return name;
+  return [...words.slice(0, -1), ...surname.split("-")].join(" ");
+}
+
 /** The keys a fact's spelling of a person may meet their page's name under.
  *
  * A page carries every given name the register knows, and an article almost

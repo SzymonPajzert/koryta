@@ -6,6 +6,7 @@ from util.polish import (
     format_person_name,
     names_agree,
     parse_name,
+    spaced_surname,
 )
 
 
@@ -177,3 +178,26 @@ def test_adds_middle_names(full, short, expected):
 def test_names_agree(one, other, expected):
     assert names_agree(one, other) is expected
     assert names_agree(other, one) is expected
+
+
+# The same table as `spacedSurname` in frontend/tests/shared/names.test.ts: the
+# ingest finds a page by that rule, and `SiteSnapshot` predicts it by this one.
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Anna Nowak-Rudnik", "Anna Nowak Rudnik"),
+        ("Anna Maria Nowak-Rudnik", "Anna Maria Nowak Rudnik"),
+        ("Jan Nowak-Kowalski-Rudnik", "Jan Nowak Kowalski Rudnik"),
+        # Only the surname, and only a hyphen between two parts of it.
+        ("Jan-Paweł Nowak", "Jan-Paweł Nowak"),
+        ("Nowak-Rudnik", "Nowak-Rudnik"),
+        ("Anna Nowak-", "Anna Nowak-"),
+        ("Anna Nowak--Rudnik", "Anna Nowak--Rudnik"),
+        # Anything else exactly as it was, spacing included.
+        ("Anna Nowak Rudnik", "Anna Nowak Rudnik"),
+        ("Anna  Nowak", "Anna  Nowak"),
+        ("", ""),
+    ],
+)
+def test_spaced_surname(name, expected):
+    assert spaced_surname(name) == expected

@@ -5,6 +5,7 @@ import {
   normalizePersonName,
   personNameKeys,
   shortPersonName,
+  spacedSurname,
   withoutDiacritics,
 } from "../../shared/names";
 
@@ -96,6 +97,28 @@ describe("namesAgree", () => {
   ])("%s and %s: %s", (one, other, expected) => {
     expect(namesAgree(one, other)).toBe(expected);
     expect(namesAgree(other, one)).toBe(expected);
+  });
+});
+
+// The same table as `test_spaced_surname` in
+// data/pipelines/src/tests/test_polish.py: the ingest finds a page by this
+// rule and the pipeline predicts it by that one.
+describe("spacedSurname", () => {
+  it.each([
+    ["Anna Nowak-Rudnik", "Anna Nowak Rudnik"],
+    ["Anna Maria Nowak-Rudnik", "Anna Maria Nowak Rudnik"],
+    ["Jan Nowak-Kowalski-Rudnik", "Jan Nowak Kowalski Rudnik"],
+    // Only the surname, and only a hyphen between two parts of it.
+    ["Jan-Paweł Nowak", "Jan-Paweł Nowak"],
+    ["Nowak-Rudnik", "Nowak-Rudnik"],
+    ["Anna Nowak-", "Anna Nowak-"],
+    ["Anna Nowak--Rudnik", "Anna Nowak--Rudnik"],
+    // Anything else exactly as it was, spacing included.
+    ["Anna Nowak Rudnik", "Anna Nowak Rudnik"],
+    ["Anna  Nowak", "Anna  Nowak"],
+    ["", ""],
+  ])("%s is %s", (name, expected) => {
+    expect(spacedSurname(name)).toBe(expected);
   });
 });
 

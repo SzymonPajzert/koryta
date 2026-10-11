@@ -34,6 +34,7 @@ import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
 import {
   addsMiddleNames,
   namesAgree,
+  spacedSurname,
   withoutDiacritics,
 } from "~~/shared/names";
 import {
@@ -854,12 +855,22 @@ function refuseAnotherBirthDate(
 
 /** The first page of the payload's exact name, as the ingest has always
  * matched one: unless it links another register entry than the payload's, or
- * stores a birth date and the payload's is another. */
+ * stores a birth date and the payload's is another.
+ *
+ * Failing a page of the exact name, a page writing the payload's double
+ * surname with a space (`spacedSurname`): the pipeline hyphenates it where
+ * PKW or Wikipedia does, and the pages it made before are titled the
+ * register's way - "Nowak Rudnik". */
 async function lookupByName(
   ctx: Context,
   body: PersonRequest,
 ): Promise<FirebaseFirestore.DocumentSnapshot | undefined> {
-  const byName = await lookupNodeDoc(ctx, "name", body.name, "person");
+  const spaced = spacedSurname(body.name);
+  const byName =
+    (await lookupNodeDoc(ctx, "name", body.name, "person")) ??
+    (spaced === body.name
+      ? undefined
+      : await lookupNodeDoc(ctx, "name", spaced, "person"));
   if (!byName) return undefined;
 
   const stored = byName.data();
@@ -996,14 +1007,25 @@ function isoBirthDate(value: unknown): string | undefined {
  * them (`generateChunksLower`): the surname as written and with its Polish
  * letters written plain, so a page typed without them is found too. Wider
  * than the namesakes - a surname is a prefix of longer ones, and companies
- * are indexed alike - so the caller narrows them by the name. */
+ * are indexed alike - so the caller narrows them by the name.
+ *
+ * A double surname by its last part as well: the index cuts a name at its
+ * spaces only, so a page titled "Anna Nowak Rudnik" carries "rudnik" and no
+ * "nowak-rudnik", and a payload hyphenating it (`spacedSurname`) would miss
+ * the page it has to be held back for. */
 async function namesakes(
   ctx: Context,
   name: string,
 ): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
   const surname = name.trim().toLowerCase().split(/\s+/).at(-1);
   if (!surname) return [];
-  const spellings = [...new Set([surname, withoutDiacritics(surname)])];
+  const lastPart =
+    spacedSurname(name).trim().toLowerCase().split(/\s+/).at(-1) || surname;
+  const spellings = [
+    ...new Set(
+      [surname, lastPart].flatMap((word) => [word, withoutDiacritics(word)]),
+    ),
+  ];
   const snapshot = await ctx.db
     .collection("nodes")
     .where("nameChunksLower", "array-contains-any", spellings)

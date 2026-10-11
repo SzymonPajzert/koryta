@@ -219,6 +219,27 @@ def adds_middle_names(full: str, short: str) -> bool:
     return not any(word in (shorter[0], shorter[-1]) for word in added)
 
 
+def spaced_surname(name: str) -> str:
+    """The name with the hyphens of its surname written as spaces: "Anna Maria
+    Nowak-Rudnik" is "Anna Maria Nowak Rudnik". Any other name comes back
+    exactly as it was.
+
+    The register keeps a double surname as two fields, and rejestr.io and the
+    odpis print them with a space between, so the pages made from them are
+    titled "Nowak Rudnik"; PKW and Wikipedia write the hyphen, and the payload
+    takes it from them. This is how a page titled the register's way is still
+    found under the hyphenated name. The surname is the last word, after a
+    first name: a hyphen anywhere else - "Jan-Paweł" - is not one.
+
+    `spacedSurname` in `frontend/shared/names.ts`, which the ingest looks a
+    person up by, and has to stay it.
+    """
+    words = name.split()
+    if len(words) < 2 or not re.fullmatch(r"[^-]+(?:-[^-]+)+", words[-1]):
+        return name
+    return " ".join(words[:-1] + words[-1].split("-"))
+
+
 def normalize_person_name(name: str | None) -> str:
     """A person's name without what two spellings of it may differ by: case,
     diacritics (``ł`` too), and anything between the words - a hyphen, a dot.

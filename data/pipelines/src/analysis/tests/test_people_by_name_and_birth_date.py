@@ -184,6 +184,45 @@ def test_neither_a_date_nor_an_entry_matches_by_the_exact_name_as_before():
     assert resolve(site, person(born=None)) == ("linked", BY_NAME)
 
 
+# ------------------------------------------------------- a double surname
+def test_an_entry_adopts_the_page_writing_its_hyphen_with_a_space():
+    """The payload hyphenates a double surname where PKW or Wikipedia does;
+    the page an earlier night made has the register's space."""
+    site = snapshot(page("stary", "Anna Nowak Rudnik"))
+
+    assert resolve(
+        site, person("Anna Nowak-Rudnik", register="https://rejestr.io/osoby/7")
+    ) == ("stary", BY_NAME)
+
+
+def test_the_page_of_the_exact_hyphenated_name_comes_first():
+    site = snapshot(
+        page("spaced", "Anna Nowak Rudnik"), page("hyphenated", "Anna Nowak-Rudnik")
+    )
+
+    assert resolve(site, person("Anna Nowak-Rudnik", born=None)) == (
+        "hyphenated",
+        BY_NAME,
+    )
+
+
+def test_a_space_in_the_payload_does_not_find_a_hyphen_on_the_page():
+    """Only the hyphen the pipeline writes in is read as a space - as before,
+    "Anna Nowak Rudnik" is not the exact name of "Anna Nowak-Rudnik"."""
+    site = snapshot(page("hyphenated", "Anna Nowak-Rudnik"))
+
+    assert resolve(site, person("Anna Nowak Rudnik", born=None)) == (
+        None,
+        NOT_ON_SITE,
+    )
+
+
+def test_an_undated_page_writing_the_hyphen_with_a_space_holds_the_person_back():
+    site = snapshot(page("undated", "Anna Nowak Rudnik"))
+
+    assert resolve(site, person("Anna Nowak-Rudnik")) == (None, HELD_UNDATED)
+
+
 # ------------------------------------------- the page the payload names
 HETMAN = page(
     "hetman", "Krzysztof Hetman", birthDate="1974-06-27", rejestrIo="", published=True
