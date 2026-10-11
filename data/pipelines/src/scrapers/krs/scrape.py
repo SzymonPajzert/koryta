@@ -1430,9 +1430,9 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         Matched by the page's name instead, one vote bought every namesake
         rejestr.io holds: four Krzysztof Owczareks for one page, and 110 of
         the 580 entries the votes queued on 2026-10-09. None of them gets a
-        page, since the people step creates pages for new hires only. A page
-        without a link is still matched by name, the one thing it has, and a
-        reviewer tells its namesakes apart.
+        page, since the people step creates one for a rejestr.io entry only
+        as a new hire. A page without a link is still matched by name, the one
+        thing it has, and a reviewer tells its namesakes apart.
 
         Never to an entry without a PESEL. `/osoby/<n>` answers for the osoba
         numbered n, and rejestr.io numbers the entries without a PESEL apart
