@@ -221,6 +221,28 @@ describe("runChip", () => {
     ).toMatchObject({ title: "nikt nie podjął", stalled: true });
   });
 
+  it("names what a queued run waits for, until it too has gone quiet", () => {
+    const waiting = (waitingFor: "export" | "night", heartbeatAt: string) =>
+      runChip(
+        run({ state: "queued", heartbeatAt, waitingFor }),
+        definition,
+        now,
+      );
+    expect(waiting("export", "2026-10-02T09:55:00.000Z")).toMatchObject({
+      title: "czeka na kopię bazy",
+      tone: "neutral",
+      stalled: false,
+    });
+    expect(waiting("night", "2026-10-02T09:55:00.000Z")).toMatchObject({
+      title: "czeka na noc",
+      stalled: false,
+    });
+    expect(waiting("night", "2026-10-02T09:45:00.000Z")).toMatchObject({
+      title: "nikt nie podjął",
+      stalled: true,
+    });
+  });
+
   it("never calls a finished run quiet", () => {
     expect(
       runChip(

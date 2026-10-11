@@ -87,7 +87,17 @@
         class="focus-run__dispatch text-body-2"
         data-focus-dispatch
       >
-        <template v-if="run.dispatch?.ok">
+        <!-- The machine took it and cannot start it yet: what it waits for
+             is what the person who asked needs to know, not the start. -->
+        <template v-if="run.waitingFor === 'export' && !stalled">
+          Paczki porównuje się z dzisiejszą kopią bazy, która powstaje o 04:00.
+          Zlecenie ruszy, gdy będzie gotowa; maszyna do tego czasu się wyłącza i
+          wraca o 04:15, na noc.
+        </template>
+        <template v-else-if="run.waitingFor === 'night' && !stalled">
+          Maszynę zajmuje teraz noc - zlecenie ruszy zaraz po niej.
+        </template>
+        <template v-else-if="run.dispatch?.ok">
           Maszynę uruchomiono {{ shortWarsawTime(run.dispatch.at, now) }} -
           zacznie w minutę, dwie.
         </template>
@@ -100,9 +110,13 @@
           (04:30).
         </template>
         <!-- Only where the site starts the VM at all: with dispatch off,
-             asking again would start nothing either. -->
+             asking again would start nothing either. Nor for a run the
+             machine has seen and is waiting with: it was started. -->
         <v-btn
-          v-if="run.dispatch?.mode === 'vm' && (!run.dispatch.ok || stalled)"
+          v-if="
+            run.dispatch?.mode === 'vm' &&
+            (stalled || (!run.dispatch.ok && !run.waitingFor))
+          "
           size="small"
           variant="outlined"
           class="ml-2"
@@ -222,6 +236,7 @@ import {
   otherDefinition,
   runAnchor,
   runLink,
+  RUN_WAITING_TEXT,
   shortWarsawTime,
   WARSAW,
   type JobRun,
@@ -302,8 +317,9 @@ const statusText = computed(() => {
     : "";
   switch (current.state) {
     case "queued":
-      return stalled.value
-        ? `Czeka od ${since} i nikt go nie podjął.`
+      if (stalled.value) return `Czeka od ${since} i nikt go nie podjął.`;
+      return current.waitingFor
+        ? `Czeka ${RUN_WAITING_TEXT[current.waitingFor]} - w kolejce od ${since}.`
         : `Czeka na maszynę od ${since}.`;
     case "running":
       return stalled.value
