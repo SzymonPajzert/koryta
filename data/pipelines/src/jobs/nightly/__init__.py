@@ -203,6 +203,11 @@ DAY_NAMED = re.compile(
 )
 #: An export shard in the download cache: the blob name with "/" as ".".
 CACHED_EXPORT = re.compile(r"^hostname=koryta\.pl\.date=(\d{4}-\d{2}-\d{2})T")
+#: The hour, Warsaw time, of the site's daily export (`scheduledFirestoreExport`
+#: in frontend/functions/src/index.ts). Each one from 2026-09-29 to 10-10 is
+#: stamped within the minute after it, and was done two to four minutes after
+#: its stamp: 10-09's, the slowest, at 04:04:10.
+EXPORT_HOUR = 4
 
 # Step states, as the summary and the log say them.
 SUCCEEDED = "succeeded"
@@ -473,6 +478,72 @@ def export_finished(client: Client, stamp: str) -> datetime | None:
 
 def export_time(stamp: str) -> datetime:
     return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+
+
+@dataclass(frozen=True)
+class Export:
+    """The site's newest finished export: when it was taken, and when done."""
+
+    #: As its folder is stamped, in UTC: "2026-10-10T02:00:59.242Z".
+    stamp: str
+    #: When Firestore wrote the marker it writes last; None if unreadable.
+    finished: datetime | None
+
+
+def latest_export(client: Client) -> Export | None:
+    """The newest export that has finished writing, as the night finds it
+    (`newest_export`), or None."""
+    stamp = newest_export(client)
+    if stamp is None:
+        return None
+    return Export(stamp, export_finished(client, stamp))
+
+
+def export_refusal(
+    export: Export | None, day: str, at: datetime, accepted: str | None = None
+) -> str:
+    """Why a people run (`jobs.people_import`) at `at` may not compare the
+    payloads with `export`, in the page's language - as the night says it -
+    or "" when it may. Kept here, beside the night's own lookup, so that
+    the requests worker can wait on the same rule without importing the
+    pipelines (`jobs.requests`).
+
+    The export has to be taken today, at `EXPORT_HOUR` or later: compared
+    with an older one, `--only-changed` sends again what the last night's run
+    put up - no-ops, but counted as changes - and `--scope not-on-koryta`
+    creates again the pages it created. That is a hand run between midnight
+    and four, or any run on a day the export failed. The night checks the
+    same at its level (`Night.step_export`); a run asked for on a page in the
+    afternoon reads the morning's export, or one taken by hand since.
+
+    And `day`, the day the snapshot's frames are named after - --koryta-date,
+    else today - has to be the export's: `KorytaExport` reads the newest
+    export of its day, and the day before when its own has none.
+
+    `accepted` (`--export`) is the stamp of an export the night's export step
+    has already taken as tonight's - any of the six hours before the night
+    (`--export-max-age`) - and stands in for both: the newest has to be that
+    one or a newer, and of `day` or a day before, whose export the frames
+    named `day` read when it has none of its own. Without it, a night forced
+    at three after an export taken by hand at eleven - or one whose 04:00
+    export failed after such a hand export - would run its invariants
+    against that export and then have its people step refuse the same one.
+    """
+    if export is None:
+        return "brak dzisiejszej kopii bazy (żadnej)"
+    if accepted:
+        if export_time(export.stamp) < export_time(accepted):
+            return f"brak kopii bazy z {accepted} (najnowsza z {export.stamp})"
+        if export.stamp[:10] > day:
+            return f"porównanie z kopią bazy z {day}, a najnowsza jest z {export.stamp}"
+        return ""
+    today = at.astimezone(warsaw_tz)
+    since = today.replace(hour=EXPORT_HOUR, minute=0, second=0, microsecond=0)
+    if export_time(export.stamp) < since:
+        return f"brak dzisiejszej kopii bazy (najnowsza z {export.stamp})"
+    if day != export.stamp[:10]:
+        return f"porównanie z kopią bazy z {day}, a najnowsza jest z {export.stamp}"
+    return ""
 
 
 def last_failures(client: Client, before: str) -> dict[str, list[str]] | None:
