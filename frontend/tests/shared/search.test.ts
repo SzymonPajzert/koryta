@@ -3,6 +3,7 @@ import {
   anchorToken,
   generateChunksLower,
   nameMatchesTokens,
+  nameWords,
   searchTokens,
 } from "~~/shared/search";
 
@@ -59,6 +60,76 @@ describe("generateChunksLower", () => {
     const chunks = generateChunksLower("Orlen");
     expect(chunks).toContain("orlen");
     expect(new Set(chunks).size).toBe(chunks.length);
+  });
+
+  it("indexes each part of a double surname, and the whole of it", () => {
+    // The person ingest renames "Bogusława Kupczak Wiśniowska" to the hyphen
+    // PKW gives, and "wiśniowska" has to go on finding her.
+    const chunks = generateChunksLower("Bogusława Kupczak-Wiśniowska");
+    expect(chunks).toContain("kupczak");
+    expect(chunks).toContain("wiśniowska");
+    expect(chunks).toContain("wiś");
+    expect(chunks).toContain("kupczak-wiśniowska");
+    expect(chunks).toContain("bogusława kupczak-wiśniowska");
+    expect(new Set(chunks).size).toBe(chunks.length);
+  });
+
+  it("cuts a hyphenated name of one word too", () => {
+    const chunks = generateChunksLower("Bielsko-Biała");
+    expect(chunks).toContain("biała");
+    expect(chunks).toContain("bielsko-biała");
+  });
+
+  it("indexes every part of a word with several hyphens, and no empty ones", () => {
+    const chunks = generateChunksLower("Jan Nowak-Kowalski-Rudnik");
+    expect(chunks).toContain("kowalski");
+    expect(chunks).toContain("rudnik");
+    expect(chunks).not.toContain("kowalski-rudnik");
+
+    // A hyphen standing for a dash, between two spaces, adds nothing: every
+    // chunk is a prefix of the name or of one of its words, as before.
+    const dashed = "ewa kukulska - zając";
+    const words = dashed.split(" ");
+    expect(
+      generateChunksLower("Ewa Kukulska - Zając").every(
+        (chunk) =>
+          dashed.startsWith(chunk) ||
+          words.some((word) => word.startsWith(chunk)),
+      ),
+    ).toBe(true);
+  });
+
+  it("gives a name without a hyphen exactly the index it had, in order", () => {
+    // What a stored index is compared against: reordered, every one of the
+    // 18,000 would read as out of date and be rewritten for nothing.
+    expect(generateChunksLower("Jan Nowak")).toEqual([
+      "",
+      "j",
+      "ja",
+      "jan",
+      "jan ",
+      "jan n",
+      "jan no",
+      "jan now",
+      "jan nowa",
+      "jan nowak",
+      "n",
+      "no",
+      "now",
+      "nowa",
+      "nowak",
+    ]);
+  });
+
+  it("puts the parts after everything it carried before", () => {
+    expect(generateChunksLower("Anna Nowak-Rudnik").slice(-6)).toEqual([
+      "r",
+      "ru",
+      "rud",
+      "rudn",
+      "rudni",
+      "rudnik",
+    ]);
   });
 });
 
@@ -144,5 +215,72 @@ describe("nameMatchesTokens", () => {
         "mieszkaniowej",
       ]),
     ).toBe(true);
+  });
+
+  it.each([
+    ["wiśniowska"],
+    ["kupczak wiśniowska"],
+    ["kupczak-wiśniowska"],
+    ["bogusława wiśniowska"],
+    ["wiśniowska kupczak"],
+    ["kupczak-wiś"],
+    ["kupczak-"],
+  ])("finds a double surname by %s, hyphen or space", (typed) => {
+    // Whichever way the page is titled: the ingest renames the register's
+    // space to the hyphen PKW gives, and 331 of the 430 pages titled with the
+    // space on 2026-10-11 have no hyphen to be given.
+    for (const name of [
+      "Bogusława Kupczak-Wiśniowska",
+      "Bogusława Kupczak Wiśniowska",
+    ]) {
+      expect(nameMatchesTokens(name, searchTokens(typed))).toBe(true);
+    }
+  });
+
+  it("matches a company by a word inside a hyphenated one", () => {
+    expect(
+      nameMatchesTokens("Przedsiębiorstwo Wodno-Kanalizacyjne Sp. z o.o.", [
+        "kanalizacyjne",
+      ]),
+    ).toBe(true);
+  });
+
+  it("still needs a different word for each typed word past a hyphen", () => {
+    expect(nameMatchesTokens("Anna Nowak-Rudnik", ["rudnik", "rudnik"])).toBe(
+      false,
+    );
+    expect(nameMatchesTokens("Anna Nowak-Rudnik", ["nowak-rudnicka"])).toBe(
+      false,
+    );
+    expect(
+      nameMatchesTokens("Anna Nowak-Rudnik", ["anna", "maria", "rudnik"]),
+    ).toBe(false);
+  });
+
+  it("does not take a lone hyphen for a word on either side", () => {
+    expect(nameMatchesTokens("Ewa Kukulska - Zając", ["kukulska-zając"])).toBe(
+      true,
+    );
+    expect(nameMatchesTokens("Ewa Kukulska - Zając", ["ewa", "-"])).toBe(true);
+  });
+});
+
+describe("nameWords", () => {
+  it("cuts at hyphens as well as at whitespace, and folds case", () => {
+    expect(nameWords("Bogusława  Kupczak-Wiśniowska")).toEqual([
+      "bogusława",
+      "kupczak",
+      "wiśniowska",
+    ]);
+  });
+
+  it("keeps no empty word where a hyphen stands alone or at an end", () => {
+    expect(nameWords("Ewa Kukulska - Zając")).toEqual([
+      "ewa",
+      "kukulska",
+      "zając",
+    ]);
+    expect(nameWords("nowak-")).toEqual(["nowak"]);
+    expect(nameWords(" - ")).toEqual([]);
   });
 });

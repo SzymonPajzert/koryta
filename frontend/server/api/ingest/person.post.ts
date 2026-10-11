@@ -1010,10 +1010,12 @@ function isoBirthDate(value: unknown): string | undefined {
  * than the namesakes - a surname is a prefix of longer ones, and companies
  * are indexed alike - so the caller narrows them by the name.
  *
- * A double surname by its last part as well: the index cuts a name at its
- * spaces only, so a page titled "Anna Nowak Rudnik" carries "rudnik" and no
- * "nowak-rudnik", and a payload hyphenating it (`spacedSurname`) would miss
- * the page it has to be held back for. */
+ * A double surname by its last part as well: a page titled "Anna Nowak
+ * Rudnik" carries "rudnik" and no "nowak-rudnik", and a payload hyphenating
+ * it (`spacedSurname`) would miss the page it has to be held back for. The
+ * index cuts a hyphenated word into its parts too, so the last part finds
+ * the pages written either way; the whole word stays in the query for a page
+ * whose index predates that. */
 async function namesakes(
   ctx: Context,
   name: string,

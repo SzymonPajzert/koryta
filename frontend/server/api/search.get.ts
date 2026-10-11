@@ -3,7 +3,12 @@ import { parseNodeDoc } from "~~/server/utils/fetch";
 import { getFirestore } from "firebase-admin/firestore";
 import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
 import { getValidatedQuery } from "h3";
-import { anchorToken, nameMatchesTokens, searchTokens } from "~~/shared/search";
+import {
+  anchorToken,
+  nameMatchesTokens,
+  nameWords,
+  searchTokens,
+} from "~~/shared/search";
 
 const queryValidator = z.object({
   q: z.string().optional().default(""),
@@ -60,8 +65,14 @@ export default editorFreshCachedEventHandler(async (event) => {
   // pass above rather than instead of it, so that whatever the index could
   // already find is still found, and found first: an exact prefix of the name
   // is a better hit than a name with something in the middle of it.
-  if (tokens.length > 1) {
-    passes.push(byChunk(anchorToken(tokens), MULTI_WORD_SCAN_LIMIT));
+  //
+  // Words as the hyphen cuts them too, so "kupczak-wiśniowska" anchors on
+  // "wiśniowska" and reaches the page still titled "Kupczak Wiśniowska", which
+  // carries no chunk with the hyphen in it; and "kupczak wiśniowska" reaches
+  // the page titled with the hyphen, whose whole name is no chunk of that.
+  const words = nameWords(query.q);
+  if (words.length > 1) {
+    passes.push(byChunk(anchorToken(words), MULTI_WORD_SCAN_LIMIT));
   }
 
   const snapshots = await Promise.all(passes);
