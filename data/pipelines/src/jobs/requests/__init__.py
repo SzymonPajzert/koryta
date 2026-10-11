@@ -22,6 +22,20 @@ alongside a night: the pipelines' outputs on disk are the night's, rebuilt
 under it. And `--busy` while it has a run in hand, which tells the night's own
 `poweroff.sh` to leave the switching off to this.
 
+A run starts only once the export it will compare the page's people with is
+there: today's, taken at 04:00 or later and finished, by the job's own rule
+(`jobs.nightly.export_refusal`). Since 2026-10-11 the job refuses an older one,
+so a run asked for between midnight and the export - or on a day the export
+failed - would only fail. It is left queued instead, says on the page that it
+waits for the export (`waitingFor`), and starts once the export's marker is
+there, told which export that was (`--export`), so the job takes the one the
+worker waited for even if midnight comes between. Nor is the VM kept up for
+it: with nothing it can run for `--idle-minutes`, the worker asks for the VM
+off as after a run, and the instance schedule's 04:15 boot for the night,
+after the export, starts it again. A run that waited goes then, before the
+04:30 night, which waits for it: the runs asked for from 2026-10-06 to 10-11
+took 0.3 to 5.6 minutes each, and night.sh waits up to thirty.
+
 A run whose job ended without saying so - it crashed first, or could not reach
 the ops database - is ended here, by the job's exit code; one this host was
 doing when it went down - a VM switched off mid-run - is ended as failed when
@@ -41,25 +55,46 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from jobs.nightly import Export, export_refusal, latest_export
 from stores.job_requests import (
     PEOPLE_REQUEST,
+    WAIT_EXPORT,
+    WAIT_NIGHT,
+    Waiting,
     claim,
     end_open_run,
+    mark_waiting,
     queued_requests,
     running_on,
 )
 from stores.job_runs import FinalState, detect_host, make_client
-from stores.storage import warsaw_tz
+from stores.storage import Client, warsaw_tz
 
 #: How long one run may take before it is stopped (SIGTERM, then SIGKILL): the
 #: job's own `--max-minutes` stops it cleanly well before this.
 RUN_TIMEOUT_MINUTES = 90
 
-#: The jobs the site can ask for, and the command that does one run of each.
+#: How often the bucket is asked again whether the export is there, while a
+#: run waits for it: the night's export step looks once a minute too.
+EXPORT_LOOK_SECONDS = 60
+
+#: How often a run that waits - for the export, or for the night - has its
+#: heartbeat written again: well inside the half hour after which the page
+#: takes a queued run for one nobody picked up (`queuedMinutes`).
+WAITING_HEARTBEAT_SECONDS = 300
+
+#: What a run waits for, as the journal says it.
+WAITING_SAID: dict[Waiting, str] = {
+    WAIT_EXPORT: "today's export",
+    WAIT_NIGHT: "the night to let go of the lock",
+}
+
+#: The jobs the site can ask for, and the command that does one run of each,
+#: given the export the worker found for it.
 #: `--refresh none`: the outputs on disk are the night's, rebuilt hours ago -
 #: rebuilding the people's chain for one company would take the night's hour.
-JOB_COMMANDS: dict[str, Callable[[str, argparse.Namespace], list[str]]] = {
-    PEOPLE_REQUEST: lambda run_id, args: [
+JOB_COMMANDS: dict[str, Callable[[str, argparse.Namespace, str], list[str]]] = {
+    PEOPLE_REQUEST: lambda run_id, args, export: [
         bin_path("koryta_people_import"),
         "--request",
         run_id,
@@ -69,6 +104,7 @@ JOB_COMMANDS: dict[str, Callable[[str, argparse.Namespace], list[str]]] = {
         f"{args.max_minutes:g}",
         "--max-uploads",
         str(args.max_uploads),
+        *(["--export", export] if export else []),
     ],
 }
 
@@ -193,6 +229,7 @@ class Worker:
         sleep: Callable[[float], None] = time.sleep,
         run: Callable[[Sequence[str], float], int | None] = run_command,
         logged_in: Callable[[], bool] = someone_logged_in,
+        find_export: Callable[[], Export | None] | None = None,
     ):
         self.args = args
         self._client = client
@@ -201,16 +238,33 @@ class Worker:
         self.sleep = sleep
         self.run_job = run
         self.logged_in = logged_in
+        self.find_export = find_export or self.newest_export
         self.host = detect_host()
         self.lock = Lock(args.lock)
         self.busy = Lock(args.busy)
         self.tally = Tally()
         self.stopping = False
+        self._storage: Client | None = None
+        #: The newest export, as last looked up, and when (`monotonic`).
+        self.export: Export | None = None
+        self._looked: float | None = None
+        #: Why the runs could not start at that look, or "".
+        self._refusal = ""
+        #: Whether a run has waited for the export since the worker started:
+        #: the VM was started for it, and may go off again (`should_power_off`).
+        self.waited = False
+        #: Per queued run: what it was last said to wait for, and when.
+        self._waiting: dict[str, tuple[Waiting, float]] = {}
 
     def client(self):
         if self._client is None:
             self._client = make_client()
         return self._client
+
+    def newest_export(self) -> Export | None:
+        if self._storage is None:
+            self._storage = Client()
+        return latest_export(self._storage)
 
     # -- the loop ----------------------------------------------------------
 
@@ -243,27 +297,35 @@ class Worker:
                 return ran
             if not queued:
                 return ran
+            waiting = [run_id for run_id, _ in queued]
+            if self.held_for_export(waiting):
+                return ran
             run_id, data = queued[0]
-            if not self.do(run_id, str(data.get("job"))):
+            if not self.do(run_id, str(data.get("job")), waiting):
                 # Somebody else took it, or it could not be taken: the queue
                 # is read again, and a run that stays stuck is the page's to show.
                 return ran
             ran += 1
         return ran
 
-    def do(self, run_id: str, job: str) -> bool:
+    def do(self, run_id: str, job: str, waiting: Sequence[str] = ()) -> bool:
         """One queued run: wait for the night, claim it, run its job, and end
-        it if the job could not. False when it was not ours to run."""
+        it if the job could not. False when it was not ours to run - or not
+        yet, the export being gone stale while the night ran past midnight.
+        `waiting` are the queued runs, this one first, that wait meanwhile."""
         if not self.busy.try_take():
             print("Another worker holds the busy lock; leaving the queue to it")
             return False
         try:
-            if not self.wait_for(self.lock):
+            if not self.wait_for(self.lock, waiting):
                 return False
             try:
+                if self.held_for_export(waiting):
+                    return False
                 if not claim(self.client(), run_id, host=self.host, now=self.clock()):
                     print(f"{run_id}: taken by somebody else")
                     return False
+                self._waiting.pop(run_id, None)
                 self.tally.runs.append(self.execute(run_id, job))
                 return True
             finally:
@@ -271,8 +333,9 @@ class Worker:
         finally:
             self.busy.release()
 
-    def wait_for(self, lock: Lock) -> bool:
-        """Take the lock, waiting while somebody - a night - has it."""
+    def wait_for(self, lock: Lock, waiting: Sequence[str] = ()) -> bool:
+        """Take the lock, waiting while somebody - a night - has it; the
+        `waiting` runs say so on the page meanwhile."""
         said = False
         while not lock.try_take():
             if self.stopping:
@@ -280,8 +343,75 @@ class Worker:
             if not said:
                 print(f"{lock.path} is held - a night is running; waiting", flush=True)
                 said = True
+            self.keep_waiting(waiting, WAIT_NIGHT)
             self.sleep(self.args.poll_seconds)
         return True
+
+    def held_for_export(self, waiting: Sequence[str]) -> bool:
+        """Whether the queued runs have to wait for the export; if they do,
+        they say so on the page (`export_wait`)."""
+        if not self.export_wait():
+            return False
+        self.waited = True
+        self.keep_waiting(waiting, WAIT_EXPORT)
+        return True
+
+    def export_wait(self) -> str:
+        """Why no run may start yet - the job would refuse to compare with
+        the newest export (`export_refusal`): before the day's 04:00 export
+        is done, or on a day it failed - or "" when they may.
+
+        The bucket is asked at most once every `EXPORT_LOOK_SECONDS`, and an
+        export found good is taken as good until midnight makes it
+        yesterday's. One the bucket would not say is waited for too: the job
+        would read the same bucket, and fail."""
+        now = self.clock()
+        day = now.astimezone(warsaw_tz).date().isoformat()
+        # Judged again each time, whenever it was looked up: a minute after
+        # a look that found it good, it may be yesterday's.
+        refusal = export_refusal(self.export, day, now)
+        if not refusal:
+            return ""
+        tick = self.monotonic()
+        if self._looked is not None and tick - self._looked < EXPORT_LOOK_SECONDS:
+            return refusal
+        self._looked = tick
+        try:
+            self.export = self.find_export()
+            refusal = export_refusal(self.export, day, now)
+        except Exception as e:
+            self.export = None
+            refusal = f"could not look for the export: {type(e).__name__}: {e}"
+        if refusal and refusal != self._refusal:
+            print(f"Waiting for today's export: {refusal}", flush=True)
+        elif not refusal and self._refusal and self.export is not None:
+            print(f"Today's export is there: {self.export.stamp}", flush=True)
+        self._refusal = refusal
+        return refusal
+
+    def keep_waiting(self, run_ids: Sequence[str], waiting: Waiting) -> None:
+        """Say on each queued run what it waits for, when it starts waiting
+        and every `WAITING_HEARTBEAT_SECONDS` after, so that the page tells
+        a run that waits for a reason from one nobody picked up."""
+        tick = self.monotonic()
+        for run_id in run_ids:
+            said = self._waiting.get(run_id)
+            if (
+                said is not None
+                and said[0] == waiting
+                and tick - said[1] < WAITING_HEARTBEAT_SECONDS
+            ):
+                continue
+            try:
+                queued = mark_waiting(
+                    self.client(), run_id, waiting=waiting, now=self.clock()
+                )
+            except Exception as e:
+                print(f"{run_id}: could not say it waits: {e}", flush=True)
+                continue
+            if queued and (said is None or said[0] != waiting):
+                print(f"{run_id}: waiting for {WAITING_SAID[waiting]}", flush=True)
+            self._waiting[run_id] = (waiting, tick)
 
     def execute(self, run_id: str, job: str) -> Outcome:
         outcome = Outcome(run_id, job)
@@ -291,8 +421,9 @@ class Worker:
             state, reason = "failed", f"nieznany job {job}"
         else:
             print(f"{run_id}: {job}", flush=True)
+            export = self.export.stamp if self.export is not None else ""
             outcome.exit_code = self.run_job(
-                command(run_id, self.args), RUN_TIMEOUT_MINUTES * 60
+                command(run_id, self.args, export), RUN_TIMEOUT_MINUTES * 60
             )
             state, reason = self.judge(outcome.exit_code)
         # A job that reported its own ending is left with it: this touches a
@@ -348,11 +479,13 @@ class Worker:
     # -- switching the VM off ----------------------------------------------
 
     def should_power_off(self, idle_seconds: float) -> bool:
-        """Once it has done what it was started for. Never for a VM nobody's
-        request started - somebody booted it to look at it - nor while a
-        night runs, while one is about to, or while anybody is logged in."""
+        """Once it has done what it was started for, or found that what it
+        was started for waits for the export - which the night's 04:15 boot
+        comes back for. Never for a VM nobody's request started - somebody
+        booted it to look at it - nor while a night runs, while one is about
+        to, or while anybody is logged in."""
         args = self.args
-        if not args.poweroff_flag or not self.tally.count:
+        if not args.poweroff_flag or not (self.tally.count or self.waited):
             return False
         if idle_seconds < args.idle_minutes * 60:
             return False
@@ -411,8 +544,9 @@ def parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--poweroff-flag",
-        help="--watch: once idle after a run, write this file and exit - "
-        "poweroff.sh switches the VM off when it finds it.",
+        help="--watch: once idle after a run - or with every queued run waiting "
+        "for today's export - write this file and exit; poweroff.sh switches "
+        "the VM off when it finds it.",
     )
     parser.add_argument("--idle-minutes", type=float, default=10)
     parser.add_argument(

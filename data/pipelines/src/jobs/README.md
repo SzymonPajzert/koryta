@@ -116,9 +116,10 @@ Runs nightly as the step after the people on the koryta-nightly VM, so a new hir
 
 ## requests
 1. Takes the runs the datascience group queued from the site's pages ("Wyślij dane osób", "Wyślij dane tej osoby"), oldest first, claiming each so that no run is done twice
-1. Runs each as `koryta_people_import --request <id> --refresh none`, under the night's lock
+1. Leaves them queued until today's export is done - the job refuses an older one (`jobs.nightly.export_refusal`) - and says so on each (`waitingFor: "export"`, and while a night holds the lock `"night"`), its heartbeat written every five minutes
+1. Runs each as `koryta_people_import --request <id> --refresh none --export <the export it waited for>`, under the night's lock
 1. Ends a run whose job could not say how it ended, by the job's exit code
-1. `--watch`: once it has run something and nothing more comes for ten minutes, asks for the VM to be switched off
+1. `--watch`: once it has run something - or found every queued run waiting for the export, which the night's 04:15 boot comes back for - and nothing more comes for ten minutes, asks for the VM to be switched off
 
 Started at every boot of the koryta-nightly VM, which the site starts for a request - see [data/nightly/README.md](../../../nightly/README.md).
 By hand, against the emulator or wherever there are outputs to read: `koryta_job_requests --once`.
