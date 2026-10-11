@@ -644,12 +644,22 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     assert "krs_odpis" not in out
     assert "koryta --all-pipelines" in out
     assert "koryta_people_import --scope priority --max-uploads 100" in out
+    assert "--export <the export step's>" in out
     assert "koryta_score_import" in out
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
     assert (
         "koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25"
         in out
     )
+
+
+def test_the_plan_names_no_export_for_a_night_without_the_export_step(world, capsys):
+    # As the people step runs then: on the job's own rule, no --export.
+    assert night.main(["--dry-run", "--only", "people"]) == 0
+
+    out = capsys.readouterr().out
+    assert "koryta_people_import --scope priority" in out
+    assert "--export" not in out
 
 
 def test_past_the_stop_by_only_compress_and_tidy_run(world, monkeypatch):
