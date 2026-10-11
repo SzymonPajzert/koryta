@@ -341,6 +341,24 @@ def test_a_state_institute_among_the_last_owners_makes_it_public():
     assert pipeline.companies[bioton].parents == []
 
 
+def test_kghms_fund_that_held_it_to_the_end_makes_it_public():
+    # STAROPOLANKA: KGHM's first fund until entry 20 handed it to the seventh,
+    # which held it until entry 31 struck it off on 2020-10-30.
+    staropolanka = "0000579249"
+    first = "KGHM I FUNDUSZ INWESTYCYJNY ZAMKNIĘTY AKTYWÓW NIEPUBLICZNYCH"
+    seventh = "KGHM VII FUNDUSZ INWESTYCYJNY ZAMKNIĘTY AKTYWÓW NIEPUBLICZNYCH"
+    pipeline = run(
+        struck_off(staropolanka, "2020-09-16"),
+        owner_seat(staropolanka, first, "20", "2019-07-05", role="wspolnik"),
+        owner_seat(
+            staropolanka, seventh, "31", "2020-10-30", role="wspolnik", added_by="20"
+        ),
+    )
+
+    assert public_of(pipeline) == {staropolanka}
+    assert pipeline.companies[staropolanka].parents == []
+
+
 def test_an_owner_struck_out_before_the_last_entry_had_sold_it():
     pipeline = run(
         struck_off(TDM_ARRTRANS, "2025-02-10"),

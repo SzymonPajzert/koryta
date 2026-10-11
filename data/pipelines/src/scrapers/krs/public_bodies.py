@@ -56,6 +56,15 @@ PUBLIC_BODY_PREFIXES = (
     # The bank guarantee fund, a state legal person set up by statute. Sole
     # shareholder of DRUGI BANK BFG (0000825574) until it was struck off.
     "BANKOWY FUNDUSZ GWARANCYJNY",
+    # KGHM's closed-end fund, public through KGHM Polska Miedź, which holds its
+    # certificates (Szymon, 2026-10-11). It was the last owner of STAROPOLANKA
+    # (0000579249), from entry 20 until entry 31 struck it off in 2020. Named
+    # rather than followed: no source here says who holds a fund's certificates,
+    # and KGHM TFI, which manages it, is not in the crawl - nor does a manager
+    # own what it manages. KGHM's funds I, III, IV and VI are past owners on file
+    # too, but naming them would change no company today, and nobody has
+    # decided them.
+    "KGHM VII FUNDUSZ INWESTYCYJNY ZAMKNIETY",
     "BANK GOSPODARSTWA KRAJOWEGO",
     "NARODOWY BANK POLSKI",
     "ZAKLAD UBEZPIECZEN SPOLECZNYCH",
