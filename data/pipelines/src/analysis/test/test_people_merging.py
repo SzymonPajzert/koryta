@@ -393,6 +393,25 @@ def test_a_person_gets_every_part_of_a_record_split_by_place(ctx):
     assert list(result["pkw_records"].iloc[0]) == ["Anna PALUCH ?"] * 3
 
 
+def test_the_part_with_most_of_the_career_names_the_person(ctx):
+    """The parts tie on the name and the year, so the count decides.
+
+    The record that names a person also gives the region their surname is
+    counted in for `unique_chance`, and with three equal parts that was
+    whichever came first: here the namesake's okręg 33, or nowhere at all.
+    """
+    parts = paluch_split(ctx)
+
+    for order in itertools.permutations(parts):
+        # `people_merged` registers its functions once per connection.
+        run = SimpleNamespace(con=duckdb.connect())
+        result = match_pkw(
+            run, [krs_person("anna", "paluch", "1960-03-31")], list(order)
+        )
+
+        assert list(result["teryt_wojewodztwo"].iloc[0]) == ["12"]
+
+
 def test_a_year_only_biography_needs_the_first_name_exactly(ctx):
     """The bug: Marzena Słomka's page carried Marek Słomka's biography.
 
