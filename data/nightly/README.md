@@ -30,7 +30,7 @@ order, each with a time limit and its output in the night's log:
 | `tests`        | `pytest src/tests/pipelines` over the night's outputs                                                                   |
 | `outputs`      | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                      |
 | `invariants`   | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                     |
-| `people`       | `koryta_people_import --scope priority --max-uploads 100 --refresh none`                                                |
+| `people`       | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --refresh none`                    |
 | `scores`       | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled             |
 | `tidy`         | export shards and day-named outputs older than a week off the disk                                                      |
 
@@ -323,6 +323,9 @@ way, and the timer runs the night on a VM that is already up too.
   VM still while `main` moves. Every merge to `main` is otherwise live the
   next night.
 - **More people.** `KORYTA_NIGHTLY_ARGS=--max-uploads 300`.
+- **More, or no, pages for the people only an odpis names in older posts.**
+  `KORYTA_NIGHTLY_ARGS=--max-odpis-only-current 20`; 0 makes none. It does
+  not grow with `--max-uploads`.
 - **The private companies' odpisy too.** `KORYTA_NIGHTLY_ARGS=--odpis-missing all`;
   `none` asks for the bulletin's companies alone, as before 2026-10-09.
 - **More of the register.** `KORYTA_NIGHTLY_ARGS=--register-backlog 2000`.
