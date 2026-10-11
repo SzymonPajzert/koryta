@@ -14,8 +14,10 @@ from analysis.payloads.priority import (
     NEW_HIRE,
     NOTED,
     NOTED_MISSING,
+    ODPIS_ONLY_CURRENT,
     ON_SITE,
     PUBLISHED,
+    current_public_seats,
     newest_public_start,
     prioritised,
     register_id,
@@ -469,3 +471,114 @@ def test_a_payload_is_filed_under_the_id_its_register_link_ends_in():
         "2479295"
     )
     assert register_id(person("Jan", None)) is None  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# The people only an odpis names in a public post that is not new
+
+
+def odpis_only(name: str, *companies: Company) -> Person:
+    """Somebody with no rejestr.io entry: the ingest finds them by their name
+    and birth date alone."""
+    return person(name, None, *companies, birthDate="1971-03-14")  # type: ignore[arg-type]
+
+
+def test_somebody_only_an_odpis_names_in_an_older_public_post_goes_after_the_noted():
+    site = snapshot(
+        stored_person("pub", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        stored_person("asked", "Piotr Sowa", "https://rejestr.io/osoby/5"),
+    )
+    # Hired lately: a new hire, whatever else they hold.
+    hire = odpis_only(
+        "Anna Nowak",
+        Company(krs=PUBLIC, start="2026-09-20"),
+        Company(krs=OTHER_PUBLIC, start="2015-01-01"),
+    )
+    seated = odpis_only(
+        "Beata Kos",
+        Company(krs=PUBLIC, start="2019-03-01"),
+        Company(krs=OTHER_PUBLIC, start="2023-05-01"),
+        Company(krs=PUBLIC, start="2025-01-01", end="2025-06-01"),
+    )
+    # With a rejestr.io entry: nobody else without a page gets one.
+    linked = person(
+        "Celina Lis",
+        "https://rejestr.io/osoby/7",
+        Company(krs=PUBLIC, start="2020-01-01"),
+    )
+    ended = odpis_only(
+        "Dorota Wilk", Company(krs=PUBLIC, start="2020-01-01", end="2024-01-01")
+    )
+    private = odpis_only("Ewa Mazur", Company(krs=PRIVATE, start="2020-01-01"))
+    asked = person(
+        "Piotr Sowa",
+        "https://rejestr.io/osoby/5",
+        Company(krs=PRIVATE, start="2026-09-20"),
+    )
+    published = person(
+        "Jan Kowalski",
+        "https://rejestr.io/osoby/1",
+        Company(krs=PUBLIC, start="2026-09-01"),
+    )
+
+    picks = prioritised(
+        [private, ended, linked, seated, hire],
+        [published, asked],
+        site,
+        public_krs={PUBLIC, OTHER_PUBLIC},
+        published_ids={"pub"},
+        bought=set(),
+        noted={"asked": frozenset({"change_request"})},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    # Ahead of the published pages, newer as theirs may be.
+    assert [(p.person.name, p.tier, p.since) for p in picks] == [
+        ("Anna Nowak", NEW_HIRE, "2026-09-20"),
+        ("Piotr Sowa", NOTED, "2026-09-20"),
+        ("Beata Kos", ODPIS_ONLY_CURRENT, "2023-05-01"),
+        ("Jan Kowalski", PUBLISHED, "2026-09-01"),
+    ]
+    assert current_public_seats(seated, {PUBLIC, OTHER_PUBLIC}) == [
+        "2019-03-01",
+        "2023-05-01",
+    ]
+
+
+def test_the_newest_post_first_and_on_one_day_a_company_the_site_has_first():
+    """Most ties are a board appointed at once: 499 of the 980 people of
+    2026-10-11 shared their day with another."""
+    fourth = "0000000004"
+    site = snapshot()  # A page for PUBLIC; none for OTHER_PUBLIC or the fourth.
+    newer = odpis_only("Karol Nowy", Company(krs=PUBLIC, start="2025-02-01"))
+    at_a_page = odpis_only("Zofia Zając", Company(krs=PUBLIC, start="2024-05-01"))
+    board = [
+        odpis_only("Barbara Lis", Company(krs=OTHER_PUBLIC, start="2024-05-01")),
+        odpis_only("Adam Bąk", Company(krs=OTHER_PUBLIC, start="2024-05-01")),
+    ]
+    elsewhere = odpis_only("Marek Ryba", Company(krs=fourth, start="2024-05-01"))
+    # A start the register does not give goes after every dated one.
+    undated = odpis_only("Olga Stara", Company(krs=PUBLIC))
+
+    picks = prioritised(
+        [undated, elsewhere, board[0], at_a_page, newer, board[1]],
+        [],
+        site,
+        public_krs={PUBLIC, OTHER_PUBLIC, fourth},
+        published_ids=set(),
+        bought=set(),
+        noted={},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert [(p.person.name, p.since) for p in picks] == [
+        ("Karol Nowy", "2025-02-01"),
+        ("Zofia Zając", "2024-05-01"),
+        ("Adam Bąk", "2024-05-01"),
+        ("Barbara Lis", "2024-05-01"),
+        ("Marek Ryba", "2024-05-01"),
+        ("Olga Stara", None),
+    ]
+    assert {p.tier for p in picks} == {ODPIS_ONLY_CURRENT}

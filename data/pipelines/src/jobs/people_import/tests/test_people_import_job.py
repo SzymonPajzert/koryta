@@ -1130,7 +1130,7 @@ def sent_part(world: World) -> list[dict]:
 
 
 HIRE, BOUGHT, PUBLISHED, ON_SITE = "new_hire", "bought", "published", "on_site"
-MISSING, NOTED = "noted_missing", "noted"
+MISSING, NOTED, SEATED = "noted_missing", "noted", "odpis_only_current"
 
 
 def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
@@ -1152,6 +1152,7 @@ def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
         BOUGHT: 0,
         MISSING: 0,
         NOTED: 0,
+        SEATED: 0,
         PUBLISHED: 1,
         ON_SITE: 1,
     }
@@ -1183,16 +1184,20 @@ def test_new_hires_past_max_new_make_room_for_the_pages_after_them(priority):
         BOUGHT: 0,
         MISSING: 0,
         NOTED: 0,
+        SEATED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }
 
 
-def odpis_only(name: str, since: str | None = None) -> build.Candidate:
+def odpis_only(
+    name: str, since: str | None = None, tier: str = HIRE
+) -> build.Candidate:
     """A new hire with no rejestr.io entry: the ingest finds them by their name
-    and birth date alone."""
+    and birth date alone. Or, as `SEATED`, somebody like that in a public
+    post that is not new."""
     payload = {"name": name, "companies": [], "birthDate": "1971-03-14"}
-    return build.Candidate(payload, HIRE, since)
+    return build.Candidate(payload, tier, since)
 
 
 def test_new_hires_only_an_odpis_names_leave_the_run_to_the_pages_after_them(
@@ -1243,6 +1248,88 @@ def test_planning_counts_only_the_new_hires_without_an_entry_to_their_cap():
         "Ewa Lis",
     ]
     assert names(max_new=2, max_new_odpis_only=5) == ["Anna Nowak", "Beata Kos"]
+
+
+def test_people_only_an_odpis_names_in_an_older_post_take_ten_a_run(priority, capsys):
+    """980 of them on 2026-10-11, and Szymon's choice that day: ten a night,
+    their pages made as a new hire's are."""
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Olga Sowa", BOUGHT),
+        *[odpis_only(f"Osoba {i}", "2025-01-01", SEATED) for i in range(1, 13)],
+        candidate("Jan Kowalski", PUBLISHED),
+    ]
+    priority.answers = [person("created"), person("updated")]
+    priority.answers += [person("created", f"page-{i}") for i in range(1, 11)]
+    priority.answers += [person("updated")]
+
+    assert job.main(["--scope", "priority", "--max-uploads", "100"]) == 0
+
+    sent = priority.sent()
+    assert sent[:2] == ["Anna Nowak", "Olga Sowa"]
+    assert sent[2:12] == [f"Osoba {i}" for i in range(1, 11)]
+    assert sent[12:] == ["Jan Kowalski"]
+    summary = priority.summary()
+    assert summary["state"] == "succeeded"
+    assert summary["tiers"][SEATED] == 10
+    assert len(summary["created"]) == 11
+    assert [row["tier"] for row in sent_part(priority)].count(SEATED) == 10
+    out = capsys.readouterr().out
+    assert "'noted': 0, 'odpis_only_current': 10, 'published': 1" in out
+    assert (
+        "People only an odpis names in an older public post: 10 of 12 planned "
+        "(--max-odpis-only-current 10)" in out
+    )
+
+
+def test_the_pages_of_both_kinds_count_against_max_new_together():
+    found = [candidate("Anna Nowak", HIRE), odpis_only("Beata Kos", tier=HIRE)]
+    found += [odpis_only("Celina Lis", tier=SEATED), candidate("Jan Lis", PUBLISHED)]
+    found += [odpis_only("Dorota Wilk", tier=SEATED)]
+
+    def names(max_new: int, max_odpis_only_current: int | None) -> list[str]:
+        planned, _ = job.plan_priority(found, set(), max_new, 5, max_odpis_only_current)
+        return [c.payload["name"] for c in planned]
+
+    everybody = ["Anna Nowak", "Beata Kos", "Celina Lis", "Jan Lis", "Dorota Wilk"]
+    assert names(max_new=5, max_odpis_only_current=None) == everybody
+    assert names(max_new=5, max_odpis_only_current=1) == everybody[:4]
+    assert names(max_new=5, max_odpis_only_current=0) == [
+        "Anna Nowak",
+        "Beata Kos",
+        "Jan Lis",
+    ]
+    # Planned past --max-new, the run would stop as failed on its own plan.
+    assert names(max_new=3, max_odpis_only_current=10) == everybody[:4]
+    assert names(max_new=2, max_odpis_only_current=10) == [
+        "Anna Nowak",
+        "Beata Kos",
+        "Jan Lis",
+    ]
+
+
+def test_ten_a_priority_run_may_be_people_only_an_odpis_names_in_an_older_post():
+    def cap(*argv: str) -> int | None:
+        return job.parse_args(["--scope", "priority", *argv]).max_odpis_only_current
+
+    assert cap() == 10
+    # Not a share of the run: the backlog waits however many go up.
+    assert cap("--max-uploads", "300") == 10
+    assert cap("--max-odpis-only-current", "0") == 0
+    assert job.parse_args([]).max_odpis_only_current is None
+
+
+def test_a_page_made_for_somebody_in_an_older_post_does_not_stop_the_run(priority):
+    priority.candidates = [
+        odpis_only("Celina Lis", "2024-05-01", SEATED),
+        candidate("Jan Kowalski", PUBLISHED),
+    ]
+    priority.answers = [person("created", "new-page"), person("updated")]
+
+    assert job.main(["--scope", "priority"]) == 0
+
+    assert priority.sent() == ["Celina Lis", "Jan Kowalski"]
+    assert priority.summary()["created"] == ["Celina Lis (new-page)"]
 
 
 def test_a_payload_sent_unchanged_lately_is_left_out(priority):
@@ -1353,7 +1440,7 @@ def test_a_priority_dry_run_shows_the_tiers_and_writes_nothing(priority, capsys)
     assert "The first 3 (--max-uploads) by tier:" in out
     assert (
         "'new_hire': 1, 'bought': 1, 'noted_missing': 0, 'noted': 0, "
-        "'published': 1, 'on_site': 0" in out
+        "'odpis_only_current': 0, 'published': 1, 'on_site': 0" in out
     )
 
 
@@ -1404,6 +1491,7 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
         BOUGHT: 1,
         MISSING: 0,
         NOTED: 0,
+        SEATED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }
@@ -1417,7 +1505,7 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
     out = capsys.readouterr().out
     assert (
         "Planned by tier: {'new_hire': 1, 'bought': 1, 'noted_missing': 0, "
-        "'noted': 0, 'published': 1, 'on_site': 0}" in out
+        "'noted': 0, 'odpis_only_current': 0, 'published': 1, 'on_site': 0}" in out
     )
 
 
@@ -1444,6 +1532,7 @@ def test_the_noted_pages_go_up_after_the_bought_in_tiers_of_their_own(priority):
         BOUGHT: 1,
         MISSING: 1,
         NOTED: 1,
+        SEATED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }

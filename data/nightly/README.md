@@ -134,21 +134,28 @@ People: at most 100 a night (`--max-uploads`), in this order
 
 1. somebody the site has no page for, with a public post that began in the
    last 30 days and has not ended - the page is created unpublished, so they
-   reach the review queue, not the site;
+   reach the review queue, not the site. Those only an odpis names, with no
+   rejestr.io entry, take at most a tenth of the night (`--max-new-odpis-only`);
 2. a page the payload would change, of somebody whose rejestr.io feed was
    bought in the last 7 days (`--bought-days`) - by `krs_paid` or by hand, as
    the crawl bucket's names say - so what was paid for reaches the site that
    night, or the night after a hand run or a held night. A page only: a page
    without a link is still bought by name, so a bought entry without a page
-   is most likely a namesake's, and nobody but a new hire gets a page;
+   is most likely a namesake's, and only tiers 1 and 5 get a page;
 3. a page the payload would change, on which somebody noted that data is
    missing ("Brakuje danych") and no admin has closed the entry - on the page
    itself, or on the page of a company the payload names: the night sends no
    company payloads, so what a company lacks comes up as its people's posts;
 4. the same for any other note entry still open: a correction ("Do poprawy"),
    or an entry an admin marked unresolved;
-5. a published page the payload would change;
-6. any other page the payload would change.
+5. at most 10 people the site has no page for whom only an odpis names, in a
+   public post that has not ended and began before those 30 days
+   (`--max-odpis-only-current`), created unpublished as in 1. 980 were waiting
+   on 2026-10-11 and no night made a page for them; ten a night is Szymon's
+   choice of that day - few enough to check by hand the next morning. The
+   newest post first, and on one day a company the site has a page for first;
+6. a published page the payload would change;
+7. any other page the payload would change.
 
 Newest news first inside each. A payload sent unchanged in the last 30 days
 is left alone (`--resend-after`), so a pending update or a party a human took
