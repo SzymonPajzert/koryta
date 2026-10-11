@@ -938,6 +938,80 @@ def test_only_an_export_taken_today_at_four_or_later_is_compared_with(
     assert bool(job.export_refusal(export, export.stamp[:10], at)) == refused
 
 
+@pytest.mark.parametrize(
+    ("argv", "code"),
+    [
+        (["--export", stamp(warsaw(YESTERDAY, 23))], 0),
+        ([], job.EXIT_FAILED),
+    ],
+)
+def test_the_night_has_its_people_compared_with_the_export_it_took(world, argv, code):
+    """A night forced at three, before the 04:00 export: its export step
+    takes the one taken by hand at eleven, within its six hours, and names
+    it. Named, the job compares with it; a hand run names none, and is
+    refused as before."""
+    eleven = warsaw(YESTERDAY, 23)
+    world.clock = warsaw(TODAY, 3, 10)
+    world.export = taken_at(eleven)
+    for pipeline in (KorytaNodes, KorytaEdges):
+        world.write_frame(pipeline(None), warsaw(TODAY, 2, 50))
+    world.payloads = people(1)
+    world.answers = [person()]
+
+    assert job.main(argv) == code
+
+    if code == 0:
+        assert world.summary()["export"] == stamp(eleven)
+        # Written after it was done, under today's name: read as they are.
+        [built] = world.built
+        assert not built["policy"].should_refresh("KorytaNodes")
+    else:
+        assert world.run().ending()["stop_reason"] == (
+            f"brak dzisiejszej kopii bazy (najnowsza z {stamp(eleven)})"
+        )
+
+
+@pytest.mark.parametrize(
+    ("newest", "day", "refusal"),
+    [
+        # The one the night took...
+        ("2026-10-09T21:00:12.004Z", "2026-10-10", ""),
+        # ...or one taken since, which the frames would read anyway.
+        ("2026-10-10T02:00:59.242Z", "2026-10-10", ""),
+        # Older than the one named: the named one is not finished.
+        (
+            "2026-10-09T02:00:35.112Z",
+            "2026-10-10",
+            "brak kopii bazy z 2026-10-09T21:00:12.004Z "
+            "(najnowsza z 2026-10-09T02:00:35.112Z)",
+        ),
+        # Frames named after the day before read the export before it.
+        (
+            "2026-10-10T02:00:59.242Z",
+            "2026-10-09",
+            "porównanie z kopią bazy z 2026-10-09, a najnowsza jest z "
+            "2026-10-10T02:00:59.242Z",
+        ),
+    ],
+)
+def test_an_export_named_is_compared_with_or_a_newer_one(newest, day, refusal):
+    export = job.Export(newest, None)
+    noon = warsaw("2026-10-10", 12)
+
+    assert (
+        job.export_refusal(export, day, noon, accepted="2026-10-09T21:00:12.004Z")
+        == refusal
+    )
+
+
+def test_an_export_named_has_to_be_an_export_stamp():
+    assert job.parse_args(["--export", "2026-10-10T02:00:59.242Z"]).export == (
+        "2026-10-10T02:00:59.242Z"
+    )
+    with pytest.raises(SystemExit):
+        job.parse_args(["--export", "dzisiejsza"])
+
+
 def test_the_newest_export_is_the_newest_finished_and_done_when_its_marker_was():
     done = datetime(2026, 10, 10, 2, 3, 11, tzinfo=UTC)
     markers = {

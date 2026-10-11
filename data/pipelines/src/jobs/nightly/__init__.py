@@ -52,7 +52,9 @@ night; only the steps that depend on it are held:
 
 - `invariants` needs the export, `tests` and `outputs` the reprocess;
 - `people` needs all of that: tonight's export, or it would compare the
-  payloads with yesterday's site; a reprocess that succeeded; and checks with
+  payloads with yesterday's site - and it is told which one the export step
+  took (`--export`), so that it never refuses the export the night has
+  accepted; a reprocess that succeeded; and checks with
   nothing new failing - a test that passed last night and fails tonight, most
   likely after last night's upload, holds the upload until somebody looks. The
   18 invariants failing on 2026-10-03 (budgets drifted past their measured
@@ -896,6 +898,11 @@ class Night:
             "--refresh",
             "none",
         ]
+        if self.summary.export_fresh:
+            # The export the export step took, which the job compares with in
+            # place of its own rule - today's, taken at 04:00 or later - so
+            # that one the night's window lets in is never refused by the job.
+            argv += ["--export", self.summary.export]
         if self.args.people_dry_run:
             argv.append("--dry-run")
         return self.judge_job(*self.process(step, argv))
@@ -970,7 +977,8 @@ class Night:
             "invariants": "pytest -m e2e src/tests/pipelines (tonight's export)",
             "people": "koryta_people_import --scope priority --max-uploads "
             f"{self.args.max_uploads}"
-            + (" --dry-run" if self.args.people_dry_run else ""),
+            + (" --dry-run" if self.args.people_dry_run else "")
+            + " --export <the export step's>",
             "scores": "koryta_score_import: every scoring model, tonight's new "
             "pages included",
             "compress": "compressor -incremental -hostname "
