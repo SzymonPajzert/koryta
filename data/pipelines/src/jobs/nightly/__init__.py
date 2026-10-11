@@ -1049,7 +1049,8 @@ class Night:
             "people": "koryta_people_import --scope priority --max-uploads "
             f"{self.args.max_uploads}"
             + (" --dry-run" if self.args.people_dry_run else "")
-            + " --export <the export step's>",
+            # Only a night with the export step has an export to name.
+            + (" --export <the export step's>" if self.needs("export") else ""),
             "scores": "koryta_score_import: every scoring model, tonight's new "
             "pages included",
             "compress": "compressor -incremental -hostname "
