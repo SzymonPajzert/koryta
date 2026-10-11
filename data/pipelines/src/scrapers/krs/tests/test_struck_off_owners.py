@@ -324,6 +324,23 @@ def test_a_state_agency_makes_it_public_with_nothing_to_draw_an_edge_to():
     assert pipeline.companies[TDM_ARRTRANS].parents == []
 
 
+def test_a_state_institute_among_the_last_owners_makes_it_public():
+    # BIOTON: the antibiotics institute held it with Prokom and Bank Austria
+    # until entry 10 struck it off on 2004-08-02.
+    bioton = "0000121065"
+    pipeline = run(
+        struck_off(bioton, "2004-07-19"),
+        owner_seat(bioton, "PROKOM INVESTMENTS SPÓŁKA AKCYJNA", "10", "2004-08-02"),
+        owner_seat(
+            bioton, "INSTYTUT BIOTECHNOLOGII I ANTYBIOTYKÓW", "10", "2004-08-02"
+        ),
+        owner_seat(bioton, "BANK AUSTRIA CREDITANSTALT AG", "10", "2004-08-02"),
+    )
+
+    assert public_of(pipeline) == {bioton}
+    assert pipeline.companies[bioton].parents == []
+
+
 def test_an_owner_struck_out_before_the_last_entry_had_sold_it():
     pipeline = run(
         struck_off(TDM_ARRTRANS, "2025-02-10"),
