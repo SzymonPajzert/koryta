@@ -291,8 +291,7 @@ class RunSummary:
     created: list[str] = field(default_factory=list)
     #: What the site did not write, as the ingest reported it
     #: (`droppedChanges`), with the person's name and page: a job end the site
-    #: keeps its own of, one on a removed job, or a rejestr.io link naming
-    #: another entry than the page links. The page's `dropped_changes`
+    #: keeps its own of, or one on a removed job. The page's `dropped_changes`
     #: counter says how many; this says which.
     dropped: list[dict] = field(default_factory=list)
     #: A priority run: how many of the planned are in each tier.

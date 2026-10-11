@@ -320,33 +320,6 @@ def test_a_change_the_site_did_not_write_is_counted_and_printed(runs, capsys):
     ) in err
 
 
-def test_a_link_the_site_kept_over_another_entry_is_counted_and_printed(runs, capsys):
-    """The person's own link rather than a job's, so the node, not an edge.
-
-    Tadeusz Rozpara's page links one entry, and the 10-06 plan's payload for it
-    named a namesake's.
-    """
-    refused = {
-        "nodeId": "msll649JpWZMJ7K1yR4f",
-        "field": "rejestrIo",
-        "stored": "https://rejestr.io/osoby/1220490",
-        "sent": "https://rejestr.io/osoby/670747",
-        "reason": "another-entry",
-    }
-    session = Session(person=[person("unchanged", dropped=[refused])])
-
-    submit("person", people("Tadeusz Rozpara"), session)
-
-    [run] = runs
-    assert run.ending()["counters"]["dropped_changes"] == 1
-    assert run.ending()["state"] == "succeeded"
-    assert (
-        "Tadeusz Rozpara: rejestrIo: site https://rejestr.io/osoby/1220490, "
-        "payload https://rejestr.io/osoby/670747 (another register entry; the "
-        "page's is kept; node msll649JpWZMJ7K1yR4f)"
-    ) in capsys.readouterr().err
-
-
 def test_a_site_from_before_the_field_reports_no_dropped_change(runs):
     session = Session(person=[Response(200, {"personId": "p1", "person": "updated"})])
 
@@ -455,6 +428,33 @@ def test_a_person_held_back_is_counted_printed_and_named_with_the_reason(runs, c
     assert (end["state"], end["counters"]["failed"]) == ("partial", 1)
     assert end["errors"] == [f"Krzysztof Hetman: 409 {held.text}"]
     assert "stores 1974-06-27; held" in capsys.readouterr().err
+
+
+def test_a_payload_of_another_entry_is_a_failed_person_not_a_dropped_change(
+    runs, capsys
+):
+    """Tadeusz Rozpara's page links one entry, and the 10-06 plan's payload for
+    it named a namesake's. The ingest refuses it whole (`refuseAnotherEntry`),
+    so it is a failure the next run sends again, not a change the site kept."""
+    held = Response(
+        409,
+        {
+            "url": "/api/ingest/person",
+            "statusCode": 409,
+            "statusMessage": "",
+            "message": "Tadeusz Rozpara, rejestr.io entry 670747: the page the "
+            "payload names (msll649JpWZMJ7K1yR4f) links entry 1220490; held",
+        },
+    )
+    session = Session(person=[person(), held])
+
+    submit("person", people("Anna Nowak", "Tadeusz Rozpara"), session)
+
+    end = runs[0].ending()
+    assert (end["state"], end["counters"]["failed"]) == ("partial", 1)
+    assert end["counters"]["dropped_changes"] == 0
+    assert end["errors"] == [f"Tadeusz Rozpara: 409 {held.text}"]
+    assert "links entry 1220490; held" in capsys.readouterr().err
 
 
 def test_every_person_refused_is_the_site_refusing_the_run(runs):
