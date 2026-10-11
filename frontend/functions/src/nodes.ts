@@ -1,7 +1,7 @@
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 import { pageIsPublic } from "../../shared/model";
-import { generateChunksLower } from "../../shared/search";
+import { nameChunksToWrite } from "../../shared/search";
 
 export const onNodeWritten = onDocumentWritten(
   {
@@ -31,24 +31,16 @@ export const onNodeWritten = onDocumentWritten(
       }
     }
 
+    // On every write that finds the index out of date, not only on a rename,
+    // so a change to how it is cut reaches each page the next time anything
+    // writes it. Its own write reads back as up to date, which ends the loop.
     const isTargetType = ["place", "region", "person"].includes(afterData.type);
-    if (isTargetType && afterData.name) {
-      const beforeName = beforeData?.name;
-      const afterName = afterData.name;
-      const missingChunks =
-        !afterData.nameChunksLower || !Array.isArray(afterData.nameChunksLower);
-
-      if (beforeName !== afterName || missingChunks) {
-        const nameChunksLower = generateChunksLower(afterName);
-
-        // Also avoid infinite loops for chunks
-        if (
-          JSON.stringify(afterData.nameChunksLower) !==
-          JSON.stringify(nameChunksLower)
-        ) {
-          updatePayload["nameChunksLower"] = nameChunksLower;
-        }
-      }
+    if (isTargetType && typeof afterData.name === "string" && afterData.name) {
+      const nameChunksLower = nameChunksToWrite(
+        afterData.name,
+        afterData.nameChunksLower,
+      );
+      if (nameChunksLower) updatePayload["nameChunksLower"] = nameChunksLower;
     }
 
     if (Object.keys(updatePayload).length > 0) {
