@@ -112,6 +112,7 @@ def process_csv(
     config: InputSource,
     csv_headers: dict[str, SetField | None],
 ):
+    csv_headers = {**csv_headers, **config.headers}
     header = None
 
     for row in reader:

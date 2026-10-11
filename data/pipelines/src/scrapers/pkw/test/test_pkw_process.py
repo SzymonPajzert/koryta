@@ -72,14 +72,12 @@ def test_check_no_nulls(column, df):
     # TODO resolve them
     known_failures = {
         ("1994", "samorząd", "party"),
-        ("2019", "europarlament", "party"),
         ("1993", "senat", "teryt_candidacy"),
         ("1997", "sejm", "teryt_candidacy"),
         ("1997", "senat", "teryt_candidacy"),
         ("2001", "sejm", "teryt_candidacy"),
         ("2001", "senat", "teryt_candidacy"),
         ("2005", "senat", "teryt_candidacy"),
-        ("2009", "europarlament", "teryt_candidacy"),
         ("2007", "sejm", "sex"),
         ("2007", "senat", "sex"),
         ("2010", "samorząd", "sex"),

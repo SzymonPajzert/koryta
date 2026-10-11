@@ -5,9 +5,7 @@ voting_district_to_city: dict[tuple[int, ElectionType], dict[int, str]] = dict()
 # TODO Unknown election: 1991 ElectionType.SEJM
 # TODO Unknown election: 1993 ElectionType.SEJM
 # TODO Unknown election: 2005 ElectionType.SEJM
-# TODO Unknown election: 2014 ElectionType.EUROPARLAMENT
 # TODO Unknown election: 2015 ElectionType.SEJM
-# TODO Unknown election: 2024 ElectionType.EUROPARLAMENT
 
 # https://wybory2007.pkw.gov.pl/SJM/PL/WYN/M/index.htm
 voting_district_to_city[2007, ElectionType.SEJM] = {
@@ -693,3 +691,30 @@ voting_district_to_city[2015, ElectionType.SENAT] = {
     99: "Koszalin",
     100: "Koszalin",
 }
+
+# The thirteen European Parliament districts, by the seat of each district
+# commission. They have not changed since the first election in 2004 (Kodeks
+# wyborczy, załącznik nr 2): the 2004 and 2019 lists name the seat on every
+# row, and in 2009, 2014 and 2024 each number's candidates live where these
+# say. Four districts span two województwa - 3 is podlaskie with
+# warmińsko-mazurskie, 10 małopolskie with świętokrzyskie, 12 dolnośląskie
+# with opolskie, 13 lubuskie with zachodniopomorskie - and a candidacy there
+# is filed under the seat's, as a Sejm one is: one district, one place, so
+# everybody on a list stands in the same one wherever they live.
+european_districts = {
+    1: "Gdańsk",
+    2: "Bydgoszcz",
+    3: "Olsztyn",
+    4: "Warszawa",
+    5: "Warszawa",
+    6: "Łódź",
+    7: "Poznań",
+    8: "Lublin",
+    9: "Rzeszów",
+    10: "Kraków",
+    11: "Katowice",
+    12: "Wrocław",
+    13: "Gorzów Wielkopolski",
+}
+for year in [2004, 2009, 2014, 2019, 2024]:
+    voting_district_to_city[year, ElectionType.EUROPARLAMENT] = european_districts
