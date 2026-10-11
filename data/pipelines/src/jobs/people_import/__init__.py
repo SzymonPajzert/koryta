@@ -1036,8 +1036,14 @@ def iso_day(text: str) -> str:
 
 
 def export_stamp(text: str) -> str:
-    """An export folder's stamp, as it is: `export_time` reads it later."""
-    export_time(text)
+    """An export folder's stamp, as it is: `export_time` reads it later.
+
+    With its zone, as every folder is stamped ("Z"): `export_refusal` compares
+    it with the newest export's time, and one without -
+    "2026-10-10T02:00:59", typed by hand - would stop the run there with a
+    TypeError rather than here with its usage."""
+    if export_time(text).tzinfo is None:
+        raise ValueError(text)
     return text
 
 

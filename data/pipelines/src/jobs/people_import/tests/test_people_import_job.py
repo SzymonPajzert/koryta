@@ -1011,6 +1011,9 @@ def test_an_export_named_has_to_be_an_export_stamp():
     )
     with pytest.raises(SystemExit):
         job.parse_args(["--export", "dzisiejsza"])
+    # Without its zone it could not be compared with the newest export's.
+    with pytest.raises(SystemExit):
+        job.parse_args(["--export", "2026-10-10T02:00:59"])
 
 
 def test_the_newest_export_is_the_newest_finished_and_done_when_its_marker_was():
