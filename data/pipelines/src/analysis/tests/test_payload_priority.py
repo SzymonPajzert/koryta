@@ -8,7 +8,11 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from analysis.payloads.person import PeoplePayloads
+from analysis.payloads.person import (
+    PeoplePayloads,
+    matching_one_page,
+    missing_from_koryta,
+)
 from analysis.payloads.priority import (
     BOUGHT,
     NEW_HIRE,
@@ -557,7 +561,8 @@ def test_the_newest_post_first_and_on_one_day_a_company_the_site_has_first():
         odpis_only("Barbara Lis", Company(krs=OTHER_PUBLIC, start="2024-05-01")),
         odpis_only("Adam Bąk", Company(krs=OTHER_PUBLIC, start="2024-05-01")),
     ]
-    elsewhere = odpis_only("Marek Ryba", Company(krs=fourth, start="2024-05-01"))
+    # Between the two by name; after both by company, so the board stays whole.
+    elsewhere = odpis_only("Agata Ryba", Company(krs=fourth, start="2024-05-01"))
     # A start the register does not give goes after every dated one.
     undated = odpis_only("Olga Stara", Company(krs=PUBLIC))
 
@@ -578,7 +583,38 @@ def test_the_newest_post_first_and_on_one_day_a_company_the_site_has_first():
         ("Zofia Zając", "2024-05-01"),
         ("Adam Bąk", "2024-05-01"),
         ("Barbara Lis", "2024-05-01"),
-        ("Marek Ryba", "2024-05-01"),
+        ("Agata Ryba", "2024-05-01"),
         ("Olga Stara", None),
     ]
     assert {p.tier for p in picks} == {ODPIS_ONLY_CURRENT}
+
+
+def test_somebody_only_an_odpis_names_in_a_current_seat_keeps_a_new_page_s_guards():
+    """The tier is what `missing_from_koryta` keeps, as the new hires are: a
+    payload the ingest would hold behind a page of the name with no birth
+    date (its 409), and two born the same day under one name, which the
+    ingest could put on one page, get none."""
+    site = snapshot({"id": "undated", "type": "person", "name": "Jan Nowak"})
+    held = odpis_only("Jan Nowak", Company(krs=PUBLIC, start="2020-01-01"))
+    twins = [
+        odpis_only("Ewa Lis", Company(krs=PUBLIC, start="2019-01-01")),
+        odpis_only("Ewa Lis", Company(krs=OTHER_PUBLIC, start="2018-01-01")),
+    ]
+    kept = odpis_only("Anna Kos", Company(krs=PUBLIC, start="2021-01-01"))
+    payloads = [held, *twins, kept]
+
+    picks = prioritised(
+        missing_from_koryta(payloads, site),
+        matching_one_page(payloads, site),
+        site,
+        public_krs={PUBLIC, OTHER_PUBLIC},
+        published_ids=set(),
+        bought=set(),
+        noted={},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert [(p.person.name, p.tier) for p in picks] == [
+        ("Anna Kos", ODPIS_ONLY_CURRENT)
+    ]
