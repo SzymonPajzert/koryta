@@ -43,6 +43,19 @@ const pages: {
     path: "/plik/polityka_prywatnosci",
     file: "plik/[name]",
   },
+  // A blog post: the template in content/blog. It is a draft, which only a
+  // local build serves - and this is one - and it uses every embed a post can,
+  // so this shot covers their layout and the post's typography. Its own
+  // content changes only when the template does. The three charts draw in the
+  // browser after the document arrives.
+  {
+    name: "blog-wpis",
+    path: "/blog/wzor-wpisu",
+    file: "blog/[slug]",
+    act: async (page) => {
+      await expect(page.locator(".apexcharts-svg")).toHaveCount(3);
+    },
+  },
   // Not a page: the path is deliberately unroutable, so this captures
   // app/error.vue's 404 branch. Keep it single-segment - two segments would
   // match pages/[seoType]/[slug].vue and render an entity instead.
