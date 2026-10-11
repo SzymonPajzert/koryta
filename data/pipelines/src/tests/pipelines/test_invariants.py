@@ -1721,6 +1721,21 @@ def test_a_later_revision_never_drops_a_field(revisions):
     # files the page without it. Leaving it out is what those revisions are for.
     unstamped_by = {"migration:unstamp-default-empty-parties": {"partiesSource"}}
 
+    # It takes the mark out of the proposals still waiting on those pages too,
+    # since approving one would put it back. One filed after the page's marked
+    # approved revision and before the migration ran - an edit of any of the 44
+    # approved pages in the days between the export it was measured on and the
+    # run - then sits next to that revision without the field, though the page
+    # lost it as well, through the migration's own revision. So on a page it
+    # unmarked, a proposal filed before that revision may lack the field.
+    unstamped_at: dict[str, str] = {}
+    for revision in revisions:
+        document_id = reference_id(revision.get("node_id"))
+        if document_id and revision.get("update_user") in unstamped_by:
+            unstamped_at[document_id] = max(
+                unstamped_at.get(document_id, ""), applied_at(revision)
+            )
+
     dropped = []
     for document_id, history in by_document.items():
         page = None
@@ -1728,6 +1743,10 @@ def test_a_later_revision_never_drops_a_field(revisions):
             if page is not None:
                 unknown = stamped_later if page.get("status") == "pending" else set()
                 unknown = unknown | unstamped_by.get(revision.get("update_user"), set())
+                if revision.get("status") in ("pending", "rejected") and timestamp_key(
+                    revision.get("update_time")
+                ) < unstamped_at.get(document_id, ""):
+                    unknown = unknown | {"partiesSource"}
                 lost = {
                     field
                     for field, value in page["data"].items()
