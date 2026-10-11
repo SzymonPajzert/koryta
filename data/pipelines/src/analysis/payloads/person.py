@@ -249,10 +249,11 @@ class PeoplePayloads(Pipeline[Person]):
         New hires the site lacks first, then the pages of the people whose
         rejestr.io feed was bought lately (`bought`, by their ids), then the
         pages with a note still open - data noted missing first - then the
-        published pages that would change, then the other pages that would -
-        see `analysis.payloads.priority`. One build for what would otherwise
-        take two runs, `--not-on-koryta` and `--on-koryta --only-changed`,
-        each guarded as that run would be.
+        other people the site lacks whom only an odpis names in a public post
+        they hold now, then the published pages that would change, then the
+        other pages that would - see `analysis.payloads.priority`. One build
+        for what would otherwise take two runs, `--not-on-koryta` and
+        `--on-koryta --only-changed`, each guarded as that run would be.
         """
         people_df = self.registered_people(ctx)
         snapshot = self.site_snapshot(ctx)

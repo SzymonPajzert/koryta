@@ -28,7 +28,8 @@ only those; a person's run creates none.
 new hires the site lacks first, then the pages of the people whose rejestr.io
 feed was bought in the last `--bought-days` days, then the pages with a note
 no admin has closed - on the page, or on a company the payload names - those
-saying data is missing first, then the published pages that would change,
+saying data is missing first, then a few of the people only an odpis names in
+a public post that is not new, then the published pages that would change,
 then the rest, newest news first in each (`analysis.payloads.priority`). The
 notes are this morning's export's, as the pages are. It leaves alone a payload
 it already sent unchanged in the last `--resend-after` days: an update a
@@ -43,6 +44,14 @@ the first plan to let them in, they were 109 of 118 new hires, a month of them
 at once, and took every one of the 100 slots from the bought, noted and
 published pages behind them. A tenth also keeps the pages made this way few
 enough to check by hand the morning after; it grows with `--max-uploads`.
+
+The people only an odpis names who hold a public post now that is not new -
+980 on 2026-10-11 - take at most `--max-odpis-only-current` a run: ten, as
+Szymon set it that day. A number rather than a share of the run: it is how
+many pages there are to check by hand the next morning, which sending more
+updates a night does not change. Their pages and the new hires' count against
+`--max-new` together, and a page made for one of them is one the run is meant
+to make, as a new hire's is.
 
 What was bought is read off the crawl bucket, which files every rejestr.io
 answer under the day it was bought, whoever bought it (`bought_since`). A week
@@ -112,7 +121,7 @@ from datetime import UTC, date, datetime, timedelta
 from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
-from analysis.payloads.priority import NEW_HIRE, TIERS
+from analysis.payloads.priority import NEW_HIRE, ODPIS_ONLY_CURRENT, TIERS
 from analysis.payloads.target import NEW, PageTarget
 from jobs.nightly import export_refusal, export_time, latest_export
 from jobs.people_import.payloads import (
@@ -182,7 +191,7 @@ STOP_UP_TO_DATE = "nic do wysłania - strona ma już te dane"
 
 #: The tiers whose people the run is meant to create pages for. A page
 #: created for anybody else is the identity lookup missing somebody.
-CREATING = (NEW_HIRE, NEW)
+CREATING = (NEW_HIRE, ODPIS_ONLY_CURRENT, NEW)
 
 #: Rebuilt on every run, whatever is on disk or in the shared cache, so that
 #: the payloads are made from the newest crawl and this morning's export.
@@ -484,6 +493,11 @@ def bought_since(client: "Client", since: str) -> set[str]:
 #: names, unless `--max-new-odpis-only` says otherwise (the module's docstring).
 ODPIS_ONLY_PER = 10
 
+#: How many of the people only an odpis names in a public post that is not
+#: new a priority run creates pages for, unless `--max-odpis-only-current`
+#: says otherwise: ten a night, as Szymon set it on 2026-10-11.
+ODPIS_ONLY_CURRENT_CAP = 10
+
 
 def only_an_odpis_names(payload: Mapping[str, typing.Any]) -> bool:
     """Whether the payload is somebody with no rejestr.io entry, whom the
@@ -496,16 +510,21 @@ def plan_priority(
     already_sent: set[tuple[str, str]],
     max_new: int,
     max_new_odpis_only: int | None = None,
+    max_odpis_only_current: int | None = None,
 ) -> tuple[list[Candidate], int]:
     """What a priority run sends, in order, and how many it left out as sent.
 
-    Out: a payload already taken unchanged (`already_sent`), and the new hires
-    past `max_new` - so a night with more of them than it may create still
-    gets to the pages after them - and, among those, the ones only an odpis
-    names past `max_new_odpis_only`, for the same reason.
+    Out: a payload already taken unchanged (`already_sent`), and the pages to
+    create past `max_new` - so a night with more of them than it may create
+    still gets to the pages after them - and, among the new hires, the ones
+    only an odpis names past `max_new_odpis_only`, and of the people only an
+    odpis names in an older post those past `max_odpis_only_current`, for the
+    same reason. The two kinds of page count against `max_new` together:
+    the run stops as failed past it, so a plan past it would fail the night
+    by itself.
     """
     planned: list[Candidate] = []
-    skipped = hires = odpis_only = 0
+    skipped = created = odpis_only = seated = 0
     for candidate in candidates:
         if (
             person_key(candidate.payload),
@@ -515,15 +534,22 @@ def plan_priority(
             continue
         if candidate.tier == NEW_HIRE:
             by_name = only_an_odpis_names(candidate.payload)
-            if hires >= max_new or (
+            if created >= max_new or (
                 by_name
                 and max_new_odpis_only is not None
                 and odpis_only >= max_new_odpis_only
             ):
                 continue
-            hires += 1
+            created += 1
             if by_name:
                 odpis_only += 1
+        elif candidate.tier == ODPIS_ONLY_CURRENT:
+            if created >= max_new or (
+                max_odpis_only_current is not None and seated >= max_odpis_only_current
+            ):
+                continue
+            created += 1
+            seated += 1
         planned.append(candidate)
     return planned, skipped
 
@@ -725,8 +751,9 @@ class PeopleImport:
 
     def plan(self) -> list[dict]:
         """A priority run's payloads, in sending order: built, the already sent
-        left out, the new hires cut at --max-new, the ones only an odpis names
-        at --max-new-odpis-only."""
+        left out, the pages to create cut at --max-new, the new hires only an
+        odpis names at --max-new-odpis-only, and the people only an odpis names
+        in an older public post at --max-odpis-only-current."""
         args = self.args
         today = warsaw_now().date()
         bought_from = (today - timedelta(days=args.bought_days)).isoformat()
@@ -745,7 +772,11 @@ class PeopleImport:
             since = (today - timedelta(days=args.resend_after)).isoformat()
             already = sent_recently(self.client(), since)
         planned, self.summary.already_sent = plan_priority(
-            candidates, already, args.max_new, args.max_new_odpis_only
+            candidates,
+            already,
+            args.max_new,
+            args.max_new_odpis_only,
+            args.max_odpis_only_current,
         )
         self.tiers = [candidate.tier for candidate in planned]
         counts = Counter(self.tiers)
@@ -762,17 +793,28 @@ class PeopleImport:
                 if candidate.tier == NEW_HIRE and only_an_odpis_names(candidate.payload)
             ]
 
-        unsent = [
-            candidate
-            for candidate in by_name(candidates)
-            if (person_key(candidate.payload), payload_hash(candidate.payload))
-            not in already
-        ]
-        if unsent:
+        def seated(found: Sequence[Candidate]) -> list[Candidate]:
+            return [c for c in found if c.tier == ODPIS_ONLY_CURRENT]
+
+        def unsent(found: Sequence[Candidate]) -> list[Candidate]:
+            return [
+                candidate
+                for candidate in found
+                if (person_key(candidate.payload), payload_hash(candidate.payload))
+                not in already
+            ]
+
+        if hires := unsent(by_name(candidates)):
             print(
                 f"New hires only an odpis names: {len(by_name(planned))} of "
-                f"{len(unsent)} planned (--max-new-odpis-only "
+                f"{len(hires)} planned (--max-new-odpis-only "
                 f"{args.max_new_odpis_only})"
+            )
+        if older := unsent(seated(candidates)):
+            print(
+                f"People only an odpis names in an older public post: "
+                f"{len(seated(planned))} of {len(older)} planned "
+                f"(--max-odpis-only-current {args.max_odpis_only_current})"
             )
         return [candidate.payload for candidate in planned]
 
@@ -1061,8 +1103,8 @@ def parser() -> argparse.ArgumentParser:
         "not-on-koryta adds the people it has not, and needs --max-new; "
         "priority sends new hires first, then the pages of the people bought "
         "from rejestr.io, then the pages with an open note (data noted missing "
-        "first), then published pages, then the rest "
-        "(analysis.payloads.priority).",
+        "first), then a few people only an odpis names in an older public post, "
+        "then published pages, then the rest (analysis.payloads.priority).",
     )
     parser.add_argument(
         "--request",
@@ -1106,8 +1148,10 @@ def parser() -> argparse.ArgumentParser:
         type=non_negative_int,
         help="Pages the run may create before it stops as failed. Default 0: "
         "an --on-koryta run that creates a page has missed somebody's identity. "
-        "With --scope priority: the most new hires a run sends, default "
-        "--max-uploads; a page made for anybody else stops it as failed.",
+        "With --scope priority: the most pages a run plans to create - new "
+        "hires and the people only an odpis names in an older public post "
+        "together - default --max-uploads; a page made for anybody else stops "
+        "it as failed.",
     )
     parser.add_argument(
         "--max-new-odpis-only",
@@ -1116,6 +1160,13 @@ def parser() -> argparse.ArgumentParser:
         "entry, so the ingest finds them by their name and birth date alone - "
         "a run sends, within --max-new. Default: a tenth of --max-uploads, "
         "rounded up.",
+    )
+    parser.add_argument(
+        "--max-odpis-only-current",
+        type=non_negative_int,
+        help="Priority: the most people only an odpis names a run creates pages "
+        "for whose public post has not ended and began before --recent-days, "
+        f"within --max-new. Default: {ODPIS_ONLY_CURRENT_CAP}.",
     )
     parser.add_argument(
         "--dry-run",
@@ -1189,6 +1240,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         args.max_new = args.max_uploads if args.scope == PRIORITY else 0
     if args.max_new_odpis_only is None and args.scope == PRIORITY:
         args.max_new_odpis_only = -(-args.max_uploads // ODPIS_ONLY_PER)
+    if args.max_odpis_only_current is None and args.scope == PRIORITY:
+        args.max_odpis_only_current = ODPIS_ONLY_CURRENT_CAP
     if args.scope == "not-on-koryta" and args.max_new <= 0:
         parse.error(
             "--scope not-on-koryta creates a page for everybody it sends; say "
