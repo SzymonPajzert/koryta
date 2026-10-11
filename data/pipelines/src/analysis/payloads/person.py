@@ -417,7 +417,8 @@ class PeoplePayloads(Pipeline[Person]):
         sources: list[Source] = []
         content = ""
         # The committees name everybody who ever stood for one, which is the
-        # only party evidence left once the hardcoded lists are gone.
+        # only party evidence left once the hardcoded lists are gone - less
+        # the candidacies that put the person in two places at once.
         party = parties_from_committees(elections)
 
         wiki_name = get_scalar("wiki_name")
@@ -913,11 +914,49 @@ def parties_from_committees(elections: list[Election]) -> list[str]:
 
     In the order the site stores them in, `party_sort_key`'s: „Inne” after the
     parties it is the remainder of.
+
+    Not from a candidacy that shares an election with one somewhere else
+    (`in_two_places`): one of the two is a namesake's, and nothing says which.
+    The candidacies themselves reach the site unpublished, for a reviewer to
+    judge, but `parties` does not wait for one: on a live page the ingest
+    approves the union along with the update. Since `split_records_by_place`
+    (2026-10-11) gives a person every part of a PKW record two people stood
+    in, that would have put a namesake's party live on 12 published pages of
+    the 2026-10-10 inputs - SLD on the page of Rafał Mucha of Gryfino, a PiS
+    Sejm candidate, from the other Rafał Marek Mucha born 1972, who stood in
+    powiat miechowski in 2010 while he stood in powiat gryfiński.
     """
+    clashing = in_two_places(elections)
     parties: set[str] = set()
-    for election in elections:
-        parties.update(parties_of_committee(election.committee))
+    for index, election in enumerate(elections):
+        if index not in clashing:
+            parties.update(parties_of_committee(election.committee))
     return sorted(parties, key=party_sort_key)
+
+
+def in_two_places(elections: list[Election]) -> set[int]:
+    """The candidacies that share an election with one in another place.
+
+    By their position in `elections`. One office per election: somebody who
+    stands in two places in one year's election of one kind is two people, the
+    rule `split_records_by_place` splits PKW records by and
+    `test_nobody_stands_in_two_places_at_once` counts on the site. A code
+    another one starts with is not a second place - a sejmik candidacy and a
+    council one in the same województwo - and a candidacy with no code, as on
+    the European lists, is in none.
+    """
+    by_election: dict[tuple, list[tuple[int, str]]] = collections.defaultdict(list)
+    for index, election in enumerate(elections):
+        if election.teryt:
+            key = (election.election_year, election.election_type)
+            by_election[key].append((index, election.teryt))
+    clashing: set[int] = set()
+    for placed in by_election.values():
+        for n, (one, here) in enumerate(placed):
+            for other, there in placed[n + 1 :]:
+                if not (here.startswith(there) or there.startswith(here)):
+                    clashing.update((one, other))
+    return clashing
 
 
 def unmapped_committees(elections: list[Election]) -> list[str]:

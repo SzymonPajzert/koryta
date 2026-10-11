@@ -5,6 +5,7 @@ import pytest
 
 from analysis.payloads.person import (
     _extract_elections,
+    in_two_places,
     parties_from_committees,
     party_of_candidacy,
     unmapped_committees,
@@ -259,6 +260,116 @@ def test_a_person_is_every_party_they_stood_for():
             candidacy("KOALICYJNY KOMITET WYBORCZY KOALICJA OBYWATELSKA"),
         ]
     ) == ["PO", "PiS"]
+
+
+def placed(committee: str | None, year: str, teryt: str | None, kind="Samorząd"):
+    return Election(
+        election_type=kind, committee=committee, election_year=year, teryt=teryt
+    )
+
+
+SLD = "KOMITET WYBORCZY SOJUSZ LEWICY DEMOKRATYCZNEJ"
+PIS = "KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ"
+PSL = "KOMITET WYBORCZY POLSKIE STRONNICTWO LUDOWE"
+
+
+def test_a_candidacy_in_two_places_at_once_names_no_party():
+    """Rafał Mucha of Gryfino, a PiS Sejm candidate, and one from Miechów.
+
+    PKW has the two as one record, which `split_records_by_place` splits, and
+    the page gets both parts for a reviewer to take the other man's off. In
+    2010 the record stands in powiat miechowski and powiat gryfiński at once,
+    and nothing here says which run is his. `parties` goes live with any
+    update to a live page, before a reviewer has looked, so the SLD of the
+    Miechów run cannot go into it.
+    """
+    assert parties_from_committees(
+        [
+            placed(SLD, "2010", "1208"),
+            placed("KWW BEZPARTYJNY BLOK SAMORZĄDOWY", "2010", "3206"),
+            placed(PIS, "2015", "32", kind="Sejm"),
+        ]
+    ) == ["PiS"]
+
+
+def test_both_halves_of_a_clash_name_no_party():
+    """Nothing says which of the two is the person's, so neither speaks."""
+    assert (
+        parties_from_committees(
+            [placed(SLD, "2010", "1208"), placed(PSL, "2010", "3206")]
+        )
+        == []
+    )
+
+
+def test_a_sejmik_and_a_council_in_one_region_are_one_place():
+    """The sejmik is filed under the województwo, which the powiat starts with."""
+    assert parties_from_committees(
+        [placed(PIS, "2010", "32"), placed(PSL, "2010", "3206")]
+    ) == ["PSL", "PiS"]
+
+
+def test_two_places_in_different_elections_are_a_career():
+    assert parties_from_committees(
+        [
+            placed(SLD, "2010", "1208"),
+            placed(PSL, "2014", "3206"),
+            # Two kinds of election in one year are two contests.
+            placed(PIS, "2023", "12", kind="Sejm"),
+            placed(PIS, "2023", "26", kind="Senat"),
+        ]
+    ) == ["PSL", "PiS", "SLD"]
+
+
+def test_a_candidacy_with_no_place_is_in_no_second_place():
+    """The European lists of 2009, 2014 and 2024 carry no code.
+
+    It clashes with nothing, even in a year two of the person's other
+    candidacies clash in, and its party stands.
+    """
+    assert parties_from_committees(
+        [
+            placed(PIS, "2014", None, kind="Parlament Europejski"),
+            placed(SLD, "2014", "1208"),
+            placed(PSL, "2014", "3206"),
+        ]
+    ) == ["PiS"]
+
+
+def test_the_payload_reads_places_as_the_split_does():
+    """A sejmik candidacy arrives as XX0000, which is the region XX, not a
+    powiat beside the person's council: the rule must not see two places
+    where `split_records_by_place` saw one."""
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "election_type": "samorządu",
+                    "party": PIS,
+                    "election_year": 2010,
+                    "teryt_candidacy_powiat": "3200",
+                },
+                {
+                    "election_type": "samorządu",
+                    "party": PSL,
+                    "election_year": 2010,
+                    "teryt_candidacy_powiat": "3206",
+                },
+                {
+                    "election_type": "samorządu",
+                    "party": SLD,
+                    "election_year": 2010,
+                    "teryt_candidacy_powiat": "1208",
+                },
+            ]
+        }
+    )
+
+    elections = _extract_elections(row)
+
+    assert in_two_places(elections) == {0, 1, 2}
+    assert in_two_places(elections[:2]) == set()
+    assert parties_from_committees(elections[:2]) == ["PSL", "PiS"]
 
 
 def test_an_unambiguous_committee_names_the_candidacys_party():
