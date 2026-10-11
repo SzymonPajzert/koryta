@@ -147,7 +147,9 @@ def split_records_by_place(con):
     does: to every person nothing contradicts. Which part is whose is the
     reviewers' to judge, as for any record two people fit. The runs that
     clashed reach people the way every ingested candidacy does - as an edge
-    the ingest stores unpublished, which only a reviewer puts live.
+    the ingest stores unpublished, which only a reviewer puts live - and name
+    no party for them (`parties_from_committees`), since a page's parties go
+    live with the page.
 
     A part is a województwo. 16,342 of the 18,980 records clash only between
     two of them, and a województwo keeps together what one career there looks
