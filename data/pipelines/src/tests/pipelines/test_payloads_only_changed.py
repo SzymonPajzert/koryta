@@ -822,6 +822,30 @@ class TestHyphenatedSurname:
         assert canonical_name(spellings) == "Anna Nowak-Rudnik"
         assert canonical_name(spellings, ["nowak-rudnik"]) == "Anna Maria Nowak-Rudnik"
 
+    @pytest.mark.parametrize(
+        ("spellings", "expected"),
+        [
+            # The record ends only the longer spelling. Hyphenated first, it
+            # lost its word count to "Anna Rudnik" and the alphabet chose that,
+            # the surname's first half gone.
+            (["Anna Zawada Rudnik", "Anna Rudnik"], "Anna Zawada-Rudnik"),
+            # Another surname in one spelling: hyphenated first, "Anna
+            # Zawada-Rudnik" was the shorter and replaced "Maria".
+            (["Anna Maria Rudnik", "Anna Zawada Rudnik"], "Anna Maria Rudnik"),
+        ],
+    )
+    def test_the_hyphen_changes_only_the_separator_of_the_choice(
+        self, spellings, expected
+    ):
+        """The register's spellings choose, not the hyphenated ones, so a
+        spelling the record does not end is not a word longer for it."""
+        surnames = ["zawada-rudnik"]
+
+        assert canonical_name(spellings, surnames) == expected
+        assert canonical_name(spellings, surnames) == hyphenate_surname(
+            canonical_name(spellings) or "", surnames
+        )
+
     @pytest.mark.parametrize("surname", ["pakuła - błoch", "pakuła – błoch"])
     def test_a_hyphen_typed_loosely_is_a_hyphen(self, surname):
         assert hyphenate_surname("Iwona Pakuła Błoch", [surname]) == (
