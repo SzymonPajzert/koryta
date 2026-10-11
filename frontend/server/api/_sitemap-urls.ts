@@ -1,5 +1,7 @@
 import { generateEntityUrl } from "~~/app/composables/slugs";
 import { type NodeType, pageIsPublic } from "~~/shared/model";
+import { listedPosts } from "~~/shared/blog";
+import { blogPosts } from "~~/server/utils/blog";
 
 /** Node types whose entity page renders a page of its own.
  *
@@ -34,8 +36,15 @@ const SITEMAP_NODE_TYPES: readonly NodeType[] = ["person", "article", "place"];
  * instance, and a sitemap fetch is exactly the request most likely to land on
  * a cold one. */
 export default defineCachedEventHandler(
-  async () => {
+  async (event) => {
     const urls: { loc: string; lastmod?: string }[] = [];
+
+    // Never a draft, not even from a local build: a sitemap only names pages
+    // that are meant to be found.
+    const posts = await blogPosts(event).all();
+    for (const post of listedPosts(posts, { includeDrafts: false })) {
+      urls.push({ loc: post.path, lastmod: post.date });
+    }
 
     const nodesSnapshots = await Promise.all(
       SITEMAP_NODE_TYPES.map((type) => fetchNodes(type)),
