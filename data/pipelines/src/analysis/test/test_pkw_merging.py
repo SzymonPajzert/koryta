@@ -2,7 +2,7 @@ import duckdb
 import pandas as pd
 import pytest
 
-from analysis.people_pkw_merged import drop_contradictory_candidacies
+from analysis.people_pkw_merged import split_records_by_place
 from analysis.utils.tables import create_people_table
 
 
@@ -116,32 +116,33 @@ def test_a_sejmik_candidacy_is_not_a_second_place(con):
                 "election_year": "2006",
                 "election_type": "samorządu",
                 "teryt_candidacy_powiat": powiat,
+                "teryt_wojewodztwo": [powiat[:2]],
                 "teryt_powiat": [powiat],
             }
             for powiat in powiats
         ]
 
+    places = [("1400", "1465"), ("1400", "2400"), ("1465", "2461")]
     people = pd.DataFrame(  # noqa: F841
         {
             "full_name": ["sejmik and warszawa", "two sejmiki", "two powiats"],
-            "elections": [
-                standing("1400", "1465"),
-                standing("1400", "2400"),
-                standing("1465", "2461"),
-            ],
+            "teryt_wojewodztwo": [sorted({p[:2] for p in pair}) for pair in places],
+            "teryt_powiat": [list(pair) for pair in places],
+            "elections": [standing(*pair) for pair in places],
         }
     )
     con.execute("CREATE TABLE people_pkw_merged AS SELECT * FROM people")
 
-    drop_contradictory_candidacies(con)
+    split_records_by_place(con)
 
-    ambiguous = dict(
-        con.execute(
-            "SELECT full_name, elections_ambiguous FROM people_pkw_merged"
-        ).fetchall()
-    )
-    assert ambiguous == {
-        "sejmik and warszawa": False,
-        "two sejmiki": True,
-        "two powiats": True,
-    }
+    records = con.execute(
+        """
+        SELECT full_name, count(*), bool_and(elections_ambiguous)
+        FROM people_pkw_merged GROUP BY full_name ORDER BY full_name
+        """
+    ).fetchall()
+    assert records == [
+        ("sejmik and warszawa", 1, False),
+        ("two powiats", 2, True),
+        ("two sejmiki", 2, True),
+    ]

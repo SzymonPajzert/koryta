@@ -15,6 +15,7 @@ from analysis.people import (
     unique_probability,
 )
 from analysis.people_koryta_merged import PeopleKorytaMerged
+from analysis.people_pkw_merged import people_pkw_merged
 from analysis.people_wiki_merged import people_wiki_merged
 from scrapers.stores import Context, ProcessPolicy
 from scrapers.stores.file import VersionedBackup
@@ -340,6 +341,56 @@ def test_an_agreeing_middle_name_names_the_person_and_keeps_the_silent_ones(ctx)
 
     assert candidacy_years(result) == ["2002", "2010", "2014"]
     assert list(result["pkw_name"]) == ["mariusz mieczysław mandat"]
+
+
+def paluch_split(ctx) -> list[dict]:
+    """Anna Paluch's undated record as `people_pkw_merged` splits it by place.
+
+    Her Sejm runs in małopolskie (okręg 14), a Koprzywnica namesake's 2023 run
+    in świętokrzyskie (okręg 33), and a European run with no place at all.
+    """
+    rows = [
+        ("12", 2005, "sejmu"),
+        ("12", 2019, "sejmu"),
+        ("12", 2023, "sejmu"),
+        ("26", 2023, "sejmu"),
+        ("", 2014, "europarlamentu"),
+    ]
+    raw = pd.DataFrame(
+        [
+            {
+                "first_name": "Anna",
+                "last_name": "Paluch",
+                "middle_name": None,
+                "teryt_candidacy": teryt,
+                "teryt_living": None,
+                "birth_year": None,
+                "pkw_name": "Anna PALUCH",
+                "party": "Komitet Wyborczy Prawo i Sprawiedliwość",
+                "election_year": year,
+                "election_type": kind,
+                "candidacy_success": "TRUE",
+            }
+            for teryt, year, kind in rows
+        ]
+    )
+    return people_pkw_merged(ctx, raw).to_dict("records")
+
+
+def test_a_person_gets_every_part_of_a_record_split_by_place(ctx):
+    """The parts keep the name and the year, so each fits her as the whole did.
+
+    Emptied, the record gave her none of her Sejm wins; split, it gives her
+    all of them, and the namesake's 2023 run with them, for a reviewer to
+    take off her page - as any candidacy of a record two people fit.
+    """
+    parts = paluch_split(ctx)
+    assert len(parts) == 3
+
+    result = match_pkw(ctx, [krs_person("anna", "paluch", "1960-03-31")], parts)
+
+    assert candidacy_years(result) == ["2005", "2014", "2019", "2023", "2023"]
+    assert list(result["pkw_records"].iloc[0]) == ["Anna PALUCH ?"] * 3
 
 
 def test_a_year_only_biography_needs_the_first_name_exactly(ctx):
