@@ -1469,6 +1469,26 @@ describe("api/ingest/person, a candidacy the site cannot place", () => {
     ]);
   });
 
+  it("reports a European candidacy without a district as unexpected", async () => {
+    // The scrapers name every European district since 2026-10. Before, the
+    // 2009, 2014 and 2024 runs all arrived without one and were dropped as
+    // expected, so nobody noticed none of them reached the site.
+    newPersonWith([
+      { election_type: "Parlament Europejski", election_year: "2014" },
+    ]);
+
+    const result = await handler({} as any);
+
+    expect(result.unplacedElections).toEqual([
+      {
+        election_type: "Parlament Europejski",
+        election_year: "2014",
+        reason: "no-teryt",
+        expected: false,
+      },
+    ]);
+  });
+
   it("keeps the person when the region node does not exist yet", async () => {
     newPersonWith(
       [{ election_type: "Samorząd", election_year: "2024", teryt: "9999" }],
@@ -2957,5 +2977,248 @@ describe("api/ingest/person, jobs from the register entry a published page links
       ]);
       expect(result.articles[0]).not.toHaveProperty("published");
     });
+  });
+});
+
+describe("api/ingest/person, a European candidacy filed under the candidate's home", () => {
+  /** Every collection the request reads, keyed by id. Answered by filtering,
+   * like the suites above, because what matters here is which stored
+   * candidacies a query finds. */
+  let store: Record<string, Record<string, Record<string, unknown>>> = {};
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function fakeQuery(
+    collection: string,
+    constraints: [string, unknown][],
+  ): any {
+    return {
+      where: (field: string, _op: string, value: unknown) =>
+        fakeQuery(collection, [...constraints, [field, value]]),
+      limit: () => fakeQuery(collection, constraints),
+      get: async () => {
+        const docs = Object.entries(store[collection] ?? {})
+          .filter(([, data]) =>
+            constraints.every(([field, value]) => data[field] === value),
+          )
+          .map(([id, data]) => ({
+            id,
+            ref: { id, parent: { id: collection } },
+            data: () => data,
+          }));
+        return { empty: docs.length === 0, docs };
+      },
+    };
+  }
+
+  function fakeCollection(collection: string) {
+    return {
+      where: (field: string, _op: string, value: unknown) =>
+        fakeQuery(collection, [[field, value]]),
+      doc: (id?: string) => ({
+        id: id ?? `new-${collection}-id`,
+        parent: { id: collection },
+        get: async () => ({
+          id,
+          exists: id !== undefined && store[collection]?.[id] !== undefined,
+          data: () => (id === undefined ? undefined : store[collection]?.[id]),
+        }),
+      }),
+    };
+  }
+
+  /** A 2019 run in district 4, whose seat is Warszawa: mazowieckie. */
+  function payload(election: Record<string, unknown> = {}) {
+    mockReadBody.mockResolvedValue({
+      name: "Jan Kowalski",
+      rejestrIo: "https://rejestr.io/osoby/123",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          election_type: "Parlament Europejski",
+          election_year: "2019",
+          teryt: "14",
+          committee: "KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ",
+          party: "PiS",
+          party_from_committee: true,
+          ...election,
+        },
+      ],
+    });
+  }
+
+  /** The same run as the 2019 list's residence column filed it: under the
+   * city of Warszawa, where the candidate lives, live on the page. */
+  function storedAtHome(fields: Record<string, unknown> = {}) {
+    store.edges!["at-home"] = {
+      type: "election",
+      name: "kandydatura",
+      source: "kowalski",
+      target: "teryt1465",
+      position: "Parlament Europejski",
+      start_date: "2019-01-01",
+      published: true,
+      revision_id: "revisions/at-home-approved",
+      ...fields,
+    };
+  }
+
+  /** The revisions written onto one stored edge: what each said, and how. */
+  function writtenOnto(edgeId: string) {
+    return vi
+      .mocked(createRevisionTransaction)
+      .mock.calls.filter(
+        ([, , , ref]) => (ref as unknown as { id: string }).id === edgeId,
+      )
+      .map(([, , , , data, options]) => ({ data, options }));
+  }
+
+  /** The candidacies written as new documents. */
+  function created() {
+    return vi
+      .mocked(createRevisionTransaction)
+      .mock.calls.map(([, , , ref]) => (ref as unknown as { id: string }).id)
+      .filter((id) => id.startsWith("edge_kowalski_"));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockResolvedValue({
+      uid: "pipeline-people-import",
+      datascience: true,
+    });
+    store = {
+      nodes: {
+        kowalski: {
+          type: "person",
+          name: "Jan Kowalski",
+          parties: [],
+          rejestrIo: "https://rejestr.io/osoby/123",
+          published: true,
+        },
+        teryt14: { type: "region", name: "mazowieckie", teryt: "14" },
+        teryt1465: { type: "region", name: "Warszawa", teryt: "1465" },
+      },
+      edges: {},
+      revisions: {},
+    };
+    mockCollection.mockImplementation((name: string) => fakeCollection(name));
+    mockBatch.mockReturnValue({
+      commit: mockCommit,
+      set: vi.fn(),
+      update: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    mockCollection.mockReset();
+    mockCollection.mockReturnValue({ where: mockWhere, doc: mockDoc });
+    mockBatch.mockReturnValue({ commit: mockCommit, set: vi.fn() });
+  });
+
+  it("moves it to the district, live as it was", async () => {
+    // Stored beside it instead, the page would show one run in two places.
+    storedAtHome();
+    payload();
+
+    const result = await handler({} as any);
+
+    const [move, ...more] = writtenOnto("at-home");
+    expect(more).toEqual([]);
+    expect(move!.data).toMatchObject({
+      target: "teryt14",
+      position: "Parlament Europejski",
+      start_date: "2019-01-01",
+      // A committee the curated table names goes in with the move.
+      committee: "KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ",
+      party: "PiS",
+    });
+    // Approved as the correction it is; `stored` carries `published` across.
+    expect(move!.options).toMatchObject({
+      automatic: true,
+      approve: true,
+      stored: store.edges!["at-home"],
+    });
+    expect(created()).toEqual([]);
+    // Neither new nor put live: it was stored, and as live as it was.
+    expect(result.elections).toEqual([
+      {
+        nodeId: "teryt14",
+        edgeId: "at-home",
+        created: false,
+        published: false,
+      },
+    ]);
+  });
+
+  it("leaves a committee nobody vouched for to the next send", async () => {
+    storedAtHome();
+    payload({
+      committee: "KWW NOWA LISTA",
+      party: undefined,
+      party_from_committee: false,
+    });
+
+    await handler({} as any);
+
+    const [move] = writtenOnto("at-home");
+    expect(move!.data).toMatchObject({ target: "teryt14" });
+    expect(move!.data).not.toHaveProperty("committee");
+    expect(created()).toEqual([]);
+  });
+
+  it("leaves a run for another committee where it is", async () => {
+    // Somebody else's run, not this one misfiled; the district gets this one.
+    storedAtHome({ committee: "KOMITET WYBORCZY WIOSNA ROBERTA BIEDRONIA" });
+    payload();
+
+    await handler({} as any);
+
+    expect(writtenOnto("at-home")).toEqual([]);
+    expect(created()).toHaveLength(1);
+  });
+
+  it("leaves a removed run as its reviewer left it", async () => {
+    // Two of these were removed as „duplikat" of another run filed under the
+    // same year and powiat. The run itself was real, so the district gets it.
+    storedAtHome({
+      deleted: true,
+      delete_reason: "duplikat",
+      published: false,
+    });
+    payload();
+
+    await handler({} as any);
+
+    expect(writtenOnto("at-home")).toEqual([]);
+    expect(created()).toHaveLength(1);
+  });
+
+  it("moves nothing once the year is filed in its district", async () => {
+    // Paweł Tomasz Kurek's 2024 run was stored twice under his home powiat:
+    // the first send moves one copy, and the second stays for a reviewer.
+    storedAtHome();
+    store.edges!["in-district"] = {
+      ...store.edges!["at-home"],
+      target: "teryt14",
+      committee: "KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ",
+      party: "PiS",
+    };
+    payload();
+
+    await handler({} as any);
+
+    expect(writtenOnto("at-home")).toEqual([]);
+    expect(created()).toEqual([]);
+  });
+
+  it("never moves another office's run", async () => {
+    storedAtHome({ position: "Sejm" });
+    payload({ election_type: "Sejm" });
+
+    await handler({} as any);
+
+    expect(writtenOnto("at-home")).toEqual([]);
+    expect(created()).toHaveLength(1);
   });
 });
