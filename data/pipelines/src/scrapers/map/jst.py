@@ -64,6 +64,21 @@ AMBIGUOUS = "AMBIGUOUS"
 #: it would then compete with real regions for a company's seat.
 SKARB_PANSTWA = "SKARB PANSTWA"
 
+#: The Treasury as the register also names it: by the minister or ministry that
+#: holds the shares for it. ZAKŁADY SIECI RYBACKICH (0000036687) had "MINISTER
+#: SKARBU PAŃSTWA W WARSZAWIE" as its sole shareholder until it was struck off in
+#: 2016, and read as private, as only a name starting "SKARB PAŃSTWA" was the
+#: Treasury. Matched on the whole name, before `clean` cuts "W IMIENIU" or
+#: "DZIAŁAJĄCY" off it: a minister of the Treasury, any minister whose name goes
+#: on to say he acts for it, and the genitive "SKARBU PAŃSTWA - MINISTER SKARBU
+#: PAŃSTWA" of KOPALNIA SOLI BOCHNIA (0000478929). In the odpisy on file on
+#: 2026-10-11 that is 32 owner rows, every one of them "MINISTER SKARBU" or
+#: "MINISTERSTWO SKARBU PAŃSTWA" but that last. A minister whose name does not
+#: say Treasury - "MINISTER KULTURY I DZIEDZICTWA NARODOWEGO", owner of TECHFILM
+#: (0000120619) - is left alone, and so is an agency named after it, "AGENCJA
+#: WŁASNOŚCI ROLNEJ SKARBU PAŃSTWA", which is a body of its own (`public_bodies`).
+_NAMES_THE_TREASURY = re.compile(r"^(SKARBU PANSTWA|MINISTER(STWO)?\b.*\bSKARBU?\b)")
+
 #: Longest first, because "GMINA MIEJSKA" has to win over "GMINA". Each maps to
 #: the level it names and, for a gmina, the RODZ it implies.
 _PREFIXES: tuple[tuple[str, Level, str | None], ...] = (
@@ -219,7 +234,9 @@ def classify(name: str) -> tuple[Level | None, str | None, str]:
     if text.endswith(_MIEJSKA_SUFFIX):
         text = text[: -len(_MIEJSKA_SUFFIX)].strip(" -,.")
         forced_rodz = RODZ_MIEJSKA
-    if text.startswith(SKARB_PANSTWA):
+    if text.startswith(SKARB_PANSTWA) or _NAMES_THE_TREASURY.match(
+        normalise(name).lstrip(' "')
+    ):
         return None, None, SKARB_PANSTWA
     for prefix, level, rodz in _PREFIXES:
         if (

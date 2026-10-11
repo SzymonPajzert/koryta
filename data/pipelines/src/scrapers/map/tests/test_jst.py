@@ -197,6 +197,46 @@ class TestResolve(unittest.TestCase):
         # seat, which is a territory and it is not one.
         self.assertEqual(self.index.resolve("SKARB PAŃSTWA"), SKARB_PANSTWA)
 
+    def test_the_minister_of_the_treasury_is_the_treasury(self):
+        # Polskie Radio Olsztyn, KRS 0000038114
+        self.assertEqual(self.index.resolve("MINISTER SKARBU"), SKARB_PANSTWA)
+        # Dragmor, KRS 0000054811
+        self.assertEqual(
+            self.index.resolve("MINISTERSTWO SKARBU PAŃSTWA"), SKARB_PANSTWA
+        )
+        # Kopalnia Soli Bochnia, KRS 0000478929, in the genitive
+        self.assertEqual(
+            self.index.resolve("SKARBU PAŃSTWA - MINISTER SKARBU PAŃSTWA"),
+            SKARB_PANSTWA,
+        )
+        # Off an odpis pełny, not an OdpisAktualny: Zakłady Sieci Rybackich,
+        # KRS 0000036687, until its strike-off in 2016, and ZPOW "Pektowin",
+        # KRS 0000288956, with the ministry's address appended
+        for name in (
+            "MINISTER SKARBU PAŃSTWA W WARSZAWIE",
+            "MINISTERSTWO SKARBU PAŃSTWA UL.KRUCZA 36/WSPÓLNA 3, 00-522 WARSZAWA",
+        ):
+            self.assertEqual(self.index.resolve(name), SKARB_PANSTWA)
+
+    def test_any_minister_that_says_he_acts_for_the_treasury_is_it(self):
+        # No odpis on file words it like this yet: the phrasings the rule is
+        # for. `clean` cuts the name at "DZIAŁAJĄC", so it is read before that.
+        name = "MINISTER ROLNICTWA DZIAŁAJĄCY W IMIENIU SKARBU PAŃSTWA"
+        self.assertEqual(self.index.resolve(name), SKARB_PANSTWA)
+        self.assertEqual(
+            self.index.resolve("MINISTER FINANSÓW REPREZENTUJĄCY SKARB PAŃSTWA"),
+            SKARB_PANSTWA,
+        )
+
+    def test_a_minister_or_agency_that_does_not_say_treasury_is_not_it(self):
+        # Techfilm, KRS 0000120619: the minister holds for the Treasury, but
+        # nothing in the name says so.
+        self.assertIsNone(
+            self.index.resolve("MINISTER KULTURY I DZIEDZICTWA NARODOWEGO")
+        )
+        # A state agency named after the Treasury is a body of its own
+        self.assertIsNone(self.index.resolve("AGENCJA WŁASNOŚCI ROLNEJ SKARBU PAŃSTWA"))
+
     def test_a_miasto_na_prawach_powiatu_is_the_town_not_the_villages(self):
         # Wloclawek is also a gmina wiejska in powiat wloclawski, which is a
         # different owner altogether.
