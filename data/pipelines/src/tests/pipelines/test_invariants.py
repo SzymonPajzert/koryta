@@ -1647,18 +1647,32 @@ def test_a_later_revision_never_drops_a_field(revisions):
     one-person import of his page that morning and approved an hour and a half
     after it. The evening's hand run of the night held its upload on the "loss"
     of `partiesSource`, `content` and `education` that both pages still carry.
+
+    Nor was an edge proposal that publishing marked approved ever the page.
+    Until prod took a73fb7c2, `publishEdgeInBatch` pointed a draft edge at its
+    newest revision and stamped that approved, writing only `published` and
+    `revision_id`, and the newest was often a proposal, which the edge never
+    holds. All 23 edge proposals marked approved on the 2026-10-11 export got
+    it that way, each with a `publish` audit row within a millisecond, and
+    not one is on its edge. The night of 10-10 wrote to two of Michał Rado's
+    candidacies (WQ6rgpfnBmCxk3GdUEpw, hXj75PkY7O5jf4RI8qSP) whose approval of
+    that kind was a contributor's correction of 09-06 dating each to its
+    election day. Read as their page, the import's revisions seemed to lose an
+    `end_date` that neither edge has ever had, and the 10-11 night failed on it.
     """
     # One article, oYkxDlD1KfkO96p6PIwK, whose January 2026 edit lost the
     # `estimates` field the previous revision carried. It is still on the node
     # only because that revision was never approved; approving it would run the
-    # `set` and drop the field for good. Two more from August 2026, both
-    # applied: `committee` lost from election edge Gm2XbS1oTAmdH7GP1yEi by an
-    # approved edit, and `shortName` from article 0XrffRWh3d3es3ZYjAm4 by
-    # migration:backfill-article-dates. A fourth, an upload's revision of Anna
-    # Derlukiewicz (enSvS2jSoLIqQmwUdy9I) without the `content` of the one
-    # filed before it, was the same misreading: that one was approved on 08-30,
-    # the day after the upload, and the content is on her page.
-    KNOWN_DROPS = 3
+    # `set` and drop the field for good. One more from August 2026, applied:
+    # `shortName` lost from article 0XrffRWh3d3es3ZYjAm4 by
+    # migration:backfill-article-dates. Two others were misreadings. An
+    # upload's revision of Anna Derlukiewicz (enSvS2jSoLIqQmwUdy9I) without the
+    # `content` of the one filed before it: that one was approved on 08-30, the
+    # day after the upload, and the content is on her page. And the removal of
+    # election edge Gm2XbS1oTAmdH7GP1yEi as a duplicate on 08-30, which "lost"
+    # a `committee` that publishing had marked approved 15 seconds earlier
+    # without writing it to the edge.
+    KNOWN_DROPS = 2
 
     # Bookkeeping the node owns rather than the revision, listed in
     # server/utils/revisions.ts as INTERNAL_FIELDS. They are regenerated or
@@ -1681,15 +1695,41 @@ def test_a_later_revision_never_drops_a_field(revisions):
         if document_id and isinstance(revision.get("data"), dict):
             by_document[document_id].append(revision)
 
+    # When the last backend took a73fb7c2, after which publishing an edge
+    # approves only a revision the edge already holds: prod's rollout of
+    # f0a02878 went live at this time (UTC). autopush built it at 18:57 on
+    # 10-09, after the last of the 23 (18:31 that day).
+    publishing_stopped_faking = "2026-10-10T21:29:35"
+
+    def approved_by_publishing(revision: dict) -> bool:
+        """Whether publishing stamped the revision approved without writing it.
+
+        That is every edge proposal approved before the fix: not one edge
+        proposal was applied through /api/revisions/approve before then, and
+        none could be approved by publishing after it, since a proposal is not
+        what its edge holds. A node proposal is applied when it is approved.
+        Once scripts/migrate/repair-unapplied-proposal-approvals.ts has run on
+        prod they are pending again, and this matches nothing.
+        """
+        return (
+            revision.get("status") == "approved"
+            and revision.get("collection") == "edges"
+            and str(revision.get("id", "")).startswith("proposal_")
+            and timestamp_key(revision.get("review_time")) < publishing_stopped_faking
+        )
+
     def applied(revision: dict) -> bool:
         """Whether the revision was written over its document.
 
-        An approved one was. So was an automatic one when it was filed,
-        whatever its status says, unless it is a `proposal_` one, which files
-        without writing. A revision with no status predates statuses (August
-        2026) and is taken as applied, which is what this test assumed of every
-        revision before. A document's first revision created it, pending or not.
+        An approved one was, unless publishing approved it. So was an automatic
+        one when it was filed, whatever its status says, unless it is a
+        `proposal_` one, which files without writing. A revision with no status
+        predates statuses (August 2026) and is taken as applied, which is what
+        this test assumed of every revision before. A document's first revision
+        created it, pending or not.
         """
+        if approved_by_publishing(revision):
+            return False
         if revision.get("status") in (None, "approved"):
             return True
         return revision.get("update_automatic") is True and not str(
@@ -1705,7 +1745,11 @@ def test_a_later_revision_never_drops_a_field(revisions):
         placed where it was filed, to be compared with the page it was offered
         against.
         """
-        if revision.get("status") == "approved" and revision.get("review_time"):
+        if (
+            revision.get("status") == "approved"
+            and revision.get("review_time")
+            and not approved_by_publishing(revision)
+        ):
             return timestamp_key(revision["review_time"])
         return timestamp_key(revision.get("update_time"))
 
