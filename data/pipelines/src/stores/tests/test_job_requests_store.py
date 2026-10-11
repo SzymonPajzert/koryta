@@ -11,6 +11,7 @@ from stores.job_requests import (
     RequestError,
     claim,
     end_open_run,
+    mark_waiting,
     padded_krs,
     parse_request,
     queued_requests,
@@ -251,6 +252,37 @@ def test_two_workers_at_once_get_one_claim_between_them():
     assert claim(db, "run-1", host="koryta@vm", now=T0) is False
     assert others == [True]
     assert db.docs["run-1"]["host"] == "other@vm"
+
+
+def test_a_queued_run_says_what_it_waits_for_until_it_is_claimed():
+    db = Db(**{"run-1": queued()})
+    later = T0 + timedelta(minutes=5)
+
+    assert mark_waiting(db, "run-1", waiting="export", now=later) is True
+    run = db.docs["run-1"]
+    assert (run["state"], run["waitingFor"], run["heartbeatAt"]) == (
+        "queued",
+        "export",
+        later,
+    )
+
+    assert claim(db, "run-1", host="koryta@vm", now=later) is True
+    assert db.docs["run-1"]["waitingFor"] is None
+    # Taken on: nothing more is said on it.
+    assert mark_waiting(db, "run-1", waiting="night", now=later) is False
+    assert db.docs["run-1"]["waitingFor"] is None
+    assert not mark_waiting(db, "missing", waiting="export", now=later)
+
+
+def test_a_claim_landing_first_keeps_its_run_from_being_said_to_wait():
+    db = Db(**{"run-1": queued()})
+    db.before_update = lambda: claim(db, "run-1", host="koryta@vm", now=T0)
+
+    assert mark_waiting(db, "run-1", waiting="export", now=T0) is False
+    assert (db.docs["run-1"]["state"], db.docs["run-1"]["waitingFor"]) == (
+        "running",
+        None,
+    )
 
 
 def test_an_open_run_is_ended_and_an_ended_one_left_alone():

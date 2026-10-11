@@ -18,6 +18,12 @@ at a time - `claim` makes sure only one ever does - and the job it starts
 reports on that same document (`JobRun(..., adopt=True)`), so the link follows
 the run to its end. The site's half is frontend/server/utils/jobRequests.ts;
 the field names here are its contract.
+
+A run the worker cannot start yet stays queued and says why in `waitingFor`
+(`mark_waiting`): "export" until the day's export is done, which the job
+compares the page's people with; "night" while a night holds the VM's lock.
+With it goes `heartbeatAt`, so that the page does not take a run waiting for
+a reason for one nobody picked up. `claim` clears it.
 """
 
 from __future__ import annotations
@@ -40,6 +46,11 @@ REQUEST_JOBS = (PEOPLE_REQUEST,)
 
 Target = Literal["company", "person"]
 TARGETS: tuple[Target, ...] = ("company", "person")
+
+#: What a queued run waits for, as its `waitingFor` says (frontend/shared/jobs.ts).
+Waiting = Literal["export", "night"]
+WAIT_EXPORT: Waiting = "export"
+WAIT_NIGHT: Waiting = "night"
 
 #: A rejestr.io person link's number: `https://rejestr.io/osoby/383093/jan-k`.
 _REGISTER_NUMBER = re.compile(r"osoby/(\d+)")
@@ -195,7 +206,33 @@ def claim(client: Any, run_id: str, *, host: str, now: datetime) -> bool:
                 "heartbeatAt": now,
                 "claimedAt": now,
                 "phase": "start",
+                "waitingFor": None,
             },
+            option=client.write_option(last_update_time=snapshot.update_time),
+        )
+    except (FailedPrecondition, Aborted, NotFound):
+        return False
+    return True
+
+
+def mark_waiting(client: Any, run_id: str, *, waiting: Waiting, now: datetime) -> bool:
+    """Say on a queued run what it waits for, and that a worker still has it
+    in view - `heartbeatAt`, which on a queued run is otherwise when it was
+    asked. Whether it was still queued: written on the same condition as a
+    claim, so it never lands on a run somebody has taken on since."""
+    from google.api_core.exceptions import (  # noqa: PLC0415
+        Aborted,
+        FailedPrecondition,
+        NotFound,
+    )
+
+    ref = _ref(client, run_id)
+    snapshot = ref.get()
+    if not snapshot.exists or (snapshot.to_dict() or {}).get("state") != "queued":
+        return False
+    try:
+        ref.update(
+            {"waitingFor": waiting, "heartbeatAt": now},
             option=client.write_option(last_update_time=snapshot.update_time),
         )
     except (FailedPrecondition, Aborted, NotFound):

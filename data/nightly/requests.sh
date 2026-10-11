@@ -6,9 +6,12 @@
 #
 # The site starts the VM when somebody asks (frontend/server/utils/jobRunner.ts),
 # so this runs at every boot. It takes the queued runs one at a time, each
-# under the night's lock, and once it has run something and nothing more comes
-# for ten minutes it leaves poweroff-requested and exits; poweroff.sh then
-# switches the VM off. A VM booted by hand, where it has run nothing, stays up.
+# under the night's lock - none before today's export is done, which they are
+# compared with - and once it has run something, or found only runs waiting
+# for that export, and nothing more comes for ten minutes it leaves
+# poweroff-requested and exits; poweroff.sh then switches the VM off, and the
+# 04:15 boot for the night brings it back for the runs that waited. A VM
+# booted by hand, where it has run nothing and nothing waits, stays up.
 #
 # It runs the code and the outputs the last night left: no checkout, no sync.
 # The outputs on disk are that code's, and a run reads them as they are

@@ -194,24 +194,33 @@ At every boot `koryta-requests.service` (`requests.sh`) runs
   they are on disk, the code the last night checked out. A company's run sends
   its people (pages for those the site lacks are created unpublished), a
   person's run that one person (it never creates a page);
+- claims none before today's export is done: the job compares the page's
+  people with it and refuses an older one. A run asked for between midnight
+  and the export stays queued, its card on /admin/procesy saying it waits for
+  the export, and goes once the export's `.overall_export_metadata` is there,
+  with that export's stamp (`--export`) - at the 04:15 boot at the latest,
+  before the night, which waits for it (the runs asked for from 2026-10-06 to
+  10-11 took 0.3-5.6 minutes);
 - takes `/var/lib/koryta-nightly/lock` for each run, as `night.sh` does for a
   night: a run waits for a night to finish, and a night started during a run
   waits for it (up to `KORYTA_LOCK_WAIT`, 30 min) instead of giving up;
 - holds `requests.busy` while it has a run in hand, so the night's
   `poweroff.sh` leaves the VM up (as it does while one is queued) and the
   worker switches it off itself;
-- once it has run something and nothing more comes for 10 minutes, writes
+- once it has run something - or found every queued run waiting for the
+  export - and nothing more comes for 10 minutes, writes
   `poweroff-requested` and exits, and `poweroff.sh requests` switches the VM
   off - never between 03:45 and 04:45 (the night is about to start), never
   while somebody is logged in or a night holds the lock, never with
-  `/etc/koryta/stay-up`. A VM booted by hand, where it has run nothing, stays
-  up as before;
+  `/etc/koryta/stay-up`. A VM booted by hand, where it has run nothing and
+  nothing waits, stays up as before;
 - ends a run its job could not end (a crash, the ops database out of reach) by
   the job's exit code, and at start a run this host was doing when it went down.
 
 Until the site may start the VM (task `grant-site-starts-nightly-vm`), a
 request waits for the next night: the 04:15 boot starts the worker too, which
-runs the queue once the night lets go of the lock.
+runs the queue once the export is done, or once the night lets go of the
+lock if it has taken it first.
 
 By hand on the VM: `journalctl -u koryta-requests -f`;
 `sudo systemctl stop koryta-requests` keeps it from claiming anything.
