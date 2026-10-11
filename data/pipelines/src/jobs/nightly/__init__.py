@@ -39,7 +39,10 @@ The steps, in order (`STEPS`):
     invariants  the database invariants over tonight's export
     people      koryta_people_import --scope priority --max-uploads 100: new
                 hires first, then the pages of the people rejestr.io was paid
-                for this week, then published pages, then the rest
+                for this week, then the pages with an open note, then at most
+                --max-odpis-only-current (10) people only an odpis names in a
+                public post that is not new, then published pages, then the
+                rest
     scores      koryta_score_import: every scoring model rebuilt over the
                 day's newest export and the pages the people step has just
                 created, and its votes reconciled with the site's
@@ -963,6 +966,8 @@ class Night:
             str(self.args.max_uploads),
             "--recent-days",
             str(self.args.recent_days),
+            "--max-odpis-only-current",
+            str(self.args.max_odpis_only_current),
             "--max-minutes",
             f"{self.minutes_for(step):.0f}",
             # The reprocess has just rebuilt every pipeline the payloads read.
@@ -1047,7 +1052,8 @@ class Night:
             "outputs": "pytest -m e2e src/tests/e2e",
             "invariants": "pytest -m e2e src/tests/pipelines (tonight's export)",
             "people": "koryta_people_import --scope priority --max-uploads "
-            f"{self.args.max_uploads}"
+            f"{self.args.max_uploads} --max-odpis-only-current "
+            f"{self.args.max_odpis_only_current}"
             + (" --dry-run" if self.args.people_dry_run else "")
             # Only a night with the export step has an export to name.
             + (" --export <the export step's>" if self.needs("export") else ""),
@@ -1201,6 +1207,14 @@ def parser() -> argparse.ArgumentParser:
         type=positive_int,
         default=30,
         help="A new hire's public post began within this many days. "
+        "Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--max-odpis-only-current",
+        type=positive_int,
+        default=10,
+        help="Pages the night creates at most for people only an odpis names "
+        "in a public post that is not new, within --max-uploads. "
         "Default: %(default)s.",
     )
     parser.add_argument(

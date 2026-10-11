@@ -228,6 +228,7 @@ def test_the_people_go_up_capped_in_priority_order_from_what_is_on_disk(world):
     assert argv[argv.index("--scope") + 1] == "priority"
     assert argv[argv.index("--max-uploads") + 1] == "50"
     assert argv[argv.index("--recent-days") + 1] == "14"
+    assert argv[argv.index("--max-odpis-only-current") + 1] == "10"
     assert argv[argv.index("--refresh") + 1] == "none"
     assert "--dry-run" not in argv
 
@@ -248,6 +249,16 @@ def test_the_people_compare_with_the_export_the_export_step_took(world, monkeypa
     assert world.steps()["export"] == ("succeeded", eleven)
     argv, _ = world.command("koryta_people_import")
     assert argv[argv.index("--export") + 1] == eleven
+
+
+def test_the_night_makes_ten_pages_for_people_only_an_odpis_names_in_older_posts(
+    world,
+):
+    """Szymon's choice of 2026-10-11; 0 makes none."""
+    night.main(["--max-odpis-only-current", "0"])
+
+    argv, _ = world.command("koryta_people_import")
+    assert argv[argv.index("--max-odpis-only-current") + 1] == "0"
 
 
 def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
@@ -643,7 +654,10 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     out = capsys.readouterr().out
     assert "krs_odpis" not in out
     assert "koryta --all-pipelines" in out
-    assert "koryta_people_import --scope priority --max-uploads 100" in out
+    assert (
+        "koryta_people_import --scope priority --max-uploads 100 "
+        "--max-odpis-only-current 10" in out
+    )
     assert "--export <the export step's>" in out
     assert "koryta_score_import" in out
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
