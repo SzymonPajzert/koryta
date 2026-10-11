@@ -145,6 +145,39 @@ describe("/api/search", () => {
     expect(results).toHaveLength(1);
   });
 
+  it("finds a page titled with the hyphen by its halves typed apart", async () => {
+    // The person ingest renames "Kupczak Wiśniowska" to the hyphen PKW gives,
+    // and "bogusława kupczak wiśniowska" is no prefix of her name any more.
+    respondWith({
+      wiśniowska: [doc("a1", "Bogusława Kupczak-Wiśniowska")],
+    });
+
+    const results = await search("Kupczak Wiśniowska");
+
+    expect(results.map((r) => r.id)).toEqual(["a1"]);
+  });
+
+  it("finds a page titled with a space by the hyphen typed", async () => {
+    // One word as typed, two as the hyphen cuts it: the index is asked for
+    // the whole word, which a page titled with the hyphen carries, and for
+    // its longer half, which the page titled with a space does.
+    respondWith({
+      "kupczak-wiśniowska": [doc("a1", "Bogusława Kupczak-Wiśniowska")],
+      wiśniowska: [
+        doc("a2", "Bogusława Kupczak Wiśniowska"),
+        doc("a3", "Anna Wiśniowska"),
+      ],
+    });
+
+    const results = await search("Kupczak-Wiśniowska");
+
+    const chunks = mockWhere.mock.calls
+      .filter(([field]) => field === "nameChunksLower")
+      .map(([, , value]) => value);
+    expect(chunks).toEqual(["kupczak-wiśniowska", "wiśniowska"]);
+    expect(results.map((r) => r.id)).toEqual(["a1", "a2"]);
+  });
+
   it("ignores the padding around a typed query", async () => {
     respondWith({ nowak: [doc("a1", "Anna Nowak")] });
 

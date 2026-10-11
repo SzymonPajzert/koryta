@@ -2140,9 +2140,8 @@ describe("api/ingest/person, somebody only an odpis names: the name and the birt
   });
 
   it("holds them back for an undated page writing their hyphen with a space", async () => {
-    // The search index cuts a name at its spaces, so this page carries
-    // "rudnik" and not "nowak-rudnik", and by the hyphenated word alone the
-    // payload would have opened a page beside it.
+    // This page carries "rudnik" and not "nowak-rudnik", and by the
+    // hyphenated word alone the payload would have opened a page beside it.
     nodes.undated = person({ name: "Anna Nowak Rudnik" });
     payload({ name: "Anna Nowak-Rudnik" });
 
@@ -2152,6 +2151,24 @@ describe("api/ingest/person, somebody only an odpis names: the name and the birt
     });
     expect(createRevisionTransaction).not.toHaveBeenCalled();
   });
+
+  it.each(["Anna Nowak Rudnik", "Anna Nowak-Rudnik"])(
+    "holds back the single surname for an undated %s alike",
+    async (name) => {
+      // The names agree either way (`namesAgree`), and the page titled with
+      // the space always held "Anna Rudnik" back. The one the ingest renames
+      // to the hyphen did not: the index carried "nowak-rudnik" whole, so the
+      // query by "rudnik" never reached it.
+      nodes.undated = person({ name });
+      payload({ name: "Anna Rudnik" });
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 409,
+        message: expect.stringContaining("no birth date"),
+      });
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+    },
+  );
 
   it("holds the person back where two pages share the name and the date", async () => {
     nodes.one = person({ name: "Anna Maria Nowak", birthDate: "1971-03-14" });
