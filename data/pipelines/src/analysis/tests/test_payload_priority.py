@@ -273,7 +273,7 @@ def test_somebody_bought_goes_only_onto_a_page_the_payload_would_change():
         Company(krs=PUBLIC, role="Prezes", start="2020-01-01"),
     )
     # The feeds are bought by name, so one bought for somebody without a page
-    # may be a namesake's: nobody but a new hire gets a page.
+    # may be a namesake's: nobody with an entry but a new hire gets a page.
     namesake = person(
         "Jan Kowalski",
         "https://rejestr.io/osoby/7",
