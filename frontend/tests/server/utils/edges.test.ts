@@ -9,6 +9,8 @@ import {
   findEdgeMatches,
   findEdges,
   findEdge,
+  preferredCopy,
+  type EdgeCopy,
   type EdgeLike,
 } from "../../../server/utils/edges";
 
@@ -267,6 +269,80 @@ describe("the result of a candidacy", () => {
     expect(addsOnlyAnnotations(owns, { ...owns, end_date: "2020-01-01" })).toBe(
       false,
     );
+  });
+});
+
+describe("preferredCopy", () => {
+  const won: EdgeLike = { ...candidacy, elected: true };
+  const committee = "Komitet Wyborczy Prawo i Sprawiedliwość";
+  /** A stored copy, labelled the way `findEdgeMatches` labels it for `row`. */
+  const copy = (
+    id: string,
+    stored: Record<string, unknown>,
+    row: EdgeLike,
+  ): EdgeCopy => ({
+    id,
+    stored,
+    relation: edgeRelation(stored as EdgeLike, row) as EdgeCopy["relation"],
+  });
+
+  it("gives a won row the copy that says it was won, wherever it sorts", () => {
+    const pick = preferredCopy(won, [
+      copy("a", { ...candidacy }, won),
+      copy("b", { ...won }, won),
+    ]);
+
+    expect(pick?.id).toBe("b");
+  });
+
+  it("gives a row that says nothing the copy that says nothing", () => {
+    // It fits the won copy too, so position alone would hand it that.
+    const pick = preferredCopy(candidacy, [
+      copy("a", { ...won }, candidacy),
+      copy("b", { ...candidacy }, candidacy),
+    ]);
+
+    expect(pick?.id).toBe("b");
+  });
+
+  it("takes the copy asserting exactly the row before one it would enrich", () => {
+    const row: EdgeLike = { ...candidacy, committee };
+    const pick = preferredCopy(row, [
+      copy("a", { ...candidacy }, row),
+      copy("b", { ...candidacy, committee }, row),
+    ]);
+
+    expect(pick?.id).toBe("b");
+  });
+
+  it("takes a live copy before a removed one", () => {
+    const pick = preferredCopy(candidacy, [
+      copy("a", { ...candidacy, deleted: true }, candidacy),
+      copy("b", { ...candidacy }, candidacy),
+    ]);
+
+    expect(pick?.id).toBe("b");
+  });
+
+  it("still restates a removed copy that is the row's own", () => {
+    // The result agrees with the removed one only: taking the live one would
+    // write the win onto a copy a reviewer kept, beside the one they removed.
+    const pick = preferredCopy(won, [
+      copy("a", { ...won, deleted: true }, won),
+      copy("b", { ...candidacy }, won),
+    ]);
+
+    expect(pick?.id).toBe("a");
+  });
+
+  it("falls back to the id, so a dry run predicts the real one", () => {
+    const pick = preferredCopy(candidacy, [
+      copy("b", { ...candidacy }, candidacy),
+      copy("a", { ...candidacy }, candidacy),
+    ]);
+
+    expect(pick?.id).toBe("a");
+    expect(preferredCopy(candidacy, [])).toBeUndefined();
   });
 });
 

@@ -538,6 +538,49 @@ def test_a_candidacy_already_marked_won_is_dropped():
     assert snapshot.changes(payload(elections=[won])) == []
 
 
+#: Marcin Witko's 2010 in Tomaszów Mazowiecki, as the 10-12 night stored it: a
+#: council seat he won and a mayoral race he lost, both „Samorząd” in his
+#: powiat, so the result is all that tells the two copies apart.
+WON_COPY = dict(STORED_CANDIDACY, id="edge-election-1", elected=True)
+LOST_COPY = dict(STORED_CANDIDACY, id="edge-election-2")
+LOST_RUN = dict(CANDIDACY, elected=False)
+WON_RUN = dict(CANDIDACY, elected=True)
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [
+        pytest.param([WON_COPY, LOST_COPY], id="won-copy-first"),
+        pytest.param(
+            [dict(LOST_COPY, id="edge-election-0"), WON_COPY], id="lost-copy-first"
+        ),
+    ],
+)
+def test_a_won_and_a_lost_run_sent_again_change_nothing(stored):
+    """Each row goes back to the copy that says what it says.
+
+    Paired by position, the lost row took whichever copy sorted first. With the
+    won copy first, the won row was left the lost copy to write its win onto;
+    with the lost copy first, it found nothing and was a new candidacy, the win
+    stored a third time.
+    """
+    snapshot = SiteSnapshot(nodes(), edges(*stored))
+
+    assert snapshot.changes(payload(elections=[LOST_RUN, WON_RUN])) == []
+
+
+def test_the_won_run_keeps_the_only_copy_that_says_it_was_won():
+    """One stored copy, won, and two rows: one new candidacy.
+
+    The prediction only says that one is written, not which, so this held
+    before the won rows went first too. Which one it is - the lost run, rather
+    than the win stored again beside the won copy - is in `person.test.ts`.
+    """
+    snapshot = SiteSnapshot(nodes(), edges(WON_COPY))
+
+    assert snapshot.changes(payload(elections=[LOST_RUN, WON_RUN])) == [NEW_CANDIDACY]
+
+
 def test_a_recorded_defeat_is_not_something_the_upload_would_write():
     """`createElection` writes only a win, so predicting one would be wrong."""
     snapshot = SiteSnapshot(nodes(), edges(STORED_CANDIDACY))

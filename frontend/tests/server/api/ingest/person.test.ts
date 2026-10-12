@@ -861,6 +861,98 @@ describe("api/ingest/person", () => {
       expect(result.elections![0]!.edgeId).toBe(narrowedId);
     });
 
+    describe("a council seat won and a mayoral race lost in one town", () => {
+      // Marcin Witko's 2010 in Tomaszów Mazowiecki, as the 10-12 night stored
+      // it. The pipeline sends both as „Samorząd” in his powiat under one
+      // committee, so the result is the only thing that tells the two rows,
+      // and the two copies they were stored as, apart. The night sent the lost
+      // one first.
+      const committee = "KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ";
+      const copy = {
+        ...storedCandidacy,
+        start_date: "2010-01-01",
+        party: "PiS",
+        committee,
+      };
+      const row = {
+        election_type: "Samorząd",
+        teryt: "1465",
+        election_year: "2010",
+        party: "PiS",
+        committee,
+        party_from_committee: true,
+      };
+      const lostThenWon = {
+        name: "Test Person",
+        parties: [],
+        companies: [],
+        elections: [
+          { ...row, elected: false },
+          { ...row, elected: true },
+        ],
+      };
+
+      /** The person, then the region and the stored copies once per row. */
+      function storedCopies(stored: Record<string, unknown>[], ids: string[]) {
+        personWithStoredEdges(stored, ids);
+        mockGet.mockResolvedValueOnce({
+          empty: false,
+          docs: [
+            { ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) },
+          ],
+        });
+        mockGet.mockResolvedValueOnce({
+          empty: false,
+          docs: stored.map((edge, index) => ({
+            id: ids[index],
+            data: () => edge,
+          })),
+        });
+      }
+
+      it.each([
+        ["the won copy sorts first", ["copy-a-won", "copy-b-lost"]],
+        ["the lost copy sorts first", ["copy-b-won", "copy-a-lost"]],
+      ])(
+        "sends each run back to its own copy when %s",
+        async (_, [wonId, lostId]) => {
+          // Paired by position, the lost row took whichever copy sorted first.
+          // With the won one first, the won row was left the lost copy and
+          // wrote its win onto it, approved; with the lost one first, it found
+          // nothing and stored the win a third time.
+          storedCopies([{ ...copy, elected: true }, copy], [wonId!, lostId!]);
+          mockReadBody.mockResolvedValue(lostThenWon);
+
+          const result = await handler({} as any);
+
+          expect(createRevisionTransaction).not.toHaveBeenCalled();
+          expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+          expect(result.elections!.map((e) => e.edgeId)).toEqual([
+            lostId,
+            wonId,
+          ]);
+        },
+      );
+
+      it("stores the lost run as the new copy when only the won one is stored", async () => {
+        // A blank row fits a won copy as well as a blank one, so placed in the
+        // payload's order the lost run took the won copy, and the won run was
+        // stored again beside it: two wins where PKW records one.
+        storedCopies([{ ...copy, elected: true }], ["copy-won"]);
+        mockReadBody.mockResolvedValue(lostThenWon);
+
+        const result = await handler({} as any);
+
+        expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+        const written = vi.mocked(createRevisionTransaction).mock.calls[0]!;
+        expect(written[4]).not.toHaveProperty("elected");
+        const [lost, won] = result.elections!;
+        expect(won!.edgeId).toBe("copy-won");
+        expect(lost!.edgeId).not.toBe("copy-won");
+        expect(lost!.created).toBe(true);
+      });
+    });
+
     it("still creates a candidacy the database does not have", async () => {
       personWithStoredEdges([]);
       mockReadBody.mockResolvedValue(

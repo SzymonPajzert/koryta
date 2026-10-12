@@ -438,6 +438,74 @@ export function addsOnlyAnnotations(
   return annotations.some(adds) && !discriminators.some(adds);
 }
 
+/** A stored edge one payload row could be placed onto, and how the row stands
+ * to it (`edgeRelation`). */
+export type EdgeCopy = {
+  id: string;
+  stored: Record<string, unknown>;
+  relation: Exclude<EdgeRelation, "conflict">;
+};
+
+/** Which of the stored copies a row of an enrichable type should take.
+ *
+ * Several copies can fit one row: the pipeline strips the office from a local
+ * candidacy, so a council run and a mayoral run in one town in one year arrive
+ * as two rows that differ only in whether they won, and are stored as two
+ * copies that differ the same way. Taking them in order of id - the rule while
+ * every copy of a row looked alike - paired each row with whichever copy came
+ * first. Marcin Witko's 2010 pair, a council seat he won and a mayoral race he
+ * lost, would have had the win written onto the copy for the race he lost by
+ * the next send, or stored a third time had the two ids sorted the other way.
+ *
+ * So the copy that is this row's own goes first:
+ * - one asserting exactly what the row does, before one the row could only
+ *   enrich or that says more than it - which is what keeps an identical
+ *   restatement on a removed edge rather than beside it;
+ * - then one that agrees with the row about its annotations, a win with a win
+ *   and a blank with a blank, since an annotation is the one thing two such
+ *   copies still differ in;
+ * - then a live copy before a removed one, then one that needs no write, then
+ *   by id, so a dry run predicts the real one.
+ *
+ * This only settles who goes with whom among rows that compete for the same
+ * copies if the rows that say more come first - a blank row fits a won copy,
+ * and taking it would leave the won row nothing - which is why the ingest
+ * places the candidacies that carry a result before the rest.
+ */
+export function preferredCopy<C extends EdgeCopy>(
+  edge: EdgeLike,
+  copies: readonly C[],
+): C | undefined {
+  const identity = edgeIdentity(edge);
+  const annotations = edgeSemantics(edge.type).annotations ?? [];
+  const rank = (copy: C): number[] => [
+    edgeIdentity(copy.stored as EdgeLike) === identity ? 0 : 1,
+    annotations.filter(
+      (name) =>
+        JSON.stringify(field(copy.stored as EdgeLike, name)) !==
+        JSON.stringify(field(edge, name)),
+    ).length,
+    copy.stored.deleted === true ? 1 : 0,
+    copy.relation === "same" ? 0 : 1,
+  ];
+  let best: { copy: C; rank: number[] } | undefined;
+  for (const copy of copies) {
+    const current = { copy, rank: rank(copy) };
+    if (!best || precedes(current, best)) best = current;
+  }
+  return best?.copy;
+}
+
+function precedes(
+  a: { copy: EdgeCopy; rank: number[] },
+  b: { copy: EdgeCopy; rank: number[] },
+): boolean {
+  for (let i = 0; i < a.rank.length; i++) {
+    if (a.rank[i] !== b.rank[i]) return a.rank[i]! < b.rank[i]!;
+  }
+  return a.copy.id < b.copy.id;
+}
+
 /** How every stored edge between this pair relates to `edge`.
  *
  * One query, partitioned in memory, because the answers all come from the same

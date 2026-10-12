@@ -13,8 +13,10 @@ import {
   edgeDocumentId,
   edgeIdentity,
   edgeRelation,
+  edgeSemantics,
   enrichedEdge,
   findEdgeMatches,
+  preferredCopy,
   type EdgeLike,
 } from "~~/server/utils/edges";
 import {
@@ -178,17 +180,27 @@ export default defineEventHandler(async (event) => {
     for (const article of assertArray(body.sources, "articles")) {
       articlesResult.push(await createArticle(ctx, personId, article));
     }
-    for (const election of assertArray(body.elections, "elections")) {
+    const elections = assertArray(body.elections, "elections");
+    // The candidacies that say they were won are placed before the rest. A row
+    // that says nothing about its result fits any stored copy, a won one
+    // included, so placed first it could take the copy that is a won row's
+    // own and leave that row to enrich or create another (`preferredCopy`).
+    // Reported in the payload's order all the same.
+    const outcomes: ElectionOutcome[] = [];
+    for (const index of placingOrder(elections)) {
+      const election = elections[index]!;
       // Per candidacy, the way the employments above are handled per company.
       // A payload is a person, not a transaction: whatever the site cannot
       // make sense of is one relation, and the rest of the person still goes
       // in. Everything dropped comes back in `unplacedElections`.
-      const outcome = await createElection(ctx, personId, election).catch(
+      outcomes[index] = await createElection(ctx, personId, election).catch(
         (e) => {
           console.error("Error creating candidacy", e);
           return { unplaced: unplaced(election, "rejected", false) };
         },
       );
+    }
+    for (const outcome of outcomes) {
       if ("placed" in outcome) {
         electionsResult.push(outcome.placed);
       } else {
@@ -554,6 +566,21 @@ function unplaced(
 /** Either the candidacy that was written, or a note of why none was. */
 type ElectionOutcome =
   { placed: EntityResult } | { unplaced: UnplacedElection };
+
+/** The order to place a payload's candidacies in, as indices into it: the won
+ * ones first, otherwise as sent. See the loop in the handler.
+ *
+ * `_candidacy_changes` in `analysis/payloads/site.py` places them in the same
+ * order to predict what a send would write. */
+function placingOrder(elections: readonly ElectionRequest[]): number[] {
+  return elections
+    .map((_, index) => index)
+    .sort(
+      (a, b) =>
+        Number(elections[b]!.elected === true) -
+          Number(elections[a]!.elected === true) || a - b,
+    );
+}
 
 async function createElection(
   ctx: Context,
@@ -1131,9 +1158,10 @@ function conflict(message: string) {
  * rather than as a repeat. It has to be: for an `election` the pipeline strips
  * the office, the committee and the run-off round before the ingest sees them,
  * so a burmistrz bid and a rada bid in one town in 2024 arrive as two
- * indistinguishable rows, and keeping only one loses a candidacy. The n-th such
- * row is matched against the n-th stored edge, so re-sending the payload maps
- * each row back onto the edge it made last time and the collection stops at
+ * indistinguishable rows, and keeping only one loses a candidacy. Each row
+ * takes one stored edge - the n-th of a job's identity, the copy a candidacy
+ * agrees with best (`preferredCopy`) - so re-sending the payload maps each row
+ * back onto the edge it made last time and the collection stops at
  * `max(rows in the payload, edges already stored)` - never fewer, never more.
  *
  * Says what it did to the edge as well as which one it is (`EdgeOutcome`),
@@ -1161,28 +1189,53 @@ async function findEdgeOrCreate(
     edge,
   );
 
-  // The n-th row of this identity onto the n-th stored edge that says it, out
-  // of those no *other* identity has taken.
-  //
-  // Both halves are needed and they are about different collisions. Skipping
-  // what another row has taken is what stops a bare row re-taking the candidacy
-  // an earlier row just enriched: nothing is committed until the end, so the
-  // enriched edge still reads back bare and matches exactly. Counting by
-  // `occurrence` is what tells two rows of the *same* identity apart, and it
-  // has to be the counter rather than the claim, because the employments are
-  // dispatched through `Promise.all` and both would read the pool before either
-  // wrote to it.
-  //
-  // Applying both to one list was the bug: a same-identity claim advanced the
-  // position once by being counted and again by being filtered, so two
-  // identical rows against two identical stored edges took the first, skipped
-  // the second and wrote a duplicate. Matching k rows needed 2k-1 stored edges.
-  // Round-tripping the 31 August export found 826 identity groups with a
-  // repeat, across 605 people, that a re-upload would have grown by 839 edges
-  // before settling.
-  const existing = same.filter(
-    (id) => (ctx.claimedEdgeIds.get(id) ?? identity) === identity,
-  )[occurrence];
+  let existing: string | undefined;
+  let candidate: { id: string; stored: Record<string, unknown> } | undefined;
+  if (edgeSemantics(edge.type).enrichable) {
+    // The copy that is this row's own, out of those no earlier row has taken
+    // (`preferredCopy`). Position cannot say which that is: for a type that
+    // can be enriched, which copies count as `same` depends on what the row
+    // says - a won copy is the same as a won row and only enrichable by a
+    // blank one - so the n-th row of one identity and the n-th of another are
+    // indexing different lists. A claim can be read instead of counted
+    // because these rows are placed one after another (`createElection`), not
+    // through `Promise.all` as the employments are.
+    const copy = preferredCopy(
+      edge,
+      [
+        ...same.map((id) => ({
+          id,
+          stored: documents.get(id) ?? {},
+          relation: "same" as const,
+        })),
+        ...enrichable.map((c) => ({ ...c, relation: "enriches" as const })),
+      ].filter((c) => !ctx.claimedEdgeIds.has(c.id)),
+    );
+    if (copy?.relation === "same") existing = copy.id;
+    else candidate = copy;
+  } else {
+    // The n-th row of this identity onto the n-th stored edge that says it,
+    // out of those no *other* identity has taken.
+    //
+    // Both halves are needed and they are about different collisions. Skipping
+    // what another row has taken is what stops a bare row re-taking an edge an
+    // earlier row of another identity took. Counting by `occurrence` is what
+    // tells two rows of the *same* identity apart, and it has to be the
+    // counter rather than the claim, because the employments are dispatched
+    // through `Promise.all` and both would read the pool before either wrote
+    // to it.
+    //
+    // Applying both to one list was the bug: a same-identity claim advanced
+    // the position once by being counted and again by being filtered, so two
+    // identical rows against two identical stored edges took the first,
+    // skipped the second and wrote a duplicate. Matching k rows needed 2k-1
+    // stored edges. Round-tripping the 31 August export found 826 identity
+    // groups with a repeat, across 605 people, that a re-upload would have
+    // grown by 839 edges before settling.
+    existing = same.filter(
+      (id) => (ctx.claimedEdgeIds.get(id) ?? identity) === identity,
+    )[occurrence];
+  }
   if (existing) {
     ctx.claimedEdgeIds.set(existing, identity);
     const published = verified && (await approveWaitingEdge(ctx, existing));
@@ -1194,7 +1247,6 @@ async function findEdgeOrCreate(
   // reachable for an `enrichable` type, and those are resolved in a sequential
   // loop, so the read above cannot interleave with another row's claim the way
   // the concurrent employments would.
-  const candidate = enrichable.find((c) => !ctx.claimedEdgeIds.has(c.id));
   if (candidate) {
     ctx.claimedEdgeIds.set(candidate.id, identity);
     const edgeRef = ctx.db.collection("edges").doc(candidate.id);
