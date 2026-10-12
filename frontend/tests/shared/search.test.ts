@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  anchorChunk,
   anchorToken,
   generateChunksLower,
   nameChunksToWrite,
@@ -196,6 +197,32 @@ describe("anchorToken", () => {
   it("breaks a tie towards the surname", () => {
     // "Piotr" is on four hundred people, "Pięta" on a handful.
     expect(anchorToken(["piotr", "pięta"])).toBe("pięta");
+  });
+});
+
+describe("anchorChunk", () => {
+  it("anchors as anchorToken does where nothing is hyphenated", () => {
+    expect(anchorChunk(["andrzej", "namysło"])).toBe("namysło");
+    expect(anchorChunk(["piotr", "pięta"])).toBe("pięta");
+  });
+
+  it("picks the word as typed, then the longest of its parts", () => {
+    // Not "przedsiębiorstwo", the longest part of any word: 697 companies
+    // carry it, past the 500 the second pass reads.
+    expect(anchorChunk(["przedsiębiorstwo", "usługowo-produkcyjne"])).toBe(
+      "produkcyjne",
+    );
+    expect(anchorChunk(["małgorzata", "kidawa-błońska"])).toBe("błońska");
+  });
+
+  it("cuts a single hyphenated word, which a page titled with a space carries in parts", () => {
+    expect(anchorChunk(["kupczak-wiśniowska"])).toBe("wiśniowska");
+  });
+
+  it("does not anchor on a hyphen standing alone", () => {
+    expect(anchorChunk(["kukulska", "-------------", "zając"])).toBe(
+      "kukulska",
+    );
   });
 });
 
