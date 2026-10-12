@@ -206,6 +206,72 @@ def test_a_namesake_with_another_register_entry_is_a_new_person():
     ]
 
 
+#: A page `/api/nodes/merge` folded into the person's. It keeps the name and the
+#: register link that find it, and the merge took its edges. Its id sorts before
+#: the person's, so it is the page a query on either reads first.
+MERGED_AWAY = {
+    "id": "person-0",
+    "type": "person",
+    "name": "Jan Kowalski",
+    "rejestrIo": "https://rejestr.io/osoby/123",
+    "merged_into": PERSON_ID,
+}
+
+
+class TestAMergedAwayPage:
+    """The ingest writes onto the page a merge leads to (`lookupNodeDoc`,
+    `resolveMergedNode`), so that is the page a payload is compared with.
+    Compared with the merged-away one, which has no edges, every job and
+    candidacy read as new: 74 people of the 2026-10-12 night's plan were judged
+    that way."""
+
+    @staticmethod
+    def site(person=None):
+        """`nodes`, with the merged-away page ahead of the person's."""
+        return pd.concat(
+            [pd.DataFrame.from_records([MERGED_AWAY]), nodes(person=person)],
+            ignore_index=True,
+        )
+
+    @staticmethod
+    def landing(snapshot, sent):
+        found = snapshot.resolve(sent)
+        return (None if found.page is None else found.page["id"], found.how)
+
+    def test_what_the_live_page_holds_is_not_news(self):
+        snapshot = SiteSnapshot(self.site(), edges(STORED_EMPLOYMENT, STORED_CANDIDACY))
+        sent = payload(companies=[EMPLOYMENT], elections=[CANDIDACY])
+
+        assert self.landing(snapshot, sent) == (PERSON_ID, "rejestrIo")
+        assert snapshot.changes(sent) == []
+
+    def test_a_link_only_the_merged_away_page_holds_is_news_for_the_live_one(self):
+        """Why the merged-away page stays in the register index rather than
+        being left out of it: the ingest finds it by the link, and writes the
+        link onto the page it was merged into."""
+        snapshot = SiteSnapshot(
+            self.site(person={"rejestrIo": None}), edges(STORED_EMPLOYMENT)
+        )
+        sent = payload(companies=[EMPLOYMENT])
+
+        assert self.landing(snapshot, sent) == (PERSON_ID, "rejestrIo")
+        assert snapshot.changes(sent) == [PERSON_FIELDS]
+
+    def test_a_page_id_is_judged_by_the_live_page_its_birth_date_included(self):
+        """`refuseAnotherBirthDate` reads the page the merge leads to: here the
+        merged-away one stores no date, and the live one another than the
+        payload's."""
+        snapshot = SiteSnapshot(
+            self.site(person={"birthDate": "1967-09-21"}), edges(STORED_EMPLOYMENT)
+        )
+        sent = payload(korytaId="person-0", rejestrIo=None, companies=[EMPLOYMENT])
+
+        assert self.landing(snapshot, sent) == (PERSON_ID, "korytaId")
+        assert snapshot.changes(sent) == []
+        refused = snapshot.resolve(dict(sent, birthDate="1971-03-14"))
+        assert (refused.page, refused.held) == (None, True)
+
+
 def test_a_party_the_node_does_not_carry_is_kept():
     snapshot = SiteSnapshot(nodes(), edges())
 
