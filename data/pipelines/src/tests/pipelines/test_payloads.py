@@ -242,6 +242,44 @@ def test_a_candidacy_nobody_recorded_a_result_for_says_nothing(mock_ctx):
     assert _extract_elections(row)[0].elected is None
 
 
+@pytest.mark.parametrize(
+    ("election_type", "office", "sent"),
+    [
+        # The seat, where `person_pkw` knows it.
+        ("samorządu", "Rada miasta", "Rada miasta"),
+        ("samorządu", "Prezydent", "Prezydent"),
+        # Where it does not - or a `person_pkw` built before the column - the
+        # payload says what it always has.
+        ("samorządu", None, "Samorząd"),
+        ("samorządu", float("nan"), "Samorząd"),
+        ("samorządu", "Kandydat", "Samorząd"),
+        # A national election is named by its kind, whatever the row says.
+        ("sejmu", "Prezydent", "Sejm"),
+    ],
+)
+def test_a_local_candidacy_is_sent_as_the_seat_it_was_for(
+    mock_ctx, election_type, office, sent
+):
+    """Marcin Witko's council seat and mayoral race in 2010 were one row each
+    of „Samorząd” in one town for one committee: indistinguishable, and two
+    copies of one candidacy on his page."""
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "election_type": election_type,
+                    "party": "KW Testowy",
+                    "election_year": 2010,
+                    "teryt_powiat": ["1016"],
+                    "office": office,
+                }
+            ]
+        }
+    )
+
+    assert _extract_elections(row)[0].election_type == sent
+
+
 def test_upload_payloads_region_shape(mock_ctx):
     pipeline = Pipeline.create(RegionPayloads)
 

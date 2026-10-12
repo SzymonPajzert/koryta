@@ -1,9 +1,15 @@
+import typing
+from types import SimpleNamespace
+
 import duckdb
 import pandas as pd
 import pytest
 
-from analysis.people_pkw_merged import drop_contradictory_candidacies
+from analysis.payloads.site import LOCAL_OFFICES as READ_BY_THE_SITE
+from analysis.people_pkw_merged import drop_contradictory_candidacies, people_pkw_merged
 from analysis.utils.tables import create_people_table
+from scrapers.pkw.offices import LOCAL_OFFICES
+from scrapers.stores import Context
 
 
 @pytest.fixture
@@ -145,3 +151,80 @@ def test_a_sejmik_candidacy_is_not_a_second_place(con):
         "two sejmiki": True,
         "two powiats": True,
     }
+
+
+def witko_rows(*rows):
+    """`person_pkw` rows for Marcin Witko, born 1971, in Tomaszów Mazowiecki."""
+    return pd.DataFrame.from_records(
+        [
+            {
+                "first_name": "Marcin",
+                "middle_name": None,
+                "last_name": "Witko",
+                "pkw_name": "Witko Marcin",
+                "birth_year": 1971.0,
+                "teryt_candidacy": "101601",
+                "teryt_living": "101601",
+                "party": "KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ",
+                "election_year": "2010",
+                "election_type": "samorządu",
+                **row,
+            }
+            for row in rows
+        ]
+    )
+
+
+def elections(pkw_data: pd.DataFrame) -> list[tuple]:
+    # All `people_pkw_merged` asks of the context is its connection.
+    ctx = typing.cast(Context, SimpleNamespace(con=duckdb.connect()))
+    merged = people_pkw_merged(ctx, pkw_data)
+    assert len(merged) == 1
+    return sorted(
+        (e["office"], e["candidacy_success"]) for e in merged.iloc[0]["elections"]
+    )
+
+
+#: His 2010: the council seat, and the prezydent race in two rounds - through
+#: to the run-off (`2`, read as FALSE), then lost it.
+WITKO_2010 = [
+    {"candidacy_success": "TRUE", "office": "Rada miasta"},
+    {"candidacy_success": "FALSE", "office": "Prezydent"},
+    {"candidacy_success": "FALSE", "office": "Prezydent"},
+]
+
+
+def test_a_council_run_and_a_mayoral_run_are_two_candidacies():
+    assert elections(witko_rows(*WITKO_2010)) == [
+        ("Prezydent", "FALSE"),
+        ("Rada miasta", "TRUE"),
+    ]
+
+
+def test_a_run_off_won_is_one_candidacy_won():
+    """The first round's row lost, the second's won: one race, won."""
+    rows = witko_rows(
+        {"candidacy_success": "FALSE", "office": "Prezydent", "election_year": "2014"},
+        {"candidacy_success": "TRUE", "office": "Prezydent", "election_year": "2014"},
+    )
+
+    assert elections(rows) == [("Prezydent", "TRUE")]
+
+
+def test_a_person_pkw_without_offices_is_read_as_before():
+    """Built before the column: nothing is folded, as nothing tells a council
+    run from a mayoral run in one town."""
+    rows = witko_rows(*WITKO_2010).drop(columns=["office"])
+    rows = pd.concat(
+        [rows, rows.iloc[[1]].assign(candidacy_success="TRUE", election_year="2014")]
+    )
+
+    assert elections(rows) == [(None, "FALSE"), (None, "TRUE"), (None, "TRUE")]
+
+
+def test_the_offices_named_are_the_ones_the_site_reads():
+    """`site.py` mirrors the ingest's list of local offices, which is the
+    site's. An office named by `scrapers.pkw.offices` and missing there would
+    read as contradicting every stored „Samorząd” and be predicted, and
+    written, as a candidacy of its own."""
+    assert LOCAL_OFFICES == READ_BY_THE_SITE

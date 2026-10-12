@@ -34,6 +34,7 @@ from entities.composite import Company, Election, Person, Source
 from scrapers.koryta.download import KorytaNotes, KorytaPeople
 from scrapers.krs.columns import is_public
 from scrapers.pkw.elections import parties_of_committee, party_sort_key
+from scrapers.pkw.offices import LOCAL_OFFICES
 from scrapers.stores import Context, Pipeline
 from util.polish import (
     adds_middle_names,
@@ -591,6 +592,17 @@ def _elected(value: typing.Any) -> bool | None:
     return None
 
 
+def _office(election: typing.Mapping) -> str | None:
+    """The seat a local candidacy was for ("Rada miasta", "Wójt"...), sent in
+    place of „Samorząd” wherever `person_pkw` knows it - see
+    `scrapers.pkw.offices`. None for any other election, and for a local one
+    whose office nothing says."""
+    if str(election.get("election_type")).lower() != "samorządu":
+        return None
+    office = _committee(election.get("office"))
+    return office if office in LOCAL_OFFICES else None
+
+
 def _extract_elections(row: pd.Series) -> list[Election]:
     elections = []
     elec_list = row.get("elections")
@@ -601,7 +613,8 @@ def _extract_elections(row: pd.Series) -> list[Election]:
 
                 committee = _committee(e.get("party"))
                 election_payload = Election(
-                    election_type=get_election_type(str(e.get("election_type"))),
+                    election_type=_office(e)
+                    or get_election_type(str(e.get("election_type"))),
                     committee=committee,
                     party=party_of_candidacy(committee),
                     party_from_committee=bool(parties_of_committee(committee)),

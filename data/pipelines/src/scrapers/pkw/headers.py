@@ -10,7 +10,7 @@ from scrapers.pkw.okregi import voting_district_to_city
 @dataclass
 class SetField:
     name: str
-    processor: typing.Callable[[str, Any], str] = lambda x, _: x
+    processor: typing.Callable[[str, Any], str | None] = lambda x, _: x
     skippable: bool = False
 
     def set_teryt(self, teryt: Teryt):
@@ -113,6 +113,21 @@ def parse_mandate(s: str, _: Never) -> str:
             return "FALSE"
 
     raise ValueError(f"Unknown mandate: {s!r}")
+
+
+def parse_runoff_mandate(s: str, context: Never) -> str | None:
+    """Read the second round's `Mandat` in the 2014 mayoral workbook.
+
+    That file gives each candidate one row with a column per round, and fills
+    a round's `Mandat` only for whoever it elected: `T` in the first round's
+    for 1,586 winners, in the second's for 889, blank everywhere else. Blank
+    in the second round is not a loss to read over the first round's win - most
+    gminas never held one - so it says nothing, and `process_csv` keeps what
+    the first round said.
+    """
+    if s is None or s != s or not str(s).strip():
+        return None
+    return parse_mandate(s, context)
 
 
 def lookup_teryt_from_city(teryt, city: str, _: None) -> str:
@@ -236,7 +251,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "I tura Gł. na\nkand.": None,
     "I tura Gł. wazne": None,
     "I tura Gł.\nprzeciw": None,
-    "I tura Mandat": None,
+    "I tura Mandat": SetField("candidacy_success", parse_mandate),
     "Id kand Mandat": None,
     "ID kand.": None,
     "Id kom Mandat": None,
@@ -247,7 +262,9 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "II tura Gł. na\nkand.": None,
     "II tura Gł. wazne": None,
     "II tura Gł.\nprzeciw": None,
-    "II tura Mandat": None,
+    "II tura Mandat": SetField(
+        "candidacy_success", parse_runoff_mandate, skippable=True
+    ),
     "Imię (imiona)": SetField("first_name"),
     "Imię": SetField("first_name"),
     "Imiona Mandat": SetField("first_name"),
@@ -413,7 +430,10 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Typ": None,
     "Umiona": SetField("first_name"),
     "Upr.": None,
-    "Urząd Mandat": None,
+    # The 2014 mayoral workbook's `Urząd`: W, B or P. `read_xls` joins its two
+    # header rows, and the second row's last label, `Mandat`, wraps round onto
+    # every column that row leaves blank - hence the name.
+    "Urząd Mandat": SetField("position"),
     "Urząd": SetField("position"),
     "Wazne w okr.": None,
     "Ważne": None,

@@ -13,6 +13,10 @@ class PeoplePKWMerged(Pipeline):
 
 def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
     con = ctx.con
+    if "office" not in pkw_data.columns:
+        # A `person_pkw` built before it had the column: every office unknown,
+        # so every local candidacy stays „Samorząd” and nothing is folded.
+        pkw_data = pkw_data.assign(office=None)
 
     con.execute(
         """
@@ -48,10 +52,12 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
         election_year,
         election_type,
         candidacy_success,
+        CAST(office AS VARCHAR) AS office,
     FROM pkw_data
     WHERE first_name IS NOT NULL AND last_name IS NOT NULL
     """
     )
+    fold_rounds(con)
 
     row_num = len(con.sql("select * from people_pkw_merged_raw").df())
     print(f"people_pkw_merged_raw has {row_num} rows")
@@ -72,12 +78,45 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
             "teryt_wojewodztwo": "teryt_wojewodztwo",
             "teryt_powiat": "teryt_powiat",
             "candidacy_success": "candidacy_success",
+            "office": "office",
         },
     )
 
     drop_contradictory_candidacies(con)
 
     return con.sql("select * from people_pkw_merged").df()
+
+
+def fold_rounds(con):
+    """One row per candidacy where the office is known, whatever the rounds.
+
+    The 2002, 2006 and 2010 mayoral files list a candidate once per round, and
+    the rows differ only in the result: a first-round `2` for whoever went
+    through, then the second round's verdict. Folded into the elections by
+    `list_distinct` they stayed two candidacies wherever the run-off was won -
+    a loss and a win for one race. A person stands for one office once per
+    election, so rows that agree on everything but the result are one
+    candidacy, won if any of its rows says so.
+
+    Rows with no office are left as they are: a council run and a mayoral run
+    in one town are just as alike without one, and they are two candidacies.
+    """
+    con.execute(
+        """
+    CREATE OR REPLACE TABLE people_pkw_merged_raw AS
+    SELECT * FROM people_pkw_merged_raw WHERE office IS NULL
+    UNION ALL BY NAME
+    SELECT
+        * EXCLUDE (candidacy_success),
+        CASE
+            WHEN bool_or(candidacy_success = 'TRUE') THEN 'TRUE'
+            WHEN bool_or(candidacy_success = 'FALSE') THEN 'FALSE'
+        END AS candidacy_success,
+    FROM people_pkw_merged_raw
+    WHERE office IS NOT NULL
+    GROUP BY ALL
+    """
+    )
 
 
 def drop_contradictory_candidacies(con):
