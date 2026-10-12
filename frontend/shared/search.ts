@@ -128,6 +128,27 @@ export function anchorToken(tokens: string[]): string {
   return anchor;
 }
 
+/** The chunk the second `/api/search` pass asks the index for: the word the
+ * searcher typed that `anchorToken` picks, and where that word holds a
+ * hyphen, the longest of its parts.
+ *
+ * Picked among the words as typed, because it is the length of the whole
+ * hyphenated word that marks it rare. Picked among the parts instead,
+ * "przedsiębiorstwo usługowo-produkcyjne" anchored on "przedsiębiorstwo",
+ * which 697 companies of 2026-10-11 carry - more than the 500 the pass
+ * reads, so the one asked for fell off the end. Of 2,120 queries made of
+ * two or three words of a hyphenated name in that export, 14 lost the page
+ * they had found before, and the pass read 148k documents over them; this
+ * way it reads 68k and loses none. A part rather than the whole word, so
+ * the pass also reaches a page titled with a space, which carries no chunk
+ * with a hyphen in it; a page titled with the hyphen carries the part once
+ * its index is cut the way `generateChunksLower` cuts it now.
+ */
+export function anchorChunk(tokens: string[]): string {
+  const typed = tokens.filter((token) => nameWords(token).length > 0);
+  return anchorToken(nameWords(anchorToken(typed)));
+}
+
 /** Whether `name` answers every word the searcher typed.
  *
  * Each token has to be the prefix of a *different* word of the name, in any

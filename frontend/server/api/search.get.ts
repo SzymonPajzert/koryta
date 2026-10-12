@@ -4,7 +4,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
 import { getValidatedQuery } from "h3";
 import {
-  anchorToken,
+  anchorChunk,
   nameMatchesTokens,
   nameWords,
   searchTokens,
@@ -70,9 +70,9 @@ export default editorFreshCachedEventHandler(async (event) => {
   // "wiśniowska" and reaches the page still titled "Kupczak Wiśniowska", which
   // carries no chunk with the hyphen in it; and "kupczak wiśniowska" reaches
   // the page titled with the hyphen, whose whole name is no chunk of that.
-  const words = nameWords(query.q);
-  if (words.length > 1) {
-    passes.push(byChunk(anchorToken(words), MULTI_WORD_SCAN_LIMIT));
+  // Which word to anchor on is still decided as typed (`anchorChunk`).
+  if (nameWords(query.q).length > 1) {
+    passes.push(byChunk(anchorChunk(tokens), MULTI_WORD_SCAN_LIMIT));
   }
 
   const snapshots = await Promise.all(passes);

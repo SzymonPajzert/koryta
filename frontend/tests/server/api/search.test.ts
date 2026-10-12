@@ -178,6 +178,28 @@ describe("/api/search", () => {
     expect(results.map((r) => r.id)).toEqual(["a1", "a2"]);
   });
 
+  it("anchors on a part of the hyphenated word typed, not a longer common one", async () => {
+    // "przedsiębiorstwo" is the longest of the words the hyphen cuts, and 697
+    // companies carry it: the 500 read off it end before this one does.
+    respondWith({
+      przedsiębiorstwo: [doc("p1", "PRZEDSIĘBIORSTWO KOMUNALNE")],
+      produkcyjne: [
+        doc("p2", "ZAMOJSKIE PRZEDSIĘBIORSTWO USŁUGOWO-PRODUKCYJNE"),
+      ],
+    });
+
+    const results = await search("Przedsiębiorstwo Usługowo-Produkcyjne");
+
+    const chunks = mockWhere.mock.calls
+      .filter(([field]) => field === "nameChunksLower")
+      .map(([, , value]) => value);
+    expect(chunks).toEqual([
+      "przedsiębiorstwo usługowo-produkcyjne",
+      "produkcyjne",
+    ]);
+    expect(results.map((r) => r.id)).toEqual(["p2"]);
+  });
+
   it("ignores the padding around a typed query", async () => {
     respondWith({ nowak: [doc("a1", "Anna Nowak")] });
 
