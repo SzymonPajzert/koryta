@@ -35,6 +35,11 @@ def normalize_unit_name(name: object) -> str:
     return _UNIT_PREFIX.sub("", " ".join(str(name).lower().split()))
 
 
+#: TERC's `RODZ` for a whole gmina: 1 miejska, 2 wiejska, 3 miejsko-wiejska,
+#: and 8 a dzielnica of Warszawa, which elects a council of its own.
+GMINA_KINDS = frozenset({"1", "2", "3", "8"})
+
+
 teryt_data = DownloadableFile(
     "https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx",
     "teryt_codes.zip",
@@ -112,6 +117,18 @@ class Teryt(Pipeline):
         }
 
         gminy_df = data[~data["POW"].isna() & ~data["GMI"].isna()]
+
+        #: What kind of gmina each one is, by the six-digit code PKW's files
+        #: carry - which leaves off TERC's seventh digit, the kind. A
+        #: miejsko-wiejska gmina is three rows sharing its code (3, and its
+        #: town 4 and its rural part 5), so it is the gmina's own row that
+        #: answers; 9, a city's delegatura, elects nobody.
+        self.gmina_kinds = {
+            str(row.WOJ) + str(row.POW) + str(row.GMI): str(row.RODZ)
+            for row in gminy_df.itertuples()
+            if str(row.RODZ) in GMINA_KINDS
+        }
+
         codes_by_name: dict[tuple[str, str], set[str]] = {}
         for row in gminy_df.itertuples():
             powiat = str(row.WOJ) + str(row.POW)

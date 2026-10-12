@@ -9,7 +9,9 @@ import pandas as pd
 
 from entities.person import PKW as Person
 from scrapers.map.teryt import Teryt
+from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
+from scrapers.pkw.offices import local_office
 from scrapers.pkw.sources import InputSource, sources
 from scrapers.stores import Context, Pipeline
 from util.polish import PkwFormat, parse_name
@@ -156,9 +158,7 @@ def process_csv(
             p = csv_headers[k]
             if p is None:
                 continue
-            val = p.processor(
-                v, ElectionContext(config.year, config.election_type)
-            )
+            val = p.processor(v, ElectionContext(config.year, config.election_type))
             # Only overwrite if the new value is truthy, or if not yet set
             if val or p.name not in mapped:
                 mapped[p.name] = val
@@ -205,6 +205,24 @@ def process_pkw(ctx: Context, csv_headers, limit: int | None, year: str | None):
 
     return pd.DataFrame.from_records([dataclasses.asdict(r) for r in outputs])
 
+
+def local_offices(rows: pd.DataFrame, gmina_kinds: typing.Mapping[str, str]) -> list:
+    """The `office` column: which seat each local candidacy was for.
+
+    After the files are read rather than row by row, because what a gmina's
+    council is called needs the TERYT register (`scrapers.pkw.offices`).
+    """
+    if rows.empty:
+        return []
+    local = str(ElectionType.SAMORZADOWE)
+    return [
+        local_office(position, teryt, gmina_kinds) if kind == local else None
+        for kind, position, teryt in zip(
+            rows["election_type"], rows["position"], rows["teryt_candidacy"]
+        )
+    ]
+
+
 class PeoplePKW(Pipeline[Person]):
     filename = "person_pkw"
     # Written zero-padded and only meaningful zero-padded. Without the pin a
@@ -246,6 +264,7 @@ def main(ctx: Context, teryt: Teryt):
     csv_headers = {k: v.set_teryt(teryt) if v else None for k, v in CSV_HEADERS.items()}
 
     res = process_pkw(ctx, csv_headers, args.limit, args.year)
+    res["office"] = local_offices(res, teryt.gmina_kinds)
 
     print("\n\n")
 

@@ -80,6 +80,10 @@ class PKW:
     middle_name: str | None = None
     last_name: str | None = None
     party_member: str | None = None
+    #: The seat a local candidacy was for, as the site names it ("Rada
+    #: miasta", "Wójt"...), or None - see `scrapers.pkw.offices`. Worked out
+    #: once the whole file is read, as it needs the TERYT register.
+    office: str | None = None
 
 
 @dataclass
