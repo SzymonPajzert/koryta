@@ -401,6 +401,13 @@ def _records(df: pd.DataFrame) -> list[dict]:
     collection has, so a person node arrives with a `krsNumber` of NaN. Reading
     those as absent here is what lets the rest of the module treat a stored
     document like the JSON the ingest reads.
+
+    In document id order, which is the order a query with no `orderBy` hands
+    the ingest its matches in, so the first page an index here keeps is the
+    one its `limit(1)` reads. An export's frame is in that order only by luck:
+    each shard holds a run of ids, but the shards are read in the order their
+    names list in - `output-420` to `output-570` for the nodes of the 10-12
+    export - and `output-1000` lists before `output-999`.
     """
     if df is None or df.empty:
         return []
@@ -408,7 +415,7 @@ def _records(df: pd.DataFrame) -> list[dict]:
     for raw in df.to_dict(orient="records"):
         row = {str(key): value for key, value in raw.items()}
         records.append({k: v for k, v in row.items() if field(row, k) is not None})
-    return records
+    return sorted(records, key=lambda record: str(record.get("id", "")))
 
 
 class SiteSnapshot:
