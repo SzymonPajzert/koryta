@@ -272,6 +272,24 @@ class TestAMergedAwayPage:
         assert (refused.page, refused.held) == (None, True)
 
 
+def test_the_page_a_lookup_reads_first_is_the_lowest_id_in_any_frame_order():
+    """`limit(1)` reads the match with the lowest document id, which is where
+    the ingest writes when two pages hold one register link or one name. The
+    frame is in id order only while its shards' names list in it."""
+    later = {
+        "id": "person-2",
+        "type": "person",
+        "name": "Jan Kowalski",
+        "rejestrIo": "https://rejestr.io/osoby/123",
+    }
+    frame = pd.concat([pd.DataFrame.from_records([later]), nodes()], ignore_index=True)
+    snapshot = SiteSnapshot(frame, edges(STORED_EMPLOYMENT))
+
+    assert snapshot.person_for(payload())["id"] == PERSON_ID
+    assert snapshot.person_for(payload(rejestrIo=None))["id"] == PERSON_ID
+    assert snapshot.changes(payload(companies=[EMPLOYMENT])) == []
+
+
 def test_a_party_the_node_does_not_carry_is_kept():
     snapshot = SiteSnapshot(nodes(), edges())
 

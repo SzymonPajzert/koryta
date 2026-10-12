@@ -176,16 +176,17 @@ def test_of_two_payloads_the_one_naming_the_pages_entry_is_sent():
 
 
 def test_data_the_site_files_on_another_page_is_not_moved_here():
-    # The page links register entry 1, but the export files entry 1 on p-2.
+    # The page links register entry 1, but the export files entry 1 on p-0,
+    # the page the ingest's query reads first.
     site = snapshot(
-        page("p-2", "Anna Nowak", "https://rejestr.io/osoby/1"),
+        page("p-0", "Anna Nowak", "https://rejestr.io/osoby/1"),
         page("p-1", "Anna Nowak-Kowalska", "https://rejestr.io/osoby/1"),
     )
 
     result = for_person([person("Anna Nowak", "1", AT_KRS)], site, TARGET)
 
     assert result.changed == []
-    assert "p-2" in result.reason
+    assert "p-0" in result.reason
 
 
 def test_a_payload_naming_another_register_entry_does_not_overwrite_the_page():
