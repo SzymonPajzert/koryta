@@ -197,6 +197,7 @@ export type ElectionPosition =
   | "Rada miasta"
   | "Rada gminy"
   | "Rada powiatu"
+  | "Rada dzielnicy"
   | "Burmistrz"
   | "Wójt"
   | "Prezydent"

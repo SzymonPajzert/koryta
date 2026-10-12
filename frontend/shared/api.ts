@@ -139,6 +139,7 @@ const electionPositionValues = [
   "Rada miasta",
   "Rada gminy",
   "Rada powiatu",
+  "Rada dzielnicy",
   "Burmistrz",
   "Wójt",
   "Prezydent",

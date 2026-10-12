@@ -10,6 +10,7 @@ import {
 } from "~~/server/utils/revisions";
 import {
   addsOnlyAnnotations,
+  addsOnlyRecordedFacts,
   edgeDocumentId,
   edgeIdentity,
   edgeRelation,
@@ -1255,14 +1256,15 @@ async function findEdgeOrCreate(
       edge,
     );
 
-    // A revision that adds nothing but the result is written out rather than
-    // proposed: PKW published the mandate column, so there is no judgement in
-    // it for a reviewer to make, and 15,681 stored candidacies are waiting to
-    // be told what happened to them. Anything else in the same revision -
-    // above all a committee the curated table does not recognise - puts it
-    // back on the reviewed path.
-    const resultOnly = addsOnlyAnnotations(candidate.stored, edge);
-    if (vouched || resultOnly || ctx.autoapprove) {
+    // A revision that adds nothing but what PKW records outright - the result,
+    // the office a „Samorząd" candidacy was for - is written out rather than
+    // proposed: there is no judgement in it for a reviewer to make, and 15,681
+    // stored candidacies are waiting to be told what happened to them, 12,941
+    // which seat they were. Anything else in the same revision - above all a
+    // committee the curated table does not recognise - puts it back on the
+    // reviewed path.
+    const recordedOnly = addsOnlyRecordedFacts(candidate.stored, edge);
+    if (vouched || recordedOnly || ctx.autoapprove) {
       createRevisionTransaction(
         ctx.db,
         ctx.batch,

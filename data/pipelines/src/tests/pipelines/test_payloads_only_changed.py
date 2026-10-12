@@ -633,6 +633,47 @@ def test_an_office_the_reviewer_narrowed_down_is_not_a_disagreement():
     assert snapshot.changes(payload(elections=[CANDIDACY])) == []
 
 
+def test_a_stored_samorzad_candidacy_learns_its_office():
+    """What the pipeline sends once it carries the office out of PKW's files.
+
+    Read as a disagreement, the named run would be a new candidacy written
+    beside the stored „Samorząd” one - for every local candidacy on the site.
+    """
+    snapshot = SiteSnapshot(nodes(), edges(STORED_CANDIDACY))
+    named = dict(CANDIDACY, election_type="Rada miasta")
+
+    assert snapshot.changes(payload(elections=[named])) == [ENRICHED_CANDIDACY]
+
+
+def test_an_office_already_named_is_not_learned_again():
+    stored = dict(STORED_CANDIDACY, position="Rada miasta")
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    named = dict(CANDIDACY, election_type="Rada miasta")
+
+    assert snapshot.changes(payload(elections=[named])) == []
+
+
+def test_a_council_run_and_a_mayoral_run_name_their_own_copies():
+    """Marcin Witko's 2010 pair, named: each row fills in one copy, and
+    neither is a new candidacy."""
+    snapshot = SiteSnapshot(nodes(), edges(WON_COPY, LOST_COPY))
+    mayoral = dict(LOST_RUN, election_type="Prezydent")
+    council = dict(WON_RUN, election_type="Rada miasta")
+
+    assert snapshot.changes(payload(elections=[mayoral, council])) == [
+        ENRICHED_CANDIDACY,
+        ENRICHED_CANDIDACY,
+    ]
+
+
+def test_another_named_office_is_another_candidacy():
+    stored = dict(STORED_CANDIDACY, position="Rada miasta")
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    mayoral = dict(CANDIDACY, election_type="Prezydent")
+
+    assert snapshot.changes(payload(elections=[mayoral])) == [NEW_CANDIDACY]
+
+
 def test_a_national_office_is_still_not_the_local_one():
     stored = dict(STORED_CANDIDACY, position="Senat")
     snapshot = SiteSnapshot(nodes(), edges(stored))

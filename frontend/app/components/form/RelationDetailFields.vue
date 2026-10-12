@@ -125,10 +125,10 @@ export type RelationDetails = {
  * values `/api/edges/create` and `/api/edges/update` accept, so nothing picked
  * here can be refused.
  *
- * „Samorząd" says only that the election was a local one. The pipeline stores
- * it on every local candidacy, because it does not keep which office the run
- * was for - so it is mostly here to be read back and narrowed down, and the
- * line under it says what it means. */
+ * „Samorząd" says only that the election was a local one. Nearly every local
+ * candidacy stored before the pipeline named the office says it, and the
+ * pipeline still sends it where PKW's files do not say - so it is mostly here to
+ * be read back and narrowed down, and the line under it says what it means. */
 const electionKinds = electionPositions.map((kind) =>
   kind === "Samorząd"
     ? {

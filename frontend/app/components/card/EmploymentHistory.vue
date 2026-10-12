@@ -388,8 +388,8 @@ function edgeLabel(edge: EdgeNode) {
 }
 
 /** The office a candidacy was for - "Sejm", "Senat", "Rada gminy", or
- * "Samorząd" for a local election where the pipeline did not keep which seat
- * (see the `election` entry in server/utils/edges.ts).
+ * "Samorząd" for a local election nothing has named the seat of yet (see the
+ * `election` entry in server/utils/edges.ts).
  *
  * Guarded on the type for the reason `partyOf` is. */
 function officeOf(edge: EdgeNode): string | undefined {

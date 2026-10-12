@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   addsOnlyAnnotations,
+  addsOnlyRecordedFacts,
   edgeDocumentId,
   edgeIdentity,
   edgeSemantics,
@@ -233,13 +234,14 @@ describe("edgeRelation", () => {
     );
   });
 
-  it("does not read a vague office as a narrower one", () => {
-    // Only the stored side may be the more precise: a „Samorząd" on the site is
-    // not the same candidacy as some particular council, as far as anything
-    // here can tell.
+  it("reads a named office as filling in a stored „Samorząd”", () => {
+    // This was a conflict while nothing but a reviewer named offices: a
+    // „Samorząd" said nothing about which council. Now the pipeline names
+    // them from PKW's files, and read as a conflict every one of the 12,941
+    // stored „Samorząd" candidacies would be written again beside itself.
     expect(
       edgeRelation(candidacy, { ...candidacy, position: "Rada gminy" }),
-    ).toBe("conflict");
+    ).toBe("enriches");
   });
 });
 
@@ -269,6 +271,60 @@ describe("the result of a candidacy", () => {
     expect(addsOnlyAnnotations(owns, { ...owns, end_date: "2020-01-01" })).toBe(
       false,
     );
+  });
+});
+
+describe("an office the pipeline names", () => {
+  // Marcin Witko's 2010 council seat, stored as „Samorząd” before the pipeline
+  // carried the office out of PKW's files.
+  const named: EdgeLike = { ...candidacy, position: "Rada miasta" };
+
+  it("fills in a stored „Samorząd” rather than standing beside it", () => {
+    expect(edgeRelation(candidacy, named)).toBe("enriches");
+    expect(enrichedEdge({ ...candidacy, committee: "KW PiS" }, named)).toEqual({
+      ...candidacy,
+      committee: "KW PiS",
+      position: "Rada miasta",
+    });
+  });
+
+  it("is a different candidacy from another named one", () => {
+    // A council run and a mayoral run: two seats, two facts.
+    expect(edgeRelation(named, { ...candidacy, position: "Prezydent" })).toBe(
+      "conflict",
+    );
+  });
+
+  it("never names a national candidacy, nor a local one national", () => {
+    expect(edgeRelation(candidacy, { ...candidacy, position: "Sejm" })).toBe(
+      "conflict",
+    );
+    expect(edgeRelation({ ...candidacy, position: "Sejm" }, named)).toBe(
+      "conflict",
+    );
+  });
+
+  it("is already said by a candidacy a reviewer named the same", () => {
+    expect(edgeRelation(named, named)).toBe("same");
+    expect(enrichedEdge({ ...named }, named)).toEqual(named);
+  });
+
+  it("can be written out with the result, but not with a committee", () => {
+    // Both are what PKW records outright; recognising a committee is not.
+    expect(addsOnlyRecordedFacts({ ...candidacy }, named)).toBe(true);
+    expect(
+      addsOnlyRecordedFacts({ ...candidacy }, { ...named, elected: true }),
+    ).toBe(true);
+    expect(
+      addsOnlyRecordedFacts(
+        { ...candidacy },
+        { ...named, committee: "KWW Nasza Gmina" },
+      ),
+    ).toBe(false);
+    expect(addsOnlyRecordedFacts({ ...named }, named)).toBe(false);
+    expect(
+      addsOnlyRecordedFacts({ ...candidacy }, { ...candidacy, elected: true }),
+    ).toBe(true);
   });
 });
 

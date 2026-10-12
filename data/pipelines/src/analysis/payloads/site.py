@@ -65,8 +65,9 @@ FOLDED_FIELDS = frozenset({"committee"})
 #: it: an edit form's unticked box, not a recorded defeat.
 FLAG_FIELDS = frozenset({"elected"})
 
-#: What the payload calls the office of every local candidacy, having kept only
-#: that the election was local. See `UNNAMED_LOCAL_OFFICE` in
+#: The office of a local candidacy nothing named: what the payload called every
+#: one until it carried the office out of PKW's files, and what it still sends
+#: where they do not say. See `UNNAMED_LOCAL_OFFICE` in
 #: `frontend/server/utils/edges.ts`.
 UNNAMED_LOCAL_OFFICE = "Samorząd"
 
@@ -80,6 +81,7 @@ LOCAL_OFFICES = frozenset(
         "Rada miasta",
         "Rada gminy",
         "Rada powiatu",
+        "Rada dzielnicy",
         "Burmistrz",
         "Wójt",
         "Prezydent",
@@ -326,14 +328,22 @@ def narrows(name: str, stored: typing.Any, incoming: typing.Any) -> bool:
 
     Only the office has such a pair: a reviewer who told the site which council
     a "Samorząd" candidacy was for has not contradicted the payload's
-    "Samorząd". Never the other way round. See `narrows` in
+    "Samorząd". The other way round is `specifies`. See `narrows` in
     `frontend/server/utils/edges.ts`.
+    """
+    return specifies(name, incoming, stored)
+
+
+def specifies(name: str, stored: typing.Any, incoming: typing.Any) -> bool:
+    """Whether the incoming value names the office a stored candidacy only says
+    was local - a blank the ingest fills in, writing the office over the word.
+    See `specifies` in `frontend/server/utils/edges.ts`.
     """
     return (
         name == "position"
-        and incoming == UNNAMED_LOCAL_OFFICE
-        and isinstance(stored, str)
-        and stored in LOCAL_OFFICES
+        and stored == UNNAMED_LOCAL_OFFICE
+        and isinstance(incoming, str)
+        and incoming in LOCAL_OFFICES
     )
 
 
@@ -361,6 +371,9 @@ def edge_relation(
             continue
         if after is not None and before != after:
             if narrows(name, before, after):
+                continue
+            if specifies(name, before, after):
+                added += 1
                 continue
             return "conflict"
     return "enriches" if added else "same"

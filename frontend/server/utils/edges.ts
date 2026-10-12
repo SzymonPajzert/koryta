@@ -106,12 +106,13 @@ export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
   },
 
   // A candidacy, and the one type where identical fields prove nothing. Much of
-  // what would tell two apart is destroyed before the ingest sees them: the
-  // office collapses into the "Samorząd" bucket (all six 2024 PKW candidate
-  // files map onto it), the gmina TERYT is truncated to its powiat, and the
-  // run-off round is discarded by the scraper. So standing for burmistrz and
-  // for that gmina's rada in 2024 can store two identical documents, and so can
-  // one mayoral bid that went to a second round.
+  // what would tell two apart was destroyed before the ingest saw them: the
+  // office collapsed into the "Samorząd" bucket, the gmina TERYT is truncated
+  // to its powiat, and the run-off round was a row of its own. So standing for
+  // burmistrz and for that gmina's rada stored two identical documents, and so
+  // could one mayoral bid that went to a second round. The pipeline now names
+  // the office where PKW's files say it (`scrapers/pkw/offices.py`), but every
+  // candidacy stored before that still says "Samorząd".
   //
   // `committee` is now accepted and stored, which separates two candidacies run
   // under different committees - but every stored candidacy predates that, and
@@ -286,11 +287,12 @@ const ENRICH_FLOOR: Record<string, readonly string[]> = {
 
 export type EdgeRelation = "conflict" | "same" | "enriches";
 
-/** What the pipeline calls the office of every local candidacy.
+/** The office of a local candidacy nothing named: "one of the local offices".
  *
- * PKW does say which office a local candidate ran for, but the scrapers map
- * all six 2024 candidate files onto this one word (see the `election` entry
- * above), so it means "one of the local offices" rather than naming one. */
+ * What the pipeline called every local candidacy until it carried the office
+ * out of PKW's files, and what it still sends where the files do not say (see
+ * the `election` entry above) - so it is what nearly every stored local
+ * candidacy says. */
 const UNNAMED_LOCAL_OFFICE = "Samorząd";
 
 /** The offices a local election fills - everything in `electionPositions`
@@ -307,6 +309,7 @@ const LOCAL_OFFICES: ReadonlySet<string> = new Set([
   "Rada miasta",
   "Rada gminy",
   "Rada powiatu",
+  "Rada dzielnicy",
   "Burmistrz",
   "Wójt",
   "Prezydent",
@@ -320,15 +323,29 @@ const LOCAL_OFFICES: ReadonlySet<string> = new Set([
  * narrowed down to „Rada gminy" still asserts everything the pipeline's row
  * does. Read as a disagreement, the next run would store that row beside it as
  * a second candidacy - putting back, as a duplicate, the vague row the
- * correction replaced. It only goes this way round: a stored „Samorząd" is not
- * made more precise by anything here, and a national office is never a local
+ * correction replaced. The other way round - a named office arriving for a
+ * stored „Samorząd" - is `specifies`, and a national office is never a local
  * one. */
 function narrows(name: string, stored: unknown, incoming: unknown): boolean {
+  return specifies(name, incoming, stored);
+}
+
+/** Whether the incoming value names the office a stored candidacy only says
+ * was local: the other half of `narrows`.
+ *
+ * The pipeline names the office now, and the 12,941 local candidacies stored
+ * before it did say „Samorząd". Read as a disagreement, every one would be
+ * written a second time beside itself, named; read as the same fact, none
+ * would ever learn its name. It is filling in a blank - the blank this word
+ * stands for - so it enriches, and `enrichedEdge` writes the office over the
+ * word. Never the other way round, and a national office is never a local
+ * one. */
+function specifies(name: string, stored: unknown, incoming: unknown): boolean {
   return (
     name === "position" &&
-    incoming === UNNAMED_LOCAL_OFFICE &&
-    typeof stored === "string" &&
-    LOCAL_OFFICES.has(stored)
+    stored === UNNAMED_LOCAL_OFFICE &&
+    typeof incoming === "string" &&
+    LOCAL_OFFICES.has(incoming)
   );
 }
 
@@ -374,6 +391,10 @@ export function edgeRelation(
     }
     if (after !== null && JSON.stringify(before) !== JSON.stringify(after)) {
       if (narrows(name, before, after)) continue;
+      if (specifies(name, before, after)) {
+        added++;
+        continue;
+      }
       return "conflict";
     }
   }
@@ -402,6 +423,12 @@ export function enrichedEdge(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = { ...stored };
   for (const key of Object.keys(incoming)) {
+    const value = (incoming as Record<string, unknown>)[key];
+    // „Samorząd" stands for a blank, and a named office fills it.
+    if (specifies(key, stored[key], value)) {
+      result[key] = value;
+      continue;
+    }
     if (field(stored as EdgeLike, key) !== null) continue;
     if (field(incoming, key) === null) continue;
     // The raw value, not `field`'s: folding is for comparing, and what gets
@@ -436,6 +463,32 @@ export function addsOnlyAnnotations(
   const adds = (name: string) =>
     field(stored as EdgeLike, name) === null && field(incoming, name) !== null;
   return annotations.some(adds) && !discriminators.some(adds);
+}
+
+/** Whether everything the payload would add to this edge is a fact PKW records
+ * outright, which needs no reviewer: an annotation, or which office a „Samorząd"
+ * candidacy was for.
+ *
+ * The office is the same kind of fact as the result: PKW's files say which
+ * seat each candidate stood for, and `scrapers/pkw/offices.py` reads it off
+ * them rather than judging anything - unlike a committee, which is proposed
+ * because recognising one is a judgement. And like the result it rides in one
+ * revision with whatever else the payload fills in, so the rule is the one
+ * `addsOnlyAnnotations` makes: the whole set has to be such facts.
+ */
+export function addsOnlyRecordedFacts(
+  stored: Record<string, unknown>,
+  incoming: EdgeLike,
+): boolean {
+  const { discriminators, annotations = [] } = edgeSemantics(incoming.type);
+  const named = (name: string) =>
+    specifies(name, stored[name], (incoming as Record<string, unknown>)[name]);
+  const adds = (name: string) =>
+    field(stored as EdgeLike, name) === null && field(incoming, name) !== null;
+  return (
+    (annotations.some(adds) || discriminators.some(named)) &&
+    !discriminators.some(adds)
+  );
 }
 
 /** A stored edge one payload row could be placed onto, and how the row stands

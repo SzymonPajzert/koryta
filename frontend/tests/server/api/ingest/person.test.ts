@@ -951,6 +951,93 @@ describe("api/ingest/person", () => {
         expect(lost!.edgeId).not.toBe("copy-won");
         expect(lost!.created).toBe(true);
       });
+
+      it.each([
+        ["the won copy sorts first", ["copy-a-won", "copy-b-lost"]],
+        ["the lost copy sorts first", ["copy-b-won", "copy-a-lost"]],
+      ])(
+        "names each run's office on its own copy when %s",
+        async (_, [wonId, lostId]) => {
+          // What the pipeline sends once it carries the office: the two rows
+          // are told apart at last, and each is written onto the „Samorząd”
+          // copy that agrees with it about the result.
+          storedCopies([{ ...copy, elected: true }, copy], [wonId!, lostId!]);
+          mockReadBody.mockResolvedValue({
+            ...lostThenWon,
+            elections: [
+              { ...row, election_type: "Prezydent", elected: false },
+              { ...row, election_type: "Rada miasta", elected: true },
+            ],
+          });
+
+          const result = await handler({} as any);
+
+          const written = Object.fromEntries(
+            vi
+              .mocked(createRevisionTransaction)
+              .mock.calls.map((call) => [
+                (call[3] as { id: string }).id,
+                call[4],
+              ]),
+          );
+          expect(written).toEqual({
+            [wonId!]: { ...copy, position: "Rada miasta", elected: true },
+            [lostId!]: { ...copy, position: "Prezydent" },
+          });
+          expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+          expect(result.elections!.map((e) => e.edgeId)).toEqual([
+            lostId,
+            wonId,
+          ]);
+        },
+      );
+    });
+
+    describe("the office of a stored „Samorząd” candidacy", () => {
+      const kww = "KWW Nasza Gmina";
+
+      it("is written out without a reviewer: PKW's files say it", async () => {
+        personWithStoredEdges([{ ...storedCandidacy, committee: kww }]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Rada gminy",
+            election_year: "2024",
+            committee: kww,
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+        const call = vi.mocked(createRevisionTransaction).mock.calls[0]!;
+        expect(call[3]).toMatchObject({ id: "stored-0" });
+        expect(call[4]).toEqual({
+          ...storedCandidacy,
+          committee: kww,
+          position: "Rada gminy",
+        });
+        expect(call[5]).toMatchObject({ approve: true });
+      });
+
+      it("still waits for a reviewer when it brings a committee nobody recognised", async () => {
+        personWithStoredEdges([storedCandidacy]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Rada gminy",
+            election_year: "2024",
+            committee: kww,
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+        const call = vi.mocked(proposeRevisionTransaction).mock.calls[0]!;
+        expect(call[4]).toMatchObject({
+          position: "Rada gminy",
+          committee: kww,
+        });
+      });
     });
 
     it("still creates a candidacy the database does not have", async () => {
