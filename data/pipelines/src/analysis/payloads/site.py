@@ -394,6 +394,38 @@ def fills_annotations(
     )
 
 
+def preferred_copy(
+    edge: typing.Mapping[str, typing.Any],
+    copies: list[tuple[dict, str]],
+) -> tuple[dict, str] | None:
+    """Which stored copy a row of an enrichable type takes, and how it stands
+    to it. A transcription of `preferredCopy` in
+    `frontend/server/utils/edges.ts`, which says why: one asserting exactly
+    what the row does first, then one agreeing about the annotations, then a
+    live one, then one needing no write, then by id.
+    """
+    identity = edge_identity(edge)
+    annotations = semantics(edge.get("type")).annotations
+
+    def rank(copy: tuple[dict, str]) -> tuple:
+        stored, relation = copy
+        return (
+            0 if edge_identity(stored) == identity else 1,
+            sum(field(stored, name) != field(edge, name) for name in annotations),
+            1 if stored.get("deleted") == 1 else 0,
+            0 if relation == "same" else 1,
+            str(stored.get("id")),
+        )
+
+    return min(copies, key=rank, default=None)
+
+
+def placing_order(elections: list[dict]) -> list[dict]:
+    """A payload's candidacies in the order the ingest places them: the won
+    ones first, otherwise as sent. `placingOrder` in `person.post.ts`."""
+    return sorted(elections, key=lambda election: election.get("elected") is not True)
+
+
 def _records(df: pd.DataFrame) -> list[dict]:
     """The frame's rows as dicts, with the columns a row does not fill dropped.
 
@@ -1051,7 +1083,8 @@ class SiteSnapshot:
         payload: typing.Mapping[str, typing.Any],
     ) -> list[Change]:
         reasons: list[Change] = []
-        for election in _rows(payload.get("elections")):
+        # The won ones first, as `placingOrder` in `person.post.ts` places them.
+        for election in placing_order(_rows(payload.get("elections"))):
             year = election.get("election_year")
             held = f"{year}-01-01" if year else None
             region_id = self._region_of(election)
@@ -1155,9 +1188,10 @@ class _EdgeMatcher:
 
     Both counters exist because a payload routinely states the same thing twice
     - two spells at one company, two 2024 candidacies in one powiat - and the
-    ingest reads a repeat as a second fact rather than as a duplicate. The n-th
-    such row is matched against the n-th stored edge, which is what stops a
-    re-run growing the collection while still letting it hold both.
+    ingest reads a repeat as a second fact rather than as a duplicate. Each row
+    takes one stored edge - the n-th of a job's identity, the copy a candidacy
+    agrees with best (`preferred_copy`) - which is what stops a re-run growing
+    the collection while still letting it hold both.
     """
 
     def __init__(self, snapshot: SiteSnapshot) -> None:
@@ -1197,6 +1231,26 @@ class _EdgeMatcher:
                     enrichable.append(stored)
                 case "same":
                     same.append(stored)
+
+        if may_enrich:
+            # The copy that is this row's own, as `findEdgeOrCreate` picks it
+            # for a type that can be enriched: no position, because which
+            # copies count as "same" depends on what the row says.
+            copies = [
+                (stored, "same")
+                for stored in same
+                if str(stored.get("id")) not in self.claimed
+            ] + [
+                (stored, "enriches")
+                for stored in enrichable
+                if str(stored.get("id")) not in self.claimed
+            ]
+            chosen = preferred_copy(edge, copies)
+            if chosen is None:
+                return "new"
+            stored, relation = chosen
+            self.claimed[str(stored.get("id"))] = identity
+            return relation
 
         # The n-th row of this identity onto the n-th stored edge that says it,
         # out of those no *other* identity has taken. Both halves, and for the
