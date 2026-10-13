@@ -288,10 +288,11 @@ def test_a_clean_run_exits_zero():
     assert (result.stopped, result.code) == ("", 0)
 
 
-def test_twenty_dead_attempts_in_a_row_stop_the_run():
-    result, record = run([requests.Timeout("t")] * 25, 25)
-    assert len(record) == crawl.MAX_CONSECUTIVE_FAILURES
-    assert "in a row" in result.stopped and result.code == 75
+def test_twenty_dead_attempts_in_a_row_stop_the_run_once_its_rests_are_spent():
+    result, record = run([requests.Timeout("t")] * 30, 30)
+    assert len(record) == crawl.MAX_CONSECUTIVE_FAILURES + crawl.STALL_RESTS
+    assert result.stopped == f"{len(record)} {crawl.REFUSING}"
+    assert result.code == 75
 
 
 def test_a_slowing_service_stops_the_run_without_a_second_pass():
@@ -371,6 +372,59 @@ def test_a_run_pauses_a_few_times_at_most():
     result, said = paced(storms + [b"%PDF"] * 30, 50, time)
 
     assert sum(line.startswith("Pausing") for line in said) == crawl.COOL_DOWNS
+
+
+TIMEOUT = requests.Timeout("Read timed out. (read timeout=10.0)")
+
+
+def night(pattern: str) -> list:
+    """A night's answers: n for a timeout, f for a document."""
+    return [TIMEOUT if c == "n" else b"%PDF" for c in pattern]
+
+
+def test_a_service_answering_again_is_not_stopped_by_the_window():
+    """The first 50 attempts of 2026-10-12 04:42, which stopped that run at
+    the 50th - a document served, the 21st in a row."""
+    first_50 = "nfffnfnnfnnfnfnnfnnffffnnfnfnfffffffffffffffffffff"
+    answers = night(first_50) + [b"%PDF"] * (10 + first_50.count("n"))
+    result, said = paced(answers, 60, Time())
+
+    assert not [line for line in said if line.startswith(("Stopping", "Resting"))]
+    assert (result.stopped, result.code) == ("", 0), "the second pass got the 15"
+
+
+def test_a_stalled_service_is_rested_on_and_the_run_carries_on():
+    """2026-10-10 and -13: nothing answered for the first minutes of the run."""
+    time = Time()
+    stall = night("n" * crawl.MAX_CONSECUTIVE_FAILURES)
+    answers = stall + night("f" * 10) + night("f" * len(stall))
+    result, said = paced(answers, 30, time)
+
+    assert [line for line in said if line.startswith("Resting")] == [
+        f"Resting 5 min at 20 of 30 (1 of {crawl.STALL_RESTS}): 20 {crawl.REFUSING}"
+    ]
+    assert time.slept >= crawl.STALL_REST
+    assert (result.stopped, result.code) == ("", 0), "the second pass got the 20"
+
+
+def test_a_run_rests_on_a_stall_a_few_times_at_most():
+    time = Time()
+    result, said = paced(night("n" * 40), 40, time)
+
+    rests = [line for line in said if line.startswith("Resting")]
+    assert len(rests) == crawl.STALL_RESTS
+    # one more attempt after each rest, then the end
+    assert said[-1] == f"Stopping at 23 of 40: 23 {crawl.REFUSING}"
+    assert job.run_state(result) == "failed"
+
+
+def test_asked_to_stop_in_a_stall_rest_stops_at_once():
+    """The night's step limit ends a run with SIGTERM, rests included."""
+    time = Time()
+    result, _ = paced(night("n" * 40), 40, time, should_stop=lambda: time.now > 1000)
+
+    assert result.stopped == "asked to stop"
+    assert 1000 < time.now < 1002
 
 
 def test_the_stop_rule():
@@ -485,8 +539,10 @@ def run_reported(monkeypatch, answers, asks_, client=None, status=None):
         ),
     )
     monkeypatch.setattr(job, "warsaw_day", lambda: TODAY)
-    # A burst of no answers rests a real minute; the rest has tests of its own.
+    # A burst of no answers rests a real minute, and a stall real minutes; the
+    # rests have tests of their own.
     monkeypatch.setattr(crawl, "COOL_DOWN", 0.0)
+    monkeypatch.setattr(crawl, "STALL_REST", 0.0)
     status = status or RecordingRun()
     code = job.run(
         plan.Plan(asks=asks_),

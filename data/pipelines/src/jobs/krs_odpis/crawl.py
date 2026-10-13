@@ -16,6 +16,12 @@ retry), so they get a second pass at the end unless the rule stopped the run;
 an odpis that is simply not in either register is an answer, and is not asked
 again. Before that, a burst of no answers - three of the last five - gets a
 minute's rest, a few times a run.
+
+A service that has stopped answering altogether gets longer: when either
+no-answer rule fires, the run rests `STALL_REST` and tries the next company,
+`STALL_RESTS` times, before it gives up. The no-answer window is judged only
+on an attempt that got no answer, since a served document says the service is
+back.
 """
 
 import statistics
@@ -57,12 +63,25 @@ COOL_DOWN = 60.0
 #: Pauses a run takes at most before it leaves the rest to the stop rule.
 COOL_DOWNS = 5
 
+#: The rest a run takes when a no-answer rule fires, and how many it takes
+#: before it lets the rule end the run. On the nights of 2026-10-10, -12 and
+#: -13 the service stopped answering at about 04:42 Warsaw: every attempt timed
+#: out at `CRAWL_TIMEOUT`, between documents served in 0.5 s, while api-krs
+#: answered as usual and the day runs before and after got every one. On the
+#: 10th it was serving again about 10 minutes in and on the 12th 7 minutes in,
+#: just as the rules ended the run - the 12th's last 21 attempts were all
+#: served. Three rests of five minutes cover that, inside the night's 45.
+STALL_REST = 300.0
+STALL_RESTS = 3
+
 #: EX_TEMPFAIL: the service would not answer everything; try again later.
 #: Anything else that goes wrong raises, and exits 1.
 EXIT_UPSTREAM_REFUSING = 75
 
-#: How the stop for too many dead attempts in a row ends.
-REFUSING = "attempts in a row got no answer"
+#: How each stop for no answers ends, and the one for too many dead attempts
+#: in a row in full.
+NO_ANSWER = "got no answer"
+REFUSING = f"attempts in a row {NO_ANSWER}"
 
 
 @dataclass
@@ -109,7 +128,7 @@ def stop_reason(
     is full.
     """
     if sum(trouble) > 10 and len(trouble) == WINDOW:
-        return f"{sum(trouble)} of the last {WINDOW} attempts got no answer"
+        return f"{sum(trouble)} of the last {WINDOW} attempts {NO_ANSWER}"
     if len(served) == WINDOW and baseline:
         trailing = statistics.mean(served)
         ceiling = min(3 * baseline, 2.5)
@@ -187,14 +206,24 @@ class CoolDown:
         self.since = 0
         say(
             f"Pausing {COOL_DOWN:.0f} s: "
-            f"{sum(recent)} of the last {len(recent)} got no answer"
+            f"{sum(recent)} of the last {len(recent)} {NO_ANSWER}"
         )
-        resting = clock() + COOL_DOWN
-        while clock() < resting:
-            if should_stop():
-                return False
-            sleep(min(1.0, resting - clock()))
-        return True
+        return rest(COOL_DOWN, clock, sleep, should_stop)
+
+
+def rest(
+    seconds: float,
+    clock: Callable[[], float],
+    sleep: Callable[[float], typing.Any],
+    should_stop: Callable[[], bool],
+) -> bool:
+    """Wait `seconds`, a second at a time; False if asked to stop meanwhile."""
+    resting = clock() + seconds
+    while clock() < resting:
+        if should_stop():
+            return False
+        sleep(min(1.0, resting - clock()))
+    return True
 
 
 def crawl(
@@ -214,15 +243,19 @@ def crawl(
     baseline: float | None = None
     in_a_row = 0
     cooling = CoolDown()
+    stall_rests = 0
+
+    def asked_to_stop() -> bool:
+        result.stopped = "asked to stop"
+        say("Stopping: asked to")
+        return False
 
     def run_pass(todo: Sequence[Ask], number: int) -> bool:
         """One pass; False when the run has to stop."""
-        nonlocal baseline, in_a_row
+        nonlocal baseline, in_a_row, stall_rests
         for index, ask in enumerate(todo, 1):
             if should_stop():
-                result.stopped = "asked to stop"
-                say("Stopping: asked to")
-                return False
+                return asked_to_stop()
             if result.outcomes:
                 sleep(interval)
             outcome = attempt(ask, number, fetch, clock)
@@ -246,14 +279,34 @@ def crawl(
             if in_a_row >= MAX_CONSECUTIVE_FAILURES:
                 result.stopped = f"{in_a_row} {REFUSING}"
             else:
-                result.stopped = stop_reason(served[-WINDOW:], baseline, trouble)
+                # 2026-10-12's run was stopped by the window at a served
+                # document, the 21st in a row.
+                result.stopped = stop_reason(
+                    served[-WINDOW:], baseline, trouble if failed else ()
+                )
+            if (
+                result.stopped.endswith(NO_ANSWER)
+                and outcome.status in TRANSIENT
+                and stall_rests < STALL_RESTS
+            ):
+                stall_rests += 1
+                say(
+                    f"Resting {STALL_REST / 60:.0f} min at {index} of {len(todo)} "
+                    f"({stall_rests} of {STALL_RESTS}): {result.stopped}"
+                )
+                result.stopped = ""
+                if not rest(STALL_REST, clock, sleep, should_stop):
+                    return asked_to_stop()
+                # The window starts afresh. The count in a row does not, so
+                # after a rest it called for, the next attempt that gets no
+                # answer calls for the next rest, or ends the run.
+                trouble.clear()
+                continue
             if result.stopped:
                 say(f"Stopping at {index} of {len(todo)}: {result.stopped}")
                 return False
             if not cooling.rest_if_due(trouble, clock, sleep, should_stop, say):
-                result.stopped = "asked to stop"
-                say("Stopping: asked to")
-                return False
+                return asked_to_stop()
         return True
 
     if run_pass(asks, 1):
