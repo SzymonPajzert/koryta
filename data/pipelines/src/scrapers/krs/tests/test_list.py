@@ -652,6 +652,7 @@ def public_after(
         )
         for krs in pipeline.companies
     }
+    pipeline.add_owners_by_regon()
     public = pipeline.compute_public_krss(hardcoded)
     pipeline.propagate_is_public(public, pipeline.build_parent_to_children())
     return {krs for krs, company in pipeline.companies.items() if company.is_public}
@@ -876,6 +877,78 @@ def test_the_identity_is_given_as_the_source():
     [company] = pipeline.build_output({})
 
     assert Source("hardcoded", reason=REGON_PUBLIC_IDENTITY) in company.sources
+
+
+# ─── an owner the register names by REGON instead of KRS ───
+
+
+def with_regon(odpis: dict, regon: str) -> dict:
+    """`odpis` with the company's own REGON in it, as the register gives it."""
+    podmiot = odpis["odpis"]["dane"]["dzial1"]["danePodmiotu"]
+    podmiot["identyfikatory"] = {"regon": regon}
+    return odpis
+
+
+WEGLOKOKS = "0000095342"
+# "WĘGLOKOKS" S.A., written into Biuro Centrum's odpis without its KRS number
+WEGLOKOKS_BY_REGON = {
+    "nazwa": '"WĘGLOKOKS" SPÓŁKA AKCYJNA',
+    "identyfikator": {"regon": "27188356400000"},
+    "krs": {"krs": "0000000000"},
+}
+
+
+def test_an_owner_named_by_its_regon_is_the_company_with_that_regon():
+    biuro_centrum = owned("0000087037", SPZOO, wspolnicy=[WEGLOKOKS_BY_REGON])
+    public = public_after(
+        [with_regon(owned(WEGLOKOKS, SA), "271883564"), biuro_centrum],
+        regon_public={WEGLOKOKS},
+    )
+
+    assert public == {WEGLOKOKS, "0000087037"}
+
+
+def test_a_regon_two_companies_share_draws_no_edge():
+    # A company and the successor its REGON passed to
+    biuro_centrum = owned("0000087037", SPZOO, wspolnicy=[WEGLOKOKS_BY_REGON])
+    public = public_after(
+        [
+            with_regon(owned(WEGLOKOKS, SA), "271883564"),
+            with_regon(owned("0000000099", SA), "27188356400000"),
+            biuro_centrum,
+        ],
+        regon_public={WEGLOKOKS},
+    )
+
+    assert public == {WEGLOKOKS}
+
+
+def test_a_company_is_not_its_own_owner_by_regon():
+    data = with_regon(
+        owned("0000087037", SPZOO, wspolnicy=[WEGLOKOKS_BY_REGON]), "271883564"
+    )
+    pipeline = CompaniesKRS()
+    pipeline.teryt = NO_TERYT  # type: ignore[assignment]
+    pipeline.jst_index = None
+    pipeline.process_api_krs_blob("api-krs", data, NO_POSTAL_CODES)
+
+    assert pipeline.add_owners_by_regon() == 0
+
+
+def test_a_fund_is_read_as_the_company_holding_its_certificates():
+    # MDR Katowice, all of it the PFR housing fund's
+    fund = {
+        "nazwa": "FUNDUSZ SEKTORA MIESZKAŃ DLA ROZWOJU FUNDUSZ INWESTYCYJNY "
+        "ZAMKNIĘTY AKTYWÓW NIEPUBLICZNYCH",
+        "identyfikator": {"regon": "36369246500000"},
+        "krs": {"krs": "0000000000"},
+    }
+    public = public_after(
+        [owned("0000466256", SA), owned("0000689614", SPZOO, wspolnicy=[fund])],
+        regon_public={"0000466256"},
+    )
+
+    assert public == {"0000466256", "0000689614"}
 
 
 def test_a_companys_sources_are_listed_in_the_same_order_every_run():

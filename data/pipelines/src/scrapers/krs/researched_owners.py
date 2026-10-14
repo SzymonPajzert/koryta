@@ -42,7 +42,17 @@ class Researched:
     source: str
 
 
+@dataclasses.dataclass(frozen=True)
+class FundHolder:
+    """Who stands behind an owner the register names without a KRS number."""
+
+    fund: str
+    holder: ResearchedOwner
+    source: str
+
+
 ARP = ResearchedOwner("AGENCJA ROZWOJU PRZEMYSŁU S.A.", "0000037957")
+PFR = ResearchedOwner("POLSKI FUNDUSZ ROZWOJU S.A.", "0000466256")
 PGZ = ResearchedOwner("POLSKA GRUPA ZBROJENIOWA S.A.", "0000489456")
 GRUPA_AZOTY = ResearchedOwner("GRUPA AZOTY S.A.", "0000075450")
 
@@ -314,5 +324,33 @@ RESEARCHED_OWNERS: dict[str, Researched] = {
             ResearchedOwner("GMINA MIEJSKO-WIEJSKA WOLSZTYN"),
         ),
         "https://simkzn-wielkopolska.pl/o-nas/",
+    ),
+}
+
+
+#: Closed-end investment funds (FIZ) whose certificates a public company holds,
+#: by the fund's REGON. A fund has no KRS number and no entry in REGON's public
+#: catalogue, so the companies the register names it as the owner of read as
+#: private; `CompaniesKRS.add_owners_by_regon` joins them to the holder instead.
+FUND_HOLDERS: dict[str, FundHolder] = {
+    # Owner of the MDR and MP housing companies, Projekt Municypalny Zgorzelec 1
+    # among them. PFR bought all of its certificates from BGK on 2021-12-09.
+    "363692465": FundHolder(
+        "FUNDUSZ SEKTORA MIESZKAŃ DLA ROZWOJU FIZAN",
+        PFR,
+        "https://strefainwestorow.pl/wiadomosci/20211210/pfr-odkupil-certyfikaty-inwestycyjne-od-bgk-w-dwoch-funduszach-rynku",
+    ),
+    # 49% of Budimex Parking Wrocław. Set up by BGK and PIR, now PFR, for
+    # local-government and PPP projects.
+    "361977212": FundHolder(
+        "PFR FUNDUSZ INWESTYCJI SAMORZĄDOWYCH FIZAN",
+        PFR,
+        "https://www.bankier.pl/wiadomosc/BGK-i-PIR-utworza-trzy-fundusze-ze-srodkami-na-poziomie-lacznie-6-5-mld-zl-3370813.html",
+    ),
+    # 90% of PPP Venture. The third of the BGK and PIR funds.
+    "361976980": FundHolder(
+        "PFR FUNDUSZ INWESTYCYJNY FIZAN",
+        PFR,
+        "https://www.pfrtfi.pl/en/fundusz/pfr-fundusz-inwestycyjny-fiz",
     ),
 }
