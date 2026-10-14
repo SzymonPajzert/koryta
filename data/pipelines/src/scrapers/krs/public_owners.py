@@ -16,14 +16,16 @@ direct first, and a company carries the first one that fits:
   `public_bodies`, the closed list `CompaniesKRS` reads too.
 - **any other owner outside KRS that REGON files as public** - the register
   gives such an owner's REGON in place of a KRS number, and the public-entity
-  catalogue has the ownership code for it (`scrapers.krs.data.public_regons`):
+  catalogue has the ownership code for it
+  (`scrapers.krs.data.public_owner_regons`):
   a public university, owner of its spin-offs, a water association, a gmina
   whose name the register misspells.
 - **a company already known to be public**, by its KRS number: anything
   `CompaniesKRS` marks public, and anything this finds, followed to a fixed
   point, so a subsidiary of a subsidiary of a gmina's holding company arrives
   with the rest. An owner the register writes without its KRS number is that
-  company if its REGON is one company's (`krs_by_regon`).
+  company if its REGON is one company's, in the ledger or the crawl
+  (`krs_by_regon`).
 
 Two things it cannot see, and says so rather than guessing. An S.A. with several
 shareholders names none of them in the register, so a województwo's minority
@@ -32,6 +34,7 @@ covers some of those. And a public owner under 10% of a spółka z o.o. is not
 listed at all.
 """
 
+import itertools
 import typing
 from dataclasses import asdict, dataclass
 
@@ -42,7 +45,12 @@ from scrapers.krs.columns import is_public, padded_krs
 from scrapers.krs.data import CompaniesHardcoded, regon_stem
 from scrapers.krs.list import CompaniesKRS, krs_by_regon
 from scrapers.krs.public_bodies import public_body
-from scrapers.krs.register import STATUS_OK, KRSRegisterEntries, owner_share
+from scrapers.krs.register import (
+    STATUS_OK,
+    STATUS_STRUCK_OFF,
+    KRSRegisterEntries,
+    owner_share,
+)
 from scrapers.map.jst import SKARB_PANSTWA, JstIndex
 from scrapers.map.teryt import Jst
 from scrapers.stores import Context, Pipeline
@@ -113,7 +121,8 @@ def classify(
     jst: JstIndex | None,
     known_public: set[str],
     public_regons: typing.Collection[str] = frozenset(),
-    owners_by_regon: typing.Mapping[str, str] | None = None,
+    crawl: typing.Iterable[tuple[str | None, str]] = (),
+    struck_off: typing.Collection[str] = frozenset(),
 ) -> list[PublicOwnership]:
     """Every entry the public owns, directly or through a public parent.
 
@@ -123,14 +132,19 @@ def classify(
     the crawl does not: a gmina's holding company and the subsidiaries it owns
     are all in the register, and possibly none in the crawl.
 
-    `owners_by_regon` places an owner the register names by REGON alone; the
-    ledger's own entries are added to it.
+    An owner the register names by REGON alone is placed by `krs_by_regon`,
+    over the ledger's entries and the crawl's `(regon, krs)` together, so a
+    REGON either holds twice is the holder not struck off: `struck_off` from
+    the crawl, and the ledger's own struck-off entries.
     """
+    entries = list(entries)
     rows = [e for e in entries if e.get("status") == STATUS_OK]
-    by_regon = {
-        **krs_by_regon((e.get("regon"), e["krs"]) for e in rows),
-        **(owners_by_regon or {}),
+    gone = set(struck_off) | {
+        e["krs"] for e in entries if e.get("status") == STATUS_STRUCK_OFF
     }
+    by_regon = krs_by_regon(
+        itertools.chain(((e.get("regon"), e["krs"]) for e in rows), crawl), gone
+    )
     found: dict[str, PublicOwnership] = {}
 
     def record(entry, reason, owner, owner_id, share):
@@ -180,6 +194,14 @@ def classify(
     return sorted(found.values(), key=lambda row: row.krs)
 
 
+def struck_off_krss(companies: pd.DataFrame) -> set[str]:
+    """The KRS numbers `CompaniesKRS` says the register has struck off."""
+    if "struck_off" not in companies.columns:
+        return set()
+    struck = companies["struck_off"].fillna(False).astype(bool)
+    return set(padded_krs(companies.loc[struck, "krs"]))
+
+
 def ledger_records(ledger: pd.DataFrame) -> list[dict]:
     """The ledger as `classify` reads it: one dict per entry, KRS padded.
 
@@ -226,8 +248,9 @@ class CompaniesPublicByRegister(Pipeline[PublicOwnership]):
             ledger_records(ledger),
             index,
             known_public,
-            self.hardcoded.public_regons,
-            krs_by_regon(zip(companies["regon"], padded_krs(companies["krs"]))),
+            self.hardcoded.public_owner_regons,
+            zip(companies["regon"], padded_krs(companies["krs"])),
+            struck_off_krss(companies),
         )
         df = pd.DataFrame([asdict(row) for row in found], columns=columns)
         print(

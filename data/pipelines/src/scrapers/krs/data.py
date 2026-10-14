@@ -40,8 +40,9 @@ def regon_stem(value: object) -> str | None:
     """The 9-digit REGON of the legal entity `value` names, or None.
 
     The register writes an owner's REGON with 14 digits, the last five a local
-    unit's; the catalogue writes 9, or 14 for the 500 schools and the like it
-    lists as a unit of their gmina. The first nine are the entity either way.
+    unit's; the catalogue writes 9, or 14 for the local units it lists - in the
+    public sector mostly police and other state offices. The first nine are the
+    entity either way.
     Anything else - a float pandas made of the column, a stray NIP - is None
     rather than a guess.
     """
@@ -110,10 +111,28 @@ def public_regons(catalogue: pd.DataFrame) -> frozenset[str]:
 def public_nips(catalogue: pd.DataFrame) -> frozenset[str]:
     """The NIP of every catalogue entry REGON records as publicly owned.
 
-    As `public_regons`, for a company itself: three research institutes moved
-    into the Łukasiewicz network kept their NIP and took a new REGON.
+    As `public_regons`, for a company itself: two research institutes moved
+    into the Łukasiewicz network (IMBiGS, EMAG) and a research unit
+    commercialised into a spółka (PIMB) kept their NIP under a new REGON.
     """
     return _public_ids(catalogue, "NIP", nip_digits)
+
+
+def public_owner_regons(catalogue: pd.DataFrame) -> frozenset[str]:
+    """`public_regons` less every entity in KRS, for reading an owner by.
+
+    An owner in KRS has an odpis of its own, which says who owns it, and that
+    outranks a code it filed once: the catalogue still files Wydawnictwo RBA
+    Poland and Złota Uncja under 112 and 113, while each odpis names people as
+    the owners. The register also writes such owners without their KRS number
+    (Węglokoks, ZMPG), so how an owner is written does not tell. Gminas,
+    universities, unions of gminas and water associations are not in KRS, and
+    for them the code is the only answer there is.
+    """
+    if "KRS" not in catalogue.columns or "REGON" not in catalogue.columns:
+        return public_regons(catalogue)
+    in_krs = catalogue.loc[catalogue["KRS"].notna(), "REGON"].map(regon_stem)
+    return public_regons(catalogue) - set(in_krs.dropna())
 
 
 class CompaniesHardcoded(Pipeline[KRS]):
@@ -122,9 +141,10 @@ class CompaniesHardcoded(Pipeline[KRS]):
 
     all_companies_krs: dict[str, KRS] = dict()
     #: The REGON and NIP numbers the catalogue files as publicly owned - see
-    #: `public_regons` and `public_nips`.
+    #: `public_regons`, `public_nips` and `public_owner_regons`.
     public_regons: frozenset[str] = frozenset()
     public_nips: frozenset[str] = frozenset()
+    public_owner_regons: frozenset[str] = frozenset()
     teryt: Teryt
 
     @property
@@ -185,8 +205,8 @@ class CompaniesHardcoded(Pipeline[KRS]):
         """The whole public-entity catalogue, from data.gov.pl.
 
         REGON and NIP are read as text: as numbers the columns turn to floats,
-        for the entries that have none, and lose their leading zeros -
-        Województwo Mazowieckie is 013272636.
+        for the entries that have none, and lose their leading zeros - the
+        Mazowieckie marshal's office is 013272636.
         """
         _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
         public_companies = FileSource(
@@ -213,6 +233,7 @@ class CompaniesHardcoded(Pipeline[KRS]):
         catalogue = self.read_catalogue(ctx)
         self.public_regons = public_regons(catalogue)
         self.public_nips = public_nips(catalogue)
+        self.public_owner_regons = public_owner_regons(catalogue)
         public_companies = self.read_public_companies(catalogue)
         self.register_partials(
             "PUBLIC_COMPANIES_KRS",

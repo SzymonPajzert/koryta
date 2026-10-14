@@ -10,6 +10,7 @@ from scrapers.krs.list import (
     company_from_api_krs,
     company_from_rejestrio,
     get_teryt,
+    krs_by_regon,
     names_an_owner,
     normalize_city,
     parse_activity_from_api_krs,
@@ -623,19 +624,21 @@ def test_a_name_nothing_here_can_place_is_not():
 def public_after(
     odpisy: list[dict],
     regon_public: set[str],
-    public_regons: frozenset[str] = frozenset(),
+    public_owner_regons: frozenset[str] = frozenset(),
+    struck_off: tuple[str, ...] = (),
 ) -> set[str]:
     """Which KRS numbers `CompaniesKRS` marks public, for these odpisy.
 
     `regon_public` are the companies REGON records as publicly owned. Every
     company is in the catalogue, the way a private one providing a public
-    service is too. `public_regons` are the REGON numbers of publicly owned
-    entities, owners included (`scrapers.krs.data.public_regons`).
+    service is too. `public_owner_regons` are the REGON numbers of publicly
+    owned entities outside KRS (`scrapers.krs.data.public_owner_regons`).
     """
     pipeline = CompaniesKRS()
     pipeline.teryt = NO_TERYT  # type: ignore[assignment]
     pipeline.jst_index = None
-    pipeline.public_regons = public_regons
+    pipeline.public_owner_regons = public_owner_regons
+    pipeline.struck_off = {krs: "2020-01-01" for krs in struck_off}
     for data in odpisy:
         krs = data["odpis"]["naglowekA"]["numerKRS"]
         pipeline.process_api_krs_blob(
@@ -750,7 +753,7 @@ def test_an_owner_regon_calls_public_makes_the_company_public():
         NO_POSTAL_CODES,
         NO_TERYT,
         owned(WODOCIAGI_ZGIERZ, SPZOO, wspolnicy=[ZGIERSKA_SPOLKA_WODNA]),
-        public_regons=frozenset({"471585659"}),
+        public_owner_regons=frozenset({"471585659"}),
     )
 
     assert company is not None
@@ -764,7 +767,7 @@ def test_an_owner_regon_does_not_know_is_not_public():
         NO_POSTAL_CODES,
         NO_TERYT,
         owned(WODOCIAGI_ZGIERZ, SPZOO, wspolnicy=[ZGIERSKA_SPOLKA_WODNA]),
-        public_regons=frozenset({"000001583"}),
+        public_owner_regons=frozenset({"000001583"}),
     )
 
     assert company is not None
@@ -778,7 +781,7 @@ def test_an_owner_with_a_krs_number_is_followed_not_read_by_its_regon():
         NO_POSTAL_CODES,
         NO_TERYT,
         owned("0000408185", SPZOO, wspolnicy=[gpw]),
-        public_regons=frozenset({"240715081"}),
+        public_owner_regons=frozenset({"240715081"}),
     )
 
     assert company is not None
@@ -791,7 +794,7 @@ def test_the_pipeline_reads_owners_by_the_public_regons_it_was_given():
 
     assert public_after([odpis], regon_public=set()) == set()
     assert public_after(
-        [odpis], regon_public=set(), public_regons=frozenset({"471585659"})
+        [odpis], regon_public=set(), public_owner_regons=frozenset({"471585659"})
     ) == {WODOCIAGI_ZGIERZ}
 
 
@@ -809,7 +812,7 @@ def test_a_subsidiary_inherits_what_an_owners_regon_said():
             owned("0000000777", SPZOO, wspolnicy=[spin_off]),
         ],
         regon_public=set(),
-        public_regons=frozenset({"000001583"}),
+        public_owner_regons=frozenset({"000001583"}),
     )
 
     assert public == {"0000333386", "0000000777"}
@@ -908,8 +911,8 @@ def test_an_owner_named_by_its_regon_is_the_company_with_that_regon():
     assert public == {WEGLOKOKS, "0000087037"}
 
 
-def test_a_regon_two_companies_share_draws_no_edge():
-    # A company and the successor its REGON passed to
+def test_a_regon_two_live_companies_share_draws_no_edge():
+    # Both public, so an edge to either would show
     biuro_centrum = owned("0000087037", SPZOO, wspolnicy=[WEGLOKOKS_BY_REGON])
     public = public_after(
         [
@@ -917,10 +920,34 @@ def test_a_regon_two_companies_share_draws_no_edge():
             with_regon(owned("0000000099", SA), "27188356400000"),
             biuro_centrum,
         ],
-        regon_public={WEGLOKOKS},
+        regon_public={WEGLOKOKS, "0000000099"},
     )
 
-    assert public == {WEGLOKOKS}
+    assert public == {WEGLOKOKS, "0000000099"}
+
+
+def test_a_regon_a_struck_off_company_shares_is_its_successors():
+    # The predecessor is public too: only the successor may be picked
+    biuro_centrum = owned("0000087037", SPZOO, wspolnicy=[WEGLOKOKS_BY_REGON])
+    pipeline_public = public_after(
+        [
+            with_regon(owned(WEGLOKOKS, SA), "271883564"),
+            with_regon(owned("0000000099", SA), "27188356400000"),
+            biuro_centrum,
+        ],
+        regon_public={"0000000099"},
+        struck_off=(WEGLOKOKS,),
+    )
+
+    assert pipeline_public == {"0000000099", "0000087037"}
+
+
+def test_krs_by_regon_answers_once_per_entity():
+    pairs = [("271883564", "A"), ("27188356400000", "B"), ("273716184", "C")]
+
+    assert krs_by_regon(pairs)["273716184"] == "C"
+    assert "271883564" not in krs_by_regon(pairs)
+    assert krs_by_regon(pairs, struck_off={"A"})["271883564"] == "B"
 
 
 def test_a_company_is_not_its_own_owner_by_regon():

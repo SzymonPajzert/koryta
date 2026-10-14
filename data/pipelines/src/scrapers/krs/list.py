@@ -351,6 +351,9 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         #: `scrapers.krs.data.public_regons`.
         self.public_regons: frozenset[str] = frozenset()
         self.public_nips: frozenset[str] = frozenset()
+        #: The same for an owner: entities outside KRS only - see
+        #: `scrapers.krs.data.public_owner_regons`.
+        self.public_owner_regons: frozenset[str] = frozenset()
         #: `(owner's REGON, owned)` for each owner an odpis names without a KRS
         #: number - see `add_owners_by_regon`.
         self.owner_regons: list[tuple[str, str]] = []
@@ -547,15 +550,19 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         and gives their REGON instead: "WĘGLOKOKS" S.A. holding 59% of Biuro
         Centrum, Huta Łabędy all of ZEM Łabędy. Where that REGON is one
         company's here, the owner is that company, and an edge to it carries
-        the flag down as any other: 26 such pairs on 2026-10-14, every one the
-        same entity, three of them renamed since. A REGON two companies share -
-        a company and the successor its identifiers passed to - draws nothing.
+        the flag down as any other: 25 such pairs on 2026-10-14, one of them
+        joined already, every one the same entity, three renamed since. A REGON
+        two companies share - a company and the successor its identifiers
+        passed to - is the one of them not struck off, and draws nothing if
+        that leaves two.
 
         `FUND_HOLDERS` answers for the investment funds a public company holds,
         which are in no register this reads. Returns how many it joined; only
         companies already known are joined, as in `add_owners_at_strike_off`.
         """
-        owners = krs_by_regon((c.regon, c.krs) for c in self.companies.values())
+        owners = krs_by_regon(
+            ((c.regon, c.krs) for c in self.companies.values()), self.struck_off
+        )
         added = 0
         for regon, owned in self.owner_regons:
             owner = owners.get(regon)
@@ -609,7 +616,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         if "Biuletyn" in blob_name:
             return
         c = company_from_api_krs(
-            postal_codes, self.teryt, data, self.jst_index, self.public_regons
+            postal_codes, self.teryt, data, self.jst_index, self.public_owner_regons
         )
         if c is None:
             return
@@ -673,7 +680,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         adds 42 companies, every one checked: 40 struck off, each an SPZOZ
         turned into a spółka, a state enterprise or research unit
         commercialised, an institute moved into the Łukasiewicz network, or a
-        municipal sp. z o.o. become an SA - the identifiers passed to the
+        public sp. z o.o. become an SA - the identifiers passed to the
         successor, and the catalogue row carries the successor's KRS. The other
         two are alive and named nowhere else: Fundacja Rozwoju Systemu
         Edukacji, the education ministry's, and Sudeckie Stowarzyszenie
@@ -742,6 +749,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         hardcoded = self.hardcoded_companies.all_companies_krs
         self.public_regons = self.hardcoded_companies.public_regons
         self.public_nips = self.hardcoded_companies.public_nips
+        self.public_owner_regons = self.hardcoded_companies.public_owner_regons
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             self.process_rejestrio_blob(blob_name, data, postal_codes)
@@ -929,13 +937,13 @@ def company_from_api_krs(  # noqa: PLR0915
     teryt: Teryt,
     data: dict,
     jst: "JstIndex | None" = None,
-    public_regons: typing.Collection[str] = frozenset(),
+    public_owner_regons: typing.Collection[str] = frozenset(),
 ) -> KrsCompany | None:
     """The company an OdpisAktualny describes, or None for a 404.
 
-    `public_regons` are the REGON numbers of entities REGON files as publicly
-    owned (`scrapers.krs.data.public_regons`); an owner named without a KRS
-    number is public if its REGON is one of them.
+    `public_owner_regons` are the REGON numbers of entities outside KRS that
+    REGON files as publicly owned (`scrapers.krs.data.public_owner_regons`);
+    an owner named without a KRS number is public if its REGON is one of them.
     """
     try:
         if data.get("title") == "Not Found":
@@ -1047,15 +1055,16 @@ def company_from_api_krs(  # noqa: PLR0915
                 # an edge to. Wodociągi Kieleckie (a union of gminas) and the
                 # KOWR stud farms read as private without it.
                 is_public = True
-            elif owner_regon(w) in public_regons:
+            elif owner_regon(w) in public_owner_regons:
                 # Any other owner with no KRS number, which the register names
                 # by its REGON instead, and REGON's own ownership code puts in
                 # the public sector: ZGIERSKA SPÓŁKA WODNA, 92.5% of Wodociągi i
                 # Kanalizacja-Zgierz, a water association REGON files under 133;
                 # a public university's spin-offs; a gmina the register
                 # misspells, "GMINA I MIASTRO WYSZOGRÓD". Public, and nothing to
-                # draw an edge to. Only for an owner without a KRS number: one
-                # with a number has its own odpis, whose owners outrank the code.
+                # draw an edge to. Only for an entity outside KRS: a company
+                # has its own odpis, whose owners outrank the code, and is
+                # joined by `CompaniesKRS.add_owners_by_regon` instead.
                 is_public = True
 
         identyfikatory = dzial1.get("danePodmiotu", {}).get("identyfikatory", {})
@@ -1091,19 +1100,26 @@ def owner_regon(wspolnik: dict) -> str | None:
 
 def krs_by_regon(
     companies: typing.Iterable[tuple[str | None, str]],
+    struck_off: typing.Collection[str] = frozenset(),
 ) -> dict[str, str]:
-    """The KRS number of each REGON among `(regon, krs)` that only one carries.
+    """The KRS number each REGON among `(regon, krs)` stands for.
 
-    A REGON two KRS numbers share - a company and the successor its
-    identifiers passed to - answers nothing. `FUND_HOLDERS` answers for the
-    funds, which carry no KRS number of their own.
+    A REGON two KRS numbers share is a company and the successor its
+    identifiers passed to, and stands for the one of them not in `struck_off`
+    - the one an owner's shares are with now. Where that leaves more than one,
+    it answers nothing. `FUND_HOLDERS` answers for the funds, which carry no
+    KRS number of their own.
     """
     seen: dict[str, set[str]] = {}
     for regon, krs in companies:
         stem = regon_stem(regon)
         if stem:
             seen.setdefault(stem, set()).add(krs)
-    found = {stem: krss.pop() for stem, krss in seen.items() if len(krss) == 1}
+    found = {}
+    for stem, krss in seen.items():
+        live = krss - set(struck_off) if len(krss) > 1 else krss
+        if len(live) == 1:
+            found[stem] = next(iter(live))
     for stem, fund in FUND_HOLDERS.items():
         if fund.holder.krs:
             found[stem] = fund.holder.krs

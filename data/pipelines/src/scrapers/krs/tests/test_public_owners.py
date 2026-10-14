@@ -187,10 +187,36 @@ def test_an_owner_regon_can_come_from_the_crawl_as_well():
         [entry("0000079400", huta)],
         pomorskie(),
         known_public={"0000076693"},
-        owners_by_regon={"273716184": "0000076693"},
+        crawl=[("273716184", "0000076693")],
     )
 
     assert [row.krs for row in found] == ["0000079400"]
+
+
+def test_a_regon_the_ledger_and_the_crawl_both_hold_is_the_live_holder():
+    # The crawl holds the struck-off predecessor, the ledger its successor
+    huta = owner("HUTA ŁABĘDY SPÓŁKA AKCYJNA", regon="27371618400000")
+    found = classify(
+        [entry("0000076693", regon="273716184"), entry("0000079400", huta)],
+        pomorskie(),
+        known_public={"0000076693", "0000000098"},
+        crawl=[("273716184", "0000000098")],
+        struck_off={"0000000098"},
+    )
+
+    assert [(row.krs, row.owner_id) for row in found] == [("0000079400", "0000076693")]
+
+
+def test_a_regon_two_live_holders_share_names_no_parent():
+    huta = owner("HUTA ŁABĘDY SPÓŁKA AKCYJNA", regon="27371618400000")
+    found = classify(
+        [entry("0000076693", regon="273716184"), entry("0000079400", huta)],
+        pomorskie(),
+        known_public={"0000076693", "0000000098"},
+        crawl=[("273716184", "0000000098")],
+    )
+
+    assert found == []
 
 
 def test_a_founding_organ_is_public():
