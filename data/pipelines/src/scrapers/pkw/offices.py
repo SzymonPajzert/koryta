@@ -95,7 +95,7 @@ def local_office(
             return _NAMED_COUNCILS[text]
         return _EXECUTIVES.get(text.split()[0])
 
-    code = _code(teryt_candidacy)
+    code = teryt_code(teryt_candidacy)
     if code is None or len(code) != 6 or not code.isdigit():
         return None
     if code.endswith("0000"):
@@ -105,7 +105,7 @@ def local_office(
     return _GMINA_COUNCILS.get(gmina_kinds.get(code, ""))
 
 
-def _code(value: typing.Any) -> str | None:
+def teryt_code(value: typing.Any) -> str | None:
     """A TERYT code as the six digits it is written with.
 
     2024's lists are CSVs read with pandas guessing the types, so a code

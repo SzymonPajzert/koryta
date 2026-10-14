@@ -53,6 +53,19 @@ class XlsExtractor(Extractor):
 
 
 @dataclass
+class Runoff:
+    """A mayoral election's second round, where PKW publishes it apart.
+
+    Its rows are the first round's columns, read the same way, and they are no
+    candidacies of their own: `process.with_runoff` settles each first-round
+    candidacy that went to a run-off by it.
+    """
+
+    source: FileSource
+    extractor: Extractor
+
+
+@dataclass
 class InputSource:
     source: FileSource
     extractor: Extractor
@@ -63,6 +76,8 @@ class InputSource:
     #: laid over it for this file alone. Plain columns only: nothing here is
     #: given the TERYT index, so a `from_teryt` field would have none.
     headers: dict[str, SetField] = field(default_factory=dict)
+    #: The second round, for a mayoral file that holds only the first.
+    runoff: Runoff | None = None
 
     def __str__(self) -> str:
         return f"{self.year} {self.election_type}"
@@ -340,6 +355,11 @@ sources.extend(
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
         ),
+        # The first round alone: its „Czy uzyskał mandat” is „Tak” for the
+        # 1,728 who won outright, and „Nie” for the 1,496 it sent to one of
+        # 748 run-offs as for everybody it eliminated. Whoever won those -
+        # 60 of the 107 prezydenci, Jacek Jaśkowiak in Poznań among them -
+        # read as beaten until the second round's file was read with it.
         InputSource(
             FileSource(
                 "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_wbp_csv.zip"
@@ -348,6 +368,12 @@ sources.extend(
             2024,
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
+            runoff=Runoff(
+                FileSource(
+                    "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_wbp2_csv.zip"
+                ),
+                ZipExtractor("kandydaci_wbp2_utf8.csv", CsvExtractor()),
+            ),
         ),
         InputSource(
             FileSource(
