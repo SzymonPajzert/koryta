@@ -289,6 +289,9 @@ const COUNTER_LABELS: Record<string, string> = {
   employments_published: "zatrudnień opublikowanych bez przeglądu",
   candidacies_created: "nowych kandydatur",
   companies_created: "dodanych firm",
+  // Jobs the person was taken without, for want of a page for a company the
+  // uploader could not create; the run's errors say which company and why.
+  employments_unplaced: "zatrudnień bez strony firmy",
   unplaced: "nieumieszczonych kandydatur",
   // Changes the ingest did not write - a job end the site keeps its own of -
   // which the run's summary lists one by one.
