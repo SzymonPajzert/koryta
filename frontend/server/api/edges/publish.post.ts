@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import {
   EDGE_PUBLISH_CHUNK,
   edgeRevisionsForMany,
@@ -14,7 +15,7 @@ import { z } from "zod";
 const bodyValidator = z.object({
   /** Capped at the batch size a single commit can carry, so a request either
    * fits or is refused rather than being silently half-applied. */
-  edge_ids: z.array(z.string().min(1)).min(1).max(EDGE_PUBLISH_CHUNK),
+  edge_ids: z.array(documentId).min(1).max(EDGE_PUBLISH_CHUNK),
   published: z.boolean(),
 });
 

@@ -14,6 +14,7 @@ import {
   fetchEdgesClose,
   type NodeDataUnion,
 } from "~~/server/utils/fetch";
+import { requireDocumentId } from "~~/server/utils/documentId";
 
 /** One node's neighbourhood, as the canvas draws it.
  *
@@ -127,6 +128,8 @@ export async function getLocalGraph(
   for (const id of expansions) {
     if (id) focusIds.add(id);
   }
+  // Each is read by id below, and `expand` and `subjects` are the caller's.
+  for (const id of focusIds) requireDocumentId(id, "id");
 
   const { edges: edgesFromDBRaw, nodes: alreadyFetched } =
     await fetchNeighbourhood(Array.from(focusIds), distance);

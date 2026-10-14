@@ -1,6 +1,7 @@
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import {
   createRevisionTransaction,
   withoutInternalFields,
@@ -9,7 +10,7 @@ import { recordAudit } from "~~/server/utils/audit";
 import { z } from "zod";
 
 const bodyValidator = z.object({
-  edge_id: z.string().min(1),
+  edge_id: documentId,
   reason: z.string().trim().min(1, "Powód usunięcia jest wymagany"),
 });
 

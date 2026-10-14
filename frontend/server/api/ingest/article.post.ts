@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { ensureArticleNode } from "~~/server/utils/articles";
 import { addArticleMentions } from "~~/server/utils/articleEdges";
 import { withHttpScheme } from "~~/shared/url";
@@ -28,7 +29,7 @@ const articleRequestSchema = z.object({
    * before this the article arrived joined to nothing. Ignored for anything
    * that is not a person or a company - see `addArticleMentions`.
    */
-  mentions: z.array(z.string().min(1)).optional(),
+  mentions: z.array(documentId).optional(),
 });
 
 export default defineEventHandler(async (event) => {

@@ -743,3 +743,33 @@ describe("api/revisions/create, the same change twice", () => {
     expect(result.id).toBe("generated-id");
   });
 });
+
+describe("api/revisions/create, a node id that is a path", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockResolvedValue({ exists: false });
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      get: mockGet,
+    }));
+  });
+
+  it.each(["x/y/z", "x/y", "jan/", ".", "..", "__name__"])(
+    "refuses %j before reading anything",
+    async (node_id) => {
+      // `collection("nodes").doc("x/y/z")` is `nodes/x/y/z`, and its `.id` is
+      // `z`. So a signed in caller read the base of a proposal from below a
+      // node, found nothing there, and filed what was left - a person's fields
+      // and nothing else - as a pending change to node `z`, whatever `z` was.
+      mockReadBody.mockResolvedValue({ node_id, name: "Jan Kowalski" });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+      expect(mockDoc).not.toHaveBeenCalled();
+      expect(baseNodeFields).not.toHaveBeenCalled();
+      expect(mockCommit).not.toHaveBeenCalled();
+    },
+  );
+});

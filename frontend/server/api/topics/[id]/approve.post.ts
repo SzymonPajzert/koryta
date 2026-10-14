@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { z } from "zod";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { applyRevision } from "~~/server/utils/revisions";
 import {
   edgeRevisionsForMany,
@@ -12,7 +13,7 @@ import type { Revision } from "~~/shared/model";
 
 const bodyValidator = z.object({
   /** `tagged` edges to put live alongside the topic. */
-  edgeIds: z.array(z.string().min(1)).max(50).optional(),
+  edgeIds: z.array(documentId).max(50).optional(),
 });
 
 /** Puts a story, and the tags that put articles in it, on the site.

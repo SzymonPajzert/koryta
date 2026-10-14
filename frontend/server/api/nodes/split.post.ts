@@ -1,6 +1,7 @@
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { recordAudit } from "~~/server/utils/audit";
 import {
@@ -16,7 +17,7 @@ import { z } from "zod";
 
 const bodyValidator = z.object({
   /** The page that turned out to be two people. */
-  node_id: z.string().min(1),
+  node_id: documentId,
   reason: z.string().trim().min(1, "Powód rozdzielenia jest wymagany"),
   /** Record that this page is two people and stop there. What separates them
    * is a judgement about individual relations, and the person who can make it
@@ -25,11 +26,11 @@ const bodyValidator = z.object({
   /** The relations that belong to the *other* person. Everything not listed
    * stays where it is, which is the safe default: a relation nobody has
    * attributed is still attributed to the page it was found on. */
-  edge_ids: z.array(z.string().min(1)).optional(),
+  edge_ids: z.array(documentId).optional(),
   /** Where those relations go. Either a page an admin has already made by hand
    * - the usual case, because noticing the collapse and creating the second
    * person is one sitting - or a new one described here. */
-  into_id: z.string().min(1).optional(),
+  into_id: documentId.optional(),
   into_person: personEditSchema
     .partial()
     .extend({ name: z.string().min(1) })

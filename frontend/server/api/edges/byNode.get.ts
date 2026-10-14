@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import {
   edgeRevisionsForMany,
   fetchEdgesForNode,
@@ -53,7 +54,7 @@ export type NodeRelations = {
 };
 
 const queryValidator = z.object({
-  nodeId: z.string().min(1),
+  nodeId: documentId,
 });
 
 /** The relations hanging off one node, for the reviewer about to publish it.

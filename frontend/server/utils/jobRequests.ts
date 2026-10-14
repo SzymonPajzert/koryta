@@ -28,10 +28,11 @@ import { toArticleCapture } from "~~/server/utils/captures";
 import { runFromDoc } from "~~/server/utils/jobs";
 import { startRunner } from "~~/server/utils/jobRunner";
 import { resolveMergedNode } from "~~/server/utils/merge";
+import { documentId } from "~~/server/utils/documentId";
 
 export const jobRequestSchema = z.object({
   /** The page the button was on. */
-  nodeId: z.string().min(1).max(200),
+  nodeId: z.string().max(200).pipe(documentId),
   /** Build and count; send nothing. */
   dryRun: z.boolean().optional().default(false),
 });

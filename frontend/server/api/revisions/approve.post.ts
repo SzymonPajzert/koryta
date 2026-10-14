@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import type { DocumentReference, Firestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { applyRevision, revisionTargetRef } from "~~/server/utils/revisions";
 import { notifyRevisionReviewed } from "~~/server/utils/revisionNotifications";
 import { resolveEdgeEndpoints } from "~~/server/utils/edgePublication";
@@ -10,7 +11,7 @@ import type { Edge, Revision } from "~~/shared/model";
 import { z } from "zod";
 
 const bodyValidator = z.object({
-  revision_id: z.string(),
+  revision_id: documentId,
   /** Publish the target in the same step. Left out, approving changes what the
    * page says without changing who can see it. */
   publish: z.boolean().optional(),

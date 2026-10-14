@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { z } from "zod";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import {
   createRevisionTransaction,
   withoutInternalFields,
@@ -9,7 +10,7 @@ import {
 
 const bodyValidator = z.object({
   /** Article node ids to cite. Checked to exist and to be articles. */
-  add: z.array(z.string().min(1)).optional(),
+  add: z.array(documentId).optional(),
   remove: z.array(z.string().min(1)).optional(),
 });
 

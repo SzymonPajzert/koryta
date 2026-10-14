@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
+import { requireDocumentId } from "~~/server/utils/documentId";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -11,6 +12,7 @@ export default defineEventHandler(async (event) => {
       message: "Missing nodeId query parameter",
     });
   }
+  requireDocumentId(nodeId, "nodeId");
 
   const db = getFirestore(getApp(), "koryta-pl");
 

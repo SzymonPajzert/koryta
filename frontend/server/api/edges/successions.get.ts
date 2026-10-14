@@ -14,6 +14,7 @@ import {
 import { displayRole } from "~~/shared/companyBodies";
 import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import type { H3Event } from "h3";
+import { requireDocumentId } from "~~/server/utils/documentId";
 
 /** One end of a handover, named. */
 export type SuccessionSide = {
@@ -402,6 +403,8 @@ async function successions(event: H3Event) {
   const query = getQuery(event);
   const companyId = typeof query.companyId === "string" ? query.companyId : "";
   const personId = typeof query.personId === "string" ? query.personId : "";
+  if (companyId) requireDocumentId(companyId, "companyId");
+  if (personId) requireDocumentId(personId, "personId");
 
   // One end or the other, never both: the two answer the same question from
   // opposite sides and a request naming both has not decided what it wants.

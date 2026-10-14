@@ -3,6 +3,7 @@ import { getApp } from "firebase-admin/app";
 import { z } from "zod";
 import type { H3Event } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import {
   createRevisionTransaction,
   withoutInternalFields,
@@ -11,7 +12,7 @@ import { pageIsPublic } from "~~/shared/model";
 import type { EdgeType, NodeType } from "~~/shared/model";
 
 const bodyValidator = z.object({
-  add: z.array(z.string().min(1)).optional(),
+  add: z.array(documentId).optional(),
   remove: z.array(z.string().min(1)).optional(),
 });
 

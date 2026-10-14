@@ -2,10 +2,11 @@ import { z } from "zod";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, readValidatedBody } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { OPEN_CAP } from "~~/shared/feedbackQueue";
 
 const bodyValidator = z.object({
-  id: z.string().min(1),
+  id: documentId,
   // `undefined` leaves the field untouched, `null`/"" clears it.
   adminStatus: z
     .enum(["new", "in_progress", "resolved", "wont_fix"])
@@ -19,7 +20,7 @@ const bodyValidator = z.object({
   // was dropped and had to be spaced out first. Written in the same batch as
   // the move, so a reload halfway cannot leave the queue half renumbered.
   renumber: z
-    .array(z.object({ id: z.string().min(1), queueRank: z.number().finite() }))
+    .array(z.object({ id: documentId, queueRank: z.number().finite() }))
     .max(OPEN_CAP)
     .optional(),
 });

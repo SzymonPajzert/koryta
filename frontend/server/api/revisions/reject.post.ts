@@ -1,6 +1,7 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { revisionTargetRef } from "~~/server/utils/revisions";
 import { notifyRevisionReviewed } from "~~/server/utils/revisionNotifications";
 import { recordAudit } from "~~/server/utils/audit";
@@ -9,7 +10,7 @@ import { approvedRevisionId } from "~~/shared/model";
 import { z } from "zod";
 
 const bodyValidator = z.object({
-  revision_id: z.string(),
+  revision_id: documentId,
   reason: z.string().trim().min(1, "Powód odrzucenia jest wymagany"),
 });
 

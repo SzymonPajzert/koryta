@@ -5,11 +5,12 @@ import {
 } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { describeRevisions } from "~~/server/utils/revisionQueue";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
 import type { Proposal } from "~~/shared/proposals";
 
-const queryValidator = z.object({ nodeId: z.string().min(1) });
+const queryValidator = z.object({ nodeId: documentId });
 
 export type NodeRevisionHistory = {
   /** Newest first. */

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getLocalGraph } from "~~/server/utils/localGraph";
 
-const { mockFetchNodesByIds, mockFetchEdgesClose } = vi.hoisted(() => ({
-  mockFetchNodesByIds: vi.fn(),
-  mockFetchEdgesClose: vi.fn(),
-}));
+const { mockFetchNodesByIds, mockFetchEdgesClose } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  globalThis.createError = (err: any) => err;
+  return { mockFetchNodesByIds: vi.fn(), mockFetchEdgesClose: vi.fn() };
+});
 
 vi.mock("~~/server/utils/fetch", () => ({
   fetchNodesByIds: mockFetchNodesByIds,
@@ -215,5 +216,21 @@ describe("getLocalGraph", () => {
     const layout = await getLocalGraph("p1", false, 2, []);
 
     expect(layout.nodes.p2).toBeUndefined();
+  });
+
+  it("refuses an id from the request that is a path, before reading anything", async () => {
+    // `expand` and `subjects` are the caller's to type, and every id here is
+    // read with `collection("nodes").doc(id)`, which takes `c1/x/y` as a path
+    // below c1.
+    world(NODES, EDGES);
+
+    await expect(
+      getLocalGraph("p1", false, 1, ["c1/x/y"]),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(
+      getLocalGraph("p1", false, 1, [], ["p2", "p2/x"]),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(mockFetchEdgesClose).not.toHaveBeenCalled();
+    expect(mockFetchNodesByIds).not.toHaveBeenCalled();
   });
 });

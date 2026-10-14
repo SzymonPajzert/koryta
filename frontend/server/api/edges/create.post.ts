@@ -2,6 +2,7 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { z } from "zod";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { edgeDocumentId } from "~~/server/utils/edges";
 import { edgeTypes } from "~~/shared/model";
@@ -15,14 +16,14 @@ const bodyValidator = z.object({
    * to the `authored` default in `EDGE_SEMANTICS` - and no migration knows
    * about. */
   type: z.enum(edgeTypes),
-  source: z.string().min(1),
-  target: z.string().min(1),
+  source: documentId,
+  target: documentId,
   name: z.string().optional(),
   content: z.string().optional(),
   text: z.string().optional(),
   start_date: z.string().nullable().optional(),
   end_date: z.string().nullable().optional(),
-  references: z.array(z.string().min(1)).optional(),
+  references: z.array(documentId).optional(),
   party: z.string().optional(),
   committee: z.string().optional(),
   /** A declared office, or blank. The form sends "" for every box it left
@@ -47,7 +48,7 @@ const bodyValidator = z.object({
    * says so instead of offering the same promotion to the next reader, who
    * would pick the far end afresh and could land a second relation beside the
    * first. */
-  extraction: z.string().min(1).optional(),
+  extraction: documentId.optional(),
 });
 
 export default defineEventHandler(async (event) => {

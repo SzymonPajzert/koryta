@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
+import { requireDocumentId } from "~~/server/utils/documentId";
 import type { VoteCategory } from "~~/shared/model";
 
 export default defineEventHandler(async (event) => {
@@ -28,6 +29,7 @@ export default defineEventHandler(async (event) => {
       data: { id, type, vote, category },
     });
   }
+  requireDocumentId(id, "id");
 
   const db = getFirestore(getApp(), "koryta-pl");
   const collectionName = type === "edge" ? "edges" : "nodes";

@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import type { Firestore, Query } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { describeRevisions } from "~~/server/utils/revisionQueue";
 import { scanQueue } from "~~/server/utils/queueScan";
 import {
@@ -30,7 +31,7 @@ const queryValidator = z.object({
   excludeAuthor: z.string().min(1).optional(),
   /** One proposal by id, answered alongside the page and independent of every
    * filter, so a permalink still resolves after the decision is made. */
-  revision: z.string().min(1).optional(),
+  revision: documentId.optional(),
   /** Whether the entry a proposal is about is live - see `ProposalSubject`. */
   published: z.enum(["true", "false", "all"]).default("all"),
   /** One row per entry instead of one per proposal; the page then counts

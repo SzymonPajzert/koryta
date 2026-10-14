@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import type { DocumentReference, Firestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import { recordAudit } from "~~/server/utils/audit";
 import { cascadeUnpublishEdges } from "~~/server/utils/edgePublication";
 import { applyRevision } from "~~/server/utils/revisions";
@@ -11,7 +12,7 @@ import type { Revision } from "~~/shared/model";
 import { z } from "zod";
 
 const bodyValidator = z.object({
-  node_id: z.string(),
+  node_id: documentId,
   published: z.boolean(),
 });
 

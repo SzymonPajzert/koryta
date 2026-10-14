@@ -2,10 +2,11 @@ import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, readValidatedBody } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import type { Note } from "~~/shared/model";
 
 const bodyValidator = z.object({
-  noteId: z.string().min(1),
+  noteId: documentId,
   sourceIndex: z.number().int().min(0),
   // `undefined` leaves the field untouched, `null`/"" clears it.
   adminStatus: z.enum(["resolved", "unresolved"]).nullable().optional(),

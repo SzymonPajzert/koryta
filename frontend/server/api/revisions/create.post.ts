@@ -1,6 +1,7 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
+import { requireDocumentId } from "~~/server/utils/documentId";
 import {
   baseNodeFields,
   proposalId,
@@ -20,6 +21,7 @@ export default defineEventHandler(async (event) => {
   const rawBody = await readBody(event);
   const node_id =
     typeof rawBody.node_id === "string" ? rawBody.node_id : undefined;
+  if (node_id) requireDocumentId(node_id, "node_id");
 
   // Without a node_id the user proposes a brand new node instead of a change
   // to an existing one.

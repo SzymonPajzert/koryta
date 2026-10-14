@@ -1,7 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
-import { z } from "zod";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import {
   createRevisionTransaction,
   proposeRevisionTransaction,
@@ -11,7 +11,7 @@ import {
 import { edgeEditSchema } from "~~/shared/api";
 
 const bodyValidator = edgeEditSchema.extend({
-  edge_id: z.string().min(1),
+  edge_id: documentId,
 });
 
 export type EdgeUpdated = {

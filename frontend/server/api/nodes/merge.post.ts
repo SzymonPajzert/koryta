@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import {
   applyNodeMerge,
   mergeRefusal,
@@ -12,9 +13,9 @@ import { z } from "zod";
 
 const bodyValidator = z.object({
   /** The page that turned out to be a second copy. It is the one that goes. */
-  duplicate_id: z.string().min(1),
+  duplicate_id: documentId,
   /** The page that stays, and that the duplicate's relations move onto. */
-  survivor_id: z.string().min(1),
+  survivor_id: documentId,
   reason: z.string().trim().min(1, "Powód scalenia jest wymagany"),
   /** Report what would happen and write nothing. The dialog asks for this
    * first, because the count of relations that would be removed is the one
