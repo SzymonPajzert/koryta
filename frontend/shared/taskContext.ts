@@ -115,6 +115,17 @@ export function taskContext(task: Task, tasks: readonly Task[]): string {
         : "") +
       (task.closedAt ? ` · closed ${when(task.closedAt)}` : ""),
   ];
+  if (state.priority && state.priorityFrom.length > 0) {
+    lines.push(
+      `Priority: ${state.priority}, taken from what it holds up: ` +
+        state.priorityFrom.map((t) => `„${t.title}” (${t.id})`).join(", ") +
+        (task.priority ? `; its own is ${task.priority}` : ""),
+    );
+  } else if (task.priority) {
+    lines.push(
+      `Priority: ${task.priority}, set by ${task.prioritySetBy ?? "agent"}`,
+    );
+  }
   if (task.source) lines.push(`Source: ${task.source}`);
   const notes = memoryNotes(task);
   if (notes.length > 0) lines.push(`Memory notes: ${notes.join(", ")}`);

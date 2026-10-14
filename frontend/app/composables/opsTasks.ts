@@ -48,7 +48,10 @@ export function useOpsTasks() {
       parked: [],
       closed: [],
     };
-    for (const task of [...tasks.value].sort(compareTasks)) {
+    const order = [...tasks.value].sort((a, b) =>
+      compareTasks(a, b, states.value),
+    );
+    for (const task of order) {
       lists[taskSection(task, states.value.get(task.id)!)].push(task);
     }
     // Closed ones newest first: they are history, read from the latest.

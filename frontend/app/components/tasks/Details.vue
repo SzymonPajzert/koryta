@@ -33,6 +33,58 @@
       </div>
     </div>
 
+    <!-- Its own level, set with a click; and, when what it holds up asks for
+         more, what that is. -->
+    <div class="task-details__priority mb-3" data-task-priority-field>
+      <span class="task-fact__label">Priorytet</span>
+      <v-btn-toggle
+        :model-value="task.priority ?? 'normal'"
+        mandatory
+        density="compact"
+        variant="outlined"
+        divided
+        :color="ownColor"
+        :disabled="saving"
+        data-task-priority-toggle
+        @update:model-value="setPriority"
+      >
+        <v-btn
+          v-for="choice in taskPriorityOrder"
+          :key="choice"
+          :value="choice"
+          size="small"
+        >
+          {{ taskPriorityConfig[choice].title }}
+        </v-btn>
+      </v-btn-toggle>
+      <span v-if="setBy" class="text-caption text-medium-emphasis">
+        ustawił {{ setBy }}
+      </span>
+      <div
+        v-if="state.priority && state.priorityFrom.length > 0"
+        class="task-details__taken text-body-2"
+        data-task-priority-from
+      >
+        {{ taskPriorityConfig[state.priority].title }}, bo czeka na
+        {{ isGoal ? "niego" : "nie" }}:
+        <v-chip
+          v-for="source in state.priorityFrom"
+          :key="source.id"
+          size="small"
+          label
+          class="task-details__chip"
+          :color="state.priority === 'urgent' ? 'ink-danger' : 'ink-warning'"
+          :prepend-icon="
+            source.kind === 'goal' ? taskKindConfig.goal.icon : undefined
+          "
+          :title="source.title"
+          @click="emit('select', source.id)"
+        >
+          {{ source.title }}
+        </v-chip>
+      </div>
+    </div>
+
     <p v-if="task.body" class="task-details__body text-body-2 mb-3">
       <template v-for="(part, index) in linkify(task.body)" :key="index">
         <a v-if="part.href" :href="part.href" target="_blank" rel="noopener">{{
@@ -288,6 +340,8 @@ import {
   taskActorLabel,
   taskChoices,
   taskKindConfig,
+  taskPriorityConfig,
+  taskPriorityOrder,
   taskStatusConfig,
   taskWhoConfig,
 } from "~/utils/taskStyle";
@@ -296,6 +350,7 @@ import {
   goalProgress,
   isClosed,
   taskAnchor,
+  type PriorityChoice,
   type Task,
   type TaskPatch,
   type TaskState,
@@ -331,6 +386,28 @@ const emit = defineEmits<{
 }>();
 
 const isGoal = computed(() => props.task.kind === "goal");
+
+/** The picked level in its own colour; normal has none. */
+const ownColor = computed(() =>
+  props.task.priority === "urgent"
+    ? "ink-danger"
+    : props.task.priority === "high"
+      ? "ink-warning"
+      : undefined,
+);
+
+/** The toggle's value is a button's, one of `taskPriorityOrder`. */
+const setPriority = (value: string) =>
+  emit("update", { priority: value as PriorityChoice });
+
+/** An agent that raised the level, named: the owner knows his own. */
+const setBy = computed(() =>
+  props.task.priority &&
+  props.task.prioritySetBy &&
+  props.task.prioritySetBy !== "owner"
+    ? taskActorLabel(props.task.prioritySetBy)
+    : null,
+);
 
 const candidates = computed(() =>
   taskChoices(props.tasks.filter((t) => t.id !== props.task.id)),
@@ -512,6 +589,23 @@ const actions = computed(() => {
 /* A title is long; a chip holding one must not stick out of the panel. */
 .task-details__chip {
   max-width: 100%;
+}
+
+.task-details__priority {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+/* No wider than the panel, so a long title in a chip is cut short there. */
+.task-details__taken {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 /* A click on a chip opens its task, so a field full of one long title would

@@ -24,6 +24,14 @@
       :is-valid-connection="validConnection"
       :title="`${task.title} czeka na…`"
     />
+    <!-- On the card's top edge, where it takes nothing from the head. -->
+    <TasksPriorityBadge
+      v-if="section !== 'closed'"
+      class="task-node__priority"
+      :task="task"
+      :state="state"
+      compact
+    />
     <div class="task-node__head">
       <v-icon size="x-small" :icon="taskKindConfig[task.kind].icon" />
       <!-- A goal says how far what leads to it has got, rather than what it
@@ -282,6 +290,13 @@ const goalWord = computed(() =>
   text-transform: uppercase;
   color: rgb(var(--task-ink));
   white-space: nowrap;
+}
+
+.task-node__priority {
+  position: absolute;
+  top: -8px;
+  right: 12px;
+  z-index: 1;
 }
 
 .task-node__actions {

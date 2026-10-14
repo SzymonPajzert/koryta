@@ -66,6 +66,33 @@
               </v-btn>
             </v-btn-toggle>
           </div>
+          <div>
+            <div class="text-caption text-medium-emphasis mb-1">Priorytet</div>
+            <v-btn-toggle
+              v-model="form.priority"
+              mandatory
+              density="comfortable"
+              variant="outlined"
+              divided
+              :color="
+                form.priority === 'urgent'
+                  ? 'ink-danger'
+                  : form.priority === 'high'
+                    ? 'ink-warning'
+                    : undefined
+              "
+              data-task-priority-choice
+            >
+              <v-btn
+                v-for="choice in taskPriorityOrder"
+                :key="choice"
+                :value="choice"
+                size="small"
+              >
+                {{ taskPriorityConfig[choice].title }}
+              </v-btn>
+            </v-btn-toggle>
+          </div>
         </div>
         <v-autocomplete
           v-model="form.dependsOn"
@@ -133,9 +160,16 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
-import { taskChoices, taskKindConfig, taskWhoConfig } from "~/utils/taskStyle";
+import {
+  taskChoices,
+  taskKindConfig,
+  taskPriorityConfig,
+  taskPriorityOrder,
+  taskWhoConfig,
+} from "~/utils/taskStyle";
 import {
   taskEditPatch,
+  type PriorityChoice,
   type Task,
   type TaskCreate,
   type TaskKind,
@@ -163,6 +197,7 @@ const empty = () => ({
   body: "",
   kind: "task" as TaskKind,
   who: "owner" as TaskWho,
+  priority: "normal" as PriorityChoice,
   dependsOn: [] as string[],
   tags: [] as string[],
   links: [] as string[],
@@ -184,6 +219,7 @@ watch(open, (isOpen) => {
           body: task.body,
           kind: task.kind,
           who: task.who,
+          priority: task.priority ?? "normal",
           dependsOn: [...task.dependsOn],
           tags: [...task.tags],
           links: [...task.links],
@@ -208,6 +244,7 @@ async function save() {
     body: form.body,
     kind: form.kind,
     who: form.who,
+    priority: form.priority === "normal" ? undefined : form.priority,
     dependsOn: form.dependsOn,
     tags: trimmed(form.tags),
     links: trimmed(form.links),
