@@ -17,6 +17,16 @@ REGON_PUBLIC_OWNERSHIP = "REGON_PUBLIC_OWNERSHIP_KRS"
 #: the catalogue's KRS column names another company or none - see
 #: `CompaniesKRS.public_by_identity`. Gated the same way.
 REGON_PUBLIC_IDENTITY = "REGON_PUBLIC_OWNERSHIP_ID"
+#: A company Prokuratoria Generalna lists as one the Treasury holds a stake in -
+#: see `treasury_stakes`.
+TREASURY_STAKE = "PROKURATORIA_SPOLKI_SKARBU_PANSTWA"
+
+#: Prokuratoria Generalna's "Wykaz spółek z udziałem Skarbu Państwa", as of
+#: 2026-06-30: dane.gov.pl dataset 1198, a new resource each quarter, CC BY 4.0.
+TREASURY_LIST = FileSource(
+    "https://api.dane.gov.pl/resources/2383706/file",
+    "wykaz-spolek-z-udzialem-skarbu-panstwa-2026-06-30.xls",
+)
 
 
 def publicly_owned(catalogue: pd.DataFrame) -> pd.DataFrame:
@@ -133,6 +143,32 @@ def public_owner_regons(catalogue: pd.DataFrame) -> frozenset[str]:
         return public_regons(catalogue)
     in_krs = catalogue.loc[catalogue["KRS"].notna(), "REGON"].map(regon_stem)
     return public_regons(catalogue) - set(in_krs.dropna())
+
+
+def treasury_stakes(wykaz: pd.DataFrame) -> dict[str, str]:
+    """The Treasury's share in each company of Prokuratoria's list, by NIP.
+
+    The list names every company the Treasury holds shares in - 391 on
+    2026-06-30 - with its NIP, the share, and the body acting for the Treasury:
+    a ministry, KOWR, AMW, ARP, KZN. The register misses many of those stakes:
+    a spółka z o.o. lists no shareholder under 10%, and an SA with several
+    lists none, so Polcargo's 9.09% and SIM KZN-Nadwarciański's 0.74% read as
+    nobody's. Every stake counts, as for any public owner, down to RAFAKO's
+    0.0000148%.
+
+    Read by position, NIP second and share sixth, as the office prints them.
+    """
+    stakes = {}
+    for nip, share in zip(wykaz.iloc[:, 1], wykaz.iloc[:, 5]):
+        digits = nip_digits(nip)
+        if digits:
+            stakes[digits] = str(share).strip()
+    return stakes
+
+
+def read_treasury_list(ctx: Context) -> pd.DataFrame:
+    """Prokuratoria's list as it is printed, every cell text."""
+    return pd.read_excel(ctx.io.read_data(TREASURY_LIST).read_file(), dtype=str)
 
 
 class CompaniesHardcoded(Pipeline[KRS]):

@@ -9,6 +9,7 @@ from scrapers.krs.data import (
     public_owner_regons,
     public_regons,
     regon_stem,
+    treasury_stakes,
 )
 from scrapers.stores import Pipeline, ProcessPolicy
 from scrapers.tests.mocks import get_test_context, setup_test_context
@@ -223,3 +224,41 @@ def test_an_owner_is_read_by_its_code_only_outside_krs():
 
     assert public_regons(rows) == {"000001583", "361123585"}
     assert public_owner_regons(rows) == {"000001583"}
+
+
+def test_the_treasury_list_is_read_by_nip_with_the_share():
+    # As Prokuratoria prints it, header row and all
+    wykaz = pd.DataFrame(
+        [
+            [
+                "1",
+                "899-232-12-94",
+                "AMW INVEST Sp. z o.o.",
+                "Wrocław",
+                "aktywna",
+                "100",
+                "Agencja Mienia Wojskowego",
+            ],
+            [
+                "2",
+                "586-103-40-90",
+                "POLCARGO GROUP Sp. z o.o.",
+                "Medyka",
+                "aktywna",
+                "9.09",
+                "Minister Aktywów Państwowych",
+            ],
+            ["3", "", "BEZ NIP", "Warszawa", "aktywna", "100", "Minister"],
+        ],
+        columns=[
+            "Lp.",
+            "NIP",
+            "Nazwa Spółki",
+            "Siedziba",
+            "Status",
+            "Udział % Skarbu Państwa w kapitale zakładowym",
+            "Organ reprezentujący Skarb Państwa",
+        ],
+    )
+
+    assert treasury_stakes(wykaz) == {"8992321294": "100", "5861034090": "9.09"}
