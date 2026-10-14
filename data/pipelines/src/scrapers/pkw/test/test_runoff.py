@@ -74,6 +74,17 @@ def test_the_2024_run_off_says_who_won_the_first_rounds_candidacy():
         ("STANISZEWSKI", "FALSE"),
     ]
 
+    # `--limit` cuts the candidacies, not each file: Bodzanów's run-off, first
+    # in its file, is of a race the cut left out, so it is dropped rather than
+    # kept as a candidacy of its own.
+    people = read_source(ctx, mayors, CSV_HEADERS, 3)
+
+    assert [(p.last_name, p.candidacy_success) for p in people] == [
+        ("CZERWIŃSKI", "FALSE"),
+        ("GARCZEWSKI", "FALSE"),
+        ("JAŚKOWIAK", "TRUE"),
+    ]
+
 
 def mayor(name: str, teryt: str | int, won: bool) -> Person:
     return Person(

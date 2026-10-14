@@ -184,7 +184,11 @@ def read_source(
 ) -> list[Person]:
     """One source's candidacies, with its run-off read into them if it has one.
 
-    `limit` caps each file read, as `--limit` says.
+    `limit` caps the candidacies, as `--limit` says: the first round's file is
+    cut after `limit` rows. Its run-off is read whole, and only the rows of
+    the candidates in that cut are kept. Cutting the run-off by row count too
+    would keep the run-offs of races the cut left out, each a candidacy of its
+    own and a false "tied to none" in the build's output.
     """
     reader = config.extractor.read(ctx, config.source)
     rows = list(itertools.islice(process_csv(reader, config, csv_headers), limit))
@@ -192,7 +196,10 @@ def read_source(
         return rows
 
     reader = config.runoff.extractor.read(ctx, config.runoff.source)
-    second_round = itertools.islice(process_csv(reader, config, csv_headers), limit)
+    second_round: typing.Iterable[Person] = process_csv(reader, config, csv_headers)
+    if limit is not None:
+        read = {race_entry(person) for person in rows}
+        second_round = (p for p in second_round if race_entry(p) in read)
     return with_runoff(rows, second_round, str(config))
 
 
@@ -324,7 +331,7 @@ def main(ctx: Context, teryt: Teryt):
         dest="limit",
         type=int,
         default=None,
-        help="for each file, only process LIMIT elements",
+        help="for each source, only process its first LIMIT candidacies",
     )
     parser.add_argument(
         "--year",
