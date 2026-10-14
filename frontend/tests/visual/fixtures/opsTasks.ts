@@ -6,8 +6,10 @@ import type { Task } from "../../../shared/tasks";
  * list is answered from here: something on every list the page has, and a
  * chain for the map to draw - a merge, the deploy waiting on it, and the
  * upload waiting on the deploy - beside a second chain with a decision at its
- * head and a goal at its end. Times are fixed rather than relative, since the
- * page prints them as dates. */
+ * head and a goal at its end. The upload is urgent, which makes the deploy and
+ * the merge under it urgent too, and the goal is high, which lifts both steps
+ * that lead to it. Times are fixed rather than relative, since the page prints
+ * them as dates. */
 
 const at = (day: string, time = "09:00") => `2026-09-${day}T${time}:00.000Z`;
 
@@ -51,6 +53,8 @@ export const opsTasks: Task[] = [
     dependsOn: ["deploy-indeksow"],
     tags: ["data"],
     links: ["https://koryta.pl/admin/opinie#fb-wizfb1"],
+    priority: "urgent",
+    prioritySetBy: "agent:bridge-cse_01Example",
     createdAt: at("27"),
     updatedAt: at("27", "10:30"),
     log: [
@@ -75,6 +79,8 @@ export const opsTasks: Task[] = [
     title: "Umowy i powiązania z nich widoczne na koryta.pl",
     kind: "goal",
     dependsOn: ["wgraj-powiazania"],
+    priority: "high",
+    prioritySetBy: "owner",
     tags: ["umowy"],
   }),
   task("etykieta-rady-spolecznej", {

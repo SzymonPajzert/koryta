@@ -18,6 +18,11 @@
         :title="taskKindConfig[task.kind].title"
       />
       <span class="arow-grow">{{ task.title }}</span>
+      <TasksPriorityBadge
+        v-if="section !== 'closed'"
+        :task="task"
+        :state="state"
+      />
       <span
         v-if="task.status === 'doing'"
         class="arow-tag bg-surface-info text-ink-info"

@@ -66,6 +66,28 @@
         <v-chip value="ty" size="small" filter>Twoje</v-chip>
         <v-chip value="agent" size="small" filter>Dla agenta</v-chip>
       </v-chip-group>
+      <v-chip-group
+        v-model="priority"
+        selected-class="text-ink-danger"
+        data-task-priority-filter
+      >
+        <v-chip
+          value="pilne"
+          size="small"
+          filter
+          title="Pilne - także zadania, na które czeka coś pilnego"
+        >
+          Pilne
+        </v-chip>
+        <v-chip
+          value="wazne"
+          size="small"
+          filter
+          title="Pilne i ważne - także zadania, na które czeka coś pilnego albo ważnego"
+        >
+          Ważne
+        </v-chip>
+      </v-chip-group>
       <v-select
         v-if="allTags.length > 0"
         v-model="tag"
@@ -105,7 +127,7 @@
           value="najstarsze"
           size="small"
           :prepend-icon="mdiSortClockAscendingOutline"
-          title="Najpierw te z ustaloną kolejnością, potem od najstarszych"
+          title="Najpierw pilne i ważne, potem od najstarszych"
         >
           Najstarsze
         </v-btn>
@@ -234,7 +256,9 @@
             strzałkę, żeby ją usunąć. Przycisk w rogu karty zwija w stos
             wszystko, co prowadzi tylko do niej, a ten obok zostawia na mapie
             tylko ją i to, na co czeka. Cele i stosy są też na pasku nad mapą -
-            strzałkę można upuścić tam.
+            strzałkę można upuścić tam. Wypełniona etykieta „Pilne” albo „Ważne”
+            to priorytet zadania, obrysowana - wzięty od zadania albo celu,
+            który na nie czeka.
           </span>
         </div>
       </div>
@@ -323,11 +347,13 @@ import {
   compareNewest,
   foldWords,
   isClosed,
+  priorityLevel,
   taskAncestors,
   taskAnchor,
   type Task,
   type TaskCreate,
   type TaskPatch,
+  type TaskPriority,
   type TaskSection,
 } from "~~/shared/tasks";
 
@@ -377,6 +403,21 @@ const who = computed<Who>({
 });
 const tag = stringFilter("tag");
 const goal = stringFilter("cel");
+/** Only what is at least this pressing, by the level the lists sort by - so
+ * with what an urgent task or goal waits on. */
+type PriorityFilter = "pilne" | "wazne";
+const PRIORITY_FILTERS: Record<PriorityFilter, TaskPriority> = {
+  pilne: "urgent",
+  wazne: "high",
+};
+const priorityParam = stringFilter("priorytet");
+const priority = computed<PriorityFilter | null>({
+  get: () =>
+    priorityParam.value === "pilne" || priorityParam.value === "wazne"
+      ? priorityParam.value
+      : null,
+  set: (value) => (priorityParam.value = value),
+});
 /** The task the map is focused on, from a card's button. */
 const focus = stringFilter("skupienie");
 type Order = "najstarsze" | "najnowsze";
@@ -410,6 +451,13 @@ const matches = (task: Task) => {
   if (who.value === "ty" && task.who !== "owner") return false;
   if (who.value === "agent" && task.who !== "agent") return false;
   if (tag.value && !task.tags.includes(tag.value)) return false;
+  if (
+    priority.value &&
+    priorityLevel(states.value.get(task.id)?.priority) <
+      priorityLevel(PRIORITY_FILTERS[priority.value])
+  ) {
+    return false;
+  }
   const words = foldWords(search.value ?? "");
   if (words.length === 0) return true;
   const haystack = foldWords(
@@ -423,6 +471,7 @@ const filtering = computed(
     who.value !== "wszyscy" ||
     !!tag.value ||
     !!goal.value ||
+    !!priority.value ||
     !!search.value?.trim(),
 );
 

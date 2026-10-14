@@ -10,9 +10,12 @@ import {
 import type { RowTone } from "~/composables/rowTone";
 import {
   isClosed,
+  type PriorityChoice,
   type Task,
   type TaskKind,
+  type TaskPriority,
   type TaskSection,
+  type TaskState,
   type TaskStatus,
   type TaskWho,
 } from "~~/shared/tasks";
@@ -43,6 +46,73 @@ export const taskStatusConfig: Record<TaskStatus, { title: string }> = {
   dropped: { title: "Porzucone" },
 };
 
+/** The levels as the page offers them, from the lowest. `taken` is the word
+ * on a task that holds up one with that level, `goal` on one that leads to a
+ * goal with it. */
+export const taskPriorityConfig: Record<
+  PriorityChoice,
+  { title: string; taken: string; goal: string }
+> = {
+  normal: { title: "Zwykłe", taken: "", goal: "" },
+  high: {
+    title: "Ważne",
+    taken: "blokuje ważne",
+    goal: "do ważnego celu",
+  },
+  urgent: {
+    title: "Pilne",
+    taken: "blokuje pilne",
+    goal: "do pilnego celu",
+  },
+};
+
+/** Lowest first, as the toggles offer them. */
+export const taskPriorityOrder: PriorityChoice[] = ["normal", "high", "urgent"];
+
+export type TaskPriorityBadge = {
+  level: TaskPriority;
+  /** Taken from what the task holds up, rather than its own. */
+  taken: boolean;
+  /** On a line with room: „Pilne”, „blokuje pilne”, „do pilnego celu”. */
+  text: string;
+  /** Where there is none: the level alone. */
+  short: string;
+  /** Who set it, or what it is taken from. */
+  title: string;
+};
+
+/** What a task's priority says on a row or a card, or null for normal. */
+export function taskPriorityBadge(
+  task: Task,
+  state: Pick<TaskState, "priority" | "priorityFrom">,
+): TaskPriorityBadge | null {
+  const level = state.priority;
+  if (!level) return null;
+  const config = taskPriorityConfig[level];
+  const from = state.priorityFrom;
+  if (from.length === 0) {
+    return {
+      level,
+      taken: false,
+      text: config.title,
+      short: config.title,
+      title: `${config.title} · ${taskActorLabel(task.prioritySetBy ?? "agent")}`,
+    };
+  }
+  const named = from.map((t) =>
+    t.kind === "goal" ? `cel „${t.title}”` : `„${t.title}”`,
+  );
+  // „zadanie” is neuter and „cel” masculine: na nie, na niego.
+  const it = task.kind === "goal" ? "niego" : "nie";
+  return {
+    level,
+    taken: true,
+    text: from.every((t) => t.kind === "goal") ? config.goal : config.taken,
+    short: config.title,
+    title: `${config.title}, bo czeka na ${it}: ${named.join(", ")}`,
+  };
+}
+
 /** One tone per list: what waits on the owner stands out, what waits on an
  * agent is calmer, and what cannot start yet is grey. Goals are the one dark
  * thing on the page: where everything else leads. */
@@ -54,19 +124,19 @@ export const taskSectionConfig: Record<
     title: "Cele",
     short: "Cel",
     tone: "strong",
-    info: "Dokąd prowadzą zadania. Cel czeka na zadania, które do niego prowadzą - tak się je grupuje - a filtr „Cel” pokazuje tylko je.",
+    info: "Dokąd prowadzą zadania. Cel czeka na zadania, które do niego prowadzą - tak się je grupuje - a filtr „Cel” pokazuje tylko je. Pilny albo ważny cel podnosi wszystkie te zadania.",
   },
   mine: {
     title: "Do zrobienia przez Ciebie",
     short: "Dla Ciebie",
     tone: "warning",
-    info: "Nic na nie nie czeka, a potrzebują Twoich uprawnień albo decyzji. Od góry: co najpierw.",
+    info: "Nic na nie nie czeka, a potrzebują Twoich uprawnień albo decyzji. Od góry: pilne, ważne, potem od najstarszych. Zadanie, na które czeka pilne albo ważne zadanie lub cel, jest pilne albo ważne razem z nim.",
   },
   agents: {
     title: "Dla agenta",
     short: "Dla agenta",
     tone: "info",
-    info: "Nic na nie nie czeka i agent zrobi je sam - wystarczy zlecić.",
+    info: "Nic na nie nie czeka i agent zrobi je sam - wystarczy zlecić. Od góry: pilne, ważne, potem od najstarszych.",
   },
   blocked: {
     title: "Czekają",

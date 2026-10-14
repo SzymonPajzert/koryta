@@ -37,10 +37,30 @@ test("zadania", ZADANIA, async ({ page }, testInfo) => {
   const upload = page.locator("#t-upload-nazw-spolek");
   await expect(upload).toBeVisible({ timeout: 30_000 });
 
-  // Waiting on the deploy: the open row shows what it waits on and its
-  // history.
+  // The upload is urgent, so the merge two steps under it is too, and heads
+  // the owner's list; the decision leads to the high goal.
+  const level = (id: string) =>
+    page.locator(`#t-${id} [data-row-toggle] [data-task-priority]`);
+  await expect(level("upload-nazw-spolek")).toHaveAttribute(
+    "data-task-priority",
+    "urgent",
+  );
+  await expect(level("merge-przykladowa-galaz")).toHaveAttribute(
+    "data-task-priority",
+    "urgent-taken",
+  );
+  await expect(level("decyzja-widocznosc")).toHaveAttribute(
+    "data-task-priority",
+    "high-taken",
+  );
+
+  // Waiting on the deploy: the open row shows its priority, what it waits on
+  // and its history.
   await upload.locator("[data-row-toggle]").click();
   await expect(upload.locator("[data-task-depends-on]")).toBeVisible();
+  await expect(upload.locator("[data-task-priority-field]")).toContainText(
+    "ustawił agent",
+  );
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("zadania.png", { fullPage: true });
@@ -56,6 +76,11 @@ test("zadania-mapa", ZADANIA, async ({ page }, testInfo) => {
   await expect(deploy).toBeVisible({ timeout: 30_000 });
   // Both chains are drawn: two arrows in each, the second ending in a goal.
   await expect(page.locator(".task-edge")).toHaveCount(4);
+  // Each card of both chains is marked: the urgent upload and the high goal
+  // filled, what leads to them outlined.
+  await expect(
+    page.locator("[data-task-node] [data-task-priority]"),
+  ).toHaveCount(6);
 
   await deploy.click();
   await expect(
