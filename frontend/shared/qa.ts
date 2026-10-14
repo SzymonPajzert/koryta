@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "profil-niezweryfikowany-dla-niezalogowanych",
+    title:
+      "Niezalogowani widzą imię i ostatnie stanowisko nieopublikowanej osoby",
+    description:
+      "Strona osoby, której nikt jeszcze nie sprawdził, pokazywała niezalogowanym tylko „Dostęp zastrzeżony”. Teraz pokazuje imię i nazwisko, obecne lub ostatnie stanowisko i przycisk logowania - nigdy partii ani kandydatur. Wyszukiwarka znów podpowiada takie osoby, z dopiskiem „Profil niezweryfikowany”.",
+    steps: [
+      "Wyloguj się i wpisz w wyszukiwarkę nazwisko osoby, której strona jest szkicem - podpowiedź ma dopisek „Profil niezweryfikowany” i stoi pod opublikowanymi osobami.",
+      "Otwórz ją - jest imię i nazwisko, stanowisko ze spółką i datami oraz przycisk „Zaloguj się, aby zobaczyć więcej”; nigdzie nie ma partii ani kandydatur.",
+      "Kliknij przycisk i zaloguj się - wracasz na pełną stronę tej osoby.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "notatki-o-osobach-dla-zalogowanych",
     title: "Notatki o osobach widzą tylko zalogowani",
     description:

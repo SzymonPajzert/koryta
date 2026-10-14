@@ -100,8 +100,8 @@ export const GOALS = {
   // anything came back or whether the reader took what it offered.
   "search:performed": {
     description:
-      "A search query reached /api/search. `results` buckets how many came back; `none` against the total is the share of searches the index cannot answer. The query itself is deliberately not recorded.",
-    props: ["results"],
+      "A search query reached /api/search. `results` buckets how many came back; `none` against the total is the share of searches the index cannot answer. `unverified` is whether any of them were people nobody has published - `none`, `some` or `all` - and `all` is a reader whose answer, logged out, is a teaser rather than a page. The query itself is deliberately not recorded.",
+    props: ["results", "unverified"],
   },
   "search:pick": {
     description:
@@ -112,6 +112,41 @@ export const GOALS = {
     description:
       "Reader started adding something the search could not find. Whether they finished is a different question, and the revision queue already answers it.",
     props: ["kind"],
+  },
+
+  // --- Teasers ------------------------------------------------------------
+  // What a logged out reader is shown where a page is not theirs to read yet,
+  // and the way to sign in for it. One set of goals for every such surface,
+  // `surface` and `kind` saying which: today only an unpublished person's page
+  // (`osoba` / `profil`), and the planned lock on hidden candidacies and
+  // parties (task login-teaser-hidden-politics) is meant to send these too -
+  // a property-filtered goal tells them apart on the dashboard. Read in order:
+  // search:pick -> teaser:shown -> teaser:click -> login:success, and against
+  // teaser:continued for the readers who went on without signing in. Whoever
+  // has none of the last three after teaser:shown stopped there.
+  "teaser:shown": {
+    description:
+      "A logged out reader was shown a teaser in place of something only signed in readers see. `from` is how they got to it: `search` (picked it in the search box), `link` (from another page here) or `entry` (the first page of the visit - a shared or bookmarked link, or a search engine).",
+    props: ["surface", "kind", "from"],
+    // Fires on mount, because the page loaded.
+    passive: true,
+  },
+  "teaser:click": {
+    description:
+      "Reader clicked the teaser's sign-in button. Against teaser:shown with the same `surface`, the share the offer convinces; against login:success, the share the form then loses.",
+    props: ["surface", "kind"],
+  },
+  "teaser:continued": {
+    description:
+      "Reader went on to another page of the site from a teaser without signing in - they kept exploring rather than leaving. `via` is how: `back` (the browser's back button, mostly to their search results), `search` (searched again from the teaser) or `link`; `to` is where they went (`osoba`, `instytucja`, `region`, `tabela`, `home`, `inne`).",
+    props: ["surface", "kind", "via", "to"],
+  },
+
+  // --- Signing in ---------------------------------------------------------
+  "login:success": {
+    description:
+      "Somebody signed in or created an account, on /login or in the sign-in dialog. `mode` is `login` or `signup`. `from` is the reason the link to /login carried (`powod`), from the closed list in `LOGIN_REASONS` - `profil-osoby` is a teaser on an unpublished person's page - or `inne`. A session restored on page load does not count.",
+    props: ["mode", "from"],
   },
 
   // --- The contribution funnel -----------------------------------------
@@ -316,6 +351,17 @@ export function searchPickKind(nodeType: string | undefined): SearchPickKind {
   );
 }
 
+/** Whether the people a search found include unpublished ones, for
+ * `search:performed`'s `unverified`. `all` only when there was something to
+ * find: a search that found nothing is `none`, which `results` already says. */
+export function unverifiedShare(
+  results: number,
+  unverified: number,
+): "none" | "some" | "all" {
+  if (unverified <= 0) return "none";
+  return unverified >= results ? "all" : "some";
+}
+
 /** The things OmniSearch offers to create when it finds nothing. */
 export type SearchProposeKind = "person" | "place" | "article";
 
@@ -330,6 +376,51 @@ export function resultBucket(count: number): string {
   if (count <= 4) return "1-4";
   if (count <= 20) return "5-20";
   return "21+";
+}
+
+// --- teasers and signing in ----------------------------------------------
+
+/** Where a teaser is, for the `teaser:*` goals' `surface`. */
+export const TEASER_SURFACES = ["osoba"] as const;
+export type TeaserSurface = (typeof TEASER_SURFACES)[number];
+
+/** What a teaser stands in for, for their `kind`: `profil` is the whole page
+ * of a person nobody has published. */
+export const TEASER_KINDS = ["profil"] as const;
+export type TeaserKind = (typeof TEASER_KINDS)[number];
+
+/** How a reader reached a teaser, for `teaser:shown`'s `from`. */
+export type TeaserArrival = "search" | "link" | "entry";
+
+/** How a reader left a teaser for another page, for `teaser:continued`'s
+ * `via`. */
+export type TeaserExit = "back" | "search" | "link";
+
+/** Where a reader went from a teaser, for `teaser:continued`'s `to`: the kind
+ * of page, never the page - a person's url is their name. */
+export function teaserDestination(path: string): string {
+  if (path === "/" || path === "") return "home";
+  if (path.startsWith("/eksploruj/tabela")) return "tabela";
+  const first = path.split("/")[1] ?? "";
+  if (first === "osoba" || first === "instytucja" || first === "region") {
+    return first;
+  }
+  return "inne";
+}
+
+/** The reasons a link to /login may give in `powod`, as `login:success`
+ * reports them. Closed, because the parameter is in the url and anybody can
+ * type anything into it; a reason that is not here is reported as `inne`.
+ * Add one here with the link that sends it. */
+export const LOGIN_REASONS = ["profil-osoby"] as const;
+export type LoginReason = (typeof LOGIN_REASONS)[number];
+
+/** `powod` off a /login url, as `login:success`'s `from`. */
+export function loginReason(powod: unknown): string {
+  return typeof powod === "string" &&
+    (LOGIN_REASONS as readonly string[]).includes(powod)
+    ? powod
+    : "inne";
 }
 
 // --- /eksploruj/tabela filters -------------------------------------------

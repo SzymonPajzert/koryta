@@ -1,7 +1,15 @@
 <template>
   <div style="width: 100%">
+    <!-- A person nobody has published, to a reader who is not signed in: their
+         name and latest post, and the way to sign in for the rest - rather
+         than a wall that did not even say whose page it was. -->
+    <CardPersonTeaser
+      v-if="status != 'success' && teaserWanted && teaser"
+      :teaser="teaser"
+      :node-id="node"
+    />
     <v-card
-      v-if="status != 'success'"
+      v-else-if="status != 'success'"
       class="mb-4"
       :title="!user ? 'Dostęp zastrzeżony' : status"
     >
@@ -476,6 +484,7 @@ import { employmentTowns } from "~/utils/companyLocation";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
+import type { PersonTeaser } from "~~/shared/personTeaser";
 import { useDisplay } from "vuetify";
 
 definePageMeta({
@@ -523,6 +532,30 @@ watch(
   },
   { immediate: true },
 );
+
+/** What a logged out reader is shown of a person whose page is not theirs to
+ * read - published by nobody yet. The server renders every page anonymously,
+ * so the teaser is in the html it sends; a signed in reader's own copy of the
+ * page then loads over it, and the teaser is dropped. A 404 here - a page that
+ * does not exist, or one that was removed - leaves the wall as it was. */
+const teaserWanted = computed(
+  () => type === "person" && status.value === "error" && !user.value,
+);
+const { data: teaser } = await useAsyncData<PersonTeaser | null>(
+  `person-teaser-${node}`,
+  () =>
+    teaserWanted.value
+      ? $fetch<PersonTeaser>(`/api/nodes/${node}/teaser`).catch(() => null)
+      : Promise.resolve(null),
+  { watch: [teaserWanted] },
+);
+// Never indexed: the status line already says 404 (`[seoType]/[slug].vue`),
+// and this says it again for anything that reads only the page - a name nobody
+// has checked is not something to put in a search engine. Decided once, at
+// setup: it only matters to the server's render, which is what a crawler gets.
+if (teaser.value && status.value !== "success") {
+  useRobotsRule("noindex, nofollow");
+}
 
 const revisionId = computed(() => route.query.revisionId as string | undefined);
 
@@ -661,8 +694,14 @@ const subsidiaries = computed(() =>
 const seoEntity = computed(() =>
   status.value === "success" ? entity.value : undefined,
 );
+// A teaser names the person in the tab as the page does, and says what the
+// page is: the reader is looking at a draft, not at what the site publishes.
 const seoTitle = computed(
-  () => seoEntity.value?.name ?? "Strona nieznaleziona",
+  () =>
+    seoEntity.value?.name ??
+    (teaser.value
+      ? `${teaser.value.name} - profil niezweryfikowany`
+      : "Strona nieznaleziona"),
 );
 const seoDescription = computed(() =>
   seoEntity.value

@@ -12,7 +12,12 @@ import { createRouter, createMemoryHistory } from "vue-router";
  *
  * Served rather than stubbed: the component calls Nuxt's auto-imported
  * `$fetch`, which the `vi.stubGlobal` below never intercepts. */
-let searched: { id: string; name: string; type: string }[] = [];
+let searched: {
+  id: string;
+  name: string;
+  type: string;
+  published?: boolean;
+}[] = [];
 registerEndpoint("/api/search", () => searched);
 
 // The menu is a real overlay here, and Vuetify measures it on open.
@@ -238,6 +243,31 @@ describe("OmniSearch", () => {
         [],
     ).map((el) => el.textContent.trim());
     expect(lines).toEqual(["PO", "Partia"]);
+
+    wrapper.unmount();
+  });
+
+  it("tells a logged out reader which people are only a teaser", async () => {
+    // Their page is the name and the latest post, with the rest after signing
+    // in - said before the click, not after it.
+    searched = [
+      { id: "live", name: "Anna Nowakowska", type: "person", published: true },
+      { id: "draft", name: "Anna Nowak", type: "person", published: false },
+    ];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "anna nowak");
+
+    const subtitleOf = (name: string) =>
+      rows()
+        .find(
+          (el) =>
+            el.querySelector(".v-list-item-title")?.textContent.trim() === name,
+        )
+        ?.querySelector(".v-list-item-subtitle")
+        ?.textContent.trim();
+    expect(subtitleOf("Anna Nowak")).toBe("Profil niezweryfikowany");
+    expect(subtitleOf("Anna Nowakowska")).toBeUndefined();
 
     wrapper.unmount();
   });
