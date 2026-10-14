@@ -75,8 +75,8 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Dopisanie „?latest=true” do zapytania pokazywało nieopublikowane osoby, ich kandydatury i partie każdemu, także niezalogowanemu. Teraz szkice dostaje tylko zalogowany czytelnik, a wyszukiwarka i tabela pokazują pozostałym wyłącznie opublikowane strony.",
     steps: [
-      "Wyloguj się i wpisz w wyszukiwarkę nazwisko osoby, której strona jest szkicem - podpowiedź jej nie pokazuje.",
-      "Zaloguj się i wpisz je jeszcze raz - podpowiedź ją pokazuje, a jej strona otwiera się jako szkic.",
+      "Wyloguj się i wpisz w wyszukiwarkę nazwę spółki, której strona jest szkicem - podpowiedź jej nie pokazuje.",
+      "Zaloguj się i wpisz ją jeszcze raz - podpowiedź ją pokazuje, a jej strona otwiera się jako szkic.",
     ],
     link: "/",
     area: "public",

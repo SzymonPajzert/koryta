@@ -6,6 +6,7 @@ import {
   wantsLatest,
 } from "~~/server/utils/handlers";
 import { getValidatedQuery } from "h3";
+import { importedOrReviewed } from "~~/server/utils/provenance";
 import {
   anchorChunk,
   nameMatchesTokens,
@@ -24,6 +25,7 @@ type node = {
   type: string;
   teryt?: string;
   visibility: boolean;
+  revision_id?: unknown;
 };
 
 /** How far down the anchor's hit list a multi-word query reads.
@@ -40,12 +42,13 @@ const MULTI_WORD_SCAN_LIMIT = 500;
 
 /** How far down the hit list a reader who may not see drafts is answered from.
  *
- * Their hits are filtered after the query - no index puts `published` beside
- * `nameChunksLower`, and adding one would have to be deployed before the code
- * that needs it - and most people in the base are unpublished, so the top
- * twenty of a common name can be twenty drafts. A wider window keeps the
- * published namesakes behind them reachable; it is paid once per query, which
- * the cache then holds for every logged out reader typing the same thing.
+ * Their hits are filtered and reordered after the query - no index puts
+ * `published` beside `nameChunksLower`, and adding one would have to be
+ * deployed before the code that needs it - and most people in the base are
+ * unpublished, so the top twenty of a common name can be twenty drafts. A wider
+ * window keeps the published namesakes behind them reachable, and in front of
+ * them once ranked; it is paid once per query, which the cache then holds for
+ * every logged out reader typing the same thing.
  */
 const PUBLIC_SCAN_LIMIT = 200;
 
@@ -111,17 +114,49 @@ export default editorFreshCachedEventHandler(async (event) => {
       // for.
       if (doc.data().deleted === true) continue;
       // An unpublished page is a legitimate hit for a signed in reader, who
-      // may have just created it - and for nobody else. Every name in the
-      // base used to be offered to anyone typing, nine in ten of the people
-      // among them unpublished, and each a page that answers them with a 404.
-      if (!includeDrafts && !node.visibility) continue;
+      // may have just created it. A logged out reader is offered unpublished
+      // people too, and nothing else unpublished: a person's page answers them
+      // with a teaser - the name and the latest post, never a party - and a
+      // way to sign in for the rest (`/api/nodes/[id]/teaser`), where a
+      // company's or a region's would only be a 404. Only the people an import
+      // wrote or a reviewer approved, which is decided below.
+      if (!includeDrafts && !node.visibility && node.type !== "person") {
+        continue;
+      }
       if (!nameMatchesTokens(node.name, tokens)) continue;
       seen.add(node.id);
       results.push(node);
     }
   }
 
-  return results.slice(0, query.limit).map((node) => {
+  // Published pages first for a logged out reader, each group in the order the
+  // index gave it. Nine in ten people are unpublished, so the top twenty of a
+  // common name would otherwise be twenty teasers with the one full page that
+  // answers the question below them.
+  const ranked = includeDrafts
+    ? results
+    : [
+        ...results.filter((node) => node.visibility),
+        ...results.filter((node) => !node.visibility),
+      ];
+
+  // The drafts a logged out reader is shown are those the teaser would show:
+  // somebody's proposal of a person is a name on this site that nobody has
+  // checked, and stays a 404 - see `importedOrReviewed`. Asked only of the
+  // drafts that would be answered, at a read each; the cache then keeps the
+  // answer for everybody typing the same thing.
+  const window = ranked.slice(0, query.limit);
+  const shownDrafts = includeDrafts
+    ? undefined
+    : await importedOrReviewed(
+        db,
+        window.filter((node) => !node.visibility),
+      );
+  const answered = shownDrafts
+    ? window.filter((node) => node.visibility || shownDrafts.has(node.id))
+    : window;
+
+  return answered.map((node) => {
     // The query that opens the table on this hit, for the node kinds whose
     // page *is* the table. A region is one. A place stopped being one when
     // companies got their pages back: `generateEntityUrl` sends a search hit
@@ -135,6 +170,9 @@ export default editorFreshCachedEventHandler(async (event) => {
       id: node.id,
       name: node.name,
       type: node.type,
+      // So the search box can tell a logged out reader which hits are a
+      // teaser rather than a page, before they click.
+      published: node.visibility,
       ...(Object.keys(query).length > 0 ? { query } : {}),
     };
   });

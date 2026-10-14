@@ -201,15 +201,18 @@ async function search_(term: string) {
   loading.value = true;
   try {
     // Drafts for a signed in reader, who may be picking the page they have
-    // just created; the published pages for anybody else.
+    // just created; the published pages for anybody else. The endpoint also
+    // offers a logged out reader unpublished people, whose pages are a teaser
+    // - something to land on from the search box, not something to pick.
     const response = await $fetch<
-      Array<{ id: string; name: string; type: string }>
+      Array<{ id: string; name: string; type: string; published?: boolean }>
     >("/api/search", {
       query: { q: term, ...(user.value ? { latest: true } : {}) },
       headers: await authHeaders(user.value),
     });
     results.value = response
       .filter((node) => entityTypes.value.includes(node.type as NodeType))
+      .filter((node) => !!user.value || node.published !== false)
       .map((node) => ({
         type: node.type as NodeType,
         id: node.id,
