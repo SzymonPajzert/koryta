@@ -365,11 +365,17 @@ describe("GET /api/feedback/list", () => {
   });
 
   // `doc("a/b")` is a path, not an id: it would address a document in a
-  // subcollection, or in another collection altogether.
+  // subcollection, or in another collection altogether. `.`, `..` and
+  // `__name__`-shaped ids pass the SDK and are refused by the server, which
+  // would fail the whole list with a 500.
   it.each([
     ["a nested path", "fb-1/notes/x"],
     ["another collection", "../users/admin-1"],
     ["a bare slash", "/"],
+    ["empty", ""],
+    ["a dot", "."],
+    ["two dots", ".."],
+    ["a reserved id", "__name__"],
     ["an id longer than Firestore allows here", "x".repeat(201)],
   ])("ignores an include that is %s", async (_, include) => {
     store.set("fb-1", report("new", 1));

@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { documentId } from "~~/server/utils/documentId";
 import {
   OPEN_CAP,
   OPEN_STATUSES,
@@ -16,11 +17,7 @@ const queryValidator = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(100),
   /** One report to return whatever its age, for a link that points straight
    * at it (Slack's "Otwórz w panelu" lands on `#fb-<id>`). */
-  include: z
-    .string()
-    .regex(/^[^/]{1,200}$/)
-    .optional()
-    .catch(undefined),
+  include: z.string().max(200).pipe(documentId).optional().catch(undefined),
 });
 
 const toFeedback = (doc: { id: string; data: () => unknown }): Feedback => ({
