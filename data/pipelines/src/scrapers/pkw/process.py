@@ -1,5 +1,6 @@
 import argparse
 import dataclasses
+import itertools
 import math
 import re
 import typing
@@ -11,7 +12,7 @@ from entities.person import PKW as Person
 from scrapers.map.teryt import Teryt
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
-from scrapers.pkw.offices import local_office
+from scrapers.pkw.offices import local_office, teryt_code
 from scrapers.pkw.sources import InputSource, sources
 from scrapers.stores import Context, Pipeline
 from util.polish import PkwFormat, parse_name
@@ -175,6 +176,85 @@ def process_csv(
             raise
 
 
+def read_source(
+    ctx: Context,
+    config: InputSource,
+    csv_headers: dict[str, SetField | None],
+    limit: int | None,
+) -> list[Person]:
+    """One source's candidacies, with its run-off read into them if it has one.
+
+    `limit` caps each file read, as `--limit` says.
+    """
+    reader = config.extractor.read(ctx, config.source)
+    rows = list(itertools.islice(process_csv(reader, config, csv_headers), limit))
+    if config.runoff is None:
+        return rows
+
+    reader = config.runoff.extractor.read(ctx, config.runoff.source)
+    second_round = itertools.islice(process_csv(reader, config, csv_headers), limit)
+    return with_runoff(rows, second_round, str(config))
+
+
+#: What ties a run-off's row to the first round's: the office as PKW titles it
+#: ("Prezydent Miasta Poznania"), the candidate's name as PKW spells it, and
+#: the TERYT of the area.
+RaceEntry = tuple[str | None, str | None, str | None]
+
+
+def race_entry(person: Person) -> RaceEntry:
+    return (person.position, person.pkw_name, teryt_code(person.teryt_candidacy))
+
+
+def with_runoff(
+    first_round: list[Person], second_round: typing.Iterable[Person], label: str
+) -> list[Person]:
+    """The first round's candidacies, each settled by its run-off if it went to one.
+
+    A run-off is no candidacy of its own: the race, the office and the
+    candidate are the first round's, and only the result is new. So it goes on
+    the row of the first round that sent the candidate there - won if they won
+    the run-off, lost if they lost it - as 2014's workbook keeps both rounds on
+    one row (`parse_runoff_mandate`) and `fold_rounds` makes one candidacy of
+    the 2002-2010 files' row per round.
+
+    A second-round row is tied to the first-round row with its `race_entry`. In
+    2024 that ties all 1,491, each to one of the 1,496 candidates the first
+    round sent through; the other five withdrew, and their race's run-off was
+    a vote for or against the one left. A row that ties to no first-round row,
+    or to more than one, is kept as a candidacy of its own - a result lost
+    unseen is worse than a race read twice - and counted in the build's output.
+    """
+    entries = Counter(race_entry(person) for person in first_round)
+    runoffs: dict[RaceEntry, Person] = {}
+    untied: list[Person] = []
+    for person in second_round:
+        entry = race_entry(person)
+        if entries[entry] == 1 and entry not in runoffs:
+            runoffs[entry] = person
+        else:
+            untied.append(person)
+
+    settled = []
+    for person in first_round:
+        runoff = runoffs.get(race_entry(person))
+        if runoff is not None:
+            person = dataclasses.replace(
+                person, candidacy_success=runoff.candidacy_success
+            )
+        settled.append(person)
+
+    won = sum(runoff.candidacy_success == "TRUE" for runoff in runoffs.values())
+    print(
+        f"{label} run-off: {len(runoffs) + len(untied)} second-round rows, "
+        f"{len(runoffs)} tied to the first round ({won} of them won), "
+        f"{len(untied)} tied to none and kept as candidacies of their own"
+    )
+    for person in untied:
+        print(f"  tied to no first-round row: {race_entry(person)}")
+    return settled + untied
+
+
 def process_pkw(ctx: Context, csv_headers, limit: int | None, year: str | None):
     print("Downloading files...")
 
@@ -184,20 +264,15 @@ def process_pkw(ctx: Context, csv_headers, limit: int | None, year: str | None):
 
     print("Downloading input files...")
     for config in filtered_sources:
-        source = config.source
-        ctx.io.read_data(source)  # Access it, so it's downloaded already
+        # Access them, so they're downloaded already
+        ctx.io.read_data(config.source)
+        if config.runoff is not None:
+            ctx.io.read_data(config.runoff.source)
     print("Files downloaded")
     outputs = []
     for config in filtered_sources:
-        reader = config.extractor.read(ctx, config.source)
-
         try:
-            count = 0
-            for item in process_csv(reader, config, csv_headers):
-                count += 1
-                if limit is not None and count > limit:
-                    break
-                outputs.append(item)
+            outputs.extend(read_source(ctx, config, csv_headers, limit))
         except Exception as e:
             raise ValueError(f"Failed processing {config.source}: {e}")
 

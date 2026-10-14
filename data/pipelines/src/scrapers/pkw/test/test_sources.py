@@ -11,5 +11,7 @@ def test_no_file_is_read_twice():
         return (source.source.filename, None, None)
 
     reads = [read(s) for s in sources]
+    # A run-off is read along with its first round, and no more than once.
+    reads += [read(s.runoff) for s in sources if s.runoff is not None]
 
     assert len(reads) == len(set(reads))
