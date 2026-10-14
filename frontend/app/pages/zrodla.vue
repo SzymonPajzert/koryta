@@ -27,30 +27,61 @@
               wspólnie lub w porozumieniu, jak również przesądzanie o
               czyjejkolwiek osobistej winie lub odpowiedzialności prawnej.
             </p>
-            <!-- The attribution CC BY 4.0 asks of whoever uses the list: who
+            <!-- The attribution CC BY 4.0 asks of whoever uses a dataset: who
                  made it, what it is called, where it lives, under which
                  licence, and that what the site shows is our reading of it
-                 rather than the list itself. The night downloads it for
-                 CompaniesKRS (`TREASURY_LIST` in scrapers/krs/data.py). -->
+                 rather than the data itself. One line per dataset the night
+                 downloads under that licence: `TREASURY_LIST`
+                 (scrapers/krs/data.py), `teryt_data` (scrapers/map/teryt.py)
+                 and `postal_codes_file` (scrapers/map/postal_codes.py). A new
+                 source that asks for attribution gets a line here too.
+
+                 The other open sets the night reads need none: PESEL's names
+                 and surnames, REGON's catalogue of public entities, PKW's Dane
+                 Wyborcze and the KRS API are CC0 on dane.gov.pl. -->
             <p class="mt-3">
-              Spółki z udziałem Skarbu Państwa rozpoznajemy także na podstawie
-              <a
-                href="https://dane.gov.pl/pl/dataset/1198,wykaz-spoek-z-udziaem-skarbu-panstwa"
-                target="_blank"
-                rel="noopener"
-                >„Wykazu spółek z udziałem Skarbu Państwa”</a
-              >
-              Prokuratorii Generalnej Rzeczypospolitej Polskiej, udostępnionego
-              w serwisie dane.gov.pl na licencji
+              Korzystamy też z otwartych danych udostępnionych na licencji
               <a
                 href="https://creativecommons.org/licenses/by/4.0/deed.pl"
                 target="_blank"
                 rel="noopener"
                 >CC BY 4.0</a
-              >. Korzystamy z niego w przetworzonej postaci: każdą spółkę,
-              której numer NIP jest w wykazie, oznaczamy jako spółkę z udziałem
-              państwa.
+              >, która wymaga podania ich źródła. Wszystkie wykorzystujemy w
+              przetworzonej postaci:
             </p>
+            <ul class="mt-1 ms-6">
+              <li>
+                <a
+                  href="https://dane.gov.pl/pl/dataset/1198,wykaz-spoek-z-udziaem-skarbu-panstwa"
+                  target="_blank"
+                  rel="noopener"
+                  >„Wykaz spółek z udziałem Skarbu Państwa”</a
+                >
+                Prokuratorii Generalnej Rzeczypospolitej Polskiej, z serwisu
+                dane.gov.pl - każdą spółkę, której numer NIP jest w wykazie,
+                oznaczamy jako spółkę z udziałem państwa;
+              </li>
+              <li>
+                <a
+                  href="https://eteryt.stat.gov.pl/"
+                  target="_blank"
+                  rel="noopener"
+                  >rejestr TERYT</a
+                >
+                Głównego Urzędu Statystycznego - z niego pochodzą nazwy i kody
+                województw, powiatów i gmin;
+              </li>
+              <li>
+                <a
+                  href="https://www.geonames.org/postal-codes/"
+                  target="_blank"
+                  rel="noopener"
+                  >baza kodów pocztowych</a
+                >
+                serwisu GeoNames - po kodzie pocztowym i miejscowości z adresu
+                ustalamy gminę, w której spółka ma siedzibę.
+              </li>
+            </ul>
           </v-expansion-panel-text>
         </v-expansion-panel>
       </v-expansion-panels>
