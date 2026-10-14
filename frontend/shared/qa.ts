@@ -60,11 +60,11 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
 export const QA_ITEMS: QaItem[] = [
   {
     id: "zrodla-wykaz-skarbu-panstwa",
-    title: "Źródła podają wykaz spółek Skarbu Państwa",
+    title: "Źródła wymieniają dane na licencji CC BY",
     description:
-      "Spółki z udziałem Skarbu Państwa rozpoznajemy teraz także po wykazie Prokuratorii Generalnej. Jego licencja (CC BY 4.0) wymaga podania autora i źródła, więc /zrodla je wymienia.",
+      "Wykaz spółek Skarbu Państwa Prokuratorii Generalnej, rejestr TERYT z GUS i kody pocztowe GeoNames są na licencji CC BY 4.0, która wymaga podania źródła. /zrodla je teraz wymienia.",
     steps: [
-      "Na /zrodla rozwiń „Na czym opiera się ta strona” - drugi akapit ma linkować do wykazu na dane.gov.pl i do licencji CC BY 4.0.",
+      "Na /zrodla rozwiń „Na czym opiera się ta strona” - pod zastrzeżeniem ma być link do licencji CC BY 4.0 i lista trzech źródeł, każde z linkiem.",
     ],
     link: "/zrodla",
     area: "public",
