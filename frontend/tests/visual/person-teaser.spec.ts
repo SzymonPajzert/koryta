@@ -8,7 +8,7 @@ import { expectFitsThePhone } from "./phoneWidth";
 
 /** A person nobody has published, as a logged out reader finds them: the name,
  * the latest post as the first row of „Historia powiązań”, and under it the
- * notice with „Zaloguj się” and „Zarejestruj się”, in place of „Dostęp
+ * notice with „Zaloguj się” and „Rejestracja”, in place of „Dostęp
  * zastrzeżony".
  *
  * Reached by a client-side navigation, so the teaser is fetched in the browser
@@ -59,11 +59,35 @@ test("osoba-niezweryfikowana", SLUG, async ({ page }, testInfo) => {
   // over it rather than widening the page, so `expectFitsThePhone` cannot see
   // a button cut in half - which is how „Zarejestruj się” first shipped.
   const banner = await teaser.locator(".v-alert").boundingBox();
+  // The banner lines up with the history row above it, on both sides.
+  const row = await teaser.locator(".history-row").first().boundingBox();
+  expect(Math.abs(banner!.x - row!.x)).toBeLessThan(1);
+  expect(
+    Math.abs(banner!.x + banner!.width - (row!.x + row!.width)),
+  ).toBeLessThan(1);
   for (const testid of ["login-banner-login", "login-banner-signup"]) {
     const button = await teaser.getByTestId(testid).boundingBox();
     expect(button!.x + button!.width, testid).toBeLessThanOrEqual(
       banner!.x + banner!.width,
     );
+    // Nor is either label cut inside its button.
+    expect(
+      await teaser
+        .getByTestId(testid)
+        .evaluate((el) => el.scrollWidth <= el.clientWidth),
+      testid,
+    ).toBe(true);
+  }
+  // Side by side, on a phone too: one line, two halves.
+  const login = await teaser.getByTestId("login-banner-login").boundingBox();
+  const signup = await teaser.getByTestId("login-banner-signup").boundingBox();
+  expect(Math.abs(login!.y - signup!.y)).toBeLessThan(1);
+  expect(Math.abs(login!.width - signup!.width)).toBeLessThan(1);
+  // On a phone the alert's icon column is gone, so the text runs on under the
+  // icon instead of leaving a strip of empty banner below it.
+  if (testInfo.project.name === "visual-mobile") {
+    await expect(teaser.locator(".v-alert__prepend")).toBeHidden();
+    await expect(teaser.locator(".login-banner__icon")).toBeVisible();
   }
 
   await readyForFullPage(page);

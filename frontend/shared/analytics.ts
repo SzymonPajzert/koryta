@@ -145,7 +145,7 @@ export const GOALS = {
   },
   "teaser:click": {
     description:
-      "Reader clicked one of the teaser's buttons: `mode` is `login` („Zaloguj się”) or `signup` („Zarejestruj się”). Against teaser:shown with the same `surface`, the share the offer convinces; against login:success, the share the form then loses.",
+      "Reader clicked one of the teaser's buttons: `mode` is `login` („Zaloguj się”) or `signup` („Rejestracja”). Against teaser:shown with the same `surface`, the share the offer convinces; against login:success, the share the form then loses.",
     props: ["surface", "kind", "mode"],
   },
   "teaser:continued": {

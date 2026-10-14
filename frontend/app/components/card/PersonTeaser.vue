@@ -17,26 +17,35 @@
         <CardEmploymentHistory :edges="historyEdges" unlink-drafts />
       </div>
 
-      <!-- Under what the reader can see, what they cannot, and the two ways in
-           - the site's own login banner. -->
-      <ExploreLoginBanner
-        :to="loginTarget"
-        :signup-to="signupTarget"
-        class="mt-4 mb-0"
-        @login="onClick('login')"
-        @signup="onClick('signup')"
+      <!-- In from the card's edges as far as the history's rows are - its list
+           pads them 8px and their frame 4px more - so the banner lines up with
+           the row above it rather than sticking out past it on both sides.
+           Only where there is a row to line up with. -->
+      <div
+        :class="{ 'teaser-below--aligned': historyEdges.length > 0 }"
+        data-testid="person-teaser-below"
       >
-        <div class="font-weight-bold">W trakcie weryfikacji</div>
-        <div data-testid="person-teaser-more">{{ noticeText }}</div>
-      </ExploreLoginBanner>
+        <!-- Under what the reader can see, what they cannot, and the two ways
+             in - the site's own login banner. -->
+        <ExploreLoginBanner
+          :to="loginTarget"
+          :signup-to="signupTarget"
+          class="mt-4 mb-0"
+          @login="onClick('login')"
+          @signup="onClick('signup')"
+        >
+          <div class="font-weight-bold">W trakcie weryfikacji</div>
+          <div data-testid="person-teaser-more">{{ noticeText }}</div>
+        </ExploreLoginBanner>
 
-      <!-- Said on every teaser: the post comes from the register, and being
-           listed here is no political tie. The party a match may have
-           suggested is not on this page at all. -->
-      <p class="text-caption text-medium-emphasis mt-4 mb-0">
-        Informacje pochodzą m.in. z publicznych rejestrów. Obecność w bazie nie
-        oznacza powiązań politycznych.
-      </p>
+        <!-- Said on every teaser: the post comes from the register, and being
+             listed here is no political tie. The party a match may have
+             suggested is not on this page at all. -->
+        <p class="text-caption text-medium-emphasis mt-4 mb-0">
+          Informacje pochodzą m.in. z publicznych rejestrów. Obecność w bazie
+          nie oznacza powiązań politycznych.
+        </p>
+      </div>
     </div>
   </v-card>
 </template>
@@ -126,3 +135,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => stopWatchingExit?.());
 </script>
+
+<style scoped>
+/* CardEmploymentHistory's `px-2` list plus the `pa-1` round its rows. */
+.teaser-below--aligned {
+  padding-inline: 12px;
+}
+</style>
