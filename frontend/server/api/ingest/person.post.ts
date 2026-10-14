@@ -969,7 +969,15 @@ function refuseAnotherBirthDate(
  * Failing a page of the exact name, a page writing the payload's double
  * surname with a space (`spacedSurname`): the pipeline hyphenates it where
  * PKW or Wikipedia does, and the pages it made before are titled the
- * register's way - "Nowak Rudnik". */
+ * register's way - "Nowak Rudnik".
+ *
+ * "Another register entry" is another number (`linksAnotherEntry`), as in
+ * every other lookup here, not another string. A link pasted from a browser
+ * carries the person's name after the number; the register lookup, which asks
+ * for the bare link the payload sends, misses such a page, and the payload
+ * comes here. Compared as written, the page's own entry was turned away from
+ * it and given a second page. 24 live pages of the 2026-10-14 export store
+ * their link that way, 5 of them published. */
 async function lookupByName(
   ctx: Context,
   body: PersonRequest,
@@ -990,9 +998,9 @@ async function lookupByName(
   ) {
     return undefined;
   }
-  const storedRegister = stored?.rejestrIo;
-  if (!body.rejestrIo || !storedRegister) return byName;
-  return storedRegister === body.rejestrIo ? byName : undefined;
+  return linksAnotherEntry(stored?.rejestrIo, body.rejestrIo)
+    ? undefined
+    : byName;
 }
 
 /** The page of the person of this name born on this day, if the site has it.
