@@ -7,7 +7,7 @@ from scrapers.article.hardcoded.kazdymusigdziespracowac import (
 )
 from scrapers.article.hardcoded.listawstydupo import hardcoded as wstydu
 from scrapers.article.hardcoded.tlustekotypisu import hardcoded as tlustekoty
-from scrapers.krs.odpis_people import NEVER_SHOWN
+from scrapers.krs.odpis_people import print_rows
 from scrapers.stores import Context, Pipeline
 
 PEOPLE_COLUMNS_TO_CHECK = [
@@ -41,7 +41,7 @@ class Statistics(Pipeline):
 
     def process(self, ctx: Context):
         df = self.people.read_or_process(ctx)
-        print(df.drop(columns=list(NEVER_SHOWN), errors="ignore").head())
+        print_rows(df.head())
 
         kazdymusi_set = set(p[0] for p in kazdymusi)
         df["kazdymusi"] = df["pkw_name"].apply(
