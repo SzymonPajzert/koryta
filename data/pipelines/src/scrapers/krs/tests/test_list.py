@@ -1,10 +1,10 @@
 import pandas as pd
 from pandas import DataFrame
 
-from entities.company import KRS, Source
+from entities.company import KRS, Owner, Source
 from entities.company import Company as KrsCompany
 from entities.company_categories import SPZOZ
-from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP
+from scrapers.krs.data import REGON_PUBLIC_IDENTITY, REGON_PUBLIC_OWNERSHIP
 from scrapers.krs.list import (
     CompaniesKRS,
     company_from_api_krs,
@@ -812,6 +812,70 @@ def test_a_subsidiary_inherits_what_an_owners_regon_said():
     )
 
     assert public == {"0000333386", "0000000777"}
+
+
+# ─── a company REGON files as public under its own identifiers ─
+#
+# The catalogue's KRS column is where `REGON_PUBLIC_OWNERSHIP` looks; a company
+# converted under a new KRS number keeps its REGON and NIP, and the catalogue
+# lists the successor's number against them.
+
+
+# ZESPÓŁ ZAKŁADÓW OPIEKI ZDROWOTNEJ W OSTRZESZOWIE, an SPZOZ struck off when it
+# became Ostrzeszowskie Centrum Zdrowia sp. z o.o. (0000581206), whose
+# catalogue row carries its REGON under code 113.
+def zzoz_ostrzeszow() -> KrsCompany:
+    return KrsCompany(krs="0000001894", regon="000310255")
+
+
+def public_by_identity(*companies: KrsCompany, on_record=()) -> set[str]:
+    pipeline = CompaniesKRS()
+    pipeline.public_regons = frozenset({"000310255"})
+    pipeline.public_nips = frozenset({"5250008519"})
+    for company in companies:
+        pipeline.add_company(company)
+    pipeline.owner_on_record.update(on_record)
+    return pipeline.compute_public_krss({})
+
+
+def test_a_company_whose_own_regon_regon_calls_public_is_public():
+    assert public_by_identity(zzoz_ostrzeszow()) == {"0000001894"}
+
+
+def test_a_14_digit_regon_is_read_as_its_entity():
+    company = KrsCompany(krs="0000001894", regon="00031025500000")
+
+    assert public_by_identity(company) == {"0000001894"}
+
+
+def test_a_company_whose_own_nip_regon_calls_public_is_public():
+    # Instytut Mechanizacji Budownictwa i Górnictwa Skalnego: the Łukasiewicz
+    # institute that took it over kept its NIP, under a new REGON.
+    company = KrsCompany(krs="0000043477", regon="000047728", nip="5250008519")
+
+    assert public_by_identity(company) == {"0000043477"}
+
+
+def test_an_owner_on_record_outranks_the_code_here_too():
+    assert public_by_identity(zzoz_ostrzeszow(), on_record={"0000001894"}) == set()
+
+
+def test_a_known_parent_outranks_the_code_too():
+    company = zzoz_ostrzeszow()
+    company.parents.append(Owner(krs="0000000777", teryt=None))
+
+    assert public_by_identity(company) == set()
+
+
+def test_the_identity_is_given_as_the_source():
+    pipeline = CompaniesKRS()
+    pipeline.public_regons = frozenset({"000310255"})
+    pipeline.add_company(zzoz_ostrzeszow())
+    pipeline.compute_public_krss({})
+
+    [company] = pipeline.build_output({})
+
+    assert Source("hardcoded", reason=REGON_PUBLIC_IDENTITY) in company.sources
 
 
 def test_a_companys_sources_are_listed_in_the_same_order_every_run():
