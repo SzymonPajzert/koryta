@@ -42,6 +42,11 @@ SAVE_ARTICLES = [
 
 # Heurisic used to ignore some articles without parsing (expensive operation)
 REQUIRED_WORDS = [
+    # Any infobox about a person has it, whatever kind of person the infobox
+    # is made for - see `Infobox.person_related`. The kinds below are what
+    # picked biographies out before, and an actor's or a snooker player's
+    # article named none of them.
+    "data urodzenia",
     "Naukowiec",
     "Duchowny",
     "Artysta",
@@ -83,6 +88,10 @@ REQUIRED_WORDS = [
 #: The infoboxes of the territorial units an owner can be: a city carries its
 #: gmina's TERYT code as `TERYT`, a gmina or powiat its own as `TERC`.
 REGION_INFOBOXES = ("Polskie miasto", "Polska jednostka administracyjna", "Województwo")
+
+#: Infoboxes giving a birth date that is nobody's: a character's in a novel or
+#: a series - Lord Voldemort's, 1926-12-31; John Connor's, 1985-02-28.
+NOT_PEOPLE = ("Postać fikcyjna",)
 
 
 #: An infobox's `państwo` names the wojewodztwo instead of the country now and
@@ -156,10 +165,19 @@ class Infobox:
             if name == "udziałowcy":
                 self.shareholders = parse_shareholders(param.value)
 
+        # An infobox giving a birth date is somebody's, whatever kind of person
+        # it is made for. The kinds listed below were enough while only the
+        # biographies of politically relevant people were wanted, but the join
+        # in `analysis.people` takes anybody it can find in KRS, and the list
+        # left out whole kinds: on the 2026-08-31 dump, 19,004 biographies of
+        # people born in 1920 or later - 16,614 actors, 621 baseball players,
+        # 357 monarchs, and 283 "Osoba publiczna" infoboxes, whose name field
+        # is "osoba publiczna" and not "osoba". Jerzy Domański's is one.
         self.person_related = (
             "imię i nazwisko" in self.fields
             or "polityk" in self.fields
             or "osoba" in self.fields
+            or ("data urodzenia" in self.fields and self.inf_type not in NOT_PEOPLE)
             or self.inf_type
             in [
                 "Biogram",
