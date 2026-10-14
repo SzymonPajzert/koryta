@@ -1,7 +1,7 @@
 """Which companies in the register ledger the public owns, and through whom.
 
 `KRSRegisterEntries` holds what the register says about who owns each company;
-this decides which of those owners are the public. Five kinds of answer, most
+this decides which of those owners are the public. Six kinds of answer, most
 direct first, and a company carries the first one that fits:
 
 - **founding organ** - `organPodmiotZalozycielskiMinisterNadzorujacy`, which is
@@ -14,10 +14,16 @@ direct first, and a company carries the first one that fits:
   agency, fund or forest. They own companies under their own names and have no
   KRS number for the parent test below to follow, so they are named, in
   `public_bodies`, the closed list `CompaniesKRS` reads too.
+- **any other owner outside KRS that REGON files as public** - the register
+  gives such an owner's REGON in place of a KRS number, and the public-entity
+  catalogue has the ownership code for it (`scrapers.krs.data.public_regons`):
+  a public university, owner of its spin-offs, a water association, a gmina
+  whose name the register misspells.
 - **a company already known to be public**, by its KRS number: anything
   `CompaniesKRS` marks public, and anything this finds, followed to a fixed
   point, so a subsidiary of a subsidiary of a gmina's holding company arrives
-  with the rest.
+  with the rest. An owner the register writes without its KRS number is that
+  company if its REGON is one company's (`krs_by_regon`).
 
 Two things it cannot see, and says so rather than guessing. An S.A. with several
 shareholders names none of them in the register, so a województwo's minority
@@ -33,7 +39,8 @@ import numpy as np
 import pandas as pd
 
 from scrapers.krs.columns import is_public, padded_krs
-from scrapers.krs.list import CompaniesKRS
+from scrapers.krs.data import CompaniesHardcoded, regon_stem
+from scrapers.krs.list import CompaniesKRS, krs_by_regon
 from scrapers.krs.public_bodies import public_body
 from scrapers.krs.register import STATUS_OK, KRSRegisterEntries, owner_share
 from scrapers.map.jst import SKARB_PANSTWA, JstIndex
@@ -44,6 +51,7 @@ REASON_FOUNDING_ORGAN = "founding_organ"
 REASON_SKARB_PANSTWA = "skarb_panstwa"
 REASON_JST = "jst"
 REASON_PUBLIC_BODY = "public_body"
+REASON_PUBLIC_REGON = "public_regon"
 REASON_PUBLIC_PARENT = "public_parent"
 
 
@@ -71,7 +79,9 @@ class PublicOwnership:
 
 
 def direct_public_owner(
-    entry: dict, jst: JstIndex | None
+    entry: dict,
+    jst: JstIndex | None,
+    public_regons: typing.Collection[str] = frozenset(),
 ) -> tuple[str, str, str | None, float | None] | None:
     """`(reason, owner, owner_id, share)` if an owner is plainly the public.
 
@@ -93,6 +103,8 @@ def direct_public_owner(
             return REASON_JST, name, resolved, share
         if not owner.get("krs") and public_body(name):
             return REASON_PUBLIC_BODY, name, None, share
+        if not owner.get("krs") and regon_stem(owner.get("regon")) in public_regons:
+            return REASON_PUBLIC_REGON, name, None, share
     return None
 
 
@@ -100,6 +112,8 @@ def classify(
     entries: typing.Iterable[dict],
     jst: JstIndex | None,
     known_public: set[str],
+    public_regons: typing.Collection[str] = frozenset(),
+    owners_by_regon: typing.Mapping[str, str] | None = None,
 ) -> list[PublicOwnership]:
     """Every entry the public owns, directly or through a public parent.
 
@@ -108,8 +122,15 @@ def classify(
     point over those and whatever this finds, because the ledger holds chains
     the crawl does not: a gmina's holding company and the subsidiaries it owns
     are all in the register, and possibly none in the crawl.
+
+    `owners_by_regon` places an owner the register names by REGON alone; the
+    ledger's own entries are added to it.
     """
     rows = [e for e in entries if e.get("status") == STATUS_OK]
+    by_regon = {
+        **krs_by_regon((e.get("regon"), e["krs"]) for e in rows),
+        **(owners_by_regon or {}),
+    }
     found: dict[str, PublicOwnership] = {}
 
     def record(entry, reason, owner, owner_id, share):
@@ -127,7 +148,7 @@ def classify(
         )
 
     for entry in rows:
-        direct = direct_public_owner(entry, jst)
+        direct = direct_public_owner(entry, jst, public_regons)
         if direct is not None:
             record(entry, *direct)
 
@@ -139,7 +160,11 @@ def classify(
             if entry["krs"] in found:
                 continue
             for owner in entry.get("owners") or []:
-                parent = owner.get("krs")
+                parent = owner.get("krs") or by_regon.get(
+                    regon_stem(owner.get("regon")) or ""
+                )
+                if parent == entry["krs"]:
+                    continue
                 if parent and str(parent).zfill(10) in public:
                     parent = str(parent).zfill(10)
                     record(
@@ -176,6 +201,7 @@ class CompaniesPublicByRegister(Pipeline[PublicOwnership]):
 
     ledger: KRSRegisterEntries
     companies: CompaniesKRS
+    hardcoded: CompaniesHardcoded
     jst: Jst
 
     @property
@@ -195,7 +221,14 @@ class CompaniesPublicByRegister(Pipeline[PublicOwnership]):
             padded_krs(companies.loc[is_public(companies["is_public"]), "krs"])
         )
 
-        found = classify(ledger_records(ledger), index, known_public)
+        self.hardcoded.process(ctx)
+        found = classify(
+            ledger_records(ledger),
+            index,
+            known_public,
+            self.hardcoded.public_regons,
+            krs_by_regon(zip(companies["regon"], padded_krs(companies["krs"]))),
+        )
         df = pd.DataFrame([asdict(row) for row in found], columns=columns)
         print(
             f"Publicly owned by the register: {len(df)} of {len(ledger)} entries; "

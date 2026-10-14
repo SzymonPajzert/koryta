@@ -9,6 +9,7 @@ from scrapers.krs.public_owners import (
     REASON_JST,
     REASON_PUBLIC_BODY,
     REASON_PUBLIC_PARENT,
+    REASON_PUBLIC_REGON,
     REASON_SKARB_PANSTWA,
     classify,
     direct_public_owner,
@@ -42,8 +43,10 @@ def entry(krs: str, *owners: dict, status=STATUS_OK, **fields) -> dict:
     }
 
 
-def owner(name: str, krs: str | None = None, shares: str | None = None) -> dict:
-    return {"name": name, "krs": krs, "regon": None, "shares": shares, "whole": False}
+def owner(
+    name: str, krs: str | None = None, shares: str | None = None, regon=None
+) -> dict:
+    return {"name": name, "krs": krs, "regon": regon, "shares": shares, "whole": False}
 
 
 def test_a_voivodeship_owns_pomorski_fundusz_pozyczkowy():
@@ -113,6 +116,81 @@ def test_an_agency_is_not_a_state_agency_by_its_first_word():
     assert not public_body('AGENCJA REKLAMOWA "GRAFITI" SPÓŁKA Z O.O.')
     assert not public_body("DOLCE VITA FUNDACJA RODZINNA")
     assert public_body('"GÓRNOŚLĄSKO - ZAGŁĘBIOWSKA METROPOLIA"')
+
+
+#: The REGON of Politechnika Łódzka, a state legal person (112).
+POLITECHNIKA_LODZKA = "000001583"
+
+
+def test_an_owner_regon_calls_public_without_a_krs_number():
+    # TULVENTURE, the university's spin-off. Neither a government nor a body
+    # `public_bodies` names, so before its REGON nothing here saw it.
+    university = owner("POLITECHNIKA ŁÓDZKA", regon="00000158300000")
+    spin_off = entry("0000333386", university)
+
+    assert direct_public_owner(spin_off, pomorskie()) is None
+    assert direct_public_owner(
+        spin_off, pomorskie(), frozenset({POLITECHNIKA_LODZKA})
+    ) == (REASON_PUBLIC_REGON, "POLITECHNIKA ŁÓDZKA", None, None)
+
+
+def test_an_owner_with_a_krs_number_is_left_to_the_parent_test():
+    with_krs = owner("POLITECHNIKA ŁÓDZKA", krs="0000000001", regon="00000158300000")
+
+    assert (
+        direct_public_owner(
+            entry("0000333386", with_krs), pomorskie(), frozenset({POLITECHNIKA_LODZKA})
+        )
+        is None
+    )
+
+
+def test_classify_reads_owners_by_their_regon_and_follows_them_down():
+    university = owner("POLITECHNIKA ŁÓDZKA", regon="00000158300000")
+    found = classify(
+        [
+            entry("0000333386", university),
+            entry("0000000777", owner("TULVENTURE", krs="0000333386")),
+        ],
+        pomorskie(),
+        known_public=set(),
+        public_regons=frozenset({POLITECHNIKA_LODZKA}),
+    )
+
+    assert [(row.krs, row.reason) for row in found] == [
+        ("0000000777", REASON_PUBLIC_PARENT),
+        ("0000333386", REASON_PUBLIC_REGON),
+    ]
+
+
+def test_an_owner_written_without_its_krs_number_is_found_by_its_regon():
+    # ZEM ŁABĘDY names Huta Łabędy by REGON only; the ledger has Huta Łabędy
+    # under its KRS number, public.
+    huta = owner("HUTA ŁABĘDY SPÓŁKA AKCYJNA", regon="27371618400000")
+    found = classify(
+        [
+            entry("0000076693", regon="273716184"),
+            entry("0000079400", huta),
+        ],
+        pomorskie(),
+        known_public={"0000076693"},
+    )
+
+    assert [(row.krs, row.reason, row.owner_id) for row in found] == [
+        ("0000079400", REASON_PUBLIC_PARENT, "0000076693"),
+    ]
+
+
+def test_an_owner_regon_can_come_from_the_crawl_as_well():
+    huta = owner("HUTA ŁABĘDY SPÓŁKA AKCYJNA", regon="27371618400000")
+    found = classify(
+        [entry("0000079400", huta)],
+        pomorskie(),
+        known_public={"0000076693"},
+        owners_by_regon={"273716184": "0000076693"},
+    )
+
+    assert [row.krs for row in found] == ["0000079400"]
 
 
 def test_a_founding_organ_is_public():
