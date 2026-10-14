@@ -13,18 +13,44 @@
             Na czym opiera się ta strona
           </v-expansion-panel-title>
           <v-expansion-panel-text class="text-body-2 pt-2">
-            Niniejsza strona została utworzona na podstawie materiałów
-            prasowych, informacji zawartych w Krajowym Rejestrze Sądowym, a
-            także w oparciu o inne ogólnodostępne źródła. Strona wskazuje
-            wybrane powiązania o charakterze biznesowym, rodzinnym lub innym
-            łączące niektóre osoby zatrudnione w spółkach, fundacjach i
-            organizacjach zarządzanych przez organy polskiego państwa.
-            Powiązanie, które zdołaliśmy ustalić i które w naszej opinii są
-            istotne dla całościowego spojrzenia na proces wybierania ludzi na
-            stanowiska poza konkursami. Zastrzegamy, że celem strony nie jest
-            twierdzenie, że wszystkie osoby uwidocznione na mapie działają
-            wspólnie lub w porozumieniu, jak również przesądzanie o
-            czyjejkolwiek osobistej winie lub odpowiedzialności prawnej.
+            <p>
+              Niniejsza strona została utworzona na podstawie materiałów
+              prasowych, informacji zawartych w Krajowym Rejestrze Sądowym, a
+              także w oparciu o inne ogólnodostępne źródła. Strona wskazuje
+              wybrane powiązania o charakterze biznesowym, rodzinnym lub innym
+              łączące niektóre osoby zatrudnione w spółkach, fundacjach i
+              organizacjach zarządzanych przez organy polskiego państwa.
+              Powiązanie, które zdołaliśmy ustalić i które w naszej opinii są
+              istotne dla całościowego spojrzenia na proces wybierania ludzi na
+              stanowiska poza konkursami. Zastrzegamy, że celem strony nie jest
+              twierdzenie, że wszystkie osoby uwidocznione na mapie działają
+              wspólnie lub w porozumieniu, jak również przesądzanie o
+              czyjejkolwiek osobistej winie lub odpowiedzialności prawnej.
+            </p>
+            <!-- The attribution CC BY 4.0 asks of whoever uses the list: who
+                 made it, what it is called, where it lives, under which
+                 licence, and that what the site shows is our reading of it
+                 rather than the list itself. The night downloads it for
+                 CompaniesKRS (`TREASURY_LIST` in scrapers/krs/data.py). -->
+            <p class="mt-3">
+              Spółki z udziałem Skarbu Państwa rozpoznajemy także na podstawie
+              <a
+                href="https://dane.gov.pl/pl/dataset/1198,wykaz-spoek-z-udziaem-skarbu-panstwa"
+                target="_blank"
+                rel="noopener"
+                >„Wykazu spółek z udziałem Skarbu Państwa”</a
+              >
+              Prokuratorii Generalnej Rzeczypospolitej Polskiej, udostępnionego
+              w serwisie dane.gov.pl na licencji
+              <a
+                href="https://creativecommons.org/licenses/by/4.0/deed.pl"
+                target="_blank"
+                rel="noopener"
+                >CC BY 4.0</a
+              >. Korzystamy z niego w przetworzonej postaci: każdą spółkę,
+              której numer NIP jest w wykazie, oznaczamy jako spółkę z udziałem
+              państwa.
+            </p>
           </v-expansion-panel-text>
         </v-expansion-panel>
       </v-expansion-panels>
