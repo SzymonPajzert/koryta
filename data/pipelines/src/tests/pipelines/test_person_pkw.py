@@ -137,3 +137,24 @@ def test_a_european_home_is_not_read_as_the_district(df):
     ]
 
     assert european["teryt_living"].str.fullmatch(r"\d{6}").all()
+
+
+def test_every_2024_mayor_reads_as_elected(df):
+    """PKW's list of who was elected in 2024 (wybrani_wojt_burmistrz_prezydent)
+    names 1,457 wójtowie, 912 burmistrzowie and 107 prezydenci, and one more
+    seat nobody won: Wilkowice's one candidate lost the vote for or against him.
+    748 of them won a run-off, and until the second round's file was read too
+    they were all beaten here - 47 prezydenci of 107."""
+    mayors = df[
+        (df["election_year"].astype(str) == "2024")
+        & df["office"].isin(["Wójt", "Burmistrz", "Prezydent"])
+    ]
+    elected = mayors[mayors["candidacy_success"].astype(str).str.upper() == "TRUE"]
+
+    assert elected.groupby("office").size().to_dict() == {
+        "Burmistrz": 912,
+        "Prezydent": 107,
+        "Wójt": 1457,
+    }
+    # Each of them once: a run-off is the first round's candidacy, not another.
+    assert not elected.duplicated(["position", "teryt_candidacy"]).any()
