@@ -59,7 +59,10 @@ describe("GET /api/edges/[id]/references", () => {
     vi.clearAllMocks();
     latest = false;
     stored = {
-      "edges/edge-1": { references: ["article-1", "article-2"] },
+      "edges/edge-1": {
+        references: ["article-1", "article-2"],
+        published: true,
+      },
       "nodes/article-1": {
         type: "article",
         name: "Zet o spółce",
@@ -102,7 +105,10 @@ describe("GET /api/edges/[id]/references", () => {
     // Nothing else would: the id is only ever rendered through a node lookup,
     // so a reference to a removed page is invisible on every page that has one.
     latest = true;
-    stored["edges/edge-1"] = { references: ["article-1", "ghost"] };
+    stored["edges/edge-1"] = {
+      references: ["article-1", "ghost"],
+      published: true,
+    };
     const result = await call();
 
     expect(result.sources).toContainEqual({
@@ -117,7 +123,10 @@ describe("GET /api/edges/[id]/references", () => {
     // Written through `sanitizeFirestoreData` from inside an array, references
     // is a map with numbered keys rather than a list.
     latest = true;
-    stored["edges/edge-1"] = { references: { "0": "article-1" } };
+    stored["edges/edge-1"] = {
+      references: { "0": "article-1" },
+      published: true,
+    };
     const result = await call();
 
     expect(result.sources.map((source: { id: string }) => source.id)).toEqual([
@@ -126,10 +135,28 @@ describe("GET /api/edges/[id]/references", () => {
   });
 
   it("answers an edge with no sources with an empty list", async () => {
-    stored["edges/edge-1"] = {};
+    stored["edges/edge-1"] = { published: true };
     const result = await call();
 
     expect(result).toEqual({ id: "edge-1", sources: [] });
+    expect(mockDb.getAll).not.toHaveBeenCalled();
+  });
+
+  it("answers a draft relation to an editor", async () => {
+    latest = true;
+    stored["edges/edge-1"] = { references: ["article-1"], published: false };
+
+    const result = await call();
+    expect(result.sources.map((source: { id: string }) => source.id)).toEqual([
+      "article-1",
+    ]);
+  });
+
+  it("refuses a draft relation to anybody else, as if it were not there", async () => {
+    // It is drawn nowhere for them, so what it cites is not theirs either.
+    stored["edges/edge-1"] = { references: ["article-1"], published: false };
+
+    await expect(call()).rejects.toMatchObject({ statusCode: 404 });
     expect(mockDb.getAll).not.toHaveBeenCalled();
   });
 

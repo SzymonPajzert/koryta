@@ -35,7 +35,7 @@ export type ArticleTopics = {
  * the same rule as everywhere else a tag is visible.
  */
 export default editorFreshCachedEventHandler(async (event) => {
-  const includeDrafts = wantsLatest(event);
+  const includeDrafts = await wantsLatest(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
   const [topicsSnap, taggedSnap] = await Promise.all([

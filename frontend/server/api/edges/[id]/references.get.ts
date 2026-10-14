@@ -51,11 +51,16 @@ export default defineEventHandler(async (event): Promise<EdgeSources> => {
   if (!id) {
     throw createError({ statusCode: 400, message: "Brak identyfikatora." });
   }
-  const includeDrafts = wantsLatest(event);
+  const includeDrafts = await wantsLatest(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
   const edgeSnap = await db.collection("edges").doc(id).get();
-  if (!edgeSnap.exists) {
+  // A draft relation is as absent as a missing one to whoever may not see
+  // drafts: it is drawn nowhere for them, so its sources are not theirs either.
+  if (
+    !edgeSnap.exists ||
+    (!includeDrafts && !pageIsPublic(edgeSnap.data() ?? {}))
+  ) {
     throw createError({ statusCode: 404, message: "Nie ma takiej relacji." });
   }
 

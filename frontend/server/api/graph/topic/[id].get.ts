@@ -26,7 +26,7 @@ async function topicGraph(event: H3Event): Promise<GraphLayout> {
   if (!topicId) {
     throw createError({ statusCode: 400, message: "Brak identyfikatora." });
   }
-  const includeDrafts = wantsLatest(event);
+  const includeDrafts = await wantsLatest(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
   const articleIds = await articleIdsForTopic(db, topicId, includeDrafts);

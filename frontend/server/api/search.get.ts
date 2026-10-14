@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { parseNodeDoc } from "~~/server/utils/fetch";
 import { getFirestore } from "firebase-admin/firestore";
-import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
+import {
+  editorFreshCachedEventHandler,
+  wantsLatest,
+} from "~~/server/utils/handlers";
 import { getValidatedQuery } from "h3";
 import {
   anchorChunk,
@@ -35,11 +38,23 @@ type node = {
  */
 const MULTI_WORD_SCAN_LIMIT = 500;
 
+/** How far down the hit list a reader who may not see drafts is answered from.
+ *
+ * Their hits are filtered after the query - no index puts `published` beside
+ * `nameChunksLower`, and adding one would have to be deployed before the code
+ * that needs it - and most people in the base are unpublished, so the top
+ * twenty of a common name can be twenty drafts. A wider window keeps the
+ * published namesakes behind them reachable; it is paid once per query, which
+ * the cache then holds for every logged out reader typing the same thing.
+ */
+const PUBLIC_SCAN_LIMIT = 200;
+
 // Whoever is signed in is the one who may have just created the person they
 // are searching for, and the picker searches before it offers to create - so
 // the miss is already in the cache by the time they look again.
 export default editorFreshCachedEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
+  const includeDrafts = await wantsLatest(event);
   const db = getFirestore("koryta-pl");
 
   const tokens = searchTokens(query.q);
@@ -57,7 +72,12 @@ export default editorFreshCachedEventHandler(async (event) => {
   // What the index answers by itself: everything the typed text is a prefix
   // of, whole name or single word. An empty query is the top of the
   // collection, "" being a chunk of every node.
-  const passes = [byChunk(tokens.join(" "), query.limit)];
+  const passes = [
+    byChunk(
+      tokens.join(" "),
+      includeDrafts ? query.limit : Math.max(query.limit, PUBLIC_SCAN_LIMIT),
+    ),
+  ];
 
   // The rest of a multi-word query, which the index cannot answer because it
   // holds no chunk spanning a word the searcher skipped - a middle name, most
@@ -88,9 +108,13 @@ export default editorFreshCachedEventHandler(async (event) => {
       // them, and the trigger keeps them in step with the name it still has -
       // so without this a merged duplicate goes on being offered under the name
       // it had, and the reader gets a redirect to a page they were not looking
-      // for. Not `pageIsPublic`: an unpublished page is a legitimate hit here,
-      // because whoever is signed in may have just created it.
+      // for.
       if (doc.data().deleted === true) continue;
+      // An unpublished page is a legitimate hit for a signed in reader, who
+      // may have just created it - and for nobody else. Every name in the
+      // base used to be offered to anyone typing, nine in ten of the people
+      // among them unpublished, and each a page that answers them with a 404.
+      if (!includeDrafts && !node.visibility) continue;
       if (!nameMatchesTokens(node.name, tokens)) continue;
       seen.add(node.id);
       results.push(node);

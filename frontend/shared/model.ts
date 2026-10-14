@@ -113,8 +113,13 @@ export interface NodeStats {
     [key: string]: unknown;
   };
   edges: {
+    /** Absent from what a reader who may not see drafts is sent - see
+     * `dropDraftStats` in server/utils/fetch.ts - and stored on every node. */
     all: NodeEdgeStats;
     approved: NodeEdgeStats;
+    /** How many more targets `all` has than `approved`: all that is left of
+     * `all` in an anonymous reader's copy. Never stored. */
+    hiddenTargets?: number;
   };
   nodeGroupSize?: number;
   people?: number;

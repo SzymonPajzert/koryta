@@ -40,6 +40,14 @@ vi.mock("h3", () => ({
   getQuery: (event: any) => event.query ?? {},
 }));
 
+// The real `editorFreshCachedEventHandler` and `wantsLatest` run here, so the
+// token is what this stands in for: a bearer header is a signed in reader,
+// anything else is nobody.
+vi.mock("../../../server/utils/auth", () => ({
+  getOptionalUser: async (event: any) =>
+    event.headers?.authorization ? { uid: "reader" } : null,
+}));
+
 /** A node as `parseNodeDoc` will see it coming back from Firestore. */
 const doc = (
   id: string,
@@ -66,7 +74,16 @@ const respondWith = (byChunk: Record<string, ReturnType<typeof doc>[]>) => {
   mockGet.mockImplementation(async () => ({ docs: byChunk[chunk] ?? [] }));
 };
 
-const search = (q: string) => handler({ query: { q } } as any);
+const search = (q: string) => handler({ query: { q }, context: {} } as any);
+
+/** The same search from a signed in reader: `latest` and the token with it,
+ * as `authHeaders` sends them. */
+const searchSignedIn = (q: string) =>
+  handler({
+    query: { q, latest: "true" },
+    headers: { authorization: "Bearer token" },
+    context: {},
+  } as any);
 
 describe("/api/search", () => {
   beforeEach(() => {
@@ -235,15 +252,57 @@ describe("/api/search", () => {
     ]);
   });
 
-  it("still offers a page nobody has published yet", async () => {
-    // The signed-in reader may have created it a moment ago; only a removal
-    // takes a page out of the index, not a draft.
+  it("still offers a signed in reader a page nobody has published yet", async () => {
+    // They may have created it a moment ago; for them only a removal takes a
+    // page out of the index, not a draft.
     respondWith({
       "anna nowak": [doc("draft", "Anna Nowak", { published: false })],
     });
 
-    expect((await search("Anna Nowak")).map((r: any) => r.id)).toEqual([
+    expect((await searchSignedIn("Anna Nowak")).map((r: any) => r.id)).toEqual([
       "draft",
     ]);
+  });
+
+  it("keeps an unpublished page from a logged out reader", async () => {
+    // Every name in the base was offered to anyone typing, and each draft
+    // among them was a page that answered them with a 404.
+    respondWith({
+      "anna nowak": [
+        doc("draft", "Anna Nowak", { published: false }),
+        doc("live", "Anna Nowakowska"),
+      ],
+    });
+
+    expect((await search("Anna Nowak")).map((r: any) => r.id)).toEqual([
+      "live",
+    ]);
+  });
+
+  it("keeps it from a logged out reader who types `latest` too", async () => {
+    // The flag without a token is a request, not a permission.
+    respondWith({
+      "anna nowak": [doc("draft", "Anna Nowak", { published: false })],
+    });
+
+    const result = await handler({
+      query: { q: "Anna Nowak", latest: "true" },
+      context: {},
+    } as any);
+    expect(result).toEqual([]);
+  });
+
+  it("reads further down the hits for a logged out reader", async () => {
+    // Their drafts are dropped after the query, so the top twenty of a common
+    // name could otherwise be twenty pages they cannot open.
+    respondWith({ kowalski: [doc("live", "Jan Kowalski")] });
+
+    await search("Kowalski");
+    expect(mockLimit).toHaveBeenCalledWith(200);
+
+    vi.clearAllMocks();
+    respondWith({ kowalski: [doc("live", "Jan Kowalski")] });
+    await searchSignedIn("Kowalski");
+    expect(mockLimit).toHaveBeenCalledWith(20);
   });
 });

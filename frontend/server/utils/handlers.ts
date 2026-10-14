@@ -52,6 +52,45 @@ export async function eventHasUser(event: H3Event): Promise<boolean> {
   return !!(await getOptionalUser(event).catch(() => null));
 }
 
+/** `eventHasUser`, worked out once per request and kept on the event.
+ *
+ * On `event.context` because that is the one part of the request a nitro
+ * cached handler passes through: it runs the handler on a copy of the event
+ * whose headers are cut down to `varies`, so from inside the cache there is no
+ * token left to verify. A reader therefore has to be resolved before the cache
+ * is reached - which every wrapper below does - and a handler asking from
+ * inside one that did not gets `false`, never a guess.
+ */
+export async function resolveReader(event: H3Event): Promise<boolean> {
+  if (typeof event.context.hasUser !== "boolean") {
+    event.context.hasUser = await eventHasUser(event);
+  }
+  return event.context.hasUser;
+}
+
+/** What an answer that must not be kept anywhere says about itself. */
+const NO_STORE = "no-store, no-cache, must-revalidate";
+
+/** The public answer to a url carrying `latest` that no signed-in reader is
+ * behind - a lapsed token, a tab left open over a sign-out, somebody typing
+ * the flag by hand.
+ *
+ * Uncached, and marked so that nothing downstream keeps it either. Cloud CDN
+ * keys on the url and not on who asked, and a `?latest=true` url is the one a
+ * signed-in reader sends too: a public answer stored under it would be handed
+ * to the next editor in place of their drafts. Nobody the app sends asks this
+ * way any more, so going without the cache costs a stray request its reads and
+ * nothing else.
+ */
+async function servePublicToLatest<T>(
+  handler: EventHandler<EventHandlerRequest, Promise<T>>,
+  event: H3Event,
+): Promise<T> {
+  const result = await handler(event);
+  setResponseHeader(event, "Cache-Control", NO_STORE);
+  return result;
+}
+
 /** `authCachedEventHandler`, for a route that must serve a logged out reader
  * something narrower than it serves an editor.
  *
@@ -83,29 +122,52 @@ export function readerAwareCachedEventHandler<T>(
   });
 
   return defineEventHandler(async (event: H3Event) => {
-    const hasUser = await eventHasUser(event);
-    event.context.hasUser = hasUser;
-    if (hasUser) {
-      setResponseHeader(
-        event,
-        "Cache-Control",
-        "no-store, no-cache, must-revalidate",
-      );
+    if (await resolveReader(event)) {
+      setResponseHeader(event, "Cache-Control", NO_STORE);
       return handler(event);
+    }
+    if (asksForLatest(event)) {
+      return servePublicToLatest(handler, event);
     }
     return cachedHandler(event);
   });
 }
 
-/** Whether the caller asked to be shown what is not approved yet.
- *
- * `authFetch` puts it on every request a signed in reader makes, so it doubles
- * as "this is an editor" - which is the only thing the server can tell about
- * them, `eventIsAuthenticated` above being stubbed out.
- */
-export function wantsLatest(event: H3Event): boolean {
+/** Whether the url asks for what is not approved yet - only the asking. Whether
+ * the caller may have it is `wantsLatest`. */
+function asksForLatest(event: H3Event): boolean {
   const latest = getQuery(event).latest;
   return latest !== undefined && latest !== "false";
+}
+
+/** Whether to show this caller what is not approved yet: they asked, with
+ * `latest`, and a verified token says they are signed in.
+ *
+ * The flag alone used to be enough, on the reasoning that `authFetch` puts it
+ * on every request a signed in reader makes and so it meant "this is an
+ * editor". It is a query parameter: anybody can type it. On 2026-09-14, and
+ * again on 2026-10-14, `curl` with `?latest=true` and no token at all was
+ * handed unpublished people by name - their candidacies, their parties - from
+ * the graph, the node and the table endpoints. So the flag is the request and
+ * the token is the permission, and a route never reads the flag itself.
+ *
+ * Asynchronous because the token has to be verified; `resolveReader` does it
+ * once per request, and only for a url that asks, so the logged-out traffic
+ * the caches exist for never pays for a verification.
+ */
+export async function wantsLatest(event: H3Event): Promise<boolean> {
+  return asksForLatest(event) && (await resolveReader(event));
+}
+
+/** `wantsLatest`, for a request that asks in its body - a POST, which no
+ * cache keeps, so the reader is all there is to decide. */
+export async function bodyWantsLatest(
+  event: H3Event,
+  body: { latest?: unknown } | null | undefined,
+): Promise<boolean> {
+  const latest = body?.latest;
+  const asks = latest !== undefined && latest !== false && latest !== "false";
+  return asks && (await resolveReader(event));
 }
 
 /** `authCachedEventHandler`, except that an editor reads through the cache.
@@ -134,7 +196,10 @@ export function wantsLatest(event: H3Event): boolean {
  * default - anywhere an editor reads back their own write, which is most
  * places. The editor's answer is cached under its own key either way, because
  * `latest=true` is part of the request URL nitro keys on, so it never collides
- * with the approved-only one the public gets.
+ * with the approved-only one the public gets. Only a verified reader gets as
+ * far as that key - see `wantsLatest` - so the entry is shared between signed
+ * in readers and nobody else, and a handler that answered one of them
+ * differently from another could not use it.
  */
 export function editorFreshCachedEventHandler<T>(
   handler: EventHandler<EventHandlerRequest, Promise<T>>,
@@ -151,7 +216,7 @@ export function editorFreshCachedEventHandler<T>(
     : undefined;
 
   return defineEventHandler(async (event: H3Event) => {
-    if (wantsLatest(event)) {
+    if (await wantsLatest(event)) {
       // `no-store` either way, and set after the handler has resolved so that
       // the `s-maxage` a cached handler emits does not survive it. The server
       // side cache is ours to drop - every write path clears `nitro:handlers` -
@@ -159,12 +224,11 @@ export function editorFreshCachedEventHandler<T>(
       const result = editorHandler
         ? await editorHandler(event)
         : await handler(event);
-      setResponseHeader(
-        event,
-        "Cache-Control",
-        "no-store, no-cache, must-revalidate",
-      );
+      setResponseHeader(event, "Cache-Control", NO_STORE);
       return result;
+    }
+    if (asksForLatest(event)) {
+      return servePublicToLatest(handler, event);
     }
     return cachedHandler(event);
   });
