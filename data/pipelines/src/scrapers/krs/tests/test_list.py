@@ -620,16 +620,22 @@ def test_a_name_nothing_here_can_place_is_not():
     )
 
 
-def public_after(odpisy: list[dict], regon_public: set[str]) -> set[str]:
+def public_after(
+    odpisy: list[dict],
+    regon_public: set[str],
+    public_regons: frozenset[str] = frozenset(),
+) -> set[str]:
     """Which KRS numbers `CompaniesKRS` marks public, for these odpisy.
 
     `regon_public` are the companies REGON records as publicly owned. Every
     company is in the catalogue, the way a private one providing a public
-    service is too.
+    service is too. `public_regons` are the REGON numbers of publicly owned
+    entities, owners included (`scrapers.krs.data.public_regons`).
     """
     pipeline = CompaniesKRS()
     pipeline.teryt = NO_TERYT  # type: ignore[assignment]
     pipeline.jst_index = None
+    pipeline.public_regons = public_regons
     for data in odpisy:
         krs = data["odpis"]["naglowekA"]["numerKRS"]
         pipeline.process_api_krs_blob(
@@ -716,6 +722,96 @@ def test_a_subsidiary_inherits_what_regon_said_of_its_parent():
     )
 
     assert public == {"0000247533", "0000408185"}
+
+
+# ─── an owner outside KRS, known by its REGON ──────────────
+#
+# The register names an owner with no KRS number by its REGON. Where REGON's own
+# ownership code puts that owner in the public sector, the company is public,
+# whatever the owner is called.
+
+# 92.51% of Wodociągi i Kanalizacja-Zgierz. Not in KRS; REGON files it under
+# 133, mixed with a public majority. The city's own 7.49% is under the 10% a
+# spółka z o.o. has to list.
+ZGIERSKA_SPOLKA_WODNA = {
+    "nazwa": "ZGIERSKA SPÓŁKA WODNA",
+    "identyfikator": {"regon": "47158565900000"},
+    "krs": {"krs": "0000000000"},
+    "posiadaneUdzialy": "45.351 UDZIAŁÓW O ŁACZNEJ WARTOŚCI NOMINALNEJ "
+    "56.688.750,00 ZŁOTYCH",
+    "czyPosiadaCaloscUdzialow": False,
+}
+WODOCIAGI_ZGIERZ = "0000046134"
+
+
+def test_an_owner_regon_calls_public_makes_the_company_public():
+    company = company_from_api_krs(
+        NO_POSTAL_CODES,
+        NO_TERYT,
+        owned(WODOCIAGI_ZGIERZ, SPZOO, wspolnicy=[ZGIERSKA_SPOLKA_WODNA]),
+        public_regons=frozenset({"471585659"}),
+    )
+
+    assert company is not None
+    assert company.is_public
+    # Nothing to draw an edge to: no KRS number, no region
+    assert company.parents == []
+
+
+def test_an_owner_regon_does_not_know_is_not_public():
+    company = company_from_api_krs(
+        NO_POSTAL_CODES,
+        NO_TERYT,
+        owned(WODOCIAGI_ZGIERZ, SPZOO, wspolnicy=[ZGIERSKA_SPOLKA_WODNA]),
+        public_regons=frozenset({"000001583"}),
+    )
+
+    assert company is not None
+    assert not company.is_public
+
+
+def test_an_owner_with_a_krs_number_is_followed_not_read_by_its_regon():
+    """Its own odpis says who owns it, and that outranks REGON's code."""
+    gpw = {**GPW, "identyfikator": {"regon": "24071508100000"}}
+    company = company_from_api_krs(
+        NO_POSTAL_CODES,
+        NO_TERYT,
+        owned("0000408185", SPZOO, wspolnicy=[gpw]),
+        public_regons=frozenset({"240715081"}),
+    )
+
+    assert company is not None
+    assert not company.is_public
+    assert [p.krs for p in company.parents] == ["0000247533"]
+
+
+def test_the_pipeline_reads_owners_by_the_public_regons_it_was_given():
+    odpis = owned(WODOCIAGI_ZGIERZ, SPZOO, wspolnicy=[ZGIERSKA_SPOLKA_WODNA])
+
+    assert public_after([odpis], regon_public=set()) == set()
+    assert public_after(
+        [odpis], regon_public=set(), public_regons=frozenset({"471585659"})
+    ) == {WODOCIAGI_ZGIERZ}
+
+
+def test_a_subsidiary_inherits_what_an_owners_regon_said():
+    # A spin-off of a public university, and the company the spin-off owns
+    university = {
+        "nazwa": "POLITECHNIKA ŁÓDZKA",
+        "identyfikator": {"regon": "00000158300000"},
+        "krs": {"krs": "0000000000"},
+    }
+    spin_off = {"nazwa": "TULVENTURE SP. Z O.O.", "krs": {"krs": "0000333386"}}
+    public = public_after(
+        [
+            owned("0000333386", SPZOO, wspolnicy=[university]),
+            owned("0000000777", SPZOO, wspolnicy=[spin_off]),
+        ],
+        regon_public=set(),
+        public_regons=frozenset({"000001583"}),
+    )
+
+    assert public == {"0000333386", "0000000777"}
 
 
 def test_a_companys_sources_are_listed_in_the_same_order_every_run():

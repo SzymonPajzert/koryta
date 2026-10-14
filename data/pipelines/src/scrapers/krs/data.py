@@ -32,11 +32,69 @@ def publicly_owned(catalogue: pd.DataFrame) -> pd.DataFrame:
     return catalogue[catalogue["Forma własności"].astype(str).str.startswith("1")]
 
 
+def regon_stem(value: object) -> str | None:
+    """The 9-digit REGON of the legal entity `value` names, or None.
+
+    The register writes an owner's REGON with 14 digits, the last five a local
+    unit's; the catalogue writes 9, or 14 for the 500 schools and the like it
+    lists as a unit of their gmina. The first nine are the entity either way.
+    Anything else - a float pandas made of the column, a stray NIP - is None
+    rather than a guess.
+    """
+    if not isinstance(value, str):
+        return None
+    digits = value.strip()
+    if not digits.isdigit():
+        return None
+    if len(digits) == 14:
+        return digits[:9]
+    if len(digits) == 9:
+        return digits
+    return None
+
+
+def _public_ids(
+    catalogue: pd.DataFrame, column: str, read: Callable[[object], str | None]
+) -> frozenset[str]:
+    """`column` of the entries filed under the public sector, as `read` reads it.
+
+    Less any that an entry under the private sector carries as well, which
+    leaves the answer to the register; no REGON is filed both ways today.
+    """
+    if column not in catalogue.columns:
+        return frozenset()
+    code = catalogue["Forma własności"].astype(str)
+    ids = catalogue[column].map(read)
+    public = set(ids[code.str.startswith("1")].dropna())
+    private = set(ids[code.str.startswith("2")].dropna())
+    return frozenset(public - private)
+
+
+def public_regons(catalogue: pd.DataFrame) -> frozenset[str]:
+    """The REGON of every catalogue entry REGON records as publicly owned.
+
+    For an owner the register names with no KRS number and no name anything
+    here can place: ZGIERSKA SPÓŁKA WODNA, a water association holding 92.5% of
+    Wodociągi i Kanalizacja-Zgierz, which REGON files under 133, mixed with a
+    public majority; a public university, owner of its spin-offs; a gmina the
+    register misspells ("GMINA I MIASTRO WYSZOGRÓD"). The register gives each
+    its REGON instead.
+
+    69,709 of the catalogue's 86,377 entries carry a 1xx code - gminas, their
+    offices and companies, schools, hospitals, universities, state agencies -
+    against 5,510 with a KRS number.
+    """
+    return _public_ids(catalogue, "REGON", regon_stem)
+
+
 class CompaniesHardcoded(Pipeline[KRS]):
     filename = None
     volatile = True
 
     all_companies_krs: dict[str, KRS] = dict()
+    #: The REGON numbers the catalogue files as publicly owned - see
+    #: `public_regons`.
+    public_regons: frozenset[str] = frozenset()
     teryt: Teryt
 
     @property
@@ -93,26 +151,38 @@ class CompaniesHardcoded(Pipeline[KRS]):
             for item in data:
                 process(item)
 
-    def read_public_companies(
-        self, ctx: Context
-    ):  # Public companies, from data.gov.pl:
+    def read_catalogue(self, ctx: Context) -> pd.DataFrame:
+        """The whole public-entity catalogue, from data.gov.pl.
+
+        REGON is read as text: as a number the column turns to floats, for the
+        entries that have none, and loses its leading zeros - Województwo
+        Mazowieckie is 013272636.
+        """
         _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
         public_companies = FileSource(
             _PUBLIC_COMPANIES_SOURCE,
             "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv",
         )
 
-        df = pd.read_csv(
-            ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
+        return pd.read_csv(
+            ctx.io.read_data(public_companies).read_file(),
+            sep=";",
+            low_memory=False,
+            dtype={"REGON": str},
         )
-        df = df[~df["KRS"].isna()]
+
+    def read_public_companies(self, catalogue: pd.DataFrame) -> pd.DataFrame:
+        """The catalogue entries with a KRS number, and the TERYT of their seat."""
+        df = catalogue[~catalogue["KRS"].isna()].copy()
         df["teryt"] = df.apply(self.parse_teryt_from_row, axis=1)
         df["KRS"] = df["KRS"].astype(int).astype(str).str.zfill(10).to_list()
         return df
 
     def process(self, ctx: Context):
         self.teryt.process(ctx)
-        public_companies = self.read_public_companies(ctx)
+        catalogue = self.read_catalogue(ctx)
+        self.public_regons = public_regons(catalogue)
+        public_companies = self.read_public_companies(catalogue)
         self.register_partials(
             "PUBLIC_COMPANIES_KRS",
             data=public_companies,

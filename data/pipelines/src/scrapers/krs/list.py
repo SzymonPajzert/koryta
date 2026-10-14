@@ -11,7 +11,7 @@ from pandas import DataFrame
 from entities.company import KRS, Owner, Source, short_name
 from entities.company import Company as KrsCompany
 from entities.person import KRS as KrsPerson
-from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded
+from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded, regon_stem
 from scrapers.krs.graph import PARENT_RELATION, QueryRelation
 from scrapers.krs.organs import supervision_kind
 from scrapers.krs.public_bodies import public_body
@@ -341,6 +341,9 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.struck_off: dict[str, str] = {}
         #: The shareholdings the historical feeds list, `(owner, owned, ended)`.
         self.past_owners: list[tuple[str, str, str]] = []
+        #: REGON numbers of publicly owned entities - see
+        #: `scrapers.krs.data.public_regons`.
+        self.public_regons: frozenset[str] = frozenset()
 
     @property
     def output_class(self) -> Type:
@@ -566,7 +569,9 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     ) -> None:
         if "Biuletyn" in blob_name:
             return
-        c = company_from_api_krs(postal_codes, self.teryt, data, self.jst_index)
+        c = company_from_api_krs(
+            postal_codes, self.teryt, data, self.jst_index, self.public_regons
+        )
         if c is None:
             return
         self.add_company(c)
@@ -661,6 +666,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.jst_index = getattr(self.jst, "index", None)
         self.hardcoded_companies.process(ctx)
         hardcoded = self.hardcoded_companies.all_companies_krs
+        self.public_regons = self.hardcoded_companies.public_regons
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             self.process_rejestrio_blob(blob_name, data, postal_codes)
@@ -842,8 +848,18 @@ SKARB_PANSTWA_OWNERS = 110
 
 
 def company_from_api_krs(  # noqa: PLR0915
-    pcs: DataFrame, teryt: Teryt, data: dict, jst: "JstIndex | None" = None
+    pcs: DataFrame,
+    teryt: Teryt,
+    data: dict,
+    jst: "JstIndex | None" = None,
+    public_regons: typing.Collection[str] = frozenset(),
 ) -> KrsCompany | None:
+    """The company an OdpisAktualny describes, or None for a 404.
+
+    `public_regons` are the REGON numbers of entities REGON files as publicly
+    owned (`scrapers.krs.data.public_regons`); an owner named without a KRS
+    number is public if its REGON is one of them.
+    """
     try:
         if data.get("title") == "Not Found":
             return None
@@ -954,6 +970,16 @@ def company_from_api_krs(  # noqa: PLR0915
                 # an edge to. Wodociągi Kieleckie (a union of gminas) and the
                 # KOWR stud farms read as private without it.
                 is_public = True
+            elif owner_regon(w) in public_regons:
+                # Any other owner with no KRS number, which the register names
+                # by its REGON instead, and REGON's own ownership code puts in
+                # the public sector: ZGIERSKA SPÓŁKA WODNA, 92.5% of Wodociągi i
+                # Kanalizacja-Zgierz, a water association REGON files under 133;
+                # a public university's spin-offs; a gmina the register
+                # misspells, "GMINA I MIASTRO WYSZOGRÓD". Public, and nothing to
+                # draw an edge to. Only for an owner without a KRS number: one
+                # with a number has its own odpis, whose owners outrank the code.
+                is_public = True
 
         identyfikatory = dzial1.get("danePodmiotu", {}).get("identyfikatory", {})
         nip = identyfikatory.get("nip")
@@ -979,6 +1005,11 @@ def company_from_api_krs(  # noqa: PLR0915
     except TypeError as e:
         print(data)
         raise ValueError(f"Wrong data: {data}") from e
+
+
+def owner_regon(wspolnik: dict) -> str | None:
+    """The 9-digit REGON an odpis gives an owner, or None."""
+    return regon_stem((wspolnik.get("identyfikator") or {}).get("regon"))
 
 
 def names_an_owner(data: dict, jst: "JstIndex | None" = None) -> bool:
