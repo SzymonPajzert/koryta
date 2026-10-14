@@ -5,11 +5,11 @@ so an SA held by Poczta Polska and Asseco, or by a city and its voivodeship,
 reads as owned by nobody, and REGON's code covers few of them; nor does it
 name a shareholder under 10% of a spółka z o.o. Each company here was found by
 `CompaniesLikelyPublic` - several people on the site worked there, all of them
-scored as koryciarz - or, for SIM "KZN-Wielkopolska", by the BIP NIP list, and
-its owners were then read off a source that says so, given beside it: the
-company's own shareholder page, its parent's group page, a stock-exchange
-disclosure, a voivodeship's or city's own page, the press where nothing better
-exists.
+scored as koryciarz - or, for SIM "KZN-Wielkopolska", by the BIP NIP list, or
+for Wodociągi i Kanalizacja-Zgierz by Szymon asking about it - and its owners
+were then read off a source that says so, given beside it: the company's own
+shareholder page, its parent's group page, a stock-exchange disclosure, a
+voivodeship's or city's own page, the press where nothing better exists.
 
 Owners are written the way an odpis writes them, so that `CompaniesKRS` treats
 them like one: a company by its KRS number becomes an ownership edge, which
@@ -324,6 +324,17 @@ RESEARCHED_OWNERS: dict[str, Researched] = {
             ResearchedOwner("GMINA MIEJSKO-WIEJSKA WOLSZTYN"),
         ),
         "https://simkzn-wielkopolska.pl/o-nas/",
+    ),
+    # "WODOCIĄGI I KANALIZACJA-ZGIERZ": the register lists only the water
+    # association, the city's own 7.49% being under the 10% it lists. Public
+    # through the association's REGON code alone (133, mixed with a public
+    # majority); this keeps the city's stake on record and draws its edge.
+    "0000046134": Researched(
+        (
+            ResearchedOwner("ZGIERSKA SPÓŁKA WODNA", share="92.51%"),
+            ResearchedOwner("GMINA MIASTO ZGIERZ", share="7.49%"),
+        ),
+        "https://www.umz.zgierz.pl/bip/?bip_umz_did=164",
     ),
 }
 
