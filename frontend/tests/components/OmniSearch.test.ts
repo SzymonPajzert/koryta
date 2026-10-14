@@ -7,6 +7,19 @@ import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import { createRouter, createMemoryHistory } from "vue-router";
+import { trackGoal } from "~/composables/analytics";
+
+vi.mock("~/composables/analytics", () => ({ trackGoal: vi.fn() }));
+
+/** Who is reading: nobody unless a test signs somebody in. Read at the moment
+ * the box reports, so a plain holder is enough. */
+const reader = vi.hoisted(() => ({
+  value: null as { uid: string; getIdToken: () => Promise<string> } | null,
+}));
+vi.mock("vuefire", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("vuefire")>()),
+  useCurrentUser: () => reader,
+}));
 
 /** What /api/search answers with, set per test.
  *
@@ -75,6 +88,8 @@ describe("OmniSearch", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     searched = [];
+    reader.value = null;
+    vi.mocked(trackGoal).mockClear();
   });
 
   // Setup Router
@@ -268,6 +283,59 @@ describe("OmniSearch", () => {
         ?.textContent.trim();
     expect(subtitleOf("Anna Nowak")).toBe("Profil niezweryfikowany");
     expect(subtitleOf("Anna Nowakowska")).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  /** The search:settled events sent so far. */
+  const settled = () =>
+    vi
+      .mocked(trackGoal)
+      .mock.calls.filter(([goal]) => goal === "search:settled")
+      .map(([, props]) => props);
+
+  it("reports the search a logged out reader left, once, query included", async () => {
+    // The search that found nothing is the one most worth knowing about - a
+    // name the site does not have - and it is reported once, not once for
+    // every prefix the box asked the server about on the way.
+    searched = [];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "Zofia");
+    await searchFor(wrapper, "Zofia  Zielińska");
+    await searchFor(wrapper, "");
+    await flushPromises();
+
+    expect(settled()).toEqual([
+      {
+        query: "zofia zielińska",
+        results: "none",
+        unverified: "none",
+        outcome: "abandon",
+      },
+    ]);
+
+    wrapper.unmount();
+  });
+
+  it("does not report a signed in reader's searches", async () => {
+    // Their searches are their research, and the owner's would outnumber
+    // every reader's.
+    reader.value = { uid: "contributor", getIdToken: async () => "token" };
+    searched = [];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "Zofia Zielińska");
+    await searchFor(wrapper, "");
+    await flushPromises();
+
+    // The search itself went out - with the token - and was answered.
+    expect(
+      vi
+        .mocked(trackGoal)
+        .mock.calls.some(([goal]) => goal === "search:performed"),
+    ).toBe(true);
+    expect(settled()).toEqual([]);
 
     wrapper.unmount();
   });

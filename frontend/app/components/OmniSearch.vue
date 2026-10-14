@@ -108,6 +108,11 @@ import {
   unverifiedShare,
   type SearchPickKind,
 } from "~~/shared/analytics";
+import {
+  SearchSession,
+  settledSearchProps,
+  type SettledSearch,
+} from "~~/shared/searchSession";
 import { noteSearchPick } from "~/composables/teaserJourney";
 import type { NodeType } from "~~/shared/model";
 import type { ProposableNodeType } from "~~/shared/api";
@@ -115,7 +120,8 @@ import { refDebounced } from "@vueuse/core";
 import { useCurrentUser } from "vuefire";
 import { authHeaders } from "~/composables/auth";
 
-const { push, currentRoute } = useRouter();
+const router = useRouter();
+const { push, currentRoute } = router;
 const user = useCurrentUser();
 
 const props = defineProps<{
@@ -182,9 +188,10 @@ const createType = ref<ProposableNodeType>("person");
 const openCreate = async (type: CreatableFromSearch) => {
   // Recorded before the dialog opens, because this is the interesting event on
   // its own: it says the search could not answer, and what the reader was
-  // willing to add instead. The typed name is not recorded - it is somebody's
-  // name, and `kind` is the part that is about the site.
+  // willing to add instead. The typed name is not part of it - `kind` is the
+  // part that is about the site - and goes once, on search:settled, below.
   trackGoal("search:propose", { kind: type });
+  report(searchSession.propose());
   pendingCreateName.value = createName.value;
   createType.value = type;
   // The dialog is keyed by type, so it is a different component instance once
@@ -240,8 +247,42 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
+/** The searches typed into the box, one `search:settled` each - see
+ * `shared/searchSession.ts`, which also says why the query is sent at all. */
+const searchSession = new SearchSession();
+
+/** Reports a settled search, if one was - for a logged out reader only. They
+ * are who the question is about; a signed in reader's searches are their
+ * research, and the owner's alone would outnumber everybody else's. */
+function report(search: SettledSearch | undefined) {
+  if (!search || user.value) return;
+  trackGoal("search:settled", settledSearchProps(search));
+}
+
+// A search nobody took anything from is still a search - and the one that
+// found nothing is the one most worth knowing about. Settled when the reader
+// hides the page, or leaves it some way other than through the box: before the
+// navigation, so it is counted on the page it was typed on. The tracker sends
+// with `keepalive`, so the one from a closing tab still goes out.
+const leaveBox = () => report(searchSession.abandon());
+const onVisibility = () => {
+  if (document.visibilityState === "hidden") leaveBox();
+};
+let stopRouteWatch: (() => void) | undefined;
+onMounted(() => {
+  document.addEventListener("visibilitychange", onVisibility);
+  stopRouteWatch = router.beforeEach(() => {
+    leaveBox();
+  });
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", onVisibility);
+  stopRouteWatch?.();
+});
+
 watch(debouncedSearch, async (val) => {
   if (!val) {
+    leaveBox();
     setTimeout(() => (nodeGroupPicked.value = null), 300);
   } else {
     if (val !== nodeGroupPicked.value?.title) {
@@ -287,6 +328,7 @@ async function performSearch(searchTerm: string) {
       results: resultBucket(response.length),
       unverified: unverifiedShare(response.length, unverified),
     });
+    report(searchSession.results(searchTerm, response.length, unverified));
   } catch (error) {
     // A search that fails should offer nothing rather than spin forever.
     console.error("Search failed", error);
@@ -385,6 +427,7 @@ watch(nodeGroupPicked, (value) => {
   // Defaulted, because the value arrives from VAutocomplete's model and a test
   // may hand over a partial entry.
   trackGoal("search:pick", { kind: value.analyticsKind ?? "place" });
+  report(searchSession.pick());
   // Before navigating, so the page it opens can tell it was searched for.
   noteSearchPick(value.nodeId);
   push(omniSearchTarget(currentRoute.value, value));
