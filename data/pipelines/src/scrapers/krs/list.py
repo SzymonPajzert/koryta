@@ -14,9 +14,12 @@ from entities.person import KRS as KrsPerson
 from scrapers.krs.data import (
     REGON_PUBLIC_IDENTITY,
     REGON_PUBLIC_OWNERSHIP,
+    TREASURY_STAKE,
     CompaniesHardcoded,
     nip_digits,
+    read_treasury_list,
     regon_stem,
+    treasury_stakes,
 )
 from scrapers.krs.graph import PARENT_RELATION, QueryRelation
 from scrapers.krs.organs import supervision_kind
@@ -351,6 +354,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         #: `scrapers.krs.data.public_regons`.
         self.public_regons: frozenset[str] = frozenset()
         self.public_nips: frozenset[str] = frozenset()
+        #: NIP -> the Treasury's share - see `scrapers.krs.data.treasury_stakes`.
+        self.treasury_stakes: dict[str, str] = {}
         #: The same for an owner: entities outside KRS only - see
         #: `scrapers.krs.data.public_owner_regons`.
         self.public_owner_regons: frozenset[str] = frozenset()
@@ -639,6 +644,15 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         """
         public_krss = set()
         for company in self.companies.values():
+            if nip_digits(company.nip) in self.treasury_stakes:
+                # Prokuratoria's own list of the Treasury's stakes. No gate:
+                # an owner the odpis names does not contradict a stake the
+                # register leaves out.
+                if not company.is_public:
+                    self.company_sources[company.krs] = self.company_sources.get(
+                        company.krs, set()
+                    ) | {Source("hardcoded", reason=TREASURY_STAKE)}
+                company.is_public = True
             if company.is_public:
                 public_krss.add(company.krs)
             hc = hardcoded.get(company.krs)
@@ -749,6 +763,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         hardcoded = self.hardcoded_companies.all_companies_krs
         self.public_regons = self.hardcoded_companies.public_regons
         self.public_nips = self.hardcoded_companies.public_nips
+        self.treasury_stakes = treasury_stakes(read_treasury_list(ctx))
         self.public_owner_regons = self.hardcoded_companies.public_owner_regons
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):

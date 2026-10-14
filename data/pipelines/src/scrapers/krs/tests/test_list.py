@@ -4,7 +4,11 @@ from pandas import DataFrame
 from entities.company import KRS, Owner, Source
 from entities.company import Company as KrsCompany
 from entities.company_categories import SPZOZ
-from scrapers.krs.data import REGON_PUBLIC_IDENTITY, REGON_PUBLIC_OWNERSHIP
+from scrapers.krs.data import (
+    REGON_PUBLIC_IDENTITY,
+    REGON_PUBLIC_OWNERSHIP,
+    TREASURY_STAKE,
+)
 from scrapers.krs.list import (
     CompaniesKRS,
     company_from_api_krs,
@@ -976,6 +980,30 @@ def test_a_fund_is_read_as_the_company_holding_its_certificates():
     )
 
     assert public == {"0000466256", "0000689614"}
+
+
+# ─── the Treasury's stakes, as Prokuratoria lists them ─────
+
+
+def test_a_company_on_the_treasury_list_is_public_whatever_its_odpis_names():
+    # POLCARGO GROUP: the Treasury's 9.09% is under the 10% the register lists,
+    # so its odpis names only private owners.
+    pipeline = CompaniesKRS()
+    pipeline.treasury_stakes = {"5861034090": "9.09"}
+    pipeline.add_company(KrsCompany(krs="0000185947", nip="586-103-40-90"))
+    pipeline.owner_on_record.add("0000185947")
+
+    assert pipeline.compute_public_krss({}) == {"0000185947"}
+    [company] = pipeline.build_output({})
+    assert Source("hardcoded", reason=TREASURY_STAKE) in company.sources
+
+
+def test_a_company_off_the_treasury_list_is_not_public_by_it():
+    pipeline = CompaniesKRS()
+    pipeline.treasury_stakes = {"5861034090": "9.09"}
+    pipeline.add_company(KrsCompany(krs="0000000001", nip="1234567890"))
+
+    assert pipeline.compute_public_krss({}) == set()
 
 
 def test_a_companys_sources_are_listed_in_the_same_order_every_run():
