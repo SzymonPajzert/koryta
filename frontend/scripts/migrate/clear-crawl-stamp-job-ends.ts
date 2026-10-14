@@ -21,9 +21,10 @@ import { reportRemaining } from "./remaining";
  * left that run with the run's date as its end. Two runs reached the site. On
  * the 2026-10-14 export 1,044 `employed` edges end on 2026-04-06 (825) or
  * 2026-03-18 (219) - against a median of two ends a day around them - and the
- * register lists 853 of those posts as current. Every one was stamped in the
- * revision that created it, by the uploader, and nothing has stamped since:
- * the 10-12 to 10-14 payloads hold two ends on 03-18, both real.
+ * register, matched to the page's person as below, lists 845 of those posts as
+ * current. Every one was stamped in the revision that created it, by the
+ * uploader, and nothing has stamped since: the 10-12 to 10-14 payloads hold
+ * two ends on 03-18, both real.
  *
  * The ingest never rewrites an end it has stored, so the night cannot repair
  * them: it reports 5 to 11 of them a night as `dropped` and keeps them. Pages
@@ -99,7 +100,7 @@ const AUTHOR = "migration:clear-crawl-stamp-job-ends";
 /** The days PeopleKRS ran before 5fe9e12b and wrote as every open post's end.
  * Found by scoring every employed end on the 2026-10-14 export against the
  * median of the 14 days around it: 825 against 2, and 219 against 2. No other
- * day in 2026 holds more than 23. */
+ * day in 2026 holds more than 13 (2026-07-07). */
 export const CRAWL_STAMPS: readonly string[] = ["2026-03-18", "2026-04-06"];
 
 /** One row of the file `register_job_ends.py` writes: one post. */
