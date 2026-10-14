@@ -6,6 +6,7 @@ from scrapers.krs.data import (
     CompaniesHardcoded,
     nip_digits,
     public_nips,
+    public_owner_regons,
     public_regons,
     regon_stem,
 )
@@ -206,3 +207,19 @@ def test_an_identifier_filed_under_both_sectors_is_left_to_the_register():
     )
 
     assert nips == {"5250008519"}
+
+
+def test_an_owner_is_read_by_its_code_only_outside_krs():
+    """A company in KRS has an odpis that says who owns it."""
+    code = "112 - WŁASNOŚĆ PAŃSTWOWYCH OSÓB PRAWNYCH"
+    rows = pd.DataFrame(
+        [
+            ["POLITECHNIKA ŁÓDZKA", "000001583", code, None],
+            # Owned by people, by its own odpis, whatever the code says
+            ["WYDAWNICTWO RBA POLAND", "361123585", code, "0000549918"],
+        ],
+        columns=["Nazwa podmiotu", "REGON", "Forma własności", "KRS"],
+    )
+
+    assert public_regons(rows) == {"000001583", "361123585"}
+    assert public_owner_regons(rows) == {"000001583"}
