@@ -58,6 +58,26 @@ export const CLOSED_STATUSES: readonly TaskStatus[] = ["done", "dropped"];
 export const isClosed = (task: Pick<Task, "status">) =>
   CLOSED_STATUSES.includes(task.status);
 
+/** How soon a task wants doing, when sooner than the rest; unset is normal.
+ * - `urgent` („Pilne”): harm that grows while it waits - personal data
+ *   exposed, wrong data written to the site every night, production broken -
+ *   or a deadline missed or a few days away. A handful at a time.
+ * - `high` („Ważne”): on a goal's critical path, unblocking many others, or a
+ *   deadline within weeks.
+ *
+ * A level also reaches everything the task waits on, a goal's included: what
+ * holds up an urgent task is urgent too (see `taskStates`). */
+export const TASK_PRIORITIES = ["urgent", "high"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+/** What a form or a tool offers: the levels, and `normal` for none. */
+export const PRIORITY_CHOICES = [...TASK_PRIORITIES, "normal"] as const;
+export type PriorityChoice = (typeof PRIORITY_CHOICES)[number];
+
+/** Higher is sooner: 2 urgent, 1 high, 0 normal. */
+export const priorityLevel = (priority: TaskPriority | null | undefined) =>
+  priority === "urgent" ? 2 : priority === "high" ? 1 : 0;
+
 /** Who made a change: the owner on the page, or an agent through the MCP
  * server, optionally with a label saying which (a session id, say). */
 export type TaskActor = "owner" | "agent" | `agent:${string}`;
@@ -89,6 +109,11 @@ export type Task = {
   branches: string[];
   /** Hand-set order within a list: lower comes first; unset sorts after. */
   rank?: number;
+  /** How soon it wants doing; unset is normal. */
+  priority?: TaskPriority;
+  /** Who set `priority`: an agent may raise a level, but not lower one the
+   * owner set. */
+  prioritySetBy?: TaskActor;
   /** Where the task came from: a session, a memory note, a report. */
   source?: string;
   createdAt: string;
@@ -115,6 +140,41 @@ const oneOf = <T extends string>(
   value: unknown,
   fallback: T,
 ): T => (values.includes(value as T) ? (value as T) : fallback);
+
+/** A priority in the history's words: „Priorytet: zwykły → pilny.” */
+const PRIORITY_WORDS: Record<PriorityChoice, string> = {
+  normal: "zwykły",
+  high: "ważny",
+  urgent: "pilny",
+};
+
+const priorityWord = (priority: TaskPriority | null | undefined) =>
+  PRIORITY_WORDS[priority ?? "normal"];
+
+/** The line a change of priority leaves in the history; a new task's has no
+ * "before". */
+const PRIORITY_LINE = /^Priorytet: (?:\S+ → )?(\S+)\.$/;
+
+/** The priority the history last gave a task, and who gave it - for a
+ * document with no `priority` field.
+ *
+ * Whatever wrote it last may come from before priorities: an MCP server
+ * started from an older checkout, or the page before its rollout. Those write
+ * the whole document back with the fields they know, which drops the level -
+ * but they keep the history, and every change of priority is logged there. */
+function loggedPriority(
+  log: readonly TaskLogEntry[],
+): Pick<Task, "priority" | "prioritySetBy"> {
+  for (const entry of [...log].reverse()) {
+    const word = PRIORITY_LINE.exec(entry.text)?.[1];
+    const choice = PRIORITY_CHOICES.find((c) => PRIORITY_WORDS[c] === word);
+    if (!choice) continue;
+    return choice === "normal"
+      ? {}
+      : { priority: choice, prioritySetBy: entry.by };
+  }
+  return {};
+}
 
 /** A stored task, from its document's data with the times as ISO strings.
  * Fills in what an older or hand-edited document lacks, and replaces values
@@ -152,6 +212,12 @@ export function taskFromData(id: string, data: Record<string, unknown>): Task {
       : [],
   };
   if (typeof data.rank === "number") task.rank = data.rank;
+  if (TASK_PRIORITIES.includes(data.priority as TaskPriority)) {
+    task.priority = data.priority as TaskPriority;
+    task.prioritySetBy = actor(data.prioritySetBy);
+  } else if (data.priority === undefined) {
+    Object.assign(task, loggedPriority(task.log));
+  }
   if (typeof data.source === "string") task.source = data.source;
   const closedAt = isoTime(data.closedAt);
   if (closedAt) task.closedAt = closedAt;
@@ -174,6 +240,11 @@ const tags = z.array(z.string().trim().min(1).max(40)).max(12);
 const links = z.array(z.string().trim().min(1).max(500)).max(30);
 const branches = z.array(z.string().trim().min(1).max(100)).max(20);
 const dependsOn = z.array(id).max(50);
+/** A level, or `normal` - null too - for none. */
+const priority = z
+  .enum(PRIORITY_CHOICES)
+  .nullable()
+  .transform((value) => (value === "normal" ? null : value));
 
 export const taskCreateSchema = z.object({
   /** A slug to use instead of one made from the title. */
@@ -188,6 +259,7 @@ export const taskCreateSchema = z.object({
   links: links.default([]),
   branches: branches.default([]),
   rank: z.number().finite().optional(),
+  priority: priority.optional(),
   source: z.string().max(500).optional(),
 });
 export type TaskCreate = z.input<typeof taskCreateSchema>;
@@ -204,6 +276,8 @@ export const taskPatchSchema = z
     branches: branches.optional(),
     /** `null` takes the task out of the hand-set order. */
     rank: z.number().finite().nullable().optional(),
+    /** `normal` or `null` takes the priority away. */
+    priority: priority.optional(),
     /** The whole list, as the page's editor has it. */
     dependsOn: dependsOn.optional(),
     /** Or changes to it, as an agent says "this also waits for that". */
@@ -282,7 +356,48 @@ export type TaskState = {
   missing: string[];
   /** The tasks that wait for this one. */
   dependents: Task[];
+  /** What the lists sort it by: its own priority, or a higher one it takes
+   * from what it holds up. Null is normal. */
+  priority: TaskPriority | null;
+  /** When `priority` is taken from elsewhere: the tasks and goals with that
+   * level of their own that wait on this one, directly or through others. */
+  priorityFrom: Task[];
 };
+
+/** The levels tasks take from what they hold up: from each open task with a
+ * priority of its own - a goal as much as any other - to everything it waits
+ * on, directly or through others, so that the head of an urgent chain comes
+ * up, and so does every step towards an urgent goal.
+ *
+ * Only while they are in the way. A closed task holds nothing up, and passes
+ * nothing on. A parked one is put aside on purpose: it takes the level of
+ * what it holds up, which is worth seeing, but passes nothing on - nobody is
+ * to work on what it waits for until it is taken up again. */
+function passedPriorities(
+  tasks: readonly Task[],
+  byId: ReadonlyMap<string, Task>,
+): Map<string, { level: TaskPriority; from: Task[] }> {
+  const passed = new Map<string, { level: TaskPriority; from: Task[] }>();
+  for (const source of tasks) {
+    const level = source.priority;
+    if (!level || isClosed(source) || source.status === "parked") continue;
+    const seen = new Set([source.id]);
+    const queue = [...source.dependsOn];
+    while (queue.length > 0) {
+      const task = byId.get(queue.pop()!);
+      if (!task || seen.has(task.id) || isClosed(task)) continue;
+      seen.add(task.id);
+      const got = passed.get(task.id);
+      if (!got || priorityLevel(level) > priorityLevel(got.level)) {
+        passed.set(task.id, { level, from: [source] });
+      } else if (got.level === level) {
+        got.from.push(source);
+      }
+      if (task.status !== "parked") queue.push(...task.dependsOn);
+    }
+  }
+  return passed;
+}
 
 export function taskStates(tasks: readonly Task[]): Map<string, TaskState> {
   const byId = new Map(tasks.map((task) => [task.id, task]));
@@ -293,6 +408,7 @@ export function taskStates(tasks: readonly Task[]): Map<string, TaskState> {
       dependents.get(dep)!.push(task);
     }
   }
+  const passed = passedPriorities(tasks, byId);
   const states = new Map<string, TaskState>();
   for (const task of tasks) {
     const known = task.dependsOn.flatMap((dep) => byId.get(dep) ?? []);
@@ -301,11 +417,17 @@ export function taskStates(tasks: readonly Task[]): Map<string, TaskState> {
     if (isClosed(task)) readiness = "closed";
     else if (task.status === "parked") readiness = "parked";
     else readiness = blockers.length > 0 ? "blocked" : "ready";
+    const own = task.priority ?? null;
+    const got = passed.get(task.id);
+    const taken =
+      got && priorityLevel(got.level) > priorityLevel(own) ? got : null;
     states.set(task.id, {
       readiness,
       blockers,
       missing: task.dependsOn.filter((dep) => !byId.has(dep)),
       dependents: dependents.get(task.id) ?? [],
+      priority: taken?.level ?? own,
+      priorityFrom: taken?.from ?? [],
     });
   }
   return states;
@@ -448,6 +570,7 @@ export type TaskEdit = Pick<
   | "tags"
   | "links"
   | "branches"
+  | "priority"
 >;
 
 /** What an edit of `task` changed, and nothing else - so that saving a form
@@ -462,6 +585,9 @@ export function taskEditPatch(task: Task, edited: TaskEdit): TaskPatch | null {
   }
   for (const key of ["tags", "links", "branches"] as const) {
     if (!sameList(edited[key], task[key])) patch[key] = [...edited[key]];
+  }
+  if ((edited.priority ?? null) !== (task.priority ?? null)) {
+    patch.priority = edited.priority ?? null;
   }
   return Object.keys(patch).length > 0 ? patch : null;
 }
@@ -508,6 +634,23 @@ export function applyTaskPatch(
     if (isClosed(next)) next.closedAt = now;
     else delete next.closedAt;
   }
+  // Logged whoever changes it: the line is also what brings the level back
+  // after a writer that does not know the field drops it (`loggedPriority`).
+  if (
+    patch.priority !== undefined &&
+    (patch.priority ?? undefined) !== task.priority
+  ) {
+    if (patch.priority) {
+      next.priority = patch.priority;
+      next.prioritySetBy = by;
+    } else {
+      delete next.priority;
+      delete next.prioritySetBy;
+    }
+    log(
+      `Priorytet: ${priorityWord(task.priority)} → ${priorityWord(patch.priority)}.`,
+    );
+  }
   const deps = patchedDependsOn(task.dependsOn, patch);
   const added = deps.filter((dep) => !task.dependsOn.includes(dep));
   const removed = task.dependsOn.filter((dep) => !deps.includes(dep));
@@ -545,6 +688,13 @@ export function newTask(
     log: [],
   };
   if (input.rank !== undefined) task.rank = input.rank;
+  if (input.priority) {
+    task.priority = input.priority;
+    task.prioritySetBy = by;
+    task.log = [
+      { at: now, by, text: `Priorytet: ${priorityWord(input.priority)}.` },
+    ];
+  }
   if (input.source !== undefined) task.source = input.source;
   if (isClosed(task)) task.closedAt = now;
   return task;
@@ -611,9 +761,18 @@ export function similarTasks(
   return scored.slice(0, limit).map(({ task }) => task);
 }
 
-/** Hand-set rank first, then the older task - so a list reads the same way
- * on every load. */
-export function compareTasks(a: Task, b: Task): number {
+/** The most pressing first - by the priority in `states`, which a task may
+ * take from what it holds up, or without them by its own - then hand-set
+ * rank, then the older task, so a list reads the same way on every load. */
+export function compareTasks(
+  a: Task,
+  b: Task,
+  states?: ReadonlyMap<string, Pick<TaskState, "priority">>,
+): number {
+  const level = (task: Task) =>
+    priorityLevel(states ? states.get(task.id)?.priority : task.priority);
+  const priority = level(b) - level(a);
+  if (priority !== 0) return priority;
   const rank = (a.rank ?? Infinity) - (b.rank ?? Infinity);
   if (rank !== 0 && !Number.isNaN(rank)) return rank;
   return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
