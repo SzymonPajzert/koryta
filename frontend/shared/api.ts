@@ -250,6 +250,19 @@ export const personRequestSchema = z.object({
   sources: z.array(z.string()).optional(),
   companies: z.array(employmentRequestSchema),
   elections: z.array(electionRequestSchema).optional(),
+  /** Set by an uploader that reads `unplacedEmployments` from the answer: a
+   * job at a company the site has no page for is then left out and reported,
+   * and the rest of the person written.
+   *
+   * Without it the ingest refuses the whole person with a 404 naming the
+   * missing companies, as it did for everybody until 2026-10-14, because that
+   * 404 is all an older uploader reads. Taken without the job, the person
+   * would count as sent and the company would never be created - and the
+   * night would leave the payload alone for a month. The requests worker on
+   * koryta-nightly runs the code the last night checked out, so an older
+   * uploader goes on sending for up to a day after this deploys; once none
+   * does, the 404 and this flag can go. */
+  reportUnplacedEmployments: z.boolean().optional(),
 });
 
 export type PersonRequest = {
@@ -265,6 +278,7 @@ export type PersonRequest = {
   sources?: Array<string>;
   companies: Array<EmploymentRequest>;
   elections?: Array<ElectionRequest>;
+  reportUnplacedEmployments?: boolean;
 };
 
 /** One row of the request, as the ingest answers it: the node the row named
@@ -315,6 +329,26 @@ export type UnplacedElection = {
   /** Whether this is a known gap rather than something to look into. See
    * `expectedMissingRegion` in `server/api/ingest/person.post.ts`. */
   expected: boolean;
+};
+
+/** A job the ingest could not turn into a relation, and why.
+ *
+ * A job hangs off the company's page, and the site has no page for every
+ * company the register names. That is no reason to reject the person, any
+ * more than a candidacy without a region is: until 2026-10-14 it was, and the
+ * whole payload came back a 404 listing the missing companies. Now the rest
+ * of the person goes in and the job comes back here, for the uploader to
+ * create the company and send the person again - where the uploader says it
+ * reads this (`reportUnplacedEmployments`).
+ */
+export type UnplacedEmployment = {
+  /** The company, as the payload names it. */
+  krs: string;
+  role?: string;
+  start?: string;
+  end?: string;
+  /** `no-company`: the site has no page for the company. */
+  reason: "no-company";
 };
 
 /** A change the payload asked for that the ingest did not write, and why.
