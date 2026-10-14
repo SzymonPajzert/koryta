@@ -3355,6 +3355,117 @@ describe("api/ingest/person, jobs from the register entry a published page links
       expect(result.articles[0]).not.toHaveProperty("published");
     });
   });
+
+  describe("a job at a company the site has no page for", () => {
+    /** Every job the request wrote, as (company, role). */
+    function jobsWritten() {
+      return vi
+        .mocked(createRevisionTransaction)
+        .mock.calls.map(([, , , , data]) => data as Record<string, unknown>)
+        .filter((data) => data.type === "employed")
+        .map((data) => [data.target, data.name]);
+    }
+
+    /** The payload, from an uploader that reads `unplacedEmployments`. */
+    function reported(overrides: Record<string, unknown> = {}) {
+      payload({ reportUnplacedEmployments: true, ...overrides });
+    }
+
+    it("writes the rest of the person, and says which job it left out", async () => {
+      // The whole payload used to come back a 404 naming the company, and
+      // nothing was written until the uploader had created it.
+      delete store.nodes!.kghm;
+      reported({ parties: ["PSL"] });
+
+      const result = await handler({} as any);
+
+      expect(result).toMatchObject({ personId: "zelewski", status: "ok" });
+      expect(result.person).toBe("updated");
+      expect(result.companies).toEqual([
+        expect.objectContaining({ nodeId: "arp", krs: "0000004441" }),
+      ]);
+      expect(result.unplacedEmployments).toEqual([
+        {
+          krs: "0000023302",
+          role: "Rada Nadzorcza",
+          start: "2026-02-09",
+          reason: "no-company",
+        },
+      ]);
+      expect(jobsWritten()).toEqual([]);
+      expect(mockCommit).toHaveBeenCalled();
+    });
+
+    it("keeps every other job at its own company", async () => {
+      // The lookup answers one company per row. Closed up over the gap a
+      // missing first company leaves, the second row's company would be the
+      // first row's, and the ARP board seat would be written at KGHM.
+      delete store.nodes!.arp;
+      reported();
+
+      const result = await handler({} as any);
+
+      expect(jobsWritten()).toEqual([["kghm", "Rada Nadzorcza"]]);
+      expect(result.companies).toEqual([
+        expect.objectContaining({ nodeId: "kghm", krs: "0000023302" }),
+      ]);
+      expect(result.unplacedEmployments).toEqual([
+        {
+          krs: "0000004441",
+          role: "Zarząd",
+          start: "2007-05-10",
+          end: "2024-10-04",
+          reason: "no-company",
+        },
+      ]);
+    });
+
+    it("creates a new person whose every company has no page", async () => {
+      // The uploader creates the companies and sends the person again, and
+      // the second request finds the page this one made.
+      delete store.nodes!.arp;
+      delete store.nodes!.kghm;
+      reported({
+        name: "Anna Nowak",
+        rejestrIo: "https://rejestr.io/osoby/1",
+        birthDate: "1970-01-01",
+      });
+
+      const result = await handler({} as any);
+
+      expect(result.person).toBe("created");
+      expect(result.companies).toEqual([]);
+      expect(
+        result.unplacedEmployments?.map((job: { krs: string }) => job.krs),
+      ).toEqual(["0000004441", "0000023302"]);
+    });
+
+    it("says nothing about jobs when every company has a page", async () => {
+      reported();
+
+      const result = await handler({} as any);
+
+      expect(result).not.toHaveProperty("unplacedEmployments");
+    });
+
+    it("refuses the whole person, as it did, an uploader that does not say it reads the report", async () => {
+      // One from before 2026-10-14 reads only the 404. Taken without the
+      // job, the person would count as sent and the company never be made.
+      // The status is set through Nuxt's `setResponseStatus`, which does
+      // nothing outside a server; the body is the one it always was.
+      delete store.nodes!.kghm;
+      payload();
+
+      const result = await handler({} as any);
+
+      expect(result).toEqual({
+        message: "Missing companies: 0000023302",
+        data: ["0000023302"],
+      });
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+      expect(mockCommit).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("api/ingest/person, a European candidacy filed under the candidate's home", () => {

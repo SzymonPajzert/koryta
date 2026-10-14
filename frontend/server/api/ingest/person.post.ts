@@ -49,6 +49,7 @@ import {
   type EmploymentRequest,
   type PersonRequest,
   type UnplacedElection,
+  type UnplacedEmployment,
 } from "#shared/api";
 
 export default defineEventHandler(async (event) => {
@@ -65,11 +66,20 @@ export default defineEventHandler(async (event) => {
    * per company and per election; this is the node. */
   let person: "created" | "updated" | "unchanged" = "unchanged";
 
-  const { companyIDs, missingKRS } = await lookupCompanyIDs(
-    ctx,
-    body.companies,
+  const companyIDs = await lookupCompanyIDs(ctx, body.companies);
+  // A job is one relation, as a candidacy is (`createElection`): a company the
+  // site has no page for is no reason to leave out the person, their other
+  // jobs and their candidacies. It used to be - the whole payload was answered
+  // with a 404 naming the missing companies, and nothing was written until the
+  // uploader had created them and sent the person again. A company the
+  // uploader could not create cost the person everything.
+  const unplacedEmployments = body.companies.flatMap((employment, index) =>
+    companyIDs[index] === undefined ? [unplacedEmployment(employment)] : [],
   );
-  if (missingKRS.length > 0) {
+  if (unplacedEmployments.length > 0 && !body.reportUnplacedEmployments) {
+    // An uploader from before 2026-10-14 reads only this; see
+    // `reportUnplacedEmployments`.
+    const missingKRS = unplacedEmployments.map((job) => job.krs);
     console.info("[404] Missing companies:", missingKRS);
     setResponseStatus(
       event,
@@ -80,6 +90,13 @@ export default defineEventHandler(async (event) => {
       message: `Missing companies: ${missingKRS.join(", ")}`,
       data: missingKRS,
     };
+  }
+  if (unplacedEmployments.length > 0) {
+    console.info(
+      `[ingest] ${body.name}: no company page for ` +
+        `${[...new Set(unplacedEmployments.map((job) => job.krs))].join(", ")}; ` +
+        `placing the rest`,
+    );
   }
 
   try {
@@ -157,13 +174,14 @@ export default defineEventHandler(async (event) => {
       companyIDs,
     );
 
+    // Only the rows whose company has a page, each with the id it was looked
+    // up under - by its index, since the lookup answers one per row.
+    const placeable = body.companies.flatMap((company, index) => {
+      const companyID = companyIDs[index];
+      return companyID === undefined ? [] : [{ company, companyID }];
+    });
     const companiesResult: EntityResult[] = await Promise.all(
-      body.companies.map(async (company, index) => {
-        const companyID = companyIDs[index];
-        if (!companyID)
-          throw new Error(
-            `Missing company ID idx=${index}, krs=${company.krs}`,
-          );
+      placeable.map(async ({ company, companyID }) => {
         return await createEmployment(ctx, personId, company, companyID).catch(
           (e) => {
             console.error("Error creating employment", e);
@@ -223,6 +241,10 @@ export default defineEventHandler(async (event) => {
       // the list is what makes a total worth anything: 300 candidacies from
       // the 1990s is the shape of the data, and 300 from 2024 is a bug.
       ...(unplacedElections.length > 0 ? { unplacedElections } : {}),
+      // The same for the jobs: omitted when every company has a page. The
+      // uploader creates the companies these name and sends the person again,
+      // which places them.
+      ...(unplacedEmployments.length > 0 ? { unplacedEmployments } : {}),
       // Also omitted when there are none, which is the usual case.
       ...(Object.keys(ctx.proposals).length > 0
         ? { proposals: ctx.proposals }
@@ -751,41 +773,43 @@ async function moveMisfiledEuropeanCandidacy(
   return undefined;
 }
 
-/** Lookup company node IDs for given employment relations.
+/** The company node each row of `companies` names, by its KRS number, in the
+ * rows' order: undefined for a row whose company the site has no page for.
  *
- * Currently it only uses KRS numbers.
- * Makes sure the companies are already present.
- * If not, fails with 404 with the missing KRS numbers
+ * One per row rather than only the ones found, so a row and its company stay
+ * paired by index when some are missing (`verifiedEmployments` reads them that
+ * way). While a missing company 404'd the whole request, the two lists could
+ * not differ; now they can, and a list closed up over a gap would put a job
+ * at the next row's company.
  *
  * Whether each company is live goes into `ctx.companyPublished` on the way:
  * the lookup reads the document anyway, so knowing it costs nothing more.
- *
- * @param db Connection to firestore DB
- * @param companies
- * @returns
  */
 async function lookupCompanyIDs(
   ctx: Context,
   employments: EmploymentRequest[],
-): Promise<{ companyIDs: string[]; missingKRS: string[] }> {
-  const failingLookup: string[] = [];
-  const companyIDsUnfiltered: (string | undefined)[] = await Promise.all(
+): Promise<(string | undefined)[]> {
+  return await Promise.all(
     employments.map(async (employment) => {
       const node = await lookupNodeDoc(ctx, "krsNumber", employment.krs);
-      if (!node) {
-        failingLookup.push(employment.krs);
-        return undefined;
-      }
+      if (!node) return undefined;
       ctx.companyPublished.set(node.id, pageIsPublic(node.data() ?? {}));
       return node.id;
     }),
   );
-  return {
-    companyIDs: companyIDsUnfiltered.filter(
-      (id: string | undefined): id is string => id !== undefined,
-    ),
-    missingKRS: failingLookup,
+}
+
+/** What to report about a job that is not going to be written: the row as the
+ * payload sent it, so the uploader can name the company to create. */
+function unplacedEmployment(employment: EmploymentRequest): UnplacedEmployment {
+  const record: UnplacedEmployment = {
+    krs: employment.krs,
+    reason: "no-company",
   };
+  if (employment.role) record.role = employment.role;
+  if (employment.start) record.start = employment.start;
+  if (employment.end) record.end = employment.end;
+  return record;
 }
 
 // TODO move this to general utils
@@ -1549,7 +1573,7 @@ async function verifiedEmployments(
   ctx: Context,
   personDoc: FirebaseFirestore.DocumentSnapshot | undefined,
   body: PersonRequest,
-  companyIDs: string[],
+  companyIDs: (string | undefined)[],
 ): Promise<Map<string, FirebaseFirestore.DocumentData> | undefined> {
   const stored = personDoc?.data();
   if (!personDoc || !stored || !pageIsPublic(stored)) return undefined;
