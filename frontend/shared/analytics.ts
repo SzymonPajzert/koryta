@@ -29,9 +29,8 @@
  *   One exception, by Szymon's decision of 2026-10-14: `search:settled`
  *   carries what a logged out reader searched for, once per search. Which
  *   names readers look for and do not find is a question only the query
- *   answers. Why, and where the alternative that keeps the queries off
- *   Plausible lives, is in `shared/searchSession.ts`. Nothing else here takes
- *   a typed value.
+ *   answers. Why, and the copy the site keeps itself, is in
+ *   `shared/searchSession.ts`. Nothing else here takes a typed value.
  * - **Bounded values where it costs nothing.** A property with a few dozen
  *   values reads as a breakdown; one with ten thousand reads as a list.
  *
@@ -122,7 +121,7 @@ export const GOALS = {
   },
   "search:settled": {
     description:
-      "A logged out reader's search, once it was over: the last query before they opened a result (`outcome: pick`), offered to add something (`propose`), or left the box (`abandon`). `query` is what they typed, lowercased - break down by it, filtered to `results: none`, for the names the site does not have, and to `unverified: all` for the people it has and does not show. `results` and `unverified` are bucketed as on search:performed. Signed in readers are not sent.",
+      "A logged out reader's search, once it was over: the last query before they opened a result (`outcome: pick`), offered to add something (`propose`), or left the box (`abandon`). `query` is what they typed, lowercased - break down by it, filtered to `results: none`, for the names the site does not have, and to `unverified: all` for the people it has and does not show. `results` and `unverified` are bucketed as on search:performed. Signed in readers are not sent. The site keeps a copy of every search itself, signed in readers' included, on /admin/wyszukiwania.",
     props: ["query", "results", "unverified", "outcome"],
   },
 
