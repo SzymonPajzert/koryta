@@ -633,3 +633,53 @@ describe("EmploymentHistory role-less copies", () => {
     expect(wrapper.text()).toContain("Zatrudniony/a w");
   });
 });
+
+describe("EmploymentHistory links to drafts", () => {
+  /** Where each row leads, by edge id: the `to` its list item was given. */
+  const links = async (unlinkDrafts: boolean) => {
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        unlinkDrafts,
+        edges: [
+          edge({
+            id: "live",
+            richNode: {
+              id: "pkp",
+              type: "place",
+              name: "PKP",
+              visibility: true,
+            },
+          } as Partial<EdgeNode>),
+          edge({
+            id: "draft",
+            richNode: {
+              id: "spolka",
+              type: "place",
+              name: "Spółka w Przygotowaniu",
+              visibility: false,
+            },
+          } as Partial<EdgeNode>),
+        ],
+      },
+    });
+    return wrapper
+      .findAllComponents({ name: "VListItem" })
+      .filter((item) => item.classes().includes("history-row"))
+      .map((item) => item.props("to"));
+  };
+
+  it("links every row by default, drafts included", async () => {
+    // A signed in reader opens a draft company like any page.
+    const to = await links(false);
+    expect(to).toHaveLength(2);
+    expect(to.every((link) => typeof link === "string" && !!link)).toBe(true);
+  });
+
+  it("draws a row whose far end is a draft without a link when asked", async () => {
+    // The teaser of an unpublished person: following the link would only be a
+    // second wall for a logged out reader.
+    const to = await links(true);
+    expect(to.filter((link) => !link)).toHaveLength(1);
+    expect(to.filter((link) => typeof link === "string")).toHaveLength(1);
+  });
+});

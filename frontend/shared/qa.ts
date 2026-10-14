@@ -63,11 +63,11 @@ export const QA_ITEMS: QaItem[] = [
     title:
       "Niezalogowani widzą imię i ostatnie stanowisko nieopublikowanej osoby",
     description:
-      "Strona osoby, której nikt jeszcze nie sprawdził, pokazywała niezalogowanym tylko „Dostęp zastrzeżony”. Teraz pokazuje imię i nazwisko, obecne lub ostatnie stanowisko i przycisk logowania - nigdy partii ani kandydatur. Wyszukiwarka znów podpowiada takie osoby, z dopiskiem „Profil niezweryfikowany”.",
+      "Strona osoby, której nikt jeszcze nie sprawdził, pokazywała niezalogowanym tylko „Dostęp zastrzeżony”. Teraz pokazuje imię i nazwisko, ostatnie stanowisko jako pierwszy wiersz „Historii powiązań”, a pod nimi ramkę z przyciskami „Zaloguj się” i „Zarejestruj się” - nigdy partii ani kandydatur. Wyszukiwarka znów podpowiada takie osoby, bez żadnego dopisku.",
     steps: [
-      "Wyloguj się i wpisz w wyszukiwarkę nazwisko osoby, której strona jest szkicem - podpowiedź ma dopisek „Profil niezweryfikowany” i stoi pod opublikowanymi osobami.",
-      "Otwórz ją - jest imię i nazwisko, stanowisko ze spółką i datami oraz przycisk „Zaloguj się, aby zobaczyć więcej”; nigdzie nie ma partii ani kandydatur.",
-      "Kliknij przycisk i zaloguj się - wracasz na pełną stronę tej osoby.",
+      "Wyloguj się i wpisz w wyszukiwarkę nazwisko osoby, której strona jest szkicem - podpowiedź jest, bez dopisku, pod opublikowanymi osobami.",
+      "Otwórz ją - jest imię i nazwisko, „Historia powiązań” z jednym stanowiskiem i pod nią ramka z dwoma przyciskami; nigdzie nie ma partii, kandydatur ani zdjęcia.",
+      "Kliknij „Zarejestruj się” - formularz otwiera się na rejestracji; po zalogowaniu wracasz na pełną stronę tej osoby.",
     ],
     link: "/",
     area: "public",

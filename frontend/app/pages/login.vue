@@ -76,7 +76,9 @@ import {
 } from "firebase/auth";
 
 const loading = ref(false);
-const isLogin = ref(true);
+// `?konto=nowe` opens the form on registration: a lock that says „załóż konto"
+// should not land the reader on a login form they have no account for.
+const isLogin = ref(useRoute().query.konto !== "nowe");
 const error = ref<string | null>(null);
 
 const auth = useFirebaseAuth()!;

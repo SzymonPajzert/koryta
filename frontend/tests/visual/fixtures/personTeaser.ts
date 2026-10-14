@@ -9,17 +9,21 @@ import type { PersonTeaser } from "../../../shared/personTeaser";
  * revision behind it that the route asks for (`importedOrReviewed`), and adding
  * one would move the counts every other baseline prints - so the answer is
  * this. The name is made up; the company is the seeded one the institution
- * pages are photographed with, which is published, so the post's company is
- * drawn as a link. */
+ * pages are photographed with, which is published and public, so the row
+ * draws it as a link with its „Instytucja publiczna” chip. */
 export const personTeaser: PersonTeaser = {
   id: "h1",
   name: "Jan Przykładowy",
-  employment: {
-    role: "Członek Rady Nadzorczej",
-    companyId: "sukspolka",
-    companyName: "Wojewódzki Zakład Testowy",
-    companyPublished: true,
-    start: "2024-03-15",
+  post: {
+    id: "teaser-post",
+    name: "Członek Rady Nadzorczej",
+    start_date: "2024-03-15",
+    company: {
+      id: "sukspolka",
+      name: "Wojewódzki Zakład Testowy",
+      visibility: true,
+      isPublic: true,
+    },
   },
   employmentCount: 4,
 };

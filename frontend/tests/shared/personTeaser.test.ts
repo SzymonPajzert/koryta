@@ -91,7 +91,7 @@ describe("mostRecentPost", () => {
 describe("buildPersonTeaser", () => {
   const person = { id: "p1", name: "Jan Kowalski" };
 
-  it("names the most recent post, its company and its dates", () => {
+  it("hands over the most recent post as the history row draws it", () => {
     const teaser = buildPersonTeaser(
       person,
       [
@@ -117,12 +117,11 @@ describe("buildPersonTeaser", () => {
     expect(teaser).toEqual({
       id: "p1",
       name: "Jan Kowalski",
-      employment: {
-        role: "Prezes Zarządu",
-        companyId: "c2",
-        companyName: "ENERGA",
-        companyPublished: false,
-        start: "2023-02-01",
+      post: {
+        id: "new",
+        name: "Prezes Zarządu",
+        start_date: "2023-02-01",
+        company: { id: "c2", name: "ENERGA", visibility: false },
       },
       employmentCount: 2,
     });
@@ -141,24 +140,43 @@ describe("buildPersonTeaser", () => {
           references: ["a1"],
         } as TeaserEdge,
       ],
-      new Map([["c1", { ...company(), parties: ["PO"] } as TeaserCompany]]),
+      new Map([
+        [
+          "c1",
+          {
+            ...company({ isPublic: true, categories: { "0": "energetyka" } }),
+            parties: ["PO"],
+            krsNumber: "0000012345",
+          } as TeaserCompany,
+        ],
+      ]),
       TODAY,
     );
 
-    expect(JSON.stringify(teaser)).not.toMatch(/PiS|PO"|party|committee|a1/);
+    expect(JSON.stringify(teaser)).not.toMatch(
+      /PiS|PO"|party|committee|a1|krs/,
+    );
     expect(Object.keys(teaser).sort()).toEqual([
-      "employment",
       "employmentCount",
       "id",
       "name",
+      "post",
     ]);
-    expect(Object.keys(teaser.employment!).sort()).toEqual([
-      "companyId",
-      "companyName",
-      "companyPublished",
-      "role",
-      "start",
+    expect(Object.keys(teaser.post!).sort()).toEqual([
+      "company",
+      "id",
+      "name",
+      "start_date",
     ]);
+    // What the row's chips read: who owns the company and its sectors, an
+    // array whatever shape the document stored it in.
+    expect(teaser.post!.company).toEqual({
+      id: "c1",
+      name: "ENERGA SPÓŁKA AKCYJNA",
+      visibility: true,
+      isPublic: true,
+      categories: ["energetyka"],
+    });
   });
 
   it("leaves out a removed post and one whose company is gone", () => {
@@ -179,7 +197,7 @@ describe("buildPersonTeaser", () => {
       TODAY,
     );
 
-    expect(teaser.employment?.start).toBe("2010-01-01");
+    expect(teaser.post?.start_date).toBe("2010-01-01");
     expect(teaser.employmentCount).toBe(1);
   });
 
@@ -197,11 +215,12 @@ describe("buildPersonTeaser", () => {
     );
 
     expect(teaser.employmentCount).toBe(1);
-    expect(teaser.employment?.role).toBe("Prokurent");
+    expect(teaser.post?.name).toBe("Prokurent");
   });
 
-  it("names a supervisory seat by the organ the institution has", () => {
-    // A hospital's board is a rada społeczna, whatever the edge was called.
+  it("passes on what the board is called, for the row to name the seat by", () => {
+    // A hospital's board is a rada społeczna, whatever the edge was called;
+    // the row names it so through `displayRole`, given the organ.
     const teaser = buildPersonTeaser(
       person,
       [post("seat", { name: "Rada Nadzorcza", start_date: "2024-01-01" })],
@@ -209,7 +228,8 @@ describe("buildPersonTeaser", () => {
       TODAY,
     );
 
-    expect(teaser.employment?.role).toBe("Rada Społeczna");
+    expect(teaser.post?.name).toBe("Rada Nadzorcza");
+    expect(teaser.post?.company.supervisoryBody).toBe("rada-spoleczna");
   });
 
   it("says nothing about employment when there is none", () => {

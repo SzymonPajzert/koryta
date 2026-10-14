@@ -85,3 +85,56 @@ describe("ExploreLoginBanner", () => {
     );
   });
 });
+
+describe("ExploreLoginBanner's buttons", () => {
+  const byTestId = (
+    wrapper: Awaited<ReturnType<typeof mountSuspended>>,
+    testid: string,
+  ) =>
+    wrapper
+      .findAllComponents({ name: "VBtn" })
+      .find((btn) => btn.attributes("data-testid") === testid);
+
+  it("offers one way in, to a bare /login, unless told otherwise", async () => {
+    // What every banner over a list has always had.
+    const wrapper = await mountSuspended(LoginBanner);
+
+    expect(byTestId(wrapper, "login-banner-login")?.props("to")).toBe("/login");
+    expect(byTestId(wrapper, "login-banner-signup")).toBeUndefined();
+  });
+
+  it("adds „Zarejestruj się” where a caller gives it somewhere to go", async () => {
+    const wrapper = await mountSuspended(LoginBanner, {
+      props: {
+        to: { path: "/login", query: { redirect: "/osoba/x-1" } },
+        signupTo: { path: "/login", query: { konto: "nowe" } },
+      },
+    });
+
+    expect(byTestId(wrapper, "login-banner-login")?.props("to")).toEqual({
+      path: "/login",
+      query: { redirect: "/osoba/x-1" },
+    });
+    const signup = byTestId(wrapper, "login-banner-signup");
+    expect(signup?.props("to")).toEqual({
+      path: "/login",
+      query: { konto: "nowe" },
+    });
+    expect(signup?.text()).toBe("Zarejestruj się");
+
+    await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
+    await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
+    expect(wrapper.emitted("signup")).toHaveLength(1);
+    expect(wrapper.emitted("login")).toHaveLength(1);
+  });
+
+  it("says what the caller puts in it instead of the default", async () => {
+    const wrapper = await mountSuspended(LoginBanner, {
+      props: { hiddenCount: 3 },
+      slots: { default: () => "Widzisz tylko fragment tego profilu" },
+    });
+
+    expect(wrapper.text()).toContain("Widzisz tylko fragment tego profilu");
+    expect(wrapper.text()).not.toContain("nieopublikowanych");
+  });
+});

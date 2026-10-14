@@ -7,7 +7,9 @@ import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
 
 /** A person nobody has published, as a logged out reader finds them: the name,
- * the latest post and the way to sign in, in place of „Dostęp zastrzeżony".
+ * the latest post as the first row of „Historia powiązań”, and under it the
+ * notice with „Zaloguj się” and „Zarejestruj się”, in place of „Dostęp
+ * zastrzeżony".
  *
  * Reached by a client-side navigation, so the teaser is fetched in the browser
  * where the route handler can answer it - see ./fixtures/personTeaser.ts for
@@ -51,6 +53,18 @@ test("osoba-niezweryfikowana", SLUG, async ({ page }, testInfo) => {
   await expect(teaser).toBeVisible({ timeout: 30_000 });
   await expect(teaser).toContainText("Członek Rady Nadzorczej");
   await expect(teaser).toContainText("wszystkie 4 stanowiska");
+  await expect(teaser.getByTestId("login-banner-signup")).toBeVisible();
+
+  // Both buttons inside the banner, on a phone too. The banner clips what runs
+  // over it rather than widening the page, so `expectFitsThePhone` cannot see
+  // a button cut in half - which is how „Zarejestruj się” first shipped.
+  const banner = await teaser.locator(".v-alert").boundingBox();
+  for (const testid of ["login-banner-login", "login-banner-signup"]) {
+    const button = await teaser.getByTestId(testid).boundingBox();
+    expect(button!.x + button!.width, testid).toBeLessThanOrEqual(
+      banner!.x + banner!.width,
+    );
+  }
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("osoba-niezweryfikowana.png", {

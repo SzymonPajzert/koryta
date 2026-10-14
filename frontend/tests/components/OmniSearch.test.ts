@@ -262,9 +262,9 @@ describe("OmniSearch", () => {
     wrapper.unmount();
   });
 
-  it("tells a logged out reader which people are only a teaser", async () => {
-    // Their page is the name and the latest post, with the rest after signing
-    // in - said before the click, not after it.
+  it("draws an unpublished person like any other hit", async () => {
+    // Whose page is a teaser is the page's to explain, not the search box's
+    // to label: no "unpublished" under the name.
     searched = [
       { id: "live", name: "Anna Nowakowska", type: "person", published: true },
       { id: "draft", name: "Anna Nowak", type: "person", published: false },
@@ -273,16 +273,16 @@ describe("OmniSearch", () => {
     await flushPromises();
     await searchFor(wrapper, "anna nowak");
 
-    const subtitleOf = (name: string) =>
-      rows()
-        .find(
-          (el) =>
-            el.querySelector(".v-list-item-title")?.textContent.trim() === name,
-        )
-        ?.querySelector(".v-list-item-subtitle")
-        ?.textContent.trim();
-    expect(subtitleOf("Anna Nowak")).toBe("Profil niezweryfikowany");
-    expect(subtitleOf("Anna Nowakowska")).toBeUndefined();
+    const row = (name: string) =>
+      rows().find(
+        (el) =>
+          el.querySelector(".v-list-item-title")?.textContent.trim() === name,
+      );
+    expect(row("Anna Nowak")).toBeDefined();
+    expect(
+      row("Anna Nowak")?.querySelector(".v-list-item-subtitle"),
+    ).toBeNull();
+    expect(row("Anna Nowakowska")).toBeDefined();
 
     wrapper.unmount();
   });

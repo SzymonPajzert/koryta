@@ -145,8 +145,8 @@ export const GOALS = {
   },
   "teaser:click": {
     description:
-      "Reader clicked the teaser's sign-in button. Against teaser:shown with the same `surface`, the share the offer convinces; against login:success, the share the form then loses.",
-    props: ["surface", "kind"],
+      "Reader clicked one of the teaser's buttons: `mode` is `login` („Zaloguj się”) or `signup` („Zarejestruj się”). Against teaser:shown with the same `surface`, the share the offer convinces; against login:success, the share the form then loses.",
+    props: ["surface", "kind", "mode"],
   },
   "teaser:continued": {
     description:
@@ -400,6 +400,10 @@ export type TeaserSurface = (typeof TEASER_SURFACES)[number];
  * of a person nobody has published. */
 export const TEASER_KINDS = ["profil"] as const;
 export type TeaserKind = (typeof TEASER_KINDS)[number];
+
+/** Which of a teaser's buttons was clicked, for `teaser:click`'s `mode` - the
+ * same values `login:success` reports. */
+export type TeaserClickMode = "login" | "signup";
 
 /** How a reader reached a teaser, for `teaser:shown`'s `from`. */
 export type TeaserArrival = "search" | "link" | "entry";

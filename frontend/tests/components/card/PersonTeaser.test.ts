@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import PersonTeaser from "../../../app/components/card/PersonTeaser.vue";
+import EmploymentHistory from "../../../app/components/card/EmploymentHistory.vue";
 import { trackGoal } from "~/composables/analytics";
 import { noteSearchPick } from "~/composables/teaserJourney";
 import type { PersonTeaser as Teaser } from "~~/shared/personTeaser";
@@ -17,12 +18,16 @@ vi.mock("~/composables/analytics", () => ({ trackGoal: vi.fn() }));
 const TEASER: Teaser = {
   id: "p1",
   name: "Jan Kowalski",
-  employment: {
-    role: "Prezes Zarządu",
-    companyId: "c1",
-    companyName: "ENERGA SPÓŁKA AKCYJNA",
-    companyPublished: true,
-    start: "2023-02-01",
+  post: {
+    id: "job",
+    name: "Prezes Zarządu",
+    start_date: "2023-02-01",
+    company: {
+      id: "c1",
+      name: "ENERGA SPÓŁKA AKCYJNA",
+      visibility: true,
+      isPublic: true,
+    },
   },
   employmentCount: 3,
 };
@@ -35,61 +40,99 @@ const mount = async (teaser: Teaser = TEASER) => {
   return wrapper;
 };
 
+/** One of the banner's two buttons, by its test id. Read off the props:
+ * Vuetify's link resolves no href in this environment. */
+const button = (wrapper: Awaited<ReturnType<typeof mount>>, testid: string) =>
+  wrapper
+    .findAllComponents({ name: "VBtn" })
+    .find((btn) => btn.attributes("data-testid") === testid);
+
 describe("CardPersonTeaser", () => {
   beforeEach(() => {
     auth.user = null;
     vi.mocked(trackGoal).mockClear();
   });
 
-  it("names the person and the post they hold now", async () => {
+  it("shows the latest post as the first row of the history card", async () => {
+    // The full page's own card, not a copy of it: the same row, chips and
+    // dates a reader sees once signed in.
     const wrapper = await mount();
 
-    expect(wrapper.text()).toContain("Jan Kowalski");
-    expect(wrapper.text()).toContain("Profil niezweryfikowany");
-    const job = wrapper.get('[data-testid="person-teaser-employment"]');
-    expect(job.text()).toContain("Obecne stanowisko");
-    expect(job.text()).toContain("ENERGA SPÓŁKA AKCYJNA");
-    expect(job.text()).toContain("Prezes Zarządu · od 2023-02-01");
-    // A live company is a link a logged out reader can follow.
-    expect(job.find("a").attributes("href")).toMatch(/^\/instytucja\//);
+    expect(wrapper.get("h2").text()).toBe("Jan Kowalski");
+    const history = wrapper.findComponent(EmploymentHistory);
+    expect(history.exists()).toBe(true);
+    expect(history.props("unlinkDrafts")).toBe(true);
+    expect(history.props("edges")).toEqual([
+      expect.objectContaining({
+        id: "job",
+        type: "employed",
+        label: "Prezes Zarządu",
+        source: "p1",
+        target: "c1",
+        start_date: "2023-02-01",
+        richNode: expect.objectContaining({
+          id: "c1",
+          type: "place",
+          name: "ENERGA SPÓŁKA AKCYJNA",
+          visibility: true,
+        }),
+      }),
+    ]);
+    expect(history.text()).toContain("Historia powiązań");
+    expect(history.text()).toContain("ENERGA SPÓŁKA AKCYJNA");
+    expect(history.text()).toContain("Prezes Zarządu");
+    // The row's chip, read off the company the teaser handed over.
+    expect(history.text()).toContain("Instytucja publiczna");
   });
 
-  it("says a post that ended is the last one, with both dates", async () => {
+  it("labels a post the register named no role for as the history does", async () => {
     const wrapper = await mount({
       ...TEASER,
-      employment: { ...TEASER.employment!, end: "2024-06-30" },
-    });
-
-    const job = wrapper.get('[data-testid="person-teaser-employment"]');
-    expect(job.text()).toContain("Ostatnie stanowisko");
-    expect(job.text()).toContain("2023-02-01 - 2024-06-30");
-  });
-
-  it("does not link a company nobody has published", async () => {
-    // It would be the same wall again.
-    const wrapper = await mount({
-      ...TEASER,
-      employment: { ...TEASER.employment!, companyPublished: false },
-    });
-
-    const job = wrapper.get('[data-testid="person-teaser-employment"]');
-    expect(job.find("a").exists()).toBe(false);
-    expect(job.text()).toContain("ENERGA SPÓŁKA AKCYJNA");
-  });
-
-  it("says nothing about a post where there is none", async () => {
-    const wrapper = await mount({
-      id: "p1",
-      name: "Jan Kowalski",
-      employmentCount: 0,
+      post: { ...TEASER.post!, name: undefined },
     });
 
     expect(
-      wrapper.find('[data-testid="person-teaser-employment"]').exists(),
-    ).toBe(false);
-    expect(wrapper.get('[data-testid="person-teaser-more"]').text()).toBe(
-      "Po zalogowaniu zobaczysz cały profil, ze źródłami i grafem powiązań, i możesz pomóc go sprawdzić.",
+      wrapper.findComponent(EmploymentHistory).props("edges")[0].label,
+    ).toBe("Zatrudniony/a w");
+  });
+
+  it("puts the notice under the profile, with both ways in", async () => {
+    const wrapper = await mount();
+
+    const html = wrapper.html();
+    expect(html.indexOf("Historia powiązań")).toBeLessThan(
+      html.indexOf("Widzisz tylko fragment tego profilu"),
     );
+    expect(button(wrapper, "login-banner-login")?.props("to")).toEqual({
+      path: "/login",
+      query: { redirect: expect.any(String), powod: "profil-osoby" },
+    });
+    expect(button(wrapper, "login-banner-signup")?.props("to")).toEqual({
+      path: "/login",
+      query: {
+        redirect: expect.any(String),
+        powod: "profil-osoby",
+        konto: "nowe",
+      },
+    });
+  });
+
+  it("counts which of the two buttons was clicked", async () => {
+    const wrapper = await mount();
+
+    await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
+    await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
+
+    expect(trackGoal).toHaveBeenCalledWith("teaser:click", {
+      surface: "osoba",
+      kind: "profil",
+      mode: "signup",
+    });
+    expect(trackGoal).toHaveBeenCalledWith("teaser:click", {
+      surface: "osoba",
+      kind: "profil",
+      mode: "login",
+    });
   });
 
   it("promises the posts the full page lists", async () => {
@@ -100,23 +143,26 @@ describe("CardPersonTeaser", () => {
     );
   });
 
-  it("sends the reader to sign in and back, saying why", async () => {
+  it("shows no history where there is no post on record", async () => {
+    const wrapper = await mount({
+      id: "p1",
+      name: "Jan Kowalski",
+      employmentCount: 0,
+    });
+
+    expect(
+      wrapper.find('[data-testid="person-teaser-employment"]').exists(),
+    ).toBe(false);
+    expect(wrapper.get('[data-testid="person-teaser-more"]').text()).toBe(
+      "Nikt z zespołu nie sprawdził go jeszcze, więc całość - źródła i graf powiązań - pokazujemy zalogowanym. Możesz też pomóc go sprawdzić.",
+    );
+  });
+
+  it("draws no picture where nobody has one", async () => {
+    // The person icon read as a profile picture that is never set.
     const wrapper = await mount();
-
-    // Read off the prop: Vuetify's link resolves no href in this environment.
-    const button = wrapper
-      .findAllComponents({ name: "VBtn" })
-      .find((btn) => btn.attributes("data-testid") === "person-teaser-login");
-    expect(button?.props("to")).toEqual({
-      path: "/login",
-      query: { redirect: expect.any(String), powod: "profil-osoby" },
-    });
-
-    await wrapper.get('[data-testid="person-teaser-login"]').trigger("click");
-    expect(trackGoal).toHaveBeenCalledWith("teaser:click", {
-      surface: "osoba",
-      kind: "profil",
-    });
+    expect(wrapper.find(".v-card-item__prepend").exists()).toBe(false);
+    expect(wrapper.find(".v-avatar").exists()).toBe(false);
   });
 
   it("counts being shown, and whether the search box sent the reader", async () => {
