@@ -461,7 +461,7 @@ import {
   entityOgType,
   SOCIAL_CARD,
 } from "~/composables/entitySeo";
-import { useAuthState, authFetch } from "@/composables/auth";
+import { useAuthState, authFetch, authRequest } from "@/composables/auth";
 import type {
   Person,
   Company,
@@ -526,13 +526,20 @@ watch(
 
 const revisionId = computed(() => route.query.revisionId as string | undefined);
 
+// A proposed change laid over the page, for a signed in reader who followed a
+// link to it. In the browser only and with the token: a revision is a draft,
+// party and all, that /api/revisions/[id] gives nobody else, and the server's
+// render is always anonymous - it merged any revision anybody named into the
+// page it served them.
 const { data: revisionResponse } = await useAsyncData<Revision | null>(
   `revision-${route.query.revisionId || "none"}`,
   async () => {
-    if (!revisionId.value) return null;
-    return $fetch<Revision>(`/api/revisions/${revisionId.value}` as never);
+    if (!revisionId.value || !user.value) return null;
+    return authRequest<Revision>(`/api/revisions/${revisionId.value}`, {
+      method: "GET",
+    });
   },
-  { watch: [revisionId] },
+  { watch: [revisionId, user], server: false },
 );
 
 const entity = computed(() => {

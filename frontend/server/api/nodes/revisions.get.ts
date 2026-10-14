@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { fetchOptionsValidator, paginate } from "~~/server/utils/fetch";
-import { defineEventHandler } from "h3";
+import { defineEventHandler, setResponseHeader } from "h3";
+import { getUser } from "~~/server/utils/auth";
 import { nodeTypes, pageIsPublic } from "~~/shared/model";
 import { normalizeUpdateTime } from "~~/shared/revisions";
 
@@ -13,7 +14,16 @@ const queryValidator = z.object({
   sortDesc: z.enum(["true", "false"]).optional(),
 });
 
+/** Pages with their revision state, a page of them at a time, for the
+ * „Strony” section of /admin/rewizje.
+ *
+ * Whole node documents, drafts among them, so signed in readers only - the
+ * page that reads this is behind the same login, and until 2026-10-14 the
+ * route was not, which put every unpublished page a curl away.
+ */
 export default defineEventHandler(async (event) => {
+  await getUser(event);
+  setResponseHeader(event, "Cache-Control", "private, no-store");
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
 
   const db = getFirestore("koryta-pl");

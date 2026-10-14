@@ -1,8 +1,14 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
+import { setResponseHeader } from "h3";
+import { getUser } from "~~/server/utils/auth";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
 
+/** Every revision of one page, as raw documents - for a signed in reader only,
+ * for the reason `/api/revisions/[id]` gives. */
 export default defineEventHandler(async (event) => {
+  await getUser(event);
+  setResponseHeader(event, "Cache-Control", "private, no-store");
   const query = getQuery(event);
   const nodeId = query.nodeId as string | undefined;
   if (!nodeId) {

@@ -1,9 +1,18 @@
 import type { Edge } from "~~/shared/model";
 import { getFirestore } from "firebase-admin/firestore";
 import { getRevisionsForNodes } from "~~/server/utils/revisions";
-import { authCachedEventHandler } from "~~/server/utils/handlers";
+import { defineEventHandler, setResponseHeader } from "h3";
+import { getUser } from "~~/server/utils/auth";
 
-export default authCachedEventHandler(async () => {
+/** The relations still waiting for their first review, with their revisions.
+ *
+ * Drafts by definition, so signed in readers only, and not from a cache:
+ * this was a six hour shared entry anybody could fill and anybody could read.
+ * Nothing in the app calls it today.
+ */
+export default defineEventHandler(async (event) => {
+  await getUser(event);
+  setResponseHeader(event, "Cache-Control", "private, no-store");
   const db = getFirestore("koryta-pl");
   const query: FirebaseFirestore.Query = db
     .collection("edges")
