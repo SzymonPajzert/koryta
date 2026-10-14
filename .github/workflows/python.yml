@@ -8,7 +8,10 @@ on:
       # a Dependabot pull request ran no Python job at all.
       - "data/pipelines/pyproject.toml"
       - "data/pipelines/uv.lock"
-      - ".github/workflows/python.yml"
+      # Every workflow, not just this one: src/stores/tests/test_ci_workflows.py
+      # reads them all for what they upload and cache, so a pull request that
+      # touches only a workflow is what it has to see.
+      - ".github/workflows/**"
 
 permissions:
   contents: read
