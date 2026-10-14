@@ -31,7 +31,7 @@
       <v-list-item
         v-for="edge in edgesSorted"
         :key="edge.id"
-        :to="nodeLinkUrl(edge.richNode)"
+        :to="rowLink(edge)"
         :target="newTab ? '_blank' : undefined"
         class="history-row mt-1"
         rounded
@@ -304,6 +304,13 @@ const props = defineProps<{
    * was opened. The router's own navigation stands aside for `_blank`, so the
    * browser opens the tab. */
   newTab?: boolean;
+  /** Whether a row whose far end nobody has published is drawn without a
+   * link. Off by default, which is right for everybody who can open drafts.
+   * The logged out teaser of an unpublished person turns it on: there the
+   * company at the far end may be a draft too, and a link to it would only be
+   * a second wall. (On rather than off as the special case because an absent
+   * boolean prop is `false`.) */
+  unlinkDrafts?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -316,6 +323,15 @@ const emit = defineEmits<{
    * refetch on this. */
   published: [];
 }>();
+
+/** Where a row leads: the page at its far end, unless that page is a draft
+ * this list was asked not to link to. */
+function rowLink(edge: EdgeNode): string | undefined {
+  if (props.unlinkDrafts && edge.richNode.visibility === false) {
+    return undefined;
+  }
+  return nodeLinkUrl(edge.richNode);
+}
 
 /** Whether the row's „Opublikuj" is offered, for this list's subject. */
 function isPublishable(edge: EdgeNode): boolean {

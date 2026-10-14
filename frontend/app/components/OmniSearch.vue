@@ -240,9 +240,6 @@ type ListItem = {
   /** The node a search hit opens, for telling its page that the search box
    * sent the reader there (`noteSearchPick`). */
   nodeId?: string;
-  /** Whether the hit is a person nobody has published - a teaser rather than a
-   * page, for a logged out reader. */
-  unverified?: boolean;
   path?: string;
   query?: Record<string, string>;
 };
@@ -390,23 +387,16 @@ const items = computed<ListItem[]>(() => {
         ? { path: "/eksploruj/tabela", query: item.query }
         : { path: generateEntityUrl(itemType, item.id!, item.name) };
 
-      const unverified = isUnverifiedPerson(item);
+      // An unpublished person is drawn like any other hit. Whose page is a
+      // teaser is the page's to explain, not the search box's to label.
       result.push({
         id: `entity-${item.id}`,
         title: item.name,
-        // Said before the click, to a logged out reader: the page behind it is
-        // a teaser - a name and a post - with the rest after signing in. A
-        // signed in reader opens drafts like any page, and nine in ten people
-        // would carry the line.
-        ...(unverified && !user.value
-          ? { subtitle: "Profil niezweryfikowany" }
-          : {}),
         icon,
         // The type /api/search returned, not the url it produced: a company
         // with a krs filter and a company page both mean "place".
         analyticsKind: searchPickKind(itemType),
         nodeId: item.id,
-        unverified,
         ...routing,
       });
     });

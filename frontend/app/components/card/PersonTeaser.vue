@@ -1,82 +1,55 @@
 <template>
   <v-card class="mb-4" data-testid="person-teaser">
-    <v-card-item>
-      <template #prepend>
-        <v-icon :icon="mdiAccountOutline" size="large" />
-      </template>
-      <v-card-title class="text-h5 text-wrap">{{ teaser.name }}</v-card-title>
-      <v-card-subtitle class="text-wrap opacity-100">
-        <v-chip size="small" variant="outlined" class="mt-1">
-          Profil niezweryfikowany
-        </v-chip>
-      </v-card-subtitle>
-    </v-card-item>
+    <div class="pa-4">
+      <!-- Headed as the full page heads a person (`EntityDetailsCard`). -->
+      <h2 class="text-h5 font-weight-bold">{{ teaser.name }}</h2>
 
-    <v-card-text>
-      <!-- The one post, as the full page would list it. The company is a link
-           only where its own page is live: a logged out reader sent to a
-           company nobody has published would hit the same wall again. -->
+      <!-- The latest post as the first row of the history the full page lists,
+           drawn by the card that draws it there - chips, dates and all - so
+           the teaser reads as the page it is a piece of. A company nobody has
+           published is drawn without a link: following it would be a second
+           wall. -->
       <div
-        v-if="employment"
-        class="mb-4"
+        v-if="historyEdges.length > 0"
+        class="mt-4"
         data-testid="person-teaser-employment"
       >
-        <div class="text-overline">
-          {{ heldNow ? "Obecne stanowisko" : "Ostatnie stanowisko" }}
-        </div>
-        <div class="text-subtitle-1 font-weight-bold text-wrap">
-          <nuxt-link v-if="companyUrl" :to="companyUrl" class="link-plain">
-            {{ employment.companyName }}
-          </nuxt-link>
-          <span v-else>{{ employment.companyName }}</span>
-        </div>
-        <div
-          v-if="employment.role || period"
-          class="text-body-2 text-medium-emphasis"
-        >
-          {{ [employment.role, period].filter(Boolean).join(" · ") }}
-        </div>
+        <CardEmploymentHistory :edges="historyEdges" unlink-drafts />
       </div>
 
-      <p class="mb-2">
-        Ta osoba jest w naszej bazie, ale nikt z zespołu nie sprawdził jeszcze
-        jej profilu, więc bez logowania pokazujemy tylko jego fragment.
-      </p>
-      <p class="mb-4" data-testid="person-teaser-more">{{ moreLine }}</p>
-
-      <v-btn
-        color="primary"
-        variant="flat"
+      <!-- Under what the reader can see, what they cannot, and the two ways in
+           - the site's own login banner. -->
+      <ExploreLoginBanner
         :to="loginTarget"
-        data-testid="person-teaser-login"
-        @click="onLoginClick"
+        :signup-to="signupTarget"
+        class="mt-4 mb-0"
+        @login="onClick('login')"
+        @signup="onClick('signup')"
       >
-        Zaloguj się, aby zobaczyć więcej
-      </v-btn>
+        <div class="font-weight-bold">W trakcie weryfikacji</div>
+        <div data-testid="person-teaser-more">{{ noticeText }}</div>
+      </ExploreLoginBanner>
 
-      <!-- Said on every teaser, because the page is about a named person and
-           nobody has checked it: the post comes from the register, and a
-           reader must not take being listed here for a political tie. The
-           party a match may have suggested is not on this page at all. -->
+      <!-- Said on every teaser: the post comes from the register, and being
+           listed here is no political tie. The party a match may have
+           suggested is not on this page at all. -->
       <p class="text-caption text-medium-emphasis mt-4 mb-0">
-        Informacje pochodzą m.in. z publicznych rejestrów i nie zostały jeszcze
-        sprawdzone przez zespół. Obecność w bazie nie oznacza powiązań
-        politycznych.
+        Informacje pochodzą m.in. z publicznych rejestrów. Obecność w bazie nie
+        oznacza powiązań politycznych.
       </p>
-    </v-card-text>
+    </div>
   </v-card>
 </template>
 
 <script setup lang="ts">
-import { mdiAccountOutline } from "@mdi/js";
 import { getCurrentUser } from "vuefire";
+import type { TeaserClickMode } from "~~/shared/analytics";
+import type { Node } from "~~/shared/model";
 import type { PersonTeaser } from "~~/shared/personTeaser";
-import { spellDate } from "~~/shared/succession";
 import { trackGoal } from "~/composables/analytics";
+import { edgeTypeLabels, type EdgeNode } from "~/composables/edges";
 import { polishCounting } from "~/composables/polish";
-import { generateEntityUrl } from "~/composables/slugs";
 import { teaserArrival, watchTeaserExit } from "~/composables/teaserJourney";
-import { relationPeriodLabel } from "~/utils/relationPeriod";
 
 /** What a logged out reader sees on the page of a person nobody has published:
  * the name, the most recent post, and the way to sign in for the rest. See
@@ -93,47 +66,51 @@ const router = useRouter();
 
 const GOAL = { surface: "osoba", kind: "profil" } as const;
 
-const employment = computed(() => props.teaser.employment);
-
-/** Whether the post is still held: no end, or an end still ahead. */
-const heldNow = computed(() => {
-  const end = spellDate(employment.value?.end);
-  return end === null || end >= Date.now();
+/** The post as a row of `CardEmploymentHistory`, made the way `useEdges`
+ * makes the full page's rows - the label is the role, or the edge type's own
+ * phrase where the register named none. */
+const historyEdges = computed<EdgeNode[]>(() => {
+  const post = props.teaser.post;
+  if (!post) return [];
+  return [
+    {
+      id: post.id,
+      type: "employed",
+      name: post.name,
+      label: post.name || edgeTypeLabels.employed!,
+      source: props.teaser.id,
+      target: post.company.id,
+      start_date: post.start_date,
+      end_date: post.end_date,
+      richNode: { ...post.company, type: "place" } as Node,
+    },
+  ];
 });
 
-const period = computed(() => {
-  const job = employment.value;
-  if (!job) return "";
-  if (job.start && !job.end) return `od ${job.start}`;
-  return relationPeriodLabel(job.start, job.end);
-});
-
-const companyUrl = computed(() => {
-  const job = employment.value;
-  if (!job?.companyPublished) return undefined;
-  return generateEntityUrl("place", job.companyId, job.companyName);
-});
-
-/** What signing in gets the reader, counting the posts where there is more
- * than the one above. */
-const moreLine = computed(() => {
+/** Why the rest is held back, and what signing in shows - counting the posts
+ * where there are more than the one above. */
+const noticeText = computed(() => {
   const count = props.teaser.employmentCount;
-  const posts =
+  const what =
     count > 1
-      ? ` - w tym wszystkie ${polishCounting(count, "stanowisko", "stanowiska", "stanowisk")}`
-      : "";
-  return `Po zalogowaniu zobaczysz cały profil${posts}, ze źródłami i grafem powiązań, i możesz pomóc go sprawdzić.`;
+      ? `${polishCounting(count, "stanowisko", "stanowiska", "stanowisk")}, źródła i graf powiązań`
+      : "źródła i graf powiązań";
+  return `Zaloguj się, by zobaczyć wszystkie ${what} tej osoby.`;
 });
 
 /** Back here once signed in. `powod` tells /login, and `login:success`, why
- * the reader came. */
+ * the reader came; `konto=nowe` opens the form on registration. */
 const loginTarget = computed(() => ({
   path: "/login",
   query: { redirect: route.fullPath, powod: "profil-osoby" },
 }));
+const signupTarget = computed(() => ({
+  path: "/login",
+  query: { ...loginTarget.value.query, konto: "nowe" },
+}));
 
-function onLoginClick() {
-  trackGoal("teaser:click", GOAL);
+function onClick(mode: TeaserClickMode) {
+  trackGoal("teaser:click", { ...GOAL, mode });
 }
 
 let stopWatchingExit: (() => void) | undefined;

@@ -22,23 +22,37 @@
  * cannot reach it by accident.
  */
 
-import { displayRole } from "./companyBodies";
+import { asArray } from "./model";
 import { withoutRedundantRoleless, type RoleSpell } from "./rolelessSpells";
 import { spellDate } from "./succession";
 
-/** The one post the teaser names. */
-export type TeaserEmployment = {
-  /** The role as the full page would print it, or absent where the register
-   * named none. */
-  role?: string;
-  companyId: string;
-  companyName: string;
-  /** Whether the company's own page is live. Only then is it a link: a
-   * logged out reader following one to a company nobody has published would
-   * land on the same wall again. */
-  companyPublished: boolean;
-  start?: string;
-  end?: string;
+/** The company at the far end of the post, as much of it as a row of
+ * „Historia powiązań” draws: its name, whether its page is live
+ * (`visibility`, as the local graph answers it), and what the row's chips say
+ * about it - who owns it, which sectors it is filed under, what its board is
+ * called. All of it is the company's own public record. */
+export type TeaserCompanyCard = {
+  id: string;
+  name: string;
+  visibility: boolean;
+  isPublic?: boolean;
+  isPublicSource?: "manual";
+  categories?: string[];
+  supervisoryBody?: string;
+};
+
+/** The one post the teaser shows: the first row of the person's „Historia
+ * powiązań”, drawn by the card the full page draws it with
+ * (`CardEmploymentHistory`), which names the role and lays out the dates
+ * itself. */
+export type TeaserPost = {
+  /** The relation's id; the row is keyed by it. */
+  id: string;
+  /** The role as stored, absent where the register named none. */
+  name?: string;
+  start_date?: string;
+  end_date?: string;
+  company: TeaserCompanyCard;
 };
 
 export type PersonTeaser = {
@@ -47,7 +61,7 @@ export type PersonTeaser = {
   id: string;
   name: string;
   /** The post held now or held last; absent where nothing is on record. */
-  employment?: TeaserEmployment;
+  post?: TeaserPost;
   /** How many posts the full page lists, the one above included - the number
    * the sign-in button promises. Counted the way the page lists them, without
    * the role-less copy of a post the person also holds under its name. */
@@ -71,6 +85,9 @@ export type TeaserCompany = {
   name?: string;
   published?: boolean;
   deleted?: boolean;
+  isPublic?: boolean;
+  isPublicSource?: string;
+  categories?: unknown;
   supervisoryBody?: string;
 };
 
@@ -150,23 +167,41 @@ export function buildPersonTeaser(
   const listed = withoutRedundantRoleless(live, spellOf);
   const latest = mostRecentPost(listed, today);
   const company = latest ? companies.get(latest.target) : undefined;
-  const role = latest ? displayRole(latest.name, company) : undefined;
 
   return {
     id: person.id,
     name: person.name,
     ...(latest && company
       ? {
-          employment: {
-            ...(role ? { role } : {}),
-            companyId: latest.target,
-            companyName: company.name!,
-            companyPublished: company.published === true,
-            ...(latest.start_date ? { start: latest.start_date } : {}),
-            ...(latest.end_date ? { end: latest.end_date } : {}),
+          post: {
+            id: latest.id,
+            ...(latest.name ? { name: latest.name } : {}),
+            ...(latest.start_date ? { start_date: latest.start_date } : {}),
+            ...(latest.end_date ? { end_date: latest.end_date } : {}),
+            company: companyCard(latest.target, company),
           },
         }
       : {}),
     employmentCount: listed.length,
+  };
+}
+
+/** The company as the row draws it, field by field. */
+function companyCard(id: string, company: TeaserCompany): TeaserCompanyCard {
+  const categories = asArray<unknown>(
+    company.categories as unknown[] | Record<string, unknown> | undefined,
+  ).filter((value): value is string => typeof value === "string");
+  return {
+    id,
+    name: company.name!,
+    visibility: company.published === true,
+    ...(company.isPublic === true ? { isPublic: true } : {}),
+    ...(company.isPublicSource === "manual"
+      ? { isPublicSource: "manual" as const }
+      : {}),
+    ...(categories.length > 0 ? { categories } : {}),
+    ...(company.supervisoryBody
+      ? { supervisoryBody: company.supervisoryBody }
+      : {}),
   };
 }

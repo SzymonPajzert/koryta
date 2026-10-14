@@ -141,12 +141,11 @@ describe("/api/nodes/[id]/teaser", () => {
     expect(await call()).toEqual({
       id: "p1",
       name: "Jan Kowalski",
-      employment: {
-        role: "Prezes Zarządu",
-        companyId: "c1",
-        companyName: "ENERGA",
-        companyPublished: true,
-        start: "2023-02-01",
+      post: {
+        id: "job",
+        name: "Prezes Zarządu",
+        start_date: "2023-02-01",
+        company: { id: "c1", name: "ENERGA", visibility: true },
       },
       employmentCount: 2,
     });
@@ -192,7 +191,7 @@ describe("/api/nodes/[id]/teaser", () => {
     // what the teaser names.
     proposed.add("job");
     expect(await call()).toMatchObject({
-      employment: { companyId: "gmina", role: "Sekretarz" },
+      post: { id: "older", name: "Sekretarz", company: { id: "gmina" } },
       employmentCount: 1,
     });
   });

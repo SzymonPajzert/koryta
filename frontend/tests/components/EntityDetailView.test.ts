@@ -136,12 +136,11 @@ describe("EntityDetailView, logged out on a page nobody has published", () => {
     teaserAnswer = {
       id: "n1",
       name: "Jan Kowalski",
-      employment: {
-        role: "Prezes Zarządu",
-        companyId: "c1",
-        companyName: "ENERGA",
-        companyPublished: true,
-        start: "2023-02-01",
+      post: {
+        id: "job",
+        name: "Prezes Zarządu",
+        start_date: "2023-02-01",
+        company: { id: "c1", name: "ENERGA", visibility: true },
       },
       employmentCount: 2,
     };
