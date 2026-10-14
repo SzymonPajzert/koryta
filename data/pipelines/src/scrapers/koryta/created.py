@@ -27,7 +27,9 @@ from scrapers.stores import CloudStorage, Context, Pipeline
 #: person: `person` and `payload` (who, and a hash of what was sent - what a
 #: later run leaves alone), `hashed` (how that hash was made, since October
 #: 2026: `jobs.people_import.HASHED`), `name`, `tier`, `outcome` (the site's
-#: answer: created, updated or unchanged), `node` (the page) and `rejestrIo`.
+#: answer: created, updated or unchanged), `node` (the page), `rejestrIo` and,
+#: since 2026-10-14, `unplaced` (the companies the site took the person without
+#: a job at, for want of a page - such a line is not left alone).
 SENT_LOG = CloudStorage(
     prefix="jobs/people_import/sent/",
     bucket="koryta-pl-sharedcache",

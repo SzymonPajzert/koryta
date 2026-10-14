@@ -35,7 +35,10 @@ notes are this morning's export's, as the pages are. It leaves alone a payload
 it already sent unchanged in the last `--resend-after` days: an update a
 reviewer has not yet approved, or a party a human took off a page, still reads
 as a change against the export, and sent every night it would take a slot each
-night and undo the human each time.
+night and undo the human each time. Not a payload the site took without a job
+for want of a page for its company - a company the uploader could not create:
+that one goes again the next night, as a refused one does, until the job is
+on the page (`remembered`).
 
 Of the new hires, the people only an odpis names - no rejestr.io entry, so the
 ingest finds them by their name and birth date alone - take at most a tenth of
@@ -305,6 +308,11 @@ class RunSummary:
     #: keeps its own of, or one on a removed job. The page's `dropped_changes`
     #: counter says how many; this says which.
     dropped: list[dict] = field(default_factory=list)
+    #: The jobs the site took a person without for want of a page for their
+    #: company, as the ingest reported them (`unplacedEmployments`) once the
+    #: uploader had created what companies it could, with the person's name
+    #: and page. The page's `employments_unplaced` counter says how many.
+    unplaced_employments: list[dict] = field(default_factory=list)
     #: A priority run: how many of the planned are in each tier.
     tiers: dict[str, int] = field(default_factory=dict)
     #: A priority run: the people whose rejestr.io feed was bought within
@@ -376,7 +384,7 @@ def judge(ending: Ending, counts: Mapping[str, int]) -> tuple[FinalState, str, i
     A guardrail fails the run, and so does every person sent being refused.
     Anything else that leaves people unsent is partial: a stop asked for - a
     limit, the deadline, a signal - or a few refusals, which the next run sends
-    again.
+    again. So is a job left off a person's page for want of its company.
     """
     if ending.guarded:
         return "failed", ending.stopped, EXIT_FAILED
@@ -389,6 +397,11 @@ def judge(ending: Ending, counts: Mapping[str, int]) -> tuple[FinalState, str, i
         return "partial", ending.stopped, EXIT_TRY_LATER
     if failed:
         return "partial", refused, EXIT_TRY_LATER
+    if unplaced := counts.get("employments_unplaced", 0):
+        # A person taken without a job, for want of a company the uploader
+        # could not create, is what a refused person was until 2026-10-14:
+        # the next run sends them again (`remembered`).
+        return "partial", f"zatrudnienia bez strony firmy: {unplaced}", EXIT_TRY_LATER
     return "succeeded", "", 0
 
 
@@ -513,7 +526,8 @@ HASHED = "lists-in-any-order"
 
 def sent_recently(client: "Client", since: str) -> set[tuple[str, str]]:
     """(person, payload hash) of everything a priority run took on `since`
-    (YYYY-MM-DD) or later, read from its `SENT_PREFIX` parts.
+    (YYYY-MM-DD) or later, read from its `SENT_PREFIX` parts, that a later run
+    may leave alone (`remembered`).
 
     A line whose hash was made as the payload was listed is hashed again, off
     the payload its run wrote before it sent anything (`hashed_again`). Left
@@ -531,6 +545,8 @@ def sent_recently(client: "Client", since: str) -> set[tuple[str, str]]:
     ):
         old: set[tuple[str, str]] = set()
         for row in json_lines(blob.download_as_bytes()):
+            if not remembered(row):
+                continue
             pair = (row["person"], row["payload"])
             if row.get("hashed") == HASHED:
                 seen.add(pair)
@@ -548,6 +564,20 @@ def sent_recently(client: "Client", since: str) -> set[tuple[str, str]]:
             f"{found} hashed again off the payloads their runs wrote"
         )
     return seen
+
+
+def remembered(row: Mapping[str, typing.Any]) -> bool:
+    """Whether a later run may leave alone as sent the payload one line of a
+    `SENT_PREFIX` part names.
+
+    Not one the site took without a job, for want of a page for its company
+    (`unplaced`): until 2026-10-14 the site refused such a person whole, and a
+    refused person is not in the part at all, so the next run sent them again
+    and the uploader tried the company once more. Remembered, the payload
+    would be left alone for `--resend-after` days with the company still
+    missing, or with its page there and the job not on it.
+    """
+    return not row.get("unplaced")
 
 
 def hashed_again(
@@ -760,8 +790,9 @@ class PeopleImport:
         #: sending order (`Candidate.published`).
         self.published: list[bool] | None = None
         #: A priority run, or one asked for: what the site took - payload,
-        #: tier, outcome, and the page it filed the person under.
-        self.taken: list[tuple[dict, str, str, str | None]] = []
+        #: tier, outcome, the page it filed the person under, and the
+        #: companies it took them without a job at, for want of a page.
+        self.taken: list[tuple[dict, str, str, str | None, list[str]]] = []
         #: A run asked for on a page: what was asked, once read.
         self.request: Request | None = None
         #: ...and what of the page's people it found and left, for the page.
@@ -1064,13 +1095,23 @@ class PeopleImport:
                         {"name": payload["name"], "node": result.person_id, **change}
                         for change in result.dropped
                     ]
+                    self.summary.unplaced_employments += [
+                        {"name": payload["name"], "node": result.person_id, **job}
+                        for job in result.unplaced_jobs
+                    ]
                 ending.done = n + 1
                 self.status.progress(ending.done, counters=self.counters())
                 if result is not None and self.tiers is not None:
                     tier = self.tiers[n]
                     if result.outcome in TAKEN:
                         self.taken.append(
-                            (payload, tier, result.outcome, result.person_id)
+                            (
+                                payload,
+                                tier,
+                                result.outcome,
+                                result.person_id,
+                                result.unplaced_companies(),
+                            )
                         )
                     if result.outcome == "created" and tier not in CREATING:
                         # Planned onto a page the export has, so a page made
@@ -1173,11 +1214,14 @@ class PeopleImport:
                     "outcome": outcome,
                     "node": node,
                     "rejestrIo": payload.get("rejestrIo"),
+                    # The companies the site took the person without a job
+                    # at: such a line is not left alone (`remembered`).
+                    "unplaced": unplaced,
                 },
                 ensure_ascii=False,
             )
             + "\n"
-            for payload, tier, outcome, node in self.taken
+            for payload, tier, outcome, node, unplaced in self.taken
         )
         data = gzip.compress(lines.encode("utf-8"), mtime=0)
         try:
