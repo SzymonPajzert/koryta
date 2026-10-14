@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import LoginPage from "../../app/pages/login.vue";
 
-/** `?konto=nowe` is what a „Zarejestruj się” link carries - the teaser of an
+/** `?konto=nowe` is what a „Rejestracja” link carries - the teaser of an
  * unpublished person has one beside „Zaloguj się” - and it should not land the
  * reader on a form for an account they do not have. */
 describe("/login", () => {

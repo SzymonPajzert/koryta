@@ -103,7 +103,7 @@ describe("ExploreLoginBanner's buttons", () => {
     expect(byTestId(wrapper, "login-banner-signup")).toBeUndefined();
   });
 
-  it("adds „Zarejestruj się” where a caller gives it somewhere to go", async () => {
+  it("adds „Rejestracja” where a caller gives it somewhere to go", async () => {
     const wrapper = await mountSuspended(LoginBanner, {
       props: {
         to: { path: "/login", query: { redirect: "/osoba/x-1" } },
@@ -120,7 +120,7 @@ describe("ExploreLoginBanner's buttons", () => {
       path: "/login",
       query: { konto: "nowe" },
     });
-    expect(signup?.text()).toBe("Zarejestruj się");
+    expect(signup?.text()).toBe("Rejestracja");
 
     await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
     await wrapper.get('[data-testid="login-banner-login"]').trigger("click");

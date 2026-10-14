@@ -101,7 +101,7 @@ describe("CardPersonTeaser", () => {
 
     const html = wrapper.html();
     expect(html.indexOf("Historia powiązań")).toBeLessThan(
-      html.indexOf("Widzisz tylko fragment tego profilu"),
+      html.indexOf("W trakcie weryfikacji"),
     );
     expect(button(wrapper, "login-banner-login")?.props("to")).toEqual({
       path: "/login",
@@ -154,7 +154,7 @@ describe("CardPersonTeaser", () => {
       wrapper.find('[data-testid="person-teaser-employment"]').exists(),
     ).toBe(false);
     expect(wrapper.get('[data-testid="person-teaser-more"]').text()).toBe(
-      "Nikt z zespołu nie sprawdził go jeszcze, więc całość - źródła i graf powiązań - pokazujemy zalogowanym. Możesz też pomóc go sprawdzić.",
+      "Zaloguj się, by zobaczyć wszystkie źródła i graf powiązań tej osoby.",
     );
   });
 
