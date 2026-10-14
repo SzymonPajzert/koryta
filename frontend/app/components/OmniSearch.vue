@@ -110,8 +110,11 @@ import {
 import type { NodeType } from "~~/shared/model";
 import type { ProposableNodeType } from "~~/shared/api";
 import { refDebounced } from "@vueuse/core";
+import { useCurrentUser } from "vuefire";
+import { authHeaders } from "~/composables/auth";
 
 const { push, currentRoute } = useRouter();
+const user = useCurrentUser();
 
 const props = defineProps<{
   width?: string;
@@ -251,11 +254,17 @@ const searchData = ref<
 async function performSearch(searchTerm: string) {
   loading.value = true;
   try {
+    // Drafts for a signed in reader, beside the token that allows them. The
+    // flag went out for everybody, so the search box offered every name in
+    // the base - nine in ten of the people among them unpublished - and could
+    // never be answered from the cache. Without it a logged out reader's
+    // search is, and finds the pages they can open.
     const response = await $fetch("/api/search", {
       query: {
         q: searchTerm,
-        latest: true,
+        ...(user.value ? { latest: true } : {}),
       },
+      headers: await authHeaders(user.value),
     });
     searchData.value = response;
     // Counted here rather than on every keystroke: `debouncedSearch` is what

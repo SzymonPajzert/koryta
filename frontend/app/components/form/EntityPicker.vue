@@ -64,6 +64,7 @@ import { ref, computed, watch } from "vue";
 import { mdiPlus } from "@mdi/js";
 import { refDebounced } from "@vueuse/core";
 import { useCurrentUser } from "vuefire";
+import { authHeaders } from "~/composables/auth";
 import type { NodeType, Link, Article } from "~~/shared/model";
 
 defineOptions({
@@ -162,8 +163,12 @@ async function loadListed(kind: NodeType) {
       // `latest` for a signed in reader, or they cannot see what they have just
       // made. /api/nodes is cached for six hours and this is a plain `$fetch`,
       // so without it somebody who created a topic on one article could not
-      // find it from another until the cache expired.
-      { query: { type: kind, ...(user.value ? { latest: true } : {}) } },
+      // find it from another until the cache expired. With their token, which
+      // is what the server hands drafts to.
+      {
+        query: { type: kind, ...(user.value ? { latest: true } : {}) },
+        headers: await authHeaders(user.value),
+      },
     );
     listed.value = {
       ...listed.value,
@@ -195,9 +200,14 @@ async function search_(term: string) {
   if (searchableTypes.value.length === 0) return;
   loading.value = true;
   try {
+    // Drafts for a signed in reader, who may be picking the page they have
+    // just created; the published pages for anybody else.
     const response = await $fetch<
       Array<{ id: string; name: string; type: string }>
-    >("/api/search", { query: { q: term, latest: true } });
+    >("/api/search", {
+      query: { q: term, ...(user.value ? { latest: true } : {}) },
+      headers: await authHeaders(user.value),
+    });
     results.value = response
       .filter((node) => entityTypes.value.includes(node.type as NodeType))
       .map((node) => ({

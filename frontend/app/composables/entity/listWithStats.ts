@@ -75,9 +75,13 @@ export async function useListWithStats(
           .map((n) => n.id)
           .join(",");
         try {
+          // `latest` only beside the token that allows it. It went out for
+          // every reader, and the endpoint took it at its word, so the
+          // logged-out table - and the home page's payload, cached for an
+          // hour - listed candidacies nobody had published.
           const subRes = await $fetch(`/api/graph/local/${firstId}`, {
             method: "POST",
-            body: { subjects: otherIds, distance: 1, latest: true },
+            body: { subjects: otherIds, distance: 1, latest: !!user.value },
             headers,
           });
           if (subRes) {

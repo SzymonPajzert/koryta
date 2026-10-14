@@ -1,5 +1,6 @@
 import type { NodeTypeMap, NodeType } from "~~/shared/model";
-import { computed, type Ref, type ComputedRef } from "vue";
+import { computed, toValue, type Ref, type ComputedRef } from "vue";
+import { useCurrentUser } from "vuefire";
 import { authFetch, useAuthState } from "@/composables/auth";
 
 export type Filters = {
@@ -34,11 +35,23 @@ export function useEntities<N extends NodeType>(
   filters: Filters | Ref<Filters> = {},
   options: UseEntitiesOptions = {},
 ) {
+  const user = useCurrentUser();
+  // `latest` said out loud for a signed in reader, as /tematy does, rather
+  // than left to `authFetch`, whose hook adds it in the browser only. The
+  // server's render is anonymous, and /api/nodes answers an anonymous caller
+  // with published pages alone - so a list rendered there and never asked for
+  // again would keep a signed in reader from the drafts they could always see:
+  // the duplicate a new page's form warns about above all. The query changing
+  // once auth resolves is what asks again, with the token.
+  const query = computed(() => ({
+    ...toValue(filters),
+    ...(user.value ? { latest: true } : {}),
+  }));
   const { data: response, refresh } = authFetch<{
     nodes: Record<string, NodeTypeMap[N]>;
     total?: number;
   }>(`/api/nodes?type=${nodeType}`, {
-    query: filters,
+    query,
     ...options,
   });
 

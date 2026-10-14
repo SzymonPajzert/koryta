@@ -3,6 +3,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  type User,
 } from "firebase/auth";
 import { computedAsync } from "@vueuse/core";
 import {
@@ -165,6 +166,23 @@ export async function authRequest<T>(
     headers,
     timeout: options.timeout,
   });
+}
+
+/** The `Authorization` header for `user`, or no headers when nobody is signed
+ * in.
+ *
+ * For a plain `$fetch` made in answer to something the reader did on a page
+ * that has long since settled - typing into a search box, opening a picker -
+ * where `authRequest`'s wait for auth to resolve would only ever return at
+ * once. Whatever asks for `latest` has to send one of these with it: the
+ * server hands drafts only to a verified token, and a flag sent alone gets the
+ * public answer.
+ */
+export async function authHeaders(
+  user: User | null | undefined,
+): Promise<Record<string, string>> {
+  if (!user) return {};
+  return { Authorization: `Bearer ${await user.getIdToken()}` };
 }
 
 /** The counterpart to `authRequest`: a request sent deliberately without
