@@ -1424,6 +1424,73 @@ def test_what_the_site_refused_is_not_remembered_as_sent(priority):
     assert [row["name"] for row in sent_part(priority)] == ["Ewa Lis"]
 
 
+#: A board seat at a company the site has no page for, as the person ingest
+#: reports a job it left out (`unplacedEmployments`).
+UNPLACED_JOB = {
+    "krs": "0000000009",
+    "role": "Rada Nadzorcza",
+    "start": "2026-02-09",
+    "reason": "no-company",
+}
+
+
+def taken_without_a_job(person_id: str = "p") -> Response:
+    body = typing.cast(dict, person("updated", person_id).body)
+    return Response(200, {**body, "unplacedEmployments": [UNPLACED_JOB]})
+
+
+def test_a_person_taken_without_a_job_is_listed_and_sent_again_next_run(
+    priority, monkeypatch
+):
+    """Until 2026-10-14 the site refused such a person whole, and they were
+    sent again the next night; now it takes them, and the job left out keeps
+    them out of what the next run leaves alone as sent."""
+    # Nothing in `Companies` to create the company from.
+    monkeypatch.setattr(PersonUploader, "company_payloads", property(lambda _: {}))
+    priority.candidates = [
+        candidate("Jan Kowalski", PUBLISHED),
+        candidate("Ewa Lis", ON_SITE),
+    ]
+    priority.answers = [taken_without_a_job("n1"), person("unchanged")]
+
+    assert job.main(["--scope", "priority"]) == job.EXIT_TRY_LATER
+
+    # Sent once: with no company created, there is nothing a second request
+    # would place.
+    assert priority.sent() == ["Jan Kowalski", "Ewa Lis"]
+    summary = priority.summary()
+    assert (summary["state"], summary["stopped"]) == (
+        "partial",
+        "zatrudnienia bez strony firmy: 1",
+    )
+    assert summary["counters"]["updated"] == 1
+    assert summary["counters"]["failed"] == 0
+    assert summary["counters"]["employments_unplaced"] == 1
+    assert summary["unplaced_employments"] == [
+        {"name": "Jan Kowalski", "node": "n1", **UNPLACED_JOB}
+    ]
+    assert summary["errors"] == [
+        "Jan Kowalski: firma 0000000009: ValueError: "
+        "Couldn't look up 0000000009 in Companies pipeline"
+    ]
+    rows = sent_part(priority)
+    assert [(row["name"], row["unplaced"]) for row in rows] == [
+        ("Jan Kowalski", ["0000000009"]),
+        ("Ewa Lis", []),
+    ]
+    assert [job.remembered(row) for row in rows] == [False, True]
+
+
+def test_a_line_from_before_unplaced_jobs_were_recorded_is_remembered():
+    rows = [
+        {"person": "a", "payload": "1"},
+        {"person": "b", "payload": "2", "unplaced": []},
+        {"person": "c", "payload": "3", "unplaced": ["0000000009"]},
+    ]
+
+    assert [job.remembered(row) for row in rows] == [True, True, False]
+
+
 def test_a_priority_dry_run_shows_the_tiers_and_writes_nothing(priority, capsys):
     priority.candidates = [
         candidate("Anna Nowak", HIRE, "2026-09-30"),
@@ -1659,6 +1726,28 @@ def test_a_line_whose_run_left_no_payloads_is_kept_as_it_was(capsys):
     assert (job.person_key(listed), job.payload_hash(listed)) not in seen
     out = capsys.readouterr().out
     assert f"No payloads for {job.SENT_PREFIX}{part}: 2 lines left as they" in out
+
+
+def test_a_line_taken_without_a_job_is_not_left_alone_however_it_was_hashed():
+    """What a night reads back: the person the site took without a job goes
+    again, with the hash of either kind, and the rest are left alone."""
+    without = {"unplaced": ["0000000009"]}
+    shared = Shared(
+        {
+            f"{job.SENT_PREFIX}date=2026-10-15/06ad03ac.jsonl.gz": gzipped(
+                [
+                    {"person": "a", "payload": "1", "hashed": job.HASHED},
+                    {"person": "b", "payload": "2", "hashed": job.HASHED, **without},
+                    {"person": "c", "payload": "3", "unplaced": []},
+                    {"person": "d", "payload": "4", **without},
+                ]
+            ),
+        }
+    )
+
+    seen = job.sent_recently(typing.cast(job.Client, shared), "2026-10-10")
+
+    assert seen == {("a", "1"), ("c", "3")}
 
 
 def test_what_was_sent_says_how_its_hash_was_made(priority):
