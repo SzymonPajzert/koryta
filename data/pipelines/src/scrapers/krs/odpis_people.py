@@ -54,6 +54,7 @@ Without the PESEL key and with no copy of the seats to restore -- a CI runner --
 the people are rejestr.io's alone, and the run says so.
 """
 
+import os
 import unicodedata
 from collections.abc import Iterable
 
@@ -102,6 +103,23 @@ COLUMNS = (*KRS_COLUMNS, "source", "pesel_fingerprint")
 #: salted PESEL. The key that made it is never rotated, so a fingerprint in a
 #: log is as good as one on a page to whoever holds the key.
 NEVER_SHOWN = ("pesel_fingerprint",)
+
+
+def print_rows(frame: pd.DataFrame) -> None:
+    """Some of the people's rows, for whoever runs a pipeline by hand.
+
+    Never on CI: the repo is public, so is the log of every run on it, and
+    the nightly's people are the register's, PKW's and the site's, unpublished
+    pages included. There only the columns are printed. NEVER_SHOWN is
+    dropped either way.
+    """
+    shown = frame.drop(columns=list(NEVER_SHOWN), errors="ignore")
+    if os.environ.get("CI"):
+        columns = ", ".join(str(column) for column in shown.columns)
+        print(f"{len(shown)} rows, not printed on CI. Columns: {columns}")
+    else:
+        print(shown)
+
 
 #: How the list of entries records a company struck off one register while it
 #: lives on in the other: "WYKREŚLENIE Z REJESTRU PRZEDSIĘBIORCÓW". Leaving the

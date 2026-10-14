@@ -860,3 +860,32 @@ def test_the_printed_day_joins_the_entry_the_register_later_gave_a_pesel(ctx):
     assert sorted(
         (e["employed_start"], e["employed_end"]) for e in row["employment"]
     ) == [("2020-01-10", "2024-01-01"), ("2024-01-01", None)]
+
+
+def _a_person_with_a_fingerprint() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "first_name": ["Anna"],
+            "last_name": ["Przykładowa"],
+            "birth_date": ["1970-01-01"],
+            "pesel_fingerprint": ["fp-0123"],
+        }
+    )
+
+
+def test_a_hand_run_prints_the_rows_but_never_the_fingerprint(monkeypatch, capsys):
+    monkeypatch.delenv("CI", raising=False)
+    odpis_people.print_rows(_a_person_with_a_fingerprint())
+    out = capsys.readouterr().out
+    assert "Przykładowa" in out and "1970-01-01" in out
+    assert "fp-0123" not in out and "pesel_fingerprint" not in out
+
+
+def test_a_ci_run_prints_the_columns_and_no_row(monkeypatch, capsys):
+    # GitHub sets CI on every runner, and this repo's logs are public.
+    monkeypatch.setenv("CI", "true")
+    odpis_people.print_rows(_a_person_with_a_fingerprint())
+    out = capsys.readouterr().out
+    assert "first_name, last_name, birth_date" in out
+    assert "Przykładowa" not in out and "1970-01-01" not in out
+    assert "fp-0123" not in out and "pesel_fingerprint" not in out
