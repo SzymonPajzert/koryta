@@ -7,18 +7,25 @@ name: Pipelines
 # pipeline breakage is structural and shows up on a shard exactly as it would
 # on the whole dump.
 #
-# The nightly gets the `full` tier: the whole 2.9 GB dump, every pipeline, from
-# scratch. That one needs GCP, so it cannot run on a fork's pull request --
-# fork PRs get no OIDC token and no secrets.
+# The `full` tier is the whole 2.9 GB dump, every pipeline, from scratch, and
+# runs only when dispatched by hand. That one needs GCP, so it cannot run on a
+# fork's pull request -- fork PRs get no OIDC token and no secrets.
+#
+# Until 2026-10-14 the full tier ran nightly at 03:00 UTC. It had not finished
+# since at least 09-24, and its public runner was the reason the production
+# data needed guarding at all: anybody can read a run's log. The night is the
+# koryta-nightly VM's now (data/nightly). It reprocesses every pipeline but a
+# few held ones with --refresh all, then runs the pipeline tests, the output
+# checks and the invariants, with the PESEL key and the bucket grants this
+# runner lacks, and its logs stay private. A dispatched full tier still stops
+# at the first private read it has no grant for (gs://koryta-pl-compressed at
+# CompaniesKRS), and whatever it prints is public.
 #
 # Both pin a dated dump rather than `latest`, which rotates roughly twice a
 # month. On `latest` a red build cannot distinguish "the pipeline broke" from
 # "Wikipedia changed", and the download cache key is never stable.
 
 on:
-  schedule:
-    # 03:00 UTC, so it is done before the morning in Warsaw.
-    - cron: "0 3 * * *"
   pull_request:
     paths:
       - "data/pipelines/**"
@@ -26,10 +33,10 @@ on:
   workflow_dispatch:
     inputs:
       tier:
-        description: "full (whole dump, all pipelines) or slice (one shard, wiki only)"
+        description: "slice (one shard, wiki only) or full (whole dump, all pipelines, a public log of private data)"
         type: choice
-        options: [full, slice]
-        default: full
+        options: [slice, full]
+        default: slice
       dump_date:
         description: "Wikipedia dump to pin, YYYYMMDD. Empty uses the default below."
         type: string
@@ -58,7 +65,7 @@ jobs:
       - name: Pick the dump to process
         id: pick
         env:
-          TIER: ${{ github.event_name == 'pull_request' && 'slice' || inputs.tier || 'full' }}
+          TIER: ${{ github.event_name == 'pull_request' && 'slice' || inputs.tier || 'slice' }}
           DUMP_DATE: ${{ inputs.dump_date || '' }}
         run: |
           set -euo pipefail
@@ -120,7 +127,7 @@ jobs:
           cache-dependency-glob: "data/pipelines/uv.lock"
 
       # Keyed on the exact dump file, so a pinned dump is fetched from
-      # wikimedia once and restored from cache every night after. Repo-wide
+      # wikimedia once and restored from cache every run after. Repo-wide
       # cache is 10 GB and evicts least-recently-used, which the uv cache also
       # draws on -- another reason the ml group stays out of this job.
       # restore/save rather than `actions/cache`, whose post step declares
@@ -199,11 +206,11 @@ jobs:
       # --assume-yes answers the "this pipeline runs long" prompts. Without it
       # they read EOF from /dev/null, take it as no, and skip the wiki pass.
       #
-      # The step has its own ceiling, below the job's, so that a slow night
+      # The step has its own ceiling, below the job's, so that a slow run
       # fails here rather than being cancelled: the saves below are
       # `!cancelled()`, and every nightly from 2026-09-24 to 09-27 was
       # cancelled at the job's 120 minutes and kept nothing it had fetched.
-      # Failed instead, it leaves downloaded/ to the next night, which starts
+      # Failed instead, it leaves downloaded/ to the next run, which starts
       # where this one stopped.
       - name: Run pipelines
         timeout-minutes: 100
@@ -354,11 +361,12 @@ jobs:
       # Only on the full tier, for two reasons. It needs the bucket, and a fork
       # pull request has no credentials to read it with. And what it checks is
       # production data rather than the code in the diff, so a red here would
-      # be telling a contributor about drift they did not cause -- nightly is
-      # the right place to hear it.
+      # be telling a contributor about drift they did not cause. The VM's night
+      # runs the same tests every night (the `invariants` step of
+      # koryta_nightly), which is where to hear it.
       #
       # Runs even if the step above failed: versioned/ output and stored data
-      # break independently, and one night should report both.
+      # break independently, and one run should report both.
       #
       # The ceiling is a backstop, not a budget: the 60 tests that remain read
       # one Firestore export between them and finished in seven minutes the
@@ -393,58 +401,5 @@ jobs:
       # and PKW entries with their birth dates, the merged people, the site's
       # pages unpublished ones included. Until 2026-10-14 all of it went up as
       # versioned-<tier> for 14 days, and nothing ever downloaded it. A red
-      # night's output is for the nightly VM or a local run, where versioned/
+      # run's output is for the nightly VM or a local run, where versioned/
       # stays on a private disk.
-
-  # GitHub's own "Only notify for failed workflows" setting covers this, but a
-  # scheduled run is attributed to whoever last touched the cron rather than to
-  # a person who asked for it, and 32 consecutive nightly failures reached
-  # nobody. An issue is louder: it shows up in the repo, it survives an ignored
-  # inbox, and watching the repo mails it.
-  #
-  # Only for the nightly -- a pull request already reports itself, and opening
-  # an issue per red PR would be noise.
-  notify:
-    needs: [resolve-dump, run]
-    if: ${{ failure() && github.event_name == 'schedule' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      # One open issue at a time. Without this the nightly files a fresh one
-      # every night for as long as it stays broken; with it, the issue is
-      # opened once, and closing it is what re-arms the alert.
-      - name: Open an issue unless one is already open
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          # First, so the --label on the create below has something to point
-          # at. Listing by a label that does not exist is fine -- that returns
-          # an empty list -- but creating with one is not. `|| true` covers
-          # every night after the first, when it already exists.
-          gh label create nightly-failure \
-            --repo "$GITHUB_REPOSITORY" \
-            --color B60205 \
-            --description "The nightly Pipelines run is failing" 2>/dev/null || true
-          open=$(gh issue list --repo "$GITHUB_REPOSITORY" \
-            --label nightly-failure --state open \
-            --json number --jq '.[0].number // empty')
-          if [ -n "$open" ]; then
-            echo "Issue #${open} is still open; not filing another."
-            exit 0
-          fi
-          body=$(printf '%s\n' \
-            "The scheduled \`Pipelines\` run failed." \
-            "" \
-            "Run: ${RUN_URL}" \
-            "" \
-            "Close this issue once the nightly is green again -- closing it is" \
-            "what re-arms the alert, and it will not be filed again while it" \
-            "stays open.")
-          gh issue create --repo "$GITHUB_REPOSITORY" \
-            --label nightly-failure \
-            --title "Nightly Pipelines failed on $(date -u +%Y-%m-%d)" \
-            --body "$body"

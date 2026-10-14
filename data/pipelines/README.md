@@ -187,7 +187,7 @@ go run ./cmd/compressor \
 Pass `--no-mirror` to skip the archive and read the bucket object by object
 instead -- the same objects, only slower.
 
-## The nightly pipeline run
+## The pipelines on CI
 
 `.github/workflows/pipelines.yml` runs the pipelines on CI in two tiers.
 
@@ -195,9 +195,18 @@ instead -- the same objects, only slower.
   shard of the Wikipedia dump (~230 MB), `ProcessWiki` only, a few minutes, no
   credentials. Most pipeline breakage is structural and shows up on a shard
   exactly as it would on the whole dump.
-- **full**, nightly at 03:00 UTC. The whole 2.9 GB dump, every pipeline except
-  `ScrapeRejestrIO` (bills per query) and `ProcessWikiNer` (its own extra pass
-  over the dump), reprocessed from scratch.
+- **full**, by hand only (`gh workflow run pipelines.yml -f tier=full`). The
+  whole 2.9 GB dump, every pipeline except `ScrapeRejestrIO` (bills per query)
+  and `ProcessWikiNer` (its own extra pass over the dump), reprocessed from
+  scratch.
+
+The full tier ran nightly at 03:00 UTC until 2026-10-14. The night is now the
+koryta-nightly VM's (`data/nightly`, the `nightly` job in `src/jobs`), which
+reprocesses, tests and checks the invariants with the credentials and the
+PESEL key a GitHub runner lacks, and keeps its logs private. The repo is
+public, so a run's log is too: a dispatched full tier prints production data
+for anybody to read, and stops at `CompaniesKRS` anyway, on the compressed
+bucket its account has no grant for.
 
 Both then run `src/tests/pipelines`, which the unit-test job cannot: those
 tests call `read_or_process` and so need real downloaded data, which is what
