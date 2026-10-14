@@ -25,6 +25,13 @@
  *   words; neither belongs in analytics. Properties here are closed sets, site
  *   data (a party, a teryt, a filter name) or buckets. `resultBucket` exists
  *   because the number of hits is interesting and the query is not.
+ *
+ *   One exception, by Szymon's decision of 2026-10-14: `search:settled`
+ *   carries what a logged out reader searched for, once per search. Which
+ *   names readers look for and do not find is a question only the query
+ *   answers. Why, and where the alternative that keeps the queries off
+ *   Plausible lives, is in `shared/searchSession.ts`. Nothing else here takes
+ *   a typed value.
  * - **Bounded values where it costs nothing.** A property with a few dozen
  *   values reads as a breakdown; one with ten thousand reads as a list.
  *
@@ -100,7 +107,7 @@ export const GOALS = {
   // anything came back or whether the reader took what it offered.
   "search:performed": {
     description:
-      "A search query reached /api/search. `results` buckets how many came back; `none` against the total is the share of searches the index cannot answer. `unverified` is whether any of them were people nobody has published - `none`, `some` or `all` - and `all` is a reader whose answer, logged out, is a teaser rather than a page. The query itself is deliberately not recorded.",
+      "A search query reached /api/search. `results` buckets how many came back; `none` against the total is the share of searches the index cannot answer. `unverified` is whether any of them were people nobody has published - `none`, `some` or `all` - and `all` is a reader whose answer, logged out, is a teaser rather than a page. The query is not sent here, keystroke by keystroke: `search:settled` carries it, once per search.",
     props: ["results", "unverified"],
   },
   "search:pick": {
@@ -112,6 +119,11 @@ export const GOALS = {
     description:
       "Reader started adding something the search could not find. Whether they finished is a different question, and the revision queue already answers it.",
     props: ["kind"],
+  },
+  "search:settled": {
+    description:
+      "A logged out reader's search, once it was over: the last query before they opened a result (`outcome: pick`), offered to add something (`propose`), or left the box (`abandon`). `query` is what they typed, lowercased - break down by it, filtered to `results: none`, for the names the site does not have, and to `unverified: all` for the people it has and does not show. `results` and `unverified` are bucketed as on search:performed. Signed in readers are not sent.",
+    props: ["query", "results", "unverified", "outcome"],
   },
 
   // --- Teasers ------------------------------------------------------------
