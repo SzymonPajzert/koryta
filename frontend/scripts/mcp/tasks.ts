@@ -16,6 +16,7 @@ import {
   isClosed,
   newTask,
   patchedDependsOn,
+  priorityLevel,
   similarTasks,
   taskAncestors,
   taskCreateSchema,
@@ -27,6 +28,7 @@ import {
   uniqueTaskId,
   type Task,
   type TaskActor,
+  type TaskPriority,
   type TaskSection,
   type TaskState,
 } from "../../shared/tasks";
@@ -88,7 +90,20 @@ export type ListArgs = {
   goal?: string;
   /** Only tasks whose id, title, body or branches mention this. */
   search?: string;
+  /** Only tasks at least this pressing, by their own level or one they take
+   * from what they hold up: `high` is high and urgent. */
+  priority?: TaskPriority;
 };
+
+/** ` !urgent`, or ` !high (for goal-x)` when the level is taken from what the
+ * task holds up. Nothing on a closed task: what it was is history. */
+function priorityMark(state: TaskState): string {
+  if (!state.priority || state.readiness === "closed") return "";
+  const from = state.priorityFrom.map((t) => t.id);
+  if (from.length === 0) return ` !${state.priority}`;
+  const more = from.length > 3 ? `, +${from.length - 3}` : "";
+  return ` !${state.priority} (for ${from.slice(0, 3).join(", ")}${more})`;
+}
 
 function line(task: Task, state: TaskState, tasks: readonly Task[]): string {
   const tags = task.tags.length > 0 ? ` [${task.tags.join(", ")}]` : "";
@@ -105,12 +120,23 @@ function line(task: Task, state: TaskState, tasks: readonly Task[]): string {
       ? ` - then: ${state.dependents.map((d) => d.id).join(", ")}`
       : "";
   const status = task.status === "doing" ? " (in progress)" : "";
-  return `- ${task.id} · ${task.kind}/${task.who}${status} · ${task.title}${tags}${waits}${blocks}`;
+  return `- ${task.id}${priorityMark(state)} · ${task.kind}/${task.who}${status} · ${task.title}${tags}${waits}${blocks}`;
 }
 
-const matches = (task: Task, args: ListArgs, group: Set<string> | null) => {
+const matches = (
+  task: Task,
+  state: TaskState,
+  args: ListArgs,
+  group: Set<string> | null,
+) => {
   if (group && !group.has(task.id)) return false;
   if (args.tag && !task.tags.includes(args.tag)) return false;
+  if (
+    args.priority &&
+    priorityLevel(state.priority) < priorityLevel(args.priority)
+  ) {
+    return false;
+  }
   if (!args.search) return true;
   const needle = args.search.toLowerCase();
   return [task.id, task.title, task.body, ...task.branches].some((text) =>
@@ -127,7 +153,8 @@ export async function tasksList(
   const states = taskStates(tasks);
   const view = args.view ?? "open";
   const bySection = new Map<TaskSection, Task[]>();
-  for (const task of [...tasks].sort(compareTasks)) {
+  const order = [...tasks].sort((a, b) => compareTasks(a, b, states));
+  for (const task of order) {
     const section = taskSection(task, states.get(task.id)!);
     if (!bySection.has(section)) bySection.set(section, []);
     bySection.get(section)!.push(task);
@@ -138,12 +165,14 @@ export async function tasksList(
   const filters = [
     goal && `goal ${goal} and what leads to it`,
     args.tag && `tag ${args.tag}`,
+    args.priority &&
+      (args.priority === "urgent" ? "urgent tasks" : "high and urgent tasks"),
     args.search && `"${args.search}"`,
   ].filter(Boolean);
 
   const lists = VIEW_SECTIONS[view].flatMap((section) => {
     const shown = (bySection.get(section) ?? []).filter((task) =>
-      matches(task, args, group),
+      matches(task, states.get(task.id)!, args, group),
     );
     if (shown.length === 0) return [];
     return [
@@ -159,10 +188,48 @@ export async function tasksList(
       ` ready for an agent ${count("agents")}, blocked ${count("blocked")},` +
       ` ideas ${count("ideas")}, parked ${count("parked")}.` +
       ` Closed: ${count("closed")}.`,
+    ...pressing(tasks, states),
     `Link a task as ${taskUrl("<id>")}. task_get has the whole of one.` +
       (filters.length > 0 ? ` Showing only ${filters.join(", ")}.` : ""),
     ...(lists.length > 0 ? lists : ["", "Nothing on these lists."]),
   ].join("\n");
+}
+
+/** The header's word on what comes first: the urgent tasks by name, and how
+ * many are high. A level a task takes from what it holds up counts too, but
+ * only the tasks it comes from are named. */
+function pressing(
+  tasks: readonly Task[],
+  states: Map<string, TaskState>,
+): string[] {
+  const at = (level: TaskPriority) => {
+    const all = tasks.filter(
+      (t) => !isClosed(t) && states.get(t.id)!.priority === level,
+    );
+    const own = all.filter((t) => t.priority === level);
+    return { own, taken: all.length - own.length };
+  };
+  const urgent = at("urgent");
+  const high = at("high");
+  const tasksWord = (n: number) => (n === 1 ? "1 task" : `${n} tasks`);
+  const words: string[] = [];
+  if (urgent.own.length > 0) {
+    words.push(
+      `Urgent: ${urgent.own.map((t) => t.id).join(", ")}` +
+        (urgent.taken > 0
+          ? `, and ${tasksWord(urgent.taken)} they wait on.`
+          : "."),
+    );
+  }
+  if (high.own.length + high.taken > 0) {
+    words.push(
+      `High: ${high.own.length + high.taken}` +
+        (high.taken > 0
+          ? `, ${high.taken} of them because a high task or goal waits on them.`
+          : "."),
+    );
+  }
+  return words.length > 0 ? [words.join(" ")] : [];
 }
 
 function describe(
@@ -181,6 +248,11 @@ function describe(
     ...task,
     link: taskUrl(task.id),
     readiness: state.readiness,
+    // Higher than its own: the level and the tasks it comes from.
+    inheritedPriority:
+      state.priorityFrom.length > 0
+        ? { priority: state.priority, from: state.priorityFrom.map(brief) }
+        : undefined,
     waitsOn: state.blockers.map(brief),
     dependsOnMissing: state.missing.length > 0 ? state.missing : undefined,
     thenUnblocks: state.dependents.map(brief),
@@ -212,6 +284,35 @@ export async function taskGet(
     null,
     2,
   );
+}
+
+/** Why an agent may not give `task` the priority `wanted`, or null if it may.
+ *
+ * Agents file most of the tasks, so a level has to be argued for to keep its
+ * meaning: raising one takes the evidence, in `evidenceIn`. And a level the
+ * owner set is his judgement - an agent may raise it, never lower it. */
+export function priorityRefusal(
+  task: Pick<Task, "id" | "priority" | "prioritySetBy">,
+  wanted: TaskPriority | null,
+  evidence: string | undefined,
+  evidenceIn: "note" | "body",
+): string | null {
+  const from = priorityLevel(task.priority);
+  const to = priorityLevel(wanted);
+  if (to < from && task.prioritySetBy === "owner") {
+    return (
+      `The owner set ${task.id} to ${task.priority}. An agent may raise a ` +
+      "priority, but not lower one the owner set: add a `note` with what " +
+      "you found, and leave the level to him."
+    );
+  }
+  if (to > from && !evidence?.trim()) {
+    return (
+      `Making ${task.id} ${wanted} needs the evidence in \`${evidenceIn}\`: ` +
+      "what grows worse while it waits, or the deadline."
+    );
+  }
+  return null;
 }
 
 export const taskAddArgs = taskCreateSchema.extend({
@@ -256,17 +357,53 @@ export async function taskAdd(
     // this only refuses itself and ids that do not exist.
     const problem = dependencyProblem(tasks, id, args.dependsOn);
     if (problem) throw new Error(problem);
+    if (args.priority && by !== "owner") {
+      const refusal = priorityRefusal({ id }, args.priority, args.body, "body");
+      if (refusal) throw new Error(refusal);
+    }
     const task = newTask(args, id, by, now());
     if (!task.source && by.startsWith("agent:")) {
       task.source = `session ${by.slice(6)}`;
     }
     writes.create(task);
-    const states = taskStates([...tasks, task]);
+    const after = [...tasks, task];
+    const states = taskStates(after);
     return [
       `Added ${id}: ${taskUrl(id)}`,
-      line(task, states.get(id)!, [...tasks, task]),
+      line(task, states.get(id)!, after),
+      ...priorityChanges(id, taskStates(tasks), states, after),
     ].join("\n");
   });
+}
+
+/** The tasks whose priority a change to `id` moved, besides `id` itself: what
+ * it waits on, or did, which takes the level it passes on or loses it. */
+function priorityChanges(
+  id: string,
+  before: Map<string, TaskState>,
+  after: Map<string, TaskState>,
+  tasks: readonly Task[],
+): string[] {
+  const moved = tasks.filter(
+    (t) =>
+      t.id !== id &&
+      !isClosed(t) &&
+      before.get(t.id)?.priority !== after.get(t.id)!.priority,
+  );
+  if (moved.length === 0) return [];
+  const shown = moved.slice(0, 20);
+  return [
+    "This also moved the priority of:",
+    ...shown.map((t) => {
+      const state = after.get(t.id)!;
+      return state.priority
+        ? line(t, state, tasks)
+        : `${line(t, state, tasks)} (normal again)`;
+    }),
+    ...(moved.length > shown.length
+      ? [`…and ${moved.length - shown.length} more.`]
+      : []),
+  ];
 }
 
 export const taskUpdateArgs = z.object({
@@ -299,6 +436,15 @@ export async function taskUpdate(
       current.dependsOn,
     );
     if (problem) throw new Error(problem);
+    if (args.patch.priority !== undefined && by !== "owner") {
+      const refusal = priorityRefusal(
+        current,
+        args.patch.priority,
+        args.patch.note,
+        "note",
+      );
+      if (refusal) throw new Error(refusal);
+    }
 
     const { task, logged } = applyTaskPatch(current, args.patch, by, now());
     writes.replace(task);
@@ -322,6 +468,7 @@ export async function taskUpdate(
             ...unblocked.map((t) => line(t, states.get(t.id)!, after)),
           ]
         : []),
+      ...priorityChanges(id, taskStates(tasks), states, after),
     ].join("\n");
   });
 }

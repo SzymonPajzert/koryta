@@ -314,6 +314,173 @@ describe("taskUpdate", () => {
   });
 });
 
+describe("priority", () => {
+  const priorityStore = () =>
+    memoryStore([
+      task("merge-fix"),
+      task("leak-fix", {
+        title: "Stop the leak",
+        priority: "urgent",
+        prioritySetBy: "owner",
+        dependsOn: ["merge-fix"],
+      }),
+      task("decide"),
+      task("build", { dependsOn: ["decide"] }),
+      task("live", {
+        title: "Live",
+        kind: "goal",
+        priority: "high",
+        prioritySetBy: "owner",
+        dependsOn: ["build"],
+      }),
+      task("plain", { createdAt: "2026-09-01T00:00:00.000Z" }),
+    ]);
+
+  it("lists the most pressing first, marked, and names the urgent ones", async () => {
+    const text = await tasksList(priorityStore().store);
+    expect(text).toContain(
+      "Urgent: leak-fix, and 1 task they wait on. High: 3, 2 of them because a high task or goal waits on them.",
+    );
+    expect(text).toContain("- merge-fix !urgent (for leak-fix) · action/owner");
+    expect(text).toContain("- leak-fix !urgent · action/owner · Stop the leak");
+    expect(text).toContain("- live !high · goal/owner · Live");
+    // The ready list: the head of the urgent chain, then what leads to the
+    // high goal, then the oldest of the rest.
+    const ready = text.split("## Ready - for the owner")[1]!.split("##")[0]!;
+    expect(ready.match(/^- \S+/gm)).toEqual([
+      "- merge-fix",
+      "- decide",
+      "- plain",
+    ]);
+  });
+
+  it("narrows the list to what is urgent, or high and urgent", async () => {
+    const { store } = priorityStore();
+    const urgent = await tasksList(store, { view: "all", priority: "urgent" });
+    expect(urgent).toContain("Showing only urgent tasks.");
+    expect(urgent.match(/^- \S+/gm)).toEqual(["- merge-fix", "- leak-fix"]);
+    const high = await tasksList(store, { view: "all", priority: "high" });
+    expect(high.match(/^- \S+/gm)?.sort()).toEqual([
+      "- build",
+      "- decide",
+      "- leak-fix",
+      "- live",
+      "- merge-fix",
+    ]);
+  });
+
+  it("says where a task's level comes from", async () => {
+    const answer = JSON.parse(
+      await taskGet(priorityStore().store, ["decide", "leak-fix"]),
+    );
+    expect(answer.tasks[0].inheritedPriority).toEqual({
+      priority: "high",
+      from: [
+        { id: "live", title: "Live", status: "open", readiness: "blocked" },
+      ],
+    });
+    expect(answer.tasks[1]).toMatchObject({
+      priority: "urgent",
+      prioritySetBy: "owner",
+    });
+    expect(answer.tasks[1].inheritedPriority).toBeUndefined();
+  });
+
+  it("raises a level with the evidence, and says what that lifted", async () => {
+    const { store, docs } = priorityStore();
+    await expect(
+      taskUpdate(
+        store,
+        { id: "plain", patch: { priority: "urgent" } },
+        "agent:bridge-cse_01",
+        now,
+      ),
+    ).rejects.toThrow(/needs the evidence in `note`/);
+
+    const text = await taskUpdate(
+      store,
+      {
+        id: "build",
+        patch: { priority: "urgent", note: "Writes wrong data every night." },
+      },
+      "agent:bridge-cse_01",
+      now,
+    );
+    expect(text).toContain("history: Priorytet: zwykły → pilny.");
+    expect(text).toContain("This also moved the priority of:");
+    expect(text).toContain("- decide !urgent (for build)");
+    expect(docs.get("build")!.task).toMatchObject({
+      priority: "urgent",
+      prioritySetBy: "agent:bridge-cse_01",
+    });
+  });
+
+  it("lets an agent raise the owner's level, never lower it", async () => {
+    const { store, docs } = priorityStore();
+    await expect(
+      taskUpdate(
+        store,
+        { id: "live", patch: { priority: "normal", note: "Not that soon." } },
+        "agent",
+        now,
+      ),
+    ).rejects.toThrow(
+      "The owner set live to high. An agent may raise a priority, but not lower one the owner set",
+    );
+    expect(docs.get("live")!.task.priority).toBe("high");
+
+    await taskUpdate(
+      store,
+      { id: "live", patch: { priority: "urgent", note: "Deadline Friday." } },
+      "agent",
+      now,
+    );
+    // Now the agent's level, which an agent may take back down.
+    const text = await taskUpdate(
+      store,
+      { id: "live", patch: { priority: "high" } },
+      "agent",
+      now,
+    );
+    expect(text).toContain("history: Priorytet: pilny → ważny.");
+    // And the owner may do anything.
+    await taskUpdate(
+      store,
+      { id: "leak-fix", patch: { priority: null } },
+      "owner",
+      now,
+    );
+    expect(docs.get("leak-fix")!.task.priority).toBeUndefined();
+  });
+
+  it("adds a task with a level only with the reason in its body", async () => {
+    const { store, docs } = memoryStore([task("upload")]);
+    await expect(
+      taskAdd(
+        store,
+        { title: "Delete the artifacts", priority: "urgent", force: true },
+        "agent",
+        now,
+      ),
+    ).rejects.toThrow(/needs the evidence in `body`/);
+    const text = await taskAdd(
+      store,
+      {
+        title: "Delete the artifacts",
+        body: "Personal data on a public repo for 14 days.",
+        priority: "urgent",
+        id: "delete-artifacts",
+      },
+      "agent:bridge-cse_01",
+      now,
+    );
+    expect(text).toContain("- delete-artifacts !urgent · task/owner");
+    expect(docs.get("delete-artifacts")!.task.log).toEqual([
+      { at: T1, by: "agent:bridge-cse_01", text: "Priorytet: pilny." },
+    ]);
+  });
+});
+
 describe("agentActor and taskIdFrom", () => {
   it("names the session's workspace", () => {
     expect(
@@ -357,6 +524,8 @@ describe("restTaskStore", () => {
   it("stores times as timestamps and reads them back as the same task", () => {
     const original = task("deploy-x", {
       rank: 1.5,
+      priority: "high",
+      prioritySetBy: "agent:bridge-cse_01",
       closedAt: T1,
       status: "done",
       log: [{ at: T1, by: "owner", text: "Done." }],
@@ -364,6 +533,7 @@ describe("restTaskStore", () => {
     const fields = encodeTask(original);
     expect(fields.createdAt).toEqual({ timestampValue: T0 });
     expect(fields.rank).toEqual({ doubleValue: 1.5 });
+    expect(fields.priority).toEqual({ stringValue: "high" });
     expect(fields.log!.arrayValue!.values![0]!.mapValue!.fields!.at).toEqual({
       timestampValue: T1,
     });

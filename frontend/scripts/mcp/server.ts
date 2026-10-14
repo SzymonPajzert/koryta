@@ -20,7 +20,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { RUNS_SHOWN } from "../../shared/jobs";
 import {
+  PRIORITY_CHOICES,
   TASK_KINDS,
+  TASK_PRIORITIES,
   TASK_STATUSES,
   TASK_WHO,
   taskCreateSchema,
@@ -43,7 +45,7 @@ const ops = opsConnection();
 const tasks = restTaskStore(ops);
 const jobReports = restJobReports(ops);
 const actor = agentActor();
-const server = new McpServer({ name: "koryta", version: "1.2.0" });
+const server = new McpServer({ name: "koryta", version: "1.3.0" });
 
 const READ_ONLY = {
   readOnlyHint: true,
@@ -201,7 +203,20 @@ const TASKS_EXPLAINED =
   "depend on others; it is `ready` once they are all done or dropped, and " +
   "`blocked` until then. A `goal` groups the tasks that lead to it by " +
   "depending on them: to put a task under a goal, task_update the goal with " +
-  "`addDependsOn`. Link one as https://koryta.pl/admin/zadania#t-<id>.";
+  "`addDependsOn`. A task or goal can be `urgent` or `high` (`priority`), " +
+  "and so is everything it waits on, directly or through others: lists go " +
+  "most pressing first, marked `!urgent` / `!high`, with `(for <id>)` when " +
+  "the level comes from what the task holds up. Link one as " +
+  "https://koryta.pl/admin/zadania#t-<id>.";
+
+const priorityHelp =
+  "`urgent`: harm that grows while it waits - personal data exposed, wrong " +
+  "data written to the site every night, production broken - or a deadline " +
+  "missed or a few days away; a handful at a time. `high`: on a goal's " +
+  "critical path, unblocking many others, or a deadline within weeks. " +
+  "`normal`: neither. Everything the task waits on, directly or through " +
+  "others, takes the level too - set it on a goal and every task leading to " +
+  "the goal comes up.";
 
 const WRITES = {
   readOnlyHint: false,
@@ -221,8 +236,9 @@ server.registerTool(
     description:
       "The owner's task list, one line per task, in the lists /admin/zadania " +
       "shows: goals, ready for the owner, ready for an agent, blocked, ideas, " +
-      "parked, closed. Each line says what a task waits on and what waits on " +
-      "it. Read it before task_add, and when a session starts on something " +
+      "parked, closed - each most pressing first, with the urgent tasks " +
+      "named at the top. Each line says what a task waits on and what waits " +
+      "on it. Read it before task_add, and when a session starts on something " +
       "the list may already cover. " +
       TASKS_EXPLAINED,
     inputSchema: {
@@ -256,6 +272,14 @@ server.registerTool(
         .string()
         .optional()
         .describe("Only tasks whose id, title, body or branches mention this"),
+      priority: z
+        .enum(TASK_PRIORITIES)
+        .optional()
+        .describe(
+          "Only tasks at least this pressing, by their own level or one " +
+            "taken from what they hold up: `urgent`, or `high` for high and " +
+            "urgent",
+        ),
     },
     annotations: READ_ONLY,
   },
@@ -333,6 +357,13 @@ server.registerTool(
         .describe(
           "Default `open`; `parked` for something to keep but not do yet",
         ),
+      priority: z
+        .enum(PRIORITY_CHOICES)
+        .optional()
+        .describe(
+          `Default \`normal\`. ${priorityHelp} Say in \`body\` why it is ` +
+            "urgent or high.",
+        ),
       dependsOn: z.array(z.string()).max(50).optional().describe(dependsOnHelp),
       tags: z
         .array(z.string())
@@ -373,10 +404,10 @@ server.registerTool(
     description:
       "Change a task on the owner's task list: close it (`status: done`, or " +
       "`dropped` when it will not happen), start it (`doing`), park it, add " +
-      "what it waits on, or add a line to its history (`note`) - say what " +
-      "you did and what you found. Closing a task tells you what it " +
-      "unblocked. Only mark `done` what you have seen done: a merge is not a " +
-      "deploy. " +
+      "what it waits on, raise its `priority`, or add a line to its history " +
+      "(`note`) - say what you did and what you found. Closing a task tells " +
+      "you what it unblocked. Only mark `done` what you have seen done: a " +
+      "merge is not a deploy. " +
       TASKS_EXPLAINED,
     inputSchema: {
       id: z.string().describe("The task's id, or its link"),
@@ -386,6 +417,13 @@ server.registerTool(
         .max(2000)
         .optional()
         .describe("A line for the task's history"),
+      priority: z
+        .enum(PRIORITY_CHOICES)
+        .optional()
+        .describe(
+          `${priorityHelp} Raising it needs a \`note\` with the evidence. ` +
+            "A level the owner set may be raised, never lowered.",
+        ),
       addDependsOn: z
         .array(z.string())
         .max(50)
