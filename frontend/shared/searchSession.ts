@@ -1,21 +1,26 @@
-/** What a reader searched for, once per search, for `search:settled`.
+/** What a reader searched for, once per search: for Plausible's
+ * `search:settled`, and for the site's own log of searches.
  *
- * ## Why the query goes to Plausible
+ * ## Why the query is kept at all
  *
  * Everywhere else the vocabulary keeps free text out of analytics (see
- * `shared/analytics.ts`), and a query is somebody's name. We save
- * which names readers look for and do not find, or find only as
+ * `shared/analytics.ts`), and a query is somebody's name. We save it anyway,
+ * because which names readers look for and do not find, or find only as
  * an unpublished person, is the most direct list there is of
- * whom to add or review next, and it reads best beside the rest of the visit -
- * the pick, the teaser, the sign-in. Only a logged out reader's searches are
- * sent: those are the readers the question is about, and a contributor's
- * searches are their research.
+ * whom to add or review next.
  *
- * Plausible keeps what it is sent and cannot drop one entry, so if that turns
- * out to matter - somebody asks for their name to be taken out, say - the
- * version that keeps the queries in the ops database instead, deletable and
- * gone after 180 days with a page of its own, is on the branch
- * `first-party-search-log`.
+ * ## Two places, by Szymon's decision of 2026-10-16
+ *
+ * Plausible reads a search beside the rest of the visit - the pick, the
+ * teaser, the sign-in. Only a logged out reader's searches are sent there:
+ * those are the readers the funnel is about, and a contributor's searches are
+ * their research.
+ *
+ * The site keeps every settled search as well (`shared/searchLog.ts`), signed
+ * in readers' among them and marked as such, for 180 days. The owner reads it
+ * on /admin/wyszukiwania: the list to turn into pages to add and drafts to
+ * review. Plausible keeps what it is sent and cannot drop one entry; the
+ * site's copy can, if somebody asks for their name to be taken out.
  *
  * ## One event per search, not per keystroke
  *
@@ -28,7 +33,11 @@
  * and the previous one is settled as left.
  */
 
-import { resultBucket, unverifiedShare } from "./analytics";
+import {
+  resultBucket,
+  unverifiedShare,
+  type SearchPickKind,
+} from "./analytics";
 
 /** The longest query sent. A name, even a company's in full, fits; anything
  * longer is not a search. */
@@ -39,7 +48,8 @@ export const MIN_QUERY_LENGTH = 3;
 
 /** How a search ended: a result opened, something offered to be added, or the
  * box left without either. */
-export type SearchOutcome = "pick" | "propose" | "abandon";
+export const SEARCH_OUTCOMES = ["pick", "propose", "abandon"] as const;
+export type SearchOutcome = (typeof SEARCH_OUTCOMES)[number];
 
 /** One settled search. */
 export type SettledSearch = {
@@ -50,6 +60,11 @@ export type SettledSearch = {
   /** Of those, how many were people nobody has published. */
   unverified: number;
   outcome: SearchOutcome;
+  /** What was opened, for a `pick`. */
+  picked?: SearchPickKind;
+  /** Whether what was opened was an unpublished person - a teaser, for a
+   * logged out reader. */
+  pickedUnverified?: boolean;
 };
 
 /** A query as it is compared and sent: lowercased, whitespace collapsed,
@@ -68,7 +83,7 @@ function sameSearch(previous: string, next: string): boolean {
   return previous.startsWith(next) || next.startsWith(previous);
 }
 
-type Pending = Omit<SettledSearch, "outcome">;
+type Pending = Pick<SettledSearch, "query" | "results" | "unverified">;
 
 /** The search box's searches, settled one at a time. Each method returns the
  * search to report, if what happened settled one. */
@@ -89,9 +104,10 @@ export class SearchSession {
     return settled(previous, "abandon");
   }
 
-  /** The reader opened a result. */
-  pick(): SettledSearch | undefined {
-    return this.settle("pick");
+  /** The reader opened a result. `kind` is what it was; `unverified` whether it
+   * was an unpublished person. */
+  pick(kind: SearchPickKind, unverified: boolean): SettledSearch | undefined {
+    return this.settle("pick", { picked: kind, pickedUnverified: unverified });
   }
 
   /** The reader offered to add what the search did not find. */
@@ -105,23 +121,28 @@ export class SearchSession {
     return this.settle("abandon");
   }
 
-  private settle(outcome: SearchOutcome): SettledSearch | undefined {
+  private settle(
+    outcome: SearchOutcome,
+    picked: Pick<SettledSearch, "picked" | "pickedUnverified"> = {},
+  ): SettledSearch | undefined {
     const pending = this.pending;
     this.pending = undefined;
-    return pending ? settled(pending, outcome) : undefined;
+    return pending ? settled(pending, outcome, picked) : undefined;
   }
 }
 
 function settled(
   pending: Pending,
   outcome: SearchOutcome,
+  picked: Pick<SettledSearch, "picked" | "pickedUnverified"> = {},
 ): SettledSearch | undefined {
   if (pending.query.length < MIN_QUERY_LENGTH) return undefined;
-  return { ...pending, outcome };
+  return { ...pending, outcome, ...picked };
 }
 
 /** `search:settled`'s properties: the query as it is, and the counts bucketed
- * the way `search:performed` buckets them, so the two break down alike. */
+ * the way `search:performed` buckets them, so the two break down alike. What
+ * was opened is left out: `search:pick` already says it. */
 export function settledSearchProps(search: SettledSearch): {
   query: string;
   results: string;

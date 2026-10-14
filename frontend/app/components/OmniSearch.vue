@@ -240,27 +240,51 @@ type ListItem = {
   /** The node a search hit opens, for telling its page that the search box
    * sent the reader there (`noteSearchPick`). */
   nodeId?: string;
+  /** Whether the hit is a person nobody has published - a teaser rather than a
+   * page, for a logged out reader. Not drawn, only kept with the search that
+   * opened it. */
+  unverified?: boolean;
   path?: string;
   query?: Record<string, string>;
 };
 
-/** The searches typed into the box, one `search:settled` each - see
- * `shared/searchSession.ts`, which also says why the query is sent at all. */
+/** The searches typed into the box, each reported once it is settled - see
+ * `shared/searchSession.ts`, which also says why the query is kept at all. */
 const searchSession = new SearchSession();
 
-/** Reports a settled search, if one was - for a logged out reader only. They
- * are who the question is about; a signed in reader's searches are their
- * research, and the owner's alone would outnumber everybody else's. */
+/** Reports a settled search, if one was, to both places that keep them. The
+ * site's own log gets everybody's, and works out itself whether somebody was
+ * signed in. Plausible gets a logged out reader's only: they are who the
+ * question is about; a signed in reader's searches are their research, and
+ * the owner's alone would outnumber everybody else's. */
 function report(search: SettledSearch | undefined) {
-  if (!search || user.value) return;
-  trackGoal("search:settled", settledSearchProps(search));
+  if (!search) return;
+  record(search);
+  if (!user.value) trackGoal("search:settled", settledSearchProps(search));
+}
+
+/** Sends a settled search to the site's own log (`shared/searchLog.ts`). Fire
+ * and forget: losing a record is better than a search box that waits on its
+ * own bookkeeping. `keepalive`, so the record of a reader leaving the page
+ * still goes out as the page goes. */
+function record(search: SettledSearch) {
+  authHeaders(user.value)
+    .then((headers) =>
+      $fetch("/api/search/log", {
+        method: "POST",
+        body: search,
+        headers,
+        keepalive: true,
+      }),
+    )
+    .catch((error) => console.error("Search log failed", error));
 }
 
 // A search nobody took anything from is still a search - and the one that
 // found nothing is the one most worth knowing about. Settled when the reader
 // hides the page, or leaves it some way other than through the box: before the
-// navigation, so it is counted on the page it was typed on. The tracker sends
-// with `keepalive`, so the one from a closing tab still goes out.
+// navigation, so it is counted on the page it was typed on. Both go out with
+// `keepalive`, so the one from a closing tab still arrives.
 const leaveBox = () => report(searchSession.abandon());
 const onVisibility = () => {
   if (document.visibilityState === "hidden") leaveBox();
@@ -397,6 +421,7 @@ const items = computed<ListItem[]>(() => {
         // with a krs filter and a company page both mean "place".
         analyticsKind: searchPickKind(itemType),
         nodeId: item.id,
+        unverified: isUnverifiedPerson(item),
         ...routing,
       });
     });
@@ -417,7 +442,12 @@ watch(nodeGroupPicked, (value) => {
   // Defaulted, because the value arrives from VAutocomplete's model and a test
   // may hand over a partial entry.
   trackGoal("search:pick", { kind: value.analyticsKind ?? "place" });
-  report(searchSession.pick());
+  report(
+    searchSession.pick(
+      value.analyticsKind ?? "place",
+      value.unverified === true,
+    ),
+  );
   // Before navigating, so the page it opens can tell it was searched for.
   noteSearchPick(value.nodeId);
   push(omniSearchTarget(currentRoute.value, value));
