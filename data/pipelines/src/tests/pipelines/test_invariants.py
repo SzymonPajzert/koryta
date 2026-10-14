@@ -1619,9 +1619,10 @@ def test_a_job_does_not_end_on_the_day_a_crawl_ran(edges):
     `data_koniec` with the run's own date as the default, so every post the
     register listed as current came out of that run ending on the day it ran.
     Two runs reached the site: 1,044 edges on the 2026-10-14 export, 825
-    ending 2026-04-06 and 219 ending 2026-03-18, and the register lists 853 of
-    those posts as current. The ingest never rewrites a stored end, so nothing
-    repairs them by itself - the night only reports them as `dropped`.
+    ending 2026-04-06 and 219 ending 2026-03-18, and the register, matched to
+    the page's person as the migration matches it, lists 845 of those posts as
+    current. The ingest never rewrites a stored end, so nothing repairs them by
+    itself - the night only reports them as `dropped`.
 
     `frontend/scripts/migrate/clear-crawl-stamp-job-ends.ts` puts back the
     register's answer on 991 of them. The rest it lists for a reviewer by id.
@@ -1658,7 +1659,7 @@ def test_no_day_ends_a_hundred_jobs(edges):
 
     The check that would have caught the crawl stamps, and catches the next
     one: a writer filling in a clock's date for a blank end puts every open
-    post it touches on one day. Before the migration the two stamps held 825
+    post it touches on one day. Before the migration the two stamps held 824
     and 219 live edges; no other day of 2026 holds more than 13 (2026-07-07 on
     the 2026-10-14 export), and none since records began reaches 50 - the
     busiest real day is 2024-04-12, with 46 ends at 20 companies. Days before
