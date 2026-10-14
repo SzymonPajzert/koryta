@@ -149,7 +149,7 @@ LOGS_PREFIX = "jobs/nightly/logs/"
 EXIT_TRY_LATER = 75
 EXIT_FAILED = 1
 
-#: Out of `--all-pipelines`, as in the CI nightly (.github/workflows/pipelines.yml):
+#: Out of `--all-pipelines`, as in CI's full tier (.github/workflows/pipelines.yml):
 #: the article branch needs the crawl queue's Postgres and its url store, and
 #: ProcessWikiNer the ml group's spaCy, which the VM does not install.
 #: KorytaDiffer writes nothing - it prints how one export differs from another
