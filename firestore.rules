@@ -2,13 +2,29 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Published pages only. Nothing in the app reads a node through the
+    // client SDK - every page comes from /api, with the admin SDK these rules
+    // do not apply to - so this is all a browser could ever be handed, and it
+    // was every person in the base: published or not, party and all, one REST
+    // call away (checked on production on 2026-10-01).
     match /nodes/{nodeId} {
-      allow read: if resource.data.type == "article" || resource.data.type == "person" || resource.data.type == "place" || resource.data.type == "topic";
+      allow read: if (resource.data.type == "article" || resource.data.type == "person" || resource.data.type == "place" || resource.data.type == "topic")
+          && resource.data.published == true
+          && resource.data.get("deleted", false) != true;
       allow create: if request.auth != null && resource.data.revision_id == null;
     }
 
+    // A note on a person is research about somebody - unreviewed, and for most
+    // of them about a person whose page is not published at all - so it is for
+    // signed in readers, as the person's drafts are. A note on a company, an
+    // article or a topic stays public: it is part of what the page says.
+    //
+    // A note does not carry its page's type, so the rule reads it off the
+    // page. The app asks by `nodeId ==`, so that is one read per query, and
+    // only for a reader who is not signed in.
     match /notes/{noteId} {
-      allow read: if true;
+      allow read: if request.auth != null
+          || get(/databases/$(database)/documents/nodes/$(resource.data.nodeId)).data.type != "person";
       allow create, update, delete: if request.auth != null && request.resource.data.userUid == request.auth.uid;
     }
 
@@ -34,7 +50,11 @@ service cloud.firestore {
     }
 
     match /revisions/{revisionId} {
-      allow read: if true;
+      // Nothing in the app reads a revision through the client SDK either -
+      // /api/revisions/* does, for signed in readers only. Readable here, a
+      // revision was every draft's every proposed party, to anybody listing
+      // the collection.
+      allow read: if false;
       // Nothing in the app creates a revision from the browser - every
       // proposal goes through /api/revisions/create, with the admin SDK these
       // rules do not apply to - so the client gets no write at all. Checking
