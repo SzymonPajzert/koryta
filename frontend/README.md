@@ -422,19 +422,31 @@ deploy, run, decide or build, and what has to happen before what
 indexes once this merges" - adds it there instead of only to its notes:
 
 - `tasks_list` — the page's lists: goals, ready for the owner, ready for an
-  agent, blocked (with what each waits on), ideas, parked, closed. `goal`
-  narrows it to one goal and the tasks that lead to it.
+  agent, blocked (with what each waits on), ideas, parked, closed - each most
+  pressing first. `goal` narrows it to one goal and the tasks that lead to it,
+  `priority` to the urgent (or high and urgent) ones.
 - `task_get` — whole tasks by id or `#t-<id>` link, with their history and
   what they unblock.
 - `task_add` — a new task, one step each, with the commands in its body and
   `dependsOn` for what has to happen first. An open task that looks like the
   same thing is shown instead of a duplicate being added.
-- `task_update` — close, start or park a task, change what it waits on, or add
-  a line to its history. A dependency that would close a loop is refused.
+- `task_update` — close, start or park a task, change what it waits on, raise
+  its priority, or add a line to its history. A dependency that would close a
+  loop is refused.
 
 A task of kind `goal` groups others: it depends on the tasks that lead to it,
 so a task is put under a goal by adding it to the goal's `dependsOn`. The page
 lists goals first, with how many of those tasks are closed, and filters by one.
+
+A task or a goal can be `urgent` (harm that grows while it waits, or a
+deadline days away) or `high` (a goal's critical path, or a deadline within
+weeks). The level reaches everything it waits on, directly or through others,
+while that is open: what holds up an urgent task is urgent too, and an urgent
+or high goal lifts every task that leads to it. Parked tasks take a level but
+pass none on. An agent has to give the evidence for raising a level (`note`,
+or the body of a new task) and may not lower one the owner set. Each change is
+logged in the task's history, and a document written back by code from before
+priorities - which drops the field - gets its level back from there.
 
 This is the one thing agents write to production, and it lives in its own
 database, `agent-tasks`, so that the account they write as cannot touch the
