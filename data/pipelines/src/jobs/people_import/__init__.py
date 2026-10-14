@@ -156,7 +156,13 @@ from stores.config import VERSIONED_DIR, pesel_salt
 from stores.job_requests import PEOPLE_REQUEST, Request, read_request
 from stores.job_runs import ERROR_CHARS, ERRORS_KEPT, FinalState, JobRun
 from stores.koryta_login import TokenSource, token_source
-from stores.storage import CRAWLED_BUCKET, SHARED_BUCKET, Client, warsaw_tz
+from stores.storage import (
+    CRAWLED_BUCKET,
+    LISTING_FIELDS,
+    SHARED_BUCKET,
+    Client,
+    warsaw_tz,
+)
 from uploader import (
     PERSON_COUNTERS,
     Args,
@@ -630,10 +636,14 @@ def bought_since(client: "Client", since: str) -> set[str]:
     the purchase, rather than off the paid job's summaries: a run killed
     before it wrote one has still bought what it stored. Some 5,000 names in
     October 2026, a few seconds to list.
+
+    Listed with the mask `Client.list_blobs` uses, since only the name is
+    read: unmasked, every item carries the object's whole metadata - 5.5 MB
+    a night for those 5,000, against 0.6 MB masked.
     """
     bucket = client.storage_client.bucket(CRAWLED_BUCKET)
     bought: set[str] = set()
-    for blob in bucket.list_blobs(prefix=PERSON_FEEDS):
+    for blob in bucket.list_blobs(prefix=PERSON_FEEDS, fields=LISTING_FIELDS):
         feed = parse_person_connections_url(blob.name)
         if feed is not None and feed[1] >= since:
             bought.add(feed[0])
