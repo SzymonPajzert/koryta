@@ -442,3 +442,61 @@ def test_an_infobox_of_another_kind_speaks_for_the_company():
         ("Skarb Państwa", 69.3),
         ("Polska Grupa Lotnicza", 30.7),
     ]
+
+
+def test_an_infobox_of_a_kind_no_list_names_is_a_persons():
+    # Jerzy Domański's article. "Osoba publiczna" is no kind the person list
+    # named, and its name field is "osoba publiczna", not "osoba".
+    article = WikiArticle.parse_text(
+        "Jerzy Domański",
+        "{{Osoba publiczna infobox\n"
+        " | osoba publiczna = Jerzy Domański\n"
+        " | data urodzenia = 21 czerwca 1951\n"
+        " | miejsce urodzenia = [[Chorzów]], [[Polska]]\n"
+        " | funkcja = prezes [[Polski Związek Piłki Nożnej|PZPN]]\n"
+        "}}\n"
+        "'''Jerzy Alojzy Domański''' (ur. [[21 czerwca]] [[1951]] w Chorzowie)"
+        " – polski politolog i dziennikarz.\n",
+    )
+
+    person = extract_from_article(article)
+
+    assert isinstance(person, People)
+    assert (person.full_name, person.birth_iso8601) == (
+        "Jerzy Alojzy Domański",
+        "1951-06-21",
+    )
+
+
+def test_a_biography_naming_none_of_the_kinds_is_still_read():
+    # Weronika Marczuk's article, an actor's: no word the parser used to look
+    # for before parsing anything, so it was skipped unread.
+    article = WikiArticle.parse_text(
+        "Weronika Marczuk",
+        "{{Aktor infobox\n"
+        " |imię i nazwisko = Weronika Marczuk\n"
+        " |data urodzenia = 28 listopada 1971\n"
+        " |miejsce urodzenia = [[Kijów]]\n"
+        "}}\n"
+        "'''Weronika Olena Marczuk''' (ur. 28 listopada 1971 w Kijowie)\n",
+    )
+
+    assert article is not None
+    person = extract_from_article(article)
+    assert isinstance(person, People)
+    assert person.birth_iso8601 == "1971-11-28"
+
+
+def test_a_fictional_characters_birth_date_is_nobodys():
+    article = WikiArticle.parse_text(
+        "Lord Voldemort",
+        "{{Postać fikcyjna infobox\n"
+        " |nazwa = Lord Voldemort\n"
+        " |seria = [[Harry Potter (seria powieści)|Harry Potter]]\n"
+        " |data urodzenia = 31 grudnia 1926\n"
+        "}}\n"
+        "'''Lord Voldemort''' – postać fikcyjna.\n",
+    )
+
+    assert article is not None
+    assert extract_from_article(article) is None
