@@ -50,7 +50,7 @@ export function polishCounting(
  * non-breaking space, so a number never wraps between „1” and „284”.
  */
 export function polishNumber(number: number): string {
-  return new Intl.NumberFormat("pl-PL").format(number);
+  return new Intl.NumberFormat("pl-PL", { useGrouping: true }).format(number);
 }
 
 /** A count after a preposition that takes the genitive: „z 1 284 osób”, „z 1
