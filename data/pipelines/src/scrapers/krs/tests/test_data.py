@@ -1,7 +1,11 @@
+import pandas as pd
+
 from scrapers.krs.data import (
     REGON_PUBLIC_OWNERSHIP,
     WOJEWODZTWA_SPOLKI,
     CompaniesHardcoded,
+    public_regons,
+    regon_stem,
 )
 from scrapers.stores import Pipeline, ProcessPolicy
 from scrapers.tests.mocks import get_test_context, setup_test_context
@@ -32,13 +36,13 @@ SEJM = (
 )
 
 
-def hardcoded(*rows: str) -> CompaniesHardcoded:
+def hardcoded(*rows: str, header: str = CATALOGUE_HEADER) -> CompaniesHardcoded:
     """`CompaniesHardcoded` run over a public-entity catalogue of these rows."""
     ctx = setup_test_context(
         get_test_context(),
         {
             "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv": "\n".join(
-                [CATALOGUE_HEADER, *rows]
+                [header, *rows]
             ),
             "teryt_codes.zip": {
                 "TERC_Urzedowy_2025-11-15.csv": """WOJ;POW;GMI;RODZ;NAZWA;NAZWA_DOD
@@ -117,3 +121,66 @@ def test_every_voivodeship_list_holds_krs_numbers_once():
     for wojewodztwo, krss in WOJEWODZTWA_SPOLKI.items():
         assert len(set(krss)) == len(krss), wojewodztwo
         assert all(len(krs) == 10 and krs.isdigit() for krs in krss), wojewodztwo
+
+
+def test_a_regon_is_read_as_the_entity_it_names():
+    # The register's 14 digits, a local unit's last five dropped
+    assert regon_stem("47158565900000") == "471585659"
+    assert regon_stem("013272636") == "013272636"
+    assert regon_stem(" 013272636 ") == "013272636"
+    # Not a REGON, or a column pandas made floats of: no guess
+    assert regon_stem("13272636.0") is None
+    assert regon_stem("7321714646") is None
+    assert regon_stem("") is None
+    assert regon_stem(None) is None
+    assert regon_stem(13272636) is None
+
+
+def catalogue(*rows: tuple) -> pd.DataFrame:
+    columns = ["Nazwa podmiotu", "REGON", "Forma własności", "NIP"]
+    return pd.DataFrame(
+        [row + (None,) * (len(columns) - len(row)) for row in rows], columns=columns
+    )
+
+
+def test_the_public_regons_are_the_public_sectors_only():
+    regons = public_regons(
+        catalogue(
+            # Mixed, with a public majority: the water association that owns
+            # Wodociągi i Kanalizacja-Zgierz
+            (
+                "ZGIERSKA SPÓŁKA WODNA",
+                "471585659",
+                "133 - WŁASNOŚĆ MIESZANA MIĘDZY SEKTORAMI Z PRZEWAGĄ WŁASNOŚCI "
+                "SEKTORA PUBLICZNEGO",
+            ),
+            ("POLITECHNIKA ŁÓDZKA", "000001583", "112 - WŁASNOŚĆ PAŃSTWOWYCH"),
+            # A school listed as a unit of its gmina: the gmina is public too
+            (
+                "SZKOŁA PODSTAWOWA",
+                "61101550800021",
+                "113 - WŁASNOŚĆ JEDNOSTEK SAMORZĄDU TERYTORIALNEGO",
+            ),
+            ("SZPITAL PRYWATNY", "123456789", "215 - WŁASNOŚĆ PRYWATNA KRAJOWA"),
+            ("BEZ REGON", None, "111 - WŁASNOŚĆ SKARBU PAŃSTWA"),
+            ("BEZ KODU", "987654321", None),
+        )
+    )
+
+    assert regons == {"471585659", "000001583", "611015508"}
+
+
+def test_a_catalogue_without_regons_names_no_public_owner():
+    assert public_regons(pd.DataFrame({"Forma własności": ["111"]})) == frozenset()
+
+
+def test_the_pipeline_keeps_the_public_regons_beside_the_companies():
+    data = hardcoded(
+        SEJM + ";000000555",
+        "ZGIERSKA SPÓŁKA WODNA;;ŁÓDZKIE;zgierski;Zgierz;Zgierz;ul. Andrzeja Struga;"
+        "45;;95-100;Zgierz;133 - WŁASNOŚĆ MIESZANA MIĘDZY SEKTORAMI Z PRZEWAGĄ "
+        "WŁASNOŚCI SEKTORA PUBLICZNEGO;471585659",
+        header=CATALOGUE_HEADER + ";REGON",
+    )
+
+    assert data.public_regons == {"000000555", "471585659"}
