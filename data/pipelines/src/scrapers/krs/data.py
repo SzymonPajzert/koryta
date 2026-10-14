@@ -13,6 +13,10 @@ from scrapers.stores.file import DownloadableFile as FileSource
 #: Not a seed like `SPOLKI_SKARBU_PANSTWA`: `CompaniesKRS.compute_public_krss`
 #: consults it only for a company whose register entry names no owner.
 REGON_PUBLIC_OWNERSHIP = "REGON_PUBLIC_OWNERSHIP_KRS"
+#: A company REGON records as publicly owned under its own REGON or NIP, where
+#: the catalogue's KRS column names another company or none - see
+#: `CompaniesKRS.public_by_identity`. Gated the same way.
+REGON_PUBLIC_IDENTITY = "REGON_PUBLIC_OWNERSHIP_ID"
 
 
 def publicly_owned(catalogue: pd.DataFrame) -> pd.DataFrame:
@@ -53,13 +57,22 @@ def regon_stem(value: object) -> str | None:
     return None
 
 
+def nip_digits(value: object) -> str | None:
+    """A NIP as its ten digits, without the dashes it is often written with."""
+    if not isinstance(value, str):
+        return None
+    digits = value.strip().replace("-", "").replace(" ", "")
+    return digits if len(digits) == 10 and digits.isdigit() else None
+
+
 def _public_ids(
     catalogue: pd.DataFrame, column: str, read: Callable[[object], str | None]
 ) -> frozenset[str]:
     """`column` of the entries filed under the public sector, as `read` reads it.
 
     Less any that an entry under the private sector carries as well, which
-    leaves the answer to the register; no REGON is filed both ways today.
+    leaves the answer to the register: no REGON is filed both ways today, and
+    two NIPs are (ZGK Granowo: 113 and 214).
     """
     if column not in catalogue.columns:
         return frozenset()
@@ -73,12 +86,19 @@ def _public_ids(
 def public_regons(catalogue: pd.DataFrame) -> frozenset[str]:
     """The REGON of every catalogue entry REGON records as publicly owned.
 
-    For an owner the register names with no KRS number and no name anything
-    here can place: ZGIERSKA SPÓŁKA WODNA, a water association holding 92.5% of
+    Read for two things the catalogue's KRS column cannot answer.
+
+    An owner the register names with no KRS number and no name anything here
+    can place: ZGIERSKA SPÓŁKA WODNA, a water association holding 92.5% of
     Wodociągi i Kanalizacja-Zgierz, which REGON files under 133, mixed with a
     public majority; a public university, owner of its spin-offs; a gmina the
     register misspells ("GMINA I MIASTRO WYSZOGRÓD"). The register gives each
     its REGON instead.
+
+    And a company itself, where the row with its REGON carries another KRS
+    number or none: the REGON of an SPZOZ turned into a spółka, or of a state
+    enterprise commercialised, passed to the successor, and the catalogue lists
+    the successor's KRS.
 
     69,709 of the catalogue's 86,377 entries carry a 1xx code - gminas, their
     offices and companies, schools, hospitals, universities, state agencies -
@@ -87,14 +107,24 @@ def public_regons(catalogue: pd.DataFrame) -> frozenset[str]:
     return _public_ids(catalogue, "REGON", regon_stem)
 
 
+def public_nips(catalogue: pd.DataFrame) -> frozenset[str]:
+    """The NIP of every catalogue entry REGON records as publicly owned.
+
+    As `public_regons`, for a company itself: three research institutes moved
+    into the Łukasiewicz network kept their NIP and took a new REGON.
+    """
+    return _public_ids(catalogue, "NIP", nip_digits)
+
+
 class CompaniesHardcoded(Pipeline[KRS]):
     filename = None
     volatile = True
 
     all_companies_krs: dict[str, KRS] = dict()
-    #: The REGON numbers the catalogue files as publicly owned - see
-    #: `public_regons`.
+    #: The REGON and NIP numbers the catalogue files as publicly owned - see
+    #: `public_regons` and `public_nips`.
     public_regons: frozenset[str] = frozenset()
+    public_nips: frozenset[str] = frozenset()
     teryt: Teryt
 
     @property
@@ -154,9 +184,9 @@ class CompaniesHardcoded(Pipeline[KRS]):
     def read_catalogue(self, ctx: Context) -> pd.DataFrame:
         """The whole public-entity catalogue, from data.gov.pl.
 
-        REGON is read as text: as a number the column turns to floats, for the
-        entries that have none, and loses its leading zeros - Województwo
-        Mazowieckie is 013272636.
+        REGON and NIP are read as text: as numbers the columns turn to floats,
+        for the entries that have none, and lose their leading zeros -
+        Województwo Mazowieckie is 013272636.
         """
         _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
         public_companies = FileSource(
@@ -168,7 +198,7 @@ class CompaniesHardcoded(Pipeline[KRS]):
             ctx.io.read_data(public_companies).read_file(),
             sep=";",
             low_memory=False,
-            dtype={"REGON": str},
+            dtype={"REGON": str, "NIP": str},
         )
 
     def read_public_companies(self, catalogue: pd.DataFrame) -> pd.DataFrame:
@@ -182,6 +212,7 @@ class CompaniesHardcoded(Pipeline[KRS]):
         self.teryt.process(ctx)
         catalogue = self.read_catalogue(ctx)
         self.public_regons = public_regons(catalogue)
+        self.public_nips = public_nips(catalogue)
         public_companies = self.read_public_companies(catalogue)
         self.register_partials(
             "PUBLIC_COMPANIES_KRS",

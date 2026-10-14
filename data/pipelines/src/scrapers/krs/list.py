@@ -11,7 +11,13 @@ from pandas import DataFrame
 from entities.company import KRS, Owner, Source, short_name
 from entities.company import Company as KrsCompany
 from entities.person import KRS as KrsPerson
-from scrapers.krs.data import REGON_PUBLIC_OWNERSHIP, CompaniesHardcoded, regon_stem
+from scrapers.krs.data import (
+    REGON_PUBLIC_IDENTITY,
+    REGON_PUBLIC_OWNERSHIP,
+    CompaniesHardcoded,
+    nip_digits,
+    regon_stem,
+)
 from scrapers.krs.graph import PARENT_RELATION, QueryRelation
 from scrapers.krs.organs import supervision_kind
 from scrapers.krs.public_bodies import public_body
@@ -341,9 +347,10 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.struck_off: dict[str, str] = {}
         #: The shareholdings the historical feeds list, `(owner, owned, ended)`.
         self.past_owners: list[tuple[str, str, str]] = []
-        #: REGON numbers of publicly owned entities - see
+        #: REGON and NIP numbers of publicly owned entities - see
         #: `scrapers.krs.data.public_regons`.
         self.public_regons: frozenset[str] = frozenset()
+        self.public_nips: frozenset[str] = frozenset()
 
     @property
     def output_class(self) -> Type:
@@ -612,7 +619,41 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             ):
                 public_krss.add(company.krs)
                 company.is_public = True
+            elif (
+                not company.is_public
+                and company.krs not in self.owner_on_record
+                and not company.parents
+                and self.public_by_identity(company)
+            ):
+                public_krss.add(company.krs)
+                company.is_public = True
+                self.company_sources[company.krs] = self.company_sources.get(
+                    company.krs, set()
+                ) | {Source("hardcoded", reason=REGON_PUBLIC_IDENTITY)}
         return public_krss
+
+    def public_by_identity(self, company: KrsCompany) -> bool:
+        """Whether REGON files the company itself as publicly owned.
+
+        By its own REGON or NIP, where `REGON_PUBLIC_OWNERSHIP` goes by the
+        catalogue's KRS column. Measured over the 10-14 companies_merged it
+        adds 42 companies, every one checked: 40 struck off, each an SPZOZ
+        turned into a spółka, a state enterprise or research unit
+        commercialised, an institute moved into the Łukasiewicz network, or a
+        municipal sp. z o.o. become an SA - the identifiers passed to the
+        successor, and the catalogue row carries the successor's KRS. The other
+        two are alive and named nowhere else: Fundacja Rozwoju Systemu
+        Edukacji, the education ministry's, and Sudeckie Stowarzyszenie
+        Inicjatyw Gospodarczych, which a powiat and five gminas founded.
+
+        Read only for a company nothing else names an owner of - neither its
+        odpis nor a feed, as none of the 42 has - since a code a company filed
+        once outranks no owner on record.
+        """
+        return (
+            regon_stem(company.regon) in self.public_regons
+            or nip_digits(company.nip) in self.public_nips
+        )
 
     def build_parent_to_children(self) -> dict[str, list[str]]:
         parent_to_children: dict[str, list[str]] = {}
@@ -667,6 +708,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.hardcoded_companies.process(ctx)
         hardcoded = self.hardcoded_companies.all_companies_krs
         self.public_regons = self.hardcoded_companies.public_regons
+        self.public_nips = self.hardcoded_companies.public_nips
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             self.process_rejestrio_blob(blob_name, data, postal_codes)

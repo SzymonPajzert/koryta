@@ -4,6 +4,8 @@ from scrapers.krs.data import (
     REGON_PUBLIC_OWNERSHIP,
     WOJEWODZTWA_SPOLKI,
     CompaniesHardcoded,
+    nip_digits,
+    public_nips,
     public_regons,
     regon_stem,
 )
@@ -184,3 +186,23 @@ def test_the_pipeline_keeps_the_public_regons_beside_the_companies():
     )
 
     assert data.public_regons == {"000000555", "471585659"}
+
+
+def test_a_nip_is_read_with_or_without_its_dashes():
+    assert nip_digits("525-000-85-19") == "5250008519"
+    assert nip_digits("5250008519") == "5250008519"
+    assert nip_digits("525000851") is None
+    assert nip_digits(None) is None
+
+
+def test_an_identifier_filed_under_both_sectors_is_left_to_the_register():
+    # ZGK Granowo's NIP carries a 113 row and a 214 row
+    nips = public_nips(
+        catalogue(
+            ("ZGK GRANOWO", "000000001", "113 - SAMORZĄD", "7881000001"),
+            ("ZGK GRANOWO", "000000002", "214 - PRYWATNA", "788-100-00-01"),
+            ("IMBiGS", "000000003", "111 - SKARB PAŃSTWA", "525-000-85-19"),
+        )
+    )
+
+    assert nips == {"5250008519"}
