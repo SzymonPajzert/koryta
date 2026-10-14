@@ -881,7 +881,9 @@ class PersonUploader(CompanyUploader):
             return self.answered(resp, first)
         if second.status_code != 200:
             # The person is in all the same, and the jobs at the companies
-            # just created are left as unplaced.
+            # just created are left as unplaced, which keeps the person out
+            # of what the next night leaves alone as sent
+            # (`jobs.people_import.remembered`): it sends them again.
             first.problems.append(
                 f"ponowna wysyłka: {refusal(second.status_code, second.text)}"
             )
@@ -937,7 +939,8 @@ class PersonUploader(CompanyUploader):
         for change in result.dropped:
             print(f"{name}: {dropped_line(change)}", file=sys.stderr)
         # The same for a job the site took the person without: its company is
-        # one the uploader could not create, which the run's errors name.
+        # one the uploader could not create, which the run's errors name, and
+        # the daily import sends the person again the next night.
         self.counts["employments_unplaced"] += len(result.unplaced_jobs)
         for job in result.unplaced_jobs:
             print(f"{name}: {unplaced_line(job)}", file=sys.stderr)
