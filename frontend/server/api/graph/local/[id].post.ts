@@ -1,9 +1,13 @@
 import { defineEventHandler, readBody, getRouterParam } from "h3";
 import { getLocalGraph } from "~~/server/utils/localGraph";
+import { bodyWantsLatest } from "~~/server/utils/handlers";
 
 export default defineEventHandler(async (event) => {
   const body = (await readBody(event)) || {};
-  const latest = body.latest !== undefined && body.latest !== false;
+  // Asked for in the body and allowed by the token. The table sent
+  // `latest: true` for every reader until 2026-10-14, and this took it at its
+  // word, so the flag by itself is no sign of anybody signed in.
+  const latest = await bodyWantsLatest(event, body);
   const distance = body.distance ? parseInt(body.distance as string, 10) : 1;
   const focusNodeId = getRouterParam(event, "id");
 

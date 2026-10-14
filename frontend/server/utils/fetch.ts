@@ -106,6 +106,44 @@ export function dropSearchIndex(
   return data;
 }
 
+/** How many ids a stored list holds, read tolerantly: `sanitizeFirestoreData`
+ * stores a list written from inside another as a map with numbered keys. */
+function idCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  return value && typeof value === "object" ? Object.keys(value).length : 0;
+}
+
+/** A node document as somebody who may not see drafts is to be shown it: its
+ * `stats.edges.all` taken off. Returns a copy; `data` is left as it was, since
+ * it can be an entry of `fetchNodes`'s cache.
+ *
+ * `all` is `approved` with the unpublished relations counted in, and its
+ * `targetNodeIds` names what they point at - the company of an employment
+ * nobody has reviewed, the region a candidacy was in. A reader who may not see
+ * a relation may not see where it leads either, and a published page carries
+ * `all` as much as a draft does.
+ *
+ * One number survives it, as `hiddenTargets`: how many more there are, which
+ * is what the logged-out table says to invite a sign-in ("W tym widoku
+ * znaleźliśmy jeszcze...") and all it ever read `all` for. A count says that
+ * there is more without saying what.
+ */
+export function dropDraftStats<T extends FirebaseFirestore.DocumentData>(
+  data: T,
+): T {
+  const edges = data.stats?.edges;
+  if (!edges || typeof edges !== "object" || !("all" in edges)) return data;
+  const { all, ...rest } = edges;
+  const hiddenTargets = Math.max(
+    0,
+    idCount(all?.targetNodeIds) - idCount(rest.approved?.targetNodeIds),
+  );
+  return {
+    ...data,
+    stats: { ...data.stats, edges: { ...rest, hiddenTargets } },
+  };
+}
+
 export function parseNodeDoc<T extends { id?: string; visibility?: boolean }>(
   doc: FirebaseFirestore.QueryDocumentSnapshot,
 ): T {

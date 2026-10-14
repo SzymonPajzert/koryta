@@ -45,12 +45,12 @@ const queryValidator = z.object({
  * "Artykuł stanowi źródło dla:" had never rendered a row.
  *
  * A signed in reader sees relations that are still drafts, the same rule the
- * graph endpoint applies - see `wantsLatest` there. Everyone else sees the
- * published ones.
+ * graph endpoint applies - see `wantsLatest`. Everyone else sees the published
+ * ones.
  */
 export default editorFreshCachedEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
-  const includeDrafts = wantsLatest(event);
+  const includeDrafts = await wantsLatest(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
   const snapshot = await db

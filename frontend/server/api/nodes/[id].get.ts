@@ -1,15 +1,14 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { nodeTypes, pageIsPublic } from "~~/shared/model";
-import { authCachedEventHandler } from "~~/server/utils/handlers";
+import {
+  editorFreshCachedEventHandler,
+  wantsLatest,
+} from "~~/server/utils/handlers";
 import { resolveMergedNode } from "~~/server/utils/merge";
-import { dropSearchIndex } from "~~/server/utils/fetch";
+import { dropDraftStats, dropSearchIndex } from "~~/server/utils/fetch";
 import { z } from "zod";
 import type { Node } from "~~/shared/model";
-
-const queryValidator = z.object({
-  latest: z.string().optional(),
-});
 
 const responseValidator = z.object({
   name: z.string(),
@@ -24,31 +23,38 @@ const responseValidator = z.object({
   published: z.boolean().optional(),
 });
 
-export default authCachedEventHandler(async (event) => {
+/** One page, as this reader may see it: the newest revision for a signed in
+ * reader who asks with `latest`, the stored and published page for anybody
+ * else.
+ *
+ * `editorFresh` rather than the plain six hour cache this had, which held the
+ * `latest` answer under its url for anyone who typed it - with the 404 below
+ * skipped for any `latest` at all, `latest=false` included. The newest
+ * revision of a page nobody has published, parties and all, went to whoever
+ * asked; `wantsLatest` now wants a token for it, and the reader it lets
+ * through is not served from a cache.
+ */
+export default editorFreshCachedEventHandler(async (event) => {
   const id = getRouterParam(event, "id");
   if (!id) {
     throw createError({ statusCode: 400, message: "Missing type or id" });
   }
-  const query = await getValidatedQuery(event, (query) =>
-    queryValidator.parse(query),
-  );
+  const latest = await wantsLatest(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
-  const node = await (query.latest == "true"
-    ? getLatestRevision(db, id)
-    : getEntity(db, id));
+  const node = await (latest ? getLatestRevision(db, id) : getEntity(db, id));
 
   if (!node) {
     throw createError({
       statusCode: 404,
-      message: `Node not found for id=${id} and latest=${query.latest}`,
+      message: `Node not found for id=${id} and latest=${latest}`,
     });
   }
   // Ahead of the shape check rather than after it. Whether a page may be read
   // is `published` and `deleted`, which are there whatever else the document
   // holds, so a page nobody may read is a 404 however it is shaped - not a
   // 500 that tells a crawler to come back and try again.
-  if (!pageIsPublic(node) && !query.latest) {
+  if (!pageIsPublic(node) && !latest) {
     throw createError({
       statusCode: 404,
       message: `Page ${id} is not approved`,
@@ -57,7 +63,7 @@ export default authCachedEventHandler(async (event) => {
   // TODO how to check the response has a correct shape
   responseValidator.parse(node);
 
-  return { node };
+  return { node: latest ? node : dropDraftStats(node) };
 });
 
 async function getLatestRevision(db: FirebaseFirestore.Firestore, id: string) {

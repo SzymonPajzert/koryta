@@ -22,7 +22,7 @@ export type TopicSummary = {
  * are far fewer of both than there are articles, and this is the index page.
  */
 export default editorFreshCachedEventHandler(async (event) => {
-  const includeDrafts = wantsLatest(event);
+  const includeDrafts = await wantsLatest(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
   const [topicsSnap, taggedSnap] = await Promise.all([

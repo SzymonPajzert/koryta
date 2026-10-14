@@ -138,6 +138,7 @@ import { mdiCash } from "@mdi/js";
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
+import { hiddenTargetCount } from "~/utils/hiddenTargets";
 import { useQueryFilters } from "~/composables/queryFilters";
 import { parties } from "~~/shared/misc";
 import { regionFilterOptions } from "~~/shared/teryt";
@@ -333,16 +334,7 @@ const hiddenCount = computed(() => {
     stats = places.value?.[company.value[0]]?.stats;
   }
 
-  if (
-    stats?.edges?.all?.targetNodeIds &&
-    stats?.edges?.approved?.targetNodeIds
-  ) {
-    const diff =
-      stats.edges.all.targetNodeIds.length -
-      stats.edges.approved.targetNodeIds.length;
-    return diff > 0 ? diff : 0;
-  }
-  return 0;
+  return hiddenTargetCount(stats);
 });
 
 // This page's whole template is a <ClientOnly>, so the server renders none of

@@ -413,7 +413,7 @@ async function successions(event: H3Event) {
   }
 
   const db = getFirestore(getApp(), "koryta-pl");
-  const showUnapproved = wantsLatest(event);
+  const showUnapproved = await wantsLatest(event);
 
   return companyId
     ? await companySuccessions(db, companyId, showUnapproved)

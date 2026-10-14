@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { waitForLoginFormHydrated } from "./login";
 
 /** The two accounts scripts/seed-emulator.ts creates. */
@@ -8,6 +8,29 @@ export const USERS = {
 } as const;
 
 type User = (typeof USERS)[keyof typeof USERS];
+
+/** The `Authorization` header a signed in reader's browser sends, for a spec
+ * that asks the api directly. Straight from the auth emulator, which the
+ * server verifies tokens against: `latest` alone is no sign of anybody, and
+ * the server answers it with what it gives the public. */
+export async function authorizationFor(
+  request: APIRequestContext,
+  user: User = USERS.normal,
+): Promise<Record<string, string>> {
+  const response = await request.post(
+    "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key",
+    {
+      data: {
+        email: user.email,
+        password: user.password,
+        returnSecureToken: true,
+      },
+    },
+  );
+  expect(response.ok()).toBe(true);
+  const { idToken } = (await response.json()) as { idToken: string };
+  return { Authorization: `Bearer ${idToken}` };
+}
 
 /** Sign in through the form and wait until the app agrees we are signed in.
  *

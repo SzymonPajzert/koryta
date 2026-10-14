@@ -29,7 +29,7 @@ export default editorFreshCachedEventHandler(async (event) => {
   if (!id) {
     throw createError({ statusCode: 400, message: "Brak identyfikatora." });
   }
-  const includeDrafts = wantsLatest(event);
+  const includeDrafts = await wantsLatest(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
   const topicSnap = await db.collection("nodes").doc(id).get();

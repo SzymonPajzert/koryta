@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import {
+  dropDraftStats,
   dropSearchIndex,
   fetchNodes,
   fetchOptionsValidator,
@@ -60,16 +61,38 @@ const cachedHandler = editorFreshCachedEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (query) =>
     queryValidator.parse(query),
   );
+  const latest = await wantsLatest(event);
 
   const opts = {
     personParties: query.parties || query.party,
-    bypassCache: wantsLatest(event),
+    bypassCache: latest,
   };
 
   // The typeless caller is rejected before we get here, so there is always a
   // type to fetch.
-  return { nodes: await fetchNodes(query.type!, opts) };
+  const nodes = await fetchNodes(query.type!, opts);
+  return { nodes: latest ? nodes : publicNodes(nodes) };
 });
+
+/** The pages anybody may read, as anybody may read them.
+ *
+ * This answered every caller with the whole collection and left it to the
+ * client to hide the drafts: on 2026-10-14 `?type=person` handed a logged out
+ * curl 11.4 MB, 10,904 people of whom 9,653 were unpublished and 2,657 carried
+ * a party. `useEntitiesFiltering` drops the same pages in the browser, so the
+ * public page draws what it always drew. Filtered here, after `fetchNodes`,
+ * rather than in its query, so that its one cache entry per type goes on
+ * serving both kinds of reader.
+ */
+function publicNodes<N extends { visibility?: boolean }>(
+  nodes: Record<string, N>,
+): Record<string, N> {
+  return Object.fromEntries(
+    Object.entries(nodes)
+      .filter(([, node]) => node.visibility === true)
+      .map(([id, node]) => [id, dropDraftStats(node)]),
+  );
+}
 
 export default defineEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
@@ -279,7 +302,9 @@ export default defineEventHandler(async (event) => {
 
     const nodesRecord: Record<string, unknown> = {};
     for (const node of nodesArray) {
-      nodesRecord[node.id] = node;
+      // Published pages only, by the filter above, and still not their
+      // unpublished relations - see `dropDraftStats`.
+      nodesRecord[node.id] = user ? node : dropDraftStats(node);
     }
 
     return { nodes: nodesRecord, total };

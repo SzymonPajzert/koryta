@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { authorizationFor, USERS } from "./helpers/auth";
 import { waitForLoginFormHydrated } from "./helpers/login";
 
 /** The seeded institution with a board history. Every other seeded place holds
@@ -83,17 +84,26 @@ test.describe("Kto kogo zastąpił", () => {
     const anonymous = await page.request.get(
       "/api/edges/successions?companyId=sukspolka",
     );
+    // The flag alone, which until 2026-10-14 was all it took to be told.
+    const typed = await page.request.get(
+      "/api/edges/successions?companyId=sukspolka&latest=true",
+    );
     const editor = await page.request.get(
       "/api/edges/successions?companyId=sukspolka&latest=true",
+      { headers: await authorizationFor(page.request, USERS.admin) },
     );
 
     const forReaders = await anonymous.json();
+    const forTyped = await typed.json();
     const forEditors = await editor.json();
 
     // `sukgrzegorz` has no page, so the prokurent handover is withheld and
     // counted instead.
     expect(forReaders.hidden).toBe(1);
     expect(JSON.stringify(forReaders)).not.toContain("Grzegorz Bez Strony");
+
+    expect(forTyped.hidden).toBe(1);
+    expect(JSON.stringify(forTyped)).not.toContain("Grzegorz Bez Strony");
 
     expect(forEditors.hidden).toBe(0);
     expect(forEditors.successions.length).toBe(
