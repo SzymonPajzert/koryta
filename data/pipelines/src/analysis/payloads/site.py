@@ -632,7 +632,12 @@ class SiteSnapshot:
         """`lookupByName`: the first page of the payload's exact name, unless it
         links another register entry, or stores a birth date and the payload's
         is another. Failing one of the exact name, a page writing the payload's
-        double surname with a space (`spaced_surname`)."""
+        double surname with a space (`spaced_surname`).
+
+        Another entry is another number (`links_another_entry`), not another
+        string: a page storing its link the way a browser writes it, with the
+        person's name after the number, is missed by the register lookup and
+        found here by its own entry's payload."""
         register = field(payload, "rejestrIo")
         name = str(payload.get("name"))
         by_name = self._found(self.people_by_name.get(name))
@@ -643,12 +648,9 @@ class SiteSnapshot:
         stored = day_of(field(by_name, "birthDate"))
         if born is not None and stored is not None and stored != born:
             return Resolution(None, NOT_ON_SITE)
-        stored_register = field(by_name, "rejestrIo")
-        if register is None or stored_register is None:
-            return Resolution(by_name, BY_NAME)
-        if str(stored_register) == str(register):
-            return Resolution(by_name, BY_NAME)
-        return Resolution(None, NOT_ON_SITE)
+        if links_another_entry(field(by_name, "rejestrIo"), register):
+            return Resolution(None, NOT_ON_SITE)
+        return Resolution(by_name, BY_NAME)
 
     def _by_name_and_date(
         self, payload: typing.Mapping[str, typing.Any], born: str

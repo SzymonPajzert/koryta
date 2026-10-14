@@ -1867,6 +1867,55 @@ describe("api/ingest/person, one register entry is one human", () => {
     expect(revisionTargetId()).not.toBe("nowak1961");
   });
 
+  it("takes the page of its name that links its entry the way a browser writes it", async () => {
+    // The register lookup asks for the bare link and misses a page storing the
+    // number with the person's name after it, so the name finds the page. It
+    // is the same entry: compared as written, it got a second page.
+    nodes.stary = {
+      type: "person",
+      name: "Jan Kowalski",
+      rejestrIo: "https://rejestr.io/osoby/999999/jan-kowalski",
+      parties: [],
+    };
+    payload({
+      name: "Jan Kowalski",
+      rejestrIo: "https://rejestr.io/osoby/999999",
+    });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("stary");
+    // The page learns the bare link, which the register lookup finds next time.
+    expect(revisionTargetId()).toBe("stary");
+    expect(createRevisionTransaction).toHaveBeenCalledWith(
+      mockDb,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ rejestrIo: "https://rejestr.io/osoby/999999" }),
+      expect.anything(),
+    );
+  });
+
+  it("gives another entry its own page however the stored link is written", async () => {
+    nodes.nowak1961 = {
+      type: "person",
+      name: "Michał Nowak",
+      rejestrIo: "https://rejestr.io/osoby/111111/michal-nowak",
+      parties: [],
+    };
+    payload({
+      name: "Michał Nowak",
+      rejestrIo: "https://rejestr.io/osoby/222222",
+    });
+
+    const result = await handler({} as any);
+
+    expect(result.person).toBe("created");
+    expect(result.personId).toBe("new-doc-id");
+    expect(revisionTargetId()).toBe("new-doc-id");
+  });
+
   it("adopts the register entry onto a person stored without one", async () => {
     // 880 people predate the pipeline sending a `rejestrIo`. Refusing to match
     // them on the name would give every one of them a second page on the next

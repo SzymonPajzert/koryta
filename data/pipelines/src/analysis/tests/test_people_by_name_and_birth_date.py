@@ -230,6 +230,28 @@ def test_a_page_linking_another_entry_is_neither_a_match_nor_a_doubt():
     )
 
 
+def test_an_entry_finds_its_page_whose_link_carries_the_name_after_the_number():
+    """The register lookup asks for the bare link and misses a page storing it
+    the way a browser writes it, so the name finds the page - compared as
+    strings, the page's own entry was turned away and given a second one."""
+    site = snapshot(page("stary", "Anna Maria Nowak", rejestrIo=f"{REGISTER}7/anna"))
+
+    assert resolve(site, person(register=f"{REGISTER}7")) == ("stary", BY_NAME)
+    assert resolve(site, person(born=None, register=f"{REGISTER}7")) == (
+        "stary",
+        BY_NAME,
+    )
+
+
+def test_another_entry_never_finds_a_page_whose_link_carries_the_name():
+    site = snapshot(page("other", "Anna Maria Nowak", rejestrIo=f"{REGISTER}5/anna"))
+
+    assert resolve(site, person(born=None, register=f"{REGISTER}7")) == (
+        None,
+        NOT_ON_SITE,
+    )
+
+
 def test_neither_a_date_nor_an_entry_matches_by_the_exact_name_as_before():
     site = snapshot(
         page(
