@@ -8,9 +8,12 @@ import {
   TABELA_FILTER_NAMES,
   activeTabelaFilters,
   isPassiveGoal,
+  loginReason,
   resultBucket,
   searchPickKind,
   tabelaFiltersChanged,
+  teaserDestination,
+  unverifiedShare,
 } from "../../shared/analytics";
 
 /** A goal Plausible has not been told about is recorded and then invisible, so
@@ -60,6 +63,7 @@ describe("the goal vocabulary", () => {
       "experiment:assigned",
       "tabela:no-results",
       "tabela:open",
+      "teaser:shown",
     ]);
   });
 });
@@ -233,5 +237,44 @@ describe("the tabela filter map", () => {
       if (key === "page") continue;
       expect(Object.keys(TABELA_FILTER_NAMES), key).toContain(key);
     }
+  });
+});
+
+describe("unverifiedShare", () => {
+  it("says none, some or all of the hits were unpublished people", () => {
+    expect(unverifiedShare(5, 0)).toBe("none");
+    expect(unverifiedShare(5, 2)).toBe("some");
+    expect(unverifiedShare(5, 5)).toBe("all");
+  });
+
+  it("calls a search that found nothing none, not all", () => {
+    // `results: none` already says it; `all` is for a reader whose every
+    // answer is a teaser.
+    expect(unverifiedShare(0, 0)).toBe("none");
+  });
+});
+
+describe("teaserDestination", () => {
+  it("names the kind of page, never the page", () => {
+    // A person's url carries their name, which is free text about somebody.
+    expect(teaserDestination("/osoba/jan-kowalski-abc")).toBe("osoba");
+    expect(teaserDestination("/instytucja/energa-xyz")).toBe("instytucja");
+    expect(teaserDestination("/region/krakow-teryt1261")).toBe("region");
+    expect(teaserDestination("/eksploruj/tabela")).toBe("tabela");
+    expect(teaserDestination("/")).toBe("home");
+    expect(teaserDestination("/pomoc")).toBe("inne");
+  });
+});
+
+describe("loginReason", () => {
+  it("passes on a reason the site's own links give", () => {
+    expect(loginReason("profil-osoby")).toBe("profil-osoby");
+  });
+
+  it("reports anything else as inne", () => {
+    // The parameter is in the url, so anybody can type anything into it.
+    expect(loginReason("Jan Kowalski")).toBe("inne");
+    expect(loginReason(undefined)).toBe("inne");
+    expect(loginReason(["profil-osoby"])).toBe("inne");
   });
 });

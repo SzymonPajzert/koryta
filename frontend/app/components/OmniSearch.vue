@@ -105,8 +105,10 @@ import { trackGoal } from "~/composables/analytics";
 import {
   resultBucket,
   searchPickKind,
+  unverifiedShare,
   type SearchPickKind,
 } from "~~/shared/analytics";
+import { noteSearchPick } from "~/composables/teaserJourney";
 import type { NodeType } from "~~/shared/model";
 import type { ProposableNodeType } from "~~/shared/api";
 import { refDebounced } from "@vueuse/core";
@@ -228,6 +230,12 @@ type ListItem = {
    * an analytics call that no longer existed - nothing read it, so every hit
    * was describing itself to nobody. */
   analyticsKind: SearchPickKind;
+  /** The node a search hit opens, for telling its page that the search box
+   * sent the reader there (`noteSearchPick`). */
+  nodeId?: string;
+  /** Whether the hit is a person nobody has published - a teaser rather than a
+   * page, for a logged out reader. */
+  unverified?: boolean;
   path?: string;
   query?: Record<string, string>;
 };
@@ -247,6 +255,8 @@ const searchData = ref<
     id: string;
     name: string;
     type: string;
+    /** False for a page nobody has published. */
+    published?: boolean;
     query?: Record<string, string>;
   }>
 >([]);
@@ -267,12 +277,16 @@ async function performSearch(searchTerm: string) {
       headers: await authHeaders(user.value),
     });
     searchData.value = response;
+    const unverified = response.filter(isUnverifiedPerson).length;
     // Counted here rather than on every keystroke: `debouncedSearch` is what
     // reaches the server, so this is one event per query a reader actually
     // waited for. The count is bucketed and the query itself is not sent -
     // `results: none` against the total is the share of searches the index
     // cannot answer, which is the whole question.
-    trackGoal("search:performed", { results: resultBucket(response.length) });
+    trackGoal("search:performed", {
+      results: resultBucket(response.length),
+      unverified: unverifiedShare(response.length, unverified),
+    });
   } catch (error) {
     // A search that fails should offer nothing rather than spin forever.
     console.error("Search failed", error);
@@ -280,6 +294,11 @@ async function performSearch(searchTerm: string) {
   } finally {
     loading.value = false;
   }
+}
+
+/** A hit that is a person nobody has published. */
+function isUnverifiedPerson(hit: { type: string; published?: boolean }) {
+  return hit.type === "person" && hit.published === false;
 }
 
 // Not sure what it does
@@ -329,13 +348,23 @@ const items = computed<ListItem[]>(() => {
         ? { path: "/eksploruj/tabela", query: item.query }
         : { path: generateEntityUrl(itemType, item.id!, item.name) };
 
+      const unverified = isUnverifiedPerson(item);
       result.push({
         id: `entity-${item.id}`,
         title: item.name,
+        // Said before the click, to a logged out reader: the page behind it is
+        // a teaser - a name and a post - with the rest after signing in. A
+        // signed in reader opens drafts like any page, and nine in ten people
+        // would carry the line.
+        ...(unverified && !user.value
+          ? { subtitle: "Profil niezweryfikowany" }
+          : {}),
         icon,
         // The type /api/search returned, not the url it produced: a company
         // with a krs filter and a company page both mean "place".
         analyticsKind: searchPickKind(itemType),
+        nodeId: item.id,
+        unverified,
         ...routing,
       });
     });
@@ -356,6 +385,8 @@ watch(nodeGroupPicked, (value) => {
   // Defaulted, because the value arrives from VAutocomplete's model and a test
   // may hand over a partial entry.
   trackGoal("search:pick", { kind: value.analyticsKind ?? "place" });
+  // Before navigating, so the page it opens can tell it was searched for.
+  noteSearchPick(value.nodeId);
   push(omniSearchTarget(currentRoute.value, value));
   autocompleteFocus.value = false;
 });
