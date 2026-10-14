@@ -53,11 +53,16 @@ PERSON_COUNTERS = (
     "employments_published",
     "candidacies_created",
     "companies_created",
+    "employments_unplaced",
     "unplaced",
     "dropped_changes",
     "failed",
     "skipped",
 )
+
+#: An answer's outcomes, least to most: what two answers about one person
+#: came to is the larger of the two. See `PersonResult.then`.
+OUTCOME_RANK: dict[str, int] = {"unchanged": 0, "updated": 1, "created": 2}
 
 #: Seconds one person or company request may take. Unbounded, a request the
 #: site never answers holds an unattended upload of thousands until somebody
@@ -109,6 +114,45 @@ class PersonResult:
     error: str = ""
     #: The node the site filed the person under.
     person_id: str | None = None
+    #: Jobs the site took the person without, for want of a page for their
+    #: company, as the ingest reports them in `unplacedEmployments`: what is
+    #: left of them once the uploader has created the companies it could and
+    #: sent the person again.
+    unplaced_jobs: list[dict] = field(default_factory=list)
+    #: What went wrong on the way that did not fail the person, as the run's
+    #: errors keep it: a company that could not be created, or the second
+    #: request after creating some, refused.
+    problems: list[str] = field(default_factory=list)
+
+    def then(self, later: "PersonResult") -> "PersonResult":
+        """This answer about a person followed by `later`, a second request
+        for the same person: what the two did together.
+
+        The edges each created or put live add up - the second writes only
+        the jobs the first could not place. What is left unplaced or unwritten
+        is the second's to say, since it restates everything the first did
+        not change. The outcome is the larger: a page the first request
+        created is a created page, whatever the second found on it.
+        """
+        return PersonResult(
+            max(self.outcome, later.outcome, key=lambda o: OUTCOME_RANK.get(o, -1)),
+            status=later.status,
+            employments_created=self.employments_created + later.employments_created,
+            employments_published=(
+                self.employments_published + later.employments_published
+            ),
+            candidacies_created=self.candidacies_created + later.candidacies_created,
+            companies_created=self.companies_created + later.companies_created,
+            unplaced=later.unplaced,
+            dropped=later.dropped,
+            person_id=later.person_id or self.person_id,
+            unplaced_jobs=later.unplaced_jobs,
+            problems=self.problems + later.problems,
+        )
+
+    def unplaced_companies(self) -> list[str]:
+        """The KRS numbers of the companies the site took the person without."""
+        return sorted({str(job.get("krs")) for job in self.unplaced_jobs})
 
 
 def refusal(status: int, text: str) -> str:
@@ -194,19 +238,83 @@ def dropped_line(change: dict) -> str:
     )
 
 
+def unplaced_employments(body: dict) -> list[dict]:
+    """The jobs the answer says the site took the person without, because it
+    has no page for their company (`unplacedEmployments`).
+
+    Read defensively, like `dropped_changes`: a site deployed before the
+    field existed answers without it - it refused the whole person instead -
+    and a row without a company is nothing the uploader could act on.
+    """
+    found = body.get("unplacedEmployments")
+    if not isinstance(found, list):
+        return []
+    return [job for job in found if isinstance(job, dict) and job.get("krs")]
+
+
+def unplaced_line(job: dict) -> str:
+    """One job the site took a person without, as the run's log prints it.
+
+    In the past tense: where the request sent after creating the company was
+    refused, the page is there by now and the job is still not on it.
+    """
+    return (
+        f"{job.get('krs')} {job.get('role') or '?'} from {job.get('start') or '?'}: "
+        "not placed, the company had no page"
+    )
+
+
 def missing_companies(resp: requests.Response) -> list[str]:
-    """The companies a 404 from the person ingest says it has no page for.
+    """The companies the person ingest says it has no page for.
+
+    Said one of two ways, by the two ingests a run may meet. Since 2026-10-14
+    the site takes the person and lists the jobs it could not place in
+    `unplacedEmployments`; before, it refused the whole person with a 404
+    listing the companies in `data`, and wrote nothing.
 
     Deduplicated, e.g if a person was employed there twice. Empty for any
     other answer - a 404 that does not list them is a refusal like any other,
     not something creating a company could fix.
     """
+    if resp.status_code == 200:
+        return sorted(
+            {str(job["krs"]) for job in unplaced_employments(json_object(resp))}
+        )
     if resp.status_code != 404:
         return []
     data = json_object(resp).get("data")
     if not isinstance(data, list):
         return []
     return sorted({str(krs) for krs in data})
+
+
+def person_answer(resp: requests.Response) -> PersonResult:
+    """What one answer of the person ingest says the site did with a person.
+
+    Only the answer: the companies created on the way and the candidacies the
+    site left out are the uploader's to count (`PersonUploader.upload_person`).
+    """
+    if resp.status_code != 200:
+        return PersonResult(
+            "failed",
+            status=resp.status_code,
+            error=refusal(resp.status_code, resp.text),
+        )
+    body = json_object(resp)
+    outcome = body.get("person")
+    person_id = body.get("personId")
+    return PersonResult(
+        # A site from before the field was added said only that it took the
+        # person, and taking is a write as far as anyone can tell.
+        outcome if outcome in ANSWERED else "updated",
+        status=resp.status_code,
+        employments_created=flagged(body, "companies", "created"),
+        employments_published=flagged(body, "companies", "published"),
+        candidacies_created=flagged(body, "elections", "created"),
+        dropped=dropped_changes(body),
+        person_id=str(person_id) if person_id else None,
+        unplaced_jobs=unplaced_employments(body),
+    )
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -684,8 +792,16 @@ class PersonUploader(CompanyUploader):
         self.count_person(name, result)
 
     def upload_person(self, payload: dict) -> PersonResult:
-        """Send one person - first creating any company the site has no page
-        for - and say what the site made of them.
+        """Send one person and say what the site made of them - creating any
+        company the site has no page for, and sending the person again so that
+        their jobs there are placed.
+
+        The site takes the person without those jobs and lists them
+        (`unplacedEmployments`), so a company that cannot be created costs the
+        person its jobs and nothing else: they are counted, printed, and kept
+        among the run's errors. A site deployed before 2026-10-14 refuses the
+        whole person with a 404 instead and writes nothing, so there a company
+        that cannot be created still fails the person.
 
         Nothing that goes wrong with one person raises: a refusal, no answer at
         all, a company that could not be created. An upload of thousands goes
@@ -694,52 +810,118 @@ class PersonUploader(CompanyUploader):
         command does.
         """
         url = f"{self.args.endpoint}/api/ingest/person"
-        companies_created = 0
+        # Says this reads `unplacedEmployments`: without it the site answers
+        # the 404 an uploader from before 2026-10-14 expects. Added here rather
+        # than to the payload, so what a run writes down as sent, and hashes,
+        # is the payload alone. A site from before then drops the field.
+        sent = {**payload, "reportUnplacedEmployments": True}
+        try:
+            resp = self.submit_payload(url, sent, fail=False)
+        except Exception as error:
+            return PersonResult("failed", error=one_line(error))
+        missing = missing_companies(resp)
+        if not missing:
+            return self.answered(resp, person_answer(resp))
+        created, refused = self.create_companies(missing)
+        if resp.status_code == 404:
+            return self.send_once_created(url, sent, created, refused)
+        return self.send_again(url, sent, resp, created, refused)
+
+    def send_once_created(
+        self,
+        url: str,
+        payload: dict,
+        created: int,
+        refused: list[tuple[int | None, str]],
+    ) -> PersonResult:
+        """A person a site deployed before 2026-10-14 refused whole for want
+        of a page for some company: sent again once every one is created, and
+        failed with the first that could not be - nothing of them is written
+        until then."""
+        if refused:
+            status, why = refused[0]
+            return PersonResult(
+                "failed", status=status, companies_created=created, error=why
+            )
         try:
             resp = self.submit_payload(url, payload, fail=False)
-            missing = missing_companies(resp)
-            if missing:
-                for krs in missing:
-                    company = self.submit_company(krs, None, fail=False)
-                    if company.status_code not in [200, 201]:
-                        return PersonResult(
-                            "failed",
-                            status=company.status_code,
-                            companies_created=companies_created,
-                            error=f"firma {krs}: "
-                            + refusal(company.status_code, company.text),
-                        )
-                    companies_created += 1
-                # Try submitting again
-                resp = self.submit_payload(url, payload, fail=False)
         except Exception as error:
             return PersonResult(
-                "failed", companies_created=companies_created, error=one_line(error)
+                "failed", companies_created=created, error=one_line(error)
             )
-        unplaced = self.count_unplaced(resp)
-        if resp.status_code != 200:
-            return PersonResult(
-                "failed",
-                status=resp.status_code,
-                companies_created=companies_created,
-                error=refusal(resp.status_code, resp.text),
+        result = person_answer(resp)
+        result.companies_created = created
+        return self.answered(resp, result)
+
+    def send_again(
+        self,
+        url: str,
+        payload: dict,
+        resp: requests.Response,
+        created: int,
+        refused: list[tuple[int | None, str]],
+    ) -> PersonResult:
+        """A person the site took without the jobs at companies it has no page
+        for (`resp`): sent again, once any of them is created, so that the jobs
+        there are placed. The companies that could not be created are the
+        person's `problems`, and their jobs stay `unplaced_jobs`."""
+        first = person_answer(resp)
+        first.companies_created = created
+        first.problems = [why for _, why in refused]
+        if not created:
+            return self.answered(resp, first)
+        # Onto the page the first request filed the person under, by its id,
+        # however it found it: the payload's own lookup would find the same
+        # page, but this is the one identifier that cannot find another.
+        again = {**payload, "korytaId": first.person_id} if first.person_id else payload
+        try:
+            second = self.submit_payload(url, again, fail=False)
+        except Exception as error:
+            first.problems.append(f"ponowna wysyłka: {one_line(error)}")
+            return self.answered(resp, first)
+        if second.status_code != 200:
+            # The person is in all the same, and the jobs at the companies
+            # just created are left as unplaced.
+            first.problems.append(
+                f"ponowna wysyłka: {refusal(second.status_code, second.text)}"
             )
-        body = json_object(resp)
-        outcome = body.get("person")
-        person_id = body.get("personId")
-        return PersonResult(
-            # A site from before the field was added said only that it took
-            # the person, and taking is a write as far as anyone can tell.
-            outcome if outcome in ANSWERED else "updated",
-            status=resp.status_code,
-            employments_created=flagged(body, "companies", "created"),
-            employments_published=flagged(body, "companies", "published"),
-            candidacies_created=flagged(body, "elections", "created"),
-            companies_created=companies_created,
-            unplaced=unplaced,
-            dropped=dropped_changes(body),
-            person_id=str(person_id) if person_id else None,
-        )
+            return self.answered(resp, first)
+        return self.answered(second, first.then(person_answer(second)))
+
+    def create_companies(
+        self, missing: list[str]
+    ) -> tuple[int, list[tuple[int | None, str]]]:
+        """Create each company the site has no page for, from `Companies`.
+
+        How many it created, and each it could not: the status of the answer
+        - None where there was none - and "firma <krs>: <what>". Every one is
+        tried, so a company that cannot be created keeps no other off the site.
+        """
+        created = 0
+        refused: list[tuple[int | None, str]] = []
+        for krs in missing:
+            print(f"No page for company {krs}: creating it", file=sys.stderr)
+            try:
+                resp = self.submit_company(krs, None, fail=False)
+            except Exception as error:
+                refused.append((None, f"firma {krs}: {one_line(error)}"))
+                continue
+            if resp.status_code in [200, 201]:
+                created += 1
+            else:
+                refused.append(
+                    (
+                        resp.status_code,
+                        f"firma {krs}: {refusal(resp.status_code, resp.text)}",
+                    )
+                )
+        return created, refused
+
+    def answered(self, resp: requests.Response, result: PersonResult) -> PersonResult:
+        """`result`, with the candidacies `resp` - the last answer about the
+        person - says the site left out, tallied for the closing report."""
+        result.unplaced = self.count_unplaced(resp)
+        return result
 
     def count_person(self, name: str, result: PersonResult) -> None:
         """Add one person's upload to what the run has counted."""
@@ -754,8 +936,21 @@ class PersonUploader(CompanyUploader):
         self.counts["dropped_changes"] += len(result.dropped)
         for change in result.dropped:
             print(f"{name}: {dropped_line(change)}", file=sys.stderr)
-        if result.outcome == "failed" and len(self.errors) < ERRORS_KEPT:
-            self.errors.append(f"{name}: {result.error}")
+        # The same for a job the site took the person without: its company is
+        # one the uploader could not create, which the run's errors name.
+        self.counts["employments_unplaced"] += len(result.unplaced_jobs)
+        for job in result.unplaced_jobs:
+            print(f"{name}: {unplaced_line(job)}", file=sys.stderr)
+        if result.outcome == "failed":
+            self.keep_error(f"{name}: {result.error}")
+        for problem in result.problems:
+            print(f"{name}: {problem}", file=sys.stderr)
+            self.keep_error(f"{name}: {problem}")
+
+    def keep_error(self, error: str) -> None:
+        """Keep `error` among the run's, up to `ERRORS_KEPT`."""
+        if len(self.errors) < ERRORS_KEPT:
+            self.errors.append(error)
 
     def count_unplaced(self, resp: requests.Response) -> int:
         """Tally what the response says it could not place, and say how many.

@@ -5,6 +5,7 @@ module, and its tests in src/tests run with the pipeline suite.
 """
 
 import argparse
+import dataclasses
 import io
 import json
 import sys
@@ -95,7 +96,28 @@ KEPT_END = {
 
 
 def missing(*krs: str) -> Response:
+    """What a site from before 2026-10-14 answered a person naming companies
+    it has no page for: a 404 for the whole person, nothing written."""
     return Response(404, {"message": "Missing companies", "data": list(krs)})
+
+
+def job_at(krs: str) -> dict:
+    """A job the person ingest left out, as `unplacedEmployments` lists it."""
+    return {
+        "krs": krs,
+        "role": "Rada Nadzorcza",
+        "start": "2026-02-09",
+        "reason": "no-company",
+    }
+
+
+def placed_without(*krs: str, outcome="updated", created=0) -> Response:
+    """What the site answers since 2026-10-14 a person naming companies it has
+    no page for: the person taken, with every other job, and a job left out
+    for each row naming one of `krs`."""
+    answer = person(outcome, created=created)
+    answer.body["unplacedEmployments"] = [job_at(n) for n in krs]  # type: ignore[index]
+    return Response(200, answer.body)
 
 
 class Session:
@@ -247,6 +269,7 @@ def test_a_person_run_counts_what_the_site_did_with_each_person(runs):
             "employments_published": 0,
             "candidacies_created": 0,
             "companies_created": 0,
+            "employments_unplaced": 0,
             "unplaced": 1,
             "dropped_changes": 0,
             "failed": 0,
@@ -376,6 +399,169 @@ def test_a_company_that_cannot_be_created_fails_the_person(companies_on_file):
         "failed", status=500, error="firma 0000000001: 500 Internal Server Error"
     )
     assert session.names(PERSON_URL) == ["Anna Nowak"]
+
+
+def person_uploader(session: Session) -> uploader.PersonUploader:
+    return uploader.PersonUploader(
+        args_for("person"),  # type: ignore[arg-type]
+        tokens=Tokens(),
+        session=session,  # type: ignore[arg-type]
+    )
+
+
+def test_a_person_taken_without_a_job_has_its_company_created_and_is_sent_again(
+    companies_on_file,
+):
+    """The first request wrote the person and the jobs it could place; the
+    second, once the companies are there, places the rest."""
+    session = Session(
+        person=[
+            placed_without("0000000002", "0000000001", "0000000002", outcome="created"),
+            person("unchanged", created=3),
+        ],
+        company=[Response(200, {"company": "created"})] * 2,
+    )
+
+    result = person_uploader(session).upload_person(people("Anna Nowak")[0])
+
+    assert result == uploader.PersonResult(
+        "created",
+        status=200,
+        employments_created=3,
+        companies_created=2,
+        person_id="p1",
+    )
+    assert [url for url, _, _ in session.sent] == [
+        PERSON_URL,
+        COMPANY_URL,
+        COMPANY_URL,
+        PERSON_URL,
+    ]
+    assert [body["krs"] for url, body, _ in session.sent if url == COMPANY_URL] == [
+        "0000000001",
+        "0000000002",
+    ]
+    # Saying it reads the jobs left out, or the site would answer a 404; then
+    # sent again onto the page the first request filed the person under.
+    first, second = [body for url, body, _ in session.sent if url == PERSON_URL]
+    assert first == {**people("Anna Nowak")[0], "reportUnplacedEmployments": True}
+    assert second == {**first, "korytaId": "p1"}
+
+
+def test_a_company_that_cannot_be_created_costs_the_person_only_its_jobs(
+    companies_on_file, runs, capsys
+):
+    """Under the 404 a company the uploader could not create failed the whole
+    person, and nothing of them was written."""
+    session = Session(
+        person=[
+            placed_without("0000000003", "0000000001"),
+            placed_without("0000000003"),
+        ],
+        company=[Response(200, {"company": "created"})],
+    )
+
+    submit("person", people("Anna Nowak"), session)
+
+    # 0000000003 is not in `Companies`, so there is nothing to create it from;
+    # 0000000001 is, and the person is sent again to place the job there.
+    end = runs[0].ending()
+    assert end["state"] == "succeeded"
+    assert end["counters"]["updated"] == 1
+    assert end["counters"]["failed"] == 0
+    assert end["counters"]["companies_created"] == 1
+    assert end["counters"]["employments_unplaced"] == 1
+    assert end["errors"] == [
+        "Anna Nowak: firma 0000000003: ValueError: "
+        "Couldn't look up 0000000003 in Companies pipeline"
+    ]
+    assert session.names(PERSON_URL) == ["Anna Nowak", "Anna Nowak"]
+    err = capsys.readouterr().err
+    assert "No page for company 0000000001: creating it" in err
+    assert "No page for company 0000000003: creating it" in err
+    assert (
+        "Anna Nowak: 0000000003 Rada Nadzorcza from 2026-02-09: not placed, "
+        "the company had no page"
+    ) in err
+
+
+def test_a_job_still_without_a_company_is_counted_and_printed(
+    companies_on_file, runs, capsys
+):
+    session = Session(
+        person=[placed_without("0000000001")],
+        company=[Response(500, text="Internal Server Error")],
+    )
+
+    submit("person", people("Anna Nowak"), session)
+
+    end = runs[0].ending()
+    assert (end["state"], end["counters"]["failed"]) == ("succeeded", 0)
+    assert end["counters"]["employments_unplaced"] == 1
+    assert end["errors"] == ["Anna Nowak: firma 0000000001: 500 Internal Server Error"]
+    assert session.names(PERSON_URL) == ["Anna Nowak"]
+    assert (
+        "Anna Nowak: 0000000001 Rada Nadzorcza from 2026-02-09: not placed, "
+        "the company had no page"
+    ) in capsys.readouterr().err
+
+
+def test_a_second_request_refused_leaves_the_person_taken_without_the_job(
+    companies_on_file,
+):
+    """The companies are there now, so the next run - which sees their pages
+    in the export - sends the person again."""
+    session = Session(
+        person=[placed_without("0000000001"), Response(500, text="boom")],
+        company=[Response(200, {"company": "created"})],
+    )
+
+    result = person_uploader(session).upload_person(people("Anna Nowak")[0])
+
+    assert result.outcome == "updated"
+    assert result.companies_created == 1
+    assert result.unplaced_companies() == ["0000000001"]
+    assert result.problems == ["ponowna wysyłka: 500 boom"]
+
+
+def test_two_answers_about_one_person_add_up():
+    first = uploader.PersonResult(
+        "created",
+        status=200,
+        employments_created=2,
+        employments_published=1,
+        candidacies_created=4,
+        companies_created=1,
+        unplaced=3,
+        dropped=[KEPT_END],
+        person_id="p1",
+        unplaced_jobs=[job_at("0000000001")],
+        problems=["firma 0000000002: 500 boom"],
+    )
+    second = uploader.PersonResult(
+        "unchanged",
+        status=200,
+        employments_created=1,
+        unplaced=3,
+        dropped=[KEPT_END],
+        person_id="p1",
+    )
+
+    assert first.then(second) == uploader.PersonResult(
+        "created",
+        status=200,
+        employments_created=3,
+        employments_published=1,
+        candidacies_created=4,
+        companies_created=1,
+        unplaced=3,
+        dropped=[KEPT_END],
+        person_id="p1",
+        problems=["firma 0000000002: 500 boom"],
+    )
+    assert second.then(dataclasses.replace(second, outcome="updated")).outcome == (
+        "updated"
+    )
 
 
 def test_a_person_the_site_never_answered_is_a_failure_with_the_reason(capsys):
