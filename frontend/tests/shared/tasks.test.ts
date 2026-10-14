@@ -16,6 +16,7 @@ import {
   taskAncestors,
   taskCreateSchema,
   taskEditPatch,
+  taskFromData,
   taskPatchSchema,
   taskSection,
   taskSlug,
@@ -406,5 +407,269 @@ describe("sections and order", () => {
     expect(taskUrl("deploy-rules")).toBe(
       "https://koryta.pl/admin/zadania#t-deploy-rules",
     );
+  });
+});
+
+describe("priority", () => {
+  const patch = (input: unknown) => taskPatchSchema.parse(input);
+  const levels = (tasks: Task[]) =>
+    Object.fromEntries(
+      [...taskStates(tasks)].map(([id, s]) => [
+        id,
+        s.priorityFrom.length > 0
+          ? `${s.priority} for ${s.priorityFrom.map((t) => t.id).join("+")}`
+          : s.priority,
+      ]),
+    );
+
+  it("logs a change with who made it, and clears it on normal or null", () => {
+    const { task: raised, logged } = applyTaskPatch(
+      task("x"),
+      patch({ priority: "urgent", note: "Leaks PESELs." }),
+      "agent:bridge-cse_01",
+      T1,
+    );
+    expect(raised).toMatchObject({
+      priority: "urgent",
+      prioritySetBy: "agent:bridge-cse_01",
+    });
+    expect(logged.map((e) => e.text)).toEqual([
+      "Priorytet: zwykły → pilny.",
+      "Leaks PESELs.",
+    ]);
+
+    const { task: lowered } = applyTaskPatch(
+      raised,
+      patch({ priority: "high" }),
+      "owner",
+      T1,
+    );
+    expect(lowered).toMatchObject({ priority: "high", prioritySetBy: "owner" });
+    expect(lowered.log.at(-1)!.text).toBe("Priorytet: pilny → ważny.");
+
+    for (const none of ["normal", null]) {
+      const { task: cleared, logged: line } = applyTaskPatch(
+        lowered,
+        patch({ priority: none }),
+        "owner",
+        T1,
+      );
+      expect(cleared.priority).toBeUndefined();
+      expect(cleared.prioritySetBy).toBeUndefined();
+      expect(line.map((e) => e.text)).toEqual(["Priorytet: ważny → zwykły."]);
+    }
+
+    // The same level again changes nothing, not even who set it.
+    const { logged: none } = applyTaskPatch(
+      lowered,
+      patch({ priority: "high", note: "Still." }),
+      "agent",
+      T1,
+    );
+    expect(none.map((e) => e.text)).toEqual(["Still."]);
+  });
+
+  it("gives a new task its level, and a line saying so", () => {
+    const made = newTask(
+      taskCreateSchema.parse({
+        title: "Delete the artifacts",
+        priority: "urgent",
+      }),
+      "delete-the-artifacts",
+      "owner",
+      T0,
+    );
+    expect(made).toMatchObject({ priority: "urgent", prioritySetBy: "owner" });
+    expect(made.log).toEqual([
+      { at: T0, by: "owner", text: "Priorytet: pilny." },
+    ]);
+    const plain = newTask(
+      taskCreateSchema.parse({ title: "x", priority: "normal" }),
+      "x",
+      "owner",
+      T0,
+    );
+    expect(plain.priority).toBeUndefined();
+    expect(plain.log).toEqual([]);
+    expect(
+      taskCreateSchema.safeParse({ title: "x", priority: "low" }).success,
+    ).toBe(false);
+  });
+
+  it("sends a changed priority from the form, and null for normal", () => {
+    const opened = task("x", { priority: "high", prioritySetBy: "agent" });
+    const edit = {
+      title: opened.title,
+      body: "",
+      kind: opened.kind,
+      who: opened.who,
+      dependsOn: [],
+      tags: [],
+      links: [],
+      branches: [],
+    };
+    expect(taskEditPatch(opened, { ...edit, priority: "high" })).toBeNull();
+    expect(taskEditPatch(opened, { ...edit, priority: "urgent" })).toEqual({
+      priority: "urgent",
+    });
+    expect(taskEditPatch(opened, edit)).toEqual({ priority: null });
+  });
+
+  it("reads the level and who set it from the document", () => {
+    const data = {
+      title: "x",
+      priority: "urgent",
+      prioritySetBy: "owner",
+      log: [],
+    };
+    expect(taskFromData("x", data)).toMatchObject({
+      priority: "urgent",
+      prioritySetBy: "owner",
+    });
+    const odd = taskFromData("x", { ...data, priority: "medium" });
+    expect(odd.priority).toBeUndefined();
+    expect(odd.prioritySetBy).toBeUndefined();
+  });
+
+  it("takes the level back from the history when a writer dropped the field", () => {
+    // A writer from before priorities wrote the task back without it, and
+    // kept the history.
+    const log = [
+      { at: T0, by: "owner", text: "Priorytet: zwykły → ważny." },
+      { at: T0, by: "agent:bridge-cse_01", text: "Priorytet: ważny → pilny." },
+      { at: T1, by: "agent", text: "Checked again." },
+    ];
+    expect(taskFromData("x", { title: "x", log })).toMatchObject({
+      priority: "urgent",
+      prioritySetBy: "agent:bridge-cse_01",
+    });
+    const created = [{ at: T0, by: "owner", text: "Priorytet: pilny." }];
+    expect(taskFromData("x", { log: created }).priority).toBe("urgent");
+    // Taken away since: normal, and nothing left over.
+    const cleared = [
+      ...log,
+      { at: T1, by: "owner", text: "Priorytet: pilny → zwykły." },
+    ];
+    const read = taskFromData("x", { log: cleared });
+    expect(read.priority).toBeUndefined();
+    expect("prioritySetBy" in read).toBe(false);
+    // A field that is there wins over the history.
+    expect(taskFromData("x", { log, priority: "high" }).priority).toBe("high");
+    expect(taskFromData("x", { log, priority: null }).priority).toBeUndefined();
+  });
+
+  it("passes a task's level to what it waits on, through the chain", () => {
+    expect(
+      levels([
+        task("merge"),
+        task("deploy", { dependsOn: ["merge"] }),
+        task("rules", { priority: "urgent", dependsOn: ["deploy"] }),
+        task("after", { dependsOn: ["rules"] }),
+        task("other"),
+      ]),
+    ).toEqual({
+      merge: "urgent for rules",
+      deploy: "urgent for rules",
+      rules: "urgent",
+      after: null,
+      other: null,
+    });
+  });
+
+  it("passes a goal's level to every task that leads to it", () => {
+    expect(
+      levels([
+        task("decide"),
+        task("build", { dependsOn: ["decide"] }),
+        task("milestone", { kind: "goal", dependsOn: ["build"] }),
+        task("upload", { dependsOn: ["milestone"] }),
+        task("live", {
+          kind: "goal",
+          priority: "high",
+          dependsOn: ["upload"],
+        }),
+      ]),
+    ).toEqual({
+      decide: "high for live",
+      build: "high for live",
+      milestone: "high for live",
+      upload: "high for live",
+      live: "high",
+    });
+  });
+
+  it("keeps the higher level, and names every task it comes from", () => {
+    expect(
+      levels([
+        task("shared"),
+        task("a", { priority: "high", dependsOn: ["shared"] }),
+        task("b", { priority: "urgent", dependsOn: ["shared"] }),
+        task("c", { priority: "urgent", dependsOn: ["shared"] }),
+        task("own", { priority: "urgent", dependsOn: [] }),
+        task("d", { priority: "high", dependsOn: ["own"] }),
+      ]),
+    ).toMatchObject({
+      shared: "urgent for b+c",
+      // Its own level is higher than what waits on it: its own it stays.
+      own: "urgent",
+    });
+  });
+
+  it("passes nothing through a closed task, or from a closed or parked one", () => {
+    expect(
+      levels([
+        task("behind-done"),
+        task("done", { status: "done", dependsOn: ["behind-done"] }),
+        task("urgent", { priority: "urgent", dependsOn: ["done"] }),
+        task("behind-parked"),
+        task("parked", { status: "parked", dependsOn: ["behind-parked"] }),
+        task("goal", { kind: "goal", priority: "high", dependsOn: ["parked"] }),
+        task("for-parked"),
+        task("parked-urgent", {
+          status: "parked",
+          priority: "urgent",
+          dependsOn: ["for-parked"],
+        }),
+        task("for-dropped"),
+        task("dropped", {
+          status: "dropped",
+          priority: "urgent",
+          dependsOn: ["for-dropped"],
+        }),
+      ]),
+    ).toMatchObject({
+      "behind-done": null,
+      done: null,
+      // Put aside on purpose: it shows what it holds up, and passes it no
+      // further.
+      parked: "high for goal",
+      "behind-parked": null,
+      "for-parked": null,
+      "for-dropped": null,
+    });
+  });
+
+  it("sorts by the level, its own or taken, then rank, then age", () => {
+    const tasks = [
+      task("ranked", { rank: 1 }),
+      task("old", { createdAt: "2026-09-01T00:00:00.000Z" }),
+      task("head", { createdAt: T1 }),
+      task("urgent", { priority: "urgent", dependsOn: ["head"] }),
+      task("high", { priority: "high", createdAt: T1 }),
+    ];
+    const states = taskStates(tasks);
+    // The head of the urgent chain is as urgent as the task it holds up, and
+    // older than nothing: the one level, the older first.
+    expect(
+      [...tasks].sort((a, b) => compareTasks(a, b, states)).map((t) => t.id),
+    ).toEqual(["urgent", "head", "high", "ranked", "old"]);
+    // Without the states, by a task's own level alone.
+    expect([...tasks].sort(compareTasks).map((t) => t.id)).toEqual([
+      "urgent",
+      "high",
+      "ranked",
+      "old",
+      "head",
+    ]);
   });
 });

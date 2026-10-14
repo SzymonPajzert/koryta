@@ -199,4 +199,45 @@ describe("/api/ops/tasks", () => {
       call(updateHandler, { id: "nope", patch: { note: "x" } }),
     ).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  it("sets a priority as the owner, and takes it away again", async () => {
+    stored("leak", {
+      priority: "high",
+      prioritySetBy: "agent:bridge-cse_01",
+    });
+    // Lowering an agent's level, raising it, any of it: the owner may.
+    const { task } = await call(updateHandler, {
+      id: "leak",
+      patch: { priority: "urgent" },
+    });
+    expect(task).toMatchObject({ priority: "urgent", prioritySetBy: "owner" });
+    expect(docs.get("leak")).toMatchObject({
+      priority: "urgent",
+      prioritySetBy: "owner",
+    });
+
+    await call(updateHandler, { id: "leak", patch: { priority: "normal" } });
+    expect(docs.get("leak")!.priority).toBeUndefined();
+    expect(docs.get("leak")!.prioritySetBy).toBeUndefined();
+    expect(
+      (docs.get("leak")!.log as { text: string }[]).map((e) => e.text),
+    ).toEqual(["Priorytet: ważny → pilny.", "Priorytet: pilny → zwykły."]);
+  });
+
+  it("lists a priority an older writer dropped, from the history", async () => {
+    // Written back by code from before priorities: no field, the history kept.
+    stored("leak", {
+      log: [
+        {
+          at: at("2026-09-28T09:00:00Z"),
+          by: "owner",
+          text: "Priorytet: zwykły → pilny.",
+        },
+      ],
+    });
+    const { tasks } = await call(listHandler);
+    expect(tasks).toEqual([
+      expect.objectContaining({ priority: "urgent", prioritySetBy: "owner" }),
+    ]);
+  });
 });
