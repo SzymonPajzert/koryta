@@ -25,7 +25,7 @@ from scrapers.krs.scrape import PEOPLE_QUERIES, RejestrIOQuery
 from scrapers.stores import ProcessPolicy
 from stores import job_requests
 from stores.job_requests import Request
-from stores.storage import CRAWLED_BUCKET, SHARED_BUCKET, warsaw_tz
+from stores.storage import CRAWLED_BUCKET, LISTING_FIELDS, SHARED_BUCKET, warsaw_tz
 from uploader import Args, PersonUploader
 
 ENDPOINT = "https://autopush.koryta.pl"
@@ -1793,8 +1793,13 @@ def test_who_was_bought_is_read_off_the_names_the_answers_are_stored_under():
         "aktualnosc_aktualne/date=2026-10-08",
     ]
 
+    masks: list[str | None] = []
+
     class Bucket:
-        def list_blobs(self, prefix):
+        def list_blobs(self, prefix, fields=None):
+            masks.append(fields)
+            # A name and nothing else, as the masked listing hands a blob back:
+            # reading any other attribute raises here rather than at night.
             return [SimpleNamespace(name=n) for n in names if n.startswith(prefix)]
 
     class Storage:
@@ -1805,6 +1810,9 @@ def test_who_was_bought_is_read_off_the_names_the_answers_are_stored_under():
     client = typing.cast(job.Client, SimpleNamespace(storage_client=Storage()))
 
     assert job.bought_since(client, "2026-10-07") == {"1134749", "2447520"}
+    # Names only, as `Client.list_blobs` lists: unmasked, the 5,000 feeds
+    # cost 5.5 MB of metadata a night rather than 0.6 MB.
+    assert masks == [LISTING_FIELDS]
 
 
 # ---------------------------------------------------------------------------
