@@ -48,6 +48,18 @@ vi.mock("../../../server/utils/auth", () => ({
     event.headers?.authorization ? { uid: "reader" } : null,
 }));
 
+/** People a contributor proposed and nobody reviewed - see
+ * `importedOrReviewed`, which has tests of its own. */
+const proposed = vi.hoisted(() => new Set<string>());
+vi.mock("../../../server/utils/provenance", () => ({
+  importedOrReviewed: async (_db: unknown, docs: { id?: string }[]) =>
+    new Set(
+      docs
+        .map((doc) => doc.id)
+        .filter((id): id is string => !!id && !proposed.has(id)),
+    ),
+}));
+
 /** A node as `parseNodeDoc` will see it coming back from Firestore. */
 const doc = (
   id: string,
@@ -88,6 +100,7 @@ const searchSignedIn = (q: string) =>
 describe("/api/search", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    proposed.clear();
     mockOrderBy.mockReturnValue({
       where: mockWhere,
       orderBy: mockOrderBy,
@@ -264,9 +277,11 @@ describe("/api/search", () => {
     ]);
   });
 
-  it("keeps an unpublished page from a logged out reader", async () => {
-    // Every name in the base was offered to anyone typing, and each draft
-    // among them was a page that answered them with a 404.
+  it("offers a logged out reader an unpublished person, marked, after the published", async () => {
+    // Their page is a teaser now - the name and the latest post, never a
+    // party - with a way to sign in for the rest, rather than the 404 that got
+    // drafts taken out of the box. Published pages still come first: nine in
+    // ten people are drafts, and the full page is the better answer.
     respondWith({
       "anna nowak": [
         doc("draft", "Anna Nowak", { published: false }),
@@ -274,19 +289,74 @@ describe("/api/search", () => {
       ],
     });
 
+    expect(
+      (await search("Anna Nowak")).map((r: any) => [r.id, r.published]),
+    ).toEqual([
+      ["live", true],
+      ["draft", false],
+    ]);
+  });
+
+  it("keeps a person somebody proposed from a logged out reader", async () => {
+    // Anybody with an account can propose a person, and the box would put the
+    // name on this site for anybody typing it.
+    proposed.add("proposed");
+    respondWith({
+      "anna nowak": [
+        doc("proposed", "Anna Nowak", { published: false }),
+        doc("imported", "Anna Nowakowska", { published: false }),
+      ],
+    });
+
     expect((await search("Anna Nowak")).map((r: any) => r.id)).toEqual([
+      "imported",
+    ]);
+    // A signed in reader still finds what they may have just proposed.
+    expect((await searchSignedIn("Anna Nowak")).map((r: any) => r.id)).toEqual([
+      "proposed",
+      "imported",
+    ]);
+  });
+
+  it("keeps every other unpublished page from a logged out reader", async () => {
+    // A company or a region nobody has published is still only a 404 to them.
+    respondWith({
+      energa: [
+        doc("draft-company", "Energa", { type: "place", published: false }),
+        doc("live-company", "Energa Operator", { type: "place" }),
+      ],
+    });
+
+    expect((await search("Energa")).map((r: any) => r.id)).toEqual([
+      "live-company",
+    ]);
+  });
+
+  it("keeps a signed in reader's hits in the index's order", async () => {
+    // They open drafts like any page, so a draft is not pushed down for them.
+    respondWith({
+      "anna nowak": [
+        doc("draft", "Anna Nowak", { published: false }),
+        doc("live", "Anna Nowakowska"),
+      ],
+    });
+
+    expect((await searchSignedIn("Anna Nowak")).map((r: any) => r.id)).toEqual([
+      "draft",
       "live",
     ]);
   });
 
-  it("keeps it from a logged out reader who types `latest` too", async () => {
+  it("keeps an unpublished company from a logged out reader who types `latest` too", async () => {
     // The flag without a token is a request, not a permission.
     respondWith({
-      "anna nowak": [doc("draft", "Anna Nowak", { published: false })],
+      energa: [
+        doc("draft-company", "Energa", { type: "place", published: false }),
+      ],
     });
 
     const result = await handler({
-      query: { q: "Anna Nowak", latest: "true" },
+      query: { q: "Energa", latest: "true" },
       context: {},
     } as any);
     expect(result).toEqual([]);
