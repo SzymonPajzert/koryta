@@ -50,6 +50,7 @@ const badge = computed(() => taskPriorityBadge(props.task, props.state));
 <style scoped>
 .task-priority {
   --task-priority-ink: var(--v-theme-ink-danger);
+  --task-priority-on-ink: var(--v-theme-on-ink-danger);
   flex: none;
   padding: 0 6px;
   border-radius: 4px;
@@ -57,12 +58,13 @@ const badge = computed(() => taskPriorityBadge(props.task, props.state));
   font-weight: 600;
   line-height: 1.25rem;
   white-space: nowrap;
-  color: #fff;
+  color: rgb(var(--task-priority-on-ink));
   background: rgb(var(--task-priority-ink));
 }
 
 .task-priority--high {
   --task-priority-ink: var(--v-theme-ink-warning);
+  --task-priority-on-ink: var(--v-theme-on-ink-warning);
 }
 
 /* Taken from what it holds up: the same hue, outlined. On a white ground
