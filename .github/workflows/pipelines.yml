@@ -140,14 +140,40 @@ jobs:
       # Everything else PeoplePKW and Teryt pull off pkw.gov.pl and
       # stat.gov.pl. Separate from the dump because this one turns over: the
       # rolling key always saves, and restore-keys takes the newest previous.
+      #
+      # Only what the open web serves, by the file types it comes in. The
+      # rest of downloaded/ is the run's copies of the private buckets - the
+      # koryta.pl export with every page, note and revision, the rejestr.io
+      # and KRS feeds - and any pull request's run, a fork's too, can restore
+      # a cache main saved. So those are fetched afresh with the run's own
+      # credentials (the export alone is ~170 MB). They are the `hostname=`
+      # and `bucket=` names of stores.storage, compressed/, .memo/ and the CRU
+      # dump, which none of these patterns reach; the two exclusions are for
+      # a copy whose name happens to end like the open web's. .listing-ranges/
+      # holds where big bucket prefixes split for listing, object names only.
+      #
+      # Files, never downloaded/ itself: actions/cache hands tar the paths
+      # the patterns match, and tar takes a directory whole, so an exclusion
+      # under one does nothing. Until 2026-10-14 the path was downloaded/
+      # with !*.bz2, which kept out nothing at all.
+      #
+      # Restore and save must list the same patterns in the same order - the
+      # cache's version is a hash of them - and test_ci_workflows.py holds
+      # them to that.
       - name: Cache the other downloads
         uses: actions/cache/restore@v6
         with:
           path: |
-            data/pipelines/downloaded
-            !data/pipelines/downloaded/*.bz2
-          key: downloads-${{ env.TIER }}-${{ github.run_id }}
-          restore-keys: downloads-${{ env.TIER }}-
+            data/pipelines/downloaded/*.csv
+            data/pipelines/downloaded/*.txt
+            data/pipelines/downloaded/*.xls
+            data/pipelines/downloaded/*.xlsx
+            data/pipelines/downloaded/*.zip
+            data/pipelines/downloaded/.listing-ranges
+            !data/pipelines/downloaded/hostname=*
+            !data/pipelines/downloaded/bucket=*
+          key: open-downloads-${{ env.TIER }}-${{ github.run_id }}
+          restore-keys: open-downloads-${{ env.TIER }}-
 
       # The ml group (torch, spacy, the nvidia runtimes -- 4.5 GB) is left out:
       # no pipeline this job runs needs it.
@@ -276,9 +302,15 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: |
-            data/pipelines/downloaded
-            !data/pipelines/downloaded/*.bz2
-          key: downloads-${{ env.TIER }}-${{ github.run_id }}
+            data/pipelines/downloaded/*.csv
+            data/pipelines/downloaded/*.txt
+            data/pipelines/downloaded/*.xls
+            data/pipelines/downloaded/*.xlsx
+            data/pipelines/downloaded/*.zip
+            data/pipelines/downloaded/.listing-ranges
+            !data/pipelines/downloaded/hostname=*
+            !data/pipelines/downloaded/bucket=*
+          key: open-downloads-${{ env.TIER }}-${{ github.run_id }}
 
       # src/tests/pipelines runs real pipelines through read_or_process, which
       # is why the unit-test job ignores src/tests entirely (issue #196). Here
