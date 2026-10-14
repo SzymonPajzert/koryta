@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zrodla-wykaz-skarbu-panstwa",
+    title: "Źródła podają wykaz spółek Skarbu Państwa",
+    description:
+      "Spółki z udziałem Skarbu Państwa rozpoznajemy teraz także po wykazie Prokuratorii Generalnej. Jego licencja (CC BY 4.0) wymaga podania autora i źródła, więc /zrodla je wymienia.",
+    steps: [
+      "Na /zrodla rozwiń „Na czym opiera się ta strona” - drugi akapit ma linkować do wykazu na dane.gov.pl i do licencji CC BY 4.0.",
+    ],
+    link: "/zrodla",
+    area: "public",
+  },
+  {
     id: "zadania-priorytet-i-cele",
     title: "Zadania: pilne i ważne, także całe cele",
     description:
