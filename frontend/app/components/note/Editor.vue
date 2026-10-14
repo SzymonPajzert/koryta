@@ -33,8 +33,8 @@
       </template>
       <template v-else>
         <p class="mb-1">
-          Wklej tu, co udało Ci się znaleźć, razem z linkiem do źródła. Notatki
-          są publiczne i to z nich powstają kolejne powiązania w bazie - nie
+          Wklej tu, co udało Ci się znaleźć, razem z linkiem do źródła.
+          {{ audience }} i to z nich powstają kolejne powiązania w bazie - nie
           musi to być nic odkrywczego.
         </p>
         <ul class="k-examples">
@@ -214,6 +214,15 @@ const noteSubject: Record<NodeType, string> = {
 
 const subject = computed(() => noteSubject[props.nodeType]);
 
+/** Who will read the note, which is not everybody for a person: notes on
+ * people are unreviewed claims about somebody named, and firestore.rules keeps
+ * them to signed in readers. */
+const audience = computed(() =>
+  props.nodeType === "person"
+    ? "Notatki o osobach widzą tylko zalogowani"
+    : "Notatki są publiczne",
+);
+
 /** Whether an entry here is a snippet rather than a source with an address.
  *
  * On an article, the url a source entry would carry is the page the note is
@@ -230,6 +239,7 @@ const emit = defineEmits(["saved"]);
 const { user } = useAuthState();
 const { userNote, otherNotes, saveNote, attachArticleIds } = useNotes(
   computed(() => props.nodeId),
+  computed(() => props.nodeType),
 );
 
 const otherSources = computed(() => {

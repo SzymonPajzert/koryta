@@ -66,6 +66,46 @@ describe("NoteEditor", () => {
     expect(company.text()).not.toContain("tej osoby");
   });
 
+  it("says who reads a note before somebody writes one", async () => {
+    // A note on a person is for signed in readers (firestore.rules), so
+    // calling it public would be a promise the page does not keep.
+    (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
+    (useNotes as any).mockReturnValue({
+      userNote: ref(null),
+      otherNotes: ref([]),
+      saveNote: vi.fn(),
+    });
+
+    /** The section's „(i)”, opened - which is where the sentence lives. */
+    const explanationFor = async (nodeType: "person" | "place") => {
+      document.body.innerHTML = "";
+      const wrapper = await mountSuspended(NoteEditor, {
+        props: { nodeId: "node-123", nodeType },
+        attachTo: document.body,
+      });
+      await wrapper.get("[data-testid='section-info']").trigger("click");
+      const text = document.body.textContent;
+      wrapper.unmount();
+      return text;
+    };
+
+    const person = await explanationFor("person");
+    expect(person).toContain("Notatki o osobach widzą tylko zalogowani");
+    expect(person).not.toContain("Notatki są publiczne");
+
+    expect(await explanationFor("place")).toContain("Notatki są publiczne");
+  });
+
+  it("asks for the notes knowing whose page they are on", async () => {
+    // What lets `useNotes` leave a logged out reader's query for a person's
+    // notes unasked, rather than have the rules refuse it.
+    await mountSuspended(NoteEditor, {
+      props: { nodeId: "node-123", nodeType: "person" as const },
+    });
+    const [, nodeType] = (useNotes as any).mock.calls.at(-1);
+    expect(nodeType.value).toBe("person");
+  });
+
   it("shows the form when add source button is clicked", async () => {
     (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
     (useNotes as any).mockReturnValue({

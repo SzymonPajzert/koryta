@@ -1,4 +1,4 @@
-import { computed, type MaybeRef } from "vue";
+import { computed, toValue, type MaybeRef } from "vue";
 import {
   getFirestore,
   doc,
@@ -21,7 +21,7 @@ import {
 } from "@mdi/js";
 import { useAuthState } from "./auth";
 import { withArticleIds } from "~/utils/notePromotion";
-import type { Note, NoteEntryKind } from "~~/shared/model";
+import type { Note, NoteEntryKind, NodeType } from "~~/shared/model";
 
 /** How each note entry kind presents itself: the label on its chip, the button
  * that creates one, the tooltip under that button, the prompt above the text
@@ -142,7 +142,16 @@ export function noteAdminTypeLabel(type: string | null | undefined): string {
   return noteAdminTypeConfig[type]?.title ?? type;
 }
 
-export function useNotes(nodeID: MaybeRef<string>) {
+/** The notes on one page, and the reader's own among them.
+ *
+ * `nodeType` where the caller knows it: the notes on a person are for signed
+ * in readers (firestore.rules), so for anybody else this does not ask - the
+ * query would only be refused, as a console error on every person's page.
+ */
+export function useNotes(
+  nodeID: MaybeRef<string>,
+  nodeType?: MaybeRef<NodeType | undefined>,
+) {
   const { user } = useAuthState();
   const firebaseApp = useFirebaseApp();
   const db = getFirestore(firebaseApp, "koryta-pl");
@@ -150,6 +159,7 @@ export function useNotes(nodeID: MaybeRef<string>) {
   const nodeRef = computed(() => toValue(nodeID));
 
   const notesQuery = computed(() => {
+    if (!user.value && toValue(nodeType) === "person") return null;
     return query(collection(db, "notes"), where("nodeId", "==", nodeRef.value));
   });
 

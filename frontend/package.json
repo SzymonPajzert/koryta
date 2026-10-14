@@ -28,6 +28,7 @@
     "test:visual:update": "cross-env PLAYWRIGHT_NO_REUSE=1 PLAYWRIGHT_SERVER_COMMAND='npm run dev:build' playwright test --project=visual-desktop --project=visual-mobile --update-snapshots",
     "test:playwright": "cross-env PLAYWRIGHT_SERVER_COMMAND='npm run dev:prod-data' playwright test --project=chromium",
     "test:playwright:ci": "node -e \"fs.rmSync('.nuxt/cache/nitro',{recursive:true,force:true})\" && cross-env PLAYWRIGHT_SERVER_COMMAND='npm run dev:build' playwright test --project=chromium",
+    "test:rules": "firebase emulators:exec --config ../firebase.rules-test.json --project demo-koryta-rules --only firestore \"vitest run --config vitest.rules.config.ts\"",
     "test": "npm run test:ci && npm run test:e2e",
     "check:duplication": "jscpd app server --ignore app/coverage",
     "check:progress-counts": "firebase emulators:exec --project demo-koryta-pl --only firestore \"npx tsx scripts/check-progress-counts.ts\"",

@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "notatki-o-osobach-dla-zalogowanych",
+    title: "Notatki o osobach widzą tylko zalogowani",
+    description:
+      "Notatka przy osobie to niesprawdzona informacja o kimś z imienia i nazwiska, a czytał ją każdy - także przy osobach, których strony nie są opublikowane. Teraz widzą ją tylko zalogowani; notatki przy spółkach, artykułach i tematach są dalej publiczne.",
+    steps: [
+      "Wyloguj się i otwórz stronę osoby, przy której ktoś zostawił notatkę - sekcji „Notatki” nie ma, a po zalogowaniu wraca.",
+      "Bez logowania otwórz spółkę z notatkami - notatki są widoczne jak dotąd.",
+    ],
+    area: "public",
+  },
+  {
     id: "szkice-tylko-dla-zalogowanych",
     title: "Szkice tylko dla zalogowanych, także pod ?latest=true",
     description:
