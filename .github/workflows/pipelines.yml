@@ -356,14 +356,13 @@ jobs:
           uv run --no-sync pytest -m e2e src/tests/pipelines -v \
             --ignore=src/tests/pipelines/test_rejestrio_coverage.py
 
-      - name: Upload pipeline output
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: versioned-${{ env.TIER }}
-          # Not the dump, which lives in downloaded/.
-          path: data/pipelines/versioned
-          retention-days: 14
+      # No artifact. The repo is public, so anybody with a GitHub account can
+      # download what a run uploads, and versioned/ is the people: register
+      # and PKW entries with their birth dates, the merged people, the site's
+      # pages unpublished ones included. Until 2026-10-14 all of it went up as
+      # versioned-<tier> for 14 days, and nothing ever downloaded it. A red
+      # night's output is for the nightly VM or a local run, where versioned/
+      # stays on a private disk.
 
   # GitHub's own "Only notify for failed workflows" setting covers this, but a
   # scheduled run is attributed to whoever last touched the cron rather than to
