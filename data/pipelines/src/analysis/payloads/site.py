@@ -1072,8 +1072,14 @@ class SiteSnapshot:
             krs = company.get("krs")
             company_id = self.companies.get(str(krs)) if krs else None
             if company_id is None:
-                # The ingest answers 404 and writes nothing at all, and the
-                # uploader creates the company and posts the person again.
+                # The ingest writes the rest of the person and leaves this job
+                # out (`unplacedEmployments`), and the uploader creates the
+                # company and posts the person again, which places it. A write,
+                # then, unlike a candidacy the ingest cannot place: sending the
+                # payload is what makes the company. Until 2026-10-14 the
+                # ingest answered 404 and wrote nothing of the person instead;
+                # the reason is the same either way, since the uploader made
+                # the company and sent them again then too.
                 reasons.append((MISSING_COMPANY, started))
                 continue
             edge: Edge = {

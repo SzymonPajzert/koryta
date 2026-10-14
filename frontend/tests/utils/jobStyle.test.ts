@@ -149,7 +149,7 @@ describe("counters", () => {
       ...["created", "updated", "unchanged", "employments_created"],
       ...["employments_published", "candidacies_created"],
       ...["companies_created", "unplaced", "failed", "skipped", "planned"],
-      "dropped_changes",
+      ...["dropped_changes", "employments_unplaced"],
       // people_import --request: what of a page's people it found.
       ...["matched", "to_change", "to_create", "up_to_date", "left_out"],
       ...["uploaded", "failed", "skipped"],
