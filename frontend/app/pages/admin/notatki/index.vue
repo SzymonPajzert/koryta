@@ -551,10 +551,10 @@ const focusNode = async (row: NoteRow) => {
 
   try {
     // `latest` so a note written on a node nobody has approved yet still opens
-    // instead of 404ing.
-    const { node } = await $fetch<{ node: Node & { id?: string } }>(
+    // instead of 404ing - with the token, which is what lets it through.
+    const { node } = await authRequest<{ node: Node & { id?: string } }>(
       `/api/nodes/${row.nodeId}`,
-      { query: { latest: "true" } },
+      { method: "GET", query: { latest: "true" } },
     );
     if (focusedNodeId.value !== row.nodeId) return;
     focusedNode.value = { ...node, id: node.id ?? row.nodeId };
