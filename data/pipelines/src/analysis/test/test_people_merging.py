@@ -377,11 +377,11 @@ def test_a_dated_biography_still_forgives_a_misspelt_first_name(ctx):
 
 
 def test_two_biographies_that_both_fit_decide_nothing(ctx):
-    """Robert Kwiatkowski the urzędnik and Robert Kwiatkowski the polityk.
+    """Two biographies of one name, both giving the day KRS has.
 
-    Both were born on 1961-11-07 and there is nothing to choose between them
-    but the score, which would hang a stranger's biography on the page - the
-    same harm the PKW side refuses to risk, refused the same way.
+    There is nothing to choose between them but the score, which would hang a
+    stranger's biography on the page - the same harm the PKW side refuses to
+    risk, refused the same way.
     """
     result = match(
         ctx,
@@ -413,6 +413,46 @@ def test_a_namesake_the_first_name_rules_out_leaves_one_match(ctx):
     )
 
     assert list(result["wiki_name"]) == ["Dariusz Popławski (wicewojewoda)"]
+
+
+def test_a_namesake_matched_on_the_year_takes_nothing_from_one_matched_to_the_day(
+    ctx,
+):
+    """Michał Zieliński (polityk) gives the day KRS has; Michał Zieliński
+    (aktor), born the same year, gives only the year. Two titles are two
+    people, and the day says which one this is."""
+    result = match(
+        ctx,
+        [krs_person("michał", "zieliński", "1972-07-16")],
+        [
+            article("Michał Zieliński (polityk)", "1972-07-16"),
+            article("Michał Zieliński (aktor)", "1972-00-00"),
+        ],
+    )
+
+    assert list(result["wiki_name"]) == ["Michał Zieliński (polityk)"]
+
+
+def test_a_year_only_biography_goes_to_the_namesake_the_day_did_not_decide(ctx):
+    """Robert Kwiatkowski (polityk) gives the day, Robert Kwiatkowski
+    (urzędnik) only the year, and KRS has two Robert Kwiatkowskis born that
+    year. The day gives the politician his article, and the year-only one has a
+    single namesake left - as it would if the politician's were not there."""
+    politician = krs_person("robert", "kwiatkowski", "1961-11-07")
+    namesake = krs_person("robert", "kwiatkowski", "1961-03-15")
+    result = match(
+        ctx,
+        [politician, {**namesake, "rejestrio_id": ["2"]}],
+        [
+            article("Robert Kwiatkowski (polityk)", "1961-11-07"),
+            article("Robert Kwiatkowski (urzędnik)", "1961-00-00"),
+        ],
+    )
+
+    assert dict(zip(result["birth_date"], result["wiki_name"])) == {
+        "1961-11-07": "Robert Kwiatkowski (polityk)",
+        "1961-03-15": "Robert Kwiatkowski (urzędnik)",
+    }
 
 
 def test_a_year_only_biography_naming_another_middle_name_is_somebody_else(ctx):

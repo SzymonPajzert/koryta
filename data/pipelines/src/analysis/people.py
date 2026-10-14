@@ -292,18 +292,38 @@ def people_merged(
                     )
             END
     ),
+    wiki_dated_first AS (
+        -- An article matched to the day outranks those matched on the year
+        -- alone. Two articles under two titles are two people, and only one of
+        -- them was born on the day KRS gives; the other is a namesake born the
+        -- same year. Robert Kwiatkowski (polityk) gives 1961-11-07, the day of
+        -- the Robert Kwiatkowski KRS has on Telewizja Polska's board, and
+        -- Robert Kwiatkowski (urzędnik) gives only 1961: counted as two equal
+        -- candidates, the pair took the politician's article from him. Reading
+        -- every biography in the dump makes it commoner - Michał Zieliński
+        -- (aktor), born in 1972, would have cost Michał Zieliński (polityk)
+        -- his. On 2026-10-14's articles and KRS people this gives five people
+        -- their article and takes it from nobody.
+        --
+        -- A year-only article is then left to the namesakes no article names
+        -- the day of, as it always was: the urzędnik's goes to the other
+        -- Robert Kwiatkowski KRS has born in 1961.
+        SELECT * FROM wiki_candidates
+        QUALIFY birth_date IS NOT NULL
+            OR count(birth_date) OVER (PARTITION BY krs_row) = 0
+    ),
     wiki_match AS (
         -- Which of those to believe - and where more than one fits, none of
-        -- them. Two articles the join cannot tell apart are two people it
-        -- cannot tell apart, and there is nothing to choose between "Robert
-        -- Kwiatkowski (urzędnik)" and "Robert Kwiatkowski (polityk)" but the
-        -- score, which would hang a stranger's biography on the page. The same
-        -- harm `pkw_match` refuses to risk, refused the same way.
+        -- them. Two articles the join cannot tell apart - both matched to the
+        -- day, or both on the year alone - are two people it cannot tell
+        -- apart, and there is nothing to choose between them but the score,
+        -- which would hang a stranger's biography on the page. The same harm
+        -- `pkw_match` refuses to risk, refused the same way.
         --
         -- And, as there, the other way round: an article two KRS people fit -
         -- a year that fits two namesakes, or a date two register entries share
         -- - is neither of theirs.
-        SELECT * FROM wiki_candidates
+        SELECT * FROM wiki_dated_first
         QUALIFY count(*) OVER (PARTITION BY krs_row) = 1
             AND count(*) OVER (PARTITION BY source) = 1
     ),
