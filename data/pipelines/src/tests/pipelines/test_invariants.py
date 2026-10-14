@@ -27,6 +27,8 @@ marked ``e2e`` and deselected by default. Run it with::
 
 import collections
 import datetime
+import re
+import zoneinfo
 
 import pytest
 
@@ -1561,6 +1563,112 @@ def test_employment_does_not_end_before_it_starts(edges):
     assert len(inverted) <= KNOWN_INVERTED, (
         f"{len(inverted)} edges end before they start, up from the "
         f"{KNOWN_INVERTED} known one: {sample(inverted)}"
+    )
+
+
+#: The days PeopleKRS ran before 5fe9e12b (2026-05-05) and wrote as the end of
+#: every post rejestr.io still listed as current. Kept in step with
+#: `CRAWL_STAMPS` in `frontend/scripts/migrate/clear-crawl-stamp-job-ends.ts`.
+CRAWL_STAMPS = ("2026-03-18", "2026-04-06")
+
+WARSAW = zoneinfo.ZoneInfo("Europe/Warsaw")
+
+
+def end_day(edge: dict) -> str | None:
+    """The day an edge's `end_date` names, or None where it names none.
+
+    Every writer stores the day as text; a timestamp is read as the Warsaw day
+    it falls on, as the migration reads one, since a date picked as midnight in
+    Poland is stored as the evening before in UTC.
+    """
+    value = edge.get("end_date")
+    if isinstance(value, datetime.datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.UTC)
+        return value.astimezone(WARSAW).date().isoformat()
+    if isinstance(value, str) and re.match(r"\d{4}-\d{2}-\d{2}", value.strip()):
+        return value.strip()[:10]
+    return None
+
+
+def job_ends_by_day(edges) -> collections.Counter:
+    """How many live employment edges end on each day."""
+    return collections.Counter(
+        day
+        for edge in edges
+        if edge.get("type") == "employed" and not is_removed(edge)
+        for day in [end_day(edge)]
+        if day is not None
+    )
+
+
+def test_a_job_does_not_end_on_the_day_a_crawl_ran(edges):
+    """No employment ends on a day PeopleKRS ran rather than one somebody left.
+
+    Until 5fe9e12b `end_time()` in `scrapers/krs/list.py` read rejestr.io's
+    `data_koniec` with the run's own date as the default, so every post the
+    register listed as current came out of that run ending on the day it ran.
+    Two runs reached the site: 1,044 edges on the 2026-10-14 export, 825
+    ending 2026-04-06 and 219 ending 2026-03-18, and the register lists 853 of
+    those posts as current. The ingest never rewrites a stored end, so nothing
+    repairs them by itself - the night only reports them as `dropped`.
+
+    `frontend/scripts/migrate/clear-crawl-stamp-job-ends.ts` puts back the
+    register's answer on 991 of them. The rest it lists for a reviewer by id.
+    """
+    # 1,043 live on the 2026-10-14 export, before the migration. After it, 52
+    # by its dry run against that export: 45 the register has no row for (33
+    # spells from before 05-05 under another role or start, 9 pages linking a
+    # rejestr.io entry other than the one whose row fits, 3 people the register
+    # does not place at the company), 5 old spells whose person's open spell
+    # has no edge, 1 contributor's proposal clearing the end that waits at
+    # /admin/rewizje, and the 1 post the register really ends on 2026-03-18.
+    # Lower it as reviewers resolve them; a re-run of the migration against a
+    # newer register picks up any its rows now answer.
+    STAMPED_ENDS = 52
+
+    stamped = sorted(
+        edge["id"]
+        for edge in edges
+        if edge.get("type") == "employed"
+        and not is_removed(edge)
+        and end_day(edge) in CRAWL_STAMPS
+    )
+
+    assert len(stamped) <= STAMPED_ENDS, (
+        f"{len(stamped)} employment edges end on a day PeopleKRS ran "
+        f"({', '.join(CRAWL_STAMPS)}) rather than one the register gives, up "
+        f"from the {STAMPED_ENDS} known ones. Run "
+        f"scripts/migrate/clear-crawl-stamp-job-ends.ts. Sample: {sample(stamped)}"
+    )
+
+
+def test_no_day_ends_a_hundred_jobs(edges):
+    """No single day since 2026-01-01 ends a hundred employments.
+
+    The check that would have caught the crawl stamps, and catches the next
+    one: a writer filling in a clock's date for a blank end puts every open
+    post it touches on one day. Before the migration the two stamps held 825
+    and 219 live edges; no other day of 2026 holds more than 13 (2026-07-07 on
+    the 2026-10-14 export), and none since records began reaches 50 - the
+    busiest real day is 2024-04-12, with 46 ends at 20 companies. Days before
+    2026 are left out: a run that stamped then would have been seen by now,
+    and a company wound up with its whole board is a real day.
+    """
+    SINCE = "2026-01-01"
+    BULK = 100
+
+    bulk = {
+        day: count
+        for day, count in job_ends_by_day(edges).items()
+        if day >= SINCE and count >= BULK
+    }
+
+    assert not bulk, (
+        f"{sum(bulk.values())} employment edges end on {len(bulk)} days that "
+        f"each end {BULK} or more, which no register does - a writer is "
+        f"stamping a clock's date as the end of every post it reads: "
+        f"{sorted(bulk.items())}"
     )
 
 
