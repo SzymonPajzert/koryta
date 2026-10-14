@@ -3,6 +3,7 @@ import {
   parseRows,
   resolveRegionId,
   seatPlan,
+  takenMoveTargets,
 } from "../../scripts/migrate/fix-stale-seats";
 
 describe("parseRows", () => {
@@ -141,5 +142,69 @@ describe("seatPlan", () => {
       action: "update",
       to: "teryt2469",
     });
+  });
+});
+
+describe("takenMoveTargets", () => {
+  const exists = (taken: string[]) => async (id: string) => taken.includes(id);
+
+  it("names a move whose new id a document already holds", async () => {
+    // The run that found this: one derived-id seat was enough to reach the
+    // check, and it threw before it looked anything up. `set` at a taken id
+    // would overwrite that document, so the move has to be refused.
+    const plans = [
+      seatPlan(
+        {
+          id: "edge_teryt1263_elzat_seat",
+          source: "teryt1263",
+          target: "elzat",
+        },
+        "teryt2469",
+      ),
+      seatPlan(
+        {
+          id: "edge_teryt1465_zelazna_seat",
+          source: "teryt1465",
+          target: "zelazna",
+        },
+        "teryt2862",
+      ),
+    ];
+    expect(
+      await takenMoveTargets(plans, exists(["edge_teryt2469_elzat_seat"])),
+    ).toEqual(["edge_teryt2469_elzat_seat"]);
+  });
+
+  it("passes moves onto free ids", async () => {
+    const plans = [
+      seatPlan(
+        {
+          id: "edge_teryt1263_elzat_seat",
+          source: "teryt1263",
+          target: "elzat",
+        },
+        "teryt2469",
+      ),
+    ];
+    expect(await takenMoveTargets(plans, exists([]))).toEqual([]);
+  });
+
+  it("looks up only the moves, not seats updated in place", async () => {
+    // An update keeps its own id, which of course exists.
+    const looked: string[] = [];
+    const plans = [
+      seatPlan(
+        { id: "Twm20atuwEHkzrNq8hMe", source: "teryt1263", target: "elzat" },
+        "teryt2469",
+      ),
+      { action: "agrees" } as const,
+    ];
+    expect(
+      await takenMoveTargets(plans, async (id) => {
+        looked.push(id);
+        return true;
+      }),
+    ).toEqual([]);
+    expect(looked).toEqual([]);
   });
 });

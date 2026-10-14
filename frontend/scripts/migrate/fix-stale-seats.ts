@@ -165,6 +165,24 @@ export function seatPlan(
   };
 }
 
+/** The ids a move would land on that a document already holds.
+ *
+ * A move is `batch.set` at the new id, and `set` overwrites whatever is there
+ * without a word - so any of these refuses the whole run before it writes.
+ * `exists` is the lookup, passed in so the check runs without Firestore.
+ */
+export async function takenMoveTargets(
+  plans: Iterable<SeatPlan>,
+  exists: (id: string) => Promise<boolean>,
+): Promise<string[]> {
+  const taken: string[] = [];
+  for (const plan of plans) {
+    if (plan.action !== "move") continue;
+    if (await exists(plan.newId)) taken.push(plan.newId);
+  }
+  return taken;
+}
+
 async function main() {
   const isProd = process.argv.includes("--prod");
   const commit = process.argv.includes("--commit");
@@ -233,6 +251,7 @@ async function main() {
     placeId: string;
     from: string;
     to: string;
+    plan: SeatPlan;
   }[] = [];
   const counts = { agree: 0, notOnSite: 0, noSeat: 0, noRegion: 0, multi: 0 };
 
@@ -265,7 +284,11 @@ async function main() {
       counts.agree += 1;
       continue;
     }
-    stale.push({ doc: seat, placeId, from, to: regionNodeId });
+    const plan = seatPlan(
+      { id: seat.id, source: from, target: placeId },
+      regionNodeId,
+    );
+    stale.push({ doc: seat, placeId, from, to: regionNodeId, plan });
   }
 
   console.info(`\n  ${counts.agree} seats agree with the register`);
@@ -302,10 +325,8 @@ async function main() {
     ]);
   }
 
-  const derived = stale.filter(
-    (s) => s.doc.id === `edge_${s.from}_${s.doc.data().target}_seat`,
-  );
-  const inPlace = stale.filter((s) => !derived.includes(s));
+  const derived = stale.filter((s) => s.plan.action === "move");
+  const inPlace = stale.filter((s) => s.plan.action === "update");
   console.info(`\n  ${inPlace.length} carry a random id  -> update in place`);
   console.info(`  ${derived.length} carry a derived id -> must move`);
   console.info(
@@ -313,14 +334,10 @@ async function main() {
   );
 
   // A target id already in use would be silently overwritten by `set`.
-  const collisions: string[] = [];
-  for (const item of derived) {
-    const plan = plans.get(item.doc.id);
-    if (plan?.action !== "move") continue;
-    if ((await db.collection("edges").doc(plan.newId).get()).exists) {
-      collisions.push(plan.newId);
-    }
-  }
+  const collisions = await takenMoveTargets(
+    derived.map((s) => s.plan),
+    async (id) => (await db.collection("edges").doc(id).get()).exists,
+  );
   if (collisions.length) {
     console.error(
       `\n${collisions.length} target ids are already taken; refusing to overwrite:`,
@@ -341,10 +358,8 @@ async function main() {
     const data = item.doc.data();
     const revisions = revisionsByTarget.get(item.doc.id) ?? [];
     const batch = db.batch();
-    const isDerived = derived.includes(item);
-    const newId = isDerived
-      ? `edge_${item.to}_${data.target}_seat`
-      : item.doc.id;
+    const isDerived = item.plan.action === "move";
+    const newId = item.plan.action === "move" ? item.plan.newId : item.doc.id;
 
     if (isDerived) {
       batch.set(db.collection("edges").doc(newId), {
