@@ -316,11 +316,12 @@ const publishDialog = ref(false);
 const history = ref<{ reload: () => Promise<void> } | null>(null);
 
 async function load() {
-  const data = await $fetch<{
+  // With the token: the endpoint answers nobody else.
+  const data = await authRequest<{
     revisions: Record<string, unknown>[];
     approvedRevisionId: string | null;
     published: boolean;
-  }>("/api/revisions/byNode", { params: { nodeId } });
+  }>("/api/revisions/byNode", { method: "GET", query: { nodeId } });
   revisions.value = data.revisions;
   approvedRevisionId.value = data.approvedRevisionId;
   published.value = data.published;

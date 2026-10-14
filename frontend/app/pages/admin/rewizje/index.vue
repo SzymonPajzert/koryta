@@ -1237,9 +1237,8 @@ const loadNodes = async () => {
   nodesPending.value = true;
   nodesFailed.value = false;
   try {
-    // The endpoint reads no token; this goes through `authRequest` anyway, as
-    // the other two sections do, so the page has one way of asking - and one
-    // thing for a test to stand in for.
+    // Through `authRequest`, as the other two sections are: the endpoint hands
+    // out drafts, so it answers only a token.
     const response = await authRequest<{
       nodes: Record<string, RevisedNode>;
       total: number;
