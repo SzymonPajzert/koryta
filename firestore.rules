@@ -22,10 +22,39 @@ service cloud.firestore {
     // A note does not carry its page's type, so the rule reads it off the
     // page. The app asks by `nodeId ==`, so that is one read per query, and
     // only for a reader who is not signed in.
+    //
+    // A person has one note per page, at `<nodeId>_<uid>`: that is where
+    // `saveNote` (app/composables/notes.ts) writes it, and where every note on
+    // production sat on 2026-10-15, 662 of 662.
     match /notes/{noteId} {
       allow read: if request.auth != null
           || get(/databases/$(database)/documents/nodes/$(resource.data.nodeId)).data.type != "person";
-      allow create, update, delete: if request.auth != null && request.resource.data.userUid == request.auth.uid;
+
+      allow create: if request.auth != null
+          && isOwnNote(noteId, request.resource.data, request.auth.uid);
+
+      // Both halves matter: the note being replaced has to be yours, and the
+      // note replacing it has to stay yours. The rule used to check only the
+      // incoming document, which let anybody signed in overwrite anybody's
+      // note by writing their own uid into it. The id check is what keeps
+      // that from coming back as squatting: without it, a note filed at
+      // `<page>_<bob>` under somebody else's uid would be one bob could no
+      // longer write.
+      allow update: if request.auth != null
+          && resource.data.userUid == request.auth.uid
+          && isOwnNote(noteId, request.resource.data, request.auth.uid);
+
+      // A delete carries no payload, so the owner is read off the note as
+      // stored. The old combined rule read `request.resource` here, which
+      // raised an error, so nobody could delete a note at all.
+      allow delete: if request.auth != null
+          && resource.data.userUid == request.auth.uid;
+    }
+
+    function isOwnNote(noteId, data, uid) {
+      return data.userUid == uid
+          && data.nodeId is string
+          && noteId == data.nodeId + '_' + uid;
     }
 
     match /users/{userId} {
