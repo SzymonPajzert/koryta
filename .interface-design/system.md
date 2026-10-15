@@ -69,6 +69,10 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   (2026-10-15).
 - **The person page's graph opens on „2 kroki”**, as today. Szymon: "it looks
   cooler, we can change it later" (2026-10-15).
+- **A long person bio folds on phones**: it shows four lines, followed by
+  „Pokaż więcej”, which opens the rest in place. It is hidden, not cut.
+  Computers show the whole bio. Szymon: "I think it's a good idea"
+  (2026-10-15).
 - **/eksploruj/tabela on desktop: one summary line per person**, e.g.
   „8 spółek ▾ · ostatnio <company> · 2023–2024 · 12 lat pracy · 8 startów”.
   Each row's „N spółek ▾” opens its companies in place, and a single
