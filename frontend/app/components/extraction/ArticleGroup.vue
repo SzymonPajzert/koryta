@@ -1,44 +1,52 @@
 <template>
-  <v-card variant="outlined" class="mb-4">
-    <v-card-item class="cursor-pointer" @click="expanded = !expanded">
-      <v-card-title class="article-header">
-        <v-chip size="small" variant="tonal" color="primary">
-          {{ domain }}
-        </v-chip>
-        <span class="article-path text-body-2">{{ articlePath }}</span>
-      </v-card-title>
-      <template #append>
-        <v-chip size="small" variant="flat" color="secondary" class="me-2">
-          {{ facts.length }}
-        </v-chip>
-        <v-icon>{{ expanded ? mdiChevronUp : mdiChevronDown }}</v-icon>
-      </template>
-    </v-card-item>
+  <!-- A line of the quiet rail: which site, which article, how many facts.
+       The path is the part that gives way: it takes what the domain and the
+       count leave and ellipsises. The domain keeps its own width, up to the
+       rail's cap for a side part (a third of the line, nearly half on a
+       phone), and ellipsises only past that - it is how a reviewer tells one
+       row from the next, and shrinking in step with a 400px slug left a
+       phone „7d…” on rows that then read the same. The count never shrinks.
+       One line either way, not a two-line clamp of a slug broken
+       mid-word. -->
+  <AdminExpandRow v-model:expanded="expanded">
+    <template #summary>
+      <span class="arow-side article-domain text-body-2">
+        {{ shownDomain }}
+      </span>
+      <span
+        class="arow-grow text-body-2 text-medium-emphasis"
+        :title="articlePath"
+      >
+        {{ articlePath }}
+      </span>
+      <span class="arow-fixed text-body-2 text-medium-emphasis">
+        {{ countLabel }}
+      </span>
+    </template>
 
-    <v-expand-transition>
-      <!-- only mount a group's cards + vote widgets when it is opened
-       so collapsed groups don't spin up Firestore listeners -->
-      <div v-if="expanded">
-        <v-divider />
-        <v-card-text class="pa-4">
-          <div v-for="fact in facts" :key="fact.id ?? fact.url" class="mb-4">
-            <ExtractionCard :fact="fact" can-promote>
-              <template #actions>
-                <ExtractionVoteButtons v-if="fact.id" :id="fact.id" />
-              </template>
-            </ExtractionCard>
-          </div>
-        </v-card-text>
-      </div>
-    </v-expand-transition>
-  </v-card>
+    <!-- The row renders its body only while open, so a group's cards and
+         their vote listeners still mount when it is opened and not before -
+         collapsed groups spin up no Firestore listeners. -->
+    <div class="article-facts">
+      <ExtractionCard
+        v-for="fact in facts"
+        :key="fact.id ?? fact.url"
+        :fact="fact"
+        can-promote
+      >
+        <template #actions>
+          <ExtractionVoteButtons v-if="fact.id" :id="fact.id" />
+        </template>
+      </ExtractionCard>
+    </div>
+  </AdminExpandRow>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { mdiChevronDown, mdiChevronUp } from "@mdi/js";
 import type { ExtractionFact } from "~~/shared/model";
 import { ExtractionVoteButtons } from "#components";
+import { polishCountingGrouped } from "~/composables/polish";
 
 const props = defineProps<{
   url: string;
@@ -48,45 +56,48 @@ const props = defineProps<{
 
 const expanded = ref(false);
 
-// Domain is already in its chip, so the title shows just the path.
-const articlePath = computed(() => {
+const parsedUrl = computed(() => {
   try {
     // Stored URLs may lack a protocol ("tvn24.pl/polska/...").
-    const parsed = new URL(
+    return new URL(
       props.url.includes("://") ? props.url : `https://${props.url}`,
     );
-    return parsed.pathname + parsed.search;
   } catch {
-    return props.url;
+    return undefined;
   }
 });
+
+/** The domain the uploader recorded, or the url's own host where it recorded
+ * none - an empty start of the line would leave the row unnamed. */
+const shownDomain = computed(
+  () => props.domain || parsedUrl.value?.hostname || "",
+);
+
+// The domain leads the line, so the path after it leaves it out.
+const articlePath = computed(() =>
+  parsedUrl.value
+    ? parsedUrl.value.pathname + parsedUrl.value.search
+    : props.url,
+);
+
+const countLabel = computed(() =>
+  polishCountingGrouped(props.facts.length, "fakt", "fakty", "faktów"),
+);
 </script>
 
 <style scoped>
-.cursor-pointer {
-  cursor: pointer;
-}
-
-.article-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  white-space: normal;
-}
-
-.article-header :deep(.v-chip) {
+/* The line's name - semibold, as a fact's far end is on a person's page.
+   It does not shrink: the rail's `.arow-side` lets a side part give way in
+   proportion to its width, which against a long path cut the domain to a few
+   letters. Its `max-width` still caps it, and past that it ellipsises. */
+.article-domain {
   flex-shrink: 0;
+  font-weight: 600;
 }
 
-/* Clamp long paths to two lines with an ellipsis. */
-.article-path {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-all;
-  line-height: 1.3;
+.article-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 </style>
