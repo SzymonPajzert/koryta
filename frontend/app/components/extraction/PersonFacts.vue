@@ -13,7 +13,6 @@
     v-if="total > 0"
     title="Fakty z artykułów"
     :icon="mdiTextSearchVariant"
-    class="mt-4"
     data-testid="person-extractions"
   >
     <!-- How the facts are judged, behind the heading's „(i)” as the notes'
