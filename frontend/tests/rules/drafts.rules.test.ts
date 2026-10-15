@@ -1,19 +1,21 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
 import {
   collection,
-  connectFirestoreEmulator,
   doc,
   getDoc,
   getDocs,
-  getFirestore,
   query,
-  setDoc,
   where,
   type Firestore,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  clearDatabase,
+  closeApps,
+  denied,
+  firestoreAs,
+  loadRules,
+  seed,
+} from "./helpers";
 
 /** What firestore.rules lets a browser read of the drafts.
  *
@@ -23,83 +25,21 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
  * and listed every revision with its parties. Rules deploy on their own, by a
  * separate `firebase deploy`, so nothing else would notice them being wrong.
  *
- * Plain client SDK against the emulator, which `npm run test:rules` starts on
- * its own port:
- *
  *   devns npm run test:rules
  */
-const RULES = readFileSync(
-  fileURLToPath(new URL("../../../firestore.rules", import.meta.url)),
-  "utf8",
-);
-const PROJECT = "demo-koryta-rules";
-const DATABASE = "koryta-pl";
-const [HOST, PORT] = (process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8081")
-  .split(":")
-  .map((part, index) => (index === 0 ? part.replace(/^\[|\]$/g, "") : part));
-const EMULATOR = `http://${HOST}:${PORT}`;
-
-const apps: FirebaseApp[] = [];
-
-/** A browser's Firestore: nobody, somebody signed in, or the emulator's
- * "owner", which skips the rules and is how a test sets itself up. */
-function firestoreAs(who: "owner" | "anonymous" | { uid: string }): Firestore {
-  const app = initializeApp(
-    { projectId: PROJECT, apiKey: "fake-api-key" },
-    `rules-${apps.length}`,
-  );
-  apps.push(app);
-  const db = getFirestore(app, DATABASE);
-  connectFirestoreEmulator(
-    db,
-    HOST!,
-    Number(PORT),
-    who === "anonymous"
-      ? {}
-      : {
-          mockUserToken:
-            who === "owner" ? "owner" : { sub: who.uid, user_id: who.uid },
-        },
-  );
-  return db;
-}
-
-let owner: Firestore;
 let anonymous: Firestore;
 let reader: Firestore;
 
-async function seed(path: string, data: Record<string, unknown>) {
-  await setDoc(doc(owner, path), data);
-}
-
-/** What a refused read looks like from the client. */
-const denied = { code: "permission-denied" };
-
 beforeAll(async () => {
-  const response = await fetch(
-    `${EMULATOR}/emulator/v1/projects/${PROJECT}:securityRules`,
-    {
-      method: "PUT",
-      body: JSON.stringify({
-        rules: { files: [{ name: "firestore.rules", content: RULES }] },
-      }),
-    },
-  );
-  expect(response.ok).toBe(true);
-  owner = firestoreAs("owner");
+  await loadRules();
   anonymous = firestoreAs("anonymous");
   reader = firestoreAs({ uid: "reader" });
 });
 
-afterAll(async () => {
-  await Promise.all(apps.map((app) => deleteApp(app)));
-});
+afterAll(closeApps);
 
 beforeEach(async () => {
-  await fetch(
-    `${EMULATOR}/emulator/v1/projects/${PROJECT}/databases/${DATABASE}/documents`,
-    { method: "DELETE" },
-  );
+  await clearDatabase();
   await seed("nodes/published", {
     type: "person",
     name: "Anna Nowak",
