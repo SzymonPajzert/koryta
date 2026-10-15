@@ -157,11 +157,74 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // A person's vote on a target lives at `<target>_<uid>`, with exactly one
+    // of `nodeId` and `extractionId` naming the target - which is what
+    // `useVotes`, `castVoteOnce` and `saveCommentOnce` in
+    // app/composables/votes.ts all write.
+    //
+    // The rule used to check only `voteId.matches('.*_' + uid)`, which pins
+    // the end of the id and says nothing about the rest. One account could
+    // write `a_<uid>`, `b_<uid>` and `c_<uid>`, each with `nodeId: "n1"`, and
+    // `computeVoteStats` (shared/stats.ts) sums every category document by
+    // document - so one person's +5 counted three times, on the
+    // `stats.votes.interesting` the queue's votes order sorts by. Equality
+    // makes the id follow from the body, so a second document cannot exist.
+    //
+    // Exactly one target, because the aggregation finds a node's votes by
+    // `nodeId ==` and an extraction's by `extractionId ==`: a document
+    // carrying both counts towards each, and `<anything>_<uid>` could then
+    // carry the same `nodeId` beside an `extractionId` made up to fit the id.
+    function isOwnVote(voteId, data, uid) {
+      return data.userUid == uid
+          && ((data.nodeId is string
+                && !("extractionId" in data)
+                && voteId == data.nodeId + '_' + uid)
+              || (data.extractionId is string
+                && !("nodeId" in data)
+                && voteId == data.extractionId + '_' + uid));
+    }
+
+    // What a person's `categoryVotes` may hold.
+    //
+    // -5..5 is the range the UI clamps to (`castVote`, `castVoteOnce`), and
+    // nothing else enforced it: a single `interesting: 1000000` would put a
+    // person at the top of every ordering by votes. A map has to be there:
+    // `computeVoteStats` reads `categoryVotes` unconditionally, so a vote
+    // without one would make every later recount of its node throw, and the
+    // node's stats would stop moving.
+    //
+    // At most 40 keys, because `onVoteWritten` re-reads every vote on the
+    // target whenever one changes: a map of ten thousand keys would be paid
+    // for again on every later vote, by anybody. There are five categories;
+    // the cap is loose so that adding one does not need a rules deploy.
+    //
+    // All three writers merge, and `request.resource.data` is the document
+    // after the merge, so this judges the whole map rather than the one key
+    // being set. A vote already holding a value out of range therefore turns
+    // away its owner's vote in another category until that value is put
+    // right; a vote in the same category replaces it and goes through. Four
+    // human votes on production held one on 2026-10-15 (`interesting` 6 or
+    // 18, cast before the clamp).
+    function isSaneVote(data) {
+      return data.categoryVotes is map
+          && data.categoryVotes.keys().size() <= 40
+          && data.categoryVotes.values().hasOnly([-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]);
+    }
+
     match /votes/{voteId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null
-          && voteId.matches('.*_' + request.auth.uid)
-          && request.resource.data.userUid == request.auth.uid;
+      allow create, update: if request.auth != null
+          && isOwnVote(voteId, request.resource.data, request.auth.uid)
+          && isSaneVote(request.resource.data);
+
+      // A delete carries no payload, so the vote is judged as stored. The old
+      // combined rule read `request.resource` here, which raised an error, so
+      // nobody could delete a vote; nothing in the app deletes one either - a
+      // vote taken back is written as 0 - so this only lets a person remove
+      // their own. Not `isSaneVote`: deleting a vote with a value out of range
+      // is the way to repair it.
+      allow delete: if request.auth != null
+          && isOwnVote(voteId, resource.data, request.auth.uid);
 
       // Nobody signs in as a scoring model, so the check above can never cover
       // the pipeline's own scores - they are uploaded by whoever runs
@@ -177,6 +240,6 @@ service cloud.firestore {
       allow delete: if request.auth != null
           && request.auth.token.datascience == true
           && isPipelineVote(voteId, resource.data);
-      }
     }
   }
+}
