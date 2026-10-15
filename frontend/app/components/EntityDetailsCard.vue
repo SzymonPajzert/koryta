@@ -137,23 +137,26 @@
         ref="bio"
         class="person-bio"
         :class="{ 'person-bio--folded': bioLong && !bioOpen }"
+        :tabindex="bioLong ? -1 : undefined"
         data-testid="person-bio"
       >
         {{ nbsp(entity.content) }}
       </p>
-      <!-- A toggle that stays rather than a button that goes: focus never has
-           to be moved, `aria-expanded` has two states to report, and a bio
-           opened by mistake folds back. -->
+      <!-- A button that goes once the bio is open, rather than a toggle that
+           stays as „Pokaż mniej” (Szymon, 2026-10-15). It is only ever shown
+           collapsed, so `aria-expanded` stays false: it still tells a screen
+           reader the button opens something. -->
       <v-btn
-        v-if="bioLong"
+        v-if="bioLong && !bioOpen"
         variant="text"
-        class="person-bio__toggle px-2"
-        :aria-expanded="bioOpen"
+        class="person-bio__more px-2"
+        :append-icon="mdiChevronDown"
+        aria-expanded="false"
         :aria-controls="bioId"
-        data-testid="person-bio-toggle"
-        @click="toggleBio"
+        data-testid="person-bio-more"
+        @click="openBio"
       >
-        {{ bioOpen ? "Pokaż mniej" : "Pokaż więcej" }}
+        Pokaż więcej
       </v-btn>
     </v-card-text>
   </v-card>
@@ -206,6 +209,7 @@
 
 <script setup lang="ts">
 import {
+  mdiChevronDown,
   mdiFileDocumentOutline,
   mdiHistory,
   mdiMapMarkerRadiusOutline,
@@ -289,16 +293,15 @@ const bioOpen = ref(false);
 const bioId = useId();
 const bio = useTemplateRef<HTMLElement>("bio");
 
-/** Folding a long bio back from below its start shortens the page above the
- * reader: the four lines left, and the focused toggle under them, can end up
- * above the screen. Bring them back into view; a bio already on screen stays
- * where it is. Instant rather than the page's smooth scrolling: it runs before
- * the fold is painted, so the reader never sees the page jump at all. */
-async function toggleBio() {
-  bioOpen.value = !bioOpen.value;
-  if (bioOpen.value) return;
+/** Opening the bio takes the focused button away, which would drop a keyboard
+ * or screen-reader user back to the top of the page. Focus goes to the bio
+ * instead: a screen reader reads on from its start, and the next Tab carries
+ * on from where the button was. `preventScroll`: the bio opens downwards from
+ * where the reader already is, so nothing needs to move. */
+async function openBio() {
+  bioOpen.value = true;
   await nextTick();
-  bio.value?.scrollIntoView({ block: "nearest", behavior: "instant" });
+  bio.value?.focus({ preventScroll: true });
 }
 </script>
 
@@ -323,14 +326,19 @@ async function toggleBio() {
   line-height: 1.55;
   margin: 0;
   max-width: 72ch;
-  /* clear of the app bar when folding scrolls it back into view */
-  scroll-margin-top: 96px;
+}
+
+/* Focus only lands here from „Pokaż więcej”, as a reading position, not a
+   control: a ring round the whole bio would frame it like something to press.
+   The text opening where the button was shows where the reader is. */
+.person-bio:focus {
+  outline: none;
 }
 
 /* Four lines and the clamp's ellipsis: the soft end, in the text's own ink.
    Phones only, up to the widest at 440px rather than Vuetify's 600: the
    length the fold is decided by holds that far, and past it a folded bio can
-   fit in four lines (BIO_FOLD_MIN_LENGTH). The toggle goes at the same width. */
+   fit in four lines (BIO_FOLD_MIN_LENGTH). The button goes at the same width. */
 @media (max-width: 440.98px) {
   .person-bio--folded {
     -webkit-box-orient: vertical;
@@ -342,31 +350,24 @@ async function toggleBio() {
 }
 
 @media (min-width: 441px) {
-  .person-bio__toggle {
+  .person-bio__more {
     display: none;
   }
 }
 
-/* A neutral text button in ink. Its label lines up with the text's left
-   edge; the 8px of padding that keeps the press tint off the label hangs
-   into the gutter instead. */
-.person-bio__toggle {
+/* A neutral text button in ink, its chevron in the label's ink too. Its
+   label lines up with the text's left edge; the 8px of padding that keeps the
+   press tint off the label hangs into the gutter instead. */
+.person-bio__more {
   margin-inline-start: -8px;
   margin-top: 4px;
 }
 
 /* Taps reach 4px past the 36px button on either side: a 44px target,
    without a taller row under the bio. */
-.person-bio__toggle::before {
+.person-bio__more::before {
   content: "";
   inset: -4px 0;
   position: absolute;
-}
-
-/* No grey wash after a tap - a touch screen keeps `:hover` on what was
-   tapped until the next tap elsewhere, so the tint stayed under the label.
-   The ripple shows the press. Kept for the keyboard, as in the app bar. */
-.person-bio__toggle:not(:focus-visible) :deep(.v-btn__overlay) {
-  opacity: 0;
 }
 </style>

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
+import { flushPromises } from "@vue/test-utils";
 import { nextTick, ref } from "vue";
 import EntityDetailsCard from "../../app/components/EntityDetailsCard.vue";
 import { useAuthState } from "~/composables/auth";
@@ -115,6 +116,50 @@ describe("EntityDetailsCard", () => {
     expect(title.find(".chip").text()).toBe("PO");
     expect(title.classes()).toContain("flex-wrap");
     expect(title.classes()).toContain("text-wrap");
+  });
+
+  it("lets „Pokaż więcej” go once the bio is open, and hands focus to the bio", async () => {
+    // jsdom lays nothing out, so the four-line clamp and the phone-only media
+    // query are not seen here: this pins what the button does, not where.
+    const wrapper = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, content: "Długi opis. ".repeat(30) } as Person,
+        type: "person",
+      },
+      attachTo: document.body,
+    });
+    const bio = wrapper.get('[data-testid="person-bio"]');
+    const more = wrapper.get('[data-testid="person-bio-more"]');
+    expect(bio.classes()).toContain("person-bio--folded");
+    expect(more.text()).toBe("Pokaż więcej");
+    expect(more.attributes("aria-controls")).toBe(bio.attributes("id"));
+    expect(more.find(".v-btn__append .v-icon").exists()).toBe(true);
+
+    await more.trigger("click");
+    await flushPromises();
+
+    expect(bio.classes()).not.toContain("person-bio--folded");
+    expect(wrapper.find('[data-testid="person-bio-more"]').exists()).toBe(
+      false,
+    );
+    expect(wrapper.text()).not.toContain("Pokaż mniej");
+    expect(document.activeElement).toBe(bio.element);
+    wrapper.unmount();
+  });
+
+  it("shows a short bio whole, with no button", async () => {
+    const wrapper = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, content: "Krótki opis." } as Person,
+        type: "person",
+      },
+    });
+    expect(wrapper.get('[data-testid="person-bio"]').classes()).not.toContain(
+      "person-bio--folded",
+    );
+    expect(wrapper.find('[data-testid="person-bio-more"]').exists()).toBe(
+      false,
+    );
   });
 
   it("marks an unpublished page as a draft, and says nothing on a live one", async () => {
