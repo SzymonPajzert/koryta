@@ -3,16 +3,17 @@
        article we hold, and a heading over empty space reads as a page that
        failed to load. The same rule `ExtractionPersonFacts` and
        `SuccessionPersonChanges` follow. -->
+  <!-- No icon beside the heading, and the sentence on where the articles
+       come from behind its (i): the cards under it say what they are. -->
   <PageSection
     v-if="mentions.length > 0 || declarations.length > 0"
     :id="declarations.length > 0 ? DECLARATIONS_ANCHOR : undefined"
     :title="sectionTitle"
-    :icon="mdiNewspaperVariantOutline"
     class="mention-section"
     data-testid="node-mentions"
   >
-    <template #lead>
-      <p class="k-lead" data-testid="node-mentions-lead">
+    <template #info>
+      <span data-testid="node-mentions-lead">
         <template v-if="mentions.length > 0">
           Artykuły prasowe wspomniające osobę i dokumenty oświadczeń
           majątkowych.
@@ -24,10 +25,13 @@
               : "Oświadczenie majątkowe z BIP ma tę samą datę urodzenia co ta osoba."
           }}
         </template>
-      </p>
+      </span>
     </template>
 
-    <v-row dense>
+    <!-- `mt-1`: the lead under the heading was the only gap between it and
+         the cards, and it now sits behind the (i). With the dense row's
+         padding this is 8px, as under „Historia powiązań”. -->
+    <v-row dense class="mt-1">
       <!-- The declarations first: on a page the site published because of
            them they are why the page is here. A card like an article's, but
            out to the office's own BIP rather than to a page of ours - a
@@ -131,7 +135,7 @@
  * piece that says who sits on which board names both of them.
  */
 import { computed } from "vue";
-import { mdiNewspaperVariantOutline, mdiOpenInNew } from "@mdi/js";
+import { mdiOpenInNew } from "@mdi/js";
 import { authFetch, useAuthState } from "~/composables/auth";
 import {
   DECLARATIONS_ANCHOR,

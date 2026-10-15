@@ -82,8 +82,12 @@ const shownCount = computed(() =>
   color: rgb(var(--v-theme-ink-neutral));
 }
 
-.asec__heading .sec-head__info {
-  margin-inline-start: 8px;
+/* The glyph 8px after the name or the count, as in AdminPageHead: 1px of
+   margin and the 7px InfoBubble pads it with for a finger. One class above
+   InfoBubble's own scoped rule, which sets the margin back to -7px and would
+   otherwise win or lose by the order the two stylesheets load in. */
+.asec .asec__heading .sec-head__info {
+  margin-inline-start: 1px;
   vertical-align: -0.1em;
 }
 

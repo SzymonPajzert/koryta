@@ -86,7 +86,7 @@ defineProps<{
 
 /* The title runs inline and the bubble follows its last word, wherever a
  * long title wraps: as a flex row's second item it stood at the far end of
- * the first line on a phone („QA – zmiany (i) / do sprawdzenia”). It stays
+ * the first line on a phone („QA - zmiany (i) / do sprawdzenia”). It stays
  * outside the h1, so the heading's name is the title alone. Balanced here,
  * on the block, since an inline h1 cannot balance its own lines. */
 .apage-head__title {
@@ -99,8 +99,12 @@ defineProps<{
   margin: 0;
 }
 
+/* The glyph 8px after the title's last letter. InfoBubble pads it by 7px on
+ * every side for a finger, with a -7px margin that gives the room back to
+ * the line; the 1px here takes the place of that margin before it, and with
+ * the padding makes the 8px. */
 .apage-head__title :deep(.sec-head__info) {
-  margin-inline-start: 8px;
+  margin-inline-start: 1px;
   vertical-align: baseline;
 }
 
