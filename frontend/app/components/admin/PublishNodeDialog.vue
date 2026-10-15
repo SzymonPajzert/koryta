@@ -45,15 +45,76 @@
         </p>
 
         <template v-else>
+          <!-- Each election whose candidacies stand in two places, as a block
+               of its own above the list: the places side by side, and how often
+               the person stood in each otherwise, which is usually what tells
+               the namesake's run from the career. A rail, like every other list
+               somebody works through on this site. Picked by Szymon on
+               2026-10-15 over one alert above the list with a chip on each of
+               its rows. -->
+          <section
+            v-for="clash in clashes"
+            :key="clashKey(clash)"
+            class="place-clash mb-4"
+            :data-testid="`publish-place-clash-${clashKey(clash)}`"
+          >
+            <div class="place-clash__head">
+              <v-icon :icon="mdiAlertOutline" size="small" />
+              <span>Wybory {{ electionLabel(clash) }} - dwa miejsca naraz</span>
+              <v-icon
+                :icon="mdiInformationOutline"
+                size="x-small"
+                class="place-clash__info"
+              >
+                <v-tooltip activator="parent" location="top" max-width="320">
+                  W jednych wyborach kandyduje się w jednym miejscu, więc co
+                  najmniej jedna z tych kandydatur należy do imiennika.
+                  Opublikuj tę, która pasuje do tej osoby - zwykle tę z miejsca,
+                  gdzie kandydowała też w innych latach - a drugą zostaw
+                  nieopublikowaną. „Zaznacz wszystkie" ich nie zaznacza.
+                </v-tooltip>
+              </v-icon>
+            </div>
+            <v-list density="compact" class="py-0 bg-transparent">
+              <v-list-item
+                v-for="relation in clash.rows"
+                :key="relation.id"
+                :class="{
+                  'text-disabled': !relation.published && !relation.publishable,
+                }"
+                :data-testid="`publish-relation-${relation.id}`"
+              >
+                <template #prepend>
+                  <v-checkbox-btn
+                    :model-value="
+                      relation.published || selected.includes(relation.id)
+                    "
+                    :disabled="relation.published || !relation.publishable"
+                    :data-testid="`publish-relation-check-${relation.id}`"
+                    @update:model-value="toggle(relation.id)"
+                  />
+                </template>
+                <v-list-item-title>
+                  {{ relation.otherName || relation.otherId }}
+                </v-list-item-title>
+                <v-list-item-subtitle>
+                  {{ placeHint(clash, relation.otherId) }}
+                  <span v-if="relation.published"> · już opublikowana</span>
+                </v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+          </section>
+
           <div class="d-flex align-center mb-2">
             <div class="text-subtitle-2">
-              Powiązania ({{ selected.length }}/{{ selectableIds.length }})
+              {{ clashes.length > 0 ? "Pozostałe powiązania" : "Powiązania" }}
+              ({{ listedSelectedCount }}/{{ listedSelectableCount }})
             </div>
             <v-spacer />
             <v-btn
               size="small"
               variant="text"
-              :disabled="selectableIds.length === 0"
+              :disabled="bulkIds.length === 0"
               data-testid="publish-select-all"
               @click="toggleAll"
             >
@@ -63,7 +124,7 @@
 
           <v-list density="compact" class="py-0">
             <v-list-item
-              v-for="relation in candidates"
+              v-for="relation in listed"
               :key="relation.id"
               :class="{ 'text-disabled': !relation.publishable }"
               :data-testid="`publish-relation-${relation.id}`"
@@ -106,6 +167,30 @@
             </v-list-item>
           </v-list>
         </template>
+
+        <!-- What this click would put live, as the night's check will count it:
+             the candidacies already published and the ones ticked. Shown by
+             the button rather than at the top, because it is about the choice
+             just made, and it does not stop the click - the reviewer may know
+             better than a rule about TERYT prefixes. -->
+        <v-alert
+          v-if="clashesAfterPublish.length > 0"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mt-4"
+          data-testid="publish-clash-after"
+        >
+          <span
+            v-for="clash in clashesAfterPublish"
+            :key="clashKey(clash)"
+            class="d-block"
+          >
+            Po publikacji strona pokaże tę osobę w dwóch miejscach w wyborach
+            {{ electionLabel(clash) }}: {{ placeNames(clash) }}.
+          </span>
+          Odznacz kandydaturę, która do niej nie należy.
+        </v-alert>
 
         <v-alert
           v-if="relationsFailed"
@@ -150,13 +235,23 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { mdiEyeOffOutline } from "@mdi/js";
+import {
+  mdiAlertOutline,
+  mdiEyeOffOutline,
+  mdiInformationOutline,
+} from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
 import {
   latestPublishableRevision,
   normalizeUpdateTime,
 } from "~~/shared/revisions";
+import {
+  placeClashes,
+  yearsInPlace,
+  type Candidacy,
+  type PlaceClash,
+} from "~~/shared/twoPlaces";
 import type {
   NodeRelation,
   NodeRelations,
@@ -213,10 +308,80 @@ const selectableIds = computed(() =>
   candidates.value.filter((r) => r.publishable).map((r) => r.id),
 );
 
+/** A relation as the two-places rule reads it: one of this page's own
+ * candidacies, which run from the person to the place. */
+function candidacyOf(relation: NodeRelation): Candidacy | undefined {
+  if (relation.type !== "election" || relation.direction !== "outgoing") {
+    return undefined;
+  }
+  return {
+    personId: props.nodeId,
+    regionId: relation.otherId,
+    startDate: relation.startDate,
+    position: relation.position,
+  };
+}
+
+/** Elections in which this page's candidacies stand in two places, published
+ * or not, newest first like the list. Every PKW record nothing contradicts is
+ * sent to the page since 2026-10-07, so these are usually a namesake's runs
+ * waiting to be rejected - and ticking every relation, which is how both
+ * namesakes that went live (Wiśniewski 10-07, Kowalski 10-14) got there,
+ * publishes them. */
+const clashes = computed(() =>
+  placeClashes(relations.value, candidacyOf).toSorted((a, b) =>
+    b.year.localeCompare(a.year),
+  ),
+);
+
+/** Each clashing relation's clash, by relation id. */
+const clashOf = computed(() => {
+  const byRelation = new Map<string, PlaceClash<NodeRelation>>();
+  for (const clash of clashes.value) {
+    for (const relation of clash.rows) byRelation.set(relation.id, clash);
+  }
+  return byRelation;
+});
+
+/** The clashes this click would put live: among the candidacies already
+ * published and the ones ticked. These are what
+ * `test_nobody_stands_in_two_places_at_once` counts, and one more than it
+ * knows of holds the night's people upload. */
+const clashesAfterPublish = computed(() =>
+  placeClashes(
+    relations.value.filter(
+      (relation) => relation.published || selected.value.includes(relation.id),
+    ),
+    candidacyOf,
+  ),
+);
+
+/** The rows of the main list: everything but the clashing candidacies, which
+ * have blocks of their own above it. */
+const listed = computed(() =>
+  candidates.value.filter((relation) => !clashOf.value.has(relation.id)),
+);
+
+const listedSelectableCount = computed(
+  () => listed.value.filter((relation) => relation.publishable).length,
+);
+
+const listedSelectedCount = computed(
+  () =>
+    listed.value.filter((relation) => selected.value.includes(relation.id))
+      .length,
+);
+
+/** What „Zaznacz wszystkie" ticks: everything that may go live but the
+ * candidacies of a clash, which the reviewer has to pick one by one. */
+const bulkIds = computed(() =>
+  selectableIds.value.filter((id) => !clashOf.value.has(id)),
+);
+
 const allSelected = computed(
   () =>
-    selectableIds.value.length > 0 &&
-    selected.value.length === selectableIds.value.length,
+    bulkIds.value.length > 0 &&
+    bulkIds.value.every((id) => selected.value.includes(id)),
 );
 
 const confirmLabel = computed(() =>
@@ -233,8 +398,56 @@ function revisionDate(updateTime: unknown): string {
   return new Date(iso).toLocaleString("pl-PL");
 }
 
+/** What a row is. A candidacy says which election as well - „kandydatura ·
+ * 2002 · Samorząd" - because every one of them is named „kandydatura", and a
+ * page's seven runs would otherwise read as seven identical rows. In the title
+ * rather than after the place: a phone cuts the subtitle short. */
 function relationLabel(relation: NodeRelation): string {
-  return relation.name || edgeTypeLabels[relation.type] || relation.type;
+  const label = relation.name || edgeTypeLabels[relation.type] || relation.type;
+  if (relation.type !== "election") return label;
+  return [label, relation.startDate?.slice(0, 4), relation.position]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function clashKey(clash: PlaceClash<NodeRelation>): string {
+  return `${clash.year}-${clash.position ?? ""}`;
+}
+
+function electionLabel(clash: PlaceClash<NodeRelation>): string {
+  return clash.position ? `${clash.year} · ${clash.position}` : clash.year;
+}
+
+/** The years, besides the clash's own, in which the person stood in this
+ * place or one containing it - the hint for which run is theirs. */
+function placeHint(clash: PlaceClash<NodeRelation>, regionId: string): string {
+  const others = yearsInPlace(
+    relations.value,
+    candidacyOf,
+    props.nodeId,
+    regionId,
+  ).filter((year) => year !== clash.year);
+  if (others.length === 0) return `tu tylko w ${clash.year}`;
+  return `tu też w ${polishList(others)}`;
+}
+
+/** The places a clash puts the person in, each once, in the order its rows
+ * came - „Powiat kozienicki i Powiat gnieźnieński". */
+function placeNames(clash: PlaceClash<NodeRelation>): string {
+  return polishList(
+    Array.from(
+      new Set(
+        clash.rows.map((relation) => relation.otherName || relation.otherId),
+      ),
+    ),
+  );
+}
+
+/** „a, b i c". */
+function polishList(items: string[]): string {
+  return items.length < 2
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} i ${items.at(-1)}`;
 }
 
 function toggle(id: string) {
@@ -243,8 +456,12 @@ function toggle(id: string) {
     : [...selected.value, id];
 }
 
+/** Ticks everything but a clash's candidacies, keeping any of those the
+ * reviewer already picked; unticks everything. */
 function toggleAll() {
-  selected.value = allSelected.value ? [] : [...selectableIds.value];
+  selected.value = allSelected.value
+    ? []
+    : Array.from(new Set([...selected.value, ...bulkIds.value]));
 }
 
 async function load() {
@@ -352,3 +569,35 @@ function errorMessage(error: unknown): string {
   );
 }
 </script>
+
+<style scoped>
+/* The rail every list somebody works through carries on this site
+   (.interface-design/system.md, `AdminExpandRow`): the row's colour down its
+   left edge and a tinted head - here the warning pair from shared/colors.ts. */
+.place-clash {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 4px;
+  box-shadow: inset 4px 0 0 rgb(var(--v-theme-ink-warning));
+  overflow: hidden;
+}
+
+.place-clash__head {
+  align-items: center;
+  background: rgb(var(--v-theme-surface-warning));
+  color: rgb(var(--v-theme-ink-warning));
+  display: flex;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: 6px;
+  padding: 6px 12px 6px 16px;
+}
+
+.place-clash__info {
+  cursor: help;
+}
+
+.place-clash :deep(.v-list) {
+  padding-left: 4px !important;
+}
+</style>
