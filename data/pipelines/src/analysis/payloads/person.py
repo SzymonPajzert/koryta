@@ -532,6 +532,18 @@ def _iso_date(value: typing.Any) -> str | None:
 
 
 def _extract_companies(row: pd.Series) -> list[Company]:
+    """The person's posts, each spell once (`one_row_per_spell`), in the same
+    order every build (`post_order`).
+
+    `employment` is a duckdb `list` aggregate with no order
+    (`analysis.utils.tables.create_people_table`), and a rebuild hands its
+    items over in another one. A payload listing them as they came changed
+    from night to night with nothing in it changed: of the 9,208 pages both
+    the 2026-10-13 and 10-14 nights planned, 3,369 differed in that alone, and
+    the night took each for a payload it had not sent yet
+    (`jobs.people_import.payload_hash`). Sorted before they are collapsed, so
+    which row of a spell is kept does not hang on that order either.
+    """
     companies = []
     company_list = row.get("companies") or row.get("employment")
     if isinstance(company_list, (list, np.ndarray)):
@@ -548,7 +560,15 @@ def _extract_companies(row: pd.Series) -> list[Company]:
                         end=c.get("end") or c.get("employed_end"),
                     )
                 )
-    return one_row_per_spell(companies)
+    return one_row_per_spell(sorted(companies, key=post_order))
+
+
+def post_order(company: Company) -> list[tuple[bool, str]]:
+    """Where a post goes in a payload: by company, role, start and end, a
+    missing one before any other. Compared as text, so that a None never
+    meets a string in a comparison."""
+    values = (company.krs, company.role, company.start, company.end)
+    return [(value is not None, str(value)) for value in values]
 
 
 def one_row_per_spell(companies: list[Company]) -> list[Company]:
