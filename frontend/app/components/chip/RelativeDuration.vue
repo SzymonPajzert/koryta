@@ -1,8 +1,18 @@
 <template>
-  <div class="d-flex flex-column align-center">
+  <div class="d-flex flex-column align-center" :class="{ 'w-100': bare }">
+    <!-- `bare`: the track alone, as wide as its column, on the quiet .10 tint
+         rather than Vuetify's dark surface-variant - where the caller prints
+         the period itself, beside the bar, the bar is the background to the
+         dates and should not be darker than the period it marks. -->
     <div
-      class="relative-duration-wrapper bg-surface-variant rounded-pill flex-shrink-0"
-      style="height: 6px; width: 200px; position: relative; overflow: hidden"
+      class="relative-duration-wrapper rounded-pill flex-shrink-0"
+      :class="bare ? 'relative-duration--bare' : 'bg-surface-variant'"
+      :style="{
+        height: '6px',
+        width: bare ? '100%' : '200px',
+        position: 'relative',
+        overflow: 'hidden',
+      }"
     >
       <div
         class="bg-success rounded-pill"
@@ -16,7 +26,7 @@
         }"
       />
     </div>
-    <span class="text-caption">{{ description }}</span>
+    <span v-if="!bare" class="text-caption">{{ description }}</span>
   </div>
 </template>
 
@@ -29,6 +39,9 @@ const props = defineProps<{
   end: string | undefined;
   minStart: string | undefined;
   maxEnd: string | undefined;
+  /** The bar without its caption, filling its parent: for a caller that
+   * prints the period in a column of its own. */
+  bare?: boolean;
 }>();
 
 // Shared with the phone layout of `card/EmploymentHistory.vue`, which shows the
@@ -73,3 +86,9 @@ const widthPercent = computed(() => {
   return Math.max(0, Math.min(100, (width / (max - min)) * 100));
 });
 </script>
+
+<style scoped>
+.relative-duration--bare {
+  background: rgba(var(--v-theme-on-surface), 0.1);
+}
+</style>

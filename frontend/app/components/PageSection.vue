@@ -1,12 +1,23 @@
 <template>
   <section>
-    <div class="sec-head">
+    <!-- `mb-2`: the 8px between a heading and what it heads, the gap
+         „Historia powiązań” keeps. A lead's own margin collapses into it. -->
+    <div class="sec-head mb-2">
       <v-icon v-if="icon" :icon="icon" size="18" class="sec-head__icon" />
       <!-- h2: a section of a page whose h1 is the entity's name. -->
       <h2 class="text-h6">{{ title }}</h2>
       <InfoBubble v-if="info || $slots.info" :label="title">
         <slot name="info">{{ info }}</slot>
       </InfoBubble>
+      <!-- How much the section holds - „2 zmiany · 3 pominięte” - on the
+           heading's baseline, where a lead sentence used to say it. -->
+      <span
+        v-if="caption || $slots.caption"
+        class="sec-head__caption"
+        :data-testid="captionTestid"
+      >
+        <slot name="caption">{{ caption }}</slot>
+      </span>
       <!-- Rendered only when somebody filled the slot: an empty `v-spacer` in
            a flex row is a 100%-wide invisible column, which would push a
            heading with no controls hard against the left edge of nothing. -->
@@ -16,20 +27,15 @@
       </template>
     </div>
 
-    <!-- How the section was put together rather than what it found, which
-         is no use in a search result: `data-nosnippet` keeps Google from
-         quoting it ahead of the names below. Honoured on a div, not a <p>. -->
-    <div v-if="lead || $slots.lead" data-nosnippet>
-      <p v-if="lead" class="k-lead">{{ lead }}</p>
-      <!-- The slot form, for the sections that say more than one thing
-           before their entries - a coverage line and a "we are not showing
-           you N of these" line, each with its own testid. It renders the
-           paragraphs itself rather than being wrapped in one here: a `<p>`
-           inside a `<p>` is closed by the parser at the first opening tag,
-           and the second half of the lead would land outside the section's
-           own markup. -->
-      <slot name="lead" />
-    </div>
+    <p v-if="lead" class="k-lead">{{ lead }}</p>
+    <!-- The slot form, for a section that says more than one thing before
+         its entries, or needs a testid on it - the notes' question and their
+         sign-in line. A count goes in `caption` and method behind the (i)
+         instead. It renders the paragraphs
+         itself rather than being wrapped in one here: a `<p>` inside a `<p>`
+         is closed by the parser at the first opening tag, and the second half
+         of the lead would land outside the section's own markup. -->
+    <slot name="lead" />
 
     <slot />
   </section>
@@ -73,5 +79,11 @@ defineProps<{
    * `info` slot instead where it is more than a sentence - a list of examples,
    * say. Nothing a reader needs in order to use the section belongs here. */
   info?: string;
+  /** A count or a short state beside the heading, in the quiet meta size:
+   * what a lead sentence would otherwise spend a line on. Use the `caption`
+   * slot where it needs markup. */
+  caption?: string;
+  /** The caption's `data-testid`, for the tests that read the count. */
+  captionTestid?: string;
 }>();
 </script>

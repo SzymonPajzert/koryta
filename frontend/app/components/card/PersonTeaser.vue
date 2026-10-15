@@ -13,17 +13,18 @@
 
     <div>
       <!-- The latest post as the first row of the history the full page lists,
-           drawn by the card that draws it there - chips, dates and all - so
-           the teaser reads as the page it is a piece of. A company nobody has
-           published is drawn without a link: following it would be a second
-           wall. On a phone it keeps the gutter, where the full page's box
-           bleeds through it: the banner under it is a tinted callout, which
-           keeps its margins, and the two stand on the same edges. -->
+           drawn by the card that draws it there - chips, dates and all, in
+           the page's `ledger` form - so the teaser reads as the page it is a
+           piece of. A company nobody has published is drawn without a link:
+           following it would be a second wall. On a phone it keeps the
+           gutter, where the full page's box bleeds through it: the banner
+           under it is a tinted callout, which keeps its margins, and the two
+           stand on the same edges. -->
       <div
         v-if="historyEdges.length > 0"
         data-testid="person-teaser-employment"
       >
-        <CardEmploymentHistory :edges="historyEdges" unlink-drafts />
+        <CardEmploymentHistory :edges="historyEdges" unlink-drafts ledger />
       </div>
 
       <!-- On the same edges as the history's box above it, and 16px under it:

@@ -171,6 +171,7 @@
         <CardEmploymentHistory
           :edges="edges"
           bleed
+          ledger
           :can-add="canAddRelations"
           :can-cite="canAddRelations"
           :can-correct="canEditRelations"
@@ -282,18 +283,28 @@
              `expandableFrontier` refuses to walk into, entered from the other
              end. Either way the reader can change it in the bar above the
              canvas. -->
-      <LazyGraphContainer
-        v-if="!smAndDown || showGraph"
-        :key="node"
-        class="k-bleed-xs"
-        :focus-node-id="node"
-        :max-depth="entity?.type === 'person' ? 2 : 1"
-      />
-      <div v-else class="d-flex justify-center">
+      <!-- Headed like every other section, so the page reads as a list of
+           titled blocks down to its end rather than a canvas that starts
+           where the last list stops. On a phone the head stands over the
+           button that opens it. Not at all for a page with no relations: its
+           graph is the one node, which is a heading over nothing. -->
+      <PageSection
+        v-if="edges.length > 0"
+        title="Graf powiązań"
+        data-testid="entity-graph"
+      >
+        <LazyGraphContainer
+          v-if="!smAndDown || showGraph"
+          :key="node"
+          class="k-bleed-xs"
+          :focus-node-id="node"
+          :max-depth="entity?.type === 'person' ? 2 : 1"
+        />
         <!-- Flat, not tonal: tonal draws the label in the theme's pale sage
-               on a wash of the same sage, which is 1.73:1. Flat is black on
-               sage. -->
+             on a wash of the same sage, which is 1.73:1. Flat is black on
+             sage. -->
         <v-btn
+          v-else
           color="primary"
           variant="flat"
           :prepend-icon="mdiGraphOutline"
@@ -301,7 +312,7 @@
         >
           Pokaż graf powiązań
         </v-btn>
-      </div>
+      </PageSection>
 
       <!-- Under the graph. The facts themselves are for logged in readers
              only - they are a model's reading of a newspaper, matched by name

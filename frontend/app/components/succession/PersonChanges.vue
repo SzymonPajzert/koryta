@@ -8,33 +8,63 @@
     </div>
   </section>
 
+  <!-- Nothing to show but something withheld: no section, one quiet line
+       under the history it is about - a heading over a sentence that says
+       there is nothing under it is a section of nothing. `mt-3` because it
+       belongs to the block above rather than starting one of its own
+       (`k-sections`, assets/css/edges.css). -->
+  <p
+    v-else-if="!changes.length && hidden"
+    class="k-note succ-note mt-3"
+    data-testid="person-successions-note"
+  >
+    <!-- Not „Brak znanych zmian”: the register does know them, the page just
+         does not name the other person. The count and its (i) wrap as one,
+         so the icon never starts a line on its own. -->
+    Zmiany na stanowiskach:
+    <span class="succ-note__tail">
+      {{ hiddenCount }}
+      <!-- Why none are shown first, then what the section covers: with no
+           pairs on the page, the section's „Skąd te pary.” has nothing to
+           point at. -->
+      <InfoBubble label="Zmiany na stanowisku">
+        <span class="d-block" data-testid="person-successions-hidden">
+          {{ hiddenSentence }}
+        </span>
+        <span class="d-block mt-2" data-testid="person-successions-coverage">
+          {{ coverage }}
+        </span>
+      </InfoBubble>
+    </span>
+  </p>
+
   <!-- Nothing found and nothing withheld: no heading either. A section that
        announces itself over empty space reads as a page that failed to load,
        and on most people this is what the register supports. -->
   <PageSection
-    v-else-if="!empty"
+    v-else-if="changes.length"
     title="Zmiany na stanowisku"
-    :icon="mdiSwapVertical"
+    :caption="caption"
+    caption-testid="person-successions-count"
     data-testid="person-successions"
   >
-    <template #lead>
-      <p class="k-lead" data-testid="person-successions-coverage">
-        {{ coverage }}
-      </p>
-
-      <!-- Why the section is shorter than the register. Said out loud: 896 of
-           6,592 people in the register have a page, so for a logged out reader
-           this is often most of what was found. -->
-      <p
-        v-if="hidden"
-        class="k-lead"
-        data-testid="person-successions-hidden"
-        data-hidden-count="1"
-      >
-        Nie pokazujemy jeszcze {{ hidden }}
-        {{ hidden === 1 ? "zmiany" : "zmian" }} — brakuje strony jednej z osób,
-        więc nie nazywamy jej tutaj.
-      </p>
+    <!-- What the section covers and why it is shorter than the register,
+         behind the heading's (i): the count beside the heading says how much
+         there is, and the five lines of method that stood here pushed the
+         first card off a phone's screen. Said, not dropped - 896 of 6,592
+         people in the register have a page, so for a logged out reader the
+         withheld changes are often most of what was found. -->
+    <template #info>
+      <span class="d-block">
+        <span class="font-weight-semibold">Skąd te pary.</span>{{ " " }}
+        <span data-testid="person-successions-coverage">{{ coverage }}</span>
+      </span>
+      <span v-if="hidden" class="d-block mt-2">
+        <span class="font-weight-semibold">Pominięte zmiany.</span>{{ " " }}
+        <span data-testid="person-successions-hidden">
+          {{ hiddenSentence }}
+        </span>
+      </span>
     </template>
 
     <article
@@ -123,8 +153,8 @@ import {
   mdiAlertCircleOutline,
   mdiArrowRight,
   mdiOfficeBuildingOutline,
-  mdiSwapVertical,
 } from "@mdi/js";
+import { nominativeNoun } from "~/composables/polish";
 import { generateEntityUrl } from "~/composables/slugs";
 import { gapLabel } from "~~/shared/succession";
 import { shortDate } from "~~/shared/dates";
@@ -156,11 +186,6 @@ const { data, status } = usePersonSuccessions(props.personId);
 const failed = computed(() => status.value === "error");
 const posts = computed<PersonSuccession[]>(() => data.value?.posts ?? []);
 const hidden = computed(() => data.value?.hidden ?? 0);
-
-/** Nothing found and nothing withheld - including while the request is still
- * in flight, which is what keeps a section that may not exist from flashing a
- * heading on a client-side navigation. */
-const empty = computed(() => !posts.value.length && !hidden.value);
 
 /* ---------- the cards ---------- */
 
@@ -292,13 +317,38 @@ const coverage = computed(() => {
   const of =
     total === undefined
       ? ""
-      : ` — ${matched.value} z ${total} ${total === 1 ? "powiązania" : "powiązań"}`;
+      : `\u00a0– ${matched.value} z ${total} ${total === 1 ? "powiązania" : "powiązań"}`;
   return (
     `Stanowiska, przy których rejestr wskazuje poprzednika lub następcę${of}. ` +
     "Brak wpisu nie znaczy, że stanowisko było nowe: częściej w rejestrze " +
     "brakuje drugiej strony zmiany."
   );
 });
+
+/** „2 zmiany · 3 pominięte”: the cards below, and the handovers withheld.
+ * Read only while the section is drawn, which is once there are cards. */
+const caption = computed(() => {
+  const shown = changes.value.length;
+  const parts = [
+    `${shown} ${nominativeNoun(shown, "zmiana", "zmiany", "zmian")}`,
+  ];
+  if (hidden.value) parts.push(hiddenCount.value);
+  return parts.join(" · ");
+});
+
+/** „3 pominięte”, agreeing with „zmiana”. */
+const hiddenCount = computed(
+  () =>
+    `${hidden.value} ${nominativeNoun(hidden.value, "pominięta", "pominięte", "pominiętych")}`,
+);
+
+/** Why the section is shorter than the register. */
+const hiddenSentence = computed(
+  () =>
+    `Nie pokazujemy jeszcze ${hidden.value} ` +
+    `${hidden.value === 1 ? "zmiany" : "zmian"}\u00a0– brakuje strony jednej ` +
+    "z osób, więc nie nazywamy jej tutaj.",
+);
 
 /** Three different facts, not one number with a sign - so the pill that says
  * "tego samego dnia" and the one that says the two filings overlap cannot be
@@ -314,6 +364,22 @@ function gapClass(gapDays: number): string {
    its own chrome but its entries are somebody else's component, so a scoped
    rule cannot reach them and every component that tried ended up with a
    slightly different card. What is left here is this section's own idiom. */
+
+/* ---- nothing shown, something withheld: one quiet line ---- */
+
+.succ-note {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-ui-size);
+  line-height: 1.45;
+  margin-bottom: 0;
+}
+
+.succ-note__tail {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
 
 /* ---- one handover ---- */
 

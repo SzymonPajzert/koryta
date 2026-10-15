@@ -1,36 +1,25 @@
 <template>
   <!-- Unboxed: the page's header, ruled off from what follows by the one
-       hairline rather than framed. -->
-  <v-card
-    v-if="type == 'person'"
-    width="100%"
-    variant="flat"
-    rounded="0"
-    class="entity-header"
-  >
-    <!-- `align-center`: without it the row is `align-items: stretch`, so the
-         h2 stretched to the height of the control block on the right and kept
-         its text at the top of that box, while PartyChip centres itself - two
+       hairline rather than framed. Three lines, the way a company's page
+       opens: the name, one line of facts, one row of controls - then the bio. -->
+  <header v-if="type == 'person'" class="entity-header">
+    <!-- `align-center`: PartyChip centres itself, and a name stretched to
+         the height of the row kept its text at the top of that box - two
          alignments in one row, and the chip reading as if it had slipped.
 
          `ga-2` rather than a margin on each child: two parties painted the
          same red - Nowa Lewica and SLD are the same party renamed - ran into
-         one block with nothing between them. The gap is the same 8px `mr-2`
-         was, which is why it comes off the h2 and off ChipDraftStatus here
-         rather than being added on top of them.
+         one block with nothing between them.
 
-         `flex-wrap` + `text-wrap`: on one line a long name kept its full width
-         (the title's `white-space: nowrap` made that its minimum) and the
-         chips - `overflow: hidden`, so free to shrink - took all the squeeze.
-         On a 393px phone „Wioletta Paprocka-Ślusarska” left her „PO” 13px of
-         its 40. Now whatever does not fit goes to the next line whole, and a
-         name too long for the line breaks between its words. -->
+         `flex-wrap`: whatever does not fit goes to the next line whole, and a
+         name too long for the line breaks between its words. On one line the
+         chips - `overflow: hidden`, so free to shrink - took all the squeeze,
+         and on a 393px phone „Wioletta Paprocka-Ślusarska” left her „PO” 13px
+         of its 40. -->
     <!-- The name is the page's h1: the one title every page opens with, at
          the type system's title size (assets/css/type.css). The parties
          beside it are drawn at the title's chip size, set below. -->
-    <v-card-title
-      class="px-0 pt-0 d-flex flex-wrap align-center ga-2 text-wrap entity-head"
-    >
+    <div class="d-flex flex-wrap align-center ga-2 entity-head">
       <h1>
         {{ entity?.name }}
       </h1>
@@ -48,16 +37,46 @@
         :key="party"
         :party="party"
       />
-      <v-spacer />
-      <!-- One row of controls, in the order they escalate: the two an admin
-           gets, then the change anybody may propose, then how interesting the
-           reader found the person. The admin pair sits first so that a reader
-           without the claim is left with exactly the row that was there
-           before - the vote pill stays on the right edge either way.
-           `ms-auto` keeps it there when the row wraps and this block starts a
-           line of its own, past the spacer. Controls, not content, so kept out
-           of search snippets. -->
-      <div class="d-none d-md-flex align-center ga-2 ms-auto" data-nosnippet>
+    </div>
+
+    <!-- Above everything the page says about the person, because while the
+         mark stands, everything it says is about two of them. Admin-only:
+         the component gates itself. -->
+    <AdminNeedsSplitBanner
+      v-if="entity?.id"
+      :node-id="entity.id"
+      :needs-split="personEntity?.needs_split"
+      class="mt-3"
+    />
+
+    <CardPersonInfo :person="personEntity" inline class="mt-2" />
+
+    <!-- One row of controls, on every screen: on a phone the row used to be
+         hidden, so the change anybody may propose was not on the page at all.
+         The reader's two first - „Zaproponuj zmianę” with its words, the one
+         action every signed in reader has, then how interesting they found
+         the person - and then the tools only some readers get, as icons in
+         one group that wraps as a whole: on a phone an admin's five tools
+         make the row's second line rather than splitting round the vote. -->
+    <div class="entity-actions" data-testid="person-actions">
+      <DialogProposeEditNode v-if="entity" :entity="entity">
+        <template #activator="{ props: activatorProps }">
+          <!-- The same button on every entity page (button/ProposeChange). -->
+          <ButtonProposeChange
+            v-bind="activatorProps"
+            class="entity-actions__propose"
+            data-testid="person-propose-change"
+          />
+        </template>
+      </DialogProposeEditNode>
+      <ButtonVoteNumber
+        v-if="entity"
+        :id="entity.id ?? ''"
+        :key="entity.id ?? ''"
+        category="interesting"
+        show-label
+      />
+      <div class="entity-actions__tools">
         <template v-if="isAdmin && entity?.id">
           <!-- The table's "Eksploruj" icon, for the reader who arrived on the
                page directly: the same rejestr.io, Wikipedia and Google queries
@@ -103,64 +122,43 @@
           target="person"
           variant="icon"
         />
-        <DialogProposeEditNode
-          v-if="entity && type === 'person'"
-          :entity="entity"
-        />
-        <ButtonVoteNumber
-          v-if="entity"
-          :id="entity.id ?? ''"
-          :key="entity.id ?? ''"
-          category="interesting"
-          show-label
-        />
       </div>
-    </v-card-title>
-    <v-card-text class="px-0 pt-2 pb-6">
-      <!-- Above everything the page says about the person, because while the
-           mark stands, everything it says is about two of them. Admin-only:
-           the component gates itself. -->
-      <AdminNeedsSplitBanner
-        v-if="entity?.id"
-        :node-id="entity.id"
-        :needs-split="personEntity?.needs_split"
-      />
-      <CardPersonInfo :person="personEntity" class="mb-2" />
-      <!-- Reading text, at a reading measure. On a phone a long bio shows
-           four lines, ending in the clamp's ellipsis, and the rest is one tap
-           away: hidden, not cut, so a screen reader and a search engine still
-           get all of it. Wider screens show it whole. Whether it folds is
-           decided by length rather than measured, so the server's html
-           already has the button and nothing moves when the page hydrates. -->
-      <p
-        v-if="entity?.content"
-        :id="bioId"
-        ref="bio"
-        class="person-bio"
-        :class="{ 'person-bio--folded': bioLong && !bioOpen }"
-        :tabindex="bioLong ? -1 : undefined"
-        data-testid="person-bio"
-      >
-        {{ nbsp(entity.content) }}
-      </p>
-      <!-- A button that goes once the bio is open, rather than a toggle that
-           stays as „Pokaż mniej” (Szymon, 2026-10-15). It is only ever shown
-           collapsed, so `aria-expanded` stays false: it still tells a screen
-           reader the button opens something. -->
-      <v-btn
-        v-if="bioLong && !bioOpen"
-        variant="text"
-        class="person-bio__more px-2"
-        :append-icon="mdiChevronDown"
-        aria-expanded="false"
-        :aria-controls="bioId"
-        data-testid="person-bio-more"
-        @click="openBio"
-      >
-        Pokaż więcej
-      </v-btn>
-    </v-card-text>
-  </v-card>
+    </div>
+
+    <!-- Reading text, at a reading measure. On a phone a long bio shows
+         four lines, ending in the clamp's ellipsis, and the rest is one tap
+         away: hidden, not cut, so a screen reader and a search engine still
+         get all of it. Wider screens show it whole. Whether it folds is
+         decided by length rather than measured, so the server's html
+         already has the button and nothing moves when the page hydrates. -->
+    <p
+      v-if="entity?.content"
+      :id="bioId"
+      ref="bio"
+      class="person-bio"
+      :class="{ 'person-bio--folded': bioLong && !bioOpen }"
+      :tabindex="bioLong ? -1 : undefined"
+      data-testid="person-bio"
+    >
+      {{ nbsp(entity.content) }}
+    </p>
+    <!-- A button that goes once the bio is open, rather than a toggle that
+         stays as „Pokaż mniej” (Szymon, 2026-10-15). It is only ever shown
+         collapsed, so `aria-expanded` stays false: it still tells a screen
+         reader the button opens something. -->
+    <v-btn
+      v-if="bioLong && !bioOpen"
+      variant="text"
+      class="person-bio__more px-2"
+      :append-icon="mdiChevronDown"
+      aria-expanded="false"
+      :aria-controls="bioId"
+      data-testid="person-bio-more"
+      @click="openBio"
+    >
+      Pokaż więcej
+    </v-btn>
+  </header>
 
   <v-card v-if="type == 'place'" width="100%" variant="flat">
     <v-card-title class="headline px-0 text-wrap">
@@ -308,13 +306,43 @@ async function openBio() {
 
 <style scoped>
 .entity-header {
-  background: transparent;
   border-bottom: 1px solid var(--k-line);
-  /* Not Vuetify's `hidden`: the bio's toggle hangs 8px into the gutter, and a
-     clipped card cut its ripple and focus tint off flat at the text's edge.
-     There is nothing here to clip - the card is square and unpainted, and the
-     title row clips itself (`.v-card-title` is `overflow: hidden`). */
-  overflow: visible;
+  padding-bottom: 24px;
+}
+
+/* The controls under the facts: a row that wraps, the tools as one group. */
+.entity-actions,
+.entity-actions__tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.entity-actions {
+  margin-top: 16px;
+}
+
+.entity-actions__tools {
+  flex-wrap: nowrap;
+}
+
+.entity-actions__tools:empty {
+  display: none;
+}
+
+/* The vote's arrows are 32px buttons, sized for the table's rows. In the
+   header on a phone they are the reader's to tap: 40px, the pill with them,
+   and „Zaproponuj zmianę” beside it at the same 40px. */
+@media (max-width: 599.98px) {
+  .entity-actions :deep(.v-btn--icon.v-btn--size-x-small) {
+    height: 40px;
+    width: 40px;
+  }
+
+  .entity-actions__propose {
+    --v-btn-height: 40px;
+  }
 }
 
 /* The parties beside the h1 are set one step up from a list's 12px. */
@@ -325,7 +353,7 @@ async function openBio() {
 .person-bio {
   font-size: 1rem;
   line-height: 1.55;
-  margin: 0;
+  margin: 16px 0 0;
   max-width: 72ch;
 }
 

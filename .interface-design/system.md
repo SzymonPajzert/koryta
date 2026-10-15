@@ -118,6 +118,17 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   stand one 40/32 gap apart. The szyna's fact labels are 12px in sentence
   case, and /admin opens on its work queues. Szymon: "Looks good, I approve
   the changed screenshots".
+- **„Zaproponuj zmianę” is one button on every entity page**: the control
+  tint with the pencil in amber (`button/ProposeChange.vue`), on a person's
+  page and on a company's alike. Szymon: "Zaproponuj zmianę should be amber
+  and uniform" (2026-10-16).
+- **A person's „Historia powiązań” lists the people first**: „Osoby”, then
+  „Obecnie”, „Zakończone” and „Bez dat”. Szymon: "they are in a sense current
+  as well and the crux of the whole website" (2026-10-16).
+- **On a phone, a person's ended posts give their years and current posts
+  their day**: „2023-2024” for a post that ended, „od 19.08.2026” for one
+  held today, on the role's line. Computers keep the full dates on every row.
+  Picked 2026-10-23 (variant C) over full dates on phones too (A).
 
   A lone „—” standing for a missing value, in a table cell or for a date
   nobody recorded, stays: it is a sign, not punctuation (2026-10-23).
@@ -139,5 +150,7 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
 
 - The exact values of the accepted directions, pending his OK on the
   implemented screenshots.
+- The vote pill (↑ 0 ↓): kept as it is for now, to be redesigned later
+  (task redesign-vote-pill, 2026-10-16).
 - The smaller questions in decide-design-review-2026-10-14 (wording, order,
   toggles, an extra font weight, the „Zgłoś” icon on phones).

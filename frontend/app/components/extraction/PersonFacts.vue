@@ -12,39 +12,37 @@
   <PageSection
     v-if="total > 0"
     title="Fakty z artykułów"
-    :icon="mdiTextSearchVariant"
+    :caption="caption"
+    caption-testid="person-extractions-count"
     data-testid="person-extractions"
   >
     <!-- How the facts are judged, behind the heading's „(i)” as the notes'
          instructions are. „Ten tekst podobnie jak w notatce powinien być
          domyślnie schowany bo robi bloat” was said of the four sentences that
-         stood here; none of them is deleted. Signed in only - it explains
-         buttons a logged out reader is not shown. -->
-    <template v-if="user" #info>
-      Przypisane do tej osoby po imieniu i nazwisku. Kliknij fakt, żeby zobaczyć
-      cytat z artykułu, i oceń go przyciskami pod cytatem, a jeśli dotyczy kogoś
-      innego, zgłoś to przyciskiem „To nie ta osoba”. Ten sam fakt z kilku
-      artykułów jest jednym wierszem, z cytatem z każdego z nich. Fakt, który
-      się potwierdza, możesz przenieść do swojej notatki przyciskiem „Dodaj do
-      notatki”, a zatrudnienie albo relację z drugą osobą zapisać w grafie
-      przyciskiem „Utwórz powiązanie”.
-    </template>
-
-    <template #lead>
-      <!-- Said out loud, because the facts look like the rest of the page and
-           are not the same kind of claim: the register above is sourced and
-           reviewed, these are a model's reading of a newspaper, matched to
-           this person by name and not yet judged by anybody. That much stays
-           in the open; the how-to is in the bubble above. -->
-      <p v-if="user" class="k-lead" data-testid="person-extractions-lead">
-        Automatycznie wyszukane w prasie - mogą być błędne.
-      </p>
-      <p v-else class="k-lead" data-testid="person-extractions-count">
-        Znaleźliśmy
-        <strong>{{ polishCounting(total, ...FACT_FORMS) }}</strong>
-        o tej osobie w artykułach prasowych. Ponieważ nie są jeszcze sprawdzone,
-        pokazujemy je tylko zalogowanym osobom.
-      </p>
+         stood here; none of them is deleted. A logged out reader gets why the
+         list is locked instead: the buttons it explains are not theirs. -->
+    <template #info>
+      <span v-if="user" data-testid="person-extractions-lead">
+        <span class="d-block">
+          Przypisane do tej osoby po imieniu i nazwisku. Kliknij fakt, żeby
+          zobaczyć cytat z artykułu, i oceń go przyciskami pod cytatem, a jeśli
+          dotyczy kogoś innego, zgłoś to przyciskiem „To nie ta osoba”.
+        </span>
+        <span class="d-block mt-2">
+          Ten sam fakt z kilku artykułów jest jednym wierszem, z cytatem z
+          każdego z nich.
+        </span>
+        <span class="d-block mt-2">
+          Fakt, który się potwierdza, możesz przenieść do swojej notatki
+          przyciskiem „Dodaj do notatki”, a zatrudnienie albo relację z drugą
+          osobą zapisać w grafie przyciskiem „Utwórz powiązanie”.
+        </span>
+      </span>
+      <span v-else data-testid="person-extractions-why-locked">
+        Fakty, które model wyczytał z artykułów prasowych i przypisał tej osobie
+        po imieniu i nazwisku. Nikt ich jeszcze nie sprawdził, więc pokazujemy
+        je tylko zalogowanym osobom.
+      </span>
     </template>
 
     <!-- Where a new page starts reading from - see `goToPage`. -->
@@ -84,13 +82,13 @@
              person has is the lead paragraph again, in smaller type. Whether
              there is is decided over the whole list, not the page, so a page
              of nothing but unchecked facts still says which side it is on. -->
-        <h4
+        <h3
           v-if="bucket.heading"
-          class="facts-bucket"
+          class="facts-bucket k-group-head"
           :data-testid="`person-extractions-${bucket.key}`"
         >
           {{ bucket.heading }}
-        </h4>
+        </h3>
         <!-- A line per claim, opened on a click - see `ExtractionFactRow`.
              Everything that costs something waits for a line to be opened,
              so a page of them mounts no buttons at all until somebody reads
@@ -181,7 +179,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
-import { mdiTextSearchVariant } from "@mdi/js";
 import { useExtractions } from "~/composables/extractions";
 import { polishCounting } from "~/composables/polish";
 import { useAuthState } from "~/composables/auth";
@@ -265,6 +262,22 @@ const facts = computed<ExtractionFact[]>(() =>
   error.value ? [] : (data.value?.facts ?? []),
 );
 const hidden = computed(() => Math.max(0, total.value - facts.value.length));
+
+/** Beside the heading, the one thing about the facts a reader must not
+ * miss: they look like the rest of the page and are not the same kind of
+ * claim. The register above is sourced and reviewed; these are a model's
+ * reading of a newspaper, matched by name and judged by nobody yet.
+ *
+ * Signed in, no number: the chips under it count lines and the note under
+ * the list counts what was fetched, and „249 faktów” over „Wszystkie (30)”
+ * was a third number for the same list. Logged out the count is all the
+ * section shows, so it leads, with where the facts are. */
+const caption = computed(() => {
+  if (user.value) return "wyszukane automatycznie, mogą być błędne";
+  const where =
+    total.value === 1 ? "widoczny po zalogowaniu" : "widoczne po zalogowaniu";
+  return `${polishCounting(total.value, ...FACT_FORMS)} · ${where}`;
+});
 
 /** Every claim the facts make, with the articles each was read from - see
  * `groupFacts`. What the reader is shown, so it is what everything below
@@ -437,15 +450,12 @@ const buckets = computed(() =>
 </script>
 
 <style scoped>
-/* Sub-heading over a block of lines. Quieter than the section's own heading -
-   it separates two halves of one list rather than announcing a new section. */
+/* Sub-heading over a block of lines, in the group-head role (`k-group-head`,
+   app.vue) as „Obecnie” and „Zakończone” over the history: it separates two
+   halves of one list rather than announcing a new section. An h3 under the
+   section's h2. */
 .facts-bucket {
-  color: rgb(var(--v-theme-ink-neutral));
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  margin-top: 8px;
-  text-transform: uppercase;
+  margin: 16px 0 0;
 }
 
 /* Clear of the heading or the chips above it, and of the pager or the next

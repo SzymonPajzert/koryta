@@ -11,7 +11,6 @@
   <PageSection
     v-if="user || otherSources.length > 0"
     title="Notatki"
-    :icon="mdiNoteTextOutline"
     data-testid="note-editor"
   >
     <!-- A question in the open, and everything else behind the heading's
