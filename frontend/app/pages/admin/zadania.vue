@@ -1,7 +1,8 @@
 <template>
   <!-- Full width takes the layout's padding away too, so the page puts its
-       own back. -->
-  <div class="w-100 pa-3 pa-sm-4">
+       own back: its own sides, and the page-top inset and page-end gap every
+       other page gets from the layout (assets/css/edges.css). -->
+  <div class="w-100 pa-3 pa-sm-4 k-page-top k-page-end">
     <div class="tasks-page__head d-flex align-start flex-wrap ga-2 mb-2">
       <div class="tasks-page__intro">
         <h1 class="text-h5 text-sm-h4 mb-2">Zadania</h1>
