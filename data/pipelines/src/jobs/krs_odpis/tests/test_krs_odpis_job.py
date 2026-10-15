@@ -5,7 +5,10 @@ bucket a list, the clock a counter.
 """
 
 import gzip
+import io
 import json
+import typing
+from dataclasses import asdict
 
 import pandas as pd
 import pytest
@@ -221,6 +224,39 @@ def test_the_queue_adds_what_the_paid_job_owes_the_public_companies_first():
         (E, "refresh"),
         (A, "person_feed"),
     ]
+
+
+def test_the_queue_is_read_as_the_last_krs_job_stored_it(monkeypatch):
+    # Read from disk, the queue's sets come back as lists and its query types
+    # as {"name": ..., "value": ...}: the 2026-10-15 hand run of the night
+    # stopped here, at its first look at a stored queue.
+    queue = [
+        RejestrIOQuery(
+            krs=KRS("29", sources={"bulletin"}),
+            queries=[
+                QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE,
+                QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE,
+            ],
+            reasons=["owned"],
+        ),
+        RejestrIOQuery(
+            person=RejestrIOKey("2145029"),
+            queries=[QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE],
+        ),
+    ]
+    written = pd.DataFrame.from_records([asdict(q) for q in queue]).to_json(
+        orient="records", lines=True
+    )
+    monkeypatch.setattr(
+        job.ScrapeRejestrIO,
+        "read_or_process",
+        lambda self, ctx: pd.read_json(io.StringIO(written), lines=True),
+    )
+    companies = pd.DataFrame({"krs": [A], "is_public": [True]})
+
+    owed = job.owed_candidates(typing.cast(typing.Any, None), companies, {})
+
+    assert [(c.krs, c.reason, c.paid_calls) for c in owed] == [(A, "owned", 2)]
 
 
 def test_changed_since_keeps_what_the_bulletin_names_on_or_after_the_day():
