@@ -38,6 +38,12 @@ class Payload:
 
 class PeopleKMGP(Pipeline[Person]):
     filename = "people_kmgp"
+    #: A big one, as ProcessWiki is: it asks before it runs, and the night
+    #: holds it at its last build (`HELD` in jobs.nightly). It took 6 to 10
+    #: minutes of every night from 2026-10-13 to 15, most of them indexing
+    #: every PKW candidacy and matching names, over a scrape of
+    #: kazdymusigdziespracowac.pl taken by hand - last on 2026-05-17.
+    confirm_run = True
 
     people_pkw: PeoplePKW
     companies_kmgp: CompaniesKMGP
