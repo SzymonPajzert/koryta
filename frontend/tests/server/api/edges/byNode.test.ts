@@ -411,6 +411,53 @@ describe("api/edges/byNode", () => {
     expect(result.relations.map((r) => r.id)).toEqual(["e-ready", "e-blocked"]);
   });
 
+  it("says when a candidacy was and for what office", async () => {
+    // Every candidacy is named „kandydatura", so these are what tell a page's
+    // runs apart - and what the dialog's two-places check groups them by.
+    stored["nodes/teryt3003"] = publishedNode("Powiat gnieźnieński");
+    stored["edges/run"] = {
+      source: "node-1",
+      target: "teryt3003",
+      type: "election",
+      name: "kandydatura",
+      start_date: "2002-01-01",
+      position: "Samorząd",
+    };
+    stored["edges/job"] = employment;
+    stored["nodes/node-2"] = publishedNode("Firma A");
+
+    const relations = byId(await callHandler());
+
+    expect(relations["run"]).toMatchObject({
+      startDate: "2002-01-01",
+      position: "Samorząd",
+    });
+    expect(relations["job"]).toMatchObject({
+      startDate: null,
+      position: null,
+    });
+  });
+
+  it("lists several runs in one place newest first", async () => {
+    stored["nodes/teryt3003"] = publishedNode("Powiat gnieźnieński");
+    for (const year of ["2006", "2018", "2002"]) {
+      stored[`edges/run-${year}`] = {
+        source: "node-1",
+        target: "teryt3003",
+        type: "election",
+        start_date: `${year}-01-01`,
+      };
+    }
+
+    const result = await callHandler();
+
+    expect(result.relations.map((r) => r.id)).toEqual([
+      "run-2018",
+      "run-2006",
+      "run-2002",
+    ]);
+  });
+
   it("reports whether the node itself is published", async () => {
     stored["nodes/node-1"] = { name: "Jan Kowalski", published: false };
 
