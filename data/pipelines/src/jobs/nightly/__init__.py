@@ -44,6 +44,10 @@ The steps, in order (`STEPS`):
     tests       the pipeline tests over those outputs (src/tests/pipelines)
     outputs     the outputs against their baseline (src/tests/e2e)
     invariants  the database invariants over tonight's export
+    companies   koryta_people_import as the people step runs it, with
+                --companies-only: the companies the people it is about to
+                send name that tonight's export has no page for, created
+                first, so that every job goes up with its person
     people      koryta_people_import --scope priority --max-uploads 10: new
                 hires first, then the pages of the people rejestr.io was paid
                 for this week, then the pages with an open note, then at most
@@ -72,6 +76,18 @@ night; only the steps that depend on it are held:
   values) fail every night and do not hold it.
 - `scores` needs the same, and not the people: their outcome only decides
   which new pages there are to rate as well.
+- `companies` writes to the site too, so it runs only when the people may go
+  up - skipped, not held, when they may not, so that a held night still names
+  the people as what it held - and holds nothing back itself: the people go
+  up whatever it did, and the uploader still creates on the way a company it
+  could not.
+
+`companies` plans tonight's people as the people step plans them - one argv
+for both (`people_argv`), the same outputs on disk, nothing sent in between -
+and creates, before they go, the companies they name that the export has no
+page for. Until it, the people step found each one missing only when the site
+took a person without the job there, and created it then and sent the person
+again: 27 companies on 2026-10-13, 16 on 10-14.
 
 `krs_register` holds nothing back, and nothing holds it. A company it finds
 the public owns is in the crawl's queue after tonight's reprocess
@@ -393,6 +409,9 @@ STEPS = (
     Step("tests", "testy", 45),
     Step("outputs", "wyniki", 20),
     Step("invariants", "niezmienniki", 30),
+    # The people's plan, a minute and a half on 2026-10-14, and a request per
+    # company: 16 that night.
+    Step("companies", "firmy", 20),
     Step("people", "osoby", 60),
     Step("scores", "oceny", 30),
     Step("tidy", "porządki", 5, always=True),
@@ -949,6 +968,9 @@ class Night:
             return "wstrzymane: brak kopii bazy"
         if step.name in ("tests", "outputs") and not self.came_through("reprocess"):
             return "wstrzymane: potoki się nie przeliczyły"
+        if step.name == "companies" and (held := self.why_not_upload()):
+            # Skipped, not held: what the night held is the people.
+            return f"pominięte - osoby {held}"
         if step.name in ("people", "scores"):
             return self.why_not_upload()
         return ""
@@ -1289,7 +1311,9 @@ class Night:
             {"KORYTA_EXPORT": self.summary.export},
         )
 
-    def step_people(self, step: Step) -> tuple[str, str, int | None]:
+    def people_argv(self, step: Step) -> list[str]:
+        """The people import as the people step runs it, in `step`'s time.
+        The companies step runs it too, so that the two plan the same people."""
         argv = [
             bin_path("koryta_people_import"),
             "--scope",
@@ -1315,7 +1339,14 @@ class Night:
             argv += ["--export", self.summary.export]
         if self.args.people_dry_run:
             argv.append("--dry-run")
+        return argv
+
+    def step_companies(self, step: Step) -> tuple[str, str, int | None]:
+        argv = [*self.people_argv(step), "--companies-only"]
         return self.judge_job(*self.process(step, argv))
+
+    def step_people(self, step: Step) -> tuple[str, str, int | None]:
+        return self.judge_job(*self.process(step, self.people_argv(step)))
 
     def step_scores(self, step: Step) -> tuple[str, str, int | None]:
         # The models are rebuilt over the newest export of the day; the rest
@@ -1369,6 +1400,15 @@ class Night:
     def describe(self, step: Step) -> str:
         if step.name == "rebuild_held":
             return self.describe_rebuilds()
+        people = (
+            "koryta_people_import --scope priority --max-uploads "
+            f"{self.args.max_uploads} --max-odpis-only-current "
+            f"{self.args.max_odpis_only_current} --max-published "
+            f"{self.args.max_published}"
+            + (" --dry-run" if self.args.people_dry_run else "")
+            # Only a night with the export step has an export to name.
+            + (" --export <the export step's>" if self.needs("export") else "")
+        )
         commands = {
             "export": "wait for tonight's export (its .overall_export_metadata)",
             "krs_free": f"koryta_scrape_krs_free --max-minutes {self.args.krs_minutes}",
@@ -1388,13 +1428,9 @@ class Night:
             "tests": "pytest src/tests/pipelines",
             "outputs": "pytest -m e2e src/tests/e2e",
             "invariants": "pytest -m e2e src/tests/pipelines (tonight's export)",
-            "people": "koryta_people_import --scope priority --max-uploads "
-            f"{self.args.max_uploads} --max-odpis-only-current "
-            f"{self.args.max_odpis_only_current} --max-published "
-            f"{self.args.max_published}"
-            + (" --dry-run" if self.args.people_dry_run else "")
-            # Only a night with the export step has an export to name.
-            + (" --export <the export step's>" if self.needs("export") else ""),
+            "companies": f"{people} --companies-only: the companies the people "
+            "step's people name that the export has no page for, created first",
+            "people": people,
             "scores": "koryta_score_import: every scoring model, tonight's new "
             "pages included",
             "compress": "compressor -incremental -hostname "
@@ -1557,7 +1593,8 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--people-dry-run",
         action="store_true",
-        help="Build and count tonight's people, send none.",
+        help="Build and count tonight's people and the companies they need; "
+        "send none, create none.",
     )
     parser.add_argument(
         "--recent-days",

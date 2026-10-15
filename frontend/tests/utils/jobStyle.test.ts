@@ -152,6 +152,8 @@ describe("counters", () => {
       ...["dropped_changes", "employments_unplaced"],
       // people_import --request: what of a page's people it found.
       ...["matched", "to_change", "to_create", "up_to_date", "left_out"],
+      // people_import --companies-only, which reports as company_import.
+      ...["planned", "companies_created", "updated", "unchanged", "failed"],
       ...["uploaded", "failed", "skipped"],
       ...["written", "retracted", "unchanged", "new_pages", "new_pages_scored"],
       ...["articles", "facts"],
