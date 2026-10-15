@@ -4,6 +4,7 @@ import {
   checkPage,
   entryOf,
   movedCopy,
+  newPerson,
   planSchema,
   type PageStep,
 } from "../../scripts/migrate/remove-namesake-jobs";
@@ -16,6 +17,7 @@ function step(overrides: Partial<PageStep> = {}): PageStep {
     expect_link: link("88058"),
     remove: [],
     move: [],
+    new_pages: [],
     ...overrides,
   };
 }
@@ -56,6 +58,72 @@ describe("planSchema", () => {
         ],
       }),
     ).toThrow();
+  });
+});
+
+describe("planSchema's moves", () => {
+  const job = {
+    edge: "e",
+    target: "c",
+    entry: "206303",
+    reason: "Przeniesione",
+  };
+
+  it("takes a move to the entry's page", () => {
+    expect(() =>
+      planSchema.parse({
+        pages: [{ page: "p", expect_link: null, move: [{ ...job, to: "p2" }] }],
+      }),
+    ).not.toThrow();
+  });
+
+  it("takes a move to a page it makes for the entry", () => {
+    expect(() =>
+      planSchema.parse({
+        pages: [
+          {
+            page: "p",
+            expect_link: null,
+            move: [job],
+            new_pages: [{ entry: "206303", name: "Małgorzata Zielińska" }],
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it("refuses a move with nowhere to go", () => {
+    expect(() =>
+      planSchema.parse({
+        pages: [{ page: "p", expect_link: null, move: [job] }],
+      }),
+    ).toThrow();
+  });
+});
+
+describe("newPerson", () => {
+  it("is the person a split makes: name, link and date, no parties", () => {
+    // The night fills in the rest from the entry's own row once the export
+    // shows a page linking it.
+    expect(
+      newPerson({
+        entry: "206303",
+        name: "Małgorzata Zielińska",
+        birthDate: "1959-08-04",
+      }),
+    ).toEqual({
+      type: "person",
+      name: "Małgorzata Zielińska",
+      parties: [],
+      rejestrIo: "https://rejestr.io/osoby/206303",
+      birthDate: "1959-08-04",
+    });
+  });
+
+  it("leaves out a birth date it does not know", () => {
+    expect(newPerson({ entry: "1", name: "X Y" })).not.toHaveProperty(
+      "birthDate",
+    );
   });
 });
 

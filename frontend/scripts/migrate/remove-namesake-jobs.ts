@@ -54,6 +54,10 @@ import { reportRemaining } from "./remaining";
  *     approving one of those would move it back (`applyRevision` writes the
  *     revision's data over the document). Where that page already says it,
  *     the job is only removed here.
+ *   - `new_pages`: a draft page - name, link, birth date - for an entry that
+ *     has none, to take its moved jobs, where the review judged the record
+ *     worth keeping on the site before a night gets round to the entry. A
+ *     second run finds it by its link and makes no other.
  *
  * WHAT IT WILL NOT DO, each reported and skipped rather than guessed:
  *   - touch a page whose link is not the one the review saw - somebody has
@@ -100,26 +104,64 @@ const move = z.object({
   edge: z.string().min(1),
   target: z.string().min(1),
   entry: z.string().min(1),
-  /** The entry's own page, which gets the job. */
-  to: z.string().min(1),
+  /** The entry's own page, which gets the job; left out for the page this run
+   * creates for it (`new_pages`). */
+  to: z.string().min(1).optional(),
   reason: z.string().trim().min(1),
+});
+
+/** A draft page for an entry that has none, made to take its jobs. */
+const newPage = z.object({
+  entry: z.string().min(1),
+  name: z.string().trim().min(1),
+  birthDate: z.string().min(1).optional(),
 });
 
 export const planSchema = z.object({
   pages: z.array(
-    z.object({
-      page: z.string().min(1),
-      /** The register link the page carried when it was reviewed. */
-      expect_link: z.string().nullable(),
-      set_link: z.string().min(1).optional(),
-      remove: z.array(removal).default([]),
-      move: z.array(move).default([]),
-    }),
+    z
+      .object({
+        page: z.string().min(1),
+        /** The register link the page carried when it was reviewed. */
+        expect_link: z.string().nullable(),
+        set_link: z.string().min(1).optional(),
+        remove: z.array(removal).default([]),
+        move: z.array(move).default([]),
+        new_pages: z.array(newPage).default([]),
+      })
+      .refine(
+        (step) =>
+          step.move.every(
+            (item) =>
+              item.to !== undefined ||
+              step.new_pages.some((page) => page.entry === item.entry),
+          ),
+        "A move with no page to go to needs a new page for its entry.",
+      ),
   ),
 });
 
 export type Plan = z.infer<typeof planSchema>;
 export type PageStep = Plan["pages"][number];
+export type NewPage = z.infer<typeof newPage>;
+
+export function registerLink(entry: string): string {
+  return `https://rejestr.io/osoby/${entry}`;
+}
+
+/** A page made for an entry the way `/api/nodes/split` makes one for the
+ * second person of a page: the person's name, link and date, nothing else -
+ * the night fills in the rest from the entry's own row once it reads the link.
+ */
+export function newPerson(page: NewPage): Record<string, unknown> {
+  return {
+    type: "person",
+    name: page.name,
+    parties: [],
+    rejestrIo: registerLink(page.entry),
+    ...(page.birthDate ? { birthDate: page.birthDate } : {}),
+  };
+}
 
 /** `registerEntry` of the person ingest: the number in a rejestr.io link, else
  * the link. Compared by number, as the ingest compares them, because a link
@@ -217,6 +259,7 @@ type Counts = {
   remove: number;
   move: number;
   link: number;
+  pages: number;
   done: number;
   refused: number;
 };
@@ -352,6 +395,13 @@ async function runPage(
     lines.push(`    remove ${item.edge} (${item.entry})`);
   }
 
+  // The moves that can go ahead, read before any page is made for them: a page
+  // made for an entry whose every job turned out to be gone would be empty.
+  const moving: {
+    item: PageStep["move"][number];
+    edgeRef: DocumentReference;
+    stored: Record<string, unknown>;
+  }[] = [];
   for (const item of step.move) {
     const edgeRef = db.collection("edges").doc(item.edge);
     const snap = await edgeRef.get();
@@ -370,31 +420,106 @@ async function runPage(
       );
       continue;
     }
-    const destination = await db.collection("nodes").doc(item.to).get();
-    const dest = destination.data();
-    if (
-      !destination.exists ||
-      dest?.type !== "person" ||
-      dest.deleted === true ||
-      typeof dest.merged_into === "string" ||
-      entryOf(dest.rejestrIo) !== item.entry
-    ) {
-      counts.refused++;
+    moving.push({ item, edgeRef, stored: stored! });
+  }
+
+  // Where each moving job goes. A page named in the plan is checked to still be
+  // its entry's; an entry of `new_pages` gets the page already linking it -
+  // made by an earlier run, a night or a person - or one made here, which is
+  // not in the database yet and holds nothing.
+  const pageOf = new Map<string, { id: string; made: boolean }>();
+  for (const wanted of step.new_pages) {
+    if (!moving.some(({ item }) => !item.to && item.entry === wanted.entry)) {
+      continue;
+    }
+    const existing = await pagesLinking(
+      db,
+      registerLink(wanted.entry),
+      step.page,
+    );
+    if (existing.length > 1) {
       lines.push(
-        `    SKIP ${item.edge}: ${item.to} is no longer the live page of ${item.entry}`,
+        `    SKIP a page for ${wanted.entry}: it has ${existing.length} ` +
+          `(${existing.join(", ")}) - merge them first`,
       );
       continue;
     }
+    if (existing.length === 1) {
+      pageOf.set(wanted.entry, { id: existing[0]!, made: false });
+      continue;
+    }
+    const madeRef = db.collection("nodes").doc();
+    const { revisionRef } = createRevisionTransaction(
+      db,
+      batch,
+      AUTHOR,
+      madeRef,
+      newPerson(wanted),
+      // Approved because the review is what found the person, and a draft:
+      // like the page a split makes, it is for somebody to read before it is
+      // in front of anybody.
+      { approve: true, published: false },
+    );
+    recordAudit(
+      db,
+      {
+        action: "approve",
+        collection: "nodes",
+        target_id: madeRef.id,
+        revision_id: revisionRef.id,
+        user: AUTHOR.uid,
+      },
+      batch,
+    );
+    pageOf.set(wanted.entry, { id: madeRef.id, made: true });
+    writes++;
+    counts.pages++;
+    lines.push(
+      `    new page ${madeRef.id} for ${wanted.entry} (${wanted.name})`,
+    );
+  }
 
-    const copy = movedCopy(stored!, item.to);
+  for (const { item, edgeRef, stored } of moving) {
+    const target = item.to
+      ? { id: item.to, made: false }
+      : pageOf.get(item.entry);
+    if (!target) {
+      counts.refused++;
+      lines.push(`    SKIP ${item.edge}: no page for ${item.entry} to take it`);
+      continue;
+    }
+    const to = target.id;
+    if (item.to) {
+      const destination = await db.collection("nodes").doc(to).get();
+      const dest = destination.data();
+      if (
+        !destination.exists ||
+        dest?.type !== "person" ||
+        dest.deleted === true ||
+        typeof dest.merged_into === "string" ||
+        entryOf(dest.rejestrIo) !== item.entry
+      ) {
+        counts.refused++;
+        lines.push(
+          `    SKIP ${item.edge}: ${to} is no longer the live page of ${item.entry}`,
+        );
+        continue;
+      }
+    }
+
+    const copy = movedCopy(stored, to);
     const identity = edgeIdentity(copy as EdgeLike);
-    const there = await db
-      .collection("edges")
-      .where("source", "==", item.to)
-      .where("target", "==", copy.target)
-      .where("type", "==", copy.type)
-      .get();
-    const twin = there.docs.find(
+    const there = target.made
+      ? []
+      : (
+          await db
+            .collection("edges")
+            .where("source", "==", to)
+            .where("target", "==", copy.target)
+            .where("type", "==", copy.type)
+            .get()
+        ).docs;
+    const twin = there.find(
       (doc) =>
         doc.data().deleted !== true &&
         edgeIdentity(doc.data() as EdgeLike) === identity,
@@ -402,13 +527,13 @@ async function runPage(
     let created: DocumentReference | undefined;
     if (!twin) {
       created = db.collection("edges").doc(edgeDocumentId(copy as EdgeLike));
-      const taken = await created.get();
-      if (taken.exists) {
+      const taken = target.made ? undefined : await created.get();
+      if (taken?.exists) {
         // The id this job would take there belongs to a relation somebody
         // removed from that page: writing over it would undo that removal.
         counts.refused++;
         lines.push(
-          `    SKIP ${item.edge}: ${created.id} on ${item.to} exists` +
+          `    SKIP ${item.edge}: ${created.id} on ${to} exists` +
             (taken.data()?.deleted === true ? " and was removed" : ""),
         );
         continue;
@@ -435,11 +560,11 @@ async function runPage(
         batch,
       );
     }
-    await removeEdgeInBatch(db, batch, AUTHOR, edgeRef, stored!, item.reason);
+    await removeEdgeInBatch(db, batch, AUTHOR, edgeRef, stored, item.reason);
     writes++;
     counts.move++;
     lines.push(
-      `    move ${item.edge} -> ${item.to} ` +
+      `    move ${item.edge} -> ${to} ` +
         (created ? `as ${created.id}` : `(already there: ${twin!.id})`),
     );
   }
@@ -487,17 +612,26 @@ export async function main(): Promise<void> {
     .slice(0, limit);
   say(`${steps.length} of the plan's ${plan.pages.length} pages:`);
 
-  const counts: Counts = { remove: 0, move: 0, link: 0, done: 0, refused: 0 };
+  const counts: Counts = {
+    remove: 0,
+    move: 0,
+    link: 0,
+    pages: 0,
+    done: 0,
+    refused: 0,
+  };
   for (const step of steps) await runPage(db, step, commit, counts);
 
   say(
     `\n${commit ? "Wrote" : "Would write"}: ${counts.link} links, ` +
-      `${counts.remove} removals, ${counts.move} moves. ` +
+      `${counts.pages} new pages, ${counts.remove} removals, ` +
+      `${counts.move} moves. ` +
       `Already done: ${counts.done}. Skipped: ${counts.refused}.`,
   );
   if (!commit) {
     reportRemaining({
       links: counts.link,
+      pages: counts.pages,
       removals: counts.remove,
       moves: counts.move,
     });
