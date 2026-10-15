@@ -96,7 +96,7 @@
           <CardAction
             :icon="mdiMessageAlertOutline"
             title="Napisz, co jest nie tak"
-            desc="Błąd w danych, literówka, pomysł na stronę – wystarczy jedno zdanie, także anonimowo. To ten sam przycisk, który masz w prawym dolnym rogu każdej strony."
+            desc="Błąd w danych, literówka, pomysł na stronę – wystarczy jedno zdanie, także anonimowo. To ten sam przycisk, który masz na górnym pasku każdej strony."
             ink="ink-sage"
             access="none"
             @activate="openFeedback"
@@ -401,8 +401,8 @@
         <InfoBubble label="Piszesz kod?">
           Nuxt i Vue po stronie serwisu, Python po stronie danych. Instrukcja
           uruchomienia jest w README. Jeśli nie masz konta na GitHubie, a chcesz
-          coś zgłosić – użyj przycisku „Zgłoś” w prawym dolnym rogu, trafi do
-          nas tak samo.
+          coś zgłosić – użyj przycisku „Zgłoś” na górnym pasku, trafi do nas tak
+          samo.
         </InfoBubble>
       </div>
       <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
@@ -448,8 +448,8 @@
         </v-expansion-panel>
       </v-expansion-panels>
       <p class="text-caption text-medium-emphasis mt-3 mb-0">
-        Nie ma tu Twojego pytania? Napisz – przycisk zgłoszenia jest w prawym
-        dolnym rogu każdej strony.
+        Nie ma tu Twojego pytania? Napisz – przycisk zgłoszenia jest na górnym
+        pasku każdej strony.
       </p>
     </section>
 

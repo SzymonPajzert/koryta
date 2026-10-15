@@ -110,7 +110,7 @@
 
 <script setup lang="ts">
 import { mdiClose, mdiCheckCircleOutline, mdiLinkVariant } from "@mdi/js";
-import { ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
   feedbackKindConfig,
@@ -152,6 +152,30 @@ watch(open, (isOpen) => {
   // who cleared the field and then reopened the dialog meant it.
   if (!contactTouched.value) contact.value = user.value?.email ?? "";
 });
+
+/** Whatever had the focus when the dialog opened - „Zgłoś” in the bar, the
+ * home call to action, the card on /pomoc - so that closing it puts a keyboard
+ * reader back where they were. Every one of them opens it through the shared
+ * state rather than as its activator, and Vuetify hands the focus back to an
+ * activator only: without this it fell to <body>. `sync`, to read the focus
+ * before the dialog takes it. */
+let returnFocus: HTMLElement | null = null;
+watch(
+  open,
+  (isOpen) => {
+    if (isOpen) {
+      returnFocus =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      return;
+    }
+    const target = returnFocus;
+    returnFocus = null;
+    void nextTick(() => target?.focus({ preventScroll: true }));
+  },
+  { flush: "sync" },
+);
 
 const close = () => {
   open.value = false;
