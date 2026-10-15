@@ -1,41 +1,23 @@
-import { test, expect, type Page } from "@playwright/test";
-import { waitForLoginFormHydrated } from "./helpers/login";
+import { test, expect } from "@playwright/test";
+import { logIn, USERS } from "./helpers/auth";
 
-/** The logged in toolbar (Rewizje, Aktywność, the "Zespół" menu, ...) does not
- * fit on a phone. Vuetify clips `.v-toolbar__content`, which used to leave the
- * trailing buttons unreachable - no scrolling, no overflow menu. The layout now
- * lets that strip scroll sideways, so the test asserts both halves of the fix:
- * the content really does overflow, and it can be scrolled to the last
- * button. */
+/** The logged in toolbar (Admin, Rewizje, Aktywność, the "Zespół" menu, ...)
+ * does not always fit on a phone. Vuetify clips `.v-toolbar__content`, which
+ * used to leave the trailing buttons unreachable - no scrolling, no overflow
+ * menu. The layout now lets that strip scroll sideways, so the test asserts
+ * both halves of the fix: the content really does overflow, and it can be
+ * scrolled to the last button. */
 
-// Narrow enough that the toolbar overflows even for a non admin, who only sees
-// the three always-on buttons.
+// The narrowest phone in use. Since the site-wide redesign set the strip's
+// labels in sentence case, a reader's three buttons fit in it; an admin's
+// four - „Admin” first - still run past it, so the test signs in as one.
 const PHONE = { width: 320, height: 700 };
-
-async function registerAndLogIn(page: Page) {
-  await page.goto("/login");
-  await waitForLoginFormHydrated(page);
-
-  await page.locator("text=Nie masz konta? Zarejestruj się").click();
-  await expect(page.locator('button:has-text("Stwórz konto")')).toBeVisible();
-
-  await page.locator("input#email").fill(`toolbar${Date.now()}@example.com`);
-  await page.locator("input#password").fill("password123");
-
-  // "Wysłano email weryfikacyjny" confirmation.
-  page.on("dialog", (dialog) => dialog.accept());
-  await page.locator('button:has-text("Stwórz konto")').click();
-
-  await page.waitForURL((url) => !url.pathname.includes("/login"), {
-    timeout: 15_000,
-  });
-}
 
 test.describe("Logged in toolbar on a phone", () => {
   test.use({ viewport: PHONE });
 
   test("overflowing buttons can be scrolled into view", async ({ page }) => {
-    await registerAndLogIn(page);
+    await logIn(page, USERS.admin);
 
     const content = page.locator(".user-toolbar .v-toolbar__content");
     await expect(content).toBeVisible();
