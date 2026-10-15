@@ -5,6 +5,15 @@
    - Always use `<script setup lang="ts">`.
    - Rely on Nuxt auto-imports; do not manually import Vue/Nuxt composables unless necessary.
 
+1. **Design and Vuetify**:
+   - The site's design decisions are in `.interface-design/system.md` at the
+     repo root. Only Szymon's dated decisions go there; propose a new rule as a
+     task instead of writing it in.
+   - The Vuetify MCP server (`vuetify-mcp`), where it is installed, answers for
+     Vuetify 4 unless told otherwise. Always pass the installed version
+     (`npm ls vuetify`, 3.13.0 in October 2026). Its feature and install guides
+     are v4 docs, and its vuetify0 and upgrade tools are for other projects.
+
 1. **Self-Correction**: Before finishing the run perform the following steps:
    - `npm run quick-check` to identify any issues. If there are some, address them first.
    - After it passes run e2e tests using `npm run test:e2e`.
