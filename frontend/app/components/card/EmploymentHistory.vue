@@ -10,8 +10,20 @@
     variant="flat"
     data-testid="relations-history"
   >
-    <div class="d-flex align-center justify-space-between mb-2">
-      <h2 class="text-h6">Historia powiązań</h2>
+    <div class="d-flex align-center justify-space-between ga-2 mb-2">
+      <!-- On a company's page, how many people the list holds and how far
+           back it goes, beside the heading as „Obecny skład” carries its
+           date. -->
+      <div class="sec-head">
+        <h2 class="text-h6">Historia powiązań</h2>
+        <span
+          v-if="companyCaption"
+          class="text-caption text-medium-emphasis"
+          data-testid="history-caption"
+        >
+          {{ companyCaption }}
+        </span>
+      </div>
       <!-- The control tint rather than `variant="text" color="primary"`:
            sage ink on white is 1.85:1 on this theme, and this is the one
            control in the section. -->
@@ -277,6 +289,7 @@ import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { placeClashes, type PlaceClash } from "~~/shared/twoPlaces";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~/composables/slugs";
+import { plural } from "~/utils/jobStyle";
 
 /** Whoever held a seat before the spell an edge records, as the successions
  * endpoint names them, plus how many seats changed hands that day. */
@@ -409,6 +422,22 @@ const clashOf = computed(() => {
     for (const row of clash.rows) byRow.set(row, clash);
   }
   return byRow;
+});
+
+/** „4 osoby · wpisy od 2016”, on a company's page only. People are counted by
+ * their page, so two spells of one person are one person and two namesakes
+ * stay two; the year is the earliest start among their rows. */
+const companyCaption = computed(() => {
+  if (!props.company) return "";
+  const people = listedEdges.value.filter((e) => e.richNode.type === "person");
+  const count = new Set(people.map((e) => e.richNode.id)).size;
+  if (!count) return "";
+  const parts = [`${count} ${plural(count, "osoba", "osoby", "osób")}`];
+  const years = people
+    .map((e) => Number(e.start_date?.slice(0, 4)))
+    .filter((year) => year > 0);
+  if (years.length) parts.push(`wpisy od ${Math.min(...years)}`);
+  return parts.join(" · ");
 });
 
 const edgesSorted = computed(() => {

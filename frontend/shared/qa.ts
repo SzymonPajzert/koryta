@@ -59,6 +59,29 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "dymek-i-na-telefonie-zostaje",
+    title: "Dymek (i) na telefonie zostaje otwarty",
+    description:
+      "Na telefonie dymek (i) przy nagłówkach otwierał się po stuknięciu i po pół sekundy sam znikał. Teraz stuknięcie go otwiera, a stuknięcie obok zamyka.",
+    steps: [
+      "Na telefonie otwórz /pomoc i stuknij (i) przy nagłówku - dymek zostaje, aż stukniesz obok.",
+    ],
+    link: "/pomoc",
+    area: "public",
+  },
+  {
+    id: "strona-spolki-ludzie-najpierw",
+    title: "Strona spółki zaczyna się od ludzi",
+    description:
+      "Pod nazwą spółki jest jeden wiersz faktów i jeden rząd przycisków, a od razu po nim obecny skład i „Historia powiązań”. Puste sekcje zniknęły: to, czego nie wiemy, mówi jedna szara linia pod listą osób, a wyjaśnienia i metoda są w jej dymku (i).",
+    steps: [
+      "Otwórz stronę spółki bez obecnego składu (np. WGT w Tarnowie) - pod nazwą są przyciski „Zaproponuj zmianę”, „Eksploruj powiązania” i „Graf połączeń”, a zaraz pod nimi lista osób i linia „Nie znamy obecnego składu…” z dymkiem (i).",
+      "Na telefonie ta sama strona - „Zaproponuj zmianę” ma napis, pozostałe przyciski są ikonami (narzędzia admina przechodzą do drugiego rzędu).",
+      "Na stronie spółki lub osoby z artykułami sekcja „Artykuły, które o tym wspominają” nie ma ikony, a zdanie o źródłach jest w dymku (i).",
+    ],
+    area: "public",
+  },
+  {
     id: "glowna-nowy-naglowek-i-powiaty",
     title: "Strona główna: nowy nagłówek i powiaty obok mapy",
     description:

@@ -1,5 +1,10 @@
 <template>
-  <v-tooltip location="bottom start" max-width="360" open-on-click>
+  <v-tooltip
+    location="bottom start"
+    max-width="360"
+    open-on-click
+    :open-on-hover="canHover"
+  >
     <template #activator="{ props: infoProps }">
       <v-icon
         v-bind="infoProps"
@@ -40,11 +45,27 @@ defineProps<{
   /** What the bubble explains, for the accessible name: „Co to jest: …”. */
   label: string;
 }>();
+
+/** Whether the reader's pointer can hover. A phone's cannot, and a tap sends
+ * an emulated hover and then a click: the hover opened the bubble and the
+ * click, being a toggle, shut it again half a second later - on every (i) on
+ * the site. Where nothing hovers, the tap is the only way in (and hover off
+ * takes Vuetify's open-on-focus with it). Read after mounting, so the server's
+ * render and the first one in the browser agree. */
+const canHover = ref(true);
+onMounted(() => {
+  canHover.value = window.matchMedia("(hover: hover)").matches;
+});
 </script>
 
 <style scoped>
-/* Cursor only - the tint is `sec-head__icon`'s, which is global in `app.vue`. */
+/* The tint is `sec-head__icon`'s, which is global in `app.vue`. The 18px
+   glyph is padded to a 32px target for a finger, and the negative margin
+   gives the padding back, so the line it sits on does not move. */
 .sec-head__info {
+  box-sizing: content-box;
   cursor: pointer;
+  margin: -7px;
+  padding: 7px;
 }
 </style>

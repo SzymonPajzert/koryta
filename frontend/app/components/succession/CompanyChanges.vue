@@ -1,329 +1,311 @@
 <template>
-  <!-- Two sections of the page in one component, so they take the page's
-       gap between them too (`k-sections`, assets/css/edges.css). -->
-  <section class="k-sections" data-testid="company-successions">
-    <div v-if="loading" class="text-center py-8">
-      <v-progress-circular indeterminate />
-    </div>
+  <div
+    v-if="part === 'current' && loading"
+    class="text-center py-8"
+    data-testid="successions-loading"
+  >
+    <!-- One of three parts of the company page, picked by `part`, all off
+         the page's one request. A part with nothing to show renders nothing
+         at all - no heading over a note that the heading is empty - and what
+         it would have said goes into the `absent` part's one line.
 
-    <div
-      v-else-if="failed"
-      class="k-note text-caption text-medium-emphasis d-flex align-center ga-2"
-      data-testid="successions-error"
-    >
-      <v-icon :icon="mdiAlertCircleOutline" size="15" />
-      <span>Nie udało się wczytać zmian kadrowych. Odśwież stronę.</span>
-    </div>
+         The comments go inside the branches, not between them: in a dev
+         build a comment there joins the next branch as a fragment, and the
+         class the page passes in never reaches the element. -->
+    <v-progress-circular indeterminate />
+  </div>
 
-    <!-- Nothing at all: one sentence rather than two headings over empty
-         space, which reads as a page that failed to load. -->
-    <div
-      v-else-if="nothingToShow"
-      class="k-note text-caption text-medium-emphasis d-flex align-start ga-2"
-      data-testid="successions-empty"
-    >
-      <v-icon :icon="mdiEyeOffOutline" size="15" class="mt-1" />
-      <span>
-        Nie mamy wpisów kadencyjnych dla: {{ companyName }}. Kiedy rejestr poda
-        daty powołania i odwołania, pojawi się tu obecny skład i to, kto kogo
-        zastąpił.
+  <div
+    v-else-if="part === 'current' && failed"
+    class="k-note text-caption text-medium-emphasis d-flex align-center ga-2"
+    data-testid="successions-error"
+  >
+    <v-icon :icon="mdiAlertCircleOutline" size="15" />
+    <span>Nie udało się wczytać zmian kadrowych. Odśwież stronę.</span>
+  </div>
+
+  <div
+    v-else-if="part === 'absent' && ready && absentLine"
+    class="company-absent"
+    data-testid="company-absent"
+  >
+    <!-- What the page does not have, in one muted line after the people,
+         and the sentences that used to stand in each empty section behind
+         its (i): hidden, not deleted. -->
+    <v-icon
+      :icon="mdiEyeOffOutline"
+      size="16"
+      class="company-absent__icon"
+      aria-hidden="true"
+    />
+    <span>
+      {{ absentHead }}
+      <!-- The last word and the (i) as one unbreakable piece: an icon is a
+           box of its own, and on a phone it wrapped onto a line by itself. -->
+      <span class="text-no-wrap"
+        >{{ absentTail }}
+        <InfoBubble label="Czego tu brakuje">
+          <span
+            v-for="item in absentInfo"
+            :key="item.testid"
+            class="d-block company-absent__why"
+            :data-testid="item.testid"
+          >
+            <strong>{{ item.title }}.</strong> {{ nbsp(item.text) }}
+          </span>
+        </InfoBubble></span
+      >
+    </span>
+  </div>
+
+  <section
+    v-else-if="part === 'current' && ready && currentGroups.length"
+    data-testid="successions-current"
+  >
+    <!-- ============ obecny skład ============ -->
+    <div class="sec-head mb-1">
+      <h2 class="text-h6">Obecny skład</h2>
+      <span class="text-caption text-medium-emphasis">
+        wpisy bez daty zakończenia, stan na {{ longDate(today) }}
       </span>
     </div>
 
-    <template v-else>
-      <!-- ============ 1. obecny skład ============ -->
-      <section data-testid="successions-current">
-        <div class="sec-head mb-1">
-          <h2 class="text-h6">Obecny skład</h2>
-          <!-- `data-nosnippet`: Google opened a company's search result on
-               this caption, which says nothing about the company. -->
-          <span class="text-caption text-medium-emphasis" data-nosnippet>
-            wpisy bez daty zakończenia, stan na {{ longDate(today) }}
-          </span>
-        </div>
+    <div
+      v-for="group in currentGroups"
+      :key="group.key"
+      class="mt-4"
+      :data-testid="`current-role-${group.key}`"
+    >
+      <div class="role-head">
+        <v-icon :icon="mdiOfficeBuildingOutline" size="15" />{{ group.role
+        }}<span class="count">{{
+          count(group.people.length, "osoba", "osoby", "osób")
+        }}</span>
+      </div>
 
-        <div
-          v-for="group in currentGroups"
-          :key="group.key"
-          class="mt-4"
-          :data-testid="`current-role-${group.key}`"
+      <v-row dense>
+        <v-col
+          v-for="{ post, predecessor } in group.people"
+          :key="post.edgeId"
+          cols="12"
+          md="6"
         >
-          <!-- The leading spaces in this card are for a reader of the text
-               rather than of the layout: Google's snippet ran the role into
-               the count, "Zarząd1 osoba", and the date into the tenure. Each
-               sits at the start of a flex item, where it is never drawn. -->
-          <div class="role-head">
-            <v-icon :icon="mdiOfficeBuildingOutline" size="15" />{{ group.role
-            }}<span class="count">{{
-              ` ${count(group.people.length, "osoba", "osoby", "osób")}`
-            }}</span>
-          </div>
+          <div class="k-card k-card--accent pa-4 pl-5 h-100">
+            <div class="d-flex align-start ga-3">
+              <div class="av av--in">{{ initials(post.personName) }}</div>
+              <div class="flex-grow-1 rl-txt">
+                <div class="d-flex align-center flex-wrap ga-2">
+                  <NuxtLink
+                    :to="personUrl(post)"
+                    class="link-plain text-subtitle-1 font-weight-bold"
+                    >{{ post.personName }}</NuxtLink
+                  >
+                  <PartyChip
+                    v-for="party in post.parties"
+                    :key="party"
+                    :party
+                  />
+                </div>
 
-          <v-row dense>
-            <v-col
-              v-for="{ post, predecessor } in group.people"
-              :key="post.edgeId"
-              cols="12"
-              md="6"
-            >
-              <div class="k-card k-card--accent pa-4 pl-5 h-100">
-                <div class="d-flex align-start ga-3">
-                  <!-- A picture of the name printed beside it. Read as
-                       text it is noise - the snippet said "RB." -->
-                  <div class="av av--in" aria-hidden="true" data-nosnippet>
-                    {{ initials(post.personName) }}
-                  </div>
-                  <div class="flex-grow-1 rl-txt">
-                    <div class="d-flex align-center flex-wrap ga-2">
-                      <NuxtLink
-                        :to="personUrl(post)"
-                        class="link-plain text-subtitle-1 font-weight-bold"
-                        >{{ post.personName }}</NuxtLink
-                      >
-                      <PartyChip
-                        v-for="party in post.parties"
-                        :key="party"
-                        :party
-                      />
-                    </div>
+                <div class="d-flex align-center flex-wrap ga-2 mt-2">
+                  <span class="now-pill">
+                    <v-icon :icon="mdiCalendarBlankOutline" size="13" />
+                    {{
+                      post.start
+                        ? `od ${longDate(post.start)}`
+                        : "bez daty powołania"
+                    }}
+                  </span>
+                  <span
+                    v-if="duration(post.start, null)"
+                    class="text-caption text-medium-emphasis"
+                  >
+                    {{ duration(post.start, null) }} na stanowisku
+                  </span>
+                </div>
 
-                    <div class="d-flex align-center flex-wrap ga-2 mt-2">
-                      <span class="now-pill">
-                        <v-icon :icon="mdiCalendarBlankOutline" size="13" />
-                        {{
-                          post.start
-                            ? `od ${longDate(post.start)}`
-                            : "bez daty powołania"
-                        }}
-                      </span>
-                      <span
-                        v-if="duration(post.start, null)"
-                        class="text-caption text-medium-emphasis"
-                      >
-                        {{ ` ${duration(post.start, null)}` }} na stanowisku
-                      </span>
-                    </div>
-
-                    <div
-                      v-if="predecessor"
-                      class="text-caption text-medium-emphasis mt-2 d-flex align-center flex-wrap ga-1"
-                    >
-                      <v-icon :icon="mdiSwapVertical" size="14" />
-                      <span>wcześniej na tym stanowisku:</span>
-                      <span
-                        v-if="predecessor.batchSize > 1"
-                        :title="batchNote(predecessor.batchSize)"
-                        >{{ " m.in." }}</span
-                      >
-                      <NuxtLink
-                        :to="personUrl(predecessor)"
-                        class="link-plain font-weight-medium"
-                        >{{ ` ${predecessor.personName}` }}</NuxtLink
-                      >
-                      <PartyChip
-                        v-for="party in predecessor.parties"
-                        :key="party"
-                        :party
-                      />
-                    </div>
-                  </div>
+                <div
+                  v-if="predecessor"
+                  class="text-caption text-medium-emphasis mt-2 d-flex align-center flex-wrap ga-1"
+                >
+                  <v-icon :icon="mdiSwapVertical" size="14" />
+                  <span>wcześniej na tym stanowisku:</span>
+                  <span
+                    v-if="predecessor.batchSize > 1"
+                    :title="batchNote(predecessor.batchSize)"
+                    >m.in.</span
+                  >
+                  <NuxtLink
+                    :to="personUrl(predecessor)"
+                    class="link-plain font-weight-medium"
+                    >{{ predecessor.personName }}</NuxtLink
+                  >
+                  <PartyChip
+                    v-for="party in predecessor.parties"
+                    :key="party"
+                    :party
+                  />
                 </div>
               </div>
-            </v-col>
-          </v-row>
-        </div>
+            </div>
+          </div>
+        </v-col>
+      </v-row>
+    </div>
+  </section>
 
-        <div
-          v-if="!currentGroups.length"
-          class="k-note text-caption text-medium-emphasis d-flex align-start ga-2 mt-4"
-          data-testid="current-empty"
+  <section
+    v-else-if="part === 'relay' && ready && successions.length"
+    data-testid="successions-relay"
+  >
+    <!-- ============ kto kogo zastąpił ============ -->
+    <div class="sec-head mb-4">
+      <h2 class="text-h6">Kto kogo zastąpił</h2>
+      <!-- How the pairs are made, and what is left out, behind the (i):
+           the method was four lines of 12px prose between the heading and
+           the first card. -->
+      <InfoBubble label="Kto kogo zastąpił">
+        <span
+          v-for="item in relayInfo"
+          :key="item.testid"
+          class="d-block company-absent__why"
+          :data-testid="item.testid"
         >
-          <v-icon :icon="mdiEyeOffOutline" size="15" class="mt-1" />
-          <!-- Two reasons, and the section cannot tell them apart: the
-               endpoint drops a post whose holder has no page without counting
-               it, the way the rest of the site does. -->
-          <span>
-            Nie mamy tu nikogo z otwartym wpisem: albo każdy wpis, który znamy,
-            ma już datę zakończenia, albo brakuje strony osoby, która zajmuje
-            stanowisko.
-          </span>
-        </div>
-      </section>
+          <strong>{{ item.title }}.</strong> {{ nbsp(item.text) }}
+        </span>
+      </InfoBubble>
+      <!-- The count says how many it leaves out, so four handovers out of
+           sixty never read as the whole register. -->
+      <span
+        class="text-caption text-medium-emphasis"
+        data-testid="successions-count"
+      >
+        {{ count(successions.length, "zmiana", "zmiany", "zmian") }} w
+        {{ count(roleSections.length, "funkcji", "funkcjach", "funkcjach")
+        }}<template v-if="hidden">
+          ·
+          {{ count(hidden, "pominięta", "pominięte", "pominiętych") }}</template
+        >
+      </span>
+    </div>
 
-      <!-- ============ 2. kto kogo zastąpił ============ -->
-      <section data-testid="successions-relay">
-        <div class="sec-head mb-1">
-          <h2 class="text-h6">Kto kogo zastąpił</h2>
+    <div
+      v-for="section in roleSections"
+      :key="section.key"
+      class="mb-8"
+      :data-testid="`succession-role-${section.key}`"
+    >
+      <div class="role-head">
+        <v-icon :icon="mdiOfficeBuildingOutline" size="15" />{{ section.role
+        }}<span class="count">{{
+          count(section.count, "zmiana", "zmiany", "zmian")
+        }}</span>
+      </div>
+      <div class="rl-legend">
+        <span>Ustępuje</span><span /><span>Obejmuje stanowisko</span>
+      </div>
+
+      <div
+        v-for="batch in section.batches"
+        :key="batch.key"
+        class="k-card k-card--accent mb-3"
+        :class="{ 'ev--batch': batch.pairs.length > 1 }"
+        data-testid="succession-batch"
+      >
+        <div class="ev-head">
+          <span class="ev-date">{{
+            batch.date ? longDate(batch.date) : "Bez daty w rejestrze"
+          }}</span>
           <span
-            v-if="successions.length"
-            class="text-caption text-medium-emphasis"
-            data-testid="successions-count"
+            v-if="batch.pairs.length > 1"
+            class="ev-badge"
+            data-testid="batch-count"
           >
-            {{ count(successions.length, "zmiana", "zmiany", "zmian") }} w
-            {{
-              count(roleSections.length, "funkcji", "funkcjach", "funkcjach")
-            }}
+            {{ count(batch.pairs.length, "zmiana", "zmiany", "zmian") }}
+            tego samego dnia
+          </span>
+          <span
+            v-if="batch.pairs.length > 1 && batch.tally.length"
+            class="ev-sub"
+            data-testid="batch-parties"
+          >
+            wśród ustępujących: {{ batch.tally.join(", ") }}
           </span>
         </div>
-        <!-- How the pairs were made, not who they are: kept out of search
-             results, which honour `data-nosnippet` on a div but not a <p>. -->
-        <div data-nosnippet>
-          <p class="text-caption text-medium-emphasis mb-6 relay-intro">
-            Pary dobrane 1:1 w obrębie tej spółki i tej samej funkcji: koniec
-            jednego wpisu i początek kolejnego w oknie od
-            {{ MAX_OVERLAP_DAYS }} dni przed do {{ MAX_GAP_DAYS }} dni po. Wpisy
-            z tego samego dnia zebrano w jedno zdarzenie.
-          </p>
-        </div>
 
-        <div
-          v-for="section in roleSections"
-          :key="section.key"
-          class="mb-8"
-          :data-testid="`succession-role-${section.key}`"
-        >
-          <div class="role-head">
-            <v-icon :icon="mdiOfficeBuildingOutline" size="15" />{{
-              section.role
-            }}<span class="count">{{
-              ` ${count(section.count, "zmiana", "zmiany", "zmian")}`
-            }}</span>
-          </div>
-          <div class="rl-legend" data-nosnippet>
-            <span>Ustępuje</span><span /><span>Obejmuje stanowisko</span>
-          </div>
-
+        <div class="ev-body">
           <div
-            v-for="batch in section.batches"
-            :key="batch.key"
-            class="k-card k-card--accent mb-3"
-            :class="{ 'ev--batch': batch.pairs.length > 1 }"
-            data-testid="succession-batch"
+            v-for="pair in batch.pairs"
+            :key="`${pair.left.edgeId}-${pair.joined.edgeId}`"
+            class="rl-row"
+            data-testid="succession-row"
           >
-            <div class="ev-head">
-              <span class="ev-date">{{
-                batch.date ? longDate(batch.date) : "Bez daty w rejestrze"
-              }}</span>
-              <span
-                v-if="batch.pairs.length > 1"
-                class="ev-badge"
-                data-testid="batch-count"
-              >
-                {{ count(batch.pairs.length, "zmiana", "zmiany", "zmian") }}
-                tego samego dnia
-              </span>
-              <span
-                v-if="batch.pairs.length > 1 && batch.tally.length"
-                class="ev-sub"
-                data-testid="batch-parties"
-              >
-                wśród ustępujących: {{ batch.tally.join(", ") }}
-              </span>
+            <div class="rl-left">
+              <div class="rl-ovl">Ustępuje</div>
+              <div class="rl-p">
+                <div class="av av--out">
+                  {{ initials(pair.left.personName) }}
+                </div>
+                <div class="rl-txt">
+                  <div class="rl-names">
+                    <NuxtLink
+                      :to="personUrl(pair.left)"
+                      class="link-plain rl-name"
+                      >{{ pair.left.personName }}</NuxtLink
+                    >
+                    <PartyChip
+                      v-for="party in pair.left.parties"
+                      :key="party"
+                      :party
+                    />
+                  </div>
+                  <div class="rl-meta">{{ spell(pair.left) }}</div>
+                </div>
+              </div>
             </div>
 
-            <div class="ev-body">
-              <div
-                v-for="pair in batch.pairs"
-                :key="`${pair.left.edgeId}-${pair.joined.edgeId}`"
-                class="rl-row"
-                data-testid="succession-row"
-              >
-                <div class="rl-left">
-                  <div class="rl-ovl">Ustępuje</div>
-                  <div class="rl-p">
-                    <div class="av av--out" aria-hidden="true" data-nosnippet>
-                      {{ initials(pair.left.personName) }}
-                    </div>
-                    <div class="rl-txt">
-                      <div class="rl-names">
-                        <NuxtLink
-                          :to="personUrl(pair.left)"
-                          class="link-plain rl-name"
-                          >{{ pair.left.personName }}</NuxtLink
-                        >
-                        <PartyChip
-                          v-for="party in pair.left.parties"
-                          :key="party"
-                          :party
-                        />
-                      </div>
-                      <div class="rl-meta">{{ spell(pair.left) }}</div>
-                    </div>
-                  </div>
-                </div>
+            <div class="rl-mid">
+              <div class="rl-disc">
+                <span class="arrow-h"
+                  ><v-icon :icon="mdiArrowRight" size="17"
+                /></span>
+                <span class="arrow-v"
+                  ><v-icon :icon="mdiArrowDown" size="17"
+                /></span>
+              </div>
+              <div class="rl-gap">{{ gapLabel(pair.gapDays) }}</div>
+              <div v-if="switchesParty(pair)" class="rl-flip">
+                zmiana afiliacji
+              </div>
+            </div>
 
-                <div class="rl-mid">
-                  <div class="rl-disc">
-                    <span class="arrow-h"
-                      ><v-icon :icon="mdiArrowRight" size="17"
-                    /></span>
-                    <span class="arrow-v"
-                      ><v-icon :icon="mdiArrowDown" size="17"
-                    /></span>
-                  </div>
-                  <div class="rl-gap">{{ gapLabel(pair.gapDays) }}</div>
-                  <div v-if="switchesParty(pair)" class="rl-flip">
-                    zmiana afiliacji
-                  </div>
+            <div class="rl-right">
+              <div class="rl-ovl">Obejmuje stanowisko</div>
+              <div class="rl-p">
+                <div class="av av--in">
+                  {{ initials(pair.joined.personName) }}
                 </div>
-
-                <div class="rl-right">
-                  <div class="rl-ovl">Obejmuje stanowisko</div>
-                  <div class="rl-p">
-                    <div class="av av--in" aria-hidden="true" data-nosnippet>
-                      {{ initials(pair.joined.personName) }}
-                    </div>
-                    <div class="rl-txt">
-                      <div class="rl-names">
-                        <NuxtLink
-                          :to="personUrl(pair.joined)"
-                          class="link-plain rl-name"
-                          >{{ pair.joined.personName }}</NuxtLink
-                        >
-                        <PartyChip
-                          v-for="party in pair.joined.parties"
-                          :key="party"
-                          :party
-                        />
-                      </div>
-                      <div class="rl-meta">{{ spell(pair.joined) }}</div>
-                    </div>
+                <div class="rl-txt">
+                  <div class="rl-names">
+                    <NuxtLink
+                      :to="personUrl(pair.joined)"
+                      class="link-plain rl-name"
+                      >{{ pair.joined.personName }}</NuxtLink
+                    >
+                    <PartyChip
+                      v-for="party in pair.joined.parties"
+                      :key="party"
+                      :party
+                    />
                   </div>
+                  <div class="rl-meta">{{ spell(pair.joined) }}</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
-        <div
-          v-if="!successions.length"
-          class="k-note text-caption text-medium-emphasis d-flex align-start ga-2"
-          data-testid="successions-none"
-        >
-          <v-icon :icon="mdiEyeOffOutline" size="15" class="mt-1" />
-          <span>
-            Nie dopasowaliśmy tu żadnej zmiany: wpisy, które znamy, nie mają
-            dat, albo nikt nie objął stanowiska w oknie
-            {{ MAX_GAP_DAYS }} dni od jego zwolnienia.
-          </span>
-        </div>
-
-        <!-- Why the section is shorter than the register. Said out loud: a
-             section showing two of fifteen handovers reads as a bug. -->
-        <div
-          v-if="hidden"
-          class="k-note text-caption text-medium-emphasis d-flex align-start ga-2"
-          data-testid="successions-hidden"
-        >
-          <v-icon :icon="mdiEyeOffOutline" size="15" class="mt-1" />
-          <span>
-            Nie pokazujemy {{ count(hidden, "zmiany", "zmian", "zmian") }} —
-            brakuje strony jednej z osób. W zestawieniu są tylko te zmiany, w
-            których obie osoby mają u nas swoją stronę.
-          </span>
-        </div>
-      </section>
-    </template>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -337,8 +319,6 @@ import {
   mdiOfficeBuildingOutline,
   mdiSwapVertical,
 } from "@mdi/js";
-import { useCurrentUser } from "vuefire";
-import { authFetch } from "~/composables/auth";
 import { createSlug, generateEntityUrl } from "~/composables/slugs";
 import { gapLabel, MAX_GAP_DAYS, MAX_OVERLAP_DAYS } from "~~/shared/succession";
 import { isoDay, longDate, shortDate } from "~~/shared/dates";
@@ -348,8 +328,22 @@ import type {
   Succession,
   SuccessionSide,
 } from "~~/server/api/edges/successions.get";
+import type { AsyncDataRequestStatus } from "#app";
 
-const props = defineProps<{ companyId: string; companyName: string }>();
+const props = defineProps<{
+  companyName: string;
+  /** Which part of the company page this instance draws. The page renders
+   * the component three times, around its relation history: `current` (who
+   * holds a post now, and the spinner or the error while there is no
+   * answer), `absent` (one line on what the register does not tell us), and
+   * `relay` (who took over from whom). */
+  part: "current" | "absent" | "relay";
+  /** The answer of `/api/edges/successions` for this company, and the state
+   * of the request, from `useCompanySuccessions`: the page asks once and
+   * hands the answer to all three parts. */
+  data: CompanySuccessions | null | undefined;
+  status: AsyncDataRequestStatus;
+}>();
 
 /** The roles a reader looks for first, in the order they look: who runs the
  * company, who stands in for them, the rest of the board, then whoever
@@ -385,45 +379,18 @@ const ROLE_ORDER: RegExp[] = [
  * post, and keeps this label. */
 const NO_ROLE = "Funkcja niepodana w rejestrze";
 
-const route = useRoute();
-// See `usePersonSuccessions`: the current user, not the whole auth state,
-// which would open a Firestore subscription this never reads.
-const user = useCurrentUser();
+const failed = computed(() => props.status === "error");
+const loading = computed(() => !failed.value && !props.data);
 
-/** `latest` put in the query rather than left to `authFetch`, which adds it in
- * an `onRequest` that returns early on the server - so the SSR request goes
- * out anonymous and `useFetch`, already holding that answer, never repeats it
- * in the browser. See `usePersonSuccessions`, which says it at length. */
-const query = computed(() => ({
-  companyId: props.companyId,
-  ...(user.value || route.query.latest !== undefined
-    ? { latest: route.query.latest ?? true }
-    : {}),
-}));
-
-// Not awaited. Nuxt settles `useAsyncData` before it serialises the page, so
-// this is still server rendered; awaiting would hold a client-side navigation
-// into a company page on this one section.
-const { data, status } = authFetch<CompanySuccessions>(
-  "/api/edges/successions",
-  {
-    query,
-    // Named after the company rather than left to key on the url, so two
-    // companies do not abort each other's request. `place/DetailView.vue`
-    // remounts this component per node, so the id is fixed for its lifetime.
-    key: `company-successions-${props.companyId}`,
-  },
-);
-
-const failed = computed(() => status.value === "error");
-const loading = computed(() => !failed.value && !data.value);
-
-const successions = computed<Succession[]>(() => data.value?.successions ?? []);
-const current = computed<CurrentPost[]>(() => data.value?.current ?? []);
-const hidden = computed(() => data.value?.hidden ?? 0);
+const successions = computed<Succession[]>(() => props.data?.successions ?? []);
+const current = computed<CurrentPost[]>(() => props.data?.current ?? []);
+const hidden = computed(() => props.data?.hidden ?? 0);
 const nothingToShow = computed(
   () => !successions.value.length && !current.value.length && !hidden.value,
 );
+/** An answer to draw from. Every part but `current` stays silent until then:
+ * the spinner and the error are said once, where the people will be. */
+const ready = computed(() => !loading.value && !failed.value);
 
 /** Today, fixed at render and carried into the browser in the payload, so the
  * server and the client cannot disagree about what "stan na" says. Local
@@ -638,6 +605,127 @@ const roleSections = computed(() => {
     return { key: group.key, role: group.role, count: ordered.length, batches };
   });
 });
+
+/* ---------- what the page does not have ---------- */
+
+/** One paragraph of a bubble: what it is about, the sentence, and the hook a
+ * test finds it by - the testid the sentence carried when it stood in the
+ * page's flow. */
+type Why = { title: string; text: string; testid: string };
+
+/** Each sentence that used to stand in an empty section, word for word. */
+const sentences = computed(() => ({
+  empty:
+    `Nie mamy wpisów kadencyjnych dla: ${props.companyName}. Kiedy rejestr ` +
+    "poda daty powołania i odwołania, pojawi się tu obecny skład i to, kto " +
+    "kogo zastąpił.",
+  // Two reasons, and the page cannot tell them apart: the endpoint drops a
+  // post whose holder has no page without counting it, the way the rest of
+  // the site does.
+  currentEmpty:
+    "Nie mamy tu nikogo z otwartym wpisem: albo każdy wpis, który znamy, ma " +
+    "już datę zakończenia, albo brakuje strony osoby, która zajmuje " +
+    "stanowisko.",
+  none:
+    "Nie dopasowaliśmy tu żadnej zmiany: wpisy, które znamy, nie mają dat, " +
+    `albo nikt nie objął stanowiska w oknie ${MAX_GAP_DAYS} dni od jego ` +
+    "zwolnienia.",
+  // Why the handovers are fewer than the register's. Said, because two of
+  // fifteen with no word on the rest reads as a bug.
+  hidden:
+    `Nie pokazujemy ${count(hidden.value, "zmiany", "zmian", "zmian")} — ` +
+    "brakuje strony jednej z osób. W zestawieniu są tylko te zmiany, w " +
+    "których obie osoby mają u nas swoją stronę.",
+  method:
+    "Pary dobrane 1:1 w obrębie tej spółki i tej samej funkcji: koniec " +
+    "jednego wpisu i początek kolejnego w oknie od " +
+    `${MAX_OVERLAP_DAYS} dni przed do ${MAX_GAP_DAYS} dni po. Wpisy z tego ` +
+    "samego dnia zebrano w jedno zdarzenie.",
+}));
+
+/** What stands behind the relay's (i) when the relay is drawn. */
+const relayInfo = computed<Why[]>(() => [
+  ...(hidden.value
+    ? [
+        {
+          title: "Pominięte zmiany",
+          text: sentences.value.hidden,
+          testid: "successions-hidden",
+        },
+      ]
+    : []),
+  {
+    title: "Jak dobieramy pary",
+    text: sentences.value.method,
+    testid: "relay-method",
+  },
+]);
+
+/** The one line under the people: which of the two sections is missing, and
+ * how many handovers were left out when that is why the relay is. Nothing
+ * when both are on the page. */
+const absentLine = computed(() => {
+  const noCurrent = !currentGroups.value.length;
+  const noRelay = !successions.value.length;
+  const skipped = hidden.value;
+  if (noCurrent && noRelay && !skipped) {
+    return "Nie znamy obecnego składu ani zmian na stanowiskach.";
+  }
+  const parts: string[] = [];
+  if (noCurrent) parts.push("Nie znamy obecnego składu.");
+  if (noRelay && !skipped) parts.push("Nie znamy zmian na stanowiskach.");
+  if (noRelay && skipped) {
+    const where = skipped === 1 ? "stanowisku" : "stanowiskach";
+    parts.push(
+      `Pominęliśmy ${count(skipped, "zmianę", "zmiany", "zmian")} na ${where}, ` +
+        "bo brakuje strony jednej z osób.",
+    );
+  }
+  // No one-letter word at the end of a line: „…jednej z / osób.” is the
+  // phone's break otherwise.
+  return nbsp(parts.join(" "));
+});
+
+/** The line up to its last word, and the last word, which the template keeps
+ * on one line with the (i) after it. */
+const absentHead = computed(() =>
+  absentLine.value.slice(0, absentLine.value.lastIndexOf(" ") + 1),
+);
+const absentTail = computed(() =>
+  absentLine.value.slice(absentLine.value.lastIndexOf(" ") + 1),
+);
+
+/** Behind the line's (i): the sentence each missing section used to print,
+ * and - when the relay is the one missing - what it leaves out and how its
+ * pairs are made, which would otherwise sit behind the relay's own (i). */
+const absentInfo = computed<Why[]>(() => {
+  if (nothingToShow.value) {
+    return [
+      {
+        title: "Obecny skład i zmiany",
+        text: sentences.value.empty,
+        testid: "successions-empty",
+      },
+    ];
+  }
+  const items: Why[] = [];
+  if (!currentGroups.value.length) {
+    items.push({
+      title: "Obecny skład",
+      text: sentences.value.currentEmpty,
+      testid: "current-empty",
+    });
+  }
+  if (!successions.value.length) {
+    items.push({
+      title: "Kto kogo zastąpił",
+      text: sentences.value.none,
+      testid: "successions-none",
+    });
+    items.push(...relayInfo.value);
+  }
+  return items;
+});
 </script>
 
 <style scoped>
@@ -648,12 +736,33 @@ const roleSections = computed(() => {
    instead of a centred one. Nobody chose that; they were copied at different
    times. The company page moves to the shared values, which is what lets the
    notes underneath these cards be the same object as the cards themselves.
-   The two headings keep their 6px of air as a `mb-1`, rounded to the spacing
-   scale, because the shell puts that gap on the lead paragraph and these two
-   have none. */
+   „Obecny skład” keeps its 6px of air as a `mb-1`, rounded to the spacing
+   scale, because the shell puts that gap on the lead paragraph and it has
+   none. „Kto kogo zastąpił” takes a `mb-4` instead: the method paragraph that
+   stood under it went behind its (i), and the gap it left is the one its
+   first group would otherwise lose. */
 
-.relay-intro {
-  max-width: 62ch;
+/* What the page does not have: one muted line at the UI size, no box. The
+   icon in the quieter ink of the (i) beside it. */
+.company-absent {
+  align-items: flex-start;
+  text-wrap: pretty;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  display: flex;
+  font-size: var(--k-ui-size);
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.company-absent__icon {
+  color: rgba(var(--v-theme-on-surface), 0.38);
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+/* A bubble that says more than one thing: a gap between its paragraphs. */
+.company-absent__why + .company-absent__why {
+  margin-top: 6px;
 }
 
 /* The board a group of people sits under: a group head, quiet and in

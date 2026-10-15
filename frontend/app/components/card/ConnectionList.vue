@@ -25,7 +25,9 @@
           :to="nodeLinkUrl(edge.richNode)"
           :prepend-icon="entityIcon(edge.richNode.type)"
         >
-          <v-list-item-title>
+          <!-- Wrapped rather than cut: a registry name runs to sixty
+               characters, and on a phone the ellipsis took the city with it. -->
+          <v-list-item-title class="text-wrap">
             {{ edge.richNode.name }}
             <span v-if="getPeopleCount(edge) > 0" class="text-medium-emphasis">
               ({{ getPeopleCount(edge) }})

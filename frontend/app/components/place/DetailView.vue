@@ -55,107 +55,137 @@
         >.
       </v-alert>
 
-      <CardCompanySummary
-        :key="nodeId"
-        :company="company"
-        :location="location"
-        @submitted="proposals?.refresh()"
-        @published="refreshNode()"
-      />
+      <!-- The people first. What this institution is, then who sits in it
+           now and everyone who ever held a post here, then one line on what
+           the register does not tell us, and only then the handovers, the
+           owners and the rest. A section with nothing in it is not drawn at
+           all: what it would have said goes into that one line. -->
+      <div class="company-flow">
+        <CardCompanySummary
+          :key="nodeId"
+          :company="company"
+          :location="location"
+          @submitted="proposals?.refresh()"
+          @published="refreshNode()"
+        >
+          <!-- The page's links ride in the header's own row of buttons, after
+               the ones that act on the page itself. -->
+          <template #actions>
+            <v-btn
+              variant="tonal"
+              :prepend-icon="mdiFormatListBulleted"
+              :to="`/eksploruj/tabela?place=${nodeId}`"
+              text="Eksploruj powiązania"
+            />
+            <v-btn
+              variant="tonal"
+              :prepend-icon="mdiGraphOutline"
+              :to="`/graf?miejsce=${nodeId}`"
+              text="Graf połączeń"
+            />
+          </template>
+        </CardCompanySummary>
 
-      <!-- Renders nothing until the reader has proposed something for this
+        <!-- Renders nothing until the reader has proposed something for this
              company, so a page nobody has touched looks exactly as it did. -->
-      <RevisionNodeProposals ref="proposals" :node-id="nodeId" />
+        <RevisionNodeProposals ref="proposals" :node-id="nodeId" />
 
-      <!-- `mt-4`: part of the header above rather than a section of its
-           own, so it keeps to it instead of taking the sections' gap.
-           Controls, not content: a snippet read "Graf połączeńEksploruj
-           powiązania". -->
-      <div class="d-flex flex-wrap ga-2 mt-4" data-nosnippet>
-        <v-btn
-          variant="tonal"
-          :prepend-icon="mdiGraphOutline"
-          :to="`/graf?miejsce=${nodeId}`"
-          text="Graf połączeń"
+        <!-- Three parts of one component, off the one request below: who
+             holds a post now, what the page cannot show, and who took over
+             from whom. -->
+        <SuccessionCompanyChanges
+          :key="`current-${nodeId}`"
+          part="current"
+          :company-name="company.name"
+          :data="successions"
+          :status="successionsStatus"
         />
-        <v-btn
-          variant="tonal"
-          :prepend-icon="mdiFormatListBulleted"
-          :to="`/eksploruj/tabela?place=${nodeId}`"
-          text="Eksploruj powiązania"
+
+        <CardEmploymentHistory
+          :edges="historyEdges"
+          bleed
+          :company="company"
+          :can-add="canAddRelations"
+          :can-cite="canAddRelations"
+          :can-correct="canEditRelations"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          @add="openAdd(['employed'], 'Dodaj osobę pracującą tutaj')"
+          @sources="openSources"
+          @edit="openEdit"
+          @remove="openRemove"
+          @published="refreshEdges()"
         />
-      </div>
 
-      <SuccessionCompanyChanges
-        :key="nodeId"
-        :company-id="nodeId"
-        :company-name="company.name"
-      />
-
-      <CardConnectionList
-        :edges="owners"
-        title="Właściciele"
-        :can-add="canAddRelations"
-        :can-remove="canRemoveRelations"
-        :subject-published="subjectPublished"
-        add-testid="owners"
-        @add="openAdd(['owns_parent'], 'Dodaj właściciela')"
-        @remove="openRemove"
-        @published="refreshEdges()"
-      />
-      <CardConnectionList
-        :edges="subsidiaries"
-        title="Spółki zależne"
-        :can-add="canAddRelations"
-        :can-remove="canRemoveRelations"
-        :subject-published="subjectPublished"
-        add-testid="subsidiaries"
-        @add="openAdd(['owns_child'], 'Dodaj spółkę zależną')"
-        @remove="openRemove"
-        @published="refreshEdges()"
-      />
-      <CardEmploymentHistory
-        :edges="historyEdges"
-        bleed
-        :company="company"
-        :can-add="canAddRelations"
-        :can-cite="canAddRelations"
-        :can-correct="canEditRelations"
-        :can-remove="canRemoveRelations"
-        :subject-published="subjectPublished"
-        @add="openAdd(['employed'], 'Dodaj osobę pracującą tutaj')"
-        @sources="openSources"
-        @edit="openEdit"
-        @remove="openRemove"
-        @published="refreshEdges()"
-      />
-
-      <!-- One hop by default, unlike a person's page: a company's own
-             relations are already a board's worth of names, and the second ring
-             is every other seat each of them holds. It is a click away in the
-             bar above the canvas for a reader who wants it. -->
-      <LazyGraphContainer
-        v-if="!smAndDown || showGraph"
-        :key="nodeId"
-        class="k-bleed-xs"
-        :focus-node-id="nodeId"
-        :max-depth="1"
-      />
-      <div v-else class="d-flex justify-center">
-        <v-btn
-          color="primary"
-          variant="flat"
-          :prepend-icon="mdiGraphOutline"
-          text="Pokaż graf powiązań"
-          @click="showGraph = true"
+        <SuccessionCompanyChanges
+          :key="`absent-${nodeId}`"
+          part="absent"
+          :company-name="company.name"
+          :data="successions"
+          :status="successionsStatus"
+          class="company-flow__absent"
         />
-      </div>
 
-      <!-- The press on this company: the same section a person's page
+        <SuccessionCompanyChanges
+          :key="`relay-${nodeId}`"
+          part="relay"
+          :company-name="company.name"
+          :data="successions"
+          :status="successionsStatus"
+        />
+
+        <CardConnectionList
+          :edges="owners"
+          title="Właściciele"
+          :can-add="canAddRelations"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          add-testid="owners"
+          @add="openAdd(['owns_parent'], 'Dodaj właściciela')"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+        <CardConnectionList
+          :edges="subsidiaries"
+          title="Spółki zależne"
+          :can-add="canAddRelations"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          add-testid="subsidiaries"
+          @add="openAdd(['owns_child'], 'Dodaj spółkę zależną')"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+
+        <!-- One hop by default, unlike a person's page: a company's own
+             relations are already a board's worth of names, and the second
+             ring is every other seat each of them holds. It is a click away
+             in the bar above the canvas for a reader who wants it. -->
+        <LazyGraphContainer
+          v-if="!smAndDown || showGraph"
+          :key="nodeId"
+          class="k-bleed-xs"
+          :focus-node-id="nodeId"
+          :max-depth="1"
+        />
+        <div v-else class="d-flex justify-center">
+          <v-btn
+            color="primary"
+            variant="flat"
+            :prepend-icon="mdiGraphOutline"
+            text="Pokaż graf powiązań"
+            @click="showGraph = true"
+          />
+        </div>
+
+        <!-- The press on this company: the same section a person's page
              carries, off the same endpoint. `mentions` is declared for both. -->
-      <MentionArticleList :node-id="nodeId" />
+        <MentionArticleList :node-id="nodeId" />
 
-      <NoteEditor :node-id="nodeId" node-type="place" />
+        <NoteEditor :node-id="nodeId" node-type="place" />
+
+        <CommentsSection v-if="user" :node-id="nodeId" />
+      </div>
 
       <FormAddRelationDialog
         v-model="addRelationOpen"
@@ -191,8 +221,6 @@
         :label="removeLabel"
         @removed="onEdgeRemoved()"
       />
-
-      <CommentsSection v-if="user" :node-id="nodeId" />
     </div>
   </div>
 </template>
@@ -228,6 +256,7 @@ import {
   SOCIAL_CARD,
 } from "~/composables/entitySeo";
 import { useAuthState, authFetch, authRequest } from "@/composables/auth";
+import { useCompanySuccessions } from "~/composables/successions";
 import type { Company, Revision } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
@@ -240,6 +269,13 @@ const route = useRoute();
 const router = useRouter();
 const { user } = useAuthState();
 const { smAndDown } = useDisplay();
+
+/** Who holds a post here now and who took over from whom, asked once for the
+ * three places the page draws it. Started before the node is awaited, so the
+ * two requests run side by side, and not awaited itself: Nuxt still settles it
+ * before it serialises the page. */
+const { data: successions, status: successionsStatus } =
+  useCompanySuccessions(nodeId);
 
 // The graph is the heaviest thing on the page and a phone shows one node at a
 // time anyway, so a narrow screen asks for it rather than being given it.
@@ -441,3 +477,39 @@ const {
   refresh: refreshEdges,
 });
 </script>
+
+<style scoped>
+/* One distance between the page's blocks: 40px, 32 on a phone. A margin on
+   whatever follows a block, rather than one per call site, so a block that
+   renders nothing - an empty section, a closed dialog - adds nothing.
+   `!important` against the `mt-4` some shared sections still carry for the
+   pages that stack them by hand. */
+.company-flow > * + * {
+  margin-top: 40px !important;
+}
+
+/* What the page could not show belongs to the people listed above it. */
+.company-flow > * + .company-flow__absent {
+  margin-top: 12px !important;
+}
+
+/* The first block keeps closer to the header it follows - after the rule
+   above, so that it wins when that block is the absence line itself. */
+.company-flow > .company-summary--page + * {
+  margin-top: 24px !important;
+}
+
+@media (max-width: 599.98px) {
+  .company-flow > * + * {
+    margin-top: 32px !important;
+  }
+
+  .company-flow > * + .company-flow__absent {
+    margin-top: 12px !important;
+  }
+
+  .company-flow > .company-summary--page + * {
+    margin-top: 20px !important;
+  }
+}
+</style>

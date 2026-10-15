@@ -1,6 +1,9 @@
 import { useCurrentUser } from "vuefire";
 import { authFetch } from "~/composables/auth";
-import type { PersonSuccessions } from "~~/server/api/edges/successions.get";
+import type {
+  CompanySuccessions,
+  PersonSuccessions,
+} from "~~/server/api/edges/successions.get";
 
 /** Whose seat a person took, and who took theirs.
  *
@@ -49,5 +52,37 @@ export function usePersonSuccessions(personId: string) {
     // callers on one page must share one request, and two profiles must not
     // abort each other's.
     key: `person-successions-${personId}`,
+  });
+}
+
+/** Who holds a post at a company now, and who took over from whom there.
+ *
+ * Called once, by the company's page, which hands the answer to the three
+ * parts of `SuccessionCompanyChanges` it draws around the relation history. A
+ * shared key does not make three callers one request: with `useFetch`'s
+ * default `dedupe: "cancel"` each caller after the first aborts the request
+ * before it and sends its own. `dedupe: "defer"` would join them, but it also
+ * hands a refresh the request already in flight - the anonymous one, when the
+ * reader signs in while it is still out.
+ *
+ * Not awaited, for the reason `usePersonSuccessions` gives; the query carries
+ * `latest` for the same reason as there.
+ */
+export function useCompanySuccessions(companyId: string) {
+  const route = useRoute();
+  const user = useCurrentUser();
+
+  const query = computed(() => ({
+    companyId,
+    ...(user.value || route.query.latest !== undefined
+      ? { latest: route.query.latest ?? true }
+      : {}),
+  }));
+
+  return authFetch<CompanySuccessions>("/api/edges/successions", {
+    query,
+    // Named after the company, so two companies do not abort each other's
+    // request.
+    key: `company-successions-${companyId}`,
   });
 }

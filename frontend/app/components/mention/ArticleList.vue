@@ -3,20 +3,24 @@
        article we hold, and a heading over empty space reads as a page that
        failed to load. The same rule `ExtractionPersonFacts` and
        `SuccessionPersonChanges` follow. -->
+  <!-- No icon beside the heading, and the sentence on where the articles
+       come from behind its (i): the cards under it say what they are. -->
   <PageSection
     v-if="mentions.length > 0"
     title="Artykuły, które o tym wspominają"
-    :icon="mdiNewspaperVariantOutline"
     data-testid="node-mentions"
   >
-    <template #lead>
-      <p class="k-lead" data-testid="node-mentions-lead">
-        Teksty prasowe, w których pada ta nazwa - z artykułów przeanalizowanych
+    <template #info>
+      <span data-testid="node-mentions-lead">
+        Teksty prasowe, w których pada ta nazwa – z artykułów przeanalizowanych
         przez model i ze źródeł dodanych w notatkach oraz przy powiązaniach.
-      </p>
+      </span>
     </template>
 
-    <v-row dense>
+    <!-- `mt-1`: the lead under the heading was the only gap between it and
+         the cards, and it now sits behind the (i). With the dense row's
+         padding this is 8px, as under „Historia powiązań”. -->
+    <v-row dense class="mt-1">
       <!-- Keyed on the article, which the endpoint lists once, not on the
            edge: a relation citing two articles puts its id on both cards. -->
       <v-col v-for="mention in mentions" :key="mention.nodeId" cols="12" md="6">
@@ -77,7 +81,6 @@
  * piece that says who sits on which board names both of them.
  */
 import { computed } from "vue";
-import { mdiNewspaperVariantOutline } from "@mdi/js";
 import { authFetch, useAuthState } from "~/composables/auth";
 import { useDomainIcon } from "~/composables/useDomainIcon";
 import { generateEntityUrl } from "~/composables/slugs";
