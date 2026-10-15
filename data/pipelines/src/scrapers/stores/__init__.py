@@ -5,12 +5,14 @@ file operations, data references, and pipeline execution contexts.
 """
 
 import contextvars
+import functools
 import io
 import os
 import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, List, NewType, Union, overload
 
 import numpy as np
@@ -1170,12 +1172,53 @@ def iterate_pipeline_dict(df: pd.DataFrame):
 def iterate_pipeline[T](
     df: pd.DataFrame, constructor: typing.Type
 ) -> typing.Iterable[T]:  # TODO join T and constructor
+    """The rows of a pipeline's output as `constructor` instances.
+
+    The frame is the one the pipeline has just built from its dataclasses, or
+    the one read back from its stored jsonl - and `to_json` writes a set as a
+    list and an Enum member as {"name": ..., "value": ...}. So a set field
+    takes a list, and an enum field the object `to_json` made of its member.
+    Without that, `koryta_krs_odpis --queue` failed on 2026-10-15 reading
+    `ScrapeRejestrIO` from disk ("krs.sources" should be "set"), where the KRS
+    jobs had only ever used the queue they had just built.
+    """
     df = df.replace({np.nan: None})
+    config = Config(
+        cast=[int, float, str, bool, set, frozenset],
+        type_hooks=enum_hooks(constructor),
+    )
     for row in df.to_dict(orient="records"):
         records = typing.cast(dict[str, typing.Any], row)
-        yield from_dict(
-            data_class=constructor,
-            data=records,
-            # TODO - I don't think we need this, try to remove it.
-            config=Config(cast=[int, float, str, bool]),
-        )
+        yield from_dict(data_class=constructor, data=records, config=config)
+
+
+def enum_hooks(constructor: typing.Type) -> dict[typing.Type, Callable[[Any], Any]]:
+    """A dacite type hook for every Enum `constructor` holds, at any depth."""
+    hooks: dict[typing.Type, Callable[[Any], Any]] = {}
+    seen: set[Any] = set()
+
+    def visit(type_: Any) -> None:
+        if type_ in seen:
+            return
+        seen.add(type_)
+        if isinstance(type_, type) and issubclass(type_, Enum):
+            hooks[type_] = functools.partial(enum_member, type_)
+        elif is_dataclass(type_):
+            for hint in typing.get_type_hints(type_).values():
+                visit(hint)
+        else:
+            for arg in typing.get_args(type_):
+                visit(arg)
+
+    visit(constructor)
+    return hooks
+
+
+def enum_member(enum: type[Enum], value: Any) -> Enum:
+    """The member `value` stands for: the member itself, its value, or the
+    {"name": ..., "value": ...} object `to_json` writes for it."""
+    if isinstance(value, enum):
+        return value
+    if isinstance(value, dict) and "value" in value:
+        value = value["value"]
+    return enum(value)
