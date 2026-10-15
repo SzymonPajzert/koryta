@@ -58,13 +58,9 @@
 
     <div v-else class="app-footer__row">
       <NuxtLink to="/" class="app-footer__brand">
-        <NuxtImg
-          src="/logo_small.png"
-          width="24"
-          height="24"
-          alt=""
-          loading="lazy"
-        />
+        <!-- Not lazy: a 24px image saves nothing by waiting for the footer
+             to come into view. -->
+        <NuxtImg src="/logo_small.png" width="24" height="24" alt="" />
         <span>koryta.pl</span>
         <small class="app-footer__copy">&copy; {{ year }}</small>
       </NuxtLink>

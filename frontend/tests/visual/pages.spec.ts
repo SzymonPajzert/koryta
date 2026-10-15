@@ -1,6 +1,7 @@
 import { test, expect } from "./test";
 import type { Page } from "@playwright/test";
 import { freezeClock } from "./clock";
+import { backToTheTop } from "./fullPage";
 import { expectFitsThePhone } from "./phoneWidth";
 import { pageTag } from "./pageTags";
 
@@ -205,14 +206,16 @@ for (const { name, path, file, settled, viewports, act, inApp } of pages) {
     // Images below the fold are lazy-loaded, so a fullPage screenshot would
     // otherwise request them mid-capture and keep growing the page height
     // (see /o-nas). Scroll through the page to trigger them, then wait until
-    // they have all settled.
+    // they have all settled. In jumps: under the site's `scroll-behavior:
+    // smooth` a plain `scrollTo` starts a glide, and the next one a frame
+    // later cut it short, so the window never got far down a long page.
     await page.evaluate(async () => {
       for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) {
-        window.scrollTo(0, y);
+        window.scrollTo({ top: y, behavior: "instant" });
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
-      window.scrollTo(0, 0);
     });
+    await backToTheTop(page);
     await page.evaluate(() => document.fonts.ready);
     await page
       .waitForFunction(
