@@ -153,6 +153,41 @@ describe("CardEmploymentHistory", () => {
     ).toMatchObject({ publishable: false });
   });
 
+  it("hands the candidacies of one election in two places their clash", async () => {
+    // Jacek Wojciech Kowalski's page, 2026-10-14: powiat gnieźnieński (3003)
+    // and powiat kozienicki (1407) in 2002, and only gnieźnieński after.
+    const run = (id: string, teryt: string, year: string) =>
+      edge({
+        id,
+        type: "election",
+        label: "kandydatura",
+        source: "kowalski",
+        target: `teryt${teryt}`,
+        start_date: `${year}-01-01`,
+        position: "Samorząd",
+        richNode: { id: `teryt${teryt}`, type: "region", name: teryt },
+      });
+    const wrapper = await render([
+      run("gniezno-2002", "3003", "2002"),
+      run("kozienice-2002", "1407", "2002"),
+      run("gniezno-2006", "3003", "2006"),
+      edge({}),
+    ]);
+
+    const clashOf = (id: string) =>
+      wrapper
+        .findAllComponents({ name: "ChipPlaceClash" })
+        .find((chip) => (chip.props("edge") as EdgeNode).id === id)
+        ?.props("clash") as { year: string; rows: EdgeNode[] } | undefined;
+    expect(clashOf("gniezno-2002")?.year).toBe("2002");
+    expect(clashOf("kozienice-2002")?.rows.map((row) => row.id)).toEqual([
+      "gniezno-2002",
+      "kozienice-2002",
+    ]);
+    expect(clashOf("gniezno-2006")).toBeUndefined();
+    expect(clashOf("e1")).toBeUndefined();
+  });
+
   it("asks the page to remove the row an admin clicked", async () => {
     const wrapper = await mountSuspended(EmploymentHistory, {
       props: { edges: [edge({})], canRemove: true },
