@@ -55,6 +55,20 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   the label („możliwe powiązania”, „partia”, then „???”), the backdrop (blur,
   party-colour gradients, bands, pie, dense dots) and the icon (lock, question
   mark, shield, eye).
+- **Redesign round 1 is accepted, site-wide changes first** (2026-10-15). The
+  six directions rendered on 10-14/15 go in, in this order:
+  1. the site-wide changes: type system, one edge style, header and footer;
+  2. then page by page: chips on feed and history, the company page, the
+     table, home.
+
+  Exact values (type scale, radii, weights) are written here once Szymon has
+  approved the implemented screenshots, not before.
+- **Home headline**: „Sprawdzamy, którymi stanowiskami w publicznych spółkach
+  podzielili się politycy”, with no full stop. It replaces „Jesteśmy
+  największym, ogólnopolskim i niezależnym agregatorem koryciarstwa”
+  (2026-10-15).
+- **The person page's graph opens on „2 kroki”**, as today. Szymon: "it looks
+  cooler, we can change it later" (2026-10-15).
 
 ## How UI changes are made
 
@@ -67,7 +81,9 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
 
 ## Not decided yet
 
-Type scale, weights, button case, depth strategy (borders, shadows, tints),
-radius scale, spacing base and chip usage. The 2026-10-14 design review
-proposed directions for each. They are proposals until Szymon picks them in
-decide-design-review-2026-10-14, so do not treat them as rules.
+- The exact values of the accepted directions, pending his OK on the
+  implemented screenshots.
+- On desktop, /eksploruj/tabela shows either a list of three posts per person
+  or one summary line.
+- The smaller questions in decide-design-review-2026-10-14 (wording, order,
+  toggles, an extra font weight, the „Zgłoś” icon on phones).
