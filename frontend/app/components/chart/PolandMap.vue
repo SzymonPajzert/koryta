@@ -3,17 +3,13 @@ import { computed, ref } from "vue";
 import powiatyPaths from "@/assets/poland_powiaty.json";
 import wojewodztwaPaths from "@/assets/poland_voivodeships.json";
 import type { Powiat } from "@/composables/entity/regions";
-import { authFetch } from "@/composables/auth";
+import { useRegionCounts } from "~/composables/stats/useRegionCounts";
 import { choropleth } from "~/utils/chartTheme";
 import { hexToRgb } from "~~/shared/colors";
 
 const hoveredDistrict = ref<Powiat | null>(null);
 
-const { data: regionStats } = authFetch("/api/stats/regions", {
-  lazy: true,
-  key: "polandmap-region-stats",
-  default: () => [],
-});
+const { data: regionStats } = useRegionCounts();
 
 const hover = (region: Powiat | null) => {
   hoveredDistrict.value = region;

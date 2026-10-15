@@ -1,20 +1,37 @@
 <template>
-  <v-card v-if="!props.region" border class="pt-2 mt-2 mx-auto" max-width="400">
-    <v-card-title>{{ emptyState.title }}</v-card-title>
-    <v-card-text>
-      <span class="d-none d-md-inline">{{ emptyState.wide }}</span>
-      <span class="d-md-none">{{ emptyState.narrow }}</span>
-    </v-card-text>
-  </v-card>
+  <HomeRegionsTop
+    v-if="!props.region"
+    ref="regionsTop"
+    @pick="emit('pick', $event)"
+  />
   <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400">
-    <v-card-title>
-      {{ props.region.name }}
+    <!-- Focused when a region is picked, so a keyboard reader who chose a row
+         of the list lands on what it opened rather than on the page's top. -->
+    <v-card-title
+      ref="title"
+      tabindex="-1"
+      class="people-list__title d-flex align-start ga-2"
+    >
+      <span class="flex-grow-1">{{ props.region.name }}</span>
+      <!-- Back to the list of powiaty, which is otherwise gone for the rest
+           of the visit once anything is picked. -->
+      <v-btn
+        :icon="mdiClose"
+        variant="text"
+        size="small"
+        class="people-list__close"
+        aria-label="Wróć do listy powiatów"
+        title="Wróć do listy powiatów"
+        data-testid="home-region-reset"
+        @click="reset"
+      />
     </v-card-title>
     <v-divider />
 
-    <template v-if="loading">
-      <v-progress-circular indeterminate />
-    </template>
+    <!-- The rows' own outline while they load, holding the card's height:
+         a bare spinner collapsed it, and the click that picked a region left
+         the pointer over „Zobacz cały region”. -->
+    <v-skeleton-loader v-if="loading" type="list-item-two-line@4" />
     <v-card-text v-else-if="people.length === 0">
       Nie znaleźliśmy jeszcze osób w tym regionie.
     </v-card-text>
@@ -79,12 +96,12 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiChevronRight } from "@mdi/js";
-import { computed } from "vue";
+import { mdiChevronRight, mdiClose } from "@mdi/js";
+import { computed, nextTick, useTemplateRef, watch } from "vue";
 import type { Powiat } from "~/composables/entity/regions";
 import type { PersonRich } from "~~/shared/model";
 import { useListWithStats } from "~/composables/entity/listWithStats";
-import { polishCounting } from "~/composables/polish";
+import { polishCounting, yearsOfWork } from "~/composables/polish";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { generateEntityUrl } from "~/composables/slugs";
 
@@ -92,25 +109,31 @@ const props = defineProps<{
   region: Powiat | undefined;
 }>();
 
-/** What the card says before a region has been picked.
- *
- * One wording now: the card used to be mounted beside the party treemap too and
- * needed a second one there, because telling a reader to pick a region off a
- * map that was not on the screen was a lie. That panel is gone, and the chart
- * panel that replaced it puts its own controls in this column rather than this
- * card.
- *
- * Byte-for-byte what it was - tests/e2e/map_stats.spec.ts waits for "Wybierz
- * region z mapy" to disappear as its proof that a powiat was picked. */
-const emptyState = {
-  title: "Analizuj powiązania",
-  wide: "Wybierz region z mapy po lewej stronie, by zobaczyć powiązane osoby.",
-  narrow: "Wybierz region z mapy na górze, by zobaczyć powiązane osoby.",
-};
+/** A row of the list shown before anything is picked, passed up so it is
+ * picked the way a click on the map is; and the way back to that list. */
+const emit = defineEmits<{ pick: [region: Powiat]; reset: [] }>();
+
+const title = useTemplateRef<{ $el: HTMLElement }>("title");
+const regionsTop = useTemplateRef<{ focusFirstRow: () => void }>("regionsTop");
+
+watch(
+  () => props.region,
+  async (region, previous) => {
+    if (!region || region === previous) return;
+    await nextTick();
+    title.value?.$el.focus({ preventScroll: true });
+  },
+);
+
+async function reset() {
+  emit("reset");
+  await nextTick();
+  regionsTop.value?.focusFirstRow();
+}
 
 function subtitle(person: Partial<PersonRich>) {
   if (person.experience) {
-    return `${person.experience} lat pracy`;
+    return yearsOfWork(person.experience);
   }
   if (person.stats?.nodeGroupSize) {
     return `${person.stats.nodeGroupSize} powiązanych osób`;
@@ -147,6 +170,21 @@ const totalLabel = computed(() =>
 </script>
 
 <style scoped>
+/* A place focus is sent, not a control: it says nothing to the reader to draw
+   a ring round the card's whole header, as the browser does after a keyboard
+   pick. */
+.people-list__title:focus-visible {
+  outline: none;
+}
+
+/* On the name's first line, not the middle of the block: a long name - „Powiat
+   nowodworski (Nowy Dwór Mazowiecki)” - takes three lines on a phone, and a
+   centred button floated beside the second. The 40px button is centred on
+   the first 22px line. */
+.people-list__close {
+  margin-block: -9px;
+}
+
 /* Where the chips start wrapping: "PSL Polska 2050" (148px) is the widest pair
  * that still shares a line, and a third chip goes under them - two lines of
  * 24px inside the 64px row, and the name keeps the rest. Narrower is worse,

@@ -1,5 +1,11 @@
 <template>
-  <v-container :style="{ background: 'white' }">
+  <!-- A plain div, not a container: HomeSection already pads the column, and
+       a container inside it added 16px of its own, so the map and the powiaty
+       stood 16px inside the call to action and the feed under them - and
+       from 960 to 1279px, where a container also caps itself at 900, about
+       50. Without it the columns' content starts and ends on the section's
+       edges, as the blocks under it do. -->
+  <div>
     <v-row>
       <v-col cols="12" class="d-md-none pb-0">
         <v-tabs
@@ -54,10 +60,15 @@
           v-model:grouping="grouping"
           v-model:range="range"
         />
-        <CardPeopleList v-show="tab !== 'graph'" :region="region" />
+        <CardPeopleList
+          v-show="tab !== 'graph'"
+          :region="region"
+          @pick="pickFromList"
+          @reset="region = undefined"
+        />
       </v-col>
     </v-row>
-  </v-container>
+  </div>
 </template>
 
 <script lang="ts" setup>
@@ -145,9 +156,10 @@ function countSwitch(value: unknown) {
 }
 
 /** The map's conversion. `panel` is still on the goal even though the map is
- * the only panel that reports one: the chart panel's equivalent is the two
- * settings it records, and a shared goal keeps the comparison possible if a
- * third panel ever arrives.
+ * the only panel that reports one - as `map` for a click on the map and
+ * `map-list` for a row of the list beside it: the chart panel's equivalent is
+ * the two settings it records, and a shared goal keeps the comparison possible
+ * if a third panel ever arrives.
  *
  * Keyed by teryt rather than name, which is optional on a Powiat. 380 values is
  * a long breakdown but a legitimate one, and it is the only place the site
@@ -155,5 +167,13 @@ function countSwitch(value: unknown) {
 function pickRegion(picked: Powiat) {
   region.value = picked;
   trackGoal("home-explorer:pick", { panel: "map", value: picked.teryt });
+}
+
+/** The same pick made from the list beside the map, before any region was
+ * clicked. Its own `panel` value so the list's share of the conversions can be
+ * read apart from the map's, without a new goal or property to register. */
+function pickFromList(picked: Powiat) {
+  region.value = picked;
+  trackGoal("home-explorer:pick", { panel: "map-list", value: picked.teryt });
 }
 </script>

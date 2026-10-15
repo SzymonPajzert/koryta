@@ -1,95 +1,74 @@
 <template>
   <HomeSection color>
-    <!-- Desktop only. On a phone the logo and the headline are most of the
-         first screen, and neither of them is something a reader can act on -
-         the search below is, so it starts the page instead. -->
-    <v-container
-      fluid
-      class="d-none d-md-flex align-center justify-center overflow-hidden w-100"
-    >
-      <v-row justify="center" align="center" class="w-100 h-100">
-        <v-col cols="12" md="3" class="d-flex align-center justify-center">
-          <!-- To /pomoc, not to the zrzutka. This used to open a particular
-               reward on the fundraiser - a limited pin - which is spent, so
-               the first thing on the page sent a reader to a finished appeal.
-               /pomoc is where the current ask lives and stays right as it
-               changes. Same goal as the "Działaj z nami" button below, told
-               apart by `from`. -->
-          <NuxtLink
-            to="/pomoc"
-            class="d-inline-block mb-8 mx-auto"
-            style="width: 200px"
-            @click="trackGoal('cta:pomoc', { from: 'home-logo' })"
-          >
-            <NuxtImg
-              width="200"
-              height="200"
-              src="/logo.png"
-              class="d-block"
-              fetchpriority="high"
-              preload
-              alt="Koryta.pl logo"
-            />
-          </NuxtLink>
-        </v-col>
-        <v-col cols="12" md="9">
-          <h1 class="text-h5 text-sm-h3 text-md-h2 font-weight-bold lh-title">
-            <span class="text-high-emphasis"
-              >Jesteśmy największym, ogólnopolskim i niezależnym agregatorem
-              koryciarstwa</span
-            >
-          </h1>
-        </v-col>
-      </v-row>
-    </v-container>
-    <!-- Phone only, and the counterpart to the headline hidden above: taking
-         the logo and the h1 off the first screen also took away the one line
-         that said what the site is for, and a search box on its own does not
-         say it. One sentence, above the field it explains, so the first screen
-         reads as a sentence, a search and then the map. -->
-    <v-container fluid class="d-md-none px-4 pt-4 pb-0">
-      <!-- Full emphasis, not medium: this sits on the green band, where
-           rgba(0,0,0,.6) is the wrong side of readable. The phone's h1 - the
-           desktop one is hidden with its container - at 24/700, the size of
-           a title that heads a block rather than a page's column. -->
-      <h1 class="k-title--sm text-high-emphasis mb-0">
-        Sprawdzamy, którymi stanowiskami w&nbsp;publicznych spółkach podzielili
-        się politycy
-      </h1>
-    </v-container>
-    <!-- Search and button in one wrapping flex line rather than an 8/4 grid.
-         The grid put them in columns with different padding, so on a phone,
-         where the columns stack, the button sat 20px to the left of the search
-         bar above it, and on a desktop it started at the 8/12 mark - a gap
-         wide enough to read as a stray control rather than as the search's
-         companion. Wrapping puts it under the search on a phone, at the same
-         left edge, and beside it everywhere else. -->
-    <v-row class="align-center">
-      <v-col
-        cols="12"
-        class="home-actions d-flex flex-wrap align-center ga-4 pa-4 pa-md-8"
+    <!-- One h1 at every width: the sentence that says what the site does.
+         It used to be two - a claim beside the logo on a computer, this
+         sentence on a phone - and the claim was a heading nobody could act
+         on, three lines of it at 60px. Now the search sits right under the
+         sentence it answers, on the same left edge, and the logo steps down
+         beside both rather than above them. -->
+    <div class="home-hero">
+      <!-- Desktop only. On a phone the logo would be most of the first screen
+           and is not something a reader can act on; the app bar has it. -->
+      <!-- To /pomoc, not to the zrzutka. This used to open a particular
+           reward on the fundraiser - a limited pin - which is spent, so the
+           first thing on the page sent a reader to a finished appeal. /pomoc
+           is where the current ask lives and stays right as it changes. Same
+           goal as the "Działaj z nami" button below, told apart by `from`. -->
+      <NuxtLink
+        to="/pomoc"
+        class="home-hero__logo d-none d-md-block"
+        @click="trackGoal('cta:pomoc', { from: 'home-logo' })"
       >
-        <omni-search />
-        <!-- Desktop only. Wrapped under a full width search field it read as a
-             stray control rather than as the search's companion, and on a
-             phone the first screen is better spent getting the reader to the
-             map than to a second call to action. The app bar carries the same
-             link on a desktop; the footer is where a phone finds it. -->
-        <v-btn
-          :append-icon="mdiChevronRight"
-          color="secondary"
-          border
-          class="text-none d-none d-md-inline-flex"
-          flat
-          rounded="lg"
-          slim
-          text="Działaj z nami"
-          to="/pomoc"
-          data-testid="home-cta"
-          @click="trackGoal('cta:pomoc', { from: 'home-hero' })"
+        <NuxtImg
+          width="136"
+          height="136"
+          src="/logo.png"
+          class="d-block"
+          fetchpriority="high"
+          preload
+          alt="Koryta.pl logo"
         />
-      </v-col>
-    </v-row>
+      </NuxtLink>
+      <div class="home-hero__main">
+        <!-- Full emphasis, not medium: this sits on the green band, where
+             rgba(0,0,0,.6) is the wrong side of readable. 48 on a computer,
+             the one display title on the site; 24 on a phone (type.css). -->
+        <h1 class="k-title--display text-high-emphasis mb-0">
+          Sprawdzamy, którymi stanowiskami w&nbsp;publicznych spółkach
+          podzielili się politycy
+        </h1>
+        <!-- Search and button in one wrapping flex line rather than an 8/4
+             grid. The grid put them in columns with different padding, so on a
+             phone, where the columns stack, the button sat 20px to the left of
+             the search bar above it, and on a desktop it started at the 8/12
+             mark - a gap wide enough to read as a stray control rather than as
+             the search's companion. Wrapping puts it under the search on a
+             phone, at the same left edge, and beside it everywhere else. -->
+        <div class="home-actions d-flex flex-wrap align-center ga-4">
+          <omni-search />
+          <!-- Desktop only. Wrapped under a full width search field it read as
+               a stray control rather than as the search's companion, and on a
+               phone the first screen is better spent getting the reader to the
+               map than to a second call to action. The app bar carries the
+               same link on a desktop; the footer is where a phone finds it.
+               No `border`: the fill sets it off the band, and a control
+               carries no line - at the site's .24 hairline it had become a
+               brownish ring round the pink. -->
+          <v-btn
+            :append-icon="mdiChevronRight"
+            color="secondary"
+            class="text-none d-none d-md-inline-flex"
+            flat
+            rounded="lg"
+            slim
+            text="Działaj z nami"
+            to="/pomoc"
+            data-testid="home-cta"
+            @click="trackGoal('cta:pomoc', { from: 'home-hero' })"
+          />
+        </div>
+      </div>
+    </div>
   </HomeSection>
   <HomeSection>
     <HomeExplorer />
@@ -100,8 +79,9 @@
   <HomeSection>
     <!-- The newsletter for readers without an account, asked first, above
          the call to action. The gap goes under it, not over it: the section
-         already pads its top. Inside the section, so a signed-in reader, who
-         does not get the form, gets no empty gap either. -->
+         already stands the sections' gap below the one above. Inside the
+         section, so a signed-in reader, who does not get the form, gets no
+         empty gap either. -->
     <MailNewsletterSignupForm class="mb-4 mb-md-6" />
     <CardCallToAction />
   </HomeSection>
@@ -146,24 +126,55 @@ definePageMeta({
 </script>
 
 <style scoped>
+/* The band's own padding is HomeSection's, 16px on a phone and 28 from 960
+   up; the hero adds to it. On a phone that makes 32 on every side, as before.
+   On a computer it is 56 above and 48 below, so the band is as tall as its
+   sentence and the search under it: 286px at 1440, where the old claim kept
+   it at 426. */
+.home-hero {
+  padding: 16px;
+}
+
+.home-actions {
+  margin-top: 16px;
+}
+
 /* OmniSearch's root is `display: contents`, so the field itself is the flex
    item on this line - which is why the `width: 400px` this page used to pass
    never took, `.v-input` being `flex: 1 1 auto` and free to grow past it.
    Sizing it as the flex item is what holds: it fills the line on a phone and
    stops at the width the search was always meant to have. The basis is below
-   the narrowest phone, so the button wraps under it rather than squeezing it. */
+   the narrowest phone, so the button wraps under it rather than squeezing it.
+   No margin of its own: it starts on the h1's left edge. */
 .home-actions :deep(.v-input) {
   flex: 1 1 280px;
   max-width: 400px;
+  margin: 0 !important;
 }
 
-/* Two thirds of the line on a desktop, which is where the 8/12 column this
-   row replaced used to end. Capped at 400px the search stopped a third of the
-   way across, and "Działaj z nami" - which is meant to read as its companion -
-   started near the middle of an otherwise empty line, looking like a control
-   that had come loose. The proportion is what matters here rather than a pixel
-   width: the section around it is capped at 1200px and centred. */
 @media (min-width: 960px) {
+  /* The logo in a column of its own beside the sentence and the search,
+     centred on the two of them. Its left edge is the page's content edge,
+     where the call to action and the footer start too. */
+  .home-hero {
+    display: grid;
+    grid-template-columns: 136px minmax(0, 1fr);
+    column-gap: 48px;
+    align-items: center;
+    padding: 28px 0 20px;
+  }
+
+  .home-actions {
+    margin-top: 28px;
+  }
+
+  /* Two thirds of the line, which is where the 8/12 column this row replaced
+     used to end. Capped at 400px the search stopped a third of the way
+     across, and "Działaj z nami" - which is meant to read as its companion -
+     started near the middle of an otherwise empty line, looking like a
+     control that had come loose. The proportion is what matters here rather
+     than a pixel width: the section around it is capped at 1200px and
+     centred. */
   .home-actions :deep(.v-input) {
     max-width: 66%;
   }

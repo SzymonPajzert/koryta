@@ -83,7 +83,7 @@ export const GOALS = {
   },
   "home-explorer:pick": {
     description:
-      "Reader clicked through from the home explorer into the data - today only a powiat on the map, the treemap that was the other half of this goal having been removed. `panel` is kept so a second panel that converts can be compared against it directly.",
+      "Reader clicked through from the home explorer into the data - a powiat on the map (`panel: map`) or a row of the list of powiaty beside it (`panel: map-list`), the treemap that was the other half of this goal having been removed. Add the two for what the map panel converts. `panel` is kept so a second panel that converts can be compared against it directly.",
     props: ["panel", "value"],
   },
   // The chart panel's two controls, counted apart from `home-explorer:tab` and

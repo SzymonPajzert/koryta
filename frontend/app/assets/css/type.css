@@ -35,6 +35,8 @@
    digits already are. */
 
 :root {
+  /* the home page's one sentence, the only display title: 48 on a computer */
+  --k-display-size: 48px;
   /* the page's one title, an h1 */
   --k-title-size: 40px;
   --k-title-size-phone: 28px;
@@ -422,6 +424,19 @@
   line-height: 1.25;
 }
 
+/* The home page's sentence, sized to sit on two lines wherever the logo is
+   beside it: the display step from 1280px, where its column is 1008px wide,
+   and the ordinary title from 960 to 1279, where 48 would take three. Below
+   960 there is no logo and it is the 24 of a block's title - four lines on a
+   phone, two on a tablet. */
+@media (min-width: 1280px) {
+  :is(.v-application, .v-overlay-container) h1.k-title--display {
+    font-size: var(--k-display-size) !important;
+    letter-spacing: -0.03em !important;
+    line-height: 1.08;
+  }
+}
+
 /* ---- phones ---- */
 @media (max-width: 599.98px) {
   :is(.v-application, .v-overlay-container) h1 {
@@ -461,5 +476,14 @@
     font-size: var(--k-lead-size-phone);
     letter-spacing: normal;
     line-height: 1.55;
+  }
+}
+
+/* The home sentence's size below 960 (see the display step above). */
+@media (max-width: 959.98px) {
+  :is(.v-application, .v-overlay-container) h1.k-title--display {
+    font-size: var(--k-title-sm-size) !important;
+    letter-spacing: -0.012em !important;
+    line-height: 1.25;
   }
 }

@@ -14,8 +14,8 @@
  * are already registered so no data is lost to a forgotten dashboard step.
  *
  * Before spending traffic on the split, read `home-explorer:tab` broken down by
- * `tab`, and `home-explorer:pick` broken down by `panel` (`shared/analytics.ts`).
- * The tab strip is already switchable, so how many people leave the panel they
+ * `tab`, and `home-explorer:pick` broken down by `panel` (`shared/analytics.ts`;
+ * the map panel's picks are `map` plus `map-list`). The tab strip is already switchable, so how many people leave the panel they
  * landed on - and what each panel converts once opened - is observable for free, at
  * full sample size, with no arm to divide by. An experiment is only worth
  * running if those numbers are ambiguous.

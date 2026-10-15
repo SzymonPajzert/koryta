@@ -1,8 +1,11 @@
 <template>
-  <!-- Inline-block only around the activator. With none, an empty inline-block
-       still opens a line of text, which put 24px of nothing under /pomoc's last
-       section; a block with nothing in it takes no room. -->
-  <div :class="{ 'd-inline-block': !hideActivator }">
+  <!-- Inline-block only around the activator. With none there is nothing to
+       show in place - both dialogs teleport to the overlay layer - so the
+       wrapper is no box at all: an empty inline-block opened a line of text,
+       which put 24px of nothing under /pomoc's last section, and even an empty
+       block is still a flex item, which took a gap of the home hero's search
+       row and stopped the field short of the line on a phone. -->
+  <div :class="hideActivator ? 'propose-edit--hidden' : 'd-inline-block'">
     <slot
       v-if="!hideActivator"
       name="activator"
@@ -476,3 +479,9 @@ async function submit() {
   }
 }
 </script>
+
+<style scoped>
+.propose-edit--hidden {
+  display: contents;
+}
+</style>

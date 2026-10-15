@@ -55,6 +55,10 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   podzielili się politycy”, with no full stop. It replaces „Jesteśmy
   największym, ogólnopolskim i niezależnym agregatorem koryciarstwa”
   (2026-10-15).
+- **Beside the home map, before anything is picked: the powiaty with the
+  most people**, each row picking its powiat as a click on the map does.
+  Picked 2026-10-23 over the people of all of Poland with the longest
+  careers (b).
 - **The person page's graph opens on „2 kroki”**, as today. Szymon: "it looks
   cooler, we can change it later" (2026-10-15).
 - **A long person bio folds on phones**: it shows four lines, followed by
