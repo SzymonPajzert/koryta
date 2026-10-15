@@ -11,7 +11,12 @@ service cloud.firestore {
       allow read: if (resource.data.type == "article" || resource.data.type == "person" || resource.data.type == "place" || resource.data.type == "topic")
           && resource.data.published == true
           && resource.data.get("deleted", false) != true;
-      allow create: if request.auth != null && resource.data.revision_id == null;
+      // Nodes are written by the server through the admin SDK, which these
+      // rules do not apply to, and whatever a reader contributes goes through
+      // a revision. The create rule that stood here read `resource`, which a
+      // create does not have, so it turned every browser away by raising an
+      // error - closed on purpose now rather than by accident.
+      allow write: if false;
     }
 
     // A note on a person is research about somebody - unreviewed, and for most
@@ -57,8 +62,10 @@ service cloud.firestore {
           && noteId == data.nodeId + '_' + uid;
     }
 
+    // Signed out, `request.auth` is null and reading its uid raised an error,
+    // which is what turned those readers away.
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
     // What a contributor concluded about one entry of the QA changelog
