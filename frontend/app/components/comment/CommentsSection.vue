@@ -43,7 +43,7 @@
 
     <div
       v-if="mainComments.length === 0 && !loading"
-      class="text-center text-grey py-4"
+      class="text-center text-grey pt-4"
     >
       Brak komentarzy.
     </div>

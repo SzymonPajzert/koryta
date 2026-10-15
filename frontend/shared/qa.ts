@@ -271,6 +271,16 @@ export const QA_ITEMS: QaItem[] = [
     area: "admin",
   },
   {
+    id: "rowny-odstep-nad-stopka",
+    title: "Ten sam odstęp nad stopką na każdej stronie",
+    description:
+      "Ostatni blok strony stoi nad stopką tak daleko, jak sekcje strony osoby od siebie – 40 px, 32 na telefonie – a nie od 16 do 68 px, zależnie od strony.",
+    steps: [
+      "Zjedź na dół strony osoby, /o-nas i /eksploruj/statystyki – nad stopką jest wszędzie ten sam odstęp.",
+    ],
+    area: "public",
+  },
+  {
     id: "cala-nazwa-koryta-pl-pogrubiona",
     title: "Cała nazwa „koryta.pl” pogrubiona",
     description:
