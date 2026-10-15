@@ -36,4 +36,8 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
-.claude
+# Claude Code: local state (settings.local.json, old worktrees) stays out;
+# the shared skills and rules are committed.
+**/.claude/*
+!**/.claude/skills/
+!**/.claude/rules/
