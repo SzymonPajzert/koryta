@@ -93,6 +93,10 @@
                nothing where the row is not a company, or where nobody has filed
                one under a sector. -->
           <ChipCompanyCategories :company="edgeCompany(edge)" />
+          <!-- A candidacy in a second place of the same election: somebody
+               else's, one of the two. Before the draft badge, whose
+               „Opublikuj" is what would put it live. -->
+          <ChipPlaceClash :edge :clash="clashOf.get(edge)" />
           <!-- Whether the relation itself is live. Among the chips rather than
                among the buttons on the right: it says what the row *is*, the
                way the sector and the party do, and the one control it carries
@@ -251,6 +255,7 @@ import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
 import { asArray, type Company } from "~~/shared/model";
 import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
+import { placeClashes, type PlaceClash } from "~~/shared/twoPlaces";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~/composables/slugs";
 
@@ -360,6 +365,28 @@ function sourceCount(edge: EdgeNode) {
 const listedEdges = computed(() =>
   withoutRedundantRoleless(props.edges, employmentSpell),
 );
+
+/** The clash each candidacy row takes part in, where it puts its person in a
+ * second place of one election - see shared/twoPlaces.ts. Over every row, the
+ * published and the drafts alike: a signed in reader is handed both, and
+ * either side may be the one that is not this person's. */
+const clashOf = computed(() => {
+  const byRow = new Map<EdgeNode, PlaceClash<EdgeNode>>();
+  const clashes = placeClashes(listedEdges.value, (edge) =>
+    edge.type === "election"
+      ? {
+          personId: edge.source,
+          regionId: edge.target,
+          startDate: edge.start_date,
+          position: edge.position,
+        }
+      : undefined,
+  );
+  for (const clash of clashes) {
+    for (const row of clash.rows) byRow.set(row, clash);
+  }
+  return byRow;
+});
 
 const edgesSorted = computed(() => {
   return listedEdges.value.toSorted((a, b) => {
