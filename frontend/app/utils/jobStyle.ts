@@ -43,26 +43,26 @@ import {
  * red and amber ones that ask for a look; the two calmer ambers say "it
  * stopped, and that may be fine". `summary` is how the strip at the top labels
  * a count of them - a column heading, so it never has to agree with a
- * number. */
+ * number, and in sentence case like every label. */
 export const jobHealthConfig: Record<
   JobHealthStatus,
   { title: string; summary: string; icon: string; tone: RowTone }
 > = {
   stalled: {
     title: "Bez sygnału",
-    summary: "bez sygnału",
+    summary: "Bez sygnału",
     icon: mdiSignalOff,
     tone: "danger",
   },
   failed: {
     title: "Błąd",
-    summary: "z błędem",
+    summary: "Z błędem",
     icon: mdiAlertCircleOutline,
     tone: "danger",
   },
   late: {
     title: "Nie wystartował",
-    summary: "nie wystartowały",
+    summary: "Nie wystartowały",
     icon: mdiClockAlertOutline,
     tone: "danger",
   },
@@ -70,49 +70,49 @@ export const jobHealthConfig: Record<
   // night's upload - but the site is a night behind until somebody looks.
   held: {
     title: "Wstrzymane kroki",
-    summary: "ze wstrzymanymi krokami",
+    summary: "Ze wstrzymanymi krokami",
     icon: mdiPauseCircleOutline,
     tone: "warning",
   },
   stale: {
     title: "Nieaktualne",
-    summary: "nieaktualne",
+    summary: "Nieaktualne",
     icon: mdiCalendarAlert,
     tone: "warning",
   },
   partial: {
     title: "Niedokończony",
-    summary: "niedokończone",
+    summary: "Niedokończone",
     icon: mdiCircleHalfFull,
     tone: "warning",
   },
   stopped: {
     title: "Zatrzymany",
-    summary: "zatrzymane",
+    summary: "Zatrzymane",
     icon: mdiStopCircleOutline,
     tone: "warning",
   },
   running: {
     title: "W toku",
-    summary: "w toku",
+    summary: "W toku",
     icon: mdiProgressClock,
     tone: "info",
   },
   ok: {
     title: "Działa",
-    summary: "działa",
+    summary: "Działa",
     icon: mdiCheckCircleOutline,
     tone: "success",
   },
   never: {
     title: "Brak raportów",
-    summary: "brak raportów",
+    summary: "Brak raportów",
     icon: mdiMinusCircleOutline,
     tone: "neutral",
   },
   unknown: {
     title: "Nieznany",
-    summary: "nieznane",
+    summary: "Nieznane",
     icon: mdiHelpCircleOutline,
     tone: "neutral",
   },

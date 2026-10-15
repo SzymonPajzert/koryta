@@ -10,63 +10,69 @@
     data-task-row
   >
     <template #summary>
-      <v-icon
-        class="arow-fixed"
-        size="small"
-        :icon="taskKindConfig[task.kind].icon"
-        :color="`ink-${taskSectionConfig[section].tone}`"
-        :title="taskKindConfig[task.kind].title"
-      />
-      <span class="arow-grow">{{ task.title }}</span>
-      <TasksPriorityBadge
-        v-if="section !== 'closed'"
-        :task="task"
-        :state="state"
-      />
-      <span
-        v-if="task.status === 'doing'"
-        class="arow-tag bg-surface-info text-ink-info"
-      >
-        W toku
-      </span>
-      <!-- A goal waits on everything that leads to it; what it says instead
-           is how far that has got. -->
-      <span
-        v-if="progress"
-        class="arow-tag bg-surface-muted"
-        :title="`Zamknięte ${progress.closed} z ${progress.total} zadań, które prowadzą do tego celu`"
-        data-goal-progress
-      >
-        {{ progress.closed }}/{{ progress.total }}
-      </span>
-      <span
-        v-else-if="state.blockers.length > 0"
-        class="arow-tag bg-surface-muted"
-        :title="state.blockers.map((t) => t.title).join('\n')"
-      >
-        czeka na {{ state.blockers.length }}
-      </span>
-      <span
-        v-if="openDependents > 0"
-        class="arow-tag bg-surface-warning text-ink-warning"
-        :title="state.dependents.map((t) => t.title).join('\n')"
-      >
-        blokuje {{ openDependents }}
-      </span>
-      <!-- Not on a phone, where the title needs every pixel of the line. -->
-      <span
-        v-if="task.tags.length > 0"
-        class="arow-side text-medium-emphasis text-body-2 d-none d-sm-inline"
-      >
-        {{ task.tags.map((tag) => `#${tag}`).join(" ") }}
-      </span>
-      <span
-        v-if="when"
-        class="arow-fixed text-caption text-medium-emphasis"
-        :title="`${when.label} ${formatTaskDate(when.at)}`"
-        data-task-when
-      >
-        {{ formatDaysAgo(when.at) }}
+      <!-- One line from a phone's width up. On a phone the title keeps the
+           first line to itself and the pills and the date go under it: a task
+           that is under way, waits, holds something up and is urgent used to
+           leave its title a word and an ellipsis. -->
+      <span class="task-head">
+        <v-icon
+          class="arow-fixed"
+          size="small"
+          :icon="taskKindConfig[task.kind].icon"
+          :color="`ink-${taskSectionConfig[section].tone}`"
+          :title="taskKindConfig[task.kind].title"
+        />
+        <span class="arow-grow task-head__title">{{ task.title }}</span>
+        <TasksPriorityBadge
+          v-if="section !== 'closed'"
+          :task="task"
+          :state="state"
+        />
+        <span
+          v-if="task.status === 'doing'"
+          class="arow-tag bg-surface-info text-ink-info"
+        >
+          W toku
+        </span>
+        <!-- A goal waits on everything that leads to it; what it says instead
+             is how far that has got. -->
+        <span
+          v-if="progress"
+          class="arow-tag bg-surface-muted"
+          :title="`Zamknięte ${progress.closed} z ${progress.total} zadań, które prowadzą do tego celu`"
+          data-goal-progress
+        >
+          {{ progress.closed }}/{{ progress.total }}
+        </span>
+        <span
+          v-else-if="state.blockers.length > 0"
+          class="arow-tag bg-surface-muted"
+          :title="state.blockers.map((t) => t.title).join('\n')"
+        >
+          czeka na {{ state.blockers.length }}
+        </span>
+        <span
+          v-if="openDependents > 0"
+          class="arow-tag bg-surface-warning text-ink-warning"
+          :title="state.dependents.map((t) => t.title).join('\n')"
+        >
+          blokuje {{ openDependents }}
+        </span>
+        <!-- Not on a phone: the open row lists them. -->
+        <span
+          v-if="task.tags.length > 0"
+          class="arow-side text-medium-emphasis text-body-2 d-none d-sm-inline"
+        >
+          {{ task.tags.map((tag) => `#${tag}`).join(" ") }}
+        </span>
+        <span
+          v-if="when"
+          class="arow-fixed text-caption text-medium-emphasis"
+          :title="`${when.label} ${formatTaskDate(when.at)}`"
+          data-task-when
+        >
+          {{ formatDaysAgo(when.at) }}
+        </span>
       </span>
     </template>
 
@@ -162,3 +168,28 @@ const openDependents = computed(
   () => props.state.dependents.filter((t) => !isClosed(t)).length,
 );
 </script>
+
+<style scoped>
+/* The summary line, beside the toggle's chevron: the same 8px gaps the
+ * toggle puts between its own items. */
+.task-head {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 599.98px) {
+  .task-head {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  /* The rest of the first line after the 20px icon and its gap, with a few
+   * pixels to spare, so whatever follows the title starts the second. */
+  .task-head__title {
+    flex: 1 1 calc(100% - 32px);
+  }
+}
+</style>

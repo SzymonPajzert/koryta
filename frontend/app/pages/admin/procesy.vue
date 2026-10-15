@@ -1,12 +1,10 @@
 <template>
   <div class="w-100">
-    <h1 class="text-h5 text-sm-h4 mb-2">Procesy</h1>
-    <p class="text-body-2 text-medium-emphasis mb-4">
-      Wszystko, co zmienia dane – pobieranie KRS, lustro, kopia bazy, crawl,
-      importy na stronę i zapisy z rozszerzenia – i jak daleko doszło. Joby
-      zgłaszają się same, gdziekolwiek działają; te, które milczą, widać po tym,
-      co zostawiły w zasobnikach.
-    </p>
+    <AdminPageHead
+      title="Procesy"
+      lead="Wszystko, co zmienia dane – pobieranie KRS, lustro, kopia bazy, crawl, importy na stronę i zapisy z rozszerzenia – i jak daleko doszło."
+      info="Joby zgłaszają się same, gdziekolwiek działają; te, które milczą, widać po tym, co zostawiły w zasobnikach."
+    />
 
     <!-- The one run a link named (#przebieg-<id>): what somebody asked for
          on a page, or a capture the extension sent, followed until it ends. -->
@@ -52,7 +50,10 @@
         </div>
       </div>
 
-      <div class="jobs-summary__stats">
+      <div
+        class="jobs-summary__stats"
+        :class="{ 'jobs-summary__stats--rows': stats.length > 4 }"
+      >
         <div
           v-for="stat in stats"
           :key="stat.status"
@@ -108,7 +109,8 @@
     </v-alert>
     <v-progress-linear v-if="loading && !overview" indeterminate class="mb-4" />
 
-    <template v-if="overview">
+    <!-- One gap between the sections, the one every admin page has. -->
+    <div v-if="overview" class="k-sections">
       <section
         v-for="section in sections"
         :key="section.key"
@@ -120,7 +122,7 @@
           :count="section.rows.length"
           :info="section.info"
         />
-        <AdminRowList class="mb-4">
+        <AdminRowList class="k-bleed-xs">
           <JobsRow
             v-for="row in section.rows"
             :key="row.definition.id"
@@ -136,7 +138,7 @@
           />
         </AdminRowList>
       </section>
-    </template>
+    </div>
   </div>
 </template>
 
@@ -174,8 +176,6 @@ definePageMeta({
   // the group need not be an administrator. The layout lights the Admin menu
   // on this middleware too, since that is where the page's entry is.
   middleware: "datascience",
-  // One column of rows, like the other admin lists.
-  maxWidth: 1100,
 });
 
 useHead({ title: "Procesy (Admin) - koryta.pl" });
@@ -409,7 +409,7 @@ onMounted(async () => {
   align-items: center;
   gap: 16px;
   padding: 16px 20px;
-  border-radius: 10px;
+  border-radius: var(--k-r-card);
 }
 
 .jobs-summary__icon {
@@ -427,26 +427,27 @@ onMounted(async () => {
   gap: 0 12px;
 }
 
+/* Figures are 700, like the page's title. */
 .jobs-summary__number {
-  font-size: 3rem;
-  font-weight: 800;
+  font-size: 48px;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
 .jobs-summary__label {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 600;
   line-height: 1.3;
 }
 
 .jobs-summary__names {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 14px;
-  margin-top: 6px;
-  font-size: 0.875rem;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-size: var(--k-ui-size);
 }
 
 /* On the solid block, links keep its text colour: underlined white reads as
@@ -470,17 +471,17 @@ onMounted(async () => {
 }
 
 .jobs-summary__stat-number {
-  font-size: 2rem;
-  font-weight: 800;
+  font-size: 32px;
+  font-weight: 700;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 
+/* A label, as type.css has them: 12/600 in the quiet ink, sentence case. */
 .jobs-summary__stat-label {
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: var(--k-meta-size);
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
 }
 
 .jobs-summary__refresh {
@@ -497,6 +498,15 @@ onMounted(async () => {
     flex-direction: row;
     align-items: center;
     margin-inline-start: 0;
+  }
+
+  /* Five or six counts in rows of three, 3+2 or 3+3: wrapped where the text
+   * ran out, the fifth was left alone on a line and read as a separate fact.
+   * Three or four still fit on one line as they are. */
+  .jobs-summary__stats--rows {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    justify-content: start;
   }
 }
 </style>
