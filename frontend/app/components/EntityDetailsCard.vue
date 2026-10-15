@@ -125,10 +125,36 @@
         :needs-split="personEntity?.needs_split"
       />
       <CardPersonInfo :person="personEntity" class="mb-2" />
-      <!-- Reading text, at a reading measure, whole at every width. -->
-      <p v-if="entity?.content" class="person-bio" data-testid="person-bio">
+      <!-- Reading text, at a reading measure. On a phone a long bio shows
+           four lines, ending in the clamp's ellipsis, and the rest is one tap
+           away: hidden, not cut, so a screen reader and a search engine still
+           get all of it. Wider screens show it whole. Whether it folds is
+           decided by length rather than measured, so the server's html
+           already has the button and nothing moves when the page hydrates. -->
+      <p
+        v-if="entity?.content"
+        :id="bioId"
+        ref="bio"
+        class="person-bio"
+        :class="{ 'person-bio--folded': bioLong && !bioOpen }"
+        data-testid="person-bio"
+      >
         {{ nbsp(entity.content) }}
       </p>
+      <!-- A toggle that stays rather than a button that goes: focus never has
+           to be moved, `aria-expanded` has two states to report, and a bio
+           opened by mistake folds back. -->
+      <v-btn
+        v-if="bioLong"
+        variant="text"
+        class="person-bio__toggle px-2"
+        :aria-expanded="bioOpen"
+        :aria-controls="bioId"
+        data-testid="person-bio-toggle"
+        @click="toggleBio"
+      >
+        {{ bioOpen ? "Pokaż mniej" : "Pokaż więcej" }}
+      </v-btn>
     </v-card-text>
   </v-card>
 
@@ -238,12 +264,53 @@ const personEntity = computed(() =>
  * extra rich fields are simply absent - `usePersonSearch` reads them
  * optionally, and `extraLocations` covers the one that matters here. */
 const richPerson = computed(() => personEntity.value as PersonRich | undefined);
+
+/** The shortest bio that folds on a phone. Measured rather than guessed: the
+ * 890 published bios of the 2026-10-15 export, set in the bio's own CSS and
+ * Roboto at every phone width from 320px to 440px.
+ *
+ * A fold pays from the sixth line on: four lines and the button row are 139px,
+ * six lines 149px, but five lines only 124px. On a 375px phone every bio of
+ * 214 characters or more takes six lines or more, and none under it does, so
+ * there the cut is clean. A wider phone fits more on a line, so there some
+ * bios of 214 or more take five and fold anyway (16 of the 70 at 412px, 20 at
+ * 430px), and on a 360px phone 7 six-line bios of 200-213 stay whole. But at
+ * no phone width does a bio of 214 or more fit in four lines (the longest that
+ * does, at 440px, has 209), so no button has nothing behind it. Wider than a
+ * phone that stops holding - at 449px a 218-character bio fits in four, at
+ * 480px 10 of the 70 do - so the fold ends with the widest phone, a 440px
+ * iPhone Pro Max. */
+const BIO_FOLD_MIN_LENGTH = 214;
+
+const bioLong = computed(
+  () => (props.entity.content?.length ?? 0) >= BIO_FOLD_MIN_LENGTH,
+);
+const bioOpen = ref(false);
+const bioId = useId();
+const bio = useTemplateRef<HTMLElement>("bio");
+
+/** Folding a long bio back from below its start shortens the page above the
+ * reader: the four lines left, and the focused toggle under them, can end up
+ * above the screen. Bring them back into view; a bio already on screen stays
+ * where it is. Instant rather than the page's smooth scrolling: it runs before
+ * the fold is painted, so the reader never sees the page jump at all. */
+async function toggleBio() {
+  bioOpen.value = !bioOpen.value;
+  if (bioOpen.value) return;
+  await nextTick();
+  bio.value?.scrollIntoView({ block: "nearest", behavior: "instant" });
+}
 </script>
 
 <style scoped>
 .entity-header {
   background: transparent;
   border-bottom: 1px solid var(--k-line);
+  /* Not Vuetify's `hidden`: the bio's toggle hangs 8px into the gutter, and a
+     clipped card cut its ripple and focus tint off flat at the text's edge.
+     There is nothing here to clip - the card is square and unpainted, and the
+     title row clips itself (`.v-card-title` is `overflow: hidden`). */
+  overflow: visible;
 }
 
 /* The parties beside the h1 are set one step up from a list's 12px. */
@@ -256,5 +323,50 @@ const richPerson = computed(() => personEntity.value as PersonRich | undefined);
   line-height: 1.55;
   margin: 0;
   max-width: 72ch;
+  /* clear of the app bar when folding scrolls it back into view */
+  scroll-margin-top: 96px;
+}
+
+/* Four lines and the clamp's ellipsis: the soft end, in the text's own ink.
+   Phones only, up to the widest at 440px rather than Vuetify's 600: the
+   length the fold is decided by holds that far, and past it a folded bio can
+   fit in four lines (BIO_FOLD_MIN_LENGTH). The toggle goes at the same width. */
+@media (max-width: 440.98px) {
+  .person-bio--folded {
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 441px) {
+  .person-bio__toggle {
+    display: none;
+  }
+}
+
+/* A neutral text button in ink. Its label lines up with the text's left
+   edge; the 8px of padding that keeps the press tint off the label hangs
+   into the gutter instead. */
+.person-bio__toggle {
+  margin-inline-start: -8px;
+  margin-top: 4px;
+}
+
+/* Taps reach 4px past the 36px button on either side: a 44px target,
+   without a taller row under the bio. */
+.person-bio__toggle::before {
+  content: "";
+  inset: -4px 0;
+  position: absolute;
+}
+
+/* No grey wash after a tap - a touch screen keeps `:hover` on what was
+   tapped until the next tap elsewhere, so the tint stayed under the label.
+   The ripple shows the press. Kept for the keyboard, as in the app bar. */
+.person-bio__toggle:not(:focus-visible) :deep(.v-btn__overlay) {
+  opacity: 0;
 }
 </style>

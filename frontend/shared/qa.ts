@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zwiniety-opis-osoby-na-telefonie",
+    title: "Długi opis osoby na telefonie zwinięty do czterech linii",
+    description:
+      "Na telefonie długi opis osoby pokazuje cztery linie i „Pokaż więcej”, które rozwija resztę w miejscu. Na komputerze opis jest cały.",
+    steps: [
+      "Otwórz na telefonie stronę Grzegorza Ganowicza i kliknij „Pokaż więcej” – opis rozwija się, a przycisk zmienia się w „Pokaż mniej”, który zwija go z powrotem.",
+      "Otwórz tę samą stronę na komputerze – opis jest cały i nie ma przycisku.",
+    ],
+    link: "/entity/person/2wqY7arTL25S5bGyhjcO",
+    area: "public",
+  },
+  {
     id: "cichy-pasek-i-stopka",
     title: "Niższy górny pasek z „Zgłoś”, smukła stopka",
     description:
