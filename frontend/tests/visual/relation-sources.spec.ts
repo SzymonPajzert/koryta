@@ -19,6 +19,12 @@ import { logIn, USERS } from "../e2e/helpers/auth";
 
 /** Everything that has to have arrived before a shot is worth taking. */
 async function settled(page: Page) {
+  // The pointer off whatever it last clicked, and that click's ripple gone:
+  // Vuetify fades a ripple out on a timer, so a shot taken before it fires
+  // drew the chosen row in the dialog a shade darker - in three runs out of
+  // four. The same wait as ./two-places.spec.ts's.
+  await page.mouse.move(0, 0);
+  await expect(page.locator(".v-ripple__animation")).toHaveCount(0);
   await page.evaluate(() => document.fonts.ready);
 }
 
