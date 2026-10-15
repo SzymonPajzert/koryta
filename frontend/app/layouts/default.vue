@@ -1,9 +1,10 @@
 <template>
-  <!-- Flat, ruled off by the one hairline: a shadow is for what floats. -->
+  <!-- Flat, ruled off by the one hairline: a shadow is for what floats. The
+       quiet frame: the menu in sentence case and the bar's neutral ink, so a
+       page's own name and data stand out rather than the chrome round it. -->
   <v-app-bar :height="APP_BAR_HEIGHT" flat class="app-bar">
-    <NuxtLink to="/">
+    <NuxtLink to="/" class="app-bar__logo">
       <NuxtImg
-        class="mx-2"
         src="/logo_small.png"
         width="40"
         height="40"
@@ -14,23 +15,34 @@
       />
     </NuxtLink>
 
-    <v-app-bar-title v-if="mdAndUp">
-      <NuxtLink
-        to="/"
-        class="text-decoration-none"
-        style="color: inherit; cursor: pointer"
-      >
-        koryta.pl
+    <!-- The name set as a wordmark: „koryta” bold, „.pl” regular. -->
+    <v-app-bar-title v-if="mdAndUp" class="app-bar__title">
+      <NuxtLink to="/" class="app-bar__wordmark">
+        <b>koryta</b><span>.pl</span>
       </NuxtLink>
     </v-app-bar-title>
     <v-spacer />
-    <omni-search v-if="!route?.meta.hideSearch" />
+    <!-- „Szukaj osób i spółek” on a phone: the full label ended in an
+         ellipsis in the narrower field. Regions stay searchable. -->
+    <omni-search
+      v-if="!route?.meta.hideSearch"
+      in-bar
+      :label="mdAndUp ? undefined : 'Szukaj osób i spółek'"
+    />
     <v-spacer />
 
     <template #append>
-      <v-btn v-if="mdAndUp" text to="/tematy">Tematy</v-btn>
-      <v-btn v-if="mdAndUp" text to="/o-nas">O nas</v-btn>
-      <v-btn v-if="mdAndUp" text to="/pomoc">Działaj z nami</v-btn>
+      <v-btn v-if="mdAndUp" class="app-bar__nav" to="/tematy">Tematy</v-btn>
+      <v-btn v-if="mdAndUp" class="app-bar__nav" to="/o-nas">O nas</v-btn>
+      <v-btn v-if="mdAndUp" class="app-bar__nav" to="/pomoc">
+        Działaj z nami
+      </v-btn>
+      <span class="app-bar__sep d-none d-md-block" aria-hidden="true" />
+      <!-- „Zgłoś” lives in the bar: a word beside „Zaloguj się” on a
+           computer, an icon on a phone - labelled on home, which has no
+           search in the bar and the room for it. It used to float over the
+           page, where on a phone it covered text at most scroll positions. -->
+      <FeedbackLauncher :labelled="!!route?.meta.hideSearch" />
       <ClientOnly>
         <v-btn v-if="user && pictureURL" icon to="/profil" size="32">
           <v-avatar :image="pictureURL" size="32" />
@@ -38,14 +50,25 @@
         <v-btn v-if="user && !pictureURL" icon to="/profil">
           <v-icon :icon="mdiAccount" />
         </v-btn>
-        <v-btn v-if="!user" :icon="!mdAndUp" @click="loginDialog = true">
+        <v-btn
+          v-if="!user"
+          :icon="!mdAndUp"
+          class="app-bar__account"
+          @click="loginDialog = true"
+        >
           <v-icon v-if="!mdAndUp" :icon="mdiAccount" />
           <span class="d-none d-md-inline">Zaloguj się</span>
         </v-btn>
-        <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
+        <v-btn v-if="user && mdAndUp" class="app-bar__account" @click="logout">
+          Wyloguj
+        </v-btn>
         <DialogLogin v-model="loginDialog" hide-activator />
         <template #fallback>
-          <v-btn :icon="!mdAndUp" @click="loginDialog = true">
+          <v-btn
+            :icon="!mdAndUp"
+            class="app-bar__account"
+            @click="loginDialog = true"
+          >
             <v-icon v-if="!mdAndUp" :icon="mdiAccount" />
             <span class="d-none d-md-inline">Zaloguj się</span>
           </v-btn>
@@ -55,15 +78,11 @@
   </v-app-bar>
   <v-main class="d-flex flex-column" :style="ssrLayoutTop">
     <ClientOnly>
-      <v-toolbar
-        v-if="user"
-        density="compact"
-        color="primary"
-        class="user-toolbar"
-      >
-        <v-spacer />
-
-        <!-- The panel and two of the inboxes it lists, under the panel's own
+      <!-- The signed-in strip keeps its sage; it is 40px rather than 48 and
+           its items start on the page's own left edge rather than centred. -->
+      <v-toolbar v-if="user" height="40" color="primary" class="user-toolbar">
+        <div class="user-toolbar__row" :style="{ maxWidth: rowMaxWidth }">
+          <!-- The panel and two of the inboxes it lists, under the panel's own
              names; the third, "Zgłoszenia", is under "Zespół" with the QA list
              and its problems, since a problem found there is a report too.
              "Zadania" is the owner's own list, shown to him alone. "Procesy",
@@ -72,72 +91,72 @@
              the menu with that one entry, and none of the panel's.
              The activator has no `to` of its own - it would navigate and open
              the menu at once - so it is lit by hand instead. -->
-        <v-menu
-          v-if="isAdmin || isDatascience"
-          location="bottom start"
-          content-class="user-toolbar-menu"
-        >
-          <template #activator="{ props: menu }">
-            <v-btn
-              v-bind="menu"
-              :prepend-icon="mdiShieldAccount"
-              :append-icon="mdiChevronDown"
-              :active="onAdminPage"
-              :aria-current="onAdminPage || undefined"
-              variant="text"
-            >
-              Admin
-            </v-btn>
-          </template>
-          <v-list density="compact" min-width="220">
-            <v-list-item
-              v-if="isAdmin"
-              :prepend-icon="mdiShieldAccount"
-              to="/admin"
-              exact
-              title="Panel administracyjny"
-            />
-            <v-divider v-if="isAdmin" />
-            <!-- The queue is the first section of /admin/rewizje, which is
+          <v-menu
+            v-if="isAdmin || isDatascience"
+            location="bottom start"
+            content-class="user-toolbar-menu"
+          >
+            <template #activator="{ props: menu }">
+              <v-btn
+                v-bind="menu"
+                :prepend-icon="mdiShieldAccount"
+                :append-icon="mdiChevronDown"
+                :active="onAdminPage"
+                :aria-current="onAdminPage || undefined"
+                variant="text"
+              >
+                Admin
+              </v-btn>
+            </template>
+            <v-list density="compact" min-width="220">
+              <v-list-item
+                v-if="isAdmin"
+                :prepend-icon="mdiShieldAccount"
+                to="/admin"
+                exact
+                title="Panel administracyjny"
+              />
+              <v-divider v-if="isAdmin" />
+              <!-- The queue is the first section of /admin/rewizje, which is
                  open to every signed-in reader - so arriving there lights
                  "Rewizje" rather than this menu. -->
-            <v-list-item
-              v-if="isAdmin"
-              :prepend-icon="mdiInboxArrowDown"
-              to="/admin/rewizje#kolejka"
-              title="Kolejka zmian"
-            />
-            <v-list-item
-              v-if="isAdmin"
-              :prepend-icon="mdiNoteEditOutline"
-              to="/admin/notatki"
-              title="Notatki"
-            />
-            <v-list-item
-              v-if="isOwner"
-              :prepend-icon="mdiSitemapOutline"
-              to="/admin/zadania"
-              title="Zadania"
-            />
-            <v-list-item
-              v-if="isDatascience"
-              :prepend-icon="mdiCogSyncOutline"
-              to="/admin/procesy"
-              title="Procesy"
-            />
-          </v-list>
-        </v-menu>
-        <v-btn :prepend-icon="mdiViewList" variant="text" to="/admin/rewizje">
-          Rewizje
-        </v-btn>
-        <v-btn
-          :prepend-icon="mdiTimelineClockOutline"
-          variant="text"
-          to="/aktywnosc"
-        >
-          Aktywność
-        </v-btn>
-        <!-- What there is to check and what is wrong, in one place: the QA
+              <v-list-item
+                v-if="isAdmin"
+                :prepend-icon="mdiInboxArrowDown"
+                to="/admin/rewizje#kolejka"
+                title="Kolejka zmian"
+              />
+              <v-list-item
+                v-if="isAdmin"
+                :prepend-icon="mdiNoteEditOutline"
+                to="/admin/notatki"
+                title="Notatki"
+              />
+              <v-list-item
+                v-if="isOwner"
+                :prepend-icon="mdiSitemapOutline"
+                to="/admin/zadania"
+                title="Zadania"
+              />
+              <v-list-item
+                v-if="isDatascience"
+                :prepend-icon="mdiCogSyncOutline"
+                to="/admin/procesy"
+                title="Procesy"
+              />
+            </v-list>
+          </v-menu>
+          <v-btn :prepend-icon="mdiViewList" variant="text" to="/admin/rewizje">
+            Rewizje
+          </v-btn>
+          <v-btn
+            :prepend-icon="mdiTimelineClockOutline"
+            variant="text"
+            to="/aktywnosc"
+          >
+            Aktywność
+          </v-btn>
+          <!-- What there is to check and what is wrong, in one place: the QA
              list, its "Problemy" and, for an admin, every report - a problem
              found on /qa is one of those, and an admin's "Problemy" shows it
              as that report; then the two links that leave the site. A menu,
@@ -146,61 +165,61 @@
              strip keeps one shape on pages with no affine board rather than
              growing a button a tick after the route changes. Lit by hand on
              the pages it lists, as "Admin" is. -->
-        <v-menu location="bottom start" content-class="user-toolbar-menu">
-          <template #activator="{ props: menu }">
-            <v-btn
-              v-bind="menu"
-              :prepend-icon="mdiAccountGroupOutline"
-              :append-icon="mdiChevronDown"
-              :active="onTeamPage"
-              :aria-current="onTeamPage || undefined"
-              variant="text"
-            >
-              Zespół
-            </v-btn>
-          </template>
-          <v-list density="compact" min-width="220">
-            <!-- Exact, query included, so only the tab that is showing is lit:
+          <v-menu location="bottom start" content-class="user-toolbar-menu">
+            <template #activator="{ props: menu }">
+              <v-btn
+                v-bind="menu"
+                :prepend-icon="mdiAccountGroupOutline"
+                :append-icon="mdiChevronDown"
+                :active="onTeamPage"
+                :aria-current="onTeamPage || undefined"
+                variant="text"
+              >
+                Zespół
+              </v-btn>
+            </template>
+            <v-list density="compact" min-width="220">
+              <!-- Exact, query included, so only the tab that is showing is lit:
                  both are /qa to the router. -->
-            <v-list-item
-              :prepend-icon="mdiClipboardCheckOutline"
-              to="/qa"
-              exact
-              title="QA – zmiany do sprawdzenia"
-            />
-            <v-list-item
-              :prepend-icon="mdiAlertCircleOutline"
-              :to="{ path: '/qa', query: { widok: 'problemy' } }"
-              exact
-              title="Problemy z QA"
-            />
-            <v-list-item
-              v-if="isAdmin"
-              :prepend-icon="mdiMessageAlertOutline"
-              to="/admin/opinie"
-              title="Zgłoszenia"
-            />
-            <v-divider />
-            <v-list-item
-              :prepend-icon="mdiGithub"
-              :append-icon="mdiOpenInNew"
-              href="https://github.com/users/SzymonPajzert/projects/2/views/3"
-              target="_blank"
-              rel="noopener"
-              title="Nowy bug w GitHubie"
-            />
-            <v-list-item
-              v-if="affineLink"
-              :prepend-icon="mdiCommentTextOutline"
-              :append-icon="mdiOpenInNew"
-              :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
-              target="_blank"
-              rel="noopener"
-              title="Dyskusja w affine"
-            />
-          </v-list>
-        </v-menu>
-        <v-spacer icon />
+              <v-list-item
+                :prepend-icon="mdiClipboardCheckOutline"
+                to="/qa"
+                exact
+                title="QA – zmiany do sprawdzenia"
+              />
+              <v-list-item
+                :prepend-icon="mdiAlertCircleOutline"
+                :to="{ path: '/qa', query: { widok: 'problemy' } }"
+                exact
+                title="Problemy z QA"
+              />
+              <v-list-item
+                v-if="isAdmin"
+                :prepend-icon="mdiMessageAlertOutline"
+                to="/admin/opinie"
+                title="Zgłoszenia"
+              />
+              <v-divider />
+              <v-list-item
+                :prepend-icon="mdiGithub"
+                :append-icon="mdiOpenInNew"
+                href="https://github.com/users/SzymonPajzert/projects/2/views/3"
+                target="_blank"
+                rel="noopener"
+                title="Nowy bug w GitHubie"
+              />
+              <v-list-item
+                v-if="affineLink"
+                :prepend-icon="mdiCommentTextOutline"
+                :append-icon="mdiOpenInNew"
+                :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
+                target="_blank"
+                rel="noopener"
+                title="Dyskusja w affine"
+              />
+            </v-list>
+          </v-menu>
+        </div>
       </v-toolbar>
     </ClientOnly>
     <v-container
@@ -211,7 +230,6 @@
       <slot />
     </v-container>
     <HomeAppFooter class="mt-auto w-100" />
-    <FeedbackLauncher />
   </v-main>
 </template>
 
@@ -261,6 +279,10 @@ const containerStyle = computed(() =>
       },
 );
 const affineLink = computed(() => route?.meta?.affineLink);
+/** The signed-in strip's items line up with the page's column under it. */
+const rowMaxWidth = computed(() =>
+  typeof maxWidth.value === "number" ? `${maxWidth.value}px` : "none",
+);
 /** The pages the "Zespół" menu leads to on this site, which light it while it
  * is closed, as "Admin" is lit by hand below. /qa is one page whichever tab is
  * showing; the router serves a path with a trailing slash as the same page. */
@@ -291,6 +313,98 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
   box-shadow: inset 0 -1px 0 var(--k-line);
 }
 
+.app-bar__logo {
+  display: flex;
+  margin-inline: 16px 0;
+}
+
+.app-bar__title {
+  flex: 0 0 auto;
+  margin-inline-start: 10px;
+}
+
+.app-bar__wordmark {
+  color: rgb(var(--v-theme-ink-strong));
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.app-bar__wordmark b {
+  font-weight: 700;
+}
+
+.app-bar__wordmark span {
+  font-weight: 400;
+}
+
+.app-bar :deep(.v-toolbar__append) {
+  align-items: center;
+  align-self: stretch;
+  margin-inline-end: 12px;
+}
+
+/* The menu in the bar's neutral ink, the page you are on in full ink with a
+   2px rule under it. The bar's height is the button's, so the rule sits on
+   the bar's hairline. */
+.app-bar .app-bar__nav.v-btn {
+  border-radius: 0;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  height: 100%;
+  padding: 0 12px;
+}
+
+/* No grey wash on hover or click - the rule and the ink say it. Kept for the
+   keyboard, which also gets a ring in full ink: Vuetify's own, at a quarter
+   of the label's colour, is too faint to find. */
+.app-bar .app-bar__nav.v-btn:not(:focus-visible) :deep(.v-btn__overlay) {
+  opacity: 0;
+}
+
+.app-bar .app-bar__nav.v-btn:focus-visible,
+.user-toolbar .user-toolbar__row :deep(.v-btn:focus-visible) {
+  outline: 2px solid rgb(var(--v-theme-ink-strong));
+  outline-offset: -2px;
+}
+
+.app-bar .app-bar__nav.v-btn:hover,
+.app-bar .app-bar__nav.v-btn--active,
+.app-bar .app-bar__account.v-btn {
+  color: rgb(var(--v-theme-ink-strong));
+}
+
+.app-bar .app-bar__nav.v-btn--active {
+  background: linear-gradient(
+      rgb(var(--v-theme-ink-strong)),
+      rgb(var(--v-theme-ink-strong))
+    )
+    no-repeat left 12px bottom 0 / calc(100% - 24px) 2px;
+}
+
+.app-bar__sep {
+  background: rgba(var(--v-border-color), 0.16);
+  flex: 0 0 auto;
+  height: 24px;
+  margin: 0 8px;
+  width: 1px;
+}
+
+@media (max-width: 959.98px) {
+  .app-bar__logo {
+    margin-inline-start: 8px;
+  }
+
+  .app-bar :deep(.v-toolbar__append) {
+    margin-inline: 0 4px;
+  }
+
+  .app-bar :deep(.v-toolbar__append > .v-btn--icon) {
+    height: 44px;
+    width: 44px;
+  }
+}
+
 /* `fill-height` makes this container a flex box, and a flex item's automatic
    minimum size is its min-content - so whatever a page puts in the slot is
    never allowed to be narrower than the widest thing inside it could be. One
@@ -306,9 +420,18 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
   min-width: 0;
 }
 
+/* At the top, not in the middle. Vuetify's `fill-height` also centres the
+   page in whatever height the container is given, and with the slim footer
+   that is most of the screen on a short page: /blog, a 404, /login and every
+   empty or still-loading list floated 130-170px below the page-top inset the
+   rest of the site opens at. */
+.v-container.fill-height {
+  align-content: flex-start;
+  align-items: flex-start;
+}
+
 /* Vuetify clips the toolbar content, so on narrow screens the trailing
-   buttons are unreachable. Let it scroll sideways instead. The spacers
-   collapse to zero once the buttons overflow, so wide screens still centre. */
+   buttons are unreachable. Let it scroll sideways instead. */
 .user-toolbar :deep(.v-toolbar__content) {
   overflow-x: auto;
   overflow-y: hidden;
@@ -319,7 +442,55 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
   display: none;
 }
 
-.user-toolbar :deep(.v-btn) {
+/* The page's column: the same max width, and the buttons' 10px padding on
+   top of 6 here puts their labels on the content's 16px edge. */
+.user-toolbar__row {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  height: 100%;
+  margin-inline: auto;
+  padding-inline: 6px;
+  width: 100%;
+}
+
+.user-toolbar .user-toolbar__row :deep(.v-btn) {
+  border-radius: 0;
+  color: rgb(var(--v-theme-ink-strong));
   flex: 0 0 auto;
+  height: 40px;
+  padding: 0 10px;
+}
+
+.user-toolbar :deep(.v-btn .v-icon) {
+  font-size: 18px;
+}
+
+.user-toolbar :deep(.v-btn:not(:focus-visible) > .v-btn__overlay) {
+  opacity: 0;
+}
+
+.user-toolbar :deep(.v-btn:hover > .v-btn__overlay) {
+  opacity: 0.08;
+}
+
+/* The section you are in: the bar's own mark, a 2px rule in full ink. */
+.user-toolbar :deep(.v-btn.v-btn--active) {
+  background: linear-gradient(
+      rgb(var(--v-theme-ink-strong)),
+      rgb(var(--v-theme-ink-strong))
+    )
+    no-repeat left 10px bottom 0 / calc(100% - 20px) 2px;
+}
+
+/* On a phone the icons go, so all four fit at 375px. */
+@media (max-width: 959.98px) {
+  .user-toolbar :deep(.v-btn__prepend) {
+    display: none;
+  }
+
+  .user-toolbar :deep(.v-btn__append) {
+    margin-inline-start: 2px;
+  }
 }
 </style>

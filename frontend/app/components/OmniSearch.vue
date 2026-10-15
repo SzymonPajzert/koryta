@@ -5,17 +5,18 @@
       v-model="nodeGroupPicked"
       v-model:focused="autocompleteFocus"
       v-model:search="search"
-      label="Szukaj osób, spółek, regionów..."
+      :label="fieldLabel"
       :items="items"
       item-title="title"
       item-value="id"
       return-object
       autocomplete="off"
-      class="ma-2 omni-search"
-      bg-color="white"
+      class="omni-search"
+      :class="inBar ? 'omni-search--bar ms-2 me-md-2' : 'ma-2'"
+      :bg-color="inBar ? undefined : 'white'"
       :rounded="true"
       :width
-      density="comfortable"
+      :density="inBar ? 'compact' : 'comfortable'"
       :hide-details="true"
       :menu-icon="mdiMagnify"
       :custom-filter="matchesTypedWords"
@@ -127,8 +128,18 @@ const user = useCurrentUser();
 
 const props = defineProps<{
   width?: string;
+  /** The app bar's copy: 40px high and drawn in the control tint, a control
+   * among the bar's controls. The home hero's stays white on the hairline. */
+  inBar?: boolean;
+  /** For a field narrower than the full label fits in. */
+  label?: string;
 }>();
 const { width = "300px" } = props;
+/** Read off `props` rather than destructured: the bar swaps it once the
+ * window's width is known, after hydration. */
+const fieldLabel = computed(
+  () => props.label ?? "Szukaj osób, spółek, regionów...",
+);
 
 /** How wide the results menu may get.
  *
@@ -450,6 +461,22 @@ watch(nodeGroupPicked, (value) => {
 @media (hover: hover) {
   .omni-search :deep(.v-field:hover) {
     border-color: var(--k-line-strong);
+  }
+}
+
+/* In the bar: a control, so the tint and no line - still a pill. No margin
+   above or below, so the 40px field centres in the 56px bar, and none after
+   it on a phone, where the icons beside it need the width. */
+.omni-search--bar :deep(.v-field),
+.omni-search--bar :deep(.v-field--focused) {
+  background: var(--k-tonal);
+  border-color: transparent;
+}
+
+@media (hover: hover) {
+  .omni-search--bar :deep(.v-field:hover) {
+    background: var(--k-tonal-hover);
+    border-color: transparent;
   }
 }
 </style>
