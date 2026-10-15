@@ -261,7 +261,7 @@ def test_the_reprocess_rebuilds_all_but_the_slow_sources_and_the_articles(world)
     argv, env = world.command("koryta")
     assert argv[1] == "--all-pipelines"
     assert "--refresh" in argv and argv[argv.index("--refresh") + 1] == "all"
-    for held in ("ProcessWiki", "PeoplePKW", "CruDump", "FirstNameFreq"):
+    for held in ("ProcessWiki", "PeoplePKW", "CruDump", "FirstNameFreq", "PeopleKMGP"):
         assert f":{held}" in argv
     # KorytaDiffer reads every export ever taken and writes nothing;
     # DomainToRegion copies a gitignored file only the article branch reads.
@@ -873,6 +873,16 @@ def test_every_rebuildable_pipeline_is_held_and_its_sources_exist():
             assert os.path.exists(os.path.join(top, path)), path
     assert "ProcessWiki" not in night.REBUILT_ON_CHANGE
     assert "CruDump" not in night.REBUILT_ON_CHANGE
+
+
+def test_every_held_name_is_a_pipeline():
+    # `--refresh :<Name>` takes any name, where --exclude refuses one it does
+    # not know: a misspelt one would hold nothing, and the pipeline it meant
+    # would be rebuilt every night.
+    from pipelines import PIPELINES  # noqa: PLC0415
+
+    names = {pipeline.__name__ for pipeline in PIPELINES}
+    assert set(night.HELD) - names == set()
 
 
 # ---------------------------------------------------------------------------
