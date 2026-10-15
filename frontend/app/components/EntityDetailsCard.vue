@@ -17,10 +17,15 @@
          On a 393px phone „Wioletta Paprocka-Ślusarska” left her „PO” 13px of
          its 40. Now whatever does not fit goes to the next line whole, and a
          name too long for the line breaks between its words. -->
-    <v-card-title class="px-0 d-flex flex-wrap align-center ga-2 text-wrap">
-      <h2 class="text-h5 font-weight-bold">
+    <!-- The name is the page's h1: the one title every page opens with, at
+         the type system's title size (assets/css/type.css). The parties
+         beside it are drawn at the title's chip size, set below. -->
+    <v-card-title
+      class="px-0 d-flex flex-wrap align-center ga-2 text-wrap entity-head"
+    >
+      <h1>
         {{ entity?.name }}
-      </h2>
+      </h1>
       <!-- Before the parties, because it is about the page rather than about
            the person on it: whoever is reading this is the only kind of reader
            who can be here at all while it shows. -->
@@ -113,16 +118,19 @@
         :needs-split="personEntity?.needs_split"
       />
       <CardPersonInfo :person="personEntity" class="mb-2" />
-      {{ entity?.content }}
+      <!-- Reading text, at a reading measure, whole at every width. -->
+      <p v-if="entity?.content" class="person-bio" data-testid="person-bio">
+        {{ nbsp(entity.content) }}
+      </p>
     </v-card-text>
   </v-card>
 
   <v-card v-if="type == 'place'" width="100%" variant="flat">
-    <v-card-title class="headline px-0">
+    <v-card-title class="headline px-0 text-wrap">
       <v-icon start :icon="mdiOfficeBuildingOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
+      <h1 class="d-inline">
         {{ entity?.name }}
-      </h2>
+      </h1>
     </v-card-title>
     <v-card-text class="px-0">
       <div v-if="identifiers.length > 0" class="text-caption mb-2">
@@ -133,11 +141,11 @@
   </v-card>
 
   <v-card v-if="type == 'article'" width="100%" variant="flat">
-    <v-card-title class="headline px-0">
+    <v-card-title class="headline px-0 text-wrap">
       <v-icon start :icon="mdiFileDocumentOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
+      <h1 class="d-inline">
         {{ entity?.name }}
-      </h2>
+      </h1>
     </v-card-title>
     <v-card-text class="px-0">
       <div v-if="article?.sourceURL" class="text-caption mb-2">
@@ -151,11 +159,11 @@
   </v-card>
 
   <v-card v-if="type == 'region'" width="100%" variant="flat">
-    <v-card-title class="headline px-0">
+    <v-card-title class="headline px-0 text-wrap">
       <v-icon start :icon="mdiMapMarkerRadiusOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
+      <h1 class="d-inline">
         {{ region?.name }}
-      </h2>
+      </h1>
     </v-card-title>
     <v-card-text class="px-0">
       {{ region?.content }}
@@ -178,6 +186,7 @@ import type {
   PersonRich,
 } from "~~/shared/model";
 import { companyIdentifiers } from "~~/shared/identifiers";
+import { nbsp } from "~/utils/nbsp";
 
 const props = withDefaults(
   defineProps<{
@@ -223,3 +232,17 @@ const personEntity = computed(() =>
  * optionally, and `extraLocations` covers the one that matters here. */
 const richPerson = computed(() => personEntity.value as PersonRich | undefined);
 </script>
+
+<style scoped>
+/* The parties beside the h1 are set one step up from a list's 12px. */
+.entity-head {
+  --k-party-chip-size: 16px;
+}
+
+.person-bio {
+  font-size: 1rem;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 72ch;
+}
+</style>

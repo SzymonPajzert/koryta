@@ -190,7 +190,7 @@ const options = computed(() => {
             enabled: labelEveryCap,
             style: {
               color: ink.secondary,
-              fontSize: "11px",
+              fontSize: "12px",
               fontWeight: 500,
             },
             offsetY: -4,

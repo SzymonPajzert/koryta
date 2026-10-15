@@ -130,9 +130,11 @@ html {
 }
 
 /* `flex-wrap` for the company page, whose headings carry a caption beside them
-   that has to be allowed to drop to its own line on a phone. */
+   that has to be allowed to drop to its own line on a phone. On the baseline,
+   so that 12px caption sits on the 24px heading's line rather than floating
+   in the middle of it. */
 .sec-head {
-  align-items: center;
+  align-items: baseline;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -142,9 +144,11 @@ html {
   color: rgba(var(--v-theme-on-surface), 0.38);
 }
 
+/* 14px, the UI size: prose is never 12px on this site. 12 is for single-line
+   meta - dates, counts, chips, labels. */
 .k-lead {
   color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   margin: 4px 0 12px;
   max-width: 78ch;

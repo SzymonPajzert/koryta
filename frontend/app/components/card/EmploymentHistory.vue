@@ -10,7 +10,7 @@
     data-testid="relations-history"
   >
     <div class="d-flex align-center justify-space-between mb-2">
-      <h3 class="text-h6">Historia powiązań</h3>
+      <h2 class="text-h6">Historia powiązań</h2>
       <!-- Outlined rather than `variant="text" color="primary"`: sage ink on
            white is 1.85:1 on this theme, and this is the one control in the
            section. -->
@@ -51,7 +51,8 @@
         </v-list-item-title>
 
         <div class="d-flex align-center flex-wrap ga-2">
-          <span class="text-caption text-medium-emphasis text-wrap">
+          <!-- The role is prose, not meta: 14px, the UI size. -->
+          <span class="text-body-2 text-medium-emphasis text-wrap">
             {{ edgeLabel(edge) }}
           </span>
           <!-- What the candidacy was for. The ingest names every one of them
@@ -111,11 +112,20 @@
                a 200px track in a 210px column, clipped at both ends, and the
                dates it captions are the only part of it that survives the
                width - so below md the row prints them and drops the track. -->
+          <!-- „obecnie” in bold: a post held today reads stronger than one
+               that ended in 2008. -->
           <span
             v-if="isDated(edge)"
             class="d-md-none text-caption text-medium-emphasis"
           >
-            {{ relationPeriodLabel(edge.start_date, edge.end_date) }}
+            {{ periodOf(edge).start
+            }}<template v-if="periodOf(edge).end !== undefined">
+              –
+              <strong v-if="periodOf(edge).current">{{
+                periodOf(edge).end
+              }}</strong>
+              <template v-else>{{ periodOf(edge).end }}</template>
+            </template>
           </span>
         </div>
 
@@ -250,7 +260,7 @@ import {
   mdiTrashCanOutline,
 } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
-import { relationPeriodLabel } from "~/utils/relationPeriod";
+import { relationPeriodParts } from "~/utils/relationPeriod";
 import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
 import { asArray, type Company } from "~~/shared/model";
@@ -491,6 +501,11 @@ function isDated(edge: EdgeNode): boolean {
   return !!(edge.start_date || edge.end_date);
 }
 
+/** The period a phone prints in place of the bar, in its two ends. */
+function periodOf(edge: EdgeNode) {
+  return relationPeriodParts(edge.start_date, edge.end_date);
+}
+
 /** The parties of the person a row leads to.
  *
  * This list was the last one on the site that named a person without them. A
@@ -585,8 +600,8 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
   background: rgba(var(--v-theme-on-surface), 0.06);
   border-radius: 6px;
   color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.6875rem;
-  line-height: 1.6;
+  font-size: 0.75rem;
+  line-height: 1.5;
   padding: 0 6px;
 }
 

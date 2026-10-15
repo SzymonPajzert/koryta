@@ -38,7 +38,7 @@
            this person by name and not yet judged by anybody. That much stays
            in the open; the how-to is in the bubble above. -->
       <p v-if="user" class="k-lead" data-testid="person-extractions-lead">
-        Automatycznie wyszukane w prasie - mogą być błędne.
+        Automatycznie wyszukane w prasie – mogą być błędne.
       </p>
       <p v-else class="k-lead" data-testid="person-extractions-count">
         Znaleźliśmy
@@ -437,7 +437,7 @@ const buckets = computed(() =>
    it separates two halves of one list rather than announcing a new section. */
 .facts-bucket {
   color: rgb(var(--v-theme-ink-neutral));
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   margin-top: 8px;

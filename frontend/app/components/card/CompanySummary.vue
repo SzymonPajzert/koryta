@@ -1,10 +1,21 @@
 <template>
   <v-card variant="outlined" data-testid="company-summary">
     <v-card-text class="d-flex flex-wrap align-center ga-4">
-      <div class="d-flex align-center ga-2 mr-auto">
-        <v-icon :icon="mdiOfficeBuildingOutline" class="flex-shrink-0" />
+      <!-- `align-start`, so the icon sits on the name's first line rather than
+           in the middle of a name that wraps to three. -->
+      <div
+        class="d-flex align-start ga-2 mr-auto company-head"
+        :class="{
+          'company-head--page': !linkToPage,
+          'company-head--caps': capsName,
+        }"
+      >
+        <v-icon
+          :icon="mdiOfficeBuildingOutline"
+          class="flex-shrink-0 company-head__icon"
+        />
         <!-- On the company's own page this card is the heading, so the name
-             is plain text there; everywhere else it is the way through to
+             is the page's h1 there; everywhere else it is the way through to
              the page. `link-plain` because a heading that is already the
              largest thing on the card does not also need to be blue. -->
         <NuxtLink
@@ -15,6 +26,12 @@
           {{ company.name }}
           <v-icon :icon="mdiArrowRight" size="small" />
         </NuxtLink>
+        <!-- A name in capitals, which is how the register writes most of
+             them, is set one size down: capitals carry about a third more
+             mass than mixed case. -->
+        <h1 v-else-if="!linkToPage" :class="{ 'k-title--caps': capsName }">
+          {{ company.name }}
+        </h1>
         <span v-else class="text-h6 text-wrap">{{ company.name }}</span>
         <!-- Only where this card is the page's own heading. Linked, it is one
              of a list of companies on somebody else's page, and a badge about
@@ -146,7 +163,7 @@
       >
         {{
           wasDuplicate
-            ? "Tę zmianę już zgłosiłeś - czeka na redakcję."
+            ? "Tę zmianę już zgłosiłeś – czeka na redakcję."
             : "Zaproponowano zmianę."
         }}
         <a
@@ -187,6 +204,7 @@ import { useNotes } from "~/composables/notes";
 import { generateEntityUrl } from "~/composables/slugs";
 import { companyIdentifiers } from "~~/shared/identifiers";
 import type { Company } from "~~/shared/model";
+import { isAllCapsName } from "~/utils/allCapsName";
 
 const props = defineProps<{
   company: Company;
@@ -199,6 +217,10 @@ const props = defineProps<{
 }>();
 
 const identifiers = computed(() => companyIdentifiers(props.company));
+
+/** Whether the name is in capitals, which sets the page's title one step
+ * down - and moves the icon beside it to that line. */
+const capsName = computed(() => isAllCapsName(props.company.name));
 
 // The notes are the tallest thing on the card and most visitors only want to
 // read the company's details, so they stay behind a button.
@@ -253,3 +275,44 @@ const previewUrl = computed(() =>
     : undefined,
 );
 </script>
+
+<style scoped>
+/* The icon on the first line of the name. */
+.company-head__icon {
+  margin-top: 2px;
+}
+
+/* On the page the name is the h1, and the icon is centred on its first
+   line: half of what the line has over the icon, whose height is its own
+   font size (`1em` here). The title's size and line height are the type
+   system's (assets/css/type.css) - 40 at 1.1 in mixed case, 32 at 1.15 in
+   capitals, 28 and 24 on a phone - so the icon follows it at either size. */
+.company-head--page .company-head__icon {
+  margin-top: calc((var(--k-title-size) * 1.1 - 1em) / 2);
+}
+
+.company-head--page.company-head--caps .company-head__icon {
+  margin-top: calc((var(--k-title-caps-size) * 1.15 - 1em) / 2);
+}
+
+/* On a phone the icon floats, so only the name's first line gives up its
+   width and the rest runs the full row. The head takes the whole row: a
+   block holding a float measures only its widest child, and a short name
+   would wrap beside the icon. */
+@media (max-width: 599.98px) {
+  .company-head--page {
+    display: block !important;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .company-head--page .company-head__icon {
+    float: left;
+    margin: calc((var(--k-title-size-phone) * 1.1 - 1em) / 2) 8px 0 0;
+  }
+
+  .company-head--page.company-head--caps .company-head__icon {
+    margin-top: calc((var(--k-title-caps-size-phone) * 1.15 - 1em) / 2);
+  }
+}
+</style>

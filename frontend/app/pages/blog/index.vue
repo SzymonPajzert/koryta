@@ -1,7 +1,7 @@
 <template>
   <div class="blog-column py-4 py-sm-8">
     <h1 class="text-h4 font-weight-bold mb-2">Blog</h1>
-    <p class="text-body-1 text-medium-emphasis mb-8">
+    <p class="k-page-lead mb-8">
       Analizy zespołu Koryta.pl: co wynika z danych o osobach i instytucjach,
       które opisujemy.
     </p>
@@ -24,7 +24,7 @@
       >
         <v-card-item>
           <BlogPostMeta :post="post" class="mb-1" />
-          <h2 class="text-h6 font-weight-bold text-wrap blog-index__title">
+          <h2 class="text-h6 text-wrap blog-index__title">
             {{ post.title }}
           </h2>
         </v-card-item>

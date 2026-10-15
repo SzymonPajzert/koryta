@@ -297,7 +297,7 @@
         variant="text"
         :prepend-icon="copied ? mdiCheck : mdiContentCopy"
         :color="copied ? 'ink-success' : undefined"
-        title="Zadanie z tym, skąd się wzięło - notatką w pamięci, sesją, zgłoszeniami - z zależnościami i historią, do wklejenia w rozmowie z agentem"
+        title="Zadanie z tym, skąd się wzięło – notatką w pamięci, sesją, zgłoszeniami – z zależnościami i historią, do wklejenia w rozmowie z agentem"
         data-task-copy
         @click="copyContext"
       >
@@ -426,7 +426,7 @@ const waitingHint = computed(() => {
     return `Zamknięte ${closed} z ${total} zadań, które do niego prowadzą.`;
   }
   const open = props.state.blockers.length;
-  if (props.task.dependsOn.length === 0) return "Nic - można zaczynać.";
+  if (props.task.dependsOn.length === 0) return "Nic – można zaczynać.";
   if (open === 0) return "Wszystko, na co czekało, jest zamknięte.";
   return `Jeszcze ${open} z ${props.task.dependsOn.length} otwarte.`;
 });

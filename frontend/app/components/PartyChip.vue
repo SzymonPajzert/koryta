@@ -55,6 +55,11 @@ const title = computed(() =>
   text-overflow: ellipsis;
   white-space: nowrap;
   border-radius: 0.3rem;
-  font-weight: 550;
+  /* 12/700 beside a name in a list, whatever the line around it is set in;
+     a page title asks for its own size through the variable. Bold, because
+     the party is the one fact on the row the eye goes looking for. */
+  font-size: var(--k-party-chip-size, 0.75rem);
+  font-weight: 700;
+  line-height: 1.35;
 }
 </style>

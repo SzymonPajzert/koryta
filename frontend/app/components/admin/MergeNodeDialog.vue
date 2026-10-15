@@ -6,7 +6,7 @@
         <p class="mb-4 text-body-2">
           Jedna osoba pod dwoma zapisami nazwiska to dwie strony, każda z połową
           tego, co o niej wiadomo. Scalenie przenosi powiązania na tę stronę,
-          która zostaje - a ta druga znika i zaczyna przekierowywać na nią, więc
+          która zostaje – a ta druga znika i zaczyna przekierowywać na nią, więc
           stare linki dalej działają.
         </p>
 
@@ -96,7 +96,7 @@
             </p>
             <p v-if="plan.counts.collapsed" class="mb-1">
               <strong>{{ plan.counts.collapsed }}</strong>
-              {{ relationsPlural(plan.counts.collapsed) }} zniknie - strona,
+              {{ relationsPlural(plan.counts.collapsed) }} zniknie – strona,
               która zostaje, mówi już dokładnie to samo.
             </p>
             <p v-if="plan.counts.review" class="mb-1">
@@ -122,7 +122,7 @@
               prowadziłoby ze strony do niej samej.
             </p>
             <p v-if="nothingToMove" class="mb-0">
-              Duplikat nie ma powiązań - zniknie sam.
+              Duplikat nie ma powiązań – zniknie sam.
             </p>
           </v-alert>
 

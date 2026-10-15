@@ -250,7 +250,7 @@ const changes = computed<Change[]>(() =>
         batchNote:
           post.batchSize > 1
             ? `Tego dnia zmieniło się ${post.batchSize} stanowisk tej samej ` +
-              "funkcji - rejestr nie wskazuje, kto zajął czyje miejsce."
+              "funkcji – rejestr nie wskazuje, kto zajął czyje miejsce."
             : null,
         key: `${neighbour.edgeId}-${index}`,
         testid: post.predecessor
@@ -335,7 +335,7 @@ function gapClass(gapDays: number): string {
 
 .succ__company {
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -364,12 +364,12 @@ function gapClass(gapDays: number): string {
   padding-left: 10px;
 }
 
+/* A label: what the name under it is. 12/600, quiet, sentence case. */
 .succ__label {
   color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.625rem;
-  letter-spacing: 0.07em;
-  line-height: 1.6;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .succ__name {
@@ -377,16 +377,17 @@ function gapClass(gapDays: number): string {
   color: rgba(var(--v-theme-on-surface), 0.87);
   display: flex;
   flex-wrap: wrap;
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
   gap: 5px;
-  line-height: 1.4;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
   margin-top: 2px;
 }
 
 .succ__when {
   color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   margin-top: 3px;
 }
 
@@ -408,7 +409,7 @@ function gapClass(gapDays: number): string {
    it would make the commonest case on the site look like an error. */
 .succ__hedge {
   color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   line-height: 1.35;
   max-width: 22ch;
   text-align: center;
@@ -418,7 +419,7 @@ function gapClass(gapDays: number): string {
   background: rgba(var(--v-theme-on-surface), 0.06);
   border-radius: 6px;
   color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   line-height: 1.5;
   padding: 1px 6px;
   text-align: center;

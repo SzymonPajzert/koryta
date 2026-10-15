@@ -4,7 +4,7 @@
     <v-row align="center" class="mb-12">
       <v-col cols="12" md="8">
         <h1 class="text-h3 font-weight-bold mb-4">Nasza misja</h1>
-        <p class="text-h6 text-grey-darken-1 mb-6">
+        <p class="k-page-lead mb-6">
           Przekształcamy rozproszone dane w czytelną mapę powiązań, by każdy
           obywatel mógł świadomie oceniać jakość zarządzania majątkiem
           publicznym.
@@ -25,7 +25,7 @@
 
     <!-- O projekcie -->
     <section class="mb-16">
-      <h2 class="text-h4 font-weight-bold mb-6">O projekcie</h2>
+      <h2 class="text-h4 mb-6">O projekcie</h2>
       <v-row>
         <v-col cols="12" md="6">
           <p class="text-body-1 mb-4">
@@ -50,7 +50,7 @@
 
     <!-- Nasze wartości -->
     <section class="mb-16">
-      <h2 class="text-h4 font-weight-bold mb-6">Nasze wartości</h2>
+      <h2 class="text-h4 mb-6">Nasze wartości</h2>
       <v-row>
         <v-col cols="12" sm="6">
           <v-card
@@ -67,9 +67,7 @@
                   class="mb-4"
                 ></v-icon>
               </template>
-              <v-card-title class="font-weight-bold text-wrap"
-                >Przejrzystość</v-card-title
-              >
+              <v-card-title class="text-wrap">Przejrzystość</v-card-title>
             </v-card-item>
             <v-card-text class="flex-grow-1">
               Wszystkie dane, które publikujemy, pochodzą z oficjalnych,
@@ -94,9 +92,7 @@
                   class="mb-4"
                 ></v-icon>
               </template>
-              <v-card-title class="font-weight-bold text-wrap"
-                >Bezstronność</v-card-title
-              >
+              <v-card-title class="text-wrap">Bezstronność</v-card-title>
             </v-card-item>
             <v-card-text class="flex-grow-1">
               Nie faworyzujemy żadnej opcji politycznej. Naszym jedynym
@@ -128,9 +124,7 @@
                   class="mb-4"
                 ></v-icon>
               </template>
-              <v-card-title class="font-weight-bold text-wrap"
-                >Niezależność</v-card-title
-              >
+              <v-card-title class="text-wrap">Niezależność</v-card-title>
             </v-card-item>
             <v-card-text class="flex-grow-1">
               Nie przyjmujemy dotacji od partii politycznych ani organizacji z
@@ -154,9 +148,7 @@
                   class="mb-4"
                 ></v-icon>
               </template>
-              <v-card-title class="font-weight-bold text-wrap"
-                >Społeczność</v-card-title
-              >
+              <v-card-title class="text-wrap">Społeczność</v-card-title>
             </v-card-item>
             <v-card-text class="flex-grow-1">
               Koryta.pl jest projektem, do którego każdy może się zgłosić.
@@ -172,7 +164,7 @@
     <section class="mb-16 bg-grey-lighten-4 rounded-xl py-10 px-6 px-md-10">
       <v-row>
         <v-col cols="12" md="5">
-          <h2 class="text-h4 font-weight-bold mb-4">Kim jesteśmy?</h2>
+          <h2 class="text-h4 mb-4">Kim jesteśmy?</h2>
           <p class="text-body-1 mb-6">
             Tworzymy zespół zaangażowanych obywateli i ekspertów z różnych
             dziedzin, których łączą wspólne wartości. Wierzymy, że zbiorowy
@@ -247,7 +239,7 @@
 
     <!-- Jak pracujemy? -->
     <section class="mb-16">
-      <h2 class="text-h4 font-weight-bold text-center mb-10">Jak pracujemy?</h2>
+      <h2 class="text-h4 text-center mb-10">Jak pracujemy?</h2>
       <v-row>
         <v-col cols="12" sm="6" lg="3">
           <div class="text-center px-4">
@@ -258,7 +250,7 @@
             >
               1
             </v-avatar>
-            <h3 class="text-h6 font-weight-bold mb-2">Zbieramy</h3>
+            <h3 class="text-subtitle-1 font-weight-semibold mb-2">Zbieramy</h3>
             <p class="text-body-2 text-grey-darken-2">
               Pozyskujemy dane z publicznych rejestrów i źródeł, wykorzystując
               zaawansowaną automatyzację oraz rzetelną pracę manualną.
@@ -274,7 +266,7 @@
             >
               2
             </v-avatar>
-            <h3 class="text-h6 font-weight-bold mb-2">Łączymy</h3>
+            <h3 class="text-subtitle-1 font-weight-semibold mb-2">Łączymy</h3>
             <p class="text-body-2 text-grey-darken-2">
               Wykorzystanie zaawansowanych algorytmów wspieranych ekspercką
               analizą pozwala precyzyjnie łączyć osoby z konkretnymi
@@ -291,7 +283,9 @@
             >
               3
             </v-avatar>
-            <h3 class="text-h6 font-weight-bold mb-2">Weryfikujemy</h3>
+            <h3 class="text-subtitle-1 font-weight-semibold mb-2">
+              Weryfikujemy
+            </h3>
             <p class="text-body-2 text-grey-darken-2">
               Każdy wpis przechodzi audyt. Użytkownicy mogą zgłaszać błędy.
             </p>
@@ -306,7 +300,9 @@
             >
               4
             </v-avatar>
-            <h3 class="text-h6 font-weight-bold mb-2">Udostępniamy</h3>
+            <h3 class="text-subtitle-1 font-weight-semibold mb-2">
+              Udostępniamy
+            </h3>
             <p class="text-body-2 text-grey-darken-2">
               Wszystkie zgromadzone przez nas dane są publiczne, darmowe i w
               pełni dostępne dla każdego obywatela.
@@ -318,14 +314,12 @@
 
     <!-- FAQ -->
     <section class="mb-16">
-      <h2 class="text-h4 font-weight-bold text-center mb-8">
-        Często zadawane pytania
-      </h2>
+      <h2 class="text-h4 text-center mb-8">Często zadawane pytania</h2>
       <v-row justify="center">
         <v-col cols="12" md="8">
           <v-expansion-panels variant="accordion">
             <v-expansion-panel>
-              <v-expansion-panel-title class="font-weight-medium text-body-1"
+              <v-expansion-panel-title
                 >Skąd bierzecie dane?</v-expansion-panel-title
               >
               <v-expansion-panel-text class="text-body-2 pt-2">
@@ -336,20 +330,18 @@
             </v-expansion-panel>
 
             <v-expansion-panel>
-              <v-expansion-panel-title class="font-weight-medium text-body-1"
+              <v-expansion-panel-title
                 >Czy mogę zweryfikować dostępne na stronie
                 informacje?</v-expansion-panel-title
               >
               <v-expansion-panel-text class="text-body-2 pt-2">
                 Tak. Przy każdym wpisie podajemy źródło. Zachęcamy do
-                samodzielnej weryfikacji - to fundament naszego projektu.
+                samodzielnej weryfikacji – to fundament naszego projektu.
               </v-expansion-panel-text>
             </v-expansion-panel>
 
             <v-expansion-panel>
-              <v-expansion-panel-title class="font-weight-medium text-body-1"
-                >Jak mogę pomóc?</v-expansion-panel-title
-              >
+              <v-expansion-panel-title>Jak mogę pomóc?</v-expansion-panel-title>
               <v-expansion-panel-text class="text-body-2 pt-2">
                 Możesz dołączyć jako wolontariusz, zgłosić błąd, zasugerować
                 nowe źródło danych lub wesprzeć nas finansowo. Każda pomoc się
@@ -358,7 +350,7 @@
             </v-expansion-panel>
 
             <v-expansion-panel>
-              <v-expansion-panel-title class="font-weight-medium text-body-1"
+              <v-expansion-panel-title
                 >Czy projekt ma afiliacje polityczne?</v-expansion-panel-title
               >
               <v-expansion-panel-text class="text-body-2 pt-2">
@@ -376,9 +368,7 @@
       id="kontakt"
       class="text-center py-10 mb-8 border rounded-xl bg-grey-lighten-4"
     >
-      <h2 class="text-h4 font-weight-bold mb-4">
-        Dołącz do naszej społeczności
-      </h2>
+      <h2 class="text-h4 mb-4">Dołącz do naszej społeczności</h2>
       <p class="text-body-1 mb-8 text-grey-darken-1">
         Zmieniajmy wspólnie jakość życia w Polsce. Masz pytania? Napisz do nas
         na

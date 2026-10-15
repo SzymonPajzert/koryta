@@ -6,7 +6,7 @@
       <div class="tasks-page__intro">
         <h1 class="text-h5 text-sm-h4 mb-2">Zadania</h1>
         <p class="text-body-2 text-medium-emphasis">
-          Co zostało do wdrożenia, uruchomienia, zdecydowania i zbudowania - i
+          Co zostało do wdrożenia, uruchomienia, zdecydowania i zbudowania – i
           co na co czeka. Agenci dopisują tu to, co zostawiają po sesji.
         </p>
       </div>
@@ -75,7 +75,7 @@
           value="pilne"
           size="small"
           filter
-          title="Pilne - także zadania, na które czeka coś pilnego"
+          title="Pilne – także zadania, na które czeka coś pilnego"
         >
           Pilne
         </v-chip>
@@ -83,7 +83,7 @@
           value="wazne"
           size="small"
           filter
-          title="Pilne i ważne - także zadania, na które czeka coś pilnego albo ważnego"
+          title="Pilne i ważne – także zadania, na które czeka coś pilnego albo ważnego"
         >
           Ważne
         </v-chip>
@@ -255,9 +255,9 @@
             (albo stuknij w jedną, potem w drugą), żeby je połączyć; stuknij w
             strzałkę, żeby ją usunąć. Przycisk w rogu karty zwija w stos
             wszystko, co prowadzi tylko do niej, a ten obok zostawia na mapie
-            tylko ją i to, na co czeka. Cele i stosy są też na pasku nad mapą -
+            tylko ją i to, na co czeka. Cele i stosy są też na pasku nad mapą –
             strzałkę można upuścić tam. Wypełniona etykieta „Pilne” albo „Ważne”
-            to priorytet zadania, obrysowana - wzięty od zadania albo celu,
+            to priorytet zadania, obrysowana – wzięty od zadania albo celu,
             który na nie czeka.
           </span>
         </div>

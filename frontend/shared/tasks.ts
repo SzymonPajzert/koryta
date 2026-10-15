@@ -520,7 +520,7 @@ export function dependencyProblem(
   const cycle = dependencyCycle(tasks, taskId, dependsOn);
   if (cycle) {
     return (
-      "To zamknęłoby pętlę - każde zadanie w niej czekałoby na pozostałe: " +
+      "To zamknęłoby pętlę – każde zadanie w niej czekałoby na pozostałe: " +
       cycle.join(" → ") +
       "."
     );

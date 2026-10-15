@@ -245,7 +245,7 @@
       <AdminSectionHead
         title="Zmiany powiązań"
         :count="edgeType ? undefined : (edges?.total ?? undefined)"
-        info="Zmiany powiązań, których nikt jeszcze nie rozpatrzył - głównie od pipeline'u. Pipeline zapisuje zmianę od razu tylko wtedy, gdy potrafi za nią ręczyć - komitet wyborczy z listy przypisanej do partii. Reszta czeka tutaj, a samo powiązanie pozostaje nietknięte. „Rozpatrz” otwiera zmianę w kolejce wyżej."
+        info="Zmiany powiązań, których nikt jeszcze nie rozpatrzył – głównie od pipeline'u. Pipeline zapisuje zmianę od razu tylko wtedy, gdy potrafi za nią ręczyć – komitet wyborczy z listy przypisanej do partii. Reszta czeka tutaj, a samo powiązanie pozostaje nietknięte. „Rozpatrz” otwiera zmianę w kolejce wyżej."
       >
         <v-select
           v-model="edgeType"
@@ -303,7 +303,7 @@
       <AdminSectionHead
         title="Wpisy z historią zmian"
         :count="nodes?.total"
-        info="Każdy wpis, który ktoś zmienił - także pipeline. Rozwiń wiersz, żeby zobaczyć kolejne wersje i kto je zapisał; ikona na końcu wiersza pokazuje wszystkie wersje obok siebie."
+        info="Każdy wpis, który ktoś zmienił – także pipeline. Rozwiń wiersz, żeby zobaczyć kolejne wersje i kto je zapisał; ikona na końcu wiersza pokazuje wszystkie wersje obok siebie."
       >
         <!-- Phrased by what is left to do rather than by the field name:
              `has_unapproved` says the opposite of "zaakceptowane", so naming

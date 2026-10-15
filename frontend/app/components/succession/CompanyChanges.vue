@@ -32,7 +32,7 @@
       <!-- ============ 1. obecny skład ============ -->
       <section class="mb-8" data-testid="successions-current">
         <div class="sec-head mb-1">
-          <h2 class="text-h6 font-weight-bold">Obecny skład</h2>
+          <h2 class="text-h6">Obecny skład</h2>
           <span class="text-caption text-medium-emphasis">
             wpisy bez daty zakończenia, stan na {{ longDate(today) }}
           </span>
@@ -141,7 +141,7 @@
       <!-- ============ 2. kto kogo zastąpił ============ -->
       <section data-testid="successions-relay">
         <div class="sec-head mb-1">
-          <h2 class="text-h6 font-weight-bold">Kto kogo zastąpił</h2>
+          <h2 class="text-h6">Kto kogo zastąpił</h2>
           <span
             v-if="successions.length"
             class="text-caption text-medium-emphasis"
@@ -640,26 +640,26 @@ const roleSections = computed(() => {
   max-width: 62ch;
 }
 
+/* The board a group of people sits under: a group head, quiet and in
+   sentence case, so the names under it lead their group instead of competing
+   with it. */
 .role-head {
   align-items: center;
   border-bottom: 1px solid rgba(var(--v-border-color), 0.16);
-  color: rgba(var(--v-theme-on-surface), 0.72);
+  color: rgba(var(--v-theme-on-surface), 0.6);
   display: flex;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   gap: 8px;
-  letter-spacing: 0.09em;
   margin-bottom: 12px;
   padding-bottom: 6px;
-  text-transform: uppercase;
 }
 
 .role-head .count {
   color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.75rem;
   font-weight: 400;
-  letter-spacing: 0;
   margin-left: auto;
-  text-transform: none;
 }
 
 /* ---- obecny skład ---- */
@@ -697,7 +697,7 @@ const roleSections = computed(() => {
 
 .ev-date {
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -706,7 +706,7 @@ const roleSections = computed(() => {
   border: 1px solid rgba(var(--v-border-color), 0.28);
   border-radius: 999px;
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   padding: 1px 9px;
   white-space: nowrap;
@@ -714,7 +714,7 @@ const roleSections = computed(() => {
 
 .ev-sub {
   color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   margin-left: auto;
 }
 
@@ -762,15 +762,17 @@ const roleSections = computed(() => {
   line-height: 1.25;
 }
 
+/* A person's name in a list: 16/700, the one weight below the page title. */
 .rl-name {
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .rl-meta {
   color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -782,18 +784,16 @@ const roleSections = computed(() => {
 .rl-ovl {
   color: rgba(var(--v-theme-on-surface), 0.6);
   display: none;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-size: 0.75rem;
+  font-weight: 600;
   margin-bottom: 2px;
-  text-transform: uppercase;
 }
 
 .av {
   border-radius: 50%;
   display: grid;
   flex: 0 0 auto;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   height: 34px;
   place-items: center;
@@ -854,7 +854,7 @@ const roleSections = computed(() => {
 .rl-gap {
   background: rgb(var(--v-theme-surface));
   color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   line-height: 1.3;
   padding: 0 4px;
   position: relative;
@@ -865,9 +865,8 @@ const roleSections = computed(() => {
   background: rgb(var(--v-theme-secondary));
   border-radius: 999px;
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
   padding: 1px 8px;
   position: relative;
   white-space: nowrap;
@@ -881,13 +880,11 @@ const roleSections = computed(() => {
 .rl-legend {
   color: rgba(var(--v-theme-on-surface), 0.6);
   display: grid;
-  font-size: 0.62rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   gap: 10px;
   grid-template-columns: 1fr 184px 1fr;
-  letter-spacing: 0.1em;
   padding: 0 17px 8px 21px;
-  text-transform: uppercase;
 }
 
 .rl-legend > :first-child {

@@ -180,7 +180,7 @@ const options = computed(() => monthChartOptions(daily.value));
 }
 
 .amc__total {
-  font-size: 2.25rem;
+  font-size: 2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
@@ -195,7 +195,7 @@ const options = computed(() => monthChartOptions(daily.value));
 
 .amc__who {
   color: rgb(var(--v-theme-surface-info));
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
 }
 
 /* 44px to aim at on a phone, where it sits beside the heading, without the
@@ -246,7 +246,7 @@ const options = computed(() => monthChartOptions(daily.value));
 /* The tooltip is apexcharts' markup, built in `monthChartOptions`. */
 .amc :deep(.amc-tip) {
   color: rgb(var(--v-theme-ink-neutral));
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.25rem;
   min-width: 190px;
   padding: 8px 12px;
@@ -254,7 +254,7 @@ const options = computed(() => monthChartOptions(daily.value));
 
 .amc :deep(.amc-tip__total) {
   color: rgb(var(--v-theme-ink-strong));
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 

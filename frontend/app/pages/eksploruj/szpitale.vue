@@ -93,7 +93,7 @@
         <template #prepend>
           <v-icon :icon="mdiHandHeartOutline" size="large" color="ink-info" />
         </template>
-        <v-card-title class="text-subtitle-1 font-weight-medium text-wrap">
+        <v-card-title class="text-subtitle-1 text-wrap">
           Pomóż uzupełnić te liczby
         </v-card-title>
         <v-card-subtitle class="text-wrap">
@@ -102,7 +102,7 @@
       </v-card-item>
       <v-card-text class="text-body-2 pb-2">
         Kolejka pokazuje po jednej osobie naraz, prowadzi krok po kroku i mówi,
-        czego szukać - to zarazem samouczek, więc nie trzeba nic wiedzieć na
+        czego szukać – to zarazem samouczek, więc nie trzeba nic wiedzieć na
         start. Wystarczy pięć minut i konto na stronie.
       </v-card-text>
       <!-- Stacked below `sm`. A `v-btn` never wraps its label, so side by side
@@ -194,7 +194,7 @@
 
     <v-card variant="outlined" class="mb-6">
       <v-card-item>
-        <v-card-title class="text-subtitle-1 font-weight-medium text-wrap">
+        <v-card-title class="text-subtitle-1 text-wrap">
           Czym są nadzorowane szpitale publiczne
         </v-card-title>
         <v-card-subtitle class="text-wrap">

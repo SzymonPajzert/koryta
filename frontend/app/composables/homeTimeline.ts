@@ -34,16 +34,16 @@ export const timelineGroupingOptions: {
   {
     value: "party",
     label: "Partie",
-    hint: "Jedna linia na partię - osoby z tą przynależnością.",
+    hint: "Jedna linia na partię – osoby z tą przynależnością.",
   },
   {
     value: "region",
     label: "Województwa",
-    hint: "Jedna linia na województwo - osoby na stanowiskach w tamtejszych instytucjach.",
+    hint: "Jedna linia na województwo – osoby na stanowiskach w tamtejszych instytucjach.",
   },
   {
     value: "category",
     label: "Branże",
-    hint: "Jedna linia na branżę - osoby na stanowiskach w instytucjach tego sektora.",
+    hint: "Jedna linia na branżę – osoby na stanowiskach w instytucjach tego sektora.",
   },
 ];

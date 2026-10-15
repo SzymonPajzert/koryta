@@ -79,7 +79,7 @@ export function entityDescription(
       // here whose description is written rather than derived.
       return truncateDescription(
         entity.description ||
-          `${entity.name} - kto jest w tej sprawie i jak te osoby są ze sobą powiązane, na podstawie artykułów w bazie Koryta.pl.`,
+          `${entity.name} – kto jest w tej sprawie i jak te osoby są ze sobą powiązane, na podstawie artykułów w bazie Koryta.pl.`,
       );
   }
 }
