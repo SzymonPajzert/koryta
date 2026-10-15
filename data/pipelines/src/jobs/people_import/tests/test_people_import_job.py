@@ -15,7 +15,10 @@ import pandas as pd
 import pytest
 
 import jobs.people_import as job
+from analysis.payloads.priority import Pick
+from analysis.payloads.site import SiteSnapshot
 from analysis.payloads.target import NEW, Targeted
+from entities.composite import Company, Person
 from entities.person import RejestrIOKey
 from jobs.krs_common import answer_name
 from jobs.nightly import Export
@@ -2158,3 +2161,309 @@ def test_a_request_that_cannot_be_read_fails_its_run(asked, monkeypatch):
     end = asked.run().ending()
     assert end["state"] == "failed"
     assert "no request" in end["errors"][0]
+
+
+# ---------------------------------------------------------------------------
+# --companies-only: the companies the night's people need, before them
+
+
+def naming(
+    name: str, *krs: str, tier: str = HIRE, published: bool | None = None
+) -> build.Candidate:
+    """A candidate whose payload names these companies, none of which the
+    export has a page for."""
+    found = candidate(name, tier, "2026-09-30", published)
+    posts = [{"krs": number, "role": "Prezes Zarządu"} for number in krs]
+    return build.Candidate(
+        {**found.payload, "companies": posts},
+        found.tier,
+        found.since,
+        found.published,
+        tuple(krs),
+    )
+
+
+@pytest.fixture
+def on_file(monkeypatch) -> dict[str, dict]:
+    """`Companies`, which the uploader creates a company from, without
+    running it: 0000000009 is not in it."""
+    rows: dict[str, dict] = {
+        krs: {"krs": krs, "name": f"Spółka {krs[-1]}", "parents": []}
+        for krs in ("0000000001", "0000000002", "0000000003")
+    }
+    monkeypatch.setattr(PersonUploader, "company_payloads", property(lambda _: rows))
+    return rows
+
+
+def company(outcome: str = "created") -> Response:
+    return Response(200, {"id": "c", "code": 200, "company": outcome})
+
+
+def companies_summary(world: World) -> dict:
+    [name] = [n for n in world.objects if n.startswith(job.COMPANIES_PREFIX)]
+    return json.loads(world.objects[name])
+
+
+COMPANIES_FIRST = ["--scope", "priority", "--companies-only"]
+
+
+def test_the_companies_tonights_people_need_are_created_and_no_person_sent(
+    priority, on_file
+):
+    """Szymon, 2026-10-15: before the people go up, the companies they name
+    that the export has no page for - so that no job of theirs waits for the
+    uploader to create its company on the way, as 16 did on 10-14."""
+    priority.candidates = [
+        naming("Anna Nowak", "0000000001", "0000000002"),
+        # Named twice, created once.
+        naming("Beata Kos", "0000000002", tier=BOUGHT),
+        candidate("Jan Kowalski", PUBLISHED),
+        # Past --max-uploads: not one of tonight's people.
+        naming("Ewa Lis", "0000000003", tier=ON_SITE),
+    ]
+    priority.answers = [company(), company()]
+
+    assert job.main([*COMPANIES_FIRST, "--max-uploads", "3"]) == 0
+
+    assert priority.sent() == ["Spółka 1", "Spółka 2"]
+    run = priority.run()
+    assert (run.job, run.kwargs["unit"]) == ("company_import", "firm")
+    assert run.calls[0] == ("start", {"phase": "paczki"})
+    assert ("progress", {"done": None, "phase": "firmy", "force": True}) in run.calls
+    end = run.ending()
+    assert (end["state"], end["stop_reason"], end["exit_code"]) == (
+        "succeeded",
+        None,
+        0,
+    )
+    assert end["counters"] == {
+        "planned": 2,
+        "companies_created": 2,
+        "updated": 0,
+        "unchanged": 0,
+        "failed": 0,
+    }
+    assert end["done"] == 2
+    # Its summary alone: no payloads part, and nothing remembered as sent.
+    summary = companies_summary(priority)
+    name = (
+        f"{job.COMPANIES_PREFIX}date={summary['started'][:10]}/{run.kwargs['run_id']}"
+    )
+    assert list(priority.objects) == [f"{name}.json"]
+    assert end["summary_path"] == f"gs://{SHARED_BUCKET}/{name}.json"
+    assert (summary["planned"], summary["people"]) == (4, 3)
+    assert summary["companies"] == [
+        {
+            "krs": "0000000001",
+            "name": "Spółka 1",
+            "people": ["Anna Nowak"],
+            "outcome": "created",
+        },
+        {
+            "krs": "0000000002",
+            "name": "Spółka 2",
+            "people": ["Anna Nowak", "Beata Kos"],
+            "outcome": "created",
+        },
+    ]
+
+
+def test_people_whose_companies_are_all_on_the_site_need_nothing_and_say_so(
+    priority, on_file
+):
+    priority.candidates = [candidate("Jan Kowalski", PUBLISHED)]
+
+    assert job.main(COMPANIES_FIRST) == 0
+
+    assert priority.sent() == []
+    end = priority.run().ending()
+    assert (end["state"], end["stop_reason"]) == ("succeeded", job.STOP_NO_COMPANIES)
+    assert companies_summary(priority)["companies"] == []
+
+
+def test_a_company_that_cannot_be_created_is_left_to_the_people_run(priority, on_file):
+    """It tries again, and leaves the job off the person's page if it cannot
+    either - which is why this is partial and never failed."""
+    priority.candidates = [
+        naming("Anna Nowak", "0000000009", "0000000001"),
+        naming("Beata Kos", "0000000002", tier=BOUGHT),
+    ]
+    priority.answers = [company(), Response(500, text="Internal Server Error")]
+
+    assert job.main(COMPANIES_FIRST) == job.EXIT_TRY_LATER
+
+    # Nothing in `Companies` to make 0000000009 from: never sent.
+    assert priority.sent() == ["Spółka 1", "Spółka 2"]
+    end = priority.run().ending()
+    assert (end["state"], end["stop_reason"]) == ("partial", "nie dodano firm: 2 z 3")
+    assert end["counters"]["companies_created"] == 1
+    assert end["counters"]["failed"] == 2
+    assert end["errors"] == [
+        "firma 0000000009: ValueError: Couldn't look up 0000000009 in Companies "
+        "pipeline",
+        "firma 0000000002: 500 Internal Server Error",
+    ]
+    assert [
+        (row["krs"], row["outcome"], row.get("error", "")[:14])
+        for row in companies_summary(priority)["companies"]
+    ] == [
+        ("0000000009", "failed", "firma 00000000"),
+        ("0000000001", "created", ""),
+        ("0000000002", "failed", "firma 00000000"),
+    ]
+
+
+def test_a_company_made_since_the_export_is_counted_as_the_site_answered(
+    priority, on_file
+):
+    priority.candidates = [naming("Anna Nowak", "0000000001", "0000000002")]
+    priority.answers = [company("unchanged"), company("updated")]
+
+    assert job.main(COMPANIES_FIRST) == 0
+
+    counters = priority.run().ending()["counters"]
+    assert (counters["companies_created"], counters["unchanged"]) == (0, 1)
+    assert counters["updated"] == 1
+    assert [row["outcome"] for row in companies_summary(priority)["companies"]] == [
+        "unchanged",
+        "updated",
+    ]
+
+
+def test_a_companies_dry_run_counts_them_and_sends_and_writes_nothing(
+    priority, on_file, monkeypatch, capsys
+):
+    def no_sign_in(endpoint):
+        raise AssertionError("a dry run signs in to nothing")
+
+    monkeypatch.setattr(job, "token_source", no_sign_in)
+    priority.candidates = [
+        naming("Anna Nowak", "0000000001", "0000000002"),
+        naming("Beata Kos", "0000000003", tier=BOUGHT),
+    ]
+
+    assert job.main([*COMPANIES_FIRST, "--dry-run", "--max-uploads", "1"]) == 0
+
+    assert priority.sent() == [] and priority.objects == {}
+    assert priority.run().ending() == {
+        "state": "succeeded",
+        "stop_reason": "próba - nic nie wysłano",
+        "counters": {"planned": 2},
+        "exit_code": 0,
+        "done": 0,
+    }
+    out = capsys.readouterr().out
+    assert (
+        "The first 1 of 2 people planned (--max-uploads) name 2 companies the "
+        "export has no page for: 0000000001, 0000000002\n"
+    ) in out
+    assert f"Dry run: 2 companies would be created at {ENDPOINT}" in out
+
+
+def test_the_companies_are_refused_the_export_the_people_would_be(priority):
+    priority.export = None
+
+    assert job.main(COMPANIES_FIRST) == job.EXIT_FAILED
+
+    assert priority.sent() == [] and priority.built == []
+    end = priority.run().ending()
+    assert (end["state"], end["stop_reason"]) == (
+        "failed",
+        "brak dzisiejszej kopii bazy (żadnej)",
+    )
+    assert end["summary_path"].startswith(
+        f"gs://{SHARED_BUCKET}/{job.COMPANIES_PREFIX}"
+    )
+
+
+def test_sigterm_stops_the_companies_after_the_one_in_hand(
+    priority, on_file, monkeypatch
+):
+    handlers: list = []
+
+    def install(signum, handler):
+        handlers.append(handler)
+        return "the handler before"
+
+    monkeypatch.setattr(job.signal, "signal", install)
+
+    def answer_then_sigterm():
+        handlers[0](15, None)
+        return company()
+
+    priority.candidates = [naming("Anna Nowak", "0000000001", "0000000002")]
+    priority.answers = [answer_then_sigterm, company()]
+
+    assert job.main(COMPANIES_FIRST) == job.EXIT_TRY_LATER
+
+    assert priority.sent() == ["Spółka 1"]
+    end = priority.run().ending()
+    assert (end["state"], end["stop_reason"], end["done"]) == ("partial", "SIGTERM", 1)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--companies-only"],
+        ["--scope", "on-koryta", "--companies-only"],
+        ["--request", "run-asked", "--companies-only"],
+    ],
+)
+def test_companies_first_needs_a_priority_run_to_plan_the_people(argv):
+    with pytest.raises(SystemExit):
+        job.parse_args(argv)
+
+
+def test_the_needed_companies_go_once_each_in_the_order_the_people_go():
+    payloads = [{"name": "Anna Nowak"}, {"name": "Jan Kowalski"}, {"name": "Ewa Lis"}]
+    missing = [("0000000002", "0000000001"), (), ("0000000001",)]
+
+    assert job.companies_needed(payloads, missing) == {
+        "0000000002": ["Anna Nowak"],
+        "0000000001": ["Anna Nowak", "Ewa Lis"],
+    }
+
+
+def test_each_planned_person_says_which_companies_the_export_has_no_page_for(
+    monkeypatch,
+):
+    class Dumper:
+        def dump_pandas(self):
+            pass
+
+    hire = Person(
+        name="Anna Nowak",
+        companies=[
+            Company(krs="0000000009", role="Prezes", start="2026-09-30"),
+            Company(krs="0000000001", role="Prokurent"),
+        ],
+        elections=[],
+        sources=[],
+        rejestrIo="https://rejestr.io/osoby/2",
+    )
+    on_site = SiteSnapshot(
+        pd.DataFrame.from_records(
+            [{"id": "c1", "type": "place", "name": "Spółka", "krsNumber": "0000000001"}]
+        ),
+        pd.DataFrame(),
+    )
+
+    class Payloads:
+        def prioritised(self, ctx, today, recent_days, bought):
+            return [Pick(hire, HIRE, "2026-09-30")]
+
+        def site_snapshot(self, ctx):
+            return on_site
+
+    monkeypatch.setattr(build, "setup_context", lambda *a, **k: ("ctx", Dumper()))
+    monkeypatch.setattr(
+        build.Pipeline, "create", staticmethod(lambda kind, nested=0: Payloads())
+    )
+    monkeypatch.setattr(sys, "argv", ["koryta_people_import"])
+
+    [found] = build.build_priority(
+        None, ProcessPolicy(set()), date(2026, 10, 15), 30, set()
+    )
+
+    assert (found.payload["name"], found.tier) == ("Anna Nowak", HIRE)
+    assert found.missing == ("0000000009",)

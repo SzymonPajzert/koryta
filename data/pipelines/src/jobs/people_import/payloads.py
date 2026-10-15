@@ -42,6 +42,10 @@ class Candidate:
     tier: str
     since: str | None
     published: bool = False
+    #: The companies the payload names that the export has no page for, by
+    #: KRS number (`SiteSnapshot.missing_companies`): what `--companies-only`
+    #: creates before the people.
+    missing: tuple[str, ...] = ()
 
 
 def pipeline_argv(scope: str, koryta_date: str | None) -> list[str]:
@@ -108,7 +112,8 @@ def build_priority(
     Built as `build_payloads` builds, flags on sys.argv included, then each
     payload made what the pipe would have carried: through a one-row frame and
     `iterate_pipeline_dict`, which turns pandas' NaN into the None the
-    uploader drops, and through JSON.
+    uploader drops, and through JSON. Each says which of its companies the
+    export has no page for, off the snapshot the plan was made against.
     """
     saved = sys.argv
     prog = saved[0] if saved else "koryta_people_import"
@@ -116,9 +121,10 @@ def build_priority(
     try:
         ctx, dumper = setup_context(required_resources(PeoplePayloads), policy=policy)
         try:
-            picks = Pipeline.create(PeoplePayloads).prioritised(
-                ctx, today, recent_days, bought
-            )
+            pipeline = Pipeline.create(PeoplePayloads)
+            picks = pipeline.prioritised(ctx, today, recent_days, bought)
+            # Read once already, by the plan: `site_snapshot` keeps it.
+            snapshot = pipeline.site_snapshot(ctx)
         finally:
             dumper.dump_pandas()
     finally:
@@ -128,7 +134,13 @@ def build_priority(
     frame = pd.DataFrame.from_records([asdict(pick.person) for pick in picks])
     rows = [as_sent(row) for row in iterate_pipeline_dict(frame)]
     return [
-        Candidate(row, pick.tier, pick.since, pick.published)
+        Candidate(
+            row,
+            pick.tier,
+            pick.since,
+            pick.published,
+            tuple(snapshot.missing_companies(row)),
+        )
         for row, pick in zip(rows, picks, strict=True)
     ]
 
