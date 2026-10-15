@@ -1,32 +1,41 @@
 <template>
-  <v-card class="mb-4" data-testid="person-teaser">
-    <div class="pa-4">
-      <!-- Headed as the full page heads a person (`EntityDetailsCard`): the
-           name is the page's h1. -->
+  <!-- On the page, as a published person's page is (EntityDetailView's
+       `k-sections`): no card round it, so the name, the history and the
+       banner share the layout's left edge, and the layout's page-top inset is
+       all there is above the name. -->
+  <div class="w-100 k-sections" data-testid="person-teaser">
+    <!-- Headed as the full page heads a person (`EntityDetailsCard`): the
+         name is the page's h1, and the header is ruled off from what follows
+         by the one hairline, 24px under it. -->
+    <div class="teaser-header pb-6">
       <h1>{{ teaser.name }}</h1>
+    </div>
 
+    <div>
       <!-- The latest post as the first row of the history the full page lists,
            drawn by the card that draws it there - chips, dates and all - so
            the teaser reads as the page it is a piece of. A company nobody has
            published is drawn without a link: following it would be a second
-           wall. -->
+           wall. On a phone it keeps the gutter, where the full page's box
+           bleeds through it: the banner under it is a tinted callout, which
+           keeps its margins, and the two stand on the same edges. -->
       <div
         v-if="historyEdges.length > 0"
-        class="mt-4"
         data-testid="person-teaser-employment"
       >
         <CardEmploymentHistory :edges="historyEdges" unlink-drafts />
       </div>
 
-      <!-- On the same edges as the history's box above it, which sits on
-           the card's padding with no inset of its own. -->
+      <!-- On the same edges as the history's box above it, and 16px under it:
+           it is about that history, so it does not stand a section away. -->
       <div data-testid="person-teaser-below">
         <!-- Under what the reader can see, what they cannot, and the two ways
              in - the site's own login banner. -->
         <ExploreLoginBanner
           :to="loginTarget"
           :signup-to="signupTarget"
-          class="mt-4 mb-0"
+          class="mb-0"
+          :class="{ 'mt-4': historyEdges.length > 0 }"
           @login="onClick('login')"
           @signup="onClick('signup')"
         >
@@ -43,7 +52,7 @@
         </p>
       </div>
     </div>
-  </v-card>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -131,3 +140,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => stopWatchingExit?.());
 </script>
+
+<style scoped>
+/* The full page's header rule (`.entity-header` in EntityDetailsCard). */
+.teaser-header {
+  border-bottom: 1px solid var(--k-line);
+}
+</style>
