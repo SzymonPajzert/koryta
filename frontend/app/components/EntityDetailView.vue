@@ -39,7 +39,7 @@
         >
           Odśwież stronę
         </v-btn>
-        <v-btn variant="outlined" to="/" :prepend-icon="mdiHome" class="ml-2">
+        <v-btn variant="tonal" to="/" :prepend-icon="mdiHome" class="ml-2">
           Strona główna
         </v-btn>
       </v-card-text>
@@ -97,153 +97,156 @@
       <RegionPeopleStatistics teryt="1261" class="mt-2" />
       <RegionPeopleStatistics teryt="12" />
     </template>
-    <v-card v-else width="100%" style="overflow: visible">
-      <div class="pa-4">
-        <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
-          Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
-          <br />
-          <nuxt-link :to="`/admin/rewizje/${node}?revisionId=${revisionId}`"
-            >Zobacz historię zmian</nuxt-link
-          >.
-        </v-alert>
+    <!-- The page sits on the page: no card around it, so the name, the
+         sections and the lists share one left edge with the bar above, and a
+         phone gives them its full width. -->
+    <div v-else class="w-100">
+      <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
+        Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
+        <br />
+        <nuxt-link :to="`/admin/rewizje/${node}?revisionId=${revisionId}`"
+          >Zobacz historię zmian</nuxt-link
+        >.
+      </v-alert>
 
-        <div v-if="entity?.type === 'region'" class="mb-4 d-flex">
-          <v-btn
-            variant="tonal"
-            :prepend-icon="mdiFormatListBulleted"
-            :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
-          >
-            Eksploruj region
-          </v-btn>
-        </div>
-        <EntityDetailsCard
-          v-if="entity"
-          :key="sourcePath"
-          :entity="entity"
-          :type="type"
-          :extra-locations="searchLocations"
-          @published="refreshNode()"
-        />
+      <div v-if="entity?.type === 'region'" class="mb-4 d-flex">
+        <v-btn
+          variant="tonal"
+          :prepend-icon="mdiFormatListBulleted"
+          :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
+        >
+          Eksploruj region
+        </v-btn>
+      </div>
+      <EntityDetailsCard
+        v-if="entity"
+        :key="sourcePath"
+        :entity="entity"
+        :type="type"
+        :extra-locations="searchLocations"
+        @published="refreshNode()"
+      />
 
-        <div class="mt-4">
-          <!-- A place is served by `place/DetailView.vue` and never reaches
+      <div class="mt-4">
+        <!-- A place is served by `place/DetailView.vue` and never reaches
                here. The branch that used to draw one lived on for three months
                after `generateNodeUrl` stopped routing anything to it, and its
                relations rendered twice - once as rows, once again through the
                `v-else` below, which binds to the person branch rather than to
                the chain of them. -->
-          <template v-if="entity?.type === 'region'">
-            <CardConnectionList
-              :edges="owners"
-              title="Część regionu"
-              :can-remove="canRemoveRelations"
-              :subject-published="subjectPublished"
-              @remove="openRemove"
-              @published="refreshEdges()"
-            />
-            <CardConnectionList
-              :edges="subregions"
-              title="Regiony"
-              :can-remove="canRemoveRelations"
-              :subject-published="subjectPublished"
-              @remove="openRemove"
-              @published="refreshEdges()"
-            />
-            <CardConnectionList
-              :edges="subsidiaries"
-              title="Spółki zależne"
-              :can-remove="canRemoveRelations"
-              :subject-published="subjectPublished"
-              @remove="openRemove"
-              @published="refreshEdges()"
-            />
-          </template>
-          <template v-if="entity?.type === 'person'">
-            <CardEmploymentHistory
-              :edges="edges"
-              :can-add="canAddRelations"
-              :can-cite="canAddRelations"
-              :can-correct="canEditRelations"
-              :can-remove="canRemoveRelations"
-              :subject-published="subjectPublished"
-              :predecessors="predecessors"
-              @add="openAdd(undefined, 'Dodaj powiązanie')"
-              @sources="openSources"
-              @edit="openEdit"
-              @remove="openRemove"
-              @published="refreshEdges()"
-            />
-            <!-- The rows above only hint at a handover; this states it, and
+        <template v-if="entity?.type === 'region'">
+          <CardConnectionList
+            :edges="owners"
+            title="Część regionu"
+            :can-remove="canRemoveRelations"
+            :subject-published="subjectPublished"
+            @remove="openRemove"
+            @published="refreshEdges()"
+          />
+          <CardConnectionList
+            :edges="subregions"
+            title="Regiony"
+            :can-remove="canRemoveRelations"
+            :subject-published="subjectPublished"
+            @remove="openRemove"
+            @published="refreshEdges()"
+          />
+          <CardConnectionList
+            :edges="subsidiaries"
+            title="Spółki zależne"
+            :can-remove="canRemoveRelations"
+            :subject-published="subjectPublished"
+            @remove="openRemove"
+            @published="refreshEdges()"
+          />
+        </template>
+        <template v-if="entity?.type === 'person'">
+          <CardEmploymentHistory
+            :edges="edges"
+            bleed
+            :can-add="canAddRelations"
+            :can-cite="canAddRelations"
+            :can-correct="canEditRelations"
+            :can-remove="canRemoveRelations"
+            :subject-published="subjectPublished"
+            :predecessors="predecessors"
+            @add="openAdd(undefined, 'Dodaj powiązanie')"
+            @sources="openSources"
+            @edit="openEdit"
+            @remove="openRemove"
+            @published="refreshEdges()"
+          />
+          <!-- The rows above only hint at a handover; this states it, and
                  says how much of the history it covers. It renders nothing at
                  all when there is nothing to say. -->
-            <SuccessionPersonChanges
-              :person-id="node"
-              :person-name="entity.name"
-              :person-parties="(entity as Person).parties"
-              :relation-count="listedRelationCount"
-              class="mt-4"
+          <SuccessionPersonChanges
+            :person-id="node"
+            :person-name="entity.name"
+            :person-parties="(entity as Person).parties"
+            :relation-count="listedRelationCount"
+            class="mt-4"
+          />
+        </template>
+        <v-row v-else>
+          <v-col
+            v-for="edge in edges.filter((edge) => {
+              const t = entity?.type || type;
+              if (t === 'place' || t === 'region') {
+                return ['employed', 'connection'].includes(edge.type);
+              }
+              return ['employed', 'connection', 'owns', 'election'].includes(
+                edge.type,
+              );
+            })"
+            :key="edge.richNode?.name"
+            cols="12"
+            md="6"
+          >
+            <CardShortNode
+              :edge="edge"
+              :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
+              @remove="openRemove"
+              @published="refreshEdges()"
             />
-          </template>
-          <v-row v-else>
-            <v-col
-              v-for="edge in edges.filter((edge) => {
-                const t = entity?.type || type;
-                if (t === 'place' || t === 'region') {
-                  return ['employed', 'connection'].includes(edge.type);
-                }
-                return ['employed', 'connection', 'owns', 'election'].includes(
-                  edge.type,
-                );
-              })"
-              :key="edge.richNode?.name"
-              cols="12"
-              md="6"
-            >
-              <CardShortNode
-                :edge="edge"
-                :can-remove="canRemoveRelations"
-                :subject-published="subjectPublished"
-                @remove="openRemove"
-                @published="refreshEdges()"
-              />
-            </v-col>
-          </v-row>
-        </div>
+          </v-col>
+        </v-row>
+      </div>
 
-        <!-- `comment` only. `mentions` used to be filtered for here too and
+      <!-- `comment` only. `mentions` used to be filtered for here too and
              could never match: `edges` comes from /api/graph/local/[id], which
              builds its node map from people, places and regions, then drops
              every edge whose far end is not in it - and the far end of a
              mention is an article. The articles that name this entity have
              their own section below, off an endpoint that can see them. -->
-        <div class="mt-4">
-          <v-row>
-            <v-col
-              v-for="edge in edges.filter((edge) => edge.type === 'comment')"
-              :key="edge.richNode?.name"
-              cols="12"
-              md="6"
-            >
-              <CardShortNode
-                :edge="edge"
-                :can-remove="canRemoveRelations"
-                :subject-published="subjectPublished"
-                @remove="openRemove"
-                @published="refreshEdges()"
-              />
-            </v-col>
-          </v-row>
-        </div>
+      <div class="mt-4">
+        <v-row>
+          <v-col
+            v-for="edge in edges.filter((edge) => edge.type === 'comment')"
+            :key="edge.richNode?.name"
+            cols="12"
+            md="6"
+          >
+            <CardShortNode
+              :edge="edge"
+              :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
+              @remove="openRemove"
+              @published="refreshEdges()"
+            />
+          </v-col>
+        </v-row>
+      </div>
 
-        <!-- Where a claim on this page came from, and what else has been
+      <!-- Where a claim on this page came from, and what else has been
              written about them. Only for the kinds `mentions` is declared
              between; a region is never one end of one. -->
-        <MentionArticleList
-          v-if="entity?.type === 'person' || entity?.type === 'place'"
-          :node-id="node"
-        />
+      <MentionArticleList
+        v-if="entity?.type === 'person' || entity?.type === 'place'"
+        :node-id="node"
+      />
 
-        <!-- Notes on a person are unreviewed claims about a named individual,
+      <!-- Notes on a person are unreviewed claims about a named individual,
              so a reader has to be logged in to see them. Everything else -
              companies, regions, topics - stays open.
              `columns`: two notes to a row on a desktop, where one full-width
@@ -252,19 +255,19 @@
              this component too and was not part of the request, and the
              table's side panel mounts the same editor and was asked to stay a
              single stack. -->
-        <NoteEditor
-          v-if="user || entity?.type !== 'person'"
-          :node-id="node"
-          :node-type="type"
-          :columns="type === 'person'"
-          class="mt-4"
-        />
+      <NoteEditor
+        v-if="user || entity?.type !== 'person'"
+        :node-id="node"
+        :node-type="type"
+        :columns="type === 'person'"
+        class="mt-4"
+      />
 
-        <!-- Last on the page, under the relations it draws. The rows above are
+      <!-- Last on the page, under the relations it draws. The rows above are
              the record - who, where, when, cited; the graph is the same facts
              arranged so a shape can be seen in them, and it is only worth
              looking at once the reader knows what they are looking for. -->
-        <!-- Two hops for a person, not one. One hop is their own relations,
+      <!-- Two hops for a person, not one. One hop is their own relations,
              which the rows above already give in full, with dates and sources -
              the canvas was redrawing the list as a star and adding nothing. The
              second ring is the part a list cannot show: who else sits on those
@@ -276,88 +279,88 @@
              `expandableFrontier` refuses to walk into, entered from the other
              end. Either way the reader can change it in the bar above the
              canvas. -->
-        <LazyGraphContainer
-          v-if="!smAndDown || showGraph"
-          :key="node"
-          class="mt-4"
-          :focus-node-id="node"
-          :max-depth="entity?.type === 'person' ? 2 : 1"
-        />
-        <div v-else class="mt-4 d-flex justify-center">
-          <!-- Flat, not tonal: tonal draws the label in the theme's pale sage
+      <LazyGraphContainer
+        v-if="!smAndDown || showGraph"
+        :key="node"
+        class="mt-4 k-bleed-xs"
+        :focus-node-id="node"
+        :max-depth="entity?.type === 'person' ? 2 : 1"
+      />
+      <div v-else class="mt-4 d-flex justify-center">
+        <!-- Flat, not tonal: tonal draws the label in the theme's pale sage
                on a wash of the same sage, which is 1.73:1. Flat is black on
                sage. -->
-          <v-btn
-            color="primary"
-            variant="flat"
-            :prepend-icon="mdiGraphOutline"
-            @click="showGraph = true"
-          >
-            Pokaż graf powiązań
-          </v-btn>
-        </div>
+        <v-btn
+          color="primary"
+          variant="flat"
+          :prepend-icon="mdiGraphOutline"
+          @click="showGraph = true"
+        >
+          Pokaż graf powiązań
+        </v-btn>
+      </div>
 
-        <!-- Under the graph. The facts themselves are for logged in readers
+      <!-- Under the graph. The facts themselves are for logged in readers
              only - they are a model's reading of a newspaper, matched by name
              and judged by nobody yet, and this is the indexed public url for a
              named individual - so the section locks itself and shows a logged
              out reader only how many there are. That gate lives inside the
              component, because the count is public and the facts are not. -->
-        <!-- A fact turned into a relation is a new draft in „Historia
+      <!-- A fact turned into a relation is a new draft in „Historia
              powiązań” above, so that list is read again, as it is after
              „Dodaj”. -->
-        <ExtractionPersonFacts
-          v-if="entity?.type === 'person'"
-          :node-id="node"
-          @promoted="refreshEdges()"
-        />
+      <ExtractionPersonFacts
+        v-if="entity?.type === 'person'"
+        :node-id="node"
+        @promoted="refreshEdges()"
+      />
 
-        <FormAddRelationDialog
-          v-if="entity"
-          v-model="addRelationOpen"
-          :node-id="node"
-          :node-type="entity.type"
-          :node-name="entity.name"
-          :types="addRelationTypes"
-          :title="addRelationTitle"
-          @added="refreshEdges()"
-        />
+      <FormAddRelationDialog
+        v-if="entity"
+        v-model="addRelationOpen"
+        :node-id="node"
+        :node-type="entity.type"
+        :node-name="entity.name"
+        :types="addRelationTypes"
+        :title="addRelationTitle"
+        @added="refreshEdges()"
+      />
 
-        <FormEdgeSourcesDialog
-          v-if="sourcesEdge?.id"
-          v-model="sourcesOpen"
-          :edge-id="sourcesEdge.id"
-          :edge-label="sourcesLabel"
-          @changed="refreshEdges()"
-        />
+      <FormEdgeSourcesDialog
+        v-if="sourcesEdge?.id"
+        v-model="sourcesOpen"
+        :edge-id="sourcesEdge.id"
+        :edge-label="sourcesLabel"
+        @changed="refreshEdges()"
+      />
 
-        <DialogEditRelationHost
-          v-model="editOpen"
-          v-model:outcome="editedOutcome"
-          :edge="editEdge"
-          :label="editLabel"
-          :can-apply="canApplyEdits"
-          @saved="onEdgeEdited"
-        />
+      <DialogEditRelationHost
+        v-model="editOpen"
+        v-model:outcome="editedOutcome"
+        :edge="editEdge"
+        :label="editLabel"
+        :can-apply="canApplyEdits"
+        @saved="onEdgeEdited"
+      />
 
-        <DialogRemoveEdgeHost
-          v-model="removeOpen"
-          v-model:shown="removedShown"
-          :edge="removeEdge"
-          :label="removeLabel"
-          @removed="onEdgeRemoved()"
-        />
+      <DialogRemoveEdgeHost
+        v-model="removeOpen"
+        v-model:shown="removedShown"
+        :edge="removeEdge"
+        :label="removeLabel"
+        @removed="onEdgeRemoved()"
+      />
 
-        <div v-if="referencedIn.length" class="mt-4">
-          <h3 class="text-h6 mb-2">Artykuł stanowi źródło dla:</h3>
-          <v-row>
-            <v-col v-for="edge in referencedIn" :key="edge.id" cols="12" md="6">
-              <CardShortNode :edge="edge" />
-            </v-col>
-          </v-row>
-        </div>
+      <div v-if="referencedIn.length" class="mt-4">
+        <h3 class="text-h6 mb-2">Artykuł stanowi źródło dla:</h3>
+        <v-row>
+          <v-col v-for="edge in referencedIn" :key="edge.id" cols="12" md="6">
+            <CardShortNode :edge="edge" />
+          </v-col>
+        </v-row>
+      </div>
 
-        <!-- template v-if="user && entity">
+      <!-- template v-if="user && entity">
           <template v-if="userWantsEdit">
             <div class="mt-4">
               <v-btn
@@ -419,7 +422,6 @@
             <v-spacer />
           </div>
         </template-->
-      </div>
 
       <!--div v-if="editedEdge" class="pa-4">
         <FormEditEdge
@@ -434,14 +436,12 @@
         />
       </div -->
 
-      <v-divider />
-
       <template v-if="!!user">
-        <div class="pa-4">
+        <div class="mt-10">
           <CommentsSection :node-id="node" />
         </div>
       </template>
-    </v-card>
+    </div>
   </div>
 </template>
 

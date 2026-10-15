@@ -64,7 +64,6 @@
           :href="`#${tile.path}`"
           height="100%"
           variant="outlined"
-          rounded="lg"
           hover
           class="pa-4"
           @click="trackGoal('pomoc:path', { path: tile.path })"
@@ -185,7 +184,7 @@
            highest-value visitor's whole path, and it must not be one card.
            Nothing in the list is a link - each row describes something found
            where the reader already is, on a person, a company or an article. -->
-      <v-card variant="outlined" rounded="lg" class="pa-4 mt-4">
+      <v-card variant="outlined" class="pa-4 mt-4">
         <div class="text-subtitle-2 font-weight-bold mb-1">
           Reszta jest tam, gdzie i tak jesteś – przy osobie, spółce albo
           artykule
@@ -532,8 +531,6 @@ const VOLUNTEER_FORM =
 definePageMeta({
   title: "Jak możesz pomóc",
   isHelp: true,
-  layout: "gray",
-  fullWidth: true,
 });
 
 useSeoMeta({

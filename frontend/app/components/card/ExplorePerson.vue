@@ -45,14 +45,14 @@
         <div class="text-caption text-medium-emphasis mb-2">
           Wyszukaj w internecie informacji:
         </div>
-        <!-- Outlined and uncoloured, for the reason the title above is:
+        <!-- The neutral control tint, for the reason the title above is:
              `tonal` + `primary` is pale sage type on a paler sage fill, and
              these carry the search terms a reader picks between. -->
         <v-btn
           v-for="query in queries"
           :key="query"
           :prepend-icon="mdiGoogle"
-          variant="outlined"
+          variant="tonal"
           class="ma-1 search-query"
           @click="searchInGoogle(query)"
         >

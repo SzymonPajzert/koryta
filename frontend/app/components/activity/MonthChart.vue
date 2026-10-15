@@ -115,7 +115,7 @@ const options = computed(() => monthChartOptions(daily.value));
 <style scoped>
 .amc {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border: 1px solid var(--k-line);
   border-radius: 10px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);

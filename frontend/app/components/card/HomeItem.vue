@@ -6,7 +6,6 @@
       :to="props.router ? props.router : undefined"
       :prepend-icon="props.icon"
       rel="noopener noreferrer"
-      rounded="lg"
       variant="tonal"
     >
       <template #title>

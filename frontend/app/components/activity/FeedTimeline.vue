@@ -621,7 +621,7 @@ function reasons(batch: FeedBatch) {
 .ft-more {
   align-items: center;
   background: none;
-  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border: 1px solid var(--k-line);
   border-radius: 14px;
   cursor: pointer;
   display: inline-flex;

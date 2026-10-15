@@ -12,7 +12,7 @@
       <v-btn
         :prepend-icon="ordering ? mdiCheck : mdiSort"
         :color="ordering ? 'primary' : undefined"
-        :variant="ordering ? 'flat' : 'outlined'"
+        :variant="ordering ? 'flat' : 'tonal'"
         :disabled="pending && !ordering"
         @click="toggleOrdering"
       >

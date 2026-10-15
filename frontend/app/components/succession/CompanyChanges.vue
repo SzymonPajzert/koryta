@@ -657,7 +657,7 @@ const roleSections = computed(() => {
    with it. */
 .role-head {
   align-items: center;
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.16);
+  border-bottom: 1px solid var(--k-line);
   color: rgba(var(--v-theme-on-surface), 0.6);
   display: flex;
   font-size: 0.875rem;
@@ -695,7 +695,7 @@ const roleSections = computed(() => {
 
 .ev-head {
   align-items: center;
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.16);
+  border-bottom: 1px solid var(--k-line);
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -739,7 +739,7 @@ const roleSections = computed(() => {
 }
 
 .rl-row + .rl-row {
-  border-top: 1px solid rgba(var(--v-border-color), 0.12);
+  border-top: 1px solid var(--k-line);
 }
 
 .rl-p {

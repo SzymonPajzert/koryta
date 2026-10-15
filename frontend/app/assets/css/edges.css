@@ -1,0 +1,205 @@
+/* One edge style.
+
+   A record or a panel has an edge: one hairline, rgba(border, 0.12). A
+   control has a tint, never a line: rgba(on-surface, 0.06). A note about what
+   is missing has neither. Shadows are for things that float - menus, dialogs -
+   and nothing else. Radii: 6 for controls, 10 for cards, 999 for pills; an
+   inner radius is the outer one less its inset.
+
+   Accepted with the 2026-10-15 redesign round (.interface-design/system.md).
+   Only neutrals change here: border alphas that were .10/.16/.18/.22/.30, and
+   Vuetify's outlines in the text colour (.87), all become the one hairline.
+   No hue is added or changed - a coloured outline, chip or toggle keeps its
+   colour, which is why the neutral rules below name the colours they leave
+   alone.
+
+   Vuetify draws its components' styles from their own stylesheets, which can
+   load after this one, so a selector here starts one class above Vuetify's:
+   at .v-application, or at the .v-overlay-container Vuetify teleports menus
+   and dialogs into, outside it. Rules about the page itself start at .v-main,
+   which leaves menus and dialogs with their elevation. `!important` only
+   against one of Vuetify's own `!important` utilities (`border`, `ma-*`,
+   `rounded-*`, `w-100`); a component's scoped state - a done step's green
+   edge, a picked chip - out-ranks these rules. */
+
+:root {
+  --k-line: rgba(var(--v-border-color), 0.12);
+  --k-line-strong: rgba(var(--v-border-color), 0.24);
+  --k-tonal: rgba(var(--v-theme-on-surface), 0.06);
+  --k-tonal-hover: rgba(var(--v-theme-on-surface), 0.1);
+  --k-r-control: 6px;
+  --k-r-card: 10px;
+  --k-r-pill: 999px;
+  /* the layout's side padding, which a phone-width panel bleeds through */
+  --k-gutter: 16px;
+  /* one distance from the app bar to the page's h1 */
+  --k-page-top: 40px;
+}
+
+@media (max-width: 599.98px) {
+  :root {
+    --k-page-top: 24px;
+  }
+}
+
+/* ---- records and panels: one hairline ---- */
+
+/* Vuetify draws an outlined card or chip in the text colour, near-black on
+   this theme. The neutral ones take the hairline; a coloured outline keeps
+   its colour (`grey` included - the feedback dialog's fourth kind). The list
+   of colours is in `:where`, so it adds nothing to the rule's weight and a
+   component's own border on the same card still wins. */
+:is(.v-application, .v-overlay-container)
+  :is(.v-card--variant-outlined, .v-chip--variant-outlined):where(
+    :not(
+      .text-primary,
+      .text-secondary,
+      .text-success,
+      .text-info,
+      .text-warning,
+      .text-error,
+      .text-cta,
+      .text-grey,
+      [class*="text-grey-"],
+      [class*="text-ink-"],
+      [class*="text-on-"],
+      [style*="color"]
+    )
+  ) {
+  border-color: var(--k-line);
+}
+
+.v-application .v-main .v-card {
+  border-radius: var(--k-r-card);
+}
+
+/* A card in the page that Vuetify would lift on a shadow sits on the page
+   with the hairline instead. Menus and dialogs are outside .v-main and keep
+   theirs. */
+.v-application .v-main .v-card--variant-elevated:not(.v-card--flat) {
+  border: 1px solid var(--k-line);
+  box-shadow: none;
+}
+
+/* The two radii as classes, for what is not a Vuetify card or button: a
+   sheet, a panel, a square icon button. Vuetify's `rounded-*` utilities keep
+   meaning what they say. */
+:is(.v-application, .v-overlay-container) .k-r-card {
+  border-radius: var(--k-r-card);
+}
+
+:is(.v-application, .v-overlay-container) .k-r-control {
+  border-radius: var(--k-r-control);
+}
+
+:is(.v-application, .v-overlay-container) .v-alert {
+  border-radius: var(--k-r-card);
+}
+
+/* An accordion is a list: one ruled box, its panels square inside it and
+   divided by Vuetify's own hairline. Flat comes from nuxt.config's defaults. */
+.v-application .v-main .v-expansion-panels {
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
+  overflow: hidden;
+}
+
+.v-application .v-main .v-expansion-panels > .v-expansion-panel {
+  border-radius: 0;
+}
+
+/* ---- controls: a tint, never a line ---- */
+
+:is(.v-application, .v-overlay-container)
+  .v-btn:not(.v-btn--icon, .rounded-pill, .rounded-circle) {
+  border-radius: var(--k-r-control);
+}
+
+/* A tonal button with no colour of its own is the control tint. Vuetify lays
+   its text colour under it at 12%, which on near-black ink is twice the 6%
+   the rest of the controls use. */
+:is(.v-application, .v-overlay-container)
+  .v-btn--variant-tonal:where(
+    :not(
+      .text-primary,
+      .text-secondary,
+      .text-success,
+      .text-info,
+      .text-warning,
+      .text-error,
+      .text-cta,
+      .text-grey,
+      [class*="text-grey-"],
+      [class*="text-ink-"],
+      [class*="text-on-"],
+      [style*="color"]
+    )
+  )
+  > .v-btn__underlay {
+  opacity: 0.07;
+}
+
+:is(.v-application, .v-overlay-container) .v-chip--label {
+  border-radius: var(--k-r-control);
+}
+
+/* A toggle between two or three views is one segmented control
+   (SegmentedToggle.vue): the track is the control tint, the chosen option a
+   white tab on the hairline with its label in full ink, the others at medium
+   emphasis. The component asks Vuetify for its 40px `comfortable` group and
+   text buttons, so inside the 2px inset each tab is a button's 36px and has
+   no outline to undo. Inner radius = outer less the inset. */
+:is(.v-application, .v-overlay-container) .v-btn-group.k-segmented {
+  background: var(--k-tonal);
+  border-radius: var(--k-r-control);
+  gap: 2px;
+  padding: 2px;
+}
+
+:is(.v-application, .v-overlay-container) .v-btn-group.k-segmented > .v-btn {
+  border: 1px solid transparent;
+  border-radius: calc(var(--k-r-control) - 2px);
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+:is(.v-application, .v-overlay-container)
+  .v-btn-group.k-segmented
+  > .v-btn.v-btn--active {
+  background: rgb(var(--v-theme-surface));
+  border-color: var(--k-line);
+  color: rgba(var(--v-theme-on-surface), 0.87);
+}
+
+:is(.v-application, .v-overlay-container)
+  .v-btn-group.k-segmented
+  > .v-btn.v-btn--active
+  > .v-btn__overlay {
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  :is(.v-application, .v-overlay-container)
+    .v-btn-group.k-segmented
+    > .v-btn:not(.v-btn--active):hover {
+    color: rgba(var(--v-theme-on-surface), 0.87);
+  }
+}
+
+/* ---- the page ---- */
+
+/* A full-width list or panel on a phone runs edge to edge, through the
+   layout's gutter: a 375px screen gives the row 375px rather than 343.
+   Tinted callouts and people cards keep their margins. */
+@media (max-width: 599.98px) {
+  .v-application .k-bleed-xs {
+    border-inline: 0 !important;
+    border-radius: 0 !important;
+    margin-inline: calc(-1 * var(--k-gutter)) !important;
+    width: auto !important;
+  }
+}
+
+/* The one page-top inset, for a full-width page that pads itself. */
+.v-application .k-page-top {
+  padding-top: var(--k-page-top) !important;
+}

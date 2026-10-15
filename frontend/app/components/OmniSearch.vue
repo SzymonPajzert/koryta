@@ -22,6 +22,7 @@
       clearable
       :loading="loading"
       single-line
+      flat
       variant="solo-filled"
       :menu-props="menuProps"
       @click:clear="nodeGroupPicked = null"
@@ -458,5 +459,27 @@ watch(nodeGroupPicked, (value) => {
 <style scoped>
 .omni-search.v-autocomplete--active-menu :deep(.v-autocomplete__menu-icon) {
   transform: rotate(0deg) !important;
+}
+
+/* One edge, white, still a pill - search is the one field that is. Vuetify's
+   solo-filled draws a grey overlay and a shadow; `flat` takes the shadow, and
+   the overlay goes here, so what is left is the hairline. */
+.omni-search :deep(.v-field) {
+  border: 1px solid var(--k-line);
+  transition: border-color 0.15s ease;
+}
+
+.omni-search :deep(.v-field__overlay) {
+  opacity: 0;
+}
+
+.omni-search :deep(.v-field--focused) {
+  border-color: var(--k-line-strong);
+}
+
+@media (hover: hover) {
+  .omni-search :deep(.v-field:hover) {
+    border-color: var(--k-line-strong);
+  }
 }
 </style>

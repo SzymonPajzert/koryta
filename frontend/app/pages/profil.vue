@@ -2,7 +2,7 @@
   <div class="profile-page w-100 mx-auto">
     <ClientOnly>
       <template v-if="user">
-        <v-card class="mb-4" rounded="lg">
+        <v-card class="mb-4">
           <v-card-text
             class="d-flex flex-column flex-sm-row align-center ga-4 pa-6"
           >
@@ -48,7 +48,7 @@
           </v-card-text>
         </v-card>
 
-        <v-card class="mb-4" rounded="lg">
+        <v-card class="mb-4">
           <v-card-title>Twoje dane</v-card-title>
           <v-card-text>
             <v-form @submit.prevent="saveProfile">
@@ -72,7 +72,7 @@
           </v-card-text>
         </v-card>
 
-        <v-card class="mb-4" rounded="lg">
+        <v-card class="mb-4">
           <v-card-title>Widoczność w statystykach i w aktywności</v-card-title>
           <v-card-subtitle class="text-wrap">
             Ranking na
@@ -123,7 +123,7 @@
              control the mail about them. -->
         <ProfileMyRevisions />
 
-        <v-card class="mb-4" rounded="lg">
+        <v-card class="mb-4">
           <v-card-title>Powiadomienia o Twoich zmianach</v-card-title>
           <v-card-subtitle class="text-wrap">
             Wysyłamy je na adres, którym się logujesz — tylko wtedy, gdy ktoś
@@ -153,7 +153,7 @@
           </v-card-text>
         </v-card>
 
-        <v-card class="mb-4" rounded="lg" data-newsletter-card>
+        <v-card class="mb-4" data-newsletter-card>
           <v-card-title>Newsletter</v-card-title>
           <v-card-subtitle class="text-wrap">
             Maile od koryta.pl, tylko na tematy, które tu wybierzesz. Z każdej
@@ -231,7 +231,7 @@
           </v-card-text>
         </v-card>
 
-        <v-card rounded="lg">
+        <v-card>
           <v-card-title>Konto</v-card-title>
           <v-card-text>
             <v-btn color="warning" variant="tonal" block @click="logout">
@@ -241,13 +241,13 @@
         </v-card>
       </template>
 
-      <v-card v-else class="pa-6 text-center" rounded="lg">
+      <v-card v-else class="pa-6 text-center">
         <v-progress-circular indeterminate class="mb-4" />
         <div>Ładowanie profilu...</div>
       </v-card>
 
       <template #fallback>
-        <v-card class="pa-6 text-center" rounded="lg">
+        <v-card class="pa-6 text-center">
           <v-progress-circular indeterminate class="mb-4" />
           <div>Ładowanie profilu...</div>
         </v-card>

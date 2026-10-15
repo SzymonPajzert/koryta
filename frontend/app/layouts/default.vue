@@ -1,5 +1,6 @@
 <template>
-  <v-app-bar :height="APP_BAR_HEIGHT">
+  <!-- Flat, ruled off by the one hairline: a shadow is for what floats. -->
+  <v-app-bar :height="APP_BAR_HEIGHT" flat class="app-bar">
     <NuxtLink to="/">
       <NuxtImg
         class="mx-2"
@@ -218,7 +219,7 @@
     <v-container
       class="position-relative fill-height"
       :max-width="maxWidth"
-      :style="{ padding: rootPadding }"
+      :style="containerStyle"
     >
       <slot />
     </v-container>
@@ -263,7 +264,18 @@ const loginDialog = ref(false);
 const maxWidth = computed(() =>
   route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 1200),
 );
-const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
+/** The page's frame: the gutter at the sides, and one page-top inset from the
+ * bar to the page's h1 - 40px, 24 on a phone (assets/css/edges.css). Both from
+ * the variables a phone-width panel bleeds through, so the two cannot drift.
+ * A full-width page brings its own. */
+const containerStyle = computed(() =>
+  route?.meta?.fullWidth
+    ? { padding: 0 }
+    : {
+        paddingInline: "var(--k-gutter)",
+        paddingTop: "var(--k-page-top)",
+      },
+);
 const affineLink = computed(() => route?.meta?.affineLink);
 /** The pages the "Zespół" menu leads to on this site, which light it while it
  * is closed, as "Admin" is lit by hand below. /qa is one page whichever tab is
@@ -291,6 +303,10 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
 
 <style scoped>
+.app-bar {
+  box-shadow: inset 0 -1px 0 var(--k-line);
+}
+
 /* `fill-height` makes this container a flex box, and a flex item's automatic
    minimum size is its min-content - so whatever a page puts in the slot is
    never allowed to be narrower than the widest thing inside it could be. One

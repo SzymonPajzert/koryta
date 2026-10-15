@@ -67,7 +67,7 @@ export default defineNuxtConfig({
   // Vuetify's SCSS for every component would cost a build that is already
   // near App Hosting's heap limit. vuetify-nuxt-module puts its own styles
   // first in this list, so these come after them.
-  css: ["~/assets/css/type.css"],
+  css: ["~/assets/css/type.css", "~/assets/css/edges.css"],
 
   ssr,
 
@@ -270,6 +270,13 @@ export default defineNuxtConfig({
             colors: themeColors,
           },
         },
+      },
+      // One edge style (assets/css/edges.css): shadows are for what floats.
+      // A button sits flat - a coloured one keeps its fill, a neutral one
+      // says `tonal` - and an accordion is a ruled list, not a raised stack.
+      defaults: {
+        VBtn: { variant: "flat" },
+        VExpansionPanels: { flat: true },
       },
     },
   },

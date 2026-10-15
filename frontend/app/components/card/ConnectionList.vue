@@ -14,7 +14,10 @@
         Dodaj
       </v-btn>
     </div>
-    <v-card v-if="edges.length > 0">
+    <!-- A ruled list on the hairline, not a card lifted on a shadow; edge to
+         edge on a phone, like the relation history. Only entity pages list
+         these, at their full width. -->
+    <v-card v-if="edges.length > 0" variant="flat" border class="k-bleed-xs">
       <v-list density="compact">
         <v-list-item
           v-for="edge in edgesSorted"

@@ -1,5 +1,6 @@
 <template>
-  <div class="pa-4">
+  <!-- No side padding of its own: the layout's container pads the column. -->
+  <div class="pb-4">
     <div class="d-flex align-start flex-wrap ga-4 mb-6">
       <div class="flex-grow-1">
         <h1 class="text-h4 mb-1">Statystyki</h1>
@@ -31,13 +32,7 @@
       <v-spacer />
       <!-- One filter row, above everything it scopes: the range below changes
            the ranking, the tiles and the timeline together. -->
-      <v-btn-toggle
-        v-model="days"
-        density="compact"
-        variant="outlined"
-        divided
-        mandatory
-      >
+      <SegmentedToggle v-model="days">
         <v-btn
           v-for="range in activityRanges"
           :key="range"
@@ -46,7 +41,7 @@
         >
           {{ range }} dni
         </v-btn>
-      </v-btn-toggle>
+      </SegmentedToggle>
     </div>
 
     <v-alert
