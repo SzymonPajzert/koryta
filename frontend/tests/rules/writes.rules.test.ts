@@ -352,3 +352,53 @@ describe("votes", () => {
     ).rejects.toMatchObject(denied);
   });
 });
+
+describe("nodes", () => {
+  it("are written by nobody through the client", async () => {
+    // Every page reaches Firestore through the server; a reader's change is a
+    // revision, filed through /api.
+    await expect(
+      setDoc(doc(reader, "nodes/new"), { type: "person", name: "Jan Nowy" }),
+    ).rejects.toMatchObject(denied);
+    await expect(
+      updateDoc(doc(reader, "nodes/person"), { name: "Ktoś inny" }),
+    ).rejects.toMatchObject(denied);
+    await expect(deleteDoc(doc(reader, "nodes/person"))).rejects.toMatchObject(
+      denied,
+    );
+    await expect(
+      setDoc(doc(anonymous, "nodes/new"), { type: "person" }),
+    ).rejects.toMatchObject(denied);
+  });
+});
+
+describe("users", () => {
+  it("lets a reader read and write their own profile, and only their own", async () => {
+    await seed("users/alice", { displayName: "Alice" });
+
+    // What profil.vue writes.
+    await setDoc(
+      doc(reader, "users/reader"),
+      { displayName: "Czytelnik" },
+      { merge: true },
+    );
+    await getDoc(doc(reader, "users/reader"));
+    await expect(getDoc(doc(reader, "users/alice"))).rejects.toMatchObject(
+      denied,
+    );
+    await expect(
+      setDoc(doc(reader, "users/alice"), { displayName: "Czytelnik" }),
+    ).rejects.toMatchObject(denied);
+  });
+
+  it("are no business of anybody signed out", async () => {
+    await seed("users/reader", { displayName: "Czytelnik" });
+
+    await expect(getDoc(doc(anonymous, "users/reader"))).rejects.toMatchObject(
+      denied,
+    );
+    await expect(
+      setDoc(doc(anonymous, "users/reader"), { displayName: "Ktoś" }),
+    ).rejects.toMatchObject(denied);
+  });
+});
