@@ -34,21 +34,9 @@
     />
     <div class="task-node__head">
       <v-icon size="x-small" :icon="taskKindConfig[task.kind].icon" />
-      <!-- A goal says how far what leads to it has got, rather than what it
-           waits on: it waits on all of it. -->
-      <template v-if="progress">
-        <span>{{ goalWord }}</span>
-        <span v-if="progress.total > 0">
-          · {{ progress.closed }}/{{ progress.total }}
-        </span>
-      </template>
-      <template v-else>
-        <span>{{ taskSectionConfig[section].short }}</span>
-        <span v-if="task.status === 'doing'">· w toku</span>
-        <span v-if="state.blockers.length > 0 && !stacked">
-          · czeka na {{ state.blockers.length }}
-        </span>
-      </template>
+      <!-- One line, cut short with an ellipsis where the buttons need the
+           room: „Dla agenta · w toku · czeka na 12” is wider than the card. -->
+      <span class="task-node__what" :title="headText">{{ headText }}</span>
       <span class="task-node__actions">
         <!-- Leaves on the map only this card and what it waits on, or brings
              the rest back. -->
@@ -175,6 +163,27 @@ const goalWord = computed(() =>
         ? "Cel odłożony"
         : "Cel",
 );
+
+/** The card's head: its list, whether it is under way and what it waits on.
+ * A goal says how far what leads to it has got instead: it waits on all of
+ * it. */
+const headText = computed(() => {
+  const parts = props.progress
+    ? [
+        goalWord.value,
+        props.progress.total > 0
+          ? `${props.progress.closed}/${props.progress.total}`
+          : null,
+      ]
+    : [
+        taskSectionConfig[props.section].short,
+        props.task.status === "doing" ? "w toku" : null,
+        props.state.blockers.length > 0 && !props.stacked
+          ? `czeka na ${props.state.blockers.length}`
+          : null,
+      ];
+  return parts.filter(Boolean).join(" · ");
+});
 </script>
 
 <style>
@@ -187,8 +196,8 @@ const goalWord = computed(() =>
   flex-direction: column;
   gap: 4px;
   padding: 8px 12px 8px 14px;
-  border: 1px solid rgba(var(--v-border-color), 0.2);
-  border-radius: 8px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   background: rgb(var(--v-theme-surface));
   box-shadow: inset 4px 0 0 rgb(var(--task-ink));
   cursor: pointer;
@@ -253,7 +262,7 @@ const goalWord = computed(() =>
   content: "";
   position: absolute;
   inset: -1px;
-  border: 1px solid rgba(var(--v-border-color), 0.28);
+  border: 1px solid var(--k-line-strong);
   border-radius: inherit;
   background: rgb(var(--v-theme-surface));
   pointer-events: none;
@@ -280,16 +289,21 @@ const goalWord = computed(() =>
   outline-offset: 1px;
 }
 
+/* 12/600 in sentence case: the type system's floor and its label weight. */
 .task-node__head {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.6875rem;
+  font-size: var(--k-meta-size);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: rgb(var(--task-ink));
   white-space: nowrap;
+}
+
+.task-node__what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .task-node__priority {
@@ -312,7 +326,7 @@ const goalWord = computed(() =>
   align-items: center;
   gap: 2px;
   padding: 0 4px;
-  border-radius: 4px;
+  border-radius: var(--k-r-control);
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -350,7 +364,7 @@ const goalWord = computed(() =>
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 0.8125rem;
+  font-size: var(--k-ui-size);
   line-height: 1.3;
   color: rgb(var(--v-theme-on-surface));
 }
