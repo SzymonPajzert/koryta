@@ -16,19 +16,21 @@
         <span class="arow-grow font-weight-medium" :title="pair">
           {{ pair }}
         </span>
-        <span
-          v-if="revision.edgeType"
-          class="arow-tag bg-surface-info text-ink-info"
-        >
-          {{ typeLabel }}
-        </span>
         <template #rest>
+          <span
+            v-if="revision.edgeType"
+            class="arow-tag bg-surface-info text-ink-info"
+          >
+            {{ typeLabel }}
+          </span>
           <span class="arow-fixed text-body-2 text-medium-emphasis">
             {{ changeCount }}
           </span>
-          <span class="arow-side text-body-2" :title="who">{{ who }}</span>
+          <span class="arow-side text-body-2" :title="who">
+            {{ who }}
+          </span>
           <span class="arow-fixed text-caption text-medium-emphasis">
-            {{ formatDaysAgo(revision.updateTime) }}
+            {{ formatDayDistance(revision.updateTime) }}
           </span>
         </template>
       </RevisionRowLine>
@@ -40,8 +42,12 @@
         <UserChip v-else :uid="revision.updateUser" />
       </AdminRowFact>
       <AdminRowFact label="Kiedy">
-        {{ formatMoment(revision.updateTime) }} ·
-        {{ formatDaysAgo(revision.updateTime) }}
+        <span class="text-no-wrap">{{
+          formatMoment(revision.updateTime)
+        }}</span>
+        <span v-if="revision.updateTime" class="d-block">{{
+          formatDayDistance(revision.updateTime)
+        }}</span>
       </AdminRowFact>
       <!-- Whether the relation is on the site now, which is what decides how
            much a wrong answer costs. It used to read „niezatwierdzona”, which
@@ -83,7 +89,7 @@
           class="edge-row__change text-body-2"
         >
           <span class="text-medium-emphasis">{{
-            revisionFieldLabel(change.field)
+            capitaliseLabel(revisionFieldLabel(change.field))
           }}</span>
           <span>{{ display(change.from) }}</span>
           <v-icon :icon="mdiArrowRight" size="x-small" class="text-disabled" />
@@ -124,10 +130,11 @@
 import { computed, watch } from "vue";
 import { mdiArrowRight, mdiGavel, mdiVectorPolyline } from "@mdi/js";
 import { useUserLookup } from "@/composables/users";
-import { formatDaysAgo } from "~/utils/chartTheme";
+import { formatDayDistance, formatMoment } from "~/utils/moment";
 import { nodeLinkUrl } from "~/composables/slugs";
 import { polishCounting } from "~/composables/polish";
 import {
+  capitaliseLabel,
   renderFieldValue,
   revisionFieldLabel,
 } from "~~/shared/revisionChanges";
@@ -197,9 +204,6 @@ const reviewTo = computed(() => ({
  * - a committee, a party, a date - so this is mostly about not printing
  * `[object Object]` if one ever is not. */
 const display = (value: unknown) => renderFieldValue(value) ?? "—";
-
-const formatMoment = (value: string | null) =>
-  value ? new Date(value).toLocaleString("pl-PL") : "-";
 </script>
 
 <style scoped>

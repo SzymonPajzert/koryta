@@ -17,14 +17,14 @@
         <span class="arow-grow font-weight-medium" :title="name">
           {{ name }}
         </span>
-        <span
-          v-if="group.subject.published"
-          class="arow-tag bg-surface-success text-ink-success"
-          data-subject-published
-        >
-          opublikowana
-        </span>
         <template #rest>
+          <span
+            v-if="group.subject.published"
+            class="arow-tag bg-surface-success text-ink-success"
+            data-subject-published
+          >
+            Opublikowana
+          </span>
           <span
             v-if="fields"
             class="arow-side text-body-2 text-medium-emphasis"
@@ -37,7 +37,7 @@
             {{ countLabel }}
           </span>
           <span class="arow-fixed text-caption text-medium-emphasis">
-            {{ formatDaysAgo(newest) }}
+            {{ formatDayDistance(newest) }}
           </span>
         </template>
       </RevisionRowLine>
@@ -64,7 +64,10 @@
         {{ group.subject.published ? "opublikowana" : "nieopublikowana" }}
       </AdminRowFact>
       <AdminRowFact label="Najnowsza zmiana">
-        {{ formatMoment(newest) }} · {{ formatDaysAgo(newest) }}
+        <span class="text-no-wrap">{{ formatMoment(newest) }}</span>
+        <span v-if="newest" class="d-block">{{
+          formatDayDistance(newest)
+        }}</span>
       </AdminRowFact>
     </template>
 
@@ -74,7 +77,7 @@
           variant="text"
           size="small"
           color="ink-sage"
-          :prepend-icon="mdiOpenInNew"
+          :prepend-icon="mdiArrowRight"
           :to="group.subject.path"
         >
           Strona wpisu
@@ -105,11 +108,12 @@
  * the plain list.
  */
 import { computed } from "vue";
-import { mdiCompare, mdiOpenInNew, mdiVectorPolyline } from "@mdi/js";
+import { mdiArrowRight, mdiCompare, mdiVectorPolyline } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
-import { formatDaysAgo } from "~/utils/chartTheme";
+import { formatDayDistance, formatMoment } from "~/utils/moment";
 import { polishCounting } from "~/composables/polish";
 import type { Proposal } from "~~/shared/proposals";
+import { capitaliseLabel } from "~~/shared/revisionChanges";
 import type { QueueGroup } from "~~/server/api/revisions/queue.get";
 
 const props = defineProps<{
@@ -163,8 +167,7 @@ const fields = computed(() => {
     else if (proposal.changeCount === 0) labels.add("bez zmian");
     else for (const change of proposal.changes) labels.add(change.label);
   }
-  const text = [...labels].join(", ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return capitaliseLabel([...labels].join(", "));
 });
 
 /** Who proposed them, plainly - the line is the inside of a button. */
@@ -189,7 +192,4 @@ const newest = computed(() => props.proposals[0]?.updateTime ?? null);
 const comparisonTo = computed(() =>
   props.group.subject.type ? `/admin/rewizje/${props.group.subject.id}` : null,
 );
-
-const formatMoment = (value: string | null) =>
-  value ? new Date(value).toLocaleString("pl-PL") : "-";
 </script>

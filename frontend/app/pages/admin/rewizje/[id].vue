@@ -1,24 +1,20 @@
 <template>
-  <!-- Full width takes the layout's padding away, so the page puts its own
-       back - the page-top inset and page-end gap too (assets/css/edges.css). -->
-  <div class="pa-4 k-page-top k-page-end revision-compare">
-    <div class="d-flex flex-wrap align-center ga-2 mb-4">
-      <v-btn
-        :icon="mdiArrowLeft"
-        variant="text"
-        to="/admin/rewizje#wpisy"
-        aria-label="Wróć do listy wpisów"
-      ></v-btn>
-      <div class="revision-title">
-        <h1 class="text-h5 text-sm-h4">
-          Szczegóły rewizji: {{ nodeName || route.params.id }}
-        </h1>
-        <div v-if="nodeName" class="text-caption text-medium-emphasis">
-          Węzeł {{ route.params.id }}
-        </div>
-      </div>
-      <v-spacer />
-      <div v-if="!pending" class="d-flex align-center ga-2">
+  <div class="w-100 revision-compare">
+    <AdminPageHead
+      :title="`Szczegóły rewizji: ${nodeName || route.params.id}`"
+      :lead="nodeName ? `Węzeł ${route.params.id}` : undefined"
+    >
+      <template #back>
+        <v-btn
+          variant="text"
+          size="small"
+          :prepend-icon="mdiArrowLeft"
+          to="/admin/rewizje#wpisy"
+        >
+          Rewizje
+        </v-btn>
+      </template>
+      <template v-if="!pending && !loadFailed" #actions>
         <v-chip
           :color="published ? 'ink-success' : 'ink-neutral'"
           size="small"
@@ -29,7 +25,6 @@
         <v-btn
           v-if="isAdmin"
           :color="published ? 'ink-neutral' : 'ink-success'"
-          size="small"
           :loading="publishPending"
           :disabled="!published && !canPublish"
           data-testid="publish-toggle"
@@ -37,16 +32,7 @@
         >
           {{ published ? "Ukryj" : "Opublikuj" }}
           <v-tooltip
-            v-if="!published && !canPublish"
-            activator="parent"
-            location="bottom"
-            max-width="280"
-          >
-            Ta strona nie ma żadnej rewizji, którą dałoby się zatwierdzić, więc
-            nie ma czego opublikować.
-          </v-tooltip>
-          <v-tooltip
-            v-else-if="!published && autoApproveRevision"
+            v-if="!published && autoApproveRevision"
             activator="parent"
             location="bottom"
             max-width="280"
@@ -55,198 +41,217 @@
             najnowszą, z {{ formatDate(autoApproveRevision.update_time) }}.
           </v-tooltip>
         </v-btn>
-      </div>
-    </div>
+        <!-- Why the button above is greyed out, as text: Vuetify gives a
+             disabled v-btn `pointer-events: none`, so the tooltip this used
+             to have could never open. ReviewActions says its own the same
+             way. -->
+        <span
+          v-if="isAdmin && !published && !canPublish"
+          class="text-caption text-medium-emphasis"
+          data-testid="publish-unavailable"
+        >
+          Nie ma czego opublikować – żadnej rewizji nie da się zatwierdzić
+        </span>
+      </template>
+    </AdminPageHead>
 
-    <!-- Who proposed what, a line each, and where the decisions are taken.
-         Above the table because it is what a reviewer arriving from a link
-         came for; the table below is for reading whole versions. -->
-    <section class="history-section mb-6">
-      <AdminSectionHead
-        title="Historia zmian"
-        :count="pending ? undefined : allRevisions.length"
-        info="Każda rewizja to pełna wersja wpisu, zapisana przez człowieka albo przez pipeline. Kliknij wiersz, żeby zobaczyć, kto ją zgłosił i co zmienia względem zatwierdzonej wersji – i tam ją rozpatrzyć."
-      />
-      <RevisionHistoryList
-        ref="history"
-        v-model:filter="columnFilter"
-        :node-id="nodeId"
-        :highlight-id="highlightId"
-        @changed="refresh"
-      />
-    </section>
+    <div class="k-sections">
+      <!-- Who proposed what, a line each, and where the decisions are taken.
+           Above the table because it is what a reviewer arriving from a link
+           came for; the table below is for reading whole versions. -->
+      <section>
+        <AdminSectionHead
+          title="Historia zmian"
+          :count="pending || loadFailed ? undefined : allRevisions.length"
+          info="Każda rewizja to pełna wersja wpisu, zapisana przez człowieka albo przez pipeline. Kliknij wiersz, żeby zobaczyć, kto ją zgłosił i co zmienia względem zatwierdzonej wersji – i tam ją rozpatrzyć."
+        />
+        <RevisionHistoryList
+          ref="history"
+          v-model:filter="columnFilter"
+          :node-id="nodeId"
+          :highlight-id="highlightId"
+          @changed="refresh"
+        />
+      </section>
 
-    <section>
-      <!-- One column per revision, so a company the pipelines have
-           re-uploaded forty times is forty screens wide. The filter is what
-           makes that readable; the scrolling below it is what makes it
-           reachable. It is the list's filter too - both show the same
-           revisions - and drawn the same way: chips wrap on a phone, where
-           the three-button toggle this used to be was wider than the screen
-           and clipped its last button. -->
-      <AdminSectionHead
-        title="Porównanie obok siebie"
-        info="Te same rewizje w kolumnach, pole pod polem, do czytania całych wersji. Pola, które różnią się od zatwierdzonej wersji, są podświetlone."
-      >
-        <template v-if="!pending && allRevisions.length > 0">
-          <v-chip-group
-            v-model="columnFilter"
-            mandatory
-            column
-            color="ink-sage"
-            class="py-0"
-          >
-            <v-chip
-              v-for="option in filterOptions"
-              :key="option.value"
-              :value="option.value"
-              size="small"
-              variant="outlined"
-              filter
-              :disabled="option.count === 0 && columnFilter !== option.value"
-              :data-testid="`revision-filter-${option.value}`"
+      <section>
+        <!-- One column per revision, so a company the pipelines have
+             re-uploaded forty times is forty screens wide. The filter is what
+             makes that readable; the scrolling below it is what makes it
+             reachable. It is the list's filter too - both show the same
+             revisions - and drawn the same way: chips wrap on a phone, where
+             the three-button toggle this used to be was wider than the screen
+             and clipped its last button. -->
+        <AdminSectionHead
+          title="Porównanie obok siebie"
+          info="Te same rewizje w kolumnach, pole pod polem, do czytania całych wersji. Pola, które różnią się od zatwierdzonej wersji, są podświetlone."
+        >
+          <template v-if="!pending && allRevisions.length > 0">
+            <v-chip-group
+              v-model="columnFilter"
+              mandatory
+              column
+              color="ink-sage"
+              class="py-0"
             >
-              {{ option.title }} ({{ option.count }})
-            </v-chip>
-          </v-chip-group>
-          <span class="text-caption text-medium-emphasis">
-            Pokazano {{ shownRevisions.length }} z {{ allRevisions.length }}.
-          </span>
-        </template>
-      </AdminSectionHead>
+              <v-chip
+                v-for="option in filterOptions"
+                :key="option.value"
+                :value="option.value"
+                size="small"
+                variant="outlined"
+                filter
+                :disabled="option.count === 0 && columnFilter !== option.value"
+                :data-testid="`revision-filter-${option.value}`"
+              >
+                {{ option.title }} ({{ option.count }})
+              </v-chip>
+            </v-chip-group>
+            <span class="text-caption text-medium-emphasis">
+              Pokazano {{ shownRevisions.length }} z {{ allRevisions.length }}.
+            </span>
+          </template>
+        </AdminSectionHead>
 
-      <v-card v-if="pending" class="pa-4 text-center">
-        <v-progress-circular indeterminate></v-progress-circular>
-      </v-card>
-      <div v-else class="comparison-scroll pb-4">
-        <client-only>
-          <table v-if="shownRevisions.length > 0" class="comparison-table">
-            <thead>
-              <tr>
-                <th
-                  v-for="rev in shownRevisions"
-                  :key="'h-' + rev.id"
-                  :data-revision-header="rev.id"
-                  class="card-header text-left"
-                  :class="{
-                    'highlighted-revision': rev.id === highlightId,
-                  }"
-                >
-                  <div class="d-flex justify-space-between align-start mb-2">
-                    <div>
-                      <div class="text-h6 font-weight-medium">
-                        {{ formatDate(rev.update_time) }}
-                      </div>
-                      <div class="mt-1">
-                        <UserChip :uid="revisionUser(rev)" />
-                      </div>
-                    </div>
-                    <div class="d-flex flex-column align-end ga-1">
-                      <!-- The same resolution the list above and the queue
-                           make: an approval a newer one overtook is
-                           `Zastąpiona`, where this used to say `Oczekuje`. -->
-                      <ChipRevisionStatus
-                        :status="statusOf(rev)"
-                        size="x-small"
-                      />
-                      <v-chip
-                        :color="
-                          rev.update_automatic ? 'ink-neutral' : 'ink-sage'
-                        "
-                        size="x-small"
-                      >
-                        {{ rev.update_automatic ? "Auto" : "Ręczna" }}
-                      </v-chip>
-                    </div>
-                  </div>
-
-                  <div class="mt-1">
-                    <nuxt-link
-                      v-if="getRevisionData(rev.data)['type']"
-                      :to="`/entity/${getRevisionData(rev.data)['type']}/${nodeId}?revisionId=${rev.id}`"
-                      class="text-decoration-none text-ink-info font-weight-bold d-inline-flex align-center ga-1"
-                      target="_blank"
-                    >
-                      <v-icon :icon="mdiEyeOutline" size="small" />
-                      Podgląd tej wersji strony
-                      <v-tooltip
-                        activator="parent"
-                        location="bottom"
-                        max-width="300"
-                      >
-                        Kliknij, aby zobaczyć, jak wyglądałaby strona po
-                        opublikowaniu tej wersji.
-                      </v-tooltip>
-                    </nuxt-link>
-                    <!-- Full id on hover only: spelled out it is ~60
-                         monospace characters, which widened the column past the
-                         350px the comparison table gives it and pushed the
-                         header controls out of view. -->
-                    <div
-                      class="text-caption font-weight-mono text-medium-emphasis mt-1 revision-id"
-                      :title="String(rev.id)"
-                    >
-                      ID: {{ shortRevisionId(rev.id) }}
-                    </div>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="key in allKeys" :key="key">
-                <td
-                  v-for="rev in shownRevisions"
-                  :key="key + '-' + rev.id"
-                  class="card-cell"
-                  :class="{
-                    'highlighted-revision': rev.id === highlightId,
-                    'changed-field': differsFromApproved(rev, key),
-                  }"
-                >
-                  <div
-                    class="field-label text-caption text-ink-sage font-weight-bold mb-1"
+        <!-- A note about what is not there yet has no edge and no fill. -->
+        <div
+          v-if="pending"
+          class="d-flex align-center ga-2 text-body-2 text-medium-emphasis"
+        >
+          <v-progress-circular indeterminate size="20" width="2" />
+          Wczytuję rewizje…
+        </div>
+        <v-alert
+          v-else-if="loadFailed"
+          type="error"
+          variant="tonal"
+          density="compact"
+          text="Nie udało się wczytać rewizji tego wpisu."
+        />
+        <div
+          v-else
+          ref="scroller"
+          class="comparison-scroll pb-4"
+          :class="{
+            'k-bleed-xs': shownRevisions.length > 0,
+            'comparison-scroll--capped': overflowsSideways,
+          }"
+        >
+          <client-only>
+            <table
+              v-if="shownRevisions.length > 0"
+              ref="table"
+              class="comparison-table"
+            >
+              <thead>
+                <tr>
+                  <th
+                    v-for="rev in shownRevisions"
+                    :key="'h-' + rev.id"
+                    :data-revision-header="rev.id"
+                    class="card-header text-left"
+                    :class="{
+                      'highlighted-revision': rev.id === highlightId,
+                    }"
                   >
-                    {{ key }}
-                  </div>
-                  <div class="field-value text-body-2">
-                    <template
-                      v-if="
-                        rev.data && getRevisionData(rev.data)[key] !== undefined
-                      "
-                    >
-                      <pre
-                        class="mb-0"
-                        style="white-space: pre-wrap; font-family: inherit"
-                        >{{
-                          typeof getRevisionData(rev.data)[key] === "object"
-                            ? JSON.stringify(
-                                getRevisionData(rev.data)[key],
-                                null,
-                                2,
-                              )
-                            : getRevisionData(rev.data)[key]
-                        }}</pre>
-                    </template>
-                    <template v-else>
-                      <span class="text-medium-emphasis font-italic"
-                        >- brak -</span
+                    <div class="d-flex justify-space-between align-start mb-2">
+                      <div>
+                        <div class="text-subtitle-1 font-weight-medium">
+                          {{ formatDate(rev.update_time) }}
+                        </div>
+                        <div class="mt-1">
+                          <UserChip :uid="revisionUser(rev)" />
+                        </div>
+                      </div>
+                      <div class="d-flex flex-column align-end ga-1">
+                        <!-- The same resolution the list above and the queue
+                             make: an approval a newer one overtook is
+                             `Zastąpiona`, where this used to say `Oczekuje`. -->
+                        <ChipRevisionStatus
+                          :status="statusOf(rev)"
+                          size="x-small"
+                        />
+                        <v-chip
+                          :color="
+                            rev.update_automatic ? 'ink-neutral' : 'ink-sage'
+                          "
+                          size="x-small"
+                        >
+                          {{ rev.update_automatic ? "Auto" : "Ręczna" }}
+                        </v-chip>
+                      </div>
+                    </div>
+
+                    <div class="mt-1">
+                      <nuxt-link
+                        v-if="getRevisionData(rev.data)['type']"
+                        :to="`/entity/${getRevisionData(rev.data)['type']}/${nodeId}?revisionId=${rev.id}`"
+                        class="text-decoration-none text-ink-info text-body-2 font-weight-medium d-inline-flex align-center ga-1"
+                        target="_blank"
                       >
-                    </template>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <v-card v-else class="pa-6 text-center text-medium-emphasis">
-            {{
-              allRevisions.length > 0
-                ? "Żadna rewizja nie pasuje do wybranego filtra."
-                : "Brak rewizji dla tego węzła."
-            }}
-          </v-card>
-        </client-only>
-      </div>
-    </section>
+                        <v-icon :icon="mdiEyeOutline" size="small" />
+                        Podgląd tej wersji strony
+                      </nuxt-link>
+                      <!-- Full id on hover only: spelled out it is ~60
+                           monospace characters, which widened the column past the
+                           350px the comparison table gives it and pushed the
+                           header controls out of view. -->
+                      <div
+                        class="text-caption font-weight-mono text-medium-emphasis mt-1 revision-id"
+                        :title="String(rev.id)"
+                      >
+                        ID: {{ shortRevisionId(rev.id) }}
+                      </div>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="key in allKeys" :key="key">
+                  <td
+                    v-for="rev in shownRevisions"
+                    :key="key + '-' + rev.id"
+                    :class="{
+                      'highlighted-revision': rev.id === highlightId,
+                      'changed-field': differsFromApproved(rev, key),
+                    }"
+                  >
+                    <!-- The name the diff above uses, „Opis” rather than
+                         `content`; the stored key on hover. -->
+                    <div
+                      class="field-label text-caption text-ink-sage font-weight-semibold mb-1"
+                      :title="key"
+                    >
+                      {{ fieldName(key) }}
+                    </div>
+                    <!-- A list reads as one, „PO, PiS”, the way the diff
+                         prints it, rather than as JSON brackets; and every
+                         way of having nothing - no key, null, "", [] - says
+                         „brak” alike, where a blank cell used to stand
+                         beside „- brak -” for the same absence. -->
+                    <div class="field-value text-body-2">
+                      <pre v-if="fieldText(rev, key)" class="mb-0">{{
+                        fieldText(rev, key)
+                      }}</pre>
+                      <span v-else class="text-medium-emphasis font-italic"
+                        >– brak –</span
+                      >
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="text-body-2 text-medium-emphasis mb-0">
+              {{
+                allRevisions.length > 0
+                  ? "Żadna rewizja nie pasuje do wybranego filtra."
+                  : "Brak rewizji dla tego węzła."
+              }}
+            </p>
+          </client-only>
+        </div>
+      </section>
+    </div>
 
     <AdminPublishNodeDialog
       v-model="publishDialog"
@@ -270,8 +275,16 @@
 import { computed, ref, onMounted, nextTick, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ClientOnly } from "#components";
+import { useResizeObserver } from "@vueuse/core";
 import { relationsPlural } from "~/composables/edges";
+import { formatMoment } from "~/utils/moment";
 import { latestPublishableRevision } from "~~/shared/revisions";
+import {
+  capitaliseLabel,
+  renderFieldValue,
+  revisionFieldLabel,
+  skippedChangeFields,
+} from "~~/shared/revisionChanges";
 import {
   resolveProposalStatus,
   type ProposalStatus,
@@ -285,7 +298,6 @@ import {
 
 definePageMeta({
   middleware: "auth",
-  fullWidth: true,
 });
 
 useHead({
@@ -309,6 +321,9 @@ const revisions = ref<Record<string, unknown>[]>([]);
 const approvedRevisionId = ref<string | null>(null);
 const published = ref(false);
 const pending = ref(true);
+/** The first read failed, which is not the same as an entry with no
+ * revisions - and said as such, rather than as „Brak rewizji”. */
+const loadFailed = ref(false);
 const publishPending = ref(false);
 const error = ref<string | null>(null);
 const errorShown = ref(false);
@@ -327,6 +342,7 @@ async function load() {
   revisions.value = data.revisions;
   approvedRevisionId.value = data.approvedRevisionId;
   published.value = data.published;
+  loadFailed.value = false;
 }
 
 onMounted(async () => {
@@ -334,6 +350,7 @@ onMounted(async () => {
     await load();
   } catch (err) {
     console.error("Failed to fetch revisions:", err);
+    loadFailed.value = true;
   } finally {
     pending.value = false;
   }
@@ -430,6 +447,20 @@ async function onPublished({
   await reloadAll();
 }
 
+/** Whether the table is wider than its scroller, which is the only time the
+ * scroller is given a height of its own (`comparison-scroll--capped`). The
+ * scroller exists only once `pending` is over, and the table only once
+ * ClientOnly has drawn it, so both are watched through refs that fill in
+ * later: the table for a filter that drops or brings back columns, the
+ * scroller for the window changing width. */
+const scroller = ref<HTMLElement | null>(null);
+const table = ref<HTMLElement | null>(null);
+const overflowsSideways = ref(false);
+useResizeObserver([scroller, table], () => {
+  const el = scroller.value;
+  overflowsSideways.value = !!el && el.scrollWidth > el.clientWidth + 1;
+});
+
 /** The review queue links here naming one revision, and the tint that marks it
  * is worth nothing if it is off to the right of a table wide enough to scroll.
  * Scrolled once the columns exist, centred so the neighbours it is being
@@ -445,12 +476,11 @@ const scrollToHighlighted = async () => {
   const header = document.querySelector<HTMLElement>(
     `[data-revision-header="${id}"]`,
   );
-  const scroller = header?.closest<HTMLElement>(".comparison-scroll");
-  if (!header || !scroller) return;
+  const box = header?.closest<HTMLElement>(".comparison-scroll");
+  if (!header || !box) return;
   const offset =
-    header.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
-  scroller.scrollLeft +=
-    offset - (scroller.clientWidth - header.offsetWidth) / 2;
+    header.getBoundingClientRect().left - box.getBoundingClientRect().left;
+  box.scrollLeft += offset - (box.clientWidth - header.offsetWidth) / 2;
 };
 
 const allRevisions = computed(() => {
@@ -559,20 +589,40 @@ const nodeName = computed<string | null>(() => {
   return null;
 });
 
+/** The fields the table has a row for, in the diff's order: by their Polish
+ * names. Sorted by the stored key they read „data urodzenia, opis, ktomaco,
+ * nazwa, partie” - alphabetical in English, which in Polish is no order at
+ * all. The bookkeeping the diff leaves out (`skippedChangeFields`: the type,
+ * `partiesSource`, `revision_id`, counters) is left out here too; none of it
+ * is something a reviewer reads a version for. */
 const allKeys = computed(() => {
   const keys = new Set<string>();
   // Over the drawn columns, so filtering out the pipeline's uploads takes
-  // their fields with them rather than leaving rows reading "- brak -".
+  // their fields with them rather than leaving rows reading „brak”.
   for (const rev of shownRevisions.value) {
     if (rev.data && typeof rev.data === "object") {
       for (const k of Object.keys(rev.data as Record<string, unknown>)) {
-        keys.add(k);
+        if (!skippedChangeFields.has(k)) keys.add(k);
       }
     }
   }
-  keys.delete("revision_id");
-  return Array.from(keys).sort();
+  return Array.from(keys).sort((a, b) =>
+    revisionFieldLabel(a).localeCompare(revisionFieldLabel(b), "pl"),
+  );
 });
+
+/** A field's Polish name as a label: „Data urodzenia”, the way the history
+ * list above writes the same fields on its lines and in its diffs. */
+function fieldName(key: string): string {
+  return capitaliseLabel(revisionFieldLabel(key));
+}
+
+/** A field's value as the diff prints it - a list as „PO, PiS”, a flag as
+ * „tak” - or null when the revision has nothing there: no key, null, an empty
+ * string or an empty list alike. Text with line breaks keeps them. */
+function fieldText(rev: Record<string, unknown>, key: string): string | null {
+  return renderFieldValue(getRevisionData(rev.data)[key]) || null;
+}
 
 function parseTime(val: unknown): string | number {
   if (!val) return 0;
@@ -591,10 +641,11 @@ function parseTime(val: unknown): string | number {
   return 0;
 }
 
+/** The moment a revision was written, the way the history list above and the
+ * queue print it, so a column can be found by its row's date. */
 function formatDate(val: unknown) {
   const time = parseTime(val);
-  if (!time) return "-";
-  return new Date(time).toLocaleString("pl-PL");
+  return time ? formatMoment(time) : "—";
 }
 
 function revisionUser(rev: Record<string, unknown>): string | null {
@@ -629,17 +680,16 @@ const approvedRevision = computed(() =>
  *
  * A revision is a full snapshot, so most of its fields are copies of what is
  * already live and the handful that actually changed is what a reviewer needs
- * to find. Compared as JSON, since values range from strings to arrays of
- * them. Everything is "changed" while nothing is approved yet - on a brand new
- * entry that is the truth. */
+ * to find. Compared as the cells print them, the way the diff compares:
+ * `["PiS"]` and `{ 0: "PiS" }` are the same claim written two ways, and two
+ * cells that both read „brak” are not a change whichever kind of nothing each
+ * one stores. Everything is "changed" while nothing is approved yet - on a
+ * brand new entry that is the truth. */
 function differsFromApproved(rev: Record<string, unknown>, key: string) {
   const approved = approvedRevision.value;
   if (!approved) return true;
   if (rev.id === approved.id) return false;
-  return (
-    JSON.stringify(getRevisionData(rev.data)[key] ?? null) !==
-    JSON.stringify(getRevisionData(approved.data)[key] ?? null)
-  );
+  return fieldText(rev, key) !== fieldText(approved, key);
 }
 </script>
 
@@ -649,34 +699,38 @@ function differsFromApproved(rev: Record<string, unknown>, key: string) {
    content. So a table wide enough to scroll stretched the page instead, and
    `html { overflow-x: hidden }`, which Vuetify also sets, then clipped the
    right-hand revisions off with no way to reach them. `min-width: 0` hands the
-   overflow back to the scroller below, which is where it belongs. */
+   overflow back to the scroller below, which is where it belongs. The layout
+   zeroes it on every page now as well; this one says so itself, because it is
+   the page the table would break.
+
+   The page sits in the site's one 1200px column like every other: it used to
+   run the window's full width for the table's sake, which put its title 16px
+   under the bar and 72px in, where every other page opens at the column's
+   edge. The table scrolls sideways inside the column instead. Its width is
+   the template's `w-100`. */
 .revision-compare {
-  width: 100%;
   min-width: 0;
 }
 
-/* A node id has no spaces to break at, and on a phone the heading is the
-   widest thing on the page. The basis is what sends the publish controls to
-   a line of their own there rather than squeezing the heading beside them. */
-.revision-title {
-  flex: 1 1 240px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-/* The page is as wide as the window for the table's sake; a line of the list
-   stretched across 1900px puts the date and the change a head-turn apart. */
-.history-section {
-  max-width: 1200px;
-}
-
+/* Edge to edge on a phone (`k-bleed-xs`): a column is 300px at the least, and
+   the gutters are what a 375px screen has to give it. Only while the table is
+   drawn - its border-spacing is a gutter of its own, where the empty notes
+   would sit against the screen's edge. */
 .comparison-scroll {
   overflow: auto;
-  /* The sideways scrollbar belongs at the bottom of the window. Left to the
-     page it sat at the bottom of a table as tall as the field list, so on a
-     node with thirty fields reaching it meant scrolling past everything it
-     was there to move. */
-  max-height: calc(100vh - 16rem);
+}
+/* The cap is there only to keep a mouse's sideways scrollbar in reach: left to
+   the page, it sat at the bottom of a table as tall as the field list, so on a
+   node with thirty fields reaching it meant scrolling past everything it was
+   there to move. So it applies only while the table really is wider than the
+   column, and only with a fine pointer. A table that fits ends with its own
+   bottom edge, rather than being cut off under the first rows; and on a phone
+   it scrolls sideways at full height, with no inner vertical scroller to trap
+   a swipe meant for the page. */
+@media (hover: hover) and (pointer: fine) {
+  .comparison-scroll--capped {
+    max-height: calc(100vh - 16rem);
+  }
 }
 
 .comparison-table {
@@ -690,29 +744,37 @@ function differsFromApproved(rev: Record<string, unknown>, key: string) {
   max-width: 400px;
   padding: 16px;
   background: rgb(var(--v-theme-surface));
-  border-left: 1px solid rgba(0, 0, 0, 0.12);
-  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-left: 1px solid var(--k-line);
+  border-right: 1px solid var(--k-line);
   vertical-align: top;
 }
+/* Each column is one card: the hairline round it and the card radius at its
+   two ends, with the fields inside ruled off at half the hairline. */
 .card-header {
-  border-top: 1px solid rgba(0, 0, 0, 0.12);
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
+  border-top: 1px solid var(--k-line);
+  border-top-left-radius: var(--k-r-card);
+  border-top-right-radius: var(--k-r-card);
   padding-top: 20px;
 }
 .comparison-table tbody tr:last-child td {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
+  border-bottom: 1px solid var(--k-line);
+  border-bottom-left-radius: var(--k-r-card);
+  border-bottom-right-radius: var(--k-r-card);
   padding-bottom: 20px;
 }
 .comparison-table tbody tr td {
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  border-top: 1px solid rgba(var(--v-border-color), 0.06);
+}
+/* A field's value with its own line breaks kept - a description's paragraphs -
+   in the page's own type rather than the browser's monospace. */
+.field-value pre {
+  white-space: pre-wrap;
+  font-family: inherit;
 }
 /* An id the shortening does not recognise still has to stay inside its column:
    underscores are not break opportunities, so one long token would stretch the
-   table rather than wrap. Same for a serialised `sources` array, where a URL is
-   equally unbreakable. */
+   table rather than wrap. Same for a list of sources, where a URL is equally
+   unbreakable. */
 .revision-id,
 .field-value pre {
   overflow-wrap: anywhere;
