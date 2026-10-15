@@ -73,15 +73,38 @@ describe("candidacyDay", () => {
     expect(candidacyDay("2001", "")).toBe("2001-09-23");
   });
 
+  it("keeps a date that names a day or a month", () => {
+    // A reviewer's correction, a run-off and a by-election typed in by hand:
+    // each says when, and none of them is the year's first round.
+    expect(candidacyDay("2019-05-26", "Sejm")).toBe("2019-05-26");
+    expect(candidacyDay("2024-04-21", "Burmistrz")).toBe("2024-04-21");
+    expect(candidacyDay("2022-04-08", "")).toBe("2022-04-08");
+    expect(candidacyDay("2010-11", "")).toBe("2010-11");
+  });
+
+  it("leaves a by-election at its year", () => {
+    // Held on a day of its own, which a year does not say.
+    expect(candidacyDay("2019-01-01", "Senat", true)).toBe("2019");
+    expect(candidacyDay("2019-01-01", "Senat", false)).toBe("2019-10-13");
+  });
+
+  it("leaves a year at the year when no election of the kind was held in it", () => {
+    // The first of January would be a day nobody voted on.
+    expect(candidacyDay("2027-01-01", "Sejm")).toBe("2027");
+    expect(candidacyDay("2014-01-01", "Sejm")).toBe("2014");
+    expect(candidacyDay("2022-01-01")).toBe("2022");
+  });
+
   it("dates every election to a real day of its own year", () => {
     // Guards the table against a typo: each day it holds is a calendar day of
-    // the year it is filed under.
+    // the year it is filed under, and never the first of January.
     for (let year = 1985; year <= 2030; year++) {
       for (const position of [...electionPositions, undefined]) {
         const day = candidacyDay(`${year}-01-01`, position);
-        if (day === `${year}-01-01`) continue;
+        if (day === String(year)) continue;
         expect(isoDay(day), `${position} ${year}: ${day}`).not.toBeNull();
         expect(day.startsWith(`${year}-`), `${position} ${year}`).toBe(true);
+        expect(day, `${position} ${year}`).not.toBe(`${year}-01-01`);
       }
     }
   });

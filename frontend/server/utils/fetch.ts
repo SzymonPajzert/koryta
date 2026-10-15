@@ -234,7 +234,11 @@ function edgeFromDB(doc: FirebaseFirestore.QueryDocumentSnapshot): Edge {
   // A candidacy is stored under its election's year; the page shows the day.
   if (data.type === "election") {
     if (typeof data.start_date === "string" && data.start_date) {
-      data.start_date = candidacyDay(data.start_date, data.position);
+      data.start_date = candidacyDay(
+        data.start_date,
+        data.position,
+        data.by_election,
+      );
     }
     data["end_date"] = data["start_date"];
   }
