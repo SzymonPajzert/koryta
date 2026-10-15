@@ -18,22 +18,22 @@ syncs the venv, builds the compressor, reads the secrets, and hands over to
 `koryta_nightly` (`data/pipelines/src/jobs/nightly`), which runs the steps in
 order, each with a time limit and its output in the night's log:
 
-| Step           | What                                                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `compress`     | the compressor, `-incremental -hostname` for rejestr.io, then api-krs.ms.gov.pl: the whole previous day in UTC          |
-| `export`       | waits for tonight's export: the newest one with its `.overall_export_metadata`, taken at most 6 h before the night      |
-| `krs_free`     | `koryta_scrape_krs_free --max-minutes 60`: the bulletin, then api-krs                                                   |
-| `krs_register` | `koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25`: who owns each newly registered company     |
-| `krs_odpis`    | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing public --max 300`: odpisy pełne, see below      |
-| `krs_paid`     | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give           |
-| `rebuild_held` | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)          |
-| `reprocess`    | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch and the slow static sources (`HELD`) |
-| `tests`        | `pytest src/tests/pipelines` over the night's outputs                                                                   |
-| `outputs`      | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                      |
-| `invariants`   | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                     |
-| `people`       | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --refresh none`                    |
-| `scores`       | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled             |
-| `tidy`         | export shards and day-named outputs older than a week off the disk                                                      |
+| Step           | What                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `compress`     | the compressor, `-incremental -hostname` for rejestr.io, then api-krs.ms.gov.pl: the whole previous day in UTC           |
+| `export`       | waits for tonight's export: the newest one with its `.overall_export_metadata`, taken at most 6 h before the night       |
+| `krs_free`     | `koryta_scrape_krs_free --max-minutes 60`: the bulletin, then api-krs                                                    |
+| `krs_register` | `koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25`: who owns each newly registered company      |
+| `krs_odpis`    | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing public --max 300`: odpisy pełne, see below       |
+| `krs_paid`     | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give            |
+| `rebuild_held` | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)           |
+| `reprocess`    | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch and the slow static sources (`HELD`)  |
+| `tests`        | `pytest src/tests/pipelines` over the night's outputs                                                                    |
+| `outputs`      | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                       |
+| `invariants`   | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                      |
+| `people`       | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-published 10 --refresh none` |
+| `scores`       | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled              |
+| `tidy`         | export shards and day-named outputs older than a week off the disk                                                       |
 
 The VM keeps its disk, so `versioned/`, the download cache, the listing ranges
 and the odpis parse memo carry over from one night to the next: the jobs run
@@ -233,6 +233,17 @@ person whose payload went up unchanged is left alone like anybody else. And a
 note nobody closes puts its page first only when there is something new to
 send it.
 
+Of all those pages, at most 100 that are published change a night
+(`--max-published`), whichever tier sends them: the bought and the noted count
+too. A change to a published page is what readers see, or a proposal waiting
+for a reviewer, and a change to the code that builds the payloads can make many
+of them read as changed at once. The cap keeps one night from leaving more to
+review than can be reviewed (Szymon, 2026-10-15). The published pages past it
+wait for the next nights, and the night goes on to the pages behind them. At
+100 people a night it changes nothing - the nights of 2026-10-10 to 10-14
+changed 45 to 87 published pages each, 33 to 49 of them bought or noted - and
+it stays put when `--max-uploads` goes up.
+
 Scores: after the people, every scoring model (`analysis/scores`) is rebuilt
 and its shortlist reconciled with the votes it holds on the site - a changed
 score written, one it no longer gives taken back (`koryta_score_import`). The
@@ -391,6 +402,9 @@ way, and the timer runs the night on a VM that is already up too.
   VM still while `main` moves. Every merge to `main` is otherwise live the
   next night.
 - **More people.** `KORYTA_NIGHTLY_ARGS=--max-uploads 300`.
+- **Fewer, or more, changes to published pages.**
+  `KORYTA_NIGHTLY_ARGS=--max-published 50`; 0 changes none. It does not grow
+  with `--max-uploads`: raise both for more of the published pages too.
 - **More, or no, pages for the people only an odpis names in older posts.**
   `KORYTA_NIGHTLY_ARGS=--max-odpis-only-current 20`; 0 makes none. It does
   not grow with `--max-uploads`.
