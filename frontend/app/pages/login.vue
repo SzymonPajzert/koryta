@@ -26,8 +26,11 @@
         <v-progress-circular indeterminate aria-label="Logowanie" />
       </v-card>
       <v-card v-else rounded="lg" class="pa-2">
-        <v-card-title class="text-h5 text-wrap">
-          Cześć {{ user?.displayName || user?.email }}!
+        <!-- The page's h1, at the size of a title that heads a card. -->
+        <v-card-title class="text-wrap">
+          <h1 class="k-title--sm">
+            Cześć {{ user?.displayName || user?.email }}!
+          </h1>
         </v-card-title>
         <v-card-text>
           <!-- A line rather than a tinted alert: what was saved, in body
@@ -80,8 +83,10 @@
         Musisz być zalogowany, aby uzyskać dostęp do tej strony.
       </v-alert>
       <v-card rounded="lg" class="pa-2">
-        <v-card-title class="text-h5 text-center">
-          {{ isLogin ? "Zaloguj się" : "Rejestracja" }}
+        <v-card-title class="text-center text-wrap">
+          <h1 class="k-title--sm">
+            {{ isLogin ? "Zaloguj się" : "Rejestracja" }}
+          </h1>
         </v-card-title>
         <v-card-text>
           <FormLoginForm :is-login="isLogin" @success="onLoginSuccess" />

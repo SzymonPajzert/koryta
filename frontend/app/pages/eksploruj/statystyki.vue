@@ -3,7 +3,7 @@
     <div class="d-flex align-start flex-wrap ga-4 mb-6">
       <div class="flex-grow-1">
         <h1 class="text-h4 mb-1">Statystyki</h1>
-        <p class="text-body-2 text-medium-emphasis mb-0">
+        <p class="k-page-lead mb-0">
           Kto się tym zajmuje i co ostatnio zrobił, a niżej — ile jest w bazie i
           ile z tego ktoś już sprawdził.
         </p>
@@ -140,7 +140,7 @@
       <v-col cols="12" md="6">
         <v-card variant="outlined" height="100%">
           <v-card-item>
-            <v-card-title class="text-subtitle-1 font-weight-medium">
+            <v-card-title class="text-subtitle-1">
               Postęp weryfikacji osób
             </v-card-title>
             <v-card-subtitle class="text-wrap">
@@ -169,7 +169,7 @@
       <v-col cols="12" md="6">
         <v-card variant="outlined" height="100%">
           <v-card-item>
-            <v-card-title class="text-subtitle-1 font-weight-medium">
+            <v-card-title class="text-subtitle-1">
               Co wiadomo o miejscach
             </v-card-title>
             <v-card-subtitle class="text-wrap">
@@ -193,7 +193,7 @@
       <v-col cols="12" md="6">
         <v-card variant="outlined" height="100%">
           <v-card-item>
-            <v-card-title class="text-subtitle-1 font-weight-medium">
+            <v-card-title class="text-subtitle-1">
               Zgłoszenia od użytkowników
             </v-card-title>
             <v-card-subtitle class="text-wrap">
@@ -222,7 +222,7 @@
       <v-col cols="12" md="6">
         <v-card variant="outlined" height="100%">
           <v-card-item>
-            <v-card-title class="text-subtitle-1 font-weight-medium">
+            <v-card-title class="text-subtitle-1">
               Kolejka administratora
             </v-card-title>
             <v-card-subtitle class="text-wrap">

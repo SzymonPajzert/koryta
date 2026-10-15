@@ -13,7 +13,7 @@
       <v-tooltip activator="parent" location="bottom" max-width="280">
         {{
           publishable
-            ? "To powiązanie nie jest opublikowane - widzą je tylko zalogowani użytkownicy."
+            ? "To powiązanie nie jest opublikowane – widzą je tylko zalogowani użytkownicy."
             : "To powiązanie nie jest opublikowane, i nie może być: jedna ze stron sama jest szkicem. Opublikuj najpierw tamtą stronę."
         }}
       </v-tooltip>

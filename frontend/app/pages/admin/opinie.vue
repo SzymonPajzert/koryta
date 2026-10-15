@@ -24,7 +24,7 @@
       {{ loadError }}
     </v-alert>
     <v-alert v-if="openTruncated" type="warning" variant="tonal" class="mb-4">
-      Otwartych zgłoszeń jest ponad {{ OPEN_CAP }} - lista i kolejka są
+      Otwartych zgłoszeń jest ponad {{ OPEN_CAP }} – lista i kolejka są
       niepełne.
     </v-alert>
     <v-alert

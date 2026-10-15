@@ -388,7 +388,7 @@ const selectedHref = computed(() => {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: rgba(var(--v-theme-on-surface), 0.72);
 }
 
@@ -409,7 +409,7 @@ const selectedHref = computed(() => {
 }
 
 .graph-panel__selected {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 

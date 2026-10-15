@@ -9,7 +9,7 @@
       <v-card-text class="pt-0">
         <p class="mb-4 text-body-2">
           Powiązanie zniknie ze strony i z grafu. Zostaje w bazie razem z
-          powodem, więc widać potem, kto i dlaczego je zdjął - ale nikt tej
+          powodem, więc widać potem, kto i dlaczego je zdjął – ale nikt tej
           decyzji nie zatwierdza po tobie i żaden ekran jej nie cofa.
         </p>
 

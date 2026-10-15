@@ -237,7 +237,7 @@ const targetIcon = computed(() => FACT_TYPE_ICONS[fact.fact_type]);
 
 .edge__kind,
 .edge__type {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   line-height: 1.2;
   color: rgba(var(--v-theme-on-surface), 0.55);
 }

@@ -303,7 +303,7 @@
       <AdminSectionHead
         title="Wpisy z historią zmian"
         :count="nodes?.total"
-        info="Każdy wpis, który ktoś zmienił - także pipeline. Rozwiń wiersz, żeby zobaczyć kolejne wersje i kto je zapisał; ikona na końcu wiersza pokazuje wszystkie wersje obok siebie."
+        info="Każdy wpis, który ktoś zmienił – także pipeline. Rozwiń wiersz, żeby zobaczyć kolejne wersje i kto je zapisał; ikona na końcu wiersza pokazuje wszystkie wersje obok siebie."
       >
         <!-- Phrased by what is left to do rather than by the field name:
              `has_unapproved` says the opposite of "zaakceptowane", so naming

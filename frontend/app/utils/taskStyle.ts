@@ -124,7 +124,7 @@ export const taskSectionConfig: Record<
     title: "Cele",
     short: "Cel",
     tone: "strong",
-    info: "Dokąd prowadzą zadania. Cel czeka na zadania, które do niego prowadzą - tak się je grupuje - a filtr „Cel” pokazuje tylko je. Pilny albo ważny cel podnosi wszystkie te zadania.",
+    info: "Dokąd prowadzą zadania. Cel czeka na zadania, które do niego prowadzą – tak się je grupuje – a filtr „Cel” pokazuje tylko je. Pilny albo ważny cel podnosi wszystkie te zadania.",
   },
   mine: {
     title: "Do zrobienia przez Ciebie",
@@ -136,7 +136,7 @@ export const taskSectionConfig: Record<
     title: "Dla agenta",
     short: "Dla agenta",
     tone: "info",
-    info: "Nic na nie nie czeka i agent zrobi je sam - wystarczy zlecić. Od góry: pilne, ważne, potem od najstarszych.",
+    info: "Nic na nie nie czeka i agent zrobi je sam – wystarczy zlecić. Od góry: pilne, ważne, potem od najstarszych.",
   },
   blocked: {
     title: "Czekają",
@@ -148,7 +148,7 @@ export const taskSectionConfig: Record<
     title: "Pomysły",
     short: "Pomysł",
     tone: "sage",
-    info: "Warte zrobienia kiedyś - nikt się jeszcze do nich nie zobowiązał.",
+    info: "Warte zrobienia kiedyś – nikt się jeszcze do nich nie zobowiązał.",
   },
   parked: {
     title: "Odłożone",

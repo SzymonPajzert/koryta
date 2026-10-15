@@ -14,7 +14,9 @@
         Powrót
       </v-btn>
       <div class="header-text">
-        <h1 class="text-subtitle-1 font-weight-medium text-truncate">
+        <h1
+          class="text-subtitle-1 font-weight-medium text-truncate k-title-inline"
+        >
           Kategoryzuj fakty
         </h1>
         <div v-if="!loading" class="text-caption text-medium-emphasis">

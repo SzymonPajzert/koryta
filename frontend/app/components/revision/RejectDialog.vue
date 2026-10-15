@@ -7,7 +7,7 @@
       </v-card-subtitle>
       <v-card-text>
         <p class="mb-1 text-body-2">
-          Rewizja zostaje zachowana wraz z powodem - to jedyne, co wróci do
+          Rewizja zostaje zachowana wraz z powodem – to jedyne, co wróci do
           osoby, która ją zgłosiła.
         </p>
         <p class="mb-3 text-body-2 text-medium-emphasis">

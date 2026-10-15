@@ -2,7 +2,8 @@
   <section class="px-2">
     <div class="sec-head">
       <v-icon v-if="icon" :icon="icon" size="18" class="sec-head__icon" />
-      <h3 class="text-h6">{{ title }}</h3>
+      <!-- h2: a section of a page whose h1 is the entity's name. -->
+      <h2 class="text-h6">{{ title }}</h2>
       <InfoBubble v-if="info || $slots.info" :label="title">
         <slot name="info">{{ info }}</slot>
       </InfoBubble>

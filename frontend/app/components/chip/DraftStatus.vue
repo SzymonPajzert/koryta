@@ -18,7 +18,7 @@
     >
       szkic
       <v-tooltip activator="parent" location="bottom" max-width="280">
-        Ta strona nie jest opublikowana - widzą ją tylko zalogowani użytkownicy.
+        Ta strona nie jest opublikowana – widzą ją tylko zalogowani użytkownicy.
       </v-tooltip>
     </v-chip>
 

@@ -333,7 +333,7 @@ export function validatePostBody(body: MinimarkBody): string[] {
     const [tag, props, ...children] = node;
     if (tag === "h1") {
       problems.push(
-        "Nagłówek „#” w treści: tytuł wpisu jest już nagłówkiem pierwszego stopnia - śródtytuły zaczynaj od „##”.",
+        "Nagłówek „#” w treści: tytuł wpisu jest już nagłówkiem pierwszego stopnia – śródtytuły zaczynaj od „##”.",
       );
     } else if (isEmbed(tag)) {
       const result = parseEmbedProps(tag, props);

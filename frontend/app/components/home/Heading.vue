@@ -1,17 +1,19 @@
 <template>
   <div height="100%" :class="{ 'text-center': center }">
+    <!-- h2: these head sections of the home page („Mapa koryciarstwa”, „Co
+         nowego”), under the page's one h1, and are set as section heads. -->
     <NuxtLink
       v-if="to"
       :to="to"
       class="text-decoration-none text-high-emphasis"
     >
-      <h1 class="text-title-1 font-weight-bold mb-2">
+      <h2 class="k-section-title mb-2">
         {{ title }}
-      </h1>
+      </h2>
     </NuxtLink>
-    <h1 v-else class="text-title-1 font-weight-bold mb-2">
+    <h2 v-else class="k-section-title mb-2">
       {{ title }}
-    </h1>
+    </h2>
 
     <div
       v-if="subtitle"

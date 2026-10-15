@@ -71,12 +71,12 @@ export const noteKindConfig: Record<
     // cypress specs click. So this one moved.
     addLabel: "Opisz błąd",
     hint:
-      "Coś w danych jest nie tak - opisz to własnymi słowami, przeczyta to " +
+      "Coś w danych jest nie tak – opisz to własnymi słowami, przeczyta to " +
       "redakcja. Samą metryczkę (imię, partia, data urodzenia, linki) " +
       "poprawisz od razu przez „Zaproponuj zmianę”.",
     prompt: "Co jest nie tak i jak powinno być?",
     example:
-      "To imiennik - w radzie nadzorczej siedzi inny Jan Kowalski. Radny z " +
+      "To imiennik – w radzie nadzorczej siedzi inny Jan Kowalski. Radny z " +
       "Radomia to osobna osoba.",
     icon: mdiPencilOutline,
     color: "warning",
@@ -84,7 +84,7 @@ export const noteKindConfig: Record<
   missing: {
     title: "Brakuje danych",
     addLabel: "Zgłoś brak",
-    hint: "Czegoś tu nie ma - napisz czego i skąd to wiadomo.",
+    hint: "Czegoś tu nie ma – napisz czego i skąd to wiadomo.",
     prompt: "Czego tu brakuje?",
     example:
       "Brakuje pracy w spółce wodociągowej 2019-2021, widać ją w KRS pod " +
@@ -123,7 +123,7 @@ export const noteAdminTypeConfig: Record<
   },
   context: {
     title: "Ciekawostka / Kontekst",
-    hint: "Tło sprawy - nie zmienia danych, ale warto je mieć.",
+    hint: "Tło sprawy – nie zmienia danych, ale warto je mieć.",
     icon: mdiLightbulbOnOutline,
     color: "info",
   },

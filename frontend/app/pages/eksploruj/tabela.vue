@@ -18,12 +18,13 @@
          edge, leaving the rest of a wide window empty. Below about 1120px the
          content already wants the whole width, so this changes nothing there. -->
     <div class="pa-4 w-100">
-      <!-- The whole chrome of this page, in one 44px bar (plus a 32px work row
-           for a reader who is signed in). It carries the h1, the filters, a
-           chip per filter that is narrowing the table, the row count, the sort
-           and the share link. What used to be here - a three line title, six
-           always open dropdowns, a progress card - put the first row of data
-           697px down a 1440px desktop and 588px down a 390px phone.
+      <!-- The whole chrome of this page: the h1 with the share link beside it,
+           then one 44px bar (plus a 32px work row for a reader who is signed
+           in) carrying the filters, a chip per filter that is narrowing the
+           table, the row count and the sort. What used to be here - a three
+           line title, six always open dropdowns, a progress card - put the
+           first row of data 697px down a 1440px desktop and 588px down a
+           390px phone.
 
            The row count goes up only when the reader has changed it:
            `shareUrl` drops `page=1` by itself but has no default row count to

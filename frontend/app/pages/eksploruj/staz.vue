@@ -9,7 +9,7 @@
     </h1>
 
     <p class="text-body-2 text-medium-emphasis mb-4">
-      Komu w tym miesiącu - wstecz albo naprzód - łączny staż w instytucjach
+      Komu w tym miesiącu – wstecz albo naprzód – łączny staż w instytucjach
       publicznych wypada równo: 10 lat, 15 lat, 24 lata. Liczymy sumę wszystkich
       stanowisk, a nie rocznicę jednego z nich, więc równoległe posady liczą się
       raz, a przerwy w karierze przesuwają datę na później. Bierzemy pod uwagę
@@ -136,7 +136,7 @@ const FIRST_PAGE_KEY = "service-milestones";
 useSeoMeta({
   title: "Okrągły staż w instytucjach publicznych - koryta.pl",
   description:
-    "Komu łączny staż we wszystkich instytucjach publicznych wypada równo - 10, 15, 24 lata - w tym miesiącu wstecz albo naprzód.",
+    "Komu łączny staż we wszystkich instytucjach publicznych wypada równo – 10, 15, 24 lata – w tym miesiącu wstecz albo naprzód.",
 });
 
 const route = useRoute();

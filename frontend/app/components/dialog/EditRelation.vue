@@ -14,10 +14,10 @@
         <p class="text-body-2 text-medium-emphasis mb-3">
           {{
             canApply
-              ? "Zmiana wchodzi od razu - zatwierdzasz ją sam/a."
+              ? "Zmiana wchodzi od razu – zatwierdzasz ją sam/a."
               : "Zmiana trafi do zatwierdzenia. Do tego czasu strona pokazuje to, co teraz."
           }}
-          Kogo powiązanie łączy i jakiego jest rodzaju, tu się nie zmienia - do
+          Kogo powiązanie łączy i jakiego jest rodzaju, tu się nie zmienia – do
           tego służy usunięcie i dodanie właściwego.
         </p>
 

@@ -2,12 +2,13 @@
   <v-card class="mb-4" data-testid="person-teaser">
     <div class="pa-4">
       <!-- Headed as the full page heads a person (`EntityDetailsCard`): the
-           name, and beside it where the full page puts the party chips, the
-           stand-in a company's board shows for the same person when a party
-           is on record - „???” in the „Inne” grey (Szymon, 2026-10-24).
-           Never the party itself, which the teaser does not carry. -->
+           name is the page's h1, and beside it, where the full page puts the
+           party chips, the stand-in a company's board shows for the same
+           person when a party is on record - „???” in the „Inne” grey
+           (Szymon, 2026-10-24). Never the party itself, which the teaser does
+           not carry. -->
       <div class="d-flex flex-wrap align-center ga-2 text-wrap">
-        <h2 class="text-h5 font-weight-bold">{{ teaser.name }}</h2>
+        <h1>{{ teaser.name }}</h1>
         <ChipHiddenParty v-if="teaser.partyHidden" />
       </div>
 

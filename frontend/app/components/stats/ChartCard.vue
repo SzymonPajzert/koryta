@@ -1,7 +1,7 @@
 <template>
   <v-card variant="outlined" height="100%">
     <v-card-item>
-      <v-card-title class="text-subtitle-1 font-weight-medium text-wrap">
+      <v-card-title class="text-subtitle-1 text-wrap">
         {{ title }}
       </v-card-title>
       <v-card-subtitle v-if="subtitle" class="text-wrap">
