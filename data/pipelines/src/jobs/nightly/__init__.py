@@ -5,6 +5,7 @@
     koryta_nightly --only people      # one step; repeatable
     koryta_nightly --skip krs_odpis   # all but this one; repeatable
     koryta_nightly --max-uploads 300  # more people, once the first nights look right
+    koryta_nightly --max-published 50 # fewer changes to published pages a night
     koryta_nightly --paid-max-calls 0 # buy nothing from rejestr.io tonight
     koryta_nightly --register-backlog 2000
                                       # the register's backlog too, not only
@@ -43,12 +44,13 @@ The steps, in order (`STEPS`):
     tests       the pipeline tests over those outputs (src/tests/pipelines)
     outputs     the outputs against their baseline (src/tests/e2e)
     invariants  the database invariants over tonight's export
-    people      koryta_people_import --scope priority --max-uploads 100: new
+    people      koryta_people_import --scope priority --max-uploads 10: new
                 hires first, then the pages of the people rejestr.io was paid
                 for this week, then the pages with an open note, then at most
                 --max-odpis-only-current (10) people only an odpis names in a
                 public post that is not new, then published pages, then the
-                rest
+                rest; of all those pages at most --max-published (10) that
+                are published, whichever tier sends them
     scores      koryta_score_import: every scoring model rebuilt over the
                 day's newest export and the pages the people step has just
                 created, and its votes reconciled with the site's
@@ -1293,6 +1295,8 @@ class Night:
             str(self.args.recent_days),
             "--max-odpis-only-current",
             str(self.args.max_odpis_only_current),
+            "--max-published",
+            str(self.args.max_published),
             "--max-minutes",
             f"{self.minutes_for(step):.0f}",
             # The reprocess has just rebuilt every pipeline the payloads read.
@@ -1381,7 +1385,8 @@ class Night:
             "invariants": "pytest -m e2e src/tests/pipelines (tonight's export)",
             "people": "koryta_people_import --scope priority --max-uploads "
             f"{self.args.max_uploads} --max-odpis-only-current "
-            f"{self.args.max_odpis_only_current}"
+            f"{self.args.max_odpis_only_current} --max-published "
+            f"{self.args.max_published}"
             + (" --dry-run" if self.args.people_dry_run else "")
             # Only a night with the export step has an export to name.
             + (" --export <the export step's>" if self.needs("export") else ""),
@@ -1563,6 +1568,16 @@ def parser() -> argparse.ArgumentParser:
         help="Pages the night creates at most for people only an odpis names "
         "in a public post that is not new, within --max-uploads. "
         "Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--max-published",
+        type=positive_int,
+        default=10,
+        help="Published pages the night changes at most, within --max-uploads, "
+        "whichever tier sends them - the bought and the noted count too - so "
+        "that a night leaves no more for review than this however many people "
+        "it sends; 0 changes none. Default: %(default)s, no more than a night "
+        "of 10 people could change.",
     )
     parser.add_argument(
         "--krs-minutes",

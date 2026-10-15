@@ -298,6 +298,7 @@ def test_the_people_go_up_capped_in_priority_order_from_what_is_on_disk(world):
     assert argv[argv.index("--max-uploads") + 1] == "50"
     assert argv[argv.index("--recent-days") + 1] == "14"
     assert argv[argv.index("--max-odpis-only-current") + 1] == "10"
+    assert argv[argv.index("--max-published") + 1] == "10"
     assert argv[argv.index("--refresh") + 1] == "none"
     assert "--dry-run" not in argv
 
@@ -328,6 +329,16 @@ def test_the_night_makes_ten_pages_for_people_only_an_odpis_names_in_older_posts
 
     argv, _ = world.command("koryta_people_import")
     assert argv[argv.index("--max-odpis-only-current") + 1] == "0"
+
+
+def test_the_published_pages_a_night_changes_stay_capped_as_it_sends_more(world):
+    """Szymon, 2026-10-15: however many people a night sends, it changes no
+    more published pages than --max-published, so that the review keeps up."""
+    night.main(["--max-uploads", "1000", "--max-published", "50"])
+
+    argv, _ = world.command("koryta_people_import")
+    assert argv[argv.index("--max-uploads") + 1] == "1000"
+    assert argv[argv.index("--max-published") + 1] == "50"
 
 
 def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
@@ -1050,7 +1061,7 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     ) in out
     assert (
         "koryta_people_import --scope priority --max-uploads 100 "
-        "--max-odpis-only-current 10" in out
+        "--max-odpis-only-current 10 --max-published 10" in out
     )
     assert "--export <the export step's>" in out
     assert "koryta_score_import" in out

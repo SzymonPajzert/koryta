@@ -62,7 +62,7 @@ rejestr.io's for every company where the odpis is the newer of the two, on the w
 1. Writes a table of the entries found - KRS, register, NIP, name, city - that `krs_odpis --krs-file` reads as it is
 
 ## nightly
-1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis --queue --missing public`, `krs_scrape_paid --scope fallback --max-calls 50`, the held pipelines whose code changed, every pipeline rebuilt but the held ones (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100 --max-odpis-only-current 10` and `score_import`
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis --queue --missing public`, `krs_scrape_paid --scope fallback --max-calls 50`, the held pipelines whose code changed, every pipeline rebuilt but the held ones (backed up as `main`), the pipeline tests, the output checks, the invariants, `people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-published 10` and `score_import`
 1. The held pipelines are the ones whose sources change with a dump or an election (`HELD`). Each night the six of them it can rebuild in minutes are compared, by the git hashes of the paths they are built from, with what their last build on the VM recorded in its state dir, and each that differs - or has no record - is rebuilt alone with `koryta <Name> --refresh <Name>` before the reprocess, which still holds it. One that fails keeps the copy on disk and is tried again the next night, without failing the night or holding the people
 1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing
 1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
@@ -76,6 +76,10 @@ Started by a systemd timer on the VM at 04:30, after the export - see [data/nigh
 1. Writes them to the shared cache as one write-once part (`jobs/people_import/payloads/date=<day>/<run>.jsonl.gz`), so what any day sent can be read back without diffing two exports
 1. Sends them to `/api/ingest/person` one by one, at the uploader's pace, first creating any company a person names that the site has no page for
 1. Writes a run summary to the shared cache (`jobs/people_import/runs/`)
+
+A priority run changes at most `--max-published` pages the export shows as published (10 on the night), whichever tier sends them: the bought and the noted count too. The rest wait for the
+next runs, and the run goes on to the pages behind them; its summary says how many it planned and left
+(`published_pages`, `published_left`).
 
 It stops at once as failed (exit 1) on what means the site is not taking what it should: more pages created than
 `--max-new` allows - none by default, since a page an `--on-koryta` run creates is somebody the identity lookup
