@@ -182,3 +182,173 @@ describe("notes", () => {
     ).rejects.toMatchObject(denied);
   });
 });
+
+describe("votes", () => {
+  /** What `castVote`, `castVoteOnce` and `saveCommentOnce` in
+   * app/composables/votes.ts write: always a merge. */
+  const vote = (db: Firestore, id: string, data: Record<string, unknown>) =>
+    setDoc(doc(db, "votes", id), data, { merge: true });
+
+  const onPerson = (categoryVotes: Record<string, unknown>) => ({
+    nodeId: "person",
+    userUid: "reader",
+    categoryVotes,
+    updatedAt: "2026-10-15T10:00:00.000Z",
+  });
+
+  beforeEach(async () => {
+    await seed("votes/person_alice", {
+      nodeId: "person",
+      userUid: "alice",
+      categoryVotes: { interesting: 2 },
+    });
+  });
+
+  it("lets a reader vote, change their mind and comment, on one document", async () => {
+    await vote(reader, "person_reader", onPerson({ interesting: 1 }));
+    await vote(reader, "person_reader", onPerson({ interesting: 5 }));
+    await vote(reader, "person_reader", onPerson({ quality: -5 }));
+    await vote(reader, "person_reader", {
+      ...onPerson({}),
+      comment: "Zarząd od 2016",
+    });
+  });
+
+  it("lets a reader vote on an extraction", async () => {
+    await vote(reader, "fact-1_reader", {
+      extractionId: "fact-1",
+      userUid: "reader",
+      categoryVotes: { correct: -1 },
+    });
+  });
+
+  it("does not let a reader vote twice on a page under other ids", async () => {
+    // The hole: the old rule pinned only the end of the id, and each of these
+    // documents counted as one more vote on the page.
+    await expect(
+      vote(reader, "a_reader", onPerson({ interesting: 5 })),
+    ).rejects.toMatchObject(denied);
+    await expect(
+      vote(reader, "anything_reader", {
+        ...onPerson({ interesting: 5 }),
+        extractionId: "anything",
+      }),
+    ).rejects.toMatchObject(denied);
+  });
+
+  it("does not let one vote name two targets", async () => {
+    await expect(
+      vote(reader, "person_reader", {
+        ...onPerson({ interesting: 1 }),
+        extractionId: "fact-1",
+      }),
+    ).rejects.toMatchObject(denied);
+  });
+
+  it("does not let a reader vote in somebody else's name", async () => {
+    await expect(
+      vote(reader, "person_alice", {
+        ...onPerson({ interesting: -5 }),
+        userUid: "alice",
+      }),
+    ).rejects.toMatchObject(denied);
+    await expect(
+      vote(reader, "person_reader", {
+        ...onPerson({ interesting: 1 }),
+        userUid: "alice",
+      }),
+    ).rejects.toMatchObject(denied);
+    await expect(
+      vote(reader, "person_alice", onPerson({ interesting: -5 })),
+    ).rejects.toMatchObject(denied);
+  });
+
+  it("keeps every value within -5..5", async () => {
+    for (const value of [6, -6, 1_000_000, 2.5, "5", true, null]) {
+      await expect(
+        vote(reader, "person_reader", onPerson({ interesting: value })),
+        `interesting: ${JSON.stringify(value)}`,
+      ).rejects.toMatchObject(denied);
+    }
+    await vote(reader, "person_reader", onPerson({ interesting: -5 }));
+    await vote(reader, "person_reader", onPerson({ quality: 5 }));
+  });
+
+  it("takes at most 40 categories on a vote", async () => {
+    const categories = (count: number) =>
+      Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [`category${index}`, 1]),
+      );
+
+    await vote(reader, "person_reader", onPerson(categories(40)));
+    await expect(
+      vote(reader, "person_reader", onPerson({ oneMore: 1 })),
+    ).rejects.toMatchObject(denied);
+  });
+
+  it("does not take a vote without its map of categories", async () => {
+    // The aggregation reads `categoryVotes` on every vote of the page, and a
+    // vote without it would make every later recount throw.
+    await expect(
+      vote(reader, "person_reader", { nodeId: "person", userUid: "reader" }),
+    ).rejects.toMatchObject(denied);
+    await expect(
+      vote(reader, "person_reader", {
+        nodeId: "person",
+        userUid: "reader",
+        categoryVotes: [1, 1, 1],
+      }),
+    ).rejects.toMatchObject(denied);
+  });
+
+  it("lets a vote in its category replace a value out of range, and only that", async () => {
+    // Four such votes were on production on 2026-10-15, from before the UI
+    // clamped. The rule judges the document after the merge, so the stale
+    // value has to go before its owner can vote in another category.
+    await seed("votes/person_reader", {
+      nodeId: "person",
+      userUid: "reader",
+      categoryVotes: { interesting: 18 },
+    });
+
+    await expect(
+      vote(reader, "person_reader", onPerson({ quality: 1 })),
+    ).rejects.toMatchObject(denied);
+    await vote(reader, "person_reader", onPerson({ interesting: 5 }));
+    await vote(reader, "person_reader", onPerson({ quality: 1 }));
+  });
+
+  it("lets a reader remove their own vote, and only their own", async () => {
+    await seed("votes/person_reader", onPerson({ interesting: 18 }));
+
+    await deleteDoc(doc(reader, "votes/person_reader"));
+    await expect(
+      deleteDoc(doc(reader, "votes/person_alice")),
+    ).rejects.toMatchObject(denied);
+  });
+
+  it("lets the datascience group write a model's scores, on any scale", async () => {
+    // What `koryta_uploader --type score` writes, under the model's uid.
+    const scientist = firestoreAs({
+      uid: "scientist",
+      claims: { datascience: true },
+    });
+    const score = {
+      nodeId: "person",
+      userUid: "pipeline-pagerank",
+      categoryVotes: { interesting: 37 },
+    };
+
+    await vote(scientist, "person_pipeline-pagerank", score);
+    await deleteDoc(doc(scientist, "votes/person_pipeline-pagerank"));
+    await expect(
+      vote(reader, "person_pipeline-pagerank", score),
+    ).rejects.toMatchObject(denied);
+  });
+
+  it("does not let anybody signed out vote", async () => {
+    await expect(
+      vote(anonymous, "person_reader", onPerson({ interesting: 1 })),
+    ).rejects.toMatchObject(denied);
+  });
+});
