@@ -17,9 +17,7 @@
     <div v-if="isHome" class="app-footer__inner">
       <div class="app-footer__top">
         <div>
-          <NuxtLink to="/" class="app-footer__wordmark">
-            <b>koryta</b><span>.pl</span>
-          </NuxtLink>
+          <NuxtLink to="/" class="app-footer__wordmark">koryta.pl</NuxtLink>
           <p class="app-footer__about">
             Projekt społeczny i open-source budujący bazę powiązań
             w&nbsp;przestrzeni publicznej.
@@ -189,23 +187,17 @@ const socials = [
   padding: 40px 0 24px;
 }
 
+/* The whole name in bold, as in the app bar. */
 .app-footer__wordmark {
   display: inline-block;
   font-size: 2rem;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
 }
 
 .app-footer__wordmark:hover {
   text-decoration: none !important;
-}
-
-.app-footer__wordmark b {
-  font-weight: 700;
-}
-
-.app-footer__wordmark span {
-  font-weight: 400;
 }
 
 .app-footer__about {
