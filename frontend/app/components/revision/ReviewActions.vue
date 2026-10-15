@@ -1,10 +1,9 @@
 <template>
-  <div class="d-flex flex-wrap align-center ga-1">
+  <div class="d-flex flex-wrap align-center ga-2">
     <template v-if="reviewable">
       <v-btn
         color="ink-success"
         variant="tonal"
-        size="small"
         :prepend-icon="mdiCheck"
         :loading="loading"
         :disabled="!proposal.targetExists"
@@ -35,7 +34,6 @@
         "
         color="ink-success"
         variant="flat"
-        size="small"
         :prepend-icon="mdiEarth"
         :loading="loading"
         :data-testid="`approve-publish-${proposal.id}`"
@@ -48,7 +46,6 @@
         v-if="rejectable"
         color="ink-danger"
         variant="text"
-        size="small"
         :prepend-icon="mdiClose"
         :loading="loading"
         :data-testid="`reject-${proposal.id}`"
@@ -61,7 +58,6 @@
     <v-btn
       v-if="fullComparisonTo"
       variant="text"
-      size="small"
       :prepend-icon="mdiCompare"
       :to="fullComparisonTo"
     >
@@ -71,7 +67,7 @@
     <v-btn
       icon
       variant="text"
-      size="x-small"
+      size="small"
       :data-testid="`permalink-${proposal.id}`"
       aria-label="Skopiuj link do tej propozycji"
       @click="emit('permalink')"
@@ -95,6 +91,10 @@
  *
  * The colours are ink tokens: Vuetify's `success` as the text of a tonal
  * button is 2.5:1, and white on it as a filled one 2.8:1.
+ *
+ * Buttons of the default size, 36px: these are the decisions the review pages
+ * exist for, taken dozens of times a day, and at `small` they were 28px
+ * targets - on a phone, under a thumb.
  */
 import {
   mdiCheck,

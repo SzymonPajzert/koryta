@@ -4,6 +4,7 @@ import {
   renderFieldValue,
   revisionChanges,
   revisionFieldLabels,
+  skippedChangeFields,
 } from "../../shared/revisionChanges";
 import { edgeEditSchema } from "../../shared/api";
 
@@ -116,6 +117,28 @@ describe("revisionChanges", () => {
       { ...stored, isPublicSource: "uid-1" },
     );
 
+    expect(changes.map((change) => change.field)).toEqual(["name"]);
+  });
+
+  it("never reports the bookkeeping a rename and an old creation stamp leave", () => {
+    // `nameSource` is what /api/revisions/create stamps on a hand-made company
+    // rename, and read as a second change beside every one. `date` and `user`
+    // are a creation stamp an old code path wrote onto about 440 nodes, which
+    // a proposal copying them showed as „date: — → 1752843656679”.
+    for (const field of ["nameSource", "date", "user"]) {
+      expect(skippedChangeFields.has(field), field).toBe(true);
+    }
+
+    const changes = revisionChanges(
+      {
+        type: "place",
+        name: "Orlen S.A.",
+        nameSource: "manual",
+        date: 1752843656679,
+        user: "uid-1",
+      },
+      { type: "place", name: "PKN Orlen S.A." },
+    );
     expect(changes.map((change) => change.field)).toEqual(["name"]);
   });
 

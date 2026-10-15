@@ -162,7 +162,7 @@ describe("RevisionHistoryList", () => {
     const first = row(wrapper, "rev-new").get("[data-row-toggle]").text();
     expect(first).toContain("20.09.2026 12:00");
     expect(first).toContain("Ręczna");
-    expect(first).toContain("Opis, Partie");
+    expect(first).toContain("Opis, partie");
     expect(row(wrapper, "rev-live").get("[data-row-toggle]").text()).toContain(
       "Obecna wersja wpisu",
     );
@@ -207,7 +207,7 @@ describe("RevisionHistoryList", () => {
     expect(panel.text()).toContain("Zastąpiona (odczytany z wpisu)");
     expect(panel.text()).toContain("Rozpatrzono");
     expect(panel.text()).toContain(
-      "Wpis zmienił się po zgłoszeniu — zatwierdzenie cofnie nowsze zmiany.",
+      "Wpis zmienił się po zgłoszeniu – zatwierdzenie cofnie nowsze zmiany.",
     );
   });
 

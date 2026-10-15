@@ -342,7 +342,7 @@ describe("the review queue section", () => {
         .get('[data-subject-id="anna"] > .arow__head [data-row-toggle]')
         .text();
       expect(line).toContain("Anna Nowak");
-      expect(line).toContain("opublikowana");
+      expect(line).toContain("Opublikowana");
       expect(line).toContain("2 propozycje");
       expect(line).toContain("Opis, partie, powiązania");
       expect(line).toContain("Autor Testowy, pipeline");
@@ -605,7 +605,7 @@ describe("the review queue section", () => {
     const wrapper = await mount();
 
     expect(wrapper.get("#kolejka").text()).toContain(
-      "Kolejka jest pusta — nic nie czeka na rozpatrzenie.",
+      "Kolejka jest pusta – nic nie czeka na rozpatrzenie.",
     );
   });
 
@@ -634,7 +634,7 @@ describe("the edge revisions section", () => {
 
     // What the relation is now, not whether this proposal was approved.
     expect(row.text()).toContain("nieopublikowane");
-    expect(row.text()).toContain("komitet");
+    expect(row.text()).toContain("Komitet");
     expect(row.text()).toContain("KW PSL");
     const review = wrapper.getComponent(
       '[data-testid="edge-review-edge-rev-1"]',
