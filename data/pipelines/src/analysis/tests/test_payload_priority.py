@@ -431,6 +431,60 @@ def test_a_noted_page_the_payload_would_not_change_is_left_out():
     assert picks == []
 
 
+def test_each_pick_says_whether_its_page_is_published_whatever_the_tier():
+    """A run caps the changes to published pages across the tiers
+    (`--max-published` in `jobs.people_import`), so a bought or a noted page
+    says it is published as a page of the published tier does."""
+    site = snapshot(
+        stored_person("pub", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        stored_person("pub-bought", "Ewa Lis", "https://rejestr.io/osoby/3"),
+        stored_person("draft-bought", "Olga Wilk", "https://rejestr.io/osoby/4"),
+        stored_person("pub-noted", "Piotr Sowa", "https://rejestr.io/osoby/5"),
+        stored_person("draft-noted", "Adam Kos", "https://rejestr.io/osoby/6"),
+        stored_person("draft", "Celina Lis", "https://rejestr.io/osoby/7"),
+    )
+
+    def changed(name: str, register: str, start: str) -> Person:
+        return person(name, register, Company(krs=PRIVATE, start=start))
+
+    hire = person(
+        "Anna Nowak",
+        "https://rejestr.io/osoby/2",
+        Company(krs=PUBLIC, start="2026-09-10"),
+    )
+    picks = prioritised(
+        [hire],
+        [
+            changed("Jan Kowalski", "https://rejestr.io/osoby/1", "2026-09-01"),
+            changed("Ewa Lis", "https://rejestr.io/osoby/3", "2026-08-02"),
+            changed("Olga Wilk", "https://rejestr.io/osoby/4", "2026-08-01"),
+            changed("Piotr Sowa", "https://rejestr.io/osoby/5", "2026-07-02"),
+            changed("Adam Kos", "https://rejestr.io/osoby/6", "2026-07-01"),
+            changed("Celina Lis", "https://rejestr.io/osoby/7", "2026-06-01"),
+        ],
+        site,
+        public_krs={PUBLIC},
+        published_ids={"pub", "pub-bought", "pub-noted"},
+        bought={"3", "4"},
+        noted={
+            "pub-noted": frozenset({"change_request"}),
+            "draft-noted": frozenset({"change_request"}),
+        },
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert [(p.person.name, p.tier, p.published) for p in picks] == [
+        ("Anna Nowak", NEW_HIRE, False),
+        ("Ewa Lis", BOUGHT, True),
+        ("Olga Wilk", BOUGHT, False),
+        ("Piotr Sowa", NOTED, True),
+        ("Adam Kos", NOTED, False),
+        ("Jan Kowalski", PUBLISHED, True),
+        ("Celina Lis", ON_SITE, False),
+    ]
+
+
 def test_the_open_notes_are_read_by_page_off_the_export_s_output(tmp_path):
     """What `noted_pages` reads is `KorytaNotes`' output, read back off disk
     with its dtypes: a page id of digits keeps its zeros, and an entry an admin
