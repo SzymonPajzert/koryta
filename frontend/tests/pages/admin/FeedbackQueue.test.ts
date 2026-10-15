@@ -845,7 +845,7 @@ describe("admin feedback queue", () => {
 
     // The queue is computed from what was loaded, so it may be missing some.
     expect(wrapper.text()).toContain(
-      "Otwartych zgłoszeń jest ponad 500 - lista i kolejka są niepełne.",
+      "Otwartych zgłoszeń jest ponad 500 – lista i kolejka są niepełne.",
     );
   });
 
