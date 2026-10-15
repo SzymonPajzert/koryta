@@ -265,16 +265,20 @@ const loginDialog = ref(false);
 const maxWidth = computed(() =>
   route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 1200),
 );
-/** The page's frame: the gutter at the sides, and one page-top inset from the
- * bar to the page's h1 - 40px, 24 on a phone (assets/css/edges.css). Both from
- * the variables a phone-width panel bleeds through, so the two cannot drift.
- * A full-width page brings its own. */
+/** The page's frame: the gutter at the sides, one page-top inset from the bar
+ * to the page's h1 - 40px, 24 on a phone - and, under the page's last block,
+ * the gap that stands between its sections - 40px, 32 on a phone - so the
+ * footer is one more block below it rather than Vuetify's 16px under it. All
+ * three from the variables in assets/css/edges.css, which a phone-width
+ * panel bleeds through and `k-sections` spaces an entity page by, so none of
+ * them can drift. A full-width page brings its own. */
 const containerStyle = computed(() =>
   route?.meta?.fullWidth
     ? { padding: 0 }
     : {
         paddingInline: "var(--k-gutter)",
         paddingTop: "var(--k-page-top)",
+        paddingBottom: "var(--k-section-gap)",
       },
 );
 const affineLink = computed(() => route?.meta?.affineLink);
