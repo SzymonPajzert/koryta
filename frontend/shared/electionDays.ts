@@ -85,18 +85,32 @@ function electionKind(
   return "local";
 }
 
-/** The day to show for a candidacy whose `start_date` is `startDate`: the day
- * of the election of its office held in that year. Only the year of
- * `startDate` is read, and a year with no such election is left as stored. */
+/** The year of a date that says nothing finer: the ingest's „2019-01-01”, or a
+ * bare „2019” from the edit form. No election is held on New Year's Day, so
+ * the first can only be the ingest's. Null for a date that names a month or a
+ * day. */
+function yearOnly(startDate: string): string | null {
+  return /^(\d{4})(?:-01-01)?$/.exec(startDate)?.[1] ?? null;
+}
+
+/** The day to show for a candidacy whose `start_date` is `startDate`.
+ *
+ * A date that names a day is somebody's - a reviewer's correction in the edit
+ * dialog, a by-election typed in by hand - and is shown as it is; only a year
+ * is turned into a day. A year with no day known for it, and a by-election's,
+ * stays a year: the first of January is never right. */
 export function candidacyDay(
   startDate: string,
   position?: string | null,
+  byElection?: boolean | null,
 ): string {
-  const year = startDate.substring(0, 4);
+  const year = yearOnly(startDate);
+  if (!year) return startDate;
+  if (byElection) return year;
   const kind = electionKind(position);
   for (const each of kind ? [kind] : UNNAMED_OFFICE_ORDER) {
     const day = ELECTION_DAYS[each][year];
     if (day) return day;
   }
-  return startDate;
+  return year;
 }
