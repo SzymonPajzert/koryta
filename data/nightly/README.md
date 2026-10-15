@@ -24,7 +24,7 @@ order, each with a time limit and its output in the night's log:
 | `export`       | waits for tonight's export: the newest one with its `.overall_export_metadata`, taken at most 6 h before the night      |
 | `krs_free`     | `koryta_scrape_krs_free --max-minutes 60`: the bulletin, then api-krs                                                   |
 | `krs_register` | `koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25`: who owns each newly registered company     |
-| `krs_odpis`    | `koryta_krs_odpis --graph --changed-since <yesterday> --missing public --max 300`: odpisy pełne, see below              |
+| `krs_odpis`    | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing public --max 300`: odpisy pełne, see below      |
 | `krs_paid`     | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give           |
 | `rebuild_held` | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)          |
 | `reprocess`    | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch and the slow static sources (`HELD`) |
@@ -55,7 +55,8 @@ the new hires:
 - the connections of a company whose odpis pełny `krs_odpis` asked for and did
   not get: the gateway or the network ate it twice, or the service answered
   with something the job could not take (`KrsOdpisAttempts`, the fold of the
-  odpis job's run record). A company it has not asked about yet waits for it.
+  odpis job's run record). A company it has not asked about yet waits for it;
+  `krs_odpis` asks for the queue's right after the bulletin's (below).
 
 At most 50 calls a day (`--paid-max-calls`): what the crawl bucket already
 holds from rejestr.io that day counts against it, so a night run twice buys no
@@ -99,7 +100,16 @@ the new ones.
 
 `krs_odpis` asks the ministry's search service for the odpis pełny of the
 graph's companies the bulletin named since yesterday - 57 to 70 a night from
-2026-10-06 to 10-09, a minute's work. With the rest of its 300
+2026-10-06 to 10-09, a minute's work. Then it asks for the companies the
+crawl's queue owes rejestr.io's connections for (`--queue`), the public ones
+first, as `krs_free` left the queue minutes before: `krs_paid` buys those only
+once their free odpis was asked for and did not come, and the bulletin and the
+gap below reach only some of them, so the rest were neither fetched nor bought.
+On 2026-10-15 that was 960 of the queue's 1,024, 493 of them private, about
+five nights at ~235; afterwards it is what the night's person feeds and doors
+add. One in the queue for its odpis aktualny alone is `krs_free`'s.
+
+With the rest of its 300
 (`--odpis-max`) it asks for the public companies that have no odpis pełny on
 file at all (`--missing public`): a company that came into the graph after its
 last register entry is not named by the bulletin until its next one, which may
@@ -118,7 +128,8 @@ register is not asked again.
 The private companies with none on file - 9,095 more on 2026-10-09, about 39
 nights after the public ones - wait for `--odpis-missing all`. The service slows
 down after about 1,000 documents a run, which `--odpis-max` keeps the step well
-under, gap and all. An odpis that does not come is what `krs_paid` buys
+under, queue, gap and all: while the queue's companies take the nights, the
+gap waits for them. An odpis that does not come is what `krs_paid` buys
 rejestr.io's feeds for, so a gap company the gateway eats can cost two of its
 50 calls.
 
@@ -384,7 +395,8 @@ way, and the timer runs the night on a VM that is already up too.
   `KORYTA_NIGHTLY_ARGS=--max-odpis-only-current 20`; 0 makes none. It does
   not grow with `--max-uploads`.
 - **The private companies' odpisy too.** `KORYTA_NIGHTLY_ARGS=--odpis-missing all`;
-  `none` asks for the bulletin's companies alone, as before 2026-10-09.
+  `none` leaves the gap out, as before 2026-10-09, and `--no-odpis-queue` the
+  queue's companies, as before 2026-10-15.
 - **More of the register.** `KORYTA_NIGHTLY_ARGS=--register-backlog 2000`.
   What it would read, without reading:
   `koryta_krs_register_owners --new-registrations --dry-run`.
@@ -411,10 +423,10 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 ## What it does not do
 
 - rejestr.io for a company the free odpis has not been asked about: the
-  night's `krs_odpis` asks for the graph's - the bulletin's, then the public
-  ones with no odpis on file - so a private company with none, or one in the
-  crawl's queue but not yet in the graph, waits for a hand run of
-  `koryta_krs_odpis` (or `--odpis-missing all`).
+  night's `krs_odpis` asks for the bulletin's, then the queue's, then the
+  public ones with no odpis on file, 300 in all, so a company waits its turn
+  there; a private company with none that the queue does not owe waits for
+  `--odpis-missing all` or a hand run of `koryta_krs_odpis`.
 - Companies: `CompaniesPayloads --only-changed` is not sent; a person's missing
   company is created on the way, as the uploader always did.
 - `test_rejestrio_coverage.py`: it walks the whole rejestr.io prefix twice, an

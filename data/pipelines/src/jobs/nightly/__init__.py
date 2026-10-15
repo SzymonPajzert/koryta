@@ -23,7 +23,8 @@ The steps, in order (`STEPS`):
                 a powiat sets up reaches the crawl - and --register-backlog
                 reads of the rest (none until decide-register-sweep-pace)
     krs_odpis   koryta_krs_odpis for the companies the bulletin named since
-                yesterday, then the public companies with no odpis on file -
+                yesterday, then those the paid queue owes rejestr.io for,
+                then the public companies with no odpis on file -
                 --odpis-max in all
     krs_paid    koryta_scrape_krs_paid --scope fallback: rejestr.io for what the
                 free sources cannot give - the people somebody marked
@@ -80,13 +81,19 @@ minutes inside its time limit, so a backlog bigger than a night is left to the
 next one rather than cut off mid-read.
 
 `krs_odpis` asks first for the graph's companies the bulletin named since
-yesterday - 57-70 a night from 2026-10-06 to 10-09 - and with what is left of
-`--odpis-max` for the public ones that have no odpis pełny on file at all,
-the live ones before those struck off: a company that came into the graph after
-its last register entry is not named by the bulletin until its next one, so
-`--changed-since` alone does not ask for it. The private ones wait behind
-`--odpis-missing all`. The service slows down after about 1,000 documents a
-run; `--odpis-max` caps the step, gap and all.
+yesterday - 57-70 a night from 2026-10-06 to 10-09 - then for the companies
+whose rejestr.io connections the paid queue owes, the public ones first, as
+`krs_free` left the queue (`--queue`; `--no-odpis-queue` leaves them out), and
+with what is left of `--odpis-max` for the public ones that have no odpis
+pełny on file at all, the live ones before those struck off. A company that
+came into the graph after its last register entry is not named by the
+bulletin until its next one, so `--changed-since` alone does not ask for it;
+and `krs_paid` buys a company only once its free odpis was asked for and did
+not come, so one in the queue that nothing asks for is neither fetched nor
+bought - 960 of the queue's 1,024 on 2026-10-15, 493 of them private. The
+private ones outside the queue wait behind `--odpis-missing all`. The service
+slows down after about 1,000 documents a run; `--odpis-max` caps the step,
+queue, gap and all.
 
 `krs_paid` holds nothing back, and nothing holds it: the people go up with or
 without what it bought. It needs the rejestr.io key - REJESTR_KEY, else the
@@ -1071,11 +1078,15 @@ class Night:
             "--graph",
             "--changed-since",
             yesterday,
+            *self.odpis_queue(),
             *self.odpis_missing(),
             "--max",
             str(self.args.odpis_max),
         ]
         return self.judge_job(*self.process(step, argv))
+
+    def odpis_queue(self) -> list[str]:
+        return ["--queue"] if self.args.odpis_queue else []
 
     def odpis_missing(self) -> list[str]:
         if self.args.odpis_missing == ODPIS_MISSING_NONE:
@@ -1357,6 +1368,7 @@ class Night:
             "krs_odpis": " ".join(
                 [
                     "koryta_krs_odpis --graph --changed-since <yesterday>",
+                    *self.odpis_queue(),
                     *self.odpis_missing(),
                     f"--max {self.args.odpis_max}",
                 ]
@@ -1574,8 +1586,15 @@ def parser() -> argparse.ArgumentParser:
         "--odpis-max",
         type=positive_int,
         default=300,
-        help="Odpisy pełne asked for at most, the companies with none on file "
-        "included. Default: %(default)s.",
+        help="Odpisy pełne asked for at most, the paid queue's companies and "
+        "those with none on file included. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--no-odpis-queue",
+        dest="odpis_queue",
+        action="store_false",
+        help="Leave out of the odpis step the companies the paid queue owes "
+        "rejestr.io for; by default it asks for them after the bulletin's.",
     )
     parser.add_argument(
         "--odpis-missing",

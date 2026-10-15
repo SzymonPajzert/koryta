@@ -511,9 +511,32 @@ def test_the_odpisy_go_to_the_bulletins_companies_then_public_ones_with_none(
         night.main(["--odpis-missing", scope, "--only", "krs_odpis"])
 
         argv, _ = world.command("koryta_krs_odpis")
-        assert argv[4:-2] == expected, scope
+        assert argv[4:-2] == ["--queue", *expected], scope
 
     night.main(["--dry-run", "--only", "krs_odpis"])
+    assert (
+        "koryta_krs_odpis --graph --changed-since <yesterday> --queue "
+        "--missing public --max 300" in capsys.readouterr().out
+    )
+
+
+def test_the_odpisy_go_to_the_paid_queues_companies_before_the_gap(world, capsys):
+    """krs_paid buys a company only once its free odpis did not come, so the
+    odpis step asks for the queue's: one nothing asks for is never bought."""
+    night.main(["--only", "krs_odpis"])
+
+    argv, _ = world.command("koryta_krs_odpis")
+    assert argv.index("--queue") < argv.index("--missing")
+
+    world.commands.clear()
+    world.objects.clear()
+    night.main(["--no-odpis-queue", "--only", "krs_odpis"])
+
+    argv, _ = world.command("koryta_krs_odpis")
+    assert "--queue" not in argv
+    assert argv[argv.index("--missing") + 1] == "public"
+
+    night.main(["--dry-run", "--no-odpis-queue", "--only", "krs_odpis"])
     assert (
         "koryta_krs_odpis --graph --changed-since <yesterday> --missing public "
         "--max 300" in capsys.readouterr().out
