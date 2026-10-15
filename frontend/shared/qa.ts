@@ -297,7 +297,7 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Na telefonie długi opis osoby pokazuje cztery linie i „Pokaż więcej”, które rozwija resztę w miejscu. Na komputerze opis jest cały.",
     steps: [
-      "Otwórz na telefonie stronę Grzegorza Ganowicza i kliknij „Pokaż więcej” – opis rozwija się, a przycisk zmienia się w „Pokaż mniej”, który zwija go z powrotem.",
+      "Otwórz na telefonie stronę Grzegorza Ganowicza i kliknij „Pokaż więcej” ze strzałką w dół – opis rozwija się w całości, a przycisk znika.",
       "Otwórz tę samą stronę na komputerze – opis jest cały i nie ma przycisku.",
     ],
     link: "/entity/person/2wqY7arTL25S5bGyhjcO",
