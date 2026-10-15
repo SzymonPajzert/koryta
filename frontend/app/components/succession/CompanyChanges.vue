@@ -1,5 +1,7 @@
 <template>
-  <section data-testid="company-successions">
+  <!-- Two sections of the page in one component, so they take the page's
+       gap between them too (`k-sections`, assets/css/edges.css). -->
+  <section class="k-sections" data-testid="company-successions">
     <div v-if="loading" class="text-center py-8">
       <v-progress-circular indeterminate />
     </div>
@@ -30,7 +32,7 @@
 
     <template v-else>
       <!-- ============ 1. obecny skład ============ -->
-      <section class="mb-8" data-testid="successions-current">
+      <section data-testid="successions-current">
         <div class="sec-head mb-1">
           <h2 class="text-h6">Obecny skład</h2>
           <span class="text-caption text-medium-emphasis">

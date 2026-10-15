@@ -47,13 +47,13 @@ import InfoBubble from "./InfoBubble.vue";
  * here, because the cards inside a section are drawn by whoever fills the
  * default slot and a scoped rule would not reach them.
  *
- * No bottom margin on purpose: the gap to the next section belongs to the page
- * that stacks them, and every caller already passes `mt-4`/`mt-6`. A margin
- * here would be added to that rather than instead of it - which is exactly
- * what the notes' own `mb-4` did, leaving 32px under them where their
- * neighbours leave 16.
+ * No margin on purpose: the gap to the next section belongs to the page that
+ * stacks them - `k-sections` in assets/css/edges.css, one gap above each block
+ * of an entity page. A margin here would be added to that rather than instead
+ * of it - which is exactly what the notes' own `mb-4` did, leaving 32px under
+ * them where their neighbours left 16.
  *
- * Attributes fall through to the `<section>`, so `class="mt-4"` and the
+ * Attributes fall through to the `<section>`, so a class and the
  * `data-testid` the e2e suite navigates by keep working from the call site.
  */
 defineProps<{

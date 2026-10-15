@@ -99,9 +99,11 @@
     </template>
     <!-- The page sits on the page: no card around it, so the name, the
          sections and the lists share one left edge with the bar above, and a
-         phone gives them its full width. -->
-    <div v-else class="w-100">
-      <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
+         phone gives them its full width. With the card gone, `k-sections`
+         is what spaces them: one gap above each block, none of them carrying
+         a margin of its own (assets/css/edges.css). -->
+    <div v-else class="w-100 k-sections">
+      <v-alert v-if="revisionId" type="info" variant="tonal">
         Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
         <br />
         <nuxt-link :to="`/admin/rewizje/${node}?revisionId=${revisionId}`"
@@ -109,95 +111,94 @@
         >.
       </v-alert>
 
-      <div v-if="entity?.type === 'region'" class="mb-4 d-flex">
-        <v-btn
-          variant="tonal"
-          :prepend-icon="mdiFormatListBulleted"
-          :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
-        >
-          Eksploruj region
-        </v-btn>
+      <!-- The header, as one block: a region's „Eksploruj region” belongs to
+           the name under it and stays 16px above it, where on its own it would
+           stand a section's gap away. A wrapper rather than a class on the
+           card, which renders one root per type and so takes none. -->
+      <div>
+        <div v-if="entity?.type === 'region'" class="d-flex mb-4">
+          <v-btn
+            variant="tonal"
+            :prepend-icon="mdiFormatListBulleted"
+            :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
+          >
+            Eksploruj region
+          </v-btn>
+        </div>
+        <EntityDetailsCard
+          v-if="entity"
+          :key="sourcePath"
+          :entity="entity"
+          :type="type"
+          :extra-locations="searchLocations"
+          @published="refreshNode()"
+        />
       </div>
-      <EntityDetailsCard
-        v-if="entity"
-        :key="sourcePath"
-        :entity="entity"
-        :type="type"
-        :extra-locations="searchLocations"
-        @published="refreshNode()"
-      />
 
-      <div class="mt-4">
-        <!-- A place is served by `place/DetailView.vue` and never reaches
-               here. The branch that used to draw one lived on for three months
-               after `generateNodeUrl` stopped routing anything to it, and its
-               relations rendered twice - once as rows, once again through the
-               `v-else` below, which binds to the person branch rather than to
-               the chain of them. -->
-        <template v-if="entity?.type === 'region'">
-          <CardConnectionList
-            :edges="owners"
-            title="Część regionu"
-            :can-remove="canRemoveRelations"
-            :subject-published="subjectPublished"
-            @remove="openRemove"
-            @published="refreshEdges()"
-          />
-          <CardConnectionList
-            :edges="subregions"
-            title="Regiony"
-            :can-remove="canRemoveRelations"
-            :subject-published="subjectPublished"
-            @remove="openRemove"
-            @published="refreshEdges()"
-          />
-          <CardConnectionList
-            :edges="subsidiaries"
-            title="Spółki zależne"
-            :can-remove="canRemoveRelations"
-            :subject-published="subjectPublished"
-            @remove="openRemove"
-            @published="refreshEdges()"
-          />
-        </template>
-        <template v-if="entity?.type === 'person'">
-          <CardEmploymentHistory
-            :edges="edges"
-            bleed
-            :can-add="canAddRelations"
-            :can-cite="canAddRelations"
-            :can-correct="canEditRelations"
-            :can-remove="canRemoveRelations"
-            :subject-published="subjectPublished"
-            :predecessors="predecessors"
-            @add="openAdd(undefined, 'Dodaj powiązanie')"
-            @sources="openSources"
-            @edit="openEdit"
-            @remove="openRemove"
-            @published="refreshEdges()"
-          />
-          <!-- The rows above only hint at a handover; this states it, and
-                 says how much of the history it covers. It renders nothing at
-                 all when there is nothing to say. -->
-          <SuccessionPersonChanges
-            :person-id="node"
-            :person-name="entity.name"
-            :person-parties="(entity as Person).parties"
-            :relation-count="listedRelationCount"
-            class="mt-4"
-          />
-        </template>
-        <v-row v-else>
+      <!-- A place is served by `place/DetailView.vue` and never reaches
+           here. The branch that used to draw one lived on for three months
+           after `generateNodeUrl` stopped routing anything to it, and its
+           relations rendered twice - once as rows, once again through the
+           `v-else` below, which binds to the person branch rather than to
+           the chain of them. -->
+      <template v-if="entity?.type === 'region'">
+        <CardConnectionList
+          :edges="owners"
+          title="Część regionu"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+        <CardConnectionList
+          :edges="subregions"
+          title="Regiony"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+        <CardConnectionList
+          :edges="subsidiaries"
+          title="Spółki zależne"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+      </template>
+      <template v-if="entity?.type === 'person'">
+        <CardEmploymentHistory
+          :edges="edges"
+          bleed
+          :can-add="canAddRelations"
+          :can-cite="canAddRelations"
+          :can-correct="canEditRelations"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          :predecessors="predecessors"
+          @add="openAdd(undefined, 'Dodaj powiązanie')"
+          @sources="openSources"
+          @edit="openEdit"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+        <!-- The rows above only hint at a handover; this states it, and
+             says how much of the history it covers. It renders nothing at
+             all when there is nothing to say. -->
+        <SuccessionPersonChanges
+          :person-id="node"
+          :person-name="entity.name"
+          :person-parties="(entity as Person).parties"
+          :relation-count="listedRelationCount"
+        />
+      </template>
+      <!-- In a plain div, as `k-sections` asks of a `v-row`, and only when
+           there is a card to show - see the comments below. -->
+      <div v-else-if="shortEdges.length">
+        <v-row>
           <v-col
-            v-for="edge in edges.filter((edge) => {
-              const t = entity?.type || type;
-              if (t === 'place' || t === 'region') {
-                return ['employed', 'connection'].includes(edge.type);
-              }
-              return ['employed', 'connection', 'owns', 'election'].includes(
-                edge.type,
-              );
-            })"
+            v-for="edge in shortEdges"
             :key="edge.richNode?.name"
             cols="12"
             md="6"
@@ -218,11 +219,14 @@
              builds its node map from people, places and regions, then drops
              every edge whose far end is not in it - and the far end of a
              mention is an article. The articles that name this entity have
-             their own section below, off an endpoint that can see them. -->
-      <div class="mt-4">
+             their own section below, off an endpoint that can see them.
+             Only when there is one: the empty row that stood here on every
+             page kept its -12px margins, and cut the gap under „Zmiany na
+             stanowisku” to 8px. -->
+      <div v-if="commentEdges.length">
         <v-row>
           <v-col
-            v-for="edge in edges.filter((edge) => edge.type === 'comment')"
+            v-for="edge in commentEdges"
             :key="edge.richNode?.name"
             cols="12"
             md="6"
@@ -260,7 +264,6 @@
         :node-id="node"
         :node-type="type"
         :columns="type === 'person'"
-        class="mt-4"
       />
 
       <!-- Last on the page, under the relations it draws. The rows above are
@@ -282,11 +285,11 @@
       <LazyGraphContainer
         v-if="!smAndDown || showGraph"
         :key="node"
-        class="mt-4 k-bleed-xs"
+        class="k-bleed-xs"
         :focus-node-id="node"
         :max-depth="entity?.type === 'person' ? 2 : 1"
       />
-      <div v-else class="mt-4 d-flex justify-center">
+      <div v-else class="d-flex justify-center">
         <!-- Flat, not tonal: tonal draws the label in the theme's pale sage
                on a wash of the same sage, which is 1.73:1. Flat is black on
                sage. -->
@@ -351,7 +354,7 @@
         @removed="onEdgeRemoved()"
       />
 
-      <div v-if="referencedIn.length" class="mt-4">
+      <div v-if="referencedIn.length">
         <h3 class="text-h6 mb-2">Artykuł stanowi źródło dla:</h3>
         <v-row>
           <v-col v-for="edge in referencedIn" :key="edge.id" cols="12" md="6">
@@ -436,11 +439,7 @@
         />
       </div -->
 
-      <template v-if="!!user">
-        <div class="mt-10">
-          <CommentsSection :node-id="node" />
-        </div>
-      </template>
+      <CommentsSection v-if="user" :node-id="node" />
     </div>
   </div>
 </template>
@@ -604,6 +603,19 @@ const {
   refresh: refreshEdges,
 } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
+
+/** The relations a page that is not a person's lists as cards. */
+const shortEdges = computed(() => {
+  const t = entity.value?.type || type;
+  const kinds =
+    t === "place" || t === "region"
+      ? ["employed", "connection"]
+      : ["employed", "connection", "owns", "election"];
+  return edges.value.filter((edge) => kinds.includes(edge.type));
+});
+const commentEdges = computed(() =>
+  edges.value.filter((edge) => edge.type === "comment"),
+);
 
 /** How many rows the relation history lists, for the coverage line of
  * „Zmiany na stanowisku" - which says "2 z 8" and should not count a row the
