@@ -1083,13 +1083,18 @@ def test_pages_are_counted_in_polish(n, form):
 # A priority run: new hires, then published pages, then the rest
 
 
-def candidate(name: str, tier: str, since: str | None = None) -> build.Candidate:
+def candidate(
+    name: str, tier: str, since: str | None = None, published: bool | None = None
+) -> build.Candidate:
+    """A payload of the tier; on a published page if `published` says so, or,
+    unless it says otherwise, if the tier is the published pages'."""
     payload = {
         "name": name,
         "companies": [],
         "rejestrIo": f"https://rejestr.io/osoby/{name.rsplit(maxsplit=1)[-1]}",
     }
-    return build.Candidate(payload, tier, since)
+    live = tier == PUBLISHED if published is None else published
+    return build.Candidate(payload, tier, since, live)
 
 
 @pytest.fixture
@@ -1332,6 +1337,86 @@ def test_a_page_made_for_somebody_in_an_older_post_does_not_stop_the_run(priorit
     assert priority.summary()["created"] == ["Celina Lis (new-page)"]
 
 
+def test_published_pages_past_max_published_wait_and_the_pages_after_them_go(
+    priority, capsys
+):
+    """Szymon, 2026-10-15: a cap on how many published pages a night changes,
+    so that it leaves no more to review than that - the bought and the noted
+    counted as much as the published."""
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Ewa Lis", BOUGHT, published=True),
+        candidate("Olga Wilk", BOUGHT),
+        candidate("Piotr Sowa", NOTED, published=True),
+        candidate("Jan Kowalski", PUBLISHED),
+        candidate("Adam Kos", PUBLISHED),
+        candidate("Celina Lis", ON_SITE),
+    ]
+    priority.answers = [person("created")] + [person("updated")] * 4
+
+    assert job.main(["--scope", "priority", "--max-published", "2"]) == 0
+
+    assert priority.sent() == [
+        "Anna Nowak",
+        "Ewa Lis",
+        "Olga Wilk",
+        "Piotr Sowa",
+        "Celina Lis",
+    ]
+    summary = priority.summary()
+    assert (summary["published_pages"], summary["published_left"]) == (2, 2)
+    assert summary["tiers"][PUBLISHED] == 0
+    assert summary["state"] == "succeeded"
+    out = capsys.readouterr().out
+    assert "Published pages to change: 2 of 4 planned (--max-published 2)" in out
+
+
+def test_planning_counts_every_change_to_a_published_page_to_its_cap():
+    sent = candidate("Beata Kos", PUBLISHED)
+    found = [
+        candidate("Anna Nowak", HIRE),
+        candidate("Ewa Lis", BOUGHT, published=True),
+        candidate("Olga Wilk", MISSING),
+        sent,
+        candidate("Piotr Sowa", NOTED, published=True),
+        candidate("Jan Kowalski", PUBLISHED),
+        candidate("Celina Lis", ON_SITE),
+    ]
+    # Left out as sent unchanged, it takes none of the cap.
+    already = {(job.person_key(sent.payload), job.payload_hash(sent.payload))}
+
+    def names(max_published: int | None) -> list[str]:
+        planned, _ = job.plan_priority(found, already, 5, max_published=max_published)
+        return [c.payload["name"] for c in planned]
+
+    assert names(None) == [
+        "Anna Nowak",
+        "Ewa Lis",
+        "Olga Wilk",
+        "Piotr Sowa",
+        "Jan Kowalski",
+        "Celina Lis",
+    ]
+    assert names(2) == [
+        "Anna Nowak",
+        "Ewa Lis",
+        "Olga Wilk",
+        "Piotr Sowa",
+        "Celina Lis",
+    ]
+    assert names(0) == ["Anna Nowak", "Olga Wilk", "Celina Lis"]
+
+
+def test_published_pages_have_no_cap_of_their_own_unless_one_is_asked_for():
+    def cap(*argv: str) -> int | None:
+        return job.parse_args(["--scope", "priority", *argv]).max_published
+
+    assert cap() is None
+    assert cap("--max-uploads", "300") is None
+    assert cap("--max-published", "50") == 50
+    assert cap("--max-published", "0") == 0
+
+
 def test_a_payload_sent_unchanged_lately_is_left_out(priority):
     unchanged = candidate("Anna Nowak", HIRE, "2026-09-30")
     changed = candidate("Jan Kowalski", PUBLISHED)
@@ -1442,6 +1527,7 @@ def test_a_priority_dry_run_shows_the_tiers_and_writes_nothing(priority, capsys)
         "'new_hire': 1, 'bought': 1, 'noted_missing': 0, 'noted': 0, "
         "'odpis_only_current': 0, 'published': 1, 'on_site': 0" in out
     )
+    assert "Of the first 3, changes to published pages: 1" in out
 
 
 def test_a_priority_run_may_create_as_many_pages_as_it_sends():

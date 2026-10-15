@@ -53,6 +53,17 @@ updates a night does not change. Their pages and the new hires' count against
 `--max-new` together, and a page made for one of them is one the run is meant
 to make, as a new hire's is.
 
+The pages the export shows as published take at most `--max-published` of a
+run, whatever tier puts them in it: the bought and the noted count as much as
+the published. A change to a published page is what readers see, or a
+proposal waiting for a reviewer, and a change to the code that builds the
+payloads can make many of them read as changed at once. The cap, Szymon's of
+2026-10-15, keeps one night from leaving more of them to review than that.
+The nights of 2026-10-10 to 10-14 changed 45 to 87 published pages each, of
+the 100 they sent, and 33 to 49 of those were bought or noted. Past the cap
+they are left to the next runs, and the run goes on to the pages behind them.
+Without it a run changes as many as `--max-uploads` lets it.
+
 What was bought is read off the crawl bucket, which files every rejestr.io
 answer under the day it was bought, whoever bought it (`bought_since`). A week
 of it rather than the day, so that a feed a hand run bought after the night's
@@ -302,6 +313,11 @@ class RunSummary:
     bought_people: int = 0
     #: A priority run: payloads left out as sent unchanged within --resend-after.
     already_sent: int = 0
+    #: A priority run: how many of the planned would change a page the export
+    #: shows as published, whatever their tier - at most --max-published - and
+    #: how many more it left to the next runs past it.
+    published_pages: int = 0
+    published_left: int = 0
     #: A priority run: the gs:// path of what it took (`SENT_PREFIX`).
     sent: str = ""
     #: A run asked for on a page: which page, and what of its people it left.
@@ -616,6 +632,7 @@ def plan_priority(
     max_new: int,
     max_new_odpis_only: int | None = None,
     max_odpis_only_current: int | None = None,
+    max_published: int | None = None,
 ) -> tuple[list[Candidate], int]:
     """What a priority run sends, in order, and how many it left out as sent.
 
@@ -626,10 +643,11 @@ def plan_priority(
     odpis names in an older post those past `max_odpis_only_current`, for the
     same reason. The two kinds of page count against `max_new` together:
     the run stops as failed past it, so a plan past it would fail the night
-    by itself.
+    by itself. And the changes to published pages past `max_published`, in
+    whichever tier they come (`Candidate.published`).
     """
     planned: list[Candidate] = []
-    skipped = created = odpis_only = seated = 0
+    skipped = created = odpis_only = seated = published = 0
     for candidate in candidates:
         if (
             person_key(candidate.payload),
@@ -655,6 +673,10 @@ def plan_priority(
                 continue
             created += 1
             seated += 1
+        elif candidate.published:
+            if max_published is not None and published >= max_published:
+                continue
+            published += 1
         planned.append(candidate)
     return planned, skipped
 
@@ -734,6 +756,9 @@ class PeopleImport:
         self._client: Client | None = None
         #: A priority run, or one asked for: each payload's tier, in sending order.
         self.tiers: list[str] | None = None
+        #: A priority run: whether each payload's page is published, in
+        #: sending order (`Candidate.published`).
+        self.published: list[bool] | None = None
         #: A priority run, or one asked for: what the site took - payload,
         #: tier, outcome, and the page it filed the person under.
         self.taken: list[tuple[dict, str, str, str | None]] = []
@@ -857,8 +882,9 @@ class PeopleImport:
     def plan(self) -> list[dict]:
         """A priority run's payloads, in sending order: built, the already sent
         left out, the pages to create cut at --max-new, the new hires only an
-        odpis names at --max-new-odpis-only, and the people only an odpis names
-        in an older public post at --max-odpis-only-current."""
+        odpis names at --max-new-odpis-only, the people only an odpis names
+        in an older public post at --max-odpis-only-current, and the changes
+        to published pages at --max-published."""
         args = self.args
         today = warsaw_now().date()
         bought_from = (today - timedelta(days=args.bought_days)).isoformat()
@@ -882,8 +908,10 @@ class PeopleImport:
             args.max_new,
             args.max_new_odpis_only,
             args.max_odpis_only_current,
+            args.max_published,
         )
         self.tiers = [candidate.tier for candidate in planned]
+        self.published = [candidate.published for candidate in planned]
         counts = Counter(self.tiers)
         self.summary.tiers = {tier: counts.get(tier, 0) for tier in TIERS}
         print(
@@ -920,6 +948,17 @@ class PeopleImport:
                 f"People only an odpis names in an older public post: "
                 f"{len(seated(planned))} of {len(older)} planned "
                 f"(--max-odpis-only-current {args.max_odpis_only_current})"
+            )
+        if pages := unsent([c for c in candidates if c.published]):
+            # The cap is the one thing that leaves a published page out.
+            summary = self.summary
+            summary.published_pages = sum(self.published)
+            summary.published_left = len(pages) - summary.published_pages
+            cap = args.max_published
+            print(
+                f"Published pages to change: {summary.published_pages} of "
+                f"{len(pages)} planned"
+                + ("" if cap is None else f" (--max-published {cap})")
             )
         return [candidate.payload for candidate in planned]
 
@@ -984,6 +1023,11 @@ class PeopleImport:
             print(
                 f"The first {sent} (--max-uploads) by tier: "
                 f"{ {tier: first.get(tier, 0) for tier in TIERS} }"
+            )
+        if self.published is not None:
+            print(
+                f"Of the first {sent}, changes to published pages: "
+                f"{sum(self.published[:sent])}"
             )
         reason = STOP_DRY_RUN
         if self.request is not None and self.summary.stopped:
@@ -1273,6 +1317,14 @@ def parser() -> argparse.ArgumentParser:
         help="Priority: the most people only an odpis names a run creates pages "
         "for whose public post has not ended and began before --recent-days, "
         f"within --max-new. Default: {ODPIS_ONLY_CURRENT_CAP}.",
+    )
+    parser.add_argument(
+        "--max-published",
+        type=non_negative_int,
+        help="Priority: the most pages the export shows as published a run "
+        "changes, whatever tier sends them - the bought and the noted as much "
+        "as the published; the rest wait for the next runs, and the run goes "
+        "on to the pages behind them. Default: no cap but --max-uploads.",
     )
     parser.add_argument(
         "--dry-run",
