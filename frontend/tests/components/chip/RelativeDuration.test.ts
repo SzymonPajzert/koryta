@@ -19,12 +19,12 @@ async function textOf(props: { start?: string; end?: string }) {
 describe("ChipRelativeDuration", () => {
   it("reads both ends of a closed period", async () => {
     expect(await textOf({ start: "2014-11-06", end: "2017-08-25" })).toBe(
-      "2014-11-06 - 2017-08-25",
+      "2014-11-06 – 2017-08-25",
     );
   });
 
   it("calls an open period ongoing", async () => {
-    expect(await textOf({ start: "2014-11-06" })).toBe("2014-11-06 - obecnie");
+    expect(await textOf({ start: "2014-11-06" })).toBe("2014-11-06 – obecnie");
   });
 
   it("collapses a period that begins and ends on one day", async () => {
@@ -39,7 +39,7 @@ describe("ChipRelativeDuration", () => {
     // 117 published people came to read "undefined - obecnie".
     const text = await textOf({ end: "2017-08-25" });
     expect(text).not.toContain("undefined");
-    expect(text).toBe("? - 2017-08-25");
+    expect(text).toBe("? – 2017-08-25");
   });
 
   it("says nothing at all when no date was recorded", async () => {

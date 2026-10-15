@@ -856,7 +856,7 @@ describe("jobHealth", () => {
     it("is stalled once one has waited too long, whatever else is going", () => {
       expect(health(captures, [going, stuck, done])).toEqual({
         status: "stalled",
-        detail: "1 strona utknęła - nic jej już nie podejmie.",
+        detail: "1 strona utknęła – nic jej już nie podejmie.",
       });
     });
 

@@ -36,7 +36,7 @@ describe("CardEmploymentHistory", () => {
     const wrapper = await render([
       edge({ start_date: "2014-11-06", end_date: "2017-08-25" }),
     ]);
-    expect(wrapper.text()).toContain("2014-11-06 - 2017-08-25");
+    expect(wrapper.text()).toContain("2014-11-06 – 2017-08-25");
     // Anchors the selector the undated case asserts the absence of.
     expect(
       wrapper.findComponent({ name: "ChipRelativeDuration" }).exists(),
