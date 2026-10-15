@@ -24,6 +24,8 @@ GOOD = {
     "koryta_krs_odpis": 0,
     "koryta_scrape_krs_paid": 0,
     "koryta": 0,
+    # The companies step runs the people import too, with one flag more.
+    "koryta_people_import --companies-only": 0,
     "koryta_people_import": 0,
     "koryta_score_import": 0,
     "compressor": 0,
@@ -178,6 +180,8 @@ def world(monkeypatch, tmp_path) -> World:
             w.timeouts[name] = timeout
             w.rebuild(argv[1], w.codes[name])
             return w.codes[name], False
+        if "--companies-only" in argv:
+            name = f"{name} --companies-only"
         w.commands.append((name, list(argv), dict(env)))
         return w.codes[name], False
 
@@ -243,6 +247,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "pytest tests",
         "pytest outputs",
         "pytest invariants",
+        "koryta_people_import --companies-only",
         "koryta_people_import",
         "koryta_score_import",
     ]
@@ -339,6 +344,73 @@ def test_the_published_pages_a_night_changes_stay_capped_as_it_sends_more(world)
     argv, _ = world.command("koryta_people_import")
     assert argv[argv.index("--max-uploads") + 1] == "1000"
     assert argv[argv.index("--max-published") + 1] == "50"
+
+
+def test_the_companies_the_people_need_go_up_first_planned_as_the_people_are(world):
+    """Szymon, 2026-10-15: the companies tonight's people name that the export
+    has no page for, created before them, so that no job of theirs waits for
+    the uploader to create its company on the way."""
+    night.main(["--max-uploads", "150", "--max-published", "20"])
+
+    ran = world.ran()
+    assert ran.index("koryta_people_import --companies-only") == (
+        ran.index("koryta_people_import") - 1
+    )
+    companies, _ = world.command("koryta_people_import --companies-only")
+    people, _ = world.command("koryta_people_import")
+    assert companies[-1] == "--companies-only"
+    # The same plan: every flag the people get, in the step's own time.
+    minutes = people.index("--max-minutes") + 1
+    assert (companies[minutes], people[minutes]) == ("20", "60")
+    assert companies[:minutes] + companies[minutes + 1 : -1] == (
+        people[:minutes] + people[minutes + 1 :]
+    )
+    assert companies[companies.index("--export") + 1] == FRESH
+    assert world.steps()["companies"] == ("succeeded", "")
+
+
+def test_a_held_upload_skips_the_companies_and_reports_the_people_as_held(world):
+    world.export = STALE
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    steps = world.steps()
+    assert steps["companies"] == (
+        "skipped",
+        "pominięte - osoby wstrzymane: nie ma dzisiejszej kopii bazy",
+    )
+    assert steps["people"] == ("held", "wstrzymane: nie ma dzisiejszej kopii bazy")
+    assert not [name for name in world.ran() if "people_import" in name]
+    ending = world.runs[-1].ending()
+    assert ending["stop_reason"] == (
+        "people: held - wstrzymane: nie ma dzisiejszej kopii bazy"
+    )
+    assert not [line for line in ending["errors"] if line.startswith("companies")]
+
+
+def test_what_the_companies_step_leaves_or_breaks_does_not_hold_the_people(world):
+    world.codes["koryta_people_import --companies-only"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["companies"] == ("partial", "zostało na następny raz")
+    assert world.steps()["people"] == ("succeeded", "")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_people_import --companies-only"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["companies"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["people"] == ("succeeded", "")
+
+
+def test_a_people_dry_run_creates_no_company_either(world):
+    night.main(["--people-dry-run"])
+
+    argv, _ = world.command("koryta_people_import --companies-only")
+    assert argv[-2:] == ["--dry-run", "--companies-only"]
 
 
 def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
@@ -1074,6 +1146,11 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
         "--max-odpis-only-current 10 --max-published 10" in out
     )
     assert "--export <the export step's>" in out
+    assert (
+        "--max-published 10 --export <the export step's> --companies-only: the "
+        "companies the people step's people name that the export has no page "
+        "for, created first" in out
+    )
     assert "koryta_score_import" in out
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
     assert (

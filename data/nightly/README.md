@@ -31,6 +31,7 @@ order, each with a time limit and its output in the night's log:
 | `tests`        | `pytest src/tests/pipelines` over the night's outputs                                                                    |
 | `outputs`      | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                       |
 | `invariants`   | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                      |
+| `companies`    | the `people` command and `--companies-only`: the companies its people name that tonight's export has no page for        |
 | `people`       | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-published 10 --refresh none` |
 | `scores`       | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled              |
 | `tidy`         | export shards and day-named outputs older than a week off the disk                                                       |
@@ -251,6 +252,17 @@ wait for the next nights, and the night goes on to the pages behind them. At
 changed 45 to 87 published pages each, 33 to 49 of them bought or noted - and
 it stays put when `--max-uploads` goes up.
 
+Companies: before the people go, the companies they name that tonight's export
+has no page for are created, through `/api/ingest/company` from `Companies`
+(`koryta_people_import --companies-only`, run with the people step's own
+flags, so that it plans the same people). Until then the people step found
+each such company only when the site took a person without the job there, and
+created it and sent the person again: 27 companies on 2026-10-13, 16 on 10-14.
+A company the step cannot create is the people step's to try again, which still
+creates on the way what is missing; the summary of each run, with every company
+and the people who name it, is in `jobs/company_import/runs/`, and the run on
+/admin/procesy is „Import firm”.
+
 Scores: after the people, every scoring model (`analysis/scores`) is rebuilt
 and its shortlist reconciled with the votes it holds on the site - a changed
 score written, one it no longer gives taken back (`koryta_score_import`). The
@@ -271,6 +283,9 @@ A failed step does not end the night; the steps that depend on it are held:
   past their measured values.
 - `scores` needs the same, but not the people: however they went, the scores
   go up, with whatever pages the people step did create.
+- `companies` runs only when `people` may - skipped, not held, when it may
+  not, so that a held night still names the people as what it held - and holds
+  nothing back: the people go up however it went.
 
 ## Runs asked for on the site
 
