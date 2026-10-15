@@ -61,6 +61,10 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   „Pokaż więcej”, which opens the rest in place. It is hidden, not cut.
   Computers show the whole bio. Szymon: "I think it's a good idea"
   (2026-10-15).
+
+  The button goes once the bio is open, with no „Pokaż mniej” to fold it
+  back, and it carries a chevron down. Szymon: "Don't keep the pokaż mniej
+  toggle for now, sure, let's add a chevron" (2026-10-15).
 - **/eksploruj/tabela on desktop: one summary line per person**, e.g.
   „8 spółek ▾ · ostatnio <company> · 2023–2024 · 12 lat pracy · 8 startów”.
   Each row's „N spółek ▾” opens its companies in place, and a single
@@ -78,6 +82,9 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   options). The line is a neutral black at .2, firmer than the site's .12
   hairline, because the bar is the one edge with nothing else to frame it.
   The shadow uses Vuetify's `scroll-behavior="elevate"`.
+- **Admin page titles follow the public pages' title rule**: the h1 is
+  40/700, 28 on phones, not a smaller 28 for working pages. Szymon: "Let's
+  keep the admin pages like public pages for now" (2026-10-15).
 
 ## How UI changes are made
 
