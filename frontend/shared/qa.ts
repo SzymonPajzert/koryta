@@ -271,6 +271,17 @@ export const QA_ITEMS: QaItem[] = [
     area: "admin",
   },
   {
+    id: "cala-nazwa-koryta-pl-pogrubiona",
+    title: "Cała nazwa „koryta.pl” pogrubiona",
+    description:
+      "W górnym pasku i w stopce strony głównej cała nazwa „koryta.pl” jest pogrubiona, a nie tylko „koryta”.",
+    steps: [
+      "Otwórz stronę główną na komputerze – „koryta.pl” obok logo w pasku i duże „koryta.pl” w stopce są w całości pogrubione.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "zwiniety-opis-osoby-na-telefonie",
     title: "Długi opis osoby na telefonie zwinięty do czterech linii",
     description:
