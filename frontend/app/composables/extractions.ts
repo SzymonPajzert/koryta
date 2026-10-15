@@ -30,6 +30,11 @@ export function useExtractions(options?: {
   reviewed?: MaybeRefOrGetter<"all" | "yes" | "no">;
   limit?: MaybeRefOrGetter<number | undefined>;
   page?: MaybeRefOrGetter<number | undefined>;
+  /** Fetch in the server render too (the default). A page only signed-in
+   * readers open passes `false`: the server render has no token to send, so
+   * its answer holds none of the unreviewed facts, and hydration then keeps
+   * that answer instead of asking again with the token. */
+  server?: boolean;
 }) {
   const query = computed(() => {
     const q: Record<string, string> = {};
@@ -55,6 +60,7 @@ export function useExtractions(options?: {
     "/api/extractions",
     {
       query,
+      server: options?.server ?? true,
     },
   );
 
