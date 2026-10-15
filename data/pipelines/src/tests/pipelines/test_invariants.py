@@ -1266,6 +1266,10 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes):
     some in two places at once on purpose: unpublished, for a reviewer to
     reject. Counted with them, this read 152 on the 2026-10-08 export, all but
     24 of them waiting in the queue.
+
+    The publish dialog warns a reviewer by the same rule before a click adds
+    to this count: `placeClashes` in frontend/shared/twoPlaces.ts. A change to
+    one belongs in the other.
     """
     # 24 on 18 published pages on the 2026-10-08 export, among them Mariusz
     # Michał Wiśniewski, whose two June candidacies for 2014 (Poznań, powiat
