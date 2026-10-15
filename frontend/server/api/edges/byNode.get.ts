@@ -24,6 +24,12 @@ export type NodeRelation = {
   otherName: string | null;
   otherPublished: boolean;
   published: boolean;
+  /** When a candidacy was, and for what office - which election it belongs
+   * to. Every candidacy is named „kandydatura", so without these a page's
+   * seven runs read as seven identical rows, and the dialog could not tell two
+   * places in one election (see shared/twoPlaces.ts) from two elections. */
+  startDate: string | null;
+  position: string | null;
   /** The revision publishing this relation would approve, when it points at
    * none of its own yet: the newest one it already holds. Null when the edge
    * already has an approved revision, or holds none and will be published on
@@ -108,6 +114,11 @@ export default defineEventHandler(async (event): Promise<NodeRelations> => {
       otherName,
       otherPublished,
       published: pageIsPublic(edge),
+      startDate:
+        typeof edge.start_date === "string" && edge.start_date
+          ? edge.start_date
+          : null,
+      position: typeof edge.position === "string" ? edge.position : null,
       revisionToApprove:
         publishCandidateRevision(
           candidates,
@@ -123,12 +134,16 @@ export default defineEventHandler(async (event): Promise<NodeRelations> => {
 
   // Unpublished first, and the ones that are ready before the ones blocked on
   // a draft - the dialog is a work queue, so what needs a decision goes on top.
+  // Then by the other end, and the newest first among several with one place:
+  // a council member's six runs in one powiat.
   relations.sort((a, b) => {
     if (a.published !== b.published) return a.published ? 1 : -1;
     if (a.publishable !== b.publishable) return a.publishable ? -1 : 1;
-    return (a.otherName ?? a.otherId).localeCompare(
-      b.otherName ?? b.otherId,
-      "pl",
+    return (
+      (a.otherName ?? a.otherId).localeCompare(
+        b.otherName ?? b.otherId,
+        "pl",
+      ) || (b.startDate ?? "").localeCompare(a.startDate ?? "")
     );
   });
 
