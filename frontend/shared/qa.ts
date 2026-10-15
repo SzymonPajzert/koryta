@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "glowna-nowy-naglowek-i-powiaty",
+    title: "Strona główna: nowy nagłówek i powiaty obok mapy",
+    description:
+      "Nagłówek strony głównej to jedno zdanie „Sprawdzamy, którymi stanowiskami w publicznych spółkach podzielili się politycy”, z wyszukiwarką tuż pod nim i mniejszym logo obok. Na komputerze zielony pas jest niższy, więc mapa zaczyna się wyżej. Obok mapy zamiast prośby o wybranie regionu jest lista powiatów z największą liczbą osób; kliknięcie wiersza działa jak kliknięcie powiatu na mapie.",
+    steps: [
+      "Otwórz stronę główną na szerokim ekranie - nagłówek ma dwie linijki, a wyszukiwarka zaczyna się na jego lewej krawędzi.",
+      "Obok mapy kliknij „Gdańsk” - pojawiają się osoby powiązane z Gdańskiem i „Zobacz cały region”, jak po kliknięciu Gdańska na mapie.",
+      "Kliknij krzyżyk obok nazwy „Gdańsk” - wraca lista powiatów.",
+      "Na telefonie lista powiatów jest pod mapą i ma pięć wierszy.",
+    ],
+    area: "public",
+  },
+  {
     id: "strony-robocze-jak-publiczne",
     title:
       "Strony robocze w tej samej kolumnie i z tym samym nagłówkiem co publiczne",

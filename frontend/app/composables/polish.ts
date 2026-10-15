@@ -91,3 +91,21 @@ export function polishCountingGrouped(
 ): string {
   return `${polishNumber(number)} ${nominativeNoun(number, form_singular, form_plural, form_genitive)}`;
 }
+
+/** „11 lat pracy”: a person's years in public companies, as a row's caption.
+ *
+ * Whole years, the rule /eksploruj/tabela's `experienceLabel` follows: the
+ * tenth `listWithStats` keeps is false precision, derived from edge dates
+ * missing a day here and a month there, and `polishCounting` picks the noun
+ * off a whole numeral - 21.8 came out „21.8 lat pracy”, where the language
+ * wants „21,8 roku pracy”. „poniżej roku” below one, where rounding would
+ * claim a person who worked four months never worked at all. */
+export function yearsOfWork(experience: number): string {
+  if (experience < 1) return "poniżej roku pracy";
+  return polishCounting(
+    Math.round(experience),
+    "rok pracy",
+    "lata pracy",
+    "lat pracy",
+  );
+}
