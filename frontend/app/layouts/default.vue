@@ -15,11 +15,10 @@
       />
     </NuxtLink>
 
-    <!-- The name set as a wordmark: „koryta” bold, „.pl” regular. -->
+    <!-- The name set as a wordmark, the whole of „koryta.pl” in bold
+         (.interface-design/system.md, 2026-10-15). -->
     <v-app-bar-title v-if="mdAndUp" class="app-bar__title">
-      <NuxtLink to="/" class="app-bar__wordmark">
-        <b>koryta</b><span>.pl</span>
-      </NuxtLink>
+      <NuxtLink to="/" class="app-bar__wordmark">koryta.pl</NuxtLink>
     </v-app-bar-title>
     <v-spacer />
     <!-- „Szukaj osób i spółek” on a phone: the full label ended in an
@@ -326,17 +325,10 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 .app-bar__wordmark {
   color: rgb(var(--v-theme-ink-strong));
   font-size: 1.25rem;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
   text-decoration: none;
-}
-
-.app-bar__wordmark b {
-  font-weight: 700;
-}
-
-.app-bar__wordmark span {
-  font-weight: 400;
 }
 
 .app-bar :deep(.v-toolbar__append) {
