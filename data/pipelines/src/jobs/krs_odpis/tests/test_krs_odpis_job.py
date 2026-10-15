@@ -200,6 +200,29 @@ def test_the_cap_covers_the_gap_too():
     assert (the_plan.held, the_plan.deferred) == (1, 1)
 
 
+def test_the_queue_adds_what_the_paid_job_owes_the_public_companies_first():
+    companies = pd.DataFrame(
+        {"krs": [A, B, C, D, E], "is_public": [False, True, True, False, "True"]}
+    )
+    queued = [
+        plan.Candidate(A, "person_feed", paid_calls=2),
+        plan.Candidate(B, "owned", paid_calls=2),
+        # The odpis aktualny alone, which krs_free fetches: nothing to buy.
+        plan.Candidate(C, "public_owner", paid_calls=0),
+        # The service last said it is in neither register.
+        plan.Candidate(D, "person_feed", paid_calls=2),
+        plan.Candidate(E, "refresh", paid_calls=2),
+    ]
+
+    owed = plan.owed_by_the_queue(queued, companies, {D: "absent", A: "gateway"})
+
+    assert [(c.krs, c.reason) for c in owed] == [
+        (B, "owned"),
+        (E, "refresh"),
+        (A, "person_feed"),
+    ]
+
+
 def test_changed_since_keeps_what_the_bulletin_names_on_or_after_the_day():
     candidates = [plan.Candidate(k, "graph") for k in (A, B, C)]
     changes = {A: "2026-09-25", B: "2026-09-24"}
@@ -770,6 +793,68 @@ def test_the_nights_run_asks_the_public_companies_with_no_odpis_after(
     # The run record is folded afresh: tonight's attempts are in it.
     assert "KrsOdpisAttempts" in offline[0].refresh_pipelines
     assert "then 1 more (public) with no odpis on file" in capsys.readouterr().out
+
+
+def test_the_nights_run_asks_the_paid_queues_companies_before_the_gap(
+    offline, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        job,
+        "graph_companies",
+        lambda ctx: pd.DataFrame(
+            {"krs": [A, B, C, D, E], "is_public": [True, True, False, True, False]}
+        ),
+    )
+
+    class Queue:
+        def read_or_process_list(self, ctx):
+            connections = [
+                QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE,
+                QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE,
+            ]
+            return [
+                RejestrIOQuery(krs=KRS(k), queries=connections, reasons=[why])
+                for k, why in ((E, "person_feed"), (D, "owned"), (A, "refresh"))
+            ]
+
+    monkeypatch.setattr(job, "ScrapeRejestrIO", Queue)
+    # A is named by the bulletin today and B and D have nothing on file: D is
+    # both owed by the queue and in the gap, and is asked about once, as owed.
+    monkeypatch.setattr(job.odpis_files, "stored_odpisy", lambda ctx: {C: None})
+    monkeypatch.setattr(job, "last_attempts", lambda ctx: {})
+    asked: list = []
+    monkeypatch.setattr(
+        job,
+        "make_plan",
+        lambda ctx, candidates, changes, today, limit, sources: (
+            asked.extend(candidates)
+            or plan.select(candidates, {}, changes, {}, today, limit)
+        ),
+    )
+    argv = ["--graph", "--changed-since", TODAY, "--queue"]
+
+    assert job.main([*argv, "--missing", "public", "--dry-run"]) == 0
+
+    assert [(c.krs, c.reason) for c in asked] == [
+        (A, plan.REASON_GRAPH),
+        (D, "owned"),
+        (E, "person_feed"),
+        (B, plan.REASON_NO_ODPIS),
+    ]
+    [policy] = offline
+    # Read as krs_free left it, not rebuilt for the bulletin this run refreshes.
+    assert "ScrapeRejestrIO" in policy.exclude_refresh
+    assert not policy.should_refresh("PeopleMerged")
+    assert policy.should_refresh("KrsOdpisAttempts")
+    out = capsys.readouterr().out
+    assert "then 2 more the paid job owes rejestr.io for" in out
+    assert "then 1 more (public) with no odpis on file" in out
+
+
+def test_the_queue_is_added_to_a_graph_run_only(capsys):
+    with pytest.raises(SystemExit):
+        job.main(["--queue", "--dry-run"])
+    assert "add --graph" in capsys.readouterr().err
 
 
 def test_the_gap_is_the_graphs_only(capsys):

@@ -122,6 +122,35 @@ def from_queries(queries: Iterable[RejestrIOQuery]) -> list[Candidate]:
     return candidates
 
 
+def owed_by_the_queue(
+    candidates: Iterable[Candidate],
+    companies: pd.DataFrame,
+    attempts: Mapping[str, str],
+) -> list[Candidate]:
+    """The queue's companies the paid job would buy connections for, public first.
+
+    What `--queue` adds to a graph run. The night's paid step buys a company
+    only once its free odpis was asked for and did not come, and the graph run
+    asks only for what the bulletin names and the public companies with none
+    on file - so a company that came into the queue another way waited for
+    nobody. On 2026-10-15, 960 of the queue's 1,024 such companies had no odpis
+    on file; 493 of them were private, which the gap never reaches, and half
+    of the 467 public ones came after the 2,220th of its 2,868, some nine
+    nights off.
+
+    A company the queue lists for its odpis aktualny alone is `krs_free`'s, and
+    one the service last said is in neither register (`attempts`: KRS to the
+    newest attempt's status) is left out, as `without_odpis` leaves it out.
+    """
+    krs = companies["krs"].astype(str).str.zfill(10)
+    unknown = pd.Series(False, index=companies.index)
+    public = set(krs[is_public(companies.get("is_public", unknown))])
+    owed = [c for c in candidates if c.paid_calls and attempts.get(c.krs) != ABSENT]
+    return [c for c in owed if c.krs in public] + [
+        c for c in owed if c.krs not in public
+    ]
+
+
 def from_graph(companies: pd.DataFrame) -> list[Candidate]:
     """Every company the pipelines know (`CompaniesKRS`), the public ones first.
 

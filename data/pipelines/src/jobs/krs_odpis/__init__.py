@@ -5,9 +5,11 @@
     koryta_krs_odpis --graph --changed-since 2026-09-25
                                            # every company the pipelines know that
                                            # the bulletin names since that day
-    koryta_krs_odpis --graph --changed-since 2026-10-08 --missing public --max 300
-                                           # the night's: and then the public
-                                           # companies with no odpis on file
+    koryta_krs_odpis --graph --changed-since 2026-10-08 --queue \
+        --missing public --max 300         # the night's: then the companies the
+                                           # paid job owes rejestr.io for, then
+                                           # the public companies with no odpis
+                                           # on file
     python -m jobs.krs_odpis --dry-run     # report the plan, ask nothing
 
 The free half of what `koryta_scrape_krs_paid` buys about a company. An odpis
@@ -29,7 +31,10 @@ job; or the KRS numbers in a file; or, with ``--graph``, every company in
 odpis. ``--changed-since`` keeps only those the bulletin names on or after a
 day, which is the weekly refresh: the register's entries are in the odpis the
 day they are made, where rejestr.io's lag them. An odpis already on file is
-asked for again only when the bulletin names the entry since. ``--missing
+asked for again only when the bulletin names the entry since. ``--queue``
+then adds the companies whose rejestr.io connections `ScrapeRejestrIO` owes,
+as the last KRS job built it - the paid job buys those only once a free odpis
+was asked for and did not come - the public ones first. ``--missing
 public`` then adds the graph's public companies with no odpis on file at all,
 which the bulletin may never name again, the live ones before those struck off
 (``--missing all``: the private ones after them); a company the service last
@@ -83,6 +88,7 @@ from jobs.krs_odpis.plan import (
     from_graph,
     from_queries,
     joined,
+    owed_by_the_queue,
     read_krs_file,
     register_hints,
     report,
@@ -170,6 +176,13 @@ def parser() -> argparse.ArgumentParser:
         help="Only the companies the KRS bulletin names on or after this day.",
     )
     parser.add_argument(
+        "--queue",
+        action="store_true",
+        help="With --graph: after the companies --changed-since keeps, ask "
+        "about the ones ScrapeRejestrIO owes rejestr.io connections for, as "
+        "the last KRS job left it, under the same --max.",
+    )
+    parser.add_argument(
         "--missing",
         choices=MISSING,
         help="With --graph: after the companies --changed-since keeps, ask "
@@ -248,6 +261,15 @@ def last_attempts(ctx: Context) -> dict[str, str]:
     return dict(zip(padded_krs(attempts["krs"]), attempts["status"].astype(str)))
 
 
+def owed_candidates(
+    ctx: Context, companies: pd.DataFrame, attempts: dict[str, str]
+) -> list[Candidate]:
+    # Read as the last KRS job left it: `main` pins it, so the bulletin
+    # refreshed under this run does not rebuild it.
+    queued = from_queries(ScrapeRejestrIO().read_or_process_list(ctx))
+    return owed_by_the_queue(queued, companies, attempts)
+
+
 def missing_candidates(
     ctx: Context, companies: pd.DataFrame, sources: Sources, scope: str
 ) -> list[Candidate]:
@@ -280,6 +302,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.missing and not args.graph:
         parser().error("--missing asks about the graph's companies: add --graph")
+    if args.queue and not args.graph:
+        parser().error(
+            "--queue adds the queue's companies to a graph run, and without "
+            "--graph or --krs-file the run asks the queue's alone: add --graph"
+        )
     if args.no_backup:
         os.environ["DISABLE_BACKUP"] = "1"
     # Pipelines read sys.argv themselves - PeoplePKW takes --limit, and anything
@@ -293,12 +320,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     # on the other routes the bulletin is read before anything else.
     queue = not (args.krs_file or args.graph)
     refresh = set(REFRESH_PIPELINES) if queue else {"KRSUpdates"}
-    if args.missing:
+    if args.missing or args.queue:
         # The fold of this job's own record, which grows with every run.
         refresh.add("KrsOdpisAttempts")
     # The queue's people half is the paid job's, so its merge is held: rebuilt
     # under this job it was 42 s and most of a 10 GB peak on 2026-10-02.
-    ctx, _ = setup_context(policy=ProcessPolicy(refresh, exclude_refresh=set(PINNED)))
+    pinned = set(PINNED)
+    if args.queue:
+        # The bulletin refreshed would rebuild the queue too: REFRESH_PIPELINES'
+        # tree, ~6 min of the paid step's 7 on 2026-10-06. The night's krs_free
+        # has built it minutes before, and the paid step builds it again after.
+        pinned.add("ScrapeRejestrIO")
+    ctx, _ = setup_context(policy=ProcessPolicy(refresh, exclude_refresh=pinned))
     sources = Sources()
     if queue:
         candidates, source = queue_candidates(ctx, sources), "ScrapeRejestrIO"
@@ -311,6 +344,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.changed_since:
         candidates = changed_since(candidates, changes, args.changed_since)
         source += f" the bulletin names since {args.changed_since}"
+    if args.queue:
+        named = len(candidates)
+        owed = owed_candidates(ctx, companies, last_attempts(ctx))
+        candidates = joined(candidates, owed)
+        more = len(candidates) - named
+        source += f", then {more:,} more the paid job owes rejestr.io for"
     if args.missing:
         named = len(candidates)
         gap = missing_candidates(ctx, companies, sources, args.missing)

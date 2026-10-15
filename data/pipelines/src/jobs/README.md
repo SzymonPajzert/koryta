@@ -43,6 +43,7 @@ day's bulletin: `--new-registrations --reads 0`, the backlog's pace waiting on `
 ## krs_odpis
 1. Reads the company part of `ScrapeRejestrIO` (person feeds stay paid), KRS numbers from `--krs-file`, or every company `CompaniesKRS` knows (`--graph`)
 1. With `--changed-since DAY`, keeps only the companies the bulletin (`KRSUpdates`) names on or after that day - the weekly refresh
+1. With `--queue` (and `--graph`), then adds the companies `ScrapeRejestrIO` owes rejestr.io connections for, as the last KRS job built it (pinned, not rebuilt), the public ones first; one the service said is in neither register is left out
 1. With `--missing public` (and `--graph`), then adds the graph's public companies with no odpis pełny on file, which the bulletin may never name again; `--missing all` the private ones after them. Live before struck off (`CompaniesKRS`'s `struck_off`), and within those never asked before last unanswered (`KrsOdpisAttempts`); one the service said is in neither register is left out. `--max` caps them all together
 1. Skips companies whose odpis pełny is on file, unless the bulletin names the entry since
 1. Asks the ministry's public KRS search service for each odpis pełny, politely, stopping when the service tires
