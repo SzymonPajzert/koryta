@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "strony-robocze-jak-publiczne",
+    title:
+      "Strony robocze w tej samej kolumnie i z tym samym nagłówkiem co publiczne",
+    description:
+      "Panel, rewizje, zgłoszenia, QA, zadania, procesy, notatki, ekstrakcje, profil i aktywność zaczynają się w tym samym miejscu co strony publiczne: tytuł, jedno zdanie pod nim, reszta wyjaśnień pod (i). Nagłówki sekcji i liczniki są spokojniejsze, a etykiety w otwartych wierszach są pisane zwykłymi literami.",
+    steps: [
+      "Otwórz /admin – na górze są kolejki „Wymagające działania”, a podstrony na dole, jako lista.",
+      "Przejdź przez /admin/rewizje, /admin/opinie, /admin/zadania i /aktywnosc – tytuł stoi zawsze w tym samym miejscu, a otwarty wiersz ma etykiety „Autor”, „Kiedy” zamiast „AUTOR”, „KIEDY”.",
+      "Przeładuj /ekstrakcje – jest lista faktów, a nie „Brak ekstrakcji”.",
+    ],
+    link: "/admin",
+    area: "admin",
+  },
+  {
     id: "rowny-odstep-nad-stopka",
     title: "Ten sam odstęp nad stopką na każdej stronie",
     description:

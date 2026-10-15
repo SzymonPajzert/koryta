@@ -12,7 +12,7 @@
 <style>
 .arow-list {
   border: 1px solid var(--k-line);
-  border-radius: 10px;
+  border-radius: var(--k-r-card);
   overflow: hidden;
   background: rgb(var(--v-theme-surface));
 }
