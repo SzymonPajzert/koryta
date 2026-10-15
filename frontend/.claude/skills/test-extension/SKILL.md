@@ -1,5 +1,6 @@
 ---
-description:
+name: test-extension
+description: Analyze test coverage, then plan and implement new tests one at a time in the TDD loop. Use when asked to extend or analyze test coverage, or to improve testing for a specific module or component.
 ---
 
 # Test Extension Workflow
@@ -23,14 +24,14 @@ If there are any Cypress tests left, migrate them to Playwright.
 
 ### 2. Iteration Planning (Scratchpad)
 
-- Create or update a scratchpad file (e.g., `tests_to_implement.md` in the `.agent/scratch/` directory or root) to document your findings.
+- Create or update the scratchpad file, `tests_to_implement.md` next to this file, to document your findings.
 - Write down the specific files, lines, or scenarios that require testing.
 - Prioritize the list (e.g., core business logic and critical user journeys first).
 
 ### 3. Execution (The TDD Loop)
 
 - Pick an item from your iteration plan.
-- **Strictly follow the TDD loop** as defined in `tdd.md`:
+- **Strictly follow the TDD loop** as defined in `frontend/.claude/rules/tdd.md`:
   1. Write the test (Vitest for units/components, Playwright for CUJs).
   2. Verify it fails (or captures the missing coverage).
   3. Update the code if it's a bug fix, or verify the test passes if it's pure coverage.

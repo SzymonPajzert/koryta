@@ -152,7 +152,7 @@ const emit = defineEmits<{
 
 /** Removing a relation from the drawer, which is how /eksploruj/tabela and
  * /admin/notatki read one node's relations. See
- * `.agent/skills/relation-surfaces.md`. */
+ * `.claude/skills/relation-surfaces/SKILL.md`. */
 const {
   canRemove: canRemoveRelations,
   removeOpen,
@@ -168,7 +168,7 @@ const {
 
 /** Correcting one, from the same rows. The drawer and /eksploruj/nowe are the
  * same job in two shapes, so a capability on one belongs on the other - see
- * `.agent/skills/relation-surfaces.md`. */
+ * `.claude/skills/relation-surfaces/SKILL.md`. */
 const {
   canEdit: canEditRelations,
   canApply: canApplyEdits,

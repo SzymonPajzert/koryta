@@ -350,7 +350,7 @@ test.describe("Correcting a relation", () => {
   }) => {
     test.setTimeout(180_000);
     // The queue and the profile stay in parity - see
-    // .agent/skills/relation-surfaces.md.
+    // .claude/skills/relation-surfaces/SKILL.md.
     await logIn(page, USERS.admin, `/eksploruj/nowe?minVotes=${QUEUE_SCORE}`);
 
     const relations = page.getByTestId("explore-relations");
