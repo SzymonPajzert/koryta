@@ -4,7 +4,7 @@
       <!-- Right after signing in or creating an account, a reader outside the
            team who never answered the newsletter question gets it here,
            before going back to where they were. -->
-      <v-card v-if="stage === 'question'" rounded="lg" class="pa-2">
+      <v-card v-if="stage === 'question'" class="pa-2">
         <v-card-text>
           <MailNewsletterQuestion
             :where="signInWhere"
@@ -20,12 +20,11 @@
            not flash up first and get replaced by the question. -->
       <v-card
         v-else-if="stage === 'waiting'"
-        rounded="lg"
         class="pa-6 d-flex justify-center"
       >
         <v-progress-circular indeterminate aria-label="Logowanie" />
       </v-card>
-      <v-card v-else rounded="lg" class="pa-2">
+      <v-card v-else class="pa-2">
         <!-- The page's h1, at the size of a title that heads a card. -->
         <v-card-title class="text-wrap">
           <h1 class="k-title--sm">
@@ -59,7 +58,7 @@
               <span class="flex-grow-1">Zweryfikuj swój adres email.</span>
               <v-btn
                 size="small"
-                variant="outlined"
+                variant="tonal"
                 :loading="loading"
                 @click="sendVerification"
               >
@@ -82,7 +81,7 @@
       <v-alert v-if="reason === 'unauthorized'" type="info" class="mb-4">
         Musisz być zalogowany, aby uzyskać dostęp do tej strony.
       </v-alert>
-      <v-card rounded="lg" class="pa-2">
+      <v-card class="pa-2">
         <v-card-title class="text-center text-wrap">
           <h1 class="k-title--sm">
             {{ isLogin ? "Zaloguj się" : "Rejestracja" }}

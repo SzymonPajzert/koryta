@@ -98,7 +98,7 @@
            through "Zgłoś" like any other. -->
       <div v-if="user && snippetOnly" class="d-flex flex-wrap ga-2 mt-3">
         <v-btn
-          variant="outlined"
+          variant="tonal"
           size="small"
           rounded="lg"
           data-testid="note-add-snippet"
@@ -117,7 +117,7 @@
         <v-btn
           v-for="(config, value) in noteKindConfig"
           :key="value"
-          variant="outlined"
+          variant="tonal"
           size="small"
           rounded="lg"
           @click="addSource(value)"

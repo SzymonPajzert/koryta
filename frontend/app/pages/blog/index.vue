@@ -1,5 +1,7 @@
 <template>
-  <div class="blog-column py-4 py-sm-8">
+  <!-- No top padding of its own: the layout's page-top inset is the gap
+       above the h1, as on every page. -->
+  <div class="blog-column pb-4 pb-sm-8">
     <h1 class="text-h4 font-weight-bold mb-2">Blog</h1>
     <p class="k-page-lead mb-8">
       Analizy zespołu Koryta.pl: co wynika z danych o osobach i instytucjach,
@@ -19,7 +21,6 @@
         :key="post.slug"
         :to="post.path"
         variant="outlined"
-        rounded="lg"
         :data-testid="`blog-post-${post.slug}`"
       >
         <v-card-item>

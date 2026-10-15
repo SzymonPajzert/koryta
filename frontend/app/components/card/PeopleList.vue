@@ -1,18 +1,12 @@
 <template>
-  <v-card
-    v-if="!props.region"
-    border
-    class="pt-2 mt-2 mx-auto"
-    max-width="400"
-    rounded="lg"
-  >
+  <v-card v-if="!props.region" border class="pt-2 mt-2 mx-auto" max-width="400">
     <v-card-title>{{ emptyState.title }}</v-card-title>
     <v-card-text>
       <span class="d-none d-md-inline">{{ emptyState.wide }}</span>
       <span class="d-md-none">{{ emptyState.narrow }}</span>
     </v-card-text>
   </v-card>
-  <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400" rounded="lg">
+  <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400">
     <v-card-title>
       {{ props.region.name }}
     </v-card-title>

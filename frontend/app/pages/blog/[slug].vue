@@ -1,5 +1,5 @@
 <template>
-  <article v-if="post" class="blog-column py-4 py-sm-8">
+  <article v-if="post" class="blog-column pb-4 pb-sm-8">
     <NuxtLink to="/blog" class="text-body-2 blog-post__back"> ← Blog </NuxtLink>
 
     <h1 class="text-h4 font-weight-bold mt-4 mb-2 blog-post__title">

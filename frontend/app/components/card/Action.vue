@@ -8,7 +8,6 @@
     :tabindex="isButton ? 0 : undefined"
     height="100%"
     variant="outlined"
-    rounded="lg"
     hover
     @click="isButton && emit('activate')"
     @keydown="onKeydown"

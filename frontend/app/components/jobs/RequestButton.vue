@@ -10,7 +10,7 @@
     />
     <v-btn
       v-else
-      variant="outlined"
+      variant="tonal"
       :prepend-icon="mdiDatabaseArrowRightOutline"
       data-testid="job-request-open"
       @click="open = true"

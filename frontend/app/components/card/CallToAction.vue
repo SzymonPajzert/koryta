@@ -50,7 +50,7 @@
         />
         <v-btn
           :prepend-icon="mdiMessageAlertOutline"
-          variant="outlined"
+          variant="tonal"
           rounded="lg"
           height="44"
           class="text-none cta__btn cta__btn--quiet"
@@ -343,8 +343,8 @@ onMounted(() => {
   --cta-pitch-x: 20px;
 
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   display: grid;
   grid-template-areas: "figures" "band" "body" "fine";
   grid-template-columns: minmax(0, 1fr);
@@ -656,7 +656,6 @@ onMounted(() => {
 }
 
 .cta__btn--quiet {
-  border-color: rgba(var(--v-border-color), 0.22);
   color: rgba(var(--v-theme-on-surface), 0.87);
 }
 
@@ -710,7 +709,7 @@ onMounted(() => {
 .cta__fine {
   align-items: center;
   background: rgb(var(--v-theme-surface-muted));
-  border-top: 1px solid rgba(var(--v-border-color), 0.1);
+  border-top: 1px solid var(--k-line);
   color: rgba(var(--v-theme-on-surface), 0.7);
   column-gap: 24px;
   display: flex;

@@ -20,13 +20,13 @@
           </v-btn>
           <v-btn
             v-if="isNotFound"
-            variant="outlined"
+            variant="tonal"
             size="large"
             to="/eksploruj/tabela"
           >
             Przeglądaj osoby
           </v-btn>
-          <v-btn v-else variant="outlined" size="large" to="/pomoc">
+          <v-btn v-else variant="tonal" size="large" to="/pomoc">
             Zgłoś problem
           </v-btn>
         </div>

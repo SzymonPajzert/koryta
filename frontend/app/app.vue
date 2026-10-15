@@ -79,54 +79,51 @@ html {
    fifth copy buys. There is one rule now; a component that needs something
    else says so in a class of its own rather than redefining these. */
 
-/* The site's card: a white surface, a hairline, and a hover that says it is a
-   thing rather than a paragraph. Sage is a fill and a border here and never
-   ink - `text-primary` on this theme is 1.85:1. */
+/* The site's card: a white surface, the one hairline (assets/css/edges.css),
+   and a hover that says it is a thing rather than a paragraph. Sage is a fill
+   and a border here and never ink - `text-primary` on this theme is 1.85:1. */
 .k-card {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   /* For the one card whose header carries a tint - the batch strip on a
      company page. Without it that strip squares off the top corners; the
      alternative is rounding the header separately wherever one exists. */
   overflow: hidden;
   position: relative;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
+/* The sage edge on hover, and no lift: a shadow is for what floats. */
 .k-card:hover {
   border-color: rgba(var(--v-theme-primary), 0.9);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
 }
 
 /* The sage edge, opt-in: a card that carries a claim about somebody - a
    handover, a board seat, a note a reader signed - takes it, and `k-note`
-   never does. Inset top and bottom so it reads as a marker on the card rather
-   than as a fourth border. */
+   never does. Flush and full height, clipped by the card's radius, the way
+   the home feed's cards draw theirs: one rail drawn one way. It used to be
+   inset 11px top and bottom, which beside the card's own hairline read as a
+   second line. */
 .k-card--accent::before {
   background: rgb(var(--v-theme-primary));
-  border-radius: 99px;
-  bottom: 11px;
+  bottom: 0;
   content: "";
   left: 0;
   position: absolute;
-  top: 11px;
-  width: 3px;
+  top: 0;
+  width: 4px;
 }
 
 /* Not a card: something the section says about itself - what it could not find
-   or what it is withholding. Dashed, so it cannot be mistaken for a record. */
+   or what it is withholding. No edge and no fill, so it cannot be mistaken for
+   a record: the icon and the muted line say it. */
 .k-note {
-  background: rgb(var(--v-theme-surface));
-  border: 1px dashed rgba(var(--v-border-color), 0.3);
-  border-radius: 8px;
-  padding: 12px 16px;
+  padding: 4px 0;
 }
 
 .k-note + .k-note {
-  margin-top: 12px;
+  margin-top: 4px;
 }
 
 /* `flex-wrap` for the company page, whose headings carry a caption beside them

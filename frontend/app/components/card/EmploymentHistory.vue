@@ -5,20 +5,20 @@
        „Dodaj" lives in it. Same guard ConnectionList has carried all along. -->
   <v-list
     v-if="edges.length > 0 || canAdd"
-    class="px-2"
+    class="pa-0"
+    :class="{ 'history-list--bleed': bleed }"
     variant="flat"
     data-testid="relations-history"
   >
     <div class="d-flex align-center justify-space-between mb-2">
       <h2 class="text-h6">Historia powiązań</h2>
-      <!-- Outlined rather than `variant="text" color="primary"`: sage ink on
-           white is 1.85:1 on this theme, and this is the one control in the
-           section. -->
+      <!-- The control tint rather than `variant="text" color="primary"`:
+           sage ink on white is 1.85:1 on this theme, and this is the one
+           control in the section. -->
       <v-btn
         v-if="canAdd"
-        variant="outlined"
+        variant="tonal"
         size="small"
-        rounded="lg"
         :prepend-icon="mdiPlus"
         data-testid="add-relation-employment"
         @click="emit('add')"
@@ -27,14 +27,15 @@
       </v-btn>
     </div>
 
-    <div class="pa-1">
+    <!-- One ruled box, the rows divided by the hairline, rather than a
+         stack of boxes; edge to edge on a phone. -->
+    <div class="history-box" :class="{ 'k-bleed-xs': bleed }">
       <v-list-item
         v-for="edge in edgesSorted"
         :key="edge.id"
         :to="rowLink(edge)"
         :target="newTab ? '_blank' : undefined"
-        class="history-row mt-1"
-        rounded
+        class="history-row"
       >
         <template #prepend>
           <v-icon :icon="entityIcon(edge.richNode.type)" />
@@ -331,6 +332,10 @@ const props = defineProps<{
    * a second wall. (On rather than off as the special case because an absent
    * boolean prop is `false`.) */
   unlinkDrafts?: boolean;
+  /** Whether the box runs edge to edge on a phone, through the layout's
+   * gutter. For a page that lists it at its full width - a person's, a
+   * company's - and not for a drawer or a card that pads it differently. */
+  bleed?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -548,20 +553,33 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
 
 <style scoped>
 /* The rows were `base-color="surface-light"`, which paints the whole list a
-   low-contrast grey slab. This is `card/Employment.vue`'s idiom instead: a
-   white surface, a hairline, and sage kept for the hover border - never for
-   ink, which on this theme is 1.85:1. */
-.history-row {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+   low-contrast grey slab, and then a box each, seventeen of them for one
+   career. Now one white box on the hairline, a hairline between the rows, and
+   sage kept for the hover edge - never for ink, which on this theme is
+   1.85:1. */
+.history-box {
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
+  overflow: hidden;
 }
 
-.history-row:hover {
-  border-color: rgba(var(--v-theme-primary), 0.9);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
+.history-row {
+  background: rgb(var(--v-theme-surface));
+  border-radius: 0;
+  transition: box-shadow 0.2s ease;
+}
+
+.history-row + .history-row {
+  border-top: 1px solid var(--k-line);
+}
+
+/* Today's sage hover edge, drawn inside the row so the rules between rows
+   stay where they are. Only for a pointer that hovers: on a phone a tap left
+   it lit. */
+@media (hover: hover) {
+  .history-row:hover {
+    box-shadow: inset 0 0 0 1px rgba(var(--v-theme-primary), 0.9);
+  }
 }
 
 /* Vuetify's own hover overlay on a near-white surface is a grey wash that
@@ -613,9 +631,17 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
 /* ---- on a phone ---- */
 
 /* Five relations used to fill a whole screen, because a 375px row leaves the
-   text about 210px and spends every one of them wrapping. Both rules here buy
+   text about 210px and spends every one of them wrapping. The rules here buy
    that width back rather than shrinking the type. */
 @media (max-width: 599.98px) {
+  /* The box bleeds through the layout's gutter (`k-bleed-xs`), and Vuetify's
+     list scrolls its own overflow: left at `auto` it clipped the bleed at the
+     column - every row 16px short on both sides - and turned the list into a
+     sideways scroller. The list never has a height to scroll within here. */
+  .history-list--bleed {
+    overflow: visible;
+  }
+
   /* 56px of the row goes on an icon that says „this leads to a company" - which
      the company name below it says already. Kept above sm, where it is the one
      thing telling an employment row from a candidacy at a glance and the width
