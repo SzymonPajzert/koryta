@@ -70,6 +70,9 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   Columns are divided by thin lines, because without them it is sometimes
   hard to read (2026-10-15). The summary line is aligned sub-columns, each
   divided by the same neutral hairline: count | latest post | date | years.
+- **The wordmark „koryta.pl” is set entirely in bold**, in the app bar and
+  in the home footer, not „koryta” bold and „.pl” regular. Szymon: "I prefer
+  the whole koryta.pl to be bolded" (2026-10-15).
 
 ## How UI changes are made
 
@@ -79,6 +82,10 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   (2026-09-23/24).
 - Show Szymon the screenshots and wait for his pick before updating tests,
   retaking baselines or committing (2026-10-14).
+- UI work on koryta uses the interface-design skill:
+  /interface-design:interface-design while designing and building, and
+  /interface-design:design-review on the screenshots before they are shown
+  to Szymon. Szymon: "Remember to use interface-design skill" (2026-10-15).
 
 ## Not decided yet
 
