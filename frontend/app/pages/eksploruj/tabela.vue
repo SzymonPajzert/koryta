@@ -1,7 +1,7 @@
 <template>
   <ClientOnly>
     <!-- Whatever this page can do to a person's relations, /eksploruj/nowe can
-         do too, in its own shape - see `.agent/skills/relation-surfaces.md`. -->
+         do too, in its own shape - see `.claude/skills/relation-surfaces/SKILL.md`. -->
     <ExploreNodeDrawer
       v-model="openDrawer"
       :node="focusedPerson"

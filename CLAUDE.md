@@ -12,8 +12,9 @@
 
 1. Be location dependent
 
-   - If you're modiyfing frontend code, refer to the frontend/.agent directory
-   - If you're modifying pipipeline code, refer to the data/pipelines/.agent directory
+   - If you're modifying frontend code, follow frontend/CLAUDE.md and the skills in frontend/.claude/skills
+   - If you're modifying pipeline code, follow data/pipelines/CLAUDE.md and the skills in data/pipelines/.claude/skills
+   - Claude Code loads both on its own once you work on a file in that directory.
 
 1. **Failure Protocol**:
 

@@ -397,7 +397,7 @@ describe("/eksploruj/nowe", () => {
 
   /** The queue is where a wrongly merged person is most likely to be caught, so
    * it carries the same admin control as the profile - see
-   * `.agent/skills/relation-surfaces.md` on keeping this page and
+   * `.claude/skills/relation-surfaces/SKILL.md` on keeping this page and
    * /eksploruj/tabela in parity. */
   it("offers an admin the removal on the relations card", async () => {
     authUser.value = {

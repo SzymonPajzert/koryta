@@ -1,3 +1,9 @@
+---
+name: refactor
+description: Analyze a file or directory for refactors (imports Nuxt auto-imports, components to split, thin components and thick composables, hardcoded strings that belong in nuxt.config.ts or .env) and propose a plan.
+disable-model-invocation: true
+---
+
 # Refactoring Workflow
 
 1. Analyze the selected file or directory

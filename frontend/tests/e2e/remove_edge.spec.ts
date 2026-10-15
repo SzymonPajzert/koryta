@@ -264,7 +264,7 @@ test.describe("Removing a relation", () => {
     test.setTimeout(180_000);
     // The queue is where a wrongly merged person is most likely to be caught,
     // so it carries the same control as the profile - in its own shape. See
-    // .agent/skills/relation-surfaces.md.
+    // .claude/skills/relation-surfaces/SKILL.md.
     await logIn(page, USERS.admin, `/eksploruj/nowe?minVotes=${QUEUE_SCORE}`);
 
     const relations = page.getByTestId("explore-relations");

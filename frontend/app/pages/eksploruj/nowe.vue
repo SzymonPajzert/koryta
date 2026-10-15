@@ -691,7 +691,7 @@ const focusedEdges = computed(() => [
  * person is most likely to be caught - it is the page for judging whether one
  * is worth publishing - so sending the reviewer off to the profile to clear the
  * relation, and then back, is a detour through the thing they are reviewing.
- * See `.agent/skills/relation-surfaces.md` for why this page and
+ * See `.claude/skills/relation-surfaces/SKILL.md` for why this page and
  * /eksploruj/tabela get the same capabilities. */
 const {
   canRemove: canRemoveRelations,

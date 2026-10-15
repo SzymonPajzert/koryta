@@ -12,7 +12,7 @@ export default withNuxt(
       "**/.output/**",
       "**/dist/**",
       "functions/lib/**",
-      "**/.agent/**",
+      "**/.claude/**",
     ],
   },
   {

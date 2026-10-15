@@ -25,7 +25,8 @@ models/
 # --group service` and takes only pyproject.toml, uv.lock, README.md and src/.
 tests/
 src/tests/
-.agent/
+.claude/
+CLAUDE.md
 docker-compose.yml
 *.ipynb
 .ipynb_checkpoints/

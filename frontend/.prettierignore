@@ -9,7 +9,8 @@ functions/lib
 .apphosting
 
 .firebase
-.agent
+.claude
+CLAUDE.md
 # Blog posts are MDC, not plain markdown: prettier reads the YAML block inside
 # `::chart` / `::stats` as a list and a horizontal rule, and rewrites it into
 # something MDC parses differently - a chart's `unit` ended up inside its
