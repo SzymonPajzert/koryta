@@ -449,26 +449,131 @@ def person_key(payload: Mapping[str, typing.Any]) -> str:
 
 
 def payload_hash(payload: Mapping[str, typing.Any]) -> str:
-    """The payload's content, so an unchanged one is recognised next time."""
+    """The payload's content, so an unchanged one is recognised next time -
+    whatever order its lists come in (`in_any_order`).
+
+    The lists are the person's posts, candidacies, parties and sources, and
+    the order of none of them is anything the site keeps. Hashed as they came,
+    the posts were a new payload whenever a rebuild listed them in another
+    order: of the 100 people the 2026-10-13 and 10-14 nights sent, 33 and 40
+    had gone up before with the same payload listed otherwise, and all but one
+    came back `unchanged`. The build sorts the posts since
+    (`analysis.payloads.person._extract_companies`); this keeps the next list
+    a rebuild reorders from doing the same.
+    """
+    return hash_as_listed(in_any_order(payload))
+
+
+def hash_as_listed(payload: typing.Any) -> str:
+    """The hash of the payload with its lists in the order they come: what
+    `payload_hash` was until October 2026, and what a `SENT_PREFIX` line
+    written then holds (`HASHED`)."""
     text = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
+def in_any_order(value: typing.Any) -> typing.Any:
+    """`value` with every list in it sorted, by each item's own JSON, so that
+    two payloads listing the same things in another order are one. A thing
+    listed twice stays twice: that is a payload of its own."""
+    if isinstance(value, Mapping):
+        return {key: in_any_order(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return sorted(
+            (in_any_order(item) for item in value),
+            key=lambda item: json.dumps(
+                item, sort_keys=True, ensure_ascii=False, default=str
+            ),
+        )
+    return value
+
+
+#: How the hash in a line of a `SENT_PREFIX` part was made, written beside it
+#: (`write_sent`): of the payload with its lists in any order (`payload_hash`).
+#: A line without it holds the hash of the payload as it was listed
+#: (`hash_as_listed`), as every line did until October 2026.
+HASHED = "lists-in-any-order"
+
+
 def sent_recently(client: "Client", since: str) -> set[tuple[str, str]]:
     """(person, payload hash) of everything a priority run took on `since`
-    (YYYY-MM-DD) or later, read from its `SENT_PREFIX` parts."""
+    (YYYY-MM-DD) or later, read from its `SENT_PREFIX` parts.
+
+    A line whose hash was made as the payload was listed is hashed again, off
+    the payload its run wrote before it sent anything (`hashed_again`). Left
+    as it is, it would match nothing a build makes now, and the nights after
+    the change would send again what the `--resend-after` days before it sent
+    and the site has not taken in full: about 95 pages of the plan of
+    2026-10-14 - most of a night's 100, and each a reviewer's change it could
+    undo.
+    """
     bucket = client.storage_client.bucket(SHARED_BUCKET)
     seen: set[tuple[str, str]] = set()
+    listed = found = 0
     for blob in bucket.list_blobs(
         prefix=SENT_PREFIX, start_offset=f"{SENT_PREFIX}date={since}"
     ):
-        for line in (
-            gzip.decompress(blob.download_as_bytes()).decode("utf-8").splitlines()
-        ):
-            if line.strip():
-                row = json.loads(line)
-                seen.add((row["person"], row["payload"]))
+        old: set[tuple[str, str]] = set()
+        for row in json_lines(blob.download_as_bytes()):
+            pair = (row["person"], row["payload"])
+            if row.get("hashed") == HASHED:
+                seen.add(pair)
+            else:
+                old.add(pair)
+        if old:
+            again = hashed_again(bucket, blob.name, {digest for _, digest in old})
+            listed, found = listed + len(old), found + len(again)
+            # Kept as they were too: a payload whose lists came in order
+            # hashes the same either way.
+            seen |= old | again
+    if listed:
+        print(
+            f"Sent with the hash of the payload as listed: {listed}; "
+            f"{found} hashed again off the payloads their runs wrote"
+        )
     return seen
+
+
+def hashed_again(
+    bucket: typing.Any, sent: str, hashes: set[str]
+) -> set[tuple[str, str]]:
+    """(person, payload hash) of the payloads one run wrote whose hash as
+    listed is among `hashes`, the hashes of the lines of its `sent` part.
+
+    The payloads are the `PAYLOADS_PREFIX` part of the same day and run: all
+    the run planned, in the order it sent them. What it took is among the
+    first, so its lines are parsed only as far as the last of those. Every
+    line from 2026-10-06 to 2026-10-14 is there: a night's hundred are the
+    first hundred of its 9,000-odd payloads.
+    """
+    name = PAYLOADS_PREFIX + sent.removeprefix(SENT_PREFIX)
+    blob = bucket.get_blob(name)
+    if blob is None:
+        print(f"No payloads for {sent}: {len(hashes)} lines left as they were")
+        return set()
+    wanted = set(hashes)
+    found: set[tuple[str, str]] = set()
+    for payload in json_lines(blob.download_as_bytes()):
+        listed = hash_as_listed(payload)
+        if listed in wanted:
+            wanted.remove(listed)
+            found.add((person_key(payload), payload_hash(payload)))
+            if not wanted:
+                break
+    if wanted:
+        print(f"{len(wanted)} lines of {sent} not among its run's payloads")
+    return found
+
+
+def json_lines(part: bytes) -> typing.Iterator[dict]:
+    """The rows of one of the job's gzipped JSON-lines parts, one by one.
+
+    Read by "\\n" alone, as `scrapers.koryta.created` reads them: the parts
+    are written with `ensure_ascii=False`, and `splitlines` would also break
+    a line at a separator a name carries raw."""
+    for line in gzip.decompress(part).decode("utf-8").split("\n"):
+        if line.strip():
+            yield json.loads(line)
 
 
 def bought_since(client: "Client", since: str) -> set[str]:
@@ -1018,6 +1123,7 @@ class PeopleImport:
                 {
                     "person": person_key(payload),
                     "payload": payload_hash(payload),
+                    "hashed": HASHED,
                     "name": payload.get("name"),
                     "tier": tier,
                     "outcome": outcome,

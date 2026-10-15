@@ -25,8 +25,9 @@ from scrapers.stores import CloudStorage, Context, Pipeline
 
 #: Where `jobs.people_import` writes what each priority run took, one line per
 #: person: `person` and `payload` (who, and a hash of what was sent - what a
-#: later run leaves alone), `name`, `tier`, `outcome` (the site's answer:
-#: created, updated or unchanged), `node` (the page) and `rejestrIo`.
+#: later run leaves alone), `hashed` (how that hash was made, since October
+#: 2026: `jobs.people_import.HASHED`), `name`, `tier`, `outcome` (the site's
+#: answer: created, updated or unchanged), `node` (the page) and `rejestrIo`.
 SENT_LOG = CloudStorage(
     prefix="jobs/people_import/sent/",
     bucket="koryta-pl-sharedcache",
