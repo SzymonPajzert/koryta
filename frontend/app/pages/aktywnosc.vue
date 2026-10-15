@@ -1,201 +1,244 @@
 <template>
-  <div class="pa-4 pb-0">
-    <div class="mb-6">
-      <h1 class="text-h4 mb-1">Aktywność</h1>
-      <p class="text-body-2 text-medium-emphasis mb-0">
-        Co ostatnio zrobili inni: oceny, notatki, propozycje zmian i decyzje
-        administratorów. Nowe wpisy pojawiają się po kilku minutach.
-      </p>
-    </div>
-
-    <ActivityMonthChart class="mb-6" />
-
-    <div class="mb-6">
-      <!-- The kinds wrap rather than slide: a sideways-scrolling row on a phone
-           cut the last chip in half with nothing to say more were there. -->
-      <v-chip-group
-        v-model="kindGroup"
-        mandatory
-        column
-        selected-class="activity__kind--on"
-        class="py-0"
-      >
-        <v-chip :value="ALL_KINDS" variant="outlined" class="activity__kind">
-          Wszystko
-        </v-chip>
-        <v-chip
-          v-for="group in kindGroupOptions"
-          :key="group"
-          :value="group"
-          variant="outlined"
-          class="activity__kind"
-        >
-          {{ feedKindGroupLabels[group] }}
-        </v-chip>
-      </v-chip-group>
-
-      <!-- Who, rather than what: a row of its own under the kinds, so it never
-           wraps behind a divider that has nothing left of it. -->
-      <div
-        v-if="feed || personLabel"
-        class="d-flex flex-wrap align-center ga-2 mt-1"
-      >
-        <!-- Off the response, not off `isAdmin`: the claim says "admin", and a
-             trial administrator holds it too. Only the server knows who counts
-             as established, and it says so with `identified`. -->
-        <v-chip
-          v-if="feed?.identified"
-          :variant="showingNewAdmins ? 'flat' : 'outlined'"
-          class="activity__kind"
-          :class="{ 'bg-surface-warning text-ink-warning': showingNewAdmins }"
-          :prepend-icon="mdiAccountClockOutline"
-          :aria-pressed="showingNewAdmins"
-          data-testid="activity-new-admins"
-          @click="toggleNewAdmins"
-        >
-          Nowi administratorzy
-        </v-chip>
-        <!-- A box to untick, quiet either way: ticked is how the page opens,
-             and a filled chip there would be the loudest thing on it. Gone
-             while a person is picked, since the pick alone says whose lines
-             to show (`hidingMine`), and after "Nowi administratorzy" so that
-             chip stays under the pointer when a click on it takes this one
-             away. -->
-        <v-chip
-          v-if="feed && !personFilter"
-          variant="outlined"
-          class="activity__kind"
-          :prepend-icon="hideMine ? mdiCheckboxMarked : mdiCheckboxBlankOutline"
-          role="checkbox"
-          :aria-checked="hideMine"
-          data-testid="activity-hide-mine"
-          @click="hideMine = !hideMine"
-        >
-          Ukryj moje zmiany
-        </v-chip>
-        <!-- The label truncates rather than the chip: an administrator's label
-             can be a whole email address, and at 375px that pushed the close
-             button past the edge of the screen. -->
-        <v-chip
-          v-if="personLabel"
-          closable
-          class="activity__person bg-surface-sage text-ink-sage"
-          :prepend-icon="mdiFilterVariant"
-          data-testid="activity-person-filter"
-          @click:close="clearPerson"
-        >
-          <span class="text-truncate" :title="personLabel">{{
-            personLabel
-          }}</span>
-        </v-chip>
-      </div>
-    </div>
-
-    <!-- Everybody on trial, including whoever did nothing - which is exactly
-         what the feed below cannot show. -->
-    <v-card
-      v-if="feed && showingNewAdmins"
-      variant="outlined"
-      class="mb-4"
-      data-testid="activity-new-admin-list"
-    >
-      <v-card-text class="py-2">
-        <div v-if="feed.newAdmins.length === 0" class="text-body-2">
-          Nikt nie ma teraz statusu nowego administratora.
-        </div>
-        <div
-          v-for="row in newAdminRows"
-          :key="row.actor.key"
-          class="d-flex flex-wrap align-center ga-2 py-1"
-        >
-          <button
-            type="button"
-            class="activity__actor"
-            :aria-label="`Pokaż tylko: ${row.actor.name}`"
-            @click="focusActor(row.actor)"
-          >
-            <!-- The same rule as a feed line's: a uid means the reader is an
-                 administrator shown the name whatever its owner chose, so the
-                 tooltip must not say they agreed to it. -->
-            <StatsContributorName
-              :row="row.actor"
-              :identified="row.actor.uid !== null"
-            />
-          </button>
-          <span class="text-body-2 text-medium-emphasis">
-            {{
-              row.batches === 0
-                ? "brak aktywności w tym okresie"
-                : polishCounting(row.batches, "wpis", "wpisy", "wpisów")
-            }}
-          </span>
-        </div>
-      </v-card-text>
-    </v-card>
-
-    <!-- Only with nothing to show: a month that fails after the week arrived
-         keeps the week, see `widenFailed`. -->
-    <v-alert
-      v-if="error && !feed"
-      type="error"
-      variant="tonal"
-      class="mb-4"
-      text="Nie udało się pobrać aktywności."
+  <div class="w-100">
+    <AdminPageHead
+      title="Aktywność"
+      lead="Co ostatnio zrobili inni: oceny, notatki, propozycje zmian i decyzje administratorów."
     />
 
-    <template v-else>
-      <v-alert
-        v-if="widenFailed && !loadingOlder"
-        type="warning"
-        variant="tonal"
-        density="compact"
-        class="mb-4"
-        data-testid="activity-widen-failed"
-        text="Nie udało się pobrać starszych wpisów."
-      />
+    <!-- From 1280px the feed and a rail beside it: the month, the filters and
+         who is on trial. Narrower, the same blocks stack in this order, the
+         rail first - which is also its order for a keyboard and a screen
+         reader at every width. -->
+    <div class="activity__grid">
+      <div class="activity__rail">
+        <ActivityMonthChart />
 
-      <v-alert
-        v-if="feed?.truncated.length"
-        type="warning"
-        variant="tonal"
-        density="compact"
-        class="mb-4"
-        text="W tym okresie było więcej, niż zdążyliśmy przejrzeć – lista jest niepełna."
-      />
+        <!-- Stuck under the bar in the two-column layout, so a filter can be
+             changed four screens down the feed without scrolling back up.
+             Only this block, not the whole rail: the chart's tooltip runs past
+             its card, and a rail that scrolls would cut it off. -->
+        <div class="activity__filters">
+          <div>
+            <!-- The kinds wrap rather than slide: a sideways-scrolling row on a
+                 phone cut the last chip in half with nothing to say more were
+                 there. -->
+            <v-chip-group
+              v-model="kindGroup"
+              mandatory
+              column
+              selected-class="activity__kind--on"
+              class="py-0"
+            >
+              <v-chip
+                :value="ALL_KINDS"
+                variant="outlined"
+                class="activity__kind"
+              >
+                Wszystko
+              </v-chip>
+              <v-chip
+                v-for="group in kindGroupOptions"
+                :key="group"
+                :value="group"
+                variant="outlined"
+                class="activity__kind"
+              >
+                {{ feedKindGroupLabels[group] }}
+              </v-chip>
+            </v-chip-group>
 
-      <v-skeleton-loader v-if="waiting" type="list-item-two-line@4" />
+            <!-- Who, rather than what: a row of its own under the kinds, so it
+                 never wraps behind a divider that has nothing left of it. -->
+            <div
+              v-if="feed || personLabel"
+              class="d-flex flex-wrap align-center ga-2 mt-1"
+            >
+              <!-- Off the response, not off `isAdmin`: the claim says "admin",
+                   and a trial administrator holds it too. Only the server
+                   knows who counts as established, and it says so with
+                   `identified`. -->
+              <v-chip
+                v-if="feed?.identified"
+                :variant="showingNewAdmins ? 'flat' : 'outlined'"
+                class="activity__kind"
+                :class="{
+                  'bg-surface-warning text-ink-warning': showingNewAdmins,
+                }"
+                :prepend-icon="mdiAccountClockOutline"
+                :aria-pressed="showingNewAdmins"
+                data-testid="activity-new-admins"
+                @click="toggleNewAdmins"
+              >
+                Nowi administratorzy
+              </v-chip>
+              <!-- A box to untick, quiet either way: ticked is how the page
+                   opens, and a filled chip there would be the loudest thing on
+                   it. Gone while a person is picked, since the pick alone says
+                   whose lines to show (`hidingMine`), and after "Nowi
+                   administratorzy" so that chip stays under the pointer when a
+                   click on it takes this one away. -->
+              <v-chip
+                v-if="feed && !personFilter"
+                variant="outlined"
+                class="activity__kind"
+                :prepend-icon="
+                  hideMine ? mdiCheckboxMarked : mdiCheckboxBlankOutline
+                "
+                role="checkbox"
+                :aria-checked="hideMine"
+                data-testid="activity-hide-mine"
+                @click="hideMine = !hideMine"
+              >
+                Ukryj moje zmiany
+              </v-chip>
+              <!-- The label truncates rather than the chip: an administrator's
+                   label can be a whole email address, and at 375px that pushed
+                   the close button past the edge of the screen. -->
+              <v-chip
+                v-if="personLabel"
+                closable
+                class="activity__person bg-surface-sage text-ink-sage"
+                :prepend-icon="mdiFilterVariant"
+                data-testid="activity-person-filter"
+                @click:close="clearPerson"
+              >
+                <span class="text-truncate" :title="personLabel">{{
+                  personLabel
+                }}</span>
+              </v-chip>
+            </div>
+          </div>
 
-      <v-alert
-        v-else-if="filtered.length === 0"
-        type="info"
-        variant="tonal"
-        data-testid="activity-empty"
-        :text="emptyText"
-      />
+          <!-- Everybody on trial, including whoever did nothing - which is
+               exactly what the feed below cannot show. -->
+          <v-card
+            v-if="feed && showingNewAdmins"
+            variant="outlined"
+            data-testid="activity-new-admin-list"
+          >
+            <v-card-text class="py-2">
+              <div v-if="feed.newAdmins.length === 0" class="text-body-2">
+                Nikt nie ma teraz statusu nowego administratora.
+              </div>
+              <div
+                v-for="row in newAdminRows"
+                :key="row.actor.key"
+                class="d-flex flex-wrap align-center ga-2 py-1"
+              >
+                <button
+                  type="button"
+                  class="activity__actor"
+                  :aria-label="`Pokaż tylko: ${row.actor.name}`"
+                  @click="focusActor(row.actor)"
+                >
+                  <!-- The same rule as a feed line's: a uid means the reader
+                       is an administrator shown the name whatever its owner
+                       chose, so the tooltip must not say they agreed to it. -->
+                  <StatsContributorName
+                    :row="row.actor"
+                    :identified="row.actor.uid !== null"
+                  />
+                </button>
+                <span class="text-body-2 text-medium-emphasis">
+                  {{
+                    row.batches === 0
+                      ? "brak aktywności w tym okresie"
+                      : polishCounting(row.batches, "wpis", "wpisy", "wpisów")
+                  }}
+                </span>
+              </div>
+            </v-card-text>
+          </v-card>
 
-      <ActivityFeedTimeline
-        :groups="dayGroups"
-        :actor-of="actorOf"
-        @select-actor="focusActor"
-      />
-
-      <!-- One button, like the home feed's: it pages through what is loaded,
-           and once that runs out on a week it asks for the month. A second
-           control for "older" would be a choice the reader cannot make
-           without knowing how the list is fetched. -->
-      <div v-if="moreLabel" class="d-flex justify-center mt-4">
-        <v-btn
-          variant="tonal"
-          color="ink-sage"
-          class="activity__more"
-          :loading="loadingOlder"
-          data-testid="activity-more"
-          @click="showMore"
-        >
-          {{ moreLabel }}
-        </v-btn>
+          <!-- How fresh the list is: method, so not in the lead, and one quiet
+               line beside the filters rather than a bubble on the title. -->
+          <p class="activity__meta">
+            Nowe wpisy pojawiają się po kilku minutach.
+          </p>
+        </div>
       </div>
-    </template>
+
+      <div class="activity__feed">
+        <!-- Only with nothing to show: a month that fails after the week
+             arrived keeps the week, see `widenFailed`. -->
+        <v-alert
+          v-if="error && !feed"
+          type="error"
+          variant="tonal"
+          class="mb-4"
+          text="Nie udało się pobrać aktywności."
+        >
+          <template #append>
+            <v-btn
+              variant="text"
+              size="small"
+              :loading="status === 'pending'"
+              @click="refresh()"
+            >
+              Spróbuj ponownie
+            </v-btn>
+          </template>
+        </v-alert>
+
+        <template v-else>
+          <v-alert
+            v-if="widenFailed && !loadingOlder"
+            type="warning"
+            variant="tonal"
+            density="compact"
+            class="mb-4"
+            data-testid="activity-widen-failed"
+            text="Nie udało się pobrać starszych wpisów."
+          />
+
+          <v-alert
+            v-if="feed?.truncated.length"
+            type="warning"
+            variant="tonal"
+            density="compact"
+            class="mb-4"
+            text="W tym okresie było więcej, niż zdążyliśmy przejrzeć – lista jest niepełna."
+          />
+
+          <!-- A badge and two lines, the shape of the timeline it stands in
+               for. -->
+          <v-skeleton-loader
+            v-if="waiting"
+            type="list-item-avatar-two-line@4"
+          />
+
+          <v-alert
+            v-else-if="filtered.length === 0"
+            type="info"
+            variant="tonal"
+            data-testid="activity-empty"
+            :text="emptyText"
+          />
+
+          <ActivityFeedTimeline
+            :groups="dayGroups"
+            :actor-of="actorOf"
+            @select-actor="focusActor"
+          />
+
+          <!-- One button, like the home feed's: it pages through what is
+               loaded, and once that runs out on a week it asks for the month.
+               A second control for "older" would be a choice the reader cannot
+               make without knowing how the list is fetched. -->
+          <div v-if="moreLabel" class="d-flex justify-center mt-4">
+            <v-btn
+              variant="tonal"
+              color="ink-sage"
+              :loading="loadingOlder"
+              data-testid="activity-more"
+              @click="showMore"
+            >
+              {{ moreLabel }}
+            </v-btn>
+          </div>
+        </template>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -228,9 +271,6 @@ definePageMeta({
   // Nothing here is for a reader who is not signed in, and it names people
   // next to what they did and when.
   robots: false,
-  // One line per sitting reads as a sentence at this width; at the default
-  // 1200 px the name, the verb and the time drift apart.
-  maxWidth: 800,
 });
 
 useHead({ title: "Aktywność - koryta.pl" });
@@ -631,12 +671,73 @@ const dayGroups = computed(() => {
 </script>
 
 <style scoped>
+/* One line per sitting reads as a sentence at about 780px; across the whole
+   1168px column the name, the verb and the time drift apart. So the page sits
+   at the layout's inset like every other, and its column stops at the feed's
+   width while everything is stacked - and from 1280px the room beside the
+   feed goes to the rail instead. */
+.activity__grid {
+  display: grid;
+  gap: 24px;
+  grid-template-areas: "rail" "feed";
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 784px;
+}
+
+.activity__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  grid-area: rail;
+  min-width: 0;
+}
+
+.activity__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.activity__feed {
+  grid-area: feed;
+  min-width: 0;
+}
+
+/* 784 + 48 + 336 = the 1168px column. The rail is a grid item the height of
+   the feed, which is what the filters stick inside; 80px is the 56px bar and
+   24 of air. A block taller than the screen - a long list of administrators
+   on trial - scrolls on its own rather than hanging off the bottom. */
+@media (min-width: 1280px) {
+  .activity__grid {
+    column-gap: 48px;
+    grid-template-areas: "feed rail";
+    grid-template-columns: minmax(0, 1fr) 336px;
+    max-width: none;
+  }
+
+  .activity__filters {
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    position: sticky;
+    top: 80px;
+  }
+}
+
+/* A single line of meta, not a sentence of the lead. */
+.activity__meta {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-meta-size);
+  line-height: 1.45;
+  margin: 0;
+}
+
 /* Quiet until picked: a row of five outlined capitals was the loudest thing
    on the page, louder than the lines it filters. Picked, a chip takes the
    header's sage with the ink that reads on it, so the one that is on is also
    the one that stands out. */
 .activity__kind {
-  border-color: rgba(var(--v-border-color), 0.24);
+  border-color: var(--k-line-strong);
   color: rgb(var(--v-theme-ink-neutral));
 }
 
@@ -645,13 +746,6 @@ const dayGroups = computed(() => {
   border-color: transparent;
   color: rgb(var(--v-theme-ink-strong));
   font-weight: 500;
-}
-
-/* A sentence, not a shout: Vuetify's buttons are capitals with tracking to
-   match, and this one sat under a soft list as the hardest thing on it. */
-.activity__more {
-  letter-spacing: normal;
-  text-transform: none;
 }
 
 /* Vuetify lets the chip shrink but not its content, so the label cannot

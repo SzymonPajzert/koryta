@@ -1,6 +1,17 @@
 <template>
-  <v-card class="mb-4">
-    <v-card-title>Twoje propozycje zmian</v-card-title>
+  <v-card>
+    <!-- "Approved is not yet published" goes in the bubble rather than in a
+         footnote under the list: the rows it applies to say so themselves.
+         Only the words are the h2, as on /profil's visibility card: inside
+         it, the bubble's „Co to jest: …” would be read out as part of the
+         heading's name. -->
+    <v-card-title class="text-wrap">
+      <h2 class="card-heading">Twoje propozycje zmian</h2>
+      <InfoBubble label="Twoje propozycje zmian">
+        Zatwierdzenie zmiany to jeszcze nie publikacja – stronę publikuje
+        redakcja osobno.
+      </InfoBubble>
+    </v-card-title>
     <v-card-subtitle v-if="subtitle" class="text-wrap">
       {{ subtitle }}
     </v-card-subtitle>
@@ -44,7 +55,7 @@
 
         <v-btn
           v-if="statusFilter !== 'all'"
-          size="x-small"
+          size="small"
           variant="text"
           :prepend-icon="mdiClose"
           data-testid="proposal-filter-clear"
@@ -59,7 +70,7 @@
            miscounted against the chip above. -->
       <div
         v-if="statusFilter === 'approved' && counts.superseded > 0"
-        class="text-caption text-medium-emphasis mb-3"
+        class="text-body-2 text-medium-emphasis mb-3"
       >
         Razem z zastąpionymi – dla bazy to jedno i to samo „zatwierdzone”.
       </div>
@@ -75,40 +86,56 @@
              anything" would be a guess about the 299th record back. -->
         <template v-if="truncated">
           Wśród {{ SCAN_CAP }} ostatnich zapisów na Twoim koncie nie ma nic
-          zgłoszonego ręcznie — starsze są poza tym zestawieniem.
+          zgłoszonego ręcznie – starsze są poza tym zestawieniem.
         </template>
         <template v-else>
           Nie zgłosiłeś jeszcze żadnej zmiany. Na każdej stronie jest przycisk
-          „Zaproponuj zmianę” — poprawka jednego nazwiska też się liczy.
+          „Zaproponuj zmianę” – poprawka jednego nazwiska też się liczy.
         </template>
       </v-alert>
 
       <template v-for="(row, index) in rows" :key="row.id">
         <v-divider v-if="index > 0" />
         <div class="py-3">
-          <div class="d-flex align-center flex-wrap ga-2">
-            <!-- The entry as this proposal would leave it: `revisionId` makes
-                 the page render the revision over the stored node. -->
-            <NuxtLink
-              v-if="row.targetPath"
-              :to="`${row.targetPath}?revisionId=${row.id}`"
-              class="link-plain text-body-2 font-weight-medium"
+          <!-- The date is a column of its own on the right. Inside one
+               wrapping row it was left behind whenever the name and the chip
+               filled the line, and dropped to the left of the next one. On
+               the baseline, so the 12px date sits level with the first line
+               of the 14px name however many lines that runs to. -->
+          <div class="d-flex align-baseline ga-2">
+            <div class="proposal-what d-flex align-center flex-wrap ga-2">
+              <!-- The entry as this proposal would leave it: `revisionId` makes
+                   the page render the revision over the stored node. -->
+              <NuxtLink
+                v-if="row.targetPath"
+                :to="`${row.targetPath}?revisionId=${row.id}`"
+                class="link-plain text-body-2 font-weight-semibold"
+              >
+                {{ rowName(row) }}
+              </NuxtLink>
+              <span v-else class="text-body-2 font-weight-semibold">
+                {{ rowName(row) }}
+              </span>
+              <!-- A proposal names what it was about even after the entry is
+                   gone, so the name alone looks like any other row that just
+                   fails to open. Says why it does not. -->
+              <span
+                v-if="!row.targetExists && row.targetName"
+                class="text-caption text-medium-emphasis"
+              >
+                (wpis usunięty)
+              </span>
+
+              <ChipRevisionStatus
+                :status="row.status"
+                :derived="row.statusDerived"
+                size="x-small"
+              />
+            </div>
+
+            <span
+              class="text-caption text-medium-emphasis text-no-wrap flex-shrink-0"
             >
-              {{ rowName(row) }}
-            </NuxtLink>
-            <span v-else class="text-body-2 font-weight-medium">
-              {{ rowName(row) }}
-            </span>
-
-            <ChipRevisionStatus
-              :status="row.status"
-              :derived="row.statusDerived"
-              size="x-small"
-            />
-
-            <v-spacer />
-
-            <span class="text-caption text-medium-emphasis text-no-wrap">
               {{ formatDaysAgo(row.updateTime) }}
             </span>
           </div>
@@ -116,11 +143,16 @@
           <div v-if="row.kind === 'removal'" class="text-body-2 mt-1">
             Powód usunięcia: {{ row.deleteReason || "nie podano" }}
           </div>
+          <!-- `wide`: a card has no table cell to protect, and the 220px cap
+               turned a description into a column a few words wide beside
+               empty space. Given the line, it wraps as prose and keeps its
+               paragraphs. -->
           <RevisionDiff
             v-else
             :changes="row.changes"
             :change-count="row.changeCount"
             :max="3"
+            wide
             class="mt-1"
           />
 
@@ -141,7 +173,7 @@
 
           <v-btn
             v-if="row.status === 'approved' && row.published && row.targetPath"
-            size="x-small"
+            size="small"
             variant="text"
             class="mt-2"
             :to="row.targetPath"
@@ -151,7 +183,7 @@
           </v-btn>
           <div
             v-else-if="row.status === 'approved' && !row.published"
-            class="text-caption text-medium-emphasis mt-2"
+            class="text-body-2 text-medium-emphasis mt-2"
           >
             Zmiana przyjęta. Strona czeka jeszcze na publikację.
           </div>
@@ -166,15 +198,10 @@
 
       <div
         v-if="truncated && anyProposals"
-        class="text-caption text-medium-emphasis mt-2"
+        class="text-body-2 text-medium-emphasis mt-2"
       >
-        Wczytaliśmy {{ SCAN_CAP }} najnowszych zapisów na Twoim koncie — starsze
+        Wczytaliśmy {{ SCAN_CAP }} najnowszych zapisów na Twoim koncie – starsze
         są poza tym zestawieniem.
-      </div>
-
-      <div class="text-caption text-medium-emphasis mt-3">
-        Zatwierdzenie zmiany to jeszcze nie publikacja — stronę publikuje
-        redakcja osobno.
       </div>
     </v-card-text>
   </v-card>
@@ -184,6 +211,9 @@
 import { computed, onMounted, ref } from "vue";
 import { mdiClose, mdiEarth } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
+// Imported rather than auto-imported, as in PageSection: the card's unit test
+// mounts it bare, without Nuxt's component resolver.
+import InfoBubble from "../InfoBubble.vue";
 import { polishCounting } from "~/composables/polish";
 import { formatDaysAgo } from "~/utils/chartTheme";
 import {
@@ -305,7 +335,7 @@ const subtitle = computed(() => {
     const head = `${polishCounting(waiting, "propozycja czeka", "propozycje czekają", "propozycji czeka")} na redakcję.`;
     return mailWillBeSent.value
       ? `${head} Odezwiemy się mailem, gdy ktoś się ${waiting === 1 ? "nią" : "nimi"} zajmie.`
-      : `${head} Decyzję zobaczysz tutaj — powiadomienia mailem masz wyłączone.`;
+      : `${head} Decyzję zobaczysz tutaj – powiadomienia mailem masz wyłączone.`;
   }
   if (anyProposals.value)
     return "Wszystko, co zgłosiłeś, zostało rozpatrzone. Dzięki!";
@@ -365,3 +395,26 @@ const summaryChips = computed(() =>
 const rowName = (row: Proposal) =>
   row.targetName ?? (row.targetExists ? "Wpis bez nazwy" : "Usunięty wpis");
 </script>
+
+<style scoped>
+/* The title's words at its own 16/600 - Vuetify's reset leaves an h2 the
+   browser's 1.5em - and inline, so the bubble follows the last word. The
+   generated space is the gap before it: Vue drops the newline between `</h2>`
+   and the bubble. Same rule as /profil's visibility card. */
+.card-heading {
+  display: inline;
+  font: inherit;
+}
+
+.card-heading::after {
+  content: " ";
+}
+
+/* The name and its status take whatever the date leaves, and may shrink below
+   their content so a long name wraps inside the card instead of pushing the
+   date off it. */
+.proposal-what {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+</style>
