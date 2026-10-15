@@ -27,21 +27,37 @@
         />
         <div class="d-flex flex-wrap ga-4 mb-4">
           <div>
-            <div class="text-caption text-medium-emphasis mb-1">Rodzaj</div>
+            <div
+              class="text-caption font-weight-semibold text-medium-emphasis mb-1"
+            >
+              Rodzaj<span class="d-sm-none"
+                >: {{ taskKindConfig[form.kind].title }}</span
+              >
+            </div>
+            <!-- Five words do not fit a phone's dialog: there each tab is its
+                 icon (named on hover and to a screen reader), and the label
+                 above says which one is picked. -->
             <SegmentedToggle v-model="form.kind">
               <v-btn
                 v-for="(config, kind) in taskKindConfig"
                 :key="kind"
                 :value="kind"
-                :prepend-icon="config.icon"
+                :prepend-icon="xs ? undefined : config.icon"
+                :aria-label="config.title"
+                :title="config.title"
                 size="small"
               >
-                {{ config.title }}
+                <v-icon v-if="xs" :icon="config.icon" />
+                <template v-else>{{ config.title }}</template>
               </v-btn>
             </SegmentedToggle>
           </div>
           <div v-if="form.kind !== 'goal'">
-            <div class="text-caption text-medium-emphasis mb-1">Kto</div>
+            <div
+              class="text-caption font-weight-semibold text-medium-emphasis mb-1"
+            >
+              Kto
+            </div>
             <SegmentedToggle v-model="form.who">
               <v-btn
                 v-for="(config, who) in taskWhoConfig"
@@ -55,13 +71,18 @@
             </SegmentedToggle>
           </div>
           <div>
-            <div class="text-caption text-medium-emphasis mb-1">Priorytet</div>
+            <div
+              class="text-caption font-weight-semibold text-medium-emphasis mb-1"
+            >
+              Priorytet
+            </div>
             <v-btn-toggle
               v-model="form.priority"
               mandatory
               density="comfortable"
               variant="outlined"
               divided
+              class="task-dialog__priority"
               :color="
                 form.priority === 'urgent'
                   ? 'ink-danger'
@@ -148,6 +169,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import { useDisplay } from "vuetify";
 import {
   taskChoices,
   taskKindConfig,
@@ -176,6 +198,8 @@ const props = defineProps<{
 }>();
 
 const open = defineModel<boolean>({ default: false });
+
+const { xs } = useDisplay();
 
 const editing = computed(() => !!props.task);
 const saving = ref(false);
@@ -252,3 +276,11 @@ async function save() {
   }
 }
 </script>
+
+<style scoped>
+/* The levels not picked sit on the hairline, as in an open task; the picked
+ * one keeps its own colour. */
+.task-dialog__priority :deep(.v-btn--variant-outlined:not(.v-btn--active)) {
+  border-color: var(--k-line);
+}
+</style>

@@ -169,11 +169,11 @@ const emit = defineEmits<{
   max-width: 220px;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid rgba(var(--v-border-color), 0.28);
-  border-radius: 6px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-control);
   background: rgb(var(--v-theme-surface));
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-  font-size: 0.8125rem;
+  font-size: var(--k-ui-size);
   color: rgb(var(--v-theme-on-surface));
   cursor: pointer;
   pointer-events: auto;
@@ -222,7 +222,7 @@ const emit = defineEmits<{
 
 .task-bar__count {
   flex: none;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 600;
   opacity: 0.8;
 }
@@ -246,9 +246,9 @@ const emit = defineEmits<{
 .task-bar__hint {
   align-self: center;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--k-r-control);
   background: rgba(var(--v-theme-surface), 0.85);
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 </style>

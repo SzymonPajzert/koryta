@@ -49,7 +49,9 @@
             <!-- The page's last runs, so a second click is a decision rather
                  than an accident - a run still going is handed back anyway. -->
             <div v-if="runs.length" class="mb-3" data-testid="job-request-runs">
-              <div class="text-caption text-medium-emphasis mb-1">
+              <div
+                class="text-caption font-weight-semibold text-medium-emphasis mb-1"
+              >
                 Ostatnie zlecenia
               </div>
               <div
