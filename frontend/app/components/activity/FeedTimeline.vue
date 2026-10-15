@@ -55,11 +55,14 @@
                   :text="row.explanation"
                 />
               </button>
-              <span v-else class="ft-actor ft-actor--masked">
+              <!-- Focusable and opened by a tap: "why is this Anonim" was
+                   otherwise there only for a mouse. -->
+              <span v-else class="ft-actor ft-actor--masked" tabindex="0">
                 <span class="ft-actor__name">{{ row.actor.name }}</span>
                 <v-tooltip
                   activator="parent"
                   location="bottom"
+                  open-on-click
                   :text="row.explanation"
                 />
               </span>
@@ -77,7 +80,17 @@
                    real ones, so the line copies and reads aloud as a
                    sentence rather than "Anna Nowakoceniła". -->
               {{ " " }}
-              <span class="ft-sentence">{{ row.sentence }}</span>
+              <!-- In runs, so a count never ends a line without its noun
+                   („1 / zmianę”). The runs hug their tags: the text reads
+                   exactly as the sentence did, with no space added. -->
+              <span class="ft-sentence"
+                ><span
+                  v-for="(run, i) in row.sentence"
+                  :key="i"
+                  :class="{ 'text-no-wrap': run.keep }"
+                  >{{ run.text }}</span
+                ></span
+              >
             </p>
             <time class="ft-time" :datetime="row.batch.lastAt">
               {{ row.time }}
@@ -112,7 +125,10 @@
                   size="14"
                   class="ft-target__icon"
                 />
-                <span class="ft-target__name">
+                <span
+                  class="ft-target__name"
+                  :class="{ 'ft-target__name--pair': !!nameParts(target).rest }"
+                >
                   {{ nameParts(target).main
                   }}<span
                     v-if="nameParts(target).rest"
@@ -273,6 +289,21 @@ function nameParts(target: FeedTarget): { main: string; rest: string } {
     : { main: target.name, rest: "" };
 }
 
+/** A count with its noun, and the one-letter word before it when there is one:
+ * „1 zmianę”, „i 4 instytucje”, „z 36 powiązaniami”. A Polish line may not
+ * end in a bare number or in „i”/„z”, and the browser would break at either.
+ * Grouped thousands („12 345”) come with a non-breaking space already. */
+const UNBROKEN = /((?:(?<=^|\s)[aiouwz] )?\d[\d\u00a0\u202f]* \S+)/;
+
+/** The sentence as plain-text runs, `keep` on each count that must not be
+ * split. Joined, they are the sentence exactly. */
+function sentenceRuns(sentence: string): { text: string; keep: boolean }[] {
+  return sentence
+    .split(UNBROKEN)
+    .map((text, i) => ({ text, keep: i % 2 === 1 }))
+    .filter((run) => run.text);
+}
+
 function timeOf(batch: FeedBatch): string {
   const first = new Date(batch.firstAt);
   const last = new Date(batch.lastAt);
@@ -296,7 +327,7 @@ const sections = computed(() =>
         actor,
         style,
         tone: feedToneClasses(style.tone),
-        sentence: describeFeedBatch(batch),
+        sentence: sentenceRuns(describeFeedBatch(batch)),
         time: timeOf(batch),
         clickable: actor.isSelf || actor.named,
         // Only an established administrator is ever sent a uid.
@@ -333,21 +364,22 @@ function reasons(batch: FeedBatch) {
 }
 
 /* A heading with a hairline running out to the right: enough to part one day
-   from the next without drawing a box around either. */
+   from the next without drawing a box around either. In full ink, unlike a
+   label: the days are the landmarks the eye scrolls by. Sentence case, so no
+   tracking. */
 .ft-day__label {
   align-items: center;
   color: rgb(var(--v-theme-on-surface));
   display: flex;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   font-weight: 600;
   gap: 12px;
-  letter-spacing: 0.01em;
   line-height: 1.5;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
 }
 
 .ft-day__label::after {
-  background: rgba(var(--v-border-color), 0.12);
+  background: var(--k-line);
   content: "";
   flex: 1 1 auto;
   height: 1px;
@@ -376,7 +408,7 @@ function reasons(batch: FeedBatch) {
 }
 
 .ft-item::before {
-  background: rgba(var(--v-border-color), 0.12);
+  background: var(--k-line);
   bottom: 0;
   content: "";
   left: calc(var(--ft-badge) / 2 - 1px);
@@ -425,7 +457,7 @@ function reasons(batch: FeedBatch) {
 
 .ft-line {
   flex: 1 1 auto;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   line-height: 20px;
   margin: 0;
   min-width: 0;
@@ -460,8 +492,9 @@ function reasons(batch: FeedBatch) {
   text-decoration: underline;
 }
 
-.ft-actor--button:focus-visible {
-  border-radius: 4px;
+.ft-actor--button:focus-visible,
+.ft-actor--masked:focus-visible {
+  border-radius: var(--k-r-control);
   outline: 2px solid rgb(var(--v-theme-ink-info));
   outline-offset: 2px;
 }
@@ -481,9 +514,9 @@ function reasons(batch: FeedBatch) {
 
 .ft-tag {
   align-items: center;
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   display: inline-flex;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 600;
   gap: 3px;
   line-height: 18px;
@@ -495,7 +528,7 @@ function reasons(batch: FeedBatch) {
 .ft-time {
   color: rgb(var(--v-theme-ink-neutral));
   flex: none;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-variant-numeric: tabular-nums;
   line-height: 20px;
   white-space: nowrap;
@@ -523,16 +556,16 @@ function reasons(batch: FeedBatch) {
 /* A pill per target: its own fill, its own icon, its own edges, so where one
    name stops and the next starts is never a matter of reading. Sage, the
    header's colour at a quarter strength with the ink measured for it, says
-   "this is a page you can open" without bringing in a second blue. Radius 14px
-   rather than a capsule so a name that wraps makes a rounded box, not a
-   lozenge. */
+   "this is a page you can open" without bringing in a second blue. The card
+   radius rather than a capsule so a name that wraps makes a rounded box, not
+   a lozenge. */
 .ft-target {
   align-items: center;
   background: rgb(var(--v-theme-surface-muted));
-  border-radius: 14px;
+  border-radius: var(--k-r-card);
   color: rgb(var(--v-theme-ink-strong));
   display: inline-flex;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   gap: 6px;
   line-height: 18px;
   max-width: 100%;
@@ -595,14 +628,14 @@ function reasons(batch: FeedBatch) {
 }
 
 .ft-target__note {
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   white-space: nowrap;
 }
 
 .ft-revision {
   align-items: center;
   display: inline-flex;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   gap: 3px;
   text-decoration: none;
   white-space: nowrap;
@@ -618,24 +651,25 @@ function reasons(batch: FeedBatch) {
   display: inline-flex;
 }
 
+/* A control, so the control tint and no line (assets/css/edges.css), in the
+   pills' shape beside them. */
 .ft-more {
   align-items: center;
-  background: none;
-  border: 1px solid var(--k-line);
-  border-radius: 14px;
+  background: var(--k-tonal);
+  border: 0;
+  border-radius: var(--k-r-card);
   cursor: pointer;
   display: inline-flex;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   font-weight: 500;
   gap: 2px;
   line-height: 18px;
-  padding: 3px 8px 3px 10px;
+  padding: 4px 8px 4px 10px;
 }
 
 .ft-more:hover {
   background: rgb(var(--v-theme-surface-info));
-  border-color: transparent;
 }
 
 .ft-more:focus-visible {
@@ -644,7 +678,7 @@ function reasons(batch: FeedBatch) {
 }
 
 .ft-rest {
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   padding: 0 2px;
 }
 
@@ -657,7 +691,7 @@ function reasons(batch: FeedBatch) {
   -webkit-line-clamp: 2;
   color: rgb(var(--v-theme-ink-neutral));
   display: -webkit-box;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   line-clamp: 2;
   line-height: 1.45;
   margin: 6px 0 0;
@@ -680,8 +714,14 @@ function reasons(batch: FeedBatch) {
    broke "zaproponował/a 1 zmianę" after one word. It runs on after the
    sentence instead, and the sittings sit a little closer. */
 @media (max-width: 599.98px) {
+  /* The line's own 14/20 rather than the page's 16/24: the run-on line takes
+     its strut from here, and on the taller one the bold name (an inline-flex
+     box at the top of the line) sat a few pixels above the sentence it
+     starts. */
   .ft-head {
     display: block;
+    font-size: var(--k-ui-size);
+    line-height: 20px;
   }
 
   .ft-line {
@@ -703,6 +743,15 @@ function reasons(batch: FeedBatch) {
   .ft-target__name {
     -webkit-line-clamp: 3;
     line-clamp: 3;
+  }
+
+  /* A relation or a fact names two things, and three lines cut off the
+     second - „… → Przedsiębiorstwo Gospodarki Komunalnej …” never said
+     which company. One more line reaches its end, and a phone has no hover
+     to read the title. */
+  .ft-target__name--pair {
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
   }
 }
 </style>
