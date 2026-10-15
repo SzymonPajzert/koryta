@@ -53,11 +53,7 @@
       <h2 class="text-h4 mb-6">Nasze wartości</h2>
       <v-row>
         <v-col cols="12" sm="6">
-          <v-card
-            height="100%"
-            variant="outlined"
-            class="d-flex flex-column hover-card"
-          >
+          <v-card height="100%" variant="outlined" class="d-flex flex-column">
             <v-card-item>
               <template #prepend>
                 <v-icon
@@ -78,11 +74,7 @@
           </v-card>
         </v-col>
         <v-col cols="12" sm="6">
-          <v-card
-            height="100%"
-            variant="outlined"
-            class="d-flex flex-column hover-card"
-          >
+          <v-card height="100%" variant="outlined" class="d-flex flex-column">
             <v-card-item>
               <template #prepend>
                 <v-icon
@@ -110,11 +102,7 @@
           </v-card>
         </v-col>
         <v-col cols="12" sm="6">
-          <v-card
-            height="100%"
-            variant="outlined"
-            class="d-flex flex-column hover-card"
-          >
+          <v-card height="100%" variant="outlined" class="d-flex flex-column">
             <v-card-item>
               <template #prepend>
                 <v-icon
@@ -134,11 +122,7 @@
           </v-card>
         </v-col>
         <v-col cols="12" sm="6">
-          <v-card
-            height="100%"
-            variant="outlined"
-            class="d-flex flex-column hover-card"
-          >
+          <v-card height="100%" variant="outlined" class="d-flex flex-column">
             <v-card-item>
               <template #prepend>
                 <v-icon
@@ -161,7 +145,9 @@
     </section>
 
     <!-- Kim jesteśmy i Zespół -->
-    <section class="mb-16 bg-grey-lighten-4 rounded-xl py-10 px-6 px-md-10">
+    <!-- A plain section like the others: the grey panel round it was a frame
+         inside the page. The tint is kept for the closing call to action. -->
+    <section class="mb-16">
       <v-row>
         <v-col cols="12" md="5">
           <h2 class="text-h4 mb-4">Kim jesteśmy?</h2>
@@ -178,7 +164,7 @@
               <v-avatar
                 size="80"
                 color="grey-lighten-2"
-                class="mr-sm-4 mb-4 mb-sm-0 mt-2 elevation-2"
+                class="mr-sm-4 mb-4 mb-sm-0 mt-2"
                 image="@/assets/pajzert.jpeg"
               />
               <div class="">
@@ -366,7 +352,7 @@
     <!-- Kontakt -->
     <section
       id="kontakt"
-      class="text-center py-10 mb-8 border rounded-xl bg-grey-lighten-4"
+      class="text-center py-10 mb-8 border k-r-card bg-grey-lighten-4"
     >
       <h2 class="text-h4 mb-4">Dołącz do naszej społeczności</h2>
       <p class="text-body-1 mb-8 text-grey-darken-1">
@@ -381,7 +367,6 @@
       <v-btn
         color="primary"
         size="x-large"
-        elevation="2"
         href="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
       >
         Dołącz do Koryta.pl
@@ -406,19 +391,5 @@ useSeoMeta({
 
 definePageMeta({
   affineLink: "yzo0TKrnnYO59pbFuoaFq",
-  layout: "gray",
-  fullWidth: true,
 });
 </script>
-
-<style scoped>
-.hover-card {
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-.hover-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
-}
-</style>

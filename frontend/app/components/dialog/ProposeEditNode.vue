@@ -8,9 +8,8 @@
       <v-btn
         icon
         border="sm current"
-        class="text-none pa-1 me-2"
+        class="text-none pa-1 me-2 k-r-control"
         color="warning"
-        rounded="lg"
         size="44"
         variant="outlined"
         @click="handleActivatorClick"

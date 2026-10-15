@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "jedna-cienka-linia",
+    title: "Jedna cienka linia zamiast ramek i cieni",
+    description:
+      "Każda ramka na stronie to jedna jasnoszara linia, przyciski zamiast czarnej obwódki mają szare tło, a cień zostaje tylko pod menu i oknami. Strona osoby i spółki nie leży już na osobnej karcie, „Historia powiązań” jest jedną listą z liniami między wierszami, a przełączniki takie jak „1 krok / 2 kroki” są jednym segmentem z białą zakładką.",
+    steps: [
+      "Otwórz stronę osoby – nie ma karty z cieniem wokół strony, nagłówek z nazwiskiem jest oddzielony od reszty cienką linią, a „Historia powiązań” to jedno pudełko z wierszami.",
+      "Na telefonie ta sama strona – lista powiązań sięga krawędzi ekranu.",
+      "Na stronie spółki przyciski „Graf połączeń” i „Zaproponuj zmianę” mają szare tło, bez czarnej ramki.",
+      "Na /eksploruj/szpitale przełącz „Partii / Województwa” – wybrana opcja to biała zakładka.",
+      "Otwórz /o-nas i /pomoc – strona nie leży w ramce na szarym tle, a przyciski i zdjęcie nie mają cienia.",
+    ],
+    area: "public",
+  },
+  {
     id: "jeden-system-typografii",
     title:
       "Jeden tytuł na stronę, mniej rozmiarów tekstu, przyciski bez wersalików",

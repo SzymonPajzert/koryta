@@ -8,14 +8,10 @@
         {{ subtitle }}
       </v-card-subtitle>
       <template #append>
-        <v-btn-toggle
+        <SegmentedToggle
           v-model="view"
           class="stats-card__view"
           :class="{ 'stats-card__view--desktop-only': hideViewToggleOnMobile }"
-          density="compact"
-          variant="outlined"
-          divided
-          mandatory
         >
           <v-btn value="chart" size="small" aria-label="Wykres">
             <v-icon :icon="mdiChartBar" />
@@ -27,7 +23,7 @@
               Tabela z liczbami
             </v-tooltip>
           </v-btn>
-        </v-btn-toggle>
+        </SegmentedToggle>
       </template>
     </v-card-item>
 

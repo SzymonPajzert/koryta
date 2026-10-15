@@ -3,8 +3,7 @@
   <v-sheet
     v-else
     border
-    rounded="lg"
-    class="blog-stats my-6 pa-4"
+    class="blog-stats k-r-card my-6 pa-4"
     data-testid="blog-stats"
   >
     <StatsStatTile

@@ -1,6 +1,16 @@
 <template>
-  <v-card variant="outlined" data-testid="company-summary">
-    <v-card-text class="d-flex flex-wrap align-center ga-4">
+  <!-- In a list it is a card on the hairline. On the company's own page it is
+       the page's header: unboxed and ruled off underneath, as a person's is. -->
+  <v-card
+    :variant="linkToPage ? 'outlined' : 'flat'"
+    :rounded="linkToPage ? undefined : 0"
+    :class="{ 'company-summary--page': !linkToPage }"
+    data-testid="company-summary"
+  >
+    <v-card-text
+      class="d-flex flex-wrap align-center ga-4"
+      :class="{ 'px-0 pt-0 pb-6': !linkToPage }"
+    >
       <!-- `align-start`, so the icon sits on the name's first line rather than
            in the middle of a name that wraps to three. -->
       <div
@@ -94,7 +104,7 @@
       <div class="d-flex flex-wrap ga-2">
         <v-btn
           v-if="canEditNotes"
-          variant="outlined"
+          variant="tonal"
           :prepend-icon="mdiNoteTextOutline"
           @click="notesOpen = !notesOpen"
         >
@@ -108,7 +118,7 @@
              page's is: this row already wraps. -->
         <v-btn
           v-if="isAdmin && company.id"
-          variant="outlined"
+          variant="tonal"
           :prepend-icon="mdiHistory"
           :to="`/admin/rewizje/${company.id}`"
           data-testid="admin-revisions-link"
@@ -132,11 +142,11 @@
           @submitted="onSubmitted"
         >
           <template #activator="{ props: activatorProps }">
-            <!-- Outlined, not `tonal color="warning"`: amber ink on a
-                 12%-amber wash is 2.4:1. The icon carries the colour. -->
+            <!-- Tonal in the neutral control tint, not `color="warning"`:
+                 amber ink on a 12%-amber wash is 2.4:1. -->
             <v-btn
               v-bind="activatorProps"
-              variant="outlined"
+              variant="tonal"
               :prepend-icon="mdiPencilOutline"
             >
               Zaproponuj zmianę
@@ -183,7 +193,11 @@
          companies, that half was too narrow to read a pasted quote in. Full
          width costs nothing: the notes are behind a button, so the card is one
          line until somebody asks for them. -->
-    <v-card-text v-if="notesOpen && canEditNotes" class="pt-0">
+    <v-card-text
+      v-if="notesOpen && canEditNotes"
+      class="pt-0"
+      :class="{ 'px-0': !linkToPage }"
+    >
       <NoteEditor :key="nodeId" :node-id="nodeId" node-type="place" />
     </v-card-text>
   </v-card>
@@ -277,6 +291,11 @@ const previewUrl = computed(() =>
 </script>
 
 <style scoped>
+.company-summary--page {
+  background: transparent;
+  border-bottom: 1px solid var(--k-line);
+}
+
 /* The icon on the first line of the name. */
 .company-head__icon {
   margin-top: 2px;

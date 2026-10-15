@@ -21,8 +21,7 @@
 
     <v-sheet
       border
-      rounded="lg"
-      class="px-2 mb-3 tabela-query-bar"
+      class="px-2 mb-3 k-r-card tabela-query-bar"
       data-testid="tabela-query-bar"
     >
       <!-- Band 1: what is narrowing the table, how much of it there is, how it

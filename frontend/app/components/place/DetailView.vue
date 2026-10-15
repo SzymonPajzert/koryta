@@ -32,7 +32,7 @@
           Odśwież stronę
         </v-btn>
         <v-btn
-          variant="outlined"
+          variant="tonal"
           to="/"
           :prepend-icon="mdiHome"
           class="ml-2"
@@ -41,158 +41,158 @@
       </v-card-text>
     </v-card>
 
-    <v-card v-else width="100%" style="overflow: visible">
-      <div class="pa-4">
-        <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
-          Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
-          <br />
-          <nuxt-link :to="`/admin/rewizje/${nodeId}?revisionId=${revisionId}`">
-            Zobacz historię zmian </nuxt-link
-          >.
-        </v-alert>
+    <!-- The page sits on the page: no card around it, so the name, the
+         sections and the lists share one left edge with the bar above, and a
+         phone gives them its full width. -->
+    <div v-else class="w-100">
+      <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
+        Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
+        <br />
+        <nuxt-link :to="`/admin/rewizje/${nodeId}?revisionId=${revisionId}`">
+          Zobacz historię zmian </nuxt-link
+        >.
+      </v-alert>
 
-        <CardCompanySummary
-          :key="nodeId"
-          :company="company"
-          :location="location"
-          @submitted="proposals?.refresh()"
-          @published="refreshNode()"
-        />
+      <CardCompanySummary
+        :key="nodeId"
+        :company="company"
+        :location="location"
+        @submitted="proposals?.refresh()"
+        @published="refreshNode()"
+      />
 
-        <!-- Renders nothing until the reader has proposed something for this
+      <!-- Renders nothing until the reader has proposed something for this
              company, so a page nobody has touched looks exactly as it did. -->
-        <RevisionNodeProposals ref="proposals" :node-id="nodeId" />
+      <RevisionNodeProposals ref="proposals" :node-id="nodeId" />
 
-        <div class="d-flex flex-wrap ga-2 mt-4">
-          <v-btn
-            variant="outlined"
-            :prepend-icon="mdiGraphOutline"
-            :to="`/graf?miejsce=${nodeId}`"
-            text="Graf połączeń"
-          />
-          <v-btn
-            variant="outlined"
-            :prepend-icon="mdiFormatListBulleted"
-            :to="`/eksploruj/tabela?place=${nodeId}`"
-            text="Eksploruj powiązania"
-          />
-        </div>
-
-        <SuccessionCompanyChanges
-          :key="nodeId"
-          :company-id="nodeId"
-          :company-name="company.name"
-          class="mt-6"
+      <div class="d-flex flex-wrap ga-2 mt-4">
+        <v-btn
+          variant="tonal"
+          :prepend-icon="mdiGraphOutline"
+          :to="`/graf?miejsce=${nodeId}`"
+          text="Graf połączeń"
         />
+        <v-btn
+          variant="tonal"
+          :prepend-icon="mdiFormatListBulleted"
+          :to="`/eksploruj/tabela?place=${nodeId}`"
+          text="Eksploruj powiązania"
+        />
+      </div>
 
-        <div class="mt-6">
-          <CardConnectionList
-            :edges="owners"
-            title="Właściciele"
-            :can-add="canAddRelations"
-            :can-remove="canRemoveRelations"
-            :subject-published="subjectPublished"
-            add-testid="owners"
-            @add="openAdd(['owns_parent'], 'Dodaj właściciela')"
-            @remove="openRemove"
-            @published="refreshEdges()"
-          />
-          <CardConnectionList
-            :edges="subsidiaries"
-            title="Spółki zależne"
-            :can-add="canAddRelations"
-            :can-remove="canRemoveRelations"
-            :subject-published="subjectPublished"
-            add-testid="subsidiaries"
-            @add="openAdd(['owns_child'], 'Dodaj spółkę zależną')"
-            @remove="openRemove"
-            @published="refreshEdges()"
-          />
-          <CardEmploymentHistory
-            :edges="historyEdges"
-            :company="company"
-            :can-add="canAddRelations"
-            :can-cite="canAddRelations"
-            :can-correct="canEditRelations"
-            :can-remove="canRemoveRelations"
-            :subject-published="subjectPublished"
-            @add="openAdd(['employed'], 'Dodaj osobę pracującą tutaj')"
-            @sources="openSources"
-            @edit="openEdit"
-            @remove="openRemove"
-            @published="refreshEdges()"
-          />
-        </div>
+      <SuccessionCompanyChanges
+        :key="nodeId"
+        :company-id="nodeId"
+        :company-name="company.name"
+        class="mt-6"
+      />
 
-        <!-- One hop by default, unlike a person's page: a company's own
+      <div class="mt-6">
+        <CardConnectionList
+          :edges="owners"
+          title="Właściciele"
+          :can-add="canAddRelations"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          add-testid="owners"
+          @add="openAdd(['owns_parent'], 'Dodaj właściciela')"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+        <CardConnectionList
+          :edges="subsidiaries"
+          title="Spółki zależne"
+          :can-add="canAddRelations"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          add-testid="subsidiaries"
+          @add="openAdd(['owns_child'], 'Dodaj spółkę zależną')"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+        <CardEmploymentHistory
+          :edges="historyEdges"
+          bleed
+          :company="company"
+          :can-add="canAddRelations"
+          :can-cite="canAddRelations"
+          :can-correct="canEditRelations"
+          :can-remove="canRemoveRelations"
+          :subject-published="subjectPublished"
+          @add="openAdd(['employed'], 'Dodaj osobę pracującą tutaj')"
+          @sources="openSources"
+          @edit="openEdit"
+          @remove="openRemove"
+          @published="refreshEdges()"
+        />
+      </div>
+
+      <!-- One hop by default, unlike a person's page: a company's own
              relations are already a board's worth of names, and the second ring
              is every other seat each of them holds. It is a click away in the
              bar above the canvas for a reader who wants it. -->
-        <LazyGraphContainer
-          v-if="!smAndDown || showGraph"
-          :key="nodeId"
-          class="mt-6"
-          :focus-node-id="nodeId"
-          :max-depth="1"
-        />
-        <div v-else class="mt-6 d-flex justify-center">
-          <v-btn
-            color="primary"
-            variant="flat"
-            :prepend-icon="mdiGraphOutline"
-            text="Pokaż graf powiązań"
-            @click="showGraph = true"
-          />
-        </div>
-
-        <!-- The press on this company: the same section a person's page
-             carries, off the same endpoint. `mentions` is declared for both. -->
-        <MentionArticleList :node-id="nodeId" class="mt-6" />
-
-        <NoteEditor :node-id="nodeId" node-type="place" class="mt-6" />
-
-        <FormAddRelationDialog
-          v-model="addRelationOpen"
-          :node-id="nodeId"
-          node-type="place"
-          :node-name="company.name"
-          :types="addRelationTypes"
-          :title="addRelationTitle"
-          @added="refreshEdges()"
-        />
-
-        <FormEdgeSourcesDialog
-          v-if="sourcesEdge?.id"
-          v-model="sourcesOpen"
-          :edge-id="sourcesEdge.id"
-          :edge-label="sourcesLabel"
-          @changed="refreshEdges()"
-        />
-
-        <DialogEditRelationHost
-          v-model="editOpen"
-          v-model:outcome="editedOutcome"
-          :edge="editEdge"
-          :label="editLabel"
-          :can-apply="canApplyEdits"
-          @saved="onEdgeEdited"
-        />
-
-        <DialogRemoveEdgeHost
-          v-model="removeOpen"
-          v-model:shown="removedShown"
-          :edge="removeEdge"
-          :label="removeLabel"
-          @removed="onEdgeRemoved()"
+      <LazyGraphContainer
+        v-if="!smAndDown || showGraph"
+        :key="nodeId"
+        class="mt-6 k-bleed-xs"
+        :focus-node-id="nodeId"
+        :max-depth="1"
+      />
+      <div v-else class="mt-6 d-flex justify-center">
+        <v-btn
+          color="primary"
+          variant="flat"
+          :prepend-icon="mdiGraphOutline"
+          text="Pokaż graf powiązań"
+          @click="showGraph = true"
         />
       </div>
 
-      <v-divider />
+      <!-- The press on this company: the same section a person's page
+             carries, off the same endpoint. `mentions` is declared for both. -->
+      <MentionArticleList :node-id="nodeId" class="mt-6" />
 
-      <div v-if="user" class="pa-4">
+      <NoteEditor :node-id="nodeId" node-type="place" class="mt-6" />
+
+      <FormAddRelationDialog
+        v-model="addRelationOpen"
+        :node-id="nodeId"
+        node-type="place"
+        :node-name="company.name"
+        :types="addRelationTypes"
+        :title="addRelationTitle"
+        @added="refreshEdges()"
+      />
+
+      <FormEdgeSourcesDialog
+        v-if="sourcesEdge?.id"
+        v-model="sourcesOpen"
+        :edge-id="sourcesEdge.id"
+        :edge-label="sourcesLabel"
+        @changed="refreshEdges()"
+      />
+
+      <DialogEditRelationHost
+        v-model="editOpen"
+        v-model:outcome="editedOutcome"
+        :edge="editEdge"
+        :label="editLabel"
+        :can-apply="canApplyEdits"
+        @saved="onEdgeEdited"
+      />
+
+      <DialogRemoveEdgeHost
+        v-model="removeOpen"
+        v-model:shown="removedShown"
+        :edge="removeEdge"
+        :label="removeLabel"
+        @removed="onEdgeRemoved()"
+      />
+
+      <div v-if="user" class="mt-10">
         <CommentsSection :node-id="nodeId" />
       </div>
-    </v-card>
+    </div>
   </div>
 </template>
 

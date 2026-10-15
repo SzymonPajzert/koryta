@@ -56,10 +56,7 @@
       </div>
 
       <div class="succ__flow">
-        <div
-          class="succ__side"
-          :class="{ 'succ__side--self': change.from.self }"
-        >
+        <div class="succ__side">
           <div class="succ__label">{{ change.from.label }}</div>
           <div class="succ__name">
             <NuxtLink
@@ -96,7 +93,7 @@
           </span>
         </div>
 
-        <div class="succ__side" :class="{ 'succ__side--self': change.to.self }">
+        <div class="succ__side">
           <div class="succ__label">{{ change.to.label }}</div>
           <div class="succ__name">
             <NuxtLink
@@ -170,7 +167,6 @@ type SideView = {
   parties: string[];
   /** Absent for this person: a link back to the page the reader is on. */
   url?: string;
-  self: boolean;
   when: string;
 };
 
@@ -180,7 +176,6 @@ function selfSide(post: PersonSuccession, label: string): SideView {
     label,
     name: props.personName,
     parties: props.personParties ?? [],
-    self: true,
     when: selfTerm(post),
   };
 }
@@ -231,7 +226,6 @@ const changes = computed<Change[]>(() =>
         neighbour.personId,
         neighbour.personName,
       ),
-      self: false,
       when: post.predecessor
         ? neighbour.end
           ? `kadencja do ${shortDate(neighbour.end)}`
@@ -355,13 +349,6 @@ function gapClass(gapDays: number): string {
 .succ__side {
   flex: 1 1 0;
   min-width: 0;
-}
-
-/* Which of the two is the person whose page this is. Sage as a border, so the
-   marker costs no contrast. */
-.succ__side--self {
-  border-left: 2px solid rgba(var(--v-theme-primary), 0.9);
-  padding-left: 10px;
 }
 
 /* A label: what the name under it is. 12/600, quiet, sentence case. */

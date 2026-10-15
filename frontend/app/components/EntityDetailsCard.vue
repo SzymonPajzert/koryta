@@ -1,5 +1,13 @@
 <template>
-  <v-card v-if="type == 'person'" width="100%" variant="flat">
+  <!-- Unboxed: the page's header, ruled off from what follows by the one
+       hairline rather than framed. -->
+  <v-card
+    v-if="type == 'person'"
+    width="100%"
+    variant="flat"
+    rounded="0"
+    class="entity-header"
+  >
     <!-- `align-center`: without it the row is `align-items: stretch`, so the
          h2 stretched to the height of the control block on the right and kept
          its text at the top of that box, while PartyChip centres itself - two
@@ -21,7 +29,7 @@
          the type system's title size (assets/css/type.css). The parties
          beside it are drawn at the title's chip size, set below. -->
     <v-card-title
-      class="px-0 d-flex flex-wrap align-center ga-2 text-wrap entity-head"
+      class="px-0 pt-0 d-flex flex-wrap align-center ga-2 text-wrap entity-head"
     >
       <h1>
         {{ entity?.name }}
@@ -107,8 +115,7 @@
         />
       </div>
     </v-card-title>
-    <template #append> </template>
-    <v-card-text class="px-0 pt-2">
+    <v-card-text class="px-0 pt-2 pb-6">
       <!-- Above everything the page says about the person, because while the
            mark stands, everything it says is about two of them. Admin-only:
            the component gates itself. -->
@@ -234,6 +241,11 @@ const richPerson = computed(() => personEntity.value as PersonRich | undefined);
 </script>
 
 <style scoped>
+.entity-header {
+  background: transparent;
+  border-bottom: 1px solid var(--k-line);
+}
+
 /* The parties beside the h1 are set one step up from a list's 12px. */
 .entity-head {
   --k-party-chip-size: 16px;

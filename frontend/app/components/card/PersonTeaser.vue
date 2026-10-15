@@ -18,14 +18,9 @@
         <CardEmploymentHistory :edges="historyEdges" unlink-drafts />
       </div>
 
-      <!-- In from the card's edges as far as the history's rows are - its list
-           pads them 8px and their frame 4px more - so the banner lines up with
-           the row above it rather than sticking out past it on both sides.
-           Only where there is a row to line up with. -->
-      <div
-        :class="{ 'teaser-below--aligned': historyEdges.length > 0 }"
-        data-testid="person-teaser-below"
-      >
+      <!-- On the same edges as the history's box above it, which sits on
+           the card's padding with no inset of its own. -->
+      <div data-testid="person-teaser-below">
         <!-- Under what the reader can see, what they cannot, and the two ways
              in - the site's own login banner. -->
         <ExploreLoginBanner
@@ -136,10 +131,3 @@ onMounted(async () => {
 
 onBeforeUnmount(() => stopWatchingExit?.());
 </script>
-
-<style scoped>
-/* CardEmploymentHistory's `px-2` list plus the `pa-1` round its rows. */
-.teaser-below--aligned {
-  padding-inline: 12px;
-}
-</style>

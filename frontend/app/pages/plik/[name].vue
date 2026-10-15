@@ -26,7 +26,7 @@ useSeoMeta({
 
 <template>
   <v-container max-width="900" class="py-12">
-    <v-sheet elevation="1" rounded="xl" class="pa-8 pa-md-12 content-styles">
+    <v-sheet border class="pa-8 pa-md-12 k-r-card content-styles">
       <ContentRenderer v-if="file" :value="file" />
       <div v-else class="text-center text-h5 text-medium-emphasis">
         Nie znaleziono strony

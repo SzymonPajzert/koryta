@@ -4,6 +4,7 @@
     :subtitle="subtitle"
     :loading="loading"
     hide-view-toggle-on-mobile
+    class="k-bleed-xs"
   >
     <template #chart>
       <div
@@ -21,13 +22,9 @@
       >
         <div class="d-flex align-center flex-wrap ga-2 mb-3">
           <span class="text-caption text-medium-emphasis">Podziel według</span>
-          <v-btn-toggle
+          <SegmentedToggle
             class="breakdown__dimensions"
             :model-value="dimension"
-            density="compact"
-            variant="outlined"
-            divided
-            mandatory
             @update:model-value="onDimension"
           >
             <v-btn
@@ -38,7 +35,7 @@
             >
               {{ label }}
             </v-btn>
-          </v-btn-toggle>
+          </SegmentedToggle>
         </div>
 
         <!-- Two of everything the narrow scale changes, chosen by a media

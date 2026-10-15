@@ -28,13 +28,7 @@
         <div class="d-flex flex-wrap ga-4 mb-4">
           <div>
             <div class="text-caption text-medium-emphasis mb-1">Rodzaj</div>
-            <v-btn-toggle
-              v-model="form.kind"
-              mandatory
-              density="comfortable"
-              variant="outlined"
-              divided
-            >
+            <SegmentedToggle v-model="form.kind">
               <v-btn
                 v-for="(config, kind) in taskKindConfig"
                 :key="kind"
@@ -44,17 +38,11 @@
               >
                 {{ config.title }}
               </v-btn>
-            </v-btn-toggle>
+            </SegmentedToggle>
           </div>
           <div v-if="form.kind !== 'goal'">
             <div class="text-caption text-medium-emphasis mb-1">Kto</div>
-            <v-btn-toggle
-              v-model="form.who"
-              mandatory
-              density="comfortable"
-              variant="outlined"
-              divided
-            >
+            <SegmentedToggle v-model="form.who">
               <v-btn
                 v-for="(config, who) in taskWhoConfig"
                 :key="who"
@@ -64,7 +52,7 @@
               >
                 {{ config.title }}
               </v-btn>
-            </v-btn-toggle>
+            </SegmentedToggle>
           </div>
           <div>
             <div class="text-caption text-medium-emphasis mb-1">Priorytet</div>

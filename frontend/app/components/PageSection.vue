@@ -1,5 +1,5 @@
 <template>
-  <section class="px-2">
+  <section>
     <div class="sec-head">
       <v-icon v-if="icon" :icon="icon" size="18" class="sec-head__icon" />
       <!-- h2: a section of a page whose h1 is the entity's name. -->

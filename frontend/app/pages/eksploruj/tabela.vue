@@ -17,7 +17,7 @@
          whatever the table happened to need and sat flush against the left
          edge, leaving the rest of a wide window empty. Below about 1120px the
          content already wants the whole width, so this changes nothing there. -->
-    <div class="pa-4 w-100">
+    <div class="pa-4 w-100 k-page-top tabela-page">
       <!-- The whole chrome of this page: the h1 with the share link beside it,
            then one 44px bar (plus a 32px work row for a reader who is signed
            in) carrying the filters, a chip per filter that is narrowing the
@@ -568,6 +568,14 @@ watch(pending, (isPending, was) => {
 </script>
 
 <style scoped>
+/* The site's second width: a table gets 1408px, where reading pages get the
+   layout's 1168 - wide enough for the columns, and no wider on a big screen.
+   The padding is the 16px gutter on either side. */
+.tabela-page {
+  margin-inline: auto;
+  max-width: calc(1408px + 2 * var(--k-gutter));
+}
+
 /* The sage band the entity pages put behind a section heading, here behind the
  * column titles - which above 960px stick to the app bar as the reader scrolls
  * and have to stay opaque over the rows passing under them. Sage as a fill,

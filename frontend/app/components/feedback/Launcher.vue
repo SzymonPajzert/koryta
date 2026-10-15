@@ -8,6 +8,7 @@
     <v-btn
       :prepend-icon="mdiMessageAlertOutline"
       color="primary"
+      variant="elevated"
       position="fixed"
       location="bottom end"
       class="feedback-fab"
