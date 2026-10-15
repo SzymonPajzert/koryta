@@ -155,6 +155,27 @@ class PersonResult:
         return sorted({str(job.get("krs")) for job in self.unplaced_jobs})
 
 
+#: What the company ingest says it did with a company (its answer's
+#: `company`). Taken without one, a company was taken: "created".
+COMPANY_OUTCOMES = ("created", "updated", "unchanged")
+
+
+@dataclass
+class CompanyResult:
+    """What came of creating one company the site had no page for."""
+
+    krs: str
+    #: What the site did with it: "created" - "updated" or "unchanged" for one
+    #: it had a page for after all - or "failed".
+    outcome: str
+    #: The name it was sent under, once it was taken.
+    name: str | None = None
+    #: Of the answer; None when there was none, or nothing to send.
+    status: int | None = None
+    #: For a failed one: "firma <krs>: <what>".
+    error: str = ""
+
+
 def refusal(status: int, text: str) -> str:
     """A refused request as a run's errors keep it, on one line."""
     return f"{status} {' '.join(text.split())[:ERROR_TEXT_CHARS]}"
@@ -902,22 +923,38 @@ class PersonUploader(CompanyUploader):
         created = 0
         refused: list[tuple[int | None, str]] = []
         for krs in missing:
-            print(f"No page for company {krs}: creating it", file=sys.stderr)
-            try:
-                resp = self.submit_company(krs, None, fail=False)
-            except Exception as error:
-                refused.append((None, f"firma {krs}: {one_line(error)}"))
-                continue
-            if resp.status_code in [200, 201]:
-                created += 1
+            result = self.create_company(krs)
+            if result.outcome == "failed":
+                refused.append((result.status, result.error))
             else:
-                refused.append(
-                    (
-                        resp.status_code,
-                        f"firma {krs}: {refusal(resp.status_code, resp.text)}",
-                    )
-                )
+                created += 1
         return created, refused
+
+    def create_company(self, krs: str) -> CompanyResult:
+        """Create one company the site has no page for, from `Companies`, and
+        say what the site did with it: also what the night does with each
+        company its people name before it sends them
+        (`koryta_people_import --companies-only`)."""
+        print(f"No page for company {krs}: creating it", file=sys.stderr)
+        try:
+            resp = self.submit_company(krs, None, fail=False)
+        except Exception as error:
+            return CompanyResult(krs, "failed", error=f"firma {krs}: {one_line(error)}")
+        if resp.status_code not in [200, 201]:
+            return CompanyResult(
+                krs,
+                "failed",
+                status=resp.status_code,
+                error=f"firma {krs}: {refusal(resp.status_code, resp.text)}",
+            )
+        outcome = json_object(resp).get("company")
+        return CompanyResult(
+            krs,
+            outcome if outcome in COMPANY_OUTCOMES else "created",
+            # Looked up, and named for display, on the way: `submit_company`.
+            name=self.company_payloads.get(krs, {}).get("name"),
+            status=resp.status_code,
+        )
 
     def answered(self, resp: requests.Response, result: PersonResult) -> PersonResult:
         """`result`, with the candidacies `resp` - the last answer about the
