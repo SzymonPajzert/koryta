@@ -250,7 +250,7 @@ describe("EntityDetailsCard for an article", () => {
 
   it("says an article has no title rather than showing an empty heading", async () => {
     const wrapper = await mountArticle(true);
-    expect(wrapper.get("h2").text()).toBe("Artykuł bez tytułu");
+    expect(wrapper.get("h1").text()).toBe("Artykuł bez tytułu");
   });
 
   it("gives a signed in reader the pencil to name it", async () => {
