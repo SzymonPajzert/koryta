@@ -1,8 +1,14 @@
 <template>
-  <!-- Flat, ruled off by the one hairline: a shadow is for what floats. The
-       quiet frame: the menu in sentence case and the bar's neutral ink, so a
-       page's own name and data stand out rather than the chrome round it. -->
-  <v-app-bar :height="APP_BAR_HEIGHT" flat class="app-bar">
+  <!-- Ruled off by a firm line, and lifted by a soft shadow only once the
+       page scrolls under it (`scroll-behavior="elevate"`: flat while scrollY
+       is 0, so the server renders it flat and nothing moves on hydration;
+       `flat` would pin it flat for good). The site's .12 hairline vanished
+       on a white page - Szymon, 2026-10-15: "why did top navbar lose the
+       border?" - and the bar is the one edge with nothing else to frame it.
+       The quiet frame: the menu in sentence case and the bar's neutral ink,
+       so a page's own name and data stand out rather than the chrome round
+       it. -->
+  <v-app-bar :height="APP_BAR_HEIGHT" scroll-behavior="elevate" class="app-bar">
     <NuxtLink to="/" class="app-bar__logo">
       <NuxtImg
         src="/logo_small.png"
@@ -329,7 +335,19 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 
 <style scoped>
 .app-bar {
-  box-shadow: inset 0 -1px 0 var(--k-line);
+  --app-bar-line: inset 0 -1px 0 rgba(var(--v-border-color), 0.2);
+
+  box-shadow: var(--app-bar-line);
+}
+
+/* Scrolled: the same line plus a soft, short shadow - enough to say the
+   content is passing under the bar, far lighter than Vuetify's elevation 4,
+   which this rule replaces (it outranks VAppBar's own not-flat selector). */
+.app-bar.v-toolbar:not(.v-toolbar--flat) {
+  box-shadow:
+    var(--app-bar-line),
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 4px 12px -2px rgba(0, 0, 0, 0.1);
 }
 
 .app-bar__logo {
