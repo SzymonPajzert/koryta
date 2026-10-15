@@ -41,6 +41,18 @@ export type FixInfo = FixJudgement & {
 export const feedbackPageLink = (item: Feedback) =>
   /^\/(?!\/)/.test(item.context.route) ? item.context.route : undefined;
 
+/** Where a report was written, as a row shows it: the QA entry it was about,
+ * or the page. The page's title loses the „ | Koryta.pl” (or „ - koryta.pl |
+ * Koryta.pl”) that nearly every document title ends in - up to a third of the
+ * room on a one-line row, spent on the one part every report shares, while
+ * the name that tells two reports apart was cut to „Mari…”. Display only: the
+ * stored context keeps the title as the browser had it. */
+export const feedbackPlace = (item: Feedback) =>
+  item.context.qa
+    ? `QA: ${item.context.qa.title}`
+    : item.context.pageTitle?.replace(/(\s*[|–—-]\s*koryta\.pl)+$/i, "") ||
+      item.context.route;
+
 export const formatFeedbackDate = (iso: string) =>
   new Date(iso).toLocaleString("pl-PL", {
     dateStyle: "short",
@@ -76,6 +88,9 @@ export function useFeedbackAdmin() {
   const pending = ref(true);
   const loadError = ref("");
   const openTruncated = ref(false);
+  /** The closed reports came back as many as the list asks for, so there may
+   * be older ones it did not bring: their count is a floor, not a total. */
+  const closedTruncated = ref(false);
   const saving = ref<Record<string, boolean>>({});
   const draftNotes = ref<Record<string, string>>({});
   /** Ids that were settled when the list was loaded - see `feedbackSection`. */
@@ -171,6 +186,7 @@ export function useFeedbackAdmin() {
       const data = await authRequest<{
         feedback: Feedback[];
         openTruncated?: boolean;
+        settledTruncated?: boolean;
       }>("/api/feedback/list", {
         method: "GET",
         ...(include ? { query: { include } } : {}),
@@ -178,6 +194,7 @@ export function useFeedbackAdmin() {
       items.value = data.feedback;
       confirmedRanks.clear();
       openTruncated.value = !!data.openTruncated;
+      closedTruncated.value = !!data.settledTruncated;
       settledAtLoad.value = new Set(
         data.feedback.filter(isSettled).map((item) => item.id!),
       );
@@ -322,6 +339,7 @@ export function useFeedbackAdmin() {
     pending,
     loadError,
     openTruncated,
+    closedTruncated,
     load,
     sectionOf,
     queue,

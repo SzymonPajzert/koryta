@@ -61,7 +61,7 @@ const model = defineModel<T>({ required: true });
 /* Quiet until picked, the way /aktywnosc draws its kinds: picked, a chip
    takes the header's sage with the ink that reads on it. */
 .fchip {
-  border-color: rgba(var(--v-border-color), 0.24);
+  border-color: var(--k-line-strong);
   color: rgb(var(--v-theme-ink-neutral));
 }
 
@@ -75,8 +75,8 @@ const model = defineModel<T>({ required: true });
 .fchip__count {
   min-width: 20px;
   padding: 0 6px;
-  border-radius: 99px;
-  font-size: 0.75rem;
+  border-radius: var(--k-r-pill);
+  font-size: var(--k-meta-size);
   line-height: 1.25rem;
   text-align: center;
 }

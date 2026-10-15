@@ -6,16 +6,22 @@
     :color="`ink-${feedbackKindTone[item.kind]}`"
     :title="feedbackKindConfig[item.kind].title"
   />
+  <!-- The line's layout is the row's own (`arow-*`, global in
+       admin/ExpandRow.vue), so a report reads the same in ordering mode as on
+       the line that opens. -->
   <span
     v-if="item.adminStatus === 'in_progress'"
-    class="fb-tag bg-surface-warning text-ink-warning text-caption"
+    class="arow-tag bg-surface-warning text-ink-warning"
   >
     W trakcie
   </span>
-  <span class="fb-where text-caption text-medium-emphasis" :title="where">
+  <span
+    class="fb-where arow-side text-caption text-medium-emphasis"
+    :title="where"
+  >
     {{ where }}
   </span>
-  <span class="fb-message text-body-2" :title="item.message">
+  <span class="fb-message arow-grow text-body-2" :title="item.message">
     {{ item.message }}
   </span>
   <v-icon
@@ -39,6 +45,7 @@ import {
   feedbackKindTone,
   fixStateConfig,
 } from "~/composables/feedback";
+import { feedbackPlace } from "~/composables/feedbackAdmin";
 import type { FixState } from "~~/shared/feedbackFixes";
 import type { Feedback } from "~~/shared/model";
 
@@ -57,35 +64,17 @@ const props = defineProps<{
 /** Where it was written. Two reports can say the same few words - a QA
  * verdict with no note arrives as "Zgłoszono problem bez opisu." - and this
  * is what tells them apart. */
-const where = computed(() =>
-  props.item.context.qa
-    ? `QA: ${props.item.context.qa.title}`
-    : props.item.context.pageTitle || props.item.context.route,
-);
+const where = computed(() => feedbackPlace(props.item));
 </script>
 
 <style scoped>
-.fb-tag {
-  flex: none;
-  padding: 0 6px;
-  border-radius: 4px;
-}
-
+/* The where does not shrink; the message gives way. Shrinking is shared out by
+ * width, so a long message used to take nearly all of it from the where and
+ * squeeze the one fact that tells two reports apart down to „Mari…”. Its own
+ * width up to 30% of the line, then an ellipsis. */
 .fb-where {
-  flex: 0 1 auto;
-  max-width: 35%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fb-message {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 0 0 auto;
+  max-width: 30%;
 }
 
 /* The row wraps on a phone (see `OrderList`); the text takes a full line of

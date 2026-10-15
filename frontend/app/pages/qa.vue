@@ -2,16 +2,23 @@
   <!-- `data-qa-loaded` is what the e2e spec waits on: the verdicts arriving is
        both the page becoming truthful and the proof that it has hydrated, so
        a filter clicked before that would silently do nothing. -->
-  <div class="w-100 pa-2 pb-0" :data-qa-loaded="loaded">
-    <h1 class="text-h5 text-sm-h4 mb-2">QA - zmiany do sprawdzenia</h1>
-    <p class="text-body-2 text-medium-emphasis mb-4">
-      Lista zmian na stronie, od najnowszej. Przejdź krokami z wpisu, a potem
-      powiedz, czy działa - i co poprawić. Liczy się Twoje sprawdzenie: wpis
-      przechodzi do sprawdzonych dopiero, gdy Ty go ocenisz, nawet jeśli ktoś
-      inny już go widział. Twoje uwagi widzą inni zalogowani, a zgłoszony
-      problem trafia do zespołu tą samą drogą, co przycisk „Zgłoś” - nic nie
-      trzeba pisać drugi raz.
-    </p>
+  <div class="w-100" :data-qa-loaded="loaded">
+    <!-- How a verdict counts goes behind the „(i)”: as a lead it ran to seven
+         lines on a phone and pushed the tabs off the first screen, and its
+         last sentence is said again where it matters, under the notes field
+         of every open entry. -->
+    <AdminPageHead title="QA – zmiany do sprawdzenia">
+      <template #lead>
+        Lista zmian na stronie, od najnowszej: przejdź krokami z&nbsp;wpisu
+        i&nbsp;powiedz, czy działa – i&nbsp;co poprawić.
+      </template>
+      <template #info>
+        Liczy się Twoje sprawdzenie: wpis przechodzi do sprawdzonych dopiero,
+        gdy Ty go ocenisz, nawet jeśli ktoś inny już go widział. Twoje uwagi
+        widzą inni zalogowani, a zgłoszony problem trafia do zespołu tą samą
+        drogą, co przycisk „Zgłoś” – nic nie trzeba pisać drugi raz.
+      </template>
+    </AdminPageHead>
 
     <!-- On an admin's "Problemy" a problem with an open report is that
          report's row, which has no verdict buttons: the way to say it works
@@ -24,7 +31,7 @@
       density="compact"
       data-issue-banner
     >
-      Zgłosiłeś problem w {{ counts.issue }} wpisach.
+      Zgłosiłeś problem w {{ issueEntries }}.
       <template v-if="ownProblemsAsReports">
         Tutaj problem z otwartym zgłoszeniem jest tym zgłoszeniem - gdy już
         działa, zmień ocenę we wpisie, do którego prowadzi „QA: …” przy
@@ -43,7 +50,7 @@
 
     <v-progress-linear v-if="!loaded" indeterminate class="mb-4" />
 
-    <template v-else>
+    <div v-else class="k-sections">
       <!-- An admin gets the team's side of the tab above their own: on "Do
            sprawdzenia" the open reports this build says it fixes, to check
            and close; on "Problemy" every open report sent from this list,
@@ -51,7 +58,7 @@
            the team as a report on /admin/opinie, so that is what it is shown
            as, with the entry it is about on its line. Either way they are the
            panel's rows, dealt with here as they are there. -->
-      <template v-if="teamSection">
+      <section v-if="teamSection">
         <AdminSectionHead
           :title="teamSection.title"
           :count="reportsReady ? teamSection.reports.length : undefined"
@@ -69,7 +76,6 @@
         <v-progress-linear
           v-if="!reportsLoadedOnce"
           indeterminate
-          class="mb-4"
           data-reports-loading
         />
         <v-alert
@@ -77,17 +83,16 @@
           type="error"
           variant="tonal"
           density="compact"
-          class="mb-6"
         >
           {{ reportsError }}
         </v-alert>
         <p
           v-else-if="teamSection.reports.length === 0"
-          class="text-body-2 text-medium-emphasis mb-6"
+          class="text-body-2 text-medium-emphasis mb-0"
         >
           {{ teamSection.empty }}
         </p>
-        <AdminRowList v-else class="mb-6">
+        <AdminRowList v-else class="k-bleed-xs">
           <FeedbackReportRow
             v-for="report in teamSection.reports"
             :key="report.id"
@@ -96,6 +101,7 @@
             :fix="fixInfo.get(report.id!)"
             :fix-targets="fixTargets.get(report.id!)"
             :can-queue="sectionOf(report) === 'inbox'"
+            :align-columns="teamMixed"
             :saving="reportSaving[report.id!]"
             report-page="/admin/opinie"
             :expanded="openRows.has(`fb-${report.id}`)"
@@ -106,11 +112,11 @@
             @save-note="saveNote(report)"
           />
         </AdminRowList>
-      </template>
+      </section>
 
       <!-- Nothing at all when an admin's own problems are all in the list
            above: an empty section under it would read as a second list. -->
-      <template v-if="!(ownProblemsAsReports && visibleItems.length === 0)">
+      <section v-if="!(ownProblemsAsReports && visibleItems.length === 0)">
         <AdminSectionHead
           v-if="ownSection"
           :title="ownSection.title"
@@ -128,25 +134,25 @@
         >
           {{ emptyText }}
         </v-alert>
-      </template>
 
-      <AdminRowList v-if="visibleItems.length > 0">
-        <QaItemRow
-          v-for="item in visibleItems"
-          :key="item.id"
-          :item="item"
-          :state="stateOf(item.id)"
-          :my-check="myCheck(item.id)"
-          :other-checks="otherChecks(item.id)"
-          :reported-by-others="reportedByOthers(item.id)"
-          :saving="savingId === item.id"
-          :report-ids="isAdmin ? item.fixes : undefined"
-          :expanded="openRows.has(`qa-${item.id}`)"
-          @update:expanded="(open) => setOpen(`qa-${item.id}`, open)"
-          @save="(status, feedback) => save(item.id, status, feedback)"
-        />
-      </AdminRowList>
-    </template>
+        <AdminRowList v-else class="k-bleed-xs">
+          <QaItemRow
+            v-for="item in visibleItems"
+            :key="item.id"
+            :item="item"
+            :state="stateOf(item.id)"
+            :my-check="myCheck(item.id)"
+            :other-checks="otherChecks(item.id)"
+            :reported-by-others="reportedByOthers(item.id)"
+            :saving="savingId === item.id"
+            :report-ids="isAdmin ? item.fixes : undefined"
+            :expanded="openRows.has(`qa-${item.id}`)"
+            @update:expanded="(open) => setOpen(`qa-${item.id}`, open)"
+            @save="(status, feedback) => save(item.id, status, feedback)"
+          />
+        </AdminRowList>
+      </section>
+    </div>
 
     <v-snackbar v-model="snackbar" :timeout="3000" :color="snackbarColor">
       {{ snackbarText }}
@@ -162,6 +168,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useQaChecks } from "~/composables/qa";
 import { useAuthState } from "~/composables/auth";
 import { useFeedbackAdmin } from "~/composables/feedbackAdmin";
+import { polishCountingGenitive } from "~/composables/polish";
 import { useQueryFilters } from "~/composables/queryFilters";
 import type { QaCheckStatus, QaItemState } from "~~/shared/qa";
 
@@ -186,6 +193,13 @@ const {
   myCheck,
   saveCheck,
 } = useQaChecks();
+
+/** „w 1 wpisie”, „w 3 wpisach”. After „w” the noun is in the locative, which
+ * like the genitive the helper is named for has two forms: one for a bare
+ * one, one for every other count. It read „w 1 wpisach”. */
+const issueEntries = computed(() =>
+  polishCountingGenitive(counts.value.issue, "wpisie", "wpisach"),
+);
 
 /** /admin/opinie's reports, for an admin: the ones this build says it fixes,
  * on the first tab, and the ones sent from this list, on "Problemy". The list
@@ -350,6 +364,18 @@ const teamSection = computed(() => {
     };
   }
   return null;
+});
+
+/** The team's list holds queued reports (a #N, no „Do kolejki”) and
+ * unqueued ones (the other way round) together, unlike /admin/opinie's
+ * sections: every row then keeps room for both, so the kind icon and the
+ * fix state stay in one column down the list. */
+const teamMixed = computed(() => {
+  const reports = teamSection.value?.reports ?? [];
+  return (
+    reports.some((r) => positions.value.has(r.id!)) &&
+    reports.some((r) => !positions.value.has(r.id!))
+  );
 });
 
 /** The head over the reader's own entries: wherever an admin's list sits

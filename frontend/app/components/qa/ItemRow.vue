@@ -20,7 +20,7 @@
         aria-hidden="false"
       />
       <span
-        class="arow-tag"
+        class="qa-row__area arow-tag"
         :class="`bg-surface-${areaTone[item.area]} text-ink-${areaTone[item.area]}`"
       >
         {{ qaAreaConfig[item.area].title }}
@@ -48,7 +48,7 @@
       <AdminRowFact label="Stan">{{ qaStateConfig[state].title }}</AdminRowFact>
     </template>
 
-    <p class="text-body-2 mb-3">{{ item.description }}</p>
+    <p class="qa-row__desc text-body-2 mb-3">{{ item.description }}</p>
 
     <ol class="qa-row__steps text-body-2 mb-3">
       <li v-for="(step, index) in item.steps" :key="index" class="mb-1">
@@ -60,12 +60,12 @@
       v-if="item.link || (reportIds?.length ?? 0) > 0"
       class="d-flex align-center flex-wrap ga-2 mb-4"
     >
+      <!-- An arrow, not „open in new”: the link is followed in this tab. -->
       <v-btn
         v-if="item.link"
-        size="small"
         variant="tonal"
         color="ink-sage"
-        :prepend-icon="mdiOpenInNew"
+        :prepend-icon="mdiArrowRight"
         :to="item.link"
       >
         Otwórz
@@ -76,7 +76,6 @@
         v-for="(reportId, index) in reportIds ?? []"
         :key="reportId"
         size="x-small"
-        variant="outlined"
         label
         :to="`/admin/opinie#fb-${reportId}`"
         data-qa-report
@@ -100,7 +99,9 @@
     />
 
     <div v-if="otherChecks.length > 0" class="mt-4">
-      <div class="text-caption text-medium-emphasis mb-1">Co napisali inni</div>
+      <div class="text-caption font-weight-semibold text-medium-emphasis mb-1">
+        Co napisali inni
+      </div>
       <div
         v-for="other in otherChecks"
         :key="other.userUid"
@@ -112,15 +113,16 @@
           :icon="other.status === 'ok' ? mdiCheck : mdiAlertCircleOutline"
           :color="other.status === 'ok' ? 'ink-success' : 'ink-danger'"
         />
-        <span class="text-body-2">
-          {{ other.feedback || qaStatusLabels[other.status] }}
-        </span>
+        <span class="qa-row__other text-body-2">{{
+          other.feedback || qaStatusLabels[other.status]
+        }}</span>
       </div>
     </div>
 
+    <!-- The verdict is what the row is for, so its buttons are full size: the
+         36px a daily action gets, not a small button's 28. -->
     <template #footer>
       <v-btn
-        size="small"
         color="ink-success"
         :variant="myCheck?.status === 'ok' ? 'flat' : 'outlined'"
         :prepend-icon="mdiCheck"
@@ -130,7 +132,6 @@
         Działa
       </v-btn>
       <v-btn
-        size="small"
         color="ink-danger"
         :variant="myCheck?.status === 'issue' ? 'flat' : 'outlined'"
         :prepend-icon="mdiAlertCircleOutline"
@@ -149,9 +150,9 @@
 <script lang="ts" setup>
 import {
   mdiAlertCircleOutline,
+  mdiArrowRight,
   mdiCheck,
   mdiCheckCircleOutline,
-  mdiOpenInNew,
   mdiProgressQuestion,
   mdiWrenchOutline,
 } from "@mdi/js";
@@ -231,8 +232,35 @@ const areaTone: Record<QaArea, Exclude<RowTone, "neutral">> = {
 </script>
 
 <style scoped>
+/* What changed and how to check it are read, line by line: a prose measure,
+ * not the layout's full 1200px. The facts, the chips, the notes field and
+ * the footer keep the full width. */
+.qa-row__desc,
+.qa-row__steps {
+  max-width: 72ch;
+}
+
 .qa-row__steps {
   padding-left: 1.25rem;
+}
+
+/* Three areas, one width - „Dla zalogowanych” at 12px is 112px with the
+ * tag's padding - so every title starts in one column. */
+.qa-row__area {
+  min-width: 7rem;
+  text-align: center;
+}
+
+/* Another checker's verdict is a comment like a report's message, and gets
+ * its treatment (`.fb-report__message`): the same measure, the line breaks
+ * they typed, and a long link broken anywhere. As a flex item the span would
+ * otherwise be as wide as its longest unbreakable run - on a phone, every
+ * line of the comment wider than the row, and cut off by it. */
+.qa-row__other {
+  min-width: 0;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 /* On a phone the line breaks in two: the state, the tags and the verdict
