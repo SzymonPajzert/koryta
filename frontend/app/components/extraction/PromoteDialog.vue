@@ -10,16 +10,32 @@
       <v-card-text class="pt-0">
         <!-- What the model actually said, verbatim. The reader is being asked
              to turn a sentence into a claim in the graph, so the sentence has
-             to be in front of them while they do it. -->
-        <blockquote v-if="fact.justification" class="quote text-body-2 mb-4">
-          {{ fact.justification }}
-        </blockquote>
+             to be in front of them while they do it - drawn as the card under
+             the dialog draws it, with its way to the passage and its copy
+             button, rather than as a second quote style of its own. The 8px
+             over it is room for that button, which sits 6px above the quote
+             and would be clipped by the scrolling text's top edge. -->
+        <ExtractionQuote
+          v-if="fact.justification"
+          :fact="fact"
+          class="mt-2 mb-4"
+        />
 
         <div class="d-flex align-center flex-wrap ga-2 mb-3 text-body-2">
           <strong>{{ fact.personNodeName }}</strong>
           <v-icon :icon="mdiArrowRight" size="small" />
-          <v-chip size="small" variant="tonal" color="primary">
-            {{ verb || "powiązany/a z" }}
+          <!-- A role runs to a hundred characters; held to one line, the chip
+               cut it mid-word at the dialog's edge. It ellipsises instead,
+               whole on hover and in the prefilled field below. -->
+          <v-chip
+            size="small"
+            variant="tonal"
+            color="primary"
+            class="promote-verb"
+          >
+            <span class="text-truncate" :title="verb || undefined">
+              {{ verb || "powiązany/a z" }}
+            </span>
           </v-chip>
           <v-icon :icon="mdiArrowRight" size="small" />
           <span class="text-medium-emphasis">
@@ -39,7 +55,7 @@
           v-model="target"
           :entity="[rule.targetType]"
           :label="rule.targetLabel"
-          density="comfortable"
+          density="compact"
           hide-details="auto"
           autofocus
           class="mb-3"
@@ -186,6 +202,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { mdiArrowRight } from "@mdi/js";
+import { ExtractionQuote } from "#components";
 import { authRequest } from "~/composables/auth";
 import { factConnector, type FactEdgeRule } from "~/utils/extraction";
 import type { ExtractionFact, Link, NodeType } from "~~/shared/model";
@@ -308,9 +325,10 @@ async function submit() {
 </script>
 
 <style scoped>
-.quote {
-  border-left: 3px solid rgba(var(--v-border-color), 0.4);
-  color: rgba(var(--v-theme-on-surface), 0.75);
-  padding-left: 12px;
+/* VChip's content box will not shrink below its text without this, so the
+   label could not ellipsise inside the chip's 100% max-width. */
+.promote-verb :deep(.v-chip__content) {
+  min-width: 0;
+  overflow: hidden;
 }
 </style>
