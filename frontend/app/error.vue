@@ -3,7 +3,7 @@
        re-established here or every v-* component below loses its layout. -->
   <v-app>
     <NuxtLayout>
-      <div class="mx-auto text-center py-12" style="max-width: 640px">
+      <div class="mx-auto text-center pt-12" style="max-width: 640px">
         <v-icon :icon="icon" size="96" color="primary" class="mb-6" />
         <p class="text-h2 font-weight-bold mb-2">{{ statusCode }}</p>
         <h1 class="text-h5 font-weight-bold mb-4">{{ title }}</h1>

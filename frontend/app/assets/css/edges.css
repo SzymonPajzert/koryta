@@ -34,7 +34,8 @@
   --k-gutter: 16px;
   /* one distance from the app bar to the page's h1 */
   --k-page-top: 40px;
-  /* one distance between the sections of an entity page (`k-sections`) */
+  /* one distance between the sections of an entity page (`k-sections`), and
+     from any page's last block to the footer (layouts/default.vue) */
   --k-section-gap: 40px;
 }
 
@@ -205,6 +206,19 @@
 /* The one page-top inset, for a full-width page that pads itself. */
 .v-application .k-page-top {
   padding-top: var(--k-page-top) !important;
+}
+
+/* And its end: the section gap between the page's last block and the
+   footer, which the layout gives every page that does not pad itself. What
+   the page ends on keeps no margin of its own under it - /eksploruj/tabela's
+   login banner and selected companies carry 16px - so it cannot add to the
+   gap, as a section's own margin folds into `k-sections`' below. */
+.v-application .k-page-end {
+  padding-bottom: var(--k-section-gap) !important;
+}
+
+.v-application .k-page-end > :last-child {
+  margin-bottom: 0 !important;
 }
 
 /* An entity page's blocks, one gap apart: the header, „Historia powiązań”,

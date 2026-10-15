@@ -2,7 +2,7 @@
   <!-- No side padding of its own: the layout's container pads the column, so
        the title shares its left edge with every other page's - the same rule
        /eksploruj/szpitale follows. -->
-  <div class="pb-4 w-100">
+  <div class="w-100">
     <h1 class="text-h5 text-sm-h4 mb-2">
       Okrągły staż w instytucjach publicznych
     </h1>

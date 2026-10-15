@@ -352,7 +352,7 @@
     <!-- Kontakt -->
     <section
       id="kontakt"
-      class="text-center py-10 mb-8 border k-r-card bg-grey-lighten-4"
+      class="text-center py-10 border k-r-card bg-grey-lighten-4"
     >
       <h2 class="text-h4 mb-4">Dołącz do naszej społeczności</h2>
       <p class="text-body-1 mb-8 text-grey-darken-1">

@@ -1,6 +1,6 @@
 <template>
   <!-- No side padding of its own: the layout's container pads the column. -->
-  <div class="pb-4">
+  <div>
     <div class="d-flex align-start flex-wrap ga-4 mb-6">
       <div class="flex-grow-1">
         <h1 class="text-h4 mb-1">Statystyki</h1>
@@ -238,7 +238,7 @@
       </v-col>
     </v-row>
 
-    <v-row class="mb-6">
+    <v-row>
       <v-col cols="12" md="6">
         <!-- Individual verdicts; the card beside it counts people, not votes,
              so the two titles have to say which is which. -->

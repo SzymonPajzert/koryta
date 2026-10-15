@@ -17,7 +17,7 @@
          whatever the table happened to need and sat flush against the left
          edge, leaving the rest of a wide window empty. Below about 1120px the
          content already wants the whole width, so this changes nothing there. -->
-    <div class="pa-4 w-100 k-page-top tabela-page">
+    <div class="pa-4 w-100 k-page-top k-page-end tabela-page">
       <!-- The whole chrome of this page: the h1 with the share link beside it,
            then one 44px bar (plus a 32px work row for a reader who is signed
            in) carrying the filters, a chip per filter that is narrowing the

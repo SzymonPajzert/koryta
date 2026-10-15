@@ -2,7 +2,7 @@
   <!-- No side padding of its own: the layout's container pads the column, so
        the title and the panels share their left edge with every other page's
        (and `pa-4` spent a fifth of a 375px screen on nothing). -->
-  <div class="pb-4">
+  <div>
     <!-- The heading and nothing else. The standfirst that stood here said what
          a rada nadzorcza is, what we show and what we leave out - all three of
          which the chart's own subtitle and the note under it say again, in
