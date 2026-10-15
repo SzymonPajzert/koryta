@@ -69,6 +69,15 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   (2026-10-15).
 - **The person page's graph opens on „2 kroki”**, as today. Szymon: "it looks
   cooler, we can change it later" (2026-10-15).
+- **/eksploruj/tabela on desktop: one summary line per person**, e.g.
+  „8 spółek ▾ · ostatnio <company> · 2023–2024 · 12 lat pracy · 8 startów”.
+  Each row's „N spółek ▾” opens its companies in place, and a single
+  „Rozwiń wszystkie” toggle opens every row at once. This was picked over the
+  rendered list of three posts per person (2026-10-15).
+
+  Columns are divided by thin lines, because without them it is sometimes
+  hard to read (2026-10-15). The summary line is aligned sub-columns, each
+  divided by the same neutral hairline: count | latest post | date | years.
 
 ## How UI changes are made
 
@@ -83,7 +92,5 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
 
 - The exact values of the accepted directions, pending his OK on the
   implemented screenshots.
-- On desktop, /eksploruj/tabela shows either a list of three posts per person
-  or one summary line.
 - The smaller questions in decide-design-review-2026-10-14 (wording, order,
   toggles, an extra font weight, the „Zgłoś” icon on phones).
