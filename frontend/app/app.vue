@@ -141,6 +141,39 @@ html {
   color: rgba(var(--v-theme-on-surface), 0.38);
 }
 
+/* A count beside a section's heading: single-line meta, 12px in the quiet
+   ink. Sentence case and no tracking - it is a fact about the section, not a
+   label over it. */
+.sec-head__caption {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-meta-size);
+  line-height: 1.4;
+}
+
+/* On a phone the caption takes a line of its own, tight under the head:
+   beside a 20px head it landed on the head's line or under it depending on
+   its length. */
+@media (max-width: 599.98px) {
+  .sec-head {
+    row-gap: 2px;
+  }
+
+  .sec-head__caption {
+    flex-basis: 100%;
+  }
+}
+
+/* A group head: what splits one list into parts - „Obecnie” and
+   „Zakończone” over a person's history, „Potwierdzone przez czytelników” over
+   their facts. The type system's group-head role, 14/600 in the quiet ink and
+   sentence case, under the section's 24px head. Spacing is the list's. */
+.k-group-head {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-ui-size);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 /* 14px, the UI size: prose is never 12px on this site. 12 is for single-line
    meta - dates, counts, chips, labels. */
 .k-lead {

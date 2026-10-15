@@ -150,14 +150,12 @@ function withoutOrphans(text: string): string {
 </script>
 
 <style scoped>
-/* Under the facts it is about, and further from the bio than from them: the
-   facts' row already ends in 20px of its own, so the line takes nothing above
-   and 24px below. */
+/* Under the facts it is about. No margin of its own: the person's header
+   spaces it, as it spaces each of its lines. */
 .decl-line {
   align-items: flex-start;
   display: flex;
   gap: 8px;
-  margin: 0 0 24px;
 }
 
 .decl-line__icon {

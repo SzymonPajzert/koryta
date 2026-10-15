@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "strona-osoby-fakty-i-historia",
+    title: "Strona osoby: jeden wiersz faktów i historia z datami w kolumnie",
+    description:
+      "Pod nazwiskiem jest jeden wiersz faktów i jeden rząd przycisków, także na telefonie. „Historia powiązań” dzieli się na Osoby, Obecnie, Zakończone i Bez dat, a daty stoją w kolumnie obok paska. Wyjaśnienia „Zmian na stanowisku” i „Faktów z artykułów” są w dymkach (i).",
+    steps: [
+      "Otwórz stronę Wojciecha Legawca - pod nazwiskiem jest „ur. 16 stycznia 1975 · Rejestr.io”, a pod nim „Zaproponuj zmianę” z pomarańczowym ołówkiem i głosowanie.",
+      "W „Historii powiązań” obecne stanowiska mają pogrubione „od …”, a zakończone zakres dat, np. „15.05.2023 - 04.12.2024”.",
+      "Na telefonie zakończone stanowiska mają same lata, np. „2023-2024”, a obecne pełną datę.",
+      "Nad grafem jest nagłówek „Graf powiązań”.",
+    ],
+    link: "/osoba/wojciech-legawiec-dGiFrp89Gpp52L1IEEgO",
+    area: "public",
+  },
+  {
     id: "dymek-i-na-telefonie-zostaje",
     title: "Dymek (i) na telefonie zostaje otwarty",
     description:
@@ -171,7 +185,7 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Każda ramka na stronie to jedna szara linia, przyciski zamiast czarnej obwódki mają szare tło, a cień zostaje tylko pod menu i oknami. Strona osoby i spółki nie leży już na osobnej karcie, „Historia powiązań” jest jedną listą z liniami między wierszami, a przełączniki takie jak „1 krok / 2 kroki” są jednym segmentem z białą zakładką.",
     steps: [
-      "Otwórz stronę osoby - nie ma karty z cieniem wokół strony, nagłówek z nazwiskiem jest oddzielony od reszty cienką linią, a „Historia powiązań” to jedno pudełko z wierszami.",
+      "Otwórz stronę osoby - nie ma karty z cieniem wokół strony, nagłówek z nazwiskiem jest oddzielony od reszty cienką linią, a „Historia powiązań” to pudełka z liniami między wierszami.",
       "Na telefonie ta sama strona - lista powiązań sięga krawędzi ekranu.",
       "Na stronie spółki przyciski „Graf połączeń” i „Zaproponuj zmianę” mają szare tło, bez czarnej ramki.",
       "Na /eksploruj/szpitale przełącz „Partii / Województwa” - wybrana opcja to biała zakładka.",
