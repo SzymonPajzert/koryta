@@ -73,6 +73,11 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
 - **The wordmark „koryta.pl” is set entirely in bold**, in the app bar and
   in the home footer, not „koryta” bold and „.pl” regular. Szymon: "I prefer
   the whole koryta.pl to be bolded" (2026-10-15).
+- **The top bar is ruled off by a firm line, and lifted by a soft shadow once
+  the page scrolls** (option „A + B”, picked 2026-10-15 from three rendered
+  options). The line is a neutral black at .2, firmer than the site's .12
+  hairline, because the bar is the one edge with nothing else to frame it.
+  The shadow uses Vuetify's `scroll-behavior="elevate"`.
 
 ## How UI changes are made
 
