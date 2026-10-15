@@ -1,5 +1,7 @@
 <template>
-  <div class="pa-4 revision-compare">
+  <!-- Full width takes the layout's padding away, so the page puts its own
+       back - the page-top inset and page-end gap too (assets/css/edges.css). -->
+  <div class="pa-4 k-page-top k-page-end revision-compare">
     <div class="d-flex flex-wrap align-center ga-2 mb-4">
       <v-btn
         :icon="mdiArrowLeft"

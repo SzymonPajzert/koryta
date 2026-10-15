@@ -1,6 +1,9 @@
 <template>
   <ClientOnly>
-    <div class="pa-4">
+    <!-- Full width takes the layout's padding away, so the page puts its own
+         back - the page-top inset and page-end gap too
+         (assets/css/edges.css). -->
+    <div class="pa-4 k-page-top k-page-end">
       <h1 class="text-h4 mb-4">
         Wizualizacje dla
         {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
