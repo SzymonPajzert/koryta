@@ -61,17 +61,17 @@ describe("/admin", () => {
     expect(newAdminsLink(wrapper)).toBeUndefined();
   });
 
-  it("has a tile for the readings of the asset declarations", async () => {
+  it("lists the readings of the asset declarations among its subpages", async () => {
     claims.current = { admin: true };
     const wrapper = await mountSuspended(AdminPage);
     await flushPromises();
 
-    // A card with `to` renders no href under mountSuspended either: read its
-    // props, by its title.
-    const tile = wrapper
-      .findAllComponents({ name: "VCard" })
-      .find((card) => card.text().startsWith("Oświadczenia majątkowe"));
-    expect(tile?.props("to")).toBe("/admin/oswiadczenia");
-    expect(tile?.text()).toContain("Daty urodzenia odczytane z oświadczeń");
+    // A row of the „Podstrony” list, found by its title and read by its
+    // props, as the link above is.
+    const row = wrapper
+      .findAllComponents({ name: "NuxtLink" })
+      .find((link) => link.text().startsWith("Oświadczenia majątkowe"));
+    expect(row?.props("to")).toBe("/admin/oswiadczenia");
+    expect(row?.text()).toContain("Daty urodzenia odczytane z oświadczeń");
   });
 });
