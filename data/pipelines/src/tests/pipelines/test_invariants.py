@@ -1648,6 +1648,16 @@ def test_a_later_revision_never_drops_a_field(revisions):
     after it. The evening's hand run of the night held its upload on the "loss"
     of `partiesSource`, `content` and `education` that both pages still carry.
 
+    A page's first revision is the exception, being written twice: filed, it
+    created the page, and approved later, it was written over the page again.
+    Ordered by its approval alone it came after the proposals filed while it
+    waited, and the first of those, which never was the page, stood in for the
+    page it had created. Four of Wojciech Prokocki's candidacies for Powiat
+    bartoszycki did on the 2026-10-15 export: created on 06-01, a committee
+    proposed for each on 09-28 and still pending, and the creating revisions
+    approved with his page on 10-14. Each then seemed to drop the `committee`
+    that none of the four edges has ever had, and the night held its upload.
+
     Nor was an edge proposal that publishing marked approved ever the page.
     Until prod took a73fb7c2, `publishEdgeInBatch` pointed a draft edge at its
     newest revision and stamped that approved, writing only `published` and
@@ -1753,6 +1763,27 @@ def test_a_later_revision_never_drops_a_field(revisions):
             return timestamp_key(revision["review_time"])
         return timestamp_key(revision.get("update_time"))
 
+    def filed_at(revision: dict) -> str:
+        """When the revision was filed, as a sortable stamp."""
+        return timestamp_key(revision.get("update_time"))
+
+    def replay(history: list[dict]) -> list[dict]:
+        """A document's revisions in the order they were written over it.
+
+        It starts from the first one filed, which created the document - as a
+        pending revision if it was approved later, since it was one until then.
+        `applyRevision` wrote it over the page again when it was approved, so it
+        comes back at that point, approved.
+        """
+        created = min(history, key=filed_at)
+        rest = [revision for revision in history if revision is not created]
+        if applied_at(created) > filed_at(created):
+            return [
+                {**created, "status": "pending"},
+                *sorted([*rest, created], key=applied_at),
+            ]
+        return [created, *sorted(rest, key=applied_at)]
+
     # backfill-parties-source.ts (2026-10-06) stamped `partiesSource` into the
     # pending human revisions after the fact, a page's creating one among them,
     # and gave the page the field through a revision of its own. So a pending
@@ -1762,7 +1793,7 @@ def test_a_later_revision_never_drops_a_field(revisions):
     dropped = []
     for document_id, history in by_document.items():
         page = None
-        for revision in sorted(history, key=applied_at):
+        for revision in replay(history):
             if page is not None:
                 unknown = stamped_later if page.get("status") == "pending" else set()
                 lost = {
