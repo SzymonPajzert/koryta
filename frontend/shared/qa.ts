@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "dwa-miejsca-w-jednych-wyborach",
+    title: "Ostrzeżenie przed kandydaturami w dwóch miejscach naraz",
+    description:
+      "Okno publikacji strony publikowało każdą zaznaczoną kandydaturę, także imiennika z innego powiatu w tych samych wyborach. Teraz pokazuje takie kandydatury w osobnym bloku, z latami, w których osoba kandydowała w każdym z tych miejsc; „Zaznacz wszystkie” ich nie zaznacza, a gdy zaznaczysz obie, pod listą pojawia się czerwone ostrzeżenie.",
+    steps: [
+      "Otwórz „Opublikuj” na szkicu osoby z dwiema kandydaturami z jednego roku w różnych powiatach - są w bloku nad listą, a „Zaznacz wszystkie” ich nie zaznacza.",
+      "Zaznacz obie - pod listą pojawia się czerwone ostrzeżenie, a strona i tak się opublikuje, jeśli klikniesz.",
+    ],
+    area: "admin",
+  },
+  {
     id: "profil-niezweryfikowany-dla-niezalogowanych",
     title:
       "Niezalogowani widzą imię i ostatnie stanowisko nieopublikowanej osoby",

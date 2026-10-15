@@ -55,10 +55,45 @@ const relation = (overrides: Partial<NodeRelation> = {}): NodeRelation => ({
   otherName: "Firma sp. z o.o.",
   otherPublished: true,
   published: false,
+  startDate: null,
+  position: null,
+  revisionToApprove: null,
   hasPendingRevision: false,
   publishable: true,
   ...overrides,
 });
+
+/** One of the page's candidacies, in the region whose TERYT code is given -
+ * Jacek Wojciech Kowalski's, unless told otherwise: a career in powiat
+ * gnieźnieński (3003), and one 2002 run in powiat kozienicki (1407) that went
+ * live with his page on 2026-10-14. */
+const candidacy = (
+  id: string,
+  teryt: string,
+  year: string,
+  overrides: Partial<NodeRelation> = {},
+): NodeRelation =>
+  relation({
+    id,
+    type: "election",
+    name: "kandydatura",
+    otherId: `teryt${teryt}`,
+    otherName:
+      { "3003": "Powiat gnieźnieński", "1407": "Powiat kozienicki" }[teryt] ??
+      `Region ${teryt}`,
+    startDate: `${year}-01-01`,
+    position: "Samorząd",
+    ...overrides,
+  });
+
+/** His page as the dialog met it on 2026-10-14, plus his one board seat. */
+const kowalski = () => [
+  candidacy("gniezno-2002", "3003", "2002"),
+  candidacy("kozienice-2002", "1407", "2002"),
+  candidacy("gniezno-2006", "3003", "2006"),
+  candidacy("gniezno-2010", "3003", "2010"),
+  relation({ id: "zol", name: "Rada Nadzorcza", otherName: "ZOL Gniezno" }),
+];
 
 /** What the node's revisions endpoint answers while a test says nothing about
  * it: a page with a version already approved, which is the case where the
@@ -612,5 +647,172 @@ describe("PublishNodeDialog.vue", () => {
     // selection both start over.
     expect(requestedUrls()).toEqual(["/api/edges/byNode", "/api/edges/byNode"]);
     expect(confirmButton().textContent).toContain("Opublikuj tylko stronę");
+  });
+});
+
+/** The two-places warning. Publishing a page used to publish whatever was
+ * ticked, and „Zaznacz wszystkie" ticked everything - which is how a
+ * namesake's run went live with Mariusz Michał Wiśniewski's page on 10-07 and
+ * with Jacek Wojciech Kowalski's on 10-14, and how the second one held the
+ * night's people upload. */
+describe("PublishNodeDialog.vue - candidacies in two places", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    revisionsResponse = { revisions: [], approvedRevisionId: "rev-approved" };
+  });
+
+  afterEach(() => {
+    wrapper?.unmount();
+    wrapper = undefined;
+    document.body.innerHTML = "";
+  });
+
+  /** What the last /api/edges/publish carried, sorted. */
+  const publishedIds = () => {
+    const call = mockAuthRequest.mock.calls
+      .filter(([url]) => url === "/api/edges/publish")
+      .at(-1) as [string, { body: { edge_ids: string[] } }] | undefined;
+    return [...(call?.[1].body.edge_ids ?? [])].sort();
+  };
+
+  it("says which election each candidacy is", async () => {
+    // Every candidacy is named „kandydatura", so without the year and the
+    // office his four rows read the same.
+    serveRelations([candidacy("gniezno-2006", "3003", "2006")]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(el("publish-relation-gniezno-2006")?.textContent).toContain(
+      "kandydatura · 2006 · Samorząd",
+    );
+  });
+
+  it("puts the two places of one election in a block of their own, with how often he stood in each", async () => {
+    serveRelations(kowalski());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    const block = el("publish-place-clash-2002-Samorząd") as HTMLElement;
+    expect(block.textContent).toContain("Wybory 2002 · Samorząd");
+    expect(
+      block.querySelector('[data-testid="publish-relation-kozienice-2002"]')
+        ?.textContent,
+    ).toContain("tu tylko w 2002");
+    expect(
+      block.querySelector('[data-testid="publish-relation-gniezno-2002"]')
+        ?.textContent,
+    ).toContain("tu też w 2006 i 2010");
+    // The rest of his page stays in the list below, and only there.
+    expect(
+      block.querySelector('[data-testid="publish-relation-zol"]'),
+    ).toBeNull();
+    expect(el("publish-relation-gniezno-2006")).not.toBeNull();
+  });
+
+  it("leaves both sides out of „Zaznacz wszystkie”, so publishing everything publishes neither", async () => {
+    serveRelations(kowalski());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(el("publish-select-all"));
+    await click(confirmButton());
+
+    expect(publishedIds()).toEqual(["gniezno-2006", "gniezno-2010", "zol"]);
+  });
+
+  it("publishes the side the reviewer picks, and says nothing about it", async () => {
+    serveRelations(kowalski());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(el("publish-select-all"));
+    await click(checkbox("gniezno-2002"));
+
+    expect(el("publish-clash-after")).toBeNull();
+    // „Odznacz wszystkie" still means everything, the picked one included.
+    expect(el("publish-select-all")?.textContent).toContain(
+      "Odznacz wszystkie",
+    );
+
+    await click(confirmButton());
+
+    expect(publishedIds()).toEqual([
+      "gniezno-2002",
+      "gniezno-2006",
+      "gniezno-2010",
+      "zol",
+    ]);
+  });
+
+  it("warns by the button once both sides are ticked, and still publishes both if asked", async () => {
+    serveRelations(kowalski());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(checkbox("gniezno-2002"));
+    await click(checkbox("kozienice-2002"));
+
+    const warning = el("publish-clash-after") as HTMLElement;
+    expect(warning.textContent).toContain("w wyborach 2002 · Samorząd");
+    expect(warning.textContent).toContain(
+      "Powiat gnieźnieński i Powiat kozienicki",
+    );
+
+    // A warning, not a refusal: the rule is about TERYT prefixes, and the
+    // reviewer may know something it does not.
+    await click(confirmButton());
+    expect(publishedIds()).toEqual(["gniezno-2002", "kozienice-2002"]);
+  });
+
+  it("counts a candidacy already live as one side of the clash", async () => {
+    serveRelations([
+      candidacy("gniezno-2002", "3003", "2002", { published: true }),
+      candidacy("kozienice-2002", "1407", "2002"),
+    ]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    const live = el("publish-relation-gniezno-2002") as HTMLElement;
+    expect(live.textContent).toContain("już opublikowana");
+    expect(checkbox("gniezno-2002")?.checked).toBe(true);
+    expect(checkbox("gniezno-2002")?.disabled).toBe(true);
+    expect(el("publish-clash-after")).toBeNull();
+
+    await click(checkbox("kozienice-2002"));
+
+    expect(el("publish-clash-after")).not.toBeNull();
+  });
+
+  it("says nothing about a sejmik run beside a council run inside its województwo", async () => {
+    // 30 is Wielkopolskie, and 3003 one of its powiats.
+    serveRelations([
+      candidacy("sejmik-2002", "30", "2002"),
+      candidacy("gniezno-2002", "3003", "2002"),
+    ]);
+    wrapper = mountDialog();
+    await open(wrapper);
+    await click(el("publish-select-all"));
+
+    expect(document.body.querySelector(".place-clash")).toBeNull();
+    expect(el("publish-clash-after")).toBeNull();
+    expect(checkbox("sejmik-2002")?.checked).toBe(true);
+    expect(checkbox("gniezno-2002")?.checked).toBe(true);
+  });
+
+  it("orders the blocks newest election first", async () => {
+    serveRelations([
+      candidacy("gniezno-2002", "3003", "2002"),
+      candidacy("kozienice-2002", "1407", "2002"),
+      candidacy("gniezno-2014", "3003", "2014"),
+      candidacy("kozienice-2014", "1407", "2014"),
+    ]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    const heads = Array.from(
+      document.body.querySelectorAll(".place-clash__head"),
+    ).map((head) => head.textContent.trim());
+    expect(heads[0]).toContain("2014");
+    expect(heads[1]).toContain("2002");
   });
 });
