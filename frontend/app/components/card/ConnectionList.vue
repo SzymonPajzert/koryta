@@ -1,7 +1,7 @@
 <template>
   <div v-if="edges.length > 0 || canAdd" class="mb-4">
     <div class="d-flex align-center justify-space-between mb-2">
-      <h3 class="text-h6">{{ title }}</h3>
+      <h2 class="text-h6">{{ title }}</h2>
       <v-btn
         v-if="canAdd"
         variant="text"

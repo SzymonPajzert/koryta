@@ -178,7 +178,7 @@
               :prepend-icon="mdiClipboardCheckOutline"
               to="/qa"
               exact
-              title="QA - zmiany do sprawdzenia"
+              title="QA – zmiany do sprawdzenia"
             />
             <v-list-item
               :prepend-icon="mdiAlertCircleOutline"

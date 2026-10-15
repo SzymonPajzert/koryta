@@ -37,14 +37,14 @@ export const queueTierCopy: Record<
       "Osoba ma i biogram na Wikipedii, i wpis w rejestrze. Porównujesz datę " +
       "urodzenia z jednego i drugiego, sprawdzasz, czy region się zgadza, i " +
       "wypisujesz partię z biogramu.",
-    needs: "Wystarczy sam biogram - niczego nie trzeba szukać poza nim.",
+    needs: "Wystarczy sam biogram – niczego nie trzeba szukać poza nim.",
   },
   2: {
     title: "Mające oświadczenie majątkowe",
     what:
       "Osoba w ostatnich dziesięciu latach zdobyła mandat i ma świeżą posadę " +
       "w spółce albo instytucji publicznej. Z mandatu bierze się oświadczenie " +
-      "majątkowe - znajdujesz je w BIP-ie urzędu i porównujesz datę urodzenia " +
+      "majątkowe – znajdujesz je w BIP-ie urzędu i porównujesz datę urodzenia " +
       "z tą z rejestru.",
     needs: "Trzeba wejść do BIP-u urzędu i znaleźć w nim oświadczenie.",
   },
@@ -54,7 +54,7 @@ export const queueTierCopy: Record<
       "Model wyciągnął z tekstów zdania o partii, znajomości albo posadzie " +
       "tej osoby. Czytasz artykuł, z którego pochodzi zdanie, i mówisz, czy " +
       "model trafił.",
-    needs: "Trzeba przeczytać źródło - to najdłuższa robota z tych trzech.",
+    needs: "Trzeba przeczytać źródło – to najdłuższa robota z tych trzech.",
   },
 };
 

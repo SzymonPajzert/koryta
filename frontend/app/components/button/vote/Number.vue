@@ -38,7 +38,7 @@
                  judgement about the person - see `voteCategoryConfig`. -->
             <div class="text-caption">{{ config.meaning }}</div>
             <div class="text-caption text-medium-emphasis">
-              Skala od -5 do +5 - im dalej, tym mocniejsze przekonanie.
+              Skala od -5 do +5 – im dalej, tym mocniejsze przekonanie.
             </div>
           </v-tooltip>
         </div>
@@ -93,7 +93,7 @@ const currentLabel = computed(() =>
 
 const currentHint = computed(() =>
   currentLabel.value
-    ? `${signed(userVoteResult.value)} - ${currentLabel.value}`
+    ? `${signed(userVoteResult.value)} – ${currentLabel.value}`
     : `${config.text}: jeszcze nie oceniono`,
 );
 
@@ -101,9 +101,9 @@ const currentHint = computed(() =>
 const stepHint = (delta: number) => {
   const next = userVoteResult.value + delta;
   if (next > 5 || next < -5) return "Krańcowa ocena";
-  if (next === 0) return "0 - wycofaj ocenę";
+  if (next === 0) return "0 – wycofaj ocenę";
   const label = voteLevelLabel(category, next);
-  return label ? `${signed(next)} - ${label}` : signed(next);
+  return label ? `${signed(next)} – ${label}` : signed(next);
 };
 
 const emit = defineEmits(["voted"]);

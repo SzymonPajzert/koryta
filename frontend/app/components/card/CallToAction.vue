@@ -20,7 +20,7 @@
           Sprawdzenie osoby polega na tym, żeby zobaczyć, gdzie pracowała,
           poszukać, czy w tle jest polityka, i ocenić w skali od -5 do +5, na
           ile ta posada wygląda na nagrodę za politykę. Nie musisz mieć pewności
-          - liczy się kilka niezależnych ocen, nie jedna. Publikuje zawsze
+          – liczy się kilka niezależnych ocen, nie jedna. Publikuje zawsze
           człowiek z redakcji.
         </InfoBubble>
       </div>
@@ -84,7 +84,7 @@
           class="cta__fine-icon"
         />
         <span
-          >Sprawdzanie wymaga konta - założysz je w minutę. Błąd zgłosisz bez
+          >Sprawdzanie wymaga konta – założysz je w minutę. Błąd zgłosisz bez
           konta.</span
         >
       </p>
@@ -403,7 +403,7 @@ onMounted(() => {
 
 .cta__eyebrow {
   color: var(--cta-pale);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.5rem;
   margin: 0;
@@ -430,7 +430,7 @@ onMounted(() => {
 
 .cta__total {
   color: var(--cta-pale);
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -486,16 +486,8 @@ onMounted(() => {
     padding-bottom: 24px;
   }
 
-  .cta__eyebrow {
-    font-size: 1rem;
-  }
-
   .cta__checked {
     font-size: 3rem;
-  }
-
-  .cta__total {
-    font-size: 1.25rem;
   }
 
   .cta__legend {
@@ -504,10 +496,6 @@ onMounted(() => {
 }
 
 @media (min-width: 1280px) {
-  .cta__legend-row {
-    font-size: 0.9375rem;
-  }
-
   .cta__swatch {
     margin-right: 10px;
     width: 16px;
@@ -574,7 +562,7 @@ onMounted(() => {
 }
 
 .cta__percent {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   line-height: 1.25rem;
@@ -631,8 +619,8 @@ onMounted(() => {
   color: rgba(var(--v-theme-on-surface), 0.92);
   display: inline;
   font-size: inherit;
-  font-weight: 700;
-  letter-spacing: -0.005em;
+  font-weight: 600;
+  letter-spacing: -0.012em;
   line-height: inherit;
   margin-right: 6px;
 }
@@ -659,7 +647,7 @@ onMounted(() => {
 
 /* Vuetify's 0.089em tracking is for upper case; sentence case wants none. */
 .cta__btn {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   letter-spacing: 0;
 }
 
@@ -712,18 +700,8 @@ onMounted(() => {
     display: none;
   }
 
-  .cta__btn {
-    font-size: 0.875rem;
-  }
-
   .cta__btn--link {
     padding-inline: 8px;
-  }
-}
-
-@media (min-width: 1280px) {
-  .cta__lead {
-    font-size: 1.0625rem;
   }
 }
 
@@ -737,7 +715,7 @@ onMounted(() => {
   column-gap: 24px;
   display: flex;
   flex-wrap: wrap;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   grid-area: fine;
   justify-content: space-between;
   line-height: 1.25rem;

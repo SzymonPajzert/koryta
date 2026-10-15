@@ -6,9 +6,7 @@
     max-width="400"
     rounded="lg"
   >
-    <v-card-title class="text-subtitle-1 font-weight-medium">
-      Ustawienia wykresu
-    </v-card-title>
+    <v-card-title class="text-subtitle-1"> Ustawienia wykresu </v-card-title>
     <v-divider />
 
     <v-card-text>

@@ -59,6 +59,7 @@ import {
   mdiOfficeBuildingOutline,
 } from "@mdi/js";
 import { generateEntityUrl } from "~/composables/slugs";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 import type { Company } from "~~/shared/model";
 import type { RecentEmployment } from "~~/server/api/edges/recentEmployments.get";
 
@@ -103,14 +104,15 @@ const company = computed<Company>(() => ({
  * the missing end that decides. */
 const ongoing = computed(() => props.employment.end_date === null);
 
-/** "2024-03-01 - obecnie", and the single date where a spell began and ended
- * on the same day. A missing end means the post is still held; a missing start
- * cannot happen here, because the feed is ordered on it. */
-const period = computed(() => {
-  const { start_date: start, end_date: end } = props.employment;
-  if (end === start) return start;
-  return `${start} - ${end ?? "obecnie"}`;
-});
+/** "2024-03-01 – obecnie", and the single date where a spell began and ended
+ * on the same day - `relationPeriodLabel`'s rule, as every relation's period
+ * on the site. A missing end means the post is still held. */
+const period = computed(() =>
+  relationPeriodLabel(
+    props.employment.start_date,
+    props.employment.end_date ?? undefined,
+  ),
+);
 </script>
 
 <style scoped>

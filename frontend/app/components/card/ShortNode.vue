@@ -32,7 +32,7 @@
         @published="emit('published')"
       />
       <div v-if="edge.start_date || edge.end_date" class="text-caption">
-        {{ edge.start_date }} - {{ edge.end_date || "obecnie" }}
+        {{ relationPeriodLabel(edge.start_date, edge.end_date) }}
       </div>
     </template>
     <!-- Admins only. The card itself is a link to the other end, so this stops
@@ -63,6 +63,7 @@ import {
   type EdgeNode,
 } from "~/composables/edges";
 import { entityIcon } from "~/utils/entityIcon";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 import { nodeLinkUrl } from "~/composables/slugs";
 
 const { edge, canRemove, subjectPublished } = defineProps<{

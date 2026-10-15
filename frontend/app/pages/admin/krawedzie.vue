@@ -5,7 +5,7 @@
       <div>
         <h1 class="text-h4">Powiązania do opublikowania</h1>
         <div class="text-caption text-grey-darken-1">
-          Nieopublikowane powiązania, których obie strony są już opublikowane -
+          Nieopublikowane powiązania, których obie strony są już opublikowane –
           czyli te, które można pokazać publicznie od razu.
         </div>
       </div>
@@ -87,7 +87,10 @@
       <template #[`item.dates`]="{ item }">
         <span class="text-caption">
           {{
-            [item.start_date, item.end_date].filter(Boolean).join(" - ") || "-"
+            relationPeriodLabel(
+              item.start_date ?? undefined,
+              item.end_date ?? undefined,
+            ) || "–"
           }}</span
         >
       </template>
@@ -117,6 +120,7 @@ import { computed, ref } from "vue";
 import { mdiArrowLeft, mdiEarth } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 import type {
   UnpublishedEdgeRow,
   UnpublishedEdges,

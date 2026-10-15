@@ -168,7 +168,7 @@ const options = computed(() => {
         dataLabels: {
           total: {
             enabled: true,
-            style: { color: ink.secondary, fontSize: "11px", fontWeight: 500 },
+            style: { color: ink.secondary, fontSize: "12px", fontWeight: 500 },
             offsetY: -4,
           },
         },

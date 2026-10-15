@@ -62,6 +62,13 @@ export default defineNuxtConfig({
 
   devtools: { enabled: true },
 
+  // Site-wide rules that restyle Vuetify's own classes. Plain CSS rather than
+  // Vuetify's SASS variables: the repo has no sass dependency, and compiling
+  // Vuetify's SCSS for every component would cost a build that is already
+  // near App Hosting's heap limit. vuetify-nuxt-module puts its own styles
+  // first in this list, so these come after them.
+  css: ["~/assets/css/type.css"],
+
   ssr,
 
   components: [
@@ -229,10 +236,14 @@ export default defineNuxtConfig({
     families: [{ name: "Roboto", provider: "fontsource" }],
     defaults: {
       // The faces are self-hosted, so every declared weight x style x subset is
-      // a file we serve. Nothing in the app reaches for thin/light/black -
-      // the only weights used are body 400, font-weight-medium and
-      // font-weight-bold, plus a couple of raw 550/600 that round to those.
-      weights: [400, 500, 700],
+      // a file we serve. Nothing in the app reaches for thin/light/black.
+      // The type system (assets/css/type.css) gives each weight one job: 700
+      // the page title and entity names, 600 section heads, card titles and
+      // labels, 500 buttons and values, 400 body. 600 is the one file that
+      // costs - about 37 KB for latin + latin-ext - and it also lets the
+      // rules that always asked for 550/600 render as asked rather than
+      // rounding up to 700.
+      weights: [400, 500, 600, 700],
       styles: ["normal", "italic"],
       subsets: ["latin", "latin-ext"],
     },

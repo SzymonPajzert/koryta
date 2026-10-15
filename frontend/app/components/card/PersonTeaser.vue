@@ -1,8 +1,9 @@
 <template>
   <v-card class="mb-4" data-testid="person-teaser">
     <div class="pa-4">
-      <!-- Headed as the full page heads a person (`EntityDetailsCard`). -->
-      <h2 class="text-h5 font-weight-bold">{{ teaser.name }}</h2>
+      <!-- Headed as the full page heads a person (`EntityDetailsCard`): the
+           name is the page's h1. -->
+      <h1>{{ teaser.name }}</h1>
 
       <!-- The latest post as the first row of the history the full page lists,
            drawn by the card that draws it there - chips, dates and all - so

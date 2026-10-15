@@ -258,7 +258,7 @@ const saveUrl = () => {
    were the loudest text on the page. */
 .note-entry__text {
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.45;
   margin: 0;
   /* Notes are written by hand, in paragraphs, and sometimes with a url in the

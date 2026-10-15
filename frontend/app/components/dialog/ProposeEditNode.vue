@@ -136,7 +136,7 @@
                 v-model="editData.isPublic"
                 :items="ownershipOptions"
                 label="Właściciel"
-                hint="KRS nie ujawnia akcjonariuszy spółek akcyjnych, a ministerstwa i urzędy nie mają w nim wpisu - dlatego pytamy."
+                hint="KRS nie ujawnia akcjonariuszy spółek akcyjnych, a ministerstwa i urzędy nie mają w nim wpisu – dlatego pytamy."
                 persistent-hint
                 class="mb-2"
               />
@@ -144,7 +144,7 @@
                 v-model="editData.categories"
                 :items="categoryOptions"
                 label="Kategorie"
-                hint="Branża, po której można filtrować na Eksploruj. Wyliczamy ją z kodów PKD, a te mówią, czym firma się zajmuje, a nie do jakiej branży należy - kopalnia z własną bocznicą ma kod kolejowy. Jeśli źle trafiliśmy, popraw."
+                hint="Branża, po której można filtrować na Eksploruj. Wyliczamy ją z kodów PKD, a te mówią, czym firma się zajmuje, a nie do jakiej branży należy – kopalnia z własną bocznicą ma kod kolejowy. Jeśli źle trafiliśmy, popraw."
                 persistent-hint
                 multiple
                 chips
@@ -156,7 +156,7 @@
               <v-textarea
                 v-model="editData.description"
                 label="Opis tematu (opcjonalnie)"
-                hint="Jedno, dwa zdania o co chodzi w tej sprawie - pokazujemy je na stronie tematu"
+                hint="Jedno, dwa zdania o co chodzi w tej sprawie – pokazujemy je na stronie tematu"
                 persistent-hint
                 auto-grow
                 rows="2"
@@ -175,7 +175,7 @@
               <v-text-field
                 v-model="editData.shortName"
                 label="Skrócona nazwa (opcjonalnie)"
-                hint="np. WP, Onet - używana tam, gdzie tytuł się nie mieści"
+                hint="np. WP, Onet – używana tam, gdzie tytuł się nie mieści"
                 persistent-hint
                 class="mb-2"
               />

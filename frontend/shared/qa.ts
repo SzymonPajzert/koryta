@@ -271,6 +271,20 @@ export const QA_ITEMS: QaItem[] = [
     area: "admin",
   },
   {
+    id: "jeden-system-typografii",
+    title:
+      "Jeden tytuł na stronę, mniej rozmiarów tekstu, przyciski bez wersalików",
+    description:
+      "Strony zaczynają się jednym pogrubionym tytułem – na stronie osoby i spółki jest nim nazwa, a na /eksploruj/tabela stoi nad paskiem filtrów. Tekst ma 8 rozmiarów zamiast 25 i żaden nie jest mniejszy niż 12 px. Przyciski, zakładki i menu są pisane zwykłymi literami, etykiety takie jak „Data urodzenia” są szare, a zakresy dat mają półpauzę („2014-11-06 – obecnie”).",
+    steps: [
+      "Otwórz stronę osoby – imię i nazwisko jest dużym tytułem, a „Historia powiązań” wyraźnie mniejszym nagłówkiem sekcji.",
+      "Otwórz stronę spółki – nazwa jest tytułem; nazwa pisana wielkimi literami jest o stopień mniejsza.",
+      "Otwórz /eksploruj/tabela – tytuł jest nad paskiem filtrów, a obok niego przycisk udostępniania widoku.",
+      "Przejrzyj przyciski i menu na kilku stronach – żaden nie jest pisany wersalikami.",
+    ],
+    area: "public",
+  },
+  {
     id: "import-osob-bez-brakujacej-firmy",
     title:
       "Import zapisuje osobę, nawet gdy jednej z jej firm nie ma na stronie",

@@ -49,9 +49,7 @@
         <v-col cols="12" sm="9">
           <v-card>
             <v-card-title class="d-flex justify-center mt-3 text-wrap">
-              <h2 class="text-h4 font-weight-bold mr-2">
-                Statystyki koryciarstwa Krakowa
-              </h2>
+              <h2 class="text-h4 mr-2">Statystyki koryciarstwa Krakowa</h2>
             </v-card-title>
             <v-card-text class="justify-center text-center">
               Podsumowanie, ile osób aktualnie u władzy jest lub kiedykolwiek

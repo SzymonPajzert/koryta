@@ -5,8 +5,10 @@
          took all the squeeze - a double-barrelled surname on a 390px phone
          left „PSL” as „P…”. Whatever does not fit now goes to the next line
          whole. -->
+    <!-- The person's name, at 24/700: an entity name, in a drawer rather
+         than as the page's h1. -->
     <v-card-title
-      class="text-wrap text-h5 mb-2 d-flex flex-wrap align-center ga-2"
+      class="text-wrap text-h5 font-weight-bold mb-2 d-flex flex-wrap align-center ga-2"
     >
       <!-- Not `text-primary`. Sage on white is 1.85:1, and this is the
            person's name - the one thing on the card a reader has to be able

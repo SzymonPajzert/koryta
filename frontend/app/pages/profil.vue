@@ -11,9 +11,9 @@
               <span v-else class="text-h4">{{ initials }}</span>
             </v-avatar>
             <div class="text-center text-sm-left flex-grow-1">
-              <div class="text-h5 mb-1">
+              <h1 class="k-title--sm mb-1">
                 {{ user.displayName || "Bez nazwy" }}
-              </div>
+              </h1>
               <div class="text-body-2 text-medium-emphasis mb-2">
                 {{ user.email }}
               </div>
@@ -77,7 +77,7 @@
           <v-card-subtitle class="text-wrap">
             Ranking na
             <NuxtLink to="/eksploruj/statystyki">stronie statystyk</NuxtLink>
-            pokazuje, kto ile sprawdził, a strona Aktywność - kto co i kiedy
+            pokazuje, kto ile sprawdził, a strona Aktywność – kto co i kiedy
             zrobił. Nazwy są w nich ukryte, dopóki ich właściciele nie zdecydują
             inaczej.
           </v-card-subtitle>

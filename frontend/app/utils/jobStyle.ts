@@ -197,12 +197,12 @@ export const jobKindConfig: Record<
   triggered: {
     title: "Na żądanie",
     icon: mdiGestureTap,
-    info: "Jedno uruchomienie na każde żądanie - zapisaną stronę albo import puszczony ręcznie. Nie mają stałej pory, więc psują się tylko błędem albo uruchomieniem, które utknęło: stroną, której nic już nie podejmie, albo importem, który przestał dawać sygnał.",
+    info: "Jedno uruchomienie na każde żądanie – zapisaną stronę albo import puszczony ręcznie. Nie mają stałej pory, więc psują się tylko błędem albo uruchomieniem, które utknęło: stroną, której nic już nie podejmie, albo importem, który przestał dawać sygnał.",
   },
   scheduled: {
     title: "Według harmonogramu",
     icon: mdiCalendarClock,
-    info: "Ruszają o stałej porze; psują się błędem albo po cichu - nie startując wcale, co zauważa dopiero zegar tej strony.",
+    info: "Ruszają o stałej porze; psują się błędem albo po cichu – nie startując wcale, co zauważa dopiero zegar tej strony.",
   },
   ongoing: {
     title: "Ciągłe",
@@ -235,12 +235,12 @@ export const jobProbeConfig: Record<
   compressedMirror: {
     title: "Lustro w koryta-pl-compressed",
     source:
-      "Kompresor nie zgłasza uruchomień - jego stan to najnowsze archiwum każdego hosta w koryta-pl-compressed.",
+      "Kompresor nie zgłasza uruchomień – jego stan to najnowsze archiwum każdego hosta w koryta-pl-compressed.",
   },
   firestoreExport: {
     title: "Ostatnia kopia w koryta-pl-crawled",
     source:
-      "Eksport nie zgłasza uruchomień - jego stan to plik końcowy (.overall_export_metadata) najnowszej kopii w koryta-pl-crawled.",
+      "Eksport nie zgłasza uruchomień – jego stan to plik końcowy (.overall_export_metadata) najnowszej kopii w koryta-pl-crawled.",
   },
 };
 

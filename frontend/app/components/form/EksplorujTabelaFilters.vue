@@ -1,108 +1,62 @@
 <template>
-  <v-sheet
-    border
-    rounded="lg"
-    class="px-2 mb-3 tabela-query-bar"
-    data-testid="tabela-query-bar"
-  >
-    <!-- Band 1: what this table is, what is narrowing it, how much of it there
-         is, how it is ordered, how to send it to somebody. One line, 44px,
-         where six always-open dropdowns and an explanatory sheet used to put
-         the first row of data 697px down a 1440px desktop. -->
-    <div class="d-flex flex-wrap align-center ga-2 tabela-query-bar__main">
-      <!-- Names the SUBJECT, never the filter: the chips beside it already say
-           „Kraków” and „Szpitale”, and a heading that repeated them would be
-           the only line on the page that goes stale when one is cleared. -->
-      <h1
-        v-if="heading"
-        class="text-subtitle-2 text-truncate flex-shrink-0 mb-0 tabela-query-bar__title"
-      >
-        {{ heading }}
-      </h1>
+  <div>
+    <!-- The page's title above the bar, as every page opens: the h1 at the
+         type system's title size, with the link to this view on its row.
+         Names the SUBJECT, never the filter: the chips in the bar already say
+         „Kraków” and „Szpitale”, and a heading that repeated them would be
+         the only line on the page that goes stale when one is cleared. -->
+    <div
+      v-if="heading || showShare"
+      class="d-flex align-center ga-2 mb-4 tabela-query__head"
+    >
+      <h1 v-if="heading" class="mb-0">{{ heading }}</h1>
+      <ExploreShareQuery
+        v-if="showShare"
+        :query="query"
+        :lookup="lookup"
+        class="ms-auto flex-shrink-0"
+        @copied="emit('share')"
+      />
+    </div>
 
-      <!-- Two activators for one panel, sorted out by Vuetify's display
-           classes rather than by `useDisplay()`: under SSR Vuetify builds its
-           display state from a placeholder 1280px and corrects it only when
-           the app's suspense resolves, so a width-driven `v-if` renders the
-           desktop overlay into the phone's html and sometimes never takes it
-           back. -->
-      <v-menu
-        v-model="menuOpen"
-        :close-on-content-click="false"
-        location="bottom start"
-        min-width="760"
-        max-width="760"
-      >
-        <template #activator="{ props: activatorProps }">
-          <v-btn
-            v-bind="activatorProps"
-            variant="tonal"
-            size="small"
-            class="text-none flex-shrink-0 d-none d-md-inline-flex"
-            :title="queryDescription"
-            :prepend-icon="mdiTuneVariant"
-            :append-icon="mdiChevronDown"
-          >
-            {{ filtersLabel }}
-          </v-btn>
-        </template>
-        <v-card class="pa-4">
-          <FormEksplorujTabelaFilterPanel
-            v-model:visibility="visibility"
-            v-model:party="party"
-            v-model:teryt="teryt"
-            v-model:company-teryt="companyTeryt"
-            v-model:place="place"
-            v-model:category="category"
-            v-model:hide-voted="hideVoted"
-            v-model:currently-employed="currentlyEmployed"
-            v-model:min-employment-date="minEmploymentDate"
-            v-model:min-votes="minVotes"
-            :available-parties="availableParties"
-            :available-regions="availableRegions"
-            :available-companies="availableCompanies"
-            :show-visibility="showVisibility"
-            :total-items="totalItems"
-            show-header
-            @close="menuOpen = false"
-            @clear="clearAll"
-          />
-        </v-card>
-      </v-menu>
-
-      <v-dialog
-        v-model="dialogOpen"
-        fullscreen
-        transition="dialog-bottom-transition"
-      >
-        <template #activator="{ props: activatorProps }">
-          <v-btn
-            v-bind="activatorProps"
-            variant="tonal"
-            size="small"
-            class="text-none flex-shrink-0 d-md-none"
-            :title="queryDescription"
-            :prepend-icon="mdiTuneVariant"
-            :append-icon="mdiChevronDown"
-          >
-            {{ filtersLabel }}
-          </v-btn>
-        </template>
-        <v-card class="d-flex flex-column">
-          <v-toolbar density="comfortable" flat>
+    <v-sheet
+      border
+      rounded="lg"
+      class="px-2 mb-3 tabela-query-bar"
+      data-testid="tabela-query-bar"
+    >
+      <!-- Band 1: what is narrowing the table, how much of it there is, how it
+           is ordered. One line, 44px, where six always-open dropdowns and an
+           explanatory sheet used to put the first row of data 697px down a
+           1440px desktop. -->
+      <div class="d-flex flex-wrap align-center ga-2 tabela-query-bar__main">
+        <!-- Two activators for one panel, sorted out by Vuetify's display
+             classes rather than by `useDisplay()`: under SSR Vuetify builds its
+             display state from a placeholder 1280px and corrects it only when
+             the app's suspense resolves, so a width-driven `v-if` renders the
+             desktop overlay into the phone's html and sometimes never takes it
+             back. -->
+        <v-menu
+          v-model="menuOpen"
+          :close-on-content-click="false"
+          location="bottom start"
+          min-width="760"
+          max-width="760"
+        >
+          <template #activator="{ props: activatorProps }">
             <v-btn
-              :icon="mdiClose"
-              variant="text"
-              aria-label="Zamknij filtry"
-              @click="dialogOpen = false"
-            />
-            <v-toolbar-title>Filtry</v-toolbar-title>
-            <v-btn variant="text" class="text-none" @click="clearAll">
-              Wyczyść
+              v-bind="activatorProps"
+              variant="tonal"
+              size="small"
+              class="text-none flex-shrink-0 d-none d-md-inline-flex"
+              :title="queryDescription"
+              :prepend-icon="mdiTuneVariant"
+              :append-icon="mdiChevronDown"
+            >
+              {{ filtersLabel }}
             </v-btn>
-          </v-toolbar>
-          <v-divider />
-          <div class="pa-4 flex-1-1-0 overflow-y-auto">
+          </template>
+          <v-card class="pa-4">
             <FormEksplorujTabelaFilterPanel
               v-model:visibility="visibility"
               v-model:party="party"
@@ -119,241 +73,292 @@
               :available-companies="availableCompanies"
               :show-visibility="showVisibility"
               :total-items="totalItems"
-              @close="dialogOpen = false"
+              show-header
+              @close="menuOpen = false"
               @clear="clearAll"
-            />
-          </div>
-        </v-card>
-      </v-dialog>
-
-      <v-divider vertical class="mx-1 my-2 d-none d-md-block" />
-
-      <!-- The rail wraps at every width, and never scrolls. The scrolling
-           version measured at six filters on a 1440px desktop put the last
-           chip at x 916-1052 against a scroller that clipped at 931: half a
-           chip, behind a 24px fade, with `scrollbar-width: none` and no way to
-           reach it with a plain mouse wheel. Wrapping costs 19px in that state
-           and keeps every filter readable, which is the whole job of a chip
-           that stands in for a control the reader can no longer see. -->
-      <div
-        class="d-flex flex-wrap align-center ga-1 flex-1-1-0 tabela-query-bar__rail"
-      >
-        <!-- `close-label` because VChip names its x „Close”, in English,
-             whatever the page is written in: the default is a Vuetify locale
-             key and this app ships no Polish translation for it. Spelled out
-             per chip so a screen reader, and an e2e locator, can say which of
-             six filters is about to go.
-
-             `variant="flat"` and a `bg-surface-*` class rather than
-             `variant="tonal" color="primary"`: a tonal chip paints the colour
-             itself as the label, and primary is a pale fill - #a8c79f on the
-             white sheet measured 1.85:1 against the 4.5:1 AA needs, which is
-             the complaint that started this. The class carries its ink with
-             it, so the pair cannot be split up later. -->
-        <v-chip
-          v-for="chip in railChips"
-          :key="chip.key"
-          size="small"
-          variant="flat"
-          border
-          closable
-          :class="chip.look.surface"
-          :style="chip.look.style"
-          :prepend-icon="chip.look.icon"
-          :close-icon="mdiClose"
-          :aria-label="chip.label"
-          :close-label="`Usuń filtr: ${chip.label}`"
-          v-on="chipOpensPanel(chip) ? { click: () => openFilters() } : {}"
-          @click:close="clearChip(chip)"
-        >
-          {{ chip.label }}
-        </v-chip>
-        <!-- Only when nothing at all is set. With the work row carrying the
-             verification chips, an empty rail is not an unfiltered table. -->
-        <span
-          v-if="chips.length === 0"
-          class="text-body-2 text-ink-neutral d-none d-md-inline"
-        >
-          Wszystkie osoby w bazie
-        </span>
-        <v-btn
-          v-if="chips.length >= 2"
-          variant="text"
-          size="small"
-          class="text-none flex-shrink-0"
-          @click="clearAll"
-        >
-          Wyczyść
-        </v-btn>
-      </div>
-
-      <!-- Shown at every width, including the 390px phone the mock hid it
-           from: „ile tego jest” is the cheapest answer to „what am I looking
-           at”, and the reader has just changed a filter without seeing the
-           table move. -->
-      <span
-        v-if="totalItems !== undefined"
-        class="text-body-2 text-ink-neutral flex-shrink-0 tabela-query-bar__count"
-      >
-        {{ polishCountingGrouped(totalItems, "osoba", "osoby", "osób") }}
-      </span>
-
-      <v-divider vertical class="mx-1 my-2 d-none d-md-block" />
-
-      <!-- Both live sorts one click away, without opening a column header. The
-           keys come from `tableSortOptions` and go verbatim into `?sortBy=`
-           and into a Firestore `orderBy` with no allow-list in between.
-
-           The label is drawn at every width. Below 960px „Oceny” and „Wybory”
-           are `hidden-sm-and-down` and their header sorts go with them, so
-           this button is the only thing on the page that can say how the table
-           is ordered - hidden, it left a phone reader with an icon and an
-           arrow and no name for either. -->
-      <v-menu v-if="sortBy !== undefined" location="bottom end">
-        <template #activator="{ props: activatorProps }">
-          <v-btn
-            v-bind="activatorProps"
-            variant="text"
-            size="small"
-            class="text-none flex-shrink-0"
-            :aria-label="sortKey ? `Sortowanie: ${sortLabel}` : 'Sortowanie'"
-            :prepend-icon="mdiSort"
-            :append-icon="sortArrow"
-          >
-            {{ sortButtonLabel }}
-          </v-btn>
-        </template>
-        <v-list density="compact" min-width="240">
-          <v-list-subheader>Sortuj wg</v-list-subheader>
-          <v-list-item
-            v-for="option in sortOptions"
-            :key="option.key"
-            :active="option.key === sortKey"
-            @click="pickSort(option.key)"
-          >
-            <v-list-item-title class="text-body-2">
-              {{ option.title }}
-            </v-list-item-title>
-            <template #append>
-              <v-icon
-                v-if="option.key === sortKey"
-                size="small"
-                :icon="sortDesc ? mdiArrowDown : mdiArrowUp"
-              />
-            </template>
-          </v-list-item>
-        </v-list>
-      </v-menu>
-
-      <ExploreShareQuery
-        v-if="showShare"
-        :query="query"
-        :lookup="lookup"
-        @copied="emit('share')"
-      />
-    </div>
-
-    <!-- Band 2: the work row, for a reader who is signed in and can act on it.
-         Progress, this reader's own contribution and the four verification
-         filters on one 32px line, in place of a 183px card plus a panel three
-         clicks away. Every one of those filters is in the top four by use, so
-         each is either a chip that can be cleared here or a `+ Nazwa` that
-         sets it here. -->
-    <template v-if="showWorkRow">
-      <v-divider />
-      <div
-        class="d-flex align-center flex-wrap ga-2 py-1 tabela-query-bar__work"
-        data-testid="tabela-work-row"
-      >
-        <!-- Without a query there is nothing to ask the progress endpoint
-             about, and `query` is a required prop of the bar. -->
-        <ExploreProgressBar
-          v-if="progressQuery"
-          compact
-          hide-cta
-          :query="progressQuery"
-          class="tabela-query-bar__progress"
-        />
-
-        <!-- One menu per filter, holding exactly that one control, and the
-             same menu whether the filter is set or not: in the mock a set
-             chip's body did nothing, so the only way to change „min. 5
-             głosów” to „min. 10” was to clear it and start again. -->
-        <v-menu
-          v-for="shortcut in workRowFilters"
-          :key="shortcut.key"
-          :close-on-content-click="false"
-          location="bottom start"
-          :offset="4"
-        >
-          <template #activator="{ props: activatorProps }">
-            <v-chip
-              v-if="shortcut.chip"
-              v-bind="activatorProps"
-              size="small"
-              variant="flat"
-              border
-              :class="shortcut.chip.look.surface"
-              :prepend-icon="shortcut.chip.look.icon"
-              closable
-              :close-icon="mdiClose"
-              :aria-label="shortcut.chip.label"
-              :close-label="`Usuń filtr: ${shortcut.chip.label}`"
-              @click:close="clearChip(shortcut.chip)"
-            >
-              {{ shortcut.chip.short }}
-            </v-chip>
-            <v-btn
-              v-else
-              v-bind="activatorProps"
-              variant="text"
-              size="x-small"
-              class="text-none text-ink-neutral flex-shrink-0"
-              :prepend-icon="mdiPlus"
-            >
-              {{ shortcut.label }}
-            </v-btn>
-          </template>
-          <v-card class="pa-3" min-width="260">
-            <FormEksplorujTabelaVerificationFields
-              v-model:visibility="visibility"
-              v-model:hide-voted="hideVoted"
-              v-model:min-employment-date="minEmploymentDate"
-              v-model:min-votes="minVotes"
-              :only="shortcut.key"
             />
           </v-card>
         </v-menu>
 
-        <!-- The only „Pomóż sprawdzać” a reader of this page meets.
-             ExploreProgressBar had a second copy, anchored to the right edge
-             of its own box - which ends before the shortcuts - and both of its
-             callers hid it, so it is gone from that component. Drawn here so
-             the row ends on the invitation rather than breaking in the middle
-             of it. (/eksploruj/statystyki draws its own, on its own page.)
-
-             Filled rather than tonal: a tonal button writes its colour as the
-             label, and primary is a fill - „Pomóż sprawdzać” in #a8c79f on
-             white measured 1.85:1. Filled, Vuetify pairs it with the ink it
-             computes for the fill, which on this sage is black at 11.33:1. -->
-        <v-btn
-          to="/eksploruj/nowe"
-          color="primary"
-          variant="flat"
-          size="small"
-          class="text-none flex-shrink-0 ms-auto"
-          :append-icon="mdiArrowRight"
+        <v-dialog
+          v-model="dialogOpen"
+          fullscreen
+          transition="dialog-bottom-transition"
         >
-          Pomóż sprawdzać
-        </v-btn>
+          <template #activator="{ props: activatorProps }">
+            <v-btn
+              v-bind="activatorProps"
+              variant="tonal"
+              size="small"
+              class="text-none flex-shrink-0 d-md-none"
+              :title="queryDescription"
+              :prepend-icon="mdiTuneVariant"
+              :append-icon="mdiChevronDown"
+            >
+              {{ filtersLabel }}
+            </v-btn>
+          </template>
+          <v-card class="d-flex flex-column">
+            <v-toolbar density="comfortable" flat>
+              <v-btn
+                :icon="mdiClose"
+                variant="text"
+                aria-label="Zamknij filtry"
+                @click="dialogOpen = false"
+              />
+              <v-toolbar-title>Filtry</v-toolbar-title>
+              <v-btn variant="text" class="text-none" @click="clearAll">
+                Wyczyść
+              </v-btn>
+            </v-toolbar>
+            <v-divider />
+            <div class="pa-4 flex-1-1-0 overflow-y-auto">
+              <FormEksplorujTabelaFilterPanel
+                v-model:visibility="visibility"
+                v-model:party="party"
+                v-model:teryt="teryt"
+                v-model:company-teryt="companyTeryt"
+                v-model:place="place"
+                v-model:category="category"
+                v-model:hide-voted="hideVoted"
+                v-model:currently-employed="currentlyEmployed"
+                v-model:min-employment-date="minEmploymentDate"
+                v-model:min-votes="minVotes"
+                :available-parties="availableParties"
+                :available-regions="availableRegions"
+                :available-companies="availableCompanies"
+                :show-visibility="showVisibility"
+                :total-items="totalItems"
+                @close="dialogOpen = false"
+                @clear="clearAll"
+              />
+            </div>
+          </v-card>
+        </v-dialog>
+
+        <v-divider vertical class="mx-1 my-2 d-none d-md-block" />
+
+        <!-- The rail wraps at every width, and never scrolls. The scrolling
+             version measured at six filters on a 1440px desktop put the last
+             chip at x 916-1052 against a scroller that clipped at 931: half a
+             chip, behind a 24px fade, with `scrollbar-width: none` and no way to
+             reach it with a plain mouse wheel. Wrapping costs 19px in that state
+             and keeps every filter readable, which is the whole job of a chip
+             that stands in for a control the reader can no longer see. -->
+        <div
+          class="d-flex flex-wrap align-center ga-1 flex-1-1-0 tabela-query-bar__rail"
+        >
+          <!-- `close-label` because VChip names its x „Close”, in English,
+               whatever the page is written in: the default is a Vuetify locale
+               key and this app ships no Polish translation for it. Spelled out
+               per chip so a screen reader, and an e2e locator, can say which of
+               six filters is about to go.
+
+               `variant="flat"` and a `bg-surface-*` class rather than
+               `variant="tonal" color="primary"`: a tonal chip paints the colour
+               itself as the label, and primary is a pale fill - #a8c79f on the
+               white sheet measured 1.85:1 against the 4.5:1 AA needs, which is
+               the complaint that started this. The class carries its ink with
+               it, so the pair cannot be split up later. -->
+          <v-chip
+            v-for="chip in railChips"
+            :key="chip.key"
+            size="small"
+            variant="flat"
+            border
+            closable
+            :class="chip.look.surface"
+            :style="chip.look.style"
+            :prepend-icon="chip.look.icon"
+            :close-icon="mdiClose"
+            :aria-label="chip.label"
+            :close-label="`Usuń filtr: ${chip.label}`"
+            v-on="chipOpensPanel(chip) ? { click: () => openFilters() } : {}"
+            @click:close="clearChip(chip)"
+          >
+            {{ chip.label }}
+          </v-chip>
+          <!-- Only when nothing at all is set. With the work row carrying the
+               verification chips, an empty rail is not an unfiltered table. -->
+          <span
+            v-if="chips.length === 0"
+            class="text-body-2 text-ink-neutral d-none d-md-inline"
+          >
+            Wszystkie osoby w bazie
+          </span>
+          <v-btn
+            v-if="chips.length >= 2"
+            variant="text"
+            size="small"
+            class="text-none flex-shrink-0"
+            @click="clearAll"
+          >
+            Wyczyść
+          </v-btn>
+        </div>
+
+        <!-- Shown at every width, including the 390px phone the mock hid it
+             from: „ile tego jest” is the cheapest answer to „what am I looking
+             at”, and the reader has just changed a filter without seeing the
+             table move. -->
+        <span
+          v-if="totalItems !== undefined"
+          class="text-body-2 text-ink-neutral flex-shrink-0 tabela-query-bar__count"
+        >
+          {{ polishCountingGrouped(totalItems, "osoba", "osoby", "osób") }}
+        </span>
+
+        <v-divider vertical class="mx-1 my-2 d-none d-md-block" />
+
+        <!-- Both live sorts one click away, without opening a column header. The
+             keys come from `tableSortOptions` and go verbatim into `?sortBy=`
+             and into a Firestore `orderBy` with no allow-list in between.
+
+             The label is drawn at every width. Below 960px „Oceny” and „Wybory”
+             are `hidden-sm-and-down` and their header sorts go with them, so
+             this button is the only thing on the page that can say how the table
+             is ordered - hidden, it left a phone reader with an icon and an
+             arrow and no name for either. -->
+        <v-menu v-if="sortBy !== undefined" location="bottom end">
+          <template #activator="{ props: activatorProps }">
+            <v-btn
+              v-bind="activatorProps"
+              variant="text"
+              size="small"
+              class="text-none flex-shrink-0"
+              :aria-label="sortKey ? `Sortowanie: ${sortLabel}` : 'Sortowanie'"
+              :prepend-icon="mdiSort"
+              :append-icon="sortArrow"
+            >
+              {{ sortButtonLabel }}
+            </v-btn>
+          </template>
+          <v-list density="compact" min-width="240">
+            <v-list-subheader>Sortuj wg</v-list-subheader>
+            <v-list-item
+              v-for="option in sortOptions"
+              :key="option.key"
+              :active="option.key === sortKey"
+              @click="pickSort(option.key)"
+            >
+              <v-list-item-title class="text-body-2">
+                {{ option.title }}
+              </v-list-item-title>
+              <template #append>
+                <v-icon
+                  v-if="option.key === sortKey"
+                  size="small"
+                  :icon="sortDesc ? mdiArrowDown : mdiArrowUp"
+                />
+              </template>
+            </v-list-item>
+          </v-list>
+        </v-menu>
       </div>
-    </template>
-  </v-sheet>
+
+      <!-- Band 2: the work row, for a reader who is signed in and can act on it.
+           Progress, this reader's own contribution and the four verification
+           filters on one 32px line, in place of a 183px card plus a panel three
+           clicks away. Every one of those filters is in the top four by use, so
+           each is either a chip that can be cleared here or a `+ Nazwa` that
+           sets it here. -->
+      <template v-if="showWorkRow">
+        <v-divider />
+        <div
+          class="d-flex align-center flex-wrap ga-2 py-1 tabela-query-bar__work"
+          data-testid="tabela-work-row"
+        >
+          <!-- Without a query there is nothing to ask the progress endpoint
+               about, and `query` is a required prop of the bar. -->
+          <ExploreProgressBar
+            v-if="progressQuery"
+            compact
+            hide-cta
+            :query="progressQuery"
+            class="tabela-query-bar__progress"
+          />
+
+          <!-- One menu per filter, holding exactly that one control, and the
+               same menu whether the filter is set or not: in the mock a set
+               chip's body did nothing, so the only way to change „min. 5
+               głosów” to „min. 10” was to clear it and start again. -->
+          <v-menu
+            v-for="shortcut in workRowFilters"
+            :key="shortcut.key"
+            :close-on-content-click="false"
+            location="bottom start"
+            :offset="4"
+          >
+            <template #activator="{ props: activatorProps }">
+              <v-chip
+                v-if="shortcut.chip"
+                v-bind="activatorProps"
+                size="small"
+                variant="flat"
+                border
+                :class="shortcut.chip.look.surface"
+                :prepend-icon="shortcut.chip.look.icon"
+                closable
+                :close-icon="mdiClose"
+                :aria-label="shortcut.chip.label"
+                :close-label="`Usuń filtr: ${shortcut.chip.label}`"
+                @click:close="clearChip(shortcut.chip)"
+              >
+                {{ shortcut.chip.short }}
+              </v-chip>
+              <v-btn
+                v-else
+                v-bind="activatorProps"
+                variant="text"
+                size="x-small"
+                class="text-none text-ink-neutral flex-shrink-0"
+                :prepend-icon="mdiPlus"
+              >
+                {{ shortcut.label }}
+              </v-btn>
+            </template>
+            <v-card class="pa-3" min-width="260">
+              <FormEksplorujTabelaVerificationFields
+                v-model:visibility="visibility"
+                v-model:hide-voted="hideVoted"
+                v-model:min-employment-date="minEmploymentDate"
+                v-model:min-votes="minVotes"
+                :only="shortcut.key"
+              />
+            </v-card>
+          </v-menu>
+
+          <!-- The only „Pomóż sprawdzać” a reader of this page meets.
+               ExploreProgressBar had a second copy, anchored to the right edge
+               of its own box - which ends before the shortcuts - and both of its
+               callers hid it, so it is gone from that component. Drawn here so
+               the row ends on the invitation rather than breaking in the middle
+               of it. (/eksploruj/statystyki draws its own, on its own page.)
+
+               Filled rather than tonal: a tonal button writes its colour as the
+               label, and primary is a fill - „Pomóż sprawdzać” in #a8c79f on
+               white measured 1.85:1. Filled, Vuetify pairs it with the ink it
+               computes for the fill, which on this sage is black at 11.33:1. -->
+          <v-btn
+            to="/eksploruj/nowe"
+            color="primary"
+            variant="flat"
+            size="small"
+            class="text-none flex-shrink-0 ms-auto"
+            :append-icon="mdiArrowRight"
+          >
+            Pomóż sprawdzać
+          </v-btn>
+        </div>
+      </template>
+    </v-sheet>
+  </div>
 </template>
 
 <script setup lang="ts">
-/** The query bar of /eksploruj/tabela: one 44px line that says what the table
- * is showing, plus a 32px work row for the people verifying it.
+/** The query bar of /eksploruj/tabela, under the page's title: one 44px line
+ * that says what the table is showing, plus a 32px work row for the people
+ * verifying it.
  *
  * It replaces six always-open dropdowns and a blue-grey sheet explaining the
  * administrative filters. Measured, that layout put the first row of data
@@ -361,7 +366,8 @@
  * followed a link to „Szpitale w Krakowie” scrolled past every control on the
  * page before reaching one person. The controls are still all here, one click
  * behind „Filtry”; what is on the bar is what is already true about the table:
- * a chip per filter, the row count, the sort and the share link.
+ * a chip per filter, the row count and the sort, with the share link beside
+ * the title above it.
  *
  * /eksploruj/autograf/[type] mounts the same component over a chart: the same
  * ten filters, but no table under it and no progress data, so everything that
@@ -428,8 +434,9 @@ const props = withDefaults(
     /** Draw the share control. Off by default for the same reason: a link to
      * the table is not what a visualisation page wants to hand out. */
     showShare?: boolean;
-    /** The page's `<h1>`, naming what the table is about. `null` for a page
-     * that already has a heading of its own. */
+    /** The page's `<h1>`, naming what the table is about, drawn above the
+     * bar with the share link beside it. `null` for a page that already has a
+     * heading of its own. */
     heading?: string | null;
     /** Where in the results the reader is standing. Not a filter and never a
      * chip: it reaches the share card, which offers to add it to the link only
@@ -578,7 +585,7 @@ const CHIP_FALLBACK = "bg-surface-muted";
  * „Siedziba: Małopolskie”, „Zatrudnieni od 1 marca 2021”, „Min. 5 głosów”,
  * „Tylko szkice” - so the icon repeated the word beside it, and it repeated it
  * in the width of a glyph and its gap, on a rail that shares one 44px line
- * with the heading, the „Filtry” button, the count and the sort. */
+ * with the „Filtry” button, the count and the sort. */
 const CATEGORY_FALLBACK_ICON = mdiTagOutline;
 
 /** A sector's own icon, keyed by the values in `shared/companyCategories`. A
@@ -878,13 +885,7 @@ function clearAll() {
   text-align: right;
 }
 
-/* On a phone the heading takes the whole first line. Sharing it with the
-   „Filtry” button leaves the chips a third of a 390px screen, and a chip rail
-   in 130px wraps one chip per line. */
 @media (max-width: 599.98px) {
-  .tabela-query-bar__title {
-    flex: 1 1 100%;
-  }
   .tabela-query-bar__count {
     min-width: 0;
   }
