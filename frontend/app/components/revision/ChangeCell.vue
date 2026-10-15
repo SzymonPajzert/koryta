@@ -20,7 +20,7 @@
     >
       <v-icon :icon="mdiAlertOutline" size="x-small" class="mt-1" />
       <span>
-        Wpis zmienił się po zgłoszeniu — zatwierdzenie cofnie nowsze zmiany.
+        Wpis zmienił się po zgłoszeniu – zatwierdzenie cofnie nowsze zmiany.
       </span>
     </div>
   </div>

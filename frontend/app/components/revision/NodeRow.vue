@@ -17,22 +17,29 @@
         <span class="arow-grow font-weight-medium" :title="name">
           {{ name }}
         </span>
-        <span class="arow-side text-body-2 text-medium-emphasis">
-          {{ typeLabel }}
-        </span>
-        <span
-          v-if="waiting"
-          class="arow-tag bg-surface-warning text-ink-warning"
-          data-waiting
-        >
-          czeka
-        </span>
         <template #rest>
+          <span class="arow-side text-body-2 text-medium-emphasis">
+            {{ typeLabel }}
+          </span>
+          <span
+            v-if="node.deleted"
+            class="arow-tag bg-surface-muted text-ink-neutral"
+            data-deleted
+          >
+            Usunięty
+          </span>
+          <span
+            v-if="waiting"
+            class="arow-tag bg-surface-warning text-ink-warning"
+            data-waiting
+          >
+            Czeka
+          </span>
           <span class="arow-fixed text-body-2" data-revision-count>
             {{ revisionCount }}
           </span>
           <span class="arow-fixed text-caption text-medium-emphasis">
-            {{ formatDaysAgo(node.revisions?.latest_time) }}
+            {{ formatDayDistance(node.revisions?.latest_time) }}
           </span>
         </template>
       </RevisionRowLine>
@@ -59,11 +66,18 @@
         {{ waiting ? "czeka na akceptację" : "wszystko zaakceptowane" }}
       </AdminRowFact>
       <AdminRowFact label="Ostatnia zmiana">
-        {{ formatMoment(node.revisions?.latest_time) }} ·
-        {{ formatDaysAgo(node.revisions?.latest_time) }}
+        <span class="text-no-wrap">{{
+          formatMoment(node.revisions?.latest_time)
+        }}</span>
+        <span v-if="node.revisions?.latest_time" class="d-block">{{
+          formatDayDistance(node.revisions?.latest_time)
+        }}</span>
       </AdminRowFact>
-      <AdminRowFact v-if="node.visibility !== undefined" label="Strona">
-        {{ node.visibility ? "opublikowana" : "nieopublikowana" }}
+      <AdminRowFact
+        v-if="node.deleted || node.visibility !== undefined"
+        label="Strona"
+      >
+        {{ pageState }}
       </AdminRowFact>
     </template>
 
@@ -73,7 +87,7 @@
           variant="text"
           size="small"
           color="ink-sage"
-          :prepend-icon="mdiOpenInNew"
+          :prepend-icon="mdiArrowRight"
           :to="entityUrl"
         >
           Strona wpisu
@@ -99,9 +113,9 @@
  * is not enough.
  */
 import { computed } from "vue";
-import { mdiCompare, mdiOpenInNew } from "@mdi/js";
+import { mdiArrowRight, mdiCompare } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
-import { formatDaysAgo } from "~/utils/chartTheme";
+import { formatDayDistance, formatMoment } from "~/utils/moment";
 import { nodeLinkUrl } from "~/composables/slugs";
 import { polishCounting } from "~/composables/polish";
 import type { NodeType } from "~~/shared/model";
@@ -114,6 +128,9 @@ export type RevisedNode = {
   type: NodeType;
   /** Whether the page is public, worked out by the endpoint. */
   visibility?: boolean;
+  /** Removed from the site. Its history stays, so it is still listed here -
+   * and has to say so, or it reads like any live entry. */
+  deleted?: boolean;
   revisions?: {
     total: number;
     latest_time: string | null;
@@ -138,6 +155,13 @@ const waiting = computed(() => props.node.revisions?.has_unapproved === true);
 
 const name = computed(() => props.node.name || props.node.id);
 
+/** The „Strona” fact. A removed entry is never public, so „nieopublikowana”
+ * would be true and still beside the point. */
+const pageState = computed(() => {
+  if (props.node.deleted) return "usunięta";
+  return props.node.visibility ? "opublikowana" : "nieopublikowana";
+});
+
 const revisionCount = computed(() =>
   polishCounting(
     props.node.revisions?.total ?? 0,
@@ -150,7 +174,4 @@ const revisionCount = computed(() =>
 const entityUrl = computed(() =>
   nodeLinkUrl({ id: props.node.id, type: props.node.type, name: name.value }),
 );
-
-const formatMoment = (value?: string | null) =>
-  value ? new Date(value).toLocaleString("pl-PL") : "-";
 </script>

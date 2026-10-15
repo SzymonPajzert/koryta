@@ -15,18 +15,16 @@
         class="revision-diff__row text-body-2"
       >
         <span class="revision-diff__label text-medium-emphasis">{{
-          change.label
+          capitaliseLabel(change.label)
         }}</span>
         <span
           class="revision-diff__value"
           :class="valueClass(change.from, 'from')"
           >{{ displayValue(change.from) }}</span
         >
-        <v-icon :icon="mdiArrowRight" size="x-small" class="text-disabled" />
-        <span
-          class="revision-diff__value"
-          :class="valueClass(change.to, 'to')"
-          >{{ displayValue(change.to) }}</span
+        <span class="revision-diff__value" :class="valueClass(change.to, 'to')"
+          ><v-icon :icon="mdiArrowRight" size="x-small" class="text-disabled" />
+          {{ displayValue(change.to) }}</span
         >
       </div>
 
@@ -58,7 +56,10 @@
 import { computed } from "vue";
 import { mdiArrowRight } from "@mdi/js";
 import { MAX_INLINE_CHANGES } from "~~/shared/proposals";
-import type { RevisionChange } from "~~/shared/revisionChanges";
+import {
+  capitaliseLabel,
+  type RevisionChange,
+} from "~~/shared/revisionChanges";
 import { polishCounting } from "~/composables/polish";
 
 const props = withDefaults(
@@ -119,10 +120,12 @@ function valueClass(value: string | null, side: "from" | "to"): string {
   overflow-wrap: anywhere;
 }
 
-/* In an open history row there is no cell to protect, and a description held
-   to 220px turned into a column a few words wide and a screen tall. Given the
-   whole line, a long value wraps as prose and the arrow and the new value
-   follow it on the next line. */
+/* In an open row - an entry's history, the queue's - there is no cell to
+   protect, and a description held to 220px turned into a column a few words
+   wide and a screen tall. Given the whole line, a long value wraps as prose
+   and the new value follows it on the next line, led by the arrow - which sits
+   inside the new value's span so it cannot be left on a line of its own
+   between the two. */
 .revision-diff--wide .revision-diff__value {
   max-width: 100%;
   white-space: pre-line;
