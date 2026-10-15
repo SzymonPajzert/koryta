@@ -355,6 +355,20 @@ export const QA_ITEMS: QaItem[] = [
     area: "admin",
   },
   {
+    id: "strony-robocze-jak-publiczne",
+    title:
+      "Strony robocze w tej samej kolumnie i z tym samym nagłówkiem co publiczne",
+    description:
+      "Panel, rewizje, zgłoszenia, QA, zadania, procesy, notatki, ekstrakcje, profil i aktywność zaczynają się w tym samym miejscu co strony publiczne: tytuł, jedno zdanie pod nim, reszta wyjaśnień pod (i). Nagłówki sekcji i liczniki są spokojniejsze, a etykiety w otwartych wierszach są pisane zwykłymi literami.",
+    steps: [
+      "Otwórz /admin – na górze są kolejki „Wymagające działania”, a podstrony na dole, jako lista.",
+      "Przejdź przez /admin/rewizje, /admin/opinie, /admin/zadania i /aktywnosc – tytuł stoi zawsze w tym samym miejscu, a otwarty wiersz ma etykiety „Autor”, „Kiedy” zamiast „AUTOR”, „KIEDY”.",
+      "Przeładuj /ekstrakcje – jest lista faktów, a nie „Brak ekstrakcji”.",
+    ],
+    link: "/admin",
+    area: "admin",
+  },
+  {
     id: "import-osob-bez-brakujacej-firmy",
     title:
       "Import zapisuje osobę, nawet gdy jednej z jej firm nie ma na stronie",
