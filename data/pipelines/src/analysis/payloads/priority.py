@@ -58,6 +58,11 @@ says: at a company the site has a page for first, a company's people together.
 A company counts through its people because the night sends no company
 payloads: what a company learns arrives as its people's posts.
 
+A page in the bought and the noted tiers may be published or not, so each pick
+says whether its page is (`Pick.published`): a change to a published page is
+what readers see, or what waits for a reviewer, whatever tier sent it, and a
+run caps those across the tiers (`--max-published` in `jobs.people_import`).
+
 The new-hire and the odpis-only tiers are `missing_from_koryta` and the other
 five `matching_one_page`, with their guards: nobody here is someone a run of
 either scope would not have sent.
@@ -100,6 +105,10 @@ class Pick:
     #: The day the news dates from - the newest post's start, the newest
     #: dated fact a page would learn - or None when it has no date.
     since: str | None
+    #: Whether the page the payload would change is published
+    #: (`published_ids`), whatever the tier; False for somebody the site has
+    #: no page for.
+    published: bool = False
 
 
 def newest_public_start(
@@ -261,14 +270,15 @@ def prioritised(
         if not writes:
             continue
         stored = snapshot.person_for(payload)
+        live = stored is not None and str(stored.get("id")) in published_ids
         if register_id(person) in bought:
-            paid_for.append(Pick(person, BOUGHT, newest))
+            paid_for.append(Pick(person, BOUGHT, newest, live))
         elif (tier := note_tier(person, stored, snapshot, noted)) is not None:
             (missing if tier == NOTED_MISSING else asked).append(
-                Pick(person, tier, newest)
+                Pick(person, tier, newest, live)
             )
-        elif stored is not None and str(stored.get("id")) in published_ids:
-            published.append(Pick(person, PUBLISHED, newest))
+        elif live:
+            published.append(Pick(person, PUBLISHED, newest, live))
         else:
             unpublished.append(Pick(person, ON_SITE, newest))
 

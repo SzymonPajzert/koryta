@@ -35,11 +35,13 @@ REQUEST = "request"
 
 @dataclass(frozen=True)
 class Candidate:
-    """A payload a priority run may send, its tier and the day it dates from."""
+    """A payload a priority run may send, its tier and the day it dates from,
+    and whether the page it would change is published (`Pick.published`)."""
 
     payload: dict
     tier: str
     since: str | None
+    published: bool = False
 
 
 def pipeline_argv(scope: str, koryta_date: str | None) -> list[str]:
@@ -126,7 +128,7 @@ def build_priority(
     frame = pd.DataFrame.from_records([asdict(pick.person) for pick in picks])
     rows = [as_sent(row) for row in iterate_pipeline_dict(frame)]
     return [
-        Candidate(row, pick.tier, pick.since)
+        Candidate(row, pick.tier, pick.since, pick.published)
         for row, pick in zip(rows, picks, strict=True)
     ]
 
