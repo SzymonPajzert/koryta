@@ -1,118 +1,119 @@
 <template>
   <!-- One line per report and nothing to answer with: this is the mode for
        deciding what comes next, so the status, the note and the links stay on
-       the cards of the other mode. -->
-  <div ref="root" class="fb-order">
-    <div class="d-flex align-center ga-2 mb-2">
-      <h2 class="text-subtitle-1 font-weight-bold">Kolejka</h2>
-      <v-chip size="x-small" label>{{ queue.length }}</v-chip>
-      <span class="text-caption text-medium-emphasis ms-auto">
-        Przeciągnij albo użyj strzałek.
-      </span>
-    </div>
+       the cards of the other mode. The heads, the frame round each list and
+       the gap between the two are the other mode's, so the two modes look
+       like one page. -->
+  <div ref="root" class="fb-order k-sections">
+    <section>
+      <AdminSectionHead title="Kolejka" :count="queue.length">
+        <span class="text-caption text-medium-emphasis">
+          Przeciągnij albo użyj strzałek.
+        </span>
+      </AdminSectionHead>
 
-    <div
-      v-if="queue.length === 0"
-      class="fb-drop-empty text-body-2 text-medium-emphasis mb-6"
-      :class="{ 'fb-drop-empty--active': hint?.id === EMPTY }"
-      data-queue-empty
-      @dragover.prevent="onDragOver($event, EMPTY)"
-      @dragleave="onDragLeave(EMPTY)"
-      @drop.prevent="onDropEmpty"
-    >
-      Kolejka jest pusta. Przeciągnij tu zgłoszenie albo kliknij przy nim +.
-    </div>
-
-    <div v-else class="fb-list mb-6" data-queue-list>
       <div
-        v-for="(item, index) in queue"
-        :id="`fb-${item.id}`"
-        :key="item.id"
-        class="fb-row"
-        :class="rowClasses(item)"
-        draggable="true"
-        data-queue-row
-        :data-feedback-id="item.id"
-        @dragstart="onDragStart($event, item)"
-        @dragover.prevent="onDragOver($event, item.id!)"
-        @dragleave="onDragLeave(item.id!)"
-        @drop.prevent="onDropOnQueueRow(item)"
-        @dragend="onDragEnd"
+        v-if="queue.length === 0"
+        class="fb-drop-empty text-body-2 text-medium-emphasis"
+        :class="{ 'fb-drop-empty--active': hint?.id === EMPTY }"
+        data-queue-empty
+        @dragover.prevent="onDragOver($event, EMPTY)"
+        @dragleave="onDragLeave(EMPTY)"
+        @drop.prevent="onDropEmpty"
       >
-        <v-icon :icon="mdiDragVertical" class="fb-handle" size="small" />
-        <span class="fb-pos text-body-2 font-weight-bold"
-          >{{ index + 1 }}.</span
+        Kolejka jest pusta. Przeciągnij tu zgłoszenie albo kliknij przy nim +.
+      </div>
+
+      <div v-else class="fb-list k-bleed-xs" data-queue-list>
+        <div
+          v-for="(item, index) in queue"
+          :id="`fb-${item.id}`"
+          :key="item.id"
+          class="fb-row"
+          :class="rowClasses(item)"
+          draggable="true"
+          data-queue-row
+          :data-feedback-id="item.id"
+          @dragstart="onDragStart($event, item)"
+          @dragover.prevent="onDragOver($event, item.id!)"
+          @dragleave="onDragLeave(item.id!)"
+          @drop.prevent="onDropOnQueueRow(item)"
+          @dragend="onDragEnd"
         >
-        <FeedbackOrderRowSummary
-          :item="item"
-          :fix-state="fixStates?.get(item.id!)"
-        />
-        <div class="fb-actions">
-          <v-btn
-            icon
-            size="x-small"
-            variant="text"
-            :disabled="index === 0"
-            aria-label="Wyżej"
-            title="Wyżej"
-            @click="step(item, -1)"
+          <v-icon :icon="mdiDragVertical" class="fb-handle" size="small" />
+          <span class="fb-pos text-body-2 font-weight-bold"
+            >{{ index + 1 }}.</span
           >
-            <v-icon :icon="mdiArrowUp" />
-          </v-btn>
-          <v-btn
-            icon
-            size="x-small"
-            variant="text"
-            :disabled="index === queue.length - 1"
-            aria-label="Niżej"
-            title="Niżej"
-            @click="step(item, 1)"
-          >
-            <v-icon :icon="mdiArrowDown" />
-          </v-btn>
-          <v-menu location="bottom end">
-            <template #activator="{ props: menu }">
-              <v-btn
-                v-bind="menu"
-                icon
-                size="x-small"
-                variant="text"
-                aria-label="Więcej"
-                title="Więcej"
-              >
-                <v-icon :icon="mdiDotsVertical" />
-              </v-btn>
-            </template>
-            <v-list density="compact">
-              <v-list-item
-                :disabled="index === 0"
-                title="Na początek"
-                @click="emit('move', item, 0)"
-              />
-              <v-list-item
-                :disabled="index === queue.length - 1"
-                title="Na koniec"
-                @click="emit('move', item, queue.length - 1)"
-              />
-              <v-list-item
-                title="Wyjmij z kolejki"
-                @click="emit('remove', item)"
-              />
-            </v-list>
-          </v-menu>
+          <FeedbackOrderRowSummary
+            :item="item"
+            :fix-state="fixStates?.get(item.id!)"
+          />
+          <!-- 40px buttons: on a phone, where nothing drags, these are the
+               only way to reorder. -->
+          <div class="fb-actions">
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              :disabled="index === 0"
+              aria-label="Wyżej"
+              title="Wyżej"
+              @click="step(item, -1)"
+            >
+              <v-icon :icon="mdiArrowUp" />
+            </v-btn>
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              :disabled="index === queue.length - 1"
+              aria-label="Niżej"
+              title="Niżej"
+              @click="step(item, 1)"
+            >
+              <v-icon :icon="mdiArrowDown" />
+            </v-btn>
+            <v-menu location="bottom end">
+              <template #activator="{ props: menu }">
+                <v-btn
+                  v-bind="menu"
+                  icon
+                  size="small"
+                  variant="text"
+                  aria-label="Więcej"
+                  title="Więcej"
+                >
+                  <v-icon :icon="mdiDotsVertical" />
+                </v-btn>
+              </template>
+              <v-list density="compact">
+                <v-list-item
+                  :disabled="index === 0"
+                  title="Na początek"
+                  @click="emit('move', item, 0)"
+                />
+                <v-list-item
+                  :disabled="index === queue.length - 1"
+                  title="Na koniec"
+                  @click="emit('move', item, queue.length - 1)"
+                />
+                <v-list-item
+                  title="Wyjmij z kolejki"
+                  @click="emit('remove', item)"
+                />
+              </v-list>
+            </v-menu>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <template v-if="inbox.length > 0">
-      <div class="d-flex align-center ga-2 mb-2">
-        <h2 class="text-subtitle-1 font-weight-bold">Poza kolejką</h2>
-        <v-chip size="x-small" label>{{ inbox.length }}</v-chip>
-      </div>
+    <section v-if="inbox.length > 0">
+      <AdminSectionHead title="Poza kolejką" :count="inbox.length" />
       <!-- Dropping a queued report anywhere here takes it out of the queue,
            the same as "Wyjmij z kolejki". -->
       <div
-        class="fb-list"
+        class="fb-list k-bleed-xs"
         :class="{ 'fb-list--target': hint?.id === INBOX }"
         data-inbox-list
         @dragover="onDragOverInbox"
@@ -139,7 +140,7 @@
           <div class="fb-actions">
             <v-btn
               icon
-              size="x-small"
+              size="small"
               variant="text"
               color="ink-sage"
               aria-label="Dodaj na koniec kolejki"
@@ -150,7 +151,7 @@
             </v-btn>
             <v-btn
               icon
-              size="x-small"
+              size="small"
               variant="text"
               aria-label="Na początek kolejki"
               title="Na początek kolejki"
@@ -161,7 +162,7 @@
           </div>
         </div>
       </div>
-    </template>
+    </section>
   </div>
 </template>
 
@@ -343,9 +344,13 @@ const rowClasses = (item: Feedback) => {
 </script>
 
 <style scoped>
+/* AdminRowList's frame: one hairline, the card radius, the rows clipped to
+ * it. It was a 4px box, so the corners changed when the mode did. */
 .fb-list {
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 4px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
+  overflow: hidden;
+  background: rgb(var(--v-theme-surface));
 }
 
 .fb-list--target {
@@ -364,7 +369,7 @@ const rowClasses = (item: Feedback) => {
 }
 
 .fb-row + .fb-row {
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
 }
 
 .fb-row--dragging {
@@ -385,9 +390,11 @@ const rowClasses = (item: Feedback) => {
   opacity: 0.6;
 }
 
+/* Room for „500.” (OPEN_CAP), so the lines of a long queue start at one
+ * place. */
 .fb-pos {
   flex: none;
-  min-width: 2ch;
+  min-width: 4ch;
   text-align: end;
 }
 
@@ -398,8 +405,8 @@ const rowClasses = (item: Feedback) => {
 }
 
 .fb-drop-empty {
-  border: 2px dashed rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 4px;
+  border: 2px dashed var(--k-line-strong);
+  border-radius: var(--k-r-card);
   padding: 16px;
   text-align: center;
 }
@@ -410,15 +417,32 @@ const rowClasses = (item: Feedback) => {
 
 /* On a phone the buttons leave the text a dozen characters, and a tooltip is
  * no help without a pointer - so the text gets a line of its own, under the
- * handle and the buttons (see `OrderRowSummary`). */
+ * handle and the buttons (see `OrderRowSummary`).
+ *
+ * So does the where, between the two. Three 40px buttons, the „W trakcie” tag
+ * and a fix icon leave it about 44px of the first line - „Mar…”, the collapse
+ * its fixed width is there to prevent. Indented past the handle, like the
+ * text. List mode's line has one button and keeps the where on it.
+ *
+ * The list runs edge to edge here (`k-bleed-xs`), so the row's end is the
+ * screen's, and the text under the buttons ends a gutter in. The row's own
+ * 4px counted on the frame round the list, which a phone no longer draws. */
 @media (max-width: 599.98px) {
   .fb-row {
     flex-wrap: wrap;
     row-gap: 0;
+    padding-inline-end: var(--k-gutter);
   }
 
   .fb-actions {
     margin-inline-start: auto;
+  }
+
+  .fb-row :deep(.fb-where) {
+    order: 1;
+    flex: 1 1 100%;
+    max-width: none;
+    margin-inline-start: 28px;
   }
 }
 </style>
