@@ -42,7 +42,7 @@ test.describe("QA changelog", () => {
       .click();
 
     await expect(
-      page.getByText("Zgłoszone - problem trafił do zespołu"),
+      page.getByText("Zgłoszone – problem trafił do zespołu"),
     ).toBeVisible({ timeout: 30_000 });
 
     // Reported problems leave the default list and turn up under "Problemy".
@@ -102,7 +102,7 @@ test.describe("QA changelog", () => {
       .getByRole("button", { name: "Coś nie działa", exact: true })
       .click();
     await expect(
-      page.getByText("Zgłoszone - problem trafił do zespołu"),
+      page.getByText("Zgłoszone – problem trafił do zespołu"),
     ).toBeVisible({ timeout: 30_000 });
 
     // The point of the whole thing: a verdict left on a changelog entry is
