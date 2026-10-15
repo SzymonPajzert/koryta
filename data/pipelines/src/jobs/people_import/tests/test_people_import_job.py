@@ -1465,6 +1465,217 @@ def test_planning_keeps_the_order_and_tells_a_person_from_their_payload():
 
 
 # ---------------------------------------------------------------------------
+# A priority run: what it sent, whatever order a payload lists things in
+
+
+POSTS = [
+    {"krs": "0000287447", "role": "Zarząd", "start": "2023-05-16", "end": None},
+    {
+        "krs": "0000012707",
+        "role": "Rada Nadzorcza",
+        "start": "2019-01-09",
+        "end": "2023-06-12",
+    },
+    {
+        "krs": "0000219532",
+        "role": "Rada Nadzorcza",
+        "start": "2018-10-01",
+        "end": "2024-06-27",
+    },
+]
+
+
+def holding(posts: list[dict], name: str = "Jan Kowalski", **fields) -> dict:
+    """The payload of somebody holding `posts`, listed in that order."""
+    return {
+        "name": name,
+        "companies": posts,
+        "elections": [],
+        "parties": [],
+        "rejestrIo": f"https://rejestr.io/osoby/{name.rsplit(maxsplit=1)[-1]}",
+        **fields,
+    }
+
+
+def test_a_payload_listing_the_same_things_in_another_order_is_one_hash():
+    """Of the 100 people the 2026-10-13 and 10-14 nights sent, 33 and 40 had
+    gone up before under another hash of the same posts: the build listed
+    them in another order."""
+    sent = job.payload_hash(holding(POSTS))
+
+    assert job.payload_hash(holding(POSTS[::-1])) == sent
+    assert job.payload_hash(holding(POSTS, parties=["PSL", "Inne"])) == (
+        job.payload_hash(holding(POSTS, parties=["Inne", "PSL"]))
+    )
+    # What it lists still counts, and how many times.
+    assert job.payload_hash(holding(POSTS[1:])) != sent
+    assert job.payload_hash(holding([*POSTS, POSTS[0]])) != sent
+    ended = [{**POSTS[0], "end": "2026-10-01"}, *POSTS[1:]]
+    assert job.payload_hash(holding(ended)) != sent
+
+
+def test_a_payload_sent_with_its_posts_in_another_order_is_left_out():
+    sent = holding(POSTS)
+    tonight = build.Candidate(holding(POSTS[::-1]), PUBLISHED, None)
+
+    planned, skipped = job.plan_priority(
+        [tonight], {(job.person_key(sent), job.payload_hash(sent))}, max_new=5
+    )
+
+    assert (planned, skipped) == ([], 1)
+
+
+def gzipped(rows: list[dict]) -> bytes:
+    """A part as the job writes one: JSON lines, Polish letters as they are."""
+    lines = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+    return gzip.compress(lines.encode("utf-8"))
+
+
+def test_a_part_is_read_line_by_line_at_newlines_alone():
+    """A name may carry a line separator, which the part keeps raw."""
+    rows = [{"name": "Anna\u2028Nowak"}, {"name": "Jan Kowalski"}]
+
+    assert list(job.json_lines(gzipped(rows))) == rows
+
+
+class Shared:
+    """The shared cache's bucket, as the job writes its parts into it and
+    `sent_recently` reads them back - and the job's `Client` onto it."""
+
+    def __init__(self, objects: dict[str, bytes] | None = None):
+        self.objects = objects if objects is not None else {}
+        self.storage_client = SimpleNamespace(bucket=self.bucket)
+
+    def bucket(self, name: str) -> "Shared":
+        assert name == SHARED_BUCKET
+        return self
+
+    def create_object(self, bucket, name, data, content_type):
+        assert name not in self.objects, f"{name} written twice"
+        self.objects[name] = data
+        return f"gs://{bucket}/{name}"
+
+    def list_blobs(self, prefix, start_offset=""):
+        return [
+            self.get_blob(name)
+            for name in sorted(self.objects)
+            if name.startswith(prefix) and name >= start_offset
+        ]
+
+    def get_blob(self, name):
+        if name not in self.objects:
+            return None
+        return SimpleNamespace(name=name, download_as_bytes=lambda: self.objects[name])
+
+
+def test_a_night_leaves_alone_what_an_earlier_one_sent_listed_otherwise(
+    world, monkeypatch
+):
+    shared = Shared()
+    tonight: list[build.Candidate] = []
+    monkeypatch.setattr(job, "Client", lambda: shared)
+    monkeypatch.setattr(job, "build_priority", lambda *args: list(tonight))
+    monkeypatch.setattr(job, "bought_since", lambda client, since: set())
+
+    tonight[:] = [build.Candidate(holding(POSTS), PUBLISHED, None)]
+    world.answers = [person("unchanged")]
+    assert job.main(["--scope", "priority"]) == 0
+    tonight[:] = [
+        build.Candidate(holding(POSTS[::-1]), PUBLISHED, None),
+        candidate("Ewa Lis", ON_SITE),
+    ]
+    world.answers = [person("updated")]
+    assert job.main(["--scope", "priority"]) == 0
+
+    assert world.sent() == ["Jan Kowalski", "Ewa Lis"]
+    summaries = [
+        json.loads(data)
+        for name, data in shared.objects.items()
+        if name.startswith(job.RUNS_PREFIX)
+    ]
+    assert sorted(summary["already_sent"] for summary in summaries) == [0, 1]
+
+
+def test_a_line_hashed_as_listed_is_hashed_again_off_its_runs_payloads(capsys):
+    """Every line written before the hash took lists in any order holds the
+    hash of the payload as it was listed. Matched to the payload its run
+    wrote, and hashed again, it still leaves that person out."""
+    before, other = holding(POSTS), holding([], "Ewa Lis")
+    part = "date=2026-10-12/06acc632.jsonl.gz"
+    shared = Shared(
+        {
+            f"{job.SENT_PREFIX}{part}": gzipped(
+                [
+                    {
+                        "person": job.person_key(payload),
+                        "payload": job.hash_as_listed(payload),
+                        "outcome": "unchanged",
+                    }
+                    for payload in (before, other)
+                ]
+            ),
+            f"{job.PAYLOADS_PREFIX}{part}": gzipped(
+                [before, other, holding([], "Olga Sowa")]
+            ),
+        }
+    )
+
+    seen = job.sent_recently(typing.cast(job.Client, shared), "2026-10-10")
+
+    tonight = [
+        build.Candidate(holding(POSTS[::-1]), PUBLISHED, None),
+        build.Candidate(holding([], "Ewa Lis"), PUBLISHED, None),
+        build.Candidate(holding([], "Olga Sowa"), PUBLISHED, None),
+    ]
+    planned, skipped = job.plan_priority(tonight, seen, max_new=5)
+    assert [c.payload["name"] for c in planned] == ["Olga Sowa"]
+    assert skipped == 2
+    out = capsys.readouterr().out
+    assert "Sent with the hash of the payload as listed: 2; 2 hashed again" in out
+
+
+def test_a_line_whose_run_left_no_payloads_is_kept_as_it_was(capsys):
+    """Nothing to hash it again from, so it leaves out only a payload whose
+    lists come in an order that hashes the same either way."""
+    unlisted, listed = holding([], "Ewa Lis"), holding(POSTS)
+    part = "date=2026-10-12/06acc632.jsonl.gz"
+    shared = Shared(
+        {
+            f"{job.SENT_PREFIX}{part}": gzipped(
+                [
+                    {
+                        "person": job.person_key(payload),
+                        "payload": job.hash_as_listed(payload),
+                    }
+                    for payload in (unlisted, listed)
+                ]
+            ),
+        }
+    )
+
+    seen = job.sent_recently(typing.cast(job.Client, shared), "2026-10-10")
+
+    assert (job.person_key(unlisted), job.payload_hash(unlisted)) in seen
+    assert (job.person_key(listed), job.payload_hash(listed)) not in seen
+    out = capsys.readouterr().out
+    assert f"No payloads for {job.SENT_PREFIX}{part}: 2 lines left as they" in out
+
+
+def test_what_was_sent_says_how_its_hash_was_made(priority):
+    hire = candidate("Anna Nowak", HIRE, "2026-09-30")
+    priority.candidates = [hire]
+    priority.answers = [person("created")]
+
+    assert job.main(["--scope", "priority"]) == 0
+
+    [line] = sent_part(priority)
+    assert (line["payload"], line["hashed"]) == (
+        job.payload_hash(hire.payload),
+        job.HASHED,
+    )
+
+
+# ---------------------------------------------------------------------------
 # A priority run: the people bought from rejestr.io
 
 
