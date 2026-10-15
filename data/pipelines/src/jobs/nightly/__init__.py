@@ -183,13 +183,16 @@ EXCLUDED = (
 )
 
 #: Held at what is on disk, or restored from the shared cache when nothing is:
-#: their sources change with a Wikipedia dump, an election, a GUS release or a
-#: hand-made copy of the CRU database, not overnight. And rebuilt they would
-#: cost the night what it has not got - ProcessWiki parses a 3 GB dump for 40
-#: minutes, CruDump needs a Postgres or a dump file the VM does not hold.
-#: (Teryt is not here: it is never stored, so there is nothing to hold.) The
-#: ones in `REBUILT_ON_CHANGE` are rebuilt before the reprocess when their code
-#: changes, and held in it all the same.
+#: their sources change with a Wikipedia dump, an election, a GUS release, a
+#: hand-made copy of the CRU database or a scrape of KMGP's map taken by hand,
+#: not overnight. And rebuilt they would cost the night what it has not got -
+#: ProcessWiki parses a 3 GB dump for 40 minutes, CruDump needs a Postgres or
+#: a dump file the VM does not hold - or time it gains nothing by: PeopleKMGP
+#: spent 6 to 10 minutes of each reprocess from 2026-10-13 to 15 matching the
+#: same 1,556 people of the 2026-05-17 scrape again, for an output nothing the
+#: night builds or checks reads. (Teryt is not here: it is never stored, so
+#: there is nothing to hold.) The ones in `REBUILT_ON_CHANGE` are rebuilt
+#: before the reprocess when their code changes, and held in it all the same.
 HELD = (
     "ProcessWiki",
     "PeoplePKW",
@@ -199,6 +202,7 @@ HELD = (
     "FirstNameFreq",
     "CruDump",
     "CruUmowy",
+    "PeopleKMGP",
 )
 
 
@@ -215,7 +219,8 @@ class Rebuildable:
 
 #: The held pipelines the VM can rebuild in minutes, cheapest first, so that a
 #: slow one does not leave the rest to another night. Not ProcessWiki - 40
-#: minutes and a 2.9 GB dump, rebuilt by hand - and never CruDump, which needs
+#: minutes and a 2.9 GB dump, rebuilt by hand - nor PeopleKMGP, rebuilt by hand
+#: too, after the scrape by hand that changes it; and never CruDump, which needs
 #: the CRU Postgres. The times are rebuilds on predator on 2026-10-10, from
 #: downloads on disk; every one the shared cache keeps a copy of came out the
 #: same as that copy, row for row.

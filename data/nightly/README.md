@@ -135,11 +135,17 @@ rejestr.io's feeds for, so a gap company the gateway eats can cost two of its
 
 ## The held pipelines, when their code changes
 
-The reprocess holds eight pipelines at what is on disk (`HELD`): their sources
-change with a Wikipedia dump, an election, a GUS release or a hand-made copy of
-the CRU database, not overnight. Their code changes more often than that, and
-until 2026-10 nothing noticed: PeoplePKW sat at an 08-28 build through eight
-commits to `scrapers/pkw`, and `test_person_pkw` failed every night for it.
+The reprocess holds nine pipelines at what is on disk (`HELD`): their sources
+change with a Wikipedia dump, an election, a GUS release, a hand-made copy of
+the CRU database or a scrape of KMGP's map taken by hand, not overnight. Their
+code changes more often than that, and until 2026-10 nothing noticed:
+PeoplePKW sat at an 08-28 build through eight commits to `scrapers/pkw`, and
+`test_person_pkw` failed every night for it.
+
+`PeopleKMGP` joined them on 2026-10-15. It spent 6 to 10 minutes of each
+reprocess from 2026-10-13 to 15 matching the same 1,556 people of the
+2026-05-17 scrape again, for an output nothing the night builds or checks
+reads.
 
 `rebuild_held` rebuilds, before the reprocess, the six the VM can rebuild in
 minutes, when the code they are built from has changed (paths under
@@ -154,7 +160,8 @@ minutes, when the code they are built from has changed (paths under
 | `CruUmowy`           | `scrapers/cru`, `entities/cru.py`                                               | 71 s, 1.2 GB; 1.7 GB |
 | `PeoplePKW`          | `scrapers/pkw`, `scrapers/map/teryt.py`, `util/polish.py`, `entities/person.py` | 173 s, 6.2 GB        |
 
-Not `ProcessWiki` - 40 minutes parsing a 2.9 GB dump, rebuilt by hand - and
+Not `ProcessWiki` - 40 minutes parsing a 2.9 GB dump, rebuilt by hand - nor
+`PeopleKMGP`, rebuilt by hand too, after the scrape by hand that changes it; and
 never `CruDump`, which needs the CRU Postgres.
 
 For each, the step asks git for the hash of every path in the checked-out
