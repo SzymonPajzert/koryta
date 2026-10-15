@@ -92,6 +92,13 @@ Before it goes live it runs a week with `--dry-run`: it builds the payloads, sen
 own, and reports the run as succeeded with `planned` and the stop reason "próba - nic nie wysłano", so
 /admin/procesy shows what each day would have sent. Then live, with `--max-uploads` - see [CLOUD_RUN.md](CLOUD_RUN.md).
 
+`--companies-only` sends no people: it plans as a priority run with the same flags plans, and of the first
+`--max-uploads` people of the plan - the ones that run sends - creates the companies they name that the export has
+no page for, each once, in the order the people go, through `/api/ingest/company` from `Companies`, as the uploader
+creates one on the way. It reports as `company_import` and writes its summary - each company, the people who name
+it, what the site did with it - to `jobs/company_import/runs/`; a company it cannot create leaves it partial,
+never failed, since the people run tries it again. The night runs it as the step before the people.
+
 `--request <run id>` does what somebody asked for on a page of the site: a company's people, or one person
 (`analysis/payloads/target.py`). It reads the request from the run the site queued, builds both halves as `priority`
 does and keeps to their guards - a company's run creates pages for the company's people the site lacks and no one

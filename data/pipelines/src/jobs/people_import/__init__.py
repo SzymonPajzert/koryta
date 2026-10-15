@@ -14,6 +14,8 @@ does - but in one process, unattended, and with guardrails a pipe has not got:
     koryta_people_import --dry-run         # build and count them; send nothing
     koryta_people_import --scope not-on-koryta --max-new 50
     koryta_people_import --scope priority --max-uploads 100   # the nightly VM
+    koryta_people_import --scope priority --max-uploads 100 --companies-only
+                                           # the companies those 100 need, first
     koryta_people_import --request <run id>   # what a page's button asked for
 
 `--request` is a run the datascience group asked for from a company's or a
@@ -23,6 +25,11 @@ person, built as the other scopes build them and kept to the same guards
 the run the site queued, so the link the site handed out follows it to its end.
 A company's run creates pages for the company's people the site lacks, and
 only those; a person's run creates none.
+
+`--companies-only` sends no people. It plans as a priority run with the same
+flags plans, and creates the companies the people that run would send name
+and the export has no page for (`CompaniesFirst`): the night's step before its
+people, so that they find every page there.
 
 `--scope priority` builds both halves at once and sends, up to the cap, the
 new hires the site lacks first, then the pages of the people whose rejestr.io
@@ -175,9 +182,16 @@ from uploader import (
 
 JOB = "people_import"
 UNIT = "osób"
+#: What a `--companies-only` run reports as: the job `koryta_uploader --type
+#: company` reports as, so that a hand upload and the night's read as one
+#: history, as the people's do.
+COMPANY_JOB = "company_import"
+COMPANY_UNIT = "firm"
 
 PAYLOADS_PREFIX = "jobs/people_import/payloads/"
 RUNS_PREFIX = "jobs/people_import/runs/"
+#: Where a `--companies-only` run writes its summary.
+COMPANIES_PREFIX = "jobs/company_import/runs/"
 #: What each priority run took - person, payload hash, outcome, page - as one
 #: write-once part, so the next runs can leave alone what is already sent, and
 #: the scoring models can rate the pages a run created before the next export
@@ -201,6 +215,7 @@ EXIT_FAILED = 1
 # What /admin/procesy shows, in the page's language.
 PHASE_BUILD = "paczki"
 PHASE_SEND = "wysyłanie"
+PHASE_COMPANIES = "firmy"
 STOP_LIMIT = "limit"
 STOP_DEADLINE = "koniec czasu"
 STOP_SIGTERM = "SIGTERM"
@@ -208,6 +223,7 @@ STOP_INTERRUPTED = "przerwany"
 STOP_DRY_RUN = "próba - nic nie wysłano"
 STOP_NOT_WRITTEN = "nie zapisano paczek"
 STOP_UP_TO_DATE = "nic do wysłania - strona ma już te dane"
+STOP_NO_COMPANIES = "nic do dodania - kopia bazy ma firmy wszystkich tych osób"
 
 #: The tiers whose people the run is meant to create pages for. A page
 #: created for anybody else is the identity lookup missing somebody.
@@ -339,6 +355,12 @@ class RunSummary:
     matched: int = 0
     up_to_date: int = 0
     left_out: int = 0
+    #: A --companies-only run: the people the run it goes before will send -
+    #: the first --max-uploads of the plan - and each company they name that
+    #: the export has no page for: its KRS number, the name it was sent under,
+    #: the people who name it, what the site did with it, and why it failed.
+    people: int = 0
+    companies: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -721,6 +743,19 @@ def plan_priority(
     return planned, skipped
 
 
+def companies_needed(
+    payloads: Sequence[Mapping[str, typing.Any]], missing: Sequence[Sequence[str]]
+) -> dict[str, list[str]]:
+    """The companies the payloads name that the export has no page for -
+    `missing`, each payload's own (`Candidate.missing`) - each once, in the
+    order the people go, with the names of the people who name it."""
+    needed: dict[str, list[str]] = {}
+    for payload, companies in zip(payloads, missing, strict=True):
+        for krs in companies:
+            needed.setdefault(krs, []).append(str(payload.get("name")))
+    return needed
+
+
 def sign_in(endpoint: str) -> TokenSource:
     """How the run signs in, tried before anything is built: a key or a grant
     that is missing is better found in a second than after an hour of
@@ -768,6 +803,12 @@ def send_one(uploader: PersonUploader, payload: object) -> PersonResult | None:
 class PeopleImport:
     """One run: what it was asked to do, how far it got, and where it says so."""
 
+    #: The job the run reports as, what its progress counts, and where its
+    #: summary goes - another for `CompaniesFirst`.
+    job = JOB
+    unit = UNIT
+    runs_prefix = RUNS_PREFIX
+
     def __init__(
         self, args: argparse.Namespace, should_stop: Callable[[], str] = lambda: ""
     ):
@@ -789,7 +830,7 @@ class PeopleImport:
                 PEOPLE_REQUEST, run_id=asked, trigger="request", adopt=True, unit=UNIT
             )
             if asked
-            else JobRun(JOB, run_id=self.summary.run, unit=UNIT)
+            else JobRun(self.job, run_id=self.summary.run, unit=self.unit)
         )
         self.uploader: PersonUploader | None = None
         self.ending = Ending()
@@ -799,6 +840,9 @@ class PeopleImport:
         #: A priority run: whether each payload's page is published, in
         #: sending order (`Candidate.published`).
         self.published: list[bool] | None = None
+        #: ...and the companies each names that the export has no page for
+        #: (`Candidate.missing`).
+        self.missing: list[tuple[str, ...]] | None = None
         #: A priority run, or one asked for: what the site took - payload,
         #: tier, outcome, the page it filed the person under, and the
         #: companies it took them without a job at, for want of a page.
@@ -953,6 +997,7 @@ class PeopleImport:
         )
         self.tiers = [candidate.tier for candidate in planned]
         self.published = [candidate.published for candidate in planned]
+        self.missing = [candidate.missing for candidate in planned]
         counts = Counter(self.tiers)
         self.summary.tiers = {tier: counts.get(tier, 0) for tier in TIERS}
         print(
@@ -1249,7 +1294,7 @@ class PeopleImport:
         """Write the run's summary once; a failure to is printed, not raised."""
         summary = self.summary
         summary.finished = now()
-        name = f"{RUNS_PREFIX}date={summary.started[:10]}/{summary.run}.json"
+        name = f"{self.runs_prefix}date={summary.started[:10]}/{summary.run}.json"
         data = json.dumps(asdict(summary), ensure_ascii=False, indent=1)
         try:
             url = self.client().create_object(
@@ -1261,6 +1306,138 @@ class PeopleImport:
             return ""
         print(f"Summary: {url}")
         return url
+
+
+class CompaniesFirst(PeopleImport):
+    """A run of `--companies-only`: the companies the night's people name that
+    the export has no page for, created before the people go.
+
+    Planned as the priority run after it plans - the same build from the same
+    outputs, with the same flags, which the night gives both its steps - and of
+    the first `--max-uploads` people of the plan, the ones that run sends, the
+    companies the export has no page for (`Candidate.missing`), each once, in
+    the order the people go. Each is created through /api/ingest/company from
+    `Companies`, as the uploader creates one when the site takes a person
+    without it (`PersonUploader.create_company`): so the people run finds every
+    page there, and places each job with its first request. The people runs of
+    2026-10-13 and 10-14 created 27 and 16 companies on their way. A company
+    this run cannot create is the people run's to try again, and to leave the
+    job off the page for, as before.
+
+    It sends no person, and writes neither what it would send nor what was
+    sent. It reports as `COMPANY_JOB` and summarises each company - the name
+    it went under, who names it, what the site did with it - in
+    `COMPANIES_PREFIX`. A company the site had a page for after all, made
+    since the export, is counted as the site answered: updated or unchanged.
+    """
+
+    job = COMPANY_JOB
+    unit = COMPANY_UNIT
+    runs_prefix = COMPANIES_PREFIX
+
+    def __init__(
+        self, args: argparse.Namespace, should_stop: Callable[[], str] = lambda: ""
+    ):
+        super().__init__(args, should_stop)
+        #: The companies to create, in order, with the people who name each.
+        self.needed: dict[str, list[str]] = {}
+        #: What the site did with the companies sent, by outcome.
+        self.outcomes: Counter[str] = Counter()
+
+    def attempt(self) -> int:
+        args = self.args
+        tokens = None if self.dry else sign_in(args.endpoint)
+        if refusal := self.check_export():
+            print(f"Stopping: {refusal}")
+            self.summary.stopped = refusal
+            return self.end("failed", EXIT_FAILED)
+        payloads = self.plan()
+        self.summary.planned = len(payloads)
+        people = payloads[: args.max_uploads]
+        self.summary.people = len(people)
+        self.needed = companies_needed(people, (self.missing or [])[: len(people)])
+        print(
+            f"The first {len(people):,} of {len(payloads):,} people planned "
+            f"(--max-uploads) name {len(self.needed)} companies the export has no "
+            "page for" + (f": {', '.join(self.needed)}" if self.needed else "")
+        )
+        self.status.progress(
+            0, total=len(self.needed), counters=self.counters(), force=True
+        )
+        if tokens is None:  # A dry run, which signed in to nothing.
+            return self.dry_run(payloads)
+        if not self.needed:
+            # Said, as a request with nothing to send says it: a success with
+            # no reason reads on the page as a run that did nothing.
+            self.summary.stopped = STOP_NO_COMPANIES
+            return self.end("succeeded", 0)
+        self.uploader = make_uploader(args.endpoint, tokens)
+        self.status.progress(phase=PHASE_COMPANIES, force=True)
+        self.create(self.uploader)
+        failed = self.outcomes["failed"]
+        print(
+            f"Companies for the first {len(people):,} people: "
+            f"{dict(self.outcomes)} of {len(self.needed)}"
+            + (f"; stopped: {self.ending.stopped}" if self.ending.stopped else "")
+        )
+        if self.ending.stopped:
+            self.summary.stopped = self.ending.stopped
+            return self.end("partial", EXIT_TRY_LATER)
+        if failed:
+            # Partial, never failed: the people run tries each of them again,
+            # and a company it cannot create costs a person that job alone.
+            self.summary.stopped = f"nie dodano firm: {failed} z {self.ending.done}"
+            return self.end("partial", EXIT_TRY_LATER)
+        return self.end("succeeded", 0)
+
+    def create(self, uploader: PersonUploader) -> None:
+        """Create each company needed, in turn, until they run out or
+        something says stop - Ctrl+C included."""
+        try:
+            for n, (krs, people) in enumerate(self.needed.items()):
+                if reason := self.should_stop():
+                    self.ending.stopped = reason
+                    break
+                result = uploader.create_company(krs)
+                self.outcomes[result.outcome] += 1
+                company: dict[str, typing.Any] = {"krs": krs}
+                if result.name:
+                    company["name"] = result.name
+                company.update(people=people, outcome=result.outcome)
+                if result.error:
+                    company["error"] = result.error
+                    self.summary.errors.append(result.error)
+                self.summary.companies.append(company)
+                self.ending.done = n + 1
+                self.status.progress(self.ending.done, counters=self.counters())
+                time.sleep(self.args.interval)
+        except KeyboardInterrupt:
+            print("Interrupted; stopping after the companies sent")
+            self.ending.stopped = STOP_INTERRUPTED
+
+    def counters(self) -> dict[str, int]:
+        return {
+            "planned": len(self.needed),
+            "companies_created": self.outcomes["created"],
+            "updated": self.outcomes["updated"],
+            "unchanged": self.outcomes["unchanged"],
+            "failed": self.outcomes["failed"],
+        }
+
+    def dry_run(self, payloads: list[dict]) -> int:
+        """Say how many companies a run would create, and end as a trial."""
+        print(
+            f"Dry run: {len(self.needed)} companies would be created at "
+            f"{self.args.endpoint}, before the people"
+        )
+        self.status.finish(
+            "succeeded",
+            stop_reason=STOP_DRY_RUN,
+            counters={"planned": len(self.needed)},
+            exit_code=0,
+            done=0,
+        )
+        return 0
 
 
 def non_negative_int(text: str) -> int:
@@ -1381,6 +1558,15 @@ def parser() -> argparse.ArgumentParser:
         "on to the pages behind them. Default: no cap but --max-uploads.",
     )
     parser.add_argument(
+        "--companies-only",
+        action="store_true",
+        help="Priority: send no people. Of the people the run would send - the "
+        "first --max-uploads of its plan - create the companies they name that "
+        "the export has no page for, through /api/ingest/company as the "
+        "uploader creates them on the way, and report as company_import. The "
+        "night's step before its people.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Build the payloads and report how many; send nothing and write "
@@ -1459,6 +1645,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "--scope not-on-koryta creates a page for everybody it sends; say "
             "how many this run may create with --max-new"
         )
+    if args.companies_only and args.scope != PRIORITY:
+        parse.error(
+            "--companies-only creates the companies of the people a priority run "
+            "sends: it needs --scope priority"
+        )
     if args.refresh:
         known = pipeline_names() | {"all", REFRESH_NONE}
         unknown = sorted({name.removeprefix(":") for name in args.refresh} - known)
@@ -1490,7 +1681,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("SIGTERM: stopping after the person in hand")
 
     previous = signal.signal(signal.SIGTERM, on_sigterm)
+    run = CompaniesFirst if args.companies_only else PeopleImport
     try:
-        return PeopleImport(args, stop_rule(deadline, lambda: signalled)).run()
+        return run(args, stop_rule(deadline, lambda: signalled)).run()
     finally:
         signal.signal(signal.SIGTERM, previous)

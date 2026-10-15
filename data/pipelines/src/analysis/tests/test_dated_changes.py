@@ -107,6 +107,26 @@ def test_a_company_the_site_lacks_dates_from_the_post_too():
     assert site.dated_changes(payload) == [(MISSING_COMPANY, "2025-03-01")]
 
 
+def test_the_companies_the_site_has_no_page_for_are_named_once_in_order():
+    """What the night creates before its people (`--companies-only`): a new
+    person's as much as a stored one's, by KRS number as the ingest looks."""
+    site = snapshot()
+    payload = asdict(
+        person(
+            "Anna Nowak",
+            "https://rejestr.io/osoby/2",
+            Company(krs="0000000009", role="Prezes", start="2026-09-15"),
+            Company(krs=PUBLIC, role="Członek Rady Nadzorczej"),
+            Company(krs="0000000008", role="Prokurent"),
+            Company(krs="0000000009", role="Członek Zarządu", start="2020-01-01"),
+            Company(role="Wspólnik"),
+        )
+    )
+
+    assert site.missing_companies(payload) == ["0000000009", "0000000008"]
+    assert site.missing_companies({"name": "Jan Kowalski"}) == []
+
+
 def test_a_candidacy_dates_from_its_year_and_a_field_from_nothing():
     site = snapshot(stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1"))
     candidacy = Election(election_type="Samorząd", election_year="2024", teryt="1465")
