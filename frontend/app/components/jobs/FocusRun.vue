@@ -118,7 +118,7 @@
             (stalled || (!run.dispatch.ok && !run.waitingFor))
           "
           size="small"
-          variant="outlined"
+          variant="tonal"
           class="ml-2"
           :loading="redispatching"
           data-focus-redispatch

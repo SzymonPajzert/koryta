@@ -13,7 +13,6 @@
     v-if="total > 0"
     title="Fakty z artykułów"
     :icon="mdiTextSearchVariant"
-    class="mt-4"
     data-testid="person-extractions"
   >
     <!-- How the facts are judged, behind the heading's „(i)” as the notes'
@@ -149,7 +148,7 @@
          about a named person into the html of their canonical, indexed url and
          call it hidden - `filter` is a paint instruction, not an access rule. -->
     <div v-else class="locked" data-testid="person-extractions-locked">
-      <div class="locked__blur" aria-hidden="true">
+      <div class="locked__blur k-bleed-xs" aria-hidden="true">
         <div v-for="i in 3" :key="i" class="locked__line">
           <div class="locked__bar locked__bar--icon" />
           <div class="locked__bar locked__bar--claim" />
@@ -437,7 +436,7 @@ const buckets = computed(() =>
    it separates two halves of one list rather than announcing a new section. */
 .facts-bucket {
   color: rgb(var(--v-theme-ink-neutral));
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   margin-top: 8px;
@@ -464,8 +463,8 @@ const buckets = computed(() =>
 
 .locked__blur {
   /* The frame `AdminRowList` draws round the lines. */
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   /* Enough of the shape to read as "facts are behind this", little enough that
      nobody mistakes the bars for content. */
   filter: blur(4px);

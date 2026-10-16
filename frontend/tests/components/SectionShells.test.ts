@@ -44,7 +44,7 @@ vi.mock("@plausible-analytics/tracker", () => ({
 }));
 
 /** Both sections are drawn through `PageSection` now, so what used to be a
- * private copy of the heading rules is the shared one: an `h3.text-h6` with
+ * private copy of the heading rules is the shared one: an `h2.text-h6` with
  * the section's icon in front of it, and the explanation either in a `k-lead`
  * paragraph or behind the heading's „(i)”. */
 describe("sections drawn through PageSection", () => {
@@ -56,8 +56,8 @@ describe("sections drawn through PageSection", () => {
       expect(wrapper.find('[data-testid="cited-note"]').exists()).toBe(true),
     );
     const section = wrapper.get('[data-testid="article-cited-notes"]');
-    expect(section.get("h3").classes()).toContain("text-h6");
-    expect(section.get("h3").text()).toBe("Notatki z innych stron");
+    expect(section.get("h2").classes()).toContain("text-h6");
+    expect(section.get("h2").text()).toBe("Notatki z innych stron");
     expect(section.find(".sec-head__icon").exists()).toBe(true);
     expect(section.get(".sec-head .v-chip").text()).toBe("1");
     // The lead moved behind the heading's „(i)”: two explanatory paragraphs
@@ -73,8 +73,10 @@ describe("sections drawn through PageSection", () => {
       props: { nodeId: "p1" },
     });
     const section = wrapper.get('[data-testid="node-mentions"]');
-    expect(section.classes()).toContain("mt-4");
-    expect(section.get("h3").text()).toBe("Artykuły, które o tym wspominają");
+    // No margin of its own: the entity page that stacks it (`k-sections`)
+    // owns the gap above it, and a margin here would add to that.
+    expect(section.classes().filter((c) => /^m[tby]?-/.test(c))).toEqual([]);
+    expect(section.get("h2").text()).toBe("Artykuły, które o tym wspominają");
     expect(section.find(".sec-head__icon").exists()).toBe(true);
     expect(
       section.get('[data-testid="node-mentions-lead"]').classes(),

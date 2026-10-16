@@ -80,7 +80,7 @@
           Odświeżono {{ loadedAtText }}
         </span>
         <v-btn
-          variant="outlined"
+          variant="tonal"
           size="small"
           :prepend-icon="mdiRefresh"
           :loading="refreshing"

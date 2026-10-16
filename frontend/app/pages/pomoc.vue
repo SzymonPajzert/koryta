@@ -64,7 +64,6 @@
           :href="`#${tile.path}`"
           height="100%"
           variant="outlined"
-          rounded="lg"
           hover
           class="pa-4"
           @click="trackGoal('pomoc:path', { path: tile.path })"
@@ -97,7 +96,7 @@
           <CardAction
             :icon="mdiMessageAlertOutline"
             title="Napisz, co jest nie tak"
-            desc="Błąd w danych, literówka, pomysł na stronę - wystarczy jedno zdanie, także anonimowo. To ten sam przycisk, który masz w prawym dolnym rogu każdej strony."
+            desc="Błąd w danych, literówka, pomysł na stronę - wystarczy jedno zdanie, także anonimowo. To ten sam przycisk, który masz na górnym pasku każdej strony."
             ink="ink-sage"
             access="none"
             @activate="openFeedback"
@@ -185,7 +184,7 @@
            highest-value visitor's whole path, and it must not be one card.
            Nothing in the list is a link - each row describes something found
            where the reader already is, on a person, a company or an article. -->
-      <v-card variant="outlined" rounded="lg" class="pa-4 mt-4">
+      <v-card variant="outlined" class="pa-4 mt-4">
         <div class="text-subtitle-2 font-weight-bold mb-1">
           Reszta jest tam, gdzie i tak jesteś - przy osobie, spółce albo
           artykule
@@ -402,8 +401,8 @@
         <InfoBubble label="Piszesz kod?">
           Nuxt i Vue po stronie serwisu, Python po stronie danych. Instrukcja
           uruchomienia jest w README. Jeśli nie masz konta na GitHubie, a chcesz
-          coś zgłosić - użyj przycisku „Zgłoś” w prawym dolnym rogu, trafi do
-          nas tak samo.
+          coś zgłosić - użyj przycisku „Zgłoś” na górnym pasku, trafi do nas tak
+          samo.
         </InfoBubble>
       </div>
       <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
@@ -449,8 +448,8 @@
         </v-expansion-panel>
       </v-expansion-panels>
       <p class="text-caption text-medium-emphasis mt-3 mb-0">
-        Nie ma tu Twojego pytania? Napisz - przycisk zgłoszenia jest w prawym
-        dolnym rogu każdej strony.
+        Nie ma tu Twojego pytania? Napisz - przycisk zgłoszenia jest na górnym
+        pasku każdej strony.
       </p>
     </section>
 
@@ -532,8 +531,6 @@ const VOLUNTEER_FORM =
 definePageMeta({
   title: "Jak możesz pomóc",
   isHelp: true,
-  layout: "gray",
-  fullWidth: true,
 });
 
 useSeoMeta({

@@ -1,5 +1,8 @@
 <template>
   <v-row cols="12">
+    <v-col cols="12" class="pb-0">
+      <h1>Źródła</h1>
+    </v-col>
     <!-- Folded, not moved. Six lines on a desktop are sixteen on a phone, so
          this notice was 380px of the first screen and a reader looking for the
          list of articles met a legal disclaimer instead of it. It stays first
@@ -152,9 +155,7 @@
     </v-col>
 
     <v-col cols="12">
-      <h3 class="text-h6 font-weight-bold mb-4">
-        Źródła tej strony to między innymi:
-      </h3>
+      <h3 class="text-h6 mb-4">Źródła tej strony to między innymi:</h3>
       <v-data-table-server
         v-model:page="page"
         v-model:items-per-page="itemsPerPage"

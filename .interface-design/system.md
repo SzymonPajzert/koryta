@@ -43,6 +43,51 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   prioritised (2026-09-09). Adopted 2026-10-14.
 - **A person with no party is grey on the graph**, not blue (2026-10-09,
   report wg0ZscDc).
+- **Redesign round 1 is accepted, site-wide changes first** (2026-10-15). The
+  six directions rendered on 10-14/15 go in, in this order:
+  1. the site-wide changes: type system, one edge style, header and footer;
+  2. then page by page: chips on feed and history, the company page, the
+     table, home.
+
+  Exact values (type scale, radii, weights) are written here once Szymon has
+  approved the implemented screenshots, not before.
+- **Home headline**: „Sprawdzamy, którymi stanowiskami w publicznych spółkach
+  podzielili się politycy”, with no full stop. It replaces „Jesteśmy
+  największym, ogólnopolskim i niezależnym agregatorem koryciarstwa”
+  (2026-10-15).
+- **The person page's graph opens on „2 kroki”**, as today. Szymon: "it looks
+  cooler, we can change it later" (2026-10-15).
+- **A long person bio folds on phones**: it shows four lines, followed by
+  „Pokaż więcej”, which opens the rest in place. It is hidden, not cut.
+  Computers show the whole bio. Szymon: "I think it's a good idea"
+  (2026-10-15).
+
+  The button goes once the bio is open, with no „Pokaż mniej” to fold it
+  back, and it carries a chevron down. Szymon: "Don't keep the pokaż mniej
+  toggle for now, sure, let's add a chevron" (2026-10-15).
+- **/eksploruj/tabela on desktop: one summary line per person**, e.g.
+  „8 spółek ▾ · ostatnio <company> · 2023-2024 · 12 lat pracy · 8 startów”.
+  Each row's „N spółek ▾” opens its companies in place, and a single
+  „Rozwiń wszystkie” toggle opens every row at once. This was picked over the
+  rendered list of three posts per person (2026-10-15).
+
+  Columns are divided by thin lines, because without them it is sometimes
+  hard to read (2026-10-15). The summary line is aligned sub-columns, each
+  divided by the same neutral hairline: count | latest post | date | years.
+- **The wordmark „koryta.pl” is set entirely in bold**, in the app bar and
+  in the home footer, not „koryta” bold and „.pl” regular. Szymon: "I prefer
+  the whole koryta.pl to be bolded" (2026-10-15).
+- **The top bar is ruled off by a firm line, and lifted by a soft shadow once
+  the page scrolls** (option „A + B”, picked 2026-10-15 from three rendered
+  options). The line is a neutral black at .2, firmer than the site's .12
+  hairline, because the bar is the one edge with nothing else to frame it.
+  The shadow uses Vuetify's `scroll-behavior="elevate"`.
+- **Admin page titles follow the public pages' title rule**: the h1 is
+  40/700, 28 on phones, not a smaller 28 for working pages. Szymon: "Let's
+  keep the admin pages like public pages for now" (2026-10-15).
+- **The site's text uses the plain hyphen „-”**, never „–” or „—”, in prose
+  and in date ranges alike. Szymon: "This is very AI and I think people
+  start noticing it" (2026-10-16).
 
 ## How UI changes are made
 
@@ -52,10 +97,14 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   (2026-09-23/24).
 - Show Szymon the screenshots and wait for his pick before updating tests,
   retaking baselines or committing (2026-10-14).
+- UI work on koryta uses the interface-design skill:
+  /interface-design:interface-design while designing and building, and
+  /interface-design:design-review on the screenshots before they are shown
+  to Szymon. Szymon: "Remember to use interface-design skill" (2026-10-15).
 
 ## Not decided yet
 
-Type scale, weights, button case, depth strategy (borders, shadows, tints),
-radius scale, spacing base and chip usage. The 2026-10-14 design review
-proposed directions for each. They are proposals until Szymon picks them in
-decide-design-review-2026-10-14, so do not treat them as rules.
+- The exact values of the accepted directions, pending his OK on the
+  implemented screenshots.
+- The smaller questions in decide-design-review-2026-10-14 (wording, order,
+  toggles, an extra font weight, the „Zgłoś” icon on phones).

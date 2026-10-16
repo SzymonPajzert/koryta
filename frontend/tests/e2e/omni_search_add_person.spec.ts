@@ -137,7 +137,7 @@ test.describe("OmniSearch add person", () => {
     await expect(
       page.locator('.v-alert:has-text("Wyświetlasz podgląd")'),
     ).toBeVisible({ timeout: 15000 });
-    await expect(page.locator("h2")).toContainText(personName);
+    await expect(page.locator("h1")).toContainText(personName);
 
     const createdUrl = page.url();
     const nodeUrl = createdUrl.split("?")[0]!;

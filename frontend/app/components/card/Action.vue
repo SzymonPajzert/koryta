@@ -8,7 +8,6 @@
     :tabindex="isButton ? 0 : undefined"
     height="100%"
     variant="outlined"
-    rounded="lg"
     hover
     @click="isButton && emit('activate')"
     @keydown="onKeydown"
@@ -25,7 +24,7 @@
           {{ accessLabels[access] }}
         </v-chip>
       </template>
-      <v-card-title class="text-wrap text-subtitle-1 font-weight-bold">
+      <v-card-title class="text-wrap text-subtitle-1">
         {{ title }}
       </v-card-title>
     </v-card-item>

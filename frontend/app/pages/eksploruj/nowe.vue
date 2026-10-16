@@ -52,14 +52,7 @@
           <!-- The labels shorten and the icons go on a phone: at 375px the
                full pair is 344px wide inside a 319px card, and the toggle
                does not wrap - the second button hung out over the edge. -->
-          <v-btn-toggle
-            v-model="filterOrder"
-            mandatory
-            divided
-            variant="outlined"
-            density="comfortable"
-            class="order-toggle"
-          >
+          <SegmentedToggle v-model="filterOrder" class="order-toggle">
             <v-btn
               value="recent"
               class="text-none"
@@ -75,7 +68,7 @@
             >
               Najwyżej oceniane
             </v-btn>
-          </v-btn-toggle>
+          </SegmentedToggle>
 
           <v-spacer />
 
@@ -858,7 +851,7 @@ const { workLocations, mapLocations } = usePersonPlaces(
 .steps__detail {
   color: rgba(var(--v-theme-on-surface), 0.7);
   display: grid;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   gap: 12px 24px;
   grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   line-height: 1.55;

@@ -1,9 +1,12 @@
 <template>
   <div class="login-page w-100 mx-auto">
     <main v-if="user">
-      <v-card rounded="lg" class="pa-2">
-        <v-card-title class="text-h5 text-wrap">
-          Cześć {{ user?.displayName || user?.email }}!
+      <v-card class="pa-2">
+        <!-- The page's h1, at the size of a title that heads a card. -->
+        <v-card-title class="text-wrap">
+          <h1 class="k-title--sm">
+            Cześć {{ user?.displayName || user?.email }}!
+          </h1>
         </v-card-title>
         <v-card-text>
           <v-alert
@@ -17,7 +20,7 @@
               <span class="flex-grow-1">Zweryfikuj swój adres email.</span>
               <v-btn
                 size="small"
-                variant="outlined"
+                variant="tonal"
                 :loading="loading"
                 @click="sendVerification"
               >
@@ -40,9 +43,11 @@
       <v-alert v-if="reason === 'unauthorized'" type="info" class="mb-4">
         Musisz być zalogowany, aby uzyskać dostęp do tej strony.
       </v-alert>
-      <v-card rounded="lg" class="pa-2">
-        <v-card-title class="text-h5 text-center">
-          {{ isLogin ? "Zaloguj się" : "Rejestracja" }}
+      <v-card class="pa-2">
+        <v-card-title class="text-center text-wrap">
+          <h1 class="k-title--sm">
+            {{ isLogin ? "Zaloguj się" : "Rejestracja" }}
+          </h1>
         </v-card-title>
         <v-card-text>
           <FormLoginForm :is-login="isLogin" @success="onLoginSuccess" />
