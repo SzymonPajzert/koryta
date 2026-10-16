@@ -217,7 +217,7 @@ People: at most 100 a night (`--max-uploads`), in this order
    the crawl bucket's names say - so what was paid for reaches the site that
    night, or the night after a hand run or a held night. A page only: a page
    without a link is still bought by name, so a bought entry without a page
-   is most likely a namesake's, and only tiers 1 and 5 get a page;
+   is most likely a namesake's, and only tiers 1, 5 and 6 get a page;
 3. a page the payload would change, on which somebody noted that data is
    missing ("Brakuje danych") and no admin has closed the entry - on the page
    itself, or on the page of a company the payload names: the night sends no
@@ -230,8 +230,14 @@ People: at most 100 a night (`--max-uploads`), in this order
    on 2026-10-11 and no night made a page for them; ten a night is Szymon's
    choice of that day - few enough to check by hand the next morning. The
    newest post first, and on one day a company the site has a page for first;
-6. a published page the payload would change;
-7. any other page the payload would change.
+6. at most 50 more people the site has no page for, with a rejestr.io entry,
+   in a public post - any post: a board, a supervisory seat, a prokurent - that
+   has not ended and began before those 30 days (`--max-rejestrio-current`),
+   created unpublished as in 1 and in the same order as 5. 13,518 were waiting
+   on 2026-10-16, against 89 new hires, and no night made a page for any of
+   them; fifty a night is Szymon's choice of that day;
+7. a published page the payload would change;
+8. any other page the payload would change.
 
 Newest news first inside each. A payload sent unchanged in the last 30 days
 is left alone (`--resend-after`), so a pending update or a party a human took
