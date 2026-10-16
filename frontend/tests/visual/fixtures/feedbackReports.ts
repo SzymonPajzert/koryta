@@ -80,3 +80,40 @@ export const feedbackReports: Feedback[] = [
     adminStatus: "wont_fix",
   },
 ];
+
+/** Two open reports a change says it fixes, for /qa as an admin opens it: what
+ * „Zgłoszenia do zamknięcia” lists, with the list above.
+ *
+ * Their ids are the ones two of the oldest entries in shared/reportFixes.ts
+ * claim - a fix with no QA entry of its own, so nobody's verdict decides it
+ * and the admin is offered „Zamknij” whatever is in `qaChecks`. That list only
+ * grows at the top, so these stay where they are; what the reports say is
+ * made up, after what those entries fixed. One is in the queue behind the two
+ * above and one is not, which is what lines the section's columns up. */
+export const fixedReports: Feedback[] = [
+  {
+    id: "3WbbJZv1qumO87LDCMQb",
+    kind: "bug",
+    message:
+      "Na telefonie w rogu ekranu wisi zielona kropka bez żadnego napisu. Kliknąłem ją przypadkiem i otworzył się formularz – nie wiedziałem, że to do zgłoszeń.",
+    context: {
+      route: "/osoba/barbara-przykladowa-wizos1",
+      pageTitle: "Barbara Przykładowa | Koryta.pl",
+    },
+    createdAt: daysAgo(12),
+    adminStatus: "in_progress",
+    queueRank: 3072,
+  },
+  {
+    id: "Bu83FlO639xnLO0ddmkc",
+    kind: "bug",
+    message:
+      "Wykres „Co się działo w bazie” na telefonie: daty pod słupkami nachodzą na siebie i nie da się ich przeczytać.",
+    context: {
+      route: "/eksploruj/statystyki",
+      pageTitle: "Statystyki - koryta.pl",
+    },
+    createdAt: daysAgo(15),
+    adminStatus: "new",
+  },
+];
