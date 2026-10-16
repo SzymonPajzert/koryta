@@ -280,7 +280,10 @@ A failed step does not end the night; the steps that depend on it are held:
   test that passed then and fails now - most likely after the last upload -
   holds the upload until somebody looks. The first night's failures are its
   baseline; on 2026-10-03, 18 invariants failed on budgets that had drifted
-  past their measured values.
+  past their measured values. A budgeted invariant fails only when it grows
+  more than ten past its budget: up to that it passes with a warning
+  (`within_budget` in `src/tests/pipelines/conftest.py`), which holds nothing
+  and goes into the summary's `warnings` and onto the night's run.
 - `scores` needs the same, but not the people: however they went, the scores
   go up, with whatever pages the people step did create.
 - `companies` runs only when `people` may - skipped, not held, when it may
@@ -412,6 +415,10 @@ way, and the timer runs the night on a VM that is already up too.
   `/admin/procesy`; the jobs it ran report under their own names. The summary
   and the whole log are in `gs://koryta-pl-sharedcache/jobs/nightly/runs/` and
   `.../logs/`.
+- **A warning on the night.** An invariant has grown past its budget, inside
+  the ten it may grow before it fails and holds the upload; the summary's
+  `warnings` name it with its count. Repair the data, or measure the count
+  again and write it into the test with what grew it.
 - **Log in during a night.** `sudo touch /etc/koryta/stay-up` before 04:30 and
   the VM stays up afterwards; remove it, or the VM runs - and bills - until
   the schedule's 09:00 stop. A boot outside the night window runs no night -

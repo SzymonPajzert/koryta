@@ -7,11 +7,20 @@ import signal
 import subprocess
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
 import jobs.nightly as night
 from stores.storage import SHARED_BUCKET, warsaw_tz
+
+#: `test_budget_warnings_reads_what_the_invariants_budgets_record` runs the
+#: invariants' own budgets through pytest.
+pytest_plugins = ["pytester"]
+
+#: Where every budgeted invariant gets `within_budget`, which records what
+#: `budget_warnings` reads.
+INVARIANTS_CONFTEST = Path(__file__).parents[3] / "tests/pipelines/conftest.py"
 
 # The 04:00 Warsaw export, in UTC as its folder is named; the night starts at
 # 04:30 Warsaw, half an hour later.
@@ -68,6 +77,12 @@ class World:
             "invariants": [],
         }
         self.pytest_codes = {"tests": None, "outputs": None, "invariants": None}
+        #: Tests past their budget and inside its buffer, per check.
+        self.warnings: dict[str, list[night.OverBudget]] = {
+            "tests": [],
+            "outputs": [],
+            "invariants": [],
+        }
         self.last: dict[str, list[str]] | None = {}
         self.export: str | None = FRESH
         self.commands: list[tuple[str, list[str], dict]] = []
@@ -191,6 +206,12 @@ def world(monkeypatch, tmp_path) -> World:
                 return w.failures[check]
         raise AssertionError(report)
 
+    def budget_warnings(report):
+        for check in night.CHECKS:
+            if report.endswith(f"-{check}.xml"):
+                return w.warnings[check]
+        raise AssertionError(report)
+
     class Bucket:
         def create_object(self, bucket, name, data, content_type):
             assert name not in w.objects, f"{name} written twice"
@@ -203,6 +224,7 @@ def world(monkeypatch, tmp_path) -> World:
 
     monkeypatch.setattr(night, "stream", stream)
     monkeypatch.setattr(night, "failed_tests", failed_tests)
+    monkeypatch.setattr(night, "budget_warnings", budget_warnings)
     monkeypatch.setattr(night, "newest_export", lambda client: w.export)
     monkeypatch.setattr(night, "last_failures", lambda client, before: w.last)
     monkeypatch.setattr(night, "Client", Bucket)
@@ -643,6 +665,7 @@ def test_the_summary_and_the_log_land_in_the_shared_cache(world):
     summary = world.summary()
     assert (summary["export"], summary["export_fresh"]) == (FRESH, True)
     assert summary["failures"] == {"tests": [], "outputs": [], "invariants": []}
+    assert summary["warnings"] == {}
     assert summary["log"].startswith(f"gs://{SHARED_BUCKET}/{night.LOGS_PREFIX}")
     [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
     assert b"[koryta_people_import]" not in world.objects[log]  # faked: no output
@@ -1009,6 +1032,49 @@ def test_failures_known_from_last_night_do_not_hold_the_people(world):
     assert world.steps()["people"] == ("succeeded", "")
 
 
+def test_a_budget_eaten_into_warns_and_holds_nothing(world):
+    grew = "src.tests.pipelines.test_invariants::test_grew"
+    world.warnings["invariants"] = [night.OverBudget(grew, 25, 24, 34)]
+
+    assert night.main([]) == 0
+
+    assert world.steps()["invariants"] == ("succeeded", "1 z ostrzeżeniem")
+    assert world.steps()["people"] == ("succeeded", "")
+    assert world.steps()["scores"] == ("succeeded", "")
+    assert world.summary()["warnings"] == {
+        "invariants": [{"test": grew, "count": 25, "known": 24, "limit": 34}]
+    }
+    # The run says so, apart from its errors: the page and the morning
+    # check read it there.
+    ending = world.runs[-1].ending()
+    assert (ending["state"], ending["errors"]) == ("succeeded", [])
+    assert ending["warnings"] == [
+        "test_invariants::test_grew: 25 przy znanych 24, nie przejdzie powyżej 34"
+    ]
+    [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
+    assert (
+        "night over: succeeded; warning - test_invariants::test_grew: 25 przy "
+        "znanych 24"
+    ) in world.objects[log].decode()
+
+
+def test_a_check_says_what_fails_and_what_warns(world):
+    world.last = {"tests": [], "outputs": [], "invariants": ["a::known"]}
+    world.failures["invariants"] = ["a::known"]
+    world.warnings["invariants"] = [
+        night.OverBudget("a::grew", 25, 24, 34),
+        night.OverBudget("b::grew", 3, 2, 12),
+    ]
+
+    assert night.main([]) == 0
+
+    assert world.steps()["invariants"] == (
+        "partial",
+        "1 nie przechodzi, 2 z ostrzeżeniem",
+    )
+    assert world.steps()["people"] == ("succeeded", "")
+
+
 def test_on_the_first_night_every_failure_is_the_baseline(world):
     world.last = None
     world.failures["tests"] = ["a::fails"]
@@ -1215,6 +1281,54 @@ def test_failed_tests_reads_a_junit_report(tmp_path):
 
     assert night.failed_tests(str(report)) == ["src.a::test_bad", "src.b::test_broken"]
     assert night.failed_tests(str(tmp_path / "missing.xml")) is None
+
+
+def test_a_warning_names_its_test_by_module_and_parameters():
+    over = night.OverBudget(
+        "src.tests.pipelines.test_revisions::test_required_field_present"
+        "[employed.name]",
+        170,
+        169,
+        179,
+    )
+
+    assert over.said() == (
+        "test_revisions::test_required_field_present[employed.name]: 170 przy "
+        "znanych 169, nie przejdzie powyżej 179"
+    )
+
+
+def test_budget_warnings_reads_what_the_invariants_budgets_record(pytester):
+    pytester.makeconftest(INVARIANTS_CONFTEST.read_text())
+    pytester.makepyfile(
+        test_budgets="""
+        def test_kept(within_budget):
+            assert within_budget(24, 24)
+
+        def test_grew(within_budget):
+            assert within_budget(25, 24)
+
+        def test_at_the_limit(within_budget):
+            assert within_budget(34, 24)
+
+        def test_ran_out(within_budget):
+            assert within_budget(35, 24)
+        """
+    )
+    report = pytester.path / "report.xml"
+
+    result = pytester.runpytest(f"--junitxml={report}", "-p", "no:cacheprovider")
+
+    result.assert_outcomes(passed=3, failed=1)
+    result.stdout.fnmatch_lines(
+        ["*BudgetWarning: 25, up from the 24 known; fails past 34"]
+    )
+    assert night.failed_tests(str(report)) == ["test_budgets::test_ran_out"]
+    assert night.budget_warnings(str(report)) == [
+        night.OverBudget("test_budgets::test_at_the_limit", 34, 24, 34),
+        night.OverBudget("test_budgets::test_grew", 25, 24, 34),
+    ]
+    assert night.budget_warnings(str(pytester.path / "missing.xml")) == []
 
 
 def test_the_newest_finished_export_is_found_past_a_running_one():

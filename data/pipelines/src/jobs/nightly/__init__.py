@@ -73,7 +73,10 @@ night; only the steps that depend on it are held:
   nothing new failing - a test that passed last night and fails tonight, most
   likely after last night's upload, holds the upload until somebody looks. The
   18 invariants failing on 2026-10-03 (budgets drifted past their measured
-  values) fail every night and do not hold it.
+  values) fail every night and do not hold it. Nor does an invariant that
+  grows by a page or two: it passes up to ten past its budget and warns
+  (`within_budget` in src/tests/pipelines/conftest.py), and the night reports
+  the warnings - `warnings` in its summary and on its run - and sends.
 - `scores` needs the same, and not the people: their outcome only decides
   which new pages there are to rate as well.
 - `companies` writes to the site too, so it runs only when the people may go
@@ -356,6 +359,28 @@ class StepResult:
 
 
 @dataclass
+class OverBudget:
+    """A test that counted more than its budget and passed, inside the buffer
+    `within_budget` gives every budget (src/tests/pipelines/conftest.py)."""
+
+    test: str
+    count: int
+    #: The count the test's budget names, and the one past which it fails.
+    known: int
+    limit: int
+
+    def said(self) -> str:
+        """One line for the run on /admin/procesy, the test named by its
+        module - test_invariants::test_x - which is all of the path that tells
+        two apart, and a phone has room for."""
+        module, _, name = self.test.partition("::")
+        return (
+            f"{module.rsplit('.', 1)[-1]}::{name}: {self.count} przy znanych "
+            f"{self.known}, nie przejdzie powyżej {self.limit}"
+        )
+
+
+@dataclass
 class NightSummary:
     """What one night did, kept in the shared cache."""
 
@@ -372,6 +397,9 @@ class NightSummary:
     failures: dict[str, list[str]] = field(default_factory=dict)
     #: Tests failing tonight that passed on the last night that ran them.
     new_failures: list[str] = field(default_factory=list)
+    #: Tests past their budget and inside its buffer, by check: they pass,
+    #: and hold nothing, until the buffer runs out.
+    warnings: dict[str, list[OverBudget]] = field(default_factory=dict)
     #: Held pipelines rebuilt before the reprocess, and why each was due.
     rebuilt: dict[str, str] = field(default_factory=dict)
     #: Held pipelines due a rebuild that did not get one, and why; the next
@@ -625,6 +653,30 @@ def failed_tests(report: str) -> list[str] | None:
         if case.find("failure") is not None or case.find("error") is not None:
             failed.append(f"{case.get('classname')}::{case.get('name')}")
     return sorted(failed)
+
+
+def budget_warnings(report: str) -> list[OverBudget]:
+    """The tests a junit report says passed past their budget, from the
+    properties `within_budget` records on each; none without a report."""
+    try:
+        root = ET.parse(report).getroot()
+    except (OSError, ET.ParseError):
+        return []
+    warned = []
+    for case in root.iter("testcase"):
+        said = {
+            prop.get("name"): prop.get("value", "") for prop in case.iter("property")
+        }
+        if {"budget_count", "budget_known", "budget_limit"} <= said.keys():
+            warned.append(
+                OverBudget(
+                    test=f"{case.get('classname')}::{case.get('name')}",
+                    count=int(said["budget_count"]),
+                    known=int(said["budget_known"]),
+                    limit=int(said["budget_limit"]),
+                )
+            )
+    return sorted(warned, key=lambda over: over.test)
 
 
 def stream(
@@ -1258,9 +1310,15 @@ class Night:
             # collected. No verdict to compare.
             return FAILED, f"bez wyniku (kod {code})", code
         self.summary.failures[step.name] = failed
-        if not failed:
-            return SUCCEEDED, "", code
-        return PARTIAL, f"{len(failed)} nie przechodzi", code
+        warned = budget_warnings(report)
+        if warned:
+            self.summary.warnings[step.name] = warned
+        said = []
+        if failed:
+            said.append(f"{len(failed)} nie przechodzi")
+        if warned:
+            said.append(f"{len(warned)} z ostrzeżeniem")
+        return (PARTIAL if failed else SUCCEEDED), ", ".join(said), code
 
     def compare_failures(self) -> None:
         last = self.last_failures()
@@ -1503,13 +1561,20 @@ class Night:
             or (["SIGTERM"] if self.signalled else [])
             or problems
         )
-        self.log(f"night over: {state}; " + ("; ".join(problems) or "all well"))
+        # The tests eating into their budgets' buffers, apart from the
+        # problems: a warning holds nothing back and decides nothing.
+        warnings = [
+            over.said() for overs in summary.warnings.values() for over in overs
+        ]
+        noted = problems + [f"warning - {warning}" for warning in warnings]
+        self.log(f"night over: {state}; " + ("; ".join(noted) or "all well"))
         summary.log = self.write_log()
         path = self.write_summary()
         self.status.finish(
             state,
             stop_reason=decisive[0][:200] if decisive else None,
             errors=problems,
+            warnings=warnings,
             exit_code=code,
             counters={
                 "kroki": len(results),
