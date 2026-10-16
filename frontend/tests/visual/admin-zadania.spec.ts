@@ -8,7 +8,7 @@ import { expectFitsThePhone } from "./phoneWidth";
 
 /** /admin/zadania, the owner's task list: the lists with one task open, the
  * map of what waits on what with one task picked, the map with every chain
- * folded, and the map focused on one task.
+ * folded, the map focused on one task, and the form „Dodaj” opens.
  *
  * The tasks live in their own database, which the seed leaves empty, so the
  * list is answered from ./fixtures/opsTasks.ts. The page is rendered in the
@@ -64,6 +64,41 @@ test("zadania", ZADANIA, async ({ page }, testInfo) => {
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("zadania.png", { fullPage: true });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+/** The form is photographed alone, in a window tall enough for all of it: it
+ * scrolls inside itself, and a shot of the part that fits a phone's screen
+ * would stop at its middle. */
+test("zadania-dodaj", ZADANIA, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({
+    width: page.viewportSize()!.width,
+    height: 1400,
+  });
+  await logIn(page, USERS.admin, "/admin/zadania");
+
+  await expect(page.locator("#t-upload-nazw-spolek")).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.locator("[data-task-add]").click();
+
+  // Empty, so „Dodaj” waits for a title.
+  const dialog = page.locator("[data-task-dialog]");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Nowe zadanie")).toBeVisible();
+  await expect(dialog.locator("[data-task-save]")).toBeDisabled();
+  await expect(
+    page.locator('[class*="-enter-active"], [class*="-leave-active"]'),
+  ).toHaveCount(0);
+
+  // The pointer off the button the click left it on, and its ripple played
+  // out.
+  await page.mouse.move(0, 0);
+  await expect(page.locator(".v-ripple__animation")).toHaveCount(0);
+  await page.evaluate(() => document.fonts.ready);
+  await expect(dialog).toHaveScreenshot("zadania-dodaj.png");
 
   await expectFitsThePhone(page, testInfo);
 });
