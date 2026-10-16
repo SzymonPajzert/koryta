@@ -1,15 +1,14 @@
 <template>
-  <!-- The container this sits in already pads 16px, so `pa-4` would spend a
-       fifth of a 375px screen on nothing before a word is read. Kept from `sm`
-       up, where there is room for it - the same rule /eksploruj/szpitale
-       follows. -->
-  <div class="py-4 px-0 pa-sm-4 w-100">
+  <!-- No side padding of its own: the layout's container pads the column, so
+       the title shares its left edge with every other page's - the same rule
+       /eksploruj/szpitale follows. -->
+  <div class="w-100">
     <h1 class="text-h5 text-sm-h4 mb-2">
       Okrągły staż w instytucjach publicznych
     </h1>
 
     <p class="text-body-2 text-medium-emphasis mb-4">
-      Komu w tym miesiącu - wstecz albo naprzód - łączny staż w instytucjach
+      Komu w tym miesiącu – wstecz albo naprzód – łączny staż w instytucjach
       publicznych wypada równo: 10 lat, 15 lat, 24 lata. Liczymy sumę wszystkich
       stanowisk, a nie rocznicę jednego z nich, więc równoległe posady liczą się
       raz, a przerwy w karierze przesuwają datę na później. Bierzemy pod uwagę
@@ -33,14 +32,10 @@
          into the month ahead, which read correctly and hid the half worth
          looking at: there are six times as many cards in the window as fit on
          a screen, so the first upcoming one sat nine pages down. -->
-    <v-btn-toggle
+    <SegmentedToggle
       v-model="scope"
       class="mb-4"
       data-testid="milestones-scope"
-      density="compact"
-      divided
-      mandatory
-      variant="outlined"
     >
       <v-btn value="upcoming" class="text-none" data-testid="scope-upcoming">
         Nadchodzące<span v-if="upcomingCount" class="ml-1 text-medium-emphasis"
@@ -52,7 +47,7 @@
           >({{ pastCount }})</span
         >
       </v-btn>
-    </v-btn-toggle>
+    </SegmentedToggle>
 
     <p
       v-if="total > 0"
@@ -80,10 +75,14 @@
       class="milestone-feed"
       data-testid="service-milestones"
       empty-text="To już wszystkie okrągłe staże z tego okresu."
-      load-more-text="Pokaż więcej"
       :mode="mode"
       @load="loadMore"
     >
+      <!-- In the control tint: Vuetify's own button here is outlined in the
+           text colour, near-black. -->
+      <template #load-more="{ props: loader }">
+        <v-btn variant="tonal" @click="loader.onClick">Pokaż więcej</v-btn>
+      </template>
       <div class="milestone-feed__grid">
         <CardServiceMilestone
           v-for="milestone in milestones"
@@ -136,7 +135,7 @@ const FIRST_PAGE_KEY = "service-milestones";
 useSeoMeta({
   title: "Okrągły staż w instytucjach publicznych - koryta.pl",
   description:
-    "Komu łączny staż we wszystkich instytucjach publicznych wypada równo - 10, 15, 24 lata - w tym miesiącu wstecz albo naprzód.",
+    "Komu łączny staż we wszystkich instytucjach publicznych wypada równo – 10, 15, 24 lata – w tym miesiącu wstecz albo naprzód.",
 });
 
 const route = useRoute();

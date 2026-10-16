@@ -10,7 +10,7 @@
     />
     <v-btn
       v-else
-      variant="outlined"
+      variant="tonal"
       :prepend-icon="mdiDatabaseArrowRightOutline"
       data-testid="job-request-open"
       @click="open = true"
@@ -25,12 +25,12 @@
           <template v-if="!requested">
             <p class="text-body-2 mb-3">
               <template v-if="target === 'company'">
-                Zbudujemy paczki wszystkich osób, które według naszych danych -
-                rejestr.io i odpisów z KRS - pracowały albo pracują w
+                Zbudujemy paczki wszystkich osób, które według naszych danych –
+                rejestr.io i odpisów z KRS – pracowały albo pracują w
                 <strong>{{ name || "tej spółce" }}</strong
                 >, i wyślemy na stronę te, które coś na niej zmienią: brakujące
                 stanowiska, kandydatury, partie. Osoby, których serwis jeszcze
-                nie ma, dostaną nowe, nieopublikowane strony - trafią do kolejki
+                nie ma, dostaną nowe, nieopublikowane strony – trafią do kolejki
                 do przejrzenia.
               </template>
               <template v-else>
@@ -49,7 +49,9 @@
             <!-- The page's last runs, so a second click is a decision rather
                  than an accident - a run still going is handed back anyway. -->
             <div v-if="runs.length" class="mb-3" data-testid="job-request-runs">
-              <div class="text-caption text-medium-emphasis mb-1">
+              <div
+                class="text-caption font-weight-semibold text-medium-emphasis mb-1"
+              >
                 Ostatnie zlecenia
               </div>
               <div
@@ -76,7 +78,7 @@
 
             <v-checkbox
               v-model="dryRun"
-              label="Tylko policz - nic nie wysyłaj"
+              label="Tylko policz – nic nie wysyłaj"
               density="compact"
               hide-details
               data-testid="job-request-dry-run"
@@ -104,7 +106,7 @@
             <p class="mb-2">
               {{
                 requested.reused
-                  ? "To zlecenie już czeka albo trwa - oto ono."
+                  ? "To zlecenie już czeka albo trwa – oto ono."
                   : "Zlecone."
               }}
               {{ dispatchText(requested.run) }}
@@ -199,7 +201,7 @@ const title = computed(() =>
     : "Wyślij dane tej osoby",
 );
 const tooltip = computed(
-  () => `${title.value} - z najnowszych danych, na żądanie`,
+  () => `${title.value} – z najnowszych danych, na żądanie`,
 );
 
 const definition = jobDefinition(PEOPLE_REQUEST)!;
@@ -224,14 +226,14 @@ function dispatchText(run: JobRun): string {
   // was started, and is off again until the night when it waits for the
   // export - "się uruchamia" would promise minutes.
   if (run.waitingFor === "export") {
-    return "Czeka na dzisiejszą kopię bazy - ruszy, gdy będzie gotowa, najpóźniej po 04:15.";
+    return "Czeka na dzisiejszą kopię bazy – ruszy, gdy będzie gotowa, najpóźniej po 04:15.";
   }
   if (run.waitingFor === "night") {
-    return "Maszynę zajmuje teraz noc - ruszy zaraz po niej.";
+    return "Maszynę zajmuje teraz noc – ruszy zaraz po niej.";
   }
   if (run.dispatch?.ok) return "Maszyna się uruchamia.";
   if (run.dispatch?.error) {
-    return "Maszyny nie udało się uruchomić - zlecenie zrobi najbliższa noc.";
+    return "Maszyny nie udało się uruchomić – zlecenie zrobi najbliższa noc.";
   }
   return "Zrobi je najbliższa noc.";
 }

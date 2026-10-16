@@ -4,9 +4,6 @@
       <div
         class="d-inline-flex align-center bg-surface border rounded-pill overflow-hidden shadow-sm transition-all"
         style="border-color: rgba(var(--v-theme-on-surface), 0.12) !important"
-        :class="{ 'elevation-2': isHoveringContainer }"
-        @mouseenter="isHoveringContainer = true"
-        @mouseleave="isHoveringContainer = false"
       >
         <v-tooltip location="top" :text="stepHint(1)">
           <template #activator="{ props: tip }">
@@ -38,7 +35,7 @@
                  judgement about the person - see `voteCategoryConfig`. -->
             <div class="text-caption">{{ config.meaning }}</div>
             <div class="text-caption text-medium-emphasis">
-              Skala od -5 do +5 - im dalej, tym mocniejsze przekonanie.
+              Skala od -5 do +5 – im dalej, tym mocniejsze przekonanie.
             </div>
           </v-tooltip>
         </div>
@@ -70,7 +67,7 @@
 
 <script setup lang="ts">
 import { mdiArrowDownBold, mdiArrowUpBold } from "@mdi/js";
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import type { VoteCategory } from "~~/shared/model";
 import { useVotes, voteLevelLabel } from "~/composables/votes";
 
@@ -93,7 +90,7 @@ const currentLabel = computed(() =>
 
 const currentHint = computed(() =>
   currentLabel.value
-    ? `${signed(userVoteResult.value)} - ${currentLabel.value}`
+    ? `${signed(userVoteResult.value)} – ${currentLabel.value}`
     : `${config.text}: jeszcze nie oceniono`,
 );
 
@@ -101,9 +98,9 @@ const currentHint = computed(() =>
 const stepHint = (delta: number) => {
   const next = userVoteResult.value + delta;
   if (next > 5 || next < -5) return "Krańcowa ocena";
-  if (next === 0) return "0 - wycofaj ocenę";
+  if (next === 0) return "0 – wycofaj ocenę";
   const label = voteLevelLabel(category, next);
-  return label ? `${signed(next)} - ${label}` : signed(next);
+  return label ? `${signed(next)} – ${label}` : signed(next);
 };
 
 const emit = defineEmits(["voted"]);
@@ -112,6 +109,4 @@ const handleVote = async (value: number) => {
   await castVote(value);
   emit("voted");
 };
-
-const isHoveringContainer = ref(false);
 </script>

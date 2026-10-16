@@ -11,9 +11,24 @@
   >
     <header class="focus-run__head">
       <div class="focus-run__heading">
-        <div class="focus-run__job text-caption" data-focus-job>
-          {{ jobTitle }}
-          <template v-if="run?.request?.dryRun"> · tylko liczenie</template>
+        <!-- The tag sits on the job's line, not beside the title: next to
+             a 40px close button only, a long request name gets the card's
+             width on a phone instead of a column left of the tag. -->
+        <div class="focus-run__meta">
+          <div class="focus-run__job text-caption" data-focus-job>
+            {{ jobTitle }}
+            <template v-if="run?.request?.dryRun"> · tylko liczenie</template>
+          </div>
+          <!-- The same tag as the run's line in the list under the card. -->
+          <span
+            v-if="run"
+            class="arow-tag focus-run__chip"
+            :class="toneClasses(chip.tone)"
+            data-focus-chip
+          >
+            <v-icon :icon="chip.icon" size="12" class="mr-1" />
+            {{ chip.title }}
+          </span>
         </div>
         <h2 class="focus-run__title" data-focus-title>
           <NuxtLink v-if="run?.request && run.link" :to="run.link">
@@ -30,15 +45,6 @@
           <span v-else>{{ run?.title || runId }}</span>
         </h2>
       </div>
-      <span
-        v-if="run"
-        class="focus-run__chip"
-        :class="toneClasses(chip.tone)"
-        data-focus-chip
-      >
-        <v-icon :icon="chip.icon" size="14" class="mr-1" />
-        {{ chip.title }}
-      </span>
       <v-btn
         icon
         variant="text"
@@ -95,10 +101,10 @@
           wraca o 04:15, na noc.
         </template>
         <template v-else-if="run.waitingFor === 'night' && !stalled">
-          Maszynę zajmuje teraz noc - zlecenie ruszy zaraz po niej.
+          Maszynę zajmuje teraz noc – zlecenie ruszy zaraz po niej.
         </template>
         <template v-else-if="run.dispatch?.ok">
-          Maszynę uruchomiono {{ shortWarsawTime(run.dispatch.at, now) }} -
+          Maszynę uruchomiono {{ shortWarsawTime(run.dispatch.at, now) }} –
           zacznie w minutę, dwie.
         </template>
         <template v-else-if="run.dispatch?.error">
@@ -106,7 +112,7 @@
           poczeka do nocy.
         </template>
         <template v-else>
-          Strona nie uruchamia maszyny sama - zlecenie zrobi najbliższa noc
+          Strona nie uruchamia maszyny sama – zlecenie zrobi najbliższa noc
           (04:30).
         </template>
         <!-- Only where the site starts the VM at all: with dispatch off,
@@ -118,7 +124,7 @@
             (stalled || (!run.dispatch.ok && !run.waitingFor))
           "
           size="small"
-          variant="outlined"
+          variant="tonal"
           class="ml-2"
           :loading="redispatching"
           data-focus-redispatch
@@ -139,7 +145,11 @@
         </span>
       </div>
 
-      <p v-if="run.stopReason" class="text-body-2 mb-2" data-focus-reason>
+      <p
+        v-if="run.stopReason"
+        class="focus-run__reason text-body-2 mb-2"
+        data-focus-reason
+      >
         Powód: {{ run.stopReason }}
       </p>
 
@@ -157,18 +167,27 @@
         <template v-if="run.request">
           <dt>Zlecono</dt>
           <dd>
-            {{ requestedAt }}
+            <span v-if="requestedAt" :title="fullTime(requestedAt)">{{
+              formatMoment(requestedAt)
+            }}</span>
             <template v-if="run.request.byName">
-              - {{ run.request.byName }}</template
+              – {{ run.request.byName }}</template
             >
           </dd>
         </template>
         <dt>{{ run.state === "queued" ? "W kolejce od" : "Start" }}</dt>
-        <dd>{{ fullTime(run.startedAt) }}</dd>
+        <dd>
+          <span :title="fullTime(run.startedAt)">{{
+            formatMoment(run.startedAt)
+          }}</span>
+        </dd>
         <template v-if="run.finishedAt">
           <dt>Koniec</dt>
           <dd>
-            {{ fullTime(run.finishedAt) }} ({{
+            <span :title="fullTime(run.finishedAt)">{{
+              formatMoment(run.finishedAt)
+            }}</span>
+            ({{
               formatDuration(
                 Date.parse(run.finishedAt) - Date.parse(run.startedAt),
               )
@@ -219,6 +238,7 @@ import { computed, ref, toRef, watch } from "vue";
 import { mdiCheck, mdiClose, mdiContentCopy } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { useOpsRun } from "~/composables/opsJobs";
+import { formatMoment } from "~/utils/moment";
 import {
   counterLabel,
   counterValue,
@@ -300,10 +320,8 @@ const fullTime = (iso: string) =>
     timeStyle: "short",
   });
 
-const requestedAt = computed(() => {
-  const at = run.value?.request?.at;
-  return at ? fullTime(at) : "";
-});
+/** When the run was asked for, if the request says. */
+const requestedAt = computed(() => run.value?.request?.at || null);
 
 /** One line saying where the run is now. */
 const statusText = computed(() => {
@@ -313,23 +331,23 @@ const statusText = computed(() => {
     props.now.getTime() - Date.parse(current.startedAt),
   );
   const progress = current.progress
-    ? ` - ${progressText(current.progress)}`
+    ? ` – ${progressText(current.progress)}`
     : "";
   switch (current.state) {
     case "queued":
       if (stalled.value) return `Czeka od ${since} i nikt go nie podjął.`;
       return current.waitingFor
-        ? `Czeka ${RUN_WAITING_TEXT[current.waitingFor]} - w kolejce od ${since}.`
+        ? `Czeka ${RUN_WAITING_TEXT[current.waitingFor]} – w kolejce od ${since}.`
         : `Czeka na maszynę od ${since}.`;
     case "running":
       return stalled.value
         ? `Brak sygnału od ${formatDuration(props.now.getTime() - Date.parse(current.heartbeatAt))}.`
-        : `Trwa od ${since}${current.phase ? ` - ${current.phase}` : ""}${progress}.`;
+        : `Trwa od ${since}${current.phase ? ` – ${current.phase}` : ""}${progress}.`;
     case "succeeded":
       // A count sent nothing, and "0 z 15 osób" would read as a send that
       // stalled at the start.
       return current.request?.dryRun
-        ? "Policzone - nic nie wysłano."
+        ? "Policzone – nic nie wysłano."
         : `Gotowe${progress}.`;
     case "partial":
       return `Przerwane z zaległościami${progress}.`;
@@ -378,8 +396,8 @@ watch(run, (current) => {
   /* Clear of the sticky app bar when a link scrolls to it. */
   scroll-margin-top: 96px;
   padding: 16px 20px;
-  border: 2px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 10px;
+  border: 2px solid var(--k-line);
+  border-radius: var(--k-r-card);
 }
 
 .focus-run--info {
@@ -407,10 +425,28 @@ watch(run, (current) => {
   min-width: 0;
 }
 
+/* The job and the run's tag on one line when they fit; the tag drops under
+   the job when they do not. */
+.focus-run__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.focus-run__chip {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* A label, as type.css has them: 12/600 in the quiet ink, sentence case.
+   A job only its runs know about is titled by its id, one long word: it
+   breaks rather than push the line past the close button. */
 .focus-run__job {
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
 }
 
 .focus-run__title {
@@ -418,17 +454,6 @@ watch(run, (current) => {
   font-weight: 700;
   line-height: 1.3;
   overflow-wrap: anywhere;
-}
-
-.focus-run__chip {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .focus-run__progress {
@@ -454,19 +479,19 @@ watch(run, (current) => {
   flex-wrap: wrap;
   gap: 4px 10px;
   margin-bottom: 8px;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
 }
 
 .focus-run__counter {
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--k-r-control);
   background: rgb(var(--v-theme-surface-muted));
 }
 
 .focus-run__errors {
   margin: 0 0 8px;
   padding-left: 20px;
-  font-size: 0.8125rem;
+  font-size: var(--k-meta-size);
 }
 
 .focus-run__errors code {
@@ -474,15 +499,24 @@ watch(run, (current) => {
   overflow-wrap: anywhere;
 }
 
+/* A stop reason can name a test path: one word longer than a phone. */
+.focus-run__reason {
+  overflow-wrap: anywhere;
+}
+
 .focus-run__facts {
   display: grid;
   grid-template-columns: max-content 1fr;
+  align-items: baseline;
   gap: 2px 12px;
   margin-bottom: 8px;
 }
 
+/* On the label rule, as „Gdzie” and „Polecenie” in the job's row below. */
 .focus-run__facts dt {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: var(--k-meta-size);
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
 }
 
 .focus-run__facts dd {
@@ -491,7 +525,7 @@ watch(run, (current) => {
 }
 
 .focus-run__path {
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   user-select: all;
 }
 

@@ -3,7 +3,7 @@
        re-established here or every v-* component below loses its layout. -->
   <v-app>
     <NuxtLayout>
-      <div class="mx-auto text-center py-12" style="max-width: 640px">
+      <div class="mx-auto text-center pt-12" style="max-width: 640px">
         <v-icon :icon="icon" size="96" color="primary" class="mb-6" />
         <p class="text-h2 font-weight-bold mb-2">{{ statusCode }}</p>
         <h1 class="text-h5 font-weight-bold mb-4">{{ title }}</h1>
@@ -20,13 +20,13 @@
           </v-btn>
           <v-btn
             v-if="isNotFound"
-            variant="outlined"
+            variant="tonal"
             size="large"
             to="/eksploruj/tabela"
           >
             Przeglądaj osoby
           </v-btn>
-          <v-btn v-else variant="outlined" size="large" to="/pomoc">
+          <v-btn v-else variant="tonal" size="large" to="/pomoc">
             Zgłoś problem
           </v-btn>
         </div>
@@ -67,7 +67,7 @@ const title = computed(() =>
 const description = computed(() =>
   isNotFound.value
     ? "Strona, której szukasz, została przeniesiona albo nigdy nie istniała. Sprawdź adres lub zacznij od strony głównej."
-    : "Po naszej stronie wystąpił błąd. Spróbuj ponownie za chwilę - jeśli problem się powtarza, daj nam znać.",
+    : "Po naszej stronie wystąpił błąd. Spróbuj ponownie za chwilę – jeśli problem się powtarza, daj nam znać.",
 );
 
 const devMessage = computed(() =>

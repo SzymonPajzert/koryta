@@ -23,7 +23,9 @@
 
     <v-card max-width="440" data-fix-details>
       <v-card-text>
-        <div class="text-caption text-medium-emphasis mb-1">
+        <div
+          class="text-caption font-weight-semibold text-medium-emphasis mb-1"
+        >
           Wpis na liście QA, który to poprawia
         </div>
         <NuxtLink
@@ -33,7 +35,9 @@
           {{ latest.title }}
         </NuxtLink>
 
-        <div class="text-caption text-medium-emphasis mt-3 mb-1">
+        <div
+          class="text-caption font-weight-semibold text-medium-emphasis mt-3 mb-1"
+        >
           Co napisali sprawdzający
         </div>
         <div v-if="state === null" class="text-body-2">Wczytuję…</div>
@@ -67,7 +71,9 @@
         </template>
 
         <template v-if="followUps.length > 0">
-          <div class="text-caption text-medium-emphasis mt-3 mb-1">
+          <div
+            class="text-caption font-weight-semibold text-medium-emphasis mt-3 mb-1"
+          >
             Zgłoszenia po poprawce
           </div>
           <!-- Green and yet no "Zamknij": this is the one place that says
@@ -96,7 +102,9 @@
         </template>
 
         <template v-if="entries.length > 1">
-          <div class="text-caption text-medium-emphasis mt-3 mb-1">
+          <div
+            class="text-caption font-weight-semibold text-medium-emphasis mt-3 mb-1"
+          >
             Wcześniejsze poprawki
           </div>
           <div v-for="entry in entries.slice(1)" :key="entry.id">

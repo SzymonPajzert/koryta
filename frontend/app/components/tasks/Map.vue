@@ -1,5 +1,5 @@
 <template>
-  <div class="task-map" data-task-map>
+  <div ref="root" class="task-map" data-task-map>
     <VueFlow
       :id="FLOW_ID"
       :nodes="nodes"
@@ -208,6 +208,7 @@ const {
   setCenter,
   setViewport,
   viewport,
+  dimensions,
   onPaneReady,
   onConnectStart,
   onConnectEnd,
@@ -215,6 +216,8 @@ const {
   endConnection,
   autoPanOnConnect,
 } = useVueFlow(FLOW_ID);
+
+const root = ref<HTMLElement | null>(null);
 
 /** The task last clicked on the map itself: it is in view already, so
  * picking it must not move the map from under the pointer. */
@@ -354,13 +357,13 @@ const unfold = (id: string) =>
 async function foldAll() {
   setFolded(new Set([...folded.value, ...unfoldedEnds.value]));
   await nextTick();
-  fit(200);
+  autoFit(200);
 }
 
 async function unfoldAll() {
   setFolded(new Set());
   await nextTick();
-  fit(200);
+  autoFit(200);
 }
 
 /** Unfolds whatever hides `id`, so that a task picked from a link or from
@@ -409,7 +412,7 @@ const nodes = computed<Node[]>(() => {
       selectable: false,
       connectable: false,
       data: {
-        text: "Bez powiązań - przeciągnij strzałkę od jednego do drugiego, żeby je połączyć",
+        text: "Bez powiązań – przeciągnij strzałkę od jednego do drugiego, żeby je połączyć",
       },
     });
   }
@@ -506,6 +509,8 @@ const bounds = computed(() => {
   return {
     x,
     y: top - room,
+    // Where the cards start, without the room: fitBounds ignores it.
+    top,
     width: Math.max(...points.map((p) => p.x)) + TASK_NODE_WIDTH - x,
     height: bottom - top + room,
   };
@@ -519,7 +524,49 @@ const fit = (duration = 0) => {
   if (bounds.value) void fitBounds(bounds.value, { padding: 0.05, duration });
 };
 
-onPaneReady(() => fit());
+/** How close bringIntoView brings a task: close enough to read. */
+const READABLE = 0.8;
+
+/** An automatic fit: everything when it can be read, otherwise the card
+ * nearest the map's top-left (where the biggest chain starts), readable,
+ * below the bar. A long chain fitted whole is a strip of cards a few pixels
+ * wide; „Pokaż wszystko” still fits it whole when asked. A card, not the
+ * corner of the bounds: the ranks start at different heights, so the corner
+ * itself is usually empty, and the map opened on nothing. */
+const autoFit = (duration = 0) => {
+  const b = bounds.value;
+  if (!b) return;
+  const { width, height } = dimensions.value;
+  if (!width || Math.min(width / b.width, height / b.height) * 0.95 >= 0.3) {
+    fit(duration);
+    return;
+  }
+  const corner = (p: { x: number; y: number }) => p.x - b.x + (p.y - b.top);
+  const anchor = [...placement.value.positions.values()].reduce((best, p) =>
+    corner(p) < corner(best) ? p : best,
+  );
+  // The bar wraps to more lines on a phone: measured, not assumed.
+  const bar = root.value?.querySelector<HTMLElement>("[data-task-bar]");
+  const below = 8 + (bar?.offsetHeight ?? 40) + 16;
+  void setViewport(
+    {
+      x: 16 - anchor.x * READABLE,
+      y: below - anchor.y * READABLE,
+      zoom: READABLE,
+    },
+    { duration },
+  );
+};
+
+// The page draws the map only once the tasks are in, so a task a link picked
+// can be picked before the map is ready to move: then it opens on that task,
+// if it draws it, rather than on the whole map.
+onPaneReady(() => {
+  const id = props.selected;
+  if (id && (placement.value.positions.has(id) || folds.value.hiddenIn.has(id)))
+    void bringIntoView(id);
+  else autoFit();
+});
 
 /** A task picked while the map did not draw it: a filter or a focus left it
  * out. The page clears those to show it, and it is brought into view once it
@@ -541,7 +588,7 @@ watch(
     const to = from && placement.value.positions.get(from.id);
     if (wanted && shownIds.value.includes(wanted)) void bringIntoView(wanted);
     else if (from && to) holdStill(from.at, to);
-    else fit();
+    else autoFit();
   },
 );
 
@@ -557,7 +604,7 @@ async function bringIntoView(id: string) {
   setCenter(
     position.x + TASK_NODE_WIDTH / 2,
     position.y + TASK_NODE_HEIGHT / 2,
-    { zoom: Math.max(viewport.value.zoom, 0.8), duration: 300 },
+    { zoom: Math.max(viewport.value.zoom, READABLE), duration: 300 },
   );
 }
 
@@ -708,18 +755,17 @@ function pickMark(id: string) {
   position: relative;
   height: 72vh;
   min-height: 420px;
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   overflow: hidden;
   background: rgb(var(--v-theme-surface-muted));
 }
 
+/* A label, as type.css has them: 12/600 in the quiet ink, sentence case. */
 .task-map__label {
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
   white-space: nowrap;
   pointer-events: none;
 }
@@ -771,7 +817,7 @@ function pickMark(id: string) {
   flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--k-r-card);
   background: rgb(var(--v-theme-surface));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   z-index: 5;

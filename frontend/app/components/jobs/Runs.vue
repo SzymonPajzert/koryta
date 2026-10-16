@@ -90,7 +90,7 @@
             v-if="run.phase && !isFinished(run.state)"
             class="text-medium-emphasis"
           >
-            - {{ run.phase }}
+            – {{ run.phase }}
           </span>
           <a
             :href="`#${runAnchor(run.id)}`"
@@ -130,7 +130,11 @@
             {{ counterLabel(String(key)) }}:
             <strong>{{ counterValue(String(key), value) }}</strong>
           </span>
-          <span v-if="run.stopReason" data-run-stop-reason>
+          <span
+            v-if="run.stopReason"
+            class="job-run__reason"
+            data-run-stop-reason
+          >
             powód: {{ run.stopReason }}
           </span>
           <!-- 75 on a run that stopped with work left is the jobs' "carry on
@@ -180,7 +184,7 @@
           <code data-run-summary-path>{{ run.summaryPath }}</code>
           <v-btn
             icon
-            size="x-small"
+            size="small"
             variant="text"
             :aria-label="copied === run.id ? 'Skopiowano' : 'Kopiuj ścieżkę'"
             :title="copied === run.id ? 'Skopiowano' : 'Kopiuj ścieżkę'"
@@ -312,24 +316,26 @@ async function copyPath(run: JobRun) {
 </script>
 
 <style scoped>
+/* A ruled list in the open row, flush with the text above it: the row is
+ * the frame, and a box of its own inside it was a card in a card. */
 .job-runs {
   list-style: none;
   padding: 0;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 8px;
 }
 
 .job-run {
-  padding: 8px 12px;
-  font-size: 0.875rem;
+  padding: 8px 0;
+  font-size: var(--k-ui-size);
 }
 
 .job-run + .job-run {
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
 }
 
-/* The run a link named: the row target's colours, as `.arow--target`. */
+/* The run a link named: the row target's colours, as `.arow--target`, with
+ * room inside the ring for its text. */
 .job-run--target {
+  padding-inline: 8px;
   background: rgb(var(--v-theme-surface-sage));
   outline: 2px solid rgb(var(--v-theme-ink-sage));
   outline-offset: -2px;
@@ -352,7 +358,7 @@ async function copyPath(run: JobRun) {
 
 .job-run__extras {
   margin-top: 4px;
-  font-size: 0.8125rem;
+  font-size: var(--k-meta-size);
 }
 
 .job-run__start {
@@ -368,7 +374,7 @@ async function copyPath(run: JobRun) {
 .job-run__host,
 .job-run__path code,
 .job-run__errors code {
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
 }
 
 /* `cloud-run:krs-scrape-free/<execution>` is one unbreakable word. */
@@ -377,15 +383,21 @@ async function copyPath(run: JobRun) {
   overflow-wrap: anywhere;
 }
 
+/* A stop reason can name a test path, just as unbreakable; `anywhere` (not
+ * `break-word`) also lets the flex item shrink below that word. */
+.job-run__reason {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .job-run__counter {
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--k-r-control);
   background: rgb(var(--v-theme-surface-muted));
 }
 
 .job-run__error {
   margin-top: 4px;
-  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
 
@@ -400,7 +412,7 @@ async function copyPath(run: JobRun) {
   border: 0;
   background: none;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--k-meta-size);
   cursor: pointer;
 }
 

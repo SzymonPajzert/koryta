@@ -85,7 +85,7 @@ test("the status filter narrows the list to what is still waiting", async ({
   const rows = entryRows(page);
   expect(await rows.count()).toBeGreaterThan(0);
   for (const row of await rows.all()) {
-    await expect(row.locator("[data-waiting]")).toHaveText("czeka");
+    await expect(row.locator("[data-waiting]")).toHaveText("Czeka");
   }
 
   await chooseStatus(page, "W pełni zaakceptowane");

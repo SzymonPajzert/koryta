@@ -28,13 +28,13 @@
          to give examples of. -->
     <template v-if="user && !userNote && !isEditing" #info>
       <template v-if="snippetOnly">
-        Zapisz fragment albo własny komentarz. Notatki są publiczne - w ten
+        Zapisz fragment albo własny komentarz. Notatki są publiczne – w ten
         sposób pomożesz innym zrozumieć, dlaczego ten tekst jest tu trzymany.
       </template>
       <template v-else>
         <p class="mb-1">
           Wklej tu, co udało Ci się znaleźć, razem z linkiem do źródła.
-          {{ audience }} i to z nich powstają kolejne powiązania w bazie - nie
+          {{ audience }} i to z nich powstają kolejne powiązania w bazie – nie
           musi to być nic odkrywczego.
         </p>
         <ul class="k-examples">
@@ -98,7 +98,7 @@
            through "Zgłoś" like any other. -->
       <div v-if="user && snippetOnly" class="d-flex flex-wrap ga-2 mt-3">
         <v-btn
-          variant="outlined"
+          variant="tonal"
           size="small"
           rounded="lg"
           data-testid="note-add-snippet"
@@ -117,7 +117,7 @@
         <v-btn
           v-for="(config, value) in noteKindConfig"
           :key="value"
-          variant="outlined"
+          variant="tonal"
           size="small"
           rounded="lg"
           @click="addSource(value)"
@@ -142,7 +142,7 @@
         class="mt-3"
         data-testid="note-save-error"
       >
-        Nie udało się zapisać notatki. Sprawdź połączenie i spróbuj ponownie -
+        Nie udało się zapisać notatki. Sprawdź połączenie i spróbuj ponownie –
         wpisany tekst jest nadal tutaj.
       </v-alert>
       <v-alert
@@ -157,7 +157,12 @@
         podanego adresu. Spróbujemy ponownie przy następnym zapisie.
       </v-alert>
 
-      <div v-if="user" class="d-flex justify-end mt-4">
+      <!-- Only with a button in it: left empty, its `mt-4` was 16px of
+           nothing under the section, on top of the gap to the next one. -->
+      <div
+        v-if="user && (userNote || isEditing)"
+        class="d-flex justify-end mt-4"
+      >
         <v-btn
           v-if="userNote && !isEditing"
           variant="tonal"

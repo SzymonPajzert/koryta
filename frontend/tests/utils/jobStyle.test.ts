@@ -90,6 +90,19 @@ describe("job style tables", () => {
     );
   });
 
+  // The summary strip at the top of /admin/procesy labels its counts in
+  // sentence case, like every label on the site; until the admin pages'
+  // redesign they were lower case („z błędem”).
+  it("labels every status in sentence case", () => {
+    for (const status of JOB_HEALTH) {
+      const { title, summary } = jobHealthConfig[status];
+      expect(summary, status).toMatch(/^\p{Lu}/u);
+      expect(title, status).toMatch(/^\p{Lu}/u);
+    }
+    expect(jobHealthConfig.failed.summary).toBe("Z błędem");
+    expect(jobHealthConfig.held.summary).toBe("Ze wstrzymanymi krokami");
+  });
+
   it("uses the spec's words", () => {
     expect(jobHealthConfig.stalled.title).toBe("Bez sygnału");
     expect(jobHealthConfig.late.title).toBe("Nie wystartował");

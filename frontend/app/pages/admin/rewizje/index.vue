@@ -1,414 +1,451 @@
 <template>
   <div class="w-100">
-    <h1 class="text-h5 text-sm-h4 mb-1">Rewizje</h1>
-    <p class="text-body-2 text-medium-emphasis mb-4">
-      Kto i co zmienił we wpisach i powiązaniach — i co z tego wciąż czeka na
-      decyzję.
-    </p>
+    <!-- In Polish: the site registers no Vuetify locale yet, so the three
+         paginations grouped a page number the English way - „1,769” under a
+         count reading „17 684” - and read their aria labels, the selects'
+         „Clear” and „No data available” out in English. Round the whole page
+         rather than each pagination: a provider's div round one would become
+         the flex item in `.rev-pager` and undo `.rev-pages`, the guard against
+         the 108,000px pager. The pattern /admin/notatki uses. -->
+    <v-locale-provider locale="pl" :messages="localeMessages">
+      <AdminPageHead
+        title="Rewizje"
+        lead="Kto i co zmienił we wpisach i powiązaniach – i co z tego wciąż czeka na decyzję."
+      />
 
-    <!-- The two admin sections are gated on `isAdmin`, not on the page's
+      <!-- The two admin sections are gated on `isAdmin`, not on the page's
          middleware: this page is `middleware: "auth"`, so any signed-in reader
          reaches it, while both endpoints behind these sections are admin-only
          and would answer them with a 403. -->
-    <section v-if="admin" id="kolejka" class="rev-section mb-8">
-      <AdminSectionHead
-        :title="status === 'pending' ? 'Czeka na decyzję' : 'Propozycje zmian'"
-        :count="queueCount"
-        :info="queueScope"
-      >
-        <v-select
-          v-model="status"
-          :items="statusOptions"
-          label="Status"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="rev-filter"
-          data-filter="status"
-        />
-        <v-select
-          v-model="automatic"
-          :items="automaticOptions"
-          label="Rodzaj"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="rev-filter"
-          data-filter="automatic"
-        />
-        <!-- Whether the entry a proposal is about is live, which is what
-             makes a change worth reviewing first: the pipeline's proposals
-             are mostly about drafts nobody can open yet. -->
-        <v-select
-          v-model="published"
-          :items="publishedOptions"
-          label="Strona"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="rev-filter"
-          data-filter="published"
-        />
-        <!-- One click to what somebody else proposed. An admin's own edits
-             are filed as proposals too and wait here like anybody's, so
-             without this a volunteer's suggestion sits among them. Put away
-             while one author is picked, which leaves everybody else out
-             already. -->
-        <FeedbackFilterChips
-          v-if="!author"
-          v-model="mine"
-          :options="mineOptions"
-        />
-        <!-- How the same list is laid out, so it is picked the way "Bez
-             moich" is: one row per proposal, or one per entry with its
-             proposals inside. Last, after everything that narrows the list. -->
-        <FeedbackFilterChips
-          v-model="grouping"
-          :options="groupingOptions"
-          data-queue-grouping
-        />
-        <!-- No dropdown of people: there is no client-side list of uids, and
-             the way in is a click from "Najaktywniejsi" on /eksploruj/statystyki
-             or from an open row below. -->
-        <v-chip
-          v-if="author"
-          closable
-          variant="tonal"
-          data-author-filter
-          @click:close="author = null"
-        >
-          <span class="mr-1">Tylko:</span>
-          <UserChip :uid="author" />
-        </v-chip>
-      </AdminSectionHead>
-
-      <!-- The list an admin is looking at is not the whole history, and saying
-           so is the difference between a queue and a lie. -->
-      <v-alert
-        v-if="showsFlagOnlyNotice"
-        type="info"
-        color="ink-info"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-      >
-        Ta lista obejmuje propozycje zgłoszone od lipca 2026 — wcześniejsze
-        rewizje nie mają zapisanego, czy powstały ręcznie. Pełną historię jednej
-        osoby zobaczysz, klikając jej nazwę w „Najaktywniejsi” na
-        <NuxtLink to="/eksploruj/statystyki">stronie statystyk</NuxtLink>.
-      </v-alert>
-
-      <v-alert
-        v-if="queue?.truncated"
-        type="warning"
-        color="ink-warning"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-        :text="
-          author
-            ? `Wczytaliśmy ${AUTHOR_SCAN_CAP} najnowszych rewizji tej osoby. Starsze są poza tym zestawieniem.`
-            : `Wczytaliśmy ${QUEUE_SCAN_CAP.toLocaleString('pl-PL')} najnowszych rewizji. Starsze są poza tym zestawieniem.`
-        "
-      />
-
-      <v-alert
-        v-if="queueFailed"
-        type="error"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-        text="Nie udało się wczytać kolejki."
-      />
-
-      <div v-if="pinned" class="mb-4" data-pinned>
-        <p class="d-flex align-center ga-1 text-body-2 mb-1">
-          <v-icon :icon="mdiLinkVariant" size="small" class="text-ink-sage" />
-          <span class="font-weight-medium">Propozycja z linku</span>
-          <span v-if="pinned.status !== 'pending'" class="text-medium-emphasis">
-            · Ta propozycja została już rozpatrzona.
-          </span>
-        </p>
-        <AdminRowList>
-          <RevisionQueueRow
-            :expanded="isOpen(queueKey(pinned.id))"
-            :proposal="pinned"
-            highlighted
-            :loading="deciding === pinned.id"
-            :author-focused="!!author"
-            @update:expanded="setOpen(queueKey(pinned.id), $event)"
-            @approve="approve(pinned!, $event)"
-            @reject="openReject(pinned!)"
-            @permalink="copyPermalink(pinned!)"
-            @focus-author="focusAuthor"
-          />
-        </AdminRowList>
-      </div>
-
-      <v-alert
-        v-if="isEmptyDefaultQueue"
-        type="success"
-        color="ink-success"
-        variant="tonal"
-        density="compact"
-        :icon="mdiCheckDecagramOutline"
-        text="Kolejka jest pusta — nic nie czeka na rozpatrzenie."
-      />
-      <template v-else>
-        <v-progress-linear
-          v-if="queuePending"
-          indeterminate
-          color="primary"
-          class="mb-1"
-        />
-        <p
-          v-if="groupSummary"
-          class="text-body-2 text-medium-emphasis mb-2"
-          data-group-summary
-        >
-          {{ groupSummary }}
-        </p>
-        <AdminRowList v-if="queueGroups.length > 0" data-queue-groups>
-          <RevisionQueueGroup
-            v-for="group in queueGroups"
-            :key="group.subject.id"
-            :expanded="isOpen(groupKey(group.subject.id))"
-            :group="group"
-            :proposals="groupRows(group)"
-            @update:expanded="setOpen(groupKey(group.subject.id), $event)"
+      <div class="k-sections">
+        <section v-if="admin" id="kolejka" class="rev-section">
+          <AdminSectionHead
+            :title="
+              status === 'pending' ? 'Czeka na decyzję' : 'Propozycje zmian'
+            "
+            :count="queueCount"
           >
-            <RevisionQueueRow
-              v-for="proposal in groupRows(group)"
-              :key="proposal.id"
-              :expanded="isOpen(queueKey(proposal.id))"
-              :proposal="proposal"
-              :loading="deciding === proposal.id"
-              :author-focused="!!author"
-              @update:expanded="setOpen(queueKey(proposal.id), $event)"
-              @approve="approve(proposal, $event)"
-              @reject="openReject(proposal)"
-              @permalink="copyPermalink(proposal)"
-              @focus-author="focusAuthor"
+            <!-- The list an admin is looking at is not the whole history, and
+               saying so is the difference between a queue and a lie - in the
+               bubble beside the count it qualifies, after what the filters
+               show. It was an alert above the list, there every day in the
+               default view, and on a phone 250px between the filters and the
+               first row. Text only: the bubble is a tooltip, which a pointer
+               cannot move into to click a link. -->
+            <template #info>
+              {{ queueScope }}
+              <span v-if="showsFlagOnlyNotice" class="d-block mt-2">
+                Ta lista obejmuje propozycje zgłoszone od lipca 2026 –
+                wcześniejsze rewizje nie mają zapisanego, czy powstały ręcznie.
+                Pełną historię jednej osoby zobaczysz, klikając jej nazwę w
+                „Najaktywniejsi” na stronie statystyk.
+              </span>
+            </template>
+            <v-select
+              v-model="status"
+              :items="statusOptions"
+              label="Status"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="rev-filter"
+              data-filter="status"
             />
-          </RevisionQueueGroup>
-        </AdminRowList>
-        <AdminRowList v-else-if="queueRows.length > 0" data-queue-list>
-          <RevisionQueueRow
-            v-for="proposal in queueRows"
-            :key="proposal.id"
-            :expanded="isOpen(queueKey(proposal.id))"
-            :proposal="proposal"
-            :loading="deciding === proposal.id"
-            :author-focused="!!author"
-            @update:expanded="setOpen(queueKey(proposal.id), $event)"
-            @approve="approve(proposal, $event)"
-            @reject="openReject(proposal)"
-            @permalink="copyPermalink(proposal)"
-            @focus-author="focusAuthor"
+            <v-select
+              v-model="automatic"
+              :items="automaticOptions"
+              label="Rodzaj"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="rev-filter"
+              data-filter="automatic"
+            />
+            <!-- Whether the entry a proposal is about is live, which is what
+               makes a change worth reviewing first: the pipeline's proposals
+               are mostly about drafts nobody can open yet. -->
+            <v-select
+              v-model="published"
+              :items="publishedOptions"
+              label="Strona"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="rev-filter"
+              data-filter="published"
+            />
+            <!-- One click to what somebody else proposed. An admin's own edits
+               are filed as proposals too and wait here like anybody's, so
+               without this a volunteer's suggestion sits among them. Put away
+               while one author is picked, which leaves everybody else out
+               already. -->
+            <FeedbackFilterChips
+              v-if="!author"
+              v-model="mine"
+              :options="mineOptions"
+            />
+            <!-- How the same list is laid out, so it is picked the way "Bez
+               moich" is: one row per proposal, or one per entry with its
+               proposals inside. Last, after everything that narrows the list. -->
+            <FeedbackFilterChips
+              v-model="grouping"
+              :options="groupingOptions"
+              data-queue-grouping
+            />
+            <!-- No dropdown of people: there is no client-side list of uids, and
+               the way in is a click from "Najaktywniejsi" on /eksploruj/statystyki
+               or from an open row below. The name as text: a `UserChip` here
+               was a chip inside a chip. -->
+            <v-chip
+              v-if="author"
+              closable
+              variant="tonal"
+              class="rev-author-filter"
+              data-author-filter
+              @click:close="author = null"
+            >
+              <span class="text-truncate" :title="authorName">
+                Tylko: {{ authorName }}
+              </span>
+            </v-chip>
+          </AdminSectionHead>
+
+          <v-alert
+            v-if="queue?.truncated"
+            type="warning"
+            color="ink-warning"
+            variant="tonal"
+            density="compact"
+            class="mb-3"
+            :text="
+              author
+                ? `Wczytaliśmy ${AUTHOR_SCAN_CAP} najnowszych rewizji tej osoby. Starsze są poza tym zestawieniem.`
+                : `Wczytaliśmy ${QUEUE_SCAN_CAP.toLocaleString('pl-PL')} najnowszych rewizji. Starsze są poza tym zestawieniem.`
+            "
           />
-        </AdminRowList>
-        <p
-          v-else-if="queue && !queuePending"
-          class="text-body-2 text-medium-emphasis mb-0"
-          data-queue-empty
-        >
-          {{ queueEmptyText }}
-        </p>
-        <div
-          v-if="queuePaged > SMALLEST_PAGE_SIZE"
-          class="rev-pager d-flex flex-wrap align-center ga-2 mt-2"
-        >
+
+          <v-alert
+            v-if="queueFailed"
+            type="error"
+            variant="tonal"
+            density="compact"
+            class="mb-3"
+            text="Nie udało się wczytać kolejki."
+          />
+
+          <div v-if="pinned" class="mb-4" data-pinned>
+            <p class="d-flex align-center ga-1 text-body-2 mb-1">
+              <v-icon
+                :icon="mdiLinkVariant"
+                size="small"
+                class="text-ink-sage"
+              />
+              <span class="font-weight-medium">Propozycja z linku</span>
+              <span
+                v-if="pinned.status !== 'pending'"
+                class="text-medium-emphasis"
+              >
+                · Ta propozycja została już rozpatrzona.
+              </span>
+            </p>
+            <AdminRowList class="k-bleed-xs">
+              <RevisionQueueRow
+                :expanded="isOpen(queueKey(pinned.id))"
+                :proposal="pinned"
+                highlighted
+                :loading="deciding === pinned.id"
+                :author-focused="!!author"
+                @update:expanded="setOpen(queueKey(pinned.id), $event)"
+                @approve="approve(pinned!, $event)"
+                @reject="openReject(pinned!)"
+                @permalink="copyPermalink(pinned!)"
+                @focus-author="focusAuthor"
+              />
+            </AdminRowList>
+          </div>
+
+          <v-alert
+            v-if="isEmptyDefaultQueue"
+            type="success"
+            color="ink-success"
+            variant="tonal"
+            density="compact"
+            :icon="mdiCheckDecagramOutline"
+            text="Kolejka jest pusta – nic nie czeka na rozpatrzenie."
+          />
+          <template v-else>
+            <v-progress-linear
+              v-if="queuePending"
+              indeterminate
+              color="primary"
+              class="mb-1"
+            />
+            <p
+              v-if="groupSummary"
+              class="text-body-2 text-medium-emphasis mb-2"
+              data-group-summary
+            >
+              {{ groupSummary }}
+            </p>
+            <AdminRowList
+              v-if="queueGroups.length > 0"
+              class="k-bleed-xs"
+              data-queue-groups
+            >
+              <RevisionQueueGroup
+                v-for="group in queueGroups"
+                :key="group.subject.id"
+                :expanded="isOpen(groupKey(group.subject.id))"
+                :group="group"
+                :proposals="groupRows(group)"
+                @update:expanded="setOpen(groupKey(group.subject.id), $event)"
+              >
+                <RevisionQueueRow
+                  v-for="proposal in groupRows(group)"
+                  :key="proposal.id"
+                  :expanded="isOpen(queueKey(proposal.id))"
+                  :proposal="proposal"
+                  :loading="deciding === proposal.id"
+                  :author-focused="!!author"
+                  @update:expanded="setOpen(queueKey(proposal.id), $event)"
+                  @approve="approve(proposal, $event)"
+                  @reject="openReject(proposal)"
+                  @permalink="copyPermalink(proposal)"
+                  @focus-author="focusAuthor"
+                />
+              </RevisionQueueGroup>
+            </AdminRowList>
+            <AdminRowList
+              v-else-if="queueRows.length > 0"
+              class="k-bleed-xs"
+              data-queue-list
+            >
+              <RevisionQueueRow
+                v-for="proposal in queueRows"
+                :key="proposal.id"
+                :expanded="isOpen(queueKey(proposal.id))"
+                :proposal="proposal"
+                :loading="deciding === proposal.id"
+                :author-focused="!!author"
+                @update:expanded="setOpen(queueKey(proposal.id), $event)"
+                @approve="approve(proposal, $event)"
+                @reject="openReject(proposal)"
+                @permalink="copyPermalink(proposal)"
+                @focus-author="focusAuthor"
+              />
+            </AdminRowList>
+            <p
+              v-else-if="queue && !queuePending"
+              class="text-body-2 text-medium-emphasis mb-0"
+              data-queue-empty
+            >
+              {{ queueEmptyText }}
+            </p>
+            <div
+              v-if="queuePaged > SMALLEST_PAGE_SIZE"
+              class="rev-pager d-flex flex-wrap align-center ga-2 mt-2"
+            >
+              <v-pagination
+                v-if="queuePages > 1"
+                v-model="page"
+                :length="queuePages"
+                density="compact"
+                class="rev-pages"
+              />
+              <v-select
+                v-model="itemsPerPage"
+                :items="PAGE_SIZES"
+                label="Na stronę"
+                density="compact"
+                variant="outlined"
+                hide-details
+                class="rev-per-page ms-auto"
+              />
+            </div>
+          </template>
+        </section>
+
+        <section v-if="admin" id="powiazania" class="rev-section">
+          <!-- No count while a type is picked: the endpoint counts every pending
+             edge revision whatever its type, so the number would describe a
+             list the reader is not looking at. -->
+          <AdminSectionHead
+            title="Zmiany powiązań"
+            :count="edgeType ? undefined : (edges?.total ?? undefined)"
+            info="Zmiany powiązań, których nikt jeszcze nie rozpatrzył – głównie od pipeline'u. Pipeline zapisuje zmianę od razu tylko wtedy, gdy potrafi za nią ręczyć – komitet wyborczy z listy przypisanej do partii. Reszta czeka tutaj, a samo powiązanie pozostaje nietknięte. „Rozpatrz” otwiera zmianę w kolejce wyżej."
+          >
+            <v-select
+              v-model="edgeType"
+              :items="edgeTypeOptions"
+              label="Typ powiązania"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              class="rev-filter"
+              data-filter="edgeType"
+            />
+          </AdminSectionHead>
+
+          <v-alert
+            v-if="edgesFailed"
+            type="error"
+            variant="tonal"
+            density="compact"
+            class="mb-3"
+            text="Nie udało się wczytać zmian powiązań."
+          />
+          <v-progress-linear
+            v-if="edgesPending"
+            indeterminate
+            color="primary"
+            class="mb-1"
+          />
+          <AdminRowList
+            v-if="edgeRows.length > 0"
+            class="k-bleed-xs"
+            data-edge-list
+          >
+            <RevisionEdgeRow
+              v-for="revision in edgeRows"
+              :key="revision.id"
+              :expanded="isOpen(edgeKey(revision.id))"
+              :revision="revision"
+              :type-labels="edgeTypeLabels"
+              @update:expanded="setOpen(edgeKey(revision.id), $event)"
+            />
+          </AdminRowList>
+          <p
+            v-else-if="edges && !edgesPending"
+            class="text-body-2 text-medium-emphasis mb-0"
+          >
+            Nic nie czeka na rozpatrzenie.
+          </p>
           <v-pagination
-            v-if="queuePages > 1"
-            v-model="page"
-            :length="queuePages"
+            v-if="edgePages > 1"
+            v-model="edgePage"
+            :length="edgePages"
             density="compact"
-            class="rev-pages"
+            class="mt-2"
           />
-          <v-select
-            v-model="itemsPerPage"
-            :items="PAGE_SIZES"
-            label="Na stronę"
+        </section>
+
+        <section id="wpisy" class="rev-section">
+          <AdminSectionHead
+            title="Wpisy z historią zmian"
+            :count="nodes?.total"
+            info="Każdy wpis, który ktoś zmienił – także pipeline. Rozwiń wiersz, żeby zobaczyć kolejne wersje i kto je zapisał; ikona na końcu wiersza pokazuje wszystkie wersje obok siebie."
+          >
+            <!-- Phrased by what is left to do rather than by the field name:
+               `has_unapproved` says the opposite of "zaakceptowane", so naming
+               either one here would read backwards next to the other. -->
+            <v-select
+              v-model="nodeStatus"
+              :items="nodeStatusOptions"
+              label="Stan"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              class="rev-filter rev-filter--wide"
+              data-filter="nodeStatus"
+            />
+            <v-select
+              v-model="nodeType"
+              :items="nodeTypeOptions"
+              label="Typ"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              class="rev-filter"
+              data-filter="nodeType"
+            />
+            <v-select
+              v-model="nodeSort"
+              :items="nodeSortOptions"
+              label="Sortuj"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="rev-filter rev-filter--wide"
+              data-filter="nodeSort"
+            />
+          </AdminSectionHead>
+
+          <v-alert
+            v-if="nodesFailed"
+            type="error"
+            variant="tonal"
             density="compact"
-            variant="outlined"
-            hide-details
-            class="rev-per-page ms-auto"
+            class="mb-3"
+            text="Nie udało się wczytać wpisów."
           />
-        </div>
-      </template>
-    </section>
-
-    <section v-if="admin" id="powiazania" class="rev-section mb-8">
-      <!-- No count while a type is picked: the endpoint counts every pending
-           edge revision whatever its type, so the number would describe a
-           list the reader is not looking at. -->
-      <AdminSectionHead
-        title="Zmiany powiązań"
-        :count="edgeType ? undefined : (edges?.total ?? undefined)"
-        info="Zmiany powiązań, których nikt jeszcze nie rozpatrzył - głównie od pipeline'u. Pipeline zapisuje zmianę od razu tylko wtedy, gdy potrafi za nią ręczyć - komitet wyborczy z listy przypisanej do partii. Reszta czeka tutaj, a samo powiązanie pozostaje nietknięte. „Rozpatrz” otwiera zmianę w kolejce wyżej."
-      >
-        <v-select
-          v-model="edgeType"
-          :items="edgeTypeOptions"
-          label="Typ powiązania"
-          density="compact"
-          variant="outlined"
-          hide-details
-          clearable
-          class="rev-filter"
-          data-filter="edgeType"
-        />
-      </AdminSectionHead>
-
-      <v-alert
-        v-if="edgesFailed"
-        type="error"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-        text="Nie udało się wczytać zmian powiązań."
-      />
-      <v-progress-linear
-        v-if="edgesPending"
-        indeterminate
-        color="primary"
-        class="mb-1"
-      />
-      <AdminRowList v-if="edgeRows.length > 0" data-edge-list>
-        <RevisionEdgeRow
-          v-for="revision in edgeRows"
-          :key="revision.id"
-          :expanded="isOpen(edgeKey(revision.id))"
-          :revision="revision"
-          :type-labels="edgeTypeLabels"
-          @update:expanded="setOpen(edgeKey(revision.id), $event)"
-        />
-      </AdminRowList>
-      <p
-        v-else-if="edges && !edgesPending"
-        class="text-body-2 text-medium-emphasis mb-0"
-      >
-        Nic nie czeka na rozpatrzenie.
-      </p>
-      <v-pagination
-        v-if="edgePages > 1"
-        v-model="edgePage"
-        :length="edgePages"
-        density="compact"
-        class="mt-2"
-      />
-    </section>
-
-    <section id="wpisy" class="rev-section">
-      <AdminSectionHead
-        title="Wpisy z historią zmian"
-        :count="nodes?.total"
-        info="Każdy wpis, który ktoś zmienił - także pipeline. Rozwiń wiersz, żeby zobaczyć kolejne wersje i kto je zapisał; ikona na końcu wiersza pokazuje wszystkie wersje obok siebie."
-      >
-        <!-- Phrased by what is left to do rather than by the field name:
-             `has_unapproved` says the opposite of "zaakceptowane", so naming
-             either one here would read backwards next to the other. -->
-        <v-select
-          v-model="nodeStatus"
-          :items="nodeStatusOptions"
-          label="Stan"
-          density="compact"
-          variant="outlined"
-          hide-details
-          clearable
-          class="rev-filter rev-filter--wide"
-          data-filter="nodeStatus"
-        />
-        <v-select
-          v-model="nodeType"
-          :items="nodeTypeOptions"
-          label="Typ"
-          density="compact"
-          variant="outlined"
-          hide-details
-          clearable
-          class="rev-filter"
-          data-filter="nodeType"
-        />
-        <v-select
-          v-model="nodeSort"
-          :items="nodeSortOptions"
-          label="Sortuj"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="rev-filter rev-filter--wide"
-          data-filter="nodeSort"
-        />
-      </AdminSectionHead>
-
-      <v-alert
-        v-if="nodesFailed"
-        type="error"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-        text="Nie udało się wczytać wpisów."
-      />
-      <v-progress-linear
-        v-if="nodesPending"
-        indeterminate
-        color="primary"
-        class="mb-1"
-      />
-      <AdminRowList v-if="nodeRows.length > 0" data-node-list>
-        <RevisionNodeRow
-          v-for="node in nodeRows"
-          :key="node.id"
-          :expanded="isOpen(nodeKey(node.id))"
-          :node="node"
-          :type-label="nodeTypeLabels[node.type] ?? node.type"
-          @update:expanded="setOpen(nodeKey(node.id), $event)"
-          @changed="onHistoryChanged"
-        />
-      </AdminRowList>
-      <p
-        v-else-if="nodes && !nodesPending"
-        class="text-body-2 text-medium-emphasis mb-0"
-      >
-        Żaden wpis nie pasuje do filtrów.
-      </p>
-      <div
-        v-if="(nodes?.total ?? 0) > SMALLEST_PAGE_SIZE"
-        class="rev-pager d-flex flex-wrap align-center ga-2 mt-2"
-      >
-        <v-pagination
-          v-if="nodePages > 1"
-          v-model="nodePage"
-          :length="nodePages"
-          density="compact"
-          class="rev-pages"
-        />
-        <v-select
-          v-model="nodePerPage"
-          :items="PAGE_SIZES"
-          label="Na stronę"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="rev-per-page ms-auto"
-        />
+          <v-progress-linear
+            v-if="nodesPending"
+            indeterminate
+            color="primary"
+            class="mb-1"
+          />
+          <AdminRowList
+            v-if="nodeRows.length > 0"
+            class="k-bleed-xs"
+            data-node-list
+          >
+            <RevisionNodeRow
+              v-for="node in nodeRows"
+              :key="node.id"
+              :expanded="isOpen(nodeKey(node.id))"
+              :node="node"
+              :type-label="nodeTypeLabels[node.type] ?? node.type"
+              @update:expanded="setOpen(nodeKey(node.id), $event)"
+              @changed="onHistoryChanged"
+            />
+          </AdminRowList>
+          <p
+            v-else-if="nodes && !nodesPending"
+            class="text-body-2 text-medium-emphasis mb-0"
+          >
+            Żaden wpis nie pasuje do filtrów.
+          </p>
+          <div
+            v-if="(nodes?.total ?? 0) > SMALLEST_PAGE_SIZE"
+            class="rev-pager d-flex flex-wrap align-center ga-2 mt-2"
+          >
+            <v-pagination
+              v-if="nodePages > 1"
+              v-model="nodePage"
+              :length="nodePages"
+              density="compact"
+              class="rev-pages"
+            />
+            <v-select
+              v-model="nodePerPage"
+              :items="PAGE_SIZES"
+              label="Na stronę"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="rev-per-page ms-auto"
+            />
+          </div>
+        </section>
       </div>
-    </section>
 
-    <RevisionRejectDialog
-      v-model="rejectOpen"
-      :loading="deciding === rejectTarget?.id"
-      :target-name="rejectTarget?.targetName"
-      @confirm="reject"
-    />
+      <RevisionRejectDialog
+        v-model="rejectOpen"
+        :loading="deciding === rejectTarget?.id"
+        :target-name="rejectTarget?.targetName"
+        @confirm="reject"
+      />
 
-    <v-snackbar v-model="noticeShown" color="success" :timeout="4000">
-      {{ notice }}
-    </v-snackbar>
-    <v-snackbar v-model="errorShown" color="error" :timeout="6000">
-      {{ error }}
-    </v-snackbar>
+      <v-snackbar v-model="noticeShown" color="success" :timeout="4000">
+        {{ notice }}
+      </v-snackbar>
+      <v-snackbar v-model="errorShown" color="error" :timeout="6000">
+        {{ error }}
+      </v-snackbar>
+    </v-locale-provider>
   </div>
 </template>
 
@@ -455,11 +492,13 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import type { LocationQuery } from "vue-router";
 import { mdiCheckDecagramOutline, mdiLinkVariant } from "@mdi/js";
+import { en, pl } from "vuetify/locale";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { sameQuery } from "~/composables/queryFilters";
-import { polishCounting } from "~/composables/polish";
+import { polishCountingGrouped, polishNumber } from "~/composables/polish";
+import { useUserLookup } from "~/composables/users";
 import type { RevisedNode } from "~/components/revision/NodeRow.vue";
-import type { NodeType } from "~~/shared/model";
+import type { EdgeType, NodeType } from "~~/shared/model";
 import type { Proposal } from "~~/shared/proposals";
 import type {
   QueueGroup,
@@ -467,14 +506,15 @@ import type {
 } from "~~/server/api/revisions/queue.get";
 import type { PendingEdgeRevision } from "~~/server/api/revisions/pendingEdges.get";
 
-// Narrower than the default 1200: rows are one line each, and a line much
-// wider than this leaves the eye tracking it across a monitor.
 definePageMeta({
   middleware: "auth",
-  maxWidth: 1100,
 });
 
 useHead({ title: "Rewizje (Admin) - koryta.pl" });
+
+/** Polish for the page's Vuetify controls, English kept as the fallback the
+ * app's own Vuetify instance has. */
+const localeMessages = { en, pl };
 
 type SectionId = "kolejka" | "powiazania" | "wpisy";
 const SECTIONS: readonly SectionId[] = ["kolejka", "powiazania", "wpisy"];
@@ -728,9 +768,11 @@ const queuePaged = computed(() => queue.value?.groupTotal ?? queueTotal.value);
 const queuePages = computed(() =>
   Math.ceil(queuePaged.value / itemsPerPage.value),
 );
+/** „30 000+” rather than „30000+”: a string, for the „+”, so the head prints
+ * it as given and the grouping is done here. */
 const queueCount = computed(() =>
   queue.value
-    ? `${queue.value.total}${queue.value.truncated ? "+" : ""}`
+    ? `${polishNumber(queue.value.total)}${queue.value.truncated ? "+" : ""}`
     : undefined,
 );
 
@@ -767,13 +809,13 @@ const queueGroups = computed(() =>
 const groupSummary = computed(() => {
   const groups = queue.value?.groupTotal;
   if (groups === undefined || groups === 0) return null;
-  const proposals = polishCounting(
+  const proposals = polishCountingGrouped(
     queueTotal.value,
     "propozycja",
     "propozycje",
     "propozycji",
   );
-  return `${proposals} w ${groups} ${groups === 1 ? "wpisie" : "wpisach"}`;
+  return `${proposals} w ${polishNumber(groups)} ${groups === 1 ? "wpisie" : "wpisach"}`;
 });
 
 const queueQuery = computed(() => ({
@@ -872,7 +914,7 @@ const queueScope = computed(() => {
       ? "Zmiany zaproponowane przez ludzi. Tego, co dopisuje pipeline, tu nie ma."
       : automatic.value === "true"
         ? "Zmiany dopisane przez pipeline."
-        : "Wszystkie rewizje — i te od ludzi, i te z pipeline'u.";
+        : "Wszystkie rewizje – i te od ludzi, i te z pipeline'u.";
   const pages =
     published.value === "true"
       ? " Tylko o wpisach, które są już opublikowane."
@@ -921,6 +963,16 @@ const isEmptyDefaultQueue = computed(
     automatic.value === "false" &&
     published.value === "all",
 );
+
+const { resolve: resolveUsers, displayName } = useUserLookup();
+
+// The same batched lookup the rows' chips use, so a uid from a link out of
+// "Najaktywniejsi" reads as a name in the chip once it answers.
+watch(author, (uid) => resolveUsers([uid]), { immediate: true });
+
+/** Whose proposals the queue is narrowed to: the name, or the uid until the
+ * lookup answers. */
+const authorName = computed(() => displayName(author.value));
 
 /** One person's everything. "Bez moich" goes with it: that list leaves
  * everybody else out already, and the switch is not shown beside it. */
@@ -1068,19 +1120,24 @@ const copyPermalink = async (proposal: Proposal) => {
 // ---------------------------------------------------------------------------
 // Zmiany powiązań
 
-// Every edge type the ingest can propose a change to. Only `election` produces
-// any today; the rest are here so a later one does not need a code change to
-// become filterable.
-const edgeTypeOptions = [
-  { title: "Kandydatura", value: "election" },
-  { title: "Zatrudnienie", value: "employed" },
-  { title: "Własność", value: "owns" },
-  { title: "Siedziba", value: "seat" },
-  { title: "Powiązanie", value: "connection" },
-];
-const edgeTypeLabels = Object.fromEntries(
-  edgeTypeOptions.map((option) => [option.value, option.title]),
+// Every edge type, by its Polish name. Any relation a person edits can arrive
+// here, not only the ingest's candidacies, so the map is checked against the
+// model: a type added there is a type error here until it has a name, rather
+// than a raw English id on the line and a filter that cannot pick it.
+const edgeTypeTitles = {
+  election: "Kandydatura",
+  employed: "Zatrudnienie",
+  owns: "Własność",
+  seat: "Siedziba",
+  connection: "Powiązanie",
+  mentions: "Wzmianka",
+  comment: "Komentarz",
+  tagged: "Temat",
+} satisfies Record<EdgeType, string>;
+const edgeTypeOptions = Object.entries(edgeTypeTitles).map(
+  ([value, title]) => ({ title, value }),
 );
+const edgeTypeLabels: Record<string, string> = edgeTypeTitles;
 
 const edgeType = optionalFilter(
   "powiazania",
@@ -1341,8 +1398,8 @@ watch(
 }
 
 /* Fixed widths rather than the field's own, which is as wide as its longest
- * option. Narrower than a phone either way: the head wraps them onto lines of
- * their own there instead of running past the edge. */
+ * option. Never wider than the line either way; on a phone they share it two
+ * to a line instead (below). */
 .rev-filter {
   width: 11rem;
   max-width: 100%;
@@ -1356,6 +1413,38 @@ watch(
 .rev-per-page {
   width: 8rem;
   flex: none;
+}
+
+/* Vuetify lets the chip shrink but not its content, so a long name cannot
+   truncate and the close button, drawn last, is what gets cut off - the fix
+   /aktywnosc makes on its own „Tylko:” chip. */
+.rev-author-filter {
+  max-width: 100%;
+}
+
+.rev-author-filter :deep(.v-chip__content) {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* On a phone the controls take a line of their own under the head and the
+   selects go two to a line. At their fixed widths they stacked one per line
+   at three ragged widths (176, 240 and 240px in the entries' head), leaving
+   half of each line empty, and the queue's filters ran to five lines above
+   its first row. */
+@media (max-width: 599.98px) {
+  .rev-section :deep(.asec__actions) {
+    flex: 1 1 100%;
+    margin-inline-start: 0;
+  }
+
+  /* Covers `.rev-filter--wide` too: it is never used without `.rev-filter`,
+     and this rule comes after its width. */
+  .rev-filter {
+    flex: 1 1 calc(50% - 4px);
+    width: auto;
+    min-width: 0;
+  }
 }
 
 /* The page numbers get what the page-size select leaves of the line, and no

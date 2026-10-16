@@ -1,5 +1,13 @@
 <template>
-  <v-card v-if="type == 'person'" width="100%" variant="flat">
+  <!-- Unboxed: the page's header, ruled off from what follows by the one
+       hairline rather than framed. -->
+  <v-card
+    v-if="type == 'person'"
+    width="100%"
+    variant="flat"
+    rounded="0"
+    class="entity-header"
+  >
     <!-- `align-center`: without it the row is `align-items: stretch`, so the
          h2 stretched to the height of the control block on the right and kept
          its text at the top of that box, while PartyChip centres itself - two
@@ -17,10 +25,15 @@
          On a 393px phone „Wioletta Paprocka-Ślusarska” left her „PO” 13px of
          its 40. Now whatever does not fit goes to the next line whole, and a
          name too long for the line breaks between its words. -->
-    <v-card-title class="px-0 d-flex flex-wrap align-center ga-2 text-wrap">
-      <h2 class="text-h5 font-weight-bold">
+    <!-- The name is the page's h1: the one title every page opens with, at
+         the type system's title size (assets/css/type.css). The parties
+         beside it are drawn at the title's chip size, set below. -->
+    <v-card-title
+      class="px-0 pt-0 d-flex flex-wrap align-center ga-2 text-wrap entity-head"
+    >
+      <h1>
         {{ entity?.name }}
-      </h2>
+      </h1>
       <!-- Before the parties, because it is about the page rather than about
            the person on it: whoever is reading this is the only kind of reader
            who can be here at all while it shows. -->
@@ -102,8 +115,7 @@
         />
       </div>
     </v-card-title>
-    <template #append> </template>
-    <v-card-text class="px-0 pt-2">
+    <v-card-text class="px-0 pt-2 pb-6">
       <!-- Above everything the page says about the person, because while the
            mark stands, everything it says is about two of them. Admin-only:
            the component gates itself. -->
@@ -113,16 +125,48 @@
         :needs-split="personEntity?.needs_split"
       />
       <CardPersonInfo :person="personEntity" class="mb-2" />
-      {{ entity?.content }}
+      <!-- Reading text, at a reading measure. On a phone a long bio shows
+           four lines, ending in the clamp's ellipsis, and the rest is one tap
+           away: hidden, not cut, so a screen reader and a search engine still
+           get all of it. Wider screens show it whole. Whether it folds is
+           decided by length rather than measured, so the server's html
+           already has the button and nothing moves when the page hydrates. -->
+      <p
+        v-if="entity?.content"
+        :id="bioId"
+        ref="bio"
+        class="person-bio"
+        :class="{ 'person-bio--folded': bioLong && !bioOpen }"
+        :tabindex="bioLong ? -1 : undefined"
+        data-testid="person-bio"
+      >
+        {{ nbsp(entity.content) }}
+      </p>
+      <!-- A button that goes once the bio is open, rather than a toggle that
+           stays as „Pokaż mniej” (Szymon, 2026-10-15). It is only ever shown
+           collapsed, so `aria-expanded` stays false: it still tells a screen
+           reader the button opens something. -->
+      <v-btn
+        v-if="bioLong && !bioOpen"
+        variant="text"
+        class="person-bio__more px-2"
+        :append-icon="mdiChevronDown"
+        aria-expanded="false"
+        :aria-controls="bioId"
+        data-testid="person-bio-more"
+        @click="openBio"
+      >
+        Pokaż więcej
+      </v-btn>
     </v-card-text>
   </v-card>
 
   <v-card v-if="type == 'place'" width="100%" variant="flat">
-    <v-card-title class="headline px-0">
+    <v-card-title class="headline px-0 text-wrap">
       <v-icon start :icon="mdiOfficeBuildingOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
+      <h1 class="d-inline">
         {{ entity?.name }}
-      </h2>
+      </h1>
     </v-card-title>
     <v-card-text class="px-0">
       <div v-if="identifiers.length > 0" class="text-caption mb-2">
@@ -133,11 +177,11 @@
   </v-card>
 
   <v-card v-if="type == 'article'" width="100%" variant="flat">
-    <v-card-title class="headline px-0">
+    <v-card-title class="headline px-0 text-wrap">
       <v-icon start :icon="mdiFileDocumentOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
+      <h1 class="d-inline">
         {{ entity?.name }}
-      </h2>
+      </h1>
     </v-card-title>
     <v-card-text class="px-0">
       <div v-if="article?.sourceURL" class="text-caption mb-2">
@@ -151,11 +195,11 @@
   </v-card>
 
   <v-card v-if="type == 'region'" width="100%" variant="flat">
-    <v-card-title class="headline px-0">
+    <v-card-title class="headline px-0 text-wrap">
       <v-icon start :icon="mdiMapMarkerRadiusOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
+      <h1 class="d-inline">
         {{ region?.name }}
-      </h2>
+      </h1>
     </v-card-title>
     <v-card-text class="px-0">
       {{ region?.content }}
@@ -165,6 +209,7 @@
 
 <script setup lang="ts">
 import {
+  mdiChevronDown,
   mdiFileDocumentOutline,
   mdiHistory,
   mdiMapMarkerRadiusOutline,
@@ -178,6 +223,7 @@ import type {
   PersonRich,
 } from "~~/shared/model";
 import { companyIdentifiers } from "~~/shared/identifiers";
+import { nbsp } from "~/utils/nbsp";
 
 const props = withDefaults(
   defineProps<{
@@ -222,4 +268,106 @@ const personEntity = computed(() =>
  * extra rich fields are simply absent - `usePersonSearch` reads them
  * optionally, and `extraLocations` covers the one that matters here. */
 const richPerson = computed(() => personEntity.value as PersonRich | undefined);
+
+/** The shortest bio that folds on a phone. Measured rather than guessed: the
+ * 890 published bios of the 2026-10-15 export, set in the bio's own CSS and
+ * Roboto at every phone width from 320px to 440px.
+ *
+ * A fold pays from the sixth line on: four lines and the button row are 139px,
+ * six lines 149px, but five lines only 124px. On a 375px phone every bio of
+ * 214 characters or more takes six lines or more, and none under it does, so
+ * there the cut is clean. A wider phone fits more on a line, so there some
+ * bios of 214 or more take five and fold anyway (16 of the 70 at 412px, 20 at
+ * 430px), and on a 360px phone 7 six-line bios of 200-213 stay whole. But at
+ * no phone width does a bio of 214 or more fit in four lines (the longest that
+ * does, at 440px, has 209), so no button has nothing behind it. Wider than a
+ * phone that stops holding - at 449px a 218-character bio fits in four, at
+ * 480px 10 of the 70 do - so the fold ends with the widest phone, a 440px
+ * iPhone Pro Max. */
+const BIO_FOLD_MIN_LENGTH = 214;
+
+const bioLong = computed(
+  () => (props.entity.content?.length ?? 0) >= BIO_FOLD_MIN_LENGTH,
+);
+const bioOpen = ref(false);
+const bioId = useId();
+const bio = useTemplateRef<HTMLElement>("bio");
+
+/** Opening the bio takes the focused button away, which would drop a keyboard
+ * or screen-reader user back to the top of the page. Focus goes to the bio
+ * instead: a screen reader reads on from its start, and the next Tab carries
+ * on from where the button was. `preventScroll`: the bio opens downwards from
+ * where the reader already is, so nothing needs to move. */
+async function openBio() {
+  bioOpen.value = true;
+  await nextTick();
+  bio.value?.focus({ preventScroll: true });
+}
 </script>
+
+<style scoped>
+.entity-header {
+  background: transparent;
+  border-bottom: 1px solid var(--k-line);
+  /* Not Vuetify's `hidden`: the bio's toggle hangs 8px into the gutter, and a
+     clipped card cut its ripple and focus tint off flat at the text's edge.
+     There is nothing here to clip - the card is square and unpainted, and the
+     title row clips itself (`.v-card-title` is `overflow: hidden`). */
+  overflow: visible;
+}
+
+/* The parties beside the h1 are set one step up from a list's 12px. */
+.entity-head {
+  --k-party-chip-size: 16px;
+}
+
+.person-bio {
+  font-size: 1rem;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 72ch;
+}
+
+/* Focus only lands here from „Pokaż więcej”, as a reading position, not a
+   control: a ring round the whole bio would frame it like something to press.
+   The text opening where the button was shows where the reader is. */
+.person-bio:focus {
+  outline: none;
+}
+
+/* Four lines and the clamp's ellipsis: the soft end, in the text's own ink.
+   Phones only, up to the widest at 440px rather than Vuetify's 600: the
+   length the fold is decided by holds that far, and past it a folded bio can
+   fit in four lines (BIO_FOLD_MIN_LENGTH). The button goes at the same width. */
+@media (max-width: 440.98px) {
+  .person-bio--folded {
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 441px) {
+  .person-bio__more {
+    display: none;
+  }
+}
+
+/* A neutral text button in ink, its chevron in the label's ink too. Its
+   label lines up with the text's left edge; the 8px of padding that keeps the
+   press tint off the label hangs into the gutter instead. */
+.person-bio__more {
+  margin-inline-start: -8px;
+  margin-top: 4px;
+}
+
+/* Taps reach 4px past the 36px button on either side: a 44px target,
+   without a taller row under the bio. */
+.person-bio__more::before {
+  content: "";
+  inset: -4px 0;
+  position: absolute;
+}
+</style>

@@ -22,7 +22,7 @@
          source, and the thing relations are made out of; this is the talk
          about it. Not on the leads page, which has no notes to point at. -->
     <p v-if="!leadMode" class="k-lead" data-testid="comments-lead">
-      Pytania i uwagi do innych czytelników - informację ze źródłem zapisz w
+      Pytania i uwagi do innych czytelników – informację ze źródłem zapisz w
       notatce wyżej.
     </p>
 
@@ -43,7 +43,7 @@
 
     <div
       v-if="mainComments.length === 0 && !loading"
-      class="text-center text-grey py-4"
+      class="text-center text-grey pt-4"
     >
       Brak komentarzy.
     </div>

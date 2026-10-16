@@ -15,10 +15,14 @@
     class="event-feed"
     data-testid="home-event-feed"
     empty-text="To już wszystko, co wiemy."
-    load-more-text="Pokaż więcej"
     mode="manual"
     @load="loadMore"
   >
+    <!-- In the control tint: Vuetify's own button here is outlined in the
+         text colour, near-black. -->
+    <template #load-more="{ props: loader }">
+      <v-btn variant="tonal" @click="loader.onClick">Pokaż więcej</v-btn>
+    </template>
     <div class="event-feed__grid">
       <!-- One `v-for` over the merged list rather than one per kind, which is
            the whole point of merging: the cards are in date order across the

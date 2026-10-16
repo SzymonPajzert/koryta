@@ -38,23 +38,13 @@ const redirectOnly: Record<string, string> = {
  * adds it. The list only gets shorter, and the check below insists on it: a
  * page photographed since has to come off. */
 const notYetPhotographed: Record<string, string> = {
-  "admin/index": "admin; client rendered, so /api/admin/summary can be stubbed",
-  "admin/krawedzie": "admin; the seed has edges to list",
-  "admin/notatki/index": "admin; the seed has notes on Jan Kowalski",
-  "admin/notatki/kategoryzacja": "admin",
-  aktywnosc:
-    "signed in; the last 30 days against today's date, so it needs the " +
-    "client-side navigation and a stubbed feed (szpitale.spec.ts)",
   "cli-login": "signed in, with a `callback` for the CLI",
   "edit/node/[[id]]": "signed in",
   "eksploruj/autograf/[type]": "charts; needs a check that they draw stably",
   "eksploruj/staz":
     "tenure is counted to today, so the figures move daily unless stubbed",
-  "ekstrakcje/index": "signed in; the seed has extractions",
-  "ekstrakcje/kategoryzacja": "signed in; the seed has extractions",
   graf: "a force-directed canvas that settles differently every run",
   leads: "signed in",
-  profil: "signed in",
   rozszerzenie: "signed in",
   "temat/[slug]": "the seed has no topic",
   tematy: "the seed has no topic",

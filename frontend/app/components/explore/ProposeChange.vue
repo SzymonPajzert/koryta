@@ -34,7 +34,7 @@
          a change has been submitted, so the panel says one thing at a time. -->
     <p v-if="!submittedRevisionId" class="k-lead text-center">
       Poprawia metryczkę: imię i nazwisko, partię, datę urodzenia, wykształcenie
-      i linki. Propozycja czeka na zatwierdzenie. Cokolwiek innego - opisz w
+      i linki. Propozycja czeka na zatwierdzenie. Cokolwiek innego – opisz w
       notatce niżej.
     </p>
 

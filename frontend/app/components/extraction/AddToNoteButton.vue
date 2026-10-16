@@ -20,7 +20,7 @@
         location="bottom"
         max-width="280"
       >
-        Zapisz ten fakt jako źródło w swojej notatce o tej osobie - z cytatem i
+        Zapisz ten fakt jako źródło w swojej notatce o tej osobie – z cytatem i
         linkiem do artykułu. Notatki są publiczne.
       </v-tooltip>
     </v-btn>

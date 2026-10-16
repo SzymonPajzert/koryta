@@ -8,7 +8,8 @@ import { expectFitsThePhone } from "./phoneWidth";
 
 /** /admin/opinie, the reports people sent, as the team works through them:
  * the ones nobody has placed yet, the queue, and the closed ones folded away,
- * with one report open.
+ * with one report open; and the same reports in „Ułóż kolejkę”, the mode for
+ * putting the queue in order.
  *
  * The seed has no reports - it clears the collection - so the list is
  * answered from ./fixtures/feedbackReports.ts. The page is rendered in the
@@ -18,14 +19,17 @@ import { expectFitsThePhone } from "./phoneWidth";
 
 const OPINIE = { tag: pageTag("admin/opinie") };
 
-test("opinie", OPINIE, async ({ page }, testInfo) => {
-  test.setTimeout(120_000);
+test.beforeEach(async ({ page }) => {
   await freezeClock(page);
   await page.route("**/api/feedback/list**", (route) =>
     route.fulfill({
       json: { feedback: feedbackReports, openTruncated: false },
     }),
   );
+});
+
+test("opinie", OPINIE, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
   await logIn(page, USERS.admin, "/admin/opinie");
 
   // A report only the fixture has, so a run that drew the empty seed fails
@@ -41,6 +45,29 @@ test("opinie", OPINIE, async ({ page }, testInfo) => {
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("opinie.png", { fullPage: true });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+test("opinie-kolejka", OPINIE, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await logIn(page, USERS.admin, "/admin/opinie");
+
+  await expect(page.locator("#fb-wizfb4")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Ułóż kolejkę" }).click();
+
+  // The fixture's queue of two, in its order, one line each - and the two
+  // nobody has placed yet, below it, to be pulled in.
+  const queue = page.locator("[data-queue-row]");
+  await expect(queue).toHaveCount(2);
+  await expect(queue.first()).toHaveAttribute("data-feedback-id", "wizfb3");
+  await expect(page.getByRole("button", { name: "Gotowe" })).toBeVisible();
+
+  // The pointer off „Gotowe”, which took the place of the button it clicked.
+  await page.mouse.move(0, 0);
+  await expect(page.locator(".v-ripple__animation")).toHaveCount(0);
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("opinie-kolejka.png", { fullPage: true });
 
   await expectFitsThePhone(page, testInfo);
 });

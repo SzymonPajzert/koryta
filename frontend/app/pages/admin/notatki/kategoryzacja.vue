@@ -1,40 +1,43 @@
 <template>
-  <v-container class="triage-container">
-    <!-- Same two-line header as /ekstrakcje/kategoryzacja: the card is the
-         point of the page, so the back button sits beside the title. -->
-    <div class="d-flex align-center ga-2 mb-3">
-      <v-btn
-        variant="text"
-        size="small"
-        density="comfortable"
-        :prepend-icon="mdiArrowLeft"
-        to="/admin/notatki"
-        class="ms-n2 flex-shrink-0"
-      >
-        Powrót
-      </v-btn>
-      <div class="header-text">
-        <h1 class="text-subtitle-1 font-weight-medium text-truncate">
-          Kategoryzuj notatki
-        </h1>
-        <div v-if="!pending" class="text-caption text-medium-emphasis">
-          Pozostało do oceny: {{ remaining }}
-        </div>
-      </div>
-      <v-spacer />
-      <!-- One mistap on a phone is one wrong type, so the way back is on
-           screen rather than in the table view. -->
-      <v-btn
-        v-if="history.length"
-        variant="text"
-        size="small"
-        :prepend-icon="mdiUndoVariant"
-        class="flex-shrink-0"
-        @click="undo"
-      >
-        Cofnij
-      </v-btn>
-    </div>
+  <!-- One column at the page's inset, its left edge the h1's: the card is the
+       point of the page, and on a phone the column is the screen less the
+       layout's gutter. -->
+  <div class="w-100 triage-column">
+    <!-- Every working page's head: the way up a level above the title, so the
+         title starts on the inset like everywhere else; what is left to judge
+         as the line under it; the undo as the page's one action. -->
+    <AdminPageHead
+      title="Kategoryzuj notatki"
+      :lead="
+        pending ? undefined : `Pozostało do oceny: ${polishNumber(remaining)}`
+      "
+    >
+      <template #back>
+        <v-btn
+          variant="text"
+          size="small"
+          :prepend-icon="mdiArrowLeft"
+          to="/admin/notatki"
+        >
+          Notatki
+        </v-btn>
+        <v-spacer />
+        <!-- One mistap on a phone is one wrong type, so the way back is on
+             screen rather than in the table view. On the line of the way up,
+             where it costs no height, and there before the first verdict too,
+             disabled: a button that appeared with the first verdict, on a
+             line of its own as the page's action was on a phone, pushed the
+             next card and the choices down under the thumb. -->
+        <v-btn
+          variant="tonal"
+          :prepend-icon="mdiUndoVariant"
+          :disabled="!history.length"
+          @click="undo"
+        >
+          Cofnij
+        </v-btn>
+      </template>
+    </AdminPageHead>
 
     <div v-if="pending" class="d-flex justify-center py-8">
       <v-progress-circular indeterminate color="primary" size="48" />
@@ -57,7 +60,7 @@
       <v-icon size="64" color="primary" class="mb-4">{{ mdiCheckAll }}</v-icon>
       <div class="text-h6">Ta porcja przejrzana!</div>
       <div class="text-body-2 text-medium-emphasis mt-1">
-        Zostało jeszcze {{ remaining }} do oceny.
+        Zostało jeszcze {{ polishNumber(remaining) }} do oceny.
       </div>
       <v-btn class="mt-4" color="primary" variant="tonal" @click="load()">
         Wczytaj kolejne
@@ -68,20 +71,32 @@
       <v-icon size="64" color="success" class="mb-4">{{ mdiCheckAll }}</v-icon>
       <div class="text-h6">Wszystkie notatki skategoryzowane!</div>
       <div v-if="deferredCount" class="text-body-2 text-medium-emphasis mt-1">
-        {{ deferredCount }}
-        {{ deferredCount === 1 ? "notatka czeka" : "czeka" }} na ocenę w tabeli.
+        {{
+          polishCounting(
+            deferredCount,
+            "notatka czeka",
+            "notatki czekają",
+            "notatek czeka",
+          )
+        }}
+        na ocenę w tabeli.
       </div>
       <v-btn class="mt-4" color="primary" variant="tonal" to="/admin/notatki">
         Wróć do tabeli
       </v-btn>
     </div>
 
-    <template v-else>
-      <div class="queue-area mx-auto">
+    <!-- The note and its choices, then - a section's gap below - who it is
+         about. -->
+    <div v-else class="k-sections">
+      <div>
         <NoteTriageCard :key="current.key" :row="current" />
 
+        <!-- The option's name a weight over its hint: at Vuetify's default
+             400 both were 14px lines told apart by ink alone, five options
+             reading as ten grey lines, on the one choice this page is for. -->
         <v-list
-          class="mt-4 rounded-lg border"
+          class="mt-4 k-r-card border triage-choices"
           density="comfortable"
           lines="two"
         >
@@ -107,7 +122,7 @@
                sometimes that is not enough to say what the entry is about. -->
           <v-list-item
             title="Nie da się ocenić tutaj"
-            subtitle="Trzeba zobaczyć węzeł - oceń w tabeli na komputerze."
+            subtitle="Trzeba zobaczyć węzeł – oceń w tabeli na komputerze."
             class="py-2"
             @click="defer"
           >
@@ -118,37 +133,37 @@
             </template>
           </v-list-item>
         </v-list>
-
-        <!-- Who the note is about, so that a reviewer on a phone can read the
-             record without switching to the table. Under the choices rather
-             than above them: the note and a tap stay on the first screen, and
-             this is what a reviewer scrolls to when they need it.
-
-             Its own `<Suspense>`, keyed by the node. The section awaits its
-             reads, which makes it an async component, and a boundary of its
-             own is what gives it a fallback without holding up the card and
-             the choices. The key starts each node from that fallback rather
-             than leaving the last person under the next note while theirs
-             loads; two entries on one node, the common case, keep the record
-             already drawn. -->
-        <Suspense v-if="showSubject" :key="current.nodeId">
-          <LazyNoteTriageSubject :node-id="current.nodeId" class="mt-6" />
-          <template #fallback>
-            <div
-              class="d-flex align-center justify-center ga-2 mt-6 py-4 text-caption text-medium-emphasis"
-              data-testid="triage-subject-loading"
-            >
-              <v-progress-circular indeterminate size="16" width="2" />
-              {{
-                current.nodeType === "person"
-                  ? "Ładowanie danych osoby…"
-                  : "Ładowanie danych instytucji…"
-              }}
-            </div>
-          </template>
-        </Suspense>
       </div>
-    </template>
+
+      <!-- Who the note is about, so that a reviewer on a phone can read the
+           record without switching to the table. Under the choices rather
+           than above them: the note and a tap stay on the first screen, and
+           this is what a reviewer scrolls to when they need it.
+
+           Its own `<Suspense>`, keyed by the node. The section awaits its
+           reads, which makes it an async component, and a boundary of its
+           own is what gives it a fallback without holding up the card and
+           the choices. The key starts each node from that fallback rather
+           than leaving the last person under the next note while theirs
+           loads; two entries on one node, the common case, keep the record
+           already drawn. -->
+      <Suspense v-if="showSubject" :key="current.nodeId">
+        <LazyNoteTriageSubject :node-id="current.nodeId" />
+        <template #fallback>
+          <div
+            class="d-flex align-center justify-center ga-2 py-4 text-caption text-medium-emphasis"
+            data-testid="triage-subject-loading"
+          >
+            <v-progress-circular indeterminate size="16" width="2" />
+            {{
+              current.nodeType === "person"
+                ? "Ładowanie danych osoby…"
+                : "Ładowanie danych instytucji…"
+            }}
+          </div>
+        </template>
+      </Suspense>
+    </div>
 
     <v-snackbar
       :model-value="!!failure"
@@ -158,7 +173,7 @@
     >
       {{ failure }}
     </v-snackbar>
-  </v-container>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -171,6 +186,7 @@ import {
 } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { noteAdminTypeConfig } from "~/composables/notes";
+import { polishCounting, polishNumber } from "~/composables/polish";
 import type { NodeType, NoteRow } from "~~/shared/model";
 
 definePageMeta({
@@ -352,23 +368,15 @@ onMounted(load);
 </script>
 
 <style scoped>
-.triage-container {
-  max-width: 600px;
+/* The queue's column. Left at the page's inset rather than centred in it, so
+   the title lands where every other page's does. */
+.triage-column {
+  max-width: 560px;
 }
 
-/* Let the title ellipsize instead of pushing the back button off the row. */
-.header-text {
-  min-width: 0;
-}
-
-/* A phone has the least room to spare above the card. */
-@media (max-width: 599px) {
-  .triage-container {
-    padding-top: 8px;
-  }
-}
-
-.queue-area {
-  max-width: 520px;
+/* The options' names, a weight over their hints - 500, as a button's or a
+   menu entry's label is (type.css). */
+.triage-choices :deep(.v-list-item-title) {
+  font-weight: 500;
 }
 </style>

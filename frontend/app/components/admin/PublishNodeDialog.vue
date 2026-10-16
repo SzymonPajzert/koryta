@@ -38,7 +38,7 @@
 
         <p
           v-else-if="candidates.length === 0"
-          class="text-body-2 text-grey-darken-1"
+          class="text-body-2 text-medium-emphasis"
           data-testid="publish-no-relations"
         >
           Ta strona nie ma powiązań czekających na publikację.
@@ -58,27 +58,25 @@
             class="place-clash mb-4"
             :data-testid="`publish-place-clash-${clashKey(clash)}`"
           >
+            <!-- The why behind the site's „(i)”, which opens on a tap and
+                 takes the keyboard's focus. It was a hover tooltip on a 12px
+                 icon, out of reach of both a phone and a keyboard. -->
             <div class="place-clash__head">
               <v-icon :icon="mdiAlertOutline" size="small" />
-              <span>Wybory {{ electionLabel(clash) }} - dwa miejsca naraz</span>
-              <v-icon
-                :icon="mdiInformationOutline"
-                size="x-small"
-                class="place-clash__info"
-              >
-                <v-tooltip activator="parent" location="top" max-width="320">
-                  W jednych wyborach kandyduje się w jednym miejscu, więc co
-                  najmniej jedna z tych kandydatur należy do imiennika.
-                  Opublikuj tę, która pasuje do tej osoby - zwykle tę z miejsca,
-                  gdzie kandydowała też w innych latach - a drugą zostaw
-                  nieopublikowaną. „Zaznacz wszystkie" ich nie zaznacza.
-                </v-tooltip>
-              </v-icon>
+              <span>Wybory {{ electionLabel(clash) }} – dwa miejsca naraz</span>
+              <InfoBubble :label="`Wybory ${electionLabel(clash)}`">
+                W jednych wyborach kandyduje się w jednym miejscu, więc co
+                najmniej jedna z tych kandydatur należy do imiennika. Opublikuj
+                tę, która pasuje do tej osoby – zwykle tę z miejsca, gdzie
+                kandydowała też w innych latach – a drugą zostaw
+                nieopublikowaną. „Zaznacz wszystkie” ich nie zaznacza.
+              </InfoBubble>
             </div>
             <v-list density="compact" class="py-0 bg-transparent">
               <v-list-item
                 v-for="relation in clash.rows"
                 :key="relation.id"
+                class="publish-relation"
                 :class="{
                   'text-disabled': !relation.published && !relation.publishable,
                 }"
@@ -94,12 +92,17 @@
                     @update:model-value="toggle(relation.id)"
                   />
                 </template>
-                <v-list-item-title>
+                <v-list-item-title class="publish-relation__wrap">
                   {{ relation.otherName || relation.otherId }}
                 </v-list-item-title>
-                <v-list-item-subtitle>
+                <v-list-item-subtitle class="publish-relation__wrap">
                   {{ placeHint(clash, relation.otherId) }}
-                  <span v-if="relation.published"> · już opublikowana</span>
+                </v-list-item-subtitle>
+                <v-list-item-subtitle
+                  v-if="relation.published"
+                  class="publish-relation__state"
+                >
+                  już opublikowana
                 </v-list-item-subtitle>
               </v-list-item>
             </v-list>
@@ -126,6 +129,7 @@
             <v-list-item
               v-for="relation in listed"
               :key="relation.id"
+              class="publish-relation"
               :class="{ 'text-disabled': !relation.publishable }"
               :data-testid="`publish-relation-${relation.id}`"
             >
@@ -137,33 +141,30 @@
                   @update:model-value="toggle(relation.id)"
                 />
               </template>
-              <v-list-item-title>
+              <v-list-item-title class="publish-relation__wrap">
                 {{ relationLabel(relation) }}
               </v-list-item-title>
-              <v-list-item-subtitle>
+              <v-list-item-subtitle class="publish-relation__wrap">
                 {{ relation.direction === "outgoing" ? "→" : "←" }}
                 {{ relation.otherName || relation.otherId }}
-                <span v-if="relation.hasPendingRevision">
-                  · propozycja czeka na zatwierdzenie</span
-                >
-                <span v-else-if="relation.revisionToApprove">
-                  · zostanie zatwierdzona najnowsza rewizja</span
-                >
               </v-list-item-subtitle>
-              <template #append>
-                <v-icon
-                  v-if="!relation.publishable"
-                  :icon="mdiEyeOffOutline"
-                  size="small"
-                  color="grey"
-                >
-                  <v-tooltip activator="parent" location="left" max-width="280">
-                    Druga strona ({{ relation.otherName || relation.otherId }})
-                    nie jest opublikowana, więc tego powiązania nie można
-                    pokazać publicznie.
-                  </v-tooltip>
-                </v-icon>
-              </template>
+              <!-- Why a row is greyed, and what ticking it also approves, on a
+                   line of its own that wraps rather than ellipsises. Vuetify
+                   clamps a subtitle to one line, and the page it names is
+                   usually a long capitalised KRS name, so put after it the
+                   reason was cut off on a phone and often on a computer too -
+                   a greyed checkbox with no reason again. It was an icon at
+                   the row's end whose reason only a hover could open. -->
+              <v-list-item-subtitle
+                v-if="
+                  !relation.publishable ||
+                  relation.hasPendingRevision ||
+                  relation.revisionToApprove
+                "
+                class="publish-relation__state"
+              >
+                {{ relationState(relation) }}
+              </v-list-item-subtitle>
             </v-list-item>
           </v-list>
         </template>
@@ -201,13 +202,13 @@
         >
           <p class="mb-1">
             <strong>Strona została opublikowana, ale powiązania nie.</strong>
-            Żadne z zaznaczonych powiązań nie trafiło na stronę - są publikowane
+            Żadne z zaznaczonych powiązań nie trafiło na stronę – są publikowane
             razem albo wcale.
           </p>
           <p class="mb-1 text-body-2">{{ relationsFailed }}</p>
           <p class="mb-0 text-body-2">
             Spróbuj ponownie tutaj albo opublikuj je w
-            <NuxtLink to="/admin/krawedzie">kolejce powiązań</NuxtLink> - strona
+            <NuxtLink to="/admin/krawedzie">kolejce powiązań</NuxtLink> – strona
             jest już widoczna publicznie, więc ten dialog więcej się nie
             otworzy.
           </p>
@@ -235,12 +236,12 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import {
-  mdiAlertOutline,
-  mdiEyeOffOutline,
-  mdiInformationOutline,
-} from "@mdi/js";
+import { mdiAlertOutline } from "@mdi/js";
+// Imported rather than auto-imported, as in PageSection: a plain `mount` in a
+// unit test has no resolver, and an unresolved bubble renders as nothing.
+import InfoBubble from "../InfoBubble.vue";
 import { authRequest } from "~/composables/auth";
+import { formatMoment } from "~/utils/moment";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
 import {
   latestPublishableRevision,
@@ -372,7 +373,7 @@ const listedSelectedCount = computed(
       .length,
 );
 
-/** What „Zaznacz wszystkie" ticks: everything that may go live but the
+/** What „Zaznacz wszystkie” ticks: everything that may go live but the
  * candidacies of a clash, which the reviewer has to pick one by one. */
 const bulkIds = computed(() =>
   selectableIds.value.filter((id) => !clashOf.value.has(id)),
@@ -395,7 +396,7 @@ const confirmLabel = computed(() =>
 function revisionDate(updateTime: unknown): string {
   const iso = normalizeUpdateTime(updateTime);
   if (!iso) return "nieznanej daty";
-  return new Date(iso).toLocaleString("pl-PL");
+  return formatMoment(iso);
 }
 
 /** What a row is. A candidacy says which election as well - „kandydatura ·
@@ -408,6 +409,21 @@ function relationLabel(relation: NodeRelation): string {
   return [label, relation.startDate?.slice(0, 4), relation.position]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Why a row cannot be ticked, and what ticking it also does, as the words
+ * on its own line under the page it names: „druga strona nieopublikowana”,
+ * then whether a proposal is still waiting or the newest revision is what
+ * goes live with it. */
+function relationState(relation: NodeRelation): string {
+  const clauses: string[] = [];
+  if (!relation.publishable) clauses.push("druga strona nieopublikowana");
+  if (relation.hasPendingRevision) {
+    clauses.push("propozycja czeka na zatwierdzenie");
+  } else if (relation.revisionToApprove) {
+    clauses.push("zostanie zatwierdzona najnowsza rewizja");
+  }
+  return clauses.join(" · ");
 }
 
 function clashKey(clash: PlaceClash<NodeRelation>): string {
@@ -576,8 +592,8 @@ function errorMessage(error: unknown): string {
    left edge and a tinted head - here the warning pair from shared/colors.ts. */
 .place-clash {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 4px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   box-shadow: inset 4px 0 0 rgb(var(--v-theme-ink-warning));
   overflow: hidden;
 }
@@ -587,17 +603,62 @@ function errorMessage(error: unknown): string {
   background: rgb(var(--v-theme-surface-warning));
   color: rgb(var(--v-theme-ink-warning));
   display: flex;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   font-weight: 600;
   gap: 6px;
   padding: 6px 12px 6px 16px;
 }
 
-.place-clash__info {
-  cursor: help;
-}
-
 .place-clash :deep(.v-list) {
   padding-left: 4px !important;
+}
+
+/* One relation is one block: more air between two relations than between the
+   lines of one, so a role, its page and its state read as belonging together. */
+.publish-relation {
+  padding-block: 6px;
+}
+
+/* The checkbox beside the role it ticks, not beside the middle of a row that
+   now runs three to five lines: Vuetify centres the prepend on the whole row.
+   Pulled up by half a line, so the 40px control's centre sits on the first
+   line of the 14px/1.45 title (about 20px tall) rather than 10px under it. */
+.publish-relation :deep(.v-list-item__prepend) {
+  align-self: start;
+  margin-top: -10px;
+}
+
+/* That pull reaches 4px above the row. A `v-list` scrolls its own overflow, so
+   on the first row it would shave the top off the control's hover and focus
+   circle; 4px more there keeps the whole 40px inside the list. */
+.publish-relation:first-child {
+  padding-top: 10px;
+}
+
+/* A row's state - why it is greyed, what ticking it approves - wraps instead
+   of ellipsising. Vuetify clamps every subtitle to one line with a two-class
+   rule (`.v-list-item--one-line .v-list-item-subtitle`), so this needs a
+   second class to win on specificity rather than on the order the sheets
+   happen to load in. It is a 12px meta line in the same ink, a step under
+   the page it names, so the two stop reading as one sentence. */
+.v-list-item-subtitle.publish-relation__state {
+  -webkit-line-clamp: unset;
+  font-size: var(--k-meta-size);
+  margin-top: 2px;
+}
+
+/* The relation itself - the role about to be published, the page at its
+   other end - wraps too, by the same two-class rule. A role like „Zastępca
+   Przewodniczącego Rady Nadzorczej ds. …” or an article named by its BIP url
+   was cut to a line with no title to hover, so what the tick would put live
+   could not be read before ticking it. */
+.v-list-item-title.publish-relation__wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.v-list-item-subtitle.publish-relation__wrap {
+  -webkit-line-clamp: unset;
+  overflow-wrap: anywhere;
 }
 </style>

@@ -182,20 +182,26 @@
       "
       class="d-flex align-center flex-wrap ga-1 mb-3"
     >
+      <!-- Branches and links are long words: cut with an ellipsis, the whole
+           value on the chip's title, like the dependencies above. -->
       <v-chip
         v-for="tag in task.tags"
         :key="`tag-${tag}`"
-        size="x-small"
+        size="small"
         label
         variant="tonal"
+        class="task-details__chip"
+        :title="`#${tag}`"
       >
         #{{ tag }}
       </v-chip>
       <v-chip
         v-for="branch in task.branches"
         :key="`branch-${branch}`"
-        size="x-small"
+        size="small"
         label
+        class="task-details__chip"
+        :title="branch"
         :prepend-icon="mdiSourceBranch"
         :href="`${REPO}/tree/${encodeURIComponent(branch)}`"
         target="_blank"
@@ -205,8 +211,10 @@
       <template v-for="link in task.links" :key="`link-${link}`">
         <v-chip
           v-if="/^https?:\/\//.test(link)"
-          size="x-small"
+          size="small"
           label
+          class="task-details__chip"
+          :title="link"
           :prepend-icon="mdiLinkVariant"
           :href="link"
           target="_blank"
@@ -215,7 +223,14 @@
         </v-chip>
         <!-- A path on the dev box: nothing to open from here, but worth
              copying. -->
-        <v-chip v-else size="x-small" label variant="outlined">
+        <v-chip
+          v-else
+          size="small"
+          label
+          variant="outlined"
+          class="task-details__chip"
+          :title="link"
+        >
           {{ link }}
         </v-chip>
       </template>
@@ -264,7 +279,7 @@
         v-for="action in actions"
         :key="action.status"
         size="small"
-        :variant="action.primary ? 'flat' : 'outlined'"
+        :variant="action.primary ? 'flat' : 'tonal'"
         :color="action.primary ? 'ink-sage' : undefined"
         :disabled="saving"
         :data-task-action="action.status"
@@ -297,7 +312,7 @@
         variant="text"
         :prepend-icon="copied ? mdiCheck : mdiContentCopy"
         :color="copied ? 'ink-success' : undefined"
-        title="Zadanie z tym, skąd się wzięło - notatką w pamięci, sesją, zgłoszeniami - z zależnościami i historią, do wklejenia w rozmowie z agentem"
+        title="Zadanie z tym, skąd się wzięło – notatką w pamięci, sesją, zgłoszeniami – z zależnościami i historią, do wklejenia w rozmowie z agentem"
         data-task-copy
         @click="copyContext"
       >
@@ -426,7 +441,7 @@ const waitingHint = computed(() => {
     return `Zamknięte ${closed} z ${total} zadań, które do niego prowadzą.`;
   }
   const open = props.state.blockers.length;
-  if (props.task.dependsOn.length === 0) return "Nic - można zaczynać.";
+  if (props.task.dependsOn.length === 0) return "Nic – można zaczynać.";
   if (open === 0) return "Wszystko, na co czekało, jest zamknięte.";
   return `Jeszcze ${open} z ${props.task.dependsOn.length} otwarte.`;
 });
@@ -575,15 +590,24 @@ const actions = computed(() => {
   flex-wrap: wrap;
   gap: 4px 20px;
   margin-bottom: 12px;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
 }
 
+/* Where a task came from can be a path or a session id with nothing to break
+ * at; it wraps inside the 380px panel rather than out of it. */
+.task-fact {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A label, as type.css has them: 12/600 in the quiet ink, sentence case. It
+ * was 11px tracked capitals, a copy of the rows' facts strip from before it
+ * changed. */
 .task-fact__label {
   margin-inline-end: 4px;
-  font-size: 0.6875rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: var(--k-meta-size);
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
 }
 
 /* A title is long; a chip holding one must not stick out of the panel. */
@@ -591,11 +615,28 @@ const actions = computed(() => {
   max-width: 100%;
 }
 
+/* And where it is cut, it says so with an ellipsis instead of stopping
+ * mid-letter; the whole title is on the chip's `title`. */
+.task-details__chip :deep(.v-chip__content) {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-details__priority {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
+}
+
+/* The levels not picked sit on the hairline; the picked one keeps its own
+ * colour. */
+.task-details__priority
+  :deep(.v-btn-group .v-btn--variant-outlined:not(.v-btn--active)) {
+  border-color: var(--k-line);
 }
 
 /* No wider than the panel, so a long title in a chip is cut short there. */
@@ -644,6 +685,6 @@ const actions = computed(() => {
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
 }
 </style>

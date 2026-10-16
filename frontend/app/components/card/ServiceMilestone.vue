@@ -8,7 +8,6 @@
       'milestone-card--festive': festive,
     }"
     flat
-    rounded="lg"
   >
     <!-- Confetti, drawn rather than imaged: six absolutely positioned squares
          over a warm wash. `aria-hidden` because it says nothing - the card
@@ -102,7 +101,7 @@
         <span
           v-if="milestone.spells > 1"
           class="milestone-card__gap text-caption d-inline-flex align-center ga-1"
-          title="Staż liczony z przerwami - przerwy nie wliczają się, więc ta data jest późniejsza niż rocznica pierwszego dnia pracy"
+          title="Staż liczony z przerwami – przerwy nie wliczają się, więc ta data jest późniejsza niż rocznica pierwszego dnia pracy"
         >
           <v-icon :icon="mdiCallSplit" size="13" />
           {{ spellsLabel }}
@@ -261,18 +260,15 @@ const company = computed<Company>(() => ({
 </script>
 
 <style scoped>
-/* Deliberately `CardEmployment`'s card, down to the accent bar and the lift on
+/* Deliberately `CardEmployment`'s card, down to the accent bar and the edge on
    hover: this feed is read the same way the home page's is, and two grids of
    near-identical rows that disagree about their border radius read as two
    half-finished features rather than as one site. */
 .milestone-card {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border: 1px solid var(--k-line);
   overflow: hidden;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
 .milestone-card::before {
@@ -293,14 +289,13 @@ const company = computed<Company>(() => ({
   background: rgba(var(--v-theme-on-surface), 0.22);
 }
 
+/* The sage edge says it is a link; no lift - a shadow is for what floats. */
 .milestone-card:hover {
   border-color: rgba(var(--v-theme-primary), 0.9);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
-  transform: translateY(-2px);
 }
 
 /* Vuetify's own hover overlay on top of a near-white surface is a grey wash
-   that fights the lift above. */
+   that fights the edge above. */
 .milestone-card :deep(.v-card__overlay) {
   display: none;
 }

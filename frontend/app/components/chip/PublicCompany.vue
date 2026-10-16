@@ -68,7 +68,7 @@ const chip = computed(() => {
     icon: mdiHelpCircleOutline,
     tooltip:
       "Nie wiadomo, kto jest właścicielem. KRS nie ujawnia akcjonariuszy " +
-      "spółek akcyjnych, a instytucje spoza KRS - ministerstwa, urzędy - nie " +
+      "spółek akcyjnych, a instytucje spoza KRS – ministerstwa, urzędy – nie " +
       "mają w nim wpisu. Zaproponuj zmianę, jeśli wiesz.",
   };
 });

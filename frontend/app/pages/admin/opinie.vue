@@ -1,30 +1,31 @@
 <template>
   <div class="w-100">
-    <div class="d-flex align-start flex-wrap ga-2 mb-2">
-      <div class="flex-1-1">
-        <h1 class="text-h5 text-sm-h4 mb-2">Zgłoszenia od użytkowników</h1>
-        <p class="text-body-2 text-medium-emphasis">
-          Wszystko, co ktoś nam napisał: przyciskiem „Zgłoś” i oceniając wpisy
-          na
-          <NuxtLink to="/qa">liście zmian do sprawdzenia</NuxtLink>.
-        </p>
-      </div>
-      <v-btn
-        :prepend-icon="ordering ? mdiCheck : mdiSort"
-        :color="ordering ? 'primary' : undefined"
-        :variant="ordering ? 'flat' : 'outlined'"
-        :disabled="pending && !ordering"
-        @click="toggleOrdering"
-      >
-        {{ ordering ? "Gotowe" : "Ułóż kolejkę" }}
-      </v-btn>
-    </div>
+    <AdminPageHead title="Zgłoszenia od użytkowników">
+      <template #lead>
+        Wszystko, co ktoś nam napisał: przyciskiem „Zgłoś” i&nbsp;oceniając
+        wpisy na
+        <NuxtLink to="/qa">liście zmian do sprawdzenia</NuxtLink>.
+      </template>
+      <template #actions>
+        <!-- With no reports there is nothing to order, and the mode would
+             only point at rows that are not there. -->
+        <v-btn
+          :prepend-icon="ordering ? mdiCheck : mdiSort"
+          :color="ordering ? 'primary' : undefined"
+          :variant="ordering ? 'flat' : 'tonal'"
+          :disabled="!ordering && (pending || items.length === 0)"
+          @click="toggleOrdering"
+        >
+          {{ ordering ? "Gotowe" : "Ułóż kolejkę" }}
+        </v-btn>
+      </template>
+    </AdminPageHead>
 
     <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
       {{ loadError }}
     </v-alert>
     <v-alert v-if="openTruncated" type="warning" variant="tonal" class="mb-4">
-      Otwartych zgłoszeń jest ponad {{ OPEN_CAP }} - lista i kolejka są
+      Otwartych zgłoszeń jest ponad {{ OPEN_CAP }} – lista i kolejka są
       niepełne.
     </v-alert>
     <v-alert
@@ -60,54 +61,58 @@
         class="mb-2"
       />
 
-      <template v-for="section in sections" :key="section.key">
-        <template v-if="section.count > 0">
-          <AdminSectionHead
-            :title="section.title"
-            :count="section.count"
-            :info="section.info"
-            :data-section="section.key"
-          >
-            <!-- Closed reports are the record of what was asked for, so they
-                 stay on the page - folded, because nobody has to read them
-                 again. -->
-            <v-btn
-              v-if="section.key === 'closed'"
-              variant="text"
-              size="small"
-              :prepend-icon="showClosed ? mdiChevronUp : mdiChevronDown"
-              data-toggle-closed
-              @click="showClosed = !showClosed"
+      <!-- One section gap between the three, as between the two lists of
+           ordering mode. -->
+      <div class="k-sections">
+        <template v-for="section in sections" :key="section.key">
+          <section v-if="section.count > 0">
+            <AdminSectionHead
+              :title="section.title"
+              :count="section.shown"
+              :info="section.info"
+              :data-section="section.key"
             >
-              {{
-                showClosed
-                  ? "Ukryj zamknięte"
-                  : `Pokaż zamknięte (${section.count})`
-              }}
-            </v-btn>
-          </AdminSectionHead>
+              <!-- Closed reports are the record of what was asked for, so
+                   they stay on the page - folded, because nobody has to read
+                   them again. -->
+              <v-btn
+                v-if="section.key === 'closed'"
+                variant="text"
+                size="small"
+                :prepend-icon="showClosed ? mdiChevronUp : mdiChevronDown"
+                data-toggle-closed
+                @click="showClosed = !showClosed"
+              >
+                {{
+                  showClosed
+                    ? "Ukryj zamknięte"
+                    : `Pokaż zamknięte (${section.shown})`
+                }}
+              </v-btn>
+            </AdminSectionHead>
 
-          <AdminRowList v-if="section.items.length > 0" class="mb-4">
-            <FeedbackReportRow
-              v-for="item in section.items"
-              :key="item.id"
-              :item="item"
-              :position="positions.get(item.id!)"
-              :fix="fixInfo.get(item.id!)"
-              :fix-targets="fixTargets.get(item.id!)"
-              :can-queue="section.key === 'inbox'"
-              :saving="saving[item.id!]"
-              :highlighted="targetId === item.id"
-              :expanded="openRows.has(item.id!)"
-              @update:expanded="(open) => setOpen(item.id!, open)"
-              @queue="moveTo(item, queue.length)"
-              @status="(adminStatus) => updateAdmin(item, { adminStatus })"
-              @draft="(note) => (draftNotes[item.id!] = note)"
-              @save-note="saveNote(item)"
-            />
-          </AdminRowList>
+            <AdminRowList v-if="section.items.length > 0" class="k-bleed-xs">
+              <FeedbackReportRow
+                v-for="item in section.items"
+                :key="item.id"
+                :item="item"
+                :position="positions.get(item.id!)"
+                :fix="fixInfo.get(item.id!)"
+                :fix-targets="fixTargets.get(item.id!)"
+                :can-queue="section.key === 'inbox'"
+                :saving="saving[item.id!]"
+                :highlighted="targetId === item.id"
+                :expanded="openRows.has(item.id!)"
+                @update:expanded="(open) => setOpen(item.id!, open)"
+                @queue="moveTo(item, queue.length)"
+                @status="(adminStatus) => updateAdmin(item, { adminStatus })"
+                @draft="(note) => (draftNotes[item.id!] = note)"
+                @save-note="saveNote(item)"
+              />
+            </AdminRowList>
+          </section>
         </template>
-      </template>
+      </div>
 
       <p
         v-if="!pending && items.length > 0 && openShown === 0"
@@ -115,11 +120,17 @@
       >
         Nic otwartego w tym widoku.
       </p>
-    </template>
 
-    <v-alert v-if="!pending && items.length === 0" type="info" variant="tonal">
-      Nic jeszcze nie wpłynęło.
-    </v-alert>
+      <!-- Here rather than for the whole page: ordering mode has its own empty
+           queue to say so, and the two stacked read as two messages. -->
+      <v-alert
+        v-if="!pending && items.length === 0"
+        type="info"
+        variant="tonal"
+      >
+        Nic jeszcze nie wpłynęło.
+      </v-alert>
+    </template>
 
     <v-snackbar v-model="snackbar" :timeout="4000" color="error">
       {{ snackbarText }}
@@ -137,8 +148,6 @@ import type { Feedback } from "~~/shared/model";
 
 definePageMeta({
   middleware: "admin",
-  // One column of one-line rows: past this the lines only get emptier.
-  maxWidth: 1100,
 });
 
 useHead({ title: "Zgłoszenia (Admin) - koryta.pl" });
@@ -151,6 +160,7 @@ const {
   pending,
   loadError,
   openTruncated,
+  closedTruncated,
   load: loadReports,
   sectionOf,
   queue,
@@ -231,6 +241,7 @@ const sections = computed(() => [
     info: "Jeszcze bez miejsca w kolejce. „Do kolejki” dopisuje zgłoszenie na koniec.",
     items: shownInbox.value,
     count: shownInbox.value.length,
+    shown: shownInbox.value.length,
   },
   {
     key: "queue",
@@ -238,6 +249,7 @@ const sections = computed(() => [
     info: "Od góry: co robimy najpierw. Kolejność zmienia się przyciskiem „Ułóż kolejkę”.",
     items: shownQueue.value,
     count: shownQueue.value.length,
+    shown: shownQueue.value.length,
   },
   {
     key: "closed",
@@ -246,6 +258,12 @@ const sections = computed(() => [
     items: showClosed.value ? shownClosed.value : [],
     // Counted folded too: the fold says how much is behind it.
     count: shownClosed.value.length,
+    // The list brings only the newest closed reports. When it came back full
+    // there may be older ones, so the number is what it brought and more,
+    // not a total that stops growing at the limit.
+    shown: closedTruncated.value
+      ? `${shownClosed.value.length}+`
+      : shownClosed.value.length,
   },
 ]);
 

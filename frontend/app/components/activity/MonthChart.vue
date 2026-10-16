@@ -1,60 +1,67 @@
 <template>
+  <!-- The section is the container its layout answers to, and the card is
+       inside it: a container query styles what is in the container, never the
+       container itself. -->
   <section
-    class="amc"
+    class="amc-host"
     aria-labelledby="amc-title"
     data-testid="activity-month-chart"
   >
-    <!-- The figure on a block of colour is what gives the top of the page a
-         focal point; the columns beside it stay one colour, so that block is
-         never mistaken for one of the kinds. -->
-    <div class="amc__pane">
-      <h2 id="amc-title" class="amc__eyebrow">Ostatnie 30 dni</h2>
-      <p class="amc__figure">
-        <span class="amc__total">
-          {{ stats ? polishNumber(stats.total) : "—"
-          }}<span
-            v-if="stats?.truncated.length"
-            title="Dolna granica: w tym okresie było więcej zmian, niż zdążyliśmy policzyć."
-            >+</span
-          >
-        </span>
-        <span v-if="stats" class="amc__who">
-          {{ nominativeNoun(stats.total, "zmiana", "zmiany", "zmian") }}
-          od
-          {{ polishCountingGenitive(stats.contributorCount, "osoby", "osób") }}
-        </span>
-      </p>
-      <NuxtLink to="/eksploruj/statystyki" class="amc__link">
-        Pełne statystyki
-        <v-icon :icon="mdiArrowRight" size="16" />
-      </NuxtLink>
-    </div>
-
-    <div class="amc__plot">
-      <p v-if="failed" class="amc__empty">Nie udało się pobrać wykresu.</p>
-      <p v-else-if="stats && !busiest" class="amc__empty">
-        W tym okresie nikt nic nie zmieniał.
-      </p>
-      <template v-else-if="stats">
-        <ClientOnly>
-          <apexchart
-            type="bar"
-            :height="HEIGHT"
-            :options="options"
-            :series="series"
-          />
-          <template #fallback>
-            <v-skeleton-loader type="image" :height="HEIGHT" />
-          </template>
-        </ClientOnly>
-        <!-- The columns say nothing to a screen reader; the one fact they
-             lead with does, and the full page has the table. -->
-        <p v-if="busiest" class="d-sr-only">
-          Najwięcej zmian było {{ fullDayLabel(busiest.date) }}:
-          {{ busiest.total }}.
+    <div class="amc">
+      <!-- The figure on a block of colour is what gives the top of the page a
+           focal point; the columns beside it stay one colour, so that block
+           is never mistaken for one of the kinds. -->
+      <div class="amc__pane">
+        <h2 id="amc-title" class="amc__eyebrow">Ostatnie 30 dni</h2>
+        <p class="amc__figure">
+          <span class="amc__total">
+            {{ stats ? polishNumber(stats.total) : "—"
+            }}<span
+              v-if="stats?.truncated.length"
+              title="Dolna granica: w tym okresie było więcej zmian, niż zdążyliśmy policzyć."
+              >+</span
+            >
+          </span>
+          <span v-if="stats" class="amc__who">
+            {{ nominativeNoun(stats.total, "zmiana", "zmiany", "zmian") }}
+            od
+            {{
+              polishCountingGenitive(stats.contributorCount, "osoby", "osób")
+            }}
+          </span>
         </p>
-      </template>
-      <v-skeleton-loader v-else type="image" :height="HEIGHT" />
+        <NuxtLink to="/eksploruj/statystyki" class="amc__link">
+          Pełne statystyki
+          <v-icon :icon="mdiArrowRight" size="16" />
+        </NuxtLink>
+      </div>
+
+      <div class="amc__plot">
+        <p v-if="failed" class="amc__empty">Nie udało się pobrać wykresu.</p>
+        <p v-else-if="stats && !busiest" class="amc__empty">
+          W tym okresie nikt nic nie zmieniał.
+        </p>
+        <template v-else-if="stats">
+          <ClientOnly>
+            <apexchart
+              type="bar"
+              :height="HEIGHT"
+              :options="options"
+              :series="series"
+            />
+            <template #fallback>
+              <v-skeleton-loader type="image" :height="HEIGHT" />
+            </template>
+          </ClientOnly>
+          <!-- The columns say nothing to a screen reader; the one fact they
+               lead with does, and the full page has the table. -->
+          <p v-if="busiest" class="d-sr-only">
+            Najwięcej zmian było {{ fullDayLabel(busiest.date) }}:
+            {{ busiest.total }}.
+          </p>
+        </template>
+        <v-skeleton-loader v-else type="image" :height="HEIGHT" />
+      </div>
     </div>
   </section>
 </template>
@@ -71,16 +78,16 @@ import {
 } from "~/composables/polish";
 import { fullDayLabel, monthChartOptions } from "~/utils/activityMonthChart";
 
-/** The last 30 days of changes over the /aktywnosc feed, and the way to the
- * full statistics.
+/** The last 30 days of changes on /aktywnosc - over the feed, or in the rail
+ * beside it on a wide screen - and the way to the full statistics.
  *
  * One column per day, in one colour. The kinds are what /eksploruj/statystyki
  * stacks, but at this height a kind with a few changes a day is a 1px sliver,
  * and two of the four hues would need a table beside the chart that a card
  * this size has no room for. The split is in the tooltip instead.
  *
- * Fetched in the browser like the feed under it, with the reader's token, and
- * never awaited: the page does not wait for its header. */
+ * Fetched in the browser like the feed, with the reader's token, and never
+ * awaited: the page does not wait for it. */
 const HEIGHT = 150;
 
 const { data, error } = useAsyncData<ActivityStats>(
@@ -113,15 +120,23 @@ const options = computed(() => monthChartOptions(daily.value));
 </script>
 
 <style scoped>
+/* Laid out by its own width, not the screen's: the same card is the full
+   column over the feed and a 336px block in /aktywnosc's rail on a wide
+   screen, where it stacks as it does on a phone. Pane beside plot from 560px
+   of card - a 208px pane leaves the plot room for thirty columns. */
+.amc-host {
+  container: amc / inline-size;
+}
+
 .amc {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
 }
 
-@media (min-width: 600px) {
+@container amc (min-width: 560px) {
   .amc {
     grid-template-columns: 208px minmax(0, 1fr);
   }
@@ -129,10 +144,12 @@ const options = computed(() => monthChartOptions(daily.value));
 
 /* White on ink-info is 6.3:1, surface-info on it 5.17:1. The pane rounds its
    own corners rather than the card clipping it, so the tooltip may run past
-   the card's edge instead of being cut off by it. */
+   the card's edge instead of being cut off by it. One pixel less than the
+   card's, inside its hairline. */
 .amc__pane {
+  --amc-r: calc(var(--k-r-card) - 1px);
   background: rgb(var(--v-theme-ink-info));
-  border-radius: 9px 9px 0 0;
+  border-radius: var(--amc-r) var(--amc-r) 0 0;
   color: rgb(var(--v-theme-on-ink-info));
   display: grid;
   gap: 4px 12px;
@@ -140,22 +157,22 @@ const options = computed(() => monthChartOptions(daily.value));
     "eyebrow link"
     "figure figure";
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 14px 16px 16px;
+  padding: 16px;
 }
 
-@media (min-width: 600px) {
+@container amc (min-width: 560px) {
   .amc__pane {
-    border-radius: 9px 0 0 9px;
+    border-radius: var(--amc-r) 0 0 var(--amc-r);
     grid-template-areas: "eyebrow" "figure" "link";
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
-    padding: 18px 20px;
+    padding: 20px;
   }
 }
 
 .amc__eyebrow {
   color: rgb(var(--v-theme-surface-info));
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   font-weight: 500;
   grid-area: eyebrow;
   line-height: 1.25rem;
@@ -171,7 +188,7 @@ const options = computed(() => monthChartOptions(daily.value));
   margin: 0;
 }
 
-@media (min-width: 600px) {
+@container amc (min-width: 560px) {
   .amc__figure {
     align-content: flex-start;
     flex-direction: column;
@@ -180,14 +197,14 @@ const options = computed(() => monthChartOptions(daily.value));
 }
 
 .amc__total {
-  font-size: 2.25rem;
+  font-size: 2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
   white-space: nowrap;
 }
 
-@media (min-width: 600px) {
+@container amc (min-width: 560px) {
   .amc__total {
     font-size: 3rem;
   }
@@ -195,17 +212,17 @@ const options = computed(() => monthChartOptions(daily.value));
 
 .amc__who {
   color: rgb(var(--v-theme-surface-info));
-  font-size: 0.9375rem;
+  font-size: var(--k-ui-size);
 }
 
-/* 44px to aim at on a phone, where it sits beside the heading, without the
-   padding pushing the heading down. */
+/* 44px to aim at in the stacked card - a phone, or the rail - where it sits
+   beside the heading, without the padding pushing the heading down. */
 .amc__link {
   align-items: center;
   align-self: start;
   color: rgb(var(--v-theme-on-ink-info));
   display: inline-flex;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   font-weight: 500;
   gap: 4px;
   grid-area: link;
@@ -217,7 +234,7 @@ const options = computed(() => monthChartOptions(daily.value));
   text-underline-offset: 3px;
 }
 
-@media (min-width: 600px) {
+@container amc (min-width: 560px) {
   .amc__link {
     align-self: end;
   }
@@ -237,7 +254,7 @@ const options = computed(() => monthChartOptions(daily.value));
   align-items: center;
   color: rgb(var(--v-theme-ink-neutral));
   display: flex;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   justify-content: center;
   margin: 0;
   min-height: 150px;
@@ -246,7 +263,7 @@ const options = computed(() => monthChartOptions(daily.value));
 /* The tooltip is apexcharts' markup, built in `monthChartOptions`. */
 .amc :deep(.amc-tip) {
   color: rgb(var(--v-theme-ink-neutral));
-  font-size: 0.8125rem;
+  font-size: var(--k-ui-size);
   line-height: 1.25rem;
   min-width: 190px;
   padding: 8px 12px;
@@ -254,7 +271,6 @@ const options = computed(() => monthChartOptions(daily.value));
 
 .amc :deep(.amc-tip__total) {
   color: rgb(var(--v-theme-ink-strong));
-  font-size: 0.9375rem;
   font-weight: 700;
 }
 

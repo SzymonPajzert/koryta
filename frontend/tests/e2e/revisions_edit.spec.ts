@@ -44,7 +44,8 @@ test.describe("Suggest node edits", () => {
     await page.goto(`/entity/person/${nodeId}`);
 
     // Wait to navigate to the person page (which might redirect to /osoba/...)
-    await page.waitForSelector("h2.text-h5", { timeout: 15000 });
+    // - the name is the page's one h1.
+    await page.waitForSelector("h1", { timeout: 15000 });
 
     // 6. Wait for the propose edit button
     const proposeEditButton = page.locator(
