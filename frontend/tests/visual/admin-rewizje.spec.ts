@@ -15,7 +15,7 @@ import { expectFitsThePhone } from "./phoneWidth";
 
 /** /admin/rewizje - the review queue, the pending edge changes and the entries
  * with a history, on one page - and one entry's history, as an admin works
- * through them.
+ * through them; and the dialog that asks why a proposal is turned down.
  *
  * Both pages are rendered in the browser only (`ssr: false` on /admin/**), so
  * every request they make can be answered from a fixture and every „N dni
@@ -115,6 +115,38 @@ test("rewizje-wedlug-wpisu", HUB, async ({ page }, testInfo) => {
       height: Math.ceil(queue.y + queue.height) + 16,
     },
   });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+test("rewizje-odrzucenie", HUB, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await freezeClock(page);
+  await answerHub(page);
+  await logIn(page, USERS.admin, "/admin/rewizje");
+
+  // Rejected from the row it is decided in: open it, then its „Odrzuć”.
+  const first = page.locator('[data-proposal-id="wizrew1"]');
+  await expect(first).toBeVisible({ timeout: 30_000 });
+  await first.locator("[data-row-toggle]").click();
+  await first.getByTestId("reject-wizrew1").click();
+
+  // Named after the entry, so a reviewer knows which one they are turning
+  // down; the reason still to be written, so „Odrzuć” waits for it.
+  const dialog = page.getByTestId("reject-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Barbara Przykładowa")).toBeVisible();
+  await expect(dialog.getByTestId("reject-confirm")).toBeDisabled();
+  await expect(
+    page.locator('[class*="-enter-active"], [class*="-leave-active"]'),
+  ).toHaveCount(0);
+
+  // The pointer off the button the click left it on, and its ripple played
+  // out.
+  await page.mouse.move(0, 0);
+  await expect(page.locator(".v-ripple__animation")).toHaveCount(0);
+  await page.evaluate(() => document.fonts.ready);
+  await expect(dialog).toHaveScreenshot("rewizje-odrzucenie.png");
 
   await expectFitsThePhone(page, testInfo);
 });
