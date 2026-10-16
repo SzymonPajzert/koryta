@@ -15,6 +15,7 @@ from analysis.scores import (
     PeopleScoresSuccession,
     PeopleScoresTurnover,
 )
+from analysis.scores.coverage import PeopleScoreCoverage
 from analysis.stats import Statistics
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.article.pipelines import (
@@ -80,6 +81,7 @@ PIPELINES = [
     CompanyScores,
     CruDump,
     CruUmowy,
+    PeopleScoreCoverage,
     PeopleScores,
     PeopleScoresCapture,
     PeopleScoresCoappointment,

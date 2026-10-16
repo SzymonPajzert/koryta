@@ -166,9 +166,11 @@ EXIT_FAILED = 1
 #: spent 65 minutes on the people alone and the kernel killed the run at 16 GB.
 #: DomainToRegion is the article branch's own input, copied from a gitignored
 #: files/domain_to_region.json the VM does not hold; only ArticlePersonMentions
-#: reads it.
+#: reads it. PeopleScoreCoverage reads every export since August, one more each
+#: day, for a question asked by hand; nothing in the night reads it.
 EXCLUDED = (
     "KorytaDiffer",
+    "PeopleScoreCoverage",
     "DomainToRegion",
     "ProcessWikiNer",
     "ArticleDoneUrls",
