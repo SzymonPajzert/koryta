@@ -158,6 +158,7 @@ def test_start_writes_the_whole_run_and_the_job_record(clock, capsys):
         "phase": "biuletyn",
         "stopReason": None,
         "errors": [],
+        "warnings": [],
         "exitCode": None,
         "summaryPath": None,
         "version": None,
@@ -338,6 +339,7 @@ def test_finish_records_how_the_run_ended(clock):
         "partial",
         stop_reason="deadline",
         errors=["https://api-krs/1: timeout"],
+        warnings=["invariants: a::test_b: 25 przy znanych 24"],
         exit_code=75,
         counters={"answered": 30},
         done=31,
@@ -353,6 +355,7 @@ def test_finish_records_how_the_run_ended(clock):
         "heartbeatAt": end,
         "stopReason": "deadline",
         "errors": ["https://api-krs/1: timeout"],
+        "warnings": ["invariants: a::test_b: 25 przy znanych 24"],
         "exitCode": 75,
         "summaryPath": "gs://koryta-pl-sharedcache/jobs/krs_scrape_free/runs/x.json",
         "progress": {"done": 31, "total": 40, "unit": "firm"},
@@ -388,16 +391,18 @@ def test_only_the_first_finish_counts(clock):
     assert run.state == "failed"
 
 
-def test_errors_are_capped_in_number_and_length(clock):
+def test_errors_and_warnings_are_capped_in_number_and_length(clock):
     client = Client()
     run = a_run(client, clock).start()
+    lines = [f"{n}:" + "x" * 1000 for n in range(30)]
 
-    run.finish("failed", errors=[f"{n}:" + "x" * 1000 for n in range(30)])
+    run.finish("failed", errors=lines, warnings=lines)
 
-    errors = client.docs[RUN]["errors"]
-    assert len(errors) == ERRORS_KEPT
-    assert all(len(error) == ERROR_CHARS for error in errors)
-    assert errors[0].startswith("0:")
+    for field in ("errors", "warnings"):
+        kept = client.docs[RUN][field]
+        assert len(kept) == ERRORS_KEPT
+        assert all(len(line) == ERROR_CHARS for line in kept)
+        assert kept[0].startswith("0:")
 
 
 def test_finish_refuses_a_state_that_is_not_an_ending(clock):
