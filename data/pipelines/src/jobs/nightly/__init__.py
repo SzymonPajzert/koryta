@@ -48,11 +48,12 @@ The steps, in order (`STEPS`):
                 --companies-only: the companies the people it is about to
                 send name that tonight's export has no page for, created
                 first, so that every job goes up with its person
-    people      koryta_people_import --scope priority --max-uploads 10: new
+    people      koryta_people_import --scope priority --max-uploads 100: new
                 hires first, then the pages of the people rejestr.io was paid
                 for this week, then the pages with an open note, then at most
                 --max-odpis-only-current (10) people only an odpis names in a
-                public post that is not new, then published pages, then the
+                public post that is not new and --max-rejestrio-current (50)
+                with a rejestr.io entry in one, then published pages, then the
                 rest; of all those pages at most --max-published (10) that
                 are published, whichever tier sends them
     scores      koryta_score_import: every scoring model rebuilt over the
@@ -1382,6 +1383,8 @@ class Night:
             str(self.args.recent_days),
             "--max-odpis-only-current",
             str(self.args.max_odpis_only_current),
+            "--max-rejestrio-current",
+            str(self.args.max_rejestrio_current),
             "--max-published",
             str(self.args.max_published),
             "--max-minutes",
@@ -1461,7 +1464,8 @@ class Night:
         people = (
             "koryta_people_import --scope priority --max-uploads "
             f"{self.args.max_uploads} --max-odpis-only-current "
-            f"{self.args.max_odpis_only_current} --max-published "
+            f"{self.args.max_odpis_only_current} --max-rejestrio-current "
+            f"{self.args.max_rejestrio_current} --max-published "
             f"{self.args.max_published}"
             + (" --dry-run" if self.args.people_dry_run else "")
             # Only a night with the export step has an export to name.
@@ -1675,6 +1679,15 @@ def parser() -> argparse.ArgumentParser:
         help="Pages the night creates at most for people only an odpis names "
         "in a public post that is not new, within --max-uploads. "
         "Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--max-rejestrio-current",
+        type=positive_int,
+        default=50,
+        help="Pages the night creates at most for people with a rejestr.io "
+        "entry in a public post - any post - that is not new, within "
+        "--max-uploads; 0 makes none. Default: %(default)s, Szymon's choice "
+        "of 2026-10-16.",
     )
     parser.add_argument(
         "--max-published",
