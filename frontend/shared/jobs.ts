@@ -442,7 +442,7 @@ export const JOBS: readonly JobDefinition[] = [
     command: "koryta_score_import",
     heartbeatMinutes: 15,
     notes: [
-      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 04:00 jeszcze ich nie ma – nowa osoba trafia do kolejki tego samego ranka.",
+      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 04:00 jeszcze ich nie ma - nowa osoba trafia do kolejki tego samego ranka.",
       "Model, który nikogo nie ocenił, nie jest wysyłany: wycofałby wszystkie swoje głosy.",
     ],
   },
@@ -460,9 +460,9 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "triggered",
     title: "Wysyłka osób na żądanie",
     summary:
-      "Przycisk na stronie firmy albo osoby: paczki jej ludzi – albo tej jednej osoby – z najnowszych danych, wysłane przez /api/ingest/person. Osobom spółki, których serwis nie ma, zakłada strony (nieopublikowane); osobie nie zakłada żadnej.",
+      "Przycisk na stronie firmy albo osoby: paczki jej ludzi - albo tej jednej osoby - z najnowszych danych, wysłane przez /api/ingest/person. Osobom spółki, których serwis nie ma, zakłada strony (nieopublikowane); osobie nie zakłada żadnej.",
     runsOn:
-      "VM koryta-nightly, którą strona włącza na żądanie (koryta-requests.service); bez tego – w nocy",
+      "VM koryta-nightly, którą strona włącza na żądanie (koryta-requests.service); bez tego - w nocy",
     command: "koryta_job_requests --once",
     // Building the payloads says nothing until it is done: the export and
     // the company's people are read in one step.
@@ -474,7 +474,7 @@ export const JOBS: readonly JobDefinition[] = [
     notes: [
       "Porównuje paczki z porannym eksportem bazy: wysyła tylko to, co zmieniłoby stronę, i nie zgaduje po samym nazwisku, gdy dwie osoby się nie odróżniają.",
       "Zlecenie sprzed porannego eksportu (północ-04:00) czeka na niego w kolejce: maszyna się wyłącza, a robi je po 04:15, gdy włącza się na noc.",
-      "Maszyna wyłącza się sama 10 minut po ostatniej wysyłce – chyba że ktoś jest zalogowany albo zaraz zacznie się noc.",
+      "Maszyna wyłącza się sama 10 minut po ostatniej wysyłce - chyba że ktoś jest zalogowany albo zaraz zacznie się noc.",
     ],
   },
   {
@@ -485,7 +485,7 @@ export const JOBS: readonly JobDefinition[] = [
     summary:
       "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, dodaje firmy, których brakuje osobom tej nocy, wysyła do 100 osób na stronę, a potem oceny modeli.",
     runsOn:
-      "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza – data/nightly",
+      "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza - data/nightly",
     command: "koryta_nightly",
     schedule: { dailyAt: "04:30", timeZone: WARSAW },
     // Przeliczenie potoków to jeden krok do dwóch i pół godziny, w którym noc
@@ -494,7 +494,7 @@ export const JOBS: readonly JobDefinition[] = [
     graceMinutes: 30,
     tasks: ["merge-nightly-vm", "create-nightly-vm", "first-night-on-the-vm"],
     notes: [
-      "Krok, który się nie uda, nie kończy nocy – wstrzymuje tylko kroki zależne. Osób nie wysyła bez dzisiejszej kopii bazy, bez udanego przeliczenia albo gdy test, który przechodził poprzedniej nocy, dziś nie przechodzi – taka noc kończy się jako „Wstrzymane kroki” i wymaga uwagi.",
+      "Krok, który się nie uda, nie kończy nocy - wstrzymuje tylko kroki zależne. Osób nie wysyła bez dzisiejszej kopii bazy, bez udanego przeliczenia albo gdy test, który przechodził poprzedniej nocy, dziś nie przechodzi - taka noc kończy się jako „Wstrzymane kroki” i wymaga uwagi.",
       "Podsumowanie każdej nocy jest w koryta-pl-sharedcache/jobs/nightly/runs/, a cały log w jobs/nightly/logs/.",
     ],
   },
@@ -520,7 +520,7 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "scheduled",
     title: "Zapytania do rejestr.io (płatne)",
     summary:
-      "Co noc kupuje z rejestr.io tylko to, czego nie dały bezpłatne źródła: powiązania osób oznaczonych jako interesujące i firm, których odpisu pełnego nie udało się pobrać – po 0,05 zł za zapytanie, najwyżej 50 zapytań dziennie.",
+      "Co noc kupuje z rejestr.io tylko to, czego nie dały bezpłatne źródła: powiązania osób oznaczonych jako interesujące i firm, których odpisu pełnego nie udało się pobrać - po 0,05 zł za zapytanie, najwyżej 50 zapytań dziennie.",
     runsOn:
       "Krok nocy na VM koryta-nightly (koryta_nightly), po odpisach, a przed przeliczeniem potoków; ręcznie cała kolejka, z pytaniem przed każdym zakupem",
     command: "koryta_scrape_krs_paid --scope fallback --max-calls 50",
@@ -534,7 +534,7 @@ export const JOBS: readonly JobDefinition[] = [
       "merge-nightly-rejestrio-fallback",
     ],
     notes: [
-      "Limit jest dzienny: liczy też to, co tego dnia kupiło wcześniejsze uruchomienie. Co zostawi na jutro, kończy uruchomienie jako „niedokończony”; odmowa konta (zły klucz, brak środków) – jako błąd.",
+      "Limit jest dzienny: liczy też to, co tego dnia kupiło wcześniejsze uruchomienie. Co zostawi na jutro, kończy uruchomienie jako „niedokończony”; odmowa konta (zły klucz, brak środków) - jako błąd.",
       "Bez klucza rejestr.io (sekret rejestr-io-key) krok nocy jest pomijany i nic nie zgłasza.",
     ],
   },
@@ -543,11 +543,11 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "scheduled",
     title: "Odpisy pełne z wyszukiwarki KRS",
     summary:
-      "Pobiera bezpłatne odpisy pełne (PDF) z ministerialnej wyszukiwarki KRS – dla firm z kolejki, z pliku albo z grafu – i z nich bierze daty, od kiedy i do kiedy kto zasiadał w zarządach.",
-    runsOn: "Ręcznie na predatorze – jeden crawler na adres IP",
+      "Pobiera bezpłatne odpisy pełne (PDF) z ministerialnej wyszukiwarki KRS - dla firm z kolejki, z pliku albo z grafu - i z nich bierze daty, od kiedy i do kiedy kto zasiadał w zarządach.",
+    runsOn: "Ręcznie na predatorze - jeden crawler na adres IP",
     command: "koryta_krs_odpis --graph --changed-since <dzień>",
     scheduleNote:
-      "Cotygodniowe odświeżenie firm z biuletynu (--graph --changed-since) – pora do ustalenia",
+      "Cotygodniowe odświeżenie firm z biuletynu (--graph --changed-since) - pora do ustalenia",
     heartbeatMinutes: 15,
     notes: [
       "Kończy się sam, gdy wyszukiwarka zwalnia albo przestaje odpowiadać; resztę bierze następne uruchomienie (wtedy „niedokończony”). 20 prób z rzędu bez odpowiedzi to błąd.",
@@ -558,7 +558,7 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "scheduled",
     title: "Przegląd rejestru KRS (właściciele)",
     summary:
-      "Czyta odpisy aktualne z api-krs, szukając spółek samorządów i Skarbu Państwa, do których nie prowadzi żadne inne wejście crawla: co noc każdą spółkę, którą biuletyn podaje jako nowo zarejestrowaną, a resztę rejestru – od najstarszych numerów – w tempie, które dopiero trzeba ustalić.",
+      "Czyta odpisy aktualne z api-krs, szukając spółek samorządów i Skarbu Państwa, do których nie prowadzi żadne inne wejście crawla: co noc każdą spółkę, którą biuletyn podaje jako nowo zarejestrowaną, a resztę rejestru - od najstarszych numerów - w tempie, które dopiero trzeba ustalić.",
     runsOn:
       "Krok nocy na VM koryta-nightly (koryta_nightly), po bezpłatnym KRS; zaległości ręcznie, partiami",
     command:
@@ -569,7 +569,7 @@ export const JOBS: readonly JobDefinition[] = [
     graceMinutes: 90,
     tasks: ["decide-register-sweep-pace"],
     notes: [
-      "Nowych rejestracji jest 230-310 w dzień roboczy, w weekend żadnej – to dwie, trzy minuty. Noc bez nowych też się zgłasza, z zerem odczytów.",
+      "Nowych rejestracji jest 230-310 w dzień roboczy, w weekend żadnej - to dwie, trzy minuty. Noc bez nowych też się zgłasza, z zerem odczytów.",
       "Zaległości (ok. 700 tys. numerów nigdy nieczytanych) noc czyta dopiero z --register-backlog, którego tempo czeka na decyzję. Po 25 minutach krok sam kończy i resztę zostawia na następną noc (wtedy „niedokończony”).",
     ],
   },
@@ -583,7 +583,7 @@ export const JOBS: readonly JobDefinition[] = [
     command:
       "go run ./cmd/compressor -incremental -hostname rejestr.io (i -hostname api-krs.ms.gov.pl)",
     scheduleNote:
-      "Co noc, na początku nocy – po północy UTC bierze cały poprzedni dzień; uruchomień jeszcze nie raportuje",
+      "Co noc, na początku nocy - po północy UTC bierze cały poprzedni dzień; uruchomień jeszcze nie raportuje",
     heartbeatMinutes: 30,
     probe: "compressedMirror",
     mirrorHosts: ["rejestr.io", "api-krs.ms.gov.pl"],
@@ -618,7 +618,7 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "scheduled",
     title: "Import osób na stronę",
     summary:
-      "Buduje paczki osób z najnowszych danych KRS i kopii bazy i wysyła je przez /api/ingest/person – w nocy najwyżej 100: najpierw świeżo zatrudnionych w spółkach publicznych, których na stronie nie ma, potem zmiany na stronach opublikowanych, potem na pozostałych.",
+      "Buduje paczki osób z najnowszych danych KRS i kopii bazy i wysyła je przez /api/ingest/person - w nocy najwyżej 100: najpierw świeżo zatrudnionych w spółkach publicznych, których na stronie nie ma, potem zmiany na stronach opublikowanych, potem na pozostałych.",
     runsOn:
       "Krok nocy na VM koryta-nightly (koryta_nightly), po przeliczeniu potoków i testach; ręcznie koryta_people_import",
     command: "koryta_people_import --scope priority --max-uploads 100",
@@ -641,7 +641,7 @@ export const JOBS: readonly JobDefinition[] = [
     title: "Crawl artykułów",
     summary:
       "Pobiera artykuły z portali według kolejki w Postgresie i zapisuje je partiami do archiwum crawla.",
-    runsOn: "Ręcznie – ostatnio u mp; kolejka w Postgresie poza repozytorium",
+    runsOn: "Ręcznie - ostatnio u mp; kolejka w Postgresie poza repozytorium",
     command: "koryta_crawl",
     heartbeatMinutes: 15,
     tasks: ["decide-article-crawl-restart"],
@@ -1239,9 +1239,9 @@ function capturesHealth(
       status: "stalled",
       detail: `${pl.format(stalled.length)} ${counted(
         stalled.length,
-        "strona utknęła – nic jej już nie podejmie.",
-        "strony utknęły – nic ich już nie podejmie.",
-        "stron utknęło – nic ich już nie podejmie.",
+        "strona utknęła - nic jej już nie podejmie.",
+        "strony utknęły - nic ich już nie podejmie.",
+        "stron utknęło - nic ich już nie podejmie.",
       )}`,
     };
   }
@@ -1272,7 +1272,7 @@ export function jobHealth(
   if (view.unavailable && !runs.length && !view.probe) {
     return {
       status: "unknown",
-      detail: "Nie udało się wczytać uruchomień – powód jest nad listą.",
+      detail: "Nie udało się wczytać uruchomień - powód jest nad listą.",
     };
   }
   // Captures are a stream of pages, any of which can be stuck behind newer

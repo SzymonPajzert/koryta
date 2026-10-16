@@ -61,7 +61,7 @@
                   >„Wykaz spółek z udziałem Skarbu Państwa”</a
                 >
                 Prokuratorii Generalnej Rzeczypospolitej Polskiej, z serwisu
-                dane.gov.pl – każdą spółkę, której numer NIP jest w wykazie,
+                dane.gov.pl - każdą spółkę, której numer NIP jest w wykazie,
                 oznaczamy jako spółkę z udziałem państwa;
               </li>
               <li>
@@ -71,7 +71,7 @@
                   rel="noopener"
                   >rejestr TERYT</a
                 >
-                Głównego Urzędu Statystycznego – z niego pochodzą nazwy i kody
+                Głównego Urzędu Statystycznego - z niego pochodzą nazwy i kody
                 województw, powiatów i gmin;
               </li>
               <li>
@@ -81,7 +81,7 @@
                   rel="noopener"
                   >baza kodów pocztowych</a
                 >
-                serwisu GeoNames – po kodzie pocztowym i miejscowości z adresu
+                serwisu GeoNames - po kodzie pocztowym i miejscowości z adresu
                 ustalamy gminę, w której spółka ma siedzibę.
               </li>
             </ul>

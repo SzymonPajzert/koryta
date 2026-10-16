@@ -3,13 +3,13 @@
        both the page becoming truthful and the proof that it has hydrated, so
        a filter clicked before that would silently do nothing. -->
   <div class="w-100 pa-2 pb-0" :data-qa-loaded="loaded">
-    <h1 class="text-h5 text-sm-h4 mb-2">QA – zmiany do sprawdzenia</h1>
+    <h1 class="text-h5 text-sm-h4 mb-2">QA - zmiany do sprawdzenia</h1>
     <p class="text-body-2 text-medium-emphasis mb-4">
       Lista zmian na stronie, od najnowszej. Przejdź krokami z wpisu, a potem
-      powiedz, czy działa – i co poprawić. Liczy się Twoje sprawdzenie: wpis
+      powiedz, czy działa - i co poprawić. Liczy się Twoje sprawdzenie: wpis
       przechodzi do sprawdzonych dopiero, gdy Ty go ocenisz, nawet jeśli ktoś
       inny już go widział. Twoje uwagi widzą inni zalogowani, a zgłoszony
-      problem trafia do zespołu tą samą drogą, co przycisk „Zgłoś” – nic nie
+      problem trafia do zespołu tą samą drogą, co przycisk „Zgłoś” - nic nie
       trzeba pisać drugi raz.
     </p>
 
@@ -26,7 +26,7 @@
     >
       Zgłosiłeś problem w {{ counts.issue }} wpisach.
       <template v-if="ownProblemsAsReports">
-        Tutaj problem z otwartym zgłoszeniem jest tym zgłoszeniem – gdy już
+        Tutaj problem z otwartym zgłoszeniem jest tym zgłoszeniem - gdy już
         działa, zmień ocenę we wpisie, do którego prowadzi „QA: …” przy
         zgłoszeniu.
       </template>
@@ -172,7 +172,7 @@ definePageMeta({
   robots: false,
 });
 
-useHead({ title: "QA – zmiany do sprawdzenia" });
+useHead({ title: "QA - zmiany do sprawdzenia" });
 
 const { user, isAdmin } = useAuthState();
 const {
@@ -330,7 +330,7 @@ const teamSection = computed(() => {
     return {
       id: "fixed-reports",
       title: "Zgłoszenia do zamknięcia",
-      info: "Otwarte zgłoszenia, które zmiany w tej wersji strony mają poprawiać – wpisem z tej listy albo samą zmianą w kodzie. Sprawdź każde tam, gdzie je zgłoszono, i zamknij, jeśli działa.",
+      info: "Otwarte zgłoszenia, które zmiany w tej wersji strony mają poprawiać - wpisem z tej listy albo samą zmianą w kodzie. Sprawdź każde tam, gdzie je zgłoszono, i zamknij, jeśli działa.",
       reports: fixedReports.value,
       empty: "Żadne otwarte zgłoszenie nie czeka na sprawdzenie poprawki.",
       link: undefined,
@@ -340,7 +340,7 @@ const teamSection = computed(() => {
     return {
       id: "qa-reports",
       title: "Zgłoszenia z QA",
-      info: "Każdy problem zgłoszony na tej liście trafia do panelu jako zgłoszenie. Tu są otwarte, od wszystkich sprawdzających – Twoje też – z wpisem, którego dotyczą. Status, notatka i kolejka działają tu tak samo jak w panelu zgłoszeń.",
+      info: "Każdy problem zgłoszony na tej liście trafia do panelu jako zgłoszenie. Tu są otwarte, od wszystkich sprawdzających - Twoje też - z wpisem, którego dotyczą. Status, notatka i kolejka działają tu tak samo jak w panelu zgłoszeń.",
       reports: qaReports.value,
       empty: "Nie ma otwartych zgłoszeń z QA.",
       link: {
@@ -480,7 +480,7 @@ async function save(itemId: string, status: QaCheckStatus, feedback: string) {
       : forwarded
         ? status === "ok"
           ? "Zapisane i wysłane do zespołu"
-          : "Zgłoszone – problem trafił do zespołu"
+          : "Zgłoszone - problem trafił do zespołu"
         : "Zapisane, ale nie udało się wysłać do zespołu";
     snackbarColor.value =
       forwarded || !reported ? "ink-success" : "ink-warning";

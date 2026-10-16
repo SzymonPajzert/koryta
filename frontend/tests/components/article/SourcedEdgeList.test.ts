@@ -69,7 +69,7 @@ describe("ArticleSourcedEdgeList", () => {
 
     const row = wrapper.get('[data-testid="sourced-edge-edge-1"]');
     expect(row.text()).toContain("prezes zarządu");
-    expect(row.text()).toContain("2024-03-01 – obecnie");
+    expect(row.text()).toContain("2024-03-01 - obecnie");
     expect(row.text()).toContain("szkic");
     expect(row.text()).toContain("2 źródła");
   });

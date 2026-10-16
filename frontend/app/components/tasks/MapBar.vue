@@ -35,7 +35,7 @@
         <span class="task-bar__count">{{ mark.count }}</span>
       </button>
       <span v-if="marks.length === 0" class="task-bar__hint">
-        Tu będą cele i zwinięte zadania – strzałkę można upuścić na nie z
+        Tu będą cele i zwinięte zadania - strzałkę można upuścić na nie z
         każdego miejsca mapy.
       </span>
     </div>

@@ -5,22 +5,15 @@ import {
 } from "~/utils/relationPeriod";
 
 describe("relationPeriodLabel", () => {
-  it("joins the two ends with an en dash, not a hyphen", () => {
-    // „2014-11-06 - 2017-08-25” read as one long number broken by a minus.
-    expect(relationPeriodLabel("2014-11-06", "2017-08-25")).not.toContain(
-      " - ",
-    );
-  });
-
   it("reads both ends of a closed period", () => {
     expect(relationPeriodLabel("2014-11-06", "2017-08-25")).toBe(
-      "2014-11-06 – 2017-08-25",
+      "2014-11-06 - 2017-08-25",
     );
   });
 
   it("calls an open period ongoing", () => {
     expect(relationPeriodLabel("2014-11-06", undefined)).toBe(
-      "2014-11-06 – obecnie",
+      "2014-11-06 - obecnie",
     );
   });
 
@@ -33,7 +26,7 @@ describe("relationPeriodLabel", () => {
     // template used to interpolate it straight into the caption - which is how
     // 117 published people came to read "undefined - obecnie". A missing start
     // is unknown, not today, so it is a "?" rather than "obecnie".
-    expect(relationPeriodLabel(undefined, "2017-08-25")).toBe("? – 2017-08-25");
+    expect(relationPeriodLabel(undefined, "2017-08-25")).toBe("? - 2017-08-25");
   });
 
   it("says nothing at all when no date was recorded", () => {

@@ -121,7 +121,7 @@
           >
             {{ periodOf(edge).start
             }}<template v-if="periodOf(edge).end !== undefined">
-              –
+              -
               <strong v-if="periodOf(edge).current">{{
                 periodOf(edge).end
               }}</strong>

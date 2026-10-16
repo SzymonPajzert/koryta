@@ -34,9 +34,9 @@
       <p class="text-body-2 mb-4 lede" data-testid="queue-brief">
         Kolejka pokazuje osoby, o których wiemy, że mają posadę w spółce albo
         instytucji publicznej. Twoje zadanie: sprawdzić, czy tę posadę tłumaczy
-        polityka – partia, kampania, rodzina, znajomość z ratusza – i
+        polityka - partia, kampania, rodzina, znajomość z ratusza - i
         zagłosować. <strong>Głos w górę</strong> znaczy „moim zdaniem ta osoba
-        powinna być oznaczona jako koryciarz”, <strong>głos w dół</strong> –
+        powinna być oznaczona jako koryciarz”, <strong>głos w dół</strong> -
         „moim zdaniem nie powinna”. Niczego tym nie publikujesz: głosy i notatki
         układają kolejkę i to na nich pracuje redakcja.
       </p>
@@ -223,7 +223,7 @@
             </ol>
             <p class="text-caption text-medium-emphasis mb-0 mt-2">
               Kiedy skończysz, kliknij „Następna osoba”. Żaden krok nie jest
-              obowiązkowy – jeśli o kimś nic nie ma, po prostu przejdź dalej.
+              obowiązkowy - jeśli o kimś nic nie ma, po prostu przejdź dalej.
             </p>
           </div>
         </v-expand-transition>
@@ -279,7 +279,7 @@
               <h3 class="text-h6">Historia powiązań</h3>
             </div>
             <p class="k-lead mb-0">
-              Nie znamy jeszcze żadnych powiązań tej osoby – tym bardziej warto
+              Nie znamy jeszcze żadnych powiązań tej osoby - tym bardziej warto
               poszukać.
             </p>
           </div>
@@ -497,7 +497,7 @@ const steps = computed(() => [
     label: "Eksploruj",
     done: actionExplored.value,
     hint:
-      "Kliknij „Eksploruj” w wierszu tabeli – otworzą się wyszukiwarki z " +
+      "Kliknij „Eksploruj” w wierszu tabeli - otworzą się wyszukiwarki z " +
       "informacjami o tej osobie. Szukasz jednego: czy coś łączy ją z " +
       "polityką. Jeśli nic się nie otwiera, wyłącz blokowanie wyskakujących " +
       "okien.",
@@ -508,7 +508,7 @@ const steps = computed(() => [
     done: actionNoted.value,
     hint:
       "Zapisz w sekcji „Notatki” to, co znalazłeś/aś, razem z linkiem do " +
-      "źródła – pod nagłówkiem „Notatki” są przykłady, jak taka notatka " +
+      "źródła - pod nagłówkiem „Notatki” są przykłady, jak taka notatka " +
       "wygląda. Nawet „szukałem/am i nic nie ma” jest coś warte: następna " +
       "osoba nie zacznie od zera.",
   },

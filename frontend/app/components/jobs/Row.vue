@@ -128,7 +128,7 @@
           >
             <code>{{ host.host }}</code>
             <template v-if="host.through">
-              – lustro do <strong>{{ host.through }}</strong>
+              - lustro do <strong>{{ host.through }}</strong>
               <template v-if="host.archivedAt">
                 · zarchiwizowane {{ shortWarsawTime(host.archivedAt, now) }}
               </template>
@@ -346,7 +346,7 @@ const captureStatsText = computed(() => {
  * has not yet, a probe job never will, and nobody has captured anything. */
 const emptyText = computed(() => {
   if (props.view.unavailable) {
-    return "Nie udało się wczytać uruchomień – powód jest nad listą.";
+    return "Nie udało się wczytać uruchomień - powód jest nad listą.";
   }
   const probe = props.definition.probe;
   if (probe) return jobProbeConfig[probe].source;

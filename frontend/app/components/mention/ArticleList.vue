@@ -11,7 +11,7 @@
   >
     <template #lead>
       <p class="k-lead" data-testid="node-mentions-lead">
-        Teksty prasowe, w których pada ta nazwa – z artykułów przeanalizowanych
+        Teksty prasowe, w których pada ta nazwa - z artykułów przeanalizowanych
         przez model i ze źródeł dodanych w notatkach oraz przy powiązaniach.
       </p>
     </template>

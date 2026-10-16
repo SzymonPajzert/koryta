@@ -13,7 +13,7 @@
       <v-tooltip activator="parent" location="bottom" max-width="280">
         {{
           flagged
-            ? `Cofnij zgłoszenie – fakt jednak dotyczy ${personName}.`
+            ? `Cofnij zgłoszenie - fakt jednak dotyczy ${personName}.`
             : `Zgłoś, że ten fakt nie dotyczy ${personName} z bazy, tylko kogoś o tym samym nazwisku.`
         }}
       </v-tooltip>

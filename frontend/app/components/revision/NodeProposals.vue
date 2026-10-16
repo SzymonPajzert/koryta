@@ -160,7 +160,7 @@ const pending = computed(
 
 const subtitle = computed(() =>
   pending.value > 0
-    ? `${polishCounting(pending.value, "propozycja czeka", "propozycje czekają", "propozycji czeka")} na redakcję – do tego czasu strona pokazuje wersję sprzed zmiany.`
+    ? `${polishCounting(pending.value, "propozycja czeka", "propozycje czekają", "propozycji czeka")} na redakcję - do tego czasu strona pokazuje wersję sprzed zmiany.`
     : "Redakcja rozpatrzyła wszystko, co zgłosiłeś do tej strony.",
 );
 

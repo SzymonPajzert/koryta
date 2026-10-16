@@ -95,10 +95,10 @@
           wraca o 04:15, na noc.
         </template>
         <template v-else-if="run.waitingFor === 'night' && !stalled">
-          Maszynę zajmuje teraz noc – zlecenie ruszy zaraz po niej.
+          Maszynę zajmuje teraz noc - zlecenie ruszy zaraz po niej.
         </template>
         <template v-else-if="run.dispatch?.ok">
-          Maszynę uruchomiono {{ shortWarsawTime(run.dispatch.at, now) }} –
+          Maszynę uruchomiono {{ shortWarsawTime(run.dispatch.at, now) }} -
           zacznie w minutę, dwie.
         </template>
         <template v-else-if="run.dispatch?.error">
@@ -106,7 +106,7 @@
           poczeka do nocy.
         </template>
         <template v-else>
-          Strona nie uruchamia maszyny sama – zlecenie zrobi najbliższa noc
+          Strona nie uruchamia maszyny sama - zlecenie zrobi najbliższa noc
           (04:30).
         </template>
         <!-- Only where the site starts the VM at all: with dispatch off,
@@ -159,7 +159,7 @@
           <dd>
             {{ requestedAt }}
             <template v-if="run.request.byName">
-              – {{ run.request.byName }}</template
+              - {{ run.request.byName }}</template
             >
           </dd>
         </template>
@@ -319,7 +319,7 @@ const statusText = computed(() => {
     case "queued":
       if (stalled.value) return `Czeka od ${since} i nikt go nie podjął.`;
       return current.waitingFor
-        ? `Czeka ${RUN_WAITING_TEXT[current.waitingFor]} – w kolejce od ${since}.`
+        ? `Czeka ${RUN_WAITING_TEXT[current.waitingFor]} - w kolejce od ${since}.`
         : `Czeka na maszynę od ${since}.`;
     case "running":
       return stalled.value
@@ -329,7 +329,7 @@ const statusText = computed(() => {
       // A count sent nothing, and "0 z 15 osób" would read as a send that
       // stalled at the start.
       return current.request?.dryRun
-        ? "Policzone – nic nie wysłano."
+        ? "Policzone - nic nie wysłano."
         : `Gotowe${progress}.`;
     case "partial":
       return `Przerwane z zaległościami${progress}.`;
