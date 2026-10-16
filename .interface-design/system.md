@@ -74,9 +74,13 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   Columns are divided by thin lines, because without them it is sometimes
   hard to read (2026-10-15). The summary line is aligned sub-columns, each
   divided by the same neutral hairline: count | latest post | date | years.
-- **The wordmark „koryta.pl” is set entirely in bold**, in the app bar and
-  in the home footer, not „koryta” bold and „.pl” regular. Szymon: "I prefer
-  the whole koryta.pl to be bolded" (2026-10-15).
+- **The wordmark „koryta.pl” is set entirely in bold** in the app bar, not
+  „koryta” bold and „.pl” regular. Szymon: "I prefer the whole koryta.pl to
+  be bolded" (2026-10-15).
+- **The footer stays as it was before the redesign** (logo, the sentence
+  about the project, the socials and the two link columns on the sage band),
+  not the slim row of round 1. Szymon: "yes for now, we can redesign it
+  later" (2026-10-16).
 - **The top bar is ruled off by a firm line, and lifted by a soft shadow once
   the page scrolls** (option „A + B”, picked 2026-10-15 from three rendered
   options). The line is a neutral black at .2, firmer than the site's .12
