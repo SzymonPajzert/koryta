@@ -93,13 +93,12 @@ export const QA_ITEMS: QaItem[] = [
   },
   {
     id: "cichy-pasek-i-stopka",
-    title: "Niższy górny pasek z „Zgłoś”, smukła stopka",
+    title: "Niższy górny pasek z „Zgłoś”",
     description:
-      "Górny pasek ma 56 px zamiast 64, cienką linię zamiast cienia i menu pisane zwykłymi literami. „Zgłoś” nie wisi już nad stroną, tylko jest w pasku: słowo na komputerze, ikona na telefonie. Stopka na wszystkich stronach poza główną to jeden wiersz na zielonym pasku, a na głównej jest o połowę niższa. Pasek zalogowanego jest niższy i zaczyna się od lewej krawędzi strony.",
+      "Górny pasek ma 56 px zamiast 64, wyraźną linię zamiast cienia (cień pojawia się dopiero po przewinięciu) i menu pisane zwykłymi literami. „Zgłoś” nie wisi już nad stroną, tylko jest w pasku: słowo na komputerze, ikona na telefonie. Pasek zalogowanego jest niższy i zaczyna się od lewej krawędzi strony.",
     steps: [
       "Otwórz dowolną stronę na komputerze - w pasku obok „Zaloguj się” jest „Zgłoś”, który otwiera okno zgłoszenia; nic nie wisi w prawym dolnym rogu.",
       "Na telefonie kliknij ikonę zgłoszenia w pasku - otwiera to samo okno.",
-      "Zjedź na dół strony osoby - stopka to jeden wiersz z tymi samymi linkami.",
       "Po zalogowaniu pasek „Admin / Rewizje / Aktywność / Zespół” zaczyna się na lewej krawędzi treści, a otwarta sekcja jest podkreślona.",
     ],
     area: "public",
