@@ -318,7 +318,7 @@ name = "Pipelines do not fetch"
 type = "forbidden"
 source_modules = ["scrapers", "analysis"]
 forbidden_modules = ["requests", "curl_cffi"]
-ignore_imports = ["scrapers.article.crawler -> curl_cffi"]
+ignore_imports = ["scrapers.common.fetch -> curl_cffi"]
 
 [[tool.importlinter.contracts]]
 name = "Do not import external packages"
@@ -364,17 +364,12 @@ ignore_imports = [
     # print_rows reads CI to keep the people's rows out of the public CI logs
     # (ci-no-personal-data); reading the environment is all it does with os.
     "scrapers.krs.odpis_people -> os",
-    # In-memory tar extraction of GCS blobs and URL joining for link discovery
+    # In-memory tar extraction of GCS blobs
     "scrapers.article.pipelines.pipeline_utils -> io",
-    "scrapers.article.crawler -> urllib",
     # pypdf reads a seekable stream and will not take bytes, so an odpis
     # fetched into memory has to be wrapped before it can be parsed. No file is
     # opened here -- the PDF never touches disk, which is the point.
     "scrapers.krs.odpis_pdf -> io",
-    # Absolute link resolution for BIP pages
-    "scrapers.bip.classify -> urllib",
-    # In-memory tar extraction of GCS blobs
-    "scrapers.article.pipelines.pipeline_utils -> io",
     # Absolute link resolution (shared link extractor + BIP classifier)
     "scrapers.common.links -> urllib",
     # DSN from env, same vars as the article crawler
