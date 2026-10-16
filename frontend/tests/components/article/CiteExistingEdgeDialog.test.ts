@@ -124,7 +124,7 @@ describe("CiteExistingEdgeDialog", () => {
       "Jan Kowalski → Orlen",
     );
     expect(byTestId("cite-existing-edge-edge-job")?.textContent).toContain(
-      "prezes zarządu · 2014-11-06 – 2017-08-25",
+      "prezes zarządu · 2014-11-06 - 2017-08-25",
     );
   });
 
@@ -145,7 +145,7 @@ describe("CiteExistingEdgeDialog", () => {
     await lookUp(wrapper);
 
     expect(byTestId("cite-existing-edge-edge-job")?.textContent).toContain(
-      "prezes zarządu · 2014-11-06 – obecnie",
+      "prezes zarządu · 2014-11-06 - obecnie",
     );
     // The candidacy has no dates: its subtitle is the relation alone (the
     // „· już powołuje się…” after it is the already-cited note, not a period).

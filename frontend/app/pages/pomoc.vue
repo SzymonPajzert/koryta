@@ -3,7 +3,7 @@
     <!-- Header -->
     <h1 class="text-h4 font-weight-bold mb-2">Jak możesz pomóc</h1>
     <p class="text-body-1 text-medium-emphasis pomoc__measure mb-4">
-      Koryta.pl prowadzą ochotnicy – po godzinach i bez sponsorów. Niżej jest
+      Koryta.pl prowadzą ochotnicy - po godzinach i bez sponsorów. Niżej jest
       wszystko, co można przy tym robić: od jednej minuty do stałej współpracy.
       <NuxtLink to="/o-nas" class="text-ink-info"
         >Dowiedz się więcej o projekcie</NuxtLink
@@ -42,14 +42,14 @@
         <span class="text-caption text-medium-emphasis">Od kwadransa</span>
         <InfoBubble label="Możesz sprawdzać osoby">
           Oceniasz w skali od -5 do +5, na ile posada wygląda na nagrodę za
-          politykę. Nie musisz mieć pewności – liczy się kilka niezależnych
+          politykę. Nie musisz mieć pewności - liczy się kilka niezależnych
           ocen, nie jedna. Niczego tym nie publikujesz: oceny układają kolejkę,
           a publikuje redakcja.
         </InfoBubble>
       </div>
       <p class="text-body-2 text-medium-emphasis pomoc__measure mb-4">
         Wiemy, kto ma posadę w spółce albo instytucji publicznej. To, czy dostał
-        ją po znajomości, musi sprawdzić człowiek – i takie osoby czekają w
+        ją po znajomości, musi sprawdzić człowiek - i takie osoby czekają w
         kolejce.
       </p>
       <PomocQueueTiers />
@@ -96,7 +96,7 @@
           <CardAction
             :icon="mdiMessageAlertOutline"
             title="Napisz, co jest nie tak"
-            desc="Błąd w danych, literówka, pomysł na stronę – wystarczy jedno zdanie, także anonimowo. To ten sam przycisk, który masz na górnym pasku każdej strony."
+            desc="Błąd w danych, literówka, pomysł na stronę - wystarczy jedno zdanie, także anonimowo. To ten sam przycisk, który masz na górnym pasku każdej strony."
             ink="ink-sage"
             access="none"
             @activate="openFeedback"
@@ -106,7 +106,7 @@
           <CardAction
             :icon="mdiShareVariantOutline"
             title="Podeślij komuś link"
-            desc="W tabeli ustaw filtr – na przykład swój region – kliknij „Kopiuj link” i wyślij go komuś, kogo to dotyczy."
+            desc="W tabeli ustaw filtr - na przykład swój region - kliknij „Kopiuj link” i wyślij go komuś, kogo to dotyczy."
             to="/eksploruj/tabela"
             ink="ink-sage"
             access="none"
@@ -118,7 +118,7 @@
             :icon="mdiFacebook"
             href="https://www.facebook.com/people/Korytapl/61581508966044/"
             title="Obserwuj i udostępniaj"
-            desc="Jesteśmy na Facebooku, X, Instagramie i GitHubie – pozostałe linki są w stopce."
+            desc="Jesteśmy na Facebooku, X, Instagramie i GitHubie - pozostałe linki są w stopce."
             ink="ink-sage"
             access="none"
             @click="trackGoal('cta:community', { to: 'facebook-page' })"
@@ -134,13 +134,13 @@
         <span class="text-caption text-medium-emphasis">Kilka minut</span>
         <InfoBubble label="Wiesz coś, czego my nie wiemy">
           Nie musisz niczego udowadniać ani pisać ładnie. Wystarczy nazwisko,
-          nazwa spółki albo link do artykułu – resztę sprawdzimy. Wszystko, co
+          nazwa spółki albo link do artykułu - resztę sprawdzimy. Wszystko, co
           dopiszesz, ma autora i trafia do kolejki, którą przegląda redakcja;
           nic nie pojawia się na stronie samo.
         </InfoBubble>
       </div>
       <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
-        Najbardziej brakuje nam wiedzy lokalnej – kto u Ciebie dostał posadę i
+        Najbardziej brakuje nam wiedzy lokalnej - kto u Ciebie dostał posadę i
         po kim.
       </p>
       <v-row>
@@ -148,7 +148,7 @@
           <CardAction
             :icon="mdiAccountPlusOutline"
             title="Dopisz brakującą osobę"
-            desc="Wystarczy imię i nazwisko – resztę pól możesz zostawić pustą."
+            desc="Wystarczy imię i nazwisko - resztę pól możesz zostawić pustą."
             ink="ink-info"
             access="login"
             @activate="openPropose('person')"
@@ -161,7 +161,7 @@
           <CardAction
             :icon="mdiDomainPlus"
             title="Dopisz brakującą spółkę albo instytucję"
-            desc="Wystarczy nazwa – KRS, REGON i resztę możesz zostawić pustą."
+            desc="Wystarczy nazwa - KRS, REGON i resztę możesz zostawić pustą."
             ink="ink-info"
             access="login"
             @activate="openPropose('place')"
@@ -186,7 +186,7 @@
            where the reader already is, on a person, a company or an article. -->
       <v-card variant="outlined" class="pa-4 mt-4">
         <div class="text-subtitle-2 font-weight-bold mb-1">
-          Reszta jest tam, gdzie i tak jesteś – przy osobie, spółce albo
+          Reszta jest tam, gdzie i tak jesteś - przy osobie, spółce albo
           artykule
         </div>
         <v-list density="compact" class="bg-transparent">
@@ -213,7 +213,7 @@
         <h2 class="text-h6">Więcej do sprawdzania</h2>
         <span class="text-caption text-medium-emphasis">Kwadrans</span>
         <InfoBubble label="Więcej do sprawdzania">
-          W całej kolejce są też osoby spoza trzech poziomów – takie, przy
+          W całej kolejce są też osoby spoza trzech poziomów - takie, przy
           których nie ma pod ręką żadnego z tamtych źródeł, więc trzeba je
           znaleźć samemu. Jeśli sprawdzasz pierwszy raz, zacznij od poziomów.
         </InfoBubble>
@@ -224,7 +224,7 @@
       </p>
       <div class="k-note mb-4 d-flex flex-wrap align-center ga-3">
         <span class="text-body-2">
-          Te cztery rzeczy wymagają konta – zakładasz je w niecałą minutę, a po
+          Te cztery rzeczy wymagają konta - zakładasz je w niecałą minutę, a po
           zalogowaniu wracasz dokładnie w to miejsce, z którego klikasz.
         </span>
         <v-btn
@@ -299,7 +299,7 @@
             :icon="mdiFacebook"
             href="https://www.facebook.com/groups/korytapl"
             title="Grupa na Facebooku"
-            desc="Nowości i znaleziska – dla tych, którzy wolą śledzić projekt niż w nim siedzieć."
+            desc="Nowości i znaleziska - dla tych, którzy wolą śledzić projekt niż w nim siedzieć."
             ink="ink-sage"
             access="none"
             @click="trackGoal('cta:community', { to: 'facebook' })"
@@ -310,7 +310,7 @@
             :icon="mdiEmailOutline"
             href="mailto:kontakt@koryta.pl"
             title="Napisz do nas"
-            desc="kontakt@koryta.pl – odpisujemy."
+            desc="kontakt@koryta.pl - odpisujemy."
             ink="ink-sage"
             access="none"
             @click="task('kontakt')"
@@ -327,7 +327,7 @@
             :icon="mdiToolboxOutline"
             to="/rozszerzenie"
             title="Narzędzia dla stałych wolontariuszy"
-            desc="Wtyczka do przeglądarki, która zapisuje czytany artykuł – także zza paywalla – i od razu wyciąga z niego fakty. O dostęp poproś mailem albo na Slacku."
+            desc="Wtyczka do przeglądarki, która zapisuje czytany artykuł - także zza paywalla - i od razu wyciąga z niego fakty. O dostęp poproś mailem albo na Slacku."
             ink="ink-neutral"
             access="team"
             @click="task('narzedzia')"
@@ -380,7 +380,7 @@
            is „w przygotowaniu”, and advertising an unbuilt feature as a way to
            help costs the whole list its credibility. -->
       <p class="text-caption text-medium-emphasis mt-3 mb-0">
-        Newsletter jeszcze nie ruszył – w profilu możesz już zaznaczyć, o czym
+        Newsletter jeszcze nie ruszył - w profilu możesz już zaznaczyć, o czym
         chcesz dostawać wiadomości, a odezwiemy się, gdy będzie gotowy.
         <v-btn
           variant="text"
@@ -401,7 +401,7 @@
         <InfoBubble label="Piszesz kod?">
           Nuxt i Vue po stronie serwisu, Python po stronie danych. Instrukcja
           uruchomienia jest w README. Jeśli nie masz konta na GitHubie, a chcesz
-          coś zgłosić – użyj przycisku „Zgłoś” na górnym pasku, trafi do nas tak
+          coś zgłosić - użyj przycisku „Zgłoś” na górnym pasku, trafi do nas tak
           samo.
         </InfoBubble>
       </div>
@@ -448,7 +448,7 @@
         </v-expansion-panel>
       </v-expansion-panels>
       <p class="text-caption text-medium-emphasis mt-3 mb-0">
-        Nie ma tu Twojego pytania? Napisz – przycisk zgłoszenia jest na górnym
+        Nie ma tu Twojego pytania? Napisz - przycisk zgłoszenia jest na górnym
         pasku każdej strony.
       </p>
     </section>
@@ -570,7 +570,7 @@ const tiles = [
   {
     path: "zespol",
     title: "Umiem coś, co się przyda",
-    desc: "Powiedz nam, co potrafisz – dobierzemy zadanie.",
+    desc: "Powiedz nam, co potrafisz - dobierzemy zadanie.",
     icon: mdiToolboxOutline,
     ink: "ink-sage",
   },
@@ -613,7 +613,7 @@ const checkingCards = computed(() => [
   {
     icon: mdiAccountSearchOutline,
     title: "Oceniaj fakty przy osobie, która Cię interesuje",
-    desc: "Nie musisz brać całej kolejki – na stronie osoby, w sekcji „Fakty z artykułów”, oceniasz tylko to, co Cię dotyczy.",
+    desc: "Nie musisz brać całej kolejki - na stronie osoby, w sekcji „Fakty z artykułów”, oceniasz tylko to, co Cię dotyczy.",
     to: "/eksploruj/tabela",
     task: "fakty-osoby" as const,
   },
@@ -679,11 +679,11 @@ const inPlace = [
 const faq = [
   {
     q: "Czy muszę mieć konto?",
-    a: "Do zgłoszenia błędu, podesłania komuś linku, ankiety wolontariusza i wpłaty – nie. Do oceniania osób i faktów oraz do notatek i propozycji zmian – tak, bo każda taka zmiana ma autora i historię. Konto zakładasz w niecałą minutę, a po zalogowaniu wracasz dokładnie w to miejsce, z którego klikasz.",
+    a: "Do zgłoszenia błędu, podesłania komuś linku, ankiety wolontariusza i wpłaty - nie. Do oceniania osób i faktów oraz do notatek i propozycji zmian - tak, bo każda taka zmiana ma autora i historię. Konto zakładasz w niecałą minutę, a po zalogowaniu wracasz dokładnie w to miejsce, z którego klikasz.",
   },
   {
     q: "Czy muszę się na czymś znać?",
-    a: "Nie. Przy każdej osobie masz jej historię zatrudnienia i artykuły, w których się pojawia – tyle wystarczy, żeby ocenić, czy posada wygląda na polityczną. Jeśli nie masz pewności, przejdź do następnej osoby; nikt nie wymaga od Ciebie pewności.",
+    a: "Nie. Przy każdej osobie masz jej historię zatrudnienia i artykuły, w których się pojawia - tyle wystarczy, żeby ocenić, czy posada wygląda na polityczną. Jeśli nie masz pewności, przejdź do następnej osoby; nikt nie wymaga od Ciebie pewności.",
   },
   {
     q: "Skąd bierzecie dane?",
@@ -692,19 +692,19 @@ const faq = [
   {
     q: "Co liczą Wasze modele?",
     a:
-      "Trzy rzeczy – i żadna z nich niczego nie publikuje.\n\n" +
+      "Trzy rzeczy - i żadna z nich niczego nie publikuje.\n\n" +
       "• Model czytający artykuły wyciąga z nich pojedyncze zdania o konkretnych osobach. To są „fakty”, które potem oceniają ludzie.\n" +
-      "• Model dopasowania łączy nazwisko z artykułu z osobą w bazie. Dopasowuje po samym nazwisku, więc czasem trafi w imiennika – dlatego przy każdym fakcie jest przycisk „To nie ta osoba”.\n" +
-      "• Model oceny stawia przy osobie liczbę od -5 do +5 – tę samą, którą stawiają ludzie – i mówi tylko, jak bardzo warto się jej przyjrzeć. Ustawia kolejność w kolejce i nic poza tym.\n\n" +
+      "• Model dopasowania łączy nazwisko z artykułu z osobą w bazie. Dopasowuje po samym nazwisku, więc czasem trafi w imiennika - dlatego przy każdym fakcie jest przycisk „To nie ta osoba”.\n" +
+      "• Model oceny stawia przy osobie liczbę od -5 do +5 - tę samą, którą stawiają ludzie - i mówi tylko, jak bardzo warto się jej przyjrzeć. Ustawia kolejność w kolejce i nic poza tym.\n\n" +
       "Publikuje zawsze człowiek.",
   },
   {
     q: "Co się dzieje z tym, co zgłoszę?",
-    a: "Notatki i propozycje zmian trafiają do kolejki, którą przegląda redakcja. O decyzji przy propozycji zmiany dostajesz maila, a swoje propozycje widzisz na swoim profilu. Notatka zostaje tam, gdzie ją napisałeś – przy osobie albo spółce.",
+    a: "Notatki i propozycje zmian trafiają do kolejki, którą przegląda redakcja. O decyzji przy propozycji zmiany dostajesz maila, a swoje propozycje widzisz na swoim profilu. Notatka zostaje tam, gdzie ją napisałeś - przy osobie albo spółce.",
   },
   {
     q: "Czy to jest wymierzone w jedną partię?",
-    a: "Nie. W bazie są ludzie ze wszystkich ugrupowań, które rządziły, i z samorządów wszystkich opcji. Jeśli uważasz, że po którejś stronie czegoś brakuje – to jest dokładnie ta pomoc, o którą prosimy. Zgłoś to.",
+    a: "Nie. W bazie są ludzie ze wszystkich ugrupowań, które rządziły, i z samorządów wszystkich opcji. Jeśli uważasz, że po którejś stronie czegoś brakuje - to jest dokładnie ta pomoc, o którą prosimy. Zgłoś to.",
   },
 ];
 

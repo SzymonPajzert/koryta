@@ -21,7 +21,7 @@ describe("edgeSentence", () => {
         "Jan Kowalski",
         edge({ start_date: "2023-04-01", end_date: "2024-09-30" }),
       ),
-    ).toBe("Jan Kowalski – Zatrudniony/a w – Orlen · 2023-04-01 – 2024-09-30");
+    ).toBe("Jan Kowalski - Zatrudniony/a w - Orlen · 2023-04-01 - 2024-09-30");
   });
 
   it("names the subject the reader is looking at, not the edge's source", () => {
@@ -34,14 +34,14 @@ describe("edgeSentence", () => {
           richNode: { id: "p1", type: "person", name: "Jan Kowalski" },
         } as Partial<EdgeNode>),
       ),
-    ).toBe("Orlen – Zatrudniony/a w – Jan Kowalski");
+    ).toBe("Orlen - Zatrudniony/a w - Jan Kowalski");
   });
 
   it("drops the period rather than trailing a separator", () => {
     // A `connection` has no date fields in the schema, and most of the drawer's
     // rows are undated.
     expect(edgeSentence("Jan Kowalski", edge())).toBe(
-      "Jan Kowalski – Zatrudniony/a w – Orlen",
+      "Jan Kowalski - Zatrudniony/a w - Orlen",
     );
   });
 
@@ -49,7 +49,7 @@ describe("edgeSentence", () => {
     // Through `relationPeriodLabel`: a post with no end is still held, so the
     // dialog says „obecnie” as the row it was opened from does.
     expect(edgeSentence("Jan", edge({ start_date: "2020-01-01" }))).toBe(
-      "Jan – Zatrudniony/a w – Orlen · 2020-01-01 – obecnie",
+      "Jan - Zatrudniony/a w - Orlen · 2020-01-01 - obecnie",
     );
   });
 

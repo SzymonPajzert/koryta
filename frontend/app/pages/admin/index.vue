@@ -421,7 +421,7 @@ const subpages = [
     title: "Powiązania",
     to: "/admin/krawedzie",
     icon: mdiGraphOutline,
-    desc: "Powiązania gotowe do publikacji – obie strony już opublikowane.",
+    desc: "Powiązania gotowe do publikacji - obie strony już opublikowane.",
   },
   {
     title: "Notatki",
@@ -439,7 +439,7 @@ const subpages = [
     title: "QA",
     to: "/qa",
     icon: mdiClipboardCheckOutline,
-    desc: "Lista zmian na stronie do sprawdzenia – otwarta dla każdego zalogowanego.",
+    desc: "Lista zmian na stronie do sprawdzenia - otwarta dla każdego zalogowanego.",
   },
   {
     title: "Ekstrakcje",

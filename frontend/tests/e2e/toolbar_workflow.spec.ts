@@ -157,7 +157,7 @@ test.describe("User toolbar", () => {
     const team = bar.getByRole("button", { name: "Zespół" });
     await expect(team).toBeVisible({ timeout: 30_000 });
 
-    await openMenu(page, team, "QA – zmiany do sprawdzenia");
+    await openMenu(page, team, "QA - zmiany do sprawdzenia");
     const entries = page.locator(menu);
     await expect(
       entries.getByRole("link", { name: "Zgłoszenia" }),
@@ -198,7 +198,7 @@ test.describe("User toolbar", () => {
     // Above them, QA and its problems, which /qa opens to everybody signed
     // in - and not the reports, which are an admin's.
     await expect(
-      entries.getByRole("link", { name: "QA – zmiany do sprawdzenia" }),
+      entries.getByRole("link", { name: "QA - zmiany do sprawdzenia" }),
     ).toHaveAttribute("href", "/qa");
     await expect(
       entries.getByRole("link", { name: "Problemy z QA" }),

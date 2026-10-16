@@ -37,7 +37,7 @@
            this person by name and not yet judged by anybody. That much stays
            in the open; the how-to is in the bubble above. -->
       <p v-if="user" class="k-lead" data-testid="person-extractions-lead">
-        Automatycznie wyszukane w prasie – mogą być błędne.
+        Automatycznie wyszukane w prasie - mogą być błędne.
       </p>
       <p v-else class="k-lead" data-testid="person-extractions-count">
         Znaleźliśmy

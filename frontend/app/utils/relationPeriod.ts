@@ -19,7 +19,7 @@ export function relationPeriodParts(
   return { start: start ?? "?", end: end || "obecnie", current: !end };
 }
 
-/** How long a relation lasted, in one line: „2014-11-06 – 2017-08-25".
+/** How long a relation lasted, in one line: „2014-11-06 - 2017-08-25".
  *
  * A range takes an en dash, not a hyphen: „2014-11-06 - 2017-08-25” read as
  * one long number broken by a minus.
@@ -36,5 +36,5 @@ export function relationPeriodLabel(
   const parts = relationPeriodParts(start, end);
   return parts.end === undefined
     ? parts.start
-    : `${parts.start} – ${parts.end}`;
+    : `${parts.start} - ${parts.end}`;
 }

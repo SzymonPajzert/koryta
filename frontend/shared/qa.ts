@@ -62,9 +62,9 @@ export const QA_ITEMS: QaItem[] = [
     id: "rowny-odstep-nad-stopka",
     title: "Ten sam odstęp nad stopką na każdej stronie",
     description:
-      "Ostatni blok strony stoi nad stopką tak daleko, jak sekcje strony osoby od siebie – 40 px, 32 na telefonie – a nie od 16 do 68 px, zależnie od strony.",
+      "Ostatni blok strony stoi nad stopką tak daleko, jak sekcje strony osoby od siebie - 40 px, 32 na telefonie - a nie od 16 do 68 px, zależnie od strony.",
     steps: [
-      "Zjedź na dół strony osoby, /o-nas i /eksploruj/statystyki – nad stopką jest wszędzie ten sam odstęp.",
+      "Zjedź na dół strony osoby, /o-nas i /eksploruj/statystyki - nad stopką jest wszędzie ten sam odstęp.",
     ],
     area: "public",
   },
@@ -74,7 +74,7 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "W górnym pasku i w stopce strony głównej cała nazwa „koryta.pl” jest pogrubiona, a nie tylko „koryta”.",
     steps: [
-      "Otwórz stronę główną na komputerze – „koryta.pl” obok logo w pasku i duże „koryta.pl” w stopce są w całości pogrubione.",
+      "Otwórz stronę główną na komputerze - „koryta.pl” obok logo w pasku i duże „koryta.pl” w stopce są w całości pogrubione.",
     ],
     link: "/",
     area: "public",
@@ -85,8 +85,8 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Na telefonie długi opis osoby pokazuje cztery linie i „Pokaż więcej”, które rozwija resztę w miejscu. Na komputerze opis jest cały.",
     steps: [
-      "Otwórz na telefonie stronę Grzegorza Ganowicza i kliknij „Pokaż więcej” ze strzałką w dół – opis rozwija się w całości, a przycisk znika.",
-      "Otwórz tę samą stronę na komputerze – opis jest cały i nie ma przycisku.",
+      "Otwórz na telefonie stronę Grzegorza Ganowicza i kliknij „Pokaż więcej” ze strzałką w dół - opis rozwija się w całości, a przycisk znika.",
+      "Otwórz tę samą stronę na komputerze - opis jest cały i nie ma przycisku.",
     ],
     link: "/entity/person/2wqY7arTL25S5bGyhjcO",
     area: "public",
@@ -97,9 +97,9 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Górny pasek ma 56 px zamiast 64, cienką linię zamiast cienia i menu pisane zwykłymi literami. „Zgłoś” nie wisi już nad stroną, tylko jest w pasku: słowo na komputerze, ikona na telefonie. Stopka na wszystkich stronach poza główną to jeden wiersz na zielonym pasku, a na głównej jest o połowę niższa. Pasek zalogowanego jest niższy i zaczyna się od lewej krawędzi strony.",
     steps: [
-      "Otwórz dowolną stronę na komputerze – w pasku obok „Zaloguj się” jest „Zgłoś”, który otwiera okno zgłoszenia; nic nie wisi w prawym dolnym rogu.",
-      "Na telefonie kliknij ikonę zgłoszenia w pasku – otwiera to samo okno.",
-      "Zjedź na dół strony osoby – stopka to jeden wiersz z tymi samymi linkami.",
+      "Otwórz dowolną stronę na komputerze - w pasku obok „Zaloguj się” jest „Zgłoś”, który otwiera okno zgłoszenia; nic nie wisi w prawym dolnym rogu.",
+      "Na telefonie kliknij ikonę zgłoszenia w pasku - otwiera to samo okno.",
+      "Zjedź na dół strony osoby - stopka to jeden wiersz z tymi samymi linkami.",
       "Po zalogowaniu pasek „Admin / Rewizje / Aktywność / Zespół” zaczyna się na lewej krawędzi treści, a otwarta sekcja jest podkreślona.",
     ],
     area: "public",
@@ -110,11 +110,11 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Każda ramka na stronie to jedna jasnoszara linia, przyciski zamiast czarnej obwódki mają szare tło, a cień zostaje tylko pod menu i oknami. Strona osoby i spółki nie leży już na osobnej karcie, „Historia powiązań” jest jedną listą z liniami między wierszami, a przełączniki takie jak „1 krok / 2 kroki” są jednym segmentem z białą zakładką.",
     steps: [
-      "Otwórz stronę osoby – nie ma karty z cieniem wokół strony, nagłówek z nazwiskiem jest oddzielony od reszty cienką linią, a „Historia powiązań” to jedno pudełko z wierszami.",
-      "Na telefonie ta sama strona – lista powiązań sięga krawędzi ekranu.",
+      "Otwórz stronę osoby - nie ma karty z cieniem wokół strony, nagłówek z nazwiskiem jest oddzielony od reszty cienką linią, a „Historia powiązań” to jedno pudełko z wierszami.",
+      "Na telefonie ta sama strona - lista powiązań sięga krawędzi ekranu.",
       "Na stronie spółki przyciski „Graf połączeń” i „Zaproponuj zmianę” mają szare tło, bez czarnej ramki.",
-      "Na /eksploruj/szpitale przełącz „Partii / Województwa” – wybrana opcja to biała zakładka.",
-      "Otwórz /o-nas i /pomoc – strona nie leży w ramce na szarym tle, a przyciski i zdjęcie nie mają cienia.",
+      "Na /eksploruj/szpitale przełącz „Partii / Województwa” - wybrana opcja to biała zakładka.",
+      "Otwórz /o-nas i /pomoc - strona nie leży w ramce na szarym tle, a przyciski i zdjęcie nie mają cienia.",
     ],
     area: "public",
   },
@@ -123,12 +123,12 @@ export const QA_ITEMS: QaItem[] = [
     title:
       "Jeden tytuł na stronę, mniej rozmiarów tekstu, przyciski bez wersalików",
     description:
-      "Strony zaczynają się jednym pogrubionym tytułem – na stronie osoby i spółki jest nim nazwa, a na /eksploruj/tabela stoi nad paskiem filtrów. Tekst ma 8 rozmiarów zamiast 25 i żaden nie jest mniejszy niż 12 px. Przyciski, zakładki i menu są pisane zwykłymi literami, etykiety takie jak „Data urodzenia” są szare, a zakresy dat mają półpauzę („2014-11-06 – obecnie”).",
+      "Strony zaczynają się jednym pogrubionym tytułem - na stronie osoby i spółki jest nim nazwa, a na /eksploruj/tabela stoi nad paskiem filtrów. Tekst ma 8 rozmiarów zamiast 25 i żaden nie jest mniejszy niż 12 px. Przyciski, zakładki i menu są pisane zwykłymi literami, etykiety takie jak „Data urodzenia” są szare.",
     steps: [
-      "Otwórz stronę osoby – imię i nazwisko jest dużym tytułem, a „Historia powiązań” wyraźnie mniejszym nagłówkiem sekcji.",
-      "Otwórz stronę spółki – nazwa jest tytułem; nazwa pisana wielkimi literami jest o stopień mniejsza.",
-      "Otwórz /eksploruj/tabela – tytuł jest nad paskiem filtrów, a obok niego przycisk udostępniania widoku.",
-      "Przejrzyj przyciski i menu na kilku stronach – żaden nie jest pisany wersalikami.",
+      "Otwórz stronę osoby - imię i nazwisko jest dużym tytułem, a „Historia powiązań” wyraźnie mniejszym nagłówkiem sekcji.",
+      "Otwórz stronę spółki - nazwa jest tytułem; nazwa pisana wielkimi literami jest o stopień mniejsza.",
+      "Otwórz /eksploruj/tabela - tytuł jest nad paskiem filtrów, a obok niego przycisk udostępniania widoku.",
+      "Przejrzyj przyciski i menu na kilku stronach - żaden nie jest pisany wersalikami.",
     ],
     area: "public",
   },

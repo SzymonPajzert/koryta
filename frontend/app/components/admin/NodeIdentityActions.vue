@@ -2,14 +2,14 @@
   <ButtonIconAction
     :icon="mdiSetMerge"
     label="Ta strona to duplikat"
-    tooltip="Ta strona to duplikat – scal ją z tą drugą"
+    tooltip="Ta strona to duplikat - scal ją z tą drugą"
     data-testid="admin-merge-node"
     @click="mergeOpen = true"
   />
   <ButtonIconAction
     :icon="mdiCallSplit"
     label="Ta strona to dwie osoby"
-    tooltip="Ta strona to dwie osoby – zaznacz albo rozdziel"
+    tooltip="Ta strona to dwie osoby - zaznacz albo rozdziel"
     data-testid="admin-split-node"
     @click="splitOpen = true"
   />

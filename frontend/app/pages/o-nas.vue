@@ -322,7 +322,7 @@
               >
               <v-expansion-panel-text class="text-body-2 pt-2">
                 Tak. Przy każdym wpisie podajemy źródło. Zachęcamy do
-                samodzielnej weryfikacji – to fundament naszego projektu.
+                samodzielnej weryfikacji - to fundament naszego projektu.
               </v-expansion-panel-text>
             </v-expansion-panel>
 

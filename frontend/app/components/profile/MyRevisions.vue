@@ -61,7 +61,7 @@
         v-if="statusFilter === 'approved' && counts.superseded > 0"
         class="text-caption text-medium-emphasis mb-3"
       >
-        Razem z zastąpionymi – dla bazy to jedno i to samo „zatwierdzone”.
+        Razem z zastąpionymi - dla bazy to jedno i to samo „zatwierdzone”.
       </div>
 
       <v-alert

@@ -244,7 +244,7 @@ const changes = computed<Change[]>(() =>
         batchNote:
           post.batchSize > 1
             ? `Tego dnia zmieniło się ${post.batchSize} stanowisk tej samej ` +
-              "funkcji – rejestr nie wskazuje, kto zajął czyje miejsce."
+              "funkcji - rejestr nie wskazuje, kto zajął czyje miejsce."
             : null,
         key: `${neighbour.edgeId}-${index}`,
         testid: post.predecessor

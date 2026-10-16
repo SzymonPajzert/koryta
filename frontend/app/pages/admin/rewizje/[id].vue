@@ -51,7 +51,7 @@
             location="bottom"
             max-width="280"
           >
-            Ta strona nie ma zatwierdzonej rewizji – opublikowanie zatwierdzi
+            Ta strona nie ma zatwierdzonej rewizji - opublikowanie zatwierdzi
             najnowszą, z {{ formatDate(autoApproveRevision.update_time) }}.
           </v-tooltip>
         </v-btn>
@@ -65,7 +65,7 @@
       <AdminSectionHead
         title="Historia zmian"
         :count="pending ? undefined : allRevisions.length"
-        info="Każda rewizja to pełna wersja wpisu, zapisana przez człowieka albo przez pipeline. Kliknij wiersz, żeby zobaczyć, kto ją zgłosił i co zmienia względem zatwierdzonej wersji – i tam ją rozpatrzyć."
+        info="Każda rewizja to pełna wersja wpisu, zapisana przez człowieka albo przez pipeline. Kliknij wiersz, żeby zobaczyć, kto ją zgłosił i co zmienia względem zatwierdzonej wersji - i tam ją rozpatrzyć."
       />
       <RevisionHistoryList
         ref="history"

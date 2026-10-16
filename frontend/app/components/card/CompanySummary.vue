@@ -173,7 +173,7 @@
       >
         {{
           wasDuplicate
-            ? "Tę zmianę już zgłosiłeś – czeka na redakcję."
+            ? "Tę zmianę już zgłosiłeś - czeka na redakcję."
             : "Zaproponowano zmianę."
         }}
         <a

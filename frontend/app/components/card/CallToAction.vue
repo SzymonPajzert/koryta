@@ -20,7 +20,7 @@
           Sprawdzenie osoby polega na tym, żeby zobaczyć, gdzie pracowała,
           poszukać, czy w tle jest polityka, i ocenić w skali od -5 do +5, na
           ile ta posada wygląda na nagrodę za politykę. Nie musisz mieć pewności
-          – liczy się kilka niezależnych ocen, nie jedna. Publikuje zawsze
+          - liczy się kilka niezależnych ocen, nie jedna. Publikuje zawsze
           człowiek z redakcji.
         </InfoBubble>
       </div>
@@ -84,7 +84,7 @@
           class="cta__fine-icon"
         />
         <span
-          >Sprawdzanie wymaga konta – założysz je w minutę. Błąd zgłosisz bez
+          >Sprawdzanie wymaga konta - założysz je w minutę. Błąd zgłosisz bez
           konta.</span
         >
       </p>

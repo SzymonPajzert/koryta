@@ -136,7 +136,7 @@ describe("DefaultLayout", () => {
 
     const titles = (await menuEntries(wrapper, "Zespół")).map((e) => e.title);
     expect(titles).toEqual([
-      "QA – zmiany do sprawdzenia",
+      "QA - zmiany do sprawdzenia",
       "Problemy z QA",
       "Nowy bug w GitHubie",
     ]);
@@ -160,7 +160,7 @@ describe("DefaultLayout", () => {
     const wrapper = mountLayout(true);
 
     expect(await menuEntries(wrapper, "Zespół")).toEqual([
-      { title: "QA – zmiany do sprawdzenia", to: "/qa" },
+      { title: "QA - zmiany do sprawdzenia", to: "/qa" },
       { title: "Problemy z QA", to: expect.stringContaining("problemy") },
       { title: "Zgłoszenia", to: "/admin/opinie" },
       { title: "Nowy bug w GitHubie", to: undefined },
