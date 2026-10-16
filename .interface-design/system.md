@@ -104,6 +104,16 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
 - **The site's text uses the plain hyphen „-”**, never „–” or „—”, in prose
   and in date ranges alike. Szymon: "This is very AI and I think people
   start noticing it" (2026-10-16).
+- **The admin and working pages share the public pages' frame** (approved
+  2026-10-16 from rendered screenshots, task
+  approve-redesign-admin-pages-screenshots). They use one column and inset
+  (the layout's 1200, no padding of their own) and one page head
+  (`AdminPageHead`: the title, one sentence under it, the rest behind the
+  (i), and the way back as a small link above the title). Their section heads
+  are on the public scale (24/600) with a quiet grey count, and sections
+  stand one 40/32 gap apart. The szyna's fact labels are 12px in sentence
+  case, and /admin opens on its work queues. Szymon: "Looks good, I approve
+  the changed screenshots".
 
   A lone „—” standing for a missing value, in a table cell or for a date
   nobody recorded, stays: it is a sign, not punctuation (2026-10-23).
