@@ -35,9 +35,10 @@ people, so that they find every page there.
 new hires the site lacks first, then the pages of the people whose rejestr.io
 feed was bought in the last `--bought-days` days, then the pages with a note
 no admin has closed - on the page, or on a company the payload names - those
-saying data is missing first, then a few of the people only an odpis names in
-a public post that is not new, then the published pages that would change,
-then the rest, newest news first in each (`analysis.payloads.priority`). The
+saying data is missing first, then a few of the people the site lacks in a
+public post that is not new - those only an odpis names, then those with a
+rejestr.io entry - then the published pages that would change, then the
+rest, newest news first in each (`analysis.payloads.priority`). The
 notes are this morning's export's, as the pages are. It leaves alone a payload
 it already sent unchanged in the last `--resend-after` days: an update a
 reviewer has not yet approved, or a party a human took off a page, still reads
@@ -62,6 +63,15 @@ many pages there are to check by hand the next morning, which sending more
 updates a night does not change. Their pages and the new hires' count against
 `--max-new` together, and a page made for one of them is one the run is meant
 to make, as a new hire's is.
+
+So do the pages of the people with a rejestr.io entry who hold a public post
+now that is not new: 13,518 on 2026-10-16, against 89 new hires that day, and
+before then no run made a page for any of them. They take at most
+`--max-rejestrio-current` a run: fifty, as Szymon set it that day, in any
+post at a public company - "count employed in any way". A number rather than
+a share of the run, as the odpis-only cap is, so that sending more updates a
+night makes no more pages; and behind those people, whose pages are checked
+by hand the next morning.
 
 The pages the export shows as published take at most `--max-published` of a
 run, whatever tier puts them in it: the bought and the noted count as much as
@@ -142,7 +152,12 @@ from datetime import UTC, date, datetime, timedelta
 from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
-from analysis.payloads.priority import NEW_HIRE, ODPIS_ONLY_CURRENT, TIERS
+from analysis.payloads.priority import (
+    NEW_HIRE,
+    ODPIS_ONLY_CURRENT,
+    REJESTRIO_CURRENT,
+    TIERS,
+)
 from analysis.payloads.target import NEW, PageTarget
 from jobs.nightly import export_refusal, export_time, latest_export
 from jobs.people_import.payloads import (
@@ -227,7 +242,7 @@ STOP_NO_COMPANIES = "nic do dodania - kopia bazy ma firmy wszystkich tych osób"
 
 #: The tiers whose people the run is meant to create pages for. A page
 #: created for anybody else is the identity lookup missing somebody.
-CREATING = (NEW_HIRE, ODPIS_ONLY_CURRENT, NEW)
+CREATING = (NEW_HIRE, ODPIS_ONLY_CURRENT, REJESTRIO_CURRENT, NEW)
 
 #: Rebuilt on every run, whatever is on disk or in the shared cache, so that
 #: the payloads are made from the newest crawl and this morning's export.
@@ -681,6 +696,11 @@ ODPIS_ONLY_PER = 10
 #: says otherwise: ten a night, as Szymon set it on 2026-10-11.
 ODPIS_ONLY_CURRENT_CAP = 10
 
+#: How many of the people with a rejestr.io entry in a public post that is
+#: not new a priority run creates pages for, unless `--max-rejestrio-current`
+#: says otherwise: fifty a night, as Szymon set it on 2026-10-16.
+REJESTRIO_CURRENT_CAP = 50
+
 
 def only_an_odpis_names(payload: Mapping[str, typing.Any]) -> bool:
     """Whether the payload is somebody with no rejestr.io entry, whom the
@@ -695,21 +715,23 @@ def plan_priority(
     max_new_odpis_only: int | None = None,
     max_odpis_only_current: int | None = None,
     max_published: int | None = None,
+    max_rejestrio_current: int | None = None,
 ) -> tuple[list[Candidate], int]:
     """What a priority run sends, in order, and how many it left out as sent.
 
     Out: a payload already taken unchanged (`already_sent`), and the pages to
     create past `max_new` - so a night with more of them than it may create
     still gets to the pages after them - and, among the new hires, the ones
-    only an odpis names past `max_new_odpis_only`, and of the people only an
-    odpis names in an older post those past `max_odpis_only_current`, for the
-    same reason. The two kinds of page count against `max_new` together:
-    the run stops as failed past it, so a plan past it would fail the night
-    by itself. And the changes to published pages past `max_published`, in
+    only an odpis names past `max_new_odpis_only`, and of the people in an
+    older post those only an odpis names past `max_odpis_only_current` and
+    those with a rejestr.io entry past `max_rejestrio_current`, for the same
+    reason. The three kinds of page count against `max_new` together: the
+    run stops as failed past it, so a plan past it would fail the night by
+    itself. And the changes to published pages past `max_published`, in
     whichever tier they come (`Candidate.published`).
     """
     planned: list[Candidate] = []
-    skipped = created = odpis_only = seated = published = 0
+    skipped = created = odpis_only = seated = linked = published = 0
     for candidate in candidates:
         if (
             person_key(candidate.payload),
@@ -735,6 +757,13 @@ def plan_priority(
                 continue
             created += 1
             seated += 1
+        elif candidate.tier == REJESTRIO_CURRENT:
+            if created >= max_new or (
+                max_rejestrio_current is not None and linked >= max_rejestrio_current
+            ):
+                continue
+            created += 1
+            linked += 1
         elif candidate.published:
             if max_published is not None and published >= max_published:
                 continue
@@ -967,9 +996,10 @@ class PeopleImport:
     def plan(self) -> list[dict]:
         """A priority run's payloads, in sending order: built, the already sent
         left out, the pages to create cut at --max-new, the new hires only an
-        odpis names at --max-new-odpis-only, the people only an odpis names
-        in an older public post at --max-odpis-only-current, and the changes
-        to published pages at --max-published."""
+        odpis names at --max-new-odpis-only, the people in an older public
+        post only an odpis names at --max-odpis-only-current and those with a
+        rejestr.io entry at --max-rejestrio-current, and the changes to
+        published pages at --max-published."""
         args = self.args
         today = warsaw_now().date()
         bought_from = (today - timedelta(days=args.bought_days)).isoformat()
@@ -994,6 +1024,7 @@ class PeopleImport:
             args.max_new_odpis_only,
             args.max_odpis_only_current,
             args.max_published,
+            args.max_rejestrio_current,
         )
         self.tiers = [candidate.tier for candidate in planned]
         self.published = [candidate.published for candidate in planned]
@@ -1015,6 +1046,9 @@ class PeopleImport:
         def seated(found: Sequence[Candidate]) -> list[Candidate]:
             return [c for c in found if c.tier == ODPIS_ONLY_CURRENT]
 
+        def linked(found: Sequence[Candidate]) -> list[Candidate]:
+            return [c for c in found if c.tier == REJESTRIO_CURRENT]
+
         def unsent(found: Sequence[Candidate]) -> list[Candidate]:
             return [
                 candidate
@@ -1034,6 +1068,12 @@ class PeopleImport:
                 f"People only an odpis names in an older public post: "
                 f"{len(seated(planned))} of {len(older)} planned "
                 f"(--max-odpis-only-current {args.max_odpis_only_current})"
+            )
+        if waiting := unsent(linked(candidates)):
+            print(
+                f"People with a rejestr.io entry in an older public post: "
+                f"{len(linked(planned))} of {len(waiting)} planned "
+                f"(--max-rejestrio-current {args.max_rejestrio_current})"
             )
         if pages := unsent([c for c in candidates if c.published]):
             # The cap is the one thing that leaves a published page out.
@@ -1484,8 +1524,9 @@ def parser() -> argparse.ArgumentParser:
         "not-on-koryta adds the people it has not, and needs --max-new; "
         "priority sends new hires first, then the pages of the people bought "
         "from rejestr.io, then the pages with an open note (data noted missing "
-        "first), then a few people only an odpis names in an older public post, "
-        "then published pages, then the rest (analysis.payloads.priority).",
+        "first), then a few people the site lacks in an older public post - "
+        "those only an odpis names, then those with a rejestr.io entry - then "
+        "published pages, then the rest (analysis.payloads.priority).",
     )
     parser.add_argument(
         "--request",
@@ -1530,9 +1571,8 @@ def parser() -> argparse.ArgumentParser:
         help="Pages the run may create before it stops as failed. Default 0: "
         "an --on-koryta run that creates a page has missed somebody's identity. "
         "With --scope priority: the most pages a run plans to create - new "
-        "hires and the people only an odpis names in an older public post "
-        "together - default --max-uploads; a page made for anybody else stops "
-        "it as failed.",
+        "hires and the people in an older public post together - default "
+        "--max-uploads; a page made for anybody else stops it as failed.",
     )
     parser.add_argument(
         "--max-new-odpis-only",
@@ -1548,6 +1588,13 @@ def parser() -> argparse.ArgumentParser:
         help="Priority: the most people only an odpis names a run creates pages "
         "for whose public post has not ended and began before --recent-days, "
         f"within --max-new. Default: {ODPIS_ONLY_CURRENT_CAP}.",
+    )
+    parser.add_argument(
+        "--max-rejestrio-current",
+        type=non_negative_int,
+        help="Priority: the most people with a rejestr.io entry a run creates "
+        "pages for whose public post - any post - has not ended and began "
+        f"before --recent-days, within --max-new. Default: {REJESTRIO_CURRENT_CAP}.",
     )
     parser.add_argument(
         "--max-published",
@@ -1640,6 +1687,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         args.max_new_odpis_only = -(-args.max_uploads // ODPIS_ONLY_PER)
     if args.max_odpis_only_current is None and args.scope == PRIORITY:
         args.max_odpis_only_current = ODPIS_ONLY_CURRENT_CAP
+    if args.max_rejestrio_current is None and args.scope == PRIORITY:
+        args.max_rejestrio_current = REJESTRIO_CURRENT_CAP
     if args.scope == "not-on-koryta" and args.max_new <= 0:
         parse.error(
             "--scope not-on-koryta creates a page for everybody it sends; say "

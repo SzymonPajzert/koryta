@@ -1139,6 +1139,7 @@ def sent_part(world: World) -> list[dict]:
 
 HIRE, BOUGHT, PUBLISHED, ON_SITE = "new_hire", "bought", "published", "on_site"
 MISSING, NOTED, SEATED = "noted_missing", "noted", "odpis_only_current"
+LINKED = "rejestrio_current"
 
 
 def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
@@ -1161,6 +1162,7 @@ def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
         MISSING: 0,
         NOTED: 0,
         SEATED: 0,
+        LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 1,
     }
@@ -1193,6 +1195,7 @@ def test_new_hires_past_max_new_make_room_for_the_pages_after_them(priority):
         MISSING: 0,
         NOTED: 0,
         SEATED: 0,
+        LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }
@@ -1283,7 +1286,10 @@ def test_people_only_an_odpis_names_in_an_older_post_take_ten_a_run(priority, ca
     assert len(summary["created"]) == 11
     assert [row["tier"] for row in sent_part(priority)].count(SEATED) == 10
     out = capsys.readouterr().out
-    assert "'noted': 0, 'odpis_only_current': 10, 'published': 1" in out
+    assert (
+        "'noted': 0, 'odpis_only_current': 10, 'rejestrio_current': 0, "
+        "'published': 1" in out
+    )
     assert (
         "People only an odpis names in an older public post: 10 of 12 planned "
         "(--max-odpis-only-current 10)" in out
@@ -1338,6 +1344,79 @@ def test_a_page_made_for_somebody_in_an_older_post_does_not_stop_the_run(priorit
 
     assert priority.sent() == ["Celina Lis", "Jan Kowalski"]
     assert priority.summary()["created"] == ["Celina Lis (new-page)"]
+
+
+def test_people_with_an_entry_in_an_older_post_take_fifty_a_run(priority, capsys):
+    """13,518 of them on 2026-10-16, against 89 new hires, and Szymon's choice
+    that day: fifty a night, their pages made as a new hire's are - after the
+    people only an odpis names, and ahead of the published pages."""
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Olga Sowa", BOUGHT),
+        odpis_only("Beata Kos", "2025-01-01", SEATED),
+        *[candidate(f"Osoba {i}", LINKED, "2024-01-01") for i in range(1, 53)],
+        candidate("Jan Kowalski", PUBLISHED),
+    ]
+    priority.answers = [person("created"), person("updated")]
+    priority.answers += [person("created", f"page-{i}") for i in range(0, 51)]
+    priority.answers += [person("updated")]
+
+    assert job.main(["--scope", "priority", "--max-uploads", "100"]) == 0
+
+    sent = priority.sent()
+    assert sent[:3] == ["Anna Nowak", "Olga Sowa", "Beata Kos"]
+    assert sent[3:53] == [f"Osoba {i}" for i in range(1, 51)]
+    assert sent[53:] == ["Jan Kowalski"]
+    summary = priority.summary()
+    # A page made for one of them is one the run was meant to make.
+    assert summary["state"] == "succeeded"
+    assert summary["tiers"][LINKED] == 50
+    assert len(summary["created"]) == 52
+    assert [row["tier"] for row in sent_part(priority)].count(LINKED) == 50
+    out = capsys.readouterr().out
+    assert (
+        "People with a rejestr.io entry in an older public post: 50 of 52 "
+        "planned (--max-rejestrio-current 50)" in out
+    )
+
+
+def test_the_pages_of_all_three_kinds_count_against_max_new_together():
+    found = [candidate("Anna Nowak", HIRE), odpis_only("Beata Kos", tier=SEATED)]
+    found += [candidate("Celina Mazur", LINKED), candidate("Jan Lis", PUBLISHED)]
+    found += [candidate("Dorota Wilk", LINKED)]
+
+    def names(max_new: int, max_rejestrio_current: int | None) -> list[str]:
+        planned, _ = job.plan_priority(
+            found, set(), max_new, 5, 5, max_rejestrio_current=max_rejestrio_current
+        )
+        return [c.payload["name"] for c in planned]
+
+    everybody = ["Anna Nowak", "Beata Kos", "Celina Mazur", "Jan Lis", "Dorota Wilk"]
+    assert names(max_new=5, max_rejestrio_current=None) == everybody
+    assert names(max_new=5, max_rejestrio_current=1) == everybody[:4]
+    assert names(max_new=5, max_rejestrio_current=0) == [
+        "Anna Nowak",
+        "Beata Kos",
+        "Jan Lis",
+    ]
+    # Planned past --max-new, the run would stop as failed on its own plan.
+    assert names(max_new=3, max_rejestrio_current=50) == everybody[:4]
+    assert names(max_new=2, max_rejestrio_current=50) == [
+        "Anna Nowak",
+        "Beata Kos",
+        "Jan Lis",
+    ]
+
+
+def test_fifty_a_priority_run_may_be_people_with_an_entry_in_an_older_post():
+    def cap(*argv: str) -> int | None:
+        return job.parse_args(["--scope", "priority", *argv]).max_rejestrio_current
+
+    assert cap() == 50
+    # Not a share of the run, as the odpis-only people's cap is not either.
+    assert cap("--max-uploads", "300") == 50
+    assert cap("--max-rejestrio-current", "0") == 0
+    assert job.parse_args([]).max_rejestrio_current is None
 
 
 def test_published_pages_past_max_published_wait_and_the_pages_after_them_go(
@@ -1595,7 +1674,8 @@ def test_a_priority_dry_run_shows_the_tiers_and_writes_nothing(priority, capsys)
     assert "The first 3 (--max-uploads) by tier:" in out
     assert (
         "'new_hire': 1, 'bought': 1, 'noted_missing': 0, 'noted': 0, "
-        "'odpis_only_current': 0, 'published': 1, 'on_site': 0" in out
+        "'odpis_only_current': 0, 'rejestrio_current': 0, 'published': 1, "
+        "'on_site': 0" in out
     )
     assert "Of the first 3, changes to published pages: 1" in out
 
@@ -1881,6 +1961,7 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
         MISSING: 0,
         NOTED: 0,
         SEATED: 0,
+        LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }
@@ -1894,7 +1975,8 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
     out = capsys.readouterr().out
     assert (
         "Planned by tier: {'new_hire': 1, 'bought': 1, 'noted_missing': 0, "
-        "'noted': 0, 'odpis_only_current': 0, 'published': 1, 'on_site': 0}" in out
+        "'noted': 0, 'odpis_only_current': 0, 'rejestrio_current': 0, "
+        "'published': 1, 'on_site': 0}" in out
     )
 
 
@@ -1922,6 +2004,7 @@ def test_the_noted_pages_go_up_after_the_bought_in_tiers_of_their_own(priority):
         MISSING: 1,
         NOTED: 1,
         SEATED: 0,
+        LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }

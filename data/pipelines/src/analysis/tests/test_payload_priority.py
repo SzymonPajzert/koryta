@@ -1,5 +1,6 @@
 """Who a capped people upload sends first: new hires, the people bought from
-rejestr.io, the pages somebody left a note on, published pages, the rest."""
+rejestr.io, the pages somebody left a note on, the people the site lacks in a
+public post that is not new, published pages, the rest."""
 
 import sys
 from dataclasses import asdict
@@ -21,6 +22,7 @@ from analysis.payloads.priority import (
     ODPIS_ONLY_CURRENT,
     ON_SITE,
     PUBLISHED,
+    REJESTRIO_CURRENT,
     current_public_seats,
     newest_public_start,
     prioritised,
@@ -158,7 +160,7 @@ def test_new_hires_then_published_then_the_rest_each_newest_first():
     ]
 
 
-def test_people_without_a_recent_public_post_or_a_change_are_left_out():
+def test_people_without_a_current_public_post_or_a_change_are_left_out():
     stored = stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1")
     site = snapshot(
         stored,
@@ -170,10 +172,12 @@ def test_people_without_a_recent_public_post_or_a_change_are_left_out():
         },
         edges=(employed("p1", "place-public", "2020-01-01"),),
     )
+    # Public no longer, however recent the private post.
     old_hire = person(
         "Anna Nowak",
         "https://rejestr.io/osoby/2",
-        Company(krs=PUBLIC, start="2025-01-01"),
+        Company(krs=PUBLIC, start="2025-01-01", end="2025-12-31"),
+        Company(krs=PRIVATE, start="2026-09-20"),
     )
     unchanged = person(
         "Jan Kowalski",
@@ -558,7 +562,7 @@ def test_somebody_only_an_odpis_names_in_an_older_public_post_goes_after_the_not
         Company(krs=OTHER_PUBLIC, start="2023-05-01"),
         Company(krs=PUBLIC, start="2025-01-01", end="2025-06-01"),
     )
-    # With a rejestr.io entry: nobody else without a page gets one.
+    # With a rejestr.io entry: the tier after theirs.
     linked = person(
         "Celina Lis",
         "https://rejestr.io/osoby/7",
@@ -596,6 +600,7 @@ def test_somebody_only_an_odpis_names_in_an_older_public_post_goes_after_the_not
         ("Anna Nowak", NEW_HIRE, "2026-09-20"),
         ("Piotr Sowa", NOTED, "2026-09-20"),
         ("Beata Kos", ODPIS_ONLY_CURRENT, "2023-05-01"),
+        ("Celina Lis", REJESTRIO_CURRENT, "2020-01-01"),
         ("Jan Kowalski", PUBLISHED, "2026-09-01"),
     ]
     assert current_public_seats(seated, {PUBLIC, OTHER_PUBLIC}) == [
@@ -672,3 +677,137 @@ def test_somebody_only_an_odpis_names_in_a_current_seat_keeps_a_new_page_s_guard
     assert [(p.person.name, p.tier) for p in picks] == [
         ("Anna Kos", ODPIS_ONLY_CURRENT)
     ]
+
+
+# ---------------------------------------------------------------------------
+# The people with a rejestr.io entry in a public post that is not new
+
+
+def test_somebody_with_an_entry_in_any_current_public_post_gets_a_page():
+    """Szymon, 2026-10-16: everybody employed at a publicly owned company goes
+    up - "count employed in any way to not complicate the logic". A
+    prokurent, a pełnomocnik, a seat on a hospital's unpaid rada społeczna
+    (the register calls every supervisory seat "Rada Nadzorcza") count as a
+    board does."""
+    site = snapshot()
+    seats = [
+        person(
+            f"Osoba {role}",
+            f"https://rejestr.io/osoby/{i}",
+            Company(krs=PUBLIC, role=role, start="2021-01-01"),
+        )
+        for i, role in enumerate(
+            ["Zarząd", "Rada Nadzorcza", "Prokurent", "Pełnomocnik"], start=10
+        )
+    ]
+    ended = person(
+        "Dorota Wilk",
+        "https://rejestr.io/osoby/20",
+        Company(krs=PUBLIC, start="2020-01-01", end="2024-01-01"),
+    )
+    private = person(
+        "Ewa Mazur",
+        "https://rejestr.io/osoby/21",
+        Company(krs=PRIVATE, start="2020-01-01"),
+    )
+
+    picks = prioritised(
+        [*seats, ended, private],
+        [],
+        site,
+        public_krs={PUBLIC},
+        published_ids=set(),
+        bought=set(),
+        noted={},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert sorted((p.person.name, p.tier) for p in picks) == [
+        ("Osoba Pełnomocnik", REJESTRIO_CURRENT),
+        ("Osoba Prokurent", REJESTRIO_CURRENT),
+        ("Osoba Rada Nadzorcza", REJESTRIO_CURRENT),
+        ("Osoba Zarząd", REJESTRIO_CURRENT),
+    ]
+
+
+def test_people_with_an_entry_in_a_current_seat_go_as_the_odpis_only_ones_do():
+    """Newest post first; on one day a company the site has a page for first,
+    then a company's people together, then by name; undated last."""
+    fourth = "0000000004"
+    site = snapshot()  # A page for PUBLIC; none for OTHER_PUBLIC or the fourth.
+
+    def linked(name: str, number: int, *companies: Company) -> Person:
+        return person(name, f"https://rejestr.io/osoby/{number}", *companies)
+
+    newer = linked("Karol Nowy", 1, Company(krs=PUBLIC, start="2025-02-01"))
+    at_a_page = linked("Zofia Zając", 2, Company(krs=PUBLIC, start="2024-05-01"))
+    board = [
+        linked("Barbara Lis", 3, Company(krs=OTHER_PUBLIC, start="2024-05-01")),
+        linked("Adam Bąk", 4, Company(krs=OTHER_PUBLIC, start="2024-05-01")),
+    ]
+    elsewhere = linked("Agata Ryba", 5, Company(krs=fourth, start="2024-05-01"))
+    undated = linked("Olga Stara", 6, Company(krs=PUBLIC))
+
+    picks = prioritised(
+        [undated, elsewhere, board[0], at_a_page, newer, board[1]],
+        [],
+        site,
+        public_krs={PUBLIC, OTHER_PUBLIC, fourth},
+        published_ids=set(),
+        bought=set(),
+        noted={},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert [(p.person.name, p.since) for p in picks] == [
+        ("Karol Nowy", "2025-02-01"),
+        ("Zofia Zając", "2024-05-01"),
+        ("Adam Bąk", "2024-05-01"),
+        ("Barbara Lis", "2024-05-01"),
+        ("Agata Ryba", "2024-05-01"),
+        ("Olga Stara", None),
+    ]
+    assert {p.tier for p in picks} == {REJESTRIO_CURRENT}
+
+
+def test_somebody_with_an_entry_in_a_current_seat_keeps_a_new_page_s_guards():
+    """The tier is what `missing_from_koryta` keeps: somebody whose entry the
+    site has lands on their page and is no new page; of two born the same day
+    under one name the one with the entry goes, and the one only an odpis
+    names, whom the ingest would put on the page just made, waits."""
+    site = snapshot(stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1"))
+    on_site = person(
+        "Jan Kowalski",
+        "https://rejestr.io/osoby/1",
+        Company(krs=PUBLIC, start="2020-01-01"),
+    )
+    born = "1971-03-14"
+    linked_twin = person(
+        "Ewa Lis",
+        "https://rejestr.io/osoby/8",
+        Company(krs=PUBLIC, start="2019-01-01"),
+        birthDate=born,
+    )
+    odpis_twin = odpis_only("Ewa Lis", Company(krs=PUBLIC, start="2018-01-01"))
+    assert odpis_twin.birthDate == born
+    payloads = [on_site, linked_twin, odpis_twin]
+
+    picks = prioritised(
+        missing_from_koryta(payloads, site),
+        matching_one_page(payloads, site),
+        site,
+        public_krs={PUBLIC},
+        published_ids=set(),
+        bought=set(),
+        noted={},
+        today=TODAY,
+        recent_days=30,
+    )
+
+    assert [(p.person.name, p.tier) for p in picks] == [
+        ("Ewa Lis", REJESTRIO_CURRENT),
+        ("Jan Kowalski", ON_SITE),
+    ]
+    assert picks[0].person.rejestrIo == "https://rejestr.io/osoby/8"
