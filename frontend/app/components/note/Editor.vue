@@ -28,13 +28,13 @@
          to give examples of. -->
     <template v-if="user && !userNote && !isEditing" #info>
       <template v-if="snippetOnly">
-        Zapisz fragment albo własny komentarz. Notatki są publiczne – w ten
+        Zapisz fragment albo własny komentarz. Notatki są publiczne - w ten
         sposób pomożesz innym zrozumieć, dlaczego ten tekst jest tu trzymany.
       </template>
       <template v-else>
         <p class="mb-1">
           Wklej tu, co udało Ci się znaleźć, razem z linkiem do źródła.
-          {{ audience }} i to z nich powstają kolejne powiązania w bazie – nie
+          {{ audience }} i to z nich powstają kolejne powiązania w bazie - nie
           musi to być nic odkrywczego.
         </p>
         <ul class="k-examples">
@@ -142,7 +142,7 @@
         class="mt-3"
         data-testid="note-save-error"
       >
-        Nie udało się zapisać notatki. Sprawdź połączenie i spróbuj ponownie –
+        Nie udało się zapisać notatki. Sprawdź połączenie i spróbuj ponownie -
         wpisany tekst jest nadal tutaj.
       </v-alert>
       <v-alert

@@ -8,8 +8,8 @@ import { relationPeriodLabel } from "~/utils/relationPeriod";
  * the rows they clicked. That matters most for the one that destroys it.
  *
  * `subject` is the page the relation is being read from, so the same edge reads
- * "Jan Kowalski – Zatrudniony/a w – Orlen" on his profile and
- * "Orlen – Zatrudniony/a w – Jan Kowalski" on the company's, with the period
+ * "Jan Kowalski - Zatrudniony/a w - Orlen" on his profile and
+ * "Orlen - Zatrudniony/a w - Jan Kowalski" on the company's, with the period
  * as every relation's is printed (`relationPeriodLabel`).
  *
  * A util rather than part of `composables/edges`, because the pages that draw
@@ -22,7 +22,7 @@ export function edgeSentence(
 ): string {
   if (!edge) return "";
   const period = relationPeriodLabel(edge.start_date, edge.end_date);
-  return [`${subject ?? ""} – ${edge.label} – ${edge.richNode.name}`, period]
+  return [`${subject ?? ""} - ${edge.label} - ${edge.richNode.name}`, period]
     .filter(Boolean)
     .join(" · ");
 }

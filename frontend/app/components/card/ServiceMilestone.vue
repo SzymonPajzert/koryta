@@ -101,7 +101,7 @@
         <span
           v-if="milestone.spells > 1"
           class="milestone-card__gap text-caption d-inline-flex align-center ga-1"
-          title="Staż liczony z przerwami – przerwy nie wliczają się, więc ta data jest późniejsza niż rocznica pierwszego dnia pracy"
+          title="Staż liczony z przerwami - przerwy nie wliczają się, więc ta data jest późniejsza niż rocznica pierwszego dnia pracy"
         >
           <v-icon :icon="mdiCallSplit" size="13" />
           {{ spellsLabel }}

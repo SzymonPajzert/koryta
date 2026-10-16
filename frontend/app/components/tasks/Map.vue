@@ -409,7 +409,7 @@ const nodes = computed<Node[]>(() => {
       selectable: false,
       connectable: false,
       data: {
-        text: "Bez powiązań – przeciągnij strzałkę od jednego do drugiego, żeby je połączyć",
+        text: "Bez powiązań - przeciągnij strzałkę od jednego do drugiego, żeby je połączyć",
       },
     });
   }

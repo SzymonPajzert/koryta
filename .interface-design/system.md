@@ -78,7 +78,7 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   back, and it carries a chevron down. Szymon: "Don't keep the pokaż mniej
   toggle for now, sure, let's add a chevron" (2026-10-15).
 - **/eksploruj/tabela on desktop: one summary line per person**, e.g.
-  „8 spółek ▾ · ostatnio <company> · 2023–2024 · 12 lat pracy · 8 startów”.
+  „8 spółek ▾ · ostatnio <company> · 2023-2024 · 12 lat pracy · 8 startów”.
   Each row's „N spółek ▾” opens its companies in place, and a single
   „Rozwiń wszystkie” toggle opens every row at once. This was picked over the
   rendered list of three posts per person (2026-10-15).
@@ -97,6 +97,9 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
 - **Admin page titles follow the public pages' title rule**: the h1 is
   40/700, 28 on phones, not a smaller 28 for working pages. Szymon: "Let's
   keep the admin pages like public pages for now" (2026-10-15).
+- **The site's text uses the plain hyphen „-”**, never „–” or „—”, in prose
+  and in date ranges alike. Szymon: "This is very AI and I think people
+  start noticing it" (2026-10-16).
 - **The admin and working pages share the public pages' frame** (approved
   2026-10-16 from rendered screenshots, task
   approve-redesign-admin-pages-screenshots). They use one column and inset

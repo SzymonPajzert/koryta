@@ -17,7 +17,7 @@
        wrong claim into a different claim. The pickers still draw the pair, so
        without this the form would look as though it offered to move them. -->
   <p v-if="editedEdge" class="text-caption text-medium-emphasis mb-0">
-    Zmieniasz to, co powiązanie mówi. Kogo łączy i jakiego jest rodzaju – nie;
+    Zmieniasz to, co powiązanie mówi. Kogo łączy i jakiego jest rodzaju - nie;
     do tego służy usunięcie i dodanie właściwego.
   </p>
 

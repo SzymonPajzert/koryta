@@ -3,7 +3,7 @@
     <v-card data-testid="promote-fact-dialog">
       <v-card-title class="pb-1">Utwórz powiązanie z tego faktu</v-card-title>
       <v-card-subtitle class="pb-3 text-wrap">
-        Powiązanie trafi do poczekalni jako szkic – zobaczy je administrator,
+        Powiązanie trafi do poczekalni jako szkic - zobaczy je administrator,
         zanim stanie się publiczne.
       </v-card-subtitle>
 
@@ -123,7 +123,7 @@
           class="mt-3"
           data-testid="promote-fact-exists"
         >
-          To powiązanie już jest w bazie, więc nie dodaliśmy drugiego – ten fakt
+          To powiązanie już jest w bazie, więc nie dodaliśmy drugiego - ten fakt
           prowadzi teraz do niego.
         </v-alert>
         <!-- The same identity, but an administrator removed it. Writing it

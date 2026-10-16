@@ -160,7 +160,7 @@
         variant="tonal"
         density="compact"
         class="mb-4"
-        text="W tym okresie było więcej, niż zdążyliśmy przejrzeć – lista jest niepełna."
+        text="W tym okresie było więcej, niż zdążyliśmy przejrzeć - lista jest niepełna."
       />
 
       <v-skeleton-loader v-if="waiting" type="list-item-two-line@4" />

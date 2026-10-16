@@ -91,7 +91,7 @@ export const voteCategoryConfig: Record<
     icon: mdiAccountAlertOutline,
     color: "ink-warning",
     downColor: "ink-warning",
-    meaning: "W górę: to imiennik – fakt dotyczy kogoś innego o tym nazwisku.",
+    meaning: "W górę: to imiennik - fakt dotyczy kogoś innego o tym nazwisku.",
   },
 };
 

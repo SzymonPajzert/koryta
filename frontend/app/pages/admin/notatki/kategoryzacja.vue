@@ -105,7 +105,7 @@
                sometimes that is not enough to say what the entry is about. -->
           <v-list-item
             title="Nie da się ocenić tutaj"
-            subtitle="Trzeba zobaczyć węzeł – oceń w tabeli na komputerze."
+            subtitle="Trzeba zobaczyć węzeł - oceń w tabeli na komputerze."
             class="py-2"
             @click="defer"
           >

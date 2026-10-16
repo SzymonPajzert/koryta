@@ -27,7 +27,7 @@
       <v-icon :icon="mdiCheck" size="16" />
       Powiązanie utworzone
       <v-tooltip activator="parent" location="bottom" max-width="280">
-        Ten fakt jest już powiązaniem w bazie – jest w „Historii powiązań” na
+        Ten fakt jest już powiązaniem w bazie - jest w „Historii powiązań” na
         stronie osoby. Zanim stanie się publiczne, zatwierdza je administrator.
       </v-tooltip>
     </span>

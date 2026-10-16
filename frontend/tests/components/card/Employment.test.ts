@@ -51,12 +51,12 @@ describe("CardEmployment", () => {
   });
 
   it("reads a spell with no end as still running", async () => {
-    expect((await mount()).text()).toContain("2024-01-01 – obecnie");
+    expect((await mount()).text()).toContain("2024-01-01 - obecnie");
   });
 
   it("prints both ends of a spell that finished", async () => {
     expect((await mount({ end_date: "2025-06-30" })).text()).toContain(
-      "2024-01-01 – 2025-06-30",
+      "2024-01-01 - 2025-06-30",
     );
   });
 
@@ -64,7 +64,7 @@ describe("CardEmployment", () => {
     const text = (await mount({ end_date: "2024-01-01" })).text();
 
     expect(text).toContain("2024-01-01");
-    expect(text).not.toContain("2024-01-01 – ");
+    expect(text).not.toContain("2024-01-01 - ");
   });
 
   it("says so when the institution is publicly owned", async () => {

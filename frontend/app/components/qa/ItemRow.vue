@@ -90,7 +90,7 @@
 
     <v-textarea
       v-model="feedback"
-      label="Uwagi – co nie działa, co zmienić"
+      label="Uwagi - co nie działa, co zmienić"
       rows="2"
       auto-grow
       variant="outlined"

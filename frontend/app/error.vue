@@ -67,7 +67,7 @@ const title = computed(() =>
 const description = computed(() =>
   isNotFound.value
     ? "Strona, której szukasz, została przeniesiona albo nigdy nie istniała. Sprawdź adres lub zacznij od strony głównej."
-    : "Po naszej stronie wystąpił błąd. Spróbuj ponownie za chwilę – jeśli problem się powtarza, daj nam znać.",
+    : "Po naszej stronie wystąpił błąd. Spróbuj ponownie za chwilę - jeśli problem się powtarza, daj nam znać.",
 );
 
 const devMessage = computed(() =>

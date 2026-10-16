@@ -7,7 +7,7 @@
       <div>
         <h1 class="text-h4">Powiązania do opublikowania</h1>
         <div class="text-caption text-grey-darken-1">
-          Nieopublikowane powiązania, których obie strony są już opublikowane –
+          Nieopublikowane powiązania, których obie strony są już opublikowane -
           czyli te, które można pokazać publicznie od razu.
         </div>
       </div>
@@ -92,7 +92,7 @@
             relationPeriodLabel(
               item.start_date ?? undefined,
               item.end_date ?? undefined,
-            ) || "–"
+            ) || "-"
           }}</span
         >
       </template>

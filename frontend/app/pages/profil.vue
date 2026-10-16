@@ -77,7 +77,7 @@
           <v-card-subtitle class="text-wrap">
             Ranking na
             <NuxtLink to="/eksploruj/statystyki">stronie statystyk</NuxtLink>
-            pokazuje, kto ile sprawdził, a strona Aktywność – kto co i kiedy
+            pokazuje, kto ile sprawdził, a strona Aktywność - kto co i kiedy
             zrobił. Nazwy są w nich ukryte, dopóki ich właściciele nie zdecydują
             inaczej.
           </v-card-subtitle>

@@ -127,7 +127,7 @@ export const usePersonSearch = (
     const targets: PersonSearchTarget[] = [
       {
         key: "rejestr",
-        label: person.rejestrIo ? "rejestr.io – strona osoby" : "rejestr.io",
+        label: person.rejestrIo ? "rejestr.io - strona osoby" : "rejestr.io",
         source: "rejestr",
         url: person.rejestrIo || `https://rejestr.io/krs?q=${name}`,
       },
@@ -136,7 +136,7 @@ export const usePersonSearch = (
     if (person.wikipedia) {
       targets.push({
         key: "wikipedia",
-        label: "Wikipedia – strona osoby",
+        label: "Wikipedia - strona osoby",
         source: "wikipedia",
         url: person.wikipedia,
       });

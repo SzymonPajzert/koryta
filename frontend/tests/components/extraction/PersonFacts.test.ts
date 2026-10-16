@@ -350,7 +350,7 @@ describe("ExtractionPersonFacts", () => {
     const section = await mount();
 
     expect(section.get("[data-testid='person-extractions-lead']").text()).toBe(
-      "Automatycznie wyszukane w prasie – mogą być błędne.",
+      "Automatycznie wyszukane w prasie - mogą być błędne.",
     );
     expect(section.text()).not.toContain("po imieniu i nazwisku");
 

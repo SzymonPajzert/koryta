@@ -5,7 +5,7 @@
       <v-card-text>
         <p class="mb-4 text-body-2">
           Nic w bazie nie mówi, które powiązanie należy do którego z dwóch
-          imienników – wie to tylko człowiek, który je przeczyta. Dlatego można
+          imienników - wie to tylko człowiek, który je przeczyta. Dlatego można
           albo zostawić znak dla siebie na potem, albo rozdzielić powiązania
           ręcznie.
         </p>
@@ -187,7 +187,7 @@
             </p>
             <p v-if="plan.counts.review" class="mb-1">
               W tym <strong>{{ plan.counts.review }}</strong> mimo tego, że
-              strona docelowa mówi już to samo – takie powtórzenie trzeba
+              strona docelowa mówi już to samo - takie powtórzenie trzeba
               obejrzeć samemu.
             </p>
             <p v-if="plan.counts.collapsed" class="mb-1">

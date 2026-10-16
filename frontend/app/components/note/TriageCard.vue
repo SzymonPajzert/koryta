@@ -78,7 +78,7 @@
     <template v-else>
       <v-divider />
       <div class="px-4 py-2 text-caption text-medium-emphasis">
-        Brak źródła – oceń po samej treści.
+        Brak źródła - oceń po samej treści.
       </div>
     </template>
   </article>

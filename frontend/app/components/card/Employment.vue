@@ -103,7 +103,7 @@ const company = computed<Company>(() => ({
  * the missing end that decides. */
 const ongoing = computed(() => props.employment.end_date === null);
 
-/** "2024-03-01 – obecnie", and the single date where a spell began and ended
+/** "2024-03-01 - obecnie", and the single date where a spell began and ended
  * on the same day - `relationPeriodLabel`'s rule, as every relation's period
  * on the site. A missing end means the post is still held. */
 const period = computed(() =>

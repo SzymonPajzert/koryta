@@ -54,7 +54,7 @@
     </v-row>
 
     <v-alert v-else type="info" variant="tonal">
-      Nie ma jeszcze żadnego tematu. Temat zakłada się ze strony artykułu –
+      Nie ma jeszcze żadnego tematu. Temat zakłada się ze strony artykułu -
       wpisz nazwę w polu "Dodaj do tematu".
     </v-alert>
   </div>
@@ -86,6 +86,6 @@ function topicUrl(topic: TopicSummary) {
 useSeoMeta({
   title: "Tematy",
   description:
-    "Sprawy, które śledzimy przez wiele artykułów naraz – kto jest w każdej z nich i jak te osoby są ze sobą powiązane.",
+    "Sprawy, które śledzimy przez wiele artykułów naraz - kto jest w każdej z nich i jak te osoby są ze sobą powiązane.",
 });
 </script>

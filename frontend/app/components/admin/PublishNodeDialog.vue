@@ -201,7 +201,7 @@
         >
           <p class="mb-1">
             <strong>Strona została opublikowana, ale powiązania nie.</strong>
-            Żadne z zaznaczonych powiązań nie trafiło na stronę – są publikowane
+            Żadne z zaznaczonych powiązań nie trafiło na stronę - są publikowane
             razem albo wcale.
           </p>
           <p class="mb-1 text-body-2">{{ relationsFailed }}</p>

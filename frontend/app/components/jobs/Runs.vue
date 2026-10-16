@@ -90,7 +90,7 @@
             v-if="run.phase && !isFinished(run.state)"
             class="text-medium-emphasis"
           >
-            – {{ run.phase }}
+            - {{ run.phase }}
           </span>
           <a
             :href="`#${runAnchor(run.id)}`"
