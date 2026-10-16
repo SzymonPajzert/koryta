@@ -89,7 +89,7 @@ JOB_RUNS_COLLECTION = "jobRuns"
 HEARTBEAT_EVERY = 60.0
 
 #: As `RUN_ERRORS_KEPT` and `RUN_ERROR_CHARS` in shared/jobs.ts, which apply
-#: them again on read.
+#: them again on read. A run's warnings are kept to the same.
 ERRORS_KEPT = 20
 ERROR_CHARS = 500
 
@@ -288,6 +288,7 @@ class JobRun:
         self._finished_at: datetime | None = None
         self._stop_reason: str | None = None
         self._errors: list[str] = []
+        self._warnings: list[str] = []
         self._exit_code: int | None = None
         self._summary_path: str | None = None
 
@@ -367,12 +368,18 @@ class JobRun:
         *,
         stop_reason: str | None = None,
         errors: Iterable[object] = (),
+        warnings: Iterable[object] = (),
         exit_code: int | None = None,
         counters: Mapping[str, object] | None = None,
         done: float | None = None,
         summary_path: str | None = None,
     ) -> None:
-        """Record how the run ended. Only the first call counts."""
+        """Record how the run ended. Only the first call counts.
+
+        `warnings` are what the run noticed and went on past - something to
+        look at that made it no less of a success, such as the night's checks
+        eating into a budget's buffer - kept apart from its `errors`.
+        """
         if state not in FINAL_STATES:
             raise ValueError(f"{state!r} is not one of {FINAL_STATES}")
         with self._state:
@@ -385,6 +392,9 @@ class JobRun:
             self._finished_at = now
             self._stop_reason = stop_reason
             self._errors = [str(error)[:ERROR_CHARS] for error in errors][:ERRORS_KEPT]
+            self._warnings = [str(warning)[:ERROR_CHARS] for warning in warnings][
+                :ERRORS_KEPT
+            ]
             self._exit_code = exit_code
             self._summary_path = summary_path
             write = self._take(now, finishing=True)
@@ -456,6 +466,7 @@ class JobRun:
             "phase": self._phase,
             "stopReason": self._stop_reason,
             "errors": list(self._errors),
+            "warnings": list(self._warnings),
             "exitCode": self._exit_code,
             "summaryPath": self._summary_path,
             "version": self.version,
@@ -509,6 +520,7 @@ class JobRun:
                     "heartbeatAt": now,
                     "stopReason": self._stop_reason,
                     "errors": list(self._errors),
+                    "warnings": list(self._warnings),
                     "exitCode": self._exit_code,
                     "summaryPath": self._summary_path,
                     "progress": self._progress_field(),
