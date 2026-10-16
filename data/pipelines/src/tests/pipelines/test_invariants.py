@@ -17,7 +17,9 @@ Where an invariant does not hold today the test carries a **budget**: the number
 of documents known to be broken, with a note on what broke them. The invariant
 is still stated in full - the budget only stops a known problem from failing the
 build, and shrinks as the data is repaired. New breakage pushes the count over
-the budget and fails.
+the budget: for the first `BUDGET_BUFFER` (ten) past it the test passes with a
+warning, which the night reports, and beyond that it fails (`within_budget` in
+conftest.py).
 
 Reading the export needs credentials and a download, so the whole file is
 marked ``e2e`` and deselected by default. Run it with::
@@ -467,7 +469,7 @@ def test_extraction_fact_types_are_known(extractions):
 # --------------------------------------------------------------------------- #
 
 
-def test_every_vote_names_the_document_it_is_about(votes):
+def test_every_vote_names_the_document_it_is_about(votes, within_budget):
     """A vote sets exactly one of `nodeId` and `extractionId`.
 
     `onVoteWritten` has nothing to aggregate into otherwise: it logs a warning
@@ -486,7 +488,7 @@ def test_every_vote_names_the_document_it_is_about(votes):
         if bool(vote.get("nodeId")) == bool(vote.get("extractionId"))
     ]
 
-    assert len(untargeted) <= LEGACY_VOTES, (
+    assert within_budget(len(untargeted), LEGACY_VOTES), (
         f"{len(untargeted)} votes name neither a node nor an extraction (or "
         f"both), up from the {LEGACY_VOTES} known legacy documents. "
         f"Sample IDs: {sample(untargeted)}"
@@ -661,7 +663,7 @@ def test_a_published_node_is_in_the_listings(nodes):
     )
 
 
-def test_a_node_with_a_name_index_can_be_searched_for(nodes):
+def test_a_node_with_a_name_index_can_be_searched_for(nodes, within_budget):
     """Carrying the search index is not enough to be found by it.
 
     `/api/search` matches on `nameChunksLower` and orders the hits by
@@ -693,7 +695,7 @@ def test_a_node_with_a_name_index_can_be_searched_for(nodes):
         and "nodeGroupSize" not in stats_of(document)
     ]
 
-    assert len(unfindable) <= UNSEEDED, (
+    assert within_budget(len(unfindable), UNSEEDED), (
         f"{len(unfindable)} nodes carry a name index but no "
         f"`stats.nodeGroupSize`, so no search for their name returns them - up "
         f"from the {UNSEEDED} known ones: {sample(unfindable)}"
@@ -701,7 +703,9 @@ def test_a_node_with_a_name_index_can_be_searched_for(nodes):
 
 
 @pytest.mark.parametrize("collection", ["nodes", "edges"])
-def test_revision_id_points_at_the_documents_own_revision(snapshot, collection):
+def test_revision_id_points_at_the_documents_own_revision(
+    snapshot, collection, within_budget
+):
     """`revision_id` names the revision that was published.
 
     `/api/revisions/byNode` compares it against the revisions of that document
@@ -727,14 +731,14 @@ def test_revision_id_points_at_the_documents_own_revision(snapshot, collection):
             wrong.append((document["id"], reference_id(document["revision_id"])))
 
     budget = SEEDED_REGIONS[collection]
-    assert len(wrong) <= budget, (
+    assert within_budget(len(wrong), budget), (
         f"{len(wrong)} {collection} have a revision_id that is not a revision "
         f"of that document, up from the {budget} known seeded regions. "
         f"Sample (document, revision_id): {sample(wrong)}"
     )
 
 
-def test_node_types_are_known(nodes):
+def test_node_types_are_known(nodes, within_budget):
     """Every node is one of the four types the frontend can render.
 
     `getNodesNoStats` builds the graph from people, companies and regions only,
@@ -756,14 +760,14 @@ def test_node_types_are_known(nodes):
         if document.get("type") not in NODE_TYPES
     )
 
-    assert len(unknown) <= LEGACY_BLOBS, (
+    assert within_budget(len(unknown), LEGACY_BLOBS), (
         f"{len(unknown)} nodes have a type the frontend does not render "
         f"({dict(by_type)}), up from the {LEGACY_BLOBS} known legacy blobs. "
         f"Sample IDs: {sample(unknown)}"
     )
 
 
-def test_every_node_has_a_name(nodes):
+def test_every_node_has_a_name(nodes, within_budget):
     """`name` is what search indexes and what every listing shows."""
     # The same 233 legacy blobs, which hold `text` or `url` instead, plus six
     # article nodes created from a url whose title could not be read.
@@ -774,13 +778,13 @@ def test_every_node_has_a_name(nodes):
         document.get("type") for document in nodes if not document.get("name")
     )
 
-    assert len(nameless) <= NAMELESS, (
+    assert within_budget(len(nameless), NAMELESS), (
         f"{len(nameless)} nodes have no name ({dict(by_type)}), up from the "
         f"{NAMELESS} known ones. Sample IDs: {sample(nameless)}"
     )
 
 
-def test_every_article_has_a_publication_date(articles):
+def test_every_article_has_a_publication_date(articles, within_budget):
     """An article with no `publishedDate` is not in /zrodla at all.
 
     The page asks for its rows with `sortBy=publishedDate`, which reaches the
@@ -811,14 +815,14 @@ def test_every_article_has_a_publication_date(articles):
         if not has_date(document, "publishedDate")
     ]
 
-    assert len(undated) <= UNDATED, (
+    assert within_budget(len(undated), UNDATED), (
         f"{len(undated)} articles have no publishedDate and so appear nowhere "
         f"in /zrodla, up from the {UNDATED} the backfill knows about. "
         f"Sample IDs: {sample(undated)}"
     )
 
 
-def test_every_article_says_where_it_came_from(articles):
+def test_every_article_says_where_it_came_from(articles, within_budget):
     """`sourceURL` is the article's identity, not one of its details.
 
     `findArticleNodeId` is the only thing standing between the site and a second
@@ -839,14 +843,14 @@ def test_every_article_says_where_it_came_from(articles):
         document["id"] for document in articles if not document.get("sourceURL")
     ]
 
-    assert len(unsourced) <= URL_LESS, (
+    assert within_budget(len(unsourced), URL_LESS), (
         f"{len(unsourced)} articles have no sourceURL, so nothing can find them "
         f"again and the next paste of that link makes a second copy - up from "
         f"the {URL_LESS} known ones. Sample IDs: {sample(unsourced)}"
     )
 
 
-def test_every_article_has_an_approved_revision(articles):
+def test_every_article_has_an_approved_revision(articles, within_budget):
     """An article node is published the moment it is created, or never.
 
     Articles are the one type with no review step: `ensureArticleNode` calls
@@ -866,14 +870,14 @@ def test_every_article_has_an_approved_revision(articles):
 
     stuck = [document["id"] for document in articles if not document.get("revision_id")]
 
-    assert len(stuck) <= UNAPPROVED, (
+    assert within_budget(len(stuck), UNAPPROVED), (
         f"{len(stuck)} articles have no approved revision, so they are invisible "
         f"and there is no way to approve them from the UI - up from the "
         f"{UNAPPROVED} known ones. Sample IDs: {sample(stuck)}"
     )
 
 
-def test_person_names_are_capitalised(nodes):
+def test_person_names_are_capitalised(nodes, within_budget):
     """A person node is named the way the site shows a name, not the way a
     register recorded it.
 
@@ -914,14 +918,14 @@ def test_person_names_are_capitalised(nodes):
         and format_person_name(document["name"]) != document["name"]
     ]
 
-    assert len(misformatted) <= MISFORMATTED, (
+    assert within_budget(len(misformatted), MISFORMATTED), (
         f"{len(misformatted)} person nodes are not named in the capitalised form "
         f"the pipeline writes, up from the {MISFORMATTED} known ones. "
         f"Sample: {sample(misformatted)}"
     )
 
 
-def test_array_fields_are_stored_as_arrays(nodes):
+def test_array_fields_are_stored_as_arrays(nodes, within_budget):
     """An array field has to be a real array for `array-contains` to see it.
 
     `sanitizeFirestoreData` used to rewrite arrays as maps with numbered keys
@@ -951,7 +955,7 @@ def test_array_fields_are_stored_as_arrays(nodes):
     by_field = collections.Counter(field for _, field in not_arrays)
     documents = {document_id for document_id, _ in not_arrays}
 
-    assert len(documents) <= MAP_VALUED, (
+    assert within_budget(len(documents), MAP_VALUED), (
         f"{len(documents)} nodes store an array field as a map ({dict(by_field)}), "
         f"and are missing from any array-contains filter on it - up from the "
         f"{MAP_VALUED} the migration knows about. "
@@ -959,7 +963,7 @@ def test_array_fields_are_stored_as_arrays(nodes):
     )
 
 
-def test_companies_are_not_duplicated_by_krs(nodes):
+def test_companies_are_not_duplicated_by_krs(nodes, within_budget):
     """One company node per KRS number.
 
     Both the company ingest and the KRS table filter look a company up with
@@ -985,13 +989,13 @@ def test_companies_are_not_duplicated_by_krs(nodes):
     )
     duplicated = {krs: count for krs, count in counts.items() if count > 1}
 
-    assert len(duplicated) <= KNOWN_DUPLICATES, (
+    assert within_budget(len(duplicated), KNOWN_DUPLICATES), (
         f"{len(duplicated)} KRS numbers have more than one company node, up from "
         f"the {KNOWN_DUPLICATES} known ones: {sample(duplicated)}"
     )
 
 
-def test_a_company_can_be_told_apart_from_the_others(nodes):
+def test_a_company_can_be_told_apart_from_the_others(nodes, within_budget):
     """No two companies go by the same name.
 
     Municipal companies are named after what they do and every town has one:
@@ -1017,14 +1021,14 @@ def test_a_company_can_be_told_apart_from_the_others(nodes):
     shared = {name: count for name, count in counts.items() if count > 1}
     affected = sum(shared.values())
 
-    assert affected <= KNOWN_SHARED_NAMES, (
+    assert within_budget(affected, KNOWN_SHARED_NAMES), (
         f"{affected} companies across {len(shared)} names cannot be told apart "
         f"from another company by name, up from the {KNOWN_SHARED_NAMES} known "
         f"ones: {sample(shared, 5)}"
     )
 
 
-def test_every_company_is_published(nodes):
+def test_every_company_is_published(nodes, within_budget):
     """A company node is published, or nothing on the site can link to it.
 
     Unlike a person, a company is never somebody's unverified claim: the nodes
@@ -1053,7 +1057,7 @@ def test_every_company_is_published(nodes):
         if document.get("type") == "place" and not page_is_public(document)
     ]
 
-    assert len(unpublished) <= UNPUBLISHED_COMPANIES, (
+    assert within_budget(len(unpublished), UNPUBLISHED_COMPANIES), (
         f"{len(unpublished)} companies are not published, so every link to one "
         f"of them is a dead end for a logged out reader - up from the "
         f"{UNPUBLISHED_COMPANIES} the migration knows about: {sample(unpublished)}"
@@ -1078,7 +1082,7 @@ def test_regions_are_identified_by_teryt(nodes):
     assert not duplicated, f"TERYT codes used by several regions: {duplicated}"
 
 
-def test_edge_stats_cover_every_edge_of_the_node(nodes, edges):
+def test_edge_stats_cover_every_edge_of_the_node(nodes, edges, within_budget):
     """`stats.edges.all.targetNodeIds` is the index behind the table filters.
 
     The people table filters by company and by region through an
@@ -1126,7 +1130,7 @@ def test_edge_stats_cover_every_edge_of_the_node(nodes, edges):
         if missing:
             incomplete.append((document["id"], sample(missing, 3)))
 
-    assert len(incomplete) <= RECOMPUTE_LAG, (
+    assert within_budget(len(incomplete), RECOMPUTE_LAG), (
         f"{len(incomplete)} nodes have live edge targets missing from "
         f"stats.edges.all.targetNodeIds, so the table filters cannot find them, "
         f"more than the {RECOMPUTE_LAG} the sweep's lag explains: "
@@ -1159,7 +1163,7 @@ def test_edge_endpoints_exist(edges, node_ids):
     )
 
 
-def test_edge_types_are_known(edges):
+def test_edge_types_are_known(edges, within_budget):
     """Only the edge types `shared/model.ts` declares may be stored."""
     # 64 `source` and 3 `mentioned_person` edges. `source` predates article
     # nodes and points at a legacy blob; `mentioned_person` is the *UI* name for
@@ -1171,13 +1175,13 @@ def test_edge_types_are_known(edges):
         edge.get("type") for edge in edges if edge.get("type") not in EDGE_TYPES
     )
 
-    assert sum(unknown.values()) <= LEGACY_EDGE_TYPES, (
+    assert within_budget(sum(unknown.values()), LEGACY_EDGE_TYPES), (
         f"{sum(unknown.values())} edges have a type the frontend does not "
         f"handle ({dict(unknown)}), up from the {LEGACY_EDGE_TYPES} known ones."
     )
 
 
-def test_edges_join_the_node_types_they_are_defined_for(edges, snapshot):
+def test_edges_join_the_node_types_they_are_defined_for(edges, snapshot, within_budget):
     """An `employed` edge runs person -> place, an `election` person -> region.
 
     The stats pipeline relies on it without checking: `computeEdgeStats` reads
@@ -1204,14 +1208,14 @@ def test_edges_join_the_node_types_they_are_defined_for(edges, snapshot):
         if pair not in allowed:
             wrong[(edge["type"], *pair)] += 1
 
-    assert sum(wrong.values()) <= LEGACY_ORIENTATIONS, (
+    assert within_budget(sum(wrong.values()), LEGACY_ORIENTATIONS), (
         f"{sum(wrong.values())} edges join node types their edge type is not "
         f"defined for, up from the {LEGACY_ORIENTATIONS} known ones, as "
         f"(edge type, source type, target type): {dict(wrong)}"
     )
 
 
-def test_a_state_edge_is_not_stored_twice(edges):
+def test_a_state_edge_is_not_stored_twice(edges, within_budget):
     """A tie that either holds or does not may only be recorded once.
 
     `owns`, `mentions` and `comment` assert a relationship rather than an
@@ -1236,7 +1240,7 @@ def test_a_state_edge_is_not_stored_twice(edges):
     redundant = sum(len(ids) - 1 for ids in duplicated.values())
     by_type = collections.Counter(key[2] for key in duplicated)
 
-    assert redundant <= DUPLICATED_STATE_EDGES, (
+    assert within_budget(redundant, DUPLICATED_STATE_EDGES), (
         f"{redundant} state edges duplicate another one across "
         f"{len(duplicated)} pairs ({dict(by_type)}), up from the "
         f"{DUPLICATED_STATE_EDGES} known ones. "
@@ -1244,7 +1248,7 @@ def test_a_state_edge_is_not_stored_twice(edges):
     )
 
 
-def test_nobody_stands_in_two_places_at_once(edges, nodes):
+def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
     """One person, one election, one constituency.
 
     Where that does not hold, the person is two people: `create_people_table`
@@ -1300,7 +1304,7 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes):
         key: teryts for key, teryts in regions.items() if contradict(teryts)
     }
 
-    assert len(contradictory) <= KNOWN_CONTRADICTIONS, (
+    assert within_budget(len(contradictory), KNOWN_CONTRADICTIONS), (
         f"{len(contradictory)} candidacies put one person in two constituencies "
         f"in the same election, up from the {KNOWN_CONTRADICTIONS} known ones, "
         f"so the person is two people: "
@@ -1308,7 +1312,7 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes):
     )
 
 
-def test_occurrence_edges_may_repeat(edges):
+def test_occurrence_edges_may_repeat(edges, within_budget):
     """Two identical `election` or `employed` edges are not a defect to fix.
 
     They are how the database says a person stood twice or was employed twice,
@@ -1354,7 +1358,7 @@ def test_occurrence_edges_may_repeat(edges):
 
     duplicated = {key: ids for key, ids in groups.items() if len(ids) > 1}
 
-    assert len(duplicated) <= KNOWN_COPIES, (
+    assert within_budget(len(duplicated), KNOWN_COPIES), (
         f"{len(duplicated)} candidacies are recorded twice for an office that "
         f"can only be stood for once, up from the {KNOWN_COPIES} known copies, "
         f"so the repeats are not two real candidacies after all: "
@@ -1362,7 +1366,7 @@ def test_occurrence_edges_may_repeat(edges):
     )
 
 
-def test_one_spell_of_employment_is_stored_once(edges):
+def test_one_spell_of_employment_is_stored_once(edges, within_budget):
     """A person may hold the same role at the same company twice - not at once.
 
     Unlike a candidacy, an employment carries the fields that tell two spells
@@ -1407,7 +1411,7 @@ def test_one_spell_of_employment_is_stored_once(edges):
     duplicated = {key: ids for key, ids in groups.items() if len(ids) > 1}
     redundant = sum(len(ids) - 1 for ids in duplicated.values())
 
-    assert redundant <= DUPLICATED_SPELLS, (
+    assert within_budget(redundant, DUPLICATED_SPELLS), (
         f"{redundant} employment edges repeat a spell already stored across "
         f"{len(duplicated)} (person, company, role, start) groups, up from the "
         f"{DUPLICATED_SPELLS} known ones. "
@@ -1415,7 +1419,7 @@ def test_one_spell_of_employment_is_stored_once(edges):
     )
 
 
-def test_employment_says_what_the_person_did(edges, entered_by_hand):
+def test_employment_says_what_the_person_did(edges, entered_by_hand, within_budget):
     """Every `employed` edge carries a role.
 
     The role is half of what tells two spells apart - `EDGE_SEMANTICS` keys an
@@ -1456,14 +1460,16 @@ def test_employment_says_what_the_person_did(edges, entered_by_hand):
         and not edge.get("name")
     ]
 
-    assert len(roleless) <= KNOWN_ROLELESS, (
+    assert within_budget(len(roleless), KNOWN_ROLELESS), (
         f"{len(roleless)} employment edges say nothing about what the person "
         f"did, up from the {KNOWN_ROLELESS} known ones: {sample(roleless)}"
     )
 
 
 @pytest.mark.parametrize("edge_type", DATED_EDGE_TYPES)
-def test_a_dated_edge_says_when_it_began(edges, entered_by_hand, edge_type):
+def test_a_dated_edge_says_when_it_began(
+    edges, entered_by_hand, edge_type, within_budget
+):
     """An edge that records a period has to say when the period started.
 
     Nothing raises when it does not. `calculateExperience` skips an interval it
@@ -1515,7 +1521,7 @@ def test_a_dated_edge_says_when_it_began(edges, entered_by_hand, edge_type):
     ]
     budget = UNDATED[edge_type]
 
-    assert len(undated) <= budget, (
+    assert within_budget(len(undated), budget), (
         f"{len(undated)} {edge_type} edges do not say when they began, so they "
         f"count for no experience and cannot be told from another spell - up "
         f"from the {budget} known ones. Sample IDs: {sample(undated)}"
@@ -1544,7 +1550,7 @@ def test_an_edge_that_ends_has_a_beginning(edges):
     )
 
 
-def test_employment_does_not_end_before_it_starts(edges):
+def test_employment_does_not_end_before_it_starts(edges, within_budget):
     """`start_date <= end_date` on every edge that has both.
 
     `calculateExperience` silently drops an interval it cannot make sense of, so
@@ -1562,7 +1568,7 @@ def test_employment_does_not_end_before_it_starts(edges):
         and str(edge["start_date"])[:10] > str(edge["end_date"])[:10]
     ]
 
-    assert len(inverted) <= KNOWN_INVERTED, (
+    assert within_budget(len(inverted), KNOWN_INVERTED), (
         f"{len(inverted)} edges end before they start, up from the "
         f"{KNOWN_INVERTED} known one: {sample(inverted)}"
     )
@@ -1573,7 +1579,7 @@ def test_employment_does_not_end_before_it_starts(edges):
 # --------------------------------------------------------------------------- #
 
 
-def test_revision_node_id_is_a_document_id(revisions):
+def test_revision_node_id_is_a_document_id(revisions, within_budget):
     """`node_id` has to be a plain id string, not a document reference.
 
     `/api/revisions/byNode` finds a document's history with
@@ -1594,7 +1600,7 @@ def test_revision_node_id_is_a_document_id(revisions):
         if is_reference(revision.get("node_id"))
     ]
 
-    assert len(references) <= MIGRATION_REVISIONS, (
+    assert within_budget(len(references), MIGRATION_REVISIONS), (
         f"{len(references)} revisions store node_id as a document reference "
         f"rather than an id, so /api/revisions/byNode cannot find them - up "
         f"from the {MIGRATION_REVISIONS} known migration rows. "
@@ -1602,7 +1608,9 @@ def test_revision_node_id_is_a_document_id(revisions):
     )
 
 
-def test_every_revision_belongs_to_a_document(revisions, node_ids, snapshot):
+def test_every_revision_belongs_to_a_document(
+    revisions, node_ids, snapshot, within_budget
+):
     """A revision describes a node or an edge, which has to still exist.
 
     Revisions are the audit trail and the approval queue; one whose subject is
@@ -1618,14 +1626,14 @@ def test_every_revision_belongs_to_a_document(revisions, node_ids, snapshot):
         if reference_id(revision.get("node_id")) not in document_ids
     ]
 
-    assert len(orphaned) <= ORPHANED_REVISIONS, (
+    assert within_budget(len(orphaned), ORPHANED_REVISIONS), (
         f"{len(orphaned)} revisions describe a node or edge that no longer "
         f"exists, up from the {ORPHANED_REVISIONS} known ones. "
         f"Sample IDs: {sample(orphaned)}"
     )
 
 
-def test_a_later_revision_never_drops_a_field(revisions):
+def test_a_later_revision_never_drops_a_field(revisions, within_budget):
     """A revision is a whole snapshot, so it must not lose an earlier field.
 
     `createRevisionTransaction` writes the revision's `data` over the node with
@@ -1815,7 +1823,7 @@ def test_a_later_revision_never_drops_a_field(revisions):
             if page is None or applied(revision):
                 page = revision
 
-    assert len(dropped) <= KNOWN_DROPS, (
+    assert within_budget(len(dropped), KNOWN_DROPS), (
         f"{len(dropped)} revisions drop a field the page they replace had, which "
         f"erases it from the node once approved - up from the {KNOWN_DROPS} "
         f"known ones. As (document, applied before it, revision, lost fields): "
@@ -1823,7 +1831,7 @@ def test_a_later_revision_never_drops_a_field(revisions):
     )
 
 
-def test_revisions_record_who_changed_what_and_when(revisions):
+def test_revisions_record_who_changed_what_and_when(revisions, within_budget):
     """`update_time` and `update_user` back the history view and the credits.
 
     `computeRevisionsObj` sorts by `update_time` to decide which revision is the
@@ -1840,13 +1848,13 @@ def test_revisions_record_who_changed_what_and_when(revisions):
         if not revision.get("update_time") or not revision.get("update_user")
     ]
 
-    assert len(incomplete) <= KNOWN_INCOMPLETE, (
+    assert within_budget(len(incomplete), KNOWN_INCOMPLETE), (
         f"{len(incomplete)} revisions have no update_time or update_user, up "
         f"from the {KNOWN_INCOMPLETE} known one: {sample(incomplete)}"
     )
 
 
-def test_every_revision_says_whether_a_person_made_it(revisions):
+def test_every_revision_says_whether_a_person_made_it(revisions, within_budget):
     """`update_automatic` has to be on every revision, not only the true ones.
 
     The flag separates what the pipelines file from what a person proposed, and
@@ -1876,7 +1884,7 @@ def test_every_revision_says_whether_a_person_made_it(revisions):
         if not isinstance(revision.get("update_automatic"), bool)
     ]
 
-    assert len(flagless) <= FLAGLESS_REVISIONS, (
+    assert within_budget(len(flagless), FLAGLESS_REVISIONS), (
         f"{len(flagless)} revisions do not say whether a person or a pipeline "
         f"made them, up from the {FLAGLESS_REVISIONS} written before the field "
         f"existed - so something is writing a revision without the flag again. "
@@ -1920,7 +1928,7 @@ def test_one_note_per_user_and_node(notes):
     )
 
 
-def test_notes_count_matches_the_notes(notes, nodes):
+def test_notes_count_matches_the_notes(notes, nodes, within_budget):
     """`stats.notesCount` says what the node's notes hold.
 
     It is what the table's notes column and the tagging-progress breakdown
@@ -1960,7 +1968,7 @@ def test_notes_count_matches_the_notes(notes, nodes):
         not in (sources_by_node[document["id"]], notes_by_node[document["id"]])
     ]
 
-    assert len(wrong) <= RECOMPUTE_LAG, (
+    assert within_budget(len(wrong), RECOMPUTE_LAG), (
         f"{len(wrong)} nodes have a stats.notesCount that is neither the number of "
         f"their notes nor the number of sources in them, more than the "
         f"{RECOMPUTE_LAG} a normal recompute lag explains. "
