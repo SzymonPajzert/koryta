@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { answerNewsletterQuestion } from "./helpers/login";
 
 test.describe("Tabela side panel suggest changes", () => {
   test("User can suggest an edit from the side panel and see preview link", async ({
@@ -54,10 +55,10 @@ test.describe("Tabela side panel suggest changes", () => {
       .fill(`tabela-test${timestamp}@example.com`);
     await loginDialog.locator("input#password").fill("password123");
 
-    // Handle alert window for email verification
-    page.on("dialog", (dialog) => dialog.accept());
-
     await loginDialog.locator('button:has-text("Stwórz konto")').click();
+    // The dialog asks a new account about the newsletter before the edit
+    // the reader came for goes on.
+    await answerNewsletterQuestion(page);
 
     // Wait for the edit dialog to open
     const editDialog = page.locator('.v-dialog:has-text("Zaproponuj zmianę")');

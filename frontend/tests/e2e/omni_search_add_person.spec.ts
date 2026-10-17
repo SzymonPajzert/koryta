@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { answerNewsletterQuestion } from "./helpers/login";
 import { omniSearchFor } from "./helpers/omniSearch";
 
 /** Everything a search that found nothing can be turned into, in the order the
@@ -103,9 +104,10 @@ test.describe("OmniSearch add person", () => {
       .fill(`omni-add${timestamp}@example.com`);
     await loginDialog.locator("input#password").fill("password123");
 
-    // Dismiss the "verification email sent" alert
-    page.on("dialog", (dialog) => dialog.accept());
     await loginDialog.locator('button:has-text("Stwórz konto")').click();
+    // The dialog asks a new account about the newsletter before the form
+    // the reader came for opens.
+    await answerNewsletterQuestion(page);
 
     // 2. After logging in the create dialog opens, prefilled with the query.
     // Logging in blurs the search box, so this also covers that the name

@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { waitForLoginFormHydrated } from "./helpers/login";
+import {
+  answerNewsletterQuestion,
+  waitForLoginFormHydrated,
+} from "./helpers/login";
 import { omniSearchFor } from "./helpers/omniSearch";
 
 test.describe("OmniSearch Nowe", () => {
@@ -20,14 +23,10 @@ test.describe("OmniSearch Nowe", () => {
     await page.locator("input#email").fill(`testuser${timestamp}@example.com`);
     await page.locator("input#password").fill("password123");
 
-    // Handle the alert window that says "Wysłano email weryfikacyjny"
-    page.on("dialog", (dialog) => dialog.accept());
-
-    // 4. Submit registration
+    // 4. Submit registration, and answer the newsletter question a new
+    // account is asked, then go to /eksploruj/nowe
     await page.locator('button[type="submit"]').click({ force: true });
-
-    // Give it a moment to authenticate and navigate, then forcefully go to /eksploruj/nowe
-    await page.waitForTimeout(2000);
+    await answerNewsletterQuestion(page);
     await page.goto("/eksploruj/nowe");
 
     await expect(page.locator(".v-main")).toBeVisible();
