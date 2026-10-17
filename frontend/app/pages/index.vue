@@ -97,6 +97,10 @@
        paddings - this row, HomeSection's container, and the component's own. -->
   <HomeSection>
     <CardCallToAction />
+    <!-- The newsletter for readers without an account, the second thing
+         asked after the call to action. Inside its section, so a signed-in
+         reader, who does not get the form, gets no empty gap either. -->
+    <MailNewsletterSignupForm class="mt-4 mt-md-6" />
   </HomeSection>
   <!-- Last on the page, and it has to be: the feed keeps growing as the reader
        scrolls, so anything below it is pushed further away every time it does. -->
