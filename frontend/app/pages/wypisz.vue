@@ -12,6 +12,20 @@
         ustawienia w <NuxtLink to="/profil">profilu</NuxtLink>.
       </v-card-text>
 
+      <!-- A reader without an account has no profile and no team mail, so
+           their copy names neither (shared/newsletterSignup.ts). -->
+      <v-card-text v-else-if="done && subscriber" class="text-body-1">
+        <v-alert type="success" variant="tonal" data-unsubscribe-done>
+          Gotowe. Nie wyślemy już na ten adres newslettera na temat „{{
+            label
+          }}”.
+        </v-alert>
+        <p class="mt-4">
+          Jeśli to pomyłka, zapisz się ponownie na
+          <NuxtLink to="/">stronie głównej</NuxtLink>.
+        </p>
+      </v-card-text>
+
       <v-card-text v-else-if="done" class="text-body-1">
         <v-alert type="success" variant="tonal" data-unsubscribe-done>
           Gotowe. Nie dostaniesz już wiadomości na temat „{{ label }}” ani maili
@@ -25,7 +39,11 @@
 
       <template v-else>
         <v-card-text class="text-body-1">
-          <p>
+          <p v-if="subscriber">
+            Po kliknięciu przestaniemy wysyłać na ten adres newsletter na temat
+            „{{ label }}”.
+          </p>
+          <p v-else>
             Po kliknięciu przestaniemy wysyłać Ci wiadomości na temat „{{
               label
             }}”. Jeśli dostajesz od nas maile jako osoba z zespołu, te też się
@@ -65,6 +83,7 @@ import {
   campaignTopics,
   type CampaignTopic,
 } from "~~/shared/campaigns";
+import { SUBSCRIBER_PREFIX } from "~~/shared/newsletterSignup";
 
 /** Where a campaign's "Wypisz się" lands. It asks before it acts: mail
  * scanners open every link in a message, and a page that unsubscribed on load
@@ -97,6 +116,11 @@ const params = computed(() => {
 
 const label = computed(() =>
   params.value ? campaignTopicLabels[params.value.k].title : "",
+);
+
+/** The link is a newsletter subscriber's rather than an account's. */
+const subscriber = computed(
+  () => params.value?.u.startsWith(SUBSCRIBER_PREFIX) ?? false,
 );
 
 const saving = ref(false);

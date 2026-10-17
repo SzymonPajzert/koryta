@@ -269,7 +269,7 @@ export const GOALS = {
   },
   "mail-prompt:answer": {
     description:
-      "Reader answered the newsletter question. `answer` is `yes` or `no`; `where` as on `mail-prompt:shown`.",
+      "Reader answered the newsletter question. `answer` is `yes` or `no`; `where` as on `mail-prompt:shown`, or `home` for an address left in the home page's form for readers without an account (always `yes`; how many confirmed is counted in Firestore, not here).",
     props: ["answer", "where"],
   },
 
