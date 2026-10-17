@@ -67,6 +67,7 @@ import {
   signInWithPopup,
   sendEmailVerification,
 } from "firebase/auth";
+import { useSignInMethod } from "~/composables/signInMethod";
 
 defineProps<{
   isLogin: boolean;
@@ -82,6 +83,7 @@ const showPassword = ref(false);
 const error = ref<string | null>(null);
 const info = ref<string | null>(null);
 const loading = ref(false);
+const signInMethod = useSignInMethod();
 
 const auth = useFirebaseAuth()!;
 const {
@@ -94,6 +96,7 @@ const login = async () => {
   error.value = null;
   info.value = null;
   loading.value = true;
+  signInMethod.value = "email-login";
   try {
     await authLogin(email.value, password.value);
     console.debug("User logged in successfully!");
@@ -111,6 +114,7 @@ const loginWithGoogle = async () => {
   error.value = null;
   info.value = null;
   loading.value = true;
+  signInMethod.value = "google";
   try {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
@@ -152,10 +156,12 @@ const register = async () => {
   error.value = null;
   info.value = null;
   loading.value = true;
+  signInMethod.value = "email-signup";
   try {
     const userCredential = await authRegister(email.value, password.value);
     await sendEmailVerification(userCredential.user);
-    alert("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
+    // No alert about the confirmation link: the page or dialog this form sits
+    // in says it next, beside the newsletter question or the greeting.
     emit("success");
   } catch (err: unknown) {
     const errorObj = err as { code: string; message: string };

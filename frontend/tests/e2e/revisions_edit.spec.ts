@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { waitForLoginFormHydrated } from "./helpers/login";
+import {
+  answerNewsletterQuestion,
+  waitForLoginFormHydrated,
+} from "./helpers/login";
 
 test.describe("Suggest node edits", () => {
   test("User can suggest an edit and admin can see it", async ({ page }) => {
@@ -19,11 +22,10 @@ test.describe("Suggest node edits", () => {
     await page.locator("input#email").fill(`edituser${timestamp}@example.com`);
     await page.locator("input#password").fill("password123");
 
-    // Handle the alert window that says "Wysłano email weryfikacyjny"
-    page.on("dialog", (dialog) => dialog.accept());
-
-    // 4. Submit registration
+    // 4. Submit registration, and answer the newsletter question a new
+    // account is asked before it goes back.
     await page.locator('button:has-text("Stwórz konto")').click();
+    await answerNewsletterQuestion(page);
 
     // Wait for the redirect from login page to home
     await page.waitForURL((url) => !url.pathname.includes("/login"), {

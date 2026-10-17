@@ -1,5 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
-import { waitForLoginFormHydrated } from "./helpers/login";
+import {
+  answerNewsletterQuestion,
+  waitForLoginFormHydrated,
+} from "./helpers/login";
 
 /** The logged in toolbar (Rewizje, Aktywność, the "Zespół" menu, ...) does not
  * fit on a phone. Vuetify clips `.v-toolbar__content`, which used to leave the
@@ -22,9 +25,8 @@ async function registerAndLogIn(page: Page) {
   await page.locator("input#email").fill(`toolbar${Date.now()}@example.com`);
   await page.locator("input#password").fill("password123");
 
-  // "Wysłano email weryfikacyjny" confirmation.
-  page.on("dialog", (dialog) => dialog.accept());
   await page.locator('button:has-text("Stwórz konto")').click();
+  await answerNewsletterQuestion(page);
 
   await page.waitForURL((url) => !url.pathname.includes("/login"), {
     timeout: 15_000,

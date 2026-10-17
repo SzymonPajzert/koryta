@@ -22,3 +22,20 @@ export async function waitForLoginFormHydrated(scope: Page | Locator) {
 
   await email.locator("input").fill("");
 }
+
+/** Answer the newsletter question a reader outside the team is asked right
+ * after creating an account or signing in, on /login or in the sign-in
+ * dialog (components/mail/NewsletterQuestion.vue), so a spec that only needs
+ * an account can go on to what it is about. */
+export async function answerNewsletterQuestion(
+  scope: Page | Locator,
+  answer: "yes" | "no" = "no",
+) {
+  const question = scope.locator("[data-newsletter-question]");
+  await expect(question).toBeVisible({ timeout: 30_000 });
+  await question
+    .locator(
+      answer === "yes" ? "[data-newsletter-yes]" : "[data-newsletter-no]",
+    )
+    .click();
+}

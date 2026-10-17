@@ -256,20 +256,21 @@ export const GOALS = {
   },
 
   // --- Mail ------------------------------------------------------------
-  // The one-time question signed-in readers are asked about campaign mail.
-  // With `utm_campaign` on every link inside a campaign, these say whether the
-  // list grows and whether mail brings anybody back.
+  // The one-time question about the newsletter, put to a signed-in reader
+  // outside the team who never answered it. With `utm_campaign` on every link
+  // inside a campaign, these say whether the list grows, which of the places
+  // that ask grows it, and whether mail brings anybody back.
   "mail-prompt:shown": {
     description:
-      "A signed-in reader who never answered was asked whether they want mail from the site. The denominator for `mail-prompt:answer`.",
-    props: [],
+      "A signed-in reader who never answered was asked whether they want the newsletter. `where` is `signup` (right after creating an account), `login` (right after signing in, on /login or in the sign-in dialog) or `prompt` (the card the layout shows later). The denominator for `mail-prompt:answer`.",
+    props: ["where"],
     // Shown because a page loaded, not because the reader did anything.
     passive: true,
   },
   "mail-prompt:answer": {
     description:
-      "Reader answered the mail question. `answer` is `yes` or `no`.",
-    props: ["answer"],
+      "Reader answered the newsletter question. `answer` is `yes` or `no`; `where` as on `mail-prompt:shown`.",
+    props: ["answer", "where"],
   },
 
   // --- Experiments -------------------------------------------------------

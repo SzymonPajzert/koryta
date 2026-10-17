@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { waitForLoginFormHydrated } from "./helpers/login";
+import {
+  answerNewsletterQuestion,
+  waitForLoginFormHydrated,
+} from "./helpers/login";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
@@ -77,11 +80,10 @@ test.describe("Admin Revisions View", () => {
     await page.locator("input#email").fill(`adminuser${timestamp}@example.com`);
     await page.locator("input#password").fill("password123");
 
-    // Handle the alert window that says "Wysłano email weryfikacyjny"
-    page.on("dialog", (dialog) => dialog.accept());
-
-    // 4. Submit registration
+    // 4. Submit registration, and answer the newsletter question a new
+    // account is asked before it goes back.
     await page.locator('button:has-text("Stwórz konto")').click();
+    await answerNewsletterQuestion(page);
 
     // Check for errors (optional, helps debugging)
 
