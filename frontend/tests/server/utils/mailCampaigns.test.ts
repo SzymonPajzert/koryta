@@ -31,6 +31,7 @@ const { store, FieldValue, Timestamp } = vi.hoisted(() => {
     store: new Map<string, Record<string, unknown>>(),
     FieldValue: {
       arrayUnion: (...items: unknown[]) => ({ arrayUnion: items }),
+      serverTimestamp: () => ({ serverTimestamp: true }),
     },
   };
 });
@@ -426,6 +427,8 @@ describe("mail tokens", () => {
       newsletter: { callsToAction: false, recentPeople: true },
       teamMail: false,
       displayName: "Anna",
+      // Kept with the topics, so /profil can say when and where they changed.
+      newsletterUpdated: { via: "wypisz" },
     });
     expect(store.get(`mailCampaigns/${campaign.id}`)!.unsubscribed).toEqual([
       "a",

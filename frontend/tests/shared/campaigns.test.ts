@@ -3,6 +3,9 @@ import {
   campaignEligibility,
   campaignLinks,
   mailPromptAnswered,
+  newsletterAnswerNote,
+  newsletterChangeViaLabels,
+  newsletterQuestionDue,
   presetIncludes,
   renderCampaign,
   unsubscribeUrls,
@@ -364,5 +367,105 @@ describe("mailPromptAnswered", () => {
       }),
     ).toBe(true);
     expect(mailPromptAnswered({ newsletter: {} })).toBe(true);
+  });
+});
+
+describe("newsletterQuestionDue", () => {
+  it("asks a signed-in reader outside the team who never answered", () => {
+    expect(
+      newsletterQuestionDue({ signedIn: true, isAdmin: false, config: null }),
+    ).toBe(true);
+    expect(
+      newsletterQuestionDue({
+        signedIn: true,
+        isAdmin: false,
+        config: { displayName: "Anna" } as { newsletter?: unknown },
+      }),
+    ).toBe(true);
+  });
+
+  it("does not ask somebody who answered, an administrator, or nobody", () => {
+    const answered = {
+      newsletter: { callsToAction: false, recentPeople: false },
+    };
+    expect(
+      newsletterQuestionDue({
+        signedIn: true,
+        isAdmin: false,
+        config: answered,
+      }),
+    ).toBe(false);
+    expect(
+      newsletterQuestionDue({ signedIn: true, isAdmin: true, config: null }),
+    ).toBe(false);
+    expect(
+      newsletterQuestionDue({
+        signedIn: false,
+        isAdmin: undefined,
+        config: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not know yet while the claims or the document are loading", () => {
+    // An administrator whose claims are still on their way must not be
+    // asked, nor a reader whose stored answer has not arrived.
+    expect(
+      newsletterQuestionDue({
+        signedIn: true,
+        isAdmin: undefined,
+        config: null,
+      }),
+    ).toBeUndefined();
+    expect(
+      newsletterQuestionDue({
+        signedIn: true,
+        isAdmin: false,
+        config: undefined,
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("newsletterAnswerNote", () => {
+  it("says where the newsletter goes, or what it still waits for", () => {
+    expect(
+      newsletterAnswerNote({
+        yes: true,
+        awaitingConfirmation: false,
+        email: "anna@example.com",
+      }),
+    ).toBe("Zapisano. Newsletter będzie przychodził na anna@example.com.");
+    expect(
+      newsletterAnswerNote({
+        yes: true,
+        awaitingConfirmation: true,
+        email: "anna@example.com",
+      }),
+    ).toContain("gdy potwierdzisz adres anna@example.com");
+    expect(
+      newsletterAnswerNote({
+        yes: false,
+        awaitingConfirmation: false,
+        email: "anna@example.com",
+      }),
+    ).toContain("Zdanie zmienisz w profilu");
+  });
+
+  it("writes no dash but a hyphen", () => {
+    // The site's copy uses the hyphen only (.interface-design/system.md).
+    const notes = [true, false].flatMap((yes) =>
+      [true, false].flatMap((awaitingConfirmation) =>
+        ["anna@example.com", null].map((email) =>
+          newsletterAnswerNote({ yes, awaitingConfirmation, email }),
+        ),
+      ),
+    );
+    for (const note of [
+      ...notes,
+      ...Object.values(newsletterChangeViaLabels),
+    ]) {
+      expect(note).not.toMatch(/[\u2013\u2014]/);
+    }
   });
 });

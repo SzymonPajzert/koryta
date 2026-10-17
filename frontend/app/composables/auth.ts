@@ -12,9 +12,14 @@ import {
   useFirebaseAuth,
   useIsCurrentUserLoaded,
 } from "vuefire";
-import { collection, doc, getFirestore } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getFirestore,
+  type Timestamp,
+} from "firebase/firestore";
 import type { NotificationPreferences } from "~~/shared/notifications";
-import type { CampaignTopic } from "~~/shared/campaigns";
+import type { CampaignTopic, NewsletterUpdate } from "~~/shared/campaigns";
 
 /** Which campaign topics a reader asked for - see `shared/campaigns.ts`.
  * Absent means never asked, which is no. */
@@ -24,6 +29,8 @@ export type UserConfig = {
   photoURL?: string;
   displayName?: string;
   newsletter?: NewsletterPreferences;
+  /** When and where `newsletter` last changed - see `NewsletterUpdate`. */
+  newsletterUpdated?: NewsletterUpdate<Timestamp>;
   /** Administrators only: campaigns sent to the team, which reach them
    * without a newsletter topic. Absent means yes. */
   teamMail?: boolean;
