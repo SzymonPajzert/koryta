@@ -262,6 +262,20 @@ describe("renderCampaign", () => {
     expect(team.text).toContain("zespołu koryta.pl");
   });
 
+  it("tells a reader without an account why, and names no settings page", () => {
+    const account = render();
+    expect(account.text).toContain("bo Twoje konto na koryta.pl jest zapisane");
+    expect(account.html).toContain("Ustawienia wiadomości");
+
+    const subscriber = render({ recipient: "subscriber" });
+    expect(subscriber.text).toContain(
+      "bo ten adres zapisano na newsletter koryta.pl",
+    );
+    expect(subscriber.text).not.toContain("/profil");
+    expect(subscriber.html).not.toContain("Ustawienia wiadomości");
+    expect(subscriber.html).toContain(">Wypisz się</a>");
+  });
+
   it("names the campaign in the unsubscribe link when told it", () => {
     expect(
       unsubscribeUrls("https://koryta.pl/", {

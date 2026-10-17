@@ -277,15 +277,20 @@ async function renderFor(
   via: "optedIn" | "team",
 ): Promise<CampaignMail> {
   const token = await mailToken(db, member.uid);
+  const subscriber = member.kind === "subscriber";
   return renderCampaign({
     campaignId: args.campaign.id,
     content: args.campaign,
     via,
-    personal: {
-      days: CAMPAIGN_STATS_DAYS,
-      counts: member.activity.counts,
-      total: member.activity.total,
-    },
+    recipient: subscriber ? "subscriber" : "account",
+    // A reader without an account has done nothing on the site to sum up.
+    personal: subscriber
+      ? null
+      : {
+          days: CAMPAIGN_STATS_DAYS,
+          counts: member.activity.counts,
+          total: member.activity.total,
+        },
     community: args.community,
     siteUrl: args.siteUrl,
     unsubscribe: unsubscribeUrls(args.siteUrl, {

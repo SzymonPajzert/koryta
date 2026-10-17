@@ -8,9 +8,10 @@ import {
   type ActivityCounts,
 } from "../../../shared/activity";
 
-const { mockListUsers, mockLoadRollups } = vi.hoisted(() => ({
+const { mockListUsers, mockLoadRollups, mockSubscribers } = vi.hoisted(() => ({
   mockListUsers: vi.fn(),
   mockLoadRollups: vi.fn(),
+  mockSubscribers: vi.fn(),
 }));
 
 vi.mock("firebase-admin/auth", () => ({
@@ -19,6 +20,10 @@ vi.mock("firebase-admin/auth", () => ({
 
 vi.mock("~~/server/utils/activityWindow", () => ({
   loadActivityRollups: mockLoadRollups,
+}));
+
+vi.mock("~~/server/utils/newsletterSubscribers", () => ({
+  confirmedSubscribers: mockSubscribers,
 }));
 
 const NOW = new Date("2026-10-09T12:00:00Z");
@@ -77,6 +82,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   userDocs = {};
   mockListUsers.mockResolvedValue({ users: [], pageToken: undefined });
+  mockSubscribers.mockResolvedValue([]);
   mockLoadRollups.mockResolvedValue({
     window: { since: SPANNED[0], until: SPANNED.at(-1), days: 90 },
     spanned: SPANNED,
@@ -85,6 +91,36 @@ beforeEach(() => {
 });
 
 describe("loadAudience", () => {
+  it("lists readers who signed up without an account, unless the address has one", async () => {
+    mockListUsers.mockResolvedValue({ users: [account("ania")] });
+    mockSubscribers.mockResolvedValue([
+      {
+        id: "abc",
+        email: "bez.konta@example.com",
+        status: "confirmed",
+        topics: { callsToAction: true, recentPeople: false },
+      },
+      // Also an account: written to as the account, never twice.
+      {
+        id: "def",
+        email: "ania@example.com",
+        status: "confirmed",
+        topics: { callsToAction: true, recentPeople: true },
+      },
+    ]);
+
+    const { members } = await loadAudience(db, { now: NOW });
+    expect(members.map((m) => m.uid)).toEqual(["ania", "sub_abc"]);
+    expect(members[1]).toMatchObject({
+      kind: "subscriber",
+      email: "bez.konta@example.com",
+      emailVerified: true,
+      admin: false,
+      lastSeenAt: null,
+      preferences: { newsletter: { callsToAction: true, recentPeople: false } },
+    });
+  });
+
   it("describes every account with its roles, address and choices", async () => {
     mockListUsers.mockResolvedValue({
       users: [

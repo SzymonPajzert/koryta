@@ -270,7 +270,7 @@ describe("queueCampaign", () => {
     expect(
       (mail.headers as Record<string, string>)["List-Unsubscribe"],
     ).toContain("/api/mail/unsubscribe?u=fan");
-    expect(message.text).toContain("bo w ustawieniach profilu zapisano Cię");
+    expect(message.text).toContain("bo Twoje konto na koryta.pl jest zapisane");
     expect(
       (
         store.get(`mail/campaign_${campaign.id}_admin`)!.message as {

@@ -10,7 +10,8 @@ import type {
 /** What /admin/mailing is answered with: the seeded owner and five accounts
  * that between them hit every row the page draws differently - a trial admin,
  * people who signed up, one who did not, one whose address nobody confirmed,
- * and one who has not been around for months. */
+ * and one who has not been around for months - and a reader who signed up on
+ * the home page without an account. */
 
 function member(
   uid: string,
@@ -73,6 +74,15 @@ export const mailingAudience: Audience = {
     member("kasia", "Kasia", {
       lastSeenAt: daysAgo(80),
       preferences: { newsletter: { callsToAction: true } },
+    }),
+    member("sub_9f2c41", "", {
+      kind: "subscriber",
+      email: "czytelniczka@example.com",
+      displayName: null,
+      createdAt: null,
+      lastSignInAt: null,
+      lastSeenAt: null,
+      preferences: { newsletter: { callsToAction: true, recentPeople: true } },
     }),
   ],
   community: {

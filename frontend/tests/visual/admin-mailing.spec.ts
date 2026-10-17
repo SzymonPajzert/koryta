@@ -54,10 +54,11 @@ test("mailing", MAILING, async ({ page }, testInfo) => {
   );
 
   // The pilot: of the people who may get it and do not have it yet, Piotr
-  // alone was around in the last 30 days - Kasia was not.
+  // alone was around in the last 30 days - Kasia was not, and the reader
+  // without an account never signs in.
   await page.locator('[data-preset="pilot"]').click();
   await expect(page.locator("[data-audience-summary]")).toContainText(
-    "Zaznaczone: 1 · Mogą ją dostać: 2",
+    "Zaznaczone: 1 · Mogą ją dostać: 3",
   );
 
   await readyForFullPage(page);
