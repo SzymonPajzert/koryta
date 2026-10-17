@@ -99,6 +99,15 @@ export default defineNuxtConfig({
        * rather than failing silently. */
       extensionId: process.env.NUXT_PUBLIC_EXTENSION_ID || "",
       siteUrl,
+      /** Whether readers without an account can sign up for the newsletter
+       * (components/mail/NewsletterSignupForm.vue). Off on production until
+       * site mail is delivered: the Trigger Email extension sends only what
+       * is written after it is installed, so a confirmation asked for before
+       * that would never arrive. Turned on with
+       * NUXT_PUBLIC_NEWSLETTER_SIGNUP_OPEN=true; always on against the
+       * emulators, where the specs need it. */
+      newsletterSignupOpen:
+        process.env.NUXT_PUBLIC_NEWSLETTER_SIGNUP_OPEN === "true" || isLocal,
     },
   },
 
@@ -156,6 +165,8 @@ export default defineNuxtConfig({
       "/aktywnosc",
       // Reached from a campaign's footer, with the reader's token in the link.
       "/wypisz",
+      // Reached from a newsletter confirmation mail, the same way.
+      "/newsletter/potwierdz",
       // Renders nothing server-side (the whole template is <ClientOnly>), so it
       // has no indexable content to lose, and every entity URL 301s into it
       // with its own ?krs=/?teryt=. That is the bulk of the crawl budget.
@@ -358,10 +369,11 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { swr: 3600 },
     "/admin/**": { ssr: false },
-    // The link carries the reader's unsubscribe token. Rendered in the browser
-    // only, so no HTML with a token in it is ever built where a cache could
-    // keep it.
+    // The link carries the reader's unsubscribe token - or, for the second,
+    // the newsletter confirmation's. Rendered in the browser only, so no HTML
+    // with a token in it is ever built where a cache could keep it.
     "/wypisz": { ssr: false },
+    "/newsletter/potwierdz": { ssr: false },
 
     // `/lista` was removed in "Remove /lista, and point what linked to it at
     // the table", and 404ed from then on - but it kept ranking. Search Console

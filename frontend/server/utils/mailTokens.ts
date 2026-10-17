@@ -3,9 +3,11 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Firestore } from "firebase-admin/firestore";
 import {
   CAMPAIGN_ID_PATTERN,
+  campaignTopics,
   type CampaignTopic,
   type NewsletterChangeVia,
 } from "~~/shared/campaigns";
+import { SUBSCRIBERS, SUBSCRIBER_PREFIX } from "~~/shared/newsletterSignup";
 
 /** One document per account that has been sent a campaign, holding the secret
  * its unsubscribe links carry. Server-only, like `mail`.
@@ -37,6 +39,16 @@ export async function mailToken(db: Firestore, uid: string): Promise<string> {
   }
 }
 
+/** Whether `token` is the one `id`'s links carry. */
+export async function mailTokenMatches(
+  db: Firestore,
+  id: string,
+  token: string,
+): Promise<boolean> {
+  const stored = (await db.collection(MAIL_TOKENS).doc(id).get()).data()?.token;
+  return typeof stored === "string" && sameToken(stored, token);
+}
+
 export type UnsubscribeOutcome = "unsubscribed" | "invalid";
 
 /** Takes the holder of `uid`'s token off `topic`, and off team mail.
@@ -55,26 +67,16 @@ export async function unsubscribe(
     campaignId?: string;
   },
 ): Promise<UnsubscribeOutcome> {
-  const stored = (await db.collection(MAIL_TOKENS).doc(args.uid).get()).data()
-    ?.token;
-  if (typeof stored !== "string" || !sameToken(stored, args.token)) {
-    return "invalid";
-  }
+  if (!(await mailTokenMatches(db, args.uid, args.token))) return "invalid";
 
-  await db
-    .collection("users")
-    .doc(args.uid)
-    .set(
-      {
-        newsletter: { [args.topic]: false },
-        teamMail: false,
-        newsletterUpdated: {
-          at: FieldValue.serverTimestamp(),
-          via: "wypisz" satisfies NewsletterChangeVia,
-        },
-      },
-      { merge: true },
-    );
+  if (args.uid.startsWith(SUBSCRIBER_PREFIX)) {
+    await withdrawSubscriberTopic(db, {
+      id: args.uid.slice(SUBSCRIBER_PREFIX.length),
+      topic: args.topic,
+    });
+  } else {
+    await unsubscribeAccount(db, args.uid, args.topic);
+  }
 
   if (args.campaignId && CAMPAIGN_ID_PATTERN.test(args.campaignId)) {
     try {
@@ -92,6 +94,48 @@ export async function unsubscribe(
     }
   }
   return "unsubscribed";
+}
+
+async function unsubscribeAccount(
+  db: Firestore,
+  uid: string,
+  topic: CampaignTopic,
+) {
+  await db
+    .collection("users")
+    .doc(uid)
+    .set(
+      {
+        newsletter: { [topic]: false },
+        teamMail: false,
+        newsletterUpdated: {
+          at: FieldValue.serverTimestamp(),
+          via: "wypisz" satisfies NewsletterChangeVia,
+        },
+      },
+      { merge: true },
+    );
+}
+
+/** Takes a reader without an account off `topic`. With no topic left, the
+ * address is unsubscribed, and the form can sign it up again. */
+async function withdrawSubscriberTopic(
+  db: Firestore,
+  args: { id: string; topic: CampaignTopic },
+) {
+  const ref = db.collection(SUBSCRIBERS).doc(args.id);
+  await db.runTransaction(async (tx) => {
+    const data = (await tx.get(ref)).data();
+    if (!data) return;
+    const topics = { ...(data.topics ?? {}), [args.topic]: false };
+    const anyLeft = campaignTopics.some((topic) => topics[topic] === true);
+    tx.update(ref, {
+      topics,
+      ...(anyLeft
+        ? {}
+        : { status: "unsubscribed", unsubscribedAt: Timestamp.now() }),
+    });
+  });
 }
 
 function sameToken(stored: string, given: string): boolean {

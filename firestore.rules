@@ -125,6 +125,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Readers who signed up for the newsletter without an account, and the
+    // daily count of the confirmation mails sent to them. Both go through
+    // /api/newsletter/* with the admin SDK: an address is personal data, and
+    // the count is what keeps the form from being a way to mail strangers.
+    match /newsletterSubscribers/{id} {
+      allow read, write: if false;
+    }
+
+    match /newsletterLimits/{day} {
+      allow read, write: if false;
+    }
+
     // One document per finished UTC day, holding what everybody did on it -
     // written and read only by /api/stats/activity through the admin SDK, which
     // these rules do not apply to. Closed to the client on both sides: reading
