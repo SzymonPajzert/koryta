@@ -262,8 +262,18 @@
             </div>
           </template>
           <template #[`item.roles`]="{ item }">
+            <!-- Signed up with the form on the home page, with an address
+                 and nothing else. -->
             <v-chip
-              v-if="item.owner"
+              v-if="item.kind === 'subscriber'"
+              size="x-small"
+              class="mr-1"
+              data-audience-subscriber
+            >
+              Bez konta
+            </v-chip>
+            <v-chip
+              v-else-if="item.owner"
               size="x-small"
               class="mr-1"
               color="ink-sage"
@@ -579,13 +589,15 @@ const preview = computed<{ mail: CampaignMail | null; error: string | null }>(
         campaignId: selectedId.value ?? "nowa-kampania",
         content: form,
         via: eligibility?.eligible ? eligibility.via : "team",
-        personal: member
-          ? {
-              days: CAMPAIGN_STATS_DAYS,
-              counts: member.activity.counts,
-              total: member.activity.total,
-            }
-          : null,
+        recipient: member?.kind === "subscriber" ? "subscriber" : "account",
+        personal:
+          member && member.kind !== "subscriber"
+            ? {
+                days: CAMPAIGN_STATS_DAYS,
+                counts: member.activity.counts,
+                total: member.activity.total,
+              }
+            : null,
         community: audience.value?.community ?? null,
         siteUrl,
         unsubscribe: unsubscribeUrls(siteUrl, {
