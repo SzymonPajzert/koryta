@@ -18,7 +18,7 @@ Cel: Wysyłanie informacji o nowych artykułach, działaniach statutowych, inicj
 
 Podstawa prawna: Twoja dobrowolna zgoda (art. 6 ust. 1 lit. a RODO). Zgodę możesz wycofać w każdej chwili.
 
-Zgodę wyrażasz osobno dla każdego tematu - w ustawieniach profilu albo w okienku, w którym pytamy o nią po zalogowaniu - i piszemy tylko na adres, którego posiadanie potwierdzisz. Wiadomość może zawierać podsumowanie Twojej aktywności w Serwisie, np. liczbę Twoich ocen z ostatnich 90 dni. Odnotowujemy, czy wiadomość została wysłana i czy ktoś wypisał się za pomocą linku w niej.
+Zgodę wyrażasz, odpowiadając „Tak” na pytanie o newsletter, które zadajemy po założeniu konta albo po zalogowaniu, albo włączając wybrane tematy w ustawieniach profilu. Piszemy tylko na adres, którego posiadanie potwierdzisz. Zapisujemy datę i miejsce wyrażenia albo wycofania zgody. Wiadomość może zawierać podsumowanie Twojej aktywności w Serwisie, np. liczbę Twoich ocen z ostatnich 90 dni. Odnotowujemy, czy wiadomość została wysłana i czy ktoś wypisał się za pomocą linku w niej.
 
 ### W celu kontaktu z zespołem Serwisu:
 
