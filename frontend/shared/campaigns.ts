@@ -5,8 +5,11 @@
  * campaign is broadcast - "this is where your help is needed now" - so it goes
  * only where somebody agreed to it:
  *
- * - an account that switched the campaign's topic on in /profil (the newsletter
- *   switches, which stay off until touched), or
+ * - an account that switched the campaign's topic on - in /profil (the
+ *   newsletter switches, which stay off until touched) or by saying yes to the
+ *   newsletter question,
+ * - a reader without an account who confirmed an address from the form on the
+ *   home page (shared/newsletterSignup.ts), or
  * - an administrator, as a message to the team, unless they turned team mail
  *   off. The owner decided this on 2026-10-09: the team is written to without a
  *   newsletter opt-in, everybody else only with one.
@@ -139,10 +142,14 @@ export function newsletterAnswerNote(args: {
     : "Zapisano.";
 }
 
-/** One account, as the owner's audience list shows it. Server-built: the auth
- * service holds the address and the roles, Firestore the preferences and the
- * activity. */
+/** One account - or one reader who signed up without an account - as the
+ * owner's audience list shows it. Server-built: the auth service holds an
+ * account's address and roles, Firestore the preferences, the activity and
+ * the subscribers. */
 export type AudienceMember = {
+  /** A reader who signed up without an account, listed under
+   * `SUBSCRIBER_PREFIX` + their subscriber id. Absent for an account. */
+  kind?: "subscriber";
   uid: string;
   email: string | null;
   emailVerified: boolean;
@@ -345,10 +352,16 @@ export function unsubscribeUrls(
   };
 }
 
+/** Who a message goes to: an account, or a reader who signed up without one
+ * (shared/newsletterSignup.ts), whose footer has no settings page to name. */
+export type CampaignRecipient = "account" | "subscriber";
+
 export type CampaignRender = {
   campaignId: string;
   content: CampaignContent;
   via: "optedIn" | "team";
+  /** Absent means an account. */
+  recipient?: CampaignRecipient;
   personal: PersonalStats | null;
   community: CommunityStats | null;
   /** No trailing slash. Decides which deployment links point at, so mail
@@ -505,10 +518,21 @@ function communityLines(stats: CommunityStats | null): string[] {
   return lines;
 }
 
-function reasonLine(via: "optedIn" | "team", topic: CampaignTopic): string {
-  return via === "team"
-    ? "Dostajesz tę wiadomość, bo należysz do zespołu koryta.pl."
-    : `Dostajesz tę wiadomość, bo w ustawieniach profilu zapisano Cię na „${campaignTopicLabels[topic].title}”.`;
+/** Why the reader is getting the message: the footer has to say. An account
+ * can have said yes at sign-in, in the corner card or on /profil, so the line
+ * names the account rather than any one of those places. */
+function reasonLine(
+  via: "optedIn" | "team",
+  topic: CampaignTopic,
+  recipient: CampaignRecipient,
+): string {
+  if (via === "team") {
+    return "Dostajesz tę wiadomość, bo należysz do zespołu koryta.pl.";
+  }
+  const title = campaignTopicLabels[topic].title;
+  return recipient === "subscriber"
+    ? `Dostajesz tę wiadomość, bo ten adres zapisano na newsletter koryta.pl, temat „${title}”.`
+    : `Dostajesz tę wiadomość, bo Twoje konto na koryta.pl jest zapisane na „${title}”.`;
 }
 
 const STYLE = {
@@ -545,15 +569,21 @@ export function renderCampaign(args: CampaignRender): CampaignMail {
         }
       : null;
 
-  const reason = reasonLine(args.via, content.topic);
-  const settingsUrl = `${base}/profil`;
+  const recipient = args.recipient ?? "account";
+  const reason = reasonLine(args.via, content.topic, recipient);
+  // A reader without an account has no settings page; the link out is all.
+  const settingsUrl = recipient === "account" ? `${base}/profil` : null;
   const { pageUrl, oneClickUrl } = args.unsubscribe;
 
   const text = [
     ...body.map((lines) => lines.map((line) => line.text).join("\n")),
     ...stats,
     ...(cta ? [`${cta.label}: ${cta.href}`] : []),
-    `${reason}\nNie chcesz takich wiadomości? Wypisz się: ${pageUrl}\nUstawienia wiadomości: ${settingsUrl}`,
+    [
+      reason,
+      `Nie chcesz takich wiadomości? Wypisz się: ${pageUrl}`,
+      ...(settingsUrl ? [`Ustawienia wiadomości: ${settingsUrl}`] : []),
+    ].join("\n"),
   ].join("\n\n");
 
   const html = [
@@ -576,7 +606,11 @@ export function renderCampaign(args: CampaignRender): CampaignMail {
     `<hr style="border: none; border-top: 1px solid ${email.rule}; margin: 24px 0;">`,
     `<p style="${STYLE.footer}">${escapeHtml(reason)} <a href="${escapeHtml(
       pageUrl,
-    )}">Wypisz się</a> · <a href="${escapeHtml(settingsUrl)}">Ustawienia wiadomości</a></p>`,
+    )}">Wypisz się</a>${
+      settingsUrl
+        ? ` · <a href="${escapeHtml(settingsUrl)}">Ustawienia wiadomości</a>`
+        : ""
+    }</p>`,
     "</div>",
   ].join("\n");
 

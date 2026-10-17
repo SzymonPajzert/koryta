@@ -3,6 +3,10 @@ import type { Firestore } from "firebase-admin/firestore";
 import { mergeRollups } from "~~/server/utils/activityRollup";
 import { loadActivityRollups } from "~~/server/utils/activityWindow";
 import { isNewAdmin } from "~~/server/utils/contributors";
+import {
+  confirmedSubscribers,
+  type Subscriber,
+} from "~~/server/utils/newsletterSubscribers";
 import type { QueueTierStats } from "~~/server/api/stats/queueTiers.get";
 import { emptyActivityCounts } from "~~/shared/activity";
 import {
@@ -14,6 +18,7 @@ import {
   type CampaignTopic,
   type MailPreferences,
 } from "~~/shared/campaigns";
+import { SUBSCRIBER_PREFIX } from "~~/shared/newsletterSignup";
 
 /** `listUsers` hands out at most 1000 accounts per page. */
 const LIST_USERS_PAGE = 1000;
@@ -43,9 +48,10 @@ export async function loadAudience(
   options: { now?: Date; toCheck?: number | null } = {},
 ): Promise<Audience> {
   const now = options.now ?? new Date();
-  const [accounts, activity] = await Promise.all([
+  const [accounts, activity, subscribers] = await Promise.all([
     listAccounts(),
     loadActivityRollups(db, CAMPAIGN_STATS_DAYS, now),
+    confirmedSubscribers(db),
   ]);
   const preferences = await readMailPreferences(
     db,
@@ -61,15 +67,26 @@ export async function loadAudience(
   );
 
   const contributions = new Map(long.contributors.map((c) => [c.uid, c]));
-  const members = accounts
-    .map((account) =>
-      toMember(
-        account,
-        contributions.get(account.uid),
-        preferences[account.uid] ?? {},
-      ),
-    )
-    .sort(byLastSeen);
+  const members = accounts.map((account) =>
+    toMember(
+      account,
+      contributions.get(account.uid),
+      preferences[account.uid] ?? {},
+    ),
+  );
+  // An address that also has an account is written to as the account, whose
+  // own switches say what it wants: one message each, never two.
+  const accountAddresses = new Set(
+    accounts.flatMap((account) =>
+      account.email ? [account.email.toLowerCase()] : [],
+    ),
+  );
+  members.push(
+    ...subscribers
+      .filter((subscriber) => !accountAddresses.has(subscriber.email))
+      .map(subscriberMember),
+  );
+  members.sort(byLastSeen);
 
   return {
     members,
@@ -204,6 +221,28 @@ function toMember(
       ? { counts: { ...contribution.counts }, total: contribution.total }
       : { counts: emptyActivityCounts(), total: 0 },
     preferences,
+  };
+}
+
+/** A reader without an account, in the shape the audience list and the send
+ * read. Confirmed, or they would not be here; never an administrator, never
+ * seen signing in, and with no activity of their own to quote. */
+function subscriberMember(subscriber: Subscriber): AudienceMember {
+  return {
+    kind: "subscriber",
+    uid: `${SUBSCRIBER_PREFIX}${subscriber.id}`,
+    email: subscriber.email,
+    emailVerified: true,
+    disabled: false,
+    displayName: null,
+    admin: false,
+    newAdmin: false,
+    owner: false,
+    createdAt: null,
+    lastSignInAt: null,
+    lastSeenAt: null,
+    activity: { counts: emptyActivityCounts(), total: 0 },
+    preferences: { newsletter: subscriber.topics },
   };
 }
 
