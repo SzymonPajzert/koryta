@@ -54,7 +54,6 @@ const notYetPhotographed: Record<string, string> = {
   "ekstrakcje/kategoryzacja": "signed in; the seed has extractions",
   graf: "a force-directed canvas that settles differently every run",
   leads: "signed in",
-  profil: "signed in",
   rozszerzenie: "signed in",
   "temat/[slug]": "the seed has no topic",
   tematy: "the seed has no topic",

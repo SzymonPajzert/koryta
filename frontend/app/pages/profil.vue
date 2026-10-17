@@ -160,13 +160,19 @@
             wiadomości wypiszesz się też jednym kliknięciem.
           </v-card-subtitle>
           <v-card-text>
+            <!-- Disabled until the stored choice is in, for the reason the
+                 notification switches are: saving writes both topics, so a
+                 toggle made before the read lands would switch the other one
+                 off. -->
             <v-switch
               v-model="newsletterRecentPeople"
               color="primary"
               :label="campaignTopicLabels.recentPeople.title"
               :hint="campaignTopicLabels.recentPeople.hint"
               persistent-hint
-              :loading="savingNewsletter"
+              :disabled="!newsletterLoaded"
+              :loading="savingNewsletter || !newsletterLoaded"
+              data-newsletter-topic="recentPeople"
               @update:model-value="saveNewsletter"
             />
             <v-switch
@@ -175,9 +181,40 @@
               :label="campaignTopicLabels.callsToAction.title"
               :hint="campaignTopicLabels.callsToAction.hint"
               persistent-hint
-              :loading="savingNewsletter"
+              :disabled="!newsletterLoaded"
+              :loading="savingNewsletter || !newsletterLoaded"
+              data-newsletter-topic="callsToAction"
               @update:model-value="saveNewsletter"
             />
+            <!-- Where it goes and since when, for a reader checking what
+                 they signed up for - and the one thing that stops it, an
+                 address not yet confirmed. -->
+            <div
+              v-if="newsletterLoaded && (subscribed || newsletterChange)"
+              class="newsletter-status text-body-2 mt-4"
+              data-newsletter-status
+            >
+              <p v-if="subscribed && user.emailVerified" class="mb-1">
+                Wysyłamy na <strong>{{ user.email }}</strong
+                >.
+              </p>
+              <p v-else-if="subscribed" class="mb-1">
+                Zaczniemy wysyłać na <strong>{{ user.email }}</strong
+                >, gdy potwierdzisz ten adres.
+                <v-btn
+                  variant="text"
+                  size="small"
+                  color="ink-sage"
+                  :loading="sendingVerification"
+                  @click="sendVerification"
+                >
+                  Wyślij link jeszcze raz
+                </v-btn>
+              </p>
+              <p v-if="newsletterChange" class="newsletter-status__when mb-0">
+                Ostatnia zmiana: {{ newsletterChange }}.
+              </p>
+            </div>
             <!-- Administrators are written to as a team without signing up
                  for a topic (shared/campaigns.ts); this is how they stop it. -->
             <v-switch
@@ -241,7 +278,11 @@ import {
   publicProfileEnabled,
   publicProfileLabel,
 } from "~~/shared/profile";
-import { campaignTopicLabels } from "~~/shared/campaigns";
+import {
+  campaignTopicLabels,
+  newsletterChangeViaLabels,
+} from "~~/shared/campaigns";
+import { useNewsletterChoice } from "~/composables/newsletter";
 
 definePageMeta({
   middleware: "auth",
@@ -422,10 +463,34 @@ const saveNotifications = async () => {
 };
 
 // Newsletter topics. Campaigns are sent to a topic only to those who switched
-// it on here or said yes to the prompt in the layout - see shared/campaigns.ts.
+// it on here or said yes to the newsletter question - see shared/campaigns.ts.
 const newsletterRecentPeople = ref(false);
 const newsletterCallsToAction = ref(false);
 const savingNewsletter = ref(false);
+const saveNewsletterChoice = useNewsletterChoice();
+
+/** Same guard as the notification switches - see `notificationsLoaded`. */
+const newsletterLoaded = computed(() => userConfig?.data?.value !== undefined);
+const subscribed = computed(
+  () => newsletterRecentPeople.value || newsletterCallsToAction.value,
+);
+
+const CHANGE_DAY = new Intl.DateTimeFormat("pl-PL", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "Europe/Warsaw",
+});
+
+/** „17 października 2026, po zalogowaniu”, from the record kept with the
+ * topics; nothing for an account that has none yet. */
+const newsletterChange = computed(() => {
+  const change = userConfig?.data?.value?.newsletterUpdated;
+  const at = change?.at?.toDate?.();
+  if (!at) return null;
+  const day = CHANGE_DAY.format(at);
+  return change?.via ? `${day}, ${newsletterChangeViaLabels[change.via]}` : day;
+});
 
 watch(
   () => userConfig?.data?.value?.newsletter,
@@ -440,17 +505,15 @@ const saveNewsletter = async () => {
   if (!user.value) return;
   savingNewsletter.value = true;
   try {
-    await setDoc(
-      doc(firestore, "users", user.value.uid),
+    await saveNewsletterChoice(
+      user.value.uid,
       {
-        newsletter: {
-          recentPeople: newsletterRecentPeople.value,
-          callsToAction: newsletterCallsToAction.value,
-        },
+        recentPeople: newsletterRecentPeople.value,
+        callsToAction: newsletterCallsToAction.value,
       },
-      { merge: true },
+      "profil",
     );
-    notify("Zapisano preferencje powiadomień.");
+    notify("Zapisano ustawienia newslettera.");
   } catch (err) {
     console.error("Failed to save newsletter preferences:", err);
     notify("Nie udało się zapisać preferencji.", "error");
@@ -509,5 +572,10 @@ const sendVerification = async () => {
 <style scoped>
 .profile-page {
   max-width: 640px;
+}
+
+.newsletter-status {
+  color: rgb(var(--v-theme-ink-neutral));
+  overflow-wrap: anywhere;
 }
 </style>

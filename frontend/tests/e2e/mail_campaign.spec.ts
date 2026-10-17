@@ -130,7 +130,7 @@ test.describe("Campaign mail", () => {
     expect(after.data()?.unsubscribed).toEqual([reader.uid]);
   });
 
-  test("a signed-in reader is asked once whether they want mail", async ({
+  test("a reader who walks away from the question is asked once more, in the corner", async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -145,13 +145,16 @@ test.describe("Campaign mail", () => {
     await page.locator("input#email").fill(reader.email);
     await page.locator("input#password").fill(reader.password);
     await page.locator('button[type="submit"]').click({ force: true });
-    await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+
+    // /login asks first; the reader leaves without answering.
+    await expect(page.locator("[data-newsletter-question]")).toBeVisible({
       timeout: 30_000,
     });
+    await page.goto("/pomoc", { waitUntil: "domcontentloaded" });
 
     const prompt = page.locator("[data-mail-opt-in]");
     await expect(prompt).toBeVisible({ timeout: 30_000 });
-    await page.locator("[data-mail-opt-in-yes]").click();
+    await prompt.locator("[data-newsletter-yes]").click();
     await expect(prompt).toBeHidden();
 
     await expect(async () => {
@@ -160,6 +163,7 @@ test.describe("Campaign mail", () => {
         callsToAction: true,
         recentPeople: true,
       });
+      expect(user.data()?.newsletterUpdated?.via).toBe("prompt");
     }).toPass({ timeout: 30_000 });
 
     // Answered is answered: a reload does not ask again.
