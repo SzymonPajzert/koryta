@@ -20,6 +20,8 @@ Podstawa prawna: Twoja dobrowolna zgoda (art. 6 ust. 1 lit. a RODO). Zgodę moż
 
 Zgodę wyrażasz, odpowiadając „Tak” na pytanie o newsletter, które zadajemy po założeniu konta albo po zalogowaniu, albo włączając wybrane tematy w ustawieniach profilu. Piszemy tylko na adres, którego posiadanie potwierdzisz. Zapisujemy datę i miejsce wyrażenia albo wycofania zgody. Wiadomość może zawierać podsumowanie Twojej aktywności w Serwisie, np. liczbę Twoich ocen z ostatnich 90 dni. Odnotowujemy, czy wiadomość została wysłana i czy ktoś wypisał się za pomocą linku w niej.
 
+Na newsletter możesz się też zapisać bez konta, podając sam adres e-mail w formularzu na stronie głównej. Zapis zaczyna działać dopiero po kliknięciu w link, który wyślemy na ten adres. Przechowujemy wtedy adres, datę i miejsce zapisu oraz daty wysłanych linków potwierdzających.
+
 ### W celu kontaktu z zespołem Serwisu:
 
 Jakie dane? Adres e-mail osób, którym nadaliśmy uprawnienia administratora Serwisu.
@@ -38,7 +40,7 @@ Podstawa prawna: Prawnie uzasadniony interes Administratora (art. 6 ust. 1 lit. 
 
 ## 3. Jak długo przechowujemy Twoje dane?
 
-Dane przetwarzane na podstawie Twojej zgody (adres e-mail dla Newslettera) przechowujemy do momentu wycofania przez Ciebie tej zgody.
+Dane przetwarzane na podstawie Twojej zgody (adres e-mail dla Newslettera) przechowujemy do momentu wycofania przez Ciebie tej zgody. Adres zapisany bez konta, którego zapisu nikt nie potwierdził, usuwamy po 7 dniach.
 
 Adres e-mail używany do wiadomości dla zespołu przetwarzamy, dopóki masz uprawnienia administratora Serwisu albo do wniesienia przez Ciebie sprzeciwu.
 
