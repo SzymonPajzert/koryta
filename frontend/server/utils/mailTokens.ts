@@ -1,7 +1,11 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Firestore } from "firebase-admin/firestore";
-import { CAMPAIGN_ID_PATTERN, type CampaignTopic } from "~~/shared/campaigns";
+import {
+  CAMPAIGN_ID_PATTERN,
+  type CampaignTopic,
+  type NewsletterChangeVia,
+} from "~~/shared/campaigns";
 
 /** One document per account that has been sent a campaign, holding the secret
  * its unsubscribe links carry. Server-only, like `mail`.
@@ -61,7 +65,14 @@ export async function unsubscribe(
     .collection("users")
     .doc(args.uid)
     .set(
-      { newsletter: { [args.topic]: false }, teamMail: false },
+      {
+        newsletter: { [args.topic]: false },
+        teamMail: false,
+        newsletterUpdated: {
+          at: FieldValue.serverTimestamp(),
+          via: "wypisz" satisfies NewsletterChangeVia,
+        },
+      },
       { merge: true },
     );
 
