@@ -70,6 +70,75 @@ export function mailPromptAnswered(
   return typeof config?.newsletter === "object" && config.newsletter !== null;
 }
 
+/** Where the newsletter question is put to a reader: right after they create
+ * an account, right after they sign in (on /login or in the sign-in dialog),
+ * or in the card the layout shows to a signed-in reader nobody has asked yet.
+ * Plausible's `where` on the mail-prompt goals. */
+export const newsletterAskPlaces = ["signup", "login", "prompt"] as const;
+
+export type NewsletterAskPlace = (typeof newsletterAskPlaces)[number];
+
+/** Every way the newsletter topics of an account change: an answer to the
+ * question, a switch on /profil, or the link in a campaign's footer. */
+export type NewsletterChangeVia = NewsletterAskPlace | "profil" | "wypisz";
+
+/** When and how the topics last changed, stored beside them as
+ * `users/{uid}.newsletterUpdated`, so that a consent can be shown to have been
+ * given, and where. `at` is a Firestore timestamp. */
+export type NewsletterUpdate<At = unknown> = {
+  at?: At;
+  via?: NewsletterChangeVia;
+};
+
+/** How /profil names each `via` after the date of the last change. */
+export const newsletterChangeViaLabels: Record<NewsletterChangeVia, string> = {
+  signup: "przy zakładaniu konta",
+  login: "po zalogowaniu",
+  prompt: "w okienku z pytaniem o newsletter",
+  profil: "w profilu",
+  wypisz: "linkiem z maila",
+};
+
+/** Whether to put the newsletter question to this reader now: yes for a
+ * signed-in reader outside the team who has never answered it.
+ *
+ * `undefined` while that cannot be known - the account's claims or its user
+ * document still on their way - so a caller waits rather than asking somebody
+ * who has answered, or showing an administrator a question that is not
+ * theirs. Administrators get campaigns as team mail and have their own switch
+ * on /profil (see the module comment). */
+export function newsletterQuestionDue(args: {
+  signedIn: boolean;
+  isAdmin: boolean | undefined;
+  config: { newsletter?: unknown } | null | undefined;
+}): boolean | undefined {
+  if (!args.signedIn) return false;
+  if (args.isAdmin === undefined || args.config === undefined) return undefined;
+  if (args.isAdmin) return false;
+  return !mailPromptAnswered(args.config);
+}
+
+/** What a reader is told once they have answered the newsletter question:
+ * that the answer is saved, and what, if anything, still stands between them
+ * and the first message. */
+export function newsletterAnswerNote(args: {
+  yes: boolean;
+  awaitingConfirmation: boolean;
+  email: string | null | undefined;
+}): string {
+  if (!args.yes) {
+    return "Jasne, nie wyślemy Ci newslettera. Zdanie zmienisz w profilu.";
+  }
+  if (args.awaitingConfirmation) {
+    return args.email
+      ? `Zapisano. Newsletter zacznie przychodzić, gdy potwierdzisz adres ${args.email} - link jest w mailu, który Ci wysłaliśmy.`
+      : "Zapisano. Newsletter zacznie przychodzić, gdy potwierdzisz swój adres - link jest w mailu, który Ci wysłaliśmy.";
+  }
+  return args.email
+    ? `Zapisano. Newsletter będzie przychodził na ${args.email}.`
+    : "Zapisano.";
+}
+
 /** One account, as the owner's audience list shows it. Server-built: the auth
  * service holds the address and the roles, Firestore the preferences and the
  * activity. */
