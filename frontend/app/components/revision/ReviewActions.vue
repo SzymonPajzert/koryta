@@ -28,6 +28,7 @@
            button, and it read as "delete and put live". -->
       <v-btn
         v-if="
+          offerPublish &&
           !proposal.published &&
           proposal.targetExists &&
           proposal.kind !== 'removal'
@@ -118,8 +119,19 @@ withDefaults(
     rejectable?: boolean;
     loading?: boolean;
     fullComparisonTo?: string | null;
+    /** Whether „Zatwierdź i opublikuj” is offered on a target that is not
+     * live. An entry's relations publish a draft by a button of their own,
+     * as it stands, so the one beside a revision would only be a second way
+     * to do it - and on a revision the draft has moved past, a way to publish
+     * it with the older version written back. */
+    offerPublish?: boolean;
   }>(),
-  { rejectable: true, loading: false, fullComparisonTo: null },
+  {
+    rejectable: true,
+    loading: false,
+    fullComparisonTo: null,
+    offerPublish: true,
+  },
 );
 
 const emit = defineEmits<{
