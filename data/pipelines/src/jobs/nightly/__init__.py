@@ -44,11 +44,16 @@ The steps, in order (`STEPS`):
     tests       the pipeline tests over those outputs (src/tests/pipelines)
     outputs     the outputs against their baseline (src/tests/e2e)
     invariants  the database invariants over tonight's export
-    people      koryta_people_import --scope priority --max-uploads 10: new
+    companies   koryta_people_import as the people step runs it, with
+                --companies-only: the companies the people it is about to
+                send name that tonight's export has no page for, created
+                first, so that every job goes up with its person
+    people      koryta_people_import --scope priority --max-uploads 100: new
                 hires first, then the pages of the people rejestr.io was paid
                 for this week, then the pages with an open note, then at most
                 --max-odpis-only-current (10) people only an odpis names in a
-                public post that is not new, then published pages, then the
+                public post that is not new and --max-rejestrio-current (50)
+                with a rejestr.io entry in one, then published pages, then the
                 rest; of all those pages at most --max-published (10) that
                 are published, whichever tier sends them
     scores      koryta_score_import: every scoring model rebuilt over the
@@ -69,9 +74,24 @@ night; only the steps that depend on it are held:
   nothing new failing - a test that passed last night and fails tonight, most
   likely after last night's upload, holds the upload until somebody looks. The
   18 invariants failing on 2026-10-03 (budgets drifted past their measured
-  values) fail every night and do not hold it.
+  values) fail every night and do not hold it. Nor does an invariant that
+  grows by a page or two: it passes up to ten past its budget and warns
+  (`within_budget` in src/tests/pipelines/conftest.py), and the night reports
+  the warnings - `warnings` in its summary and on its run - and sends.
 - `scores` needs the same, and not the people: their outcome only decides
   which new pages there are to rate as well.
+- `companies` writes to the site too, so it runs only when the people may go
+  up - skipped, not held, when they may not, so that a held night still names
+  the people as what it held - and holds nothing back itself: the people go
+  up whatever it did, and the uploader still creates on the way a company it
+  could not.
+
+`companies` plans tonight's people as the people step plans them - one argv
+for both (`people_argv`), the same outputs on disk, nothing sent in between -
+and creates, before they go, the companies they name that the export has no
+page for. Until it, the people step found each one missing only when the site
+took a person without the job there, and created it then and sent the person
+again: 27 companies on 2026-10-13, 16 on 10-14.
 
 `krs_register` holds nothing back, and nothing holds it. A company it finds
 the public owns is in the crawl's queue after tonight's reprocess
@@ -166,9 +186,11 @@ EXIT_FAILED = 1
 #: spent 65 minutes on the people alone and the kernel killed the run at 16 GB.
 #: DomainToRegion is the article branch's own input, copied from a gitignored
 #: files/domain_to_region.json the VM does not hold; only ArticlePersonMentions
-#: reads it.
+#: reads it. PeopleScoreCoverage reads every export since August, one more each
+#: day, for a question asked by hand; nothing in the night reads it.
 EXCLUDED = (
     "KorytaDiffer",
+    "PeopleScoreCoverage",
     "DomainToRegion",
     "ProcessWikiNer",
     "ArticleDoneUrls",
@@ -340,6 +362,28 @@ class StepResult:
 
 
 @dataclass
+class OverBudget:
+    """A test that counted more than its budget and passed, inside the buffer
+    `within_budget` gives every budget (src/tests/pipelines/conftest.py)."""
+
+    test: str
+    count: int
+    #: The count the test's budget names, and the one past which it fails.
+    known: int
+    limit: int
+
+    def said(self) -> str:
+        """One line for the run on /admin/procesy, the test named by its
+        module - test_invariants::test_x - which is all of the path that tells
+        two apart, and a phone has room for."""
+        module, _, name = self.test.partition("::")
+        return (
+            f"{module.rsplit('.', 1)[-1]}::{name}: {self.count} przy znanych "
+            f"{self.known}, nie przejdzie powyżej {self.limit}"
+        )
+
+
+@dataclass
 class NightSummary:
     """What one night did, kept in the shared cache."""
 
@@ -356,6 +400,9 @@ class NightSummary:
     failures: dict[str, list[str]] = field(default_factory=dict)
     #: Tests failing tonight that passed on the last night that ran them.
     new_failures: list[str] = field(default_factory=list)
+    #: Tests past their budget and inside its buffer, by check: they pass,
+    #: and hold nothing, until the buffer runs out.
+    warnings: dict[str, list[OverBudget]] = field(default_factory=dict)
     #: Held pipelines rebuilt before the reprocess, and why each was due.
     rebuilt: dict[str, str] = field(default_factory=dict)
     #: Held pipelines due a rebuild that did not get one, and why; the next
@@ -393,6 +440,9 @@ STEPS = (
     Step("tests", "testy", 45),
     Step("outputs", "wyniki", 20),
     Step("invariants", "niezmienniki", 30),
+    # The people's plan, a minute and a half on 2026-10-14, and a request per
+    # company: 16 that night.
+    Step("companies", "firmy", 20),
     Step("people", "osoby", 60),
     Step("scores", "oceny", 30),
     Step("tidy", "porządki", 5, always=True),
@@ -606,6 +656,30 @@ def failed_tests(report: str) -> list[str] | None:
         if case.find("failure") is not None or case.find("error") is not None:
             failed.append(f"{case.get('classname')}::{case.get('name')}")
     return sorted(failed)
+
+
+def budget_warnings(report: str) -> list[OverBudget]:
+    """The tests a junit report says passed past their budget, from the
+    properties `within_budget` records on each; none without a report."""
+    try:
+        root = ET.parse(report).getroot()
+    except (OSError, ET.ParseError):
+        return []
+    warned = []
+    for case in root.iter("testcase"):
+        said = {
+            prop.get("name"): prop.get("value", "") for prop in case.iter("property")
+        }
+        if {"budget_count", "budget_known", "budget_limit"} <= said.keys():
+            warned.append(
+                OverBudget(
+                    test=f"{case.get('classname')}::{case.get('name')}",
+                    count=int(said["budget_count"]),
+                    known=int(said["budget_known"]),
+                    limit=int(said["budget_limit"]),
+                )
+            )
+    return sorted(warned, key=lambda over: over.test)
 
 
 def stream(
@@ -949,6 +1023,9 @@ class Night:
             return "wstrzymane: brak kopii bazy"
         if step.name in ("tests", "outputs") and not self.came_through("reprocess"):
             return "wstrzymane: potoki się nie przeliczyły"
+        if step.name == "companies" and (held := self.why_not_upload()):
+            # Skipped, not held: what the night held is the people.
+            return f"pominięte - osoby {held}"
         if step.name in ("people", "scores"):
             return self.why_not_upload()
         return ""
@@ -1236,9 +1313,15 @@ class Night:
             # collected. No verdict to compare.
             return FAILED, f"bez wyniku (kod {code})", code
         self.summary.failures[step.name] = failed
-        if not failed:
-            return SUCCEEDED, "", code
-        return PARTIAL, f"{len(failed)} nie przechodzi", code
+        warned = budget_warnings(report)
+        if warned:
+            self.summary.warnings[step.name] = warned
+        said = []
+        if failed:
+            said.append(f"{len(failed)} nie przechodzi")
+        if warned:
+            said.append(f"{len(warned)} z ostrzeżeniem")
+        return (PARTIAL if failed else SUCCEEDED), ", ".join(said), code
 
     def compare_failures(self) -> None:
         last = self.last_failures()
@@ -1289,7 +1372,9 @@ class Night:
             {"KORYTA_EXPORT": self.summary.export},
         )
 
-    def step_people(self, step: Step) -> tuple[str, str, int | None]:
+    def people_argv(self, step: Step) -> list[str]:
+        """The people import as the people step runs it, in `step`'s time.
+        The companies step runs it too, so that the two plan the same people."""
         argv = [
             bin_path("koryta_people_import"),
             "--scope",
@@ -1300,6 +1385,8 @@ class Night:
             str(self.args.recent_days),
             "--max-odpis-only-current",
             str(self.args.max_odpis_only_current),
+            "--max-rejestrio-current",
+            str(self.args.max_rejestrio_current),
             "--max-published",
             str(self.args.max_published),
             "--max-minutes",
@@ -1315,7 +1402,14 @@ class Night:
             argv += ["--export", self.summary.export]
         if self.args.people_dry_run:
             argv.append("--dry-run")
+        return argv
+
+    def step_companies(self, step: Step) -> tuple[str, str, int | None]:
+        argv = [*self.people_argv(step), "--companies-only"]
         return self.judge_job(*self.process(step, argv))
+
+    def step_people(self, step: Step) -> tuple[str, str, int | None]:
+        return self.judge_job(*self.process(step, self.people_argv(step)))
 
     def step_scores(self, step: Step) -> tuple[str, str, int | None]:
         # The models are rebuilt over the newest export of the day; the rest
@@ -1369,6 +1463,16 @@ class Night:
     def describe(self, step: Step) -> str:
         if step.name == "rebuild_held":
             return self.describe_rebuilds()
+        people = (
+            "koryta_people_import --scope priority --max-uploads "
+            f"{self.args.max_uploads} --max-odpis-only-current "
+            f"{self.args.max_odpis_only_current} --max-rejestrio-current "
+            f"{self.args.max_rejestrio_current} --max-published "
+            f"{self.args.max_published}"
+            + (" --dry-run" if self.args.people_dry_run else "")
+            # Only a night with the export step has an export to name.
+            + (" --export <the export step's>" if self.needs("export") else "")
+        )
         commands = {
             "export": "wait for tonight's export (its .overall_export_metadata)",
             "krs_free": f"koryta_scrape_krs_free --max-minutes {self.args.krs_minutes}",
@@ -1388,13 +1492,9 @@ class Night:
             "tests": "pytest src/tests/pipelines",
             "outputs": "pytest -m e2e src/tests/e2e",
             "invariants": "pytest -m e2e src/tests/pipelines (tonight's export)",
-            "people": "koryta_people_import --scope priority --max-uploads "
-            f"{self.args.max_uploads} --max-odpis-only-current "
-            f"{self.args.max_odpis_only_current} --max-published "
-            f"{self.args.max_published}"
-            + (" --dry-run" if self.args.people_dry_run else "")
-            # Only a night with the export step has an export to name.
-            + (" --export <the export step's>" if self.needs("export") else ""),
+            "companies": f"{people} --companies-only: the companies the people "
+            "step's people name that the export has no page for, created first",
+            "people": people,
             "scores": "koryta_score_import: every scoring model, tonight's new "
             "pages included",
             "compress": "compressor -incremental -hostname "
@@ -1467,13 +1567,20 @@ class Night:
             or (["SIGTERM"] if self.signalled else [])
             or problems
         )
-        self.log(f"night over: {state}; " + ("; ".join(problems) or "all well"))
+        # The tests eating into their budgets' buffers, apart from the
+        # problems: a warning holds nothing back and decides nothing.
+        warnings = [
+            over.said() for overs in summary.warnings.values() for over in overs
+        ]
+        noted = problems + [f"warning - {warning}" for warning in warnings]
+        self.log(f"night over: {state}; " + ("; ".join(noted) or "all well"))
         summary.log = self.write_log()
         path = self.write_summary()
         self.status.finish(
             state,
             stop_reason=decisive[0][:200] if decisive else None,
             errors=problems,
+            warnings=warnings,
             exit_code=code,
             counters={
                 "kroki": len(results),
@@ -1557,7 +1664,8 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--people-dry-run",
         action="store_true",
-        help="Build and count tonight's people, send none.",
+        help="Build and count tonight's people and the companies they need; "
+        "send none, create none.",
     )
     parser.add_argument(
         "--recent-days",
@@ -1573,6 +1681,15 @@ def parser() -> argparse.ArgumentParser:
         help="Pages the night creates at most for people only an odpis names "
         "in a public post that is not new, within --max-uploads. "
         "Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--max-rejestrio-current",
+        type=positive_int,
+        default=50,
+        help="Pages the night creates at most for people with a rejestr.io "
+        "entry in a public post - any post - that is not new, within "
+        "--max-uploads; 0 makes none. Default: %(default)s, Szymon's choice "
+        "of 2026-10-16.",
     )
     parser.add_argument(
         "--max-published",

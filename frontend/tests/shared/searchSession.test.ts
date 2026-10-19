@@ -23,11 +23,13 @@ describe("SearchSession", () => {
     expect(session.results("jan kow", 6, 5)).toBeUndefined();
     expect(session.results("jan kowalski", 2, 2)).toBeUndefined();
 
-    expect(session.pick()).toEqual({
+    expect(session.pick("person", true)).toEqual({
       query: "jan kowalski",
       results: 2,
       unverified: 2,
       outcome: "pick",
+      picked: "person",
+      pickedUnverified: true,
     });
     // Settled: nothing more to report for it.
     expect(session.abandon()).toBeUndefined();
@@ -69,7 +71,7 @@ describe("SearchSession", () => {
   });
 
   it("has nothing to report before any answer came back", () => {
-    expect(new SearchSession().pick()).toBeUndefined();
+    expect(new SearchSession().pick("party", false)).toBeUndefined();
   });
 });
 
@@ -100,6 +102,24 @@ describe("settledSearchProps", () => {
       results: "none",
       unverified: "none",
       outcome: "abandon",
+    });
+  });
+
+  it("leaves out what was opened, which search:pick already says", () => {
+    expect(
+      settledSearchProps({
+        query: "jan kowalski",
+        results: 1,
+        unverified: 1,
+        outcome: "pick",
+        picked: "person",
+        pickedUnverified: true,
+      }),
+    ).toEqual({
+      query: "jan kowalski",
+      results: "1-4",
+      unverified: "all",
+      outcome: "pick",
     });
   });
 });

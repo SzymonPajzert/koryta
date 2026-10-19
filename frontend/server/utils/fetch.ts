@@ -8,6 +8,7 @@ import {
   type Topic,
   pageIsPublic,
 } from "~~/shared/model";
+import { candidacyDay } from "~~/shared/electionDays";
 import { getFirestore, Filter } from "firebase-admin/firestore";
 import { z } from "zod";
 
@@ -224,46 +225,20 @@ const _cachedFetchNodes = defineCachedFunction(
   },
 );
 
-const electionConcreteDate: Record<string, string> = {
-  "1989": "1989-06-04",
-  "1990": "1990-11-25",
-  "1991": "1991-10-27",
-  "1993": "1993-09-19",
-  "1995": "1995-11-05",
-  "1997": "1997-09-21",
-  "1998": "1998-10-11",
-  "2000": "2000-10-08",
-  "2001": "2001-09-23",
-  "2002": "2002-10-27",
-  "2004": "2004-06-13",
-  "2005": "2005-09-25",
-  "2006": "2006-11-12",
-  "2007": "2007-10-21",
-  "2009": "2009-06-07",
-  "2010": "2010-06-20",
-  "2011": "2011-10-09",
-  "2014": "2014-11-16",
-  "2015": "2015-10-25",
-  "2018": "2018-10-21",
-  "2019": "2019-10-13",
-  "2020": "2020-06-28",
-  "2023": "2023-10-15",
-  "2024": "2024-04-07",
-};
-
 function edgeFromDB(doc: FirebaseFirestore.QueryDocumentSnapshot): Edge {
   const data = doc.data();
   if (data.revision_id && typeof data.revision_id.path === "string") {
     data.revision_id = data.revision_id.path;
   }
 
-  // TODO this should be organized somewhere else.
+  // A candidacy is stored under its election's year; the page shows the day.
   if (data.type === "election") {
-    if (data["start_date"]) {
-      const year = String(data["start_date"]).substring(0, 4);
-      if (electionConcreteDate[year]) {
-        data["start_date"] = electionConcreteDate[year];
-      }
+    if (typeof data.start_date === "string" && data.start_date) {
+      data.start_date = candidacyDay(
+        data.start_date,
+        data.position,
+        data.by_election,
+      );
     }
     data["end_date"] = data["start_date"];
   }

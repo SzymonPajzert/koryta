@@ -1,7 +1,7 @@
 """Who a capped upload sends first.
 
 While the daily people import is rolled out it sends at most a hundred people
-a night, so the order decides who reaches the site at all. Seven tiers, each
+a night, so the order decides who reaches the site at all. Eight tiers, each
 sent whole before the next:
 
 1. `NEW_HIRE` - somebody the site has no page for, holding a post at a public
@@ -18,8 +18,9 @@ sent whole before the next:
    entry of the page's name (`ScrapeRejestrIO.people_to_scrape`), so one
    bought for somebody without a page is likely a namesake's - 8 of the 17
    people bought 2026-10-06 to 10-08 were, back when every vote was matched
-   by name - and nobody with a rejestr.io entry but a new hire gets a page
-   here.
+   by name - and somebody bought who has no page gets one only as anybody
+   else without one does: as a new hire, or in a public post they hold now
+   (`REJESTRIO_CURRENT`).
 3. `NOTED_MISSING` - a page the payload would change, on which a reader noted
    that data is missing ("Brakuje danych") and no admin has closed the entry:
    on the page itself, or on the page of a company the payload names. The
@@ -45,15 +46,30 @@ sent whole before the next:
    out - 833 of them in the 2026-10-11 plan, behind 54 in the tiers before -
    so that the few are made every night; behind the bought and the noted,
    which somebody asked for.
-6. `PUBLISHED` - a published page the payload would change. What readers see.
-7. `ON_SITE` - an unpublished page the payload would change.
+6. `REJESTRIO_CURRENT` - the same for everybody else the site has no page
+   for: somebody with a rejestr.io entry, holding a post at a public company
+   now that began before the new hires' days, or on a day the register does
+   not give. Before it nobody with an entry
+   got a page but a new hire, so most of the people the site exists to show
+   never would: on the 2026-10-16 data 21,965 people held a public post,
+   15,802 of them had no page, and 13,518 of those were these - 89 were new
+   hires. Szymon's decision of that day: everybody employed at a publicly
+   owned company goes up, in any post - a prokurent's, a seat on an unpaid
+   rada społeczna - "to not complicate the logic", fifty a night
+   (`--max-rejestrio-current` in `jobs.people_import`). Created unpublished,
+   as a new hire is; after the people only an odpis names, whose few are
+   checked by hand, and ahead of the published pages for the same reason as
+   theirs.
+7. `PUBLISHED` - a published page the payload would change. What readers see.
+8. `ON_SITE` - an unpublished page the payload would change.
 
 Inside a tier the newest news first: a hire by the start of their newest post,
 a page by the newest dated fact the upload would add (`dated_changes`). A
 change with no date - a party, a birth date - goes after every dated one.
-Somebody only an odpis names in a current seat goes by the start of the newest
-public post they hold, and among the posts begun on one day as `seat_order`
-says: at a company the site has a page for first, a company's people together.
+Somebody in a current seat, in either of the two tiers, goes by the start of
+the newest public post they hold, and among the posts begun on one day as
+`seat_order` says: at a company the site has a page for first, a company's
+people together.
 
 A company counts through its people because the night sends no company
 payloads: what a company learns arrives as its people's posts.
@@ -63,9 +79,9 @@ says whether its page is (`Pick.published`): a change to a published page is
 what readers see, or what waits for a reviewer, whatever tier sent it, and a
 run caps those across the tiers (`--max-published` in `jobs.people_import`).
 
-The new-hire and the odpis-only tiers are `missing_from_koryta` and the other
-five `matching_one_page`, with their guards: nobody here is someone a run of
-either scope would not have sent.
+The new-hire tier and the two of the people in a current seat are
+`missing_from_koryta`, and the other five `matching_one_page`, with their
+guards: nobody here is someone a run of either scope would not have sent.
 """
 
 import typing
@@ -80,6 +96,7 @@ BOUGHT = "bought"
 NOTED_MISSING = "noted_missing"
 NOTED = "noted"
 ODPIS_ONLY_CURRENT = "odpis_only_current"
+REJESTRIO_CURRENT = "rejestrio_current"
 PUBLISHED = "published"
 ON_SITE = "on_site"
 TIERS = (
@@ -88,6 +105,7 @@ TIERS = (
     NOTED_MISSING,
     NOTED,
     ODPIS_ONLY_CURRENT,
+    REJESTRIO_CURRENT,
     PUBLISHED,
     ON_SITE,
 )
@@ -197,16 +215,16 @@ def newest_change(
 def seat_order(
     pick: Pick, public_krs: typing.Container[str], snapshot: SiteSnapshot
 ) -> tuple[bool, str, str]:
-    """Where somebody only an odpis names goes among the people in a current
-    seat whose newest public post began the same day as theirs.
+    """Where somebody in a current seat goes among the people of their tier
+    whose newest public post began the same day as theirs.
 
-    Ties are common: 499 of the tier's 980 people on 2026-10-11 shared the
-    day with another, most often a board appointed at once. A post at a
-    company the site has a page for first - their page joins one readers
-    already reach, and the night makes no company page alongside it for the
-    morning's check; then by the company, so that a board goes up together
-    where the cap allows; then by name, so that the order does not move with
-    the order of the pipeline's rows.
+    Ties are common: 499 of the odpis-only tier's 980 people on 2026-10-11
+    shared the day with another, most often a board appointed at once. A
+    post at a company the site has a page for first - their page joins one
+    readers already reach, and the night makes no company page alongside it
+    for the morning's check; then by the company, so that a board goes up
+    together where the cap allows; then by name, so that the order does not
+    move with the order of the pipeline's rows.
     """
     newest = sorted(
         str(company.krs)
@@ -250,14 +268,16 @@ def prioritised(
     since = (today - timedelta(days=recent_days)).isoformat()
     hires: list[Pick] = []
     seated: list[Pick] = []
+    linked: list[Pick] = []
     for person in new:
         if (start := newest_public_start(person, public_krs, since)) is not None:
             hires.append(Pick(person, NEW_HIRE, start))
-        elif only_an_odpis_names(person) and (
-            seats := current_public_seats(person, public_krs)
-        ):
+        elif seats := current_public_seats(person, public_krs):
             newest = max((seat for seat in seats if seat is not None), default=None)
-            seated.append(Pick(person, ODPIS_ONLY_CURRENT, newest))
+            if only_an_odpis_names(person):
+                seated.append(Pick(person, ODPIS_ONLY_CURRENT, newest))
+            else:
+                linked.append(Pick(person, REJESTRIO_CURRENT, newest))
 
     paid_for: list[Pick] = []
     missing: list[Pick] = []
@@ -287,17 +307,23 @@ def prioritised(
         f"{len(paid_for)} pages of people bought from rejestr.io, "
         f"{len(missing)} with a note that data is missing, {len(asked)} with "
         f"another open note, {len(seated)} more people only an odpis names in "
-        f"a current public seat, {len(published)} published and "
-        f"{len(unpublished)} unpublished pages to change"
+        f"a current public seat and {len(linked)} with a rejestr.io entry, "
+        f"{len(published)} published and {len(unpublished)} unpublished pages "
+        f"to change"
     )
+
+    def by_seat(picks: list[Pick]) -> list[Pick]:
+        return newest_first(
+            sorted(picks, key=lambda pick: seat_order(pick, public_krs, snapshot))
+        )
+
     return (
         newest_first(hires)
         + newest_first(paid_for)
         + newest_first(missing)
         + newest_first(asked)
-        + newest_first(
-            sorted(seated, key=lambda pick: seat_order(pick, public_krs, snapshot))
-        )
+        + by_seat(seated)
+        + by_seat(linked)
         + newest_first(published)
         + newest_first(unpublished)
     )

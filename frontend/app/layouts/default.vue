@@ -119,6 +119,12 @@
               title="Zadania"
             />
             <v-list-item
+              v-if="isOwner"
+              :prepend-icon="mdiMagnify"
+              to="/admin/wyszukiwania"
+              title="Wyszukiwania"
+            />
+            <v-list-item
               v-if="isDatascience"
               :prepend-icon="mdiCogSyncOutline"
               to="/admin/procesy"
@@ -224,6 +230,7 @@ import {
   mdiCommentTextOutline,
   mdiGithub,
   mdiInboxArrowDown,
+  mdiMagnify,
   mdiOpenInNew,
   mdiShieldAccount,
   mdiTimelineClockOutline,

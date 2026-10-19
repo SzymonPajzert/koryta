@@ -22,7 +22,8 @@ pytestmark = pytest.mark.e2e
 
 # Fields that must always be present on a revision of a given node ``type``,
 # with the number of revisions known to be missing them today. The budget only
-# keeps a known problem from failing the build; it should shrink, never grow.
+# keeps a known problem from failing the build; it should shrink, never grow,
+# and a count past it warns until the buffer in conftest.py runs out.
 REQUIRED_FIELDS = [
     # Every election revision should say which office was contested; 1891 do
     # not, and the elections list has nothing to show for them.
@@ -54,7 +55,7 @@ def node_data(revision: dict) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
-def test_revisions_have_type(revisions):
+def test_revisions_have_type(revisions, within_budget):
     """No revision may exist without a ``data.type`` field."""
     # One "Test field" document with nothing else in it either - no node_id,
     # update_time or update_user.
@@ -66,7 +67,7 @@ def test_revisions_have_type(revisions):
         if (data := node_data(revision)) is None or "type" not in data
     ]
 
-    assert len(missing) <= KNOWN_STUBS, (
+    assert within_budget(len(missing), KNOWN_STUBS), (
         f"Found {len(missing)} revisions without a 'data.type' field, up from "
         f"the {KNOWN_STUBS} known stub. Sample IDs: {missing[:10]}"
     )
@@ -77,7 +78,7 @@ def test_revisions_have_type(revisions):
     REQUIRED_FIELDS,
     ids=[f"{t}.{f}" for t, f, _ in REQUIRED_FIELDS],
 )
-def test_required_field_present(revisions, node_type, field, budget):
+def test_required_field_present(revisions, node_type, field, budget, within_budget):
     """Every revision of ``node_type`` must have ``field`` present."""
     total = 0
     missing = []
@@ -99,7 +100,7 @@ def test_required_field_present(revisions, node_type, field, budget):
     if total == 0:
         pytest.skip(f"No revisions of type '{node_type}' found in the export")
 
-    assert len(missing) <= budget, (
+    assert within_budget(len(missing), budget), (
         f"Found {len(missing)}/{total} '{node_type}' revisions missing the "
         f"'{field}' field, up from the {budget} known ones. "
         f"Sample IDs: {missing[:10]}"

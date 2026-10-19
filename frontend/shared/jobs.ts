@@ -411,19 +411,25 @@ export const JOBS: readonly JobDefinition[] = [
   // The imports report one run per `koryta_uploader --submit`, under the id
   // of the payload type they send. A person upload reports as people_import,
   // which also has a daily run of its own, so it sits with the scheduled jobs.
-  // score_import is a step of the night too (koryta_score_import), but the
-  // night's own row is what says a night did not run it; this one is judged
-  // by its newest run, as before.
+  // score_import and company_import are steps of the night too
+  // (koryta_score_import, koryta_people_import --companies-only), but the
+  // night's own row is what says a night did not run them; these are judged
+  // by their newest run, as before.
   {
     id: "company_import",
     kind: "triggered",
     title: "Import firm",
     summary:
-      "koryta_uploader --type company: firmy z CompaniesPayloads przez /api/ingest/company.",
-    runsOn: "Ręcznie",
+      "Firmy przez /api/ingest/company. Co noc, przed importem osób: firmy, w których pracują osoby wysyłane tej nocy, a których nie ma w porannej kopii bazy - z potoku Companies, tak jak import osób dodaje brakującą firmę po drodze. Ręcznie: koryta_uploader --type company, firmy z CompaniesPayloads.",
+    runsOn:
+      "Krok nocy na VM koryta-nightly (koryta_nightly, krok „companies”, tuż przed osobami); ręcznie koryta_uploader --type company",
     command:
       "koryta CompaniesPayloads --output stdout | koryta_uploader --type company --submit",
     heartbeatMinutes: 15,
+    notes: [
+      "Firmę, której nocny krok nie dodał, import osób próbuje dodać jeszcze raz; gdy i jemu się nie uda, zapisuje osobę bez tego zatrudnienia („zatrudnień bez strony firmy”).",
+      "Podsumowanie nocnego uruchomienia - każda firma, kto w niej pracuje i co z nią zrobiono - jest w koryta-pl-sharedcache/jobs/company_import/runs/.",
+    ],
   },
   {
     id: "score_import",
@@ -477,7 +483,7 @@ export const JOBS: readonly JobDefinition[] = [
     partialIsHeld: true,
     title: "Noc na maszynie koryta-nightly",
     summary:
-      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, wysyła do 100 osób na stronę, a potem oceny modeli.",
+      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, dodaje firmy, których brakuje osobom tej nocy, wysyła do 100 osób na stronę, a potem oceny modeli.",
     runsOn:
       "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza - data/nightly",
     command: "koryta_nightly",

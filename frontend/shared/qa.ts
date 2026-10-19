@@ -59,6 +59,53 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "fakty-po-odswiezeniu-strony",
+    title: "Kategoryzacja faktów działa także po odświeżeniu strony",
+    description:
+      "Odświeżona albo otwarta z linku, /ekstrakcje/kategoryzacja mówiła „Brak faktów do kategoryzacji.” pod licznikiem tysięcy faktów do oceny, a udostępniony fakt podmieniała na inny. Tak samo /ekstrakcje było puste, a „Wydobyte fakty” na stronie artykułu pokazywały 0.",
+    steps: [
+      "Zalogowany odśwież /ekstrakcje/kategoryzacja - ma się pokazać karta faktu.",
+      "Skopiuj adres strony (z ?fact=), oceń kartę i otwórz skopiowany adres w nowej karcie - ma się pokazać ten sam fakt.",
+    ],
+    link: "/ekstrakcje/kategoryzacja",
+    area: "contributor",
+  },
+  {
+    id: "dzien-wyborow-wedlug-rodzaju",
+    title: "Kandydatury do Parlamentu Europejskiego z dniem tych wyborów",
+    description:
+      "Dzień przy kandydaturze był dobierany po samym roku, więc start do Parlamentu Europejskiego w 2014, 2019 i 2024 roku dostawał dzień wyborów samorządowych albo do Sejmu z tego roku, a kandydatury samorządowe z 2010 roku - dzień wyborów prezydenckich. Teraz dzień zależy też od rodzaju wyborów, a datę wpisaną przy kandydaturze ręcznie strona pokazuje bez zmian.",
+    steps: [
+      "Na stronie Pawła Kobylińskiego start do Parlamentu Europejskiego z 2019 roku ma datę 2019-05-26, a start do Sejmu z tego samego roku - 2019-10-13.",
+    ],
+    link: "/osoba/pawel-bronislaw-kobylinski-xFCwXT4EuQUrjyN532Zt",
+    area: "public",
+  },
+  {
+    id: "wyszukiwania-czytelnikow",
+    title: "Wyszukiwania: czego szukają czytelnicy",
+    description:
+      "Wyszukiwarka zapisuje u nas każde zakończone wyszukiwanie - ostatnie zapytanie i to, czy ktoś otworzył wynik - bez danych o szukającym poza tym, czy był zalogowany. /admin/wyszukiwania pokazuje je razem, także te bez wyników i te, które znalazły tylko niezweryfikowane osoby. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Wpisz w wyszukiwarkę nazwisko, którego nie ma w bazie, i kliknij poza polem; potem wyszukaj kogoś i otwórz wynik.",
+      "Na /admin/wyszukiwania oba zapytania są na liście, a pierwsze ma 1 w „Bez wyników”.",
+    ],
+    link: "/admin/wyszukiwania",
+    area: "admin",
+  },
+  {
+    id: "noc-dodaje-firmy-przed-osobami",
+    title: "Noc dodaje brakujące firmy, zanim wyśle osoby",
+    description:
+      "Przed importem osób noc dodaje firmy, w których pracują wysyłane osoby, a których nie ma w porannej kopii bazy. Dotąd import dodawał każdą z nich dopiero po drodze, gdy strona przyjęła osobę bez tego zatrudnienia - 16 firm w nocy z 14 października.",
+    steps: [
+      "Rano po nocy otwórz /admin/procesy i rozwiń „Import firm” - ostatnie uruchomienie jest z nocy, z licznikami „w paczce” i „dodanych firm”.",
+      "Rozwiń „Import osób na stronę” - w uruchomieniu z tej samej nocy „dodanych firm” i „zatrudnień bez strony firmy” mają być zwykle 0.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "import-osob-bez-brakujacej-firmy",
     title:
       "Import zapisuje osobę, nawet gdy jednej z jej firm nie ma na stronie",

@@ -7,11 +7,20 @@ import signal
 import subprocess
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
 import jobs.nightly as night
 from stores.storage import SHARED_BUCKET, warsaw_tz
+
+#: `test_budget_warnings_reads_what_the_invariants_budgets_record` runs the
+#: invariants' own budgets through pytest.
+pytest_plugins = ["pytester"]
+
+#: Where every budgeted invariant gets `within_budget`, which records what
+#: `budget_warnings` reads.
+INVARIANTS_CONFTEST = Path(__file__).parents[3] / "tests/pipelines/conftest.py"
 
 # The 04:00 Warsaw export, in UTC as its folder is named; the night starts at
 # 04:30 Warsaw, half an hour later.
@@ -24,6 +33,8 @@ GOOD = {
     "koryta_krs_odpis": 0,
     "koryta_scrape_krs_paid": 0,
     "koryta": 0,
+    # The companies step runs the people import too, with one flag more.
+    "koryta_people_import --companies-only": 0,
     "koryta_people_import": 0,
     "koryta_score_import": 0,
     "compressor": 0,
@@ -66,6 +77,12 @@ class World:
             "invariants": [],
         }
         self.pytest_codes = {"tests": None, "outputs": None, "invariants": None}
+        #: Tests past their budget and inside its buffer, per check.
+        self.warnings: dict[str, list[night.OverBudget]] = {
+            "tests": [],
+            "outputs": [],
+            "invariants": [],
+        }
         self.last: dict[str, list[str]] | None = {}
         self.export: str | None = FRESH
         self.commands: list[tuple[str, list[str], dict]] = []
@@ -178,6 +195,8 @@ def world(monkeypatch, tmp_path) -> World:
             w.timeouts[name] = timeout
             w.rebuild(argv[1], w.codes[name])
             return w.codes[name], False
+        if "--companies-only" in argv:
+            name = f"{name} --companies-only"
         w.commands.append((name, list(argv), dict(env)))
         return w.codes[name], False
 
@@ -185,6 +204,12 @@ def world(monkeypatch, tmp_path) -> World:
         for check in night.CHECKS:
             if report.endswith(f"-{check}.xml"):
                 return w.failures[check]
+        raise AssertionError(report)
+
+    def budget_warnings(report):
+        for check in night.CHECKS:
+            if report.endswith(f"-{check}.xml"):
+                return w.warnings[check]
         raise AssertionError(report)
 
     class Bucket:
@@ -199,6 +224,7 @@ def world(monkeypatch, tmp_path) -> World:
 
     monkeypatch.setattr(night, "stream", stream)
     monkeypatch.setattr(night, "failed_tests", failed_tests)
+    monkeypatch.setattr(night, "budget_warnings", budget_warnings)
     monkeypatch.setattr(night, "newest_export", lambda client: w.export)
     monkeypatch.setattr(night, "last_failures", lambda client, before: w.last)
     monkeypatch.setattr(night, "Client", Bucket)
@@ -243,6 +269,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "pytest tests",
         "pytest outputs",
         "pytest invariants",
+        "koryta_people_import --companies-only",
         "koryta_people_import",
         "koryta_score_import",
     ]
@@ -263,12 +290,14 @@ def test_the_reprocess_rebuilds_all_but_the_slow_sources_and_the_articles(world)
     assert "--refresh" in argv and argv[argv.index("--refresh") + 1] == "all"
     for held in ("ProcessWiki", "PeoplePKW", "CruDump", "FirstNameFreq", "PeopleKMGP"):
         assert f":{held}" in argv
-    # KorytaDiffer reads every export ever taken and writes nothing;
+    # KorytaDiffer reads every export ever taken and writes nothing, and
+    # PeopleScoreCoverage every export since August for nobody downstream;
     # DomainToRegion copies a gitignored file only the article branch reads.
     for excluded in (
         "ArticleParsed",
         "ProcessWikiNer",
         "KorytaDiffer",
+        "PeopleScoreCoverage",
         "DomainToRegion",
     ):
         assert excluded in argv
@@ -298,6 +327,7 @@ def test_the_people_go_up_capped_in_priority_order_from_what_is_on_disk(world):
     assert argv[argv.index("--max-uploads") + 1] == "50"
     assert argv[argv.index("--recent-days") + 1] == "14"
     assert argv[argv.index("--max-odpis-only-current") + 1] == "10"
+    assert argv[argv.index("--max-rejestrio-current") + 1] == "50"
     assert argv[argv.index("--max-published") + 1] == "10"
     assert argv[argv.index("--refresh") + 1] == "none"
     assert "--dry-run" not in argv
@@ -331,6 +361,16 @@ def test_the_night_makes_ten_pages_for_people_only_an_odpis_names_in_older_posts
     assert argv[argv.index("--max-odpis-only-current") + 1] == "0"
 
 
+def test_the_night_makes_fifty_pages_for_people_with_an_entry_in_older_posts(
+    world,
+):
+    """Szymon's choice of 2026-10-16, any post counting; 0 makes none."""
+    night.main(["--max-rejestrio-current", "0"])
+
+    argv, _ = world.command("koryta_people_import")
+    assert argv[argv.index("--max-rejestrio-current") + 1] == "0"
+
+
 def test_the_published_pages_a_night_changes_stay_capped_as_it_sends_more(world):
     """Szymon, 2026-10-15: however many people a night sends, it changes no
     more published pages than --max-published, so that the review keeps up."""
@@ -339,6 +379,73 @@ def test_the_published_pages_a_night_changes_stay_capped_as_it_sends_more(world)
     argv, _ = world.command("koryta_people_import")
     assert argv[argv.index("--max-uploads") + 1] == "1000"
     assert argv[argv.index("--max-published") + 1] == "50"
+
+
+def test_the_companies_the_people_need_go_up_first_planned_as_the_people_are(world):
+    """Szymon, 2026-10-15: the companies tonight's people name that the export
+    has no page for, created before them, so that no job of theirs waits for
+    the uploader to create its company on the way."""
+    night.main(["--max-uploads", "150", "--max-published", "20"])
+
+    ran = world.ran()
+    assert ran.index("koryta_people_import --companies-only") == (
+        ran.index("koryta_people_import") - 1
+    )
+    companies, _ = world.command("koryta_people_import --companies-only")
+    people, _ = world.command("koryta_people_import")
+    assert companies[-1] == "--companies-only"
+    # The same plan: every flag the people get, in the step's own time.
+    minutes = people.index("--max-minutes") + 1
+    assert (companies[minutes], people[minutes]) == ("20", "60")
+    assert companies[:minutes] + companies[minutes + 1 : -1] == (
+        people[:minutes] + people[minutes + 1 :]
+    )
+    assert companies[companies.index("--export") + 1] == FRESH
+    assert world.steps()["companies"] == ("succeeded", "")
+
+
+def test_a_held_upload_skips_the_companies_and_reports_the_people_as_held(world):
+    world.export = STALE
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    steps = world.steps()
+    assert steps["companies"] == (
+        "skipped",
+        "pominięte - osoby wstrzymane: nie ma dzisiejszej kopii bazy",
+    )
+    assert steps["people"] == ("held", "wstrzymane: nie ma dzisiejszej kopii bazy")
+    assert not [name for name in world.ran() if "people_import" in name]
+    ending = world.runs[-1].ending()
+    assert ending["stop_reason"] == (
+        "people: held - wstrzymane: nie ma dzisiejszej kopii bazy"
+    )
+    assert not [line for line in ending["errors"] if line.startswith("companies")]
+
+
+def test_what_the_companies_step_leaves_or_breaks_does_not_hold_the_people(world):
+    world.codes["koryta_people_import --companies-only"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["companies"] == ("partial", "zostało na następny raz")
+    assert world.steps()["people"] == ("succeeded", "")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_people_import --companies-only"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["companies"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["people"] == ("succeeded", "")
+
+
+def test_a_people_dry_run_creates_no_company_either(world):
+    night.main(["--people-dry-run"])
+
+    argv, _ = world.command("koryta_people_import --companies-only")
+    assert argv[-2:] == ["--dry-run", "--companies-only"]
 
 
 def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
@@ -571,6 +678,7 @@ def test_the_summary_and_the_log_land_in_the_shared_cache(world):
     summary = world.summary()
     assert (summary["export"], summary["export_fresh"]) == (FRESH, True)
     assert summary["failures"] == {"tests": [], "outputs": [], "invariants": []}
+    assert summary["warnings"] == {}
     assert summary["log"].startswith(f"gs://{SHARED_BUCKET}/{night.LOGS_PREFIX}")
     [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
     assert b"[koryta_people_import]" not in world.objects[log]  # faked: no output
@@ -937,6 +1045,49 @@ def test_failures_known_from_last_night_do_not_hold_the_people(world):
     assert world.steps()["people"] == ("succeeded", "")
 
 
+def test_a_budget_eaten_into_warns_and_holds_nothing(world):
+    grew = "src.tests.pipelines.test_invariants::test_grew"
+    world.warnings["invariants"] = [night.OverBudget(grew, 25, 24, 34)]
+
+    assert night.main([]) == 0
+
+    assert world.steps()["invariants"] == ("succeeded", "1 z ostrzeżeniem")
+    assert world.steps()["people"] == ("succeeded", "")
+    assert world.steps()["scores"] == ("succeeded", "")
+    assert world.summary()["warnings"] == {
+        "invariants": [{"test": grew, "count": 25, "known": 24, "limit": 34}]
+    }
+    # The run says so, apart from its errors: the page and the morning
+    # check read it there.
+    ending = world.runs[-1].ending()
+    assert (ending["state"], ending["errors"]) == ("succeeded", [])
+    assert ending["warnings"] == [
+        "test_invariants::test_grew: 25 przy znanych 24, nie przejdzie powyżej 34"
+    ]
+    [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
+    assert (
+        "night over: succeeded; warning - test_invariants::test_grew: 25 przy "
+        "znanych 24"
+    ) in world.objects[log].decode()
+
+
+def test_a_check_says_what_fails_and_what_warns(world):
+    world.last = {"tests": [], "outputs": [], "invariants": ["a::known"]}
+    world.failures["invariants"] = ["a::known"]
+    world.warnings["invariants"] = [
+        night.OverBudget("a::grew", 25, 24, 34),
+        night.OverBudget("b::grew", 3, 2, 12),
+    ]
+
+    assert night.main([]) == 0
+
+    assert world.steps()["invariants"] == (
+        "partial",
+        "1 nie przechodzi, 2 z ostrzeżeniem",
+    )
+    assert world.steps()["people"] == ("succeeded", "")
+
+
 def test_on_the_first_night_every_failure_is_the_baseline(world):
     world.last = None
     world.failures["tests"] = ["a::fails"]
@@ -1071,9 +1222,15 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     ) in out
     assert (
         "koryta_people_import --scope priority --max-uploads 100 "
-        "--max-odpis-only-current 10 --max-published 10" in out
+        "--max-odpis-only-current 10 --max-rejestrio-current 50 "
+        "--max-published 10" in out
     )
     assert "--export <the export step's>" in out
+    assert (
+        "--max-published 10 --export <the export step's> --companies-only: the "
+        "companies the people step's people name that the export has no page "
+        "for, created first" in out
+    )
     assert "koryta_score_import" in out
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
     assert (
@@ -1138,6 +1295,54 @@ def test_failed_tests_reads_a_junit_report(tmp_path):
 
     assert night.failed_tests(str(report)) == ["src.a::test_bad", "src.b::test_broken"]
     assert night.failed_tests(str(tmp_path / "missing.xml")) is None
+
+
+def test_a_warning_names_its_test_by_module_and_parameters():
+    over = night.OverBudget(
+        "src.tests.pipelines.test_revisions::test_required_field_present"
+        "[employed.name]",
+        170,
+        169,
+        179,
+    )
+
+    assert over.said() == (
+        "test_revisions::test_required_field_present[employed.name]: 170 przy "
+        "znanych 169, nie przejdzie powyżej 179"
+    )
+
+
+def test_budget_warnings_reads_what_the_invariants_budgets_record(pytester):
+    pytester.makeconftest(INVARIANTS_CONFTEST.read_text())
+    pytester.makepyfile(
+        test_budgets="""
+        def test_kept(within_budget):
+            assert within_budget(24, 24)
+
+        def test_grew(within_budget):
+            assert within_budget(25, 24)
+
+        def test_at_the_limit(within_budget):
+            assert within_budget(34, 24)
+
+        def test_ran_out(within_budget):
+            assert within_budget(35, 24)
+        """
+    )
+    report = pytester.path / "report.xml"
+
+    result = pytester.runpytest(f"--junitxml={report}", "-p", "no:cacheprovider")
+
+    result.assert_outcomes(passed=3, failed=1)
+    result.stdout.fnmatch_lines(
+        ["*BudgetWarning: 25, up from the 24 known; fails past 34"]
+    )
+    assert night.failed_tests(str(report)) == ["test_budgets::test_ran_out"]
+    assert night.budget_warnings(str(report)) == [
+        night.OverBudget("test_budgets::test_at_the_limit", 34, 24, 34),
+        night.OverBudget("test_budgets::test_grew", 25, 24, 34),
+    ]
+    assert night.budget_warnings(str(pytester.path / "missing.xml")) == []
 
 
 def test_the_newest_finished_export_is_found_past_a_running_one():

@@ -7,6 +7,7 @@ import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import { createRouter, createMemoryHistory } from "vue-router";
+import { readBody } from "h3";
 import { trackGoal } from "~/composables/analytics";
 
 vi.mock("~/composables/analytics", () => ({ trackGoal: vi.fn() }));
@@ -32,6 +33,22 @@ let searched: {
   published?: boolean;
 }[] = [];
 registerEndpoint("/api/search", () => searched);
+
+/** What the box sent to the site's own log, in order, and the token each went
+ * with - the server works out from it whether somebody was signed in. Read
+ * off the web headers, which ignore case: the stub's Node request keeps the
+ * `Authorization` the box wrote, where `getHeader` looks for it lowercased. */
+let logged: { body: Record<string, unknown>; authorization?: string }[] = [];
+registerEndpoint("/api/search/log", {
+  method: "POST",
+  handler: async (event) => {
+    logged.push({
+      body: await readBody(event),
+      authorization: event.headers.get("authorization") ?? undefined,
+    });
+    return { recorded: true };
+  },
+});
 
 // The menu is a real overlay here, and Vuetify measures it on open.
 global.ResizeObserver = class {
@@ -88,6 +105,7 @@ describe("OmniSearch", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     searched = [];
+    logged = [];
     reader.value = null;
     vi.mocked(trackGoal).mockClear();
   });
@@ -127,6 +145,10 @@ describe("OmniSearch", () => {
     // We can also trigger search
     const input = wrapper.find("input");
     await input.setValue("Person");
+
+    // Or that search, still waiting out the debounce, runs in a later test -
+    // and is settled there by whatever navigates next.
+    wrapper.unmount();
   });
 
   it("keeps a hit whose middle name sits between the words typed", async () => {
@@ -294,7 +316,7 @@ describe("OmniSearch", () => {
       .mock.calls.filter(([goal]) => goal === "search:settled")
       .map(([, props]) => props);
 
-  it("reports the search a logged out reader left, once, query included", async () => {
+  it("reports the search a logged out reader left, once, to both places", async () => {
     // The search that found nothing is the one most worth knowing about - a
     // name the site does not have - and it is reported once, not once for
     // every prefix the box asked the server about on the way.
@@ -314,13 +336,25 @@ describe("OmniSearch", () => {
         outcome: "abandon",
       },
     ]);
+    // The site's own copy has the counts themselves, and no token to go by.
+    expect(logged).toEqual([
+      {
+        body: {
+          query: "zofia zielińska",
+          results: 0,
+          unverified: 0,
+          outcome: "abandon",
+        },
+        authorization: undefined,
+      },
+    ]);
 
     wrapper.unmount();
   });
 
-  it("does not report a signed in reader's searches", async () => {
+  it("keeps a signed in reader's searches on the site, not on Plausible", async () => {
     // Their searches are their research, and the owner's would outnumber
-    // every reader's.
+    // every reader's in Plausible. The site keeps them, marked as such.
     reader.value = { uid: "contributor", getIdToken: async () => "token" };
     searched = [];
     const wrapper = mountSearch();
@@ -336,6 +370,58 @@ describe("OmniSearch", () => {
         .mock.calls.some(([goal]) => goal === "search:performed"),
     ).toBe(true);
     expect(settled()).toEqual([]);
+    expect(logged).toEqual([
+      {
+        body: {
+          query: "zofia zielińska",
+          results: 0,
+          unverified: 0,
+          outcome: "abandon",
+        },
+        authorization: "Bearer token",
+      },
+    ]);
+
+    wrapper.unmount();
+  });
+
+  it("keeps what a reader opened with the search that found it", async () => {
+    // A reader who opened an unpublished person wanted them and got a teaser:
+    // the review queue, in the order readers ask for it.
+    searched = [
+      { id: "draft", name: "Anna Nowak", type: "person", published: false },
+    ];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "Anna Nowak");
+
+    const autocomplete = wrapper.findComponent({ name: "VAutocomplete" });
+    const hit = (autocomplete.props("items") as { nodeId?: string }[]).find(
+      (item) => item.nodeId === "draft",
+    );
+    expect(hit).toBeDefined();
+    autocomplete.vm.$emit("update:modelValue", hit);
+    await flushPromises();
+
+    expect(logged.map(({ body }) => body)).toEqual([
+      {
+        query: "anna nowak",
+        results: 1,
+        unverified: 1,
+        outcome: "pick",
+        picked: "person",
+        pickedUnverified: true,
+      },
+    ]);
+    // Plausible hears what was opened from search:pick, so not here as well.
+    expect(settled()).toEqual([
+      {
+        query: "anna nowak",
+        results: "1-4",
+        unverified: "all",
+        outcome: "pick",
+      },
+    ]);
 
     wrapper.unmount();
   });

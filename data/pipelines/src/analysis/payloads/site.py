@@ -786,6 +786,24 @@ class SiteSnapshot:
         changes += self._candidacy_changes(matcher, person_id, payload)
         return changes
 
+    def missing_companies(self, payload: typing.Mapping[str, typing.Any]) -> list[str]:
+        """The KRS numbers of the companies the payload names that the site has
+        no page for, each once, in the payload's order - a new person's as much
+        as a stored one's.
+
+        Looked up as `_employment_changes` looks a job's company up, by
+        `krsNumber`. The ingest takes the person without their jobs there
+        (`unplacedEmployments`), and the uploader creates the companies and
+        sends the person again; the night creates them before its people
+        instead (`koryta_people_import --companies-only`).
+        """
+        missing: list[str] = []
+        for company in _rows(payload.get("companies")):
+            krs = company.get("krs")
+            if krs and str(krs) not in self.companies and str(krs) not in missing:
+                missing.append(str(krs))
+        return missing
+
     def _person_learns(
         self, stored: dict, payload: typing.Mapping[str, typing.Any]
     ) -> bool:

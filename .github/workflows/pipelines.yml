@@ -265,6 +265,9 @@ jobs:
               # reads every export ever taken: 65 minutes and over 16 GB for
               # the people alone on the nightly VM (data/nightly).
               KorytaDiffer
+              # Reads every export since August, one more each day, to answer
+              # a question asked by hand; nothing reads what it writes.
+              PeopleScoreCoverage
               # The article branch's domain->region map, copied from a
               # gitignored files/domain_to_region.json no runner has. Only
               # ArticlePersonMentions, out with the branch above, reads it.

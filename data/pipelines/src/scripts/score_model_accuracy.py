@@ -44,17 +44,12 @@ import pandas as pd
 from leveldb_export import parse_leveldb_documents  # type: ignore
 
 from analysis.scores import PEOPLE_SCORE_MODELS, QUEUE_THRESHOLD
+from analysis.scores.coverage import MULTI_MODEL_ERA
 from conductor import setup_context
 from entities.person import is_pipeline_uid
 from scrapers.koryta.download import export_timestamp
 from scrapers.stores import CloudStorage, Context
 from scrapers.stores.file import DownloadableFile
-
-#: The day the models beyond the original `pipeline` uid first appear in an
-#: export. Anything earlier can only measure one of them, so the default run
-#: starts here rather than pretending the older snapshots say something about
-#: `pipeline-capture`.
-MULTI_MODEL_ERA = "2026-08-08"
 
 #: What counts as the reader having been glad they looked. +1 is "ciekawe" and
 #: +3 is "koryciarz" - see `scaleLabels` in frontend/app/composables/votes.ts,

@@ -15,7 +15,10 @@ import pandas as pd
 import pytest
 
 import jobs.people_import as job
+from analysis.payloads.priority import Pick
+from analysis.payloads.site import SiteSnapshot
 from analysis.payloads.target import NEW, Targeted
+from entities.composite import Company, Person
 from entities.person import RejestrIOKey
 from jobs.krs_common import answer_name
 from jobs.nightly import Export
@@ -1136,6 +1139,7 @@ def sent_part(world: World) -> list[dict]:
 
 HIRE, BOUGHT, PUBLISHED, ON_SITE = "new_hire", "bought", "published", "on_site"
 MISSING, NOTED, SEATED = "noted_missing", "noted", "odpis_only_current"
+LINKED = "rejestrio_current"
 
 
 def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
@@ -1158,6 +1162,7 @@ def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
         MISSING: 0,
         NOTED: 0,
         SEATED: 0,
+        LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 1,
     }
@@ -1190,6 +1195,7 @@ def test_new_hires_past_max_new_make_room_for_the_pages_after_them(priority):
         MISSING: 0,
         NOTED: 0,
         SEATED: 0,
+        LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }
@@ -1280,7 +1286,10 @@ def test_people_only_an_odpis_names_in_an_older_post_take_ten_a_run(priority, ca
     assert len(summary["created"]) == 11
     assert [row["tier"] for row in sent_part(priority)].count(SEATED) == 10
     out = capsys.readouterr().out
-    assert "'noted': 0, 'odpis_only_current': 10, 'published': 1" in out
+    assert (
+        "'noted': 0, 'odpis_only_current': 10, 'rejestrio_current': 0, "
+        "'published': 1" in out
+    )
     assert (
         "People only an odpis names in an older public post: 10 of 12 planned "
         "(--max-odpis-only-current 10)" in out
@@ -1335,6 +1344,79 @@ def test_a_page_made_for_somebody_in_an_older_post_does_not_stop_the_run(priorit
 
     assert priority.sent() == ["Celina Lis", "Jan Kowalski"]
     assert priority.summary()["created"] == ["Celina Lis (new-page)"]
+
+
+def test_people_with_an_entry_in_an_older_post_take_fifty_a_run(priority, capsys):
+    """13,518 of them on 2026-10-16, against 89 new hires, and Szymon's choice
+    that day: fifty a night, their pages made as a new hire's are - after the
+    people only an odpis names, and ahead of the published pages."""
+    priority.candidates = [
+        candidate("Anna Nowak", HIRE, "2026-09-30"),
+        candidate("Olga Sowa", BOUGHT),
+        odpis_only("Beata Kos", "2025-01-01", SEATED),
+        *[candidate(f"Osoba {i}", LINKED, "2024-01-01") for i in range(1, 53)],
+        candidate("Jan Kowalski", PUBLISHED),
+    ]
+    priority.answers = [person("created"), person("updated")]
+    priority.answers += [person("created", f"page-{i}") for i in range(0, 51)]
+    priority.answers += [person("updated")]
+
+    assert job.main(["--scope", "priority", "--max-uploads", "100"]) == 0
+
+    sent = priority.sent()
+    assert sent[:3] == ["Anna Nowak", "Olga Sowa", "Beata Kos"]
+    assert sent[3:53] == [f"Osoba {i}" for i in range(1, 51)]
+    assert sent[53:] == ["Jan Kowalski"]
+    summary = priority.summary()
+    # A page made for one of them is one the run was meant to make.
+    assert summary["state"] == "succeeded"
+    assert summary["tiers"][LINKED] == 50
+    assert len(summary["created"]) == 52
+    assert [row["tier"] for row in sent_part(priority)].count(LINKED) == 50
+    out = capsys.readouterr().out
+    assert (
+        "People with a rejestr.io entry in an older public post: 50 of 52 "
+        "planned (--max-rejestrio-current 50)" in out
+    )
+
+
+def test_the_pages_of_all_three_kinds_count_against_max_new_together():
+    found = [candidate("Anna Nowak", HIRE), odpis_only("Beata Kos", tier=SEATED)]
+    found += [candidate("Celina Mazur", LINKED), candidate("Jan Lis", PUBLISHED)]
+    found += [candidate("Dorota Wilk", LINKED)]
+
+    def names(max_new: int, max_rejestrio_current: int | None) -> list[str]:
+        planned, _ = job.plan_priority(
+            found, set(), max_new, 5, 5, max_rejestrio_current=max_rejestrio_current
+        )
+        return [c.payload["name"] for c in planned]
+
+    everybody = ["Anna Nowak", "Beata Kos", "Celina Mazur", "Jan Lis", "Dorota Wilk"]
+    assert names(max_new=5, max_rejestrio_current=None) == everybody
+    assert names(max_new=5, max_rejestrio_current=1) == everybody[:4]
+    assert names(max_new=5, max_rejestrio_current=0) == [
+        "Anna Nowak",
+        "Beata Kos",
+        "Jan Lis",
+    ]
+    # Planned past --max-new, the run would stop as failed on its own plan.
+    assert names(max_new=3, max_rejestrio_current=50) == everybody[:4]
+    assert names(max_new=2, max_rejestrio_current=50) == [
+        "Anna Nowak",
+        "Beata Kos",
+        "Jan Lis",
+    ]
+
+
+def test_fifty_a_priority_run_may_be_people_with_an_entry_in_an_older_post():
+    def cap(*argv: str) -> int | None:
+        return job.parse_args(["--scope", "priority", *argv]).max_rejestrio_current
+
+    assert cap() == 50
+    # Not a share of the run, as the odpis-only people's cap is not either.
+    assert cap("--max-uploads", "300") == 50
+    assert cap("--max-rejestrio-current", "0") == 0
+    assert job.parse_args([]).max_rejestrio_current is None
 
 
 def test_published_pages_past_max_published_wait_and_the_pages_after_them_go(
@@ -1592,7 +1674,8 @@ def test_a_priority_dry_run_shows_the_tiers_and_writes_nothing(priority, capsys)
     assert "The first 3 (--max-uploads) by tier:" in out
     assert (
         "'new_hire': 1, 'bought': 1, 'noted_missing': 0, 'noted': 0, "
-        "'odpis_only_current': 0, 'published': 1, 'on_site': 0" in out
+        "'odpis_only_current': 0, 'rejestrio_current': 0, 'published': 1, "
+        "'on_site': 0" in out
     )
     assert "Of the first 3, changes to published pages: 1" in out
 
@@ -1878,6 +1961,7 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
         MISSING: 0,
         NOTED: 0,
         SEATED: 0,
+        LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }
@@ -1891,7 +1975,8 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
     out = capsys.readouterr().out
     assert (
         "Planned by tier: {'new_hire': 1, 'bought': 1, 'noted_missing': 0, "
-        "'noted': 0, 'odpis_only_current': 0, 'published': 1, 'on_site': 0}" in out
+        "'noted': 0, 'odpis_only_current': 0, 'rejestrio_current': 0, "
+        "'published': 1, 'on_site': 0}" in out
     )
 
 
@@ -1919,6 +2004,7 @@ def test_the_noted_pages_go_up_after_the_bought_in_tiers_of_their_own(priority):
         MISSING: 1,
         NOTED: 1,
         SEATED: 0,
+        LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
     }
@@ -2158,3 +2244,309 @@ def test_a_request_that_cannot_be_read_fails_its_run(asked, monkeypatch):
     end = asked.run().ending()
     assert end["state"] == "failed"
     assert "no request" in end["errors"][0]
+
+
+# ---------------------------------------------------------------------------
+# --companies-only: the companies the night's people need, before them
+
+
+def naming(
+    name: str, *krs: str, tier: str = HIRE, published: bool | None = None
+) -> build.Candidate:
+    """A candidate whose payload names these companies, none of which the
+    export has a page for."""
+    found = candidate(name, tier, "2026-09-30", published)
+    posts = [{"krs": number, "role": "Prezes Zarządu"} for number in krs]
+    return build.Candidate(
+        {**found.payload, "companies": posts},
+        found.tier,
+        found.since,
+        found.published,
+        tuple(krs),
+    )
+
+
+@pytest.fixture
+def on_file(monkeypatch) -> dict[str, dict]:
+    """`Companies`, which the uploader creates a company from, without
+    running it: 0000000009 is not in it."""
+    rows: dict[str, dict] = {
+        krs: {"krs": krs, "name": f"Spółka {krs[-1]}", "parents": []}
+        for krs in ("0000000001", "0000000002", "0000000003")
+    }
+    monkeypatch.setattr(PersonUploader, "company_payloads", property(lambda _: rows))
+    return rows
+
+
+def company(outcome: str = "created") -> Response:
+    return Response(200, {"id": "c", "code": 200, "company": outcome})
+
+
+def companies_summary(world: World) -> dict:
+    [name] = [n for n in world.objects if n.startswith(job.COMPANIES_PREFIX)]
+    return json.loads(world.objects[name])
+
+
+COMPANIES_FIRST = ["--scope", "priority", "--companies-only"]
+
+
+def test_the_companies_tonights_people_need_are_created_and_no_person_sent(
+    priority, on_file
+):
+    """Szymon, 2026-10-15: before the people go up, the companies they name
+    that the export has no page for - so that no job of theirs waits for the
+    uploader to create its company on the way, as 16 did on 10-14."""
+    priority.candidates = [
+        naming("Anna Nowak", "0000000001", "0000000002"),
+        # Named twice, created once.
+        naming("Beata Kos", "0000000002", tier=BOUGHT),
+        candidate("Jan Kowalski", PUBLISHED),
+        # Past --max-uploads: not one of tonight's people.
+        naming("Ewa Lis", "0000000003", tier=ON_SITE),
+    ]
+    priority.answers = [company(), company()]
+
+    assert job.main([*COMPANIES_FIRST, "--max-uploads", "3"]) == 0
+
+    assert priority.sent() == ["Spółka 1", "Spółka 2"]
+    run = priority.run()
+    assert (run.job, run.kwargs["unit"]) == ("company_import", "firm")
+    assert run.calls[0] == ("start", {"phase": "paczki"})
+    assert ("progress", {"done": None, "phase": "firmy", "force": True}) in run.calls
+    end = run.ending()
+    assert (end["state"], end["stop_reason"], end["exit_code"]) == (
+        "succeeded",
+        None,
+        0,
+    )
+    assert end["counters"] == {
+        "planned": 2,
+        "companies_created": 2,
+        "updated": 0,
+        "unchanged": 0,
+        "failed": 0,
+    }
+    assert end["done"] == 2
+    # Its summary alone: no payloads part, and nothing remembered as sent.
+    summary = companies_summary(priority)
+    name = (
+        f"{job.COMPANIES_PREFIX}date={summary['started'][:10]}/{run.kwargs['run_id']}"
+    )
+    assert list(priority.objects) == [f"{name}.json"]
+    assert end["summary_path"] == f"gs://{SHARED_BUCKET}/{name}.json"
+    assert (summary["planned"], summary["people"]) == (4, 3)
+    assert summary["companies"] == [
+        {
+            "krs": "0000000001",
+            "name": "Spółka 1",
+            "people": ["Anna Nowak"],
+            "outcome": "created",
+        },
+        {
+            "krs": "0000000002",
+            "name": "Spółka 2",
+            "people": ["Anna Nowak", "Beata Kos"],
+            "outcome": "created",
+        },
+    ]
+
+
+def test_people_whose_companies_are_all_on_the_site_need_nothing_and_say_so(
+    priority, on_file
+):
+    priority.candidates = [candidate("Jan Kowalski", PUBLISHED)]
+
+    assert job.main(COMPANIES_FIRST) == 0
+
+    assert priority.sent() == []
+    end = priority.run().ending()
+    assert (end["state"], end["stop_reason"]) == ("succeeded", job.STOP_NO_COMPANIES)
+    assert companies_summary(priority)["companies"] == []
+
+
+def test_a_company_that_cannot_be_created_is_left_to_the_people_run(priority, on_file):
+    """It tries again, and leaves the job off the person's page if it cannot
+    either - which is why this is partial and never failed."""
+    priority.candidates = [
+        naming("Anna Nowak", "0000000009", "0000000001"),
+        naming("Beata Kos", "0000000002", tier=BOUGHT),
+    ]
+    priority.answers = [company(), Response(500, text="Internal Server Error")]
+
+    assert job.main(COMPANIES_FIRST) == job.EXIT_TRY_LATER
+
+    # Nothing in `Companies` to make 0000000009 from: never sent.
+    assert priority.sent() == ["Spółka 1", "Spółka 2"]
+    end = priority.run().ending()
+    assert (end["state"], end["stop_reason"]) == ("partial", "nie dodano firm: 2 z 3")
+    assert end["counters"]["companies_created"] == 1
+    assert end["counters"]["failed"] == 2
+    assert end["errors"] == [
+        "firma 0000000009: ValueError: Couldn't look up 0000000009 in Companies "
+        "pipeline",
+        "firma 0000000002: 500 Internal Server Error",
+    ]
+    assert [
+        (row["krs"], row["outcome"], row.get("error", "")[:14])
+        for row in companies_summary(priority)["companies"]
+    ] == [
+        ("0000000009", "failed", "firma 00000000"),
+        ("0000000001", "created", ""),
+        ("0000000002", "failed", "firma 00000000"),
+    ]
+
+
+def test_a_company_made_since_the_export_is_counted_as_the_site_answered(
+    priority, on_file
+):
+    priority.candidates = [naming("Anna Nowak", "0000000001", "0000000002")]
+    priority.answers = [company("unchanged"), company("updated")]
+
+    assert job.main(COMPANIES_FIRST) == 0
+
+    counters = priority.run().ending()["counters"]
+    assert (counters["companies_created"], counters["unchanged"]) == (0, 1)
+    assert counters["updated"] == 1
+    assert [row["outcome"] for row in companies_summary(priority)["companies"]] == [
+        "unchanged",
+        "updated",
+    ]
+
+
+def test_a_companies_dry_run_counts_them_and_sends_and_writes_nothing(
+    priority, on_file, monkeypatch, capsys
+):
+    def no_sign_in(endpoint):
+        raise AssertionError("a dry run signs in to nothing")
+
+    monkeypatch.setattr(job, "token_source", no_sign_in)
+    priority.candidates = [
+        naming("Anna Nowak", "0000000001", "0000000002"),
+        naming("Beata Kos", "0000000003", tier=BOUGHT),
+    ]
+
+    assert job.main([*COMPANIES_FIRST, "--dry-run", "--max-uploads", "1"]) == 0
+
+    assert priority.sent() == [] and priority.objects == {}
+    assert priority.run().ending() == {
+        "state": "succeeded",
+        "stop_reason": "próba - nic nie wysłano",
+        "counters": {"planned": 2},
+        "exit_code": 0,
+        "done": 0,
+    }
+    out = capsys.readouterr().out
+    assert (
+        "The first 1 of 2 people planned (--max-uploads) name 2 companies the "
+        "export has no page for: 0000000001, 0000000002\n"
+    ) in out
+    assert f"Dry run: 2 companies would be created at {ENDPOINT}" in out
+
+
+def test_the_companies_are_refused_the_export_the_people_would_be(priority):
+    priority.export = None
+
+    assert job.main(COMPANIES_FIRST) == job.EXIT_FAILED
+
+    assert priority.sent() == [] and priority.built == []
+    end = priority.run().ending()
+    assert (end["state"], end["stop_reason"]) == (
+        "failed",
+        "brak dzisiejszej kopii bazy (żadnej)",
+    )
+    assert end["summary_path"].startswith(
+        f"gs://{SHARED_BUCKET}/{job.COMPANIES_PREFIX}"
+    )
+
+
+def test_sigterm_stops_the_companies_after_the_one_in_hand(
+    priority, on_file, monkeypatch
+):
+    handlers: list = []
+
+    def install(signum, handler):
+        handlers.append(handler)
+        return "the handler before"
+
+    monkeypatch.setattr(job.signal, "signal", install)
+
+    def answer_then_sigterm():
+        handlers[0](15, None)
+        return company()
+
+    priority.candidates = [naming("Anna Nowak", "0000000001", "0000000002")]
+    priority.answers = [answer_then_sigterm, company()]
+
+    assert job.main(COMPANIES_FIRST) == job.EXIT_TRY_LATER
+
+    assert priority.sent() == ["Spółka 1"]
+    end = priority.run().ending()
+    assert (end["state"], end["stop_reason"], end["done"]) == ("partial", "SIGTERM", 1)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--companies-only"],
+        ["--scope", "on-koryta", "--companies-only"],
+        ["--request", "run-asked", "--companies-only"],
+    ],
+)
+def test_companies_first_needs_a_priority_run_to_plan_the_people(argv):
+    with pytest.raises(SystemExit):
+        job.parse_args(argv)
+
+
+def test_the_needed_companies_go_once_each_in_the_order_the_people_go():
+    payloads = [{"name": "Anna Nowak"}, {"name": "Jan Kowalski"}, {"name": "Ewa Lis"}]
+    missing = [("0000000002", "0000000001"), (), ("0000000001",)]
+
+    assert job.companies_needed(payloads, missing) == {
+        "0000000002": ["Anna Nowak"],
+        "0000000001": ["Anna Nowak", "Ewa Lis"],
+    }
+
+
+def test_each_planned_person_says_which_companies_the_export_has_no_page_for(
+    monkeypatch,
+):
+    class Dumper:
+        def dump_pandas(self):
+            pass
+
+    hire = Person(
+        name="Anna Nowak",
+        companies=[
+            Company(krs="0000000009", role="Prezes", start="2026-09-30"),
+            Company(krs="0000000001", role="Prokurent"),
+        ],
+        elections=[],
+        sources=[],
+        rejestrIo="https://rejestr.io/osoby/2",
+    )
+    on_site = SiteSnapshot(
+        pd.DataFrame.from_records(
+            [{"id": "c1", "type": "place", "name": "Spółka", "krsNumber": "0000000001"}]
+        ),
+        pd.DataFrame(),
+    )
+
+    class Payloads:
+        def prioritised(self, ctx, today, recent_days, bought):
+            return [Pick(hire, HIRE, "2026-09-30")]
+
+        def site_snapshot(self, ctx):
+            return on_site
+
+    monkeypatch.setattr(build, "setup_context", lambda *a, **k: ("ctx", Dumper()))
+    monkeypatch.setattr(
+        build.Pipeline, "create", staticmethod(lambda kind, nested=0: Payloads())
+    )
+    monkeypatch.setattr(sys, "argv", ["koryta_people_import"])
+
+    [found] = build.build_priority(
+        None, ProcessPolicy(set()), date(2026, 10, 15), 30, set()
+    )
+
+    assert (found.payload["name"], found.tier) == ("Anna Nowak", HIRE)
+    assert found.missing == ("0000000009",)
