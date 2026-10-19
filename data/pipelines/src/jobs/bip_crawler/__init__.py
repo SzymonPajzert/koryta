@@ -1,7 +1,8 @@
-"""CLI for the BIP document crawler (Postgres bip_queue, coordinator + fetchers).
+"""BIP crawler job: harvest documents from the official gov.pl registry.
 
-Top-level script like `crawl_cli.py`: outside the import-linter layers, so it
-wires the concrete Postgres client, robots cache and bundle store.
+Run as `koryta_scrape_bip` (or `python -m jobs.bip_crawler`). On an empty host
+table it ingests the registry first, repairs stale `.part` bundles, then drives
+the coordinator in `coordinator.py`.
 """
 
 from __future__ import annotations
@@ -11,19 +12,18 @@ import json
 import multiprocessing
 import os
 import re
-import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from tqdm import tqdm
 
-from scrapers.bip.bip_queue import PostgresBipQueue
-from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
+from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import BipQueue
 from stores.bip_bundles import LocalBundleStore, rewrap_part
+from stores.bip_queue import PostgresBipQueue
 from stores.bip_registry import download_subjects_xml
 from stores.web import RobotsCache
 
@@ -273,11 +273,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
-    sys.exit(args.func(args))
-
-
-if __name__ == "__main__":
-    main()
+    args = parser.parse_args(argv)
+    return args.func(args)

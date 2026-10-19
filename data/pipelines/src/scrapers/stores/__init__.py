@@ -1297,7 +1297,7 @@ class RunStats:
 
 
 class BipQueue(metaclass=ABCMeta):
-    """The BIP frontier interface (`scrapers.bip.bip_queue.PostgresBipQueue`)."""
+    """The BIP frontier interface (`stores.bip_queue.PostgresBipQueue`)."""
 
     @abstractmethod
     def ensure_schema(self) -> None:

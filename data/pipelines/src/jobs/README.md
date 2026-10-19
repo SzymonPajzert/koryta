@@ -1,5 +1,13 @@
 # List of currently defined jobs
 
+## bip_crawler
+1. Ingests the official gov.pl BIP registry when the host table is empty
+1. Repairs `.part` bundles left by a killed run, then crawls each host BFS-style
+   through a Postgres frontier (robots, per-host rate limit, sha256 dedup)
+1. Writes documents to local `tar.gz` bundles; `BipUrlsClassified` and
+   `BipDocumentsParsed` read them
+1. Not part of the nightly yet
+
 ## krs_scrape_bulletin
 1. Reads KRS bulletin for updates on dates we haven't scraped yet
 

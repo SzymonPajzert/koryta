@@ -1,18 +1,9 @@
-"""BIP document crawler (Postgres queue, coordinator + fetchers)."""
+"""BIP crawler: URL classification and registry parsing.
 
-from scrapers.bip.bip_queue import PostgresBipQueue
-from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions
+The Postgres frontier now lives in `stores.bip_queue`; the coordinator and CLI
+are the `jobs.bip_crawler` job.
+"""
+
 from scrapers.bip.registry import RegistryEntry
-from scrapers.stores import BipQueue, DocRow, HostRow, RunStats, UrlRow
 
-__all__ = [
-    "BipCoordinator",
-    "BipQueue",
-    "CoordinatorOptions",
-    "DocRow",
-    "HostRow",
-    "PostgresBipQueue",
-    "RegistryEntry",
-    "RunStats",
-    "UrlRow",
-]
+__all__ = ["RegistryEntry"]
