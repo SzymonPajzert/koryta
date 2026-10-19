@@ -218,6 +218,11 @@ const { data, pending, error } = useExtractions({
   reviewed: "no",
   limit: PAGE_SIZE,
   page,
+  // In the browser only: the server render has no token, so its answer is
+  // `facts: []` and the total, and hydration kept it - opened or reloaded by
+  // somebody signed in, the page said „Brak faktów do kategoryzacji.” under
+  // a count of thousands.
+  server: false,
 });
 const route = useRoute();
 const router = useRouter();
@@ -304,10 +309,13 @@ const votesReady = computed(
 // SSR can't know the user's votes, so render the spinner — matching the
 // client's first (hydration) render; rendering the card instead would cause a
 // hydration mismatch.
+// Before the first answer too: the facts are fetched in the browser only, and
+// until that fetch starts there is no answer and nothing pending either.
 const loading = computed(
   () =>
     import.meta.server ||
     pending.value ||
+    (!data.value && !error.value) ||
     !votesReady.value ||
     !linkedSettled.value,
 );

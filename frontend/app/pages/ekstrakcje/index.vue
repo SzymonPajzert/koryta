@@ -29,7 +29,10 @@
       </div>
     </v-alert>
 
-    <div v-if="pending" class="d-flex justify-center py-8">
+    <!-- Also before the first answer: the list is fetched in the browser
+         only, so the server render has nothing yet, and "nothing to show" is
+         not something the page knows. -->
+    <div v-if="pending || (!data && !error)" class="d-flex justify-center py-8">
       <v-progress-circular indeterminate color="primary" size="48" />
     </div>
 
@@ -90,6 +93,10 @@ const { data, pending, error } = useExtractions({
   groupBy: "article",
   limit: 100,
   articleUrl: articleFilter,
+  // In the browser only: a reload rendered on the server, with no token, and
+  // hydration kept that answer, so the page said „Brak ekstrakcji” over a
+  // backlog of tens of thousands.
+  server: false,
 });
 
 type ArticleGroup = {

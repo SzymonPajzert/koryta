@@ -412,6 +412,11 @@ const sourcedEdges = computed(() => sourcedResponse.value?.edges ?? []);
 
 const { data: extractions } = useExtractions({
   articleUrl: computed(() => article.value?.sourceURL),
+  // In the browser only. The server render is anonymous, as `latest` above
+  // explains, so it was handed the count without the facts, and hydration
+  // kept that: a signed in reader who reloaded read „Wydobyte fakty 0”. Only a
+  // signed in reader is shown them, so the server render loses nothing.
+  server: false,
 });
 const facts = computed(() => extractions.value?.facts ?? []);
 const factsOpen = ref(false);

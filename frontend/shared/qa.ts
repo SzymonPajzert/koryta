@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "fakty-po-odswiezeniu-strony",
+    title: "Kategoryzacja faktów działa także po odświeżeniu strony",
+    description:
+      "Odświeżona albo otwarta z linku, /ekstrakcje/kategoryzacja mówiła „Brak faktów do kategoryzacji.” pod licznikiem tysięcy faktów do oceny, a udostępniony fakt podmieniała na inny. Tak samo /ekstrakcje było puste, a „Wydobyte fakty” na stronie artykułu pokazywały 0.",
+    steps: [
+      "Zalogowany odśwież /ekstrakcje/kategoryzacja - ma się pokazać karta faktu.",
+      "Skopiuj adres strony (z ?fact=), oceń kartę i otwórz skopiowany adres w nowej karcie - ma się pokazać ten sam fakt.",
+    ],
+    link: "/ekstrakcje/kategoryzacja",
+    area: "contributor",
+  },
+  {
     id: "dzien-wyborow-wedlug-rodzaju",
     title: "Kandydatury do Parlamentu Europejskiego z dniem tych wyborów",
     description:
