@@ -5,7 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
-from bip_cli import repair_parts
+from jobs.bip_crawler import repair_parts
+from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions, _ActiveHost
 from scrapers.bip.classify import (
     host_of,
     is_document_url,
@@ -13,7 +14,6 @@ from scrapers.bip.classify import (
     normalize_url,
     path_of,
 )
-from scrapers.bip.coordinator import BipCoordinator, CoordinatorOptions, _ActiveHost
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import extract_link_pairs, extract_links

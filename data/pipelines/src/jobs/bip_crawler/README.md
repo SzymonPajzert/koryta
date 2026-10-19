@@ -1,8 +1,9 @@
-# BIP crawler
+# BIP crawler job
 
-Harvests documents from the official gov.pl BIP registry (~9.7k hosts) into
-local `tar.gz` bundles. Pure crawler: it stores files, it does not parse them
-(the `BipUrlsClassified` / `BipDocumentsParsed` pipelines do that).
+`jobs/bip_crawler` harvests documents from the official gov.pl BIP registry
+(~9.7k hosts) into local `tar.gz` bundles. Pure crawler: it stores files, it
+does not parse them (the `BipUrlsClassified` / `BipDocumentsParsed` pipelines do
+that).
 
 ## Setup
 
@@ -11,10 +12,11 @@ The `bip_*` tables are created automatically on the first run; no manual
 article crawler (`POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD`, `POSTGRES_PORT`).
 
-Run it as the installed script:
+Run it as the installed script, or as a module:
 
 ```bash
 koryta_scrape_bip <command> [options]
+python -m jobs.bip_crawler <command> [options]
 ```
 
 ## Commands
