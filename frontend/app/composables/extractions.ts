@@ -30,6 +30,11 @@ export function useExtractions(options?: {
   reviewed?: MaybeRefOrGetter<"all" | "yes" | "no">;
   limit?: MaybeRefOrGetter<number | undefined>;
   page?: MaybeRefOrGetter<number | undefined>;
+  /** Fetch in the server render too (the default). Pass `false` where only a
+   * signed-in reader is shown the facts: the server render has no token to
+   * send, so its answer holds none of them, and hydration then keeps that
+   * answer instead of asking again with the token. */
+  server?: boolean;
 }) {
   const query = computed(() => {
     const q: Record<string, string> = {};
@@ -55,6 +60,7 @@ export function useExtractions(options?: {
     "/api/extractions",
     {
       query,
+      server: options?.server ?? true,
     },
   );
 
@@ -67,7 +73,14 @@ export function useExtractions(options?: {
 export function useExtraction(id: string | null) {
   const { data, error } = authFetch<{ fact: ExtractionFact }>(
     () => (id ? `/api/extractions/${encodeURIComponent(id)}` : ""),
-    { immediate: !!id },
+    {
+      immediate: !!id,
+      // In the browser only. The endpoint refuses a caller with no token, and
+      // the server render has none to send, so it only ever stored a 401 -
+      // which hydration kept, and a link opened by somebody already signed in
+      // fell through to the queue's next card.
+      server: false,
+    },
   );
 
   const fact = computed<ExtractionFact | null>(() => data.value?.fact ?? null);
