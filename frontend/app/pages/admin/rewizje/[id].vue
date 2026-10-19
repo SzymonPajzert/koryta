@@ -14,6 +14,15 @@
         <div v-if="nodeName" class="text-caption text-medium-emphasis">
           Węzeł {{ route.params.id }}
         </div>
+        <a
+          v-if="variant === 'b' && relationSignal"
+          href="#powiazania"
+          class="relation-facts text-body-2 text-ink-warning"
+          data-testid="relation-signal"
+        >
+          <v-icon :icon="mdiVectorPolyline" size="small" />
+          Powiązania: {{ relationSignal.short }}
+        </a>
       </div>
       <v-spacer />
       <div v-if="!pending" class="d-flex align-center ga-2">
@@ -56,6 +65,31 @@
       </div>
     </div>
 
+    <!-- What waits on the entry's relations, said before anything else on
+         the page: their revisions are not in the history below, so a page
+         whose own history is settled can still have a draft candidacy and
+         proposals waiting. -->
+    <div
+      v-if="variant === 'a' && relationSignal"
+      class="relation-signal mb-6"
+      data-testid="relation-signal"
+    >
+      <v-icon :icon="mdiVectorPolyline" color="ink-warning" size="small" />
+      <span class="text-body-2">
+        <strong>Powiązania czekają na decyzję:</strong>
+        {{ relationSignal.long }}
+      </span>
+      <v-btn
+        href="#powiazania"
+        variant="text"
+        size="small"
+        color="ink-info"
+        class="relation-signal__go"
+      >
+        Przejdź do powiązań
+      </v-btn>
+    </div>
+
     <!-- Who proposed what, a line each, and where the decisions are taken.
          Above the table because it is what a reviewer arriving from a link
          came for; the table below is for reading whole versions. -->
@@ -73,6 +107,15 @@
         @changed="refresh"
       />
     </section>
+
+    <RevisionRelations
+      v-if="isAdmin"
+      class="mb-6"
+      :node-id="nodeId"
+      :node-name="nodeName"
+      :variant="variant"
+      @summary="(summary) => (relationSummary = summary)"
+    />
 
     <section>
       <!-- One column per revision, so a company the pipelines have
@@ -279,7 +322,10 @@ import {
   mdiEyeOutline,
   mdiEyeOffOutline,
   mdiEarth,
+  mdiVectorPolyline,
 } from "@mdi/js";
+import { polishCounting } from "~/composables/polish";
+import type { RelationSummary } from "~~/server/api/revisions/relations.get";
 
 definePageMeta({
   middleware: "auth",
@@ -302,6 +348,62 @@ const highlightId = computed(() =>
 );
 
 const { isAdmin } = useAuthState();
+
+/** Temporary: the two layouts of the relations section, for the screenshots. */
+const variant = computed<"a" | "b">(() =>
+  route.query.wariant === "b" ? "b" : "a",
+);
+
+/** What waits on the entry's relations, as the section below reported it. */
+const relationSummary = ref<RelationSummary | null>(null);
+
+/** The signal at the top, or null when nothing waits. */
+const relationSignal = computed(() => {
+  const summary = relationSummary.value;
+  if (!summary || (summary.proposals === 0 && summary.drafts === 0)) {
+    return null;
+  }
+  const proposals =
+    summary.proposals > 0
+      ? polishCounting(
+          summary.proposals,
+          "propozycja zmiany",
+          "propozycje zmian",
+          "propozycji zmian",
+        )
+      : null;
+  const where =
+    summary.withProposals > 1
+      ? ` w ${polishCounting(summary.withProposals, "powiązaniu", "powiązaniach", "powiązaniach")}`
+      : "";
+  const drafts =
+    summary.drafts > 0
+      ? polishCounting(
+          summary.drafts,
+          "nieopublikowane powiązanie",
+          "nieopublikowane powiązania",
+          "nieopublikowanych powiązań",
+        )
+      : null;
+  return {
+    long: [proposals && `${proposals}${where}`, drafts]
+      .filter(Boolean)
+      .join(" i ")
+      .concat("."),
+    short: [
+      proposals,
+      drafts &&
+        polishCounting(
+          summary.drafts,
+          "nieopublikowane",
+          "nieopublikowane",
+          "nieopublikowanych",
+        ),
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  };
+});
 
 const revisions = ref<Record<string, unknown>[]>([]);
 const approvedRevisionId = ref<string | null>(null);
@@ -666,6 +768,37 @@ function differsFromApproved(rev: Record<string, unknown>, key: string) {
    stretched across 1900px puts the date and the change a head-turn apart. */
 .history-section {
   max-width: 1200px;
+}
+
+/* The signal for what waits on the relations: the list rows' rail and tint,
+   so it reads as the same kind of thing as the rows it points down to. */
+.relation-signal {
+  max-width: 1200px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface-warning));
+  box-shadow: inset 4px 0 0 rgb(var(--v-theme-ink-warning));
+}
+
+.relation-signal__go {
+  margin-inline-start: auto;
+}
+
+.relation-facts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.relation-facts:hover {
+  text-decoration: underline;
 }
 
 .comparison-scroll {
