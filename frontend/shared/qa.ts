@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wyszukiwarka-osoby-dodane-recznie",
+    title: "Wyszukiwarka podpowiada niezalogowanym także osoby dodane ręcznie",
+    description:
+      "Niezalogowanym wyszukiwarka podpowiadała tylko te nieopublikowane osoby, które dodał import albo zatwierdziła redakcja, więc nie znajdowali nikogo dodanego ręcznie, także osób dodanych dlatego, że ktoś ich szukał. Teraz podpowiada każdą nieopublikowaną osobę, a jej strona prosi o zalogowanie.",
+    steps: [
+      "Wyloguj się i wpisz w wyszukiwarkę nazwisko osoby dodanej ręcznie, której strona czeka na zatwierdzenie (np. „Borys Budka”) - podpowiedź ją pokazuje, a jej strona prosi o zalogowanie.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "fakty-po-odswiezeniu-strony",
     title: "Kategoryzacja faktów działa także po odświeżeniu strony",
     description:

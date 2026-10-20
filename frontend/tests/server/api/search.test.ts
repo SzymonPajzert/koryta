@@ -48,18 +48,6 @@ vi.mock("../../../server/utils/auth", () => ({
     event.headers?.authorization ? { uid: "reader" } : null,
 }));
 
-/** People a contributor proposed and nobody reviewed - see
- * `importedOrReviewed`, which has tests of its own. */
-const proposed = vi.hoisted(() => new Set<string>());
-vi.mock("../../../server/utils/provenance", () => ({
-  importedOrReviewed: async (_db: unknown, docs: { id?: string }[]) =>
-    new Set(
-      docs
-        .map((doc) => doc.id)
-        .filter((id): id is string => !!id && !proposed.has(id)),
-    ),
-}));
-
 /** A node as `parseNodeDoc` will see it coming back from Firestore. */
 const doc = (
   id: string,
@@ -100,7 +88,6 @@ const searchSignedIn = (q: string) =>
 describe("/api/search", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    proposed.clear();
     mockOrderBy.mockReturnValue({
       where: mockWhere,
       orderBy: mockOrderBy,
@@ -297,25 +284,22 @@ describe("/api/search", () => {
     ]);
   });
 
-  it("keeps a person somebody proposed from a logged out reader", async () => {
-    // Anybody with an account can propose a person, and the box would put the
-    // name on this site for anybody typing it.
-    proposed.add("proposed");
+  it("offers a logged out reader a person added by hand as well", async () => {
+    // The box names them and nothing else, and their page asks the reader to
+    // sign in. Asking how each page was written, as the teaser does, kept out
+    // the people added by hand because readers searched for them.
     respondWith({
       "anna nowak": [
-        doc("proposed", "Anna Nowak", { published: false }),
+        doc("added-by-hand", "Anna Nowak", { published: false }),
         doc("imported", "Anna Nowakowska", { published: false }),
       ],
     });
 
     expect((await search("Anna Nowak")).map((r: any) => r.id)).toEqual([
+      "added-by-hand",
       "imported",
     ]);
-    // A signed in reader still finds what they may have just proposed.
-    expect((await searchSignedIn("Anna Nowak")).map((r: any) => r.id)).toEqual([
-      "proposed",
-      "imported",
-    ]);
+    expect(mockCollection).not.toHaveBeenCalledWith("revisions");
   });
 
   it("keeps every other unpublished page from a logged out reader", async () => {
