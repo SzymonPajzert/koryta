@@ -12,6 +12,7 @@ from entities.company_categories import (
     CATEGORY_VALUES,
     COMPANY_CATEGORIES,
     KOLEJE,
+    OBRONNOSC,
     SPZOZ,
     categories_for,
     matches_pkd,
@@ -338,6 +339,213 @@ class TestOverrideListsAreWellFormed(unittest.TestCase):
         self.assertTrue(KOLEJE.exclude)
 
 
+class TestObronnosc(unittest.TestCase):
+    """The state's defence companies, and the arms makers whoever owns them.
+
+    Two codes place an arms maker; everything else in the state's group is
+    named by KRS, because it files the code of its own trade and the register
+    does not draw the group.
+    """
+
+    def test_an_arms_maker_by_its_main_code(self):
+        # KRS 0000041811, Mesko
+        self.assertEqual(
+            categories_for(
+                "0000041811",
+                [
+                    "25.40.Z",
+                    "20.51.Z",
+                    "25.62.Z",
+                    "25.73.Z",
+                    "28.99.Z",
+                    "33.12.Z",
+                    "38.12.Z",
+                    "38.22.Z",
+                    "38.31.Z",
+                    "72.19.Z",
+                ],
+            ),
+            ["obronnosc"],
+        )
+
+    def test_a_private_ammunition_maker_too(self):
+        # KRS 0000041302, Fabryka Amunicji Mysliwskiej FAM-Pionki: the codes
+        # place a company whoever owns it, as they do in every category.
+        self.assertIn(
+            "obronnosc",
+            categories_for(
+                "0000041302",
+                [
+                    "25.40.Z",
+                    "22.21.Z",
+                    "22.29.Z",
+                    "46.90.Z",
+                    "25.50.Z",
+                    "68.20.Z",
+                    "46.42.Z",
+                    "49.41.Z",
+                    "51.10.Z",
+                    "77.35.Z",
+                ],
+            ),
+        )
+
+    def test_a_steelworks_listing_the_arms_code_second_is_not_an_arms_maker(self):
+        # KRS 0000123124, Celsa Huta Ostrowiec
+        self.assertNotIn(
+            "obronnosc",
+            categories_for(
+                "0000123124",
+                [
+                    "24.10.Z",
+                    "25.40.Z",
+                    "25.53.Z",
+                    "28.42.Z",
+                    "46.82.Z",
+                    "46.86.Z",
+                    "46.87.Z",
+                    "35.14.Z",
+                ],
+            ),
+        )
+
+    def test_the_holding_company_files_no_arms_code(self):
+        # KRS 0000489456, Polska Grupa Zbrojeniowa: 64.20, and 84.22 tenth
+        self.assertEqual(
+            categories_for(
+                "0000489456",
+                [
+                    "64.20.Z",
+                    "46.14.Z",
+                    "46.18.Z",
+                    "64.19.Z",
+                    "64.92.Z",
+                    "64.99.Z",
+                    "70.10.Z",
+                    "72.19.Z",
+                    "74.10.Z",
+                    "84.22.Z",
+                ],
+            ),
+            ["obronnosc"],
+        )
+
+    def test_the_group_on_the_codes_of_its_own_trades(self):
+        # KRS 0000657652, PGZ Stocznia Wojenna: a shipyard
+        self.assertEqual(
+            categories_for("0000657652", ["30.11.Z", "33.15.Z", "30.12.Z"]),
+            ["obronnosc"],
+        )
+        # KRS 0000044482, Centrum Bankowo-Finansowe Nowy Swiat: an office block
+        self.assertEqual(
+            categories_for("0000044482", ["68.20.Z", "68.32.Z", "41.20.Z"]),
+            ["obronnosc"],
+        )
+
+    def test_a_military_works(self):
+        # KRS 0000295398, Wojskowe Zaklady Lotnicze nr 1: aircraft overhauls
+        self.assertEqual(
+            categories_for(
+                "0000295398",
+                [
+                    "33.16.Z",
+                    "25.61.Z",
+                    "25.62.Z",
+                    "28.12.Z",
+                    "30.30.Z",
+                    "33.13.Z",
+                    "33.19.Z",
+                    "71.12.Z",
+                    "71.20.B",
+                    "74.90.Z",
+                ],
+            ),
+            ["obronnosc"],
+        )
+
+    def test_the_army_s_property_agency_s_companies(self):
+        # KRS 0000394569, AMW Rewita: the army's holiday resorts
+        self.assertEqual(
+            categories_for("0000394569", ["55.20.Z", "46..", "47..", "56.."]),
+            ["obronnosc"],
+        )
+
+    def test_an_aircraft_engine_works_is_not_by_its_code(self):
+        # KRS 0000014898, Pratt & Whitney Rzeszow: 30.30 is not an arms code
+        self.assertEqual(
+            categories_for(
+                "0000014898",
+                [
+                    "30.30.Z",
+                    "33.16.Z",
+                    "28.11.Z",
+                    "29.32.Z",
+                    "33.12.Z",
+                    "33.20.Z",
+                    "28.15.Z",
+                    "28.12.Z",
+                    "28.13.Z",
+                    "25.61.Z",
+                ],
+                wiki_categories=["Polskie wytwórnie lotnicze"],
+            ),
+            [],
+        )
+
+    def test_a_military_hospital_stays_a_hospital(self):
+        # KRS 0000007548, 10 Wojskowy Szpital Kliniczny z Poliklinika
+        self.assertEqual(categories_for("0000007548", [], form=SPZOZ), ["szpitale"])
+
+    def test_the_national_defence_code_places_nothing(self):
+        # KRS 0000180451, Wojskowy Instytut Medycyny Lotniczej: the one company
+        # filing 84.22 first, a research institute
+        self.assertEqual(
+            categories_for("0000180451", ["84.22.Z", "72.1.", "72.2.", "86.1."]),
+            [],
+        )
+
+    def test_an_arms_maker_only_its_article_files(self):
+        # KRS 0000369722, WB Electronics: electronics and drones on its codes
+        self.assertEqual(
+            categories_for(
+                "0000369722",
+                [
+                    "26.20.Z",
+                    "26.30.Z",
+                    "26.51.Z",
+                    "26.70.Z",
+                    "30.30.Z",
+                    "62.01.Z",
+                    "33.13.Z",
+                    "33.16.Z",
+                    "61.20.Z",
+                    "72.19.Z",
+                ],
+                wiki_categories=[
+                    "WB Electronics",
+                    "Spółki akcyjne",
+                    "Polskie przedsiębiorstwa zbrojeniowe",
+                ],
+            ),
+            ["obronnosc"],
+        )
+        # KRS 0000211833, ZURAD: no code stored, filed under PGZ's group
+        self.assertEqual(
+            categories_for(
+                "0000211833", [], wiki_categories=["Polska Grupa Zbrojeniowa"]
+            ),
+            ["obronnosc"],
+        )
+
+    def test_the_list_names_no_company_another_category_excludes(self):
+        # A company the list names and another category leaves out would read
+        # as a sector somebody argued it out of; none does today.
+        others = frozenset().union(
+            *(c.excluded_krs for c in COMPANY_CATEGORIES if c is not OBRONNOSC)
+        )
+        self.assertEqual(OBRONNOSC.included_krs & others, frozenset())
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -506,11 +714,13 @@ class TestWikipediaCategories(unittest.TestCase):
         )
 
     def test_a_category_nobody_mapped_places_nothing(self):
+        # KRS 0000023302, KGHM: mining, which the filter has no category for.
+        # This was PGZ and the arms makers' category until `obronnosc`.
         self.assertEqual(
             categories_for(
-                "0000489456",
-                ["70.10.Z"],
-                wiki_categories=["Polskie przedsiębiorstwa zbrojeniowe"],
+                "0000023302",
+                ["07.29.Z"],
+                wiki_categories=["Polskie przedsiębiorstwa przemysłu wydobywczego"],
             ),
             [],
         )
