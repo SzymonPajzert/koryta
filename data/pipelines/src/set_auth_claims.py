@@ -61,6 +61,16 @@ ROLE_LEVELS = {
     "ODZUN0WEZ9PLpVNO3uBq808D8Uh2": Level.ADMIN,
     "xLrIMGV6ITbhGG2H1s2urN226tv1": Level.ADMIN,
     "1U0540kyQpOWsqa5OItWyDC4vTf2": Level.DATASCIENCE,
+    "Qu1BGOPj31a0qAfr3wKMZyU0kVK2": Level.DATASCIENCE,
+    # People for the new wave of analysis
+    "W22I40h65XaLUv3qFt66dMLqTsd2": Level.ADMIN,
+    "4poqYQPoDqPpMCznxaadcapvZXm2": Level.ADMIN,
+    "SeAnQgJgJvb1VxeZv2c5FQn0kZI2": Level.ADMIN,
+    "zRb8YVrBfvZbMp44au5Va84McTx2": Level.ADMIN,
+    "WBEvxbQ1y8SDEx89PsykMLOKfRi2": Level.ADMIN,
+    "KCLrkr8nKyU7CCeLRX5JCnZAmmA2": Level.ADMIN,
+    "xUDXyj7Pj7PMvDmhTycONTm8UVk2": Level.ADMIN,
+    "GYEHjkUOC1OYB5QdI8fkKJuxaDC2": Level.ADMIN,
 }
 
 # Administrators on trial. They hold `admin` like any other, plus `newAdmin`,
@@ -85,6 +95,14 @@ NEW_ADMINS = {
     "rJNsODgkXuZ9di81GTcgPhc192o2",
     "ODZUN0WEZ9PLpVNO3uBq808D8Uh2",
     "xLrIMGV6ITbhGG2H1s2urN226tv1",
+    "W22I40h65XaLUv3qFt66dMLqTsd2",
+    "4poqYQPoDqPpMCznxaadcapvZXm2",
+    "SeAnQgJgJvb1VxeZv2c5FQn0kZI2",
+    "zRb8YVrBfvZbMp44au5Va84McTx2",
+    "WBEvxbQ1y8SDEx89PsykMLOKfRi2",
+    "KCLrkr8nKyU7CCeLRX5JCnZAmmA2",
+    "xUDXyj7Pj7PMvDmhTycONTm8UVk2",
+    "GYEHjkUOC1OYB5QdI8fkKJuxaDC2",
 }
 
 # The site's owner. `owner` is what opens his task list, /admin/zadania, and
