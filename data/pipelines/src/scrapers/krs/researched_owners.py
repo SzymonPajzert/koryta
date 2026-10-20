@@ -6,7 +6,8 @@ reads as owned by nobody, and REGON's code covers few of them; nor does it
 name a shareholder under 10% of a spółka z o.o. Each company here was found by
 `CompaniesLikelyPublic` - several people on the site worked there, all of them
 scored as koryciarz - or, for SIM "KZN-Wielkopolska", by the BIP NIP list, or
-for Wodociągi i Kanalizacja-Zgierz by Szymon asking about it - and its owners
+for Wodociągi i Kanalizacja-Zgierz by Szymon asking about it, or for PCO,
+PIT-RADWAR and Dezamet by the defence sector (`obronnosc`) - and its owners
 were then read off a source that says so, given beside it: the company's own
 shareholder page, its parent's group page, a stock-exchange disclosure, a
 voivodeship's or city's own page, the press where nothing better exists.
@@ -20,8 +21,9 @@ A public body with neither (KOWR, KZN, PARP) is named for the record only.
 
 Every company here is public by the site's rule - any public stake, minority
 included - so `CompaniesKRS` marks it public whatever the owners resolve to.
-Checked 2026-10-09; a sale changes it, so a source older than a year or two is
-worth reading again before a page quotes it.
+Checked 2026-10-09, the three defence companies 2026-10-20; a sale changes
+it, so a source older than a year or two is worth reading again before a page
+quotes it.
 """
 
 import dataclasses
@@ -208,6 +210,26 @@ RESEARCHED_OWNERS: dict[str, Researched] = {
             ),
         ),
         "https://pl.wikipedia.org/wiki/Centrum_Gie%C5%82dowe",
+    ),
+    # PCO S.A., military optics: PGZ's, the rest its employees'. Its own
+    # companies (Łucznik, Zakłady Mechaniczne "Tarnów") follow it.
+    "0000169830": Researched(
+        (dataclasses.replace(PGZ, share="91.48%"),),
+        "https://pcosa.com.pl/pl/dla-akcjonariuszy",
+    ),
+    # PIT-RADWAR S.A., military radars. Its page says it belongs to PGZ and
+    # gives no share.
+    "0000297470": Researched(
+        (PGZ,),
+        "https://www.pitradwar.com/o-firmie",
+    ),
+    # ZAKŁADY METALOWE "DEZAMET" S.A., artillery ammunition.
+    "0000044261": Researched(
+        (
+            dataclasses.replace(PGZ, share="45.99%"),
+            ResearchedOwner("MESKO S.A.", "0000041811", "39.94%"),
+        ),
+        "https://dezamet.com.pl/dla-akcjonariuszy-2/struktura-wlasnosciowa",
     ),
     # ZAKŁADY MECHANICZNE "TARNÓW" S.A., in the PGZ group.
     "0000036320": Researched(
