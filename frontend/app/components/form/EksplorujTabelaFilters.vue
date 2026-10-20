@@ -381,6 +381,7 @@ import {
   mdiPlus,
   mdiRadiator,
   mdiRecycle,
+  mdiShieldOutline,
   mdiSoccer,
   mdiSort,
   mdiStethoscope,
@@ -592,6 +593,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   koleje: mdiTrain,
   "komunikacja-miejska": mdiBus,
   sport: mdiSoccer,
+  obronnosc: mdiShieldOutline,
 };
 
 interface ChipLook {
