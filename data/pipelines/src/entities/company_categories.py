@@ -738,6 +738,313 @@ PRZYCHODNIE = Category(
     pkd_main_prefixes=("86.21", "86.22", "86.23", "86.90", "86.92", "87.", "88."),
 )
 
+OBRONNOSC = Category(
+    value="obronnosc",
+    title="Obronnosc",
+    # 25.40 Produkcja broni i amunicji
+    # 30.40 Produkcja wojskowych pojazdow bojowych
+    #
+    # Main-code only, and only these two: they are the register's only codes
+    # that mean arms and nothing else. They place the arms makers whoever owns
+    # them - Mesko, Rosomak, Bumar-Labedy, Dezamet, Wojskowe Zaklady
+    # Uzbrojenia, and the private shell and ammunition makers. 30.30 (aircraft)
+    # is left out, being the glider and light-aircraft makers as much as any
+    # engine works, and so is 84.22 (obrona narodowa): the one company in the
+    # 2026-10-20 crawl filing it first is Wojskowy Instytut Medycyny
+    # Lotniczej, a research institute.
+    pkd_main_prefixes=("25.40", "30.40"),
+    # Read only for a company nothing else places. 4 companies in the
+    # 2026-10-20 crawl: WB Electronics and Hertz Systems, both private, ZURAD,
+    # which plwiki files under PGZ's group, and Osrodek Badawczo-Rozwojowy
+    # Sprzetu Mechanicznego. Every other company filed under either is in the
+    # list below or reached by its code.
+    wikipedia=("Polskie przedsiębiorstwa zbrojeniowe", "Polska Grupa Zbrojeniowa"),
+    # The rest of the state's defence companies, named by KRS number as the
+    # PKP group is in `koleje`, because no code reaches them. Polska Grupa
+    # Zbrojeniowa files 64.20, a holding company, and what it holds - a
+    # shipyard, a trader, developers, a fund manager - each files the code of
+    # its own trade. Nor can the ownership graph stand in for the list: the
+    # register names an S.A.'s shareholders only when there is one, so in the
+    # 2026-10-20 crawl it lists 14 companies under PGZ and names no company as
+    # a shareholder of Huta Stalowa Wola, Nitro-Chem, PCO, PIT-RADWAR or any
+    # of the military works.
+    #
+    # The list starts from the companies the state-company estimate of
+    # 2026-10-11 put in its defence phase (decide-ssp-research-phase-1), and
+    # adds three it filed elsewhere: Centrum Techniki Morskiej under research
+    # by its PKD 72, and PCO and PIT-RADWAR as private, the register naming
+    # none of their owners. A company the group adds later has to be added
+    # here.
+    #
+    # Left out on purpose: the military hospitals and przychodnie, which are
+    # `szpitale` and `przychodnie` - the army runs them, but what they do is
+    # health care - and the military research institutes, which are not
+    # companies and were not in the estimate.
+    include=(
+        Override(
+            "0000489456",
+            "Polska Grupa Zbrojeniowa",
+            "the group's holding company: PKD 64.20",
+        ),
+        Override(
+            "0000004324",
+            "Huta Stalowa Wola",
+            "PGZ's; howitzers and tracked carriers, filed under 25.30",
+        ),
+        Override(
+            "0000015446",
+            "Jelcz",
+            "Huta Stalowa Wola's and PGZ's; the army's trucks, PKD 29.10",
+        ),
+        Override(
+            "0000118542",
+            "Grupa MCC",
+            "Jelcz's, with a private partner; PKD 45.32",
+        ),
+        Override(
+            "0000006791",
+            "Zaklady Chemiczne Nitro-Chem",
+            "PGZ's; explosives, PKD 20.51",
+        ),
+        Override(
+            "0000147230",
+            "Zaklad Produkcji Specjalnej Gamrat",
+            "PGZ's; propellants and pyrotechnics, PKD 20.51",
+        ),
+        Override(
+            "0000026372",
+            "Cenzin",
+            "PGZ's arms trader, PKD 46.90",
+        ),
+        Override(
+            "0000110327",
+            "Rondo",
+            "Cenzin's property company, PKD 68.20",
+        ),
+        Override(
+            "0000657652",
+            "PGZ Stocznia Wojenna",
+            "PGZ's naval shipyard, PKD 30.11",
+        ),
+        Override(
+            "0000300687",
+            "Osrodek Badawczo-Rozwojowy Urzadzen Mechanicznych OBRUM",
+            "PGZ's armoured-vehicle design bureau, PKD 72.19",
+        ),
+        Override(
+            "0000169830",
+            "PCO",
+            "in PGZ's group, holds shares in Lucznik and ZM Tarnow; military "
+            "optics, PKD 26.51",
+        ),
+        Override(
+            "0000297470",
+            "PIT-RADWAR",
+            "in PGZ's group, holds shares in ZM Tarnow; military radars, PKD 72.10",
+        ),
+        Override(
+            "0000295769",
+            "Osrodek Badawczo-Rozwojowy Centrum Techniki Morskiej",
+            "a Treasury company; naval weapons, PKD 72.10",
+        ),
+        Override(
+            "0000099611",
+            "Warynski Grupa Holdingowa",
+            "PGZ's property company, PKD 68.20",
+        ),
+        Override(
+            "0000475240",
+            "Eqlibrium",
+            "Warynski's developer company, PKD 41.10",
+        ),
+        Override(
+            "0000712820",
+            "Eqlibrium II",
+            "Warynski's developer company, PKD 41.10",
+        ),
+        Override(
+            "0000719290",
+            "Warynski Atol",
+            "Warynski's developer company, PKD 41.10",
+        ),
+        Override(
+            "0000784128",
+            "Warynski Atol",
+            "the same name's second entry, also Warynski's; PKD 41.10",
+        ),
+        Override(
+            "0000045537",
+            "Warynski Trade w likwidacji",
+            "Warynski's, in liquidation; PKD 46.63",
+        ),
+        Override(
+            "0000044482",
+            "Centrum Bankowo-Finansowe Nowy Swiat",
+            "PGZ's office building, PKD 68.20",
+        ),
+        Override(
+            "0000533455",
+            "Gryf Nieruchomosci",
+            "PGZ's property company, PKD 68.20",
+        ),
+        Override(
+            "0000340312",
+            "MS Towarzystwo Funduszy Inwestycyjnych",
+            "PGZ's fund manager, PKD 66.30",
+        ),
+        Override(
+            "0000395219",
+            "Mars Finance 1",
+            "PGZ's financing company, PKD 64.99",
+        ),
+        Override(
+            "0000116560",
+            "Stomil-Poznan w likwidacji",
+            "PGZ's tyre works, in liquidation; PKD 22.11",
+        ),
+        Override(
+            "0000308183",
+            "Osrodek Badawczo-Rozwojowy Przemyslu Oponiarskiego Stomil",
+            "Stomil-Poznan's research centre, PKD 72.19",
+        ),
+        Override(
+            "0000235836",
+            "Kuznia Labedy w likwidacji",
+            "Bumar-Labedy's forge, in liquidation; PKD 25.50",
+        ),
+        # Polski Holding Obronny is the Treasury's own, beside PGZ rather than
+        # under it, and holds a group of its own.
+        Override(
+            "0000027151",
+            "Polski Holding Obronny",
+            "the Treasury's defence holding company, PKD 46.69",
+        ),
+        Override(
+            "0000026981",
+            "WGT",
+            "Polski Holding Obronny's guarding company, PKD 80.01",
+        ),
+        Override(
+            "0000652787",
+            "RR Security",
+            "Polski Holding Obronny's guarding company, PKD 80.01",
+        ),
+        Override(
+            "0000130996",
+            "Agencja Ochrony Osob i Mienia Reflex",
+            "Polski Holding Obronny's guarding company, PKD 80.01",
+        ),
+        Override(
+            "0000066424",
+            "Fadroma Development",
+            "Polski Holding Obronny's, PKD 28.92",
+        ),
+        Override(
+            "0000017328",
+            "Huta Gliwice-Osie w likwidacji",
+            "Polski Holding Obronny's, in liquidation; PKD 35.20",
+        ),
+        # The military works and the army's other companies, all the
+        # Treasury's. Each files the code of the work it does for the army.
+        Override(
+            "0000295398",
+            "Wojskowe Zaklady Lotnicze nr 1",
+            "overhauls the army's helicopters and aircraft, PKD 33.16",
+        ),
+        Override(
+            "0000295719",
+            "Wojskowe Zaklady Lotnicze nr 2",
+            "overhauls the army's aircraft, PKD 33.16",
+        ),
+        Override(
+            "0000312175",
+            "Laboratorium Badan Napedow Lotniczych Polonia Aero",
+            "Wojskowe Zaklady Lotnicze nr 2's engine laboratory, PKD 72.19",
+        ),
+        Override(
+            "0000294799",
+            "Wojskowe Zaklady Motoryzacyjne",
+            "repairs the army's vehicles, PKD 33.11",
+        ),
+        Override(
+            "0000296096",
+            "Wojskowe Zaklady Lacznosci nr 1",
+            "the army's signals equipment, PKD 27.90",
+        ),
+        Override(
+            "0000296158",
+            "Wojskowe Zaklady Elektroniczne",
+            "the army's electronics, PKD 27.90",
+        ),
+        Override(
+            "0000303109",
+            "Wojskowe Centralne Biuro Konstrukcyjno-Technologiczne",
+            "the army's design bureau, PKD 28.99",
+        ),
+        Override(
+            "0000295452",
+            "Wojskowe Zaklady Kartograficzne",
+            "prints the army's maps, PKD 18.12",
+        ),
+        Override(
+            "0000294679",
+            "Wojskowe Przedsiebiorstwo Handlowe",
+            "the army's shops, PKD 47.11",
+        ),
+        Override(
+            "0000320810",
+            "Warszawskie Zaklady Mechaniczne PZL-WZM",
+            "a Treasury engine works, PKD 29.32",
+        ),
+        Override(
+            "0000187449",
+            "Diesel Centrum-Polska",
+            "PZL-WZM's, PKD 45.31",
+        ),
+        Override(
+            "0000071223",
+            "Wytwornia Sprzetu Komunikacyjnego PZL-Kalisz",
+            "a state aircraft-engine works plwiki files under PGZ's group; "
+            "PKD 30.30, which is left out above",
+        ),
+        Override(
+            "0001187687",
+            "Hornet - Polskie Drony",
+            "drones, owned by the Instytut Techniczny Wojsk Lotniczych and "
+            "Boryszew; PKD 30.32",
+        ),
+        # Agencja Mienia Wojskowego's companies. The agency holds them for the
+        # Treasury and is not in the register itself, so the register names
+        # the Treasury and nothing ties them to the army but this list - and
+        # the AMW list in `scrapers.krs.data`, which holds Modlin airport too.
+        Override(
+            "0000394569",
+            "AMW Rewita",
+            "AMW's hotels and holiday resorts, PKD 55.20",
+        ),
+        Override(
+            "0001204707",
+            "Rewita Food Service",
+            "AMW Rewita's catering, PKD 56.21",
+        ),
+        Override(
+            "0000392868",
+            "AMW Sinevia",
+            "AMW's, PKD 42.99",
+        ),
+        Override(
+            "0000003772",
+            "AMW Invest",
+            "AMW's, PKD 71.11",
+        ),
+        Override(
+            "0000140528",
+            "AMW Towarzystwo Budownictwa Spolecznego Kwatera",
+            "AMW's housing for soldiers, PKD 68.32",
+        ),
+    ),
+)
+
 COMPANY_CATEGORIES: tuple[Category, ...] = (
     SZPITALE,
     PRZYCHODNIE,
@@ -748,6 +1055,7 @@ COMPANY_CATEGORIES: tuple[Category, ...] = (
     KOLEJE,
     KOMUNIKACJA_MIEJSKA,
     SPORT,
+    OBRONNOSC,
 )
 
 CATEGORY_VALUES: tuple[str, ...] = tuple(c.value for c in COMPANY_CATEGORIES)
@@ -853,8 +1161,9 @@ def categories_for(
     a broader one - to plwiki a heat plant is an energy company - so it fills a
     gap rather than adding to an answer. On the 2026-08 dump it places 21 of
     the 299 site companies with an article and no sector of their own - 27
-    before the six it got wrong were excluded by KRS. The rest are in
-    sectors the filter has no category for: arms, chemicals, mining, finance.
+    before the six it got wrong were excluded by KRS. The rest were in
+    sectors the filter had no category for: arms, chemicals, mining, finance.
+    Arms has had one since 2026-10-20, `obronnosc`.
 
     Returns a list rather than a set so the value is stable from one run to the
     next - it ends up in a Firestore document that a diff is taken against.
