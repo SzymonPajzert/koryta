@@ -186,7 +186,7 @@ class World:
 def world(monkeypatch, tmp_path) -> World:
     w = World(tmp_path)
 
-    def build_payloads(scope, koryta_date, policy):
+    def build_payloads(scope, koryta_date, policy, company_category=None):
         w.events.append("build")
         w.built.append(
             {
@@ -194,6 +194,7 @@ def world(monkeypatch, tmp_path) -> World:
                 "date": koryta_date,
                 "policy": policy,
                 "argv": list(sys.argv),
+                "category": company_category,
             }
         )
         if isinstance(w.payloads, BaseException):
@@ -426,6 +427,25 @@ def test_pages_within_max_new_are_listed_but_are_no_error(world):
     assert world.run().ending()["errors"] == []
     assert world.summary()["created"] == ["Osoba 1 (n1)"]
     assert world.summary()["scope"] == "not-on-koryta"
+
+
+def test_a_sector_s_people_the_site_lacks(world):
+    """`--company-category` reaches the build, and the summary says which
+    sector the pages it made are from."""
+    world.payloads = people(2)
+    world.answers = [person("created", "n1"), person("created", "n2")]
+
+    argv = ["--scope", "not-on-koryta", "--max-new", "5"]
+    assert job.main([*argv, "--company-category", "obronnosc"]) == 0
+
+    [built] = world.built
+    assert (built["scope"], built["category"]) == ("not-on-koryta", "obronnosc")
+    summary = world.summary()
+    assert (summary["scope"], summary["company_category"]) == (
+        "not-on-koryta",
+        "obronnosc",
+    )
+    assert summary["created"] == ["Osoba 1 (n1)", "Osoba 2 (n2)"]
 
 
 def test_twenty_refusals_in_a_row_stop_the_run_as_failed(world):
@@ -689,6 +709,43 @@ def test_the_pipelines_see_the_cli_flags_and_only_while_they_run(monkeypatch):
     ]
 
 
+def test_a_sector_stands_in_for_everybody(monkeypatch):
+    """Extract refuses `--all` beside `--company-category`, and a sector's
+    people are the ones in a post there now, at a public company."""
+    seen: list = []
+
+    class Dumper:
+        def dump_pandas(self):
+            pass
+
+    def run_people_payloads(ctx):
+        seen.append(list(sys.argv))
+        return pd.DataFrame({"name": ["Anna Nowak"]})
+
+    monkeypatch.setattr(build, "setup_context", lambda *a, **k: ("ctx", Dumper()))
+    monkeypatch.setattr(build, "run_people_payloads", run_people_payloads)
+    monkeypatch.setattr(sys, "argv", ["koryta_people_import"])
+
+    build.build_payloads(
+        "not-on-koryta", "2026-10-20", ProcessPolicy(set()), "obronnosc"
+    )
+
+    assert seen == [
+        [
+            "koryta_people_import",
+            "--company-category",
+            "obronnosc",
+            "--currently-employed",
+            "--public-employer",
+            "--not-on-koryta",
+            "--only-changed",
+            "--koryta-date",
+            "2026-10-20",
+        ]
+    ]
+    assert sys.argv == ["koryta_people_import"]
+
+
 def test_sys_argv_comes_back_when_the_pipelines_fail(monkeypatch):
     def broken(ctx):
         raise RuntimeError("no export")
@@ -717,11 +774,42 @@ def test_sys_argv_comes_back_when_the_pipelines_fail(monkeypatch):
         ["--koryta-date", "01-10-2026"],
         ["--scope", "not-on-koryta"],
         ["--refresh", "PeopleMergd"],
+        [
+            "--scope",
+            "not-on-koryta",
+            "--max-new",
+            "5",
+            "--company-category",
+            "lotniska",
+        ],
     ],
 )
 def test_a_flag_the_job_does_not_know_is_refused(argv):
     with pytest.raises(SystemExit):
         job.parse_args(argv)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--scope", "priority", "--company-category", "obronnosc"],
+        ["--request", "run-asked", "--company-category", "obronnosc"],
+        ["--company-category", "obronnosc", "--companies-only"],
+    ],
+)
+def test_only_the_two_halves_of_everybody_keep_to_a_sector(argv):
+    with pytest.raises(SystemExit):
+        job.parse_args(argv)
+
+
+def test_a_sector_s_pages_to_refresh_need_no_number_of_pages():
+    args = job.parse_args(["--company-category", "koleje"])
+
+    assert (args.scope, args.company_category, args.max_new) == (
+        "on-koryta",
+        "koleje",
+        0,
+    )
 
 
 def test_adding_people_needs_a_number_of_pages_it_may_create():
