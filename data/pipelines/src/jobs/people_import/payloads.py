@@ -48,15 +48,36 @@ class Candidate:
     missing: tuple[str, ...] = ()
 
 
-def pipeline_argv(scope: str, koryta_date: str | None) -> list[str]:
+def pipeline_argv(
+    scope: str, koryta_date: str | None, company_category: str | None = None
+) -> list[str]:
     """The flags `koryta PeoplePayloads` would be given for this run.
 
     `--only-changed` always: a person the export already shows as the payload
     has them is a request that writes nothing, and most of `--all` is that. A
     priority run passes neither scope: `PeoplePayloads.prioritised` splits the
     halves, and leaves out what would change nothing, itself.
+
+    A `company_category` stands in for `--all`: the people in a post now, any
+    post, at a public company in that sector (`Extract --company-category
+    --currently-employed --public-employer`) - who the night's tiers make
+    pages for, kept to one sector. Extract refuses `--all` beside it, since
+    `--all` would let a post at any company through.
     """
-    argv = ["--all"] if scope == PRIORITY else ["--all", f"--{scope}", "--only-changed"]
+    if scope == PRIORITY:
+        argv = ["--all"]
+    else:
+        people = (
+            [
+                "--company-category",
+                company_category,
+                "--currently-employed",
+                "--public-employer",
+            ]
+            if company_category
+            else ["--all"]
+        )
+        argv = [*people, f"--{scope}", "--only-changed"]
     if koryta_date:
         argv += ["--koryta-date", koryta_date]
     return argv
@@ -72,7 +93,10 @@ def run_people_payloads(ctx: Context) -> pd.DataFrame:
 
 
 def build_payloads(
-    scope: str, koryta_date: str | None, policy: ProcessPolicy
+    scope: str,
+    koryta_date: str | None,
+    policy: ProcessPolicy,
+    company_category: str | None = None,
 ) -> list[dict]:
     """Every payload the run would send, in the pipeline's order.
 
@@ -82,7 +106,7 @@ def build_payloads(
     """
     saved = sys.argv
     prog = saved[0] if saved else "koryta_people_import"
-    sys.argv = [prog, *pipeline_argv(scope, koryta_date)]
+    sys.argv = [prog, *pipeline_argv(scope, koryta_date, company_category)]
     try:
         ctx, dumper = setup_context(required_resources(PeoplePayloads), policy=policy)
         try:

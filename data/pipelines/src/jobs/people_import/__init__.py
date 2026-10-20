@@ -13,6 +13,8 @@ does - but in one process, unattended, and with guardrails a pipe has not got:
     koryta_people_import                   # daily on Cloud Run, jobs/CLOUD_RUN.md
     koryta_people_import --dry-run         # build and count them; send nothing
     koryta_people_import --scope not-on-koryta --max-new 50
+    koryta_people_import --scope not-on-koryta --max-new 50 --company-category obronnosc
+                                           # a sector's people the site lacks
     koryta_people_import --scope priority --max-uploads 100   # the nightly VM
     koryta_people_import --scope priority --max-uploads 100 --companies-only
                                            # the companies those 100 need, first
@@ -25,6 +27,17 @@ person, built as the other scopes build them and kept to the same guards
 the run the site queued, so the link the site handed out follows it to its end.
 A company's run creates pages for the company's people the site lacks, and
 only those; a person's run creates none.
+
+`--company-category` keeps an `on-koryta` or `not-on-koryta` run to one
+sector's people: those in a post now, any post, at a public company
+`entities.company_categories` files under it - the same rule that puts the
+category on the company's page, so the pages a `not-on-koryta` run of a
+sector makes are the ones its filter on the site lists, once the companies
+carry it. Public, as the night's tiers are: a sector's codes reach the
+private firms in it too, and the site is about public posts. Asked for on
+2026-10-20 to put the whole defence sector (`obronnosc`) on the site at once,
+for the volunteers checking it first, rather than at the fifty a night the
+priority run's `rejestrio_current` tier makes of everybody in a public post.
 
 `--companies-only` sends no people. It plans as a priority run with the same
 flags plans, and creates the companies the people that run would send name
@@ -159,6 +172,7 @@ from analysis.payloads.priority import (
     TIERS,
 )
 from analysis.payloads.target import NEW, PageTarget
+from entities.company_categories import CATEGORY_VALUES
 from jobs.nightly import export_refusal, export_time, latest_export
 from jobs.people_import.payloads import (
     PRIORITY,
@@ -324,6 +338,8 @@ class RunSummary:
     started: str
     finished: str = ""
     scope: str = ""
+    #: The sector the run kept to (`--company-category`), if it kept to one.
+    company_category: str = ""
     endpoint: str = ""
     #: The export the payloads were compared with, as its folder is stamped.
     export: str = ""
@@ -848,6 +864,7 @@ class PeopleImport:
             run=asked or uuid7str(),
             started=now(),
             scope=args.scope,
+            company_category=getattr(args, "company_category", None) or "",
             endpoint=args.endpoint,
         )
         # Under the summary's id, so the page's run and what the run left in
@@ -919,7 +936,9 @@ class PeopleImport:
         elif args.scope == PRIORITY:
             payloads = self.plan()
         else:
-            payloads = build_payloads(args.scope, args.koryta_date, self.policy())
+            payloads = build_payloads(
+                args.scope, args.koryta_date, self.policy(), args.company_category
+            )
         self.summary.planned = len(payloads)
         self.status.progress(
             0,
@@ -1537,6 +1556,15 @@ def parser() -> argparse.ArgumentParser:
         "company's people the site lacks.",
     )
     parser.add_argument(
+        "--company-category",
+        choices=CATEGORY_VALUES,
+        metavar="CATEGORY",
+        help="With --scope on-koryta or not-on-koryta: only the people in a post "
+        "now - any post - at a public company in this sector, as "
+        "entities.company_categories files it, in place of everybody. One of: "
+        f"{', '.join(CATEGORY_VALUES)}.",
+    )
+    parser.add_argument(
         "--recent-days",
         type=non_negative_int,
         default=30,
@@ -1693,6 +1721,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parse.error(
             "--scope not-on-koryta creates a page for everybody it sends; say "
             "how many this run may create with --max-new"
+        )
+    if args.company_category and args.scope not in ("on-koryta", "not-on-koryta"):
+        parse.error(
+            "--company-category keeps --scope on-koryta or not-on-koryta to one "
+            "sector's people; a priority run and a page's request choose their "
+            "own people"
         )
     if args.companies_only and args.scope != PRIORITY:
         parse.error(
