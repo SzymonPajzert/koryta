@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "kategoria-obronnosc",
+    title: "Kategoria „Obronność” w filtrach",
+    description:
+      "Spółki zbrojeniowe Skarbu Państwa - PGZ ze spółkami, wojskowe zakłady, spółki AMW - i producenci broni mają własną kategorię. Zawęża nią tabelę i kolejkę nowych osób.",
+    steps: [
+      "Zalogowany otwórz /eksploruj/nowe i wybierz „Obronność” w „Typ podmiotu” - kolejka ma pokazać osoby ze spółek zbrojeniowych.",
+    ],
+    link: "/eksploruj/tabela?category=obronnosc",
+    area: "public",
+  },
+  {
     id: "wyszukiwarka-osoby-dodane-recznie",
     title: "Wyszukiwarka podpowiada niezalogowanym także osoby dodane ręcznie",
     description:

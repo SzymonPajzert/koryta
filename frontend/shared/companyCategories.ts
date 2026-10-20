@@ -35,6 +35,7 @@ export const companyCategories = [
   { value: "koleje", title: "Koleje" },
   { value: "komunikacja-miejska", title: "Komunikacja miejska i autobusowa" },
   { value: "sport", title: "Sport i rekreacja" },
+  { value: "obronnosc", title: "Obronność" },
 ] as const satisfies readonly { value: string; title: string }[];
 
 export type CompanyCategory = (typeof companyCategories)[number]["value"];

@@ -31,6 +31,7 @@ describe("companyCategories", () => {
       "koleje",
       "komunikacja-miejska",
       "sport",
+      "obronnosc",
     ]);
   });
 
