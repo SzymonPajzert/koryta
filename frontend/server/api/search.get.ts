@@ -6,7 +6,6 @@ import {
   wantsLatest,
 } from "~~/server/utils/handlers";
 import { getValidatedQuery } from "h3";
-import { importedOrReviewed } from "~~/server/utils/provenance";
 import {
   anchorChunk,
   nameMatchesTokens,
@@ -114,12 +113,18 @@ export default editorFreshCachedEventHandler(async (event) => {
       // for.
       if (doc.data().deleted === true) continue;
       // An unpublished page is a legitimate hit for a signed in reader, who
-      // may have just created it. A logged out reader is offered unpublished
-      // people too, and nothing else unpublished: a person's page answers them
-      // with a teaser - the name and the latest post, never a party - and a
-      // way to sign in for the rest (`/api/nodes/[id]/teaser`), where a
-      // company's or a region's would only be a 404. Only the people an import
-      // wrote or a reviewer approved, which is decided below.
+      // may have just created it. A logged out reader is offered every
+      // unpublished person too, and nothing else unpublished. The person they
+      // typed is who they came for, and the page it opens is where the site
+      // asks them to sign in: with a teaser of the name and the latest post
+      // where an import wrote the page or a reviewer approved it
+      // (`/api/nodes/[id]/teaser`), with the sign-in card alone where somebody
+      // added it by hand. Either way the box gives away the name and nothing
+      // else.
+      //
+      // Not `importedOrReviewed`, which the teaser asks before it shows a
+      // post: in front of the box it hid every page added by hand, the people
+      // added because readers had searched for them among them.
       if (!includeDrafts && !node.visibility && node.type !== "person") {
         continue;
       }
@@ -140,23 +145,7 @@ export default editorFreshCachedEventHandler(async (event) => {
         ...results.filter((node) => !node.visibility),
       ];
 
-  // The drafts a logged out reader is shown are those the teaser would show:
-  // somebody's proposal of a person is a name on this site that nobody has
-  // checked, and stays a 404 - see `importedOrReviewed`. Asked only of the
-  // drafts that would be answered, at a read each; the cache then keeps the
-  // answer for everybody typing the same thing.
-  const window = ranked.slice(0, query.limit);
-  const shownDrafts = includeDrafts
-    ? undefined
-    : await importedOrReviewed(
-        db,
-        window.filter((node) => !node.visibility),
-      );
-  const answered = shownDrafts
-    ? window.filter((node) => node.visibility || shownDrafts.has(node.id))
-    : window;
-
-  return answered.map((node) => {
+  return ranked.slice(0, query.limit).map((node) => {
     // The query that opens the table on this hit, for the node kinds whose
     // page *is* the table. A region is one. A place stopped being one when
     // companies got their pages back: `generateEntityUrl` sends a search hit
