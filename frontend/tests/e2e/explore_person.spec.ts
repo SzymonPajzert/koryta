@@ -55,6 +55,29 @@ test.describe("Explore Person", () => {
     }
   });
 
+  test("links the drawer's name to the person's page by name", async ({
+    page,
+  }) => {
+    // It was a bare `/osoba/<id>`, and a page awaiting review kept that url:
+    // the slug healing runs on the server, which reads the node with no token.
+    await page.goto("/eksploruj/tabela");
+    await expect(page.locator(".v-main")).toBeVisible();
+    await expect(page.locator(".v-data-table__progress")).not.toBeVisible();
+
+    await page
+      .locator("tbody tr", { hasText: "Jan Kowalski" })
+      .first()
+      .locator(".text-primary.cursor-pointer")
+      .first()
+      .click();
+
+    const drawer = page.locator(".v-navigation-drawer--active");
+    await expect(drawer.locator("a.person-link")).toHaveAttribute(
+      "href",
+      /^\/osoba\/jan-kowalski-[A-Za-z0-9]+$/,
+    );
+  });
+
   test("offers a search in the city the person worked in", async ({ page }) => {
     // Jan Kowalski is employed at Orlen, which Województwo Pomorskie owns - so
     // the seat of the employer, not any election, is what names the city here.
