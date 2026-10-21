@@ -32,7 +32,7 @@ export const queueTierCopy: Record<
   { title: string; what: string; needs: string }
 > = {
   1: {
-    title: "Wikipedia obok rejestru",
+    title: "Mamy wikipedię osoby",
     what:
       "Osoba ma i biogram na Wikipedii, i wpis w rejestrze. Porównujesz datę " +
       "urodzenia z jednego i drugiego, sprawdzasz, czy region się zgadza, i " +
@@ -40,7 +40,7 @@ export const queueTierCopy: Record<
     needs: "Wystarczy sam biogram - niczego nie trzeba szukać poza nim.",
   },
   2: {
-    title: "Wygrana w wyborach, czyli oświadczenie majątkowe",
+    title: "Mające oświadczenie majątkowe",
     what:
       "Osoba w ostatnich dziesięciu latach zdobyła mandat i ma świeżą posadę " +
       "w spółce albo instytucji publicznej. Z mandatu bierze się oświadczenie " +
@@ -49,7 +49,7 @@ export const queueTierCopy: Record<
     needs: "Trzeba wejść do BIP-u urzędu i znaleźć w nim oświadczenie.",
   },
   3: {
-    title: "Fakty wyciągnięte z artykułów",
+    title: "Wspomniane w prasie",
     what:
       "Model wyciągnął z tekstów zdania o partii, znajomości albo posadzie " +
       "tej osoby. Czytasz artykuł, z którego pochodzi zdanie, i mówisz, czy " +
