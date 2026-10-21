@@ -32,6 +32,10 @@ The steps, in order (`STEPS`):
                 interesting, and the companies whose odpis did not come - at
                 most --paid-max-calls a day; before the reprocess, so what it
                 buys reaches tonight's people, who send those pages first
+    bip         koryta_scrape_bip crawl: harvest what the registry's hosts have
+                new (ingests the registry when the host table is empty, and
+                re-wraps stale .part bundles first); stops with exit 75 when
+                its budget runs out, leaving the rest to the next night
     rebuild_held
                 `koryta <Name> --refresh <Name>`, one at a time, for each
                 pipeline the reprocess holds whose code has changed since
@@ -435,6 +439,10 @@ STEPS = (
     Step("krs_paid", "rejestr.io", 30),
     # Nothing to do on most nights, a few git calls. The first night after it
     # landed rebuilds all six, PeoplePKW perhaps after downloading PKW's files.
+    # A 60-minute slice of the BIP crawl; it stops itself at 58 and leaves the
+    # rest of the queue to the next night. Before the reprocess, so tonight's
+    # bundles are parsed tonight.
+    Step("bip", "BIP", 60),
     Step("rebuild_held", "stałe potoki", 30),
     Step("reprocess", "potoki", 150),
     Step("tests", "testy", 45),
@@ -1290,6 +1298,30 @@ class Night:
             )
         return failed
 
+    def bip_argv(self, step: Step) -> list[str]:
+        return [
+            bin_path("koryta_scrape_bip"),
+            "crawl",
+            "--depth",
+            "10",
+            "--max-pages",
+            "8000000",
+            "--max-docs",
+            "30000000",
+            "--workers",
+            "32",
+            "--max-active-hosts",
+            "400",
+            "--rate",
+            "0.01",
+            "--max-minutes",
+            f"{max(1.0, self.minutes_for(step) - 2):.0f}",
+        ]
+
+    def step_bip(self, step: Step) -> tuple[str, str, int | None]:
+        """A slice of the BIP crawl; exit 75 leaves the queue to tomorrow."""
+        return self.judge_job(*self.process(step, self.bip_argv(step)))
+
     def step_reprocess(self, step: Step) -> tuple[str, str, int | None]:
         code, timed_out = self.process(step, reprocess_argv())
         state, reason, code = self.judge_job(code, timed_out)
@@ -1488,6 +1520,7 @@ class Night:
             ),
             "krs_paid": "koryta_scrape_krs_paid --scope fallback --max-calls "
             f"{self.args.paid_max_calls} (the key from {REJESTR_SECRET})",
+            "bip": "koryta_scrape_bip " + " ".join(self.bip_argv(step)[1:]),
             "reprocess": "koryta " + " ".join(reprocess_argv()[1:]),
             "tests": "pytest src/tests/pipelines",
             "outputs": "pytest -m e2e src/tests/e2e",

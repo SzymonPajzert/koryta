@@ -43,6 +43,8 @@ koryta_scrape_bip crawl \
   `partial`, so a later pass picks it up again.
 - `--depth` — link depth from each seed (default 4).
 - `--rate` — seconds between hits on one host (default 1.0).
+- `--max-minutes` — stop gracefully after this many minutes; exits 75 when work
+  remains, so the nightly step leaves the queue to the next night.
 - Registry bootstrap: runs automatically when `bip_hosts` is empty; the XML is
   cached (`--xml-cache`), reused unless `--refresh-registry`, and can be skipped
   with `--no-registry`.

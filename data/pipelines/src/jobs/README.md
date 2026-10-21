@@ -6,7 +6,8 @@
    through a Postgres frontier (robots, per-host rate limit, sha256 dedup)
 1. Writes documents to local `tar.gz` bundles; `BipUrlsClassified` and
    `BipDocumentsParsed` read them
-1. Not part of the nightly yet
+1. Runs as the `bip` step of `koryta_nightly` (a 60-minute slice; it stops with
+   exit 75 and leaves the rest to the next night)
 
 ## krs_scrape_bulletin
 1. Reads KRS bulletin for updates on dates we haven't scraped yet

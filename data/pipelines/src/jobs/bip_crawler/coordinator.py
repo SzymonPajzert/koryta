@@ -55,6 +55,8 @@ class CoordinatorOptions:
     request_timeout_s: float = 15.0
     user_agent: str = "KorytaBIPCrawler/0.1 (+http://koryta.pl/crawler)"
     max_doc_bytes: int = 60_000_000
+    #: Stop gracefully (flush bundles, exit 75) after this many seconds.
+    max_run_seconds: float | None = None
 
 
 @dataclass
@@ -93,6 +95,8 @@ class BipCoordinator:
         self._deferred: list[tuple[float, UrlRow]] = []
         self._ready: deque[UrlRow] = deque()
         self._stop = threading.Event()
+        #: Set when `max_run_seconds` stopped the run with work left.
+        self.timed_out = False
 
     # -- seeding -------------------------------------------------------------
     def _refill_active(self) -> None:
@@ -355,12 +359,21 @@ class BipCoordinator:
         with ThreadPoolExecutor(max_workers=self.options.workers) as pool:
             pending: dict[Future, UrlRow] = {}
             last_progress = time.monotonic()
+            deadline = (
+                last_progress + self.options.max_run_seconds
+                if self.options.max_run_seconds is not None
+                else None
+            )
             while not self._stop.is_set():
                 self._refill_active()
                 self._dispatch_deferred(pool, pending)
                 self._top_up(pool, pending)
                 if pending:
                     self._collect(pending)
+                if deadline is not None and time.monotonic() >= deadline:
+                    logger.warning("run budget reached: stopping gracefully")
+                    self.timed_out = True
+                    self._stop.set()
                 if time.monotonic() - last_progress >= PROGRESS_EVERY_S:
                     self._print_progress()
                     last_progress = time.monotonic()
