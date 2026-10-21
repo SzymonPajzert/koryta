@@ -4,7 +4,7 @@ import { readyForFullPage } from "./fullPage";
 import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
 
-/** The newsletter for readers without an account: the form under the call to
+/** The newsletter for readers without an account: the form above the call to
  * action on the home page, the page its confirmation mail links to, and
  * /wypisz for such a reader. Signed out, as such a reader always is.
  *

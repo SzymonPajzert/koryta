@@ -30,7 +30,7 @@ export const SUBSCRIBERS = "newsletterSubscribers";
 export const SUBSCRIBER_PREFIX = "sub_";
 
 /** Where the form is, as stored with the address and sent to Plausible as
- * the mail goals' `where`: under the call to action on the home page. */
+ * the mail goals' `where`: above the call to action on the home page. */
 export const newsletterSignupPlaces = ["home"] as const;
 
 export type NewsletterSignupPlace = (typeof newsletterSignupPlaces)[number];

@@ -96,11 +96,12 @@
        now rather than centred loose text, and the old nest stacked five
        paddings - this row, HomeSection's container, and the component's own. -->
   <HomeSection>
-    <MailNewsletterSignupForm class="mt-4 mt-md-6" />
+    <!-- The newsletter for readers without an account, asked first, above
+         the call to action. The gap goes under it, not over it: the section
+         already pads its top. Inside the section, so a signed-in reader, who
+         does not get the form, gets no empty gap either. -->
+    <MailNewsletterSignupForm class="mb-4 mb-md-6" />
     <CardCallToAction />
-    <!-- The newsletter for readers without an account, the second thing
-         asked after the call to action. Inside its section, so a signed-in
-         reader, who does not get the form, gets no empty gap either. -->
   </HomeSection>
   <!-- Last on the page, and it has to be: the feed keeps growing as the reader
        scrolls, so anything below it is pushed further away every time it does. -->

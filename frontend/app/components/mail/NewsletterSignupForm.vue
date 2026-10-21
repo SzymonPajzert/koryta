@@ -172,11 +172,10 @@ async function submit() {
 </script>
 
 <style scoped>
-/* In the frame the call to action above it has, so the two asks read as a
+/* In the frame the call to action under it has, so the two asks read as a
    pair (Szymon's pick of 2026-10-17 over a strip): the words on the left and
    the form on the right where there is room for both, one under the other on
-   a phone. A step below the call to action - 18px against its 20 - since this
-   is the second thing asked. */
+   a phone. A step below the call to action's title - 18px against its 20. */
 .newsletter-signup {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
