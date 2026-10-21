@@ -45,10 +45,19 @@ func newQuery(prefix, delimiter string) (*storage.Query, error) {
 }
 
 func (c *Client) ListObjects(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, error) {
+	return c.ListObjectsRange(ctx, prefix, "", "")
+}
+
+// ListObjectsRange lists the objects under prefix whose names are at or after
+// start and before end, in name order, as GCS lists them. An empty start or
+// end leaves that side open.
+func (c *Client) ListObjectsRange(ctx context.Context, prefix, start, end string) ([]*storage.ObjectAttrs, error) {
 	q, err := newQuery(prefix, "")
 	if err != nil {
 		return nil, err
 	}
+	q.StartOffset = start
+	q.EndOffset = end
 	var objects []*storage.ObjectAttrs
 	it := c.bucket.Objects(ctx, q)
 	for {
