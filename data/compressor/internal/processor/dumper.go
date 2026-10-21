@@ -21,6 +21,9 @@ import (
 
 type StorageClient interface {
 	ListObjects(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, error)
+	// ListObjectsRange lists the objects under prefix named at or after start
+	// and before end, in name order; an empty start or end leaves that side open.
+	ListObjectsRange(ctx context.Context, prefix, start, end string) ([]*storage.ObjectAttrs, error)
 	ListPrefixes(ctx context.Context, prefix string) ([]string, error)
 	ReadObject(ctx context.Context, name string) (io.ReadCloser, error)
 	WriteObject(ctx context.Context, name string) io.WriteCloser
@@ -168,7 +171,7 @@ func (d *Dumper) processHostname(ctx context.Context, hostname, today string) er
 
 	// List files for this hostname in the source bucket
 	sourcePrefix := fmt.Sprintf("%shostname=%s/", d.cfg.SourcePrefix, hostname)
-	sourceObjects, err := d.client.ListObjects(ctx, sourcePrefix)
+	sourceObjects, err := d.listSource(ctx, sourcePrefix, dumpObjects)
 	if err != nil {
 		return err
 	}
@@ -230,7 +233,7 @@ func (d *Dumper) processHostname(ctx context.Context, hostname, today string) er
 }
 
 func (d *Dumper) processHostnameIncremental(ctx context.Context, hostname, today, yesterday string) error {
-	maxDumpDate, err := d.getLatestIncrementalDumpDate(ctx, hostname)
+	archives, maxDumpDate, err := d.incrementalArchives(ctx, hostname)
 	if err != nil {
 		return err
 	}
@@ -259,7 +262,7 @@ func (d *Dumper) processHostnameIncremental(ctx context.Context, hostname, today
 
 	// List files for this hostname in the source bucket
 	sourcePrefix := fmt.Sprintf("%shostname=%s/", d.cfg.SourcePrefix, hostname)
-	sourceObjects, err := d.client.ListObjects(ctx, sourcePrefix)
+	sourceObjects, err := d.listSource(ctx, sourcePrefix, archives)
 	if err != nil {
 		return err
 	}
@@ -309,11 +312,13 @@ func (d *Dumper) processHostnameIncremental(ctx context.Context, hostname, today
 	return d.createTarGz(ctx, destPath, allFiles, indexContent)
 }
 
-func (d *Dumper) getLatestIncrementalDumpDate(ctx context.Context, hostname string) (string, error) {
+// incrementalArchives lists the hostname's from=/date= archives, and the date
+// the newest of them archives up to, "" when there is none.
+func (d *Dumper) incrementalArchives(ctx context.Context, hostname string) ([]*storage.ObjectAttrs, string, error) {
 	prefix := fmt.Sprintf("hostname=%s/from=", hostname)
 	objects, err := d.outClient.ListObjects(ctx, prefix)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	dumpRegex := regexp.MustCompile(`date=([^.]+)\.tar\.gz$`)
@@ -326,7 +331,7 @@ func (d *Dumper) getLatestIncrementalDumpDate(ctx context.Context, hostname stri
 			}
 		}
 	}
-	return maxDate, nil
+	return objects, maxDate, nil
 }
 
 func (d *Dumper) processDump(ctx context.Context, hostname, date string, files []FileInfo) error {

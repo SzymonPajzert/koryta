@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -73,6 +74,13 @@ type MockStorageClient struct {
 	// ErrClose fails Close, which is where GCS reports the outcome of an
 	// upload small enough to be sent in a single request.
 	ErrClose error
+	// ErrListFrom fails the ranged listings that start at a given name ("" for
+	// the first range).
+	ErrListFrom map[string]error
+	// Ranges is every ranged listing asked for, as [start, end].
+	Ranges [][2]string
+	// Listings counts the listings asked for in one go.
+	Listings atomic.Int32
 }
 
 func NewMockStorageClient() *MockStorageClient {
@@ -101,7 +109,28 @@ func (m *MockStorageClient) written() []string {
 	return append([]string(nil), m.WriteTracker...)
 }
 
+// ListObjects lists in name order, as GCS does.
 func (m *MockStorageClient) ListObjects(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, error) {
+	m.Listings.Add(1)
+	return m.list(prefix, "", "")
+}
+
+// ListObjectsRange keeps to GCS's offsets: start is in the range, end is not.
+func (m *MockStorageClient) ListObjectsRange(ctx context.Context, prefix, start, end string) ([]*storage.ObjectAttrs, error) {
+	m.mu.Lock()
+	m.Ranges = append(m.Ranges, [2]string{start, end})
+	err := m.ErrListFrom[start]
+	m.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return m.list(prefix, start, end)
+}
+
+func (m *MockStorageClient) list(prefix, start, end string) ([]*storage.ObjectAttrs, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -111,11 +140,18 @@ func (m *MockStorageClient) ListObjects(ctx context.Context, prefix string) ([]*
 
 	var results []*storage.ObjectAttrs
 	for name, attr := range m.Objects {
-		if strings.HasPrefix(name, prefix) {
+		if strings.HasPrefix(name, prefix) && name >= start && (end == "" || name < end) {
 			results = append(results, attr)
 		}
 	}
+	sort.Slice(results, func(i, j int) bool { return results[i].Name < results[j].Name })
 	return results, nil
+}
+
+func (m *MockStorageClient) ranges() [][2]string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([][2]string(nil), m.Ranges...)
 }
 
 func (m *MockStorageClient) ListPrefixes(ctx context.Context, prefix string) ([]string, error) {

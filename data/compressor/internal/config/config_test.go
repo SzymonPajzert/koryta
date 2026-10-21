@@ -22,6 +22,7 @@ func TestParse(t *testing.T) {
 		"-source-prefix", "raw/",
 		"-hostname", "rejestr.io",
 		"-dry-run",
+		"-listing-ranges", "4",
 	}
 
 	cfg := Parse()
@@ -44,6 +45,9 @@ func TestParse(t *testing.T) {
 	if !cfg.DryRun {
 		t.Errorf("expected DryRun to be true")
 	}
+	if cfg.ListingRanges != 4 {
+		t.Errorf("expected listing-ranges 4, got %d", cfg.ListingRanges)
+	}
 }
 
 func TestParseDefaultOutBucket(t *testing.T) {
@@ -65,5 +69,8 @@ func TestParseDefaultOutBucket(t *testing.T) {
 	// out-bucket should default to bucket if not provided
 	if cfg.OutBucket != "same-bucket" {
 		t.Errorf("expected out-bucket to fallback to same-bucket, got %s", cfg.OutBucket)
+	}
+	if cfg.ListingRanges != 16 {
+		t.Errorf("expected 16 listing ranges by default, got %d", cfg.ListingRanges)
 	}
 }
