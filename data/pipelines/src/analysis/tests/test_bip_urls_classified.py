@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from analysis.bip_urls_classified import (
+    _key,
+    _seed_from_existing,
     best_anchor,
     load_model,
     predict,
@@ -16,6 +21,35 @@ def test_tag_names_replaces_person_name_runs() -> None:
 def test_best_anchor_drops_boilerplate_labels() -> None:
     assert best_anchor("Pobierz (PDF)") == ""
     assert best_anchor("Pobierz (PDF) | uchwała nr 5/2024") == "uchwała nr 5/2024"
+
+
+def test_seed_from_existing_keeps_current_version_rows(tmp_path: Path) -> None:
+    final = tmp_path / "bip_urls_classified.jsonl"
+    current_url = "https://bip.x.pl/a.pdf"
+    current = {"url": current_url, "model_version": 3}
+    stale = {"url": "https://bip.x.pl/b.pdf", "model_version": 2}
+    final.write_text(json.dumps(current) + "\n" + json.dumps(stale) + "\n")
+    temp = tmp_path / "bip_urls_classified.jsonl.tmp"
+
+    keys, kept = _seed_from_existing(final, temp, 3, force=False)
+
+    assert kept == 1
+    assert keys == {_key(current_url)}
+    # The stale row is dropped, so its URL is classified again.
+    assert temp.read_text() == json.dumps(current) + "\n"
+
+
+def test_seed_from_existing_forced_starts_empty(tmp_path: Path) -> None:
+    final = tmp_path / "bip_urls_classified.jsonl"
+    final.write_text(
+        json.dumps({"url": "https://bip.x.pl/a.pdf", "model_version": 3}) + "\n"
+    )
+    temp = tmp_path / "bip_urls_classified.jsonl.tmp"
+
+    keys, kept = _seed_from_existing(final, temp, 3, force=True)
+
+    assert (keys, kept) == (set(), 0)
+    assert not temp.exists()
 
 
 def test_predict_uses_path_section_words() -> None:

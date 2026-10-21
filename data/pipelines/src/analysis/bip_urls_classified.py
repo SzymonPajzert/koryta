@@ -5,10 +5,16 @@ and the anchor text captured at crawl time (``bip_urls.anchor_text``), with
 person names replaced by a ``<NAME>`` token. The token weights are trained
 offline on 1,000 content-labelled documents (``bip_url_categories.json``) and
 combined with a small curated keyword list, so the model stays inspectable.
+
+A rerun reuses the rows already written for the current model version and only
+classifies URLs that are new (or were classified by an older model);
+``--bip-force-classify`` recomputes every row.
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import math
 import re
@@ -140,6 +146,56 @@ def load_model() -> dict[str, Any]:
     return json.loads(MODEL_PATH.read_text(encoding="utf-8"))
 
 
+def _key(url: str) -> int:
+    """A compact, stable key for one URL (64-bit blake2b)."""
+    return int.from_bytes(
+        hashlib.blake2b(url.encode("utf-8"), digest_size=8).digest(), "big"
+    )
+
+
+def _seed_from_existing(
+    final: Path, temp: Path, version: int, *, force: bool
+) -> tuple[set[int], int]:
+    """Copy current-version rows into `temp`; return their keys and count.
+
+    Rows classified by an older model are dropped, so their URLs are
+    classified again. `force` ignores the existing output entirely.
+    """
+    if force or not final.exists():
+        return set(), 0
+    keys: set[int] = set()
+    kept = 0
+    with final.open(encoding="utf-8") as src, temp.open("a", encoding="utf-8") as dst:
+        for line in src:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            url = row.get("url")
+            if not isinstance(url, str) or int(row.get("model_version", -1)) != version:
+                continue
+            dst.write(line)
+            keys.add(_key(url))
+            kept += 1
+    return keys, kept
+
+
+def add_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the BIP classification flags on a parser."""
+    parser.add_argument(
+        "--bip-force-classify",
+        action="store_true",
+        help="Classify every document URL again, ignoring the existing output.",
+    )
+
+
+@cache
+def _args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    return parser.parse_known_args()[0]
+
+
 def predict(
     model: dict[str, Any],
     url: str,
@@ -193,8 +249,21 @@ class BipUrlsClassified(IncrementalJsonlPipeline[BipUrlClassified]):
         return BipUrlClassified
 
     def process(self, ctx: Context) -> pd.DataFrame:
+        options = _args()
         model = load_model()
+        version = int(model["version"])
         self.prepare_temp_output()
+        keys, kept = _seed_from_existing(
+            self.final_output_path,
+            self.temp_output_path,
+            version,
+            force=options.bip_force_classify,
+        )
+        if kept:
+            print(f"reusing {kept:,} classified URLs")
+        # The dumper only appends after its first flush; force that so the
+        # seeded rows survive when fewer than --dump-every rows are new.
+        ctx.io.dumper.flush()  # type: ignore[attr-defined]
         pg = PostgresClient.from_env(max_size=2)
         try:
             total_row = pg.fetchone("SELECT count(*) FROM bip_urls WHERE kind='doc'")
@@ -217,6 +286,8 @@ class BipUrlsClassified(IncrementalJsonlPipeline[BipUrlClassified]):
                         break
                     last = batch[-1]
                     for url, nodes, anchors in _chain_rows(pg, batch):
+                        if _key(url) in keys:
+                            continue
                         category, score, runner_up = predict(
                             model, url, "", "", nodes, anchors
                         )
@@ -226,7 +297,7 @@ class BipUrlsClassified(IncrementalJsonlPipeline[BipUrlClassified]):
                             category=category,
                             score=score,
                             runner_up=runner_up,
-                            model_version=int(model["version"]),
+                            model_version=version,
                         )
                         ctx.io.dumper.insert_into(record, [])  # type: ignore[attr-defined]
                         emitted += 1
@@ -235,5 +306,5 @@ class BipUrlsClassified(IncrementalJsonlPipeline[BipUrlClassified]):
                     bar.update(len(batch))
         finally:
             pg.close()
-        print(f"classified: {emitted:,}")
+        print(f"classified: {emitted:,} new, {kept:,} reused")
         return pd.DataFrame()
