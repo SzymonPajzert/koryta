@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import pandas as pd
 
 from analysis.bip_documents_parsed import add_arguments as bip_parse_args
+from analysis.bip_urls_classified import add_arguments as bip_classify_args
 from conductor import setup_context
 from pipelines import PIPELINES
 from scrapers.article.pipelines import pipeline_utils as article_args
@@ -122,6 +123,7 @@ def get_args():
     wiki_dump_args.add_arguments(parser)
     cru_args.add_arguments(parser)
     bip_parse_args(parser)
+    bip_classify_args(parser)
     args, _ = parser.parse_known_args()
     return args
 
