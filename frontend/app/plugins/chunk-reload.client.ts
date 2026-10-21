@@ -35,5 +35,13 @@ export default defineNuxtPlugin(() => {
   // Cleared once a page has loaded and stayed up long enough to be usable, so
   // that a deploy a week from now still gets its one reload. On the failure
   // path the reload happens well before this, so the guard survives to catch it.
-  window.setTimeout(() => sessionStorage.removeItem(GUARD), 10_000);
+  //
+  // A page always has `sessionStorage`; a vitest file does not, once it has
+  // ended. Its nuxt environment deletes the global at teardown, but this timer
+  // is Node's and still fires, so a file that ended within ten seconds of
+  // booting the app failed the run with "sessionStorage is not defined"
+  // (AdminProcesy.test.ts, 2026-10-21).
+  window.setTimeout(() => {
+    if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(GUARD);
+  }, 10_000);
 });
