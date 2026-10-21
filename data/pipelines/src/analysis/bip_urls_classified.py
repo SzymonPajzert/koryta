@@ -285,9 +285,11 @@ class BipUrlsClassified(IncrementalJsonlPipeline[BipUrlClassified]):
                     if not batch:
                         break
                     last = batch[-1]
-                    for url, nodes, anchors in _chain_rows(pg, batch):
-                        if _key(url) in keys:
-                            continue
+                    # Only the unknown URLs need the (expensive) chain query.
+                    new_urls = [url for url in batch if _key(url) not in keys]
+                    for url, nodes, anchors in (
+                        _chain_rows(pg, new_urls) if new_urls else ()
+                    ):
                         category, score, runner_up = predict(
                             model, url, "", "", nodes, anchors
                         )
