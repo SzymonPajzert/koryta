@@ -10,8 +10,17 @@
     >
       <!-- Not `text-primary`. Sage on white is 1.85:1, and this is the
            person's name - the one thing on the card a reader has to be able
-           to read. Default ink, with the underline kept for the hover. -->
-      <NuxtLink :to="`/osoba/${person.id}`" class="person-link" target="_blank">
+           to read. Default ink, with the underline kept for the hover.
+           The url with the name in it, built here rather than left to the
+           page's slug healing: that runs on the server, which reads the node
+           with no token, so for a page still awaiting review it got a 404 and
+           the tab stayed on a bare `/osoba/<id>`. A published page was
+           healed, at the cost of a 302 on every click. -->
+      <NuxtLink
+        :to="generateEntityUrl('person', person.id, person.name)"
+        class="person-link"
+        target="_blank"
+      >
         {{ person.name }}
       </NuxtLink>
       <PartyChip
@@ -61,6 +70,7 @@
 import { mdiGoogle } from "@mdi/js";
 import { toRef } from "vue";
 import type { PersonRich } from "~~/shared/model";
+import { generateEntityUrl } from "~/composables/slugs";
 import { usePersonSearch } from "~/composables/usePersonSearch";
 
 const props = withDefaults(
