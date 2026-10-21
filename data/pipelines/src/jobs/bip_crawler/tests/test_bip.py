@@ -606,6 +606,40 @@ def test_result_exception_releases_the_host(tmp_path: Path) -> None:
     assert bip_queue.hosts["bip.test"].status == "partial"
 
 
+def test_run_budget_marks_the_run_timed_out(tmp_path: Path) -> None:
+    """max_run_seconds stops gracefully and says there is work left."""
+    bip_queue = FakeFrontier(
+        [
+            HostRow(
+                host="bip.test",
+                name="t",
+                source_url="https://bip.test/",
+                teryt="",
+                entry_count=1,
+            )
+        ]
+    )
+    store = LocalBundleStore(tmp_path / "out")
+    pages = _site_pages()
+
+    def fetch(url: str, timeout: float, user_agent: str) -> HttpResult:
+        content_type, content = pages[url]
+        return HttpResult(
+            url=url, status=200, content_type=content_type, content=content
+        )
+
+    coordinator = BipCoordinator(
+        cast("BipQueue", bip_queue),  # test double
+        store,
+        CoordinatorOptions(workers=1, rate_interval_s=0.0, max_run_seconds=0.0),
+        fetch=fetch,
+        robots_allowed=lambda url: True,
+    )
+    coordinator.run()
+
+    assert coordinator.timed_out
+
+
 def test_cross_host_is_a_seed_only_move(tmp_path: Path) -> None:
     """The seed may land on another host; a deeper redirect may not be adopted."""
     bip_queue = FakeFrontier(

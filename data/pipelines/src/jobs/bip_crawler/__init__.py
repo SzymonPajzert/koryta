@@ -28,6 +28,7 @@ from stores.bip_registry import download_subjects_xml
 from stores.web import RobotsCache
 
 USER_AGENT = "KorytaBIPCrawler/0.1 (+http://koryta.pl/crawler)"
+EXIT_TRY_LATER = 75
 DEFAULT_OUT = Path("bip_crawl_out")
 DEFAULT_XML_CACHE = Path("bip_crawl_out/registry/subjects.xml")
 
@@ -110,6 +111,7 @@ def cmd_crawl(args: argparse.Namespace) -> int:
         run_limit=args.hosts,
         max_active_hosts=args.max_active_hosts,
         user_agent=USER_AGENT,
+        max_run_seconds=args.max_minutes * 60 if args.max_minutes else None,
     )
     coordinator = BipCoordinator(
         bip_queue, store, options, robots_allowed=robots.allowed
@@ -119,7 +121,7 @@ def cmd_crawl(args: argparse.Namespace) -> int:
     finally:
         pg.close()
     print(json.dumps(stats.as_dict(), indent=2))
-    return 0
+    return EXIT_TRY_LATER if coordinator.timed_out else 0
 
 
 def repair_parts(
@@ -243,6 +245,12 @@ def build_parser() -> argparse.ArgumentParser:
     crawl.add_argument("--depth", type=int, default=4)
     crawl.add_argument(
         "--rate", type=float, default=1.0, help="seconds between hits on one host"
+    )
+    crawl.add_argument(
+        "--max-minutes",
+        type=float,
+        default=None,
+        help="stop gracefully after this many minutes (exit 75 when work remains)",
     )
     crawl.add_argument(
         "--no-repair",
