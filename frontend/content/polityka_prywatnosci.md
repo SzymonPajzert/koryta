@@ -40,7 +40,7 @@ Podstawa prawna: Prawnie uzasadniony interes Administratora (art. 6 ust. 1 lit. 
 
 ## 3. Jak długo przechowujemy Twoje dane?
 
-Dane przetwarzane na podstawie Twojej zgody (adres e-mail dla Newslettera) przechowujemy do momentu wycofania przez Ciebie tej zgody. Adres zapisany bez konta, którego zapisu nikt nie potwierdził, usuwamy po 7 dniach.
+Dane przetwarzane na podstawie Twojej zgody (adres e-mail dla Newslettera) przechowujemy do momentu wycofania przez Ciebie tej zgody. Adres zapisany bez konta, którego zapisu nikt nie potwierdził, usuwamy po 90 dniach.
 
 Adres e-mail używany do wiadomości dla zespołu przetwarzamy, dopóki masz uprawnienia administratora Serwisu albo do wniesienia przez Ciebie sprzeciwu.
 
