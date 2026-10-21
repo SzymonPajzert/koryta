@@ -21,8 +21,8 @@
         Newsletter koryta.pl
       </h2>
       <p class="newsletter-signup__lead">
-        Raz na jakiś czas napiszemy, kogo ostatnio znaleźliśmy na stanowiskach w
-        publicznych spółkach i gdzie przyda się pomoc. Konto nie jest potrzebne.
+        Śledź postępy projektu. Raz na miesiąc napiszemy, kogo ostatnio
+        znaleźliśmy i gdzie przyda się pomoc. Konto nie jest potrzebne.
       </p>
     </div>
 
