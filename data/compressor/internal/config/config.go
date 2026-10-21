@@ -15,6 +15,7 @@ type Config struct {
 	HostWorkers     int
 	DownloadWorkers int
 	CompressWorkers int
+	ListingRanges   int
 	CpuProfile      string
 	MemProfile      string
 }
@@ -31,6 +32,7 @@ func Parse() *Config {
 	flag.IntVar(&cfg.HostWorkers, "host-workers", 5, "Number of concurrent hostnames to process")
 	flag.IntVar(&cfg.DownloadWorkers, "download-workers", 10, "Number of concurrent file downloads per dump")
 	flag.IntVar(&cfg.CompressWorkers, "compress-workers", 5, "Number of concurrent dump generations per hostname")
+	flag.IntVar(&cfg.ListingRanges, "listing-ranges", 16, "List a big hostname as this many name ranges at once, split where its archives' index.txt says (1 lists it in one go)")
 	flag.StringVar(&cfg.CpuProfile, "cpuprofile", "", "Write cpu profile to file")
 	flag.StringVar(&cfg.MemProfile, "memprofile", "", "Write memory profile to file")
 
