@@ -1489,7 +1489,6 @@ class Night:
             "krs_paid": "koryta_scrape_krs_paid --scope fallback --max-calls "
             f"{self.args.paid_max_calls} (the key from {REJESTR_SECRET})",
             "reprocess": "koryta " + " ".join(reprocess_argv()[1:]),
-
             "tests": "pytest src/tests/pipelines",
             "outputs": "pytest -m e2e src/tests/e2e",
             "invariants": "pytest -m e2e src/tests/pipelines (tonight's export)",
