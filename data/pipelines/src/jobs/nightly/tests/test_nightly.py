@@ -32,7 +32,6 @@ GOOD = {
     "koryta_krs_register_owners": 0,
     "koryta_krs_odpis": 0,
     "koryta_scrape_krs_paid": 0,
-    "koryta_scrape_bip": 0,
     "koryta": 0,
     # The companies step runs the people import too, with one flag more.
     "koryta_people_import --companies-only": 0,
@@ -266,7 +265,6 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "koryta_krs_register_owners",
         "koryta_krs_odpis",
         "koryta_scrape_krs_paid",
-        "koryta_scrape_bip",
         "koryta",
         "pytest tests",
         "pytest outputs",
@@ -573,25 +571,6 @@ def test_what_the_paid_step_leaves_or_breaks_does_not_hold_the_people(world):
 
     assert world.steps()["krs_paid"] == ("failed", "kod wyjścia 1")
     assert world.steps()["people"] == ("succeeded", "")
-
-
-def test_the_bip_step_crawls_a_slice_and_leaves_the_rest(world):
-    assert night.main(["--only", "bip"]) == 0
-
-    argv, _ = world.command("koryta_scrape_bip")
-    assert argv[1] == "crawl"
-    # Inside the step's 60 minutes, so the crawler stops itself, flushes the
-    # bundles and reports, rather than being killed by the step's timeout.
-    assert argv[argv.index("--max-minutes") + 1] == "58"
-    assert world.steps()["bip"] == ("succeeded", "")
-
-    world.commands.clear()
-    world.objects.clear()
-    world.codes["koryta_scrape_bip"] = night.EXIT_TRY_LATER
-
-    assert night.main(["--only", "bip"]) == 0
-
-    assert world.steps()["bip"] == ("partial", "zostało na następny raz")
 
 
 def test_the_register_reads_the_days_new_registrations_and_no_backlog(world):

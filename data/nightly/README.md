@@ -26,7 +26,6 @@ order, each with a time limit and its output in the night's log:
 | `krs_register` | `koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25`: who owns each newly registered company                                |
 | `krs_odpis`    | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing public --max 300`: odpisy pełne, see below                                 |
 | `krs_paid`     | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give                                      |
-| `bip`          | `koryta_scrape_bip crawl --max-minutes 58`: a 60-minute slice of the BIP crawl; exit 75 leaves the queue to the next night                          |
 | `rebuild_held` | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)                                     |
 | `reprocess`    | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch and the slow static sources (`HELD`)                            |
 | `tests`        | `pytest src/tests/pipelines` over the night's outputs                                                                                              |
