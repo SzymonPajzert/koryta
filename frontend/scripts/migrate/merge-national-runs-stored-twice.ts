@@ -1,19 +1,24 @@
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import type { Firestore } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import {
-  edgeRelation,
   isDistrictOffice,
   isSameRun,
   misfiledRunOf,
   type EdgeLike,
 } from "../../server/utils/edges";
 import {
-  createRevisionTransaction,
-  sameStoredValue,
-  withoutInternalFields,
-} from "../../server/utils/revisions";
-import { recordAudit } from "../../server/utils/audit";
+  argValue,
+  byId,
+  disagree,
+  fold,
+  holdBack,
+  namesOf,
+  printPlans,
+  writeFold,
+  type RunPlan,
+  type SkippedRun,
+  type StoredEdge,
+} from "./fold-candidacies";
 import { reportRemaining } from "./remaining";
 
 /**
@@ -102,32 +107,6 @@ import { reportRemaining } from "./remaining";
 
 const AUTHOR = "migration:merge-national-runs-stored-twice";
 
-/** One stored edge, as read. */
-export type StoredEdge = { id: string; data: Record<string, unknown> };
-
-/** What becomes of one run stored twice. */
-export type RunPlan = {
-  personId: string;
-  office: string;
-  startDate: string;
-  /** The region of the district's copy: the województwo the run belongs in. */
-  districtId: string;
-  /** The copy that stays. */
-  keep: string;
-  /** Where the kept copy was filed before, when it is the copy at home moving
-   * to the district; null when it is the district's copy, staying put. */
-  movedFrom: string | null;
-  /** Whether the kept copy is live, which it stays. */
-  published: boolean;
-  /** What the kept copy says once the run is folded into it, or null when it
-   * says that already and is not moving. */
-  data: Record<string, unknown> | null;
-  /** The fields the kept copy learns from the copies removed. */
-  learns: Record<string, unknown>;
-  /** The copies removed. */
-  remove: string[];
-};
-
 /** Why a run stored twice is left for a person rather than folded. */
 export type SkipReason =
   | "home in another województwo"
@@ -135,61 +114,6 @@ export type SkipReason =
   | "several district copies"
   | "copy fits two runs"
   | "draft would learn";
-
-export type SkippedRun = {
-  reason: SkipReason;
-  personId: string;
-  office: string;
-  startDate: string;
-  ids: string[];
-};
-
-function byId(a: StoredEdge, b: StoredEdge): number {
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-}
-
-/** A field with nothing in it, as the edit form and the ingest write nothing:
- * `field` in server/utils/edges.ts, and an empty list as well. */
-function blank(value: unknown): boolean {
-  return (
-    value === undefined ||
-    value === null ||
-    value === "" ||
-    value === false ||
-    (Array.isArray(value) && value.length === 0)
-  );
-}
-
-/** The fields no copy is folded over: which relation it is, and where. */
-const PLACE_FIELDS = new Set(["source", "target", "type"]);
-
-/** Whether two copies of a run say something different about one field each
- * of them fills in. `edgeRelation` answers it for the fields that say which
- * run it is and whether it was won; this covers the rest - a note or a source
- * a reviewer added to one copy is not dropped for the other's. */
-function disagree(
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
-): boolean {
-  if (
-    edgeRelation(a as EdgeLike, b as EdgeLike) === "conflict" ||
-    edgeRelation(b as EdgeLike, a as EdgeLike) === "conflict"
-  ) {
-    return true;
-  }
-  const left = withoutInternalFields(a);
-  const right = withoutInternalFields(b);
-  return Object.keys(left).some(
-    (key) =>
-      !PLACE_FIELDS.has(key) &&
-      !blank(left[key]) &&
-      !blank(right[key]) &&
-      // The pipeline's committee in whatever case that year's file had is
-      // the same committee; `edgeRelation` already compared it folded.
-      key !== "committee" &&
-      !sameStoredValue(left[key], right[key]),
-  );
-}
 
 /** What to do with every run stored twice among `edges`: the person's
  * candidacies, read whole. Pure, so the dry run, the run and the tests reason
@@ -326,33 +250,9 @@ export function planRuns(
         continue;
       }
 
-      const liveHome = homes.find((home) => home.data.published === true);
-      const keep =
-        district.data.published === true || !liveHome ? district : liveHome;
-      const removed = copies.filter((copy) => copy !== keep);
-
-      const before = withoutInternalFields(keep.data);
-      const after: Record<string, unknown> = {
-        ...before,
-        target: district.data.target,
-      };
-      const learns: Record<string, unknown> = {};
-      for (const copy of [district, ...homes]) {
-        if (copy === keep) continue;
-        for (const [key, value] of Object.entries(
-          withoutInternalFields(copy.data),
-        )) {
-          if (PLACE_FIELDS.has(key) || blank(value) || !blank(after[key])) {
-            continue;
-          }
-          after[key] = value;
-          learns[key] = value;
-        }
-      }
-      const data = sameStoredValue(after, before) ? null : after;
-      const published = keep.data.published === true;
-      if (!published && Object.keys(learns).length > 0) {
-        skip("draft would learn");
+      const folded = fold(district, homes);
+      if (folded === "draft would learn") {
+        skip(folded);
         continue;
       }
 
@@ -360,13 +260,8 @@ export function planRuns(
         personId,
         office,
         startDate,
-        districtId: String(district.data.target),
-        keep: keep.id,
-        movedFrom: keep === district ? null : String(keep.data.target),
-        published,
-        data,
-        learns,
-        remove: removed.map((copy) => copy.id),
+        placeId: String(district.data.target),
+        ...folded,
       });
     }
   }
@@ -381,18 +276,6 @@ export function removalReason(plan: RunPlan): string {
     "była zapisana dwa razy, pod miejscem zamieszkania kandydata i pod " +
     `województwem okręgu. Zostaje powiązanie ${plan.keep}.`
   );
-}
-
-function argValue(flag: string): string | undefined {
-  const index = process.argv.indexOf(flag);
-  if (index === -1) return undefined;
-  return process.argv[index + 1];
-}
-
-/** The revisions written onto one edge, by id. */
-async function revisionsOf(db: Firestore, edgeId: string) {
-  return (await db.collection("revisions").where("node_id", "==", edgeId).get())
-    .docs;
 }
 
 async function main() {
@@ -442,128 +325,28 @@ async function main() {
     (regionId) => teryts.get(String(regionId)),
   );
   const stored = new Map(edges.docs.map((doc) => [doc.id, doc.data()]));
-
-  // What only reading more than the candidacies can tell: a revision waiting
-  // on the live copy that moves, votes cast on a copy that goes, a fact
-  // promoted into one. Each holds its run back rather than being guessed at.
-  const pendingOnRemoved = new Map<string, string[]>();
-  const held: { plan: RunPlan; why: string }[] = [];
-  const ready: RunPlan[] = [];
-  for (const plan of plans.slice(0, limit)) {
-    let why: string | undefined;
-    if (plan.movedFrom) {
-      const waiting = (await revisionsOf(db, plan.keep)).filter(
-        (doc) => doc.data().status === "pending",
-      );
-      if (waiting.length > 0) {
-        why = `the copy that moves holds ${waiting.length} revision(s) waiting for review`;
-      }
-    }
-    for (const id of plan.remove) {
-      if (why) break;
-      const votes = stored.get(id)?.votes;
-      if (votes && Object.keys(votes).length > 0) {
-        why = `${id} carries votes`;
-        break;
-      }
-      const promoted = await db
-        .collection("extractions")
-        .where("promotedEdgeIds", "array-contains", id)
-        .limit(1)
-        .get();
-      if (!promoted.empty) {
-        why = `a fact was promoted into ${id}`;
-        break;
-      }
-      pendingOnRemoved.set(
-        id,
-        (await revisionsOf(db, id))
-          .filter((doc) => doc.data().status === "pending")
-          .map((doc) => doc.id),
-      );
-    }
-    if (why) held.push({ plan, why });
-    else ready.push(plan);
-  }
-
-  const people = new Map<string, string>();
-  const personIds = [
-    ...new Set([...plans, ...skipped].map((run) => run.personId)),
-  ];
-  for (let i = 0; i < personIds.length; i += 100) {
-    const docs = await db.getAll(
-      ...personIds
-        .slice(i, i + 100)
-        .map((id) => db.collection("nodes").doc(id)),
-    );
-    for (const doc of docs) {
-      people.set(doc.id, String(doc.data()?.name ?? doc.id));
-    }
-  }
-  const place = (id: string | null) => (id ? (regionNames.get(id) ?? id) : "");
-
-  const moved = ready.filter((plan) => plan.movedFrom);
-  const removedCount = ready.reduce((n, plan) => n + plan.remove.length, 0);
-  const rejectedCount = ready.reduce(
-    (n, plan) =>
-      n +
-      plan.remove.reduce(
-        (m, id) => m + (pendingOnRemoved.get(id)?.length ?? 0),
-        0,
-      ),
-    0,
+  const { ready, held, pendingOnRemoved } = await holdBack(
+    db,
+    plans.slice(0, limit),
+    stored,
   );
-  console.info(
-    `\n${plans.length} runs stored twice${plans.length > ready.length + held.length ? `, the first ${limit} taken` : ""}:`,
+  const people = await namesOf(
+    db,
+    [...plans, ...skipped].map((run) => run.personId),
   );
-  console.info(
-    `  ${ready.length - moved.length} keep the district's copy and remove the one at home`,
+  const { removed } = printPlans(
+    plans,
+    ready,
+    held,
+    skipped,
+    pendingOnRemoved,
+    people,
+    regionNames,
+    limit,
   );
-  console.info(
-    `  ${moved.length} keep the live copy at home, move it to the district and remove the draft there`,
-  );
-  console.info(
-    `  ${removedCount} copies to remove, ${rejectedCount} revisions waiting on them to reject`,
-  );
-  for (const plan of ready) {
-    const learnt = Object.entries(plan.learns)
-      .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-      .join(", ");
-    console.info(
-      `  ${people.get(plan.personId) ?? plan.personId} (${plan.personId}) ` +
-        `${plan.startDate.slice(0, 4)} ${plan.office}: keep ${plan.keep}` +
-        (plan.movedFrom
-          ? ` [${plan.published ? "live" : "draft"}], moved ${place(plan.movedFrom)} -> ${place(plan.districtId)}`
-          : ` [${plan.published ? "live" : "draft"}] in ${place(plan.districtId)}`) +
-        `; remove ${plan.remove.join(", ")}` +
-        (learnt ? `; learns ${learnt}` : ""),
-    );
-  }
-
-  const byReason = new Map<string, SkippedRun[]>();
-  for (const run of skipped) {
-    byReason.set(run.reason, [...(byReason.get(run.reason) ?? []), run]);
-  }
-  if (skipped.length > 0 || held.length > 0) {
-    console.info(`\nLeft for a person:`);
-  }
-  for (const [reason, runs] of byReason) {
-    console.info(`  ${runs.length} ${reason}`);
-    for (const run of runs) {
-      console.info(
-        `    ${people.get(run.personId) ?? run.personId} (${run.personId}) ` +
-          `${run.startDate.slice(0, 4)} ${run.office}: ${run.ids.join(", ")}`,
-      );
-    }
-  }
-  for (const { plan, why } of held) {
-    console.info(
-      `  held: ${plan.personId} ${plan.startDate.slice(0, 4)} ${plan.office}: ${why}`,
-    );
-  }
 
   if (!commit) {
-    reportRemaining({ runs: ready.length, removed: removedCount });
+    reportRemaining({ runs: ready.length, removed });
     console.info("\nDry run. Re-run with --commit to apply.");
     return;
   }
@@ -571,79 +354,19 @@ async function main() {
   // One batch per run, so no run is left half-folded: a failure stops the
   // script with every run before it whole, and a re-run finishes the job
   // because a folded run has one copy left.
-  const user = { uid: AUTHOR };
   let done = 0;
   for (const plan of ready) {
     const batch = db.batch();
-    const keepStored = stored.get(plan.keep)!;
-    if (plan.data) {
-      createRevisionTransaction(
-        db,
-        batch,
-        user,
-        db.collection("edges").doc(plan.keep),
-        plan.data,
-        // Approved, as the correction it is; `stored` carries `published`
-        // and the rest of what the document owns across.
-        { automatic: true, approve: true, stored: keepStored },
-      );
-    }
-    const reason = removalReason(plan);
-    for (const id of plan.remove) {
-      const removed = stored.get(id)!;
-      // Withheld so this revision is the one that states them, as in
-      // /api/edges/delete.
-      const {
-        deleted: _wasDeleted,
-        delete_reason: _oldReason,
-        ...carried
-      } = removed;
-      const { revisionRef } = createRevisionTransaction(
-        db,
-        batch,
-        user,
-        db.collection("edges").doc(id),
-        {
-          ...withoutInternalFields(removed),
-          deleted: true,
-          delete_reason: reason,
-        },
-        { stored: carried, approve: true, published: false },
-      );
-      recordAudit(
-        db,
-        {
-          action: "delete",
-          collection: "edges",
-          target_id: id,
-          revision_id: revisionRef.id,
-          user: AUTHOR,
-          reason,
-        },
-        batch,
-      );
-      const rejectReason = `Zastąpiona: ta sama kandydatura jest w powiązaniu ${plan.keep}.`;
-      for (const revisionId of pendingOnRemoved.get(id) ?? []) {
-        batch.update(db.collection("revisions").doc(revisionId), {
-          status: "rejected",
-          reject_reason: rejectReason,
-          review_user: AUTHOR,
-          review_time: Timestamp.now(),
-        });
-        recordAudit(
-          db,
-          {
-            action: "reject",
-            collection: "edges",
-            target_id: id,
-            revision_id: revisionId,
-            user: AUTHOR,
-            reason: rejectReason,
-          },
-          batch,
-        );
-      }
-    }
+    writeFold(
+      db,
+      batch,
+      AUTHOR,
+      plan,
+      stored,
+      pendingOnRemoved,
+      removalReason(plan),
+      `Zastąpiona: ta sama kandydatura jest w powiązaniu ${plan.keep}.`,
+    );
     await batch.commit();
     done++;
   }
