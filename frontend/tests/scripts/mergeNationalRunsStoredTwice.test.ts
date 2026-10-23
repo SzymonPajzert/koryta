@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   planRuns,
   removalReason,
-  type RunPlan,
-  type StoredEdge,
 } from "../../scripts/migrate/merge-national-runs-stored-twice";
+import type {
+  RunPlan,
+  StoredEdge,
+} from "../../scripts/migrate/fold-candidacies";
 
 const TERYTS: Record<string, string> = {
   teryt10: "10",
@@ -74,7 +76,7 @@ describe("planRuns", () => {
       office: "Sejm",
       keep: "vXyTHf5fBR3A5g8e7G6t",
       movedFrom: "teryt1061",
-      districtId: "teryt10",
+      placeId: "teryt10",
       published: true,
       remove: ["edge_sobczak_teryt10_election_L8EZlPsKS1"],
       learns: { committee: TRZECIA_DROGA },
