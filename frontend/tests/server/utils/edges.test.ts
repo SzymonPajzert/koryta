@@ -10,6 +10,8 @@ import {
   findEdgeMatches,
   findEdges,
   findEdge,
+  isSameRun,
+  misfiledRunOf,
   preferredCopy,
   type EdgeCopy,
   type EdgeLike,
@@ -565,5 +567,167 @@ describe("findEdgeMatches", () => {
     expect(same).toEqual(["stored-0"]);
     expect(enrichable).toEqual([]);
     expect(documents.get("stored-0")).toEqual(spell);
+  });
+});
+
+describe("misfiledRunOf", () => {
+  /** Michał Jerzy Sobczak's 2023 Sejm run as the pipeline places it now:
+   * district 9, filed under łódzkie. */
+  const inDistrict: EdgeLike = {
+    source: "p",
+    target: "teryt10",
+    type: "election",
+    name: "kandydatura",
+    position: "Sejm",
+    start_date: "2023-01-01",
+    committee:
+      "KOALICYJNY KOMITET WYBORCZY TRZECIA DROGA POLSKA 2050 SZYMONA HOŁOWNI - POLSKIE STRONNICTWO LUDOWE",
+  };
+  /** The same run as the June upload filed it: under Łódź, where PKW's list
+   * says he lives. */
+  const atHome: EdgeLike = {
+    source: "p",
+    target: "teryt1061",
+    type: "election",
+    name: "kandydatura",
+    position: "Sejm",
+    start_date: "2023-01-01",
+  };
+
+  it("takes a Sejm run filed under the candidate's home for the district's", () => {
+    expect(misfiledRunOf(atHome, "1061", inDistrict, "10")).toBe(true);
+    // A gmina inside the województwo is as much a home as a powiat.
+    expect(misfiledRunOf(atHome, "106101", inDistrict, "10")).toBe(true);
+    expect(
+      misfiledRunOf(
+        { ...atHome, position: "Senat" },
+        "1061",
+        { ...inDistrict, position: "Senat" },
+        "10",
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves a copy filed under a województwo, where a district is", () => {
+    expect(misfiledRunOf(atHome, "10", inDistrict, "10")).toBe(false);
+    expect(misfiledRunOf(atHome, "14", inDistrict, "10")).toBe(false);
+  });
+
+  it("leaves a Sejm run at a home outside the district's województwo", () => {
+    // Warszawa: a namesake's run as likely as this one, and two places in one
+    // election for a reviewer to look at.
+    expect(misfiledRunOf(atHome, "1465", inDistrict, "10")).toBe(false);
+  });
+
+  it("takes a European run from a home anywhere, as it always did", () => {
+    // District 13 is lubuskie and zachodniopomorskie, filed under lubuskie,
+    // where its seat is: a home in Szczecin lies outside that województwo
+    // and inside the district.
+    const european = {
+      ...inDistrict,
+      position: "Parlament Europejski",
+      start_date: "2019-01-01",
+    };
+    const home = {
+      ...atHome,
+      position: "Parlament Europejski",
+      start_date: "2019-01-01",
+    };
+    expect(misfiledRunOf(home, "3262", european, "08")).toBe(true);
+  });
+
+  it("never takes another office's run, nor another year's", () => {
+    expect(
+      misfiledRunOf(
+        { ...atHome, position: "Samorząd" },
+        "1061",
+        inDistrict,
+        "10",
+      ),
+    ).toBe(false);
+    expect(
+      misfiledRunOf(
+        { ...atHome, start_date: "2019-01-01" },
+        "1061",
+        inDistrict,
+        "10",
+      ),
+    ).toBe(false);
+    // Nor anything for a local office, which a powiat is the place of.
+    expect(
+      misfiledRunOf(
+        { ...atHome, position: "Samorząd", start_date: "2024-01-01" },
+        "1061",
+        { ...inDistrict, position: "Sejmik", start_date: "2024-01-01" },
+        "10",
+      ),
+    ).toBe(false);
+  });
+
+  it("leaves a run another committee stood, and a removed copy", () => {
+    expect(
+      misfiledRunOf(
+        { ...atHome, committee: "KOMITET WYBORCZY KONFEDERACJA" },
+        "1061",
+        inDistrict,
+        "10",
+      ),
+    ).toBe(false);
+    expect(
+      misfiledRunOf(
+        { ...atHome, deleted: true } as EdgeLike,
+        "1061",
+        inDistrict,
+        "10",
+      ),
+    ).toBe(false);
+  });
+
+  it("takes a copy with no office only in a year that held nothing else", () => {
+    const { position: _, ...officeless } = atHome;
+    // 2023 had only the Sejm's and the Senate's: Hubert Papaj's bare run under
+    // Jelenia Góra.
+    expect(
+      misfiledRunOf(
+        officeless,
+        "0261",
+        { ...inDistrict, target: "teryt02" },
+        "02",
+      ),
+    ).toBe(true);
+    expect(
+      misfiledRunOf({ ...officeless, position: "" }, "1061", inDistrict, "10"),
+    ).toBe(true);
+    // 2019 had the European one as well, so a bare 2019 run could be either.
+    const sejm2019 = { ...inDistrict, start_date: "2019-01-01" };
+    expect(
+      misfiledRunOf(
+        { ...officeless, start_date: "2019-01-01" },
+        "1061",
+        sejm2019,
+        "10",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("isSameRun", () => {
+  const sejm: EdgeLike = {
+    source: "p",
+    target: "teryt10",
+    type: "election",
+    position: "Sejm",
+    start_date: "2023-01-01",
+  };
+
+  it("is the same office in the same year, wherever it is filed", () => {
+    expect(isSameRun({ ...sejm, target: "teryt1061" }, sejm)).toBe(true);
+    expect(isSameRun({ ...sejm, position: "Senat" }, sejm)).toBe(false);
+    expect(isSameRun({ ...sejm, start_date: "2019-01-01" }, sejm)).toBe(false);
+  });
+
+  it("takes a stated day for another date, as the identity does", () => {
+    // A reviewer's correction is theirs to reconcile, not this rule's.
+    expect(isSameRun({ ...sejm, start_date: "2023-10-15" }, sejm)).toBe(false);
   });
 });

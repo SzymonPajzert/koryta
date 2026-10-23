@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Edge } from "~~/shared/model";
+import { electionKind, electionKindsIn } from "../../shared/electionDays";
 
 /** What kind of assertion an edge type makes, which is what decides when two of
  * them are the same fact.
@@ -489,6 +490,100 @@ export function addsOnlyRecordedFacts(
     (annotations.some(adds) || discriminators.some(named)) &&
     !discriminators.some(adds)
   );
+}
+
+/** The offices a whole district elects: the Sejm, the Senate and the European
+ * Parliament. The pipeline files each such run under the województwo its
+ * district lies in (the seat's, for a European district spanning two), never
+ * under a powiat or a gmina. */
+const DISTRICT_OFFICES: ReadonlySet<string> = new Set([
+  "Sejm",
+  "Senat",
+  "Parlament Europejski",
+]);
+
+/** Whether a candidacy's office is one a whole district elects. */
+export function isDistrictOffice(position: unknown): position is string {
+  return typeof position === "string" && DISTRICT_OFFICES.has(position);
+}
+
+/** Whether a stored candidacy is a copy of the run `incoming` states, as far as
+ * the year and the office tell: the same office in the same year, or no office
+ * at all in a year that held no other kind of election than that one.
+ *
+ * 1,549 live candidacies had no office on the 2026-10-15 export: uploads from
+ * before the ingest wrote one, and hand-made ones whose form left it empty. A
+ * 2023 one of those can only be a parliamentary run, because 2023 held
+ * nothing else; a 2019 one could be the Sejm's or the European Parliament's,
+ * and is not taken for either (`electionKindsIn`). Nobody stands for the Sejm
+ * and the Senate in one election, so a parliamentary year's office-less copy is
+ * whichever of the two the payload says. */
+export function isSameRun(stored: EdgeLike, incoming: EdgeLike): boolean {
+  if (!incoming.start_date || stored.start_date !== incoming.start_date) {
+    return false;
+  }
+  const office = field(stored, "position");
+  if (office !== null) return office === incoming.position;
+  const kind = electionKind(incoming.position);
+  const held = electionKindsIn(String(incoming.start_date).slice(0, 4));
+  return kind !== null && held.length === 1 && held[0] === kind;
+}
+
+/** Whether `stored`, filed under the region coded `storedTeryt`, is the run
+ * `incoming` places under its district's województwo (`districtTeryt`), filed
+ * under the candidate's home instead.
+ *
+ * Every upload before 2026-07-30 could file a run under the place PKW's list
+ * gives as the candidate's home: the merge kept that code and the district's in
+ * one list that did not keep its order, and everything took the first of them
+ * (df49f43e, "File a candidacy where it was run, not where the candidate
+ * lives"). The pipeline has filed the run under its district since, and the
+ * ingest, which looks for a stored candidacy under the payload's region only,
+ * could not see the copy at home - so it stored the run a second time beside
+ * it. 168 runs were stored twice that way on the 2026-10-23 export, and Michał
+ * Jerzy Sobczak's 2023 Sejm run, live under Łódź beside a draft under
+ * łódzkie, is how it was noticed.
+ *
+ * - The office is one a whole district elects, and the copy is that run
+ *   (`isSameRun`).
+ * - The copy is filed below a województwo. One under a województwo is where
+ *   its district is.
+ * - For the Sejm and the Senate, the copy's place lies inside the district's
+ *   województwo, as a district does. A copy anywhere else could as well be the
+ *   run of a namesake whose PKW record was joined to the person's, and a page
+ *   standing in two województwa in one election is for a reviewer to look at
+ *   (`shared/twoPlaces.ts`). A European district is one or two whole
+ *   województwa and is filed under its seat's, so a European run is taken from
+ *   any home, as it always was.
+ * - Nothing about the two disagrees (`edgeRelation`): a committee or a party
+ *   that differs is somebody else's run. And a removed copy stays as its
+ *   reviewer left it.
+ *
+ * Shared by the ingest, which moves such a copy to the district instead of
+ * storing the run again (`moveMisfiledCandidacy` in
+ * server/api/ingest/person.post.ts), and by
+ * scripts/migrate/merge-national-runs-stored-twice.ts, which folds together the
+ * runs stored twice before it did. `_misfiled_candidacy` in
+ * data/pipelines/src/analysis/payloads/site.py is the planner's copy. */
+export function misfiledRunOf(
+  stored: EdgeLike,
+  storedTeryt: unknown,
+  incoming: EdgeLike,
+  districtTeryt: unknown,
+): boolean {
+  const office = incoming.position;
+  if (!isDistrictOffice(office)) return false;
+  if ((stored as { deleted?: unknown }).deleted === true) return false;
+  if (!isSameRun(stored, incoming)) return false;
+  if (typeof storedTeryt !== "string" || storedTeryt.length <= 2) return false;
+  if (
+    office !== "Parlament Europejski" &&
+    (typeof districtTeryt !== "string" ||
+      !storedTeryt.startsWith(districtTeryt))
+  ) {
+    return false;
+  }
+  return edgeRelation(stored, incoming) !== "conflict";
 }
 
 /** A stored edge one payload row could be placed onto, and how the row stands

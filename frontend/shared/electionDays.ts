@@ -17,7 +17,7 @@
 
 /** The elections the site holds candidacies in, as far as their day goes: the
  * Sejm and the Senate are elected together, and every local office together. */
-type ElectionKind = "parliament" | "european" | "local";
+export type ElectionKind = "parliament" | "european" | "local";
 
 /** Each election's first round - the one a candidacy stands in. A mayor's
  * run-off is the same candidacy's second day, not a candidacy of its own, as
@@ -73,7 +73,7 @@ const UNNAMED_OFFICE_ORDER: readonly ElectionKind[] = [
   "european",
 ];
 
-function electionKind(
+export function electionKind(
   position: string | null | undefined,
 ): ElectionKind | null {
   if (!position) return null;
@@ -83,6 +83,20 @@ function electionKind(
   // pipeline's word for any of them, too (`LOCAL_OFFICES` in
   // server/utils/edges.ts).
   return "local";
+}
+
+/** Every kind of election held in `year`: one in most years, two in 2014 and
+ * 2024 (local and European) and in 2019 (European and parliamentary), none in
+ * a year with no election the site records.
+ *
+ * What says which election a candidacy stored without its office was for, when
+ * nothing else does: in 2023 there was only the Sejm's and the Senate's, so a
+ * 2023 candidacy is a parliamentary one, while a 2019 one could be either
+ * (`misfiledRunOf` in server/utils/edges.ts). */
+export function electionKindsIn(year: string): ElectionKind[] {
+  return (Object.keys(ELECTION_DAYS) as ElectionKind[]).filter(
+    (kind) => ELECTION_DAYS[kind][year] !== undefined,
+  );
 }
 
 /** The year of a date that says nothing finer: the ingest's „2019-01-01”, or a

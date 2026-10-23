@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { candidacyDay } from "../../shared/electionDays";
+import { candidacyDay, electionKindsIn } from "../../shared/electionDays";
 import { isoDay } from "../../shared/dates";
 import { electionPositions } from "../../shared/misc";
 
@@ -107,5 +107,26 @@ describe("candidacyDay", () => {
         expect(day, `${position} ${year}`).not.toBe(`${year}-01-01`);
       }
     }
+  });
+});
+
+describe("electionKindsIn", () => {
+  it("names the one election of most years", () => {
+    expect(electionKindsIn("2023")).toEqual(["parliament"]);
+    expect(electionKindsIn("2009")).toEqual(["european"]);
+    expect(electionKindsIn("2018")).toEqual(["local"]);
+  });
+
+  it("names both elections of the years that held two", () => {
+    expect(electionKindsIn("2019").sort()).toEqual(["european", "parliament"]);
+    expect(electionKindsIn("2014").sort()).toEqual(["european", "local"]);
+    expect(electionKindsIn("2024").sort()).toEqual(["european", "local"]);
+  });
+
+  it("names none in a year without an election the site records", () => {
+    // 2020 and 2025 held presidential elections, which the site has no
+    // candidacy in.
+    expect(electionKindsIn("2020")).toEqual([]);
+    expect(electionKindsIn("2025")).toEqual([]);
   });
 });
