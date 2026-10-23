@@ -1,12 +1,14 @@
 /* One edge style.
 
-   A record or a panel has an edge: one hairline, rgba(border, 0.12). A
+   A record or a panel has an edge: one hairline, rgba(border, 0.24). A
    control has a tint, never a line: rgba(on-surface, 0.06). A note about what
    is missing has neither. Shadows are for things that float - menus, dialogs -
    and nothing else. Radii: 6 for controls, 10 for cards, 999 for pills; an
    inner radius is the outer one less its inset.
 
    Accepted with the 2026-10-15 redesign round (.interface-design/system.md).
+   The hairline was .12 in that round; Szymon picked the firmer .24 on
+   2026-10-23 from rendered versions, so a card still reads as a box.
    Only neutrals change here: border alphas that were .10/.16/.18/.22/.30, and
    Vuetify's outlines in the text colour (.87), all become the one hairline.
    No hue is added or changed - a coloured outline, chip or toggle keeps its
@@ -23,8 +25,9 @@
    edge, a picked chip - out-ranks these rules. */
 
 :root {
-  --k-line: rgba(var(--v-border-color), 0.12);
-  --k-line-strong: rgba(var(--v-border-color), 0.24);
+  --k-line: rgba(var(--v-border-color), 0.24);
+  /* a hovered or focused edge: one step above the hairline */
+  --k-line-strong: rgba(var(--v-border-color), 0.4);
   --k-tonal: rgba(var(--v-theme-on-surface), 0.06);
   --k-tonal-hover: rgba(var(--v-theme-on-surface), 0.1);
   --k-r-control: 6px;

@@ -3,7 +3,7 @@
     <div class="d-inline-flex flex-column align-center ga-1">
       <div
         class="d-inline-flex align-center bg-surface border rounded-pill overflow-hidden shadow-sm transition-all"
-        style="border-color: rgba(var(--v-theme-on-surface), 0.12) !important"
+        style="border-color: var(--k-line) !important"
       >
         <v-tooltip location="top" :text="stepHint(1)">
           <template #activator="{ props: tip }">

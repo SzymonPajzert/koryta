@@ -335,7 +335,7 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 
 <style scoped>
 .app-bar {
-  --app-bar-line: inset 0 -1px 0 rgba(var(--v-border-color), 0.2);
+  --app-bar-line: inset 0 -1px 0 var(--k-line);
 
   box-shadow: var(--app-bar-line);
 }

@@ -86,6 +86,12 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   options). The line is a neutral black at .2, firmer than the site's .12
   hairline, because the bar is the one edge with nothing else to frame it.
   The shadow uses Vuetify's `scroll-behavior="elevate"`.
+- **The hairline is .24, not round 1's .12**: every record and panel edge,
+  the table's lines and the top bar's line are one neutral black at .24, so a
+  card still reads as a box. The type system and the sentence-case menu stay
+  as round 1 set them, and the typeface stays Roboto. Picked 2026-10-23 out of
+  seven rendered versions („2 teraz + wyraźniejsze linie”), after Szymon
+  preferred main's firmer boxes on the blog (2026-10-16).
 - **Admin page titles follow the public pages' title rule**: the h1 is
   40/700, 28 on phones, not a smaller 28 for working pages. Szymon: "Let's
   keep the admin pages like public pages for now" (2026-10-15).
