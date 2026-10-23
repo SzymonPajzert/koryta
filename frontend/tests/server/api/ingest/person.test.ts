@@ -3840,4 +3840,80 @@ describe("api/ingest/person, a district's candidacy filed under the candidate's 
       expect(created()).toEqual([]);
     });
   });
+
+  describe("a sejmik run stored at home as „Samorząd”", () => {
+    const KKW = "KKW TRZECIA DROGA PSL-PL2050 SZYMONA HOŁOWNI";
+
+    /** Michał Jerzy Sobczak's 2024 sejmik run as the payload places it. */
+    const SEJMIK = {
+      election_type: "Sejmik",
+      election_year: "2024",
+      teryt: "10",
+      committee: KKW,
+      party_from_committee: true,
+    };
+
+    function sejmikPayload(...more: Record<string, unknown>[]) {
+      mockReadBody.mockResolvedValue({
+        name: "Jan Kowalski",
+        rejestrIo: "https://rejestr.io/osoby/123",
+        parties: [],
+        companies: [],
+        elections: [SEJMIK, ...more],
+      });
+    }
+
+    /** The same run as his June upload stored it: „Samorząd”, under Łódź. */
+    function sejmikAtHome(fields: Record<string, unknown> = {}) {
+      storedAtHome({
+        target: "teryt1061",
+        position: "Samorząd",
+        start_date: "2024-01-01",
+        ...fields,
+      });
+    }
+
+    it("moves it to the województwo and names it, as the year's only local run", async () => {
+      sejmikAtHome();
+      sejmikPayload();
+
+      await handler({} as any);
+
+      const [move, ...more] = writtenOnto("at-home");
+      expect(more).toEqual([]);
+      expect(move!.data).toMatchObject({
+        target: "teryt10",
+        position: "Sejmik",
+        committee: KKW,
+      });
+      expect(created()).toEqual([]);
+    });
+
+    it("leaves it to the council run the payload also has that year", async () => {
+      // Beside a council run in Łódź, the „Samorząd” copy there could be
+      // either: the council row names it, the sejmik gets a copy of its own.
+      sejmikAtHome();
+      sejmikPayload({ ...SEJMIK, election_type: "Rada miasta", teryt: "1061" });
+
+      await handler({} as any);
+
+      const [rename, ...more] = writtenOnto("at-home");
+      expect(more).toEqual([]);
+      expect(rename!.data).toMatchObject({
+        target: "teryt1061",
+        position: "Rada miasta",
+      });
+      expect(created()).toHaveLength(1);
+    });
+
+    it("leaves a 2024 copy with no office, which could be the European run", async () => {
+      sejmikAtHome({ position: undefined });
+      sejmikPayload();
+
+      await handler({} as any);
+
+      expect(writtenOnto("at-home")).toEqual([]);
+      expect(created()).toHaveLength(1);
+    });
+  });
 });

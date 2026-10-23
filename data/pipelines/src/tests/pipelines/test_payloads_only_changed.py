@@ -1289,3 +1289,71 @@ class TestHyphenatedSurname:
         assert name_of(pkw_last_names=[], wiki_last_name="kosiniak-kamysz") == (
             "Władysław Marcin Kosiniak-Kamysz"
         )
+
+
+#: Michał Jerzy Sobczak's 2024 sejmik run as the payload places it: łódzkie.
+SEJMIK = dict(
+    CANDIDACY,
+    election_type="Sejmik",
+    election_year="2024",
+    teryt="10",
+    committee="KKW TRZECIA DROGA PSL-PL2050 SZYMONA HOŁOWNI",
+    party_from_committee=True,
+)
+
+#: The same run as his June upload stored it: „Samorząd”, under Łódź.
+SEJMIK_AT_HOME = dict(
+    STORED_CANDIDACY,
+    id="edge-sejmik-1",
+    target="teryt1061",
+    position="Samorząd",
+    start_date="2024-01-01",
+)
+
+
+def test_a_sejmik_run_stored_at_home_moves_when_it_is_the_year_s_only_local_run():
+    """Nothing else local that year, so the „Samorząd” copy at home can only be
+    the sejmik run."""
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(SEJMIK_AT_HOME))
+
+    assert snapshot.changes(payload(elections=[SEJMIK])) == [MOVED_CANDIDACY]
+
+
+def test_a_samorzad_copy_beside_another_local_run_of_the_year_stays():
+    """With a council run in Łódź that year as well, the „Samorząd” copy there
+    could be either run; the council row names it, and the sejmik gets its own."""
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(SEJMIK_AT_HOME))
+    council = dict(SEJMIK, election_type="Rada miasta", teryt="1061")
+
+    assert snapshot.changes(payload(elections=[SEJMIK, council])) == [
+        NEW_CANDIDACY,
+        ENRICHED_CANDIDACY,
+    ]
+
+
+def test_a_bare_2024_copy_is_not_taken_for_the_sejmik_s():
+    """2024 held the European election as well, so a copy with no office could
+    be that run."""
+    bare = {k: v for k, v in SEJMIK_AT_HOME.items() if k != "position"}
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(bare))
+
+    assert snapshot.changes(payload(elections=[SEJMIK])) == [NEW_CANDIDACY]
+
+
+def test_a_bare_2018_copy_is_the_sejmik_run_of_a_year_with_one_election():
+    bare = {k: v for k, v in SEJMIK_AT_HOME.items() if k != "position"}
+    bare["start_date"] = "2018-01-01"
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(bare))
+
+    assert snapshot.changes(
+        payload(elections=[dict(SEJMIK, election_year="2018")])
+    ) == [MOVED_CANDIDACY]
+
+
+def test_a_sejmik_run_already_under_its_wojewodztwo_moves_nothing():
+    """The 09-12 upload's „Samorząd” copy under łódzkie is the sejmik's: the
+    row names it there, and the copy at home is the migration's to fold."""
+    in_place = dict(SEJMIK_AT_HOME, id="edge-sejmik-2", target="teryt10")
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(SEJMIK_AT_HOME, in_place))
+
+    assert snapshot.changes(payload(elections=[SEJMIK])) == [ENRICHED_CANDIDACY]

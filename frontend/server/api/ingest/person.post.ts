@@ -17,9 +17,12 @@ import {
   enrichedEdge,
   findEdgeMatches,
   isDistrictOffice,
+  isLocalOffice,
   isSameRun,
   misfiledRunOf,
+  misfiledSejmikRunOf,
   preferredCopy,
+  unnamedLocal,
   type EdgeLike,
 } from "~~/server/utils/edges";
 import {
@@ -202,6 +205,15 @@ export default defineEventHandler(async (event) => {
       articlesResult.push(await createArticle(ctx, personId, article));
     }
     const elections = assertArray(body.elections, "elections");
+    for (const election of elections) {
+      if (
+        isLocalOffice(election.election_type) ||
+        election.election_type === "Samorząd"
+      ) {
+        const year = String(election.election_year ?? "");
+        ctx.localRunsByYear.set(year, (ctx.localRunsByYear.get(year) ?? 0) + 1);
+      }
+    }
     // The candidacies that say they were won are placed before the rest. A row
     // that says nothing about its result fits any stored copy, a won one
     // included, so placed first it could take the copy that is a won row's
@@ -422,6 +434,12 @@ class Context {
   /** What the payload said about a stored job that this request did not
    * write, and why - see `droppedEnd`. */
   readonly dropped: DroppedChange[] = [];
+
+  /** How many local runs the payload states each year, by year. A sejmik run
+   * stored at home as „Samorząd” is only moved where it is the year's one
+   * (`moveMisfiledCandidacy`): beside a council or mayoral run the copy could
+   * be either. */
+  readonly localRunsByYear = new Map<string, number>();
 
   constructor(
     readonly db: FirebaseFirestore.Firestore,
@@ -694,7 +712,7 @@ async function createElection(
   };
 }
 
-/** A Sejm, Senate or European Parliament candidacy stored under the
+/** A Sejm, Senate, European Parliament or sejmik candidacy stored under the
  * candidate's home, moved to the district the payload places it in. Says what
  * it did as `findEdgeOrCreate` does - an edge it neither created nor put live -
  * or undefined when there is nothing to move and the candidacy takes the
@@ -712,7 +730,10 @@ async function createElection(
  * of them removed as „duplikat” because a misfiled one reads as a copy of any
  * other run of its year and powiat; and on the 2026-10-23 export 168 Sejm and
  * Senate runs had been stored twice already, from before this moved them too
- * (scripts/migrate/merge-national-runs-stored-twice.ts folds those).
+ * (scripts/migrate/merge-national-runs-stored-twice.ts folds those). A sejmik
+ * run was stored at home the same way, as „Samorząd”, and is moved where it is
+ * the year's only local run (`misfiledSejmikRunOf`); the ones already stored
+ * twice are merge-local-runs-stored-twice.ts's.
  *
  * Moved rather than replaced, so a live candidacy stays live and keeps its
  * votes and history. Only one that has not been removed, and only where nothing
@@ -730,7 +751,24 @@ async function moveMisfiledCandidacy(
   districtTeryt: string | undefined,
   vouched: boolean,
 ): Promise<EdgeOutcome | undefined> {
-  if (!isDistrictOffice(edge.position) || !edge.start_date) {
+  if (!edge.start_date) return undefined;
+  // Which stored copies are this run, and which of them is misfiled: a
+  // district's own rule, or the sejmik's, which only holds for the year's one
+  // local run (`misfiledSejmikRunOf`).
+  let sameRunAs: (stored: EdgeLike) => boolean;
+  let misfiled: typeof misfiledRunOf;
+  if (isDistrictOffice(edge.position)) {
+    sameRunAs = (stored) => isSameRun(stored, edge);
+    misfiled = misfiledRunOf;
+  } else if (
+    edge.position === "Sejmik" &&
+    ctx.localRunsByYear.get(edge.start_date.slice(0, 4)) === 1
+  ) {
+    sameRunAs = (stored) =>
+      stored.start_date === edge.start_date &&
+      (stored.position === "Sejmik" || unnamedLocal(stored));
+    misfiled = misfiledSejmikRunOf;
+  } else {
     return undefined;
   }
   const snapshot = await ctx.db
@@ -739,7 +777,7 @@ async function moveMisfiledCandidacy(
     .where("type", "==", "election")
     .get();
   const sameRun = snapshot.docs
-    .filter((doc) => isSameRun(doc.data() as EdgeLike, edge))
+    .filter((doc) => sameRunAs(doc.data() as EdgeLike))
     // By code point, as `findEdgeMatches` orders its candidates and the
     // pipeline's prediction of this (`_misfiled_candidacy`) does.
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -753,13 +791,14 @@ async function moveMisfiledCandidacy(
     if (ctx.claimedEdgeIds.has(doc.id)) continue;
     const region = await ctx.db.collection("nodes").doc(stored.target).get();
     const teryt = region.data()?.teryt;
-    if (!misfiledRunOf(stored as EdgeLike, teryt, edge, districtTeryt)) {
-      continue;
-    }
+    if (!misfiled(stored as EdgeLike, teryt, edge, districtTeryt)) continue;
 
     const moved = { ...withoutInternalFields(stored), target: edge.target };
+    // What the ordinary path would write out rather than propose: a vouched
+    // row, or one adding only what PKW records outright - the result, or the
+    // office a „Samorząd” copy was for (`findEdgeOrCreate`).
     const writeAll =
-      vouched || ctx.autoapprove || addsOnlyAnnotations(stored, edge);
+      vouched || ctx.autoapprove || addsOnlyRecordedFacts(stored, edge);
     createRevisionTransaction(
       ctx.db,
       ctx.batch,

@@ -12,7 +12,9 @@ import {
   findEdge,
   isSameRun,
   misfiledRunOf,
+  misfiledSejmikRunOf,
   preferredCopy,
+  unnamedLocal,
   type EdgeCopy,
   type EdgeLike,
 } from "../../../server/utils/edges";
@@ -729,5 +731,64 @@ describe("isSameRun", () => {
   it("takes a stated day for another date, as the identity does", () => {
     // A reviewer's correction is theirs to reconcile, not this rule's.
     expect(isSameRun({ ...sejm, start_date: "2023-10-15" }, sejm)).toBe(false);
+  });
+});
+
+describe("misfiledSejmikRunOf", () => {
+  /** Michał Jerzy Sobczak's 2024 sejmik run as the payload places it. */
+  const sejmik: EdgeLike = {
+    source: "p",
+    target: "teryt10",
+    type: "election",
+    position: "Sejmik",
+    start_date: "2024-01-01",
+  };
+  /** As his June upload stored it: „Samorząd”, under Łódź. */
+  const atHome: EdgeLike = {
+    ...sejmik,
+    target: "teryt1061",
+    position: "Samorząd",
+  };
+
+  it("takes a „Samorząd” copy at home inside the województwo", () => {
+    expect(misfiledSejmikRunOf(atHome, "1061", sejmik, "10")).toBe(true);
+  });
+
+  it("never takes a named local run, nor one outside the województwo", () => {
+    expect(
+      misfiledSejmikRunOf(
+        { ...atHome, position: "Rada miasta" },
+        "1061",
+        sejmik,
+        "10",
+      ),
+    ).toBe(false);
+    expect(misfiledSejmikRunOf(atHome, "1465", sejmik, "10")).toBe(false);
+    expect(misfiledSejmikRunOf(atHome, "10", sejmik, "10")).toBe(false);
+  });
+
+  it("is only ever asked for a sejmik row", () => {
+    expect(
+      misfiledSejmikRunOf(
+        atHome,
+        "1061",
+        { ...sejmik, position: "Sejm" },
+        "10",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("unnamedLocal", () => {
+  it("reads „Samorząd” as saying no more than local", () => {
+    expect(unnamedLocal({ ...candidacy })).toBe(true);
+    expect(unnamedLocal({ ...candidacy, position: "Rada gminy" })).toBe(false);
+  });
+
+  it("reads no office as local only in a year with no other election", () => {
+    const { position: _, ...bare } = candidacy;
+    expect(unnamedLocal({ ...bare, start_date: "2018-01-01" })).toBe(true);
+    // 2024 held the European election too.
+    expect(unnamedLocal({ ...bare, start_date: "2024-01-01" })).toBe(false);
   });
 });

@@ -521,6 +521,47 @@ def misfiled_run_of(
     return edge_relation(stored, incoming) != "conflict"
 
 
+def unnamed_local(stored: typing.Mapping[str, typing.Any]) -> bool:
+    """Whether a stored candidacy says no more than that it was local:
+    „Samorząd”, or no office at all in a year that held only local elections.
+    `unnamedLocal` in `frontend/server/utils/edges.ts`."""
+    office = field(stored, "position")
+    if office is not None:
+        return office == UNNAMED_LOCAL_OFFICE
+    start = field(stored, "start_date")
+    held = [k for k, years in ELECTION_YEARS.items() if str(start)[:4] in years]
+    return held == ["local"]
+
+
+def misfiled_sejmik_run_of(
+    stored: typing.Mapping[str, typing.Any],
+    stored_teryt: typing.Any,
+    incoming: Edge,
+    district_teryt: typing.Any,
+) -> bool:
+    """Whether `stored` is the sejmik run `incoming` places under its
+    województwo, stored without its office under the candidate's home. A
+    transcription of `misfiledSejmikRunOf` in `frontend/server/utils/edges.ts`:
+    only where the payload has no other local run that year, which its caller
+    checks."""
+    if incoming.get("position") != "Sejmik":
+        return False
+    if stored.get("deleted") == 1:
+        return False
+    start = field(incoming, "start_date")
+    if start is None or field(stored, "start_date") != start:
+        return False
+    if not unnamed_local(stored):
+        return False
+    if not isinstance(stored_teryt, str) or len(stored_teryt) <= 2:
+        return False
+    if not isinstance(district_teryt, str) or not stored_teryt.startswith(
+        district_teryt
+    ):
+        return False
+    return edge_relation(stored, incoming) != "conflict"
+
+
 def placing_order(elections: list[dict]) -> list[dict]:
     """A payload's candidacies in the order the ingest places them: the won
     ones first, otherwise as sent. `placingOrder` in `person.post.ts`."""
@@ -1234,6 +1275,14 @@ class SiteSnapshot:
         payload: typing.Mapping[str, typing.Any],
     ) -> list[Change]:
         reasons: list[Change] = []
+        # How many local runs the payload states each year, as the ingest
+        # counts them for `moveMisfiledCandidacy` (`localRunsByYear`).
+        local_runs: typing.Counter[str] = Counter(
+            str(election.get("election_year"))
+            for election in _rows(payload.get("elections"))
+            if election.get("election_type") in LOCAL_OFFICES
+            or election.get("election_type") == UNNAMED_LOCAL_OFFICE
+        )
         # The won ones first, as `placingOrder` in `person.post.ts` places them.
         for election in placing_order(_rows(payload.get("elections"))):
             year = election.get("election_year")
@@ -1266,7 +1315,9 @@ class SiteSnapshot:
             if election.get("election_year"):
                 edge["start_date"] = f"{election['election_year']}-01-01"
 
-            if self._misfiled_candidacy(matcher, edge, election.get("teryt")):
+            if self._misfiled_candidacy(
+                matcher, edge, election.get("teryt"), local_runs
+            ):
                 reasons.append((MOVED_CANDIDACY, held))
                 continue
             match matcher.place(edge):
@@ -1279,33 +1330,58 @@ class SiteSnapshot:
         return reasons
 
     def _misfiled_candidacy(
-        self, matcher: "_EdgeMatcher", edge: Edge, district_teryt: typing.Any
+        self,
+        matcher: "_EdgeMatcher",
+        edge: Edge,
+        district_teryt: typing.Any,
+        local_runs: typing.Mapping[str, int] | None = None,
     ) -> bool:
         """`moveMisfiledCandidacy`: whether the ingest moves a stored Sejm,
-        Senate or European candidacy to this one's district rather than
-        placing this one.
+        Senate, European or sejmik candidacy to this one's district rather
+        than placing this one.
 
         A district's run filed under a powiat or a gmina is the candidate's
         home, read as the place by older uploads (`misfiled_run_of` says which
-        copy is one). The ingest moves the first such copy of the run that no
-        row has taken, unless the run is already filed in the district.
+        copy is one). A sejmik run stored there says only „Samorząd”, so it is
+        taken only where the payload has no other local run that year
+        (`misfiled_sejmik_run_of`): beside a council or mayoral run it could
+        be either. The ingest moves the first such copy no row has taken,
+        unless the run is already filed in the district.
         """
-        if edge.get("position") not in DISTRICT_OFFICES or not edge.get("start_date"):
-            return False
-        same_run = [
-            stored
-            for stored in self.candidacies.get(str(edge["source"]), [])
-            if is_same_run(stored, edge)
-        ]
-        if any(stored.get("target") == edge["target"] for stored in same_run):
+        position = edge.get("position")
+        if not edge.get("start_date"):
             return False
         district = None if district_teryt is None else str(district_teryt)
+        stored_runs = self.candidacies.get(str(edge["source"]), [])
+        if position in DISTRICT_OFFICES:
+            same_run = [stored for stored in stored_runs if is_same_run(stored, edge)]
+
+            def misfiled(stored: dict, teryt: str | None) -> bool:
+                return misfiled_run_of(stored, teryt, edge, district)
+
+        elif position == "Sejmik":
+            year = str(edge["start_date"])[:4]
+            if (local_runs or {}).get(year, 0) != 1:
+                return False
+            same_run = [
+                stored
+                for stored in stored_runs
+                if field(stored, "start_date") == field(edge, "start_date")
+                and (stored.get("position") == "Sejmik" or unnamed_local(stored))
+            ]
+
+            def misfiled(stored: dict, teryt: str | None) -> bool:
+                return misfiled_sejmik_run_of(stored, teryt, edge, district)
+
+        else:
+            return False
+        if any(stored.get("target") == edge["target"] for stored in same_run):
+            return False
         for stored in same_run:
             edge_id = str(stored.get("id"))
             if edge_id in matcher.claimed:
                 continue
-            teryt = self.region_teryts.get(str(stored.get("target")))
-            if not misfiled_run_of(stored, teryt, edge, district):
+            if not misfiled(stored, self.region_teryts.get(str(stored.get("target")))):
                 continue
             matcher.claimed[edge_id] = edge_identity(edge)
             return True
