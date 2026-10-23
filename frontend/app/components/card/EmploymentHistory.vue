@@ -2,33 +2,25 @@
   <!-- Nothing at all when there is nothing to list and no way to add one:
        after the de-duplication fix a company whose only relations were its own
        still drew the heading over an empty list. An editor keeps it, because
-       „Dodaj" lives in it. Same guard ConnectionList has carried all along. -->
-  <v-list
+       „Dodaj" lives in it. Same guard ConnectionList has carried all along.
+
+       The head is the site's section head (`PageSection`), as over every
+       other section of an entity page, and outside the list: an h2 among
+       the rows of a `role="list"` was a heading inside a list. On a
+       company's page its caption says how many people the list holds and
+       how far back it goes, as „Obecny skład” carries its date. -->
+  <PageSection
     v-if="edges.length > 0 || canAdd"
-    class="pa-0"
-    :class="{ 'history-list--bleed': bleed }"
-    variant="flat"
+    title="Historia powiązań"
+    :caption="companyCaption"
+    caption-testid="history-caption"
     data-testid="relations-history"
   >
-    <div class="d-flex align-center justify-space-between ga-2 mb-2">
-      <!-- On a company's page, how many people the list holds and how far
-           back it goes, beside the heading as „Obecny skład” carries its
-           date. -->
-      <div class="sec-head">
-        <h2 class="text-h6">Historia powiązań</h2>
-        <span
-          v-if="companyCaption"
-          class="text-caption text-medium-emphasis"
-          data-testid="history-caption"
-        >
-          {{ companyCaption }}
-        </span>
-      </div>
-      <!-- The control tint rather than `variant="text" color="primary"`:
-           sage ink on white is 1.85:1 on this theme, and this is the one
-           control in the section. -->
+    <!-- The control tint rather than `variant="text" color="primary"`:
+         sage ink on white is 1.85:1 on this theme, and this is the one
+         control in the section. -->
+    <template v-if="canAdd" #actions>
       <v-btn
-        v-if="canAdd"
         variant="tonal"
         size="small"
         :prepend-icon="mdiPlus"
@@ -37,161 +29,175 @@
       >
         Dodaj
       </v-btn>
-    </div>
+    </template>
 
-    <!-- One ruled box, the rows divided by the hairline, rather than a
-         stack of boxes; edge to edge on a phone. On a person's page
-         (`ledger`) one box per group, each under its quiet head: the people,
-         what they hold today, what ended, and what has no dates. -->
-    <!-- One element per group, not a fragment: signed in, the list can hold
-         a group the server's anonymous render did not (a draft under
-         „Osoby”), and a keyed list of fragments that disagrees with the
-         server's left the server's copy of the list in the page under the
-         new one. Elements are replaced and the leftovers removed. -->
-    <div
-      v-for="group in groups"
-      :key="group.key"
-      class="history-group"
-      :data-testid="`history-box-${group.key}`"
+    <v-list
+      class="pa-0"
+      :class="{ 'history-list--bleed': bleed }"
+      variant="flat"
     >
-      <!-- An h3: the groups split one long list into parts a screen reader
-           can jump between, under the section's h2. -->
-      <h3
-        v-if="group.title"
-        class="history-group-head k-group-head"
-        :data-testid="`history-group-${group.key}`"
+      <!-- One ruled box, the rows divided by the hairline, rather than a
+           stack of boxes; edge to edge on a phone. On a person's or a
+           company's page (`ledger`) one box per group, each under its quiet
+           head: the people a person knows, what is held today, what ended,
+           and what has no dates. -->
+      <!-- One element per group, not a fragment: signed in, the list can
+           hold a group the server's anonymous render did not (a draft under
+           „Osoby”), and a keyed list of fragments that disagrees with the
+           server's left the server's copy of the list in the page under the
+           new one. Elements are replaced and the leftovers removed. -->
+      <div
+        v-for="group in groups"
+        :key="group.key"
+        class="k-group"
+        :data-testid="`history-box-${group.key}`"
       >
-        {{ group.title }}
-        <span class="history-group-head__count">{{ group.edges.length }}</span>
-      </h3>
-      <div class="history-box" :class="{ 'k-bleed-xs': bleed }">
-        <v-list-item
-          v-for="edge in group.edges"
-          :key="edge.id"
-          :to="rowLink(edge)"
-          :target="newTab ? '_blank' : undefined"
-          class="history-row"
-          :class="{
-            'history-row--ledger': ledger,
-            'history-row--ended': ledger && group.key === 'ended',
-            'history-row--barred': ledger && !!ledgerOf(edge),
-            'history-row--acts': ledger && showsActions(edge),
-          }"
+        <!-- An h3: the groups split one long list into parts a screen
+             reader can jump between, under the section's h2. -->
+        <h3
+          v-if="group.title"
+          class="k-group-head"
+          :data-testid="`history-group-${group.key}`"
         >
-          <template #prepend>
-            <v-icon :icon="entityIcon(edge.richNode.type)" />
-          </template>
-
-          <!-- The row's text in one box: a plain block everywhere, and on a
-               person's page a grid that sets the name across the whole row,
-               then the role line with the bar and its dates at its right end,
-               then the „Wcześniej:” rail, with the buttons at the row's edge
-               (`history-row--ledger`, below). -->
-          <div
-            class="history-cell"
+          {{ group.title }}
+          <span class="k-group-head__count">{{ group.edges.length }}</span>
+        </h3>
+        <div class="history-box" :class="{ 'k-bleed-xs': bleed }">
+          <v-list-item
+            v-for="edge in group.edges"
+            :key="edge.id"
+            :to="rowLink(edge)"
+            :target="newTab ? '_blank' : undefined"
+            class="history-row"
             :class="{
-              'history-cell--dated': ledger && !!ledgerOf(edge),
-              'history-cell--acts':
-                ledger && (hasActions(edge) || reserveSources),
-              'history-cell--rail': ledger && predecessorOf(edge).length > 0,
+              'history-row--ledger': ledger,
+              'history-row--ended': ledger && group.key === 'ended',
+              'history-row--barred': ledger && !!ledgerOf(edge),
+              'history-row--acts': ledger && showsActions(edge),
             }"
           >
-            <!-- `title` because the phone clamps this to two lines: a registry
-             name runs to sixty characters and the ellipsis has to leave the
-             full one somewhere. -->
-            <v-list-item-title
-              class="history-cell__title text-subtitle-2 font-weight-bold text-wrap"
-              :title="edge.richNode.name"
+            <template #prepend>
+              <v-icon :icon="entityIcon(edge.richNode.type)" />
+            </template>
+
+            <!-- The row's text in one box: a plain block everywhere, and on a
+                 ledger a grid that sets the name across the whole row, then the
+                 role line with the bar and its dates at its right end, then the
+                 „Wcześniej:” rail, with the buttons at the row's edge
+                 (`history-row--ledger`, below). -->
+            <div
+              class="history-cell"
+              :class="{
+                'history-cell--dated': ledger && !!ledgerOf(edge),
+                'history-cell--acts':
+                  ledger && (hasActions(edge) || reserveSources),
+                'history-cell--rail': ledger && predecessorOf(edge).length > 0,
+              }"
             >
-              {{ edge.richNode.name }}
-            </v-list-item-title>
+              <!-- `title` because the phone clamps this to two lines: a
+                   registry name runs to sixty characters and the ellipsis has
+                   to leave the full one somewhere. -->
+              <v-list-item-title
+                class="history-cell__title text-subtitle-2 font-weight-bold text-wrap"
+                :title="edge.richNode.name"
+              >
+                {{ edge.richNode.name }}
+              </v-list-item-title>
 
-            <div class="history-cell__meta d-flex align-center flex-wrap ga-2">
-              <!-- The role is prose, not meta: 14px, the UI size. -->
-              <span class="text-body-2 text-medium-emphasis text-wrap">
-                {{ edgeLabel(edge) }}
-              </span>
-              <!-- What the candidacy was for. The ingest names every one of them
-               „kandydatura", so a run for the Senate and one for a gmina
-               council read alike without it. Bold, as `ShortNode` prints it:
-               it is the word on the row that says which kind of election this
-               was. -->
-              <span
-                v-if="officeOf(edge)"
-                class="text-caption font-weight-bold"
-                :data-testid="`edge-office-${edge.id}`"
+              <div
+                class="history-cell__meta d-flex align-center flex-wrap ga-2"
               >
-                {{ officeOf(edge) }}
-              </span>
-              <!-- Whose party the person at the other end is in. Never collides
-               with the candidacy chip below: that one only shows on `election`
-               rows, whose far end is a place. -->
-              <PartyChip v-for="party in partiesOf(edge)" :key="party" :party />
-              <PartyChip v-if="partyOf(edge)" :party="partyOf(edge)!" />
-              <span
-                v-if="committeeOf(edge)"
-                class="history-meta__committee text-caption text-medium-emphasis text-wrap"
-              >
-                {{ committeeOf(edge) }}
-              </span>
-              <v-chip
-                v-if="wonSeat(edge)"
-                size="x-small"
-                color="success"
-                variant="flat"
-                :data-testid="`edge-elected-${edge.id}`"
-              >
-                Wybrany
-              </v-chip>
-              <!-- On a person's page only as the exception: nearly every row
-               there is a public company, which is what the page is about, and
-               fifteen identical sage chips said nothing per row. -->
-              <ChipPublicCompany
-                v-if="!ledger || !edgeCompany(edge)?.isPublic"
-                :company="edgeCompany(edge)"
-              />
-              <!-- Which sector the employer belongs to, so a career reads as the
-               shape it has - three railways and a water utility - rather than
-               four registry names the reader has to recognise one by one. Draws
-               nothing where the row is not a company, or where nobody has filed
-               one under a sector. -->
-              <ChipCompanyCategories :company="edgeCompany(edge)" />
-              <!-- A candidacy in a second place of the same election: somebody
-               else's, one of the two. Before the draft badge, whose
-               „Opublikuj" is what would put it live. -->
-              <ChipPlaceClash :edge :clash="clashOf.get(edge)" />
-              <!-- Whether the relation itself is live. Among the chips rather than
-               among the buttons on the right: it says what the row *is*, the
-               way the sector and the party do, and the one control it carries
-               belongs next to the words that explain it. -->
-              <ChipEdgeDraftStatus
-                :edge-id="edge.id"
-                :published="edge.visibility"
-                :publishable="isPublishable(edge)"
-                @published="emit('published')"
-              />
-              <!-- Last, where the bar sits on a wide screen. On a phone the bar is
-               a 200px track in a 210px column, clipped at both ends, and the
-               dates it captions are the only part of it that survives the
-               width - so below md the row prints them and drops the track. -->
-              <!-- „obecnie” in bold: a post held today reads stronger than one
-               that ended in 2008. -->
-              <span
-                v-if="!ledger && isDated(edge)"
-                class="d-md-none text-caption text-medium-emphasis"
-              >
-                {{ periodOf(edge).start
-                }}<template v-if="periodOf(edge).end !== undefined">
-                  –
-                  <strong v-if="periodOf(edge).current">{{
-                    periodOf(edge).end
-                  }}</strong>
-                  <template v-else>{{ periodOf(edge).end }}</template>
-                </template>
-              </span>
-            </div>
+                <!-- The role is prose, not meta: 14px, the UI size. -->
+                <span class="text-body-2 text-medium-emphasis text-wrap">
+                  {{ edgeLabel(edge) }}
+                </span>
+                <!-- What the candidacy was for. The ingest names every one of
+                     them „kandydatura", so a run for the Senate and one for a
+                     gmina council read alike without it. Bold, as `ShortNode`
+                     prints it: it is the word on the row that says which kind
+                     of election this was. -->
+                <span
+                  v-if="officeOf(edge)"
+                  class="text-caption font-weight-bold"
+                  :data-testid="`edge-office-${edge.id}`"
+                >
+                  {{ officeOf(edge) }}
+                </span>
+                <!-- Whose party the person at the other end is in. Never
+                     collides with the candidacy chip below: that one only shows
+                     on `election` rows, whose far end is a place. -->
+                <PartyChip
+                  v-for="party in partiesOf(edge)"
+                  :key="party"
+                  :party
+                />
+                <PartyChip v-if="partyOf(edge)" :party="partyOf(edge)!" />
+                <span
+                  v-if="committeeOf(edge)"
+                  class="history-meta__committee text-caption text-medium-emphasis text-wrap"
+                >
+                  {{ committeeOf(edge) }}
+                </span>
+                <v-chip
+                  v-if="wonSeat(edge)"
+                  size="x-small"
+                  color="success"
+                  variant="flat"
+                  :data-testid="`edge-elected-${edge.id}`"
+                >
+                  Wybrany
+                </v-chip>
+                <!-- On a person's page only as the exception: nearly every row
+                     there is a public company, which is what the page is about,
+                     and fifteen identical sage chips said nothing per row. -->
+                <ChipPublicCompany
+                  v-if="!ledger || !edgeCompany(edge)?.isPublic"
+                  :company="edgeCompany(edge)"
+                />
+                <!-- Which sector the employer belongs to, so a career reads as
+                     the shape it has - three railways and a water utility -
+                     rather than four registry names the reader has to recognise
+                     one by one. Draws nothing where the row is not a company,
+                     or where nobody has filed one under a sector. -->
+                <ChipCompanyCategories :company="edgeCompany(edge)" />
+                <!-- A candidacy in a second place of the same election:
+                     somebody else's, one of the two. Before the draft badge,
+                     whose „Opublikuj" is what would put it live. -->
+                <ChipPlaceClash :edge :clash="clashOf.get(edge)" />
+                <!-- Whether the relation itself is live. Among the chips rather
+                     than among the buttons on the right: it says what the row
+                     *is*, the way the sector and the party do, and the one
+                     control it carries belongs next to the words that explain
+                     it. -->
+                <ChipEdgeDraftStatus
+                  :edge-id="edge.id"
+                  :published="edge.visibility"
+                  :publishable="isPublishable(edge)"
+                  @published="emit('published')"
+                />
+                <!-- Last, where the bar sits on a wide screen. On a phone the
+                     bar is a 200px track in a 210px column, clipped at both
+                     ends, and the dates it captions are the only part of it
+                     that survives the width - so below md the row prints them
+                     and drops the track. -->
+                <!-- „obecnie” in bold: a post held today reads stronger than
+                     one that ended in 2008. -->
+                <span
+                  v-if="!ledger && isDated(edge)"
+                  class="d-md-none text-caption text-medium-emphasis"
+                >
+                  {{ periodOf(edge).start
+                  }}<template v-if="periodOf(edge).end !== undefined">
+                    -
+                    <strong v-if="periodOf(edge).current">{{
+                      periodOf(edge).end
+                    }}</strong>
+                    <template v-else>{{ periodOf(edge).end }}</template>
+                  </template>
+                </span>
+              </div>
 
-            <!-- On a person's page: the bar on one time scale for the whole
+              <!-- On a ledger: the bar on one time scale for the whole
                    list and its dates beside it at the UI size, at the right
                    end of the role line, so the name keeps the row's width and
                    the dates line up down the box; on a phone the dates take a
@@ -199,139 +205,144 @@
                    under them at the row's full width. The dates were a 12px
                    caption under a dark 200px track, which a phone clipped at
                    both ends and dropped. -->
-            <template v-if="ledger && ledgerOf(edge)">
-              <span
-                class="history-period history-cell__period"
-                :class="{
-                  'history-period--current': ledgerOf(edge)!.current,
-                }"
-                :title="ledgerOf(edge)!.text"
-                :data-testid="`edge-period-${edge.id}`"
+              <template v-if="ledger && ledgerOf(edge)">
+                <span
+                  class="history-period history-cell__period"
+                  :class="{
+                    'history-period--current': ledgerOf(edge)!.current,
+                  }"
+                  :title="ledgerOf(edge)!.text"
+                  :data-testid="`edge-period-${edge.id}`"
+                >
+                  <span class="history-period__full">{{
+                    ledgerOf(edge)!.text
+                  }}</span>
+                  <span class="history-period__years">{{
+                    ledgerOf(edge)!.years
+                  }}</span>
+                </span>
+              </template>
+
+              <!-- Who sat here before. A `v-for` over nought or one so the
+                   lookup is read once per row rather than four times, and only
+                   the predecessor: the section below the card carries both
+                   directions, and this row already holds a company, a role, a
+                   chip, a bar and two dates. -->
+              <div
+                v-for="predecessor in predecessorOf(edge)"
+                :key="predecessor.edgeId"
+                class="history-row__rail history-cell__rail"
+                :data-testid="`edge-predecessor-${edge.id}`"
               >
-                <span class="history-period__full">{{
-                  ledgerOf(edge)!.text
-                }}</span>
-                <span class="history-period__years">{{
-                  ledgerOf(edge)!.years
-                }}</span>
-              </span>
-            </template>
+                <v-icon
+                  :icon="mdiArrowUp"
+                  size="13"
+                  class="history-row__rail-icon"
+                  aria-hidden="true"
+                />
+                <span class="history-row__rail-label">Wcześniej:</span>
+                <!-- „m.in." where a whole board changed on one day. The
+                     register struck four names off and entered four, and which
+                     of them took whose chair is an assignment the pairing made
+                     up; naming one of them flatly would assert something nobody
+                     recorded. -->
+                <span
+                  v-if="predecessor.batchSize > 1"
+                  class="history-row__rail-label"
+                  :title="batchNote(predecessor.batchSize)"
+                >
+                  m.in.
+                </span>
+                <!-- Text, not a link. The row itself is an anchor to the other
+                     end of the relation, and an anchor inside an anchor is
+                     invalid HTML - the parser closes the outer one and reopens
+                     it around each fragment, which split this row into three
+                     boxes. Clicking through to the predecessor is what „Zmiany
+                     na stanowisku" below is for. -->
+                <span class="history-row__rail-name">
+                  {{ predecessor.personName }}
+                </span>
+                <PartyChip
+                  v-for="party in predecessor.parties"
+                  :key="party"
+                  :party
+                />
+                <span class="history-row__rail-gap">
+                  {{ gapLabel(predecessor.gapDays) }}
+                </span>
+              </div>
 
-            <!-- Who sat here before. A `v-for` over nought or one so the lookup is
-             read once per row rather than four times, and only the predecessor:
-             the section below the card carries both directions, and this row
-             already holds a company, a role, a chip, a bar and two dates. -->
-            <div
-              v-for="predecessor in predecessorOf(edge)"
-              :key="predecessor.edgeId"
-              class="history-row__rail history-cell__rail"
-              :data-testid="`edge-predecessor-${edge.id}`"
-            >
-              <v-icon
-                :icon="mdiArrowUp"
-                size="13"
-                class="history-row__rail-icon"
-                aria-hidden="true"
-              />
-              <span class="history-row__rail-label">Wcześniej:</span>
-              <!-- „m.in." where a whole board changed on one day. The register
-               struck four names off and entered four, and which of them took
-               whose chair is an assignment the pairing made up; naming one of
-               them flatly would assert something nobody recorded. -->
-              <span
-                v-if="predecessor.batchSize > 1"
-                class="history-row__rail-label"
-                :title="batchNote(predecessor.batchSize)"
+              <!-- The bar and the row's buttons, as one foot: on a wide screen
+                   it steps aside (`display: contents`) and the grid sets the
+                   bar on the role line and the buttons at the row's edge; on a
+                   phone it is the row's last line, the bar filling what the
+                   buttons leave. Sharing the dates' column, the buttons had
+                   squeezed the role line to 181px. -->
+              <div
+                v-if="ledger && (ledgerOf(edge) || showsActions(edge))"
+                class="history-cell__foot"
               >
-                m.in.
-              </span>
-              <!-- Text, not a link. The row itself is an anchor to the other end of
-               the relation, and an anchor inside an anchor is invalid HTML -
-               the parser closes the outer one and reopens it around each
-               fragment, which split this row into three boxes. Clicking
-               through to the predecessor is what „Zmiany na stanowisku" below
-               is for. -->
-              <span class="history-row__rail-name">
-                {{ predecessor.personName }}
-              </span>
-              <PartyChip
-                v-for="party in predecessor.parties"
-                :key="party"
-                :party
-              />
-              <span class="history-row__rail-gap">
-                {{ gapLabel(predecessor.gapDays) }}
-              </span>
-            </div>
-
-            <!-- The bar and the row's buttons, as one foot: on a wide screen
-                 it steps aside (`display: contents`) and the grid sets the bar
-                 on the role line and the buttons at the row's edge; on a
-                 phone it is the row's last line, the bar filling what the
-                 buttons leave. Sharing the dates' column, the buttons had
-                 squeezed the role line to 181px. -->
-            <div
-              v-if="ledger && (ledgerOf(edge) || showsActions(edge))"
-              class="history-cell__foot"
-            >
-              <ChipRelativeDuration
-                v-if="ledgerOf(edge)"
-                bare
-                class="history-cell__bar"
-                :start="edge.start_date"
-                :end="edge.end_date"
-                :min-start="minStart"
-                :max-end="maxEnd"
-              />
-              <CardHistoryRowActions
-                v-if="showsActions(edge)"
-                class="history-cell__actions"
-                :edge
-                :can-cite
-                :can-correct
-                :can-remove
-                :reserve-sources="reserveSources"
-                @sources="emit('sources', $event)"
-                @edit="emit('edit', $event)"
-                @remove="emit('remove', $event)"
-              />
-            </div>
-          </div>
-
-          <template v-if="!ledger" #append>
-            <div class="d-flex align-center ga-2">
-              <div v-if="isDated(edge)" class="d-none d-md-flex">
                 <ChipRelativeDuration
+                  v-if="ledgerOf(edge)"
+                  bare
+                  class="history-cell__bar"
                   :start="edge.start_date"
                   :end="edge.end_date"
                   :min-start="minStart"
                   :max-end="maxEnd"
                 />
+                <CardHistoryRowActions
+                  v-if="showsActions(edge)"
+                  class="history-cell__actions"
+                  :edge
+                  :can-cite
+                  :can-correct
+                  :can-remove
+                  :reserve-sources="reserveSources"
+                  @sources="emit('sources', $event)"
+                  @edit="emit('edit', $event)"
+                  @remove="emit('remove', $event)"
+                />
               </div>
-              <CardHistoryRowActions
-                v-if="hasActions(edge)"
-                :edge
-                :can-cite
-                :can-correct
-                :can-remove
-                @sources="emit('sources', $event)"
-                @edit="emit('edit', $event)"
-                @remove="emit('remove', $event)"
-              />
             </div>
-          </template>
-        </v-list-item>
+
+            <template v-if="!ledger" #append>
+              <div class="d-flex align-center ga-2">
+                <div v-if="isDated(edge)" class="d-none d-md-flex">
+                  <ChipRelativeDuration
+                    :start="edge.start_date"
+                    :end="edge.end_date"
+                    :min-start="minStart"
+                    :max-end="maxEnd"
+                  />
+                </div>
+                <CardHistoryRowActions
+                  v-if="hasActions(edge)"
+                  :edge
+                  :can-cite
+                  :can-correct
+                  :can-remove
+                  @sources="emit('sources', $event)"
+                  @edit="emit('edit', $event)"
+                  @remove="emit('remove', $event)"
+                />
+              </div>
+            </template>
+          </v-list-item>
+        </div>
       </div>
-    </div>
-  </v-list>
+    </v-list>
+  </PageSection>
 </template>
 
 <script lang="ts" setup>
 import { mdiArrowUp, mdiPlus } from "@mdi/js";
 // Imported rather than left to Nuxt's auto-import, as PageSection imports
 // InfoBubble: this card's own tests mount it with a plain `mount`, which has
-// no auto-import resolver, and an unresolved component renders as nothing.
+// no auto-import resolver, and an unresolved component renders as nothing -
+// for PageSection, the whole card.
 import CardHistoryRowActions from "./HistoryRowActions.vue";
+import PageSection from "../PageSection.vue";
 import { entityIcon } from "~/utils/entityIcon";
 import { ledgerPeriod, relationPeriodParts } from "~/utils/relationPeriod";
 import { gapLabel } from "~~/shared/succession";
@@ -341,7 +352,7 @@ import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { placeClashes, type PlaceClash } from "~~/shared/twoPlaces";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~/composables/slugs";
-import { plural } from "~/utils/jobStyle";
+import { polishCounting } from "~/composables/polish";
 
 /** Whoever held a seat before the spell an edge records, as the successions
  * endpoint names them, plus how many seats changed hands that day. */
@@ -404,12 +415,21 @@ const props = defineProps<{
    * gutter. For a page that lists it at its full width - a person's, a
    * company's - and not for a drawer or a card that pads it differently. */
   bleed?: boolean;
-  /** A person's own page reads the list as a ledger of their career: grouped
-   * into „Obecnie”, „Zakończone”, „Bez dat” and „Osoby”, the bar and its
-   * period in two columns of their own in one date format, and the posts that
-   * ended a step quieter than the ones held today. Every other host - a
-   * company's board, the drawer, the queues - keeps the one list. */
+  /** An entity's own page reads the list as a ledger: grouped into „Osoby”,
+   * „Obecnie”, „Zakończone” and „Bez dat”, the bar and its period in two
+   * columns of their own in one date format, and the posts that ended a step
+   * quieter than the ones held today. A person's page and a company's pass
+   * it; every other host - the drawer, /eksploruj/nowe, the queues - keeps
+   * the one list. */
   ledger?: boolean;
+  /** Whether a ledger files the rows that lead to a person by their period,
+   * like every other row, rather than first in an „Osoby” group of their
+   * own. For a company's page, where every row leads to a person - the
+   * people who held its posts - and „Osoby” would be the whole list in one
+   * box, with nothing held today told from what ended. A person's page
+   * leaves it off: there the people are the acquaintances, who have no
+   * period, and are what the site is about. */
+  peopleByPeriod?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -520,7 +540,7 @@ const companyCaption = computed(() => {
   const people = listedEdges.value.filter((e) => e.richNode.type === "person");
   const count = new Set(people.map((e) => e.richNode.id)).size;
   if (!count) return "";
-  const parts = [`${count} ${plural(count, "osoba", "osoby", "osób")}`];
+  const parts = [polishCounting(count, "osoba", "osoby", "osób")];
   const years = people
     .map((e) => Number(e.start_date?.slice(0, 4)))
     .filter((year) => year > 0);
@@ -537,11 +557,12 @@ const edgesSorted = computed(() => {
   });
 });
 
-/** The boxes the rows are drawn in. One, unheaded, everywhere but a
- * person's page; there, the people they know, then what they hold today,
- * what ended, and what has no dates - today's sort put the undated posts
- * among the people, above a seat taken last month. The sort inside each
- * group is the list's own. */
+/** The boxes the rows are drawn in. One, unheaded, everywhere but on a
+ * ledger; there, the people a person knows, then what is held today, what
+ * ended, and what has no dates - today's sort put the undated posts among
+ * the people, above a seat taken last month. On a company's ledger
+ * (`peopleByPeriod`) the people are those rows themselves. The sort inside
+ * each group is the list's own. */
 const groups = computed(() => {
   if (!props.ledger) {
     return [{ key: "all", title: "", edges: edgesSorted.value }];
@@ -554,7 +575,7 @@ const groups = computed(() => {
   };
   for (const edge of edgesSorted.value) {
     const period = ledgerOf(edge);
-    if (edgePerson(edge)) by.people.push(edge);
+    if (!props.peopleByPeriod && edgePerson(edge)) by.people.push(edge);
     else if (!period) by.undated.push(edge);
     else if (period.current) by.current.push(edge);
     else by.ended.push(edge);
@@ -754,23 +775,10 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
   display: none;
 }
 
-/* ---- a person's page: groups and the period columns ---- */
+/* ---- a ledger: groups and the period columns ----
 
-/* The type system's group head (`k-group-head`, app.vue), above its box and
-   clear of the box before it. */
-.history-group-head {
-  margin: 0 0 6px;
-}
-
-.history-group + .history-group {
-  margin-top: 20px;
-}
-
-/* The count a step down by weight alone, in the same quiet ink. */
-.history-group-head__count {
-  font-weight: 400;
-  margin-left: 4px;
-}
+   The groups' heads and the gap between them are the type system's group
+   head (`k-group-head` and `k-group`, assets/css/type.css). */
 
 /* A post that ended reads a step quieter than one held today: the name at
    500 rather than 700, in the .78 ink. */
@@ -779,12 +787,12 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
   font-weight: 500 !important;
 }
 
-/* The row's text as a grid on a person's page: the name across the row; the
+/* The row's text as a grid on a ledger: the name across the row; the
    role line with the bar and its dates at its right end, in fixed columns so
    the dates line up down the box; the „Wcześniej:” rail under them; the
    buttons at the row's edge, centred on it. Everywhere else the cell is a
    plain block. The bar is the brief's 360px where the page is wide and 200px
-   between md and lg; the dates' column fits „15.05.2023 – 04.12.2024” at
+   between md and lg; the dates' column fits „15.05.2023 - 04.12.2024” at
    14px on one line. */
 .history-row--ledger .history-cell {
   align-items: center;
@@ -1027,7 +1035,7 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
   color: rgba(var(--v-theme-on-surface), 0.72);
   display: flex;
   flex-wrap: wrap;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   gap: 4px;
   line-height: 1.45;
   margin-top: 7px;
@@ -1039,7 +1047,7 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
 }
 
 .history-row__rail-label {
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
 }
 
 .history-row__rail-name {
@@ -1047,11 +1055,13 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
   font-weight: 600;
 }
 
+/* The gap between two holders of a seat: the same tinted pill as on the
+   cards of „Zmiany na stanowisku”, in the control tint and radius. */
 .history-row__rail-gap {
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  border-radius: 6px;
+  background: var(--k-tonal);
+  border-radius: var(--k-r-control);
   color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   line-height: 1.5;
   padding: 0 6px;
 }

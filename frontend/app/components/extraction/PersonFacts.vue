@@ -3,12 +3,7 @@
        SuccessionPersonChanges follows. Most people in the graph are named in
        no analysed article at all, and a section that announces itself over
        empty space reads as a page that failed to load. An error is silent for
-       the same reason - see `total` below.
-
-       `px-2` arrives with the shell, and this section had been missing it: its
-       heading started 8px left of the three above it on a person's page, which
-       nobody had spotted while every section carried its own copy of the
-       heading rules. -->
+       the same reason - see `total` below. -->
   <PageSection
     v-if="total > 0"
     title="Fakty z artykułów"
@@ -56,7 +51,7 @@
       v-model="selectedType"
       mandatory
       density="compact"
-      class="mb-1"
+      class="mb-2"
       data-testid="person-extractions-filter"
     >
       <v-chip value="all" size="small" variant="outlined">
@@ -76,7 +71,11 @@
     </v-chip-group>
 
     <template v-if="user">
-      <template v-for="bucket in buckets" :key="bucket.key">
+      <!-- Each block a group (`k-group`, assets/css/type.css): its head 8px
+           over its lines, and the next block 24px under them. The chips
+           above filter the whole list, so the first block stands 8px under
+           them rather than a group's 24. -->
+      <div v-for="bucket in buckets" :key="bucket.key" class="k-group">
         <!-- Only titled when there is something on both sides of the line: a
              heading saying „nobody has checked these" over every fact the
              person has is the lead paragraph again, in smaller type. Whether
@@ -84,7 +83,7 @@
              of nothing but unchecked facts still says which side it is on. -->
         <h3
           v-if="bucket.heading"
-          class="facts-bucket k-group-head"
+          class="k-group-head"
           :data-testid="`person-extractions-${bucket.key}`"
         >
           {{ bucket.heading }}
@@ -105,7 +104,7 @@
              queue and the article's page - signed in, which every reader of
              these lines is - and the same draft: the relation waits for an
              administrator like one added with „Dodaj” above. -->
-        <AdminRowList class="facts-list">
+        <AdminRowList>
           <ExtractionFactRow
             v-for="group in bucket.groups"
             :key="group.key"
@@ -115,7 +114,7 @@
             @promoted="emit('promoted', $event)"
           />
         </AdminRowList>
-      </template>
+      </div>
 
       <!-- „Pokazujemy 24 najnowszych z 66 -> dlaczego tylko 24? Nie ma sposobu
            na przejrzenie wszystkiego” - and from a phone, where 24 cards stood
@@ -450,19 +449,10 @@ const buckets = computed(() =>
 </script>
 
 <style scoped>
-/* Sub-heading over a block of lines, in the group-head role (`k-group-head`,
-   app.vue) as „Obecnie” and „Zakończone” over the history: it separates two
-   halves of one list rather than announcing a new section. An h3 under the
-   section's h2. */
-.facts-bucket {
-  margin: 16px 0 0;
-}
-
-/* Clear of the heading or the chips above it, and of the pager or the next
-   block below. */
-.facts-list {
-  margin-block: 8px;
-}
+/* The heads over the blocks of lines are the group-head role, as „Obecnie”
+   and „Zakończone” over the history: they separate two halves of one list
+   rather than announcing a new section. An h3 under the section's h2. The
+   pager and the count under the list keep their own `mt-2` off it. */
 
 /* Clear of the sticky app bar when a new page scrolls to it - the allowance
    the help page gives its headings. */
@@ -498,7 +488,7 @@ const buckets = computed(() =>
 }
 
 .locked__line + .locked__line {
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
 }
 
 .locked__bar {

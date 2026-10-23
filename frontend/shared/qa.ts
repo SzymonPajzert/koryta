@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "strona-osoby-i-spolki-jedna-budowa",
+    title: "Strona osoby i strona spółki zbudowane tak samo",
+    description:
+      "Na obu stronach pod nazwą jest ten sam wiersz faktów i ten sam rząd przycisków z pomarańczowym ołówkiem przy „Zaproponuj zmianę”. „Historia powiązań” spółki ma daty w kolumnie i grupy Obecnie, Zakończone i Bez dat, jak na stronie osoby, a graf spółki ma nagłówek „Graf powiązań”.",
+    steps: [
+      "Otwórz stronę PKP LHS - „Historia powiązań” ma grupy „Obecnie” i „Zakończone”, a daty stoją w kolumnie, np. „od 14.05.2026”.",
+      "Na tej samej stronie kliknij „Notatki” pod nazwą - strona przewija się do sekcji „Notatki”.",
+      "Jako admin otwórz stronę osoby na komputerze - narzędzia admina to przyciski z podpisami; na telefonie to kwadratowe ikony w osobnym rzędzie.",
+      "Na stronie z komentarzami obok nagłówka „Dyskusja” jest ich liczba, np. „2 komentarze”.",
+    ],
+    link: "/instytucja/pkp-linia-hutnicza-szerokotorowa-zamosc-HcPyUKHOPqnRjWq2OqUs",
+    area: "public",
+  },
+  {
     id: "dymki-statusu-na-telefonie",
     title: "Dymki przy statusach rewizji zostają otwarte na telefonie",
     description:
@@ -100,7 +114,7 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Pod nazwą spółki jest jeden wiersz faktów i jeden rząd przycisków, a od razu po nim obecny skład i „Historia powiązań”. Puste sekcje zniknęły: to, czego nie wiemy, mówi jedna szara linia pod listą osób, a wyjaśnienia i metoda są w jej dymku (i).",
     steps: [
-      "Otwórz stronę spółki bez obecnego składu (np. WGT w Tarnowie) - pod nazwą są przyciski „Zaproponuj zmianę”, „Eksploruj powiązania” i „Graf połączeń”, a zaraz pod nimi lista osób i linia „Nie znamy obecnego składu…” z dymkiem (i).",
+      "Otwórz stronę spółki bez obecnego składu (np. WGT w Tarnowie) - pod nazwą są przyciski „Zaproponuj zmianę”, „Eksploruj powiązania” i „Graf powiązań”, a pod nimi lista osób i linia „Nie znamy obecnego składu…” z dymkiem (i).",
       "Na telefonie ta sama strona - „Zaproponuj zmianę” ma napis, pozostałe przyciski są ikonami (narzędzia admina przechodzą do drugiego rzędu).",
       "Na stronie spółki lub osoby z artykułami sekcja „Artykuły, które o tym wspominają” nie ma ikony, a zdanie o źródłach jest w dymku (i).",
     ],
@@ -198,7 +212,7 @@ export const QA_ITEMS: QaItem[] = [
     steps: [
       "Otwórz stronę osoby - nie ma karty z cieniem wokół strony, nagłówek z nazwiskiem jest oddzielony od reszty cienką linią, a „Historia powiązań” to pudełka z liniami między wierszami.",
       "Na telefonie ta sama strona - lista powiązań sięga krawędzi ekranu.",
-      "Na stronie spółki przyciski „Graf połączeń” i „Zaproponuj zmianę” mają szare tło, bez czarnej ramki.",
+      "Na stronie spółki przyciski „Graf powiązań” i „Zaproponuj zmianę” mają szare tło, bez czarnej ramki.",
       "Na /eksploruj/szpitale przełącz „Partii / Województwa” - wybrana opcja to biała zakładka.",
       "Otwórz /o-nas i /pomoc - strona nie leży w ramce na szarym tle, a przyciski i zdjęcie nie mają cienia.",
     ],

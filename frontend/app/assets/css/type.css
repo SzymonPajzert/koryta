@@ -380,6 +380,62 @@
   text-transform: none;
 }
 
+/* ---- group heads: what splits one list into parts ----
+
+   „Obecnie” and „Zakończone” over a history, a board's „Prezes zarządu”
+   over its people or its handovers, „Potwierdzone przez czytelników” over
+   the facts. 14/600 in the quiet ink, under the section's 24px head, with
+   how many the group holds after it a step down by weight alone:
+   „Zarząd 3”. No icon: the section head above says what kind of list it is.
+
+   The spacing is the role's, so no list carries its own - they had been 6
+   and 20 over a person's history, 16 and 8 over the facts, and 12, 16 and
+   32 on a company's page. A head stands 8px over what it heads, as a
+   section head does, and a group stands 24px under the group before it.
+   That gap is on the group (`k-group`), not the head: a head is the first
+   thing in its group, and the group is what follows the content above. */
+:is(.v-application, .v-overlay-container) .k-group-head {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-ui-size);
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0 0 8px;
+}
+
+:is(.v-application, .v-overlay-container) .k-group-head__count {
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+:is(.v-application, .v-overlay-container) .k-group + .k-group {
+  margin-top: 24px;
+}
+
+/* ---- what a section lacks: one quiet line ----
+
+   What the page could not show or is withholding, said where the section
+   would have been - „Nie znamy obecnego składu.” on a company, „Zmiany na
+   stanowiskach: 3 pominięte” on a person - and what failed to load. One
+   sentence at the UI size in the quiet ink: prose, so not the 12px of meta,
+   and with no box (`k-note`, app.vue) and no icon of its own, so it cannot be
+   mistaken for a record. Why goes behind its (i). An error keeps its alert
+   icon beside the words, which is what tells it from an absence. */
+:is(.v-application, .v-overlay-container) .k-absent {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-ui-size);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* The line's last words and its (i), wrapped as one piece: the bubble is a
+   box of its own, and on a phone it wrapped onto a line by itself. */
+:is(.v-application, .v-overlay-container) .k-absent__tail {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 /* ---- the lead: one sentence directly under the h1 ----
 
    One per page, and only one sentence. Method and anything longer is body

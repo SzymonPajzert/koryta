@@ -1,9 +1,29 @@
 <template>
-  <!-- A neutral one is a plain icon button: a near-black outline round
-       each of five admin tools outweighed the name they sit beside. One with
-       a colour of its own keeps that colour's outline. Square at the control
-       radius either way. -->
+  <!-- In an entity page's row of actions (`EntityActions`): a labelled button
+       in the control tint, like every other button in that row, which a phone
+       folds to its icon (entity/Actions.vue). The tooltip says what the label
+       cannot - and, on a phone, the label itself. -->
   <v-btn
+    v-if="labelled"
+    variant="tonal"
+    :color="color"
+    :prepend-icon="icon"
+    :to="to"
+  >
+    {{ label }}
+    <v-tooltip
+      activator="parent"
+      location="top"
+      :disabled="!tooltip && !xs"
+      :text="tooltip || label"
+    />
+  </v-btn>
+  <!-- Anywhere else - the table's drawer - a neutral one is a plain icon
+       button: a near-black outline round each of five admin tools outweighed
+       the name they sit beside. One with a colour of its own keeps that
+       colour's outline. Square at the control radius either way. -->
+  <v-btn
+    v-else
     icon
     :border="color ? 'sm current' : undefined"
     class="text-none pa-1 k-r-control"
@@ -24,22 +44,41 @@
   </v-btn>
 </template>
 
-<script setup lang="ts">
-/** One of the square icon buttons in an entity page's header.
+<script lang="ts">
+// The setup block's imports are here too: the two blocks are one module, and
+// its imports go at its top.
+import { inject, type InjectionKey } from "vue";
+import { useDisplay } from "vuetify";
+
+/** Provided by `EntityActions`: the buttons inside it are labelled.
  *
- * The shape is `DialogProposeEditNode`'s activator, which is the button these
- * were asked to look like: 44px, captioned by a tooltip rather than by a
- * label, outlined in the icon's colour where it has one and plain where it
- * does not. That one keeps its own copy -
- * it is an activator inside a dialog component, and every other caller of that
- * dialog would have had to be re-checked to share this.
+ * Through the component tree rather than a prop, because most of these
+ * buttons are not placed by the row itself. The person page's search menu,
+ * its duplicate and split pair and the data request each draw this button
+ * from inside a component of their own, and none of them has a reason to know
+ * which row it is in. */
+export const iconActionLabelledKey: InjectionKey<boolean> = Symbol(
+  "icon-action-labelled",
+);
+</script>
+
+<script setup lang="ts">
+/** One of the secondary actions on an entity: an admin's tool, a page's link.
+ *
+ * Its look is decided by where it is. In the row of actions under an entity's
+ * name it is a labelled tonal button, which a phone folds into a 40px square;
+ * elsewhere it is the 44px icon button, captioned by a tooltip rather than by
+ * a label, outlined in the icon's colour where it has one and plain where it
+ * does not. `DialogProposeEditNode`'s default activator keeps its own copy of
+ * that icon shape - it is an activator inside a dialog component, and every
+ * other caller of that dialog would have had to be re-checked to share this.
  */
 withDefaults(
   defineProps<{
     /** An `@mdi/js` path. */
     icon: string;
-    /** What the button does, for a screen reader and, failing a `tooltip`, for
-     * the tooltip too. */
+    /** What the button does: its label in a row of actions, and otherwise
+     * what a screen reader says and, failing a `tooltip`, the tooltip too. */
     label: string;
     /** Said on hover, where there is more to say than the label. */
     tooltip?: string;
@@ -53,6 +92,13 @@ withDefaults(
   }>(),
   { tooltip: undefined, color: undefined, to: undefined },
 );
+
+const labelled = inject(iconActionLabelledKey, false);
+
+/** A phone, where the row clips the label: the tooltip is then the only place
+ * a sighted reader can find out what the square does. Wider, a tooltip that
+ * only repeated the label beside it would be noise. */
+const { xs } = useDisplay();
 </script>
 
 <style scoped>

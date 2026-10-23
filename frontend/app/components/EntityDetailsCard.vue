@@ -51,20 +51,18 @@
 
     <CardPersonInfo :person="personEntity" inline class="mt-2" />
 
-    <!-- One row of controls, on every screen: on a phone the row used to be
-         hidden, so the change anybody may propose was not on the page at all.
-         The reader's two first - „Zaproponuj zmianę” with its words, the one
-         action every signed in reader has, then how interesting they found
-         the person - and then the tools only some readers get, as icons in
-         one group that wraps as a whole: on a phone an admin's five tools
-         make the row's second line rather than splitting round the vote. -->
-    <div class="entity-actions" data-testid="person-actions">
+    <!-- One row of controls, on every screen, the same as a company's
+         (entity/Actions.vue): on a phone the row used to be hidden, so the
+         change anybody may propose was not on the page at all. The reader's
+         two first - „Zaproponuj zmianę”, the one action every signed in reader
+         has, then how interesting they found the person - and then the tools
+         only some readers get, labelled on a computer and squares on a phone,
+         where an admin's five make the row's second line. -->
+    <EntityActions class="mt-4" data-testid="person-actions">
       <DialogProposeEditNode v-if="entity" :entity="entity">
         <template #activator="{ props: activatorProps }">
-          <!-- The same button on every entity page (button/ProposeChange). -->
           <ButtonProposeChange
             v-bind="activatorProps"
-            class="entity-actions__propose"
             data-testid="person-propose-change"
           />
         </template>
@@ -76,7 +74,7 @@
         category="interesting"
         show-label
       />
-      <div class="entity-actions__tools">
+      <template #tools>
         <template v-if="isAdmin && entity?.id">
           <!-- The table's "Eksploruj" icon, for the reader who arrived on the
                page directly: the same rejestr.io, Wikipedia and Google queries
@@ -120,10 +118,9 @@
           :node-id="entity.id"
           :name="entity.name"
           target="person"
-          variant="icon"
         />
-      </div>
-    </div>
+      </template>
+    </EntityActions>
 
     <!-- Reading text, at a reading measure. On a phone a long bio shows
          four lines, ending in the clamp's ellipsis, and the rest is one tap
@@ -160,21 +157,9 @@
     </v-btn>
   </header>
 
-  <v-card v-if="type == 'place'" width="100%" variant="flat">
-    <v-card-title class="headline px-0 text-wrap">
-      <v-icon start :icon="mdiOfficeBuildingOutline" />
-      <h1 class="d-inline">
-        {{ entity?.name }}
-      </h1>
-    </v-card-title>
-    <v-card-text class="px-0">
-      <div v-if="identifiers.length > 0" class="text-caption mb-2">
-        {{ identifiers.join(" · ") }}
-      </div>
-      {{ entity?.content }}
-    </v-card-text>
-  </v-card>
-
+  <!-- No company: place/DetailView.vue draws one under both of its urls, the
+       readable one and /entity/place/<id> (pages/entity/[destination]/[id]).
+       An article opened by id still lands here - see that page for why. -->
   <v-card v-if="type == 'article'" width="100%" variant="flat">
     <v-card-title class="headline px-0 text-wrap">
       <v-icon start :icon="mdiFileDocumentOutline" />
@@ -212,7 +197,6 @@ import {
   mdiFileDocumentOutline,
   mdiHistory,
   mdiMapMarkerRadiusOutline,
-  mdiOfficeBuildingOutline,
 } from "@mdi/js";
 import type {
   Person,
@@ -221,7 +205,6 @@ import type {
   Region,
   PersonRich,
 } from "~~/shared/model";
-import { companyIdentifiers } from "~~/shared/identifiers";
 import { nbsp } from "~/utils/nbsp";
 
 const props = withDefaults(
@@ -243,15 +226,6 @@ const emit = defineEmits<{ published: [] }>();
 
 const { isAdmin } = useAuthState();
 
-const company = computed(() =>
-  props.type === "place" ? (props.entity as Company) : undefined,
-);
-
-const identifiers = computed(() =>
-  companyIdentifiers(company.value ?? {}).map(
-    ({ register, value }) => `${register}: ${value}`,
-  ),
-);
 const article = computed(() =>
   props.type === "article" ? (props.entity as Article) : undefined,
 );
@@ -308,41 +282,6 @@ async function openBio() {
 .entity-header {
   border-bottom: 1px solid var(--k-line);
   padding-bottom: 24px;
-}
-
-/* The controls under the facts: a row that wraps, the tools as one group. */
-.entity-actions,
-.entity-actions__tools {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.entity-actions {
-  margin-top: 16px;
-}
-
-.entity-actions__tools {
-  flex-wrap: nowrap;
-}
-
-.entity-actions__tools:empty {
-  display: none;
-}
-
-/* The vote's arrows are 32px buttons, sized for the table's rows. In the
-   header on a phone they are the reader's to tap: 40px, the pill with them,
-   and „Zaproponuj zmianę” beside it at the same 40px. */
-@media (max-width: 599.98px) {
-  .entity-actions :deep(.v-btn--icon.v-btn--size-x-small) {
-    height: 40px;
-    width: 40px;
-  }
-
-  .entity-actions__propose {
-    --v-btn-height: 40px;
-  }
 }
 
 /* The parties beside the h1 are set one step up from a list's 12px. */

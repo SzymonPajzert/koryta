@@ -17,71 +17,65 @@
 
   <div
     v-else-if="part === 'current' && failed"
-    class="k-note text-caption text-medium-emphasis d-flex align-center ga-2"
+    class="k-note k-absent d-flex align-center ga-2"
     data-testid="successions-error"
   >
+    <!-- The quiet line of what a section lacks (`k-absent`), with the alert
+         icon that tells a failure from an absence: two sentences of prose,
+         at the UI size rather than the 12px of meta. -->
     <v-icon :icon="mdiAlertCircleOutline" size="15" />
     <span>Nie udało się wczytać zmian kadrowych. Odśwież stronę.</span>
   </div>
 
-  <div
+  <p
     v-else-if="part === 'absent' && ready && absentLine"
-    class="company-absent"
+    class="k-note k-absent"
     data-testid="company-absent"
   >
-    <!-- What the page does not have, in one muted line after the people,
-         and the sentences that used to stand in each empty section behind
-         its (i): hidden, not deleted. -->
-    <v-icon
-      :icon="mdiEyeOffOutline"
-      size="16"
-      class="company-absent__icon"
-      aria-hidden="true"
-    />
-    <span>
-      {{ absentHead }}
-      <!-- The last word and the (i) as one unbreakable piece: an icon is a
-           box of its own, and on a phone it wrapped onto a line by itself. -->
-      <span class="text-no-wrap"
-        >{{ absentTail }}
-        <InfoBubble label="Czego tu brakuje">
-          <span
-            v-for="item in absentInfo"
-            :key="item.testid"
-            class="d-block company-absent__why"
-            :data-testid="item.testid"
-          >
-            <strong>{{ item.title }}.</strong> {{ nbsp(item.text) }}
-          </span>
-        </InfoBubble></span
-      >
-    </span>
-  </div>
+    <!-- What the page does not have, in one quiet line after the people -
+         the same line a person's page gives what it withholds - and the
+         sentences that used to stand in each empty section behind its (i):
+         hidden, not deleted. The page sets it 12px under the history, as
+         a person's sits under theirs. -->
+    {{ absentHead }}
+    <!-- The last word and the (i) as one unbreakable piece. -->
+    <span class="k-absent__tail"
+      >{{ absentTail }}
+      <InfoBubble label="Czego tu brakuje">
+        <span
+          v-for="item in absentInfo"
+          :key="item.testid"
+          class="d-block why"
+          :data-testid="item.testid"
+        >
+          <strong>{{ item.title }}.</strong> {{ nbsp(item.text) }}
+        </span>
+      </InfoBubble></span
+    >
+  </p>
 
-  <section
+  <PageSection
     v-else-if="part === 'current' && ready && currentGroups.length"
+    title="Obecny skład"
+    :caption="`wpisy bez daty zakończenia, stan na ${longDate(today)}`"
     data-testid="successions-current"
   >
     <!-- ============ obecny skład ============ -->
-    <div class="sec-head mb-1">
-      <h2 class="text-h6">Obecny skład</h2>
-      <span class="text-caption text-medium-emphasis">
-        wpisy bez daty zakończenia, stan na {{ longDate(today) }}
-      </span>
-    </div>
-
+    <!-- The site's section head, as over every section of an entity page:
+         8px over its first group, and the date the board is read at as its
+         caption, which on a phone takes a line of its own. -->
     <div
       v-for="group in currentGroups"
       :key="group.key"
-      class="mt-4"
+      class="k-group"
       :data-testid="`current-role-${group.key}`"
     >
-      <div class="role-head">
-        <v-icon :icon="mdiOfficeBuildingOutline" size="15" />{{ group.role
-        }}<span class="count">{{
-          count(group.people.length, "osoba", "osoby", "osób")
-        }}</span>
-      </div>
+      <!-- The type system's group head, with how many hold the post:
+           „Zarząd 3”. -->
+      <h3 class="k-group-head board-head">
+        {{ group.role }}
+        <span class="k-group-head__count">{{ group.people.length }}</span>
+      </h3>
 
       <v-row dense>
         <v-col
@@ -152,55 +146,45 @@
         </v-col>
       </v-row>
     </div>
-  </section>
+  </PageSection>
 
-  <section
+  <PageSection
     v-else-if="part === 'relay' && ready && successions.length"
+    title="Kto kogo zastąpił"
+    :caption="relayCaption"
+    caption-testid="successions-count"
     data-testid="successions-relay"
   >
     <!-- ============ kto kogo zastąpił ============ -->
-    <div class="sec-head mb-4">
-      <h2 class="text-h6">Kto kogo zastąpił</h2>
-      <!-- How the pairs are made, and what is left out, behind the (i):
-           the method was four lines of 12px prose between the heading and
-           the first card. -->
-      <InfoBubble label="Kto kogo zastąpił">
-        <span
-          v-for="item in relayInfo"
-          :key="item.testid"
-          class="d-block company-absent__why"
-          :data-testid="item.testid"
-        >
-          <strong>{{ item.title }}.</strong> {{ nbsp(item.text) }}
-        </span>
-      </InfoBubble>
-      <!-- The count says how many it leaves out, so four handovers out of
-           sixty never read as the whole register. -->
+    <!-- The count beside the head says how many it leaves out, so four
+         handovers out of sixty never read as the whole register. How the
+         pairs are made, and what is left out, behind the (i): the method
+         was four lines of 12px prose between the heading and the first
+         card. -->
+    <template #info>
       <span
-        class="text-caption text-medium-emphasis"
-        data-testid="successions-count"
+        v-for="item in relayInfo"
+        :key="item.testid"
+        class="d-block why"
+        :data-testid="item.testid"
       >
-        {{ count(successions.length, "zmiana", "zmiany", "zmian") }} w
-        {{ count(roleSections.length, "funkcji", "funkcjach", "funkcjach")
-        }}<template v-if="hidden">
-          ·
-          {{ count(hidden, "pominięta", "pominięte", "pominiętych") }}</template
-        >
+        <strong>{{ item.title }}.</strong> {{ nbsp(item.text) }}
       </span>
-    </div>
+    </template>
 
     <div
       v-for="section in roleSections"
       :key="section.key"
-      class="mb-8"
+      class="k-group"
       :data-testid="`succession-role-${section.key}`"
     >
-      <div class="role-head">
-        <v-icon :icon="mdiOfficeBuildingOutline" size="15" />{{ section.role
-        }}<span class="count">{{
-          count(section.count, "zmiana", "zmiany", "zmian")
-        }}</span>
-      </div>
+      <!-- With how many handovers the post saw: „Prezes zarządu 4”. No rule
+           under it, unlike a board's head: the handovers below are boxes,
+           and a line over a box's edge is two lines. -->
+      <h3 class="k-group-head">
+        {{ section.role }}
+        <span class="k-group-head__count">{{ section.count }}</span>
+      </h3>
       <div class="rl-legend">
         <span>Ustępuje</span><span /><span>Obejmuje stanowisko</span>
       </div>
@@ -221,7 +205,9 @@
             class="ev-badge"
             data-testid="batch-count"
           >
-            {{ count(batch.pairs.length, "zmiana", "zmiany", "zmian") }}
+            {{
+              polishCounting(batch.pairs.length, "zmiana", "zmiany", "zmian")
+            }}
             tego samego dnia
           </span>
           <span
@@ -306,7 +292,7 @@
         </div>
       </div>
     </div>
-  </section>
+  </PageSection>
 </template>
 
 <script lang="ts" setup>
@@ -315,10 +301,9 @@ import {
   mdiArrowDown,
   mdiArrowRight,
   mdiCalendarBlankOutline,
-  mdiEyeOffOutline,
-  mdiOfficeBuildingOutline,
   mdiSwapVertical,
 } from "@mdi/js";
+import { polishCounting } from "~/composables/polish";
 import { createSlug, generateEntityUrl } from "~/composables/slugs";
 import { gapLabel, MAX_GAP_DAYS, MAX_OVERLAP_DAYS } from "~~/shared/succession";
 import { isoDay, longDate, shortDate } from "~~/shared/dates";
@@ -404,19 +389,6 @@ const today = useState("succession-today", () => {
 
 /* ---------- durations ---------- */
 
-/** 1 / 2-4 / 5+, with the 12-14 exception Polish keeps for itself. */
-function pluralPl(n: number, one: string, few: string, many: string): string {
-  if (n === 1) return one;
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-  return many;
-}
-
-function count(n: number, one: string, few: string, many: string): string {
-  return `${n} ${pluralPl(n, one, few, many)}`;
-}
-
 /** How long a spell ran, in years and months. An open spell is measured to
  * today, which is what "2 lata na stanowisku" means on a current post. */
 function duration(start: string | null, end: string | null): string {
@@ -429,8 +401,7 @@ function duration(start: string | null, end: string | null): string {
   const years = Math.floor(months / 12);
   const rest = months % 12;
   if (!years) return `${rest} mies.`;
-  const label = pluralPl(years, "rok", "lata", "lat");
-  return `${years} ${label}${rest ? ` ${rest} mies.` : ""}`;
+  return `${polishCounting(years, "rok", "lata", "lat")}${rest ? ` ${rest} mies.` : ""}`;
 }
 
 /** The whole spell behind one side of a handover, so a row stands on its own
@@ -439,7 +410,7 @@ function spell(side: SuccessionSide): string {
   if (!side.start) return "brak daty rozpoczęcia";
   const end = side.end ? shortDate(side.end) : "obecnie";
   const length = duration(side.start, side.end);
-  return `${shortDate(side.start)} – ${end}${length ? ` · ${length}` : ""}`;
+  return `${shortDate(side.start)} - ${end}${length ? ` · ${length}` : ""}`;
 }
 
 /* ---------- people ---------- */
@@ -606,6 +577,17 @@ const roleSections = computed(() => {
   });
 });
 
+/** „4 zmiany w 2 funkcjach · 5 pominiętych”: the relay's cards, the roles
+ * they fall under, and the handovers left out. */
+const relayCaption = computed(() => {
+  const shown =
+    `${polishCounting(successions.value.length, "zmiana", "zmiany", "zmian")} ` +
+    `w ${polishCounting(roleSections.value.length, "funkcji", "funkcjach", "funkcjach")}`;
+  return hidden.value
+    ? `${shown} · ${polishCounting(hidden.value, "pominięta", "pominięte", "pominiętych")}`
+    : shown;
+});
+
 /* ---------- what the page does not have ---------- */
 
 /** One paragraph of a bubble: what it is about, the sentence, and the hook a
@@ -633,7 +615,7 @@ const sentences = computed(() => ({
   // Why the handovers are fewer than the register's. Said, because two of
   // fifteen with no word on the rest reads as a bug.
   hidden:
-    `Nie pokazujemy ${count(hidden.value, "zmiany", "zmian", "zmian")} — ` +
+    `Nie pokazujemy ${polishCounting(hidden.value, "zmiany", "zmian", "zmian")}\u00a0- ` +
     "brakuje strony jednej z osób. W zestawieniu są tylko te zmiany, w " +
     "których obie osoby mają u nas swoją stronę.",
   method:
@@ -677,7 +659,7 @@ const absentLine = computed(() => {
   if (noRelay && skipped) {
     const where = skipped === 1 ? "stanowisku" : "stanowiskach";
     parts.push(
-      `Pominęliśmy ${count(skipped, "zmianę", "zmiany", "zmian")} na ${where}, ` +
+      `Pominęliśmy ${polishCounting(skipped, "zmianę", "zmiany", "zmian")} na ${where}, ` +
         "bo brakuje strony jednej z osób.",
     );
   }
@@ -729,62 +711,30 @@ const absentInfo = computed<Why[]>(() => {
 </script>
 
 <style scoped>
-/* `k-card`, `k-card--accent` and `k-note` are global (`app.vue`), and so is
-   `sec-head`. They used to be here too, at values a little off the ones
-   `succession/PersonChanges.vue` carried - 8px round instead of 10, a 4px
-   full-height rail instead of a 3px inset one, a baseline-aligned heading
-   instead of a centred one. Nobody chose that; they were copied at different
-   times. The company page moves to the shared values, which is what lets the
-   notes underneath these cards be the same object as the cards themselves.
-   „Obecny skład” keeps its 6px of air as a `mb-1`, rounded to the spacing
-   scale, because the shell puts that gap on the lead paragraph and it has
-   none. „Kto kogo zastąpił” takes a `mb-4` instead: the method paragraph that
-   stood under it went behind its (i), and the gap it left is the one its
-   first group would otherwise lose. */
-
-/* What the page does not have: one muted line at the UI size, no box. The
-   icon in the quieter ink of the (i) beside it. */
-.company-absent {
-  align-items: flex-start;
-  text-wrap: pretty;
-  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
-  display: flex;
-  font-size: var(--k-ui-size);
-  gap: 8px;
-  line-height: 1.5;
-}
-
-.company-absent__icon {
-  color: rgba(var(--v-theme-on-surface), 0.38);
-  flex: 0 0 auto;
-  margin-top: 3px;
-}
+/* `k-card`, `k-card--accent` and `k-note` are global (`app.vue`), and the
+   section heads are the site's `PageSection`. They used to be here too, at
+   values a little off the ones `succession/PersonChanges.vue` carried - 8px
+   round instead of 10, a 4px full-height rail instead of a 3px inset one, a
+   baseline-aligned heading instead of a centred one, and a head 16px over
+   its content where every other section's stands 8. Nobody chose that; they
+   were copied at different times. The company page moves to the shared
+   values, which is what lets the notes underneath these cards be the same
+   object as the cards themselves. The group heads (`k-group-head`,
+   assets/css/type.css) and the line on what the page lacks (`k-absent`) are
+   the shared ones too, the same as on a person's page. */
 
 /* A bubble that says more than one thing: a gap between its paragraphs. */
-.company-absent__why + .company-absent__why {
+.why + .why {
   margin-top: 6px;
 }
 
-/* The board a group of people sits under: a group head, quiet and in
-   sentence case, so the names under it lead their group instead of competing
-   with it. */
-.role-head {
-  align-items: center;
+/* Over a board's cards, and only there, a hairline under the group head:
+   the cards stand apart in a grid, and without the line three of them read
+   as three loose boxes rather than one board. A list that is one box of its
+   own - the history, the handovers below - needs no line over its edge. */
+.board-head {
   border-bottom: 1px solid var(--k-line);
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  display: flex;
-  font-size: 0.875rem;
-  font-weight: 600;
-  gap: 8px;
-  margin-bottom: 12px;
   padding-bottom: 6px;
-}
-
-.role-head .count {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  font-weight: 400;
-  margin-left: auto;
 }
 
 /* ---- obecny skład ---- */
@@ -794,10 +744,10 @@ const absentInfo = computed<Why[]>(() => {
 .now-pill {
   align-items: center;
   background: rgba(var(--v-theme-primary), 0.22);
-  border-radius: 6px;
+  border-radius: var(--k-r-control);
   color: rgba(var(--v-theme-on-surface), 0.87);
   display: inline-flex;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 600;
   gap: 4px;
   padding: 2px 8px;
@@ -822,16 +772,16 @@ const absentInfo = computed<Why[]>(() => {
 
 .ev-date {
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   font-weight: 700;
 }
 
 .ev-badge {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-border-color), 0.28);
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 700;
   padding: 1px 9px;
   white-space: nowrap;
@@ -839,7 +789,7 @@ const absentInfo = computed<Why[]>(() => {
 
 .ev-sub {
   color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   margin-left: auto;
 }
 
@@ -896,8 +846,8 @@ const absentInfo = computed<Why[]>(() => {
 }
 
 .rl-meta {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-meta-size);
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -907,9 +857,9 @@ const absentInfo = computed<Why[]>(() => {
 /* Which side of the handover a block is, on the phone layout only: on a wide
    row the legend above the cards says it once for the whole role. */
 .rl-ovl {
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
   display: none;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 600;
   margin-bottom: 2px;
 }
@@ -918,7 +868,7 @@ const absentInfo = computed<Why[]>(() => {
   border-radius: 50%;
   display: grid;
   flex: 0 0 auto;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 700;
   height: 34px;
   place-items: center;
@@ -928,7 +878,7 @@ const absentInfo = computed<Why[]>(() => {
 /* Faded = the post was left; sage = the post is now theirs. */
 .av--out {
   background: rgba(var(--v-theme-on-surface), 0.06);
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
 }
 
 .av--in {
@@ -979,7 +929,7 @@ const absentInfo = computed<Why[]>(() => {
 .rl-gap {
   background: rgb(var(--v-theme-surface));
   color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   line-height: 1.3;
   padding: 0 4px;
   position: relative;
@@ -988,9 +938,9 @@ const absentInfo = computed<Why[]>(() => {
 
 .rl-flip {
   background: rgb(var(--v-theme-secondary));
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 700;
   padding: 1px 8px;
   position: relative;
@@ -1003,9 +953,9 @@ const absentInfo = computed<Why[]>(() => {
 
 /* Column labels once per role, not once per card. */
 .rl-legend {
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
   display: grid;
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   font-weight: 600;
   gap: 10px;
   grid-template-columns: 1fr 184px 1fr;

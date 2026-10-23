@@ -12,15 +12,15 @@
   >
     <template #info>
       <span data-testid="node-mentions-lead">
-        Teksty prasowe, w których pada ta nazwa – z artykułów przeanalizowanych
+        Teksty prasowe, w których pada ta nazwa - z artykułów przeanalizowanych
         przez model i ze źródeł dodanych w notatkach oraz przy powiązaniach.
       </span>
     </template>
 
-    <!-- `mt-1`: the lead under the heading was the only gap between it and
-         the cards, and it now sits behind the (i). With the dense row's
-         padding this is 8px, as under „Historia powiązań”. -->
-    <v-row dense class="mt-1">
+    <!-- No margin of its own: the dense row's -4px and its columns' 4px
+         cancel, so the cards stand the head's 8px under it, as under every
+         other section head. A `mt-1` here put them 12px down. -->
+    <v-row dense>
       <!-- Keyed on the article, which the endpoint lists once, not on the
            edge: a relation citing two articles puts its id on both cards. -->
       <v-col v-for="mention in mentions" :key="mention.nodeId" cols="12" md="6">
@@ -53,7 +53,7 @@
                 >
                   szkic
                   <v-tooltip activator="parent" location="top">
-                    Powiązanie czeka na zatwierdzenie — widoczne tylko dla
+                    Powiązanie czeka na zatwierdzenie - widoczne tylko dla
                     zalogowanych.
                   </v-tooltip>
                 </v-chip>

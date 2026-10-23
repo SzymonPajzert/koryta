@@ -1,22 +1,14 @@
 <template>
   <template v-if="isDatascience">
+    <!-- One of the tools in an entity's row of actions: labelled there on a
+         computer, a square on a phone (button/IconAction.vue). -->
     <ButtonIconAction
-      v-if="variant === 'icon'"
       :icon="mdiDatabaseArrowRightOutline"
       :label="label"
       :tooltip="tooltip"
       data-testid="job-request-open"
       @click="open = true"
     />
-    <v-btn
-      v-else
-      variant="tonal"
-      :prepend-icon="mdiDatabaseArrowRightOutline"
-      data-testid="job-request-open"
-      @click="open = true"
-    >
-      {{ label }}
-    </v-btn>
 
     <v-dialog v-model="open" max-width="600" scrollable>
       <v-card data-testid="job-request-dialog">
@@ -173,10 +165,8 @@ const props = withDefaults(
     nodeId: string;
     target: RequestTarget;
     name?: string | null;
-    /** `icon`: one of the square buttons in a person page's header. */
-    variant?: "icon" | "button";
   }>(),
-  { name: null, variant: "button" },
+  { name: null },
 );
 
 const { isDatascience } = useAuthState();

@@ -1,9 +1,11 @@
 <template>
-  <div v-if="edges.length > 0 || canAdd">
-    <div class="d-flex align-center justify-space-between mb-2">
-      <h2 class="text-h6">{{ title }}</h2>
+  <!-- The site's section head, as over every other section of an entity
+       page: on the heading's baseline, 8px over the list. -->
+  <PageSection v-if="edges.length > 0 || canAdd" :title="title">
+    <!-- Still the sage text it was, unlike the history's neutral „Dodaj”:
+         a colour change, and colours wait for the palette. -->
+    <template v-if="canAdd" #actions>
       <v-btn
-        v-if="canAdd"
         variant="text"
         size="small"
         color="primary"
@@ -13,7 +15,7 @@
       >
         Dodaj
       </v-btn>
-    </div>
+    </template>
     <!-- A ruled list on the hairline, not a card lifted on a shadow; edge to
          edge on a phone, like the relation history. Only entity pages list
          these, at their full width. -->
@@ -26,10 +28,15 @@
           :prepend-icon="entityIcon(edge.richNode.type)"
         >
           <!-- Wrapped rather than cut: a registry name runs to sixty
-               characters, and on a phone the ellipsis took the city with it. -->
-          <v-list-item-title class="text-wrap">
+               characters, and on a phone the ellipsis took the city with it.
+               Bold, as an entity's name is in the history's rows and every
+               other list of them; how many people it holds stays regular. -->
+          <v-list-item-title class="text-wrap font-weight-bold">
             {{ edge.richNode.name }}
-            <span v-if="getPeopleCount(edge) > 0" class="text-medium-emphasis">
+            <span
+              v-if="getPeopleCount(edge) > 0"
+              class="font-weight-regular text-medium-emphasis"
+            >
               ({{ getPeopleCount(edge) }})
             </span>
           </v-list-item-title>
@@ -67,7 +74,7 @@
         </v-list-item>
       </v-list>
     </v-card>
-  </div>
+  </PageSection>
 </template>
 
 <script setup lang="ts">
