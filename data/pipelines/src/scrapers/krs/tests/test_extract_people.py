@@ -6,10 +6,13 @@ import json
 import pandas as pd
 import pytest
 
+from entities.person import PERSON_FEED
 from scrapers.krs.list import (
     CompaniesKRS,
+    Post,
     extract_people,
     is_owned_by_queried,
+    posts_at_companies,
     posts_held,
 )
 from scrapers.stores import Context, ProcessPolicy
@@ -554,21 +557,41 @@ def test_an_entry_with_no_connections_is_not_owned():
     assert not is_owned_by_queried({"typ": "organizacja"})
 
 
-PERSON_FEED = (
-    "hostname=rejestr.io/api/v2/osoby/808738/krs-powiazania"
-    "/aktualnosc_aktualne/date=2026-07-19"
-)
+# ─── a person's own feed ───────────────────────────────────
 
 
-def test_a_persons_own_feed_contributes_nothing_here(context):
-    """It lists companies, not people, so it never could have.
+def person_feed(id: str, aktualnosc: str, date: str) -> str:
+    return (
+        f"hostname=rejestr.io/api/v2/osoby/{id}/krs-powiazania"
+        f"/aktualnosc_{aktualnosc}/date={date}"
+    )
 
-    4,198 such documents were being parsed for no rows at all. What is in them
-    is used elsewhere - to find companies worth crawling, and to tell whether
-    the feed itself has gone stale.
-    """
+
+def company(krs: str, *connections: dict) -> dict:
+    """A company as a person's feed lists it, with that person's connections."""
+    return {
+        "typ": "organizacja",
+        "numery": {"krs": krs},
+        "krs_powiazania_kwerendowane": list(connections),
+    }
+
+
+def board(start: str, end: str | None = None) -> dict:
+    return {"typ": "KRS_BOARD", "data_start": start, "data_koniec": end}
+
+
+def bought(people: pd.DataFrame) -> pd.DataFrame:
+    return people[people["rejestrio_feed"] == PERSON_FEED]
+
+
+def test_the_feed_of_somebody_no_company_feed_knows_gives_no_rows(context):
+    """The feed names its person by the id alone: no name, no birth date."""
     ctx, _ = context(
-        {PERSON_FEED: [{"typ": "organizacja", "numery": {"krs": "0000030563"}}]}
+        {
+            person_feed("808738", "aktualne", "2026-07-19"): [
+                company("0000030563", board("2020-01-01"))
+            ]
+        }
     )
 
     assert extract_people(ctx).empty
@@ -577,7 +600,9 @@ def test_a_persons_own_feed_contributes_nothing_here(context):
 def test_a_company_feed_alongside_one_is_still_read(context):
     ctx, _ = context(
         {
-            PERSON_FEED: [{"typ": "organizacja", "numery": {"krs": "0000030563"}}],
+            person_feed("808738", "aktualne", "2026-07-19"): [
+                {"typ": "organizacja", "numery": {"krs": "0000030563"}}
+            ],
             connections("0000030563", "aktualne", "2026-02-13"): [
                 seat("2007-10-16", None)
             ],
@@ -585,3 +610,182 @@ def test_a_company_feed_alongside_one_is_still_read(context):
     )
 
     assert len(extract_people(ctx)) == 1
+
+
+def test_a_bought_feed_gives_its_posts_at_companies_no_company_feed_was_read_for(
+    context,
+):
+    """Marek Staniszewski's company feed names him at 0000030563; his own feed
+    also names 0000099999, which nothing else does. That post comes from his
+    feed, under his name and birth date; the one at 0000030563 stays the
+    company feed's alone."""
+    ctx, _ = context(
+        {
+            connections("0000030563", "aktualne", "2026-02-13"): [
+                seat("2007-10-16", None)
+            ],
+            person_feed("911114", "aktualne", "2026-10-17"): [
+                company(
+                    "0000030563",
+                    {"typ": "KRS_SUPERVISION", "data_start": "2007-10-16"},
+                ),
+                company("99999", board("2026-09-29")),
+                # A shareholding is no post, from either feed.
+                company("0000088888", {"typ": "KRS_SHAREHOLDER"}),
+            ],
+        }
+    )
+
+    people = extract_people(ctx)
+
+    assert len(people) == 2
+    [row] = bought(people).to_dict("records")
+    assert {
+        k: row[k]
+        for k in (
+            "id",
+            "full_name",
+            "birth_date",
+            "rejestrio_type",
+            "employed_krs",
+            "employed_role",
+            "employed_start",
+            "employed_end",
+            "crawled_on",
+        )
+    } == {
+        "id": "911114",
+        "full_name": "Marek Staniszewski",
+        "birth_date": "1958-04-11",
+        "rejestrio_type": "osoba",
+        "employed_krs": "0000099999",
+        "employed_role": "Zarząd",
+        "employed_start": "2026-09-29",
+        "employed_end": None,
+        "crawled_on": "2026-10-17",
+    }
+    from_company = people[people["rejestrio_feed"].isna()]
+    assert list(from_company["employed_krs"]) == ["0000030563"]
+
+
+@pytest.mark.parametrize("newest_first", [False, True])
+def test_the_newest_crawl_of_a_persons_feed_wins(context, newest_first):
+    older = (
+        person_feed("911114", "aktualne", "2026-09-01"),
+        [company("0000099999", board("2020-01-01"))],
+    )
+    newer = (
+        person_feed("911114", "aktualne", "2026-10-17"),
+        [company("0000099999", board("2020-01-01", "2026-10-01"))],
+    )
+    known = (
+        connections("0000030563", "aktualne", "2026-02-13"),
+        [seat("2007-10-16", None)],
+    )
+    arriving = [newer, older] if newest_first else [older, newer]
+    ctx, _ = context(dict([known, *arriving]))
+
+    [row] = bought(extract_people(ctx)).to_dict("records")
+
+    assert (row["employed_end"], row["crawled_on"]) == ("2026-10-01", "2026-10-17")
+
+
+def test_a_failed_crawl_of_a_persons_feed_falls_back_to_the_one_before(context):
+    ctx, _ = context(
+        {
+            connections("0000030563", "aktualne", "2026-02-13"): [
+                seat("2007-10-16", None)
+            ],
+            person_feed("911114", "aktualne", "2026-09-01"): [
+                company("0000099999", board("2020-01-01"))
+            ],
+            person_feed("911114", "aktualne", "2026-10-17"): "",
+        }
+    )
+
+    [row] = bought(extract_people(ctx)).to_dict("records")
+
+    assert row["crawled_on"] == "2026-09-01"
+
+
+def test_both_of_a_persons_feeds_give_their_posts_once_each(context):
+    """The current posts and the past ones are two feeds, as for a company,
+    and a post the two both list is still one."""
+    ctx, _ = context(
+        {
+            connections("0000030563", "aktualne", "2026-02-13"): [
+                seat("2007-10-16", None)
+            ],
+            person_feed("911114", "aktualne", "2026-10-17"): [
+                company("0000099999", board("2026-02-02"))
+            ],
+            person_feed("911114", "historyczne", "2026-10-17"): [
+                company("0000099999", board("2001-05-05", "2004-06-30")),
+                company("0000077777", board("2010-01-01", "2012-12-31")),
+                company("0000077777", board("2010-01-01", "2012-12-31")),
+            ],
+        }
+    )
+
+    rows = bought(extract_people(ctx))
+
+    assert sorted(zip(rows["employed_krs"], rows["employed_start"])) == [
+        ("0000077777", "2010-01-01"),
+        ("0000099999", "2001-05-05"),
+        ("0000099999", "2026-02-02"),
+    ]
+
+
+def test_a_company_feed_that_lists_nobody_still_speaks_for_its_company(context):
+    """An empty list is rejestr.io's answer for the company - nobody - and not
+    a failed crawl, which is stored as an empty object."""
+    ctx, _ = context(
+        {
+            connections("0000030563", "aktualne", "2026-02-13"): [
+                seat("2007-10-16", None)
+            ],
+            connections("0000099999", "aktualne", "2026-05-27"): [],
+            person_feed("911114", "aktualne", "2026-10-17"): [
+                company("0000099999", board("2020-01-01"))
+            ],
+        }
+    )
+
+    assert bought(extract_people(ctx)).empty
+
+
+def test_an_entry_without_a_pesel_takes_nothing_off_the_feed_of_its_number(context):
+    """``/osoby/<n>`` is the osoba numbered n: bought for an ``osoba-bez-pesel``
+    number, it is a stranger's feed (`PERSON_TYPES`)."""
+    ctx, _ = context(
+        {
+            connections("0000030563", "aktualne", "2026-02-13"): [
+                unidentified_seat("2007-10-16", None)
+            ],
+            person_feed("2906389", "aktualne", "2026-10-17"): [
+                company("0000099999", board("2020-01-01"))
+            ],
+        }
+    )
+
+    people = extract_people(ctx)
+
+    assert len(people) == 1 and bought(people).empty
+
+
+def test_a_company_without_a_krs_number_is_no_post():
+    assert posts_at_companies(
+        [
+            {
+                "typ": "organizacja",
+                "numery": {},
+                "krs_powiazania_kwerendowane": [board("2020-01-01")],
+            },
+            {
+                "typ": "osoba",
+                "numery": {"krs": "1"},
+                "krs_powiazania_kwerendowane": [board("2020-01-01")],
+            },
+            company("12345", board("2020-01-01")),
+        ]
+    ) == [("0000012345", Post(role="Zarząd", start="2020-01-01", end=None))]
