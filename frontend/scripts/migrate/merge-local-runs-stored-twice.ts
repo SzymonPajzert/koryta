@@ -7,6 +7,7 @@ import {
   type EdgeLike,
 } from "../../server/utils/edges";
 import { electionKindsIn } from "../../shared/electionDays";
+import { approvedRevisionId } from "../../shared/model";
 import { placesAgree } from "../../shared/twoPlaces";
 import {
   argValue,
@@ -297,6 +298,14 @@ export function planLocalRuns(
           );
           continue;
         }
+        // The office PKW gives the run, on a copy written anyway that would
+        // still say only „Samorząd” or nothing: a sejmik run under its
+        // województwo when the copy in place had no name either. The first
+        // run left 43 such runs without one (`bareFoldedSejmikRuns`).
+        if (folded.data && unnamedLocal(folded.data as EdgeLike)) {
+          folded.data.position = office;
+          folded.learns.position = office;
+        }
         plans.push({
           personId,
           office,
@@ -308,6 +317,47 @@ export function planLocalRuns(
     }
   }
   return { plans, skipped };
+}
+
+/** The sejmik runs a fold of this script left saying no office: the copies it
+ * moved under a województwo whose current revision, its own, still says only
+ * „Samorząd” or nothing.
+ *
+ * Its first run, on 2026-10-23, did that to 43 runs: a live copy at home folded
+ * into a copy under the województwo that named no office either, so nothing
+ * named the run. 16 of them said no office at all, and their revisions were
+ * the first election revisions since the pipeline named offices to have none,
+ * which is what `test_required_field_present[election.position]` counts - 1907
+ * against a budget of 1891 the night's gate fails past 1901. PKW gives every
+ * one of them as the year's only local run, the sejmik of that województwo,
+ * and a local run under a województwo is its sejmik's (`officeOf`), so the
+ * office is written onto the edge and into the revision it is shown by: the
+ * revision is corrected rather than followed by another, which would leave it
+ * counted. Rehearsed on the 2026-10-23 21:37 export: 43 named, the count back
+ * to 1891. */
+export function bareFoldedSejmikRuns(
+  revisions: readonly { id: string; data: Record<string, unknown> }[],
+  edges: ReadonlyMap<string, Record<string, unknown>>,
+  terytOf: (regionId: unknown) => string | undefined,
+): { edgeId: string; revisionId: string }[] {
+  const bare: { edgeId: string; revisionId: string }[] = [];
+  for (const { id, data: revision } of revisions) {
+    if (revision.update_user !== AUTHOR) continue;
+    const data = (revision.data ?? {}) as Record<string, unknown>;
+    if (data.type !== "election" || data.deleted === true) continue;
+    const edgeId = String(revision.node_id ?? "");
+    const edge = edges.get(edgeId);
+    if (!edge || edge.deleted === true) continue;
+    if (approvedRevisionId(edge.revision_id) !== id) continue;
+    if (!unnamedLocal(edge as EdgeLike) || !unnamedLocal(data as EdgeLike)) {
+      continue;
+    }
+    if (terytOf(edge.target)?.length !== 2) continue;
+    bare.push({ edgeId, revisionId: id });
+  }
+  return bare.sort((a, b) =>
+    a.edgeId < b.edgeId ? -1 : a.edgeId > b.edgeId ? 1 : 0,
+  );
 }
 
 /** Why a copy went, on the copy. */
@@ -520,11 +570,37 @@ async function main() {
     limit,
   );
 
+  const ours = await db
+    .collection("revisions")
+    .where("update_user", "==", AUTHOR)
+    .get();
+  const bare = bareFoldedSejmikRuns(
+    ours.docs.map((doc) => ({ id: doc.id, data: doc.data() })),
+    stored,
+    (regionId) => teryts.get(String(regionId)),
+  );
+  console.info(
+    `\n${bare.length} sejmik runs an earlier fold moved without an office, to name „Sejmik”` +
+      (bare.length ? `: ${bare.map((run) => run.edgeId).join(", ")}` : ""),
+  );
+
   if (!commit) {
-    reportRemaining({ runs: ready.length, removed });
+    reportRemaining({ runs: ready.length, removed, unnamed: bare.length });
     console.info("\nDry run. Re-run with --commit to apply.");
     return;
   }
+
+  // The edge and the revision it is shown by, in one batch each, so the two
+  // never disagree.
+  for (const { edgeId, revisionId } of bare) {
+    const batch = db.batch();
+    batch.update(db.collection("edges").doc(edgeId), { position: "Sejmik" });
+    batch.update(db.collection("revisions").doc(revisionId), {
+      "data.position": "Sejmik",
+    });
+    await batch.commit();
+  }
+  console.info(`Named ${bare.length} sejmik runs.`);
 
   // One batch per run, as merge-national-runs-stored-twice.ts writes them.
   let done = 0;

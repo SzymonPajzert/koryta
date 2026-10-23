@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  bareFoldedSejmikRuns,
   planLocalRuns,
   readPkw,
   removalReason,
@@ -108,7 +109,8 @@ describe("planLocalRuns", () => {
     const folded = only([atHome(), sejmik({ position: "Samorząd" })]);
 
     expect(folded.keep).toBe("xoQqPmr06ziH4e2wUIlh");
-    expect(folded.learns).toEqual({ committee: KKW });
+    // Named by PKW's office, as neither copy said it.
+    expect(folded.learns).toEqual({ committee: KKW, position: "Sejmik" });
   });
 
   it("keeps the named copy where it is live, and removes the „Samorząd” one", () => {
@@ -348,6 +350,98 @@ describe("planLocalRuns", () => {
         "raz jako „Samorząd”, bez nazwy urzędu. " +
         "Zostaje powiązanie xoQqPmr06ziH4e2wUIlh.",
     );
+  });
+});
+
+describe("a sejmik run whose copy in place has no office either", () => {
+  // 16 runs on the first production run: a live copy at home with no office,
+  // folded into a „Samorząd” copy under the województwo.
+  const home = atHome({ position: undefined, start_date: "2018-01-01" });
+  const place = sejmik({ position: "Samorząd", start_date: "2018-01-01" });
+  const run: PkwRun = { ...SEJMIK_2024, year: "2018" };
+
+  it("is named by the office PKW gives it", () => {
+    const folded = only([home, place], [run]);
+
+    expect(folded.keep).toBe("xoQqPmr06ziH4e2wUIlh");
+    expect(folded.data).toMatchObject({
+      target: "teryt10",
+      position: "Sejmik",
+    });
+    expect(folded.learns).toMatchObject({ position: "Sejmik", committee: KKW });
+  });
+
+  describe("bareFoldedSejmikRuns, for the ones the first run left bare", () => {
+    const AUTHOR = "migration:merge-local-runs-stored-twice";
+    const revision = (fields: Record<string, unknown> = {}) => ({
+      id: "rev-1",
+      data: {
+        node_id: "xoQqPmr06ziH4e2wUIlh",
+        update_user: AUTHOR,
+        status: "approved",
+        data: { type: "election", target: "teryt10", start_date: "2018-01-01" },
+        ...fields,
+      },
+    });
+    const edges = (fields: Record<string, unknown> = {}) =>
+      new Map([
+        [
+          "xoQqPmr06ziH4e2wUIlh",
+          {
+            ...home.data,
+            target: "teryt10",
+            revision_id: "revisions/rev-1",
+            ...fields,
+          },
+        ],
+      ]);
+
+    it("finds the copy it moved and showed by its own bare revision", () => {
+      expect(bareFoldedSejmikRuns([revision()], edges(), terytOf)).toEqual([
+        { edgeId: "xoQqPmr06ziH4e2wUIlh", revisionId: "rev-1" },
+      ]);
+    });
+
+    it("leaves anybody else's revision, and one no longer shown", () => {
+      expect(
+        bareFoldedSejmikRuns(
+          [revision({ update_user: "pipeline-people-import" })],
+          edges(),
+          terytOf,
+        ),
+      ).toEqual([]);
+      expect(
+        bareFoldedSejmikRuns(
+          [revision()],
+          edges({ revision_id: "revisions/later" }),
+          terytOf,
+        ),
+      ).toEqual([]);
+    });
+
+    it("leaves a run already named, one below a województwo, and a removal", () => {
+      expect(
+        bareFoldedSejmikRuns(
+          [revision()],
+          edges({ position: "Sejmik" }),
+          terytOf,
+        ),
+      ).toEqual([]);
+      expect(
+        bareFoldedSejmikRuns(
+          [revision()],
+          edges({ target: "teryt1061" }),
+          terytOf,
+        ),
+      ).toEqual([]);
+      expect(
+        bareFoldedSejmikRuns(
+          [revision({ data: { type: "election", deleted: true } })],
+          edges(),
+          terytOf,
+        ),
+      ).toEqual([]);
+    });
   });
 });
 
