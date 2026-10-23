@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "sklad-raz-zmiany-jednakowo",
+    title: "Obecny skład raz, zmiany na stanowiskach tak samo na obu stronach",
+    description:
+      "Na stronie spółki obecny skład jest tylko w kartach, a „Historia powiązań” zaczyna się od zakończonych stanowisk. Zmiany na stanowiskach wyglądają tak samo na stronie osoby i spółki: kto ustępuje, przerwa, kto obejmuje. Długie listy są zwinięte.",
+    steps: [
+      "Otwórz stronę PKP LHS - osoby z „Obecnego składu” nie powtarzają się w „Historii powiązań”, która pokazuje już tylko zakończone stanowiska.",
+      "Zalogowany jako admin - przy każdej karcie obecnego składu są przyciski źródeł, edycji i usuwania.",
+      "Zalogowany, na tej samej stronie w „Kto kogo zastąpił” każda funkcja pokazuje pięć ostatnich zmian i przycisk „Pokaż starsze”, a „Właściciele” są nad nią, z liczbą.",
+      "Otwórz stronę Kazimierza Karolczaka - w „Zmianach na stanowisku” jest „Ustępuje”, szara przerwa i „Obejmuje stanowisko”, jak na stronie spółki.",
+    ],
+    link: "/instytucja/pkp-linia-hutnicza-szerokotorowa-zamosc-HcPyUKHOPqnRjWq2OqUs",
+    area: "public",
+  },
+  {
     id: "region-i-tematy-z-tytulem",
     title: "Strona regionu i /tematy z tytułem jak inne strony",
     description:
@@ -76,7 +90,7 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Na obu stronach pod nazwą jest ten sam wiersz faktów i ten sam rząd przycisków z pomarańczowym ołówkiem przy „Zaproponuj zmianę”. „Historia powiązań” spółki ma daty w kolumnie i grupy Obecnie, Zakończone i Bez dat, jak na stronie osoby, a graf spółki ma nagłówek „Graf powiązań”.",
     steps: [
-      "Otwórz stronę PKP LHS - „Historia powiązań” ma grupy „Obecnie” i „Zakończone”, a daty stoją w kolumnie, np. „od 14.05.2026”.",
+      "Otwórz stronę PKP LHS - w „Historii powiązań” daty stoją w kolumnie, np. „12.06.2025 - 03.04.2026”, a na telefonie same lata.",
       "Na tej samej stronie kliknij „Notatki” pod nazwą - strona przewija się do sekcji „Notatki”.",
       "Jako admin otwórz stronę osoby na komputerze - narzędzia admina to przyciski z podpisami; na telefonie to kwadratowe ikony w osobnym rzędzie.",
       "Na stronie z komentarzami obok nagłówka „Dyskusja” jest ich liczba, np. „2 komentarze”.",

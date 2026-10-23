@@ -1,9 +1,70 @@
 import { useCurrentUser } from "vuefire";
+import type { AsyncDataRequestStatus } from "#app";
 import { authFetch } from "~/composables/auth";
+import { nominativeNoun, polishCounting } from "~/composables/polish";
+import { warsawDate } from "~~/shared/dates";
 import type {
   CompanySuccessions,
   PersonSuccessions,
 } from "~~/server/api/edges/successions.get";
+
+/** One side of a handover as `succession/HandoverRow.vue` draws it, whichever
+ * page it is on: who, their parties, and the spell they served in the seat. */
+export type HandoverSide = {
+  name: string;
+  /** Their page. Left out for the person whose page the row is on: a link
+   * back to where the reader already is. */
+  url?: string;
+  parties: string[];
+  start: string | null;
+  end: string | null;
+};
+
+/** Today, for the handover sections: the Warsaw day, fixed at render and
+ * carried into the browser in the payload, so the server and the client cannot
+ * disagree about how long somebody has held a post or what „stan na” says.
+ * Warsaw rather than the machine's own zone, which on App Hosting is UTC and
+ * answers yesterday for the first two hours of a Warsaw day. One key for every
+ * component that measures a spell, so they all measure to the same day. */
+export function useSuccessionToday() {
+  return useState("succession-today", () => warsawDate());
+}
+
+/** The edges of the posts „Obecny skład” draws as cards on a company's page,
+ * or none while it draws none.
+ *
+ * The page's „Historia powiązań” leaves these out, so a reader meets each of
+ * today's board once (Szymon, 2026-10-23). Read off the same answer and the
+ * same state `succession/CompanyChanges.vue` draws its cards from, so the two
+ * cannot disagree: until the first answer arrives, or once the request has
+ * failed, there are no cards, and the history keeps every row. */
+export function boardEdgeIds(
+  data: CompanySuccessions | null | undefined,
+  status: AsyncDataRequestStatus,
+): Set<string> {
+  if (status === "error") return new Set();
+  return new Set((data?.current ?? []).map((post) => post.edgeId));
+}
+
+/** Why a name is hedged where a whole board changed on one day. The register
+ * struck several people off and entered as many, and which of them took whose
+ * chair is an assignment the pairing made up (`sameDayPeers`). One sentence for
+ * the „m.in.” on a company's board and the line under a person's handover,
+ * which had drifted into two wordings - and both said „zmieniło się 4
+ * stanowisk”: the verb and the noun follow the number in Polish. */
+export function batchNote(batchSize: number): string {
+  const changed = nominativeNoun(batchSize, "zmieniło", "zmieniły", "zmieniło");
+  const seats = polishCounting(
+    batchSize,
+    "stanowisko",
+    "stanowiska",
+    "stanowisk",
+  );
+  return (
+    `Tego dnia ${changed} się ${seats} tej samej funkcji. ` +
+    "Rejestr nie wskazuje, kto zajął czyje miejsce."
+  );
+}
 
 /** Whose seat a person took, and who took theirs.
  *
