@@ -800,14 +800,95 @@ def test_a_removed_misfiled_run_is_not_moved():
     assert snapshot.changes(payload(elections=[EUROPEAN])) == [NEW_CANDIDACY]
 
 
-def test_a_sejm_run_is_never_moved():
-    """Only a European run is moved: its district is whole województwa, so one
-    under a powiat cannot be where it was stood. Other offices' runs stay put."""
+def test_a_european_row_never_moves_another_office_s_run():
+    """A 2019 Sejm run at home is no copy of the European run of that year."""
     sejm_at_home = dict(EUROPEAN_AT_HOME, position="Sejm")
     snapshot = SiteSnapshot(nodes(MAZOWIECKIE), edges(sejm_at_home))
-    sejm = dict(EUROPEAN, election_type="Sejm")
+
+    assert snapshot.changes(payload(elections=[EUROPEAN])) == [NEW_CANDIDACY]
+
+
+LODZKIE = {"id": "teryt10", "type": "region", "name": "łódzkie", "teryt": "10"}
+LODZ = {"id": "teryt1061", "type": "region", "name": "Łódź", "teryt": "1061"}
+
+#: Michał Jerzy Sobczak's 2023 Sejm run as the pipeline places it now: district
+#: 9, filed under łódzkie.
+SEJM = dict(
+    CANDIDACY,
+    election_type="Sejm",
+    election_year="2023",
+    teryt="10",
+    committee=(
+        "KOALICYJNY KOMITET WYBORCZY TRZECIA DROGA POLSKA 2050 SZYMONA HOŁOWNI"
+        " - POLSKIE STRONNICTWO LUDOWE"
+    ),
+    party_from_committee=True,
+)
+
+#: The same run as his June upload filed it: under Łódź, where PKW's list says
+#: he lives.
+SEJM_AT_HOME = dict(
+    STORED_CANDIDACY,
+    id="edge-sejm-1",
+    target="teryt1061",
+    position="Sejm",
+    start_date="2023-01-01",
+)
+
+
+def test_a_sejm_run_filed_under_the_home_powiat_moves():
+    """Stored beside it instead, as the 09-12 upload did, the run shows twice."""
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(SEJM_AT_HOME))
+
+    assert snapshot.changes(payload(elections=[SEJM])) == [MOVED_CANDIDACY]
+
+
+def test_a_senate_run_filed_under_the_home_powiat_moves():
+    at_home = dict(SEJM_AT_HOME, position="Senat")
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(at_home))
+    senate = dict(SEJM, election_type="Senat")
+
+    assert snapshot.changes(payload(elections=[senate])) == [MOVED_CANDIDACY]
+
+
+def test_a_2023_run_stored_without_its_office_moves():
+    """2023 held only the Sejm's and the Senate's election, so a bare 2023 run
+    is the parliamentary one: Hubert Papaj's under Jelenia Góra was."""
+    bare = {k: v for k, v in SEJM_AT_HOME.items() if k != "position"}
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(bare))
+
+    assert snapshot.changes(payload(elections=[SEJM])) == [MOVED_CANDIDACY]
+
+
+def test_a_2019_run_stored_without_its_office_is_not_taken_for_the_sejm_s():
+    """2019 held the European election as well, so a bare 2019 run could be
+    either, and the district gets a copy of its own."""
+    bare = {k: v for k, v in SEJM_AT_HOME.items() if k != "position"}
+    bare["start_date"] = "2019-01-01"
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(bare))
+    sejm = dict(SEJM, election_year="2019")
 
     assert snapshot.changes(payload(elections=[sejm])) == [NEW_CANDIDACY]
+
+
+def test_a_sejm_run_at_a_home_in_another_wojewodztwo_is_not_moved():
+    """Warszawa against a run in łódzkie: two places in one election, which
+    could as well be a namesake's, and a reviewer's to look at."""
+    at_warszawa = dict(SEJM_AT_HOME, target="teryt1465")
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(at_warszawa))
+
+    assert snapshot.changes(payload(elections=[SEJM])) == [NEW_CANDIDACY]
+
+
+def test_a_sejm_run_already_in_its_district_moves_nothing():
+    """The runs stored twice before the ingest moved them are the migration's
+    to fold (merge-national-runs-stored-twice.ts), not the next send's."""
+    in_district = dict(
+        SEJM_AT_HOME, id="edge-sejm-2", target="teryt10", committee=SEJM["committee"]
+    )
+    snapshot = SiteSnapshot(nodes(LODZKIE, LODZ), edges(SEJM_AT_HOME, in_district))
+
+    assert snapshot.changes(payload(elections=[SEJM])) == []
 
 
 def test_a_person_with_no_id_column_is_not_indexed():

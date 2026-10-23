@@ -88,6 +88,36 @@ LOCAL_OFFICES = frozenset(
     }
 )
 
+#: The offices a whole district elects, which the pipeline files under the
+#: województwo the district lies in and never under a powiat or a gmina.
+#: Mirrors `DISTRICT_OFFICES` in `frontend/server/utils/edges.ts`.
+DISTRICT_OFFICES = frozenset({"Sejm", "Senat", "Parlament Europejski"})
+
+#: The years of each kind of election the site holds candidacies in. Mirrors
+#: `ELECTION_DAYS` in `frontend/shared/electionDays.ts`, of which only the
+#: years are read here.
+ELECTION_YEARS: dict[str, frozenset[str]] = {
+    "parliament": frozenset(
+        {
+            "1989",
+            "1991",
+            "1993",
+            "1997",
+            "2001",
+            "2005",
+            "2007",
+            "2011",
+            "2015",
+            "2019",
+            "2023",
+        }
+    ),
+    "european": frozenset({"2004", "2009", "2014", "2019", "2024"}),
+    "local": frozenset(
+        {"1990", "1994", "1998", "2002", "2006", "2010", "2014", "2018", "2024"}
+    ),
+}
+
 
 @dataclass(frozen=True)
 class EdgeSemantics:
@@ -435,6 +465,62 @@ def preferred_copy(
     return min(copies, key=rank, default=None)
 
 
+def election_kind(position: typing.Any) -> str | None:
+    """Which kind of election an office is filled in: `electionKind` in
+    `frontend/shared/electionDays.ts`. Every office but the national ones is
+    local, „Samorząd” included."""
+    if not isinstance(position, str) or not position:
+        return None
+    if position in ("Sejm", "Senat"):
+        return "parliament"
+    if position == "Parlament Europejski":
+        return "european"
+    return "local"
+
+
+def is_same_run(stored: typing.Mapping[str, typing.Any], incoming: Edge) -> bool:
+    """Whether a stored candidacy is a copy of the run `incoming` states, as far
+    as the year and the office tell - `isSameRun` in
+    `frontend/server/utils/edges.ts`, which says why a copy with no office
+    counts only in a year that held no other kind of election."""
+    start = field(incoming, "start_date")
+    if start is None or field(stored, "start_date") != start:
+        return False
+    office = field(stored, "position")
+    if office is not None:
+        return office == incoming.get("position")
+    kind = election_kind(incoming.get("position"))
+    held = [k for k, years in ELECTION_YEARS.items() if str(start)[:4] in years]
+    return kind is not None and held == [kind]
+
+
+def misfiled_run_of(
+    stored: typing.Mapping[str, typing.Any],
+    stored_teryt: typing.Any,
+    incoming: Edge,
+    district_teryt: typing.Any,
+) -> bool:
+    """Whether `stored`, filed under `stored_teryt`, is the run `incoming`
+    places under its district's województwo, filed under the candidate's home
+    instead. A transcription of `misfiledRunOf` in
+    `frontend/server/utils/edges.ts`, which gives the reasons."""
+    office = incoming.get("position")
+    if office not in DISTRICT_OFFICES:
+        return False
+    if stored.get("deleted") == 1:
+        return False
+    if not is_same_run(stored, incoming):
+        return False
+    if not isinstance(stored_teryt, str) or len(stored_teryt) <= 2:
+        return False
+    if office != "Parlament Europejski" and (
+        not isinstance(district_teryt, str)
+        or not stored_teryt.startswith(district_teryt)
+    ):
+        return False
+    return edge_relation(stored, incoming) != "conflict"
+
+
 def placing_order(elections: list[dict]) -> list[dict]:
     """A payload's candidacies in the order the ingest places them: the won
     ones first, otherwise as sent. `placingOrder` in `person.post.ts`."""
@@ -541,7 +627,7 @@ class SiteSnapshot:
 
         self.edges: dict[tuple, list[dict]] = {}
         #: Each person's candidacies wherever they were filed, for the one
-        #: lookup that is not by pair: `_misfiled_european`.
+        #: lookup that is not by pair: `_misfiled_candidacy`.
         self.candidacies: dict[str, list[dict]] = defaultdict(list)
         for edge in _records(edges):
             pair = (edge.get("source"), edge.get("target"), edge.get("type"))
@@ -1180,7 +1266,7 @@ class SiteSnapshot:
             if election.get("election_year"):
                 edge["start_date"] = f"{election['election_year']}-01-01"
 
-            if self._misfiled_european(matcher, edge):
+            if self._misfiled_candidacy(matcher, edge, election.get("teryt")):
                 reasons.append((MOVED_CANDIDACY, held))
                 continue
             match matcher.place(edge):
@@ -1192,33 +1278,34 @@ class SiteSnapshot:
                     reasons.append((NEW_CANDIDACY, held))
         return reasons
 
-    def _misfiled_european(self, matcher: "_EdgeMatcher", edge: Edge) -> bool:
-        """`moveMisfiledEuropeanCandidacy`: whether the ingest moves a stored
-        European candidacy to this one's district rather than placing this one.
+    def _misfiled_candidacy(
+        self, matcher: "_EdgeMatcher", edge: Edge, district_teryt: typing.Any
+    ) -> bool:
+        """`moveMisfiledCandidacy`: whether the ingest moves a stored Sejm,
+        Senate or European candidacy to this one's district rather than
+        placing this one.
 
-        A European district is whole województwa, so one stored under a powiat
-        or a gmina is the candidate's home, read as the place by older runs.
-        The ingest moves the first live one of the same year that nothing
-        contradicts, unless that year is already filed in the district.
+        A district's run filed under a powiat or a gmina is the candidate's
+        home, read as the place by older uploads (`misfiled_run_of` says which
+        copy is one). The ingest moves the first such copy of the run that no
+        row has taken, unless the run is already filed in the district.
         """
-        if edge.get("position") != "Parlament Europejski" or not edge.get("start_date"):
+        if edge.get("position") not in DISTRICT_OFFICES or not edge.get("start_date"):
             return False
         same_run = [
             stored
             for stored in self.candidacies.get(str(edge["source"]), [])
-            if stored.get("position") == edge["position"]
-            and field(stored, "start_date") == field(edge, "start_date")
+            if is_same_run(stored, edge)
         ]
         if any(stored.get("target") == edge["target"] for stored in same_run):
             return False
+        district = None if district_teryt is None else str(district_teryt)
         for stored in same_run:
             edge_id = str(stored.get("id"))
-            if stored.get("deleted") == 1 or edge_id in matcher.claimed:
-                continue
-            if edge_relation(stored, edge) == "conflict":
+            if edge_id in matcher.claimed:
                 continue
             teryt = self.region_teryts.get(str(stored.get("target")))
-            if teryt is None or len(teryt) <= 2:
+            if not misfiled_run_of(stored, teryt, edge, district):
                 continue
             matcher.claimed[edge_id] = edge_identity(edge)
             return True
