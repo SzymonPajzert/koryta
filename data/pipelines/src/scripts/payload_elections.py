@@ -24,13 +24,15 @@ Run it over the newest `people_enriched` backup the night wrote:
         > /tmp/payload-elections.jsonl
 
 Nothing is downloaded or written but what the commands above say. Over the
-2026-10-23 backup (571 MB, 152,724 rows) it took 5 s and wrote 138,909 people.
+2026-10-23 backup (571 MB, 152,724 rows) it took 25 s and wrote 138,909 people.
 """
 
 import json
 import sys
 import typing
 from dataclasses import asdict
+
+import pandas as pd
 
 from analysis.payloads.person import _extract_elections
 
@@ -46,7 +48,11 @@ def payload_elections(row: typing.Mapping[str, typing.Any]) -> dict | None:
     return {
         "korytaId": page or None,
         "rejestrIo": [str(entry) for entry in entries],
-        "elections": [asdict(election) for election in _extract_elections(row)],
+        # A row of the frame PeoplePayloads reads, which is what the builder
+        # takes; the dump's line is that row.
+        "elections": [
+            asdict(election) for election in _extract_elections(pd.Series(row))
+        ],
     }
 
 
