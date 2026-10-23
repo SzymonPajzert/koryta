@@ -451,10 +451,9 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 }
 
 /* At the top, not in the middle. Vuetify's `fill-height` also centres the
-   page in whatever height the container is given, and with the slim footer
-   that is most of the screen on a short page: /blog, a 404, /login and every
-   empty or still-loading list floated 130-170px below the page-top inset the
-   rest of the site opens at. */
+   page in whatever height the container is given, which on a short page is
+   most of the screen: /blog, a 404, /login and every empty or still-loading
+   list floated well below the page-top inset the rest of the site opens at. */
 .v-container.fill-height {
   align-content: flex-start;
   align-items: flex-start;

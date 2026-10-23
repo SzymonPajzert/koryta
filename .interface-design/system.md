@@ -99,6 +99,9 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   and in date ranges alike. Szymon: "This is very AI and I think people
   start noticing it" (2026-10-16).
 
+  A lone „—” standing for a missing value, in a table cell or for a date
+  nobody recorded, stays: it is a sign, not punctuation (2026-10-23).
+
 ## How UI changes are made
 
 - Judge a layout by its screenshots, not by its markup. Render 2-3 variants at

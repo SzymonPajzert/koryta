@@ -101,6 +101,12 @@
   letter-spacing: normal;
 }
 
+/* ...but not in the footer, which stays exactly as it was before the
+   redesign (Szymon, 2026-10-16): its links keep Vuetify's button tracking. */
+.v-application .v-footer .v-btn {
+  letter-spacing: 0.0892857143em;
+}
+
 /* The indent Vuetify adds to a button balances its tracking; with no
    tracking it only pushes the label off centre. */
 :is(.v-application, .v-overlay-container) .v-btn {

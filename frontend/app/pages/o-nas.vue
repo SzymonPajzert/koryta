@@ -13,7 +13,6 @@
       <v-col cols="12" md="4" class="text-md-right">
         <v-btn
           color="primary"
-          class="text-display-small"
           href="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
         >
           Dołącz do wolontariuszy

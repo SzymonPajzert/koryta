@@ -268,6 +268,12 @@ export default defineNuxtConfig({
             // shared/colors.ts, so the hexes have one home and the tests that
             // check their contrast are checking what Vuetify actually paints.
             colors: themeColors,
+            // The site's one hairline (assets/css/edges.css): .24, picked by
+            // Szymon on 2026-10-23, where Vuetify's default is .12. Here
+            // rather than only in `--k-line`, so the lines Vuetify draws by
+            // itself - `border` props, dividers, table rows - are that
+            // hairline too.
+            variables: { "border-opacity": 0.24 },
           },
         },
       },
