@@ -121,6 +121,9 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   case, and /admin opens on its work queues. Szymon: "Looks good, I approve
   the changed screenshots".
 
+  A lone „—” standing for a missing value, in a table cell or for a date
+  nobody recorded, stays: it is a sign, not punctuation (2026-10-23).
+
 ## How UI changes are made
 
 - Judge a layout by its screenshots, not by its markup. Render 2-3 variants at

@@ -15,6 +15,13 @@
    colour, which is why the neutral rules below name the colours they leave
    alone.
 
+   The .24 itself is set once, as Vuetify's own `border-opacity` in the
+   light theme (nuxt.config.ts), and `--k-line` reads it from there. So the
+   lines Vuetify draws by itself - a `border` prop, a divider, a table's rows,
+   the rules between an accordion's panels - are the same hairline as the
+   records and panels below, where they had stayed at Vuetify's .12 while
+   these went to .24.
+
    Vuetify draws its components' styles from their own stylesheets, which can
    load after this one, so a selector here starts one class above Vuetify's:
    at .v-application, or at the .v-overlay-container Vuetify teleports menus
@@ -25,7 +32,7 @@
    edge, a picked chip - out-ranks these rules. */
 
 :root {
-  --k-line: rgba(var(--v-border-color), 0.24);
+  --k-line: rgba(var(--v-border-color), var(--v-border-opacity));
   /* a hovered or focused edge: one step above the hairline */
   --k-line-strong: rgba(var(--v-border-color), 0.4);
   --k-tonal: rgba(var(--v-theme-on-surface), 0.06);
@@ -47,6 +54,23 @@
     --k-page-top: 24px;
     --k-section-gap: 32px;
   }
+}
+
+/* Vuetify reads the same `border-opacity` for a few fills that are not
+   lines: a loading skeleton's bones, a progress bar's track, a spinner's
+   ring, the tint on a pager's current page and a table's sort badge. Those
+   keep Vuetify's .12. The .24 is the hairline Szymon picked, and a fill
+   twice as dark is a colour change, which waits for the palette
+   (2026-10-10). */
+:is(.v-application, .v-overlay-container)
+  :is(
+    .v-skeleton-loader,
+    .v-progress-linear,
+    .v-progress-circular,
+    .v-pagination__item--is-active,
+    .v-data-table-header__sort-badge
+  ) {
+  --v-border-opacity: 0.12;
 }
 
 /* ---- records and panels: one hairline ---- */
@@ -238,8 +262,9 @@
    to it, and an empty block between two sections adds nothing. A `v-row`
    goes in a plain div: this margin would replace its -12px, and its columns'
    padding would land on top of the gap. Something that belongs to the block
-   above rather than starting a new one - the company page's buttons under
-   its header - says so with its own `mt-*`, which outranks this. */
+   above rather than starting a new one - a reader's proposals under a
+   company's header, the line on what a person's page withholds under their
+   history - says so with its own `mt-*`, which outranks this. */
 .v-application .k-sections > * + * {
   margin-top: var(--k-section-gap);
 }
