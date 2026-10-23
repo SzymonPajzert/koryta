@@ -79,68 +79,115 @@
 
       <v-row dense>
         <v-col
-          v-for="{ post, predecessor } in group.people"
-          :key="post.edgeId"
+          v-for="seat in group.people"
+          :key="seat.post.edgeId"
           cols="12"
           md="6"
         >
-          <div class="k-card k-card--accent pa-4 pl-5 h-100">
-            <div class="d-flex align-start ga-3">
-              <div class="av av--in">{{ initials(post.personName) }}</div>
-              <div class="flex-grow-1 rl-txt">
+          <!-- The only place on the page today's board is listed: the
+               history below leaves these posts out (Szymon, 2026-10-23), so
+               the card carries what their rows there had - the draft badge,
+               and the sources, the correction and the bin for whoever may
+               use them - and fixing a post stays one click. -->
+          <div
+            class="k-card k-card--accent pa-4 pl-5 h-100"
+            :data-testid="`current-post-${seat.post.edgeId}`"
+          >
+            <div
+              class="board-card"
+              :class="{ 'board-card--tools': !!seat.tools }"
+            >
+              <SuccessionInitials
+                class="board-card__avatar"
+                :name="seat.post.personName"
+                tone="in"
+              />
+              <div class="board-card__text">
                 <div class="d-flex align-center flex-wrap ga-2">
                   <NuxtLink
-                    :to="personUrl(post)"
+                    :to="personUrl(seat.post)"
                     class="link-plain text-subtitle-1 font-weight-bold"
-                    >{{ post.personName }}</NuxtLink
+                    >{{ seat.post.personName }}</NuxtLink
                   >
                   <PartyChip
-                    v-for="party in post.parties"
+                    v-for="party in seat.post.parties"
                     :key="party"
                     :party
                   />
                 </div>
 
                 <div class="d-flex align-center flex-wrap ga-2 mt-2">
+                  <!-- The day as every row on the site gives it, „od
+                       14.05.2026”: the card said „od 14 maja 2026” a few
+                       hundred pixels above the history's „od 14.05.2026” for
+                       the same post. -->
                   <span class="now-pill">
                     <v-icon :icon="mdiCalendarBlankOutline" size="13" />
-                    {{
-                      post.start
-                        ? `od ${longDate(post.start)}`
-                        : "bez daty powołania"
-                    }}
+                    {{ seat.since }}
                   </span>
                   <span
-                    v-if="duration(post.start, null)"
+                    v-if="seat.tenure"
                     class="text-caption text-medium-emphasis"
                   >
-                    {{ duration(post.start, null) }} na stanowisku
+                    {{ seat.tenure }} na stanowisku
                   </span>
+                  <!-- Whether the relation is live, as on its history row:
+                       among what the post is, not among the buttons. -->
+                  <ChipEdgeDraftStatus
+                    v-if="seat.edge"
+                    :edge-id="seat.edge.id"
+                    :published="seat.edge.visibility"
+                    :publishable="
+                      edgeIsPublishable(seat.edge, subjectPublished)
+                    "
+                    @published="emit('published')"
+                  />
                 </div>
 
                 <div
-                  v-if="predecessor"
+                  v-if="seat.predecessor"
                   class="text-caption text-medium-emphasis mt-2 d-flex align-center flex-wrap ga-1"
                 >
                   <v-icon :icon="mdiSwapVertical" size="14" />
                   <span>wcześniej na tym stanowisku:</span>
+                  <!-- „m.in.”, the name and its parties as one piece of the
+                       line: it moves to a line of its own whole, and breaks
+                       inside only where it is wider than the card. A phone
+                       broke the line before the chip, which stood alone on
+                       the next one, cut off from the name it belongs to. -->
                   <span
-                    v-if="predecessor.batchSize > 1"
-                    :title="batchNote(predecessor.batchSize)"
-                    >m.in.</span
+                    class="board-card__who d-inline-flex align-center flex-wrap ga-1"
                   >
-                  <NuxtLink
-                    :to="personUrl(predecessor)"
-                    class="link-plain font-weight-medium"
-                    >{{ predecessor.personName }}</NuxtLink
-                  >
-                  <PartyChip
-                    v-for="party in predecessor.parties"
-                    :key="party"
-                    :party
-                  />
+                    <span
+                      v-if="seat.predecessor.batchSize > 1"
+                      :title="batchNote(seat.predecessor.batchSize)"
+                      >m.in.</span
+                    >
+                    <NuxtLink
+                      :to="personUrl(seat.predecessor)"
+                      class="link-plain font-weight-medium"
+                      >{{ seat.predecessor.personName }}</NuxtLink
+                    >
+                    <PartyChip
+                      v-for="party in seat.predecessor.parties"
+                      :key="party"
+                      :party
+                    />
+                  </span>
                 </div>
               </div>
+
+              <CardHistoryRowActions
+                v-if="seat.tools"
+                class="board-card__tools"
+                :edge="seat.tools"
+                :can-cite
+                :can-correct
+                :can-remove
+                @sources="emit('sources', $event)"
+                @edit="emit('edit', $event)"
+                @remove="emit('remove', $event)"
+              />
             </div>
           </div>
         </v-col>
@@ -185,112 +232,84 @@
         {{ section.role }}
         <span class="k-group-head__count">{{ section.count }}</span>
       </h3>
-      <div class="rl-legend">
-        <span>Ustępuje</span><span /><span>Obejmuje stanowisko</span>
-      </div>
 
-      <div
-        v-for="batch in section.batches"
-        :key="batch.key"
-        class="k-card k-card--accent mb-3"
-        :class="{ 'ev--batch': batch.pairs.length > 1 }"
-        data-testid="succession-batch"
-      >
-        <div class="ev-head">
-          <span class="ev-date">{{
-            batch.date ? longDate(batch.date) : "Bez daty w rejestrze"
-          }}</span>
-          <span
-            v-if="batch.pairs.length > 1"
-            class="ev-badge"
-            data-testid="batch-count"
-          >
-            {{
-              polishCounting(batch.pairs.length, "zmiana", "zmiany", "zmian")
-            }}
-            tego samego dnia
-          </span>
-          <span
-            v-if="batch.pairs.length > 1 && batch.tally.length"
-            class="ev-sub"
-            data-testid="batch-parties"
-          >
-            wśród ustępujących: {{ batch.tally.join(", ") }}
-          </span>
-        </div>
+      <div :id="listId(section.key)" class="relay-list">
+        <!-- Focusable only where „Pokaż starsze” sends the focus: the first
+             card it opens. -->
+        <div
+          v-for="(batch, index) in shownBatches(section)"
+          :id="batchId(section.key, index)"
+          :key="batch.key"
+          class="k-card k-card--accent relay-batch"
+          :class="{ 'ev--batch': batch.pairs.length > 1 }"
+          :tabindex="index === section.foldAt ? -1 : undefined"
+          data-testid="succession-batch"
+        >
+          <!-- The company's head for a handover: the day the seat changed
+               hands, and on a day a whole board did, how many seats and
+               whose parties left. -->
+          <div class="ev-head">
+            <span class="ev-date">{{
+              batch.date ? longDate(batch.date) : "Bez daty w rejestrze"
+            }}</span>
+            <span
+              v-if="batch.pairs.length > 1"
+              class="ev-badge"
+              data-testid="batch-count"
+            >
+              <!-- „tego dnia”, not „tego samego dnia”: the gap chip in a row
+                   already says that for a seat taken the day it was left
+                   (Szymon, 2026-10-24). -->
+              {{
+                polishCounting(batch.pairs.length, "zmiana", "zmiany", "zmian")
+              }}
+              tego dnia
+            </span>
+            <span
+              v-if="batch.pairs.length > 1 && batch.tally.length"
+              class="ev-sub"
+              data-testid="batch-parties"
+            >
+              wśród ustępujących: {{ batch.tally.join(", ") }}
+            </span>
+          </div>
 
-        <div class="ev-body">
-          <div
+          <!-- The row a person's page draws too (`HandoverRow`), with the
+               labels in each side at every width: they stood once over the
+               columns, outside the card, on a computer, and in each row on
+               a phone. -->
+          <SuccessionHandoverRow
             v-for="pair in batch.pairs"
             :key="`${pair.left.edgeId}-${pair.joined.edgeId}`"
-            class="rl-row"
+            class="ev-row"
+            :left="sideOf(pair.left)"
+            :right="sideOf(pair.joined)"
+            :gap-days="pair.gapDays"
             data-testid="succession-row"
-          >
-            <div class="rl-left">
-              <div class="rl-ovl">Ustępuje</div>
-              <div class="rl-p">
-                <div class="av av--out">
-                  {{ initials(pair.left.personName) }}
-                </div>
-                <div class="rl-txt">
-                  <div class="rl-names">
-                    <NuxtLink
-                      :to="personUrl(pair.left)"
-                      class="link-plain rl-name"
-                      >{{ pair.left.personName }}</NuxtLink
-                    >
-                    <PartyChip
-                      v-for="party in pair.left.parties"
-                      :key="party"
-                      :party
-                    />
-                  </div>
-                  <div class="rl-meta">{{ spell(pair.left) }}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="rl-mid">
-              <div class="rl-disc">
-                <span class="arrow-h"
-                  ><v-icon :icon="mdiArrowRight" size="17"
-                /></span>
-                <span class="arrow-v"
-                  ><v-icon :icon="mdiArrowDown" size="17"
-                /></span>
-              </div>
-              <div class="rl-gap">{{ gapLabel(pair.gapDays) }}</div>
-              <div v-if="switchesParty(pair)" class="rl-flip">
-                zmiana afiliacji
-              </div>
-            </div>
-
-            <div class="rl-right">
-              <div class="rl-ovl">Obejmuje stanowisko</div>
-              <div class="rl-p">
-                <div class="av av--in">
-                  {{ initials(pair.joined.personName) }}
-                </div>
-                <div class="rl-txt">
-                  <div class="rl-names">
-                    <NuxtLink
-                      :to="personUrl(pair.joined)"
-                      class="link-plain rl-name"
-                      >{{ pair.joined.personName }}</NuxtLink
-                    >
-                    <PartyChip
-                      v-for="party in pair.joined.parties"
-                      :key="party"
-                      :party
-                    />
-                  </div>
-                  <div class="rl-meta">{{ spell(pair.joined) }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
+          />
         </div>
       </div>
+
+      <!-- The rest of a long relay one click away, opened in place, and the
+           button gone once it has: the bio's „Pokaż więcej”
+           (EntityDetailsCard.vue). Never in the way of an edit - nothing
+           here is a row anybody corrects. A neutral text button, its label
+           on the cards' left edge (`ms-n2` hangs its padding into the
+           gutter) and 44px tall, so a finger finds it: at rest a text
+           button has no box to look taller. -->
+      <v-btn
+        v-if="section.older && !opened.has(section.key)"
+        variant="text"
+        height="44"
+        class="px-2 ms-n2"
+        :append-icon="mdiChevronDown"
+        aria-expanded="false"
+        :aria-controls="listId(section.key)"
+        :data-testid="`succession-older-${section.key}`"
+        @click="openOlder(section)"
+      >
+        Pokaż starsze ({{ section.older }})
+      </v-btn>
     </div>
   </PageSection>
 </template>
@@ -298,15 +317,21 @@
 <script lang="ts" setup>
 import {
   mdiAlertCircleOutline,
-  mdiArrowDown,
-  mdiArrowRight,
   mdiCalendarBlankOutline,
+  mdiChevronDown,
   mdiSwapVertical,
 } from "@mdi/js";
 import { polishCounting } from "~/composables/polish";
 import { createSlug, generateEntityUrl } from "~/composables/slugs";
-import { gapLabel, MAX_GAP_DAYS, MAX_OVERLAP_DAYS } from "~~/shared/succession";
-import { isoDay, longDate, shortDate } from "~~/shared/dates";
+import { edgeIsPublishable, type EdgeNode } from "~/composables/edges";
+import {
+  batchNote,
+  useSuccessionToday,
+  type HandoverSide,
+} from "~/composables/successions";
+import { ledgerPeriod, spellLength } from "~/utils/relationPeriod";
+import { MAX_GAP_DAYS, MAX_OVERLAP_DAYS } from "~~/shared/succession";
+import { longDate } from "~~/shared/dates";
 import type {
   CompanySuccessions,
   CurrentPost,
@@ -328,6 +353,28 @@ const props = defineProps<{
    * hands the answer to all three parts. */
   data: CompanySuccessions | null | undefined;
   status: AsyncDataRequestStatus;
+  /** The page's relations, which a card of the current board finds its post
+   * in by edge id. Only `current` reads this and the four props after it: a
+   * card whose post is here gets that relation's draft badge and the
+   * history's row tools (`CardHistoryRowActions`), with the same permissions
+   * the history is given; a card with no match gets neither. */
+  edges?: EdgeNode[];
+  canCite?: boolean;
+  canCorrect?: boolean;
+  canRemove?: boolean;
+  /** Whether the company's own page is live - see the same prop on
+   * `CardEmploymentHistory`. */
+  subjectPublished?: boolean;
+}>();
+
+/** What a card's tools ask for, passed up to the page's own dialogs: the same
+ * events, and the same handlers, as the history's rows. */
+const emit = defineEmits<{
+  sources: [edge: EdgeNode];
+  edit: [edge: EdgeNode];
+  remove: [edge: EdgeNode];
+  /** A card's relation went live from its draft badge. */
+  published: [];
 }>();
 
 /** The roles a reader looks for first, in the order they look: who runs the
@@ -364,6 +411,13 @@ const ROLE_ORDER: RegExp[] = [
  * post, and keeps this label. */
 const NO_ROLE = "Funkcja niepodana w rejestrze";
 
+/** How many handovers each function shows before „Pokaż starsze”: the newest
+ * five (Szymon, 2026-10-23). PKP LHS has 63, about 14,000px of a phone, more
+ * than the rest of its page together. A day the whole board changed is never
+ * split, so a function can open on more than five where the fifth falls inside
+ * one. */
+const RELAY_SHOWN = 5;
+
 const failed = computed(() => props.status === "error");
 const loading = computed(() => !failed.value && !props.data);
 
@@ -377,71 +431,39 @@ const nothingToShow = computed(
  * the spinner and the error are said once, where the people will be. */
 const ready = computed(() => !loading.value && !failed.value);
 
-/** Today, fixed at render and carried into the browser in the payload, so the
- * server and the client cannot disagree about what "stan na" says. Local
- * components rather than `toISOString`, which would answer yesterday for the
- * first two hours of a Warsaw day. */
-const today = useState("succession-today", () => {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-});
-
-/* ---------- durations ---------- */
-
-/** How long a spell ran, in years and months. An open spell is measured to
- * today, which is what "2 lata na stanowisku" means on a current post. */
-function duration(start: string | null, end: string | null): string {
-  const from = isoDay(start);
-  const to = isoDay(end) ?? isoDay(today.value);
-  if (!from || !to) return "";
-  let months = (to.y - from.y) * 12 + (to.m - from.m);
-  if (to.d < from.d) months -= 1;
-  if (months < 1) return "poniżej miesiąca";
-  const years = Math.floor(months / 12);
-  const rest = months % 12;
-  if (!years) return `${rest} mies.`;
-  return `${polishCounting(years, "rok", "lata", "lat")}${rest ? ` ${rest} mies.` : ""}`;
-}
-
-/** The whole spell behind one side of a handover, so a row stands on its own
- * rather than only naming the day the seat changed hands. */
-function spell(side: SuccessionSide): string {
-  if (!side.start) return "brak daty rozpoczęcia";
-  const end = side.end ? shortDate(side.end) : "obecnie";
-  const length = duration(side.start, side.end);
-  return `${shortDate(side.start)} - ${end}${length ? ` · ${length}` : ""}`;
-}
+/** The day the board is read at and every spell is measured to, shared with
+ * the handover rows - see `useSuccessionToday`. */
+const today = useSuccessionToday();
 
 /* ---------- people ---------- */
-
-/** Stands in for a photograph nobody has, as on `card/Employment.vue`. */
-function initials(name: string): string {
-  return (name || "?")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
 
 function personUrl(who: { personId: string; personName: string }): string {
   return generateEntityUrl("person", who.personId, who.personName);
 }
 
-/** Whether the seat changed party with its holder. Only claimed when both
- * sides are known: an empty `parties` means "not recorded", not
- * "bezpartyjny", and reading it as a swing would invent one. */
-function switchesParty(pair: Succession): boolean {
-  const left = pair.left.parties;
-  const joined = pair.joined.parties;
-  return left.length > 0 && joined.length > 0 && left[0] !== joined[0];
+/** One side of a handover as the shared row takes it. */
+function sideOf(side: SuccessionSide): HandoverSide {
+  return {
+    name: side.personName,
+    url: personUrl(side),
+    parties: side.parties,
+    start: side.start,
+    end: side.end,
+  };
 }
 
 /* ---------- grouping ---------- */
 
 function roleKey(role: string | null): string {
   return role?.trim().toLowerCase() ?? "";
+}
+
+/** A function's name as a group head. The register gives some in lower case -
+ * „dyrektorka działu obsługi spółki” stood under „Zarząd” and „Rada
+ * Nadzorcza” as it came - and a head reads in sentence case. The first letter
+ * only, so an acronym further on keeps its capitals. */
+function headCase(role: string): string {
+  return role.charAt(0).toLocaleUpperCase("pl") + role.slice(1);
 }
 
 function roleRank(key: string): number {
@@ -466,21 +488,36 @@ function byRole<T>(groups: Map<string, { role: string; items: T[] }>) {
     }));
 }
 
+/** The page's relations by edge id, for the cards' tools. */
+const edgeById = computed(
+  () =>
+    new Map(
+      (props.edges ?? []).flatMap((edge) =>
+        edge.id ? [[edge.id, edge] as const] : [],
+      ),
+    ),
+);
+
+/** Whether a card draws any of the row tools - the conditions
+ * `CardHistoryRowActions` draws its buttons on, as the history checks them. */
+function hasTools(edge: EdgeNode): boolean {
+  return (
+    !!edge.id &&
+    ((edge.references?.length ?? 0) > 0 ||
+      !!props.canCite ||
+      !!props.canCorrect ||
+      !!props.canRemove)
+  );
+}
+
 /** Open posts by role, longest-serving first. A post with no start date sorts
  * last rather than reading as the oldest one there.
  *
  * Each one carries whoever the handover put out of that seat, matched on the
  * arriving edge: it is the same fact as a row of the relay below, said where a
- * reader looking at today's board is standing.
+ * reader looking at today's board is standing. And the relation it is, from
+ * the page's own list, for the badge and the tools.
  */
-/** Why a predecessor is hedged, for whoever hovers it. */
-function batchNote(batchSize: number): string {
-  return (
-    `Tego dnia zmieniło się ${batchSize} stanowisk tej samej funkcji. ` +
-    "Rejestr nie wskazuje, kto zajął czyje miejsce."
-  );
-}
-
 const currentGroups = computed(() => {
   // Carrying the batch with the person: a seat that changed hands on a day when
   // three others did is one the register cannot say who took from whom, and the
@@ -496,16 +533,31 @@ const currentGroups = computed(() => {
     const key = roleKey(post.role);
     const group = groups.get(key);
     if (group) group.items.push(post);
-    else groups.set(key, { role: post.role?.trim() || NO_ROLE, items: [post] });
+    else {
+      groups.set(key, {
+        role: headCase(post.role?.trim() || NO_ROLE),
+        items: [post],
+      });
+    }
   }
   return byRole(groups).map((group) => ({
     ...group,
     people: group.items
       .sort((a, b) => (a.start || "9999").localeCompare(b.start || "9999"))
-      .map((post) => ({
-        post,
-        predecessor: predecessors.get(post.edgeId) ?? null,
-      })),
+      .map((post) => {
+        const edge = edgeById.value.get(post.edgeId) ?? null;
+        return {
+          post,
+          predecessor: predecessors.get(post.edgeId) ?? null,
+          edge,
+          tools: edge && hasTools(edge) ? edge : null,
+          since:
+            ledgerPeriod(post.start ?? undefined, undefined, {
+              today: today.value,
+            })?.text ?? "bez daty powołania",
+          tenure: spellLength(post.start, null, today.value),
+        };
+      }),
   }));
 });
 
@@ -517,16 +569,40 @@ type Batch = {
   tally: string[];
 };
 
+type RoleSection = {
+  key: string;
+  role: string;
+  count: number;
+  batches: Batch[];
+  /** How many batches are shown before „Pokaż starsze”, and how many
+   * handovers that leaves behind it - none for a function short enough to
+   * show whole. */
+  foldAt: number;
+  older: number;
+};
+
+/** Where a function's relay folds: after the batch that brings it to
+ * `RELAY_SHOWN` handovers, so a day's batch is shown whole or not at all. */
+function foldAt(batches: Batch[]): number {
+  let shown = 0;
+  let at = 0;
+  while (at < batches.length && shown < RELAY_SHOWN) {
+    shown += batches[at]!.pairs.length;
+    at += 1;
+  }
+  return at;
+}
+
 /** The relay: role, then handover date.
  *
  * The date grouping is the point. The register files a board turnover as one
  * decision - seven struck off and seven entered on one morning - and seven
  * separate cards would tell a reader it happened seven times. A handover with
  * no date is left on its own: those share nothing but the gap in the data, and
- * a "4 zmiany tego samego dnia" badge over them would be a claim about a day
+ * a „4 zmiany tego dnia” badge over them would be a claim about a day
  * nobody recorded.
  */
-const roleSections = computed(() => {
+const roleSections = computed<RoleSection[]>(() => {
   const groups = new Map<string, { role: string; items: Succession[] }>();
   for (const succession of successions.value) {
     const key = roleKey(succession.role);
@@ -534,7 +610,7 @@ const roleSections = computed(() => {
     if (group) group.items.push(succession);
     else
       groups.set(key, {
-        role: succession.role.trim() || NO_ROLE,
+        role: headCase(succession.role.trim() || NO_ROLE),
         items: [succession],
       });
   }
@@ -573,9 +649,53 @@ const roleSections = computed(() => {
         .map(([party, n]) => `${n} × ${party}`);
     }
 
-    return { key: group.key, role: group.role, count: ordered.length, batches };
+    const fold = foldAt(batches);
+    return {
+      key: group.key,
+      role: group.role,
+      count: ordered.length,
+      batches,
+      foldAt: fold,
+      older: batches
+        .slice(fold)
+        .reduce((sum, batch) => sum + batch.pairs.length, 0),
+    };
   });
 });
+
+/** The functions whose older handovers the reader has opened. */
+const opened = ref(new Set<string>());
+
+function shownBatches(section: RoleSection): Batch[] {
+  return opened.value.has(section.key)
+    ? section.batches
+    : section.batches.slice(0, section.foldAt);
+}
+
+/** Ids for the button to point at and the focus to land on, unique per page
+ * and the same on the server and in the browser. */
+const relayId = useId();
+
+function listId(sectionKey: string): string {
+  return `${relayId}-${sectionKey}`;
+}
+
+function batchId(sectionKey: string, index: number): string {
+  return `${relayId}-${sectionKey}-${index}`;
+}
+
+/** Opening the older handovers takes the focused button away, which would
+ * drop a keyboard or screen-reader user back to the top of the page. Focus
+ * goes to the first card it opened instead, as the bio's „Pokaż więcej” sends
+ * it to the bio; `preventScroll`, because the cards open downwards from where
+ * the reader already is. */
+async function openOlder(section: RoleSection) {
+  opened.value.add(section.key);
+  await nextTick();
+  document
+    .getElementById(batchId(section.key, section.foldAt))
+    ?.focus({ preventScroll: true });
+}
 
 /** „4 zmiany w 2 funkcjach · 5 pominiętych”: the relay's cards, the roles
  * they fall under, and the handovers left out. */
@@ -721,7 +841,8 @@ const absentInfo = computed<Why[]>(() => {
    values, which is what lets the notes underneath these cards be the same
    object as the cards themselves. The group heads (`k-group-head`,
    assets/css/type.css) and the line on what the page lacks (`k-absent`) are
-   the shared ones too, the same as on a person's page. */
+   the shared ones too, the same as on a person's page - and so, since
+   2026-10-23, is the handover row (`succession/HandoverRow.vue`). */
 
 /* A bubble that says more than one thing: a gap between its paragraphs. */
 .why + .why {
@@ -739,6 +860,45 @@ const absentInfo = computed<Why[]>(() => {
 
 /* ---- obecny skład ---- */
 
+/* Who, then what the post is; with an editor's tools for it at the card's
+   edge, on the name's line, where the history's rows keep theirs. On the
+   name's line rather than centred: cards of one row are as tall as the
+   tallest, so tools centred on each card's own text zigzagged across the
+   row. Only a card with tools has their column, or its empty gap would
+   still cost the text 12px. */
+.board-card {
+  align-items: start;
+  column-gap: 12px;
+  display: grid;
+  grid-template-areas: "avatar text";
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.board-card--tools {
+  grid-template-areas: "avatar text tools";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.board-card__avatar {
+  grid-area: avatar;
+}
+
+.board-card__text {
+  grid-area: text;
+  min-width: 0;
+}
+
+.board-card__tools {
+  align-self: start;
+  grid-area: tools;
+}
+
+/* Free to shrink below its widest word, so a name with six party chips that
+   is wider than the card breaks inside the group rather than past its edge. */
+.board-card__who {
+  min-width: 0;
+}
+
 /* Sage behind ink rather than as ink: the one thing a reader scanning the
    section is looking for is who is in the seat now. */
 .now-pill {
@@ -755,6 +915,21 @@ const absentInfo = computed<Why[]>(() => {
 }
 
 /* ---- the relay ---- */
+
+/* The cards of one function 12px apart, and nothing under the last: the next
+   function's head stands the type system's 24px below it (`k-group`). */
+.relay-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Focus only lands here from „Pokaż starsze”, as a reading position, not a
+   control: a ring round the whole card would frame it like something to
+   press. */
+.relay-batch:focus {
+  outline: none;
+}
 
 .ev-head {
   align-items: center;
@@ -793,240 +968,38 @@ const absentInfo = computed<Why[]>(() => {
   margin-left: auto;
 }
 
-.rl-row {
-  align-items: center;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 1fr 184px 1fr;
+/* One handover of the batch, inset 16px clear of the sage rail and of the
+   far edge, as on a person's card, with the hairline between the rows. */
+.ev-row {
   padding: 12px 16px 12px 20px;
 }
 
-.rl-row + .rl-row {
+.ev-row + .ev-row {
   border-top: 1px solid var(--k-line);
 }
 
-.rl-p {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  min-width: 0;
-}
-
-/* The two avatars flank the arrow, so the baton changes hands in the middle
-   of the row instead of at its edges. */
-.rl-left .rl-p {
-  flex-direction: row-reverse;
-  text-align: right;
-}
-
-.rl-left .rl-names {
-  justify-content: flex-end;
-}
-
-/* Without this the flex item is free to size to its longest word, and an
-   unbroken surname widens the row past the card. */
-.rl-txt {
-  min-width: 0;
-}
-
-.rl-names {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  line-height: 1.25;
-}
-
-/* A person's name in a list: 16/700, the one weight below the page title. */
-.rl-name {
-  color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.rl-meta {
-  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
-  font-size: var(--k-meta-size);
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Which side of the handover a block is, on the phone layout only: on a wide
-   row the legend above the cards says it once for the whole role. */
-.rl-ovl {
-  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
-  display: none;
-  font-size: var(--k-meta-size);
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.av {
-  border-radius: 50%;
-  display: grid;
-  flex: 0 0 auto;
-  font-size: var(--k-meta-size);
-  font-weight: 700;
-  height: 34px;
-  place-items: center;
-  width: 34px;
-}
-
-/* Faded = the post was left; sage = the post is now theirs. */
-.av--out {
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
-}
-
-.av--in {
-  background: rgb(var(--v-theme-primary));
-  color: rgba(var(--v-theme-on-surface), 0.87);
-}
-
-.rl-mid {
-  align-items: center;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  justify-content: center;
-}
-
-/* One thread down the whole batch, beaded by the arrows: four rows, one
-   decision. Drawn on the body, or it breaks at every row gap. */
-.ev-body {
-  position: relative;
-}
-
-.ev--batch .ev-body::before {
-  background: rgba(var(--v-border-color), 0.3);
-  bottom: 8px;
-  content: "";
-  left: calc(50% + 2px);
-  position: absolute;
-  top: 8px;
-  width: 1px;
-}
-
-.rl-disc {
-  padding: 3px 0;
-}
-
-.rl-disc span {
-  background: rgba(var(--v-theme-primary), 0.28);
-  border-radius: 50%;
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  display: grid;
-  height: 26px;
-  place-items: center;
-  width: 26px;
-}
-
-/* Opaque, so the thread runs behind the beads and not through the words. */
-.rl-gap {
-  background: rgb(var(--v-theme-surface));
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: var(--k-meta-size);
-  line-height: 1.3;
-  padding: 0 4px;
-  position: relative;
-  text-align: center;
-}
-
-.rl-flip {
-  background: rgb(var(--v-theme-secondary));
-  border-radius: var(--k-r-pill);
-  color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: var(--k-meta-size);
-  font-weight: 700;
-  padding: 1px 8px;
-  position: relative;
-  white-space: nowrap;
-}
-
-.rl-disc .arrow-v {
-  display: none;
-}
-
-/* Column labels once per role, not once per card. */
-.rl-legend {
-  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
-  display: grid;
-  font-size: var(--k-meta-size);
-  font-weight: 600;
-  gap: 10px;
-  grid-template-columns: 1fr 184px 1fr;
-  padding: 0 17px 8px 21px;
-}
-
-.rl-legend > :first-child {
-  text-align: right;
-}
-
-/* ---- phone: the relay reflows to a baton, never a scroller ---- */
-@media (max-width: 719px) {
-  .rl-row {
-    gap: 0;
-    grid-template-columns: 1fr;
-    padding: 14px 14px 14px 18px;
+/* ---- phone ---- */
+@media (max-width: 599.98px) {
+  /* An editor's tools take the card's last line, at its right edge, where
+     the history's rows put theirs on a phone: beside the name they would
+     leave it about 110px. */
+  .board-card--tools {
+    grid-template-areas:
+      "avatar text"
+      ". tools";
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .rl-left .rl-p {
-    flex-direction: row;
-    text-align: left;
+  .board-card__tools {
+    justify-self: end;
+    margin-top: 8px;
   }
 
-  .rl-left .rl-names {
-    justify-content: flex-start;
-  }
-
-  /* Indented to the name column so the thread below has a clear channel down
-     the avatars. */
-  .rl-ovl {
-    display: block;
-    padding-left: 44px;
-  }
-
-  .rl-meta {
-    white-space: normal;
-  }
-
-  .rl-mid {
-    flex-direction: row;
-    gap: 10px;
-    justify-content: flex-start;
-    margin: 6px 0 6px 4px;
-    position: relative;
-  }
-
-  .rl-mid::before {
-    background: rgba(var(--v-border-color), 0.3);
-    bottom: -20px;
-    content: "";
-    left: 13px;
-    position: absolute;
-    top: -8px;
-    width: 1px;
-  }
-
-  .rl-disc {
-    padding: 0;
-  }
-
-  .rl-disc .arrow-h {
-    display: none;
-  }
-
-  .rl-disc .arrow-v {
-    display: grid;
-  }
-
-  .rl-legend,
-  .ev--batch .ev-body::before {
-    display: none;
+  /* Tapped here, so the count of sources is as tall as the pencil and the
+     bin beside it, as on the history's rows on a phone. It is the tools'
+     only button with a label. */
+  .board-card__tools :deep(.v-btn:not(.v-btn--icon)) {
+    --v-btn-height: 40px;
   }
 
   .ev-sub {

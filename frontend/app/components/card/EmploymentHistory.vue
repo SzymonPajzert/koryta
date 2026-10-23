@@ -344,7 +344,12 @@ import { mdiArrowUp, mdiPlus } from "@mdi/js";
 import CardHistoryRowActions from "./HistoryRowActions.vue";
 import PageSection from "../PageSection.vue";
 import { entityIcon } from "~/utils/entityIcon";
-import { ledgerPeriod, relationPeriodParts } from "~/utils/relationPeriod";
+import {
+  historySpanCaption,
+  ledgerPeriod,
+  relationPeriodParts,
+} from "~/utils/relationPeriod";
+import { batchNote } from "~/composables/successions";
 import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
 import { asArray, type Company } from "~~/shared/model";
@@ -352,7 +357,6 @@ import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { placeClashes, type PlaceClash } from "~~/shared/twoPlaces";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~/composables/slugs";
-import { polishCounting } from "~/composables/polish";
 
 /** Whoever held a seat before the spell an edge records, as the successions
  * endpoint names them, plus how many seats changed hands that day. */
@@ -390,6 +394,11 @@ const props = defineProps<{
    * the second case needs telling, which is why this is optional - see
    * `roleOwner`. */
   company?: Company;
+  /** On a company's page, the whole history the caption counts when the card
+   * is handed fewer rows than that: the posts „Obecny skład” draws as cards
+   * are left out of the rows (Szymon, 2026-10-23), and the caption still
+   * counts them. Unset, the caption counts the rows it lists. */
+  captionEdges?: EdgeNode[];
   /** Who held each seat before, keyed by the edge id of the spell that took it
    * over. Optional because most callers of this card do not ask
    * `/api/edges/successions` at all - and because the successions of a company
@@ -532,20 +541,17 @@ const clashOf = computed(() => {
   return byRow;
 });
 
-/** „4 osoby · wpisy od 2016”, on a company's page only. People are counted by
- * their page, so two spells of one person are one person and two namesakes
- * stay two; the year is the earliest start among their rows. */
+/** „4 osoby · wpisy od 2016”, on a company's page only (`historySpanCaption`
+ * says how it counts). Over `captionEdges` when the page hands the card fewer
+ * rows than the history holds, less the same role-less copies the rows leave
+ * out, so the count is the card's own over every row it would have listed. */
 const companyCaption = computed(() => {
   if (!props.company) return "";
-  const people = listedEdges.value.filter((e) => e.richNode.type === "person");
-  const count = new Set(people.map((e) => e.richNode.id)).size;
-  if (!count) return "";
-  const parts = [polishCounting(count, "osoba", "osoby", "osób")];
-  const years = people
-    .map((e) => Number(e.start_date?.slice(0, 4)))
-    .filter((year) => year > 0);
-  if (years.length) parts.push(`wpisy od ${Math.min(...years)}`);
-  return parts.join(" · ");
+  return historySpanCaption(
+    props.captionEdges
+      ? withoutRedundantRoleless(props.captionEdges, employmentSpell)
+      : listedEdges.value,
+  );
 });
 
 const edgesSorted = computed(() => {
@@ -724,14 +730,6 @@ function partiesOf(edge: EdgeNode): string[] {
  *
  * A list so the template can `v-for` it: `v-if` would mean looking the edge up
  * again for every field it prints, each behind a non-null assertion. */
-/** Why a predecessor is hedged, spelled out for whoever hovers it. */
-function batchNote(batchSize: number): string {
-  return (
-    `Tego dnia zmieniło się ${batchSize} stanowisk tej samej funkcji. ` +
-    "Rejestr nie wskazuje, kto zajął czyje miejsce."
-  );
-}
-
 function predecessorOf(edge: EdgeNode): Predecessor[] {
   const predecessor = edge.id ? props.predecessors?.[edge.id] : undefined;
   return predecessor ? [predecessor] : [];

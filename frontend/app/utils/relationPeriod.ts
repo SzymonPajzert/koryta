@@ -1,4 +1,6 @@
 import { isoDay, shortDate, warsawDate } from "~~/shared/dates";
+import { polishCounting } from "~/composables/polish";
+import type { EdgeNode } from "~/composables/edges";
 
 /** A relation's two ends as they are printed: the start, and the end or
  * „obecnie” for a post still held. `end` is undefined where there is no range
@@ -132,4 +134,54 @@ function ledgerPeriodOf(
 /** The year a register date begins with, or the date as written. */
 function yearOf(iso: string): string {
   return /^\d{4}/.exec(iso)?.[0] ?? iso;
+}
+
+/** How long a spell ran, in years and months: „9 mies.”, „2 lata 3 mies.”,
+ * „poniżej miesiąca”. A spell still held is measured to `today`, which is what
+ * „5 mies. na stanowisku” means on a current post. Empty where an end is not a
+ * whole day: a month or a year alone cannot be counted in months, and an end
+ * that is only a year used to be measured to today instead.
+ *
+ * Lived in `succession/CompanyChanges.vue`, for the current board's cards; the
+ * handover row a person's page and a company's now share
+ * (`succession/HandoverRow.vue`) prints it after each side's period too. */
+export function spellLength(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  today: string = warsawDate(),
+): string {
+  const from = isoDay(start);
+  const to = isoDay(end || today);
+  if (!from || !to) return "";
+  let months = (to.y - from.y) * 12 + (to.m - from.m);
+  if (to.d < from.d) months -= 1;
+  if (months < 1) return "poniżej miesiąca";
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  if (!years) return `${rest} mies.`;
+  const counted = polishCounting(years, "rok", "lata", "lat");
+  return rest ? `${counted} ${rest} mies.` : counted;
+}
+
+/** „12 osób · wpisy od 2001”: how many people a company's history holds and
+ * the year its earliest post began. People are counted by their page, so two
+ * spells of one person are one person and two namesakes stay two.
+ *
+ * Here rather than only in `card/EmploymentHistory.vue`, which prints it over
+ * whatever rows it is handed, because a company's page hands that card less
+ * than the history is: the posts „Obecny skład” draws as cards are left out of
+ * the rows (Szymon, 2026-10-23), and the caption still counts them. Empty where
+ * no row leads to a person. */
+export function historySpanCaption(edges: EdgeNode[]): string {
+  const people = new Set<string | undefined>();
+  let earliest = Infinity;
+  for (const edge of edges) {
+    if (edge.richNode.type !== "person") continue;
+    people.add(edge.richNode.id);
+    const year = Number(edge.start_date?.slice(0, 4));
+    if (year > 0) earliest = Math.min(earliest, year);
+  }
+  if (!people.size) return "";
+  const count = polishCounting(people.size, "osoba", "osoby", "osób");
+  return Number.isFinite(earliest) ? `${count} · wpisy od ${earliest}` : count;
 }

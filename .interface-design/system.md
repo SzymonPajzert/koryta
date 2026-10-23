@@ -132,6 +132,22 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
 
   A lone „—” standing for a missing value, in a table cell or for a date
   nobody recorded, stays: it is a sign, not punctuation (2026-10-23).
+- **A company's board is drawn once**: the „Obecny skład” cards, each with
+  an editor's row tools, and „Historia powiązań” leaves out the posts the
+  cards show, so it opens on the ended ones; its caption still counts
+  everybody. Picked 2026-10-23 (A) over one list or hiding the repeat for
+  logged-out readers.
+- **A handover is one row on a person's page and on a company's**: the one
+  who left („Ustępuje”), a grey chip saying the gap, the one who took over
+  („Obejmuje stanowisko”), each with an initials disc, party chips and the
+  spell with its length; pink only for a party change. Each page keeps its
+  card head and section title. Picked 2026-10-23 (A). A day's batch is
+  headed „N zmiany tego dnia” (2026-10-24).
+- **A long company page folds**: the newest five handovers of a function,
+  then „Pokaż starsze (N)”; „Właściciele” and „Spółki zależne” above the
+  handovers, with a count; logged out, the subsidiaries fold after 12.
+  Picked 2026-10-23 (B). An editor's empty list says so in one quiet line,
+  „Nie znamy spółek zależnych.” (2026-10-24).
 
 ## How UI changes are made
 

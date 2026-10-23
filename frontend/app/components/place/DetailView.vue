@@ -58,10 +58,13 @@
       </v-alert>
 
       <!-- The people first. What this institution is, then who sits in it
-           now and everyone who ever held a post here, then one line on what
-           the register does not tell us, and only then the handovers, the
-           owners and the rest. A section with nothing in it is not drawn at
-           all: what it would have said goes into that one line.
+           now and everyone who held a post here before, then one line on
+           what the register does not tell us, then who owns it and what it
+           owns, and only then the handovers and the rest. The owners came
+           back above the handovers with Szymon's pick of 2026-10-23: under
+           them they stood 24,000px down a long company's phone page. A
+           section with nothing in it is not drawn at all: what it would have
+           said goes into that one line.
 
            Each block straight in `k-sections`, as on a person's page, so a
            company's sections stand the same 40px apart as a person's (32 on
@@ -100,17 +103,36 @@
 
       <!-- Three parts of one component, off the one request below: who
            holds a post now, what the page cannot show, and who took over
-           from whom. -->
+           from whom.
+
+           Today's board is drawn once, as these cards: the history below
+           leaves their posts out (`historyEdges`). So each card carries
+           what its row there had - the draft badge, and the sources, the
+           correction and the bin - off the same permissions and into the
+           same dialogs as the history's rows. -->
       <SuccessionCompanyChanges
         :key="`current-${nodeId}`"
         part="current"
         :company-name="company.name"
         :data="successions"
         :status="successionsStatus"
+        :edges
+        :can-cite="canAddRelations"
+        :can-correct="canEditRelations"
+        :can-remove="canRemoveRelations"
+        :subject-published="subjectPublished"
+        @sources="openSources"
+        @edit="openEdit"
+        @remove="openRemove"
+        @published="refreshEdges()"
       />
 
+      <!-- Opens on „Zakończone” once the board's cards are drawn: what is
+           held today is in them. Its caption counts everybody all the same,
+           the board included (Szymon, 2026-10-23): `caption-edges`. -->
       <CardEmploymentHistory
         :edges="historyEdges"
+        :caption-edges="historyAll"
         bleed
         ledger
         people-by-period
@@ -137,17 +159,16 @@
         class="company-absent"
       />
 
-      <SuccessionCompanyChanges
-        :key="`relay-${nodeId}`"
-        part="relay"
-        :company-name="company.name"
-        :data="successions"
-        :status="successionsStatus"
-      />
-
+      <!-- Each with its count beside the head. A long list of subsidiaries
+           folds after twelve, behind „Pokaż wszystkie”, for a reader who is
+           not signed in. Signed in, it is whole: the contributor's page
+           comes first, and an admin's rows carry the controls nothing may
+           put a click away (Szymon, 2026-10-23). -->
       <CardConnectionList
         :edges="owners"
         title="Właściciele"
+        :count-nouns="['podmiot', 'podmioty', 'podmiotów']"
+        empty-text="Nie znamy właścicieli."
         :can-add="canAddRelations"
         :can-remove="canRemoveRelations"
         :subject-published="subjectPublished"
@@ -159,6 +180,9 @@
       <CardConnectionList
         :edges="subsidiaries"
         title="Spółki zależne"
+        :count-nouns="['spółka', 'spółki', 'spółek']"
+        empty-text="Nie znamy spółek zależnych."
+        :fold-after="user ? undefined : SUBSIDIARIES_SHOWN"
         :can-add="canAddRelations"
         :can-remove="canRemoveRelations"
         :subject-published="subjectPublished"
@@ -166,6 +190,14 @@
         @add="openAdd(['owns_child'], 'Dodaj spółkę zależną')"
         @remove="openRemove"
         @published="refreshEdges()"
+      />
+
+      <SuccessionCompanyChanges
+        :key="`relay-${nodeId}`"
+        part="relay"
+        :company-name="company.name"
+        :data="successions"
+        :status="successionsStatus"
       />
 
       <!-- Headed like every other section, as on a person's page, and not
@@ -217,7 +249,7 @@
         :node-name="company.name"
         :types="addRelationTypes"
         :title="addRelationTitle"
-        @added="refreshEdges()"
+        @added="refreshRelations()"
       />
 
       <FormEdgeSourcesDialog
@@ -279,7 +311,7 @@ import {
   SOCIAL_CARD,
 } from "~/composables/entitySeo";
 import { useAuthState, authFetch, authRequest } from "@/composables/auth";
-import { useCompanySuccessions } from "~/composables/successions";
+import { boardEdgeIds, useCompanySuccessions } from "~/composables/successions";
 import type { Company, Revision } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
@@ -297,8 +329,15 @@ const { smAndDown } = useDisplay();
  * three places the page draws it. Started before the node is awaited, so the
  * two requests run side by side, and not awaited itself: Nuxt still settles it
  * before it serialises the page. */
-const { data: successions, status: successionsStatus } =
-  useCompanySuccessions(nodeId);
+const {
+  data: successions,
+  status: successionsStatus,
+  refresh: refreshSuccessions,
+} = useCompanySuccessions(nodeId);
+
+/** How many subsidiaries a reader who is not signed in sees before „Pokaż
+ * wszystkie”: Orlen lists about eighty (Szymon, 2026-10-23). */
+const SUBSIDIARIES_SHOWN = 12;
 
 // The graph is the heaviest thing on the page and a phone shows one node at a
 // time anyway, so a narrow screen asks for it rather than being given it.
@@ -375,11 +414,11 @@ const subsidiaries = computed(() =>
   targets.value.filter((e) => e.type === "owns" && e.richNode.type === "place"),
 );
 
-/** What "Historia powiązań" carries: the relations the two lists above have not
- * already drawn. Every ownership edge used to appear on this page twice - once
- * under „Właściciele" or „Spółki zależne", and again as a history row - so a
- * company with a parent and ten subsidiaries printed all eleven, then printed
- * the same eleven underneath.
+/** What "Historia powiązań" is about: the relations the owners' and the
+ * subsidiaries' lists under it have not already drawn. Every ownership edge
+ * used to appear on this page twice - once under „Właściciele" or „Spółki
+ * zależne", and again as a history row - so a company with a parent and ten
+ * subsidiaries printed all eleven, then printed the same eleven again.
  *
  * Excluding exactly what was rendered, rather than filtering the history by
  * type: `subsidiaries` only takes an outgoing `owns` whose far end is a place,
@@ -388,13 +427,27 @@ const subsidiaries = computed(() =>
  * both lists and `edges` read the same cached `sources`/`targets` computeds
  * from `useEdges`, so they hold the same objects. Every owner edge counts as
  * drawn, the ones `owners` folded into another row included: the seat of a
- * gmina already listed as an owner would otherwise turn up again down here. */
-const listedAbove = computed(
+ * gmina already listed as an owner would otherwise turn up again in the
+ * history. */
+const listedAsOwnership = computed(
   () => new Set([...ownerEdges.value, ...subsidiaries.value]),
 );
-const historyEdges = computed(() =>
-  edges.value.filter((e) => !listedAbove.value.has(e)),
+const historyAll = computed(() =>
+  edges.value.filter((e) => !listedAsOwnership.value.has(e)),
 );
+
+/** The rows the history draws: all of it less the posts „Obecny skład” shows
+ * as cards above it, so a reader meets today's board once rather than as five
+ * cards and then the same five rows (Szymon, 2026-10-23). By edge id, the one
+ * thing the cards (from `/api/edges/successions`) and the rows (from the local
+ * graph) share - and only while the cards are drawn: before the answer is in,
+ * or once the request has failed, the history keeps every row
+ * (`boardEdgeIds`). A post held today that the cards do not show stays here,
+ * under „Obecnie”. */
+const historyEdges = computed(() => {
+  const onBoard = boardEdgeIds(successions.value, successionsStatus.value);
+  return historyAll.value.filter((e) => !e.id || !onBoard.has(e.id));
+});
 
 /** Where the institution sits: the region at the other end of its `seat`.
  *
@@ -467,9 +520,18 @@ function openSources(edge: EdgeNode) {
   sourcesOpen.value = true;
 }
 
-/** Refetching rather than splicing the row out in the browser: the board
- * summary at the top of the page, the rows and the graph all read the one
- * local-graph response. */
+/** Both answers the page's people are drawn from, read again after one of
+ * its relations was added, corrected or removed: the local graph (the
+ * history, the owners, the graph) and the successions (the board's cards, the
+ * relay). Today's board is listed only in its cards now, so a post removed
+ * with its card's bin has to leave the card, not only the history. */
+function refreshRelations() {
+  return Promise.all([refreshEdges(), refreshSuccessions()]);
+}
+
+/** Refetching rather than splicing the row out in the browser: the board's
+ * cards, the rows and the graph are drawn from two responses between them,
+ * and the same relation is in more than one of them. */
 const {
   canRemove: canRemoveRelations,
   removeOpen,
@@ -480,7 +542,7 @@ const {
   onEdgeRemoved,
 } = useEdgeRemoval({
   subjectName: () => company.value?.name,
-  refresh: refreshEdges,
+  refresh: refreshRelations,
 });
 
 /** Correcting one, on the same terms as on a person's page - a job title read
@@ -497,7 +559,7 @@ const {
   onEdgeEdited,
 } = useEdgeEditing({
   subjectName: () => company.value?.name,
-  refresh: refreshEdges,
+  refresh: refreshRelations,
 });
 </script>
 
