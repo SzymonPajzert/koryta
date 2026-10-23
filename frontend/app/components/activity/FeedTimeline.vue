@@ -56,13 +56,15 @@
                 />
               </button>
               <!-- Focusable and opened by a tap: "why is this Anonim" was
-                   otherwise there only for a mouse. -->
+                   otherwise there only for a mouse. Hover only where a pointer
+                   hovers, or a phone's tap opens it and shuts it again. -->
               <span v-else class="ft-actor ft-actor--masked" tabindex="0">
                 <span class="ft-actor__name">{{ row.actor.name }}</span>
                 <v-tooltip
                   activator="parent"
                   location="bottom"
                   open-on-click
+                  :open-on-hover="canHover"
                   :text="row.explanation"
                 />
               </span>
@@ -221,6 +223,7 @@ import {
   type FeedTarget,
   type FeedTargetType,
 } from "~~/shared/activityFeed";
+import { useCanHover } from "~/composables/canHover";
 import { contributorNameExplanation } from "~/utils/contributorName";
 import { entityIcon } from "~/utils/entityIcon";
 import { feedKindStyle, feedToneClasses } from "~/utils/feedKindStyle";
@@ -248,6 +251,9 @@ const emit = defineEmits<{ "select-actor": [actor: FeedActor] }>();
  * and five made one sitting taller than the screen. */
 const { xs } = useDisplay();
 const targetsShown = computed(() => (xs.value ? 3 : 5));
+
+/** `useCanHover`: a tap on a phone opens the tooltip and keeps it open. */
+const canHover = useCanHover();
 
 /** Below this a batch reads as one moment: a range "14:18-14:20" says nothing
  * a single time does not. */

@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "dymki-statusu-na-telefonie",
+    title: "Dymki przy statusach rewizji zostają otwarte na telefonie",
+    description:
+      "Na telefonie stuknięcie w status rewizji, „odczytany” albo zamaskowaną nazwę „Anonim N” otwierało dymek, który po pół sekundy sam znikał, jak wcześniej dymki (i). Teraz zostaje, aż stukniesz obok.",
+    steps: [
+      "Na telefonie zaloguj się, otwórz /profil i stuknij status jednej ze swoich propozycji - dymek zostaje otwarty.",
+    ],
+    link: "/profil",
+    area: "contributor",
+  },
+  {
     id: "strona-osoby-fakty-i-historia",
     title: "Strona osoby: jeden wiersz faktów i historia z datami w kolumnie",
     description:
