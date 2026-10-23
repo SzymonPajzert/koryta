@@ -2,56 +2,81 @@
   <v-card v-if="loading" class="pa-4 d-flex justify-center">
     <v-progress-circular indeterminate></v-progress-circular>
   </v-card>
-  <v-card v-else-if="data" class="pa-4 mb-4">
+  <!-- No margin of its own: the page stands its two regions one section gap
+       apart (`k-sections`), and under the last one the layout's gap to the
+       footer is the whole of it. -->
+  <v-card v-else-if="data" class="pa-4">
+    <!-- The region's name heads its section, on the section scale under the
+         page's h1 - 24px, 20 on a phone - and above the chart, which is the
+         council's and means nothing before its name. It used to sit in the
+         second column, beside the chart on a computer and under it on a
+         phone, where the section opened on an unlabelled half-gauge. -->
+    <h2 class="k-section-title mb-2">
+      {{ data.regionName }}
+    </h2>
     <v-row>
-      <v-col cols="12" md="6" height="260">
-        <apexchart
-          v-if="currentChartOptions && currentSeries"
-          type="donut"
-          :options="currentChartOptions"
-          :series="currentSeries"
-        />
-      </v-col>
-      <v-col cols="12" md="6" class="d-flex align-center justify-center">
-        <div>
-          <v-card-title class="text-h5 mb-1 text-center text-wrap">
-            {{ data.regionName }}
-          </v-card-title>
-          <v-list
-            v-model:selected="selectedChart"
-            bg-color="background"
-            class="mx-auto ga-4 d-flex flex-column"
-            item-props
-            :items="items"
-            lines="two"
-            mandatory
-          >
-            <template #item="{ props: itemProps }">
-              <v-list-item
-                v-bind="itemProps"
-                base-color="medium-emphasis"
-                rounded="lg"
-                variant="outlined"
-              >
-                <template #title>
-                  <div
-                    class="d-flex justify-space-between align-center text-body-medium"
-                  >
-                    <strong>{{ itemProps.title }}</strong>
-
-                    <div>{{ itemProps.price }} osób</div>
-                  </div>
-                </template>
-
-                <template #subtitle>
-                  <div class="d-flex justify-space-between align-center">
-                    {{ itemProps.subtitle }}
-                  </div>
-                </template>
-              </v-list-item>
-            </template>
-          </v-list>
+      <v-col cols="12" md="6">
+        <!-- Measured, because the chart's height is worked out from its
+             width (`gaugeGrid` below); drawn once that width is known, so it
+             does not open at a wrong size and resize in front of the
+             reader. -->
+        <div ref="gaugeBox">
+          <apexchart
+            v-if="currentChartOptions && currentSeries && gaugeWidth > 0"
+            type="donut"
+            height="auto"
+            :options="currentChartOptions"
+            :series="currentSeries"
+          />
         </div>
+      </v-col>
+      <v-col cols="12" md="6" class="d-flex align-center">
+        <v-list
+          v-model:selected="selectedChart"
+          bg-color="background"
+          class="w-100 ga-4 d-flex flex-column"
+          item-props
+          :items="items"
+          lines="two"
+          mandatory
+        >
+          <template #item="{ props: itemProps }">
+            <!-- A choice between the two charts, so drawn as a control: the
+                 tint and no line (assets/css/edges.css). Outlined in the
+                 medium ink, the two were the darkest lines on the page,
+                 heavier than the card holding them. The one on show keeps
+                 Vuetify's selected layer over the tint and its words go to
+                 full ink; the other stays quiet.
+
+                 `rounded`, because without it or `nav` a list item asks for
+                 Vuetify's `rounded-0`, a border-radius of 0 !important that
+                 squared off the control radius below. With it the item asks
+                 for its own 4px instead, which the radius below outranks. -->
+            <v-list-item
+              v-bind="itemProps"
+              base-color="medium-emphasis"
+              color="high-emphasis"
+              rounded
+              class="people-stats__choice"
+            >
+              <template #title>
+                <div
+                  class="d-flex justify-space-between align-center text-body-medium"
+                >
+                  <strong>{{ itemProps.title }}</strong>
+
+                  <div>{{ peopleCount(itemProps.price) }}</div>
+                </div>
+              </template>
+
+              <template #subtitle>
+                <div class="d-flex justify-space-between align-center">
+                  {{ itemProps.subtitle }}
+                </div>
+              </template>
+            </v-list-item>
+          </template>
+        </v-list>
       </v-col>
     </v-row>
 
@@ -198,7 +223,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useElementSize } from "@vueuse/core";
 import { parties as allParties, partyColors } from "~~/shared/misc";
+import { polishCounting } from "~/composables/polish";
 import { partyRemainder } from "~/utils/chartTheme";
 import {
   useRegionStatistics,
@@ -252,6 +279,12 @@ const items = computed(() => [
   },
 ]);
 
+/** A choice's count in the form its number takes: „10 osób”, but „24 osoby”,
+ * which the sejmik's choice used to print as „24 osób”. */
+function peopleCount(count: number) {
+  return polishCounting(count, "osoba", "osoby", "osób");
+}
+
 function isExternalLink(accountId: string) {
   return accountId.includes("rejestr.io") || accountId.startsWith("http");
 }
@@ -300,12 +333,13 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
     return partyRemainder.fallback;
   });
 
+  // No height here: the component's `height` prop overrides it, and the
+  // template leaves that to apexcharts (`gaugeGrid` below).
   return {
     series,
     options: {
       chart: {
         type: "donut",
-        height: 400,
       },
       labels,
       colors,
@@ -325,28 +359,36 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
           },
         },
       },
-      grid: {
-        padding: {
-          bottom: -250,
-        },
-      },
-      responsive: [
-        {
-          breakpoint: 960,
-          options: {
-            chart: {
-              height: 320,
-            },
-            grid: {
-              padding: {
-                bottom: -180,
-              },
-            },
-          },
-        },
-      ],
     },
   };
+}
+
+/** The chart's column, measured: the half-gauge is as wide as it. */
+const gaugeBox = ref<HTMLElement | null>(null);
+const { width: gaugeWidth } = useElementSize(gaugeBox);
+
+/** How much more than half the width comes off the bottom. apexcharts' own
+ * height for a donut with its legend on top counts the legend twice, above
+ * the circle and again under it, plus a few px of its own; 24 takes that
+ * back for a legend of one row and leaves 8px under the half-gauge's flat
+ * edge. A legend that wraps adds its second row there, under the gauge,
+ * rather than pushing the gauge out of the bottom of the chart. */
+const GAUGE_BELOW_HALF = 24;
+
+/** The half-gauge's height, from its width.
+ *
+ * apexcharts sizes a donut by the shorter side of its plot area, so a half
+ * donut as wide as its column needs an area as tall as the column is wide,
+ * and draws nothing in the lower half of it. Left to size itself (`height`
+ * "auto"), the chart measures out that whole circle under its legend; the
+ * grid's bottom padding takes the unused half back off. What is left is the
+ * legend and the half-gauge: about half the width, plus the legend.
+ *
+ * The padding used to be a fixed -250, and -180 on a fixed 320px under 960 -
+ * right for one width each. On a phone that left about 130px of blank under
+ * the gauge, two fifths of the chart. */
+function gaugeGrid(width: number) {
+  return { padding: { bottom: -(Math.round(width / 2) + GAUGE_BELOW_HALF) } };
 }
 
 const currentChartData = computed(() => {
@@ -372,11 +414,40 @@ const activeChartData = computed(() => {
 });
 
 const currentSeries = computed(() => activeChartData.value?.series);
-const currentChartOptions = computed(() => activeChartData.value?.options);
+const currentChartOptions = computed(() => {
+  const options = activeChartData.value?.options;
+  return options && { ...options, grid: gaugeGrid(gaugeWidth.value) };
+});
 </script>
 
 <style scoped>
 .gap-2 {
   gap: 0.5rem;
+}
+
+/* The control tint and the control radius. Vuetify's selected layer is
+   drawn in the text colour over it, so the chosen one reads darker without a
+   colour of its own. A subtitle is .6 of its item's ink in Vuetify, which on
+   the quiet one came to 2.5:1; at the .78 the site gives a card's subtitle
+   (assets/css/type.css) it is 3.5:1 there and 6.6:1 on the chosen one. */
+.people-stats__choice {
+  --v-list-item-subtitle-opacity: 0.78;
+
+  background: var(--k-tonal);
+  border-radius: var(--k-r-control);
+}
+
+/* The ring a keyboard's focus draws round it, on the same corners: Vuetify
+   draws it at a fixed 4px. */
+.people-stats__choice::after {
+  border-radius: inherit;
+}
+
+/* The other one, under a pointer: the controls' hover tint, which Vuetify's
+   own hover layer - 4% of the quiet ink - barely moved. */
+@media (hover: hover) {
+  .people-stats__choice:not(.v-list-item--active):hover {
+    background: var(--k-tonal-hover);
+  }
 }
 </style>

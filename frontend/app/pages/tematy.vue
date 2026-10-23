@@ -1,12 +1,14 @@
 <template>
   <div>
-    <v-card class="mb-4">
-      <v-card-title><h1>Tematy</h1></v-card-title>
-      <v-card-text>
-        Sprawy, które śledzimy przez wiele artykułów naraz. Każdy temat pokazuje
-        graf osób i instytucji powiązanych przez te artykuły.
-      </v-card-text>
-    </v-card>
+    <!-- The page's head on the page rather than in a ruled card, where it
+         read as one more topic: the h1, one sentence of lead, and the rest of
+         the explanation behind the „(i)”, in the head the admin and working
+         pages share. -->
+    <AdminPageHead
+      title="Tematy"
+      lead="Sprawy, które śledzimy przez wiele artykułów naraz."
+      info="Każdy temat pokazuje graf osób i instytucji powiązanych przez te artykuły."
+    />
 
     <ExploreLoginBanner
       v-if="!user"
