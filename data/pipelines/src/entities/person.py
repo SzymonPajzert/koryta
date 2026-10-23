@@ -28,6 +28,11 @@ class Koryta:
     birth_date: str | None = None
 
 
+#: What `KRS.rejestrio_feed` says of a row read off a person's own rejestr.io
+#: feed, ``osoby/<id>``, rather than off a company's.
+PERSON_FEED = "osoby"
+
+
 @dataclass
 class KRS:
     """Represents a person associated with a KRS (National Court Register) entry."""
@@ -55,6 +60,13 @@ class KRS:
     #: tells the same story for free, and which of the two is newer decides
     #: whose word stands for the company (`scrapers.krs.odpis_people`).
     crawled_on: str | None = None
+    #: `PERSON_FEED` for a row read off the person's own feed, ``osoby/<id>``,
+    #: rather than off the company's: what `PeopleKRS` takes from a bought feed
+    #: for a company no company feed was read for
+    #: (`scrapers.krs.list.posts_from_person_feeds`). Such a row speaks for one
+    #: person, not for the company, so any odpis of the company stands in for it,
+    #: whatever its day (`scrapers.krs.odpis_people.combine`).
+    rejestrio_feed: str | None = None
 
     def __post_init__(self):
         """Ensures the person's ID is a string."""

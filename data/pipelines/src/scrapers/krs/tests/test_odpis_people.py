@@ -337,6 +337,65 @@ def test_somebody_the_newer_odpis_does_not_name_keeps_rejestrios_rows():
     ]
 
 
+def bought(krs, **kwargs):
+    """A row off the person's own rejestr.io feed (`PeopleKRS` makes one only
+    for a company no company feed was read for), crawled after the odpisy."""
+    return person(krs=krs, crawled_on="2026-10-17", rejestrio_feed="osoby", **kwargs)
+
+
+def test_an_odpis_stands_in_for_rows_off_a_persons_own_feed_whatever_the_days():
+    """A feed of October against an odpis of September: the odpis still names
+    the whole board, the feed one person. That person keeps the rejestr.io id
+    at the company, and carries the PESEL to their other rows; somebody only
+    the feed names there is not kept, as the odpis is the company's word."""
+    rejestrio = people(
+        person(krs=A, id="7"),
+        bought(B, id="7"),
+        bought(B, id="9", first="Ewa", last="Eckert"),
+    )
+    odpisy = seats(
+        seat(krs=B, pesel_fingerprint="a" * 32),
+        seat(krs=B, surname="KOWALSKI", given="ADAM", pesel_fingerprint="b" * 32),
+    )
+    combined = combine(rejestrio, odpisy, graph={A, B})
+
+    at_b = combined[combined["employed_krs"] == B]
+    assert set(at_b["source"]) == {SOURCE_ODPIS}
+    assert sorted(zip(at_b["full_name"], at_b["id"].fillna(""))) == [
+        ("Adam Kowalski", ""),
+        ("Jan Nowak", "7"),
+    ]
+    assert "Ewa Eckert" not in set(combined["full_name"])
+    [at_a] = combined[combined["employed_krs"] == A].to_dict("records")
+    assert (at_a["source"], at_a["pesel_fingerprint"]) == (SOURCE_REJESTRIO, "a" * 32)
+
+
+def test_rows_off_a_persons_own_feed_stand_where_no_odpis_is_on_file():
+    rejestrio = people(person(krs=A, id="7"), bought(C, id="7"))
+    combined = combine(
+        rejestrio, seats(seat(krs=A, pesel_fingerprint="a" * 32)), {A, C}
+    )
+
+    assert [
+        (row["id"], row["source"], row["rejestrio_feed"], row["pesel_fingerprint"])
+        for row in combined[combined["employed_krs"] == C].to_dict("records")
+    ] == [("7", SOURCE_REJESTRIO, "osoby", "a" * 32)]
+
+
+def test_an_odpis_that_stands_in_for_nobody_leaves_the_feeds_rows_standing():
+    combined = combine(
+        people(person(krs=A, id="7"), bought(B, id="7")),
+        seats(seat(krs=B, date_removed="2019-12-11")),
+        graph={A, B},
+        struck={B},
+    )
+
+    assert sorted(zip(combined["employed_krs"], combined["source"])) == [
+        (A, SOURCE_REJESTRIO),
+        (B, SOURCE_REJESTRIO),
+    ]
+
+
 def test_an_odpis_of_a_company_struck_off_one_register_stands_in_for_nobody():
     rejestrio = people(person(krs=A, id="1"))
     odpisy = seats(seat(krs=A, date_removed="2019-12-11"), seat(krs=B))

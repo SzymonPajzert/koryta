@@ -44,6 +44,13 @@ that is the newer source having seen an entry the older had not.
   An odpis pełny names everybody who ever held a seat, struck out or not, so
   somebody missing from it is the parser's miss or a spelling no rule above
   reaches -- 8 of the 16,441, measured -- and not a person who left.
+- A row off somebody's own rejestr.io feed (`KrsPerson.rejestrio_feed`, made
+  only for a company no company feed was read for) is one person's word, not
+  the company's. Any odpis of the company stands in for it, whatever the two
+  days, and its day never makes rejestr.io the newer source: an odpis of
+  July still names the whole board, the person's feed of October one person.
+  It still matches the odpis person it is, so that person's posts there keep
+  the rejestr.io id the person's page is linked by.
 - An odpis that records the company struck off one register while it lives on
   in the other (``WYKREŚLENIE Z REJESTRU PRZEDSIĘBIORCÓW``, 17 on file) stands in
   for nobody. Its seats all end on the day of the strike-off, which is when the
@@ -61,6 +68,7 @@ from collections.abc import Iterable
 import pandas as pd
 
 from entities.person import KRS as KrsPerson
+from entities.person import PERSON_FEED
 from scrapers.krs.columns import iso_dates, padded_krs
 from scrapers.krs.list import KRS_RELATION_ROLES, CompaniesKRS, PeopleKRS, Post
 from scrapers.krs.odpis_history import (
@@ -416,7 +424,10 @@ def combine(
     posts = posts[posts["employed_krs"].isin(graph - set(struck))]
     matches = match_rejestrio(rejestrio, posts)
     posts = with_identities(posts, matches)
-    from_odpis = odpis_companies(rejestrio, posts)
+    # Rows off a person's own feed say nothing of when rejestr.io last saw the
+    # company: the module's docstring.
+    bought = rejestrio["rejestrio_feed"].eq(PERSON_FEED)
+    from_odpis = odpis_companies(rejestrio[~bought], posts)
     prints = matches.groupby("id")["pesel_fingerprint"].unique()
     print_of_id = {
         str(id): values[0] for id, values in prints.items() if len(values) == 1
@@ -444,9 +455,26 @@ def combine(
         dtype=bool,
     )
     replaced = rejestrio["employed_krs"].isin(from_odpis)
-    kept = rejestrio[~replaced | unnamed].assign(source=SOURCE_REJESTRIO)
+    kept = rejestrio[~replaced | (unnamed & ~bought)].assign(source=SOURCE_REJESTRIO)
     added = posts[posts["employed_krs"].isin(from_odpis)]
-    report(rejestrio, posts, matches, from_odpis, kept, added, replaced & unnamed)
+    report(
+        rejestrio[~bought],
+        posts,
+        matches,
+        from_odpis,
+        kept[~kept["rejestrio_feed"].eq(PERSON_FEED)],
+        added,
+        (replaced & unnamed)[~bought],
+    )
+    from_feeds = rejestrio[bought]
+    stood = kept[kept["rejestrio_feed"].eq(PERSON_FEED)]
+    stood_in = from_feeds[from_feeds["employed_krs"].isin(from_odpis)]
+    print(
+        f"  Rows off people's own feeds: {len(stood):,} at "
+        f"{stood['employed_krs'].nunique():,} companies with no odpis on file; "
+        f"{len(stood_in):,} at {stood_in['employed_krs'].nunique():,} companies "
+        f"an odpis stands in for."
+    )
     combined = pd.concat(
         [kept.reindex(columns=list(COLUMNS)), added.reindex(columns=list(COLUMNS))],
         ignore_index=True,
