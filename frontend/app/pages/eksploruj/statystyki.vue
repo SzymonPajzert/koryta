@@ -12,10 +12,15 @@
       <v-btn to="/eksploruj/szpitale" variant="tonal">
         Rady nadzorcze szpitali
       </v-btn>
+      <!-- Filled, not tonal: tonal wrote „Pomóż sprawdzać” in the sage on a
+           wash of the same sage, 1.73:1, so the page's invitation read as a
+           disabled button. Filled, Vuetify sets it in the dark ink it pairs
+           with the sage, as /eksploruj/tabela's copy of it already was
+           (Szymon, 2026-10-23: sage controls become a fill now). -->
       <v-btn
         to="/eksploruj/nowe"
         color="primary"
-        variant="tonal"
+        variant="flat"
         :prepend-icon="mdiArrowRight"
       >
         Pomóż sprawdzać

@@ -73,6 +73,17 @@
   --v-border-opacity: 0.12;
 }
 
+/* The footer stays exactly as it was before the redesign (Szymon,
+   2026-10-16), and that includes its frame: the `border` round the sage band
+   keeps Vuetify's .12. The .24 he picked on 2026-10-23 is for records,
+   panels, the table's lines and the top bar; drawn at .24, the band sat in a
+   darker box, down both sides of a phone's screen. Set on the footer itself,
+   because the footer carries a theme class of its own, and with it the
+   theme's .24. */
+.v-application .v-footer {
+  --v-border-opacity: 0.12;
+}
+
 /* ---- records and panels: one hairline ---- */
 
 /* Vuetify draws an outlined card or chip in the text colour, near-black on
@@ -141,8 +152,13 @@
 
 /* ---- controls: a tint, never a line ---- */
 
+/* A button takes the control radius - except the footer's links, which keep
+   Vuetify's 4px with the rest of the footer: their one edge is the ring a
+   keyboard's focus draws, and it follows the radius. */
 :is(.v-application, .v-overlay-container)
-  .v-btn:not(.v-btn--icon, .rounded-pill, .rounded-circle) {
+  .v-btn:not(.v-btn--icon, .rounded-pill, .rounded-circle):where(
+    :not(.v-footer *)
+  ) {
   border-radius: var(--k-r-control);
 }
 

@@ -300,11 +300,19 @@ const company = computed<Company>(() => ({
   display: none;
 }
 
+/* Above the confetti, which is positioned and so painted over anything that
+   is not: a bit sat on a letter of the person's name on most festive cards,
+   and another on the corner of the years badge. Raised, the name is drawn
+   over the bits rather than under them and the badge's own fill hides the
+   one at its corner, while the bits stay where they were thrown. The card's
+   own `z-index: 0` keeps this inside it. */
 .milestone-card__body {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px 16px 16px 20px;
+  position: relative;
+  z-index: 1;
 }
 
 /* Without this the flex item is free to size to its longest word, and an

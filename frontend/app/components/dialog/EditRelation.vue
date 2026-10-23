@@ -44,9 +44,11 @@
         <v-btn variant="text" :disabled="saving" @click="open = false">
           Anuluj
         </v-btn>
+        <!-- A sage fill with dark text, not sage on its own tint: sage is a
+             fill, never text (Szymon, 2026-10-23, for every control). -->
         <v-btn
           color="primary"
-          variant="tonal"
+          variant="flat"
           :loading="saving"
           :disabled="!readyToSubmit"
           data-testid="edit-relation-submit"

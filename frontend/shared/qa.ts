@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zrodla-na-telefonie",
+    title: "Źródła na telefonie pokazują artykuły",
+    description:
+      "Na telefonie /zrodla pokazywało same nazwy kolumn, bo długi tytuł wypychał resztę wiersza poza ekran. Teraz każdy wiersz ma cały tytuł, datę i tematy.",
+    steps: [
+      "Otwórz /zrodla na telefonie - pod każdym tytułem są data i tematy.",
+    ],
+    link: "/zrodla",
+    area: "public",
+  },
+  {
     id: "rowny-odstep-nad-stopka",
     title: "Ten sam odstęp nad stopką na każdej stronie",
     description:

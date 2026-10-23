@@ -304,10 +304,17 @@ const containerStyle = computed(() =>
       },
 );
 const affineLink = computed(() => route?.meta?.affineLink);
-/** The signed-in strip's items line up with the page's column under it. */
-const rowMaxWidth = computed(() =>
-  typeof maxWidth.value === "number" ? `${maxWidth.value}px` : "none",
-);
+/** The signed-in strip's items line up with the page's column under it. A
+ * full-width page whose content still sits in a column names its width in
+ * `columnWidth`: home's bands run edge to edge, but what is in them is 1200
+ * wide, and the strip used to start at the window's edge there and on the
+ * column everywhere else - the daily menu jumping 120px between pages. Not
+ * read off `fullWidth`, since /eksploruj/tabela, /graf and the autograf
+ * pages do fill the window, and their strip starts at its edge with them. */
+const rowMaxWidth = computed(() => {
+  const width = route?.meta?.columnWidth ?? maxWidth.value;
+  return typeof width === "number" ? `${width}px` : "none";
+});
 /** The pages the "Zespół" menu leads to on this site, which light it while it
  * is closed, as "Admin" is lit by hand below. /qa is one page whichever tab is
  * showing; the router serves a path with a trailing slash as the same page. */

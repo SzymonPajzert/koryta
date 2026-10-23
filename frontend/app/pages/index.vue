@@ -137,6 +137,10 @@ useSeoMeta({
 definePageMeta({
   affineLink: "7CDdAj6z8PUAFNWT-phhD",
   fullWidth: true,
+  // The bands run edge to edge, the content in them on HomeSection's 1200
+  // column - which the signed-in strip under the app bar lines up with, as
+  // it does with every other page's.
+  columnWidth: 1200,
   hideSearch: true,
 });
 </script>

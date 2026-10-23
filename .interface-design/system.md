@@ -92,6 +92,12 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   as round 1 set them, and the typeface stays Roboto. Picked 2026-10-23 out of
   seven rendered versions („2 teraz + wyraźniejsze linie”), after Szymon
   preferred main's firmer boxes on the blog (2026-10-16).
+- **A control drawn in sage text becomes a sage fill with dark text now**,
+  during the colour hold: „Pomóż sprawdzać”, the region's „Zobacz wszystkie
+  osoby”, the forms' „Wyślij”, „Zapisz zmianę” and „Utwórz powiązanie”; an
+  admin's „Dodaj” or „Opublikuj” beside a neutral one copies the neutral
+  tonal button. Sage text that is not a control (links, names, icons, /o-nas)
+  waits for the palette. Picked 2026-10-23 („controls only, now”).
 - **Admin page titles follow the public pages' title rule**: the h1 is
   40/700, 28 on phones, not a smaller 28 for working pages. Szymon: "Let's
   keep the admin pages like public pages for now" (2026-10-15).

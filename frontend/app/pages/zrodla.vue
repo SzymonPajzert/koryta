@@ -166,13 +166,18 @@
         mobile-breakpoint="md"
         hover
       >
+        <!-- Below the breakpoint Vuetify draws this slot again as the label of
+             every row's date, where an arrow beside each one read as a sort
+             control on every article. The arrow says how the whole list is
+             ordered, so it is the header's alone: hidden in those labels
+             (`zrodla-sort-arrow` below). -->
         <template #[`header.publishedDate`]="{ column }">
           <span class="d-inline-flex align-center">
             {{ column.title }}
             <v-icon
               :icon="mdiArrowDown"
               size="small"
-              class="ml-1 text-medium-emphasis"
+              class="ml-1 text-medium-emphasis zrodla-sort-arrow"
             ></v-icon>
           </span>
         </template>
@@ -207,7 +212,7 @@
           {{ formatDate(item.publishedDate) }}
         </template>
         <template #[`item.topics`]="{ item }">
-          <div class="d-flex flex-wrap ga-1 py-1">
+          <div class="d-flex flex-wrap ga-1 py-1 zrodla-topics">
             <v-chip
               v-for="topic in topicsFor(item.id)"
               :key="topic.id"
@@ -348,12 +353,33 @@ const canCapture = useCanCapture();
 const { forUrl, refresh: refreshCaptures } = useCaptures(canCapture);
 const pasteDialogOpen = ref(false);
 
+/** Marks a cell with nothing in it, so that a phone can leave its row out
+ * (`zrodla-cell--empty` in the styles below). The desktop table keeps the
+ * cell and its „—”: there it holds a column's place. */
+function emptyCell(isEmpty: boolean) {
+  return { class: { "zrodla-cell--empty": isEmpty } };
+}
+
 const headers = computed(() => [
   { title: "Tytuł", key: "name", sortable: false },
   { title: "Data publikacji", key: "publishedDate", sortable: false },
-  { title: "Tematy", key: "topics", sortable: false },
+  {
+    title: "Tematy",
+    key: "topics",
+    sortable: false,
+    cellProps: ({ item }: { item: { id?: string } }) =>
+      emptyCell(!topicsFor(item.id).length),
+  },
   ...(canCapture.value
-    ? [{ title: "Treść", key: "capture", sortable: false }]
+    ? [
+        {
+          title: "Treść",
+          key: "capture",
+          sortable: false,
+          cellProps: ({ item }: { item: { sourceURL?: string } }) =>
+            emptyCell(!forUrl(item.sourceURL)),
+        },
+      ]
     : []),
 ]);
 
@@ -485,5 +511,73 @@ function formatDate(dateVal: string | Timestamp | undefined) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Phones - below `md`, where Vuetify stacks each row into pairs of a label
+   and a value - showed the labels and nothing else. Each cell there is a grid
+   of two equal columns with the value at the end, and the one-line title made
+   its whole width the narrowest that column could be: the table grew to the
+   longest title, and every date and topic sat off the screen to the right, in
+   the table's own sideways scroll. So on a phone the title takes its cell's
+   full width without the „Tytuł” label, starts at the left and wraps; the
+   desktop table keeps its single line and ellipsis. */
+:deep(.v-data-table__tr--mobile > td:first-child) {
+  grid-template-columns: 1fr;
+}
+
+:deep(.v-data-table__tr--mobile > td:first-child > .v-data-table__td-title) {
+  display: none;
+}
+
+:deep(.v-data-table__tr--mobile > td:first-child > .v-data-table__td-value) {
+  min-width: 0;
+  text-align: start;
+}
+
+:deep(.v-data-table__tr--mobile) .zrodla-title {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* The header's sort arrow, which a phone's row labels repeat (see the
+   `header.publishedDate` slot). */
+:deep(.v-data-table__td-title) .zrodla-sort-arrow {
+  display: none;
+}
+
+/* A phone's article is its title and the rows under it that say something.
+   „Tematy —” stood under almost every article, a third of its height, and
+   for whoever can capture „Treść —” under most of them as well: half of each
+   article spent saying there was nothing to say. */
+:deep(.v-data-table__tr--mobile > td.zrodla-cell--empty) {
+  display: none;
+}
+
+/* Vuetify rules each phone article off under its last cell, which can be one
+   of the rows left out above, and then the rule goes with it. So the rule is
+   drawn over each article's title instead, from the second article on, and
+   the last cell draws none. Same hairline, same place between two articles.
+   The first selector names the table down to the cell because the rule it
+   undoes, Vuetify's, names it down to the row. */
+:deep(
+  .v-table__wrapper
+    > table
+    > tbody
+    > tr.v-data-table__tr--mobile
+    > td.v-data-table__td
+) {
+  border-bottom: 0;
+}
+
+:deep(.v-data-table__tr--mobile + .v-data-table__tr--mobile > td:first-child) {
+  border-top: thin solid var(--k-line);
+}
+
+/* On a phone every value sits at the end of its row, the date and the
+   capture's chip included; the topics are a wrapping row of chips, which
+   started where the value column does, mid-row, and so are pushed to the
+   same end. */
+:deep(.v-data-table__tr--mobile) .zrodla-topics {
+  justify-content: flex-end;
 }
 </style>

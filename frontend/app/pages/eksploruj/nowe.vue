@@ -254,12 +254,22 @@
         <!-- The record first. Where somebody has worked and what they ran for
              is what the reader is being asked to judge; the searches next to
              the note below are written against it, and reading them in the
-             other order meant scrolling past both to find out who this is. -->
-        <v-card class="mb-4 pa-2 pa-md-3" data-testid="explore-relations">
+             other order meant scrolling past both to find out who this is.
+
+             On the page rather than in a card of its own, as on a person's
+             page, and edge to edge on a phone (`bleed`) the same way: the
+             list is one ruled box under its section head already, and a card
+             around it drew a second frame 12px outside the first. With no
+             relations yet, the same head over one line in place of the rows,
+             so the section reads alike from one person to the next. The
+             testid stays on the element around both: the e2e specs reach the
+             list through it. -->
+        <div class="mb-4" data-testid="explore-relations">
           <CardEmploymentHistory
             v-if="focusedEdges.length"
             :key="focusedPerson.id"
             :edges="focusedEdges"
+            bleed
             :can-correct="canEditRelations"
             :can-remove="canRemoveRelations"
             :subject-published="
@@ -269,21 +279,13 @@
             @remove="openRemove"
             @published="refreshFocusedEdges()"
           />
-          <div v-else class="pa-2">
-            <div class="sec-head mb-1">
-              <v-icon
-                :icon="mdiTimelineTextOutline"
-                size="18"
-                class="sec-head__icon"
-              />
-              <h3 class="text-h6">Historia powiązań</h3>
-            </div>
+          <PageSection v-else title="Historia powiązań">
             <p class="k-lead mb-0">
               Nie znamy jeszcze żadnych powiązań tej osoby - tym bardziej warto
               poszukać.
             </p>
-          </div>
-        </v-card>
+          </PageSection>
+        </div>
 
         <DialogEditRelationHost
           v-model="editOpen"
@@ -360,7 +362,6 @@ import {
   mdiHelpCircleOutline,
   mdiStarOutline,
   mdiTable,
-  mdiTimelineTextOutline,
 } from "@mdi/js";
 import { ref, computed, watch } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
