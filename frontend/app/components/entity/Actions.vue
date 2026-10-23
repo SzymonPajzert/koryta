@@ -4,11 +4,14 @@
        after them, in a group of their own. -->
   <div class="entity-actions">
     <slot />
-    <!-- One group, so that it wraps as a whole: on a desktop too narrow for
-         the row it goes to a line of its own rather than splitting round the
-         vote, and on a phone it always does. Hidden when it holds nothing,
-         which is what a reader who is not an admin gets: every tool in it
-         gates itself on a claim. -->
+    <!-- One group, on a line of its own under the reader's actions at every
+         width, as on a phone. It used to take that line only once the row ran
+         out of room, so at 1024 an admin found „Rewizje” under the vote on a
+         person's page and beside the links on a company's, and at 1440 a tool
+         that starts a merge stood in the reader's row as if it were one of
+         their own actions. Hidden when it holds nothing, which is what a
+         reader who is not an admin gets: every tool in it gates itself on a
+         claim, so the line costs nobody else anything. -->
     <div v-if="$slots.tools" class="entity-actions__tools">
       <slot name="tools" />
     </div>
@@ -29,8 +32,8 @@ import { iconActionLabelledKey } from "~/components/button/IconAction.vue";
  * On a computer every action is a labelled button in the control tint, with
  * „Zaproponuj zmianę” first and its pencil in amber (`ButtonProposeChange`).
  * On a phone „Zaproponuj zmianę” keeps its words and every other button folds
- * to a 40px square of its icon, so the reader's actions fit one line, and an
- * admin's tools take the line under it.
+ * to a 40px square of its icon, so the reader's actions fit one line. On both,
+ * an admin's tools take the line under them.
  *
  * The buttons come from the pages and from components of their own, so the
  * row reaches them in two ways: `ButtonIconAction` learns from the tree that
@@ -48,15 +51,17 @@ provide(iconActionLabelledKey, true);
   gap: 8px;
 }
 
+/* The tools' line of their own, on a computer as on a phone - see the
+   template. */
+.entity-actions__tools {
+  flex-basis: 100%;
+}
+
 .entity-actions__tools:empty {
   display: none;
 }
 
 @media (max-width: 599.98px) {
-  .entity-actions__tools {
-    flex-basis: 100%;
-  }
-
   /* Every button but „Zaproponuj zmianę” becomes a 40px square: the minimum
      touch target, and the height „Zaproponuj zmianę” has on a phone too. The
      label is clipped rather than `display: none`, which would take the

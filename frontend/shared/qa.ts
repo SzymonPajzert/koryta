@@ -92,7 +92,7 @@ export const QA_ITEMS: QaItem[] = [
     steps: [
       "Otwórz stronę PKP LHS - w „Historii powiązań” daty stoją w kolumnie, np. „12.06.2025 - 03.04.2026”, a na telefonie same lata.",
       "Na tej samej stronie kliknij „Notatki” pod nazwą - strona przewija się do sekcji „Notatki”.",
-      "Jako admin otwórz stronę osoby na komputerze - narzędzia admina to przyciski z podpisami; na telefonie to kwadratowe ikony w osobnym rzędzie.",
+      "Jako admin otwórz stronę osoby - narzędzia admina stoją w osobnym rzędzie pod „Zaproponuj zmianę”: z podpisami na komputerze, jako kwadratowe ikony na telefonie.",
       "Na stronie z komentarzami obok nagłówka „Dyskusja” jest ich liczba, np. „2 komentarze”.",
     ],
     link: "/instytucja/pkp-linia-hutnicza-szerokotorowa-zamosc-HcPyUKHOPqnRjWq2OqUs",
