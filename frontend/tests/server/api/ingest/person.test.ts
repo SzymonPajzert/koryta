@@ -3468,7 +3468,7 @@ describe("api/ingest/person, jobs from the register entry a published page links
   });
 });
 
-describe("api/ingest/person, a European candidacy filed under the candidate's home", () => {
+describe("api/ingest/person, a district's candidacy filed under the candidate's home", () => {
   /** Every collection the request reads, keyed by id. Answered by filtering,
    * like the suites above, because what matters here is which stored
    * candidacies a query finds. */
@@ -3586,6 +3586,8 @@ describe("api/ingest/person, a European candidacy filed under the candidate's ho
         },
         teryt14: { type: "region", name: "mazowieckie", teryt: "14" },
         teryt1465: { type: "region", name: "Warszawa", teryt: "1465" },
+        teryt10: { type: "region", name: "łódzkie", teryt: "10" },
+        teryt1061: { type: "region", name: "Łódź", teryt: "1061" },
       },
       edges: {},
       revisions: {},
@@ -3701,12 +3703,141 @@ describe("api/ingest/person, a European candidacy filed under the candidate's ho
   });
 
   it("never moves another office's run", async () => {
+    // A 2019 Sejm run at home is no copy of the European run of that year.
     storedAtHome({ position: "Sejm" });
-    payload({ election_type: "Sejm" });
+    payload();
 
     await handler({} as any);
 
     expect(writtenOnto("at-home")).toEqual([]);
     expect(created()).toHaveLength(1);
+  });
+
+  describe("a Sejm or Senate run", () => {
+    /** Michał Jerzy Sobczak's 2023 run as the pipeline places it now: district
+     * 9, filed under łódzkie. */
+    function sejmPayload(election: Record<string, unknown> = {}) {
+      payload({
+        election_type: "Sejm",
+        election_year: "2023",
+        teryt: "10",
+        committee:
+          "KOALICYJNY KOMITET WYBORCZY TRZECIA DROGA POLSKA 2050 SZYMONA HOŁOWNI - POLSKIE STRONNICTWO LUDOWE",
+        party: undefined,
+        party_from_committee: true,
+        ...election,
+      });
+    }
+
+    /** The same run as his June upload filed it: under Łódź, where PKW's list
+     * says he lives, and published with his page on 09-09. */
+    function sejmAtHome(fields: Record<string, unknown> = {}) {
+      storedAtHome({
+        target: "teryt1061",
+        position: "Sejm",
+        start_date: "2023-01-01",
+        ...fields,
+      });
+    }
+
+    it("moves it to its district's województwo, live as it was", async () => {
+      // Stored beside it instead, as the 09-12 upload did, his page showed the
+      // run twice.
+      sejmAtHome();
+      sejmPayload();
+
+      const result = await handler({} as any);
+
+      const [move, ...more] = writtenOnto("at-home");
+      expect(more).toEqual([]);
+      expect(move!.data).toMatchObject({
+        target: "teryt10",
+        position: "Sejm",
+        committee:
+          "KOALICYJNY KOMITET WYBORCZY TRZECIA DROGA POLSKA 2050 SZYMONA HOŁOWNI - POLSKIE STRONNICTWO LUDOWE",
+      });
+      expect(move!.options).toMatchObject({
+        approve: true,
+        stored: store.edges!["at-home"],
+      });
+      expect(created()).toEqual([]);
+      expect(result.elections).toEqual([
+        {
+          nodeId: "teryt10",
+          edgeId: "at-home",
+          created: false,
+          published: false,
+        },
+      ]);
+    });
+
+    it("moves a Senate run the same way", async () => {
+      sejmAtHome({ position: "Senat" });
+      sejmPayload({ election_type: "Senat" });
+
+      await handler({} as any);
+
+      expect(writtenOnto("at-home")[0]!.data).toMatchObject({
+        target: "teryt10",
+        position: "Senat",
+      });
+      expect(created()).toEqual([]);
+    });
+
+    it("moves a 2023 copy stored without its office, the one election of that year", async () => {
+      // Hubert Papaj's bare run under Jelenia Góra was stored like this.
+      sejmAtHome({ position: undefined });
+      sejmPayload();
+
+      await handler({} as any);
+
+      expect(writtenOnto("at-home")[0]!.data).toMatchObject({
+        target: "teryt10",
+        // Written in with the move, as the committee is: vouched for.
+        position: "Sejm",
+      });
+      expect(created()).toEqual([]);
+    });
+
+    it("leaves a 2019 copy without its office, which could be the European run", async () => {
+      sejmAtHome({ position: undefined, start_date: "2019-01-01" });
+      sejmPayload({ election_year: "2019" });
+
+      await handler({} as any);
+
+      expect(writtenOnto("at-home")).toEqual([]);
+      expect(created()).toHaveLength(1);
+    });
+
+    it("leaves a home outside the district's województwo for a reviewer", async () => {
+      // Under Warszawa against a run in łódzkie: two places in one election,
+      // which could as well be a namesake's.
+      sejmAtHome({ target: "teryt1465" });
+      sejmPayload();
+
+      await handler({} as any);
+
+      expect(writtenOnto("at-home")).toEqual([]);
+      expect(created()).toHaveLength(1);
+    });
+
+    it("moves nothing once the run is stored in its district as well", async () => {
+      // The 168 stored twice before this: folding them is
+      // scripts/migrate/merge-national-runs-stored-twice.ts's job.
+      sejmAtHome();
+      store.edges!["in-district"] = {
+        ...store.edges!["at-home"],
+        target: "teryt10",
+        committee:
+          "KOALICYJNY KOMITET WYBORCZY TRZECIA DROGA POLSKA 2050 SZYMONA HOŁOWNI - POLSKIE STRONNICTWO LUDOWE",
+        published: false,
+      };
+      sejmPayload();
+
+      await handler({} as any);
+
+      expect(writtenOnto("at-home")).toEqual([]);
+      expect(created()).toEqual([]);
+    });
   });
 });
