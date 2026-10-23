@@ -56,8 +56,22 @@
                 {{ domain }}
                 <v-icon :icon="mdiOpenInNew" size="x-small" class="ml-1" />
               </a>
-              <span v-if="publishedDate">· {{ publishedDate }}</span>
-              <span v-if="author">· {{ author }}</span>
+              <!-- Each dot an item of its own, so the row's 8px gap stands on
+                   both sides of it, and only between two things it divides:
+                   inside the date's span it hugged the date, and opened the
+                   line of an article with no address. -->
+              <span
+                v-if="article?.sourceURL && publishedDate"
+                aria-hidden="true"
+                >·</span
+              >
+              <span v-if="publishedDate">{{ publishedDate }}</span>
+              <span
+                v-if="author && (article?.sourceURL || publishedDate)"
+                aria-hidden="true"
+                >·</span
+              >
+              <span v-if="author">{{ author }}</span>
               <ChipDraftStatus
                 :published="isPublished"
                 :node-id="nodeId"

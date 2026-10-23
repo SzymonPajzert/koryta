@@ -27,7 +27,7 @@
         rel="noopener"
         class="entity-facts__link"
       >
-        <span class="entity-facts__name">{{ fact.value }}</span>
+        <span class="entity-facts__name">{{ nbsp(fact.value) }}</span>
         <v-icon
           :icon="mdiOpenInNew"
           size="14"
@@ -35,7 +35,7 @@
           aria-hidden="true"
         />
       </a>
-      <template v-else>{{ fact.value }}</template>
+      <template v-else>{{ nbsp(fact.value) }}</template>
     </span>
     <!-- What the page sets after its facts: a company's chips. No dot before
          them; the line's gap is what sets them off. -->
@@ -45,6 +45,7 @@
 
 <script setup lang="ts">
 import { mdiOpenInNew } from "@mdi/js";
+import { nbsp } from "~/utils/nbsp";
 
 /** One fact on the line. */
 export type EntityFact = {
@@ -54,6 +55,9 @@ export type EntityFact = {
    * punctuation. Left out where the value names itself: a link called
    * „Wikipedia” needs no label saying so. */
   label?: string;
+  /** Printed through `nbsp`, as the bio is: a value is data, which cannot
+   * write its own `&nbsp;`, and on a phone „magister zarządzania w turystyce
+   * i sporcie” ended a line on its lone „i”. */
   value: string;
   /** Makes the value a link off the site, with the arrow that says so. */
   url?: string;
@@ -76,7 +80,9 @@ defineProps<{
    it on the left - so an item that wraps to open a new line loses its dot
    instead of starting with one, and its own text never moves. That is why it
    needs no phone rule. The clip edge sits 4px out from the text, which the dot
-   at -11px is past and a link's focus ring is not. At the bio's measure. */
+   at -11px is past and a link's focus ring is not. No measure: a line of facts
+   is not prose, and held to the bio's 80ch a long education sent „Rejestr.io”
+   onto a line of its own beside the empty rest of the column. */
 .entity-facts {
   align-items: center;
   color: rgba(var(--v-theme-on-surface), 0.87);
@@ -86,7 +92,6 @@ defineProps<{
   font-size: var(--k-ui-size);
   line-height: 1.45;
   margin: 0 0 0 -4px;
-  max-width: calc(80ch + 4px);
   overflow-x: clip;
   padding-inline-start: 4px;
   row-gap: 2px;

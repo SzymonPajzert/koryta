@@ -41,11 +41,21 @@
               <div class="text-body-2 font-weight-medium">
                 {{ mention.name ?? mention.nodeId }}
               </div>
+              <!-- The dot an item of its own, so the row's 8px gap stands on
+                   both sides of it, and only between the two things it
+                   divides. Inside the date's span it sat 8px from the domain
+                   and a space from the date, and opened the line of a card
+                   with no domain. -->
               <div
                 class="d-flex align-center flex-wrap ga-2 mt-1 text-caption text-medium-emphasis"
               >
                 <span v-if="domainOf(mention)">{{ domainOf(mention) }}</span>
-                <span v-if="dateOf(mention)">· {{ dateOf(mention) }}</span>
+                <span
+                  v-if="domainOf(mention) && dateOf(mention)"
+                  aria-hidden="true"
+                  >·</span
+                >
+                <span v-if="dateOf(mention)">{{ dateOf(mention) }}</span>
                 <v-chip
                   v-if="!mention.published"
                   size="x-small"

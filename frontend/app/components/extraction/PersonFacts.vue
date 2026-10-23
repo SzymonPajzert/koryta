@@ -138,7 +138,8 @@
       />
     </template>
 
-    <!-- Locked, in the shape of the thing being withheld.
+    <!-- Locked, in the shape of the thing being withheld: a line for each fact
+         found, up to three. Three under „1 fakt” showed more than there was.
          The blur is decoration over placeholder bars, not over the facts: the
          endpoint is asked for the count alone (`countOnly`), so the sentences
          never reach this page. Blurring real text would put unverified claims
@@ -151,13 +152,15 @@
       data-nosnippet
     >
       <div class="locked__blur k-bleed-xs" aria-hidden="true">
-        <div v-for="i in 3" :key="i" class="locked__line">
+        <div v-for="i in Math.min(total, 3)" :key="i" class="locked__line">
           <div class="locked__bar locked__bar--icon" />
           <div class="locked__bar locked__bar--claim" />
           <div class="locked__bar locked__bar--meta" />
         </div>
       </div>
 
+      <!-- Under the frame rather than over it: centred on a single line, the
+           button covered the shape it stands for. -->
       <div class="locked__gate">
         <v-btn color="primary" variant="flat" :to="loginLink">
           Zaloguj się lub załóż konto
@@ -462,10 +465,6 @@ const buckets = computed(() =>
 
 /* The heading and the lead are `PageSection`'s, drawn from the global rules in
    `app.vue`. What is left here is the shape of what is being withheld. */
-.locked {
-  position: relative;
-}
-
 .locked__blur {
   /* The frame `AdminRowList` draws round the lines. */
   border: 1px solid var(--k-line);
@@ -513,11 +512,9 @@ const buckets = computed(() =>
   width: 15%;
 }
 
+/* The way in, 12px under the frame and on the section's left edge, where
+   every section's content starts. */
 .locked__gate {
-  align-items: center;
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  position: absolute;
+  margin-top: 12px;
 }
 </style>

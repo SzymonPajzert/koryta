@@ -148,6 +148,14 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   handovers, with a count; logged out, the subsidiaries fold after 12.
   Picked 2026-10-23 (B). An editor's empty list says so in one quiet line,
   „Nie znamy spółek zależnych.” (2026-10-24).
+- **The unified person and company pages, the home round and the fixes of
+  their reviews are approved** from rendered screenshots: „Yes, finish
+  everything” (2026-10-24). With them, as a batch: the logged-out facts
+  teaser draws as many blurred rows as there are facts (at most three), its
+  button under them; owners are counted as „N podmiotów”; the board cards
+  carry the draft badge; both sides of a handover start on the left; /tematy
+  and the region page use the admin pages' head; „Eksploruj” keeps its name
+  on the person page.
 
 ## How UI changes are made
 

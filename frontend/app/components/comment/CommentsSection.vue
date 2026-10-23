@@ -27,7 +27,13 @@
       </p>
     </template>
 
-    <div v-if="!user" class="text-caption text-grey mb-4">
+    <!-- What the section withholds from a reader who is not signed in, said
+         in the quiet line a section says that in (`k-absent`), like „Brak
+         komentarzy.” below. This line was 12px of #9e9e9e, 2.7:1 on white,
+         and prose is never 12px on this site. No margin of its own: `k-note`
+         spaces it from a „Brak komentarzy.” under it, as it spaces any two
+         such lines. -->
+    <div v-if="!user" class="k-note k-absent">
       <router-link to="/login">Zaloguj się</router-link>, aby dodać komentarz.
     </div>
 
@@ -42,8 +48,12 @@
       />
     </div>
 
-    <!-- On the head's left edge, as every section's content is. -->
-    <div v-if="mainComments.length === 0 && !loading" class="text-grey">
+    <!-- On the head's left edge, as every section's content is, and in the
+         one quiet line for what a section lacks (`k-absent`,
+         assets/css/type.css). `text-grey` was #9e9e9e at 16px, 2.7:1 on
+         white, and read as a control switched off rather than as an empty
+         list. -->
+    <div v-if="mainComments.length === 0 && !loading" class="k-note k-absent">
       Brak komentarzy.
     </div>
 
