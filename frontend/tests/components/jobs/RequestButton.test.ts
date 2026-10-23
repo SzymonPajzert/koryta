@@ -242,7 +242,6 @@ describe("JobsRequestButton", () => {
       nodeId: "p1",
       name: "Anna Nowak",
       target: "person",
-      variant: "icon",
     });
     await openDialog();
 

@@ -117,7 +117,7 @@ html {
 
 /* Not a card: something the section says about itself - what it could not find
    or what it is withholding. No edge and no fill, so it cannot be mistaken for
-   a record: the icon and the muted line say it. */
+   a record; its words are the quiet line of `k-absent` (assets/css/type.css). */
 .k-note {
   padding: 4px 0;
 }
@@ -126,10 +126,10 @@ html {
   margin-top: 4px;
 }
 
-/* `flex-wrap` for the company page, whose headings carry a caption beside them
-   that has to be allowed to drop to its own line on a phone. On the baseline,
-   so that 12px caption sits on the 24px heading's line rather than floating
-   in the middle of it. */
+/* `flex-wrap` for the headings that carry a caption beside them, which has to
+   be allowed to drop to its own line on a phone. On the baseline, so that
+   12px caption, and a small „Dodaj” at the far end, sit on the 24px heading's
+   line rather than floating in the middle of it. */
 .sec-head {
   align-items: baseline;
   display: flex;
@@ -152,7 +152,8 @@ html {
 
 /* On a phone the caption takes a line of its own, tight under the head:
    beside a 20px head it landed on the head's line or under it depending on
-   its length. */
+   its length. After the head's controls (`order`), so a „Dodaj” stays on the
+   head's line rather than wrapping under the caption onto a third. */
 @media (max-width: 599.98px) {
   .sec-head {
     row-gap: 2px;
@@ -160,25 +161,15 @@ html {
 
   .sec-head__caption {
     flex-basis: 100%;
+    order: 1;
   }
-}
-
-/* A group head: what splits one list into parts - „Obecnie” and
-   „Zakończone” over a person's history, „Potwierdzone przez czytelników” over
-   their facts. The type system's group-head role, 14/600 in the quiet ink and
-   sentence case, under the section's 24px head. Spacing is the list's. */
-.k-group-head {
-  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
-  font-size: var(--k-ui-size);
-  font-weight: 600;
-  line-height: 1.4;
 }
 
 /* 14px, the UI size: prose is never 12px on this site. 12 is for single-line
    meta - dates, counts, chips, labels. */
 .k-lead {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-ui-size);
   line-height: 1.5;
   margin: 4px 0 12px;
   max-width: 78ch;

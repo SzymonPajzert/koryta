@@ -23,8 +23,9 @@ export function relationPeriodParts(
 
 /** How long a relation lasted, in one line: „2014-11-06 - 2017-08-25".
  *
- * A range takes an en dash, not a hyphen: „2014-11-06 - 2017-08-25” read as
- * one long number broken by a minus.
+ * A range takes the site's one dash, the plain hyphen (Szymon, 2026-10-16),
+ * with a space either side: unspaced, „2014-11-06-2017-08-25” read as one
+ * long number.
  *
  * Lives here rather than inside `chip/RelativeDuration.vue` because the phone
  * layout of `card/EmploymentHistory.vue` prints the period without the bar -
@@ -58,12 +59,13 @@ function heldOn(end: string | undefined, today: string): boolean {
   return !end || end > today.slice(0, end.length) || today.startsWith(end);
 }
 
-/** The period as a person's history prints it in its own column, in the one
- * format the register's dates take on the site (`text`), and in years alone
- * (`years`) for a phone's role line: „od 19.08.2026” for a post
- * still held, „15.05.2023 – 04.12.2024” for one that ended, „25.09.2005” for
- * a single day and „do 26.07.2010” where only the end is known. Never
- * „– obecnie”: „od” already says the post is held, and `current` lets the
+/** The period as an entity page's history (`ledger`, a person's or a
+ * company's) prints it in its own column, in the one format the register's
+ * dates take on the site (`text`), and in years alone (`years`) for a phone's
+ * role line: „od 19.08.2026” for a post still held, „15.05.2023 - 04.12.2024”
+ * for one that ended, „25.09.2005” for a single day and „do 26.07.2010” where
+ * only the end is known. Never
+ * „- obecnie”: „od” already says the post is held, and `current` lets the
  * caller set it in bold - including a term whose end is still ahead, which
  * keeps its range. Undefined for a relation with no dates. */
 export function ledgerPeriod(
@@ -118,9 +120,11 @@ function ledgerPeriodOf(
   }
   const [from, to] = [yearOf(start), yearOf(end)];
   return {
-    text: `${registerDay(start)} – ${registerDay(end)}`,
-    // As the table writes a span of years: „2023–2024”, one year once.
-    years: from === to ? from : `${from}–${to}`,
+    // The plain hyphen, spaced between two days and not between two years:
+    // „15.05.2023 - 04.12.2024”, and „2023-2024” as the table writes a span
+    // of years, one year once.
+    text: `${registerDay(start)} - ${registerDay(end)}`,
+    years: from === to ? from : `${from}-${to}`,
     current,
   };
 }

@@ -8,10 +8,12 @@
       :teaser="teaser"
       :node-id="node"
     />
+    <!-- Titled as a company's page titles it. A signed in reader whose load
+         failed used to read the fetch's own status here: „error”. -->
     <v-card
       v-else-if="status != 'success'"
       class="mb-4"
-      :title="!user ? 'Dostęp zastrzeżony' : status"
+      :title="user ? 'Nie udało się wczytać strony' : 'Dostęp zastrzeżony'"
     >
       <v-card-text v-if="!user" class="pt-0">
         <p class="mb-4">
@@ -19,14 +21,15 @@
           Niezaakceptowane strony są widoczne tylko dla zalogowanych
           użytkowników.
         </p>
-        <v-btn color="primary" @click="handleLoginRedirect()">
+        <v-btn color="primary" variant="flat" @click="handleLoginRedirect()">
           Zaloguj się
         </v-btn>
       </v-card-text>
       <v-card-text v-else class="pt-0">
         <v-alert type="warning" variant="tonal" class="mb-4">
           <p class="mb-2">Strona nie mogła zostać załadowana.</p>
-          <p class="text-caption">
+          <!-- 14px: two sentences are prose, and prose is never 12px. -->
+          <p class="text-body-2">
             Prawdopodobnie strona nie istnieje, została usunięta lub nie masz do
             niej dostępu. Upewnij się, że adres URL jest prawidłowy.
           </p>

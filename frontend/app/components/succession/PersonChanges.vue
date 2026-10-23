@@ -1,12 +1,16 @@
 <template>
-  <section v-if="failed" class="px-2" data-testid="person-successions-error">
-    <div
-      class="k-note text-caption text-medium-emphasis d-flex align-center ga-2"
-    >
-      <v-icon :icon="mdiAlertCircleOutline" size="15" />
-      <span>Nie udało się wczytać zmian na stanowiskach. Odśwież stronę.</span>
-    </div>
-  </section>
+  <div
+    v-if="failed"
+    class="k-note k-absent d-flex align-center ga-2"
+    data-testid="person-successions-error"
+  >
+    <!-- The quiet line of what a section lacks (`k-absent`), as on a
+         company's page, with the alert icon that tells a failure from an
+         absence. Flush with the page: the 8px indent it had was a leftover
+         of the card the sections used to sit in. -->
+    <v-icon :icon="mdiAlertCircleOutline" size="15" />
+    <span>Nie udało się wczytać zmian na stanowiskach. Odśwież stronę.</span>
+  </div>
 
   <!-- Nothing to show but something withheld: no section, one quiet line
        under the history it is about - a heading over a sentence that says
@@ -15,14 +19,14 @@
        (`k-sections`, assets/css/edges.css). -->
   <p
     v-else-if="!changes.length && hidden"
-    class="k-note succ-note mt-3"
+    class="k-note k-absent mt-3"
     data-testid="person-successions-note"
   >
     <!-- Not „Brak znanych zmian”: the register does know them, the page just
          does not name the other person. The count and its (i) wrap as one,
          so the icon never starts a line on its own. -->
     Zmiany na stanowiskach:
-    <span class="succ-note__tail">
+    <span class="k-absent__tail">
       {{ hiddenCount }}
       <!-- Why none are shown first, then what the section covers: with no
            pairs on the page, the section's „Skąd te pary.” has nothing to
@@ -212,7 +216,7 @@ function selfSide(post: PersonSuccession, label: string): SideView {
 
 function selfTerm(post: PersonSuccession): string {
   if (post.start && post.end) {
-    return `kadencja ${shortDate(post.start)} – ${shortDate(post.end)}`;
+    return `kadencja ${shortDate(post.start)} - ${shortDate(post.end)}`;
   }
   if (post.start) return `kadencja od ${shortDate(post.start)} · nadal trwa`;
   if (post.end) return `kadencja do ${shortDate(post.end)}`;
@@ -317,7 +321,7 @@ const coverage = computed(() => {
   const of =
     total === undefined
       ? ""
-      : `\u00a0– ${matched.value} z ${total} ${total === 1 ? "powiązania" : "powiązań"}`;
+      : `\u00a0- ${matched.value} z ${total} ${total === 1 ? "powiązania" : "powiązań"}`;
   return (
     `Stanowiska, przy których rejestr wskazuje poprzednika lub następcę${of}. ` +
     "Brak wpisu nie znaczy, że stanowisko było nowe: częściej w rejestrze " +
@@ -346,7 +350,7 @@ const hiddenCount = computed(
 const hiddenSentence = computed(
   () =>
     `Nie pokazujemy jeszcze ${hidden.value} ` +
-    `${hidden.value === 1 ? "zmiany" : "zmian"}\u00a0– brakuje strony jednej ` +
+    `${hidden.value === 1 ? "zmiany" : "zmian"}\u00a0- brakuje strony jednej ` +
     "z osób, więc nie nazywamy jej tutaj.",
 );
 
@@ -365,21 +369,9 @@ function gapClass(gapDays: number): string {
    rule cannot reach them and every component that tried ended up with a
    slightly different card. What is left here is this section's own idiom. */
 
-/* ---- nothing shown, something withheld: one quiet line ---- */
-
-.succ-note {
-  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
-  font-size: var(--k-ui-size);
-  line-height: 1.45;
-  margin-bottom: 0;
-}
-
-.succ-note__tail {
-  align-items: center;
-  display: inline-flex;
-  gap: 6px;
-  white-space: nowrap;
-}
+/* Nothing shown but something withheld is the global quiet line
+   (`k-absent`, assets/css/type.css), the same one a company's page gives
+   what it lacks. */
 
 /* ---- one handover ---- */
 
@@ -400,7 +392,7 @@ function gapClass(gapDays: number): string {
 
 .succ__company {
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   font-weight: 700;
 }
 
@@ -417,8 +409,8 @@ function gapClass(gapDays: number): string {
 }
 
 .succ__role {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-meta-size);
   margin-left: 6px;
 }
 
@@ -436,8 +428,8 @@ function gapClass(gapDays: number): string {
 
 /* A label: what the name under it is. 12/600, quiet, sentence case. */
 .succ__label {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-meta-size);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -456,8 +448,8 @@ function gapClass(gapDays: number): string {
 }
 
 .succ__when {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-meta-size);
   margin-top: 3px;
 }
 
@@ -478,18 +470,20 @@ function gapClass(gapDays: number): string {
 /* Deliberately plain: it is a caveat, not a warning, and a coloured box round
    it would make the commonest case on the site look like an error. */
 .succ__hedge {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-meta-size);
   line-height: 1.35;
   max-width: 22ch;
   text-align: center;
 }
 
+/* The gap between the two holders: a pill in the control tint and radius,
+   as on the „Wcześniej:” line of the history above. */
 .succ__gap {
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  border-radius: 6px;
+  background: var(--k-tonal);
+  border-radius: var(--k-r-control);
   color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.75rem;
+  font-size: var(--k-meta-size);
   line-height: 1.5;
   padding: 1px 6px;
   text-align: center;

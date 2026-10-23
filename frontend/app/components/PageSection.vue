@@ -87,3 +87,12 @@ defineProps<{
   captionTestid?: string;
 }>();
 </script>
+
+<style scoped>
+/* A section a link lands on - the company header's „Notatki” scrolls to the
+   notes (`id="notatki"` on the company page) - stops clear of the sticky app
+   bar, with the allowance the help page gives its headings. */
+section {
+  scroll-margin-top: 96px;
+}
+</style>

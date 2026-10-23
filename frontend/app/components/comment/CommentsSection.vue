@@ -1,12 +1,11 @@
 <template>
-  <div class="comments-section">
-    <div
-      class="d-flex align-center justify-space-between"
-      :class="{ 'mb-4': leadMode }"
-    >
-      <h3 class="text-h6">Dyskusja ({{ comments.length }})</h3>
+  <!-- A section of the page like the ones above it: the same 24px head as
+       „Notatki” and „Historia powiązań”, with how many comments there are as
+       its caption, where „Dyskusja (N)” used to be an h3 of its own among the
+       page's h2s. -->
+  <PageSection title="Dyskusja" :caption="countCaption">
+    <template v-if="!showForm && user" #actions>
       <v-btn
-        v-if="!showForm && user"
         variant="tonal"
         size="small"
         :prepend-icon="mdiCommentPlusOutline"
@@ -14,17 +13,19 @@
       >
         Dodaj komentarz
       </v-btn>
-    </div>
+    </template>
 
     <!-- „Sam nawet do końca nie rozumiem jaka jest różnica pomiędzy
          komentarzem i notatka”, from a reader who had just posted a test
          comment. A note is what the site is built from - public, with a
          source, and the thing relations are made out of; this is the talk
          about it. Not on the leads page, which has no notes to point at. -->
-    <p v-if="!leadMode" class="k-lead" data-testid="comments-lead">
-      Pytania i uwagi do innych czytelników - informację ze źródłem zapisz w
-      notatce wyżej.
-    </p>
+    <template v-if="!leadMode" #lead>
+      <p class="k-lead" data-testid="comments-lead">
+        Pytania i uwagi do innych czytelników - informację ze źródłem zapisz w
+        notatce wyżej.
+      </p>
+    </template>
 
     <div v-if="!user" class="text-caption text-grey mb-4">
       <router-link to="/login">Zaloguj się</router-link>, aby dodać komentarz.
@@ -41,10 +42,8 @@
       />
     </div>
 
-    <div
-      v-if="mainComments.length === 0 && !loading"
-      class="text-center text-grey pt-4"
-    >
+    <!-- On the head's left edge, as every section's content is. -->
+    <div v-if="mainComments.length === 0 && !loading" class="text-grey">
       Brak komentarzy.
     </div>
 
@@ -57,7 +56,7 @@
         @reply-success="refresh"
       />
     </div>
-  </div>
+  </PageSection>
 </template>
 
 <script setup lang="ts">
@@ -66,6 +65,8 @@ import type { Comment } from "~~/shared/model";
 import { useAuthState, authFetch } from "@/composables/auth";
 import CommentItem from "./CommentItem.vue";
 import CommentForm from "./CommentForm.vue";
+import PageSection from "../PageSection.vue";
+import { polishCounting } from "~/composables/polish";
 
 const props = defineProps<{
   nodeId?: string;
@@ -92,6 +93,20 @@ const {
 });
 
 const comments = computed(() => data.value || []);
+
+/** „3 komentarze”, replies included, as the heading's brackets counted them.
+ * None at all says itself in the list below („Brak komentarzy.”), so the
+ * heading stays bare then rather than saying it twice. */
+const countCaption = computed(() =>
+  comments.value.length > 0
+    ? polishCounting(
+        comments.value.length,
+        "komentarz",
+        "komentarze",
+        "komentarzy",
+      )
+    : undefined,
+);
 const mainComments = computed(() => {
   if (!Array.isArray(comments.value)) return [];
   return comments.value.filter((c) => !c.parentId);

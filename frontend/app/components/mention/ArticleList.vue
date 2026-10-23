@@ -28,10 +28,10 @@
       </span>
     </template>
 
-    <!-- `mt-1`: the lead under the heading was the only gap between it and
-         the cards, and it now sits behind the (i). With the dense row's
-         padding this is 8px, as under „Historia powiązań”. -->
-    <v-row dense class="mt-1">
+    <!-- No margin of its own: the dense row's -4px and its columns' 4px
+         cancel, so the cards stand the head's 8px under it, as under every
+         other section head. A `mt-1` here put them 12px down. -->
+    <v-row dense>
       <!-- The declarations first: on a page the site published because of
            them they are why the page is here. A card like an article's, but
            out to the office's own BIP rather than to a page of ours - a
@@ -107,7 +107,7 @@
                 >
                   szkic
                   <v-tooltip activator="parent" location="top">
-                    Powiązanie czeka na zatwierdzenie — widoczne tylko dla
+                    Powiązanie czeka na zatwierdzenie - widoczne tylko dla
                     zalogowanych.
                   </v-tooltip>
                 </v-chip>
