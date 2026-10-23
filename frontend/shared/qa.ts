@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "region-i-tematy-z-tytulem",
+    title: "Strona regionu i /tematy z tytułem jak inne strony",
+    description:
+      "Strona regionu (np. Krakowa) i /tematy zaczynają się dużym tytułem i jednym zdaniem pod nim, bez ramki. Reszta wyjaśnienia jest w dymku (i).",
+    steps: [
+      "Otwórz /tematy - tytuł „Tematy” stoi na lewej krawędzi, a obok niego jest (i) z drugim zdaniem.",
+      "Otwórz stronę Krakowa - tytuł bez ramki, a przycisk „Zobacz wszystkie osoby” ma zielone tło.",
+    ],
+    link: "/tematy",
+    area: "public",
+  },
+  {
     id: "strona-osoby-i-spolki-jedna-budowa",
     title: "Strona osoby i strona spółki zbudowane tak samo",
     description:

@@ -47,58 +47,38 @@
         </v-btn>
       </v-card-text>
     </v-card>
+    <!-- Kraków's statistics, the one region page drawn by hand. It opens as
+         every page does: the h1 at the page-top inset, one sentence under it
+         and the page's own button beside them, in the head the admin and
+         working pages share. It used to be a centred 24px h2 in a ruled card,
+         the only page with no h1, and on a phone a title smaller than the
+         section heads under it. -->
     <template v-else-if="node == 'teryt1261'">
-      <v-row>
-        <v-col cols="12" sm="9">
-          <v-card>
-            <v-card-title class="d-flex justify-center mt-3 text-wrap">
-              <h2 class="text-h4 mr-2">Statystyki koryciarstwa Krakowa</h2>
-            </v-card-title>
-            <v-card-text class="justify-center text-center">
-              Podsumowanie, ile osób aktualnie u władzy jest lub kiedykolwiek
-              było zatrudnionych w spółkach publicznych lub instytucjach.
-            </v-card-text>
-          </v-card>
-        </v-col>
-        <v-col
-          cols="12"
-          sm="3"
-          height="100%"
-          class="d-flex align-center justify-center"
-        >
-          <v-hover v-slot="{ isHovering, props: hoverProps }">
-            <v-btn
-              v-bind="hoverProps"
-              border="md opacity-100 primary"
-              class="text-none pl-6"
-              color="primary"
-              height="60"
-              rounded="pill"
-              spaced="end"
-              text="Zobacz wszystkie osoby"
-              variant="outlined"
-              width="250"
-              to="/eksploruj/tabela?teryt=1261"
-            >
-              <template #append>
-                <v-avatar variant="text">
-                  <v-progress-circular
-                    bg-color="transparent"
-                    color="primary"
-                    :model-value="isHovering ? 100 : 0"
-                    width="2"
-                  >
-                    <v-icon :icon="mdiArrowRight" />
-                  </v-progress-circular>
-                </v-avatar>
-              </template>
-            </v-btn>
-          </v-hover>
-        </v-col>
-      </v-row>
+      <AdminPageHead
+        title="Statystyki koryciarstwa Krakowa"
+        lead="Podsumowanie, ile osób aktualnie u władzy jest lub kiedykolwiek było zatrudnionych w spółkach publicznych lub instytucjach."
+      >
+        <template #actions>
+          <!-- A sage fill with dark text rather than sage text in a sage
+               outline: sage is a fill and never text, 1.85:1 on white, and
+               this is how the entity pages' own buttons wear it (Szymon,
+               2026-10-23: „controls only, now”). -->
+          <v-btn
+            color="primary"
+            variant="flat"
+            :append-icon="mdiArrowRight"
+            to="/eksploruj/tabela?teryt=1261"
+            text="Zobacz wszystkie osoby"
+          />
+        </template>
+      </AdminPageHead>
 
-      <RegionPeopleStatistics teryt="1261" class="mt-2" />
-      <RegionPeopleStatistics teryt="12" />
+      <!-- The city council and the regional assembly: two sections, one
+           section gap apart. -->
+      <div class="k-sections">
+        <RegionPeopleStatistics teryt="1261" />
+        <RegionPeopleStatistics teryt="12" />
+      </div>
     </template>
     <!-- The page sits on the page: no card around it, so the name, the
          sections and the lists share one left edge with the bar above, and a
