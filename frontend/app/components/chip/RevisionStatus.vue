@@ -13,6 +13,7 @@
         location="bottom"
         max-width="280"
         open-on-click
+        :open-on-hover="canHover"
       >
         {{ proposalStatusHints[status] }}
       </v-tooltip>
@@ -33,6 +34,7 @@
         location="bottom"
         max-width="280"
         open-on-click
+        :open-on-hover="canHover"
       >
         {{ derivedHint }}
       </v-tooltip>
@@ -49,6 +51,7 @@
  */
 import { mdiHelpCircleOutline } from "@mdi/js";
 import { computed } from "vue";
+import { useCanHover } from "~/composables/canHover";
 import { revisionStatusIcons } from "~/utils/revisionStatus";
 import {
   proposalStatusHints,
@@ -75,4 +78,7 @@ const icon = computed(() => revisionStatusIcons[props.status]);
  * not stranded on a device without a pointer. */
 const derivedHint =
   "Status odczytany z wpisu (rewizja sprzed wprowadzenia recenzji).";
+
+/** `useCanHover`: a tap on a phone opens the tooltip and keeps it open. */
+const canHover = useCanHover();
 </script>

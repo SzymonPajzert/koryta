@@ -46,16 +46,9 @@ defineProps<{
   label: string;
 }>();
 
-/** Whether the reader's pointer can hover. A phone's cannot, and a tap sends
- * an emulated hover and then a click: the hover opened the bubble and the
- * click, being a toggle, shut it again half a second later - on every (i) on
- * the site. Where nothing hovers, the tap is the only way in (and hover off
- * takes Vuetify's open-on-focus with it). Read after mounting, so the server's
- * render and the first one in the browser agree. */
-const canHover = ref(true);
-onMounted(() => {
-  canHover.value = window.matchMedia("(hover: hover)").matches;
-});
+/** Whether the reader's pointer can hover: where nothing hovers, a tap is the
+ * only way in (`useCanHover` says why). */
+const canHover = useCanHover();
 </script>
 
 <style scoped>
