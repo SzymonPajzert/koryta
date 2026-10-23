@@ -128,7 +128,7 @@ const lead = computed(() => {
     "fakty wyciągnięte",
     "faktów wyciągniętych",
   );
-  const newest = total > LIMIT ? ` – tu najnowsze ${LIMIT}` : "";
+  const newest = total > LIMIT ? ` - tu najnowsze ${LIMIT}` : "";
   return articleFilter.value
     ? `${facts} z tego artykułu${newest}.`
     : `${facts} z artykułów${newest}, po jednym wierszu na artykuł.`;

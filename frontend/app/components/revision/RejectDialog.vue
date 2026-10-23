@@ -13,7 +13,7 @@
           v-model="reason"
           label="Powód odrzucenia"
           placeholder="np. brak źródła, dane niezgodne z KRS"
-          hint="Rewizja zostaje zachowana razem z powodem, a autor dostaje go mailem – to jedyne, co do niego wróci."
+          hint="Rewizja zostaje zachowana razem z powodem, a autor dostaje go mailem - to jedyne, co do niego wróci."
           persistent-hint
           rows="3"
           auto-grow

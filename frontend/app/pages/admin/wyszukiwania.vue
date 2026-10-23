@@ -1,17 +1,30 @@
 <template>
-  <div class="pa-4">
-    <div class="d-flex align-center mb-4">
-      <v-btn :icon="mdiArrowLeft" variant="text" class="mr-2" to="/admin" />
-      <div>
-        <h1 class="text-h4">Wyszukiwania</h1>
-        <div class="text-caption text-medium-emphasis">
-          Czego czytelnicy szukali w wyszukiwarce na górze strony - jedno
-          wyszukiwanie to ostatnie zapytanie, zanim ktoś otworzył wynik albo
-          zrezygnował. Bez danych o tym, kto szukał. Wpisy znikają po
-          {{ RETENTION_DAYS }} dniach.
-        </div>
-      </div>
-    </div>
+  <div class="w-100">
+    <!-- The admin pages' head: the way back as a named link above the title,
+         one sentence under it and the method behind the (i). The page had a
+         head of its own: a bare arrow beside the title, which pushed the h1
+         off the page's edge, over three sentences of 12px, on a page of its
+         own width and padding. -->
+    <AdminPageHead
+      title="Wyszukiwania"
+      lead="Czego czytelnicy szukali w wyszukiwarce na górze strony."
+    >
+      <template #back>
+        <v-btn
+          variant="text"
+          size="small"
+          :prepend-icon="mdiArrowLeft"
+          to="/admin"
+        >
+          Panel administracyjny
+        </v-btn>
+      </template>
+      <template #info>
+        Jedno wyszukiwanie to ostatnie zapytanie, zanim ktoś otworzył wynik albo
+        zrezygnował. Bez danych o tym, kto szukał. Wpisy znikają po
+        {{ RETENTION_DAYS }} dniach.
+      </template>
+    </AdminPageHead>
 
     <v-alert
       v-if="error"
@@ -22,16 +35,11 @@
     />
 
     <!-- The window and whose searches: they scope the chart and the list
-         under it alike, so they come first, above both. -->
+         under it alike, so they come first, above both. A row of controls,
+         not a record, so no card round it. The window is the site's neutral
+         segmented toggle, as on /eksploruj/statystyki. -->
     <div class="d-flex align-center flex-wrap ga-3 mb-4">
-      <v-btn-toggle
-        v-model="days"
-        mandatory
-        density="compact"
-        variant="outlined"
-        divided
-        data-testid="searches-days"
-      >
+      <SegmentedToggle v-model="days" data-testid="searches-days">
         <v-btn
           v-for="option in DAY_OPTIONS"
           :key="option"
@@ -40,7 +48,7 @@
         >
           {{ option }} dni
         </v-btn>
-      </v-btn-toggle>
+      </SegmentedToggle>
       <v-switch
         v-model="signedOutOnly"
         label="Tylko niezalogowani"
@@ -91,24 +99,29 @@
       </div>
     </div>
 
-    <v-data-table
-      density="compact"
-      item-value="query"
-      :headers="headers"
-      :items="shownRows"
-      :loading="pending"
-      no-data-text="Nikt jeszcze niczego takiego nie szukał."
-      loading-text="Ładowanie..."
-      :items-per-page="-1"
-      hide-default-footer
-      data-testid="searches-table"
-    >
-      <template #[`item.lastAt`]="{ item }">
-        <span class="text-caption">{{
-          shortDate(item.lastAt.slice(0, 10))
-        }}</span>
-      </template>
-    </v-data-table>
+    <!-- Edge to edge on a phone, as the admin pages' other lists. The bleed
+         sits on a plain wrapper: on the table itself Vuetify's
+         `.v-table { max-width: 100% }` holds it at the column's width. -->
+    <div class="k-bleed-xs">
+      <v-data-table
+        density="compact"
+        item-value="query"
+        :headers="headers"
+        :items="shownRows"
+        :loading="pending"
+        no-data-text="Nikt jeszcze niczego takiego nie szukał."
+        loading-text="Ładowanie..."
+        :items-per-page="-1"
+        hide-default-footer
+        data-testid="searches-table"
+      >
+        <template #[`item.lastAt`]="{ item }">
+          <span class="text-caption">{{
+            shortDate(item.lastAt.slice(0, 10))
+          }}</span>
+        </template>
+      </v-data-table>
+    </div>
   </div>
 </template>
 
@@ -129,7 +142,6 @@ import type { SearchesSummary } from "~~/server/api/admin/searches.get";
  * of: the review queue, ordered by who is being looked for. */
 definePageMeta({
   middleware: "owner",
-  fullWidth: true,
 });
 
 useHead({

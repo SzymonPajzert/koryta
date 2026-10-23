@@ -109,7 +109,7 @@ export const myProposals: MyProposals = {
       id: "wizmoja6",
       kind: "removal",
       targetId: "wizart3",
-      targetName: "To samo co wyżej – kopia artykułu",
+      targetName: "To samo co wyżej - kopia artykułu",
       targetType: "article",
       targetPath: null,
       targetExists: false,
@@ -122,7 +122,7 @@ export const myProposals: MyProposals = {
       id: "wizmoja7",
       status: "rejected",
       rejectReason:
-        "Brak źródła – w KRS ta osoba nie występuje w zarządzie tej spółki.",
+        "Brak źródła - w KRS ta osoba nie występuje w zarządzie tej spółki.",
       reviewTime: daysAgo(20),
       reviewUser: "wizautor5",
       targetId: "wizos3",

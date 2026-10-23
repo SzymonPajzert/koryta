@@ -88,27 +88,16 @@
         </v-card>
 
         <v-card>
-          <!-- Wrapping, where Vuetify keeps a card title to one line and cuts
-               it off with an ellipsis - a title this long does not fit a
-               phone's card. The bubble follows the last word inline, so it is
-               never left alone at the far edge of a two-line title. Only the
-               words are the h2: inside it, the bubble's „Co to jest: …” would
-               be read out as part of the heading's name. -->
-          <v-card-title class="text-wrap">
-            <h2 class="card-heading">
-              Widoczność w statystykach i w aktywności
-            </h2>
-            <InfoBubble label="Widoczność w statystykach i w aktywności">
-              Nazwy są w nich ukryte, dopóki ich właściciele nie zdecydują
-              inaczej. {{ publicProfileLabel.hint }}
-            </InfoBubble>
-          </v-card-title>
+          <ProfileCardTitle title="Widoczność w statystykach i w aktywności">
+            Nazwy są w nich ukryte, dopóki ich właściciele nie zdecydują
+            inaczej. {{ publicProfileLabel.hint }}
+          </ProfileCardTitle>
           <!-- The sentence with the link stays in the card: a bubble is a
                tooltip and cannot hold one. -->
           <v-card-subtitle class="text-wrap">
             Ranking na
             <NuxtLink to="/eksploruj/statystyki">stronie statystyk</NuxtLink>
-            pokazuje, kto ile sprawdził, a strona Aktywność – kto co i kiedy
+            pokazuje, kto ile sprawdził, a strona Aktywność - kto co i kiedy
             zrobił.
           </v-card-subtitle>
           <v-card-text>
@@ -158,7 +147,7 @@
         <v-card>
           <v-card-title tag="h2">Powiadomienia o Twoich zmianach</v-card-title>
           <v-card-subtitle class="text-wrap">
-            Wysyłamy je na adres, którym się logujesz – tylko wtedy, gdy ktoś
+            Wysyłamy je na adres, którym się logujesz — tylko wtedy, gdy ktoś
             zajmie się czymś, co zaproponowałeś.
           </v-card-subtitle>
           <v-card-text>
@@ -690,29 +679,13 @@ const sendVerification = async () => {
   min-width: 0;
 }
 
-/* The words of a card title that carries a bubble, at the title's own 16/600:
-   Vuetify's reset leaves an h2 the browser's 1.5em. Inline, so the bubble
-   after it still follows the last word. */
-.card-heading {
-  display: inline;
-  font: inherit;
-}
-
-/* The space before the bubble. Vue drops the newline between `</h2>` and the
-   bubble, and whether the h2's own text keeps a trailing one is up to how
-   prettier wraps it; a generated space collapses into that one if it is
-   there, so the gap is one space either way. */
-.card-heading::after {
-  content: " ";
-}
-
 /* No elevation on the switch thumbs (edges.css: shadows are for what
    floats). Not Vuetify's `flat`: in 3.13 it also repaints the thumb in
    surface-variant, near-black, so every switch that is off read as the
    heaviest - and as „on” - mark on the page. A neutral hairline ring keeps
    the white thumb findable on the white card; on, it keeps its sage. */
 .profile-page :deep(.v-switch:not(.v-switch--inset) .v-switch__thumb) {
-  box-shadow: 0 0 0 1px var(--k-line-strong);
+  box-shadow: 0 0 0 1px var(--k-line);
 }
 
 /* A switch with a hint: the track centres on the title's first line, so the

@@ -2,7 +2,7 @@
   <div class="w-100">
     <AdminPageHead
       title="Procesy"
-      lead="Wszystko, co zmienia dane – pobieranie KRS, lustro, kopia bazy, crawl, importy na stronę i zapisy z rozszerzenia – i jak daleko doszło."
+      lead="Wszystko, co zmienia dane - pobieranie KRS, lustro, kopia bazy, crawl, importy na stronę i zapisy z rozszerzenia - i jak daleko doszło."
       info="Joby zgłaszają się same, gdziekolwiek działają; te, które milczą, widać po tym, co zostawiły w zasobnikach."
     />
 

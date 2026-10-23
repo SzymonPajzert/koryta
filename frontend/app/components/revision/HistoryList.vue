@@ -287,7 +287,7 @@ const filter = defineModel<HistoryFilter>("filter", { default: "all" });
 const EMBEDDED_LIMIT = 10;
 
 const STALE_HINT =
-  "Wpis zmienił się po zgłoszeniu – zatwierdzenie cofnie nowsze zmiany.";
+  "Wpis zmienił się po zgłoszeniu — zatwierdzenie cofnie nowsze zmiany.";
 
 const { isAdmin } = useAuthState();
 

@@ -105,7 +105,7 @@ export const unreviewedFacts: ExtractionFact[] = [
     organization: LONG_COMPANY,
     role: "członkini rady nadzorczej",
     justification:
-      "Aleksandra Konstantynowicz-Szczepańska, radna powiatu z ramienia PSL, od marca 2021 roku zasiada w radzie nadzorczej przedsiębiorstwa komunalnego, choć – jak przyznaje starostwo – konkursu na to stanowisko nie ogłoszono.",
+      "Aleksandra Konstantynowicz-Szczepańska, radna powiatu z ramienia PSL, od marca 2021 roku zasiada w radzie nadzorczej przedsiębiorstwa komunalnego, choć - jak przyznaje starostwo - konkursu na to stanowisko nie ogłoszono.",
     createdAt: daysAgo(0, 7),
   }),
   fact("wizexk2", GAZETA, {

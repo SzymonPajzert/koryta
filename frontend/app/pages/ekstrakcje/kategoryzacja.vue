@@ -9,7 +9,7 @@
          „Nie wiem” is not a softer „Błędny” - the bubble does. -->
     <AdminPageHead
       title="Kategoryzuj fakty"
-      info="Przeciągnij kartę w prawo, jeśli fakt jest dobry, albo w lewo, jeśli jest błędny – albo użyj przycisków pod nią. „Nie wiem” zapisuje, że do oceny jest za mało informacji, a nie że fakt jest błędny."
+      info="Przeciągnij kartę w prawo, jeśli fakt jest dobry, albo w lewo, jeśli jest błędny - albo użyj przycisków pod nią. „Nie wiem” zapisuje, że do oceny jest za mało informacji, a nie że fakt jest błędny."
       :lead="
         loading ? undefined : `Pozostało do oceny: ${polishNumber(remaining)}`
       "

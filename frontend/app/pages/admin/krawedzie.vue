@@ -109,7 +109,7 @@
               relationPeriodLabel(
                 item.start_date ?? undefined,
                 item.end_date ?? undefined,
-              ) || "–"
+              ) || "-"
             }}</span
           >
         </template>
@@ -189,7 +189,7 @@ const allSelected = computed(
 // reads.
 const emptyText = computed(() =>
   truncated.value
-    ? `Wśród ${polishCountingGenitive(scanned.value, "przejrzanego powiązania", "przejrzanych powiązań")} nie ma gotowych – „Wczytaj więcej” sprawdzi kolejne.`
+    ? `Wśród ${polishCountingGenitive(scanned.value, "przejrzanego powiązania", "przejrzanych powiązań")} nie ma gotowych - „Wczytaj więcej” sprawdzi kolejne.`
     : "Nie ma powiązań gotowych do publikacji.",
 );
 

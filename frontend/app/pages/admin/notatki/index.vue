@@ -143,7 +143,7 @@
           :no-data-text="noDataText"
           loading-text="Ładowanie…"
           items-per-page-text="Wierszy na stronę:"
-          page-text="{0}–{1} z {2}"
+          page-text="{0}-{1} z {2}"
           :items-per-page-options="[10, 25, 50, 100]"
         >
           <!-- When and who, in one column: seven columns needed about 1,250px,
@@ -661,7 +661,7 @@ const patchRow = async (
     console.error("Failed to update note admin data", error);
     Object.assign(row, previous);
     failure.value =
-      "Nie udało się zapisać zmiany – przywrócono poprzednią wartość.";
+      "Nie udało się zapisać zmiany - przywrócono poprzednią wartość.";
   } finally {
     saving.value[row.key] = false;
   }
@@ -707,7 +707,7 @@ const focusNode = async (row: NoteRow) => {
     console.error(`Failed to fetch node ${row.nodeId}`, error);
     if (focusedNodeId.value !== row.nodeId) return;
     openDrawer.value = false;
-    failure.value = "Nie udało się otworzyć wpisu – mógł zostać usunięty.";
+    failure.value = "Nie udało się otworzyć wpisu - mógł zostać usunięty.";
   }
 };
 </script>

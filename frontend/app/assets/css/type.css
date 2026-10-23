@@ -43,7 +43,7 @@
   --k-title-caps-size: 32px;
   --k-title-caps-size-phone: 24px;
   /* a title that heads a card rather than the page's column - the sign-in
-     form, the profile - and the phone home's one sentence */
+     form - and the phone home's one sentence */
   --k-title-sm-size: 24px;
   /* section heads */
   --k-section-size: 24px;
@@ -67,8 +67,12 @@
 
 /* Vuetify tracks its type for Roboto's upper case. Sentence case wants none.
    A list of the classes that carry tracking, not a blanket `*`: first its
-   typography utilities, whose tracking is `!important`... The footer's
-   column heads and its copyright line keep Vuetify's. */
+   typography utilities, whose tracking is `!important`...
+
+   ...except on an h1, which the page title's rule below tracks tighter. That
+   rule is a bare `h1`, a class lighter than this one, so the exception is
+   made here, inside `:where`, where it adds nothing to this rule's weight.
+   The footer's column heads and its copyright line keep Vuetify's. */
 :is(.v-application, .v-overlay-container)
   :is(
     .text-h1,
@@ -88,7 +92,7 @@
     .text-caption,
     .text-overline,
     .text-button
-  ):where(:not(.v-footer *)) {
+  ):where(:not(h1, .v-footer *)) {
   letter-spacing: normal !important;
 }
 
@@ -137,17 +141,20 @@
 
 /* ---- card and step titles: 16/600 ----
 
-   Before the section heads and the page title, which out-rank it on the
-   headings they share a class with. `.text-h6` is a utility, so its size
-   needs `!important`; a card title's does not, and one whose markup says
-   `text-h5` keeps that size. */
-:is(.v-application, .v-overlay-container) .text-h6:not(p) {
+   Before the section heads, which out-rank it on the headings they share a
+   class with. Not on an h1 either: there `text-h6` is the size a page title
+   used to have on a phone (/eksploruj/nowe), and the title's own rule, a
+   class lighter than this one, sets it now. `.text-h6` is a utility, so its
+   size needs `!important`; a card title's does not, and one whose markup
+   says `text-h5` keeps that size. */
+:is(.v-application, .v-overlay-container) .text-h6:not(p, h1) {
   font-size: var(--k-sub-size) !important;
 }
 
 /* `.v-card .v-card-title` because that is where Vuetify sets a card title's
    line height. */
-:is(.v-application, .v-overlay-container) :is(.text-h6:not(p), .v-card-title),
+:is(.v-application, .v-overlay-container)
+  :is(.text-h6:not(p, h1), .v-card-title),
 :is(.v-application, .v-overlay-container) .v-card .v-card-title {
   font-size: var(--k-sub-size);
   font-weight: 600;
@@ -389,12 +396,11 @@
    One treatment on every page: the h1 is 40/700, 28 on a phone. Person and
    company pages make the entity's name the h1. Many h1s still carry the
    Vuetify heading class they used to be sized with (`text-h4`), whose size
-   and tracking are `!important` - so those two are here.
-
-   `k-title-inline` is the two categorisation screens' toolbar title, an h1
-   naming a working tool inside a 48px bar. It keeps its own size until the
-   admin pages' titles are decided (typography's open question 5). */
-:is(.v-application, .v-overlay-container) h1:not(.k-title-inline) {
+   and tracking are `!important` - so those two are here. A bare `h1` out-
+   weighs Vuetify's one class; the two rules in this file that weigh more,
+   the ground rules' tracking and `.text-h6`'s card-title size, leave an h1
+   out themselves. */
+:is(.v-application, .v-overlay-container) h1 {
   font-size: var(--k-title-size) !important;
   letter-spacing: -0.025em !important;
   font-weight: 700;
@@ -418,7 +424,7 @@
 
 /* ---- phones ---- */
 @media (max-width: 599.98px) {
-  :is(.v-application, .v-overlay-container) h1:not(.k-title-inline) {
+  :is(.v-application, .v-overlay-container) h1 {
     font-size: var(--k-title-size-phone) !important;
   }
 

@@ -40,6 +40,10 @@ describe("feedbackPlace", () => {
     expect(
       feedbackPlace(report({ pageTitle: "Opinie - koryta.pl | Koryta.pl" })),
     ).toBe("Opinie");
+    // The same plain hyphen on its own, as the site writes every separator.
+    expect(feedbackPlace(report({ pageTitle: "Procesy - koryta.pl" }))).toBe(
+      "Procesy",
+    );
     // An en dash, as a typographer writes the separator.
     expect(feedbackPlace(report({ pageTitle: "Procesy – koryta.pl" }))).toBe(
       "Procesy",

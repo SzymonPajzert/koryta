@@ -605,7 +605,7 @@ describe("the review queue section", () => {
     const wrapper = await mount();
 
     expect(wrapper.get("#kolejka").text()).toContain(
-      "Kolejka jest pusta – nic nie czeka na rozpatrzenie.",
+      "Kolejka jest pusta — nic nie czeka na rozpatrzenie.",
     );
   });
 
