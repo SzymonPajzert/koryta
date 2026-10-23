@@ -316,6 +316,12 @@ const LOCAL_OFFICES: ReadonlySet<string> = new Set([
   "Prezydent",
 ]);
 
+/** Whether an office is one of the named local ones, rather than „Samorząd”
+ * or a national office. */
+export function isLocalOffice(position: unknown): position is string {
+  return typeof position === "string" && LOCAL_OFFICES.has(position);
+}
+
 /** Whether a stored value says what the incoming one says, only more
  * precisely.
  *
@@ -503,7 +509,9 @@ const DISTRICT_OFFICES: ReadonlySet<string> = new Set([
 ]);
 
 /** Whether a candidacy's office is one a whole district elects. */
-export function isDistrictOffice(position: unknown): position is string {
+export function isDistrictOffice(
+  position: unknown,
+): position is "Sejm" | "Senat" | "Parlament Europejski" {
   return typeof position === "string" && DISTRICT_OFFICES.has(position);
 }
 
@@ -580,6 +588,53 @@ export function misfiledRunOf(
     office !== "Parlament Europejski" &&
     (typeof districtTeryt !== "string" ||
       !storedTeryt.startsWith(districtTeryt))
+  ) {
+    return false;
+  }
+  return edgeRelation(stored, incoming) !== "conflict";
+}
+
+/** Whether a stored candidacy says no more than that it was local: „Samorząd”,
+ * or no office at all in a year that held only local elections (2014 and 2024
+ * held the European one as well). */
+export function unnamedLocal(stored: EdgeLike): boolean {
+  const office = field(stored, "position");
+  if (office !== null) return office === UNNAMED_LOCAL_OFFICE;
+  const held = electionKindsIn(String(stored.start_date ?? "").slice(0, 4));
+  return held.length === 1 && held[0] === "local";
+}
+
+/** Whether `stored`, filed under `storedTeryt`, is the sejmik run `incoming`
+ * places under its województwo (`districtTeryt`), stored without its office
+ * under the candidate's home instead.
+ *
+ * The same upload bug as `misfiledRunOf`'s, met by a local run: the sejmik is
+ * elected by a whole województwo, and the uploads before 2026-07-30 could file
+ * the run under the candidate's home, as „Samorząd”. But „Samorząd” there says
+ * only that the run was local, and a council or mayoral run in that town is
+ * local too - so this is only the sejmik run where the payload has no other
+ * local run that year, which the caller has to check: a person stands for one
+ * council at a time, and the sejmik is one. Michał Jerzy Sobczak's 2024 run is
+ * such a copy, live under Łódź beside the draft „Sejmik” under łódzkie.
+ *
+ * Otherwise as `misfiledRunOf`: same date, below the województwo and inside
+ * it, nothing disagreeing, not removed. */
+export function misfiledSejmikRunOf(
+  stored: EdgeLike,
+  storedTeryt: unknown,
+  incoming: EdgeLike,
+  districtTeryt: unknown,
+): boolean {
+  if (incoming.position !== "Sejmik") return false;
+  if ((stored as { deleted?: unknown }).deleted === true) return false;
+  if (!incoming.start_date || stored.start_date !== incoming.start_date) {
+    return false;
+  }
+  if (!unnamedLocal(stored)) return false;
+  if (typeof storedTeryt !== "string" || storedTeryt.length <= 2) return false;
+  if (
+    typeof districtTeryt !== "string" ||
+    !storedTeryt.startsWith(districtTeryt)
   ) {
     return false;
   }
