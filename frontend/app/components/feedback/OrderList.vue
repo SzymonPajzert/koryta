@@ -405,7 +405,7 @@ const rowClasses = (item: Feedback) => {
 }
 
 .fb-drop-empty {
-  border: 2px dashed var(--k-line-strong);
+  border: 2px dashed var(--k-line);
   border-radius: var(--k-r-card);
   padding: 16px;
   text-align: center;

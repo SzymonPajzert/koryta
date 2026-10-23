@@ -177,7 +177,7 @@ export const activityFeed: ActivityFeed = {
           ...person("wizos3", "Jan Przykładowy"),
           revisionHref: "/admin/rewizje?rewizja=wizrew8#kolejka",
           reason:
-            "Brak źródła – w KRS ta osoba nie występuje w zarządzie tej spółki.",
+            "Brak źródła - w KRS ta osoba nie występuje w zarządzie tej spółki.",
         },
       ],
     }),

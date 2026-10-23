@@ -331,7 +331,7 @@ const statusText = computed(() => {
     props.now.getTime() - Date.parse(current.startedAt),
   );
   const progress = current.progress
-    ? ` – ${progressText(current.progress)}`
+    ? ` - ${progressText(current.progress)}`
     : "";
   switch (current.state) {
     case "queued":
@@ -342,7 +342,7 @@ const statusText = computed(() => {
     case "running":
       return stalled.value
         ? `Brak sygnału od ${formatDuration(props.now.getTime() - Date.parse(current.heartbeatAt))}.`
-        : `Trwa od ${since}${current.phase ? ` – ${current.phase}` : ""}${progress}.`;
+        : `Trwa od ${since}${current.phase ? ` - ${current.phase}` : ""}${progress}.`;
     case "succeeded":
       // A count sent nothing, and "0 z 15 osób" would read as a send that
       // stalled at the start.

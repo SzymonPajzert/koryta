@@ -63,12 +63,12 @@
                  icon, out of reach of both a phone and a keyboard. -->
             <div class="place-clash__head">
               <v-icon :icon="mdiAlertOutline" size="small" />
-              <span>Wybory {{ electionLabel(clash) }} – dwa miejsca naraz</span>
+              <span>Wybory {{ electionLabel(clash) }} - dwa miejsca naraz</span>
               <InfoBubble :label="`Wybory ${electionLabel(clash)}`">
                 W jednych wyborach kandyduje się w jednym miejscu, więc co
                 najmniej jedna z tych kandydatur należy do imiennika. Opublikuj
-                tę, która pasuje do tej osoby – zwykle tę z miejsca, gdzie
-                kandydowała też w innych latach – a drugą zostaw
+                tę, która pasuje do tej osoby - zwykle tę z miejsca, gdzie
+                kandydowała też w innych latach - a drugą zostaw
                 nieopublikowaną. „Zaznacz wszystkie” ich nie zaznacza.
               </InfoBubble>
             </div>
@@ -208,7 +208,7 @@
           <p class="mb-1 text-body-2">{{ relationsFailed }}</p>
           <p class="mb-0 text-body-2">
             Spróbuj ponownie tutaj albo opublikuj je w
-            <NuxtLink to="/admin/krawedzie">kolejce powiązań</NuxtLink> – strona
+            <NuxtLink to="/admin/krawedzie">kolejce powiązań</NuxtLink> - strona
             jest już widoczna publicznie, więc ten dialog więcej się nie
             otworzy.
           </p>

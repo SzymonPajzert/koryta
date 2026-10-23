@@ -207,7 +207,7 @@ describe("RevisionHistoryList", () => {
     expect(panel.text()).toContain("Zastąpiona (odczytany z wpisu)");
     expect(panel.text()).toContain("Rozpatrzono");
     expect(panel.text()).toContain(
-      "Wpis zmienił się po zgłoszeniu – zatwierdzenie cofnie nowsze zmiany.",
+      "Wpis zmienił się po zgłoszeniu — zatwierdzenie cofnie nowsze zmiany.",
     );
   });
 

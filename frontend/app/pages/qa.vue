@@ -7,16 +7,16 @@
          lines on a phone and pushed the tabs off the first screen, and its
          last sentence is said again where it matters, under the notes field
          of every open entry. -->
-    <AdminPageHead title="QA – zmiany do sprawdzenia">
+    <AdminPageHead title="QA - zmiany do sprawdzenia">
       <template #lead>
         Lista zmian na stronie, od najnowszej: przejdź krokami z&nbsp;wpisu
-        i&nbsp;powiedz, czy działa – i&nbsp;co poprawić.
+        i&nbsp;powiedz, czy działa - i&nbsp;co poprawić.
       </template>
       <template #info>
         Liczy się Twoje sprawdzenie: wpis przechodzi do sprawdzonych dopiero,
         gdy Ty go ocenisz, nawet jeśli ktoś inny już go widział. Twoje uwagi
         widzą inni zalogowani, a zgłoszony problem trafia do zespołu tą samą
-        drogą, co przycisk „Zgłoś” – nic nie trzeba pisać drugi raz.
+        drogą, co przycisk „Zgłoś” - nic nie trzeba pisać drugi raz.
       </template>
     </AdminPageHead>
 

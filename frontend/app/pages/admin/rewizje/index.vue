@@ -10,7 +10,7 @@
     <v-locale-provider locale="pl" :messages="localeMessages">
       <AdminPageHead
         title="Rewizje"
-        lead="Kto i co zmienił we wpisach i powiązaniach – i co z tego wciąż czeka na decyzję."
+        lead="Kto i co zmienił we wpisach i powiązaniach — i co z tego wciąż czeka na decyzję."
       />
 
       <!-- The two admin sections are gated on `isAdmin`, not on the page's
@@ -35,7 +35,7 @@
             <template #info>
               {{ queueScope }}
               <span v-if="showsFlagOnlyNotice" class="d-block mt-2">
-                Ta lista obejmuje propozycje zgłoszone od lipca 2026 –
+                Ta lista obejmuje propozycje zgłoszone od lipca 2026 —
                 wcześniejsze rewizje nie mają zapisanego, czy powstały ręcznie.
                 Pełną historię jednej osoby zobaczysz, klikając jej nazwę w
                 „Najaktywniejsi” na stronie statystyk.
@@ -171,7 +171,7 @@
             variant="tonal"
             density="compact"
             :icon="mdiCheckDecagramOutline"
-            text="Kolejka jest pusta – nic nie czeka na rozpatrzenie."
+            text="Kolejka jest pusta — nic nie czeka na rozpatrzenie."
           />
           <template v-else>
             <v-progress-linear
@@ -272,7 +272,7 @@
           <AdminSectionHead
             title="Zmiany powiązań"
             :count="edgeType ? undefined : (edges?.total ?? undefined)"
-            info="Zmiany powiązań, których nikt jeszcze nie rozpatrzył – głównie od pipeline'u. Pipeline zapisuje zmianę od razu tylko wtedy, gdy potrafi za nią ręczyć – komitet wyborczy z listy przypisanej do partii. Reszta czeka tutaj, a samo powiązanie pozostaje nietknięte. „Rozpatrz” otwiera zmianę w kolejce wyżej."
+            info="Zmiany powiązań, których nikt jeszcze nie rozpatrzył - głównie od pipeline'u. Pipeline zapisuje zmianę od razu tylko wtedy, gdy potrafi za nią ręczyć - komitet wyborczy z listy przypisanej do partii. Reszta czeka tutaj, a samo powiązanie pozostaje nietknięte. „Rozpatrz” otwiera zmianę w kolejce wyżej."
           >
             <v-select
               v-model="edgeType"
@@ -334,7 +334,7 @@
           <AdminSectionHead
             title="Wpisy z historią zmian"
             :count="nodes?.total"
-            info="Każdy wpis, który ktoś zmienił – także pipeline. Rozwiń wiersz, żeby zobaczyć kolejne wersje i kto je zapisał; ikona na końcu wiersza pokazuje wszystkie wersje obok siebie."
+            info="Każdy wpis, który ktoś zmienił - także pipeline. Rozwiń wiersz, żeby zobaczyć kolejne wersje i kto je zapisał; ikona na końcu wiersza pokazuje wszystkie wersje obok siebie."
           >
             <!-- Phrased by what is left to do rather than by the field name:
                `has_unapproved` says the opposite of "zaakceptowane", so naming
@@ -914,7 +914,7 @@ const queueScope = computed(() => {
       ? "Zmiany zaproponowane przez ludzi. Tego, co dopisuje pipeline, tu nie ma."
       : automatic.value === "true"
         ? "Zmiany dopisane przez pipeline."
-        : "Wszystkie rewizje – i te od ludzi, i te z pipeline'u.";
+        : "Wszystkie rewizje — i te od ludzi, i te z pipeline'u.";
   const pages =
     published.value === "true"
       ? " Tylko o wpisach, które są już opublikowane."

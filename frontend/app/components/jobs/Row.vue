@@ -147,7 +147,7 @@
                 · nic nowszego do spakowania
               </template>
             </template>
-            <template v-else> – brak archiwum</template>
+            <template v-else> - brak archiwum</template>
           </li>
         </ul>
         <template v-else-if="view.probe.kind === 'firestoreExport'">

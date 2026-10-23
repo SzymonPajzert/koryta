@@ -95,7 +95,7 @@ export const fixedReports: Feedback[] = [
     id: "3WbbJZv1qumO87LDCMQb",
     kind: "bug",
     message:
-      "Na telefonie w rogu ekranu wisi zielona kropka bez żadnego napisu. Kliknąłem ją przypadkiem i otworzył się formularz – nie wiedziałem, że to do zgłoszeń.",
+      "Na telefonie w rogu ekranu wisi zielona kropka bez żadnego napisu. Kliknąłem ją przypadkiem i otworzył się formularz - nie wiedziałem, że to do zgłoszeń.",
     context: {
       route: "/osoba/barbara-przykladowa-wizos1",
       pageTitle: "Barbara Przykładowa | Koryta.pl",

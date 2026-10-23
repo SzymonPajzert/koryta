@@ -50,7 +50,7 @@
           class="text-caption text-medium-emphasis"
           data-testid="publish-unavailable"
         >
-          Nie ma czego opublikować – żadnej rewizji nie da się zatwierdzić
+          Nie ma czego opublikować - żadnej rewizji nie da się zatwierdzić
         </span>
       </template>
     </AdminPageHead>
@@ -63,7 +63,7 @@
         <AdminSectionHead
           title="Historia zmian"
           :count="pending || loadFailed ? undefined : allRevisions.length"
-          info="Każda rewizja to pełna wersja wpisu, zapisana przez człowieka albo przez pipeline. Kliknij wiersz, żeby zobaczyć, kto ją zgłosił i co zmienia względem zatwierdzonej wersji – i tam ją rozpatrzyć."
+          info="Każda rewizja to pełna wersja wpisu, zapisana przez człowieka albo przez pipeline. Kliknij wiersz, żeby zobaczyć, kto ją zgłosił i co zmienia względem zatwierdzonej wersji - i tam ją rozpatrzyć."
         />
         <RevisionHistoryList
           ref="history"
@@ -193,11 +193,11 @@
                         Podgląd tej wersji strony
                       </nuxt-link>
                       <!-- Full id on hover only: spelled out it is ~60
-                           monospace characters, which widened the column past the
-                           350px the comparison table gives it and pushed the
-                           header controls out of view. -->
+                           characters, which widened the column past the 350px
+                           the comparison table gives it and pushed the header
+                           controls out of view. -->
                       <div
-                        class="text-caption font-weight-mono text-medium-emphasis mt-1 revision-id"
+                        class="text-caption text-medium-emphasis mt-1 revision-id"
                         :title="String(rev.id)"
                       >
                         ID: {{ shortRevisionId(rev.id) }}
@@ -234,7 +234,7 @@
                         fieldText(rev, key)
                       }}</pre>
                       <span v-else class="text-medium-emphasis font-italic"
-                        >– brak –</span
+                        >- brak -</span
                       >
                     </div>
                   </td>

@@ -427,7 +427,7 @@
           :style="{ '--apages-rows': subpageRows }"
         >
           <NuxtLink
-            v-for="page in subpages"
+            v-for="page in listedSubpages"
             :key="page.to"
             :to="page.to"
             class="apages__row"
@@ -461,6 +461,7 @@ import {
   mdiChevronRight,
   mdiCheckCircleOutline,
   mdiGestureTapButton,
+  mdiMagnify,
   mdiRefresh,
   mdiMessageAlertOutline,
 } from "@mdi/js";
@@ -525,29 +526,48 @@ const subpages = [
     icon: mdiChartLine,
     desc: "Stan bazy i kto ją ostatnio zmieniał.",
   },
+  // Last, so the list reads the same for every administrator down to here.
+  {
+    title: "Wyszukiwania",
+    to: "/admin/wyszukiwania",
+    icon: mdiMagnify,
+    desc: "Czego czytelnicy szukali w wyszukiwarce i czego nie znaleźli.",
+    ownerOnly: true,
+  },
 ];
+
+const { user } = useAuthState();
+
+/** The reader's claims, off the same token the server decides by; undefined
+ * until it has been read, so nothing below flashes up for somebody it is not
+ * for. */
+const claims = computedAsync(
+  async () => (await user.value?.getIdTokenResult())?.claims,
+);
+
+/** The entries this reader can open. The owner's own pages refuse every other
+ * administrator (middleware/owner.ts), so for them a row there would only be
+ * a way in to a 403; the strip's „Admin” menu hides them the same way. */
+const listedSubpages = computed(() =>
+  subpages.filter((page) => !page.ownerOnly || claims.value?.owner === true),
+);
 
 /** The rows of the two-column list from md, which reads down the first
  * column before the second: half the entries, rounded up. A fixed count let
  * one entry more open an implicit third column. */
-const subpageRows = Math.ceil(subpages.length / 2);
+const subpageRows = computed(() => Math.ceil(listedSubpages.value.length / 2));
 
 /** The window the panel calls "this week". The stats page lets an admin widen
  * it; here it is fixed, because the question is "who is around right now". */
 const WEEKLY_DAYS = 7;
 
-const { user } = useAuthState();
-
 /** An administrator who is not on trial - the only one /aktywnosc will show
  * who is. The page's middleware lets in anybody holding `admin`, trial
  * administrators too, and for them the "Nowi administratorzy" link led to a
- * list that quietly ignored the filter. Read off the same token the server
- * decides by; false until it has been read, so the link never flashes up for
- * somebody it is not for. */
-const established = computedAsync(async () => {
-  const claims = (await user.value?.getIdTokenResult())?.claims;
-  return claims?.admin === true && claims.newAdmin !== true;
-}, false);
+ * list that quietly ignored the filter. */
+const established = computed(
+  () => claims.value?.admin === true && claims.value.newAdmin !== true,
+);
 
 const summary = ref<AdminSummary | null>(null);
 const weekly = ref<ActivityStats | null>(null);

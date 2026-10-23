@@ -89,10 +89,6 @@ useRobotsRule(
   text-decoration: underline;
 }
 
-.blog-post__title {
-  line-height: 1.25;
-}
-
 .blog-post__lead {
   line-height: 1.5;
   color: rgb(var(--v-theme-ink-neutral));

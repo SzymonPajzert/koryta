@@ -262,7 +262,7 @@ const headText = computed(() => {
   content: "";
   position: absolute;
   inset: -1px;
-  border: 1px solid var(--k-line-strong);
+  border: 1px solid var(--k-line);
   border-radius: inherit;
   background: rgb(var(--v-theme-surface));
   pointer-events: none;

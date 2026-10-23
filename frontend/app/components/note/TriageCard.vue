@@ -112,8 +112,8 @@
       <div class="px-4 py-2 text-caption text-medium-emphasis">
         {{
           row.note
-            ? "Brak źródła – oceń po samej treści."
-            : "Brak treści i źródła – oceń w tabeli."
+            ? "Brak źródła - oceń po samej treści."
+            : "Brak treści i źródła - oceń w tabeli."
         }}
       </div>
     </template>

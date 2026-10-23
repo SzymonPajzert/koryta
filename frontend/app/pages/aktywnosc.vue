@@ -19,36 +19,14 @@
              its card, and a rail that scrolls would cut it off. -->
         <div class="activity__filters">
           <div>
-            <!-- The kinds wrap rather than slide: a sideways-scrolling row on a
-                 phone cut the last chip in half with nothing to say more were
-                 there. -->
-            <v-chip-group
-              v-model="kindGroup"
-              mandatory
-              column
-              selected-class="activity__kind--on"
-              class="py-0"
-            >
-              <v-chip
-                :value="ALL_KINDS"
-                variant="outlined"
-                class="activity__kind"
-              >
-                Wszystko
-              </v-chip>
-              <v-chip
-                v-for="group in kindGroupOptions"
-                :key="group"
-                :value="group"
-                variant="outlined"
-                class="activity__kind"
-              >
-                {{ feedKindGroupLabels[group] }}
-              </v-chip>
-            </v-chip-group>
+            <!-- The same row of views as on /qa and /admin/opinie: one kind
+                 at a time, or all of them. -->
+            <FeedbackFilterChips v-model="kindGroup" :options="kindChips" />
 
             <!-- Who, rather than what: a row of its own under the kinds, so it
-                 never wraps behind a divider that has nothing left of it. -->
+                 never wraps behind a divider that has nothing left of it. Its
+                 chips are drawn like the kinds, with the `filter-chip` class
+                 FeedbackFilterChips defines. -->
             <div
               v-if="feed || personLabel"
               class="d-flex flex-wrap align-center ga-2 mt-1"
@@ -60,7 +38,7 @@
               <v-chip
                 v-if="feed?.identified"
                 :variant="showingNewAdmins ? 'flat' : 'outlined'"
-                class="activity__kind"
+                class="filter-chip"
                 :class="{
                   'bg-surface-warning text-ink-warning': showingNewAdmins,
                 }"
@@ -80,7 +58,7 @@
               <v-chip
                 v-if="feed && !personFilter"
                 variant="outlined"
-                class="activity__kind"
+                class="filter-chip"
                 :prepend-icon="
                   hideMine ? mdiCheckboxMarked : mdiCheckboxBlankOutline
                 "
@@ -197,7 +175,7 @@
             variant="tonal"
             density="compact"
             class="mb-4"
-            text="W tym okresie było więcej, niż zdążyliśmy przejrzeć – lista jest niepełna."
+            text="W tym okresie było więcej, niż zdążyliśmy przejrzeć - lista jest niepełna."
           />
 
           <!-- A badge and two lines, the shape of the timeline it stands in
@@ -301,6 +279,16 @@ const WIDEN_BELOW = 10;
 const WIDE_RANGE: FeedRange = 30;
 
 const kindGroupOptions = Object.keys(feedKindGroups) as FeedKindGroup[];
+
+/** The row of kinds over the feed: everything, or one group of them. */
+const kindChips: { value: FeedKindGroup | typeof ALL_KINDS; title: string }[] =
+  [
+    { value: ALL_KINDS, title: "Wszystko" },
+    ...kindGroupOptions.map((group) => ({
+      value: group,
+      title: feedKindGroupLabels[group],
+    })),
+  ];
 
 const days = ref<FeedRange>(defaultFeedRange);
 
@@ -730,22 +718,6 @@ const dayGroups = computed(() => {
   font-size: var(--k-meta-size);
   line-height: 1.45;
   margin: 0;
-}
-
-/* Quiet until picked: a row of five outlined capitals was the loudest thing
-   on the page, louder than the lines it filters. Picked, a chip takes the
-   header's sage with the ink that reads on it, so the one that is on is also
-   the one that stands out. */
-.activity__kind {
-  border-color: var(--k-line-strong);
-  color: rgb(var(--v-theme-ink-neutral));
-}
-
-.activity__kind--on {
-  background: rgb(var(--v-theme-primary));
-  border-color: transparent;
-  color: rgb(var(--v-theme-ink-strong));
-  font-weight: 500;
 }
 
 /* Vuetify lets the chip shrink but not its content, so the label cannot

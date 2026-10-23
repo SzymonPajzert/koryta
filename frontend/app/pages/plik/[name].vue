@@ -42,11 +42,9 @@ useSeoMeta({
   line-height: 1.6;
 }
 
+/* Size, weight and line height are the site's h1 (assets/css/type.css). */
 .content-styles h1 {
-  font-size: 2.5rem;
-  font-weight: 500;
   margin-bottom: 32px;
-  line-height: 1.2;
 }
 
 .content-styles h2 {

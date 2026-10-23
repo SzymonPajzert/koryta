@@ -2,7 +2,7 @@
   <div class="w-100">
     <AdminPageHead
       title="Zadania"
-      lead="Co zostało do wdrożenia, uruchomienia, zdecydowania i zbudowania – i co na co czeka."
+      lead="Co zostało do wdrożenia, uruchomienia, zdecydowania i zbudowania - i co na co czeka."
       info="Agenci dopisują tu to, co zostawiają po sesji."
     >
       <template #actions>
@@ -250,8 +250,8 @@
               strzałkę, żeby ją usunąć. Przycisk w rogu karty zwija w stos
               wszystko, co prowadzi tylko do niej, a ten obok zostawia na mapie
               tylko ją i to, na co czeka. Cele i stosy są też na pasku nad mapą
-              – strzałkę można upuścić tam. Wypełniona etykieta „Pilne” albo
-              „Ważne” to priorytet zadania, obrysowana – wzięty od zadania albo
+              - strzałkę można upuścić tam. Wypełniona etykieta „Pilne” albo
+              „Ważne” to priorytet zadania, obrysowana - wzięty od zadania albo
               celu, który na nie czeka.
             </InfoBubble>
           </span>

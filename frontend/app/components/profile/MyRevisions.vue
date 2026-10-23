@@ -1,17 +1,11 @@
 <template>
   <v-card>
     <!-- "Approved is not yet published" goes in the bubble rather than in a
-         footnote under the list: the rows it applies to say so themselves.
-         Only the words are the h2, as on /profil's visibility card: inside
-         it, the bubble's „Co to jest: …” would be read out as part of the
-         heading's name. -->
-    <v-card-title class="text-wrap">
-      <h2 class="card-heading">Twoje propozycje zmian</h2>
-      <InfoBubble label="Twoje propozycje zmian">
-        Zatwierdzenie zmiany to jeszcze nie publikacja – stronę publikuje
-        redakcja osobno.
-      </InfoBubble>
-    </v-card-title>
+         footnote under the list: the rows it applies to say so themselves. -->
+    <ProfileCardTitle title="Twoje propozycje zmian">
+      Zatwierdzenie zmiany to jeszcze nie publikacja — stronę publikuje redakcja
+      osobno.
+    </ProfileCardTitle>
     <v-card-subtitle v-if="subtitle" class="text-wrap">
       {{ subtitle }}
     </v-card-subtitle>
@@ -86,11 +80,11 @@
              anything" would be a guess about the 299th record back. -->
         <template v-if="truncated">
           Wśród {{ SCAN_CAP }} ostatnich zapisów na Twoim koncie nie ma nic
-          zgłoszonego ręcznie – starsze są poza tym zestawieniem.
+          zgłoszonego ręcznie — starsze są poza tym zestawieniem.
         </template>
         <template v-else>
           Nie zgłosiłeś jeszcze żadnej zmiany. Na każdej stronie jest przycisk
-          „Zaproponuj zmianę” – poprawka jednego nazwiska też się liczy.
+          „Zaproponuj zmianę” — poprawka jednego nazwiska też się liczy.
         </template>
       </v-alert>
 
@@ -200,7 +194,7 @@
         v-if="truncated && anyProposals"
         class="text-body-2 text-medium-emphasis mt-2"
       >
-        Wczytaliśmy {{ SCAN_CAP }} najnowszych zapisów na Twoim koncie – starsze
+        Wczytaliśmy {{ SCAN_CAP }} najnowszych zapisów na Twoim koncie — starsze
         są poza tym zestawieniem.
       </div>
     </v-card-text>
@@ -213,7 +207,7 @@ import { mdiClose, mdiEarth } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
 // Imported rather than auto-imported, as in PageSection: the card's unit test
 // mounts it bare, without Nuxt's component resolver.
-import InfoBubble from "../InfoBubble.vue";
+import ProfileCardTitle from "./CardTitle.vue";
 import { polishCounting } from "~/composables/polish";
 import { formatDaysAgo } from "~/utils/chartTheme";
 import {
@@ -335,7 +329,7 @@ const subtitle = computed(() => {
     const head = `${polishCounting(waiting, "propozycja czeka", "propozycje czekają", "propozycji czeka")} na redakcję.`;
     return mailWillBeSent.value
       ? `${head} Odezwiemy się mailem, gdy ktoś się ${waiting === 1 ? "nią" : "nimi"} zajmie.`
-      : `${head} Decyzję zobaczysz tutaj – powiadomienia mailem masz wyłączone.`;
+      : `${head} Decyzję zobaczysz tutaj — powiadomienia mailem masz wyłączone.`;
   }
   if (anyProposals.value)
     return "Wszystko, co zgłosiłeś, zostało rozpatrzone. Dzięki!";
@@ -397,19 +391,6 @@ const rowName = (row: Proposal) =>
 </script>
 
 <style scoped>
-/* The title's words at its own 16/600 - Vuetify's reset leaves an h2 the
-   browser's 1.5em - and inline, so the bubble follows the last word. The
-   generated space is the gap before it: Vue drops the newline between `</h2>`
-   and the bubble. Same rule as /profil's visibility card. */
-.card-heading {
-  display: inline;
-  font: inherit;
-}
-
-.card-heading::after {
-  content: " ";
-}
-
 /* The name and its status take whatever the date leaves, and may shrink below
    their content so a long name wraps inside the card instead of pushing the
    date off it. */
