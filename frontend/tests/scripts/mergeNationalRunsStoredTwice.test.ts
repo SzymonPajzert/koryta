@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   planRuns,
   removalReason,
-} from "../../scripts/migrate/merge-national-runs-stored-twice";
+} from "../../scripts/migrate/archive/merge-national-runs-stored-twice";
 import type {
   RunPlan,
   StoredEdge,

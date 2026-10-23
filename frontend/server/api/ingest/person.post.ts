@@ -730,7 +730,7 @@ async function createElection(
  * of them removed as „duplikat” because a misfiled one reads as a copy of any
  * other run of its year and powiat; and on the 2026-10-23 export 168 Sejm and
  * Senate runs had been stored twice already, from before this moved them too
- * (scripts/migrate/merge-national-runs-stored-twice.ts folds those). A sejmik
+ * (scripts/migrate/archive/merge-national-runs-stored-twice.ts folded those). A sejmik
  * run was stored at home the same way, as „Samorząd”, and is moved where it is
  * the year's only local run (`misfiledSejmikRunOf`); the ones already stored
  * twice are merge-local-runs-stored-twice.ts's.

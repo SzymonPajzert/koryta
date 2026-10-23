@@ -570,7 +570,7 @@ export function isSameRun(stored: EdgeLike, incoming: EdgeLike): boolean {
  * Shared by the ingest, which moves such a copy to the district instead of
  * storing the run again (`moveMisfiledCandidacy` in
  * server/api/ingest/person.post.ts), and by
- * scripts/migrate/merge-national-runs-stored-twice.ts, which folds together the
+ * scripts/migrate/archive/merge-national-runs-stored-twice.ts, which folds together the
  * runs stored twice before it did. `_misfiled_candidacy` in
  * data/pipelines/src/analysis/payloads/site.py is the planner's copy. */
 export function misfiledRunOf(

@@ -3823,7 +3823,7 @@ describe("api/ingest/person, a district's candidacy filed under the candidate's 
 
     it("moves nothing once the run is stored in its district as well", async () => {
       // The 168 stored twice before this: folding them is
-      // scripts/migrate/merge-national-runs-stored-twice.ts's job.
+      // scripts/migrate/archive/merge-national-runs-stored-twice.ts's job.
       sejmAtHome();
       store.edges!["in-district"] = {
         ...store.edges!["at-home"],
