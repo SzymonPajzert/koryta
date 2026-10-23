@@ -71,6 +71,9 @@ ROLE_LEVELS = {
     "KCLrkr8nKyU7CCeLRX5JCnZAmmA2": Level.ADMIN,
     "xUDXyj7Pj7PMvDmhTycONTm8UVk2": Level.ADMIN,
     "GYEHjkUOC1OYB5QdI8fkKJuxaDC2": Level.ADMIN,
+    "ZGK3O2lhRTb7JnVpizafVOE7h0Q2": Level.ADMIN,
+    "C396iW7EHYU6t6qrSAomPXG3J3o1": Level.ADMIN,
+    "eqL3l9WOqsQj8VAfMdBqa7of6Lj2": Level.ADMIN,
 }
 
 # Administrators on trial. They hold `admin` like any other, plus `newAdmin`,
@@ -103,6 +106,9 @@ NEW_ADMINS = {
     "KCLrkr8nKyU7CCeLRX5JCnZAmmA2",
     "xUDXyj7Pj7PMvDmhTycONTm8UVk2",
     "GYEHjkUOC1OYB5QdI8fkKJuxaDC2",
+    "ZGK3O2lhRTb7JnVpizafVOE7h0Q2",
+    "C396iW7EHYU6t6qrSAomPXG3J3o1",
+    "eqL3l9WOqsQj8VAfMdBqa7of6Lj2",
 }
 
 # The site's owner. `owner` is what opens his task list, /admin/zadania, and
