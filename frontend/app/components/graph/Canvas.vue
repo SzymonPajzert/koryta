@@ -80,9 +80,17 @@
     </template>
   </v-network-graph>
 
-  <div v-else class="d-flex justify-center" width="100%">
-    <v-progress-circular indeterminate />
-    Ładuję...
+  <!-- While the layout settles: one quiet status in the middle of the
+       canvas, the spinner over its word. They used to touch, along the top
+       edge of an empty 520px panel, which read as a broken page rather than
+       one still loading - and two hops of a busy person take long enough to
+       be seen. -->
+  <div
+    v-else
+    class="d-flex flex-column align-center justify-center ga-3 fill-height text-medium-emphasis"
+  >
+    <v-progress-circular indeterminate size="28" width="3" />
+    <span class="text-body-2">Ładuję...</span>
   </div>
 </template>
 

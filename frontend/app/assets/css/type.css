@@ -22,7 +22,17 @@
    components' styles, so they are plain here too - which leaves a utility
    written in the markup (`font-weight-bold`, `text-body-1`) the last word.
    A component with type of its own keeps it in its scoped styles, on the
-   same scale. */
+   same scale.
+
+   The footer is left out: it stays exactly as it was before the redesign
+   (Szymon, 2026-10-16). Each rule here that would change how it looks - the
+   tracking, a button's indent, the body and caption line heights, a
+   paragraph's wrapping - ends in `:where(:not(.v-footer *))`, which adds
+   nothing to the rule's weight, so Vuetify's own values still apply there
+   rather than copies of them, which would go stale. Two rules do reach it,
+   because they draw it the same: sentence case, which its labelled buttons
+   already ask for with `text-none`, and tabular figures, which Roboto's
+   digits already are. */
 
 :root {
   /* the page's one title, an h1 */
@@ -57,7 +67,8 @@
 
 /* Vuetify tracks its type for Roboto's upper case. Sentence case wants none.
    A list of the classes that carry tracking, not a blanket `*`: first its
-   typography utilities, whose tracking is `!important`... */
+   typography utilities, whose tracking is `!important`... The footer's
+   column heads and its copyright line keep Vuetify's. */
 :is(.v-application, .v-overlay-container)
   :is(
     .text-h1,
@@ -77,11 +88,12 @@
     .text-caption,
     .text-overline,
     .text-button
-  ) {
+  ):where(:not(.v-footer *)) {
   letter-spacing: normal !important;
 }
 
-/* ...then its components, whose tracking is a plain rule. */
+/* ...then its components, whose tracking is a plain rule. The footer's
+   links keep Vuetify's button tracking. */
 :is(.v-application, .v-overlay-container)
   :is(
     .v-btn,
@@ -97,19 +109,14 @@
     .v-data-table__th,
     .v-field,
     .v-label
-  ) {
+  ):where(:not(.v-footer *)) {
   letter-spacing: normal;
 }
 
-/* ...but not in the footer, which stays exactly as it was before the
-   redesign (Szymon, 2026-10-16): its links keep Vuetify's button tracking. */
-.v-application .v-footer .v-btn {
-  letter-spacing: 0.0892857143em;
-}
-
 /* The indent Vuetify adds to a button balances its tracking; with no
-   tracking it only pushes the label off centre. */
-:is(.v-application, .v-overlay-container) .v-btn {
+   tracking it only pushes the label off centre. The footer's tracked links
+   keep it. */
+:is(.v-application, .v-overlay-container) .v-btn:where(:not(.v-footer *)) {
   text-indent: 0;
 }
 
@@ -122,7 +129,9 @@
   text-wrap: balance;
 }
 
-:is(.v-application, .v-overlay-container) :is(p, .k-lead, .v-card-text) {
+/* Not the footer's sentence, which keeps the line breaks it had. */
+:is(.v-application, .v-overlay-container)
+  :is(p, .k-lead, .v-card-text):where(:not(.v-footer *)) {
   text-wrap: pretty;
 }
 
@@ -236,13 +245,15 @@
 /* ---- body, UI text and meta ----
 
    Vuetify's body classes are on the scale already (16, 14, 12); only their
-   line heights change. */
+   line heights change - outside the footer, whose column heads and copyright
+   line keep Vuetify's 1.5 and 1.667, and with them its height. */
 :is(.v-application, .v-overlay-container)
   :is(.text-subtitle-1, .text-subtitle-2) {
   line-height: 1.4;
 }
 
-:is(.v-application, .v-overlay-container) .text-body-1 {
+:is(.v-application, .v-overlay-container)
+  .text-body-1:where(:not(.v-footer *)) {
   line-height: 1.55;
 }
 
@@ -273,7 +284,8 @@
   font-weight: 500;
 }
 
-:is(.v-application, .v-overlay-container) .text-caption {
+:is(.v-application, .v-overlay-container)
+  .text-caption:where(:not(.v-footer *)) {
   line-height: 1.45;
 }
 
