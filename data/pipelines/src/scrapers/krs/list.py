@@ -11,6 +11,8 @@ from pandas import DataFrame
 from entities.company import KRS, Owner, Source, short_name
 from entities.company import Company as KrsCompany
 from entities.person import KRS as KrsPerson
+from entities.person import PERSON_FEED
+from scrapers.krs.coverage import parse_person_connections_url
 from scrapers.krs.data import (
     REGON_PUBLIC_IDENTITY,
     REGON_PUBLIC_OWNERSHIP,
@@ -104,8 +106,9 @@ class Post:
 #: numbered n. `ScrapeRejestrIO.people_to_scrape` reads them only to leave them
 #: out - a page's name matching one buys nothing - and `companies_to_scrape`
 #: takes no company off a feed bought for one before 2026-10-10.
+OSOBA = "osoba"
 WITHOUT_PESEL = "osoba-bez-pesel"
-PERSON_TYPES = frozenset({"osoba", WITHOUT_PESEL})
+PERSON_TYPES = frozenset({OSOBA, WITHOUT_PESEL})
 
 
 def posts_held(item: dict, unknown: typing.Counter[str] | None = None) -> list[Post]:
@@ -178,25 +181,35 @@ def extract_people(ctx: Context):
     The cost of that choice is that superseded blobs are still fetched. On the
     mirror path they arrive inside one archive and are free; on the fallback
     path this is the egress an earlier version of this function avoided.
+
+    A person's own feed, ``osoby/<id>``, bought for the people the site
+    follows, tells the same posts from the person's side: every company the
+    person is tied to, each with the person's connections to it. Where a
+    company feed was read, it is the company's word on all of its people and
+    the person's posts are among them; where none was - a company only a
+    person feed names, queued for a crawl or an odpis of its own - the
+    person's feed is all there is, and the posts are taken from it, newest
+    crawl first as everywhere here (`posts_from_person_feeds`).
     """
     unknown_relations: typing.Counter[str] = collections.Counter()
     # subject -> (crawl date, the rows that crawl produced). Keyed by the query
     # with its `date=` removed, which is what identifies the thing crawled.
     latest: dict[str, tuple[str, list[KrsPerson]]] = {}
+    # The companies a company feed was read for, whatever it listed.
+    covered: set[str] = set()
+    # Person feeds, the same way: subject -> (crawl date, rejestr.io id, the
+    # posts the feed states, each with its company).
+    feeds: dict[str, tuple[str, str, list[tuple[str, Post]]]] = {}
 
     for blob_name, blob in ctx.io.read_many(CloudStorage(prefix="hostname=rejestr.io")):
         if "aktualnosc_" not in blob_name:
             continue
-        if "/osoby/" in blob_name:
-            # A person's own feed answers "which companies is this person tied
-            # to", so it holds only `organizacja` entries and never yielded a
-            # row here - 4,198 documents parsed for nothing. What is in them is
-            # used, just elsewhere: `companies_to_scrape` reads them to find
-            # companies worth crawling, and `PersonFeedCoverage` reads the
-            # register entry numbers to tell whether the feed is stale.
+        person_feed = "/osoby/" in blob_name
+        person = parse_person_connections_url(blob_name) if person_feed else None
+        if person_feed and person is None:
             continue
         subject, date = split_crawl_date(blob_name)
-        seen = latest.get(subject)
+        seen = feeds.get(subject) if person_feed else latest.get(subject)
         if seen is not None and seen[0] >= date:
             # A crawl this one supersedes. Skipped before parsing rather than
             # after, so the work is proportional to the companies, not to how
@@ -213,6 +226,13 @@ def extract_people(ctx: Context):
         except json.JSONDecodeError as e:
             print(f"  [ERROR] Could not process {blob_name}: {e}")
             raise e
+        if person is not None:
+            feeds[subject] = (
+                date,
+                person[0],
+                posts_at_companies(data, unknown_relations),
+            )
+            continue
         people: list[KrsPerson] = []
         try:
             for item in data:
@@ -241,8 +261,13 @@ def extract_people(ctx: Context):
             print(f"  [ERROR] Could not process {blob_name}: {e}")
             continue
         latest[subject] = (date, people)
+        if "org/" in blob_name:
+            covered.add(KRS.from_blob_name(blob_name).id)
 
     outputs = [person for _, people in latest.values() for person in people]
+    outputs += posts_from_person_feeds(
+        [feeds[subject] for subject in sorted(feeds)], outputs, covered
+    )
 
     if unknown_relations:
         # rejestr.io grew a kind of connection nobody has classified. Dropping
@@ -251,6 +276,118 @@ def extract_people(ctx: Context):
         print(f"Unclassified rejestr.io relations: {dict(unknown_relations)}")
 
     return DataFrame.from_records([dataclasses.asdict(d) for d in outputs])
+
+
+def posts_at_companies(
+    data: typing.Any, unknown: typing.Counter[str] | None = None
+) -> list[tuple[str, Post]]:
+    """The posts a person feed states, each with its company's KRS number.
+
+    A person feed lists `organizacja` entries, one per company the person is
+    tied to, and under each the person's connections to it, as a company
+    feed lists the company's people (`posts_held`). An entry with no KRS
+    number names no company the pipelines can hold.
+    """
+    posts = []
+    for item in data if isinstance(data, list) else []:
+        if not isinstance(item, dict) or item.get("typ") != "organizacja":
+            continue
+        krs = (item.get("numery") or {}).get("krs")
+        if not krs:
+            continue
+        for post in posts_held(item, unknown):
+            posts.append((str(krs).zfill(10), post))
+    return posts
+
+
+def posts_from_person_feeds(
+    feeds: typing.Iterable[tuple[str, str, list[tuple[str, Post]]]],
+    people: typing.Sequence[KrsPerson],
+    covered: typing.Collection[str],
+) -> list[KrsPerson]:
+    """The rows the bought person feeds give, at the companies no company feed
+    was read for (`covered`), each `feeds` entry being (crawl date, rejestr.io
+    id, the posts with their companies).
+
+    Only there: a company feed is the company's word on all of its people, and
+    two sources for one company would state each post twice and could not
+    both be the newest. Measured on the 2026-10-21 night, the feeds of the
+    1,003 people bought stated 7,713 posts, and 1,248 of them were at
+    companies with no company feed: rejestr.io's company feeds are no longer
+    bought, so such a company waited for its odpis, and the post with it, a
+    night at the least, for good if no odpis came. Replayed on that night's
+    data, these rows are 1,236 posts at 1,091 companies, and 763 of them, at
+    the 682 companies no odpis was on file for, reach `PeopleKRSCombined`.
+
+    A person feed names its person by the id alone. The name, birth date and
+    sex are those of the person's own rows from the company feeds, the newest
+    crawl's: a feed is bought for somebody those rows already know, and an
+    id they know only as an ``osoba-bez-pesel`` entry is somebody else
+    (`PERSON_TYPES`). A person they do not know at all gives no rows, and the
+    run says how many.
+
+    The rows say they came from a person feed (`KrsPerson.rejestrio_feed`): an
+    odpis of the company stands in for them, whatever its day, and once its
+    own feed is read they are not made at all.
+    """
+    known: dict[str, KrsPerson] = {}
+    for row in people:
+        if row.rejestrio_type == WITHOUT_PESEL:
+            continue
+        held = known.get(row.id)
+        if held is None or (row.crawled_on or "", row.employed_krs) > (
+            held.crawled_on or "",
+            held.employed_krs,
+        ):
+            known[row.id] = row
+
+    rows: list[KrsPerson] = []
+    made: set[tuple[str, str, Post]] = set()
+    unknown_people: set[str] = set()
+    feeds_read = 0
+    for date, id, posts in feeds:
+        feeds_read += 1
+        uncovered = [(krs, post) for krs, post in posts if krs not in covered]
+        who = known.get(id)
+        if who is None:
+            if uncovered:
+                unknown_people.add(id)
+            continue
+        for krs, post in uncovered:
+            if (id, krs, post) in made:
+                continue
+            made.add((id, krs, post))
+            rows.append(
+                KrsPerson(
+                    id=id,
+                    first_name=who.first_name,
+                    last_name=who.last_name,
+                    full_name=who.full_name,
+                    birth_date=who.birth_date,
+                    second_names=who.second_names,
+                    sex=who.sex,
+                    rejestrio_type=OSOBA,
+                    employed_krs=krs,
+                    employed_start=post.start,
+                    employed_end=post.end,
+                    employed_for=post.years,
+                    employed_role=post.role,
+                    crawled_on=date,
+                    rejestrio_feed=PERSON_FEED,
+                )
+            )
+    print(
+        f"Person feeds: {feeds_read:,} read; {len(rows):,} posts at "
+        f"{len({row.employed_krs for row in rows}):,} companies no company feed "
+        f"was read for, of {len({row.id for row in rows}):,} people"
+        + (
+            f"; {len(unknown_people):,} people with such posts left out, known to "
+            f"no company feed: {', '.join(sorted(unknown_people, key=int)[:20])}"
+            if unknown_people
+            else ""
+        )
+    )
+    return rows
 
 
 def is_owned_by_queried(item: dict, unknown: typing.Counter[str] | None = None) -> bool:
