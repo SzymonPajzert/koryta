@@ -30,12 +30,12 @@
           </span>
           <span
             v-if="fields"
-            class="arow-side text-body-2 text-medium-emphasis"
+            class="arow-side queue-row__fields text-body-2 text-medium-emphasis"
             :title="fields"
           >
             {{ fields }}
           </span>
-          <span class="arow-side flex-shrink-0 text-body-2" :title="who">
+          <span class="arow-side queue-row__who text-body-2" :title="who">
             {{ who }}
           </span>
           <span class="arow-fixed text-caption text-medium-emphasis">
@@ -238,3 +238,30 @@ const comparisonTo = computed(() =>
     : null,
 );
 </script>
+
+<style scoped>
+/* The author keeps its whole name beside the fields: it is what a reviewer
+ * sorts by, and what „Bez moich” filters on. */
+.queue-row__who {
+  flex-shrink: 0;
+}
+
+/* On a phone the tag, the fields, the author and the date share one line, and
+ * an author that would not give way left the fields one letter and an
+ * ellipsis - „b…” for „bez zmian” - beside an e-mail address or an account id
+ * as wide as a third of the screen. There the fields keep their first seven
+ * characters or so (`7ch`, or the whole of a shorter word: the max-content cap
+ * keeps the basis from outgrowing its text), and grow into whatever the line
+ * has left. The author still takes its width first, up to its cap, and gives
+ * way only where the line cannot hold both. */
+@media (max-width: 599.98px) {
+  .queue-row__fields {
+    flex: 1 0 7ch;
+    max-width: max-content;
+  }
+
+  .queue-row__who {
+    flex-shrink: 1;
+  }
+}
+</style>

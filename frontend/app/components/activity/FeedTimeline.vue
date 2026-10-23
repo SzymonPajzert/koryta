@@ -249,7 +249,7 @@ const emit = defineEmits<{ "select-actor": [actor: FeedActor] }>();
 const { xs } = useDisplay();
 const targetsShown = computed(() => (xs.value ? 3 : 5));
 
-/** Below this a batch reads as one moment: a range "14:18–14:20" says nothing
+/** Below this a batch reads as one moment: a range "14:18-14:20" says nothing
  * a single time does not. */
 const RANGE_FROM_MS = 5 * 60 * 1000;
 
@@ -309,7 +309,7 @@ function timeOf(batch: FeedBatch): string {
   const last = new Date(batch.lastAt);
   const end = CLOCK.format(last);
   return last.getTime() - first.getTime() > RANGE_FROM_MS
-    ? `${CLOCK.format(first)}–${end}`
+    ? `${CLOCK.format(first)}-${end}`
     : end;
 }
 
@@ -407,8 +407,10 @@ function reasons(batch: FeedBatch) {
   padding-bottom: 0;
 }
 
+/* A connector, not an edge, so not the .24 hairline (`--k-line`): at twice
+   an edge's width that made the rail the heaviest line on the page. */
 .ft-item::before {
-  background: var(--k-line);
+  background: rgba(var(--v-border-color), 0.12);
   bottom: 0;
   content: "";
   left: calc(var(--ft-badge) / 2 - 1px);

@@ -35,7 +35,11 @@
     />
 
     <!-- A row of controls, not a record, so no card round it. The window is
-         the site's neutral segmented toggle, as on /eksploruj/statystyki. -->
+         the site's neutral segmented toggle, as on /eksploruj/statystyki. The
+         views are the row of chips /admin/opinie and /qa pick theirs from,
+         sage when on: Vuetify's grey chips with a tick slid sideways on a
+         phone, cutting the last one in half, where these wrap. A view's chip
+         is `[data-filter="none"]` and so on, inside `searches-view`. -->
     <div class="d-flex align-center flex-wrap ga-3 mb-4">
       <SegmentedToggle v-model="days" data-testid="searches-days">
         <v-btn
@@ -47,20 +51,28 @@
           {{ option }} dni
         </v-btn>
       </SegmentedToggle>
-      <v-chip-group v-model="view" mandatory>
-        <v-chip value="all" filter>Wszystkie</v-chip>
-        <v-chip value="none" filter data-testid="searches-view-none">
-          Bez wyników
-        </v-chip>
-        <v-chip value="unverified" filter>Tylko niezweryfikowane</v-chip>
-      </v-chip-group>
-      <v-switch
-        v-model="signedOutOnly"
-        label="Tylko niezalogowani"
-        density="compact"
-        hide-details
-        color="primary"
+      <FeedbackFilterChips
+        v-model="view"
+        :options="VIEW_OPTIONS"
+        data-testid="searches-view"
       />
+      <!-- On or off over whichever view is on, so a box to tick rather than
+           one more view, drawn as /aktywnosc draws „Ukryj moje zmiany”: quiet
+           either way, the box saying which. It was a switch, whose 16px label
+           stood out of a row of 14px chips. -->
+      <v-chip
+        variant="outlined"
+        class="filter-chip"
+        :prepend-icon="
+          signedOutOnly ? mdiCheckboxMarked : mdiCheckboxBlankOutline
+        "
+        role="checkbox"
+        :aria-checked="signedOutOnly"
+        data-testid="searches-signed-out"
+        @click="signedOutOnly = !signedOutOnly"
+      >
+        Tylko niezalogowani
+      </v-chip>
       <v-spacer />
       <div v-if="summary" class="text-caption text-medium-emphasis">
         {{
@@ -88,8 +100,7 @@
         :headers="headers"
         :items="shownRows"
         :loading="pending"
-        no-data-text="Nikt jeszcze niczego takiego nie szukał."
-        loading-text="Ładowanie..."
+        :hide-default-body="shownRows.length === 0"
         :items-per-page="-1"
         hide-default-footer
         data-testid="searches-table"
@@ -99,6 +110,20 @@
             shortDate(item.lastAt.slice(0, 10))
           }}</span>
         </template>
+        <!-- With no rows, loading or none to show, the sentence goes under
+             the head and outside the part that scrolls, from the start edge.
+             As the table's own row it was centred on the table's whole width,
+             which a phone scrolls sideways: „Nikt jeszcze niczeg”, cut at
+             the screen's edge. -->
+        <template #bottom>
+          <p v-if="shownRows.length === 0" class="px-4 py-2">
+            {{
+              pending
+                ? "Ładowanie..."
+                : "Nikt jeszcze niczego takiego nie szukał."
+            }}
+          </p>
+        </template>
       </v-data-table>
     </div>
   </div>
@@ -106,7 +131,11 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { mdiArrowLeft } from "@mdi/js";
+import {
+  mdiArrowLeft,
+  mdiCheckboxBlankOutline,
+  mdiCheckboxMarked,
+} from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { polishCounting } from "~/composables/polish";
 import { shortDate } from "~~/shared/dates";
@@ -143,8 +172,16 @@ const headers = [
   { title: "Ostatnio", key: "lastAt", width: 120 },
 ];
 
+type View = "all" | "none" | "unverified";
+
+const VIEW_OPTIONS: { value: View; title: string }[] = [
+  { value: "all", title: "Wszystkie" },
+  { value: "none", title: "Bez wyników" },
+  { value: "unverified", title: "Tylko niezweryfikowane" },
+];
+
 const days = ref<number>(30);
-const view = ref<"all" | "none" | "unverified">("all");
+const view = ref<View>("all");
 const signedOutOnly = ref(false);
 const summary = ref<SearchesSummary | null>(null);
 const pending = ref(false);
