@@ -5,7 +5,7 @@ import {
   isSameRun,
   misfiledRunOf,
   type EdgeLike,
-} from "../../server/utils/edges";
+} from "../../../server/utils/edges";
 import {
   argValue,
   byId,
@@ -18,8 +18,8 @@ import {
   type RunPlan,
   type SkippedRun,
   type StoredEdge,
-} from "./fold-candidacies";
-import { reportRemaining } from "./remaining";
+} from "../fold-candidacies";
+import { reportRemaining } from "../remaining";
 
 /**
  * Fold together the Sejm, Senate and European Parliament runs stored twice:
@@ -98,7 +98,7 @@ import { reportRemaining } from "./remaining";
  * Usage, from frontend/ (the server tsconfig resolves nothing this needs, but
  * it is what `check:archived-migrations` runs every script under):
  *   npx tsx --tsconfig .nuxt/tsconfig.server.json \
- *     scripts/migrate/merge-national-runs-stored-twice.ts                  # dry run, emulator
+ *     scripts/migrate/archive/merge-national-runs-stored-twice.ts                  # dry run, emulator
  *   ... merge-national-runs-stored-twice.ts --commit                       # apply, emulator
  *   ... merge-national-runs-stored-twice.ts --prod                         # dry run, PRODUCTION
  *   ... merge-national-runs-stored-twice.ts --prod --commit --limit 10     # the first ten
