@@ -1,13 +1,28 @@
 <template>
   <div class="mailing-page w-100">
-    <h1 class="text-h5 text-sm-h4 mb-2">Mailing</h1>
-    <p class="text-body-2 text-medium-emphasis mb-4">
-      Kampanie do osób z kontem. Admini dostają je jako wiadomość dla zespołu,
-      pozostali tylko wtedy, gdy zapisali się na temat kampanii - w profilu albo
-      w okienku, które pokazujemy zalogowanym. Każda osoba dostaje jedną
-      kampanię najwyżej raz, więc można ją najpierw wysłać na próbę, poprawić, a
-      dopiero potem rozesłać szerzej.
-    </p>
+    <!-- The admin pages' head: the way back as a named link above the title,
+         the lede's first sentence under it and the rest behind the (i). The
+         page was added after the admin pages got that head, with one of its
+         own: no way back, and the title over three sentences of 14px. -->
+    <AdminPageHead title="Mailing" lead="Kampanie do osób z kontem.">
+      <template #back>
+        <v-btn
+          variant="text"
+          size="small"
+          :prepend-icon="mdiArrowLeft"
+          to="/admin"
+        >
+          Panel administracyjny
+        </v-btn>
+      </template>
+      <template #info>
+        Admini dostają je jako wiadomość dla zespołu, pozostali tylko wtedy, gdy
+        zapisali się na temat kampanii - w profilu albo w okienku, które
+        pokazujemy zalogowanym. Każda osoba dostaje jedną kampanię najwyżej raz,
+        więc można ją najpierw wysłać na próbę, poprawić, a dopiero potem
+        rozesłać szerzej.
+      </template>
+    </AdminPageHead>
 
     <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
       {{ loadError }}
@@ -143,17 +158,12 @@
             <div class="text-body-2 mb-2" data-campaign-preview-subject>
               <strong>Temat:</strong> {{ preview.mail?.subject || "—" }}
             </div>
-            <v-btn-toggle
-              v-model="previewFormat"
-              density="compact"
-              variant="outlined"
-              divided
-              mandatory
-              class="mb-2"
-            >
+            <!-- A neutral two-way view switch, so the site's segmented
+                 control rather than an outlined toggle. -->
+            <SegmentedToggle v-model="previewFormat" class="mb-2">
               <v-btn value="html">Wiadomość</v-btn>
               <v-btn value="text">Sam tekst</v-btn>
-            </v-btn-toggle>
+            </SegmentedToggle>
             <v-alert
               v-if="preview.error"
               type="error"
@@ -246,8 +256,7 @@
           density="compact"
           :items-per-page="-1"
           hide-default-footer
-          no-data-text="Nikogo tu nie ma."
-          loading-text="Ładowanie..."
+          :hide-default-body="filteredRows.length === 0"
           data-audience-table
         >
           <template #[`item.name`]="{ item }">
@@ -313,6 +322,16 @@
               </div>
             </template>
             <span v-else class="text-medium-emphasis">—</span>
+          </template>
+          <template #bottom>
+            <!-- With no one to list, loading or none left after the filters,
+                 the sentence goes under the head and outside the part that
+                 scrolls, from the start edge, as on /admin/krawedzie: as the
+                 table's own row it was centred on the table's whole width,
+                 which a phone scrolls sideways. -->
+            <p v-if="filteredRows.length === 0" class="px-4 py-2">
+              {{ pending ? "Ładowanie..." : "Nikogo tu nie ma." }}
+            </p>
           </template>
         </v-data-table>
       </v-card-text>
@@ -405,7 +424,13 @@
 </template>
 
 <script setup lang="ts">
-import { mdiEmailCheckOutline, mdiMagnify, mdiPlus, mdiSend } from "@mdi/js";
+import {
+  mdiArrowLeft,
+  mdiEmailCheckOutline,
+  mdiMagnify,
+  mdiPlus,
+  mdiSend,
+} from "@mdi/js";
 import { useAuthState } from "@/composables/auth";
 import { mailingError, useMailing } from "~/composables/mailing";
 import { polishCountingGenitive } from "~/composables/polish";

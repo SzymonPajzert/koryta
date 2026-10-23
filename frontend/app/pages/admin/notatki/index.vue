@@ -45,9 +45,13 @@
     </v-alert>
 
     <!-- The filters are controls over the table, not a record of their own, so
-         they sit on the page rather than in a card. On a phone the four
+         they sit on the page rather than in a card. On a phone the two short
          selects go two to a line: stacked one above the other they were five
-         fields, about 260px, before the first note. -->
+         fields, about 260px, before the first note. „Typ zgłoszenia” and
+         „Status” take a line each there: at half a phone's width the first
+         was cut to „Typ zgłoszen…”, and once it has a line of its own,
+         „Status” has one either way - the whole of it rather than half,
+         beside a gap. -->
     <div v-else class="mb-4">
       <v-row dense>
         <v-col cols="12" md="4">
@@ -83,7 +87,7 @@
             clearable
           />
         </v-col>
-        <v-col cols="6" md="2">
+        <v-col cols="12" sm="6" md="2">
           <v-select
             v-model="filterAdminType"
             :items="adminTypeFilterOptions"
@@ -94,7 +98,7 @@
             clearable
           />
         </v-col>
-        <v-col cols="6" md="2">
+        <v-col cols="12" sm="6" md="2">
           <v-select
             v-model="filterStatus"
             :items="statusFilterOptions"

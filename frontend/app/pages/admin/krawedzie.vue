@@ -75,8 +75,7 @@
         :headers="headers"
         :items="rows"
         :loading="pending"
-        :no-data-text="emptyText"
-        loading-text="Ładowanie…"
+        :hide-default-body="rows.length === 0"
         items-per-page="-1"
         class="edges-queue"
         data-testid="edges-queue-table"
@@ -103,19 +102,30 @@
             {{ item.targetName || item.targetId }}
           </nuxt-link>
         </template>
+        <!-- „—” for a relation with no dates, the sign the other admin pages
+             put in an empty cell: a lone hyphen read as a stray mark. -->
         <template #[`item.dates`]="{ item }">
           <span class="text-caption">
             {{
               relationPeriodLabel(
                 item.start_date ?? undefined,
                 item.end_date ?? undefined,
-              ) || "-"
+              ) || "—"
             }}</span
           >
         </template>
-        <!-- Only when there is more to read: an empty band under the last row
-             otherwise. -->
         <template #bottom>
+          <!-- With no rows, loading or none ready, the sentence goes under the
+               head and outside the part that scrolls, from the start edge. As
+               the table's own row it was centred on the table's whole width,
+               which a phone scrolls sideways: „Ładowanie…” stood far right of
+               the screen's middle, and the sentence for an empty queue ran
+               off its edge. -->
+          <p v-if="rows.length === 0" class="px-4 py-2">
+            {{ pending ? "Ładowanie…" : emptyText }}
+          </p>
+          <!-- Only when there is more to read: an empty band under the last
+               row otherwise. -->
           <div v-if="nextCursor" class="d-flex justify-center pa-3">
             <v-btn
               variant="text"
