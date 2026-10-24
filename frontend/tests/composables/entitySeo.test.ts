@@ -212,6 +212,30 @@ describe("entityDescription for a company, from its rows", () => {
     expect(text.match(/Adam Fronczak/g)).toHaveLength(1);
   });
 
+  it("names somebody once in an organ, however many copies are stored", () => {
+    const copy = edge({ ...bosakowski });
+    // A post with no role, beside the seat that has one.
+    const roleless = edge({ ...bosakowski, name: "", start_date: undefined });
+    // Somebody whose only post has no role is still listed.
+    const nowak = edge({
+      type: "employed",
+      name: "",
+      richNode: person("Jan Nowak"),
+    });
+    expect(
+      entityDescription(bionanopark, 4, [bosakowski, copy, roleless, nowak]),
+    ).toBe(
+      "BIONANOPARK (Łódź). Zarząd: Romuald Bosakowski (PO), od 28 sierpnia 2026. Inne funkcje: Jan Nowak.",
+    );
+  });
+
+  it("names somebody under each organ they sit on", () => {
+    const supervising = edge({ ...bosakowski, name: "Rada Nadzorcza" });
+    expect(entityDescription(bionanopark, 2, [bosakowski, supervising])).toBe(
+      "BIONANOPARK (Łódź). Zarząd: Romuald Bosakowski (PO), od 28 sierpnia 2026. Rada Nadzorcza: Romuald Bosakowski (PO), od 28 sierpnia 2026.",
+    );
+  });
+
   it("calls a hospital's supervisory seat by the organ's own name", () => {
     const hospital = node({
       type: "place",
@@ -320,6 +344,29 @@ describe("entityDescription for a person, from their rows", () => {
     expect(
       entityDescription(bosakowski, 1, [at("BIONANOPARK (Łódź)", "")]),
     ).toBe("Romuald Bosakowski (PO). Obecnie: BIONANOPARK (Łódź).");
+  });
+
+  it("names a company once, with every role held there", () => {
+    const roleless = edge({ ...now, name: "", start_date: undefined });
+    const typedIn = edge({ ...now, name: "zarząd", start_date: undefined });
+    const director = edge({
+      ...now,
+      name: "dyrektor finansowy",
+      start_date: "2026-01-15",
+    });
+    // Dated from the first of them: since when they hold a post there.
+    expect(
+      entityDescription(bosakowski, 4, [roleless, typedIn, director, now]),
+    ).toBe(
+      "Romuald Bosakowski (PO). Obecnie: BIONANOPARK (Łódź, Zarząd, dyrektor finansowy), od 15 stycznia 2026.",
+    );
+  });
+
+  it("does not date a post the register gave only a month for", () => {
+    const monthOnly = edge({ ...now, start_date: "2025-12" });
+    expect(entityDescription(bosakowski, 1, [monthOnly])).toBe(
+      "Romuald Bosakowski (PO). Obecnie: BIONANOPARK (Łódź, Zarząd).",
+    );
   });
 
   it("counts the employers there is no room to name, latest first", () => {

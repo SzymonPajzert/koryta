@@ -2,7 +2,7 @@ import type { Person, Company, Article, Region, Topic } from "~~/shared/model";
 import { asArray } from "~~/shared/model";
 import { OTHER_PARTY } from "~~/shared/misc";
 import { displayRole } from "~~/shared/companyBodies";
-import { longDate } from "~~/shared/dates";
+import { isoDay, longDate } from "~~/shared/dates";
 import { relationsPlural, type EdgeNode } from "~/composables/edges";
 import { polishCounting } from "~/composables/polish";
 
@@ -176,16 +176,28 @@ function withParties(name: string, parties?: string[]): string {
   return listed.length ? `${named} (${listed.join(", ")})` : named;
 }
 
-/** A company and the post somebody holds there, the role in parentheses -
+/** A company and the posts somebody holds there, the roles in parentheses -
  * inside the ones the name already has, where it has some: „BIONANOPARK
  * (Łódź, Zarząd)”. Not „Zarząd w BIONANOPARK”: a register name stays in the
  * nominative it is written in, and after „w” that reads as a mistake - „Rada
  * Nadzorcza w ZAKŁAD UNIESZKODLIWIANIA ODPADÓW”. */
-function withRole(where: string, role: string | undefined): string {
-  if (!role) return where;
+function withRoles(where: string, roles: readonly string[]): string {
+  if (!roles.length) return where;
+  const said = roles.join(", ");
   return where.endsWith(")")
-    ? `${where.slice(0, -1)}, ${role})`
-    : `${where} (${role})`;
+    ? `${where.slice(0, -1)}, ${said})`
+    : `${where} (${said})`;
+}
+
+/** Each role once, however it was capitalised: „Rada Nadzorcza” from the
+ * register and „rada nadzorcza” typed in beside it are one seat. */
+function distinctRoles(roles: readonly (string | undefined)[]): string[] {
+  const seen = new Map<string, string>();
+  for (const role of roles) {
+    const key = role?.toLocaleLowerCase("pl");
+    if (role && key && !seen.has(key)) seen.set(key, role);
+  }
+  return [...seen.values()];
 }
 
 /** What a lone former post was, for a list with room to say so: ", Zarząd
@@ -223,6 +235,36 @@ function onePerNode(edges: EdgeNode[]): EdgeNode[] {
   });
 }
 
+/** A company and somebody's posts at it, or a person and theirs in one organ. */
+type Held = { node: EdgeNode["richNode"]; posts: EdgeNode[] };
+
+/** Posts held now, gathered by their far end in the order they come. A seat
+ * is often stored twice - the register's copy and one typed in by hand, or a
+ * copy with no role beside one with - and a list naming each copy says one
+ * thing twice: „POLSKA SPÓŁKA GAZOWNICTWA (Tarnów, Zarząd), POLSKA SPÓŁKA
+ * GAZOWNICTWA (Tarnów)”, „Zarząd: Kacper Pietrusiński (PO), Kacper
+ * Pietrusiński (PO)”. */
+function byNode(posts: readonly EdgeNode[]): Held[] {
+  const held = new Map<string, Held>();
+  for (const post of posts) {
+    const key = nodeKey(post);
+    const entry = held.get(key);
+    if (entry) entry.posts.push(post);
+    else held.set(key, { node: post.richNode, posts: [post] });
+  }
+  return [...held.values()];
+}
+
+/** Since when somebody has held a post there: the earliest start among its
+ * copies. A start the register gave as a month or a year alone is passed
+ * over - `longDate` has no day to print and would say „od brak daty”. */
+function heldSince(posts: readonly EdgeNode[]): string | undefined {
+  return posts
+    .map((post) => post.start_date)
+    .filter((day): day is string => isoDay(day) !== null)
+    .toSorted()[0];
+}
+
 const morePeople = (n: number) =>
   `jeszcze ${polishCounting(n, "osoba", "osoby", "osób")}`;
 
@@ -247,9 +289,16 @@ function placeClauses(company: Company, edges: readonly EdgeNode[]): Clause[] {
     .filter((e) => !e.end_date)
     .toSorted(latest((e) => e.start_date));
 
+  // A post with no role adds nothing about somebody already named under an
+  // organ: „Zarząd: Szymon Moś (PO). Inne funkcje: Szymon Moś (PO).”
+  const titled = new Set(
+    current.filter((post) => displayRole(post.name, company)).map(nodeKey),
+  );
   const organs = new Map<string, { role: string; held: EdgeNode[] }>();
   for (const post of current) {
-    const named = displayRole(post.name, company) ?? "Inne funkcje";
+    const title = displayRole(post.name, company);
+    if (!title && titled.has(nodeKey(post))) continue;
+    const named = title ?? "Inne funkcje";
     // A heading: "pracuje" is stored lower case, "Zarząd" is not.
     const role = named.charAt(0).toLocaleUpperCase("pl") + named.slice(1);
     const key = role.toLocaleLowerCase("pl");
@@ -261,16 +310,16 @@ function placeClauses(company: Company, edges: readonly EdgeNode[]): Clause[] {
   const clauses = [...organs.values()]
     .toSorted((a, b) => organRank(a.role) - organRank(b.role))
     .map(({ role, held }): Clause => {
-      const [only] = held;
+      const people = byNode(held);
+      const [only] = people;
+      const since =
+        people.length === 1 && only ? heldSince(only.posts) : undefined;
       return {
         head: `${role}: `,
-        items: held.map((e) =>
-          withParties(e.richNode.name, (e.richNode as Person).parties),
+        items: people.map(({ node }) =>
+          withParties(node.name, (node as Person).parties),
         ),
-        tail:
-          held.length === 1 && only?.start_date
-            ? `, od ${longDate(only.start_date)}`
-            : undefined,
+        tail: since ? `, od ${longDate(since)}` : undefined,
         rest: morePeople,
       };
     });
@@ -309,20 +358,23 @@ function personClauses(edges: readonly EdgeNode[]): Clause[] {
   const current = posts
     .filter((e) => !e.end_date)
     .toSorted(latest((e) => e.start_date));
-  if (current.length) {
-    const [only] = current;
+  // One entry per company, with every role held there.
+  const places = byNode(current);
+  if (places.length) {
+    const [only] = places;
+    const since =
+      places.length === 1 && only ? heldSince(only.posts) : undefined;
     clauses.push({
       head: "Obecnie: ",
-      items: current.map((e) =>
-        withRole(
-          oneLine(e.richNode.name),
-          displayRole(e.name, e.richNode as Company),
+      items: places.map(({ node, posts }) =>
+        withRoles(
+          oneLine(node.name),
+          distinctRoles(
+            posts.map((post) => displayRole(post.name, node as Company)),
+          ),
         ),
       ),
-      tail:
-        current.length === 1 && only?.start_date
-          ? `, od ${longDate(only.start_date)}`
-          : undefined,
+      tail: since ? `, od ${longDate(since)}` : undefined,
       rest: (n) =>
         `jeszcze ${polishCounting(n, "stanowisko", "stanowiska", "stanowisk")}`,
     });
