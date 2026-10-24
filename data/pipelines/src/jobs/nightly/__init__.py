@@ -188,6 +188,10 @@ EXIT_FAILED = 1
 #: files/domain_to_region.json the VM does not hold; only ArticlePersonMentions
 #: reads it. PeopleScoreCoverage reads every export since August, one more each
 #: day, for a question asked by hand; nothing in the night reads it.
+#: BipUrlsClassified and BipDocumentsParsed read the BIP crawl's queue, a
+#: Postgres of its own the VM does not run either. The crawl left the night on
+#: 2026-10-23 and runs by hand, so there is nothing new here for them to read.
+#: On 2026-10-24 they failed the reprocess and held the people and scores.
 EXCLUDED = (
     "KorytaDiffer",
     "PeopleScoreCoverage",
@@ -202,6 +206,8 @@ EXCLUDED = (
     "ArticleFactsVerified",
     "ArticleKoryciarskiScores",
     "PeopleAffairTags",
+    "BipUrlsClassified",
+    "BipDocumentsParsed",
 )
 
 #: Held at what is on disk, or restored from the shared cache when nothing is:

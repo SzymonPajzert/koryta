@@ -27,7 +27,7 @@ order, each with a time limit and its output in the night's log:
 | `krs_odpis`    | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing public --max 300`: odpisy pełne, see below                                 |
 | `krs_paid`     | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give                                      |
 | `rebuild_held` | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)                                     |
-| `reprocess`    | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch and the slow static sources (`HELD`)                            |
+| `reprocess`    | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch, the BIP documents and the slow static sources (`HELD`)         |
 | `tests`        | `pytest src/tests/pipelines` over the night's outputs                                                                                              |
 | `outputs`      | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                                                 |
 | `invariants`   | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                                                |
@@ -486,6 +486,8 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 - `test_rejestrio_coverage.py`: it walks the whole rejestr.io prefix twice, an
   hour and a half - by hand only, as in CI.
 - The article crawl.
+- The BIP crawl (`koryta_scrape_bip`, by hand), nor the two pipelines that
+  classify and parse what it fetched: they read its Postgres queue.
 
 ## Files
 

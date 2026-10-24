@@ -249,6 +249,12 @@ jobs:
               ArticleFactsVerified
               ArticleKoryciarskiScores
               PeopleAffairTags
+              # The BIP documents read the BIP crawl's queue, a Postgres of
+              # its own the runner has neither: the same PoolTimeout. Both
+              # are named, as BipDocumentsParsed reads BipUrlsClassified and
+              # each is on the top-level list.
+              BipUrlsClassified
+              BipDocumentsParsed
               # Both read every stored odpis, one object at a time -- ~8,300
               # PDFs, the better part of an hour on a cold runner -- and the
               # seats need the PESEL key, which the runner does not hold.
