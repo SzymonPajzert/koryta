@@ -98,8 +98,9 @@ const pages: {
     file: "[seoType]/[slug]",
     // Both sections are filled from /api/edges/successions after the page
     // renders, so capturing before it lands catches a page with two empty
-    // headings on it.
-    settled: ["Kto kogo zastąpił", "2 zmiany tego samego dnia"],
+    // headings on it. The second is the head of the seed's one same-day
+    // batch, the layout most likely to break.
+    settled: ["Kto kogo zastąpił", "2 zmiany tego dnia"],
     // „stan na” over the current board, and every open post's „2 lata na
     // stanowisku”, count from a today that CompanyChanges.vue fixes at render
     // - on the server, for a page the server sends. So the shot changed every

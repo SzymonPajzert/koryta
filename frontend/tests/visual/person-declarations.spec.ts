@@ -2,6 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./test";
 import type { NodeMentions } from "../../server/api/nodes/[id]/mentions.get";
 import type { PersonDeclarations } from "../../shared/declarations";
+import { longDate } from "../../shared/dates";
 import { freezeClock } from "./clock";
 import { readyForElementShot } from "./elementShot";
 import {
@@ -84,16 +85,15 @@ async function openPerson(
   await openInApp(page, path);
 }
 
-/** The card at the head of the page, around the line under the facts. */
+/** The head of the page, around the line under the facts. */
 async function header(page: Page): Promise<Locator> {
   const line = page.getByTestId("person-declarations-pointer");
   await expect(line).toBeVisible({ timeout: 30_000 });
-  // The birth date the line vouches for, which only the laid-over answer has.
-  const card = line.locator(
-    "xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' v-card ')][1]",
-  );
-  await expect(card).toContainText(declarationPerson.birthDate);
-  return card;
+  // The birth date the line vouches for, which only the laid-over answer has,
+  // in the facts line over it: „ur. 14 marca 1968”.
+  const head = line.locator("xpath=ancestor::header[1]");
+  await expect(head).toContainText(longDate(declarationPerson.birthDate));
+  return head;
 }
 
 /** The section of articles and declarations under `title`, with the site icon

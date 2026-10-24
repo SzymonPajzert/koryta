@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { authorizationFor, USERS } from "./helpers/auth";
 import { waitForLoginFormHydrated } from "./helpers/login";
 
@@ -7,6 +7,23 @@ import { waitForLoginFormHydrated } from "./helpers/login";
 const COMPANY = "/instytucja/wojewodzki-zaklad-testowy-sukspolka";
 /** Somebody who took a seat over from a named predecessor on the same day. */
 const SUCCESSOR = "/osoba/danuta-obejmujaca-sukdanuta";
+
+/** Open the „(i)” by a section's head and wait for `inside` to show in it.
+ *
+ * What a section explains rather than counts - how the pairs are made, what
+ * was left out and why - stands behind that „(i)”, in a tooltip that is not in
+ * the document at all until it opens. Hovered rather than clicked: where the
+ * pointer can hover the bubble opens on hover too, and a click after the hover
+ * is the toggle that shuts it again (`useCanHover`). Retried as a whole, from
+ * off the icon, because a page that arrived server rendered drops the first
+ * hover until Vue has attached its listeners. */
+async function openInfo(page: Page, section: Locator, inside: Locator) {
+  await expect(async () => {
+    await page.mouse.move(0, 0);
+    await section.getByTestId("section-info").hover();
+    await expect(inside).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 20_000 });
+}
 
 test.describe("Kto kogo zastąpił", () => {
   test("a company page names who took over from whom", async ({ page }) => {
@@ -20,36 +37,47 @@ test.describe("Kto kogo zastąpił", () => {
     );
     await expect(page.getByText("KRS:")).toBeVisible({ timeout: 30_000 });
 
-    // Who sits there now, split by the role the register files them under.
-    await expect(page.locator("text=Obecny skład")).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page.locator(".v-main")).toContainText("Franciszek Następny");
+    // Who sits there now, split by the role the register files them under...
+    const board = page.getByTestId("successions-current");
+    await expect(board).toContainText("Obecny skład", { timeout: 30_000 });
+    await expect(board).toContainText("Franciszek Następny");
     // ...and, on the person who took a seat over, who they took it from.
-    await expect(page.locator(".v-main")).toContainText("Edward Poprzedni");
+    await expect(board).toContainText("Edward Poprzedni");
 
-    await expect(page.locator("text=Kto kogo zastąpił")).toBeVisible({
+    // Drawn once: the history under the board leaves today's posts out
+    // (Szymon, 2026-10-23), and keeps the ones that ended.
+    const history = page.getByTestId("relations-history");
+    await expect(history).toContainText("Edward Poprzedni");
+    await expect(history).not.toContainText("Franciszek Następny");
+
+    const relay = page.getByTestId("successions-relay");
+    await expect(relay).toContainText("Kto kogo zastąpił", {
       timeout: 30_000,
     });
 
     // Two supervisory-board seats changed hands on 2024-04-12. The register
     // files that as one decision and the page has to read as one card, not as
-    // two unrelated rows - which is the whole point of the batching.
-    await expect(page.locator(".v-main")).toContainText(
-      "2 zmiany tego samego dnia",
-    );
+    // two unrelated rows - which is the whole point of the batching. „tego
+    // dnia” in the card's head: the gap chip in each row says „tego samego
+    // dnia” already.
+    await expect(relay).toContainText("2 zmiany tego dnia");
     // Both departing members were filed under PiS, which is the tally the
     // batch header carries.
-    await expect(page.locator(".v-main")).toContainText("2 × PiS");
+    await expect(relay).toContainText("2 × PiS");
 
     // A seat that stood empty says how long for, rather than showing a date
     // difference the reader has to work out.
-    await expect(page.locator(".v-main")).toContainText("po 46 dniach przerwy");
+    await expect(relay).toContainText("po 46 dniach przerwy");
 
     // The one handover a logged out reader may not be shown, because the
-    // person who took the seat has no page here. Stated rather than silently
-    // dropped, or the section reads as broken.
-    await expect(page.locator(".v-main")).toContainText(
+    // person who took the seat has no page here. Counted beside the head
+    // rather than silently dropped, or the section reads as broken - and why,
+    // behind its „(i)”.
+    await expect(page.getByTestId("successions-count")).toContainText(
+      "1 pominięta",
+    );
+    await openInfo(page, relay, page.getByTestId("successions-hidden"));
+    await expect(page.getByTestId("successions-hidden")).toContainText(
       "Nie pokazujemy 1 zmiany",
     );
     await expect(page.locator(".v-main")).not.toContainText(
@@ -72,10 +100,26 @@ test.describe("Kto kogo zastąpił", () => {
     await expect(row).toContainText("m.in.");
     await expect(row).toContainText(/Barbara Ustępująca|Adam Ustępujący/);
 
-    // ...and the section that states it, with how much of the history it
-    // covers, so the rows it says nothing about do not read as a bug.
-    await expect(page.locator(".v-main")).toContainText("Zmiany na stanowisku");
-    await expect(page.locator(".v-main")).toContainText("1 z 1 powiązania");
+    // ...and the section that states it: the handover row a company's page
+    // draws too, who left, then who took the seat.
+    const section = page.getByTestId("person-successions");
+    await expect(section).toContainText("Zmiany na stanowisku");
+    await expect(page.getByTestId("person-successions-count")).toContainText(
+      "1 zmiana",
+    );
+    const card = section.getByTestId("succession-predecessor");
+    await expect(card.getByTestId("handover-left")).toContainText(
+      /Barbara Ustępująca|Adam Ustępujący/,
+    );
+    await expect(card.getByTestId("handover-right")).toContainText(
+      "Danuta Obejmująca",
+    );
+
+    // How much of the history it covers, behind the head's „(i)”, so the rows
+    // it says nothing about do not read as a bug.
+    const coverage = page.getByTestId("person-successions-coverage");
+    await openInfo(page, section, coverage);
+    await expect(coverage).toContainText("1 z 1 powiązania");
   });
 
   test("the endpoint withholds a name from a visitor and gives it to an editor", async ({
@@ -145,20 +189,22 @@ test.describe("Kto kogo zastąpił", () => {
     // with nobody signed in.
     await page.reload({ waitUntil: "domcontentloaded" });
 
-    // Scoped to this section, not to `.v-main`. The relation history below it
-    // lists "Grzegorz Bez Strony" too - it comes from the local graph, which
-    // refetches on its own - so asserting against the whole page passes while
-    // the section under test is still showing the redacted answer.
-    const section = page.locator('[data-testid="company-successions"]');
-    await expect(section).toContainText("Kto kogo zastąpił", {
+    // Scoped to the handovers, not to `.v-main`. The page's other lists read
+    // other answers - the relation history comes from the local graph, which
+    // refetches on its own - so asserting against the whole page could pass
+    // while the section under test is still showing the redacted answer.
+    const relay = page.getByTestId("successions-relay");
+    await expect(relay).toContainText("Kto kogo zastąpił", {
       timeout: 30_000,
     });
-    await expect(section).toContainText("Grzegorz Bez Strony", {
+    await expect(relay).toContainText("Grzegorz Bez Strony", {
       timeout: 30_000,
     });
-    await expect(section).not.toContainText("Nie pokazujemy", {
-      timeout: 30_000,
-    });
+    // Nothing left out, so nothing counted as left out beside the head.
+    await expect(page.getByTestId("successions-count")).not.toContainText(
+      "pominięt",
+      { timeout: 30_000 },
+    );
   });
 
   test("a company link leads to the company, not to the table", async ({

@@ -341,23 +341,55 @@ describe("ExtractionPersonFacts", () => {
     });
   });
 
-  it("says in the open that the facts may be wrong, and the rest behind the (i)", async () => {
+  it("says beside the heading that the facts may be wrong, and the rest behind the (i)", async () => {
     // „Ten tekst podobnie jak w notatce powinien być domyślnie schowany bo
     // robi bloat” - four sentences stood between the heading and the cards.
     // The warning is the half a reader needs before trusting a card, so it
-    // stays; how to judge one is a click away.
+    // stays, as the heading's caption; how to judge one is a click away.
     response = { facts: [fact()], total: 1 };
     const section = await mount();
 
-    expect(section.get("[data-testid='person-extractions-lead']").text()).toBe(
-      "Automatycznie wyszukane w prasie - mogą być błędne.",
+    // Signed in, no number: the chips count lines and the note under the
+    // list counts what was fetched, and a third number for the same list was
+    // one too many.
+    expect(section.get("[data-testid='person-extractions-count']").text()).toBe(
+      "wyszukane automatycznie, mogą być błędne",
     );
+    expect(section.find("p.k-lead").exists()).toBe(false);
     expect(section.text()).not.toContain("po imieniu i nazwisku");
 
     await section.get("[data-testid='section-info']").trigger("click");
     await flushPromises();
-    expect(document.body.textContent).toContain("po imieniu i nazwisku");
-    expect(document.body.textContent).toContain("„To nie ta osoba”");
+    const lead = document.querySelector(
+      "[data-testid='person-extractions-lead']",
+    );
+    expect(lead?.textContent).toContain("po imieniu i nazwisku");
+    expect(lead?.textContent).toContain("„To nie ta osoba”");
+    expect(lead?.textContent).toContain("„Utwórz powiązanie”");
+  });
+
+  it("heads the readers' verdicts as groups of the section", async () => {
+    response = {
+      facts: [
+        fact({ id: "open" }),
+        fact({
+          id: "confirmed",
+          party: "Partia Potwierdzona",
+          stats: {
+            votes: { correct: 2, humanVoted: true, humanCount: 2 },
+          } as ExtractionFact["stats"],
+        }),
+      ],
+      total: 2,
+    };
+    const section = await mount();
+
+    // Under the section's h2, so a screen reader can jump between them.
+    for (const key of ["confirmed", "open"]) {
+      const head = section.get(`[data-testid='person-extractions-${key}']`);
+      expect(head.element.tagName).toBe("H3");
+      expect(head.classes()).toContain("k-group-head");
+    }
   });
 
   it("renders nothing at all when the person has no matched facts", async () => {
@@ -727,27 +759,59 @@ describe("ExtractionPersonFacts", () => {
 
       const count = section.find("[data-testid='person-extractions-count']");
       expect(count.exists()).toBe(true);
-      expect(count.text()).toContain("3 fakty");
+      // The count is all the section shows, so it leads, with where the
+      // facts are.
+      expect(count.text()).toBe("3 fakty · widoczne po zalogowaniu");
       expect(
         section.find("[data-testid='person-extractions-locked']").exists(),
       ).toBe(true);
       expect(section.text()).toContain("Zaloguj się lub załóż konto");
     });
 
-    it("has no (i) to open, since it explains buttons they are not shown", async () => {
+    it("says behind the (i) why the list is locked, not how to judge it", async () => {
+      // How to judge a fact explains buttons a logged out reader is not
+      // shown; what they are owed is why they cannot read the facts.
       response = { facts: [], total: 3 };
       const section = await mount();
 
-      expect(section.find("[data-testid='section-info']").exists()).toBe(false);
+      await section.get("[data-testid='section-info']").trigger("click");
+      await flushPromises();
+      expect(
+        document.querySelector("[data-testid='person-extractions-why-locked']")
+          ?.textContent,
+      ).toContain("pokazujemy je tylko zalogowanym osobom");
+      expect(
+        document.querySelector("[data-testid='person-extractions-lead']"),
+      ).toBeNull();
     });
 
-    it("declines the Polish plural properly", async () => {
-      response = { facts: [], total: 5 };
-      const section = await mount();
+    it("declines the Polish plural properly, and agrees „widoczny” with one", async () => {
+      const caption = async (total: number) => {
+        clearNuxtData();
+        response = { facts: [], total };
+        const section = await mount();
+        return section.get("[data-testid='person-extractions-count']").text();
+      };
 
-      expect(
-        section.find("[data-testid='person-extractions-count']").text(),
-      ).toContain("5 faktów");
+      expect(await caption(1)).toBe("1 fakt · widoczny po zalogowaniu");
+      expect(await caption(2)).toBe("2 fakty · widoczne po zalogowaniu");
+      expect(await caption(5)).toBe("5 faktów · widoczne po zalogowaniu");
+      expect(await caption(12)).toBe("12 faktów · widoczne po zalogowaniu");
+      expect(await caption(22)).toBe("22 fakty · widoczne po zalogowaniu");
+    });
+
+    it("draws a locked line for each fact found, up to three", async () => {
+      // Three under „1 fakt” showed more than there was.
+      const locked = async (total: number) => {
+        clearNuxtData();
+        response = { facts: [], total };
+        const section = await mount();
+        return section.findAll(".locked__line").length;
+      };
+
+      expect(await locked(1)).toBe(1);
+      expect(await locked(2)).toBe(2);
+      expect(await locked(40)).toBe(3);
     });
 
     it("shows no fact text and no lines at all", async () => {

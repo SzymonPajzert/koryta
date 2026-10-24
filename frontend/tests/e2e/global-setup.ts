@@ -28,7 +28,7 @@ const PUBLIC_ROUTES = [
   // The /entity/:type/:id form of the same page, which redirects to the slug
   // url above - one spec follows that redirect on purpose.
   "/entity/person/1",
-  // Orlen, seeded as node 2: the place whose "Graf połączeń" button the local
+  // Orlen, seeded as node 2: the place whose "Graf powiązań" button the local
   // graph spec follows into /graf.
   "/graf?miejsce=2",
   "/pomoc",

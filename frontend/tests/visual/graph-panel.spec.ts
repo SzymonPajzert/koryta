@@ -21,8 +21,8 @@ import { pageTag } from "./pageTags";
  *   - "Opisy powiązań", off by default, which writes the relation along each
  *     line when it is on.
  *
- * Desktop only. Below sm the company page keeps its graph behind a "Graf
- * połączeń" button, so there is no bar on a phone to photograph.
+ * Desktop only. Below md the company page keeps its graph behind a „Pokaż
+ * graf powiązań” button, so there is no bar on a phone to photograph.
  */
 
 /** The company the seed gives a full board, a seat and an owner: employment

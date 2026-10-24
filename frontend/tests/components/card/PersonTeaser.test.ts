@@ -63,6 +63,9 @@ describe("CardPersonTeaser", () => {
     const history = wrapper.findComponent(EmploymentHistory);
     expect(history.exists()).toBe(true);
     expect(history.props("unlinkDrafts")).toBe(true);
+    // In the page's ledger form, so the teaser reads as the page it is a
+    // piece of.
+    expect(history.props("ledger")).toBe(true);
     expect(history.props("edges")).toEqual([
       expect.objectContaining({
         id: "job",
@@ -82,8 +85,35 @@ describe("CardPersonTeaser", () => {
     expect(history.text()).toContain("Historia powiązań");
     expect(history.text()).toContain("ENERGA SPÓŁKA AKCYJNA");
     expect(history.text()).toContain("Prezes Zarządu");
-    // The row's chip, read off the company the teaser handed over.
-    expect(history.text()).toContain("Instytucja publiczna");
+    // The ledger's own column: the post is held, from its first day.
+    expect(
+      history
+        .get("[data-testid='edge-period-job'] .history-period__full")
+        .text(),
+    ).toBe("od 01.02.2023");
+    // One post is the whole list, so no group heads it.
+    expect(history.find("h3").exists()).toBe(false);
+    // A public company is what the page is about, so as on the full page no
+    // chip says so: only a company that is not public is marked.
+    expect(history.text()).not.toContain("Instytucja publiczna");
+  });
+
+  it("marks the post's company where it is not a public one", async () => {
+    const wrapper = await mount({
+      ...TEASER,
+      post: {
+        ...TEASER.post!,
+        company: {
+          ...TEASER.post!.company,
+          isPublic: false,
+          isPublicSource: "manual",
+        },
+      },
+    });
+
+    expect(wrapper.findComponent(EmploymentHistory).text()).toContain(
+      "Podmiot prywatny",
+    );
   });
 
   it("labels a post the register named no role for as the history does", async () => {

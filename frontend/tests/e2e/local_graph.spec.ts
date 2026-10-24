@@ -27,7 +27,7 @@ test.describe("Local graph", () => {
     test.setTimeout(60_000); // The force directed layout takes a while to settle
 
     // Orlen, seeded as node 2, in the shape everything linking here uses: the
-    // "Graf połączeń" button on a place and the omni search both name the node
+    // "Graf powiązań" button on a place and the omni search both name the node
     // in `?miejsce=`. The page used to ignore the query and centre on a
     // hardcoded id of "0", which nothing in the data carries, so it drew an
     // empty canvas whatever you clicked.

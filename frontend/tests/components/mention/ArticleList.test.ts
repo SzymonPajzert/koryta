@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
-import { flushPromises } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import { nextTick, ref } from "vue";
 import MentionArticleList from "../../../app/components/mention/ArticleList.vue";
 import type {
@@ -25,6 +25,11 @@ vi.mock("~/composables/auth", () => ({
   authFetch: vi.fn(() => ({ data })),
   authRequest: mockAuthRequest,
 }));
+
+// The (i) bubbles are tooltips teleported to <body>, which outlive their
+// component: one left open by a test would still be in the document for the
+// next.
+enableAutoUnmount(afterEach);
 
 const mention = (
   nodeId: string,
@@ -127,6 +132,27 @@ type ListWrapper = Awaited<ReturnType<typeof mountPersonList>>;
 const title = (wrapper: ListWrapper) =>
   wrapper.get('[data-testid="node-mentions"] h2').text();
 
+/** What the section holds, as its heading's (i) says it. The bubble is a
+ * tooltip teleported to <body>, so it is read from the document once open:
+ * from this activator's own bubble, which its `aria-describedby` names, since
+ * an earlier test's may still be on its way out of the document. */
+async function lead(wrapper: ListWrapper): Promise<string> {
+  const info = wrapper.get(
+    '[data-testid="node-mentions"] [data-testid="section-info"]',
+  );
+  await info.trigger("click");
+  await flushPromises();
+  const bubble = document.getElementById(
+    info.attributes("aria-describedby") ?? "",
+  );
+  return (
+    bubble
+      ?.querySelector('[data-testid="node-mentions-lead"]')
+      ?.textContent.replace(/\s+/g, " ")
+      .trim() ?? ""
+  );
+}
+
 /** Each card of the section, in order: a declaration or an article. A column
  * given `cols` is `.v-col-12`, not `.v-col`, so a column is any child. */
 const cardKinds = (wrapper: ListWrapper) =>
@@ -170,12 +196,12 @@ describe("MentionArticleList on a person's page", () => {
     expect(list.get('[data-testid="node-mentions"]').attributes("id")).toBe(
       "oswiadczenia-majatkowe",
     );
-    // What the section holds, one sentence each.
-    const lead = list.get('[data-testid="node-mentions-lead"]').text();
-    expect(lead).toContain(
+    // What the section holds, one sentence each, behind the heading's (i).
+    const said = await lead(list);
+    expect(said).toContain(
       "Artykuły prasowe wspomniające osobę i dokumenty oświadczeń majątkowych.",
     );
-    expect(lead).toContain(
+    expect(said).toContain(
       "Oświadczenia majątkowe z BIP mają tę samą datę urodzenia co ta osoba.",
     );
   });
@@ -216,10 +242,15 @@ describe("MentionArticleList on a person's page", () => {
       declarations: [twoDeclarations.declarations[1]!],
     });
 
-    expect(title(await mountPersonList("two"))).toBe("Oświadczenia majątkowe");
+    const two = await mountPersonList("two");
+    expect(title(two)).toBe("Oświadczenia majątkowe");
+    // Out of the document before the next one comes in: each mount numbers
+    // its tooltips from zero, so the two bubbles would share an id.
+    two.unmount();
+    await flushPromises();
     const one = await mountPersonList("one");
     expect(title(one)).toBe("Oświadczenie majątkowe");
-    expect(one.get('[data-testid="node-mentions-lead"]').text()).toBe(
+    expect(await lead(one)).toBe(
       "Oświadczenie majątkowe z BIP ma tę samą datę urodzenia co ta osoba.",
     );
   });
