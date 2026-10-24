@@ -63,9 +63,9 @@ export const QA_ITEMS: QaItem[] = [
     title: "Zapowiedź strony osoby mówi, że są możliwe powiązania polityczne",
     description:
       "Na stronie osoby bez opublikowanej strony niezalogowany czytelnik nie wiedział, że mamy o niej jakiekolwiek informacje partyjne. " +
-      "Teraz, gdy partia jest zapisana, obok nazwiska stoi chip „możliwe powiązania” z kłódką, jak w obecnym składzie spółki, a baner wymienia je na początku tego, co pokaże logowanie. Samej partii nadal nie widać.",
+      "Teraz, gdy partia jest zapisana, obok nazwiska stoi szary chip „???” z kolorowymi kropkami, jak w obecnym składzie spółki, a baner wymienia możliwe powiązania polityczne na początku tego, co pokaże logowanie. Samej partii nadal nie widać.",
     steps: [
-      "Wylogowany kliknij w obecnym składzie MPWiK w Kamiennej Górze osobę z chipem „możliwe powiązania”: na jej stronie ten sam chip stoi obok nazwiska, a baner zaczyna się od „Zaloguj się, by zobaczyć możliwe powiązania polityczne”.",
+      "Wylogowany kliknij w obecnym składzie MPWiK w Kamiennej Górze osobę z chipem „???”: na jej stronie ten sam chip stoi obok nazwiska, a baner zaczyna się od „Zaloguj się, by zobaczyć możliwe powiązania polityczne”.",
       "Kliknij chip i zaloguj się: wracasz na stronę tej osoby, już z partią.",
       "Osoba bez zapisanej partii nie ma chipu, a jej baner wygląda jak dotąd.",
     ],
@@ -77,9 +77,9 @@ export const QA_ITEMS: QaItem[] = [
     title: "Strona spółki pokazuje cały obecny skład, a partie po zalogowaniu",
     description:
       "Niezalogowany czytelnik widział w „Obecnym składzie” tylko osoby z opublikowaną stroną, więc ponad połowa stron spółek nie pokazywała nikogo. " +
-      "Teraz widzi wszystkich, którzy zasiadają w spółce, z funkcją i datą powołania. Partii osoby bez opublikowanej strony nie widzi: w jej miejscu stoi szary chip „możliwe powiązania” z kłódką, a pod składem baner z logowaniem. Po zalogowaniu wszystko jest jak dotąd.",
+      "Teraz widzi wszystkich, którzy zasiadają w spółce, z funkcją i datą powołania. Partii osoby bez opublikowanej strony nie widzi: w jej miejscu stoi chip „???” w szarym kolorze chipu „Inne”, z kolorowymi kropkami przy brzegach, a pod składem baner z logowaniem. Po zalogowaniu wszystko jest jak dotąd.",
     steps: [
-      "Wyloguj się i otwórz stronę MPWiK w Kamiennej Górze: w „Obecnym składzie” są też osoby bez opublikowanej strony, przy części z nich chip „możliwe powiązania”, a pod składem baner „Powiązania polityczne po zalogowaniu”.",
+      "Wyloguj się i otwórz stronę MPWiK w Kamiennej Górze: w „Obecnym składzie” są też osoby bez opublikowanej strony, przy części z nich chip „???”, a pod składem baner „Powiązania polityczne po zalogowaniu”.",
       "Kliknij chip albo „Zaloguj się” w banerze i zaloguj się: wracasz na tę samą stronę, a w miejscu chipów stoją partie.",
       "Wylogowany kliknij nazwisko osoby bez opublikowanej strony: otwiera się zapowiedź jej strony z logowaniem.",
       "Na stronie Orlenu osoby z opublikowaną stroną mają swoje partie tak jak dotąd.",

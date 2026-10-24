@@ -4,7 +4,7 @@
       <!-- Headed as the full page heads a person (`EntityDetailsCard`): the
            name, and beside it where the full page puts the party chips, the
            stand-in a company's board shows for the same person when a party
-           is on record - „możliwe powiązania”, leading to the sign in
+           is on record - „???” in the „Inne” grey, leading to the sign in
            (Szymon, 2026-10-24). Never the party itself, which the teaser
            does not carry. -->
       <div class="d-flex flex-wrap align-center ga-2 text-wrap">

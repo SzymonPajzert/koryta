@@ -8,7 +8,7 @@ import { expectFitsThePhone } from "./phoneWidth";
 
 /** A company's „Obecny skład” as a logged out reader finds it: the whole
  * board, unpublished holders too, and where one of them has a party on record
- * the grey „możliwe powiązania” chip in its place, with the sign-in banner
+ * the „???” chip in its place, with the sign-in banner
  * under the board. Szymon picked the spelled-out chip on 2026-10-24.
  *
  * Reached by a client-side navigation, so the board is fetched in the browser
@@ -35,7 +35,7 @@ test(
     await expect(board).toContainText("Krzysztof Stanisław Wielkopolański");
     const chips = board.getByTestId("party-locked");
     await expect(chips).toHaveCount(2);
-    await expect(chips.first()).toHaveText("możliwe powiązania");
+    await expect(chips.first()).toHaveText("???");
     const banner = board.getByTestId("current-party-teaser");
     await expect(banner).toContainText("Przy 2 osobach z obecnego składu");
 

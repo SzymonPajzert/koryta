@@ -77,7 +77,7 @@ test("osoba-niezweryfikowana", SLUG, async ({ page }, testInfo) => {
   await expectFitsThePhone(page, testInfo);
 });
 
-/** The same teaser for a person with a party on record: „możliwe powiązania”
+/** The same teaser for a person with a party on record: the „???” chip
  * beside the name, where the full page puts the party chips, leading to the
  * sign in (Szymon, 2026-10-24). The answer says only that there is a party. */
 test(
@@ -93,7 +93,7 @@ test(
     const teaser = page.getByTestId("person-teaser");
     await expect(teaser).toBeVisible({ timeout: 30_000 });
     const chip = teaser.getByTestId("party-locked");
-    await expect(chip).toHaveText("możliwe powiązania");
+    await expect(chip).toHaveText("???");
     // On the name's line on a computer; on a phone a long name may push it to
     // the next one, whole.
     await expect(chip).toHaveAttribute("href", /powod=partia-osoby/);
