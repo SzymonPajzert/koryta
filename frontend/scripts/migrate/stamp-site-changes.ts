@@ -79,8 +79,8 @@ export const SITE_CHANGES: readonly SiteChange[] = [
   },
   {
     id: "company-boards-unpublished-holders",
-    // The DONE of the prod rollout that carries company-board-unpublished-people.
-    at: null,
+    // rollout-2026-10-24-003, build a72f5751 (3cab5cf), DONE 21:46:02 UTC.
+    at: "2026-10-24T21:46:02Z",
     what:
       "„Obecny skład” lists a company's unpublished current holders to a " +
       "logged-out reader (and so to a crawler), their party behind a sign in.",
