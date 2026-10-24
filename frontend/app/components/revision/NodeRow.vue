@@ -102,7 +102,7 @@ import { computed } from "vue";
 import { mdiCompare, mdiOpenInNew } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
 import { formatDaysAgo } from "~/utils/chartTheme";
-import { nodeLinkUrl } from "~/composables/slugs";
+import { nodeLinkUrl } from "~~/shared/slugs";
 import { polishCounting } from "~/composables/polish";
 import type { NodeType } from "~~/shared/model";
 

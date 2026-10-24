@@ -165,7 +165,7 @@ import {
   mdiPencil,
   mdiPlus,
 } from "@mdi/js";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { noteKindConfig, noteKindOf } from "~/composables/notes";
 import { sourceDomain } from "~/utils/sourceDomain";
 import type { NoteEntryKind, NoteSource } from "~~/shared/model";

@@ -11,7 +11,7 @@ import {
   mdiDotsHorizontal,
   mdiProgressClock,
 } from "@mdi/js";
-import { parseEntityUrlSlug, seoTypes, type SeoType } from "./slugs";
+import { parseEntityUrlSlug, seoTypes, type SeoType } from "~~/shared/slugs";
 import { anonymousRequest, authRequest } from "./auth";
 import { feedbackKindLabels } from "~~/shared/model";
 import type { RowTone } from "./rowTone";

@@ -81,7 +81,7 @@ import { computed } from "vue";
 import { mdiNewspaperVariantOutline } from "@mdi/js";
 import { authFetch, useAuthState } from "~/composables/auth";
 import { useDomainIcon } from "~/composables/useDomainIcon";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type {
   NodeMention,
   NodeMentions,

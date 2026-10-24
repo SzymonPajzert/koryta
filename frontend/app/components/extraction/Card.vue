@@ -126,7 +126,7 @@ import {
   factVoterCount,
   factWrongPersonReports,
 } from "~/utils/extraction";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import {
   ExtractionPromoteButton,
   ExtractionQuote,

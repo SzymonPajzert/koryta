@@ -91,7 +91,7 @@
 import { ref } from "vue";
 import { mdiCheckCircle, mdiCloseCircle, mdiTagOutline } from "@mdi/js";
 import type { Link, NodeType } from "~~/shared/model";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { ArticleRelation } from "~~/server/api/articles/[id]/relations.get";
 
 const props = defineProps<{

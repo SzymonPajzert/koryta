@@ -96,7 +96,7 @@ import {
 } from "@mdi/js";
 import { edgeTypeLabels } from "~/composables/edges";
 import { polishCounting } from "~/composables/polish";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { entityIcon } from "~/utils/entityIcon";
 import type { NodeType } from "~~/shared/model";
 import type { SourcedEdge } from "~~/server/api/edges/byReference.get";

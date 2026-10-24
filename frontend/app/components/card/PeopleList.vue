@@ -92,7 +92,7 @@ import type { PersonRich } from "~~/shared/model";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { polishCounting } from "~/composables/polish";
 import type { Query } from "~~/server/api/nodes/index.get";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 
 const props = defineProps<{
   region: Powiat | undefined;

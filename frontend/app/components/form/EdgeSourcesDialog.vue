@@ -121,7 +121,7 @@ import type {
   EdgeSources,
 } from "~~/server/api/edges/[id]/references.get";
 import { authRequest, useAuthState } from "~/composables/auth";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 
 const props = defineProps<{
   modelValue: boolean;

@@ -264,7 +264,7 @@
 import { computed, ref, watch } from "vue";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { Link, NodeType, Person } from "~~/shared/model";
 import type {
   NodeRelation,

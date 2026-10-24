@@ -67,7 +67,7 @@ import {
   mdiOfficeBuildingOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { Company } from "~~/shared/model";
 
 const props = withDefaults(

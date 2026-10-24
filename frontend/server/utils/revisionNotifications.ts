@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { DocumentReference, Firestore } from "firebase-admin/firestore";
-import { generateEntityUrl } from "~~/app/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { NodeType, Revision } from "~~/shared/model";
 import type {
   NotificationEvent,

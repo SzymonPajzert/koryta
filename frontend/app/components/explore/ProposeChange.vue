@@ -72,7 +72,7 @@
 import { mdiOpenInNew, mdiPencilOutline } from "@mdi/js";
 import { computed, shallowRef } from "vue";
 import type { PersonRich } from "~~/shared/model";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 
 const props = defineProps<{ person: PersonRich }>();
 

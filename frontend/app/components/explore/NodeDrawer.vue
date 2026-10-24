@@ -109,7 +109,7 @@
 import { computed } from "vue";
 import { mdiHistory } from "@mdi/js";
 import { useDisplay } from "vuetify";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { EdgeNode } from "~/composables/edges";
 import type { NodeMaybeRich, PersonRich } from "~~/shared/model";
 import type { PlaceRegion } from "~/utils/companyLocation";

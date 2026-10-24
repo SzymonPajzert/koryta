@@ -256,7 +256,7 @@ import { useCurrentUser } from "vuefire";
 import type { Timestamp } from "firebase-admin/firestore";
 import { useDomainIcon } from "~/composables/useDomainIcon";
 import { useCanCapture, useCaptures } from "~/composables/captures";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { authFetch } from "~/composables/auth";
 import type { ArticleTopics } from "~~/server/api/articles/topics.get";
 

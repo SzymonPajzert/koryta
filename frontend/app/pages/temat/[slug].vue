@@ -114,7 +114,7 @@ import { useCurrentUser } from "vuefire";
 import { authFetch } from "~/composables/auth";
 import { useDomainIcon } from "~/composables/useDomainIcon";
 import { polishCounting } from "~/composables/polish";
-import { parseEntityUrlSlug, generateEntityUrl } from "~/composables/slugs";
+import { parseEntityUrlSlug, generateEntityUrl } from "~~/shared/slugs";
 import { nodeUrlLocation, redirectToNodeUrl } from "~/composables/slugRedirect";
 import { entityDescription, SOCIAL_CARD } from "~/composables/entitySeo";
 import type { TopicArticle, TopicDetail } from "~~/server/api/topics/[id].get";

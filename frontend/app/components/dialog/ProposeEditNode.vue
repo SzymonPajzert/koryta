@@ -229,7 +229,7 @@
 import { ref, reactive, computed, watch } from "vue";
 import { mdiAccountPlusOutline, mdiPencilOutline } from "@mdi/js";
 import { authRequest } from "@/composables/auth";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { parties } from "~~/shared/misc";
 import { asArray, publicSectorKnown, type NodeType } from "~~/shared/model";
 import {

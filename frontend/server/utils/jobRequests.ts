@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { z } from "zod";
-import { generateEntityUrl } from "~~/app/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import {
   JOB_RUNS_COLLECTION,
   PEOPLE_REQUEST,

@@ -185,7 +185,7 @@ import {
 import { computed, ref } from "vue";
 import { useAuthState } from "~/composables/auth";
 import { useNotes } from "~/composables/notes";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { companyIdentifiers } from "~~/shared/identifiers";
 import type { Company } from "~~/shared/model";
 
