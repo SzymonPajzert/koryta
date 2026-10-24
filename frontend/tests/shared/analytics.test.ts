@@ -272,6 +272,8 @@ describe("teaserDestination", () => {
 describe("loginReason", () => {
   it("passes on a reason the site's own links give", () => {
     expect(loginReason("profil-osoby")).toBe("profil-osoby");
+    // The locked parties on a company's board.
+    expect(loginReason("partie-w-skladzie")).toBe("partie-w-skladzie");
   });
 
   it("reports anything else as inne", () => {
