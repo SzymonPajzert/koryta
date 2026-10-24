@@ -59,6 +59,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "sklad-spolki-z-osobami-bez-strony",
+    title: "Strona spółki pokazuje cały obecny skład, a partie po zalogowaniu",
+    description:
+      "Niezalogowany czytelnik widział w „Obecnym składzie” tylko osoby z opublikowaną stroną, więc ponad połowa stron spółek nie pokazywała nikogo. " +
+      "Teraz widzi wszystkich, którzy zasiadają w spółce, z funkcją i datą powołania. Partii osoby bez opublikowanej strony nie widzi: w jej miejscu stoi szary chip „możliwe powiązania” z kłódką, a pod składem baner z logowaniem. Po zalogowaniu wszystko jest jak dotąd.",
+    steps: [
+      "Wyloguj się i otwórz stronę MPWiK w Kamiennej Górze: w „Obecnym składzie” są też osoby bez opublikowanej strony, przy części z nich chip „możliwe powiązania”, a pod składem baner „Powiązania polityczne po zalogowaniu”.",
+      "Kliknij chip albo „Zaloguj się” w banerze i zaloguj się: wracasz na tę samą stronę, a w miejscu chipów stoją partie.",
+      "Wylogowany kliknij nazwisko osoby bez opublikowanej strony: otwiera się zapowiedź jej strony z logowaniem.",
+      "Na stronie Orlenu osoby z opublikowaną stroną mają swoje partie tak jak dotąd.",
+    ],
+    link: "/instytucja/miejskie-przedsiebiorstwo-wodociagow-i-kanalizacji-kamienna-gora-KNZZ2oawiqTbeg8xztLX",
+    area: "public",
+  },
+  {
     id: "opis-w-wyszukiwarce",
     title: "Google i podgląd linku opisują osobę albo spółkę konkretnie",
     description:
