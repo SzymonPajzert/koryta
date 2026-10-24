@@ -4,6 +4,7 @@ import {
   polishCountingGenitive,
   polishCountingGrouped,
   polishNumber,
+  yearsOfWork,
 } from "../../app/composables/polish";
 
 /** The separator `Intl` groups thousands with in Polish. Spelled out so a
@@ -84,5 +85,27 @@ describe("polishCounting", () => {
     expect(polishCounting(5, "osoba", "osoby", "osób")).toBe("5 osób");
     expect(polishCounting(11, "osoba", "osoby", "osób")).toBe("11 osób");
     expect(polishCounting(0, "osoba", "osoby", "osób")).toBe("0 osób");
+  });
+});
+
+describe("yearsOfWork", () => {
+  it("counts whole years, in the form the number takes", () => {
+    expect(yearsOfWork(1)).toBe("1 rok pracy");
+    expect(yearsOfWork(2)).toBe("2 lata pracy");
+    expect(yearsOfWork(5)).toBe("5 lat pracy");
+  });
+
+  it("rounds the fraction away rather than printing it", () => {
+    // The home page's people card printed the raw figure before a fixed
+    // „lat pracy”: „21.8 lat pracy”, with a decimal point where Polish writes
+    // a comma. Rounded, the number picks its own form - „22 lata”, not „22 lat”.
+    expect(yearsOfWork(21.8)).toBe("22 lata pracy");
+  });
+
+  it("says less than a year rather than rounding it to none", () => {
+    // Rounded, four months would read „0 lat pracy” - nobody who worked at
+    // all - and eleven would claim a whole year.
+    expect(yearsOfWork(0.4)).toBe("poniżej roku pracy");
+    expect(yearsOfWork(0.9)).toBe("poniżej roku pracy");
   });
 });

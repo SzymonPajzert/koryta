@@ -223,4 +223,49 @@ describe("HomeExplorer", () => {
       value: "1261",
     });
   });
+
+  it("opens a powiat picked from the list beside the map, and counts it apart", async () => {
+    // The same conversion as a click on the map, under its own `panel`, so
+    // the list's share of the picks can be read apart from the map's.
+    const wrapper = await mount();
+    const card = wrapper.findComponent({ name: "CardPeopleList" });
+    const gdansk = {
+      teryt: "2261",
+      id: "2261",
+      d: "",
+      people: 117,
+      name: "Gdańsk",
+    };
+
+    card.vm.$emit("pick", gdansk);
+    await wrapper.vm.$nextTick();
+
+    expect(trackGoal).toHaveBeenCalledWith("home-explorer:pick", {
+      panel: "map-list",
+      value: "2261",
+    });
+    expect(trackGoal).not.toHaveBeenCalledWith(
+      "home-explorer:pick",
+      expect.objectContaining({ panel: "map" }),
+    );
+    expect(card.props("region")).toEqual(gdansk);
+  });
+
+  it("drops the pick when the card goes back to the list", async () => {
+    const wrapper = await mount();
+    const map = wrapper.findComponent({ name: "ChartPolandMap" });
+    const card = wrapper.findComponent({ name: "CardPeopleList" });
+
+    map.vm.$emit("click", { teryt: "1261", d: "", name: "Kraków" });
+    await wrapper.vm.$nextTick();
+    expect(card.props("region")).toMatchObject({ teryt: "1261" });
+
+    trackGoal.mockClear();
+    card.vm.$emit("reset");
+    await wrapper.vm.$nextTick();
+
+    expect(card.props("region")).toBeUndefined();
+    // Going back is not a pick.
+    expect(trackGoal).not.toHaveBeenCalled();
+  });
 });

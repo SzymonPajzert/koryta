@@ -87,10 +87,9 @@
     <v-skeleton-loader type="list-item-two-line, list-item@5" />
   </v-card>
   <!-- No counts - none computed yet, or the request failed: the instruction
-       this column used to be. Byte-for-byte what it was, and what the e2e seed
-       renders, having no counts: tests/e2e/map_stats.spec.ts waits for
-       "Wybierz region z mapy" to disappear as its proof that a powiat was
-       picked. -->
+       this column used to be, byte for byte. The e2e seed writes counts, so
+       the specs see the list; tests/components/home/RegionsTop.test.ts covers
+       this card. -->
   <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400">
     <v-card-title>Analizuj powiązania</v-card-title>
     <v-card-text>

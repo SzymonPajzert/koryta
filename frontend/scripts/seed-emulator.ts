@@ -9,6 +9,7 @@ import { generateChunksLower } from "../shared/search";
 import { computeEdgeStats } from "../shared/stats";
 import { bodyIsPaidPost } from "../shared/companyBodies";
 import type { Edge } from "../shared/model";
+import { writeRegionStats, type RegionStat } from "../server/utils/regionStats";
 
 import nodes from "./nodes.json";
 import edges from "./edges.json";
@@ -114,6 +115,40 @@ function edgeStatsBySource(
   }
   return bySource;
 }
+
+/**
+ * People per powiat, as the home page's map is coloured by them and the list
+ * beside it ranks them (/api/stats/regions, server/utils/regionStats.ts): the
+ * ten powiaty koryta.pl counted the most people in on 2026-10-24, names and
+ * numbers as it served them.
+ *
+ * Written out rather than computed. Production's come from
+ * /api/stats/computeNodes, which nothing runs against the emulator, and
+ * computed from the fixtures they would be empty: Opole is the one powiat in
+ * nodes.json, and nobody works there. With no counts the list falls back to
+ * the card asking the reader to pick a region on the map, so the e2e specs
+ * would never reach a row and the visual baselines would photograph that card.
+ *
+ * Only the map and that list read this document. It adds no node, so no
+ * other count on the site moves with it. Nobody in the fixtures is behind
+ * these numbers either: a row opens the card of a powiat with no seeded
+ * people, „Nie znaleźliśmy jeszcze osób w tym regionie.” Teryt 1807 is
+ * deliberately not among them. It is the map's first patch, which
+ * tests/e2e/map_stats.spec.ts clicks to check that the map, the card and
+ * /api/nodes agree on a powiat's count - here, that it has nobody.
+ */
+const SEEDED_REGION_PEOPLE: RegionStat[] = [
+  { id: "teryt1465", teryt: "1465", name: "Miasto Warszawa", people: 518 },
+  { id: "teryt2261", teryt: "2261", name: "Gdańsk", people: 117 },
+  { id: "teryt1261", teryt: "1261", name: "Kraków", people: 99 },
+  { id: "teryt3064", teryt: "3064", name: "Poznań", people: 92 },
+  { id: "teryt0264", teryt: "0264", name: "Wrocław", people: 86 },
+  { id: "teryt2469", teryt: "2469", name: "Katowice", people: 75 },
+  { id: "teryt0211", teryt: "0211", name: "Powiat lubiński", people: 61 },
+  { id: "teryt0663", teryt: "0663", name: "Lublin", people: 55 },
+  { id: "teryt1263", teryt: "1263", name: "Tarnów", people: 54 },
+  { id: "teryt0262", teryt: "0262", name: "Legnica", people: 51 },
+];
 
 async function seedDatabase() {
   await waitOn({
@@ -287,6 +322,14 @@ async function seedDatabase() {
   );
 
   await batch.commit();
+  // With the function /api/stats/computeNodes writes it with, so the document
+  // has the shape the endpoint reads. The date is the day the counts were
+  // read, so a re-seeded emulator holds the same document every time.
+  await writeRegionStats(
+    db,
+    SEEDED_REGION_PEOPLE,
+    new Date("2026-10-24T00:00:00.000Z"),
+  );
   console.log("Database seeded successfully!");
 
   console.log((await db.collection("nodes").get()).docs.length, "nodes");
