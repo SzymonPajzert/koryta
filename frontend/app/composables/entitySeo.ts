@@ -176,6 +176,18 @@ function withParties(name: string, parties?: string[]): string {
   return listed.length ? `${named} (${listed.join(", ")})` : named;
 }
 
+/** A company and the post somebody holds there, the role in parentheses -
+ * inside the ones the name already has, where it has some: „BIONANOPARK
+ * (Łódź, Zarząd)”. Not „Zarząd w BIONANOPARK”: a register name stays in the
+ * nominative it is written in, and after „w” that reads as a mistake - „Rada
+ * Nadzorcza w ZAKŁAD UNIESZKODLIWIANIA ODPADÓW”. */
+function withRole(where: string, role: string | undefined): string {
+  if (!role) return where;
+  return where.endsWith(")")
+    ? `${where.slice(0, -1)}, ${role})`
+    : `${where} (${role})`;
+}
+
 /** What a lone former post was, for a list with room to say so: ", Zarząd
  * 2011–2012". Years only - the page prints the days. */
 function formerSpell(
@@ -301,11 +313,12 @@ function personClauses(edges: readonly EdgeNode[]): Clause[] {
     const [only] = current;
     clauses.push({
       head: "Obecnie: ",
-      items: current.map((e) => {
-        const role = displayRole(e.name, e.richNode as Company);
-        const where = oneLine(e.richNode.name);
-        return role ? `${role} w ${where}` : where;
-      }),
+      items: current.map((e) =>
+        withRole(
+          oneLine(e.richNode.name),
+          displayRole(e.name, e.richNode as Company),
+        ),
+      ),
       tail:
         current.length === 1 && only?.start_date
           ? `, od ${longDate(only.start_date)}`
