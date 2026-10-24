@@ -380,7 +380,7 @@ describe("SuccessionCompanyChanges, unpublished holders", () => {
 
     const chips = wrapper.findAll('[data-testid="party-locked"]');
     expect(chips).toHaveLength(1);
-    expect(chips[0]!.text()).toBe("możliwe powiązania");
+    expect(chips[0]!.text()).toBe("???");
     // On the card of the holder whose party is held back, and only there.
     const card = chips[0]!.element.closest(".k-card");
     expect(card?.textContent).toContain("Jan Kowalski");

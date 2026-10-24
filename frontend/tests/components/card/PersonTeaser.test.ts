@@ -187,11 +187,14 @@ describe("CardPersonTeaser", () => {
     );
   });
 
-  it("offers „możliwe powiązania” beside the name where a party is on record", async () => {
+  it("offers the „???” chip beside the name where a party is on record", async () => {
     const wrapper = await mount({ ...TEASER, partyHidden: true });
 
     const chip = wrapper.get('[data-testid="party-locked"]');
-    expect(chip.text()).toBe("możliwe powiązania");
+    expect(chip.text()).toBe("???");
+    expect(chip.attributes("aria-label")).toBe(
+      "Możliwe powiązania polityczne, widoczne po zalogowaniu",
+    );
     expect(chip.attributes("href")).toContain("powod=partia-osoby");
     // In the header, by the name, as the full page puts the party chips.
     expect(chip.element.parentElement?.querySelector("h2")?.textContent).toBe(

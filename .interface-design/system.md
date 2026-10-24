@@ -43,12 +43,15 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   prioritised (2026-09-09). Adopted 2026-10-14.
 - **A person with no party is grey on the graph**, not blue (2026-10-09,
   report wg0ZscDc).
-- **A party a logged-out reader is not shown** is a grey chip in its place:
-  a lock and „możliwe powiązania”, linking to the sign in, with one sign-in
-  banner under the list. Never the party's name or colour. Picked 2026-10-24
-  out of three rendered variants (blurred chip, spelled-out chip, blurred chip
-  without the banner) for the company page's „Obecny skład”, the words his
-  (task pick-the-look-of-the-hidden-parties-on-company-boards-a-b-or).
+- **A party a logged-out reader is not shown** is a chip in its place, as
+  tall as a party chip: „???” in black on the „Inne” chip's grey, with six
+  small dots of the parties' colours at its edges and corners (none under the
+  marks), no icon, linking to the sign in; one sign-in banner under the list.
+  Never the party's name or colour. Picked 2026-10-24 for the company page's
+  „Obecny skład” and an unpublished person's teaser, over rounds of renders:
+  the label („możliwe powiązania”, „partia”, then „???”), the backdrop (blur,
+  party-colour gradients, bands, pie, dense dots) and the icon (lock, question
+  mark, shield, eye).
 
 ## How UI changes are made
 

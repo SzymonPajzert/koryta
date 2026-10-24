@@ -18,7 +18,7 @@
  * says it about them by name.
  *
  * Of a party it says only whether one is on record (`partyHidden`), for the
- * page to offer behind the sign in as „możliwe powiązania” - what a company's
+ * page to offer behind the sign in, as the same „???” chip a company's
  * board says of the same person (Szymon, 2026-10-24).
  *
  * The shape below is the whole of what the endpoint sends, built field by field
