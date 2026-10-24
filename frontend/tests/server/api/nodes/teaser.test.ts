@@ -148,7 +148,14 @@ describe("/api/nodes/[id]/teaser", () => {
         company: { id: "c1", name: "ENERGA", visibility: true },
       },
       employmentCount: 2,
+      // A party is on record; which one is not said.
+      partyHidden: true,
     });
+  });
+
+  it("says nothing of a party where none is on record", async () => {
+    nodes.p1 = { ...nodes.p1, parties: [] };
+    expect(await call()).not.toHaveProperty("partyHidden");
   });
 
   it("never sends the party, a candidacy or anything else on the page", async () => {
@@ -202,6 +209,7 @@ describe("/api/nodes/[id]/teaser", () => {
       id: "p1",
       name: "Jan Kowalski",
       employmentCount: 0,
+      partyHidden: true,
     });
   });
 });

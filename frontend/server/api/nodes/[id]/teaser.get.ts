@@ -91,7 +91,7 @@ export default authCachedEventHandler(async (event): Promise<PersonTeaser> => {
   }
 
   return buildPersonTeaser(
-    { id: personId, name: person.name },
+    { id: personId, name: person.name, parties: person.parties },
     edges,
     companies,
     Date.now(),

@@ -232,6 +232,23 @@ describe("buildPersonTeaser", () => {
     expect(teaser.post?.company.supervisoryBody).toBe("rada-spoleczna");
   });
 
+  it("says that a party is on record, and never which", () => {
+    const teaser = buildPersonTeaser(
+      { ...person, parties: ["PiS", "Inne"] },
+      [],
+      new Map(),
+      TODAY,
+    );
+    expect(teaser.partyHidden).toBe(true);
+    expect(JSON.stringify(teaser)).not.toContain("PiS");
+    expect(
+      buildPersonTeaser({ ...person, parties: [] }, [], new Map(), TODAY),
+    ).not.toHaveProperty("partyHidden");
+    expect(buildPersonTeaser(person, [], new Map(), TODAY)).not.toHaveProperty(
+      "partyHidden",
+    );
+  });
+
   it("says nothing about employment when there is none", () => {
     expect(buildPersonTeaser(person, [], new Map(), TODAY)).toEqual({
       id: "p1",
