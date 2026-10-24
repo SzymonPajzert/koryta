@@ -296,8 +296,30 @@ describe("entityDescription for a person, from their rows", () => {
 
   it("says where they hold a post now, then where they held one", () => {
     expect(entityDescription(bosakowski, 2, [pkp, now])).toBe(
-      "Romuald Bosakowski (PO). Obecnie: Zarząd w BIONANOPARK (Łódź), od 28 sierpnia 2026. Wcześniej: POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Zarząd 2011–2012.",
+      "Romuald Bosakowski (PO). Obecnie: BIONANOPARK (Łódź, Zarząd), od 28 sierpnia 2026. Wcześniej: POLSKIE KOLEJE PAŃSTWOWE (Warszawa), Zarząd 2011–2012.",
     );
+  });
+
+  /** „Rada Nadzorcza w ZAKŁAD UNIESZKODLIWIANIA ODPADÓW” is what „w” in front
+   * of a register name made of it: the name does not decline. */
+  it("names the post after the company, not with „w” in front of it", () => {
+    const at = (name: string, role: string) =>
+      edge({ type: "employed", name: role, richNode: company(name) });
+    expect(
+      entityDescription(bosakowski, 1, [at("SZPITAL PUCKI", "Rada Nadzorcza")]),
+    ).toBe("Romuald Bosakowski (PO). Obecnie: SZPITAL PUCKI (Rada Nadzorcza).");
+    // A role somebody typed in is kept as they typed it.
+    expect(
+      entityDescription(bosakowski, 1, [
+        at("WFOŚIGW Gdańsk", "zastępca prezesa"),
+      ]),
+    ).toBe(
+      "Romuald Bosakowski (PO). Obecnie: WFOŚIGW Gdańsk (zastępca prezesa).",
+    );
+    // A post with no role is just the company.
+    expect(
+      entityDescription(bosakowski, 1, [at("BIONANOPARK (Łódź)", "")]),
+    ).toBe("Romuald Bosakowski (PO). Obecnie: BIONANOPARK (Łódź).");
   });
 
   it("counts the employers there is no room to name, latest first", () => {
@@ -324,7 +346,7 @@ describe("entityDescription for a person, from their rows", () => {
       1,
       [long],
     );
-    expect(text).toContain("MIASTA STOŁECZNEGO.");
+    expect(text).toContain("MIASTA STOŁECZNEGO (Zarząd).");
     expect(text).not.toContain(" od ");
   });
 
