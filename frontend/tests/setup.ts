@@ -78,3 +78,8 @@ vi.mock("@sentry/nuxt", () => ({
   init: vi.fn(),
   replayIntegration: vi.fn(),
 }));
+
+// nuxt-og-image's composables are not auto-imported under vitest, so a page
+// that asks for its social card reaches for a global that is not there and
+// throws on mount. The card's props are tested in tests/composables/ogCard.
+vi.stubGlobal("defineOgImageComponent", vi.fn());
