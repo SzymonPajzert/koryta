@@ -186,4 +186,44 @@ describe("CardPersonTeaser", () => {
       expect.anything(),
     );
   });
+
+  it("offers „możliwe powiązania” beside the name where a party is on record", async () => {
+    const wrapper = await mount({ ...TEASER, partyHidden: true });
+
+    const chip = wrapper.get('[data-testid="party-locked"]');
+    expect(chip.text()).toBe("możliwe powiązania");
+    expect(chip.attributes("href")).toContain("powod=partia-osoby");
+    // In the header, by the name, as the full page puts the party chips.
+    expect(chip.element.parentElement?.querySelector("h2")?.textContent).toBe(
+      "Jan Kowalski",
+    );
+    expect(wrapper.get('[data-testid="person-teaser-more"]').text()).toBe(
+      "Zaloguj się, by zobaczyć możliwe powiązania polityczne, wszystkie 3 stanowiska, źródła i graf powiązań tej osoby.",
+    );
+  });
+
+  it("says nothing of a party where none is on record", async () => {
+    const wrapper = await mount();
+
+    expect(wrapper.find('[data-testid="party-locked"]').exists()).toBe(false);
+    expect(
+      wrapper.get('[data-testid="person-teaser-more"]').text(),
+    ).not.toContain("powiązania polityczne");
+  });
+
+  it("counts the party chip as a teaser of its own", async () => {
+    const wrapper = await mount({ ...TEASER, partyHidden: true });
+
+    expect(trackGoal).toHaveBeenCalledWith("teaser:shown", {
+      surface: "osoba",
+      kind: "partia",
+      from: expect.any(String),
+    });
+    await wrapper.get('[data-testid="party-locked"]').trigger("click");
+    expect(trackGoal).toHaveBeenCalledWith("teaser:click", {
+      surface: "osoba",
+      kind: "partia",
+      mode: "login",
+    });
+  });
 });

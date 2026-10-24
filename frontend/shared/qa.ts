@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "profil-osoby-mozliwe-powiazania",
+    title: "Zapowiedź strony osoby mówi, że są możliwe powiązania polityczne",
+    description:
+      "Na stronie osoby bez opublikowanej strony niezalogowany czytelnik nie wiedział, że mamy o niej jakiekolwiek informacje partyjne. " +
+      "Teraz, gdy partia jest zapisana, obok nazwiska stoi chip „możliwe powiązania” z kłódką, jak w obecnym składzie spółki, a baner wymienia je na początku tego, co pokaże logowanie. Samej partii nadal nie widać.",
+    steps: [
+      "Wylogowany kliknij w obecnym składzie MPWiK w Kamiennej Górze osobę z chipem „możliwe powiązania”: na jej stronie ten sam chip stoi obok nazwiska, a baner zaczyna się od „Zaloguj się, by zobaczyć możliwe powiązania polityczne”.",
+      "Kliknij chip i zaloguj się: wracasz na stronę tej osoby, już z partią.",
+      "Osoba bez zapisanej partii nie ma chipu, a jej baner wygląda jak dotąd.",
+    ],
+    link: "/instytucja/miejskie-przedsiebiorstwo-wodociagow-i-kanalizacji-kamienna-gora-KNZZ2oawiqTbeg8xztLX",
+    area: "public",
+  },
+  {
     id: "sklad-spolki-z-osobami-bez-strony",
     title: "Strona spółki pokazuje cały obecny skład, a partie po zalogowaniu",
     description:

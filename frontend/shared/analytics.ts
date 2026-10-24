@@ -129,10 +129,11 @@ export const GOALS = {
   // What a logged out reader is shown where a page is not theirs to read yet,
   // and the way to sign in for it. One set of goals for every such surface,
   // `surface` and `kind` saying which: an unpublished person's page
-  // (`osoba` / `profil`) and the parties of the unpublished people on a
-  // company's board (`instytucja` / `partia`); the planned lock on hidden
-  // candidacies (task login-teaser-hidden-politics) is meant to send these too -
-  // a property-filtered goal tells them apart on the dashboard. Read in order:
+  // (`osoba` / `profil`), the party on it (`osoba` / `partia`) and the parties
+  // of the unpublished people on a company's board (`instytucja` / `partia`);
+  // the planned lock on hidden candidacies (task login-teaser-hidden-politics)
+  // is meant to send these too - a property-filtered goal tells them apart on
+  // the dashboard. Read in order:
   // search:pick -> teaser:shown -> teaser:click -> login:success, and against
   // teaser:continued for the readers who went on without signing in. Whoever
   // has none of the last three after teaser:shown stopped there.
@@ -157,7 +158,7 @@ export const GOALS = {
   // --- Signing in ---------------------------------------------------------
   "login:success": {
     description:
-      "Somebody signed in or created an account, on /login or in the sign-in dialog. `mode` is `login` or `signup`. `from` is the reason the link to /login carried (`powod`), from the closed list in `LOGIN_REASONS` - `profil-osoby` is a teaser on an unpublished person's page, `partie-w-skladzie` the hidden parties on a company's board - or `inne`. A session restored on page load does not count.",
+      "Somebody signed in or created an account, on /login or in the sign-in dialog. `mode` is `login` or `signup`. `from` is the reason the link to /login carried (`powod`), from the closed list in `LOGIN_REASONS` - `profil-osoby` is a teaser on an unpublished person's page, `partia-osoby` the hidden party on it, `partie-w-skladzie` the hidden parties on a company's board - or `inne`. A session restored on page load does not count.",
     props: ["mode", "from"],
   },
 
@@ -446,7 +447,11 @@ export function teaserDestination(path: string): string {
  * reports them. Closed, because the parameter is in the url and anybody can
  * type anything into it; a reason that is not here is reported as `inne`.
  * Add one here with the link that sends it. */
-export const LOGIN_REASONS = ["profil-osoby", "partie-w-skladzie"] as const;
+export const LOGIN_REASONS = [
+  "profil-osoby",
+  "partie-w-skladzie",
+  "partia-osoby",
+] as const;
 export type LoginReason = (typeof LOGIN_REASONS)[number];
 
 /** `powod` off a /login url, as `login:success`'s `from`. */
