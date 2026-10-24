@@ -1,5 +1,6 @@
 import { test, expect } from "./test";
 import { freezeClock } from "./clock";
+import { readyForFullPage } from "./fullPage";
 import { companyBoard } from "./fixtures/companyBoard";
 import { openInApp } from "./openInApp";
 import { pageTag } from "./pageTags";
@@ -47,18 +48,17 @@ test(
       );
     }
 
-    // The whole board inside one window, so the shot is not stitched
-    // together under the app bar, which a phone's 812px would lay across
-    // the top of it.
-    const { width } = page.viewportSize()!;
-    await page.setViewportSize({ width, height: 2000 });
+    // One full-page shot cut to the board, at the window the project gives
+    // - on a phone the board is taller than the screen. A shot of the element
+    // itself scrolls the window down it and stitches the pieces, and laid the
+    // fixed app bar across the board's top. A full-page shot draws the bar
+    // once, at the top of the page, above where the board starts.
     await page.mouse.move(0, 0);
-    await page.addStyleTag({
-      content: ".feedback-fab { visibility: hidden !important; }",
-    });
-    await page.evaluate(() => document.fonts.ready);
-    await expect(board).toHaveScreenshot(
+    await readyForFullPage(page);
+    const clip = await board.boundingBox();
+    await expect(page).toHaveScreenshot(
       "instytucja-sklad-mozliwe-powiazania.png",
+      { fullPage: true, clip: clip! },
     );
 
     await expectFitsThePhone(page, testInfo);
