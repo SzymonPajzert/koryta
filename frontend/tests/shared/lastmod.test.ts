@@ -192,7 +192,8 @@ describe("pagesChangedByEdgeWrite", () => {
   it("names nothing while the relation is a draft", () => {
     // The gate, and the whole reason the dates stay trustworthy: two edges in
     // three are drafts and the ingest rewrites them by the thousand. A draft is
-    // invisible, so it cannot have changed a page.
+    // invisible, so it cannot have changed a page - except a post held today,
+    // which a company's board lists (below); these are not posts.
     expect(
       pagesChangedByEdgeWrite(undefined, employment({ published: false })),
     ).toEqual([]);
@@ -203,6 +204,69 @@ describe("pagesChangedByEdgeWrite", () => {
       pagesChangedByEdgeWrite(
         employment({ published: true, deleted: true }),
         employment({ published: true, deleted: true }),
+      ),
+    ).toEqual([]);
+  });
+
+  /** A post as the register import writes one: a draft, held today. */
+  const post = (overrides: Record<string, unknown> = {}) => ({
+    type: "employed",
+    source: "person-1",
+    target: "company-1",
+    name: "Rada Nadzorcza",
+    start_date: "2024-04-30",
+    published: false,
+    ...overrides,
+  });
+
+  it("names the company whose board a draft post joins or leaves", () => {
+    // „Obecny skład” lists a post held today whatever the relation's state,
+    // so a new appointment, a post that ended and a post removed all change
+    // the company's page. Never the holder's: a draft is not on their page.
+    expect(pagesChangedByEdgeWrite(undefined, post())).toEqual(["company-1"]);
+    expect(
+      pagesChangedByEdgeWrite(post(), post({ end_date: "2026-10-01" })),
+    ).toEqual(["company-1"]);
+    expect(pagesChangedByEdgeWrite(post(), post({ deleted: true }))).toEqual([
+      "company-1",
+    ]);
+    expect(pagesChangedByEdgeWrite(post(), undefined)).toEqual(["company-1"]);
+  });
+
+  it("names the company when a draft post's role or start date changes", () => {
+    expect(
+      pagesChangedByEdgeWrite(post(), post({ name: "Prezes Zarządu" })),
+    ).toEqual(["company-1"]);
+    expect(
+      pagesChangedByEdgeWrite(post(), post({ start_date: "2024-05-01" })),
+    ).toEqual(["company-1"]);
+    // Moved to another company: both boards changed.
+    expect(
+      pagesChangedByEdgeWrite(post(), post({ target: "company-2" })),
+    ).toEqual(["company-1", "company-2"]);
+  });
+
+  it("names nothing for a draft that leaves the board as it was", () => {
+    // A rewrite that restates the post, a correction of what the board does
+    // not print, an end date written as "" rather than null, a spell that had
+    // already ended, and a candidacy.
+    expect(pagesChangedByEdgeWrite(post(), post())).toEqual([]);
+    expect(
+      pagesChangedByEdgeWrite(post(), post({ references: ["art-1"] })),
+    ).toEqual([]);
+    expect(
+      pagesChangedByEdgeWrite(post({ end_date: null }), post({ end_date: "" })),
+    ).toEqual([]);
+    expect(
+      pagesChangedByEdgeWrite(
+        post({ end_date: "2019-01-01" }),
+        post({ end_date: "2019-02-01" }),
+      ),
+    ).toEqual([]);
+    expect(
+      pagesChangedByEdgeWrite(
+        undefined,
+        post({ type: "election", end_date: undefined }),
       ),
     ).toEqual([]);
   });
