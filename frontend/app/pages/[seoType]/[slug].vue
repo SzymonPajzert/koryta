@@ -20,7 +20,7 @@ import {
   seoTypes,
   type SeoType,
 } from "~/composables/slugs";
-import { redirectToNodeUrl } from "~/composables/slugRedirect";
+import { nodeUrlLocation, redirectToNodeUrl } from "~/composables/slugRedirect";
 import type { NodeType, Node } from "~~/shared/model";
 import { authFetch } from "@/composables/auth";
 
@@ -44,9 +44,9 @@ if (status.value === "success" && data.value?.node?.name) {
   // the site root, which is where every article link in the sitemap used to land.
   if (expectedUrl && route.path !== expectedUrl) {
     if (import.meta.server) {
-      await redirectToNodeUrl(expectedUrl);
+      await redirectToNodeUrl(expectedUrl, route);
     } else {
-      await navigateTo(expectedUrl, { replace: true });
+      await navigateTo(nodeUrlLocation(expectedUrl, route), { replace: true });
     }
   }
 } else if (status.value === "error" && import.meta.server) {
@@ -61,7 +61,7 @@ if (status.value === "success" && data.value?.node?.name) {
       ).catch(() => undefined)
     : undefined;
   if (found && found.url !== route.path) {
-    await redirectToNodeUrl(found.url);
+    await redirectToNodeUrl(found.url, route);
   } else {
     // Say 404 in the status line, not only in the heading.
     //

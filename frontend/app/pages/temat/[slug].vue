@@ -115,7 +115,7 @@ import { authFetch } from "~/composables/auth";
 import { useDomainIcon } from "~/composables/useDomainIcon";
 import { polishCounting } from "~/composables/polish";
 import { parseEntityUrlSlug, generateEntityUrl } from "~/composables/slugs";
-import { redirectToNodeUrl } from "~/composables/slugRedirect";
+import { nodeUrlLocation, redirectToNodeUrl } from "~/composables/slugRedirect";
 import { entityDescription, SOCIAL_CARD } from "~/composables/entitySeo";
 import type { TopicArticle, TopicDetail } from "~~/server/api/topics/[id].get";
 
@@ -160,9 +160,9 @@ if (status.value === "success" && topic.value?.name) {
   const expected = generateEntityUrl("topic", topicId, topic.value.name);
   if (route.path !== expected) {
     if (import.meta.server) {
-      await redirectToNodeUrl(expected);
+      await redirectToNodeUrl(expected, route);
     } else {
-      await navigateTo(expected, { replace: true });
+      await navigateTo(nodeUrlLocation(expected, route), { replace: true });
     }
   }
 }
