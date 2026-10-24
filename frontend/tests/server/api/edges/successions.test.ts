@@ -151,6 +151,35 @@ describe("api/edges/successions supervisory seats", () => {
     expect(successions[0]?.role).toBe("Rada Nadzorcza");
   });
 
+  it("names an association's komisja rewizyjna as its register does", async () => {
+    // A stowarzyszenie: the form says nothing about the organ, the register's
+    // entry lists a komisja rewizyjna, and the edges say "Rada Nadzorcza".
+    nodes.zmp = {
+      name: "Związek Miast Polskich",
+      type: "place",
+      published: true,
+      supervisoryOrgan: "komisja_rewizyjna",
+    };
+    edges = {
+      e1: seat({
+        source: "jan",
+        target: "zmp",
+        start_date: "2018-01-01",
+        end_date: "2021-01-01",
+      }),
+      e2: seat({ target: "zmp", start_date: "2021-01-01", end_date: null }),
+    };
+
+    const { successions, current } = await call<CompanySuccessions>({
+      companyId: "zmp",
+    });
+    const { posts } = await call<PersonSuccessions>({ personId: "anna" });
+
+    expect(successions[0]?.role).toBe("Komisja Rewizyjna");
+    expect(current.map((post) => post.role)).toEqual(["Komisja Rewizyjna"]);
+    expect(posts[0]?.role).toBe("Komisja Rewizyjna");
+  });
+
   it("keeps a role nobody recorded absent rather than empty", async () => {
     // `current` types the field as nullable and the card has its own wording
     // for it; `displayRole` returns undefined for a blank, so this is the one

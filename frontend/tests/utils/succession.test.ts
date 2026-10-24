@@ -57,6 +57,35 @@ describe("predecessorsByEdge", () => {
     expect(Object.keys(found)).toEqual(["e1"]);
   });
 
+  it.each([
+    [
+      "a hospital's rada społeczna",
+      { supervisoryBody: "rada-spoleczna" },
+      "Rada Społeczna",
+    ],
+    [
+      "an association's komisja rewizyjna",
+      { supervisoryOrgan: "komisja_rewizyjna" },
+      "Komisja Rewizyjna",
+    ],
+  ])(
+    "matches %s, which the endpoint names after the organ",
+    (_, organ, role) => {
+      // The row holds the "Rada Nadzorcza" every supervisory seat is stored as;
+      // the endpoint names the post the way `displayRole` does.
+      const found = predecessorsByEdge(
+        [post({ role })],
+        [
+          edge({
+            richNode: { id: "phcrs", type: "place", name: "PHCRS", ...organ },
+          } as Partial<EdgeNode>),
+        ],
+      );
+
+      expect(Object.keys(found)).toEqual(["e1"]);
+    },
+  );
+
   it("keeps two spells of the same company apart", () => {
     const rows = [
       edge({ id: "board", label: "Zarząd", start_date: "2024-05-17" }),

@@ -472,7 +472,11 @@ export interface Company extends Omit<Node, "type"> {
    * finer - it can tell a komisja rewizyjna from a rada fundacji - but is
    * absent for 719 of the 1,192 SPZOZ in the crawl, whose rada społeczna is
    * created by statute and never registered. So `"brak"` is emphatically not
-   * evidence of a paid board, and only /eksploruj/szpitale reads this field.
+   * evidence of a paid board, and nothing that counts employment reads this
+   * field. /eksploruj/szpitale reports by it, and `supervisoryOrganTitle` in
+   * `shared/companyBodies.ts` names a seat by it where the form says nothing -
+   * a stowarzyszenie's komisja rewizyjna, which the stored edge calls "Rada
+   * Nadzorcza".
    *
    * A scalar rather than a list: no crawled entry anywhere names both a rada
    * nadzorcza and a rada społeczna, barely any name two organs at all, and a

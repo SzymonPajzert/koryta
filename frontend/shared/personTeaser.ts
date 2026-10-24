@@ -39,6 +39,7 @@ export type TeaserCompanyCard = {
   isPublicSource?: "manual";
   categories?: string[];
   supervisoryBody?: string;
+  supervisoryOrgan?: string;
 };
 
 /** The one post the teaser shows: the first row of the person's „Historia
@@ -89,6 +90,7 @@ export type TeaserCompany = {
   isPublicSource?: string;
   categories?: unknown;
   supervisoryBody?: string;
+  supervisoryOrgan?: string;
 };
 
 function spellOf(edge: TeaserEdge): RoleSpell {
@@ -202,6 +204,9 @@ function companyCard(id: string, company: TeaserCompany): TeaserCompanyCard {
     ...(categories.length > 0 ? { categories } : {}),
     ...(company.supervisoryBody
       ? { supervisoryBody: company.supervisoryBody }
+      : {}),
+    ...(company.supervisoryOrgan
+      ? { supervisoryOrgan: company.supervisoryOrgan }
       : {}),
   };
 }

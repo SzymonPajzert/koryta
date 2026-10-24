@@ -232,6 +232,19 @@ describe("buildPersonTeaser", () => {
     expect(teaser.post?.company.supervisoryBody).toBe("rada-spoleczna");
   });
 
+  it("passes on the organ the register lists, where the form says nothing", () => {
+    // An association's komisja rewizyjna, stored as "Rada Nadzorcza" like
+    // every supervisory seat.
+    const teaser = buildPersonTeaser(
+      person,
+      [post("seat", { name: "Rada Nadzorcza", start_date: "2024-01-01" })],
+      new Map([["c1", company({ supervisoryOrgan: "komisja_rewizyjna" })]]),
+      TODAY,
+    );
+
+    expect(teaser.post?.company.supervisoryOrgan).toBe("komisja_rewizyjna");
+  });
+
   it("says nothing about employment when there is none", () => {
     expect(buildPersonTeaser(person, [], new Map(), TODAY)).toEqual({
       id: "p1",

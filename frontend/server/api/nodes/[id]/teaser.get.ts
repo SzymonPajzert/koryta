@@ -87,6 +87,7 @@ export default authCachedEventHandler(async (event): Promise<PersonTeaser> => {
       isPublicSource: data.isPublicSource,
       categories: data.categories,
       supervisoryBody: data.supervisoryBody,
+      supervisoryOrgan: data.supervisoryOrgan,
     });
   }
 

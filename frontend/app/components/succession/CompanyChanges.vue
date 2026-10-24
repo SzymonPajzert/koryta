@@ -349,16 +349,18 @@ const props = defineProps<{ companyId: string; companyName: string }>();
  * both are the same seat - up to a space or the end of the title, so that
  * „prezes" does not also take a „prezesa…" of some other kind.
  *
- * Two entries for the supervisory organ: it reaches this card under whichever
- * name the institution's own form gives it (`displayRole`, applied by
- * `/api/edges/successions`), and a hospital's rada społeczna belongs in the
- * same place a spółka's rada nadzorcza does. No company has both. */
+ * Three entries for the supervisory organ: it reaches this card under whatever
+ * name the institution's form or its register entry gives it (`displayRole`,
+ * applied by `/api/edges/successions`), and a hospital's rada społeczna and a
+ * stowarzyszenie's komisja rewizyjna belong in the same place a spółka's rada
+ * nadzorcza does. The card names each company's seats one way only. */
 const ROLE_ORDER: RegExp[] = [
   /^prezes( |$)/,
   /^(wiceprezes|zastępca prezesa)( |$)/,
   /^(zarząd|członek zarządu)$/,
   /^rada nadzorcza$/,
   /^rada społeczna$/,
+  /^komisja rewizyjna$/,
 ];
 
 /** What a role with no name is called on screen. The pairing drops spells
