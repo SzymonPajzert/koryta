@@ -21,6 +21,11 @@ export interface Node {
   entityType?: string;
   /** Only on company nodes, see `Company.isPublic`. */
   isPublic?: boolean;
+  /** Only on company nodes, see `Company.supervisoryBody` and
+   * `Company.supervisoryOrgan`: what a line to the company calls a seat on
+   * its supervisory organ. */
+  supervisoryBody?: string;
+  supervisoryOrgan?: string;
   /** How many relations away from the page's subject this node sits: 0 for the
    * subject itself, 1 for something it is directly related to, 2 for a relation
    * of one of those.

@@ -305,6 +305,30 @@ describe("EmploymentHistory supervisory seats", () => {
     expect(wrapper.text()).toContain("Rada Społeczna");
   });
 
+  it("names an association's komisja rewizyjna as its register does", async () => {
+    // Związek Miast Polskich: a stowarzyszenie, so the form says nothing about
+    // the organ, and the register's entry lists a komisja rewizyjna.
+    const association = {
+      id: "zmp",
+      type: "place",
+      name: "Związek Miast Polskich",
+      supervisoryOrgan: "komisja_rewizyjna",
+    };
+    const onPersonPage = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [seat({ richNode: association } as Partial<EdgeNode>)],
+      },
+    });
+    const onOwnPage = await mountSuspended(EmploymentHistory, {
+      props: { edges: [seat()], company: association as never },
+    });
+
+    for (const wrapper of [onPersonPage, onOwnPage]) {
+      expect(wrapper.text()).toContain("Komisja Rewizyjna");
+      expect(wrapper.text()).not.toContain("Rada Nadzorcza");
+    }
+  });
+
   it("leaves a spółka's board alone", async () => {
     const wrapper = await mountSuspended(EmploymentHistory, {
       props: { edges: [seat()], company: {} as never },

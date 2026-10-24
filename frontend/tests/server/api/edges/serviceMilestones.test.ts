@@ -395,6 +395,9 @@ describe("api/edges/serviceMilestones", () => {
 
     expect(fieldMasks.length).toBeGreaterThan(0);
     expect(fieldMasks[0]).toContain("isPublic");
+    // Both halves of what a seat is called, for `displayRole`.
+    expect(fieldMasks[0]).toContain("supervisoryBody");
+    expect(fieldMasks[0]).toContain("supervisoryOrgan");
     expect(fieldMasks[0]).not.toContain("stats");
   });
 

@@ -16,6 +16,12 @@
  * supervised by a komisja rewizyjna, which by something else again, and which
  * filed nothing - distinctions `supervisoryBody` deliberately collapses.
  *
+ * And naming. Every supervisory seat is stored as "Rada Nadzorcza", so where
+ * the form says nothing about the organ, `supervisoryOrganTitle` in
+ * `companyBodies.ts` reads the value here to call a stowarzyszenie's seat
+ * what the register calls it. That is a label, not a rule: it changes no
+ * count.
+ *
  * The values are normalized upstream by
  * `data/pipelines/src/scrapers/krs/organs.py` and arrive on the node as
  * `supervisoryOrgan` through `/api/ingest/company`. This is only the

@@ -5,6 +5,7 @@ import {
   supervisoryBodyTitle,
   bodyIsPaidPost,
   namesASupervisorySeat,
+  supervisoryOrganTitle,
   displayRole,
 } from "../../shared/companyBodies";
 
@@ -127,8 +128,50 @@ describe("namesASupervisorySeat", () => {
   });
 });
 
+describe("supervisoryOrganTitle", () => {
+  it("names the organ the legal form settles", () => {
+    expect(supervisoryOrganTitle({ supervisoryBody: "rada-spoleczna" })).toBe(
+      "Rada Społeczna",
+    );
+  });
+
+  it("names the organ the register lists where the form says nothing", () => {
+    // Związek Miast Polskich is a stowarzyszenie, and its entry lists a
+    // komisja rewizyjna.
+    expect(
+      supervisoryOrganTitle({ supervisoryOrgan: "komisja_rewizyjna" }),
+    ).toBe("Komisja Rewizyjna");
+    expect(supervisoryOrganTitle({ supervisoryOrgan: "rada_nadzorcza" })).toBe(
+      "Rada Nadzorcza",
+    );
+  });
+
+  it("puts the form ahead of the register", () => {
+    // An SPZOZ is supervised by a rada społeczna by statute, whatever its
+    // entry says in words the pipelines could not place.
+    expect(
+      supervisoryOrganTitle({
+        supervisoryBody: "rada-spoleczna",
+        supervisoryOrgan: "inny",
+      }),
+    ).toBe("Rada Społeczna");
+  });
+
+  it("names nothing where the register does not say which organ it is", () => {
+    for (const organ of ["inny", "nieznany", "brak"]) {
+      expect(
+        supervisoryOrganTitle({ supervisoryOrgan: organ }),
+      ).toBeUndefined();
+    }
+    expect(supervisoryOrganTitle({})).toBeUndefined();
+    expect(supervisoryOrganTitle(undefined)).toBeUndefined();
+    expect(supervisoryOrganTitle(null)).toBeUndefined();
+  });
+});
+
 describe("displayRole", () => {
   const hospital = { supervisoryBody: "rada-spoleczna" };
+  const association = { supervisoryOrgan: "komisja_rewizyjna" };
 
   it("puts the register's own word back on a hospital's seat", () => {
     expect(displayRole("Rada Nadzorcza", hospital)).toBe("Rada Społeczna");
@@ -145,6 +188,35 @@ describe("displayRole", () => {
 
   it("leaves a management post at the same hospital alone", () => {
     expect(displayRole("Zarząd", hospital)).toBe("Zarząd");
+  });
+
+  it("names an association's komisja rewizyjna the way its register does", () => {
+    // Every supervisory seat is stored as "Rada Nadzorcza", the seats on
+    // Związek Miast Polskich's komisja rewizyjna among them.
+    expect(displayRole("Rada Nadzorcza", association)).toBe(
+      "Komisja Rewizyjna",
+    );
+    expect(displayRole(" rada nadzorcza ", association)).toBe(
+      "Komisja Rewizyjna",
+    );
+  });
+
+  it("leaves a spelled-out role at an association as it was typed", () => {
+    expect(displayRole("Przewodniczący Rady Nadzorczej", association)).toBe(
+      "Przewodniczący Rady Nadzorczej",
+    );
+    expect(displayRole("Zarząd", association)).toBe("Zarząd");
+  });
+
+  it("keeps the stored name where the register's organ has no name we know", () => {
+    // `inny` is a rada fundacji or a rada izby, and the node does not say
+    // which; `brak` is an entry that lists no organ at all.
+    expect(displayRole("Rada Nadzorcza", { supervisoryOrgan: "inny" })).toBe(
+      "Rada Nadzorcza",
+    );
+    expect(displayRole("Rada Nadzorcza", { supervisoryOrgan: "brak" })).toBe(
+      "Rada Nadzorcza",
+    );
   });
 
   it("leaves every other company's roles untouched", () => {
