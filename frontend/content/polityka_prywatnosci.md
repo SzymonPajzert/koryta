@@ -4,7 +4,7 @@
 
 Administratorem Twoich danych osobowych jest osoba fizyczna odpowiedzialna za prowadzenie serwisu koryta.pl.
 
-W sprawach związanych z ochroną danych osobowych możesz skontaktować się z nami pod adresem e-mail: szymonpajzert@gmail.com.
+W sprawach związanych z ochroną danych osobowych możesz skontaktować się z nami pod adresem e-mail: kontakt@koryta.pl.
 
 ## 2. Jakie dane przetwarzamy, w jakim celu i na jakiej podstawie prawnej?
 
@@ -94,4 +94,4 @@ Podanie przez Ciebie adresu e-mail jest w pełni dobrowolne, ale niezbędne do t
 
 Zastrzegamy sobie prawo do wprowadzania zmian w Polityce Prywatności. Aktualna wersja Polityki Prywatności będzie zawsze dostępna na stronie Serwisu.
 
-Data ostatniej aktualizacji: 18 sierpnia 2025r.
+Data ostatniej aktualizacji: 24 października 2026r.
