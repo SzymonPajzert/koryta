@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "lastmod-po-zmianach-calej-witryny",
+    title: "Mapa strony odnotowuje zmiany całej witryny i zmiany składu spółek",
+    description:
+      "Data ostatniej zmiany w /sitemap.xml ruszała się tylko wtedy, gdy ktoś zmienił samą stronę albo opublikowane powiązanie. " +
+      "Teraz rusza się też, gdy zmiana całej witryny dotarła do strony (poprawione adresy i opisy z 24 października, obecny skład spółek z osobami bez opublikowanej strony), i gdy w obecnym składzie spółki ktoś dochodzi, odchodzi albo zmienia funkcję - także osoba bez opublikowanej strony.",
+    steps: [
+      "Po przeliczeniu dat (skrypt stamp-site-changes) otwórz /sitemap.xml: strony osób, artykułów i spółek mają datę nie starszą niż 24 października 2026.",
+      "Po wdrożeniu funkcji dodaj w spółce nowe zatrudnienie osoby bez opublikowanej strony: po kilku minutach data przy tej spółce jest dzisiejsza (w samej mapie po wygaśnięciu jej cache, do sześciu godzin).",
+    ],
+    link: "/sitemap.xml",
+    area: "admin",
+  },
+  {
     id: "profil-osoby-mozliwe-powiazania",
     title: "Zapowiedź strony osoby mówi, że są możliwe powiązania polityczne",
     description:
