@@ -245,6 +245,32 @@ describe("SuccessionCompanyChanges", () => {
     ]);
   });
 
+  it("puts a komisja rewizyjna where a rada nadzorcza would go", async () => {
+    // An association's supervisory seats reach the card under the organ's own
+    // name (`displayRole`), and belong right after its zarząd all the same,
+    // not in the alphabetical tail.
+    response = {
+      successions: [],
+      current: [
+        post("A", { role: "dyrektor Biura Zarządu" }),
+        post("B", { role: "Komisja Rewizyjna" }),
+        post("C", { role: "Zarząd" }),
+      ],
+      hidden: 0,
+    };
+
+    const wrapper = await mountChanges();
+
+    const roles = wrapper
+      .findAll('[data-testid^="current-role-"]')
+      .map((node) => node.attributes("data-testid"));
+    expect(roles).toEqual([
+      "current-role-zarzad",
+      "current-role-komisja-rewizyjna",
+      "current-role-dyrektor-biura-zarzadu",
+    ]);
+  });
+
   it("ranks the register's longer titles the same way", async () => {
     response = {
       successions: [],

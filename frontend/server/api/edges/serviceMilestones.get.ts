@@ -136,6 +136,9 @@ const NODE_FIELDS = [
   "isPublic",
   "isPublicSource",
   "supervisoryBody",
+  // What the card calls a seat where the form says nothing about the organ -
+  // see `displayRole`. One short string, on the nodes that have it.
+  "supervisoryOrgan",
   // Only the card needs this, and only for the handful of nodes a milestone
   // lands on - but the mask is applied to the whole scan, so every node carries
   // it. A short array of slugs, against the `activity` blob and the `stats`

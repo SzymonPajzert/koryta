@@ -99,6 +99,7 @@ import type { Node as GraphNode, NodeStats, Edge } from "~~/shared/graph/model";
 import { edgeStyle } from "~~/shared/graph/edges";
 import { GRAPH_INK } from "~~/shared/graph/nodes";
 import { role } from "~~/shared/colors";
+import { displayRole } from "~~/shared/companyBodies";
 import { personLabel, wrapLabel } from "~/utils/graphLabel";
 import { entityGlyph } from "~/utils/entityIcon";
 import { graphNodeDestination, readableInk } from "~/utils/graphNode";
@@ -232,9 +233,13 @@ function glyphTransform(config: ShapeStyle, scale: number): string {
  * settles this as `edge.name ?? edgeLabel[edge.type]`, so a relation somebody
  * named - an employment's job title - says that, and an unnamed one falls back
  * to the same word the rest of the site uses for its kind. A second table here
- * would be a second answer to the same question. */
+ * would be a second answer to the same question.
+ *
+ * Except that every supervisory seat is stored as "Rada Nadzorcza", so a line
+ * to a hospital or an association is named after the organ the institution
+ * really has, as the history beside the graph names it (`displayRole`). */
 function edgeText(edge: Edge): string {
-  return edge.label ?? "";
+  return displayRole(edge.label, props.nodes[edge.target]) ?? "";
 }
 
 /** Opening a node's page, on a double click.
