@@ -371,7 +371,7 @@ import type { TeaserClickMode } from "~~/shared/analytics";
 import { trackGoal } from "~/composables/analytics";
 import { authFetch } from "~/composables/auth";
 import { teaserArrival, watchTeaserExit } from "~/composables/teaserJourney";
-import { createSlug, generateEntityUrl } from "~/composables/slugs";
+import { createSlug, generateEntityUrl } from "~~/shared/slugs";
 import { gapLabel, MAX_GAP_DAYS, MAX_OVERLAP_DAYS } from "~~/shared/succession";
 import { isoDay, longDate, shortDate } from "~~/shared/dates";
 import type {

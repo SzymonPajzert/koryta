@@ -95,7 +95,7 @@ import {
   mdiFileDocumentOutline,
   mdiOpenInNew,
 } from "@mdi/js";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { ExtractionFact } from "~~/shared/model";
 
 const { fact, linkArticle, inset, closing } = defineProps<{

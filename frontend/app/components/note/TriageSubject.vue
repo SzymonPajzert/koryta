@@ -63,7 +63,7 @@
 import { computed } from "vue";
 import { authFetch } from "~/composables/auth";
 import { useEdges } from "~/composables/edges";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { employmentTowns } from "~/utils/companyLocation";
 import { entityIcon } from "~/utils/entityIcon";
 import type { Company, Node, PersonRich } from "~~/shared/model";

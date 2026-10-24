@@ -1,4 +1,4 @@
-import type { NodeType, Node } from "~~/shared/model";
+import type { NodeType, Node } from "./model";
 
 export type SeoType = "osoba" | "instytucja" | "region" | "artykul" | "temat";
 

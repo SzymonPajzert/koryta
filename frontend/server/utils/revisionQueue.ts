@@ -4,7 +4,7 @@ import type {
   QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { generateEntityUrl } from "~~/app/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import {
   approvedRevisionId,
   nodeTypes,

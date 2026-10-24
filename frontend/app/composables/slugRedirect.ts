@@ -1,5 +1,5 @@
 import { parseQuery, stringifyQuery, type LocationQuery } from "vue-router";
-import { slugRedirectCode } from "./slugs";
+import { slugRedirectCode } from "~~/shared/slugs";
 
 /** Where a redirect to a node's own address sends the reader: that address,
  * with the query and the hash of the one they asked for.
@@ -35,10 +35,7 @@ export function nodeUrlLocation(
  *
  * Kept out of `slugs.ts`, which the server imports and which has to stay free
  * of the app's composables. */
-export function redirectToNodeUrl(
-  url: string,
-  from: { query: LocationQuery; hash: string },
-) {
+export function redirectToNodeUrl(url: string) {
   useResponseHeader("cache-control").value = "no-store";
   return navigateTo(nodeUrlLocation(url, from), {
     redirectCode: slugRedirectCode(url),

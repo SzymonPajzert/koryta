@@ -1,4 +1,4 @@
-import { generateEntityUrl } from "~~/app/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import {
   SITEMAP_NODE_TYPES,
   inSitemap,

@@ -10,7 +10,7 @@ import type {
 import { supervisoryOrganLabel } from "~~/shared/companyOrgans";
 import { partyAliasesOf, partyColors, partyMergedLabels } from "~~/shared/misc";
 import { categorical, ink } from "~/utils/chartTheme";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { polishCounting } from "~/composables/polish";
 
 /** Who sits on the supervisory boards of publicly owned hospitals, shaped for

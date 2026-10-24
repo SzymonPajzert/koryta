@@ -79,7 +79,7 @@ import { ref } from "vue";
 import { mdiCloseCircle } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
 import type { Link, NodeType } from "~~/shared/model";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { ArticleRelation } from "~~/server/api/articles/[id]/relations.get";
 
 /** What a `mentions` edge may point at. The section has always been "osoby i

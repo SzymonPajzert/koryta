@@ -79,7 +79,7 @@ import {
   type QueueTier,
 } from "~~/shared/queueTiers";
 import { polishCounting } from "~/composables/polish";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { trackGoal } from "~/composables/analytics";
 import { useQueueTiers } from "~/composables/stats/useQueueTiers";
 

@@ -1,4 +1,4 @@
-import { mangledIdKey, parseEntityUrlSlug } from "~~/app/composables/slugs";
+import { mangledIdKey, parseEntityUrlSlug } from "~~/shared/slugs";
 
 /** The address of the public page an id names, matched without regard to the
  * id's case or to punctuation trailing it - see `mangledIdKey`.

@@ -99,7 +99,7 @@ import {
 } from "@mdi/js";
 import { parties } from "~~/shared/misc";
 import { nameMatchesTokens, searchTokens } from "~~/shared/search";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { omniSearchTarget } from "~/composables/omniSearch";
 import { trackGoal } from "~/composables/analytics";
 import {

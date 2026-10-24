@@ -58,7 +58,7 @@ import {
   mdiCalendarBlankOutline,
   mdiOfficeBuildingOutline,
 } from "@mdi/js";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { Company } from "~~/shared/model";
 import type { RecentEmployment } from "~~/server/api/edges/recentEmployments.get";
 
