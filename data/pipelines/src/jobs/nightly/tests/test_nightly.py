@@ -292,13 +292,16 @@ def test_the_reprocess_rebuilds_all_but_the_slow_sources_and_the_articles(world)
         assert f":{held}" in argv
     # KorytaDiffer reads every export ever taken and writes nothing, and
     # PeopleScoreCoverage every export since August for nobody downstream;
-    # DomainToRegion copies a gitignored file only the article branch reads.
+    # DomainToRegion copies a gitignored file only the article branch reads;
+    # the BIP documents read a crawl queue's Postgres the VM does not run.
     for excluded in (
         "ArticleParsed",
         "ProcessWikiNer",
         "KorytaDiffer",
         "PeopleScoreCoverage",
         "DomainToRegion",
+        "BipUrlsClassified",
+        "BipDocumentsParsed",
     ):
         assert excluded in argv
     assert argv[-3:] == ["--keep-going", "--assume-yes", "--all"]
