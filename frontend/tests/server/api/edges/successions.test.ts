@@ -7,28 +7,49 @@ import type {
 
 let nodes: Record<string, Record<string, unknown>> = {};
 let edges: Record<string, Record<string, unknown>> = {};
+/** The revisions `importedOrReviewed` reads the first of, for a document with
+ * no approved revision. Empty unless a test needs them. */
+let revisions: Record<string, Record<string, unknown>> = {};
 
-/** A query over `edges` built the way the endpoint builds it: equality filters
- * and one `in`, with no ordering - the pairing sorts its own results, so the
- * fake does not have to model an index. */
-function edgeQuery() {
+/** A query built the way the endpoint builds it: equality filters and one
+ * `in` over `edges`, and over `revisions` the first by `update_time` - the
+ * pairing sorts its own results, so the fake models no other order. */
+function collectionQuery(
+  docsOf: () => Record<string, Record<string, unknown>>,
+) {
   const filters: [string, string, unknown][] = [];
+  let order: string | undefined;
+  let max = Infinity;
 
   const query = {
     where: vi.fn((field: string, op: string, value: unknown) => {
       filters.push([field, op, value]);
       return query;
     }),
-    limit: vi.fn(() => query),
+    orderBy: vi.fn((field: string) => {
+      order = field;
+      return query;
+    }),
+    limit: vi.fn((n: number) => {
+      max = n;
+      return query;
+    }),
     get: vi.fn(async () => {
-      const docs = Object.entries(edges)
-        .filter(([, data]) =>
-          filters.every(([field, op, value]) =>
-            op === "in"
-              ? (value as unknown[]).includes(data[field])
-              : data[field] === value,
-          ),
-        )
+      const entries = Object.entries(docsOf()).filter(([, data]) =>
+        filters.every(([field, op, value]) =>
+          op === "in"
+            ? (value as unknown[]).includes(data[field])
+            : data[field] === value,
+        ),
+      );
+      if (order) {
+        const key = order;
+        entries.sort(([, a], [, b]) =>
+          String(a[key]).localeCompare(String(b[key])),
+        );
+      }
+      const docs = entries
+        .slice(0, max)
         .map(([id, data]) => ({ id, data: () => data }));
       return { docs, size: docs.length, empty: docs.length === 0 };
     }),
@@ -40,7 +61,9 @@ const mockDb = {
   collection: vi.fn((collection: string) => ({
     doc: vi.fn((id: string) => ({ id, path: `${collection}/${id}` })),
     where: vi.fn((field: string, op: string, value: unknown) =>
-      edgeQuery().where(field, op, value),
+      collectionQuery(() =>
+        collection === "revisions" ? revisions : edges,
+      ).where(field, op, value),
     ),
   })),
   getAll: vi.fn(async (...refs: { id: string }[]) =>
@@ -58,10 +81,13 @@ vi.mock("firebase-admin/firestore", () => ({
 
 vi.mock("firebase-admin/app", () => ({ getApp: vi.fn() }));
 
+/** Whether the caller is a signed in reader asking for drafts. */
+const reader = vi.hoisted(() => ({ signedIn: false }));
+
 vi.mock("../../../../server/utils/handlers", () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   editorFreshCachedEventHandler: (fn: any) => fn,
-  wantsLatest: () => false,
+  wantsLatest: () => reader.signedIn,
 }));
 
 const { mockGetQuery } = vi.hoisted(() => {
@@ -243,5 +269,183 @@ describe("api/edges/successions role-less posts", () => {
       "Karol Później: Zarząd",
       "Karol Później: null",
     ]);
+  });
+});
+
+/** Today's board as a logged out reader is shown it: the unpublished holders
+ * too, where an import wrote both the person and the post or a reviewer
+ * approved them, and never their party. */
+describe("api/edges/successions unpublished holders", () => {
+  /** An open post at the company, as the register import writes one. */
+  function job(source: string, fields: Record<string, unknown> = {}) {
+    return {
+      source,
+      target: "wodociagi",
+      type: "employed",
+      name: "Rada Nadzorcza",
+      start_date: "2024-04-30",
+      published: false,
+      ...fields,
+    };
+  }
+
+  /** The first revision of a document, written by an import or by hand. */
+  function firstRevision(
+    nodeId: string,
+    automatic: boolean,
+    time = "2026-01-01",
+  ) {
+    return { node_id: nodeId, update_time: time, update_automatic: automatic };
+  }
+
+  async function board() {
+    const { current } = await call<CompanySuccessions>({
+      companyId: "wodociagi",
+    });
+    return current;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    reader.signedIn = false;
+    nodes = {
+      wodociagi: {
+        name: "MPWiK Kamienna Góra",
+        type: "place",
+        published: true,
+      },
+      ala: {
+        name: "Ala Opublikowana",
+        type: "person",
+        published: true,
+        parties: ["PO"],
+      },
+      bob: {
+        name: "Bob Zaimportowany",
+        type: "person",
+        published: false,
+        parties: ["PiS"],
+      },
+      cyd: {
+        name: "Cyd Bez Partii",
+        type: "person",
+        published: false,
+        parties: [],
+      },
+      dan: {
+        name: "Dan Dopisany",
+        type: "person",
+        published: false,
+        parties: ["PSL"],
+      },
+      eva: {
+        name: "Eva Sprawdzona",
+        type: "person",
+        published: false,
+        parties: ["SLD"],
+        revision_id: "rev-eva",
+      },
+      fil: {
+        name: "Fil Usunięty",
+        type: "person",
+        published: false,
+        deleted: true,
+        parties: ["PO"],
+      },
+    };
+    edges = {
+      "e-ala": job("ala", { published: true }),
+      "e-bob": job("bob"),
+      "e-cyd": job("cyd", { name: "Zarząd" }),
+      "e-dan": job("dan"),
+      "e-eva": job("eva", { revision_id: "rev-e-eva" }),
+      "e-fil": job("fil"),
+    };
+    revisions = {
+      r1: firstRevision("bob", true),
+      r2: firstRevision("e-bob", true),
+      r3: firstRevision("cyd", true),
+      r4: firstRevision("e-cyd", true),
+      // Proposed by hand, and only later touched by an import: the first
+      // revision is what says who put the person here.
+      r5: firstRevision("dan", false, "2026-01-01"),
+      r6: firstRevision("dan", true, "2026-03-01"),
+      r7: firstRevision("e-dan", true),
+      r8: firstRevision("fil", true),
+      r9: firstRevision("e-fil", true),
+    };
+  });
+
+  it("lists the holders an import or a reviewer stands behind", async () => {
+    const names = (await board()).map((post) => post.personName).sort();
+
+    expect(names).toEqual([
+      "Ala Opublikowana",
+      "Bob Zaimportowany",
+      "Cyd Bez Partii",
+      "Eva Sprawdzona",
+    ]);
+  });
+
+  it("says an unpublished holder has a party, and never which", async () => {
+    const current = await board();
+    const bob = current.find((post) => post.personId === "bob");
+    const cyd = current.find((post) => post.personId === "cyd");
+    const ala = current.find((post) => post.personId === "ala");
+
+    expect(bob).toMatchObject({
+      parties: [],
+      partyHidden: true,
+      published: false,
+    });
+    expect(cyd?.partyHidden).toBeUndefined();
+    expect(cyd?.published).toBe(false);
+    expect(ala).toMatchObject({ parties: ["PO"], published: true });
+    expect(ala?.partyHidden).toBeUndefined();
+    // Not anywhere in the answer, under any field.
+    const answer = JSON.stringify(current);
+    expect(answer).not.toContain("PiS");
+    expect(answer).not.toContain("SLD");
+  });
+
+  it("leaves out a person or a post somebody added by hand", async () => {
+    nodes.eva = { ...nodes.eva, revision_id: undefined };
+    revisions.r10 = firstRevision("eva", true);
+    edges["e-eva"] = job("eva");
+    revisions.r11 = firstRevision("e-eva", false);
+
+    const names = (await board()).map((post) => post.personName);
+
+    expect(names).not.toContain("Dan Dopisany");
+    expect(names).not.toContain("Eva Sprawdzona");
+  });
+
+  it("leaves out a removed page and a post that ended", async () => {
+    edges["e-cyd"] = job("cyd", { end_date: "2025-12-31" });
+
+    const names = (await board()).map((post) => post.personName);
+
+    expect(names).not.toContain("Fil Usunięty");
+    expect(names).not.toContain("Cyd Bez Partii");
+  });
+
+  it("asks nothing about the provenance of published holders", async () => {
+    nodes = { wodociagi: nodes.wodociagi!, ala: nodes.ala! };
+    edges = { "e-ala": job("ala", { published: true }) };
+
+    await board();
+
+    expect(mockDb.collection).not.toHaveBeenCalledWith("revisions");
+  });
+
+  it("shows a signed in reader every holder with the party", async () => {
+    reader.signedIn = true;
+
+    const current = await board();
+    const bob = current.find((post) => post.personId === "bob");
+
+    expect(bob).toMatchObject({ parties: ["PiS"], published: false });
+    expect(bob?.partyHidden).toBeUndefined();
+    expect(current.map((post) => post.personName)).toContain("Dan Dopisany");
   });
 });

@@ -1,8 +1,20 @@
 <template>
   <v-card class="mb-4" data-testid="person-teaser">
     <div class="pa-4">
-      <!-- Headed as the full page heads a person (`EntityDetailsCard`). -->
-      <h2 class="text-h5 font-weight-bold">{{ teaser.name }}</h2>
+      <!-- Headed as the full page heads a person (`EntityDetailsCard`): the
+           name, and beside it where the full page puts the party chips, the
+           stand-in a company's board shows for the same person when a party
+           is on record - „???” in the „Inne” grey, leading to the sign in
+           (Szymon, 2026-10-24). Never the party itself, which the teaser
+           does not carry. -->
+      <div class="d-flex flex-wrap align-center ga-2 text-wrap">
+        <h2 class="text-h5 font-weight-bold">{{ teaser.name }}</h2>
+        <ChipPartyLocked
+          v-if="teaser.partyHidden"
+          :to="partyLoginTarget"
+          @click="onPartyClick()"
+        />
+      </div>
 
       <!-- The latest post as the first row of the history the full page lists,
            drawn by the card that draws it there - chips, dates and all - so
@@ -40,7 +52,7 @@
 
         <!-- Said on every teaser: the post comes from the register, and being
              listed here is no political tie. The party a match may have
-             suggested is not on this page at all. -->
+             suggested is not on this page at all, only that there is one. -->
         <p class="text-caption text-medium-emphasis mt-4 mb-0">
           Informacje pochodzą m.in. z publicznych rejestrów. Obecność w bazie
           nie oznacza powiązań politycznych.
@@ -74,6 +86,8 @@ const route = useRoute();
 const router = useRouter();
 
 const GOAL = { surface: "osoba", kind: "profil" } as const;
+/** The party chip beside the name, as its own teaser. */
+const PARTY_GOAL = { surface: "osoba", kind: "partia" } as const;
 
 /** The post as a row of `CardEmploymentHistory`, made the way `useEdges`
  * makes the full page's rows - the label is the role, or the edge type's own
@@ -97,14 +111,19 @@ const historyEdges = computed<EdgeNode[]>(() => {
 });
 
 /** Why the rest is held back, and what signing in shows - counting the posts
- * where there are more than the one above. */
+ * where there are more than the one above, and naming the possible political
+ * ties first where a party is on record: what the chip beside the name
+ * promised (Szymon, 2026-10-24). */
 const noticeText = computed(() => {
   const count = props.teaser.employmentCount;
   const what =
     count > 1
       ? `${polishCounting(count, "stanowisko", "stanowiska", "stanowisk")}, źródła i graf powiązań`
       : "źródła i graf powiązań";
-  return `Zaloguj się, by zobaczyć wszystkie ${what} tej osoby.`;
+  const party = props.teaser.partyHidden
+    ? "możliwe powiązania polityczne, "
+    : "";
+  return `Zaloguj się, by zobaczyć ${party}wszystkie ${what} tej osoby.`;
 });
 
 /** Back here once signed in. `powod` tells /login, and `login:success`, why
@@ -122,6 +141,16 @@ function onClick(mode: TeaserClickMode) {
   trackGoal("teaser:click", { ...GOAL, mode });
 }
 
+/** Where the party chip leads: the sign in, back here, giving its own reason. */
+const partyLoginTarget = computed(() => ({
+  path: "/login",
+  query: { redirect: route.fullPath, powod: "partia-osoby" },
+}));
+
+function onPartyClick() {
+  trackGoal("teaser:click", { ...PARTY_GOAL, mode: "login" });
+}
+
 let stopWatchingExit: (() => void) | undefined;
 
 onMounted(async () => {
@@ -129,7 +158,11 @@ onMounted(async () => {
   // this for the moment before their page loads. Only a reader who is really
   // logged out has been shown a teaser.
   if (await getCurrentUser()) return;
-  trackGoal("teaser:shown", { ...GOAL, from: teaserArrival(props.nodeId) });
+  const from = teaserArrival(props.nodeId);
+  trackGoal("teaser:shown", { ...GOAL, from });
+  if (props.teaser.partyHidden) {
+    trackGoal("teaser:shown", { ...PARTY_GOAL, from });
+  }
   stopWatchingExit = watchTeaserExit(router, route.path, GOAL);
 });
 

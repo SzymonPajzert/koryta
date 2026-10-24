@@ -1,4 +1,4 @@
-import { pageIsPublic, type NodeRevisions } from "./model";
+import { pageIsPublic, type NodeRevisions, type NodeType } from "./model";
 import { normalizeUpdateTime } from "./revisions";
 
 /** When a page last said something different, and how the sitemap says so.
@@ -21,6 +21,50 @@ import { normalizeUpdateTime } from "./revisions";
  * all when a relation appears on them. `content_changed_at` is what closes
  * that gap; this module is the pair of it that reads the answer back.
  */
+
+/** Node types whose entity page renders a page of its own.
+ *
+ * `region` is deliberately absent. A region has no page of its own:
+ * app/composables/slugs.ts `generateNodeUrl` sends every one to
+ * `/eksploruj/tabela?teryt=...`, and app/pages/[seoType]/[slug].vue then
+ * redirects there on the server - so listing them advertised URLs that exist
+ * only to bounce a crawler into the heaviest response on the site, and one
+ * robots.txt blocks besides. None of them could ever rank, because the page
+ * they land on renders no markup. The one region with a real page, teryt1261,
+ * is reachable from the homepage and from the explore table, so dropping the
+ * type here does not hide it.
+ *
+ * `place` was absent for the same reason until 2026-08-26, when companies got
+ * their page back, and then stayed absent because putting the URLs in was a
+ * decision nobody had taken. The Search Console export of 2026-09-10 took it:
+ * over the preceding three months 554 `/instytucja/` URLs drew 4,903
+ * impressions - 42% of the site's total, more than person and article pages
+ * together - entirely on Google's own discovery, with no sitemap entry behind
+ * any of them. Whatever share of the other ~3,860 published companies would
+ * rank the same way was being left on the table.
+ */
+export const SITEMAP_NODE_TYPES: readonly NodeType[] = [
+  "person",
+  "article",
+  "place",
+];
+
+/** Whether a node's page is in the sitemap: a live page of one of those types,
+ * with a name to make its url from. The pages a change to the whole site is
+ * dated on (scripts/migrate/stamp-site-changes.ts) are these too. */
+export function inSitemap(node: {
+  type?: unknown;
+  name?: unknown;
+  published?: unknown;
+  deleted?: unknown;
+}): node is { type: NodeType; name: string } {
+  return (
+    pageIsPublic(node) &&
+    typeof node.name === "string" &&
+    node.name.length > 0 &&
+    (SITEMAP_NODE_TYPES as readonly unknown[]).includes(node.type)
+  );
+}
 
 /** The field, on a node document.
  *
@@ -59,8 +103,11 @@ function instant(value: unknown): number | undefined {
  *
  * The newer of two recorded instants:
  *
- * 1. `content_changed_at` - the page went live, came down, or a relation at
- *    either end of it was published, hidden or edited while live.
+ * 1. `content_changed_at` - the page went live, came down, a relation at
+ *    either end of it was published, hidden or edited while live, a post on
+ *    a company's board started, ended or changed (`pagesChangedByEdgeWrite`),
+ *    or a change to the whole site reached it
+ *    (scripts/migrate/stamp-site-changes.ts).
  * 2. `revisions.latest_time` - the newest revision written against the node.
  *    Present, a string, and exact on 6,802 of 6,802 sitemap-eligible pages,
  *    which is what gives every url an honest date on the day this ships with no
@@ -117,15 +164,16 @@ export function sitemapLastmod(
  * `source` dirty for `stats.edges`, which is the right rule for counting what a
  * node points at and the wrong one for a page.
  *
- * Empty unless the edge was public on one side of the write, and that gate is
- * the difference between a `lastmod` Google keeps using and one it stops
- * trusting site-wide. Two edges in three are drafts - 33,475 of 49,583 - and
- * the ingest creates, corrects and deletes them by the thousand: 880 edge
- * writes a day on average and 4,373 on the worst day measured, against 0-53
- * publication flips a day. Ungated, a routine ingest run would hand a fresh
- * date to thousands of already-published company pages on which a reader would
- * find nothing new. A draft relation is invisible, so it cannot change a page
- * until it is published - and when it is, that write passes this gate.
+ * Only where the edge was public on one side of the write, with one exception
+ * (`boardsChanged`), and that gate is the difference between a `lastmod` Google
+ * keeps using and one it stops trusting site-wide. Two edges in three are
+ * drafts - 33,475 of 49,583 - and the ingest creates, corrects and deletes them
+ * by the thousand: 880 edge writes a day on average and 4,373 on the worst day
+ * measured, against 0-53 publication flips a day. Ungated, a routine ingest run
+ * would hand a fresh date to thousands of already-published pages on which a
+ * reader would find nothing new. A draft relation is invisible on a person's
+ * page and in a company's history, so it cannot change them until it is
+ * published - and when it is, that write passes this gate.
  *
  * Here rather than beside its one caller in `functions/src/edges.ts` so that it
  * can be tested: a test importing that module resolves `firebase-admin` through
@@ -136,13 +184,62 @@ export function pagesChangedByEdgeWrite(
   before: Record<string, unknown> | undefined,
   after: Record<string, unknown> | undefined,
 ): string[] {
-  if (!pageIsPublic(before ?? {}) && !pageIsPublic(after ?? {})) return [];
+  if (!pageIsPublic(before ?? {}) && !pageIsPublic(after ?? {})) {
+    return boardsChanged(before, after);
+  }
 
   return [
     ...new Set(
       [before, after]
         .flatMap((edge) => [edge?.source, edge?.target])
         .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+}
+
+/** What a company's „Obecny skład” shows of one edge: who holds which post
+ * there since when - or nothing, for an edge that is not a post held today.
+ * Held today is what `/api/edges/successions` reads it as: an `employed` edge,
+ * not removed, with no end date (null and "" alike). */
+function boardEntry(edge: Record<string, unknown> | undefined) {
+  if (!edge || edge.type !== "employed" || edge.deleted === true) return null;
+  if (edge.end_date) return null;
+  const { source, target } = edge;
+  if (typeof source !== "string" || !source) return null;
+  if (typeof target !== "string" || !target) return null;
+  const role = typeof edge.name === "string" ? edge.name.trim() : "";
+  const start = typeof edge.start_date === "string" ? edge.start_date : "";
+  return JSON.stringify([source, target, role, start]);
+}
+
+/** The companies whose board a draft relation changed: the exception to the
+ * gate above.
+ *
+ * „Obecny skład” is the one place a draft is not invisible. It lists the posts
+ * held today whatever the relation's own state - for a published holder since
+ * the board was built, and for an unpublished one that an import or a reviewer
+ * stands behind since company pages stopped showing logged-out readers an empty
+ * board (Szymon, 2026-10-24). So a draft post that starts, ends, or changes its
+ * role or its start date changes what the company's page says, to a crawler
+ * too, and the company's date has to move with it. Nothing else a draft does
+ * reaches a page: an ended spell, a candidacy, an edit that leaves the post
+ * as it was. The holder's own page is not moved - a draft is not on it.
+ *
+ * Without reading the documents at either end, so a little wide: a company
+ * nobody has published is dated too (it is in no sitemap, and publishing it
+ * dates it anyway), and so is a board for a post somebody added by hand, which
+ * the board leaves out until a reviewer approves it. Both are rare beside the
+ * ingest's writes, which are the posts the board shows. */
+function boardsChanged(
+  before: Record<string, unknown> | undefined,
+  after: Record<string, unknown> | undefined,
+): string[] {
+  if (boardEntry(before) === boardEntry(after)) return [];
+  return [
+    ...new Set(
+      [before, after]
+        .filter((edge) => boardEntry(edge) !== null)
+        .map((edge) => edge!.target as string),
     ),
   ];
 }

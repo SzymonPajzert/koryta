@@ -73,8 +73,12 @@
                   </div>
                   <div class="flex-grow-1 rl-txt">
                     <div class="d-flex align-center flex-wrap ga-2">
+                      <!-- `nofollow` to a page nobody has published: for a
+                           logged out reader, and so for a crawler, it is the
+                           teaser, which answers 404. -->
                       <NuxtLink
                         :to="personUrl(post)"
+                        :rel="post.published === false ? 'nofollow' : undefined"
                         class="link-plain text-subtitle-1 font-weight-bold"
                         >{{ post.personName }}</NuxtLink
                       >
@@ -82,6 +86,13 @@
                         v-for="party in post.parties"
                         :key="party"
                         :party
+                      />
+                      <!-- The party of an unpublished holder, which a logged
+                           out reader is told is there and not what it is. -->
+                      <ChipPartyLocked
+                        v-if="post.partyHidden"
+                        :to="loginTarget"
+                        @click="onTeaserClick('login')"
                       />
                     </div>
 
@@ -130,6 +141,30 @@
             </v-col>
           </v-row>
         </div>
+
+        <!-- Under the board, once for all of it: the site's own banner and
+             its two ways in, as on an unpublished person's page. Not for a
+             reader who is signed in, who is shown the parties themselves
+             once their own answer replaces the server's. -->
+        <ExploreLoginBanner
+          v-if="lockedCount > 0 && !user"
+          :to="loginTarget"
+          :signup-to="signupTarget"
+          class="mt-4 mb-0"
+          data-testid="current-party-teaser"
+          @login="onTeaserClick('login')"
+          @signup="onTeaserClick('signup')"
+        >
+          <div class="font-weight-bold">
+            Powiązania polityczne po zalogowaniu
+          </div>
+          <div>
+            Przy
+            {{ count(lockedCount, "osobie", "osobach", "osobach") }} z obecnego
+            składu mamy niesprawdzone informacje o powiązaniach politycznych.
+            Zaloguj się, by je zobaczyć.
+          </div>
+        </ExploreLoginBanner>
 
         <div
           v-if="!currentGroups.length"
@@ -335,8 +370,11 @@ import {
   mdiOfficeBuildingOutline,
   mdiSwapVertical,
 } from "@mdi/js";
-import { useCurrentUser } from "vuefire";
+import { getCurrentUser, useCurrentUser } from "vuefire";
+import type { TeaserClickMode } from "~~/shared/analytics";
+import { trackGoal } from "~/composables/analytics";
 import { authFetch } from "~/composables/auth";
+import { teaserArrival, watchTeaserExit } from "~/composables/teaserJourney";
 import { createSlug, generateEntityUrl } from "~/composables/slugs";
 import { gapLabel, MAX_GAP_DAYS, MAX_OVERLAP_DAYS } from "~~/shared/succession";
 import { isoDay, longDate, shortDate } from "~~/shared/dates";
@@ -384,6 +422,7 @@ const ROLE_ORDER: RegExp[] = [
 const NO_ROLE = "Funkcja niepodana w rejestrze";
 
 const route = useRoute();
+const router = useRouter();
 // See `usePersonSuccessions`: the current user, not the whole auth state,
 // which would open a Firestore subscription this never reads.
 const user = useCurrentUser();
@@ -419,6 +458,56 @@ const loading = computed(() => !failed.value && !data.value);
 const successions = computed<Succession[]>(() => data.value?.successions ?? []);
 const current = computed<CurrentPost[]>(() => data.value?.current ?? []);
 const hidden = computed(() => data.value?.hidden ?? 0);
+
+/** How many of today's holders have a party this reader is not shown: the
+ * unpublished ones, for a reader who is not signed in. */
+const lockedCount = computed(
+  () => current.value.filter((post) => post.partyHidden).length,
+);
+
+/** Back to this page once signed in, where the parties then are. `powod`
+ * tells /login, and `login:success`, why the reader came; `konto=nowe` opens
+ * the form on registration. */
+const loginTarget = computed(() => ({
+  path: "/login",
+  query: { redirect: route.fullPath, powod: "partie-w-skladzie" },
+}));
+const signupTarget = computed(() => ({
+  path: "/login",
+  query: { ...loginTarget.value.query, konto: "nowe" },
+}));
+
+const TEASER_GOAL = { surface: "instytucja", kind: "partia" } as const;
+
+function onTeaserClick(mode: TeaserClickMode) {
+  trackGoal("teaser:click", { ...TEASER_GOAL, mode });
+}
+
+let teaserReported = false;
+let stopWatchingExit: (() => void) | undefined;
+
+/** `teaser:shown`, once, when the board first shows a logged out reader a
+ * party it holds back. Watched rather than read on mount: on a navigation
+ * inside the site the answer arrives after the component has mounted. The
+ * server renders every page anonymously, so a signed in reader sees the
+ * locks for the moment before their own answer arrives - only a reader who
+ * is really logged out has been shown them. */
+async function reportTeaser() {
+  if (teaserReported || lockedCount.value === 0) return;
+  teaserReported = true;
+  if (await getCurrentUser()) return;
+  trackGoal("teaser:shown", {
+    ...TEASER_GOAL,
+    from: teaserArrival(props.companyId),
+  });
+  stopWatchingExit = watchTeaserExit(router, route.path, TEASER_GOAL);
+}
+
+onMounted(() => {
+  watch(lockedCount, reportTeaser, { immediate: true });
+});
+
+onBeforeUnmount(() => stopWatchingExit?.());
 const nothingToShow = computed(
   () => !successions.value.length && !current.value.length && !hidden.value,
 );

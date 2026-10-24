@@ -17,6 +17,10 @@
  * guess. The job comes from the register the person was entered from, which
  * says it about them by name.
  *
+ * Of a party it says only whether one is on record (`partyHidden`), for the
+ * page to offer behind the sign in, as the same „???” chip a company's
+ * board says of the same person (Szymon, 2026-10-24).
+ *
  * The shape below is the whole of what the endpoint sends, built field by field
  * rather than spread from the document, so a field added to the person later
  * cannot reach it by accident.
@@ -66,6 +70,8 @@ export type PersonTeaser = {
    * the sign-in button promises. Counted the way the page lists them, without
    * the role-less copy of a post the person also holds under its name. */
   employmentCount: number;
+  /** A party is on record for the person; which one is not said. */
+  partyHidden?: boolean;
 };
 
 /** An `employed` edge, as much of it as the teaser reads. */
@@ -149,7 +155,7 @@ export function mostRecentPost<T extends TeaserEdge>(
  * either, and the teaser must not name what the page does not.
  */
 export function buildPersonTeaser(
-  person: { id: string; name: string },
+  person: { id: string; name: string; parties?: unknown },
   edges: readonly TeaserEdge[],
   companies: ReadonlyMap<string, TeaserCompany>,
   today: number,
@@ -183,6 +189,9 @@ export function buildPersonTeaser(
         }
       : {}),
     employmentCount: listed.length,
+    ...(Array.isArray(person.parties) && person.parties.length > 0
+      ? { partyHidden: true }
+      : {}),
   };
 }
 

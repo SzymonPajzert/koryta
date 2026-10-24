@@ -4,6 +4,7 @@ import {
   editorFreshCachedEventHandler,
   wantsLatest,
 } from "~~/server/utils/handlers";
+import { importedOrReviewed } from "~~/server/utils/provenance";
 import { pageIsPublic } from "~~/shared/model";
 import type { Company, Edge, Person } from "~~/shared/model";
 import {
@@ -61,6 +62,14 @@ export type CurrentPost = {
   parties: string[];
   role: string | null;
   start: string | null;
+  /** Whether the holder's page is live. A logged out reader is told about the
+   * unpublished holders of a post too - see `unpublishedHolders` - and their
+   * link leads to the teaser of their page rather than to the page. */
+  published: boolean;
+  /** For a logged out reader, an unpublished holder with a party on record:
+   * the answer leaves the party out (`parties` is empty) and says only that
+   * there is one, for the page to offer behind a sign in. */
+  partyHidden?: boolean;
 };
 
 export type CompanySuccessions = {
@@ -174,6 +183,10 @@ async function endpointNodes(
  * people in the register have a page, so a logged out reader sees a small
  * fraction of the handovers and an editor sees all of them. That is what
  * `hidden` counts.
+ *
+ * Today's board is the one exception, and only for who sits on it: a company's
+ * own register names them, with no claim about how they got there. See
+ * `unpublishedHolders`.
  */
 function canName(
   node: Person | Company | undefined,
@@ -218,6 +231,50 @@ function spellsByCompany(edges: (Edge & { id: string })[]) {
     else byCompany.set(edge.target, [spell]);
   }
   return { byCompany, edgeById };
+}
+
+/** The holders of today's posts that a logged out reader may not open the page
+ * of, as „Obecny skład” lists them for that reader: a name, the post, the day
+ * it began - and of the party only whether there is one.
+ *
+ * A company has no secrets, and its page with nobody on it was the site's
+ * worst landing: 3,794 of the 6,578 company pages live on 2026-10-24 showed a
+ * logged out reader no people at all. Who sits on a board is in the register
+ * the post was read from, which says it about them by name - what the teaser
+ * of an unpublished person's page (`shared/personTeaser.ts`) shows for the
+ * same reason, and what it leaves out for the same reason too: a party on an
+ * unpublished person is mostly a PKW match nobody has checked yet. So the
+ * party stays behind the sign in, and the reader is told it is there.
+ *
+ * Only a person and a post an import wrote or a reviewer approved
+ * (`importedOrReviewed`), as on the teaser, whose page the name links to: a
+ * person or a relation somebody added by hand is anybody's say-so about a
+ * named individual until a reviewer has read it. On the 2026-10-24 export that
+ * kept 28 people out and let 6,820 in. One read per document that has no
+ * approved revision, and only for a reader the six-hour cache answers. */
+async function unpublishedHolders(
+  db: FirebaseFirestore.Firestore,
+  holders: { spell: SuccessionSpell; person: Person }[],
+  edgeById: Map<string, Edge & { id: string }>,
+  company: Company,
+): Promise<CurrentPost[]> {
+  if (!holders.length) return [];
+  const shown = await importedOrReviewed(db, [
+    ...holders.map(({ person }) => person),
+    ...holders.flatMap(({ spell }) => edgeById.get(spell.id) ?? []),
+  ]);
+  return holders
+    .filter(({ spell }) => shown.has(spell.personId) && shown.has(spell.id))
+    .map(({ spell, person }) => ({
+      edgeId: spell.id,
+      personId: spell.personId,
+      personName: person.name,
+      parties: [],
+      role: displayRole(spell.role, company) ?? null,
+      start: spell.start,
+      published: false,
+      ...((person.parties?.length ?? 0) > 0 ? { partyHidden: true } : {}),
+    }));
 }
 
 async function companySuccessions(
@@ -282,13 +339,20 @@ async function companySuccessions(
     }),
   );
   const current: CurrentPost[] = [];
+  const unpublished: { spell: SuccessionSpell; person: Person }[] = [];
   for (const spell of listed) {
     // An absent end date is what "still in post" looks like; `create.post.ts`
     // writes null and the edge editor writes "", so neither may be trusted to
     // be the other.
     if (spell.end) continue;
     const person = nodes.get(spell.personId);
-    if (!canName(person, showUnapproved) || person.type !== "person") continue;
+    if (!person?.name || person.type !== "person") continue;
+    // `canName`, spelled out: a holder it would refuse is not dropped here
+    // but handed to `unpublishedHolders` - unless the page was removed.
+    if (!showUnapproved && !pageIsPublic(person)) {
+      if (person.deleted !== true) unpublished.push({ spell, person });
+      continue;
+    }
     current.push({
       edgeId: spell.id,
       personId: spell.personId,
@@ -296,8 +360,12 @@ async function companySuccessions(
       parties: person.parties ?? [],
       role: displayRole(spell.role, company) ?? null,
       start: spell.start,
+      published: pageIsPublic(person),
     });
   }
+  current.push(
+    ...(await unpublishedHolders(db, unpublished, edgeById, company)),
+  );
   current.sort(
     (a, b) =>
       (a.role ?? "").localeCompare(b.role ?? "") ||

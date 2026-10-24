@@ -1,8 +1,8 @@
-import type { Page } from "@playwright/test";
 import { test, expect } from "./test";
 import { freezeClock } from "./clock";
 import { personTeaser } from "./fixtures/personTeaser";
 import { readyForFullPage } from "./fullPage";
+import { openInApp } from "./openInApp";
 import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
 
@@ -18,27 +18,6 @@ import { expectFitsThePhone } from "./phoneWidth";
 
 const SLUG = { tag: pageTag("[seoType]/[slug]") };
 const PATH = "/osoba/jan-przykladowy-h1";
-
-type MountPoint = Element & {
-  __vue_app__?: {
-    config: {
-      globalProperties: { $router: { push: (to: string) => unknown } };
-    };
-  };
-};
-
-async function openInApp(page: Page, path: string) {
-  await page.goto("/o-nas");
-  await page.waitForFunction(
-    () =>
-      !!(document.querySelector("#__nuxt") as MountPoint | null)?.__vue_app__,
-  );
-  await page.evaluate(async (to) => {
-    const root = document.querySelector("#__nuxt") as MountPoint;
-    await root.__vue_app__!.config.globalProperties.$router.push(to);
-  }, path);
-  await page.waitForURL(`**${path}`);
-}
 
 test("osoba-niezweryfikowana", SLUG, async ({ page }, testInfo) => {
   await freezeClock(page);
@@ -97,3 +76,40 @@ test("osoba-niezweryfikowana", SLUG, async ({ page }, testInfo) => {
 
   await expectFitsThePhone(page, testInfo);
 });
+
+/** The same teaser for a person with a party on record: the „???” chip
+ * beside the name, where the full page puts the party chips, leading to the
+ * sign in (Szymon, 2026-10-24). The answer says only that there is a party. */
+test(
+  "osoba-niezweryfikowana-mozliwe-powiazania",
+  SLUG,
+  async ({ page }, testInfo) => {
+    await freezeClock(page);
+    await page.route("**/api/nodes/h1/teaser", (route) =>
+      route.fulfill({ json: { ...personTeaser, partyHidden: true } }),
+    );
+    await openInApp(page, PATH);
+
+    const teaser = page.getByTestId("person-teaser");
+    await expect(teaser).toBeVisible({ timeout: 30_000 });
+    const chip = teaser.getByTestId("party-locked");
+    await expect(chip).toHaveText("???");
+    // On the name's line on a computer; on a phone a long name may push it to
+    // the next one, whole.
+    await expect(chip).toHaveAttribute("href", /powod=partia-osoby/);
+    // And the banner names them first among what signing in shows.
+    await expect(teaser.getByTestId("person-teaser-more")).toContainText(
+      "możliwe powiązania polityczne, wszystkie 4 stanowiska",
+    );
+
+    await page.mouse.move(0, 0);
+    await readyForFullPage(page);
+    const clip = await teaser.boundingBox();
+    await expect(page).toHaveScreenshot(
+      "osoba-niezweryfikowana-mozliwe-powiazania.png",
+      { fullPage: true, clip: clip! },
+    );
+
+    await expectFitsThePhone(page, testInfo);
+  },
+);

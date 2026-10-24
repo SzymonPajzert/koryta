@@ -59,6 +59,48 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "lastmod-po-zmianach-calej-witryny",
+    title: "Mapa strony odnotowuje zmiany całej witryny i zmiany składu spółek",
+    description:
+      "Data ostatniej zmiany w /sitemap.xml ruszała się tylko wtedy, gdy ktoś zmienił samą stronę albo opublikowane powiązanie. " +
+      "Teraz rusza się też, gdy zmiana całej witryny dotarła do strony (poprawione adresy i opisy z 24 października, obecny skład spółek z osobami bez opublikowanej strony), i gdy w obecnym składzie spółki ktoś dochodzi, odchodzi albo zmienia funkcję - także osoba bez opublikowanej strony.",
+    steps: [
+      "Po przeliczeniu dat (skrypt stamp-site-changes) otwórz /sitemap.xml: strony osób, artykułów i spółek mają datę nie starszą niż 24 października 2026.",
+      "Po wdrożeniu funkcji dodaj w spółce nowe zatrudnienie osoby bez opublikowanej strony: po kilku minutach data przy tej spółce jest dzisiejsza (w samej mapie po wygaśnięciu jej cache, do sześciu godzin).",
+    ],
+    link: "/sitemap.xml",
+    area: "admin",
+  },
+  {
+    id: "profil-osoby-mozliwe-powiazania",
+    title: "Zapowiedź strony osoby mówi, że są możliwe powiązania polityczne",
+    description:
+      "Na stronie osoby bez opublikowanej strony niezalogowany czytelnik nie wiedział, że mamy o niej jakiekolwiek informacje partyjne. " +
+      "Teraz, gdy partia jest zapisana, obok nazwiska stoi szary chip „???” z kolorowymi kropkami, jak w obecnym składzie spółki, a baner wymienia możliwe powiązania polityczne na początku tego, co pokaże logowanie. Samej partii nadal nie widać.",
+    steps: [
+      "Wylogowany kliknij w obecnym składzie MPWiK w Kamiennej Górze osobę z chipem „???”: na jej stronie ten sam chip stoi obok nazwiska, a baner zaczyna się od „Zaloguj się, by zobaczyć możliwe powiązania polityczne”.",
+      "Kliknij chip i zaloguj się: wracasz na stronę tej osoby, już z partią.",
+      "Osoba bez zapisanej partii nie ma chipu, a jej baner wygląda jak dotąd.",
+    ],
+    link: "/instytucja/miejskie-przedsiebiorstwo-wodociagow-i-kanalizacji-kamienna-gora-KNZZ2oawiqTbeg8xztLX",
+    area: "public",
+  },
+  {
+    id: "sklad-spolki-z-osobami-bez-strony",
+    title: "Strona spółki pokazuje cały obecny skład, a partie po zalogowaniu",
+    description:
+      "Niezalogowany czytelnik widział w „Obecnym składzie” tylko osoby z opublikowaną stroną, więc ponad połowa stron spółek nie pokazywała nikogo. " +
+      "Teraz widzi wszystkich, którzy zasiadają w spółce, z funkcją i datą powołania. Partii osoby bez opublikowanej strony nie widzi: w jej miejscu stoi chip „???” w szarym kolorze chipu „Inne”, z kolorowymi kropkami przy brzegach, a pod składem baner z logowaniem. Po zalogowaniu wszystko jest jak dotąd.",
+    steps: [
+      "Wyloguj się i otwórz stronę MPWiK w Kamiennej Górze: w „Obecnym składzie” są też osoby bez opublikowanej strony, przy części z nich chip „???”, a pod składem baner „Powiązania polityczne po zalogowaniu”.",
+      "Kliknij chip albo „Zaloguj się” w banerze i zaloguj się: wracasz na tę samą stronę, a w miejscu chipów stoją partie.",
+      "Wylogowany kliknij nazwisko osoby bez opublikowanej strony: otwiera się zapowiedź jej strony z logowaniem.",
+      "Na stronie Orlenu osoby z opublikowaną stroną mają swoje partie tak jak dotąd.",
+    ],
+    link: "/instytucja/miejskie-przedsiebiorstwo-wodociagow-i-kanalizacji-kamienna-gora-KNZZ2oawiqTbeg8xztLX",
+    area: "public",
+  },
+  {
     id: "opis-w-wyszukiwarce",
     title: "Google i podgląd linku opisują osobę albo spółkę konkretnie",
     description:
