@@ -19,6 +19,14 @@ vi.mock("~/composables/edges", async (importOriginal) => ({
   useEdges: vi.fn(),
 }));
 
+// Even mounted shallow, the page starts the graph's lazy import - its canvas,
+// v-network-graph and the simulation store. Nothing here looks at the graph,
+// and that import can finish after the file's environment is torn down, which
+// fails the run after every test has passed. An empty component answers it.
+vi.mock("~/components/graph/Container.vue", () => ({
+  default: { name: "GraphContainer", render: () => null },
+}));
+
 vi.mock("@plausible-analytics/tracker", () => ({
   init: vi.fn(),
   track: vi.fn(),
