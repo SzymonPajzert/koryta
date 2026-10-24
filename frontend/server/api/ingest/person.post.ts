@@ -23,6 +23,7 @@ import {
   misfiledSejmikRunOf,
   preferredCopy,
   unnamedLocal,
+  withRecordedFacts,
   type EdgeLike,
 } from "~~/server/utils/edges";
 import {
@@ -740,8 +741,9 @@ async function createElection(
  * contradicts: a committee or party that disagrees is somebody else's run and
  * is left for a reviewer, and a removed one stays as its reviewer left it. The
  * payload's other fields go in with the move where the ordinary path would
- * write them straight out (`findEdgeOrCreate`); otherwise the next send offers
- * them.
+ * write them straight out (`findEdgeOrCreate`). Otherwise what PKW records -
+ * the office and the result - goes in with it, as the ordinary path writes
+ * those out too, and the next send offers the rest.
  */
 async function moveMisfiledCandidacy(
   ctx: Context,
@@ -796,7 +798,8 @@ async function moveMisfiledCandidacy(
     const moved = { ...withoutInternalFields(stored), target: edge.target };
     // What the ordinary path would write out rather than propose: a vouched
     // row, or one adding only what PKW records outright - the result, or the
-    // office a „Samorząd” copy was for (`findEdgeOrCreate`).
+    // office the copy was for (`namesOffice`) - and otherwise those facts
+    // alone (`findEdgeOrCreate`).
     const writeAll =
       vouched || ctx.autoapprove || addsOnlyRecordedFacts(stored, edge);
     createRevisionTransaction(
@@ -804,7 +807,9 @@ async function moveMisfiledCandidacy(
       ctx.batch,
       ctx.user,
       ctx.db.collection("edges").doc(doc.id),
-      writeAll ? enrichedEdge(moved, edge) : moved,
+      writeAll
+        ? enrichedEdge(moved, edge)
+        : (withRecordedFacts(moved, edge) ?? moved),
       // Approved as the correction it is, and published or not as it was.
       { automatic: true, approve: true, stored },
     );
@@ -1401,8 +1406,8 @@ async function findEdgeOrCreate(
     // proposed: there is no judgement in it for a reviewer to make, and 15,681
     // stored candidacies are waiting to be told what happened to them, 12,941
     // which seat they were. Anything else in the same revision - above all a
-    // committee the curated table does not recognise - puts it back on the
-    // reviewed path.
+    // committee the curated table does not recognise - is proposed, and the
+    // recorded facts go out without it (below).
     const recordedOnly = addsOnlyRecordedFacts(candidate.stored, edge);
     if (vouched || recordedOnly || ctx.autoapprove) {
       createRevisionTransaction(
@@ -1440,6 +1445,37 @@ async function findEdgeOrCreate(
         },
       );
       ctx.proposals[outcome] = (ctx.proposals[outcome] ?? 0) + 1;
+
+      // The office and the result do not wait for it. They rode in the one
+      // proposal until 2026-10-24, so a page kept „Samorząd” for as long as
+      // its committee waited for a reviewer; now they are written out as an
+      // approved revision, and the proposal stays an offer of the committee
+      // on top. Left out where:
+      // - a reviewer has answered this offer, and their answer stands for all
+      //   of it;
+      // - the copy is removed, which stays as its reviewer left it;
+      // - the copy would still not say which office it was for - a 2024 one
+      //   with none could be the European run - since a candidacy revision
+      //   without one is what `test_required_field_present[election.position]`
+      //   counts, and a night past its budget holds the upload.
+      const recorded = withRecordedFacts(
+        withoutInternalFields(candidate.stored),
+        edge,
+      );
+      if (
+        recorded?.position &&
+        outcome !== "decided" &&
+        candidate.stored.deleted !== true
+      ) {
+        createRevisionTransaction(
+          ctx.db,
+          ctx.batch,
+          ctx.user,
+          edgeRef,
+          recorded,
+          { automatic: true, approve: true, stored: candidate.stored },
+        );
+      }
     }
     // Written onto with the visibility it had, so nothing went live.
     return { edgeId: edgeRef.id, created: false, published: false };

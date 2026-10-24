@@ -472,30 +472,81 @@ export function addsOnlyAnnotations(
   return annotations.some(adds) && !discriminators.some(adds);
 }
 
+/** Whether the incoming office says which seat a stored candidacy was for,
+ * where the stored copy leaves that open: a „Samorząd” copy given a local
+ * office (`specifies`), or a copy with no office at all in a year that held
+ * no other kind of election than the incoming one (`isSameRun`).
+ *
+ * Either way it is what PKW's files say about this run rather than anybody's
+ * judgement, as the result is. A copy with no office in 2014, 2019 or 2024 is
+ * not named this way: those years held two kinds of election, and the copy
+ * may be the other one's. 1,544 live candidacies had no office on the
+ * 2026-10-17 export, Hubert Papaj's 2018 and 2024 mayoral runs among them. */
+export function namesOffice(stored: EdgeLike, incoming: EdgeLike): boolean {
+  if (incoming.type !== "election") return false;
+  if (specifies("position", stored.position, incoming.position)) return true;
+  return field(stored, "position") === null && isSameRun(stored, incoming);
+}
+
 /** Whether everything the payload would add to this edge is a fact PKW records
- * outright, which needs no reviewer: an annotation, or which office a „Samorząd"
- * candidacy was for.
+ * outright, which needs no reviewer: an annotation, or which office the
+ * candidacy was for (`namesOffice`).
  *
  * The office is the same kind of fact as the result: PKW's files say which
  * seat each candidate stood for, and `scrapers/pkw/offices.py` reads it off
  * them rather than judging anything - unlike a committee, which is proposed
- * because recognising one is a judgement. And like the result it rides in one
- * revision with whatever else the payload fills in, so the rule is the one
- * `addsOnlyAnnotations` makes: the whole set has to be such facts.
+ * because recognising one is a judgement. Where the payload brings one of
+ * those as well, the recorded facts go out on their own (`withRecordedFacts`)
+ * and the rest waits for a reviewer.
  */
 export function addsOnlyRecordedFacts(
   stored: Record<string, unknown>,
   incoming: EdgeLike,
 ): boolean {
   const { discriminators, annotations = [] } = edgeSemantics(incoming.type);
-  const named = (name: string) =>
-    specifies(name, stored[name], (incoming as Record<string, unknown>)[name]);
+  const office = namesOffice(stored as EdgeLike, incoming);
   const adds = (name: string) =>
     field(stored as EdgeLike, name) === null && field(incoming, name) !== null;
-  return (
-    (annotations.some(adds) || discriminators.some(named)) &&
-    !discriminators.some(adds)
-  );
+  // The office filling in a copy that has none is the one discriminator PKW
+  // records outright; any other one added is a judgement.
+  const judged = (name: string) =>
+    adds(name) && !(name === "position" && office);
+  return (annotations.some(adds) || office) && !discriminators.some(judged);
+}
+
+/** The stored edge with what PKW records outright written in and nothing else:
+ * the office where `namesOffice` says it, and each annotation the edge lacks.
+ * Undefined when the payload brings no such fact.
+ *
+ * What goes out without a reviewer when the payload also brings something
+ * that needs one. They used to wait together: a „Samorząd” candidacy whose row
+ * named its office and an unrecognised committee was proposed whole, and the
+ * page said „Samorząd” until somebody approved the committee - 178 published
+ * runs on the 2026-10-15 plan, and all eight of Robert Marek Starzyński's on
+ * the „Wyślij dane” of 2026-10-24, every one a local KWW. Which seat he stood
+ * for, and whether he took it, is not what a reviewer was being asked.
+ */
+export function withRecordedFacts(
+  stored: Record<string, unknown>,
+  incoming: EdgeLike,
+): Record<string, unknown> | undefined {
+  const { annotations = [] } = edgeSemantics(incoming.type);
+  const result: Record<string, unknown> = { ...stored };
+  let added = false;
+  if (namesOffice(stored as EdgeLike, incoming)) {
+    result.position = incoming.position;
+    added = true;
+  }
+  for (const name of annotations) {
+    if (
+      field(stored as EdgeLike, name) === null &&
+      field(incoming, name) !== null
+    ) {
+      result[name] = (incoming as Record<string, unknown>)[name];
+      added = true;
+    }
+  }
+  return added ? result : undefined;
 }
 
 /** The offices a whole district elects: the Sejm, the Senate and the European
