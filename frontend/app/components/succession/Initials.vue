@@ -1,9 +1,14 @@
 <template>
   <!-- Hidden from a screen reader: the name it stands for is read out right
-       beside it, and „MP Marcin Protas” says the name twice. -->
-  <span class="initials" :class="`initials--${tone}`" aria-hidden="true">{{
-    letters
-  }}</span>
+       beside it, and „MP Marcin Protas” says the name twice. Out of search
+       snippets for the same reason: Google's read „RB.” before the name. -->
+  <span
+    class="initials"
+    :class="`initials--${tone}`"
+    aria-hidden="true"
+    data-nosnippet
+    >{{ letters }}</span
+  >
 </template>
 
 <script lang="ts" setup>
