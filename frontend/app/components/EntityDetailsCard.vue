@@ -133,12 +133,31 @@
     </v-card-text>
   </v-card>
 
-  <v-card v-if="type == 'article'" width="100%" variant="flat">
-    <v-card-title class="headline px-0">
-      <v-icon start :icon="mdiFileDocumentOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
-        {{ entity?.name }}
+  <v-card
+    v-if="type == 'article'"
+    width="100%"
+    variant="flat"
+    data-testid="entity-article-card"
+  >
+    <v-card-title class="headline px-0 d-flex align-start ga-2 text-wrap">
+      <h2 class="text-h5 font-weight-bold flex-grow-1 text-break">
+        <v-icon start :icon="mdiFileDocumentOutline" />
+        <template v-if="entity?.name">{{ entity.name }}</template>
+        <span v-else class="text-medium-emphasis">Artykuł bez tytułu</span>
       </h2>
+      <!-- The article page's pencil, on the same terms (signed in readers
+           only). An article reaches this card only when it is opened by id: a
+           draft, which is how /admin/rewizje links to one, or one stored
+           without a name, which has no readable url to be sent on to. Those
+           are the pages whose name most needs correcting, and the article's
+           own page is not an option for them yet: drawn there, the list of
+           390 people stored without a name froze a desktop browser for
+           minutes. -->
+      <DialogProposeEditNode
+        v-if="user && entity"
+        :entity="entity"
+        data-testid="article-propose-change"
+      />
     </v-card-title>
     <v-card-text class="px-0">
       <div v-if="article?.sourceURL" class="text-caption mb-2">
@@ -197,7 +216,7 @@ const props = withDefaults(
  * - the entity is handed to it - so the only thing it can do is say so. */
 const emit = defineEmits<{ published: [] }>();
 
-const { isAdmin } = useAuthState();
+const { user, isAdmin } = useAuthState();
 
 const company = computed(() =>
   props.type === "place" ? (props.entity as Company) : undefined,

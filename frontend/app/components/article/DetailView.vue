@@ -31,18 +31,54 @@
 
     <v-card v-else width="100%">
       <div class="pa-4">
+        <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
+          Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
+          <br />
+          <nuxt-link :to="`/admin/rewizje/${nodeId}?revisionId=${revisionId}`">
+            Zobacz historię zmian </nuxt-link
+          >.
+        </v-alert>
+
         <!-- 1. What this is, and where it came from -->
-        <div class="d-flex align-start ga-3 mb-2">
+        <div class="d-flex align-start ga-3 mb-2" data-testid="article-head">
           <v-avatar
             v-if="article?.sourceURL"
             :image="getDomainIcon(article.sourceURL)"
             size="32"
             class="mt-1"
           />
-          <div class="flex-grow-1">
-            <h1 class="text-h5 font-weight-bold text-wrap">
-              {{ article?.name }}
-            </h1>
+          <div class="flex-grow-1 article-head">
+            <div class="d-flex flex-wrap align-start ga-3">
+              <h1 class="text-h5 font-weight-bold text-wrap article-title">
+                <template v-if="article?.name">{{ article.name }}</template>
+                <span v-else class="text-medium-emphasis">
+                  Artykuł bez tytułu
+                </span>
+              </h1>
+              <!-- The person page's amber pencil, beside the title, which is
+                   what it is mostly there to correct: an import names an
+                   article after its address, or keeps the site's „| Newsweek”.
+                   For signed in readers only (Szymon, 2026-10-24), and the
+                   admin's way to the page's revisions beside it. -->
+              <div
+                v-if="user && article"
+                class="d-flex align-center ga-2"
+                data-testid="article-actions"
+              >
+                <DialogProposeEditNode
+                  :entity="article"
+                  data-testid="article-propose-change"
+                  @submitted="onProposed"
+                />
+                <ButtonIconAction
+                  v-if="isAdmin"
+                  :icon="mdiHistory"
+                  label="Rewizje"
+                  :to="`/admin/rewizje/${nodeId}`"
+                  data-testid="admin-revisions-link"
+                />
+              </div>
+            </div>
             <div
               class="d-flex align-center flex-wrap ga-2 mt-1 text-caption text-medium-emphasis"
             >
@@ -68,6 +104,10 @@
             </div>
           </div>
         </div>
+
+        <!-- Renders nothing until the reader has proposed something for this
+             article, so a page nobody has touched looks exactly as it did. -->
+        <RevisionNodeProposals ref="proposals" :node-id="nodeId" />
 
         <!-- 2. Which story it belongs to -->
         <v-divider class="my-3" />
@@ -295,6 +335,7 @@ import { computed, ref } from "vue";
 import {
   mdiChevronDown,
   mdiChevronUp,
+  mdiHistory,
   mdiLinkVariantPlus,
   mdiOpenInNew,
   mdiPlus,
@@ -305,7 +346,7 @@ import { useDomainIcon } from "~/composables/useDomainIcon";
 import { useExtractions } from "~/composables/extractions";
 import { useCanCapture } from "~/composables/captures";
 import { entityDescription, SOCIAL_CARD } from "~/composables/entitySeo";
-import type { Article, Link, NodeType } from "~~/shared/model";
+import type { Article, Link, NodeType, Revision } from "~~/shared/model";
 import type { ArticleCapture } from "~~/shared/capture";
 import type {
   ArticleRelation,
@@ -332,8 +373,52 @@ const {
   refresh: refreshNode,
 } = await authFetch<{ node: Article }>(`/api/nodes/${nodeId}`);
 
-const article = computed(() => nodeResponse.value?.node);
+// A reader who signs in on a draft should see it without reloading, as on a
+// company's page. The server's render is anonymous, so a full load of an
+// article nobody has published arrived as an error and stayed one.
+watch(
+  user,
+  (signedIn) => {
+    if (signedIn && status.value === "error") refreshNode();
+  },
+  { immediate: true },
+);
+
+const revisionId = computed(() => route.query.revisionId as string | undefined);
+
+// A proposed change laid over the page, for a signed in reader who followed a
+// link to one: the preview "Zaproponuj zmianę" sends them to, and the one
+// /profil and /admin/rewizje link to. In the browser only and with the token,
+// as on the person and company pages - a proposal nobody has reviewed is not
+// for the server's anonymous render.
+const { data: revisionResponse } = await useAsyncData<Revision | null>(
+  `revision-${route.query.revisionId || "none"}`,
+  async () => {
+    if (!revisionId.value || !user.value) return null;
+    return authRequest<Revision>(`/api/revisions/${revisionId.value}`, {
+      method: "GET",
+    });
+  },
+  { watch: [revisionId, user], server: false },
+);
+
+/** The article as the reader is looking at it, which is the stored node unless
+ * they followed a link to a proposed change. */
+const article = computed<Article | undefined>(() => {
+  const node = nodeResponse.value?.node;
+  if (revisionId.value && revisionResponse.value?.data) {
+    return { ...node, ...revisionResponse.value.data } as unknown as Article;
+  }
+  return node;
+});
 const isPublished = computed(() => article.value?.published === true);
+
+/** The card listing what this reader has proposed here, read again once they
+ * have proposed something more. */
+const proposals = ref<{ refresh: () => void } | null>(null);
+function onProposed() {
+  proposals.value?.refresh();
+}
 
 const domain = computed(() => {
   const url = article.value?.sourceURL;
@@ -565,9 +650,11 @@ async function detachSource(edge: SourcedEdge) {
   }
 }
 
+// `||`, not `??`: an article stored with an empty name is titled „Artykuł”
+// rather than left blank.
 const seoTitle = computed(() =>
   status.value === "success"
-    ? (article.value?.name ?? "Artykuł")
+    ? article.value?.name || "Artykuł"
     : "Strona nieznaleziona",
 );
 
@@ -588,5 +675,23 @@ useSeoMeta({
 <style scoped>
 .cursor-pointer {
   cursor: pointer;
+}
+
+/* 137 articles in the 2026-10-24 export are titled with their own address,
+   which has few places to break: on a phone the longest needed 476px of a
+   267px heading and was cut off at the card's edge.
+
+   The flex basis shares the line with the pencil until the title would be
+   narrower than 320px, and then the pencil takes the line under it. */
+.article-title {
+  flex: 1 1 min(320px, 100%);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Free to be narrower than its widest unbreakable piece, which is what lets
+   the title and the actions wrap inside the card instead of widening it. */
+.article-head {
+  min-width: 0;
 }
 </style>

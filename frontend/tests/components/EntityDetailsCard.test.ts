@@ -3,7 +3,7 @@ import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { nextTick, ref } from "vue";
 import EntityDetailsCard from "../../app/components/EntityDetailsCard.vue";
 import { useAuthState } from "~/composables/auth";
-import type { Person } from "../../shared/model";
+import type { Article, Person } from "../../shared/model";
 
 vi.mock("~/composables/auth", () => ({
   useAuthState: vi.fn(() => ({
@@ -128,5 +128,46 @@ describe("EntityDetailsCard", () => {
       },
     });
     expect(live.text()).not.toContain("szkic");
+  });
+});
+
+/** The card an article gets when it is opened by id: a draft, or one of the
+ * articles an import stored without a name, which have no readable url. */
+describe("EntityDetailsCard for an article", () => {
+  const nameless = {
+    id: "art",
+    type: "article",
+    name: "",
+    sourceURL: "https://www.psl.pl/mamy-liste-357tlustych-kotow",
+  } as Article;
+
+  const mountArticle = (signedIn: boolean) => {
+    (useAuthState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      user: ref(signedIn ? { uid: "test-user" } : null),
+      isAdmin: ref(false),
+    });
+    return mountSuspended(EntityDetailsCard, {
+      props: { entity: nameless, type: "article" },
+    });
+  };
+
+  it("says an article has no title rather than showing an empty heading", async () => {
+    const wrapper = await mountArticle(true);
+    expect(wrapper.get("h2").text()).toBe("Artykuł bez tytułu");
+  });
+
+  it("gives a signed in reader the pencil to name it", async () => {
+    const wrapper = await mountArticle(true);
+    expect(
+      wrapper.find('[data-testid="article-propose-change"]').exists(),
+    ).toBe(true);
+  });
+
+  it("gives a reader who is not signed in no pencil", async () => {
+    // Szymon, 2026-10-24: for signed in readers only, as on the article page.
+    const wrapper = await mountArticle(false);
+    expect(
+      wrapper.find('[data-testid="article-propose-change"]').exists(),
+    ).toBe(false);
   });
 });

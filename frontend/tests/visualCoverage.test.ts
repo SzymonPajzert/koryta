@@ -21,10 +21,6 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 /** Pages that draw nothing of their own: each sends the reader on before it
  * renders, so its screenshot would be of wherever it sends them. */
 const redirectOnly: Record<string, string> = {
-  "entity/[destination]/[id]":
-    "app/middleware/entity-slug.ts sends every node it can read on to its " +
-    "readable url, and what it draws for one it cannot is the same detail " +
-    "view [seoType]/[slug] is photographed with",
   "eksploruj/autograf/index":
     "replaces itself with /eksploruj/autograf/spolki-partie",
   "admin/rewizje/kolejka": "a route redirect to /admin/rewizje#kolejka",
