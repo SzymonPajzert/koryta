@@ -5,16 +5,20 @@
        value after it the text's own ink, so the facts read before what they
        are called. -->
   <div class="entity-facts">
+    <!-- Each fact opens on a space, for a reader of the text rather than of
+         the layout: the dot between two facts is drawn in CSS, so the text
+         read „1975Wikipedia”. At the start of a flex item it is never drawn.
+         The gap after a label belongs to the label: Vue drops the whitespace
+         between two tags, and „REGON:123456785” reads as one number.
+         Non-breaking, so a label never wraps off its own value. -->
     <span
       v-for="fact in facts"
       :key="fact.key"
       class="entity-facts__item"
       :data-testid="fact.testid"
     >
-      <!-- The gap belongs to the label: Vue drops the whitespace between two
-           tags, and „REGON:123456785” reads as one number. Non-breaking, so a
-           label never wraps off its own value. -->
-      <span v-if="fact.label" class="entity-facts__label"
+      {{ " "
+      }}<span v-if="fact.label" class="entity-facts__label"
         >{{ fact.label }}&nbsp;</span
       >
       <!-- Underlined ink: the theme's sage is 1.85:1 as text on white, and

@@ -1,8 +1,9 @@
 <template>
   <!-- The reader's actions first - „Zaproponuj zmianę”, then a person's vote,
        then whatever links the page adds - and the tools only some readers get
-       after them, in a group of their own. -->
-  <div class="entity-actions">
+       after them, in a group of their own. Controls, not content, so kept
+       out of search snippets. -->
+  <div class="entity-actions" data-nosnippet>
     <slot />
     <!-- One group, on a line of its own under the reader's actions at every
          width, as on a phone. It used to take that line only once the row ran

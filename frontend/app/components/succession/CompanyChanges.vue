@@ -57,10 +57,16 @@
   <PageSection
     v-else-if="part === 'current' && ready && currentGroups.length"
     title="Obecny skład"
-    :caption="`wpisy bez daty zakończenia, stan na ${longDate(today)}`"
     data-testid="successions-current"
   >
     <!-- ============ obecny skład ============ -->
+    <!-- `data-nosnippet`: Google opened a company's search result on this
+         caption, which says nothing about the company. -->
+    <template #caption>
+      <span data-nosnippet
+        >wpisy bez daty zakończenia, stan na {{ longDate(today) }}</span
+      >
+    </template>
     <!-- The site's section head, as over every section of an entity page:
          8px over its first group, and the date the board is read at as its
          caption, which on a phone takes a line of its own. -->
@@ -125,11 +131,16 @@
                     <v-icon :icon="mdiCalendarBlankOutline" size="13" />
                     {{ seat.since }}
                   </span>
+                  <!-- The leading spaces in this card are for a reader of
+                       the text rather than of the layout: Google's snippet
+                       ran the date into the tenure, and the predecessor's
+                       name into „wcześniej na tym stanowisku:”. Each sits at
+                       the start of a flex item, where it is never drawn. -->
                   <span
                     v-if="seat.tenure"
                     class="text-caption text-medium-emphasis"
                   >
-                    {{ seat.tenure }} na stanowisku
+                    {{ ` ${seat.tenure}` }} na stanowisku
                   </span>
                   <!-- Whether the relation is live, as on its history row:
                        among what the post is, not among the buttons. -->
@@ -161,12 +172,12 @@
                     <span
                       v-if="seat.predecessor.batchSize > 1"
                       :title="batchNote(seat.predecessor.batchSize)"
-                      >m.in.</span
+                      >{{ " m.in." }}</span
                     >
                     <NuxtLink
                       :to="personUrl(seat.predecessor)"
                       class="link-plain font-weight-medium"
-                      >{{ seat.predecessor.personName }}</NuxtLink
+                      >{{ ` ${seat.predecessor.personName}` }}</NuxtLink
                     >
                     <PartyChip
                       v-for="party in seat.predecessor.parties"
@@ -260,8 +271,10 @@
               <!-- „tego dnia”, not „tego samego dnia”: the gap chip in a row
                    already says that for a seat taken the day it was left
                    (Szymon, 2026-10-24). -->
+              <!-- The leading space keeps the count off the date for a
+                   reader of the text. -->
               {{
-                polishCounting(batch.pairs.length, "zmiana", "zmiany", "zmian")
+                ` ${polishCounting(batch.pairs.length, "zmiana", "zmiany", "zmian")}`
               }}
               tego dnia
             </span>
