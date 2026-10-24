@@ -114,7 +114,10 @@ IGNORE_FAILURES: list[str] = [
     "Jacek Skórski",
     "Jakub Szurski",
     "Jan Szewczak",
+    # Józef Jan Malec (rejestr.io 2246272), as the register misspells him. Since
+    # 2026-10-24 his rows come from odpisy, which drop his middle name.
     "Józedf Jan Malec",
+    "Józedf Malec",
     "Jarosław Dworzański",
     "Justyna Jakubowicz-Dziduch",
     "Justyna Wójtowicz-Woda",
