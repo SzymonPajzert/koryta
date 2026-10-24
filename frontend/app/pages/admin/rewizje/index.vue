@@ -245,7 +245,7 @@
       <AdminSectionHead
         title="Zmiany powiązań"
         :count="edgeType ? undefined : (edges?.total ?? undefined)"
-        info="Zmiany powiązań, których nikt jeszcze nie rozpatrzył - głównie od pipeline'u. Pipeline zapisuje zmianę od razu tylko wtedy, gdy potrafi za nią ręczyć - komitet wyborczy z listy przypisanej do partii. Reszta czeka tutaj, a samo powiązanie pozostaje nietknięte. „Rozpatrz” otwiera zmianę w kolejce wyżej."
+        info="Zmiany powiązań, których nikt jeszcze nie rozpatrzył - głównie od pipeline'u. Pipeline zapisuje od razu to, co podaje PKW - urząd i wynik kandydatury - oraz komitet wyborczy z listy przypisanej do partii. Inny komitet czeka tutaj i trafia do powiązania dopiero po zatwierdzeniu. „Rozpatrz” otwiera zmianę w kolejce wyżej."
       >
         <v-select
           v-model="edgeType"
