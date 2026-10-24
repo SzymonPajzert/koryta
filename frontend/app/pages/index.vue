@@ -49,11 +49,13 @@
          reads as a sentence, a search and then the map. -->
     <v-container fluid class="d-md-none px-4 pt-4 pb-0">
       <!-- Full emphasis, not medium: this sits on the green band, where
-           rgba(0,0,0,.6) is the wrong side of readable. -->
-      <p class="text-body-2 text-high-emphasis mb-0">
-        Sprawdzamy, którymi stanowiskami w publicznych spółkach podzielili się
-        politycy.
-      </p>
+           rgba(0,0,0,.6) is the wrong side of readable. The phone's h1 - the
+           desktop one is hidden with its container - at 24/700, the size of
+           a title that heads a block rather than a page's column. -->
+      <h1 class="k-title--sm text-high-emphasis mb-0">
+        Sprawdzamy, którymi stanowiskami w&nbsp;publicznych spółkach podzielili
+        się politycy
+      </h1>
     </v-container>
     <!-- Search and button in one wrapping flex line rather than an 8/4 grid.
          The grid put them in columns with different padding, so on a phone,
@@ -107,7 +109,7 @@
        scrolls, so anything below it is pushed further away every time it does. -->
   <!-- Everything the site has just learned, in one date-ordered list: posts
        taken up, round numbers of years served, and whatever gets found next. -->
-  <HomeSection>
+  <HomeSection end>
     <HomeEventFeed />
   </HomeSection>
 </template>
@@ -135,6 +137,10 @@ useSeoMeta({
 definePageMeta({
   affineLink: "7CDdAj6z8PUAFNWT-phhD",
   fullWidth: true,
+  // The bands run edge to edge, the content in them on HomeSection's 1200
+  // column - which the signed-in strip under the app bar lines up with, as
+  // it does with every other page's.
+  columnWidth: 1200,
   hideSearch: true,
 });
 </script>

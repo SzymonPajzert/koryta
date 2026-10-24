@@ -1,36 +1,30 @@
 <template>
-  <!-- Full width takes the layout's padding away too, so the page puts its
-       own back. -->
-  <div class="w-100 pa-3 pa-sm-4">
-    <div class="tasks-page__head d-flex align-start flex-wrap ga-2 mb-2">
-      <div class="tasks-page__intro">
-        <h1 class="text-h5 text-sm-h4 mb-2">Zadania</h1>
-        <p class="text-body-2 text-medium-emphasis">
-          Co zostało do wdrożenia, uruchomienia, zdecydowania i zbudowania - i
-          co na co czeka. Agenci dopisują tu to, co zostawiają po sesji.
-        </p>
-      </div>
-      <v-btn-toggle
-        v-model="view"
-        mandatory
-        density="comfortable"
-        variant="outlined"
-        divided
-        data-task-view
-      >
-        <v-btn value="lista" :prepend-icon="mdiFormatListBulleted">Lista</v-btn>
-        <v-btn value="mapa" :prepend-icon="mdiSitemapOutline">Mapa</v-btn>
-      </v-btn-toggle>
-      <v-btn
-        color="ink-sage"
-        variant="flat"
-        :prepend-icon="mdiPlus"
-        data-task-add
-        @click="openDialog(null)"
-      >
-        Dodaj
-      </v-btn>
-    </div>
+  <div class="w-100">
+    <AdminPageHead
+      title="Zadania"
+      lead="Co zostało do wdrożenia, uruchomienia, zdecydowania i zbudowania - i co na co czeka."
+      info="Agenci dopisują tu to, co zostawiają po sesji."
+    >
+      <template #actions>
+        <SegmentedToggle v-model="view" data-task-view>
+          <v-btn value="lista" :prepend-icon="mdiFormatListBulleted">
+            Lista
+          </v-btn>
+          <v-btn value="mapa" :prepend-icon="mdiSitemapOutline">Mapa</v-btn>
+        </SegmentedToggle>
+        <!-- 40px, the toggle's track beside it. -->
+        <v-btn
+          color="ink-sage"
+          variant="flat"
+          height="40"
+          :prepend-icon="mdiPlus"
+          data-task-add
+          @click="openDialog(null)"
+        >
+          Dodaj
+        </v-btn>
+      </template>
+    </AdminPageHead>
 
     <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
       {{ loadError }}
@@ -48,7 +42,7 @@
 
     <div
       v-if="tasks.length > 0"
-      class="tasks-page__filters d-flex align-center flex-wrap ga-2 mb-2"
+      class="d-flex align-center flex-wrap ga-2 mb-2"
     >
       <v-text-field
         v-model="search"
@@ -69,6 +63,7 @@
       <v-chip-group
         v-model="priority"
         selected-class="text-ink-danger"
+        class="tasks-page__priority"
         data-task-priority-filter
       >
         <v-chip
@@ -114,15 +109,7 @@
         class="tasks-page__goal"
         data-task-goal-filter
       />
-      <v-btn-toggle
-        v-if="view === 'lista'"
-        v-model="order"
-        mandatory
-        density="compact"
-        variant="outlined"
-        divided
-        data-task-order
-      >
+      <SegmentedToggle v-if="view === 'lista'" v-model="order" data-task-order>
         <v-btn
           value="najstarsze"
           size="small"
@@ -139,8 +126,10 @@
         >
           Najnowsze
         </v-btn>
-      </v-btn-toggle>
-      <template v-if="view === 'mapa'">
+      </SegmentedToggle>
+      <!-- The map's two toggles wrap as one pair, so they never touch and
+           neither wraps away from the other. -->
+      <div v-if="view === 'mapa'" class="tasks-page__map-toggles">
         <v-switch
           v-model="showClosed"
           label="Zamknięte"
@@ -157,14 +146,14 @@
           color="ink-sage"
           class="flex-0-0"
         />
-      </template>
+      </div>
     </div>
 
-    <!-- The lists. Kept to a readable width: a line longer than this is only
-         emptier, while the map uses all of the screen it gets. -->
-    <div v-if="view === 'lista'" class="tasks-page__lists">
+    <!-- The lists, in the site's column, as the map is, one section gap
+         apart as on every admin page. -->
+    <div v-if="view === 'lista'" class="k-sections">
       <template v-for="section in shownSections" :key="section.key">
-        <template v-if="section.count > 0">
+        <section v-if="section.count > 0">
           <AdminSectionHead
             :title="taskSectionConfig[section.key].title"
             :count="section.count"
@@ -182,11 +171,11 @@
               {{
                 showClosedList
                   ? "Ukryj zamknięte"
-                  : `Pokaż zamknięte (${section.count})`
+                  : `Pokaż zamknięte (${polishNumber(section.count)})`
               }}
             </v-btn>
           </AdminSectionHead>
-          <AdminRowList v-if="section.items.length > 0" class="mb-4">
+          <AdminRowList v-if="section.items.length > 0" class="k-bleed-xs">
             <TasksRow
               v-for="task in section.items"
               :key="task.id"
@@ -207,7 +196,7 @@
               @disconnect="(a, b) => disconnect(a, b)"
             />
           </AdminRowList>
-        </template>
+        </section>
       </template>
       <p
         v-if="!pending && tasks.length > 0 && shownCount === 0"
@@ -217,7 +206,9 @@
       </p>
     </div>
 
-    <div v-else class="tasks-page__map">
+    <!-- Only once there is something to draw: with no tasks, an empty canvas
+         72% of the screen high stood over the note saying so. -->
+    <div v-else-if="tasks.length > 0" class="tasks-page__map">
       <div class="tasks-page__canvas">
         <TasksMap
           :tasks="mapTasks.tasks"
@@ -249,23 +240,29 @@
             />
             {{ taskSectionConfig[key].short }}
           </span>
+          <!-- How to read the map stays in sight; how to work it is behind
+               the „(i)”, kept with the sentence so the two wrap together. -->
           <span class="tasks-page__legend-hint">
             Strzałka prowadzi od tego, co najpierw, do tego, co czeka.
-            Przeciągnij od prawej krawędzi jednego zadania do lewej drugiego
-            (albo stuknij w jedną, potem w drugą), żeby je połączyć; stuknij w
-            strzałkę, żeby ją usunąć. Przycisk w rogu karty zwija w stos
-            wszystko, co prowadzi tylko do niej, a ten obok zostawia na mapie
-            tylko ją i to, na co czeka. Cele i stosy są też na pasku nad mapą -
-            strzałkę można upuścić tam. Wypełniona etykieta „Pilne” albo „Ważne”
-            to priorytet zadania, obrysowana - wzięty od zadania albo celu,
-            który na nie czeka.
+            <InfoBubble label="Mapa zadań">
+              Przeciągnij od prawej krawędzi jednego zadania do lewej drugiego
+              (albo stuknij w jedną, potem w drugą), żeby je połączyć; stuknij w
+              strzałkę, żeby ją usunąć. Przycisk w rogu karty zwija w stos
+              wszystko, co prowadzi tylko do niej, a ten obok zostawia na mapie
+              tylko ją i to, na co czeka. Cele i stosy są też na pasku nad mapą
+              - strzałkę można upuścić tam. Wypełniona etykieta „Pilne” albo
+              „Ważne” to priorytet zadania, obrysowana - wzięty od zadania albo
+              celu, który na nie czeka.
+            </InfoBubble>
           </span>
         </div>
       </div>
       <aside class="tasks-page__panel" data-task-panel>
         <template v-if="selectedTask">
           <div class="d-flex align-start ga-2 mb-2">
-            <h2 class="text-subtitle-1 font-weight-bold flex-1-1">
+            <h2
+              class="tasks-page__panel-title text-subtitle-1 font-weight-semibold flex-1-1"
+            >
               {{ selectedTask.title }}
             </h2>
             <v-btn
@@ -337,6 +334,7 @@ import {
   mdiSortClockDescendingOutline,
 } from "@mdi/js";
 import { useOpsTasks } from "~/composables/opsTasks";
+import { polishNumber } from "~/composables/polish";
 import { useQueryFilters } from "~/composables/queryFilters";
 import {
   taskChoices,
@@ -361,8 +359,9 @@ definePageMeta({
   // `admin` as well, though every owner is one: it is what lights the Admin
   // menu while the page is open.
   middleware: ["admin", "owner"],
-  // The map takes the whole width it is given; the lists narrow themselves.
-  fullWidth: true,
+  // The site's column, with the title where every page has it. The map used
+  // to take the whole screen, but it pans and zooms to fit whatever it gets,
+  // a phone's width included.
 });
 
 useHead({ title: "Zadania (Admin) - koryta.pl" });
@@ -674,19 +673,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.tasks-page__head,
-.tasks-page__filters,
-.tasks-page__lists {
-  max-width: 1100px;
-}
-
-/* Gives way before the view switch and "Dodaj" do, so they stay on the
- * title's line wherever there is room for both. */
-.tasks-page__intro {
-  flex: 1 1 0;
-  min-width: 260px;
-}
-
 .tasks-page__search {
   flex: 1 1 220px;
   max-width: 360px;
@@ -698,6 +684,31 @@ onMounted(async () => {
 
 .tasks-page__goal {
   flex: 0 1 240px;
+}
+
+/* On a phone the priority chips take their own line, so Tag and Cel sit
+ * under them as two equal halves with both edges on the inset, instead of a
+ * staircase at two unrelated widths. One of them alone takes the line. */
+@media (max-width: 599.98px) {
+  .tasks-page__priority {
+    flex: 1 1 100%;
+  }
+
+  .tasks-page__tag,
+  .tasks-page__goal {
+    flex: 1 1 calc(50% - 4px);
+  }
+}
+
+/* 24px between one switch's label and the next one's thumb; the start
+ * padding keeps the first thumb, which overhangs its own box, inside the
+ * page's inset. */
+.tasks-page__map-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 24px;
+  padding-inline-start: 8px;
 }
 
 .tasks-page__map {
@@ -713,9 +724,15 @@ onMounted(async () => {
   max-height: calc(100vh - 100px);
   overflow-y: auto;
   padding: 16px;
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   background: rgb(var(--v-theme-surface));
+}
+
+/* A title can be a branch name with no space to break at. */
+.tasks-page__panel-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* The panel scrolls on its own; what can be done with the task stays at its
@@ -754,7 +771,7 @@ onMounted(async () => {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
-/* On a phone the panel goes under the map, which keeps the screen's width. */
+/* On a phone the panel goes under the map, which keeps the column's width. */
 @media (max-width: 959.98px) {
   .tasks-page__map {
     grid-template-columns: minmax(0, 1fr);

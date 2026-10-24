@@ -2,7 +2,7 @@
   <AdminExpandRow
     v-model:expanded="expanded"
     :row-id="`rewizja-${proposal.id}`"
-    :tone="statusTone[proposal.status]"
+    :tone="revisionStatusTones[proposal.status]"
     :highlighted="highlighted"
     data-proposal-row
     :data-proposal-id="proposal.id"
@@ -12,8 +12,8 @@
         <v-icon
           class="flex-0-0"
           size="small"
-          :icon="statusIcons[proposal.status]"
-          :class="`text-ink-${statusTone[proposal.status]}`"
+          :icon="revisionStatusIcons[proposal.status]"
+          :class="`text-ink-${revisionStatusTones[proposal.status]}`"
         />
         <span class="d-sr-only">{{ statusLabel }}:</span>
         <v-icon
@@ -24,20 +24,22 @@
         <span class="arow-grow font-weight-medium" :title="name">
           {{ name }}
         </span>
-        <span v-if="kindTag" class="arow-tag" :class="kindTag.classes">
-          {{ kindTag.label }}
-        </span>
         <template #rest>
+          <span v-if="kindTag" class="arow-tag" :class="kindTag.classes">
+            {{ kindTag.label }}
+          </span>
           <span
             v-if="fields"
-            class="arow-side text-body-2 text-medium-emphasis"
+            class="arow-side queue-row__fields text-body-2 text-medium-emphasis"
             :title="fields"
           >
             {{ fields }}
           </span>
-          <span class="arow-side text-body-2" :title="who">{{ who }}</span>
+          <span class="arow-side queue-row__who text-body-2" :title="who">
+            {{ who }}
+          </span>
           <span class="arow-fixed text-caption text-medium-emphasis">
-            {{ formatDaysAgo(proposal.updateTime) }}
+            {{ formatDayDistance(proposal.updateTime) }}
           </span>
         </template>
       </RevisionRowLine>
@@ -48,8 +50,12 @@
         <UserChip :uid="proposal.updateUser" :user="proposal.author" />
       </AdminRowFact>
       <AdminRowFact label="Kiedy">
-        {{ formatMoment(proposal.updateTime) }} ·
-        {{ formatDaysAgo(proposal.updateTime) }}
+        <span class="text-no-wrap">{{
+          formatMoment(proposal.updateTime)
+        }}</span>
+        <span v-if="proposal.updateTime" class="d-block">{{
+          formatDayDistance(proposal.updateTime)
+        }}</span>
       </AdminRowFact>
       <AdminRowFact label="Rodzaj">
         {{ proposal.automatic ? "Pipeline" : "Od człowieka" }}
@@ -75,7 +81,7 @@
 
     <div class="d-flex flex-column ga-3">
       <RevisionTargetCell :proposal="proposal" />
-      <RevisionChangeCell :proposal="proposal" />
+      <RevisionChangeCell :proposal="proposal" wide />
       <!-- A pipeline uid has tens of thousands of revisions, and the per-author
            scan stops at 500, so "everything from this author" is only offered
            for a person. -->
@@ -118,23 +124,22 @@
  * buttons; an open row has.
  */
 import { computed } from "vue";
-import {
-  mdiAccountSearchOutline,
-  mdiCheckDecagramOutline,
-  mdiClockOutline,
-  mdiCloseCircleOutline,
-  mdiHistory,
-  mdiVectorPolyline,
-} from "@mdi/js";
-import type { RowTone } from "~/composables/rowTone";
+import { mdiAccountSearchOutline, mdiVectorPolyline } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
-import { formatDaysAgo } from "~/utils/chartTheme";
+import { formatDayDistance, formatMoment } from "~/utils/moment";
+// The icons and tones `ChipRevisionStatus` and an entry's history draw the
+// same four states with, so the line and the chips on /profil and on an
+// entry's page read alike.
+import {
+  revisionStatusIcons,
+  revisionStatusTones,
+} from "~/utils/revisionStatus";
 import {
   proposalStatusHints,
   proposalStatusLabels,
   type Proposal,
-  type ProposalStatus,
 } from "~~/shared/proposals";
+import { capitaliseLabel } from "~~/shared/revisionChanges";
 
 const props = defineProps<{
   proposal: Proposal;
@@ -155,22 +160,6 @@ const emit = defineEmits<{
 }>();
 
 const expanded = defineModel<boolean>("expanded", { default: false });
-
-const statusTone: Record<ProposalStatus, RowTone> = {
-  pending: "warning",
-  approved: "success",
-  superseded: "neutral",
-  rejected: "danger",
-};
-
-/** The icons `ChipRevisionStatus` puts on the same four states, so the line and
- * the chips on /profil and on an entry's page read alike. */
-const statusIcons: Record<ProposalStatus, string> = {
-  pending: mdiClockOutline,
-  approved: mdiCheckDecagramOutline,
-  superseded: mdiHistory,
-  rejected: mdiCloseCircleOutline,
-};
 
 const statusLabel = computed(
   () => proposalStatusLabels[props.proposal.status].label,
@@ -219,7 +208,7 @@ const fields = computed(() => {
   const text =
     proposal.changes.map((change) => change.label).join(", ") +
     (more > 0 ? ` +${more}` : "");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return capitaliseLabel(text);
 });
 
 /** Plain text on the line - a `UserChip` is a chip, and the line is the inside
@@ -248,7 +237,31 @@ const comparisonTo = computed(() =>
     ? `/admin/rewizje/${props.proposal.targetId}?revisionId=${props.proposal.id}`
     : null,
 );
-
-const formatMoment = (value: string | null) =>
-  value ? new Date(value).toLocaleString("pl-PL") : "-";
 </script>
+
+<style scoped>
+/* The author keeps its whole name beside the fields: it is what a reviewer
+ * sorts by, and what „Bez moich” filters on. */
+.queue-row__who {
+  flex-shrink: 0;
+}
+
+/* On a phone the tag, the fields, the author and the date share one line, and
+ * an author that would not give way left the fields one letter and an
+ * ellipsis - „b…” for „bez zmian” - beside an e-mail address or an account id
+ * as wide as a third of the screen. There the fields keep their first seven
+ * characters or so (`7ch`, or the whole of a shorter word: the max-content cap
+ * keeps the basis from outgrowing its text), and grow into whatever the line
+ * has left. The author still takes its width first, up to its cap, and gives
+ * way only where the line cannot hold both. */
+@media (max-width: 599.98px) {
+  .queue-row__fields {
+    flex: 1 0 7ch;
+    max-width: max-content;
+  }
+
+  .queue-row__who {
+    flex-shrink: 1;
+  }
+}
+</style>

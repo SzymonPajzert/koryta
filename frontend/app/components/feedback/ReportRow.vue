@@ -10,6 +10,7 @@
     v-model:expanded="expanded"
     :row-id="`fb-${item.id}`"
     class="fb-report"
+    :class="{ 'fb-report--no-action': alignColumns && !canQueue }"
     :tone="feedbackKindTone[item.kind]"
     :dimmed="isSettled(item)"
     :highlighted="highlighted"
@@ -19,11 +20,18 @@
     <template #summary>
       <span
         v-if="position"
-        class="arow-fixed text-body-2 font-weight-bold"
+        class="fb-report__pos arow-fixed text-body-2 font-weight-bold"
         data-queue-position
       >
         #{{ position }}
       </span>
+      <!-- The same type as the #N above: its 4.1ch is measured in its own
+           font, and an empty span would take the toggle's 16px. -->
+      <span
+        v-else-if="alignColumns"
+        class="fb-report__pos arow-fixed text-body-2 font-weight-bold"
+        aria-hidden="true"
+      />
       <FeedbackOrderRowSummary :item="item" :fix-state="fix?.state" />
     </template>
 
@@ -80,7 +88,7 @@
     <div
       v-for="(change, index) in fix?.changes ?? []"
       :key="index"
-      class="d-flex align-start ga-2 mb-3 text-body-2"
+      class="fb-report__fix d-flex align-start ga-2 mb-3 text-body-2"
       data-fix-change
     >
       <v-icon
@@ -118,10 +126,12 @@
           size="x-small"
           label
           color="ink-info"
+          class="fb-report__chip"
           :to="`/qa#qa-${item.context.qa.itemId}`"
+          :title="`QA: ${item.context.qa.title}`"
         >
           <v-icon start :icon="mdiClipboardCheckOutline" />
-          QA: {{ item.context.qa.title }}
+          <span class="text-truncate">QA: {{ item.context.qa.title }}</span>
         </v-chip>
         <v-chip
           size="x-small"
@@ -134,9 +144,16 @@
           {{ qaStatusLabels[item.context.qa.status] }}
         </v-chip>
       </template>
-      <v-chip v-else size="x-small" label :to="feedbackPageLink(item)">
+      <v-chip
+        v-else
+        size="x-small"
+        label
+        class="fb-report__chip"
+        :to="feedbackPageLink(item)"
+        :title="item.context.pageTitle || item.context.route"
+      >
         <v-icon start :icon="mdiLinkVariant" />
-        {{ item.context.pageTitle || item.context.route }}
+        <span class="text-truncate">{{ feedbackPlace(item) }}</span>
       </v-chip>
       <!-- A change on the QA list says it fixes this report. -->
       <FeedbackFixChip
@@ -156,7 +173,6 @@
         :key="target.id"
         size="x-small"
         label
-        variant="outlined"
         :to="feedbackReportLink(target.id!, reportPage)"
         :title="target.message"
         data-fix-target
@@ -175,10 +191,13 @@
       </v-chip>
     </div>
 
+    <!-- „Zamknij jako załatwione” is what „Zgłoszenia do zamknięcia” on /qa is
+         there for, so it is a full-size button, level with the 40px compact
+         fields beside it rather than the smallest thing in the footer. -->
     <template #footer>
       <v-btn
         v-if="fix?.close"
-        size="small"
+        height="40"
         variant="tonal"
         color="ink-success"
         :prepend-icon="mdiCheckAll"
@@ -232,6 +251,7 @@ import {
 } from "~/composables/feedback";
 import {
   feedbackPageLink,
+  feedbackPlace,
   formatFeedbackDate,
   type FixInfo,
 } from "~/composables/feedbackAdmin";
@@ -258,6 +278,9 @@ defineProps<{
   fixTargets?: Feedback[];
   /** Offer "Do kolejki" on the line - for a report outside the queue. */
   canQueue?: boolean;
+  /** In a list that mixes queued and unqueued reports, keep the #N and
+   * „Do kolejki” columns on every row. */
+  alignColumns?: boolean;
   /** A status or note of this report is being written. */
   saving?: boolean;
   /** The report the url points at. */
@@ -285,9 +308,31 @@ const statusOptions = Object.entries(feedbackStatusConfig).map(
 </script>
 
 <style scoped>
+/* The message is what the row is opened for, often a letter of several
+ * paragraphs: a prose measure, not the layout's full 1200px - the site's
+ * 72ch, as on an entity's description. So is the fix written out under it. */
 .fb-report__message {
+  max-width: 72ch;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.fb-report__fix {
+  max-width: 72ch;
+}
+
+/* Room for „#500” (OPEN_CAP), so #1 and #175 start their lines at one place:
+ * the kind icon, the status and the place stay in one column down the queue. */
+.fb-report__pos {
+  min-width: 4.1ch;
+  text-align: end;
+}
+
+/* In a mixed list a row with no „Do kolejki” keeps that button's room (4px
+ * toggle end + 40px small icon button + 4px .arow__actions end), so the line
+ * ends where the others do. */
+.fb-report--no-action :deep(.arow__head > .arow__toggle:last-child) {
+  padding-inline-end: 48px;
 }
 
 /* The date is the report's permalink. It keeps the colour of the facts
@@ -296,6 +341,13 @@ const statusOptions = Object.entries(feedbackStatusConfig).map(
   color: inherit;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+}
+
+/* A long QA or page title ends in an ellipsis rather than being cut off
+ * mid-word. VChip clips its content, but the box the label sits in will not
+ * shrink below its text, so the `text-truncate` inside it never gets to. */
+.fb-report__chip :deep(.v-chip__content) {
+  min-width: 0;
 }
 
 .fb-report__status {

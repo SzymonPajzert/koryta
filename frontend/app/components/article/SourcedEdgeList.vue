@@ -42,7 +42,7 @@
         <span class="text-body-2 text-medium-emphasis">
           {{ edge.name || edgeTypeLabels[edge.type] || edge.type }}
           <template v-if="edge.start_date || edge.end_date">
-            · {{ edge.start_date }} – {{ edge.end_date || "obecnie" }}
+            · {{ relationPeriodLabel(edge.start_date, edge.end_date) }}
           </template>
         </span>
 
@@ -98,6 +98,7 @@ import { edgeTypeLabels } from "~/composables/edges";
 import { polishCounting } from "~/composables/polish";
 import { generateEntityUrl } from "~/composables/slugs";
 import { entityIcon } from "~/utils/entityIcon";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 import type { NodeType } from "~~/shared/model";
 import type { SourcedEdge } from "~~/server/api/edges/byReference.get";
 

@@ -45,9 +45,11 @@ describe("edgeSentence", () => {
     );
   });
 
-  it("keeps a half-open period", () => {
+  it("reads a half-open period the way every relation's period reads", () => {
+    // Through `relationPeriodLabel`: a post with no end is still held, so the
+    // dialog says „obecnie” as the row it was opened from does.
     expect(edgeSentence("Jan", edge({ start_date: "2020-01-01" }))).toBe(
-      "Jan - Zatrudniony/a w - Orlen · 2020-01-01",
+      "Jan - Zatrudniony/a w - Orlen · 2020-01-01 - obecnie",
     );
   });
 

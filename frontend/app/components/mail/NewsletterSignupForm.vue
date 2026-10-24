@@ -12,9 +12,11 @@
   >
     <div class="newsletter-signup__intro">
       <h2 id="newsletter-signup-title" class="newsletter-signup__title">
+        <!-- The title's own 20px. At 22 the envelope stood taller than the
+             16px the title has on a phone. -->
         <v-icon
           :icon="mdiEmailOutline"
-          size="22"
+          size="20"
           color="ink-sage"
           class="newsletter-signup__title-icon"
         />
@@ -50,12 +52,18 @@
            which would put the address in the URL. -->
       <form v-else novalidate @submit.prevent="submit">
         <div class="newsletter-signup__row">
+          <!-- A control, so the tint and no line (assets/css/edges.css):
+               `solo-filled` is Vuetify's field without an outline or an
+               underline, `flat` takes its shadow, and the tint itself is set
+               below. Outlined, it drew Vuetify's .38 line in the text colour,
+               darker than the card round it. -->
           <v-text-field
             v-model="email"
             type="email"
             autocomplete="email"
             label="Twój adres e-mail"
-            variant="outlined"
+            variant="solo-filled"
+            flat
             density="comfortable"
             hide-details
             :error="!!error"
@@ -175,14 +183,16 @@ async function submit() {
 /* In the frame the call to action under it has, so the two asks read as a
    pair (Szymon's pick of 2026-10-17 over a strip): the words on the left and
    the form on the right where there is room for both, one under the other on
-   a phone. A step below the call to action's title - 18px against its 20. */
+   a phone. The frame is the site's one hairline and the card radius
+   (assets/css/edges.css), as the call to action's is. At its own .16 it was
+   the paler box of the two once the hairline went to .24. */
 .newsletter-signup {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   padding: 20px;
 }
 
@@ -195,15 +205,27 @@ async function submit() {
   }
 }
 
+/* One step under the call to action's title on the type scale
+   (assets/css/type.css), so the ask above it reads as the smaller of the two:
+   20 against its 24, and 16 against its 20 on a phone. 600 is the weight
+   type.css gives a title that heads a card; 700 is the page title's, and 18
+   was on no scale. */
 .newsletter-signup__title {
   display: flex;
   align-items: center;
   gap: 8px;
   color: rgba(var(--v-theme-on-surface), 0.92);
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 600;
   line-height: 1.3;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 599px) {
+  .newsletter-signup__title {
+    font-size: 1rem;
+    line-height: 1.4;
+  }
 }
 
 .newsletter-signup__title-icon {
@@ -229,14 +251,40 @@ async function submit() {
   min-width: 0;
 }
 
+/* The control tint and the control radius, in place of the white field and
+   the 4% overlay Vuetify gives `solo-filled`. The overlay stays off in every
+   state and the tint does its work instead: a step darker under a pointer
+   and while the field is being typed in, when the label also moves up out of
+   the way. */
+.newsletter-signup__field :deep(.v-field) {
+  background: var(--k-tonal);
+  border-radius: var(--k-r-control);
+}
+
+.newsletter-signup__field :deep(.v-field .v-field__overlay) {
+  opacity: 0;
+}
+
+.newsletter-signup__field :deep(.v-field--focused) {
+  background: var(--k-tonal-hover);
+}
+
+@media (hover: hover) {
+  .newsletter-signup__field :deep(.v-field:hover) {
+    background: var(--k-tonal-hover);
+  }
+}
+
 .newsletter-signup__submit {
   flex: none;
 }
 
+/* Meta, at the scale's 12px, as the call to action's own small print is;
+   13 was on no scale. */
 .newsletter-signup__fine {
   margin-top: 8px;
   color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   line-height: 1.45;
   text-wrap: pretty;
 }

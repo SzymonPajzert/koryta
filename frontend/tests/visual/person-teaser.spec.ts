@@ -59,11 +59,12 @@ test("osoba-niezweryfikowana", SLUG, async ({ page }, testInfo) => {
   // over it rather than widening the page, so `expectFitsThePhone` cannot see
   // a button cut in half - which is how „Zarejestruj się” first shipped.
   const banner = await teaser.locator(".v-alert").boundingBox();
-  // The banner lines up with the history row above it, on both sides.
-  const row = await teaser.locator(".history-row").first().boundingBox();
-  expect(Math.abs(banner!.x - row!.x)).toBeLessThan(1);
+  // The banner lines up with the history's ruled box above it, on both sides
+  // - the box, not the row inside it, which sits within the box's hairline.
+  const box = await teaser.locator(".history-box").boundingBox();
+  expect(Math.abs(banner!.x - box!.x)).toBeLessThan(1);
   expect(
-    Math.abs(banner!.x + banner!.width - (row!.x + row!.width)),
+    Math.abs(banner!.x + banner!.width - (box!.x + box!.width)),
   ).toBeLessThan(1);
   for (const testid of ["login-banner-login", "login-banner-signup"]) {
     const button = await teaser.getByTestId(testid).boundingBox();

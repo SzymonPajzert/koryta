@@ -1,38 +1,44 @@
 <template>
-  <v-container class="kategoryzacja-container">
-    <!-- The card is the point of this page, so the header stays on two lines:
-         the back button beside a title/progress stack rather than above it. -->
-    <div class="d-flex align-center ga-2 mb-3">
-      <v-btn
-        variant="text"
-        size="small"
-        density="comfortable"
-        :prepend-icon="mdiArrowLeft"
-        to="/ekstrakcje"
-        class="ms-n2 flex-shrink-0"
-      >
-        Powrót
-      </v-btn>
-      <div class="header-text">
-        <h1 class="text-subtitle-1 font-weight-medium text-truncate">
-          Kategoryzuj fakty
-        </h1>
-        <div v-if="!loading" class="text-caption text-medium-emphasis">
-          Pozostało do oceny: {{ remaining }}
-        </div>
-      </div>
-    </div>
+  <!-- One column at the page's inset, its left edge the h1's: the card, the
+       verdicts and the related facts all start where the title does. -->
+  <div class="w-100 triage-column">
+    <!-- Every working page's head, as on /admin/notatki/kategoryzacja: the
+         way up a level above the title, so the title starts on the inset like
+         everywhere else, and what is left to judge as the line under it.
+         Nothing on the page said that the card can be dragged, or that
+         „Nie wiem” is not a softer „Błędny” - the bubble does. -->
+    <AdminPageHead
+      title="Kategoryzuj fakty"
+      info="Przeciągnij kartę w prawo, jeśli fakt jest dobry, albo w lewo, jeśli jest błędny - albo użyj przycisków pod nią. „Nie wiem” zapisuje, że do oceny jest za mało informacji, a nie że fakt jest błędny."
+      :lead="
+        loading ? undefined : `Pozostało do oceny: ${polishNumber(remaining)}`
+      "
+    >
+      <template #back>
+        <v-btn
+          variant="text"
+          size="small"
+          :prepend-icon="mdiArrowLeft"
+          to="/ekstrakcje"
+        >
+          Ekstrakcje
+        </v-btn>
+      </template>
+    </AdminPageHead>
 
     <div v-if="loading" class="d-flex justify-center py-8">
       <v-progress-circular indeterminate color="primary" size="48" />
     </div>
 
-    <!-- A failed fetch leaves the same empty list as a cleared backlog, and the
-         SSR one never reaches the network tab — so say which it was. -->
+    <!-- A failed fetch leaves the same empty list as a cleared backlog, so say
+         which it was. -->
     <div v-else-if="error" class="py-8 text-center">
       <v-alert type="error" variant="tonal">
         Nie udało się załadować faktów do kategoryzacji.
       </v-alert>
+      <v-btn class="mt-4" variant="tonal" @click="refresh()">
+        Spróbuj ponownie
+      </v-btn>
     </div>
 
     <!-- A shared card is worth showing even when nothing is left to review. -->
@@ -45,9 +51,11 @@
       </v-alert>
     </div>
 
-    <template v-else>
-      <!-- Swipe card area -->
-      <div class="swipe-area mx-auto">
+    <!-- The card and its verdicts, then - a section's gap below - the facts
+         around it. -->
+    <div v-else class="k-sections">
+      <div>
+        <!-- Swipe card area -->
         <ExtractionSwipeCard
           v-if="currentFact"
           :key="currentFact.id"
@@ -63,7 +71,7 @@
           }}</v-icon>
           <div class="text-h6">Ta porcja przejrzana!</div>
           <div class="text-body-2 text-medium-emphasis mt-1">
-            Zostało jeszcze {{ remaining }} do oceny.
+            Zostało jeszcze {{ polishNumber(remaining) }} do oceny.
           </div>
           <v-btn class="mt-4" color="primary" variant="tonal" @click="loadMore">
             Wczytaj kolejne
@@ -79,78 +87,78 @@
             Wróć do listy
           </v-btn>
         </div>
-      </div>
 
-      <!-- Desktop fallback buttons -->
-      <div v-if="currentFact" class="mt-6">
-        <!-- Four buttons have to share one row, so the icons go on wider
-             screens only — a phone has room for the labels or the icons. -->
-        <div class="d-flex justify-center align-center ga-2">
-          <v-btn
-            color="error"
-            variant="tonal"
-            :size="smAndUp ? 'large' : 'default'"
-            :prepend-icon="smAndUp ? mdiCloseCircleOutline : undefined"
-            @click="recordVote('incorrect')"
-          >
-            Błędny
-          </v-btn>
-          <v-btn
-            color="warning"
-            variant="tonal"
-            :size="smAndUp ? 'large' : 'default'"
-            :prepend-icon="smAndUp ? mdiHelpCircleOutline : undefined"
-            @click="recordVote('insufficient')"
-          >
-            Nie wiem
-          </v-btn>
-          <v-btn
-            color="success"
-            variant="tonal"
-            :size="smAndUp ? 'large' : 'default'"
-            :append-icon="smAndUp ? mdiCheckCircleOutline : undefined"
-            @click="recordVote('correct')"
-          >
-            Dobry
-          </v-btn>
-          <v-btn
-            :size="smAndUp ? 'large' : 'default'"
-            :icon="mdiCommentTextOutline"
-            variant="text"
-            :color="commentOpen ? 'primary' : undefined"
-            aria-label="Skomentuj"
-            @click="commentOpen = true"
-          />
-        </div>
+        <!-- The verdicts as buttons, for whoever does not drag the card. -->
+        <div v-if="currentFact" class="mt-6">
+          <!-- Four buttons have to share one row, so the icons go on wider
+               screens only — a phone has room for the labels or the icons. -->
+          <div class="d-flex justify-center align-center ga-2">
+            <v-btn
+              color="error"
+              variant="tonal"
+              :size="smAndUp ? 'large' : 'default'"
+              :prepend-icon="smAndUp ? mdiCloseCircleOutline : undefined"
+              @click="recordVote('incorrect')"
+            >
+              Błędny
+            </v-btn>
+            <v-btn
+              color="warning"
+              variant="tonal"
+              :size="smAndUp ? 'large' : 'default'"
+              :prepend-icon="smAndUp ? mdiHelpCircleOutline : undefined"
+              @click="recordVote('insufficient')"
+            >
+              Nie wiem
+            </v-btn>
+            <v-btn
+              color="success"
+              variant="tonal"
+              :size="smAndUp ? 'large' : 'default'"
+              :append-icon="smAndUp ? mdiCheckCircleOutline : undefined"
+              @click="recordVote('correct')"
+            >
+              Dobry
+            </v-btn>
+            <v-btn
+              :size="smAndUp ? 'large' : 'default'"
+              :icon="mdiCommentTextOutline"
+              variant="text"
+              :color="commentOpen ? 'primary' : undefined"
+              aria-label="Skomentuj"
+              @click="commentOpen = true"
+            />
+          </div>
 
-        <!-- Comment: opened by the button above and never by a verdict, so the
-             card the reviewer is commenting on is one they asked to hold. The
-             verdict that follows saves it and moves on. -->
-        <div v-if="commentOpen" class="comment-section mx-auto mt-4">
-          <v-textarea
-            v-model="comment"
-            label="Komentarz (opcjonalny)"
-            rows="3"
-            auto-grow
-            hide-details
-            variant="outlined"
-            density="comfortable"
-            autofocus
-          />
-          <div class="d-flex justify-end mt-2">
-            <span class="text-caption text-medium-emphasis py-2">
-              Wybierz jeszcze ocenę powyżej.
-            </span>
+          <!-- Comment: opened by the button above and never by a verdict, so
+               the card the reviewer is commenting on is one they asked to
+               hold. The verdict that follows saves it and moves on. -->
+          <div v-if="commentOpen" class="mt-4">
+            <v-textarea
+              v-model="comment"
+              label="Komentarz (opcjonalny)"
+              rows="3"
+              auto-grow
+              hide-details
+              variant="outlined"
+              density="comfortable"
+              autofocus
+            />
+            <div class="d-flex justify-end mt-2">
+              <span class="text-caption text-medium-emphasis py-2">
+                Wybierz jeszcze ocenę powyżej.
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Related facts: pick which context to keep alongside the current fact -->
-      <div v-if="currentFact" class="related-section mx-auto mt-8">
-        <div class="d-flex align-center flex-wrap ga-1 mb-2">
-          <span class="text-caption text-medium-emphasis me-1">
-            Powiązane fakty:
-          </span>
+      <!-- Related facts: pick which context to keep alongside the current
+           fact. A section with a head of its own, so the context reads a tier
+           under the card being judged rather than as more of the same cards
+           under a 12px caption. -->
+      <PageSection v-if="currentFact" title="Powiązane fakty">
+        <template #actions>
           <v-chip-group v-model="activeFilters" multiple class="py-0">
             <v-chip value="article" size="small" filter variant="outlined">
               Z tego artykułu
@@ -159,25 +167,20 @@
               O tej osobie
             </v-chip>
           </v-chip-group>
-        </div>
+        </template>
 
-        <template v-if="activeFilters.length">
-          <ExtractionCard
-            v-for="f in relatedFacts"
-            :key="f.id"
-            :fact="f"
-            class="mb-3"
-          />
-          <div
+        <div v-if="activeFilters.length" class="related-facts">
+          <ExtractionCard v-for="f in relatedFacts" :key="f.id" :fact="f" />
+          <p
             v-if="relatedFacts.length === 0"
-            class="text-center text-caption text-medium-emphasis py-2"
+            class="k-note text-body-2 text-medium-emphasis mb-0"
           >
             Brak innych powiązanych faktów.
-          </div>
-        </template>
-      </div>
-    </template>
-  </v-container>
+          </p>
+        </div>
+      </PageSection>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -199,6 +202,7 @@ import {
   useIsCurrentUserLoaded,
 } from "vuefire";
 import { useExtraction, useExtractions } from "~/composables/extractions";
+import { polishNumber } from "~/composables/polish";
 import { castVoteOnce, saveCommentOnce } from "~/composables/votes";
 import { factSubject } from "~/utils/extraction";
 import type { ExtractionFact, VoteDocument } from "~~/shared/model";
@@ -214,7 +218,7 @@ useHead({
 // sittings reach the end of it — and `total` says what waits behind.
 const PAGE_SIZE = 200;
 const page = ref(0);
-const { data, pending, error } = useExtractions({
+const { data, pending, error, refresh } = useExtractions({
   reviewed: "no",
   limit: PAGE_SIZE,
   page,
@@ -450,28 +454,17 @@ onMounted(() => syncUrlToFact(currentFact.value));
 </script>
 
 <style scoped>
-.kategoryzacja-container {
-  max-width: 600px;
+/* The queue's column. Left at the page's inset rather than centred in it, so
+   the title lands where every other page's does; the verdicts stay centred
+   under the card inside it. */
+.triage-column {
+  max-width: 560px;
 }
 
-/* Let the title ellipsize instead of pushing the back button off the row. */
-.header-text {
-  min-width: 0;
-}
-
-/* A phone has the least room to spare above the card. */
-@media (max-width: 599px) {
-  .kategoryzacja-container {
-    padding-top: 8px;
-  }
-}
-
-.swipe-area {
-  max-width: 480px;
-}
-
-.comment-section,
-.related-section {
-  max-width: 480px;
+.related-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
 }
 </style>

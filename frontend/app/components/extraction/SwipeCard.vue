@@ -135,8 +135,11 @@ function onEnd() {
   cursor: grabbing;
 }
 
+/* The card's own corners, which the overlays below inherit: without them the
+   green or red tint of a drag filled square corners outside the round card. */
 .swipe-card {
   position: relative;
+  border-radius: var(--k-r-card);
   will-change: transform;
 }
 

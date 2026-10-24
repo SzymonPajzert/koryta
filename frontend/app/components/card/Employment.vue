@@ -4,7 +4,6 @@
     :data-testid="`recent-employment-${employment.id}`"
     class="employment-card h-100"
     flat
-    rounded="lg"
   >
     <div class="employment-card__body">
       <div class="d-flex align-start ga-3">
@@ -59,6 +58,7 @@ import {
   mdiOfficeBuildingOutline,
 } from "@mdi/js";
 import { generateEntityUrl } from "~/composables/slugs";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 import type { Company } from "~~/shared/model";
 import type { RecentEmployment } from "~~/server/api/edges/recentEmployments.get";
 
@@ -104,28 +104,26 @@ const company = computed<Company>(() => ({
 const ongoing = computed(() => props.employment.end_date === null);
 
 /** "2024-03-01 - obecnie", and the single date where a spell began and ended
- * on the same day. A missing end means the post is still held; a missing start
- * cannot happen here, because the feed is ordered on it. */
-const period = computed(() => {
-  const { start_date: start, end_date: end } = props.employment;
-  if (end === start) return start;
-  return `${start} - ${end ?? "obecnie"}`;
-});
+ * on the same day - `relationPeriodLabel`'s rule, as every relation's period
+ * on the site. A missing end means the post is still held. */
+const period = computed(() =>
+  relationPeriodLabel(
+    props.employment.start_date,
+    props.employment.end_date ?? undefined,
+  ),
+);
 </script>
 
 <style scoped>
 /* A feed of twenty of these, so the card is a quiet white surface with one
    accent rather than the tonal block the rest of the home page uses: stacked,
-   those read as a wall. Depth is kept for the hover, which is the only thing
+   those read as a wall. The sage edge on hover is the only thing
    here that has to say "this is a link". */
 .employment-card {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border: 1px solid var(--k-line);
   overflow: hidden;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
 /* The accent, drawn rather than given to the border so only one edge carries
@@ -140,14 +138,13 @@ const period = computed(() => {
   width: 4px;
 }
 
+/* The sage edge says it is a link; no lift - a shadow is for what floats. */
 .employment-card:hover {
   border-color: rgba(var(--v-theme-primary), 0.9);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
-  transform: translateY(-2px);
 }
 
 /* Vuetify's own hover overlay on top of a near-white surface is a grey wash
-   that fights the lift above. */
+   that fights the edge above. */
 .employment-card :deep(.v-card__overlay) {
   display: none;
 }

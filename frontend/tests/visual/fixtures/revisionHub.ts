@@ -21,8 +21,9 @@ import { daysAgo } from "../clock";
  * each common type. The people and places are made up. */
 
 /** A proposal about its own target, unless it says otherwise - the subject of
- * a node revision is the node. */
-const proposal = (fields: Partial<Proposal> & Pick<Proposal, "id">) => {
+ * a node revision is the node. Also what ./myProposals.ts builds /profil's
+ * rows with. */
+export const proposal = (fields: Partial<Proposal> & Pick<Proposal, "id">) => {
   const row: Omit<Proposal, "subject"> = {
     targetId: "wizos1",
     targetCollection: "nodes",

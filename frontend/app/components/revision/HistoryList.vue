@@ -44,7 +44,12 @@
           </v-chip>
         </v-chip-group>
 
-        <AdminRowList v-if="shown.length > 0">
+        <!-- Edge to edge on a phone where it is the page's own list; inside
+             an entry's open row it keeps its frame. -->
+        <AdminRowList
+          v-if="shown.length > 0"
+          :class="{ 'k-bleed-xs': !embedded }"
+        >
           <AdminExpandRow
             v-for="row in shown"
             :key="row.id"
@@ -72,7 +77,7 @@
                   {{ formatMoment(row.updateTime) }}
                 </span>
                 <span
-                  class="arow-side rev-author text-body-2 font-weight-bold"
+                  class="arow-side rev-author text-body-2 font-weight-medium"
                   :title="authorName(row)"
                   data-revision-author
                 >
@@ -116,8 +121,12 @@
                 <UserChip :uid="row.updateUser || null" :user="row.author" />
               </AdminRowFact>
               <AdminRowFact label="Kiedy">
-                {{ formatMoment(row.updateTime) }} ·
-                {{ formatDaysAgo(row.updateTime) }}
+                <span class="text-no-wrap">{{
+                  formatMoment(row.updateTime)
+                }}</span>
+                <span v-if="row.updateTime" class="d-block">{{
+                  formatDayDistance(row.updateTime)
+                }}</span>
               </AdminRowFact>
               <AdminRowFact label="Rodzaj">
                 {{ row.automatic ? "Pipeline" : "Od człowieka" }}
@@ -241,12 +250,13 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { mdiAlertOutline, mdiCompare, mdiEyeOutline } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
-import { formatDaysAgo } from "~/utils/chartTheme";
+import { formatDayDistance, formatMoment } from "~/utils/moment";
 import {
   revisionStatusIcons,
   revisionStatusTones,
 } from "~/utils/revisionStatus";
 import { proposalStatusLabels, type Proposal } from "~~/shared/proposals";
+import { capitaliseLabel } from "~~/shared/revisionChanges";
 import type { NodeRevisionHistory } from "~~/server/api/revisions/node.get";
 
 type HistoryFilter = "all" | "manual" | "pending";
@@ -402,25 +412,6 @@ watch(
 
 defineExpose({ reload: load });
 
-/** "24.09.2026 14:05" - the day and the minute, in Warsaw whatever the
- * browser's zone, like every other clock on the site. */
-const MOMENT = new Intl.DateTimeFormat("pl-PL", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "Europe/Warsaw",
-});
-
-function formatMoment(iso: string | null): string {
-  if (!iso) return "—";
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : MOMENT.format(date).replace(", ", " ");
-}
-
 /** Who filed it, as plain text: the name when this reader may know it, the
  * uid when not, and "pipeline" for the ingest - whose account is somebody's
  * admin login, so its name would say the wrong thing. */
@@ -438,15 +429,13 @@ const statusText = (row: Proposal) =>
     ? `${proposalStatusLabels[row.status].label} (odczytany z wpisu)`
     : proposalStatusLabels[row.status].label;
 
-const capitalise = (text: string) =>
-  text.charAt(0).toLocaleUpperCase("pl-PL") + text.slice(1);
-
-/** What the revision touches, in field names. */
+/** What the revision touches, in field names - one sentence-case list, as the
+ * queue's line writes the same revision. */
 function changeSummary(row: Proposal): string {
   if (row.kind === "removal") return "Wniosek o usunięcie";
   if (row.id === data.value?.approvedRevisionId) return "Obecna wersja wpisu";
   if (row.changeCount === 0) return "bez zmian";
-  return row.changes.map((change) => capitalise(change.label)).join(", ");
+  return capitaliseLabel(row.changes.map((change) => change.label).join(", "));
 }
 
 /** What the diff below is measured against. It is the approved version, not

@@ -99,17 +99,10 @@
         />
         <!-- Only a neighbourhood has a reach to choose. A topic's or an
              article's layout is the whole story it was asked for. -->
-        <v-btn-toggle
-          v-if="!source"
-          v-model="depth"
-          density="compact"
-          variant="outlined"
-          divided
-          mandatory
-        >
+        <SegmentedToggle v-if="!source" v-model="depth">
           <v-btn :value="1" size="small" text="1 krok" />
           <v-btn :value="2" size="small" text="2 kroki" />
-        </v-btn-toggle>
+        </SegmentedToggle>
       </div>
     </div>
 
@@ -334,8 +327,8 @@ const selectedHref = computed(() => {
      flex row - without a width the panel shrinks to whatever the canvas
      happened to lay out and leaves half the window empty. */
   width: 100%;
-  border: 1px solid rgba(var(--v-border-color), 0.18);
-  border-radius: 8px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   overflow: hidden;
 }
 
@@ -350,12 +343,12 @@ const selectedHref = computed(() => {
 }
 
 .graph-panel__bar {
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
+  border-bottom: 1px solid var(--k-line);
   justify-content: space-between;
 }
 
 .graph-panel__foot {
-  border-top: 1px solid rgba(var(--v-border-color), 0.18);
+  border-top: 1px solid var(--k-line);
   min-height: 40px;
 }
 
@@ -388,7 +381,7 @@ const selectedHref = computed(() => {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: rgba(var(--v-theme-on-surface), 0.72);
 }
 
@@ -409,7 +402,7 @@ const selectedHref = computed(() => {
 }
 
 .graph-panel__selected {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 

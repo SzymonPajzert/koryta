@@ -260,7 +260,7 @@ const promotion = computed(() => {
 .fact-source + .fact-source {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
 }
 
 .fact-source__actions {

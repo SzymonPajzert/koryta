@@ -94,7 +94,7 @@ describe("ActivityFeedTimeline", () => {
       batch: batch({ firstAt: "2026-09-22T12:02:00.000Z" }),
     });
 
-    expect(wrapper.find("time").text()).toBe("14:02–14:20");
+    expect(wrapper.find("time").text()).toBe("14:02-14:20");
   });
 
   it("names five targets and offers the rest it was sent", async () => {

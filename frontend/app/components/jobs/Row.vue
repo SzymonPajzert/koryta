@@ -76,7 +76,12 @@
     </template>
 
     <template #meta>
-      <AdminRowFact label="Gdzie">{{ definition.runsOn }}</AdminRowFact>
+      <!-- Where it runs is a sentence beside facts of a few words: it gets
+           two of the strip's columns, three on a wide screen, instead of
+           being folded into the narrowest. -->
+      <AdminRowFact label="Gdzie" class="job-row__where">
+        {{ definition.runsOn }}
+      </AdminRowFact>
       <AdminRowFact v-if="scheduleFact" label="Harmonogram">
         {{ scheduleFact }}
       </AdminRowFact>
@@ -167,12 +172,19 @@
       </div>
     </template>
 
+    <!-- Each count holds together with its word, so a narrow line breaks
+         only at a " · ": never "1" at one line's end and "w kolejce" on the
+         next. No whitespace between the separator and the span, or the
+         text would read " ·  1 w kolejce". -->
     <p
-      v-if="captureStatsText"
+      v-if="captureStats"
       class="text-body-2 font-weight-medium mb-3"
       data-capture-stats
     >
-      {{ captureStatsText }}
+      <template v-for="(part, index) in captureStats" :key="index"
+        >{{ index ? " · " : ""
+        }}<span class="text-no-wrap">{{ part }}</span></template
+      >
     </p>
 
     <ul
@@ -189,7 +201,7 @@
       class="job-row__tasks text-body-2 mb-3"
       data-job-tasks
     >
-      <span class="text-medium-emphasis">Zadania:</span>
+      <span class="job-row__label">Zadania</span>
       <NuxtLink
         v-for="task in definition.tasks"
         :key="task"
@@ -323,8 +335,9 @@ const scheduleFact = computed(() => {
   return props.definition.scheduleNote ?? null;
 });
 
-/** The week of captures in one line, whatever the newest twenty show. */
-const captureStatsText = computed(() => {
+/** The week of captures in one line, whatever the newest twenty show: its
+ * parts, which the template joins with " · ". */
+const captureStats = computed((): string[] | null => {
   const stats = props.view.captureStats;
   if (!props.definition.captures || !stats) return null;
   const days = Math.max(
@@ -339,7 +352,7 @@ const captureStatsText = computed(() => {
     count(failed, "błąd", "błędy", "błędów"),
     `${formatCount(running)} w toku`,
     `${formatCount(queued)} w kolejce`,
-  ].join(" · ");
+  ];
 });
 
 /** Why there is nothing to list: a job that reports - an import included -
@@ -359,7 +372,8 @@ const emptyText = computed(() => {
 
 <style scoped>
 /* The line: one row on a wide screen, the detail ellipsised; on a narrow
- * one the detail drops to a line of its own instead of being cut to nothing. */
+ * one the detail drops to a line of its own, two lines at most, instead of
+ * being cut to nothing or growing into a paragraph. */
 .job-head {
   flex: 1 1 auto;
   min-width: 0;
@@ -367,15 +381,26 @@ const emptyText = computed(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 2px 10px;
+  /* No end padding of its own: the toggle with nothing after it already ends
+   * a gutter in (AdminExpandRow's `.arow__toggle:last-child`), so the time
+   * keeps off the row's edge, and the ring of a row a link points at, by the
+   * same inset as a task row's. */
   padding: 4px 0;
 }
 
-.job-head__kind,
-.job-head__title {
+.job-head__kind {
   flex: none;
 }
 
+/* A job only its runs know about is titled by its id, one word that can be
+ * longer than a phone is wide: it breaks rather than run off the edge, and
+ * beside its icon (20px, the 10px gap and 4px to spare) rather than on a
+ * line of its own under it. */
 .job-head__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 34px);
+  overflow-wrap: anywhere;
   font-weight: 600;
 }
 
@@ -383,7 +408,7 @@ const emptyText = computed(() => {
   order: 10;
   flex: 1 1 100%;
   min-width: 0;
-  font-size: 0.8125rem;
+  font-size: var(--k-ui-size);
 }
 
 /* Its parts wrap rather than run off a phone's edge; each part holds
@@ -396,6 +421,16 @@ const emptyText = computed(() => {
   margin-inline-start: auto;
 }
 
+/* On a phone the reason a row needs a look comes straight under its name,
+ * and the time after it, all on the text's left edge: wrapped right-aligned
+ * between two left-aligned lines, it zigzagged and put the reason third. */
+@media (max-width: 599.98px) {
+  .job-head__side {
+    order: 11;
+    margin-inline-start: 0;
+  }
+}
+
 .job-head__side > * {
   white-space: nowrap;
 }
@@ -406,7 +441,19 @@ const emptyText = computed(() => {
 }
 
 .job-head__next {
-  font-size: 0.8125rem;
+  font-size: var(--k-meta-size);
+}
+
+/* A run's stop reason has no length cap: two lines of it, the rest on the
+ * detail's title and in the open row's run. */
+@media (max-width: 959.98px) {
+  .job-head__detail {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
 }
 
 @media (min-width: 960px) {
@@ -414,9 +461,11 @@ const emptyText = computed(() => {
     flex-wrap: nowrap;
   }
 
+  /* From a zero basis, so the detail gives up its room before the title
+   * has to: it takes what the rest of the line leaves. */
   .job-head__detail {
     order: 0;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -425,6 +474,13 @@ const emptyText = computed(() => {
   .job-head__side {
     flex-wrap: nowrap;
     margin-inline-start: 0;
+  }
+
+  /* „następne: 04:30” and „jeszcze bez harmonogramu” take one width, so the
+   * last-run times above and below each other end on one line. */
+  .job-head__next {
+    min-width: 152px;
+    text-align: end;
   }
 }
 
@@ -447,8 +503,22 @@ const emptyText = computed(() => {
   grid-column: 1 / -1;
 }
 
+/* Two columns: all of a phone's strip. From 960px the strip has at least
+ * five, so three are about 540px and the nightly sentence takes two lines.
+ * Not three below that: on a phone's two columns a span of three would add a
+ * track and run out of the row. */
+.job-row__where {
+  grid-column: span 2;
+}
+
+@media (min-width: 960px) {
+  .job-row__where {
+    grid-column: span 3;
+  }
+}
+
 .job-row__command {
-  font-size: 0.8125rem;
+  font-size: var(--k-meta-size);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -457,18 +527,23 @@ const emptyText = computed(() => {
   margin-bottom: 12px;
 }
 
+/* A label, as type.css has them: 12/600 in the quiet ink, sentence case -
+ * over a block, or in the line before the tasks. */
+.job-row__subhead,
+.job-row__label {
+  font-size: var(--k-meta-size);
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+}
+
 .job-row__subhead {
   margin-bottom: 4px;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .job-row__list {
   padding-left: 20px;
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
 }
 
 /* Folder names and hosts have no spaces to break at. */
@@ -484,6 +559,6 @@ const emptyText = computed(() => {
 }
 
 .job-row__tasks code {
-  font-size: 0.8125rem;
+  font-size: var(--k-meta-size);
 }
 </style>

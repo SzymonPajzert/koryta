@@ -1,36 +1,41 @@
 <template>
-  <v-card class="mb-4" data-testid="person-teaser">
-    <div class="pa-4">
-      <!-- Headed as the full page heads a person (`EntityDetailsCard`). -->
-      <h2 class="text-h5 font-weight-bold">{{ teaser.name }}</h2>
+  <!-- On the page, as a published person's page is (EntityDetailView's
+       `k-sections`): no card round it, so the name, the history and the
+       banner share the layout's left edge, and the layout's page-top inset is
+       all there is above the name. -->
+  <div class="w-100 k-sections" data-testid="person-teaser">
+    <!-- Headed as the full page heads a person (`EntityDetailsCard`): the
+         name is the page's h1, and the header is ruled off from what follows
+         by the one hairline, 24px under it. -->
+    <div class="teaser-header pb-6">
+      <h1>{{ teaser.name }}</h1>
+    </div>
 
+    <div>
       <!-- The latest post as the first row of the history the full page lists,
            drawn by the card that draws it there - chips, dates and all - so
            the teaser reads as the page it is a piece of. A company nobody has
            published is drawn without a link: following it would be a second
-           wall. -->
+           wall. On a phone it keeps the gutter, where the full page's box
+           bleeds through it: the banner under it is a tinted callout, which
+           keeps its margins, and the two stand on the same edges. -->
       <div
         v-if="historyEdges.length > 0"
-        class="mt-4"
         data-testid="person-teaser-employment"
       >
         <CardEmploymentHistory :edges="historyEdges" unlink-drafts />
       </div>
 
-      <!-- In from the card's edges as far as the history's rows are - its list
-           pads them 8px and their frame 4px more - so the banner lines up with
-           the row above it rather than sticking out past it on both sides.
-           Only where there is a row to line up with. -->
-      <div
-        :class="{ 'teaser-below--aligned': historyEdges.length > 0 }"
-        data-testid="person-teaser-below"
-      >
+      <!-- On the same edges as the history's box above it, and 16px under it:
+           it is about that history, so it does not stand a section away. -->
+      <div data-testid="person-teaser-below">
         <!-- Under what the reader can see, what they cannot, and the two ways
              in - the site's own login banner. -->
         <ExploreLoginBanner
           :to="loginTarget"
           :signup-to="signupTarget"
-          class="mt-4 mb-0"
+          class="mb-0"
+          :class="{ 'mt-4': historyEdges.length > 0 }"
           @login="onClick('login')"
           @signup="onClick('signup')"
         >
@@ -47,7 +52,7 @@
         </p>
       </div>
     </div>
-  </v-card>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -137,8 +142,8 @@ onBeforeUnmount(() => stopWatchingExit?.());
 </script>
 
 <style scoped>
-/* CardEmploymentHistory's `px-2` list plus the `pa-1` round its rows. */
-.teaser-below--aligned {
-  padding-inline: 12px;
+/* The full page's header rule (`.entity-header` in EntityDetailsCard). */
+.teaser-header {
+  border-bottom: 1px solid var(--k-line);
 }
 </style>

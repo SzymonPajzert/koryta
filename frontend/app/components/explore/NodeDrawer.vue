@@ -26,7 +26,7 @@
       :work-locations="workLocations"
     />
     <v-card v-else class="ma-2" flat>
-      <v-card-title class="text-wrap text-h5">
+      <v-card-title class="text-wrap text-h5 font-weight-bold">
         <!-- The drawer's title for every node that is not a person, and it
              was `text-decoration-none text-primary`: the brand's pale sage on
              the drawer's white is 1.85:1, against the 3:1 that `text-h5`'s

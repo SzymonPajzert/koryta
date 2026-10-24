@@ -8,15 +8,19 @@ import { test, expect } from "@playwright/test";
  */
 const PHONE = { width: 375, height: 667 };
 
+/** The phone's lead sentence. `\s` rather than a space after „w”: the site
+ * ties a one-letter word to the next with a no-break space, and a literal
+ * space would match nothing - which the desktop test's `toBeHidden()` would
+ * then pass on whatever the page showed. */
+const INTRO = /Sprawdzamy, którymi stanowiskami w\spublicznych spółkach/;
+
 test.describe("the home page on a phone", () => {
   test.use({ viewport: PHONE });
 
   test("leads with a sentence, a search and the map", async ({ page }) => {
     await page.goto("/", { waitUntil: "load" });
 
-    const intro = page.getByText(
-      /Sprawdzamy, którymi stanowiskami w publicznych spółkach/,
-    );
+    const intro = page.getByText(INTRO);
     await expect(intro).toBeVisible();
 
     // Above the search field, not tucked in beside it.
@@ -76,8 +80,7 @@ test.describe("the home page on a desktop", () => {
     ).toBeVisible();
     await expect(page.getByTestId("home-cta")).toBeVisible();
     // The phone-only sentence would repeat the headline here.
-    await expect(
-      page.getByText(/Sprawdzamy, którymi stanowiskami w publicznych spółkach/),
-    ).toBeHidden();
+    await expect(page.getByText(INTRO)).toBeAttached();
+    await expect(page.getByText(INTRO)).toBeHidden();
   });
 });

@@ -120,6 +120,12 @@ const SEGMENT_GAP_PX = 1;
  * the rest is the width the columns share. */
 const VALUE_AXIS_PX = 50;
 
+/** Room at the plot's right end for the last date. apexcharts centres a label
+ * on its column, so the last one - today's, which `everyNthDayLabel` keeps
+ * on purpose - ran half its width past the plot, and the chart's own box cut
+ * it off: „23 pa” for „23 paź” on a phone. */
+const LAST_LABEL_PX = 16;
+
 /** How wide the chart is drawn, which is what decides how many dates fit under
  * it. Measured rather than read off `useDisplay()`: the window is not the
  * chart - on a desktop the page stops at 1200px, and on a phone the layout's,
@@ -149,7 +155,10 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
  * the chart is redrawn when the step changes and not on every pixel of a
  * resize. */
 const labelStep = computed(() =>
-  dayLabelStep(props.daily.length, chartWidth.value - VALUE_AXIS_PX),
+  dayLabelStep(
+    props.daily.length,
+    chartWidth.value - VALUE_AXIS_PX - LAST_LABEL_PX,
+  ),
 );
 
 const hasData = computed(() => props.daily.some((day) => day.total > 0));
@@ -175,6 +184,7 @@ const options = computed(() => {
   return {
     ...base,
     chart: { ...base.chart, type: "bar", stacked: true },
+    grid: { ...base.grid, padding: { right: LAST_LABEL_PX } },
     colors: activityKinds.map((kind) => activityColors[kind]),
     ...barPlotOptions(),
     stroke: { ...barPlotOptions().stroke, width: SEGMENT_GAP_PX },
@@ -190,7 +200,7 @@ const options = computed(() => {
             enabled: labelEveryCap,
             style: {
               color: ink.secondary,
-              fontSize: "11px",
+              fontSize: "12px",
               fontWeight: 500,
             },
             offsetY: -4,

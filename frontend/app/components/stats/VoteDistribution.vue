@@ -120,7 +120,7 @@ const options = computed(() => {
     dataLabels: {
       enabled: true,
       offsetY: -18,
-      style: { colors: [ink.secondary], fontSize: "11px", fontWeight: 500 },
+      style: { colors: [ink.secondary], fontSize: "12px", fontWeight: 500 },
       background: { enabled: false },
     },
     grid: { ...base.grid, show: false, padding: { top: 12 } },

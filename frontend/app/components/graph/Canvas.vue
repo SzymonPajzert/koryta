@@ -80,9 +80,17 @@
     </template>
   </v-network-graph>
 
-  <div v-else class="d-flex justify-center" width="100%">
-    <v-progress-circular indeterminate />
-    Ładuję...
+  <!-- While the layout settles: one quiet status in the middle of the
+       canvas, the spinner over its word. They used to touch, along the top
+       edge of an empty 520px panel, which read as a broken page rather than
+       one still loading - and two hops of a busy person take long enough to
+       be seen. -->
+  <div
+    v-else
+    class="d-flex flex-column align-center justify-center ga-3 fill-height text-medium-emphasis"
+  >
+    <v-progress-circular indeterminate size="28" width="3" />
+    <span class="text-body-2">Ładuję...</span>
   </div>
 </template>
 
@@ -138,7 +146,9 @@ const FOCUS_RING = role.focusRing;
  * small enough to read as background. A flat two hop graph is forty equal dots
  * and no way to tell whose page you are on. */
 const RING_WIDTH: Record<number, number> = { 0: 46, 1: 34, 2: 24 };
-const RING_LABEL: Record<number, number> = { 0: 13, 1: 11.5, 2: 9.5 };
+// Labels on the type scale, and never under its 12px floor: the subject at
+// 14, everything around it at 12. The ring sizes carry the hierarchy.
+const RING_LABEL: Record<number, number> = { 0: 14, 1: 12, 2: 12 };
 
 function ringOf(node: GraphNode): number {
   return Math.min(node.depth ?? 1, 2);
@@ -330,7 +340,7 @@ const configs = reactive(
         // hops there are more labels than there is room for them, and this is
         // what makes any one of them legible.
         visible: (node) => !dimmed(node.id),
-        fontSize: (node) => RING_LABEL[ringOf(node)] ?? 11.5,
+        fontSize: (node) => RING_LABEL[ringOf(node)] ?? 12,
         color: GRAPH_INK.label,
         // Labels are drawn over whatever the layout put underneath them, and a
         // dense graph puts a lot there: without a plate behind the text, a name
@@ -391,7 +401,7 @@ const configs = reactive(
         },
       },
       label: {
-        fontSize: 11,
+        fontSize: 12,
         color: GRAPH_INK.edgeLabel,
       },
     },
