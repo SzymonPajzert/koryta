@@ -68,8 +68,10 @@
       <RevisionNodeProposals ref="proposals" :node-id="nodeId" />
 
       <!-- `mt-4`: part of the header above rather than a section of its
-           own, so it keeps to it instead of taking the sections' gap. -->
-      <div class="d-flex flex-wrap ga-2 mt-4">
+           own, so it keeps to it instead of taking the sections' gap.
+           Controls, not content: a snippet read "Graf połączeńEksploruj
+           powiązania". -->
+      <div class="d-flex flex-wrap ga-2 mt-4" data-nosnippet>
         <v-btn
           variant="tonal"
           :prepend-icon="mdiGraphOutline"

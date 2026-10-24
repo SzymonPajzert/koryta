@@ -112,14 +112,17 @@
           <!-- Last, where the bar sits on a wide screen. On a phone the bar is
                a 200px track in a 210px column, clipped at both ends, and the
                dates it captions are the only part of it that survives the
-               width - so below md the row prints them and drops the track. -->
+               width - so below md the row prints them and drops the track.
+               The leading space is for a reader of the text, where the row
+               read "ZarządPO2026-08-28"; at the start of a flex item it is
+               never drawn. -->
           <!-- „obecnie” in bold: a post held today reads stronger than one
                that ended in 2008. -->
           <span
             v-if="isDated(edge)"
             class="d-md-none text-caption text-medium-emphasis"
           >
-            {{ periodOf(edge).start
+            {{ ` ${periodOf(edge).start}`
             }}<template v-if="periodOf(edge).end !== undefined">
               -
               <strong v-if="periodOf(edge).current">{{

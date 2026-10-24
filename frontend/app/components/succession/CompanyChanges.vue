@@ -35,7 +35,9 @@
       <section data-testid="successions-current">
         <div class="sec-head mb-1">
           <h2 class="text-h6">Obecny skład</h2>
-          <span class="text-caption text-medium-emphasis">
+          <!-- `data-nosnippet`: Google opened a company's search result on
+               this caption, which says nothing about the company. -->
+          <span class="text-caption text-medium-emphasis" data-nosnippet>
             wpisy bez daty zakończenia, stan na {{ longDate(today) }}
           </span>
         </div>
