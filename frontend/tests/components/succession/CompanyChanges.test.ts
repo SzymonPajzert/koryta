@@ -1,13 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
+import { flushPromises } from "@vue/test-utils";
+import { ref } from "vue";
 import { clearNuxtData } from "#app";
 import CompanyChanges from "../../../app/components/succession/CompanyChanges.vue";
+import { trackGoal } from "~/composables/analytics";
+import { noteSearchPick } from "~/composables/teaserJourney";
 import type {
   CompanySuccessions,
   CurrentPost,
   Succession,
   SuccessionSide,
 } from "../../../server/api/edges/successions.get";
+
+/** Who is signed in, if anybody: `useCurrentUser` for the query and the
+ * banner, `getCurrentUser` for whether the teaser counts as shown. */
+const auth = vi.hoisted(() => ({
+  user: null as { uid: string; getIdToken: () => Promise<string> } | null,
+}));
+
+// `ref` is only called once a component asks for the user, by which time the
+// import above has long resolved - as in tests/setup.ts.
+vi.mock("vuefire", async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof import("vuefire")>()),
+    useFirestore: vi.fn(() => ({})),
+    useCollection: vi.fn(() => ref([])),
+    useFirebaseAuth: vi.fn(() => ({ currentUser: null })),
+    useCurrentUser: vi.fn(() => ref(auth.user)),
+    useIsCurrentUserLoaded: vi.fn(() => ref(true)),
+    getCurrentUser: async () => auth.user,
+  };
+});
+vi.mock("~/composables/analytics", () => ({ trackGoal: vi.fn() }));
 
 /** What the endpoint will answer with, set by each test before it mounts. */
 let response: CompanySuccessions = { successions: [], current: [], hidden: 0 };
@@ -55,6 +80,7 @@ function post(name: string, extra: Partial<CurrentPost> = {}): CurrentPost {
     parties: [],
     role: "Zarząd",
     start: "2024-04-12",
+    published: true,
     ...extra,
   };
 }
@@ -330,5 +356,152 @@ describe("SuccessionCompanyChanges", () => {
     expect(wrapper.text()).not.toContain("Obecny skład");
     expect(wrapper.text()).not.toContain("Kto kogo zastąpił");
     expect(wrapper.text()).toContain("Tauron Dystrybucja");
+  });
+});
+
+describe("SuccessionCompanyChanges, unpublished holders", () => {
+  beforeEach(() => {
+    auth.user = null;
+    vi.mocked(trackGoal).mockClear();
+    response = {
+      successions: [],
+      current: [
+        post("Anna Nowak", { parties: ["PO"] }),
+        post("Jan Kowalski", { published: false, partyHidden: true }),
+        post("Ewa Zielińska", { published: false }),
+      ],
+      hidden: 0,
+    };
+    clearNuxtData();
+  });
+
+  it("stands a chip in for the party it is not told, and says what it is", async () => {
+    const wrapper = await mountChanges();
+
+    const chips = wrapper.findAll('[data-testid="party-locked"]');
+    expect(chips).toHaveLength(1);
+    expect(chips[0]!.text()).toBe("możliwe powiązania");
+    // On the card of the holder whose party is held back, and only there.
+    const card = chips[0]!.element.closest(".k-card");
+    expect(card?.textContent).toContain("Jan Kowalski");
+    expect(card?.textContent).not.toContain("Ewa Zielińska");
+    // A published holder keeps the party chip they always had.
+    expect(wrapper.text()).toContain("PO");
+  });
+
+  it("leads the chip and the banner to the sign in, back to this page", async () => {
+    const wrapper = await mountChanges();
+
+    const href = wrapper.get('[data-testid="party-locked"]').attributes("href");
+    expect(href).toContain("/login");
+    expect(href).toContain("powod=partie-w-skladzie");
+    const banner = wrapper.get('[data-testid="current-party-teaser"]');
+    // „przy 1 osobie”: the locative, whatever the count.
+    expect(banner.text()).toContain("Przy 1 osobie z obecnego składu");
+    expect(
+      banner
+        .findAllComponents({ name: "VBtn" })
+        .find((b) => b.attributes("data-testid") === "login-banner-signup")
+        ?.props("to"),
+    ).toEqual({
+      path: "/login",
+      query: {
+        redirect: expect.any(String),
+        powod: "partie-w-skladzie",
+        konto: "nowe",
+      },
+    });
+  });
+
+  it("counts the holders in the banner by the locative", async () => {
+    response = {
+      ...response,
+      current: [
+        post("Jan Kowalski", { published: false, partyHidden: true }),
+        post("Adam Lis", { published: false, partyHidden: true }),
+      ],
+    };
+    const wrapper = await mountChanges();
+
+    expect(
+      wrapper.get('[data-testid="current-party-teaser"]').text(),
+    ).toContain("Przy 2 osobach z obecnego składu");
+  });
+
+  it("tells a crawler not to follow a name to a page nobody published", async () => {
+    const wrapper = await mountChanges();
+
+    const rel = (name: string) =>
+      wrapper
+        .findAll("a")
+        .find((a) => a.text() === name)
+        ?.attributes("rel");
+    expect(rel("Jan Kowalski")).toBe("nofollow");
+    expect(rel("Ewa Zielińska")).toBe("nofollow");
+    expect(rel("Anna Nowak")).toBeUndefined();
+  });
+
+  it("offers no banner where no party is held back", async () => {
+    response = {
+      ...response,
+      current: [post("Ewa Zielińska", { published: false })],
+    };
+    const wrapper = await mountChanges();
+
+    expect(wrapper.find('[data-testid="party-locked"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="current-party-teaser"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("offers a signed in reader no banner", async () => {
+    // The server renders anonymously, so a signed in reader is handed the
+    // locks for the moment before their own answer arrives.
+    auth.user = { uid: "reader", getIdToken: async () => "token" };
+    const wrapper = await mountChanges();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="current-party-teaser"]').exists()).toBe(
+      false,
+    );
+    expect(trackGoal).not.toHaveBeenCalledWith(
+      "teaser:shown",
+      expect.anything(),
+    );
+  });
+
+  it("counts being shown, and whether the search box sent the reader", async () => {
+    noteSearchPick("tauron");
+    await mountChanges();
+    await flushPromises();
+
+    expect(trackGoal).toHaveBeenCalledWith("teaser:shown", {
+      surface: "instytucja",
+      kind: "partia",
+      from: "search",
+    });
+    expect(
+      vi
+        .mocked(trackGoal)
+        .mock.calls.filter(([goal]) => goal === "teaser:shown"),
+    ).toHaveLength(1);
+  });
+
+  it("counts which way in was clicked", async () => {
+    const wrapper = await mountChanges();
+
+    await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
+    await wrapper.get('[data-testid="party-locked"]').trigger("click");
+
+    expect(trackGoal).toHaveBeenCalledWith("teaser:click", {
+      surface: "instytucja",
+      kind: "partia",
+      mode: "signup",
+    });
+    expect(trackGoal).toHaveBeenCalledWith("teaser:click", {
+      surface: "instytucja",
+      kind: "partia",
+      mode: "login",
+    });
   });
 });
