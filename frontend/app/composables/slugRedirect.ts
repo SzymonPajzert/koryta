@@ -1,4 +1,4 @@
-import { slugRedirectCode } from "./slugs";
+import { slugRedirectCode } from "~~/shared/slugs";
 
 /** Sends a server-rendered request for a node on to `url`, the address
  * `generateNodeUrl` gives it, with the status `slugRedirectCode` picks.
@@ -9,8 +9,8 @@ import { slugRedirectCode } from "./slugs";
  * rename that went A -> B -> A would leave a browser that saw the first answer
  * looping, A sending it to B from its cache and the server sending it back.
  *
- * Kept out of `slugs.ts`, which the server imports and which has to stay free
- * of the app's composables. */
+ * Kept out of shared/slugs.ts, which the server imports too and which has to
+ * stay free of the app's composables. */
 export function redirectToNodeUrl(url: string) {
   useResponseHeader("cache-control").value = "no-store";
   return navigateTo(url, { redirectCode: slugRedirectCode(url) });

@@ -1,5 +1,5 @@
 import type { Node, NodeType } from "~~/shared/model";
-import { generateEntityUrl, generateNodeUrl } from "~/composables/slugs";
+import { generateEntityUrl, generateNodeUrl } from "~~/shared/slugs";
 import { redirectToNodeUrl } from "~/composables/slugRedirect";
 
 /** Sends /entity/:type/:id on to the readable url for that node.

@@ -1,4 +1,4 @@
-import { generateEntityUrl } from "~~/app/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { sitemapLastmod } from "~~/shared/lastmod";
 import { type NodeType, pageIsPublic } from "~~/shared/model";
 import { listedPosts } from "~~/shared/blog";
@@ -7,7 +7,7 @@ import { blogPosts } from "~~/server/utils/blog";
 /** Node types whose entity page renders a page of its own.
  *
  * `region` is deliberately absent. A region has no page of its own:
- * app/composables/slugs.ts `generateNodeUrl` sends every one to
+ * shared/slugs.ts `generateNodeUrl` sends every one to
  * `/eksploruj/tabela?teryt=...`, and app/pages/[seoType]/[slug].vue then
  * redirects there on the server - so listing them advertised URLs that exist
  * only to bounce a crawler into the heaviest response on the site, and one

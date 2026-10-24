@@ -1,5 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { generateEntityUrl } from "~~/app/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { nodeTypes, type NodeType } from "~~/shared/model";
 import type { FeedTargetType } from "~~/shared/activityFeed";
 

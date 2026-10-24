@@ -8,6 +8,7 @@
 
 <script setup lang="ts">
 import type { Node } from "~~/shared/model";
+import { generateNodeUrl } from "~~/shared/slugs";
 
 /** `:entity[Jan Kowalski]{id="…"}` - the words in brackets, linked to that
  * page on the site.

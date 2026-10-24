@@ -4,7 +4,7 @@ import {
   mangledIdKey,
   mayBeMangledId,
   slugRedirectCode,
-} from "../../app/composables/slugs";
+} from "../../shared/slugs";
 import type { Node } from "../../shared/model";
 
 /** A place node, with whatever identifiers the caller wants to give it. */

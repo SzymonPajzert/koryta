@@ -66,7 +66,7 @@ import { mdiTagOutline } from "@mdi/js";
 import { useCurrentUser } from "vuefire";
 import { authFetch } from "~/composables/auth";
 import { polishCounting } from "~/composables/polish";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { TopicSummary } from "~~/server/api/topics/index.get";
 
 definePageMeta({ title: "Tematy" });

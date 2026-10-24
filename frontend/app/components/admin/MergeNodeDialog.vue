@@ -169,7 +169,7 @@
 import { computed, ref, watch } from "vue";
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { Link, NodeType } from "~~/shared/model";
 import type { NodesMerged } from "~~/server/api/nodes/merge.post";
 import type { MergePlan } from "~~/server/utils/merge";

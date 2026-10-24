@@ -70,7 +70,7 @@
 import { mdiGoogle } from "@mdi/js";
 import { toRef } from "vue";
 import type { PersonRich } from "~~/shared/model";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { usePersonSearch } from "~/composables/usePersonSearch";
 
 const props = withDefaults(

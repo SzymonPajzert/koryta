@@ -74,7 +74,7 @@ import {
   edgeIsPublishable,
   type EdgeNode,
 } from "~~/app/composables/edges";
-import { nodeLinkUrl } from "~/composables/slugs";
+import { nodeLinkUrl } from "~~/shared/slugs";
 
 const { edges, title, canRemove, subjectPublished } = defineProps<{
   title: string;

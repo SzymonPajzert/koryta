@@ -257,7 +257,7 @@ import { asArray, type Company } from "~~/shared/model";
 import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { placeClashes, type PlaceClash } from "~~/shared/twoPlaces";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
-import { nodeLinkUrl } from "~/composables/slugs";
+import { nodeLinkUrl } from "~~/shared/slugs";
 
 /** Whoever held a seat before the spell an edge records, as the successions
  * endpoint names them, plus how many seats changed hands that day. */

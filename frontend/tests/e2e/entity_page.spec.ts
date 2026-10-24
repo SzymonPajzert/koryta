@@ -72,7 +72,7 @@ test.describe("Entity page", () => {
     // this used to be it kept the /entity/ url as the page's own address. And
     // `no-store` beside it, asserted rather than assumed: a 301 a browser may
     // cache is kept for the life of the profile, beyond the reach of any
-    // deploy. See `slugRedirectCode` in app/composables/slugs.ts.
+    // deploy. See `slugRedirectCode` in shared/slugs.ts.
     const redirected = response?.request().redirectedFrom();
     expect(redirected, "/entity/person/1 did not redirect at all").toBeTruthy();
     const redirect = await redirected!.response();

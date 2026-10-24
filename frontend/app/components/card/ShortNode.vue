@@ -63,7 +63,7 @@ import {
   type EdgeNode,
 } from "~/composables/edges";
 import { entityIcon } from "~/utils/entityIcon";
-import { nodeLinkUrl } from "~/composables/slugs";
+import { nodeLinkUrl } from "~~/shared/slugs";
 
 const { edge, canRemove, subjectPublished } = defineProps<{
   edge: EdgeNode;

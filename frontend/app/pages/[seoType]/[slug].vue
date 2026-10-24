@@ -19,7 +19,7 @@ import {
   mayBeMangledId,
   seoTypes,
   type SeoType,
-} from "~/composables/slugs";
+} from "~~/shared/slugs";
 import { redirectToNodeUrl } from "~/composables/slugRedirect";
 import type { NodeType, Node } from "~~/shared/model";
 import { authFetch } from "@/composables/auth";

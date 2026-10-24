@@ -323,7 +323,7 @@ import {
 } from "@mdi/js";
 import { useCurrentUser } from "vuefire";
 import { authFetch } from "~/composables/auth";
-import { createSlug, generateEntityUrl } from "~/composables/slugs";
+import { createSlug, generateEntityUrl } from "~~/shared/slugs";
 import { gapLabel, MAX_GAP_DAYS, MAX_OVERLAP_DAYS } from "~~/shared/succession";
 import { isoDay, longDate, shortDate } from "~~/shared/dates";
 import type {

@@ -123,7 +123,7 @@ import {
   mdiOfficeBuildingOutline,
   mdiSwapVertical,
 } from "@mdi/js";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { gapLabel } from "~~/shared/succession";
 import { shortDate } from "~~/shared/dates";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";

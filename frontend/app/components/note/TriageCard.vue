@@ -89,7 +89,7 @@ import { computed } from "vue";
 import { mdiHelp, mdiLink, mdiOpenInNew } from "@mdi/js";
 import { NuxtLink } from "#components";
 import { noteKindConfig } from "~/composables/notes";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { NoteRow } from "~~/shared/model";
 import { entityIcon } from "~/utils/entityIcon";
 import { sourceDomain } from "~/utils/sourceDomain";

@@ -82,7 +82,7 @@ import { ref, watchEffect } from "vue";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { entityIcon } from "~/utils/entityIcon";
 import { noteKindConfig } from "~/composables/notes";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { NoteRow } from "~~/shared/model";
 import type { ArticleNotes } from "~~/server/api/articles/[id]/notes.get";
 

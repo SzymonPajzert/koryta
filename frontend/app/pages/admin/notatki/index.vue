@@ -268,7 +268,7 @@ import {
   noteKindConfig,
 } from "~/composables/notes";
 import { useQueryFilters } from "~/composables/queryFilters";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type {
   NodeMaybeRich,
   NodeType,

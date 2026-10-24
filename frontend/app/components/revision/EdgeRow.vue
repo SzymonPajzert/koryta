@@ -125,7 +125,7 @@ import { computed, watch } from "vue";
 import { mdiArrowRight, mdiGavel, mdiVectorPolyline } from "@mdi/js";
 import { useUserLookup } from "@/composables/users";
 import { formatDaysAgo } from "~/utils/chartTheme";
-import { nodeLinkUrl } from "~/composables/slugs";
+import { nodeLinkUrl } from "~~/shared/slugs";
 import { polishCounting } from "~/composables/polish";
 import {
   renderFieldValue,

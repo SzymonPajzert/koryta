@@ -128,7 +128,7 @@ import {
   mdiOfficeBuildingOutline,
   mdiPartyPopper,
 } from "@mdi/js";
-import { generateEntityUrl } from "~/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { polishCounting } from "~/composables/polish";
 import { longDate } from "~~/shared/dates";
 import type { Company } from "~~/shared/model";
