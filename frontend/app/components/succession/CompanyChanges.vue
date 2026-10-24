@@ -92,7 +92,6 @@
                       <ChipPartyLocked
                         v-if="post.partyHidden"
                         :to="loginTarget"
-                        :label="variant === 'b'"
                         @click="onTeaserClick('login')"
                       />
                     </div>
@@ -148,7 +147,7 @@
              reader who is signed in, who is shown the parties themselves
              once their own answer replaces the server's. -->
         <ExploreLoginBanner
-          v-if="lockedCount > 0 && !user && variant !== 'c'"
+          v-if="lockedCount > 0 && !user"
           :to="loginTarget"
           :signup-to="signupTarget"
           class="mt-4 mb-0"
@@ -161,9 +160,9 @@
           </div>
           <div>
             Przy
-            {{ count(lockedCount, "osobie", "osobach", "osobach") }} z
-            obecnego składu mamy niesprawdzone informacje o powiązaniach
-            politycznych. Zaloguj się, by je zobaczyć.
+            {{ count(lockedCount, "osobie", "osobach", "osobach") }} z obecnego
+            składu mamy niesprawdzone informacje o powiązaniach politycznych.
+            Zaloguj się, by je zobaczyć.
           </div>
         </ExploreLoginBanner>
 
@@ -427,15 +426,6 @@ const router = useRouter();
 // See `usePersonSuccessions`: the current user, not the whole auth state,
 // which would open a Firestore subscription this never reads.
 const user = useCurrentUser();
-
-/** Which look of the hidden parties to draw, for the round of screenshots
- * that picks one: `a` the blurred chip and the banner under the board, `b`
- * the chip spelled out and the banner, `c` the blurred chip alone.
- * Temporary: the url switch goes once a look is picked. */
-const variant = computed(() => {
-  const asked = route.query.wariant;
-  return asked === "b" || asked === "c" ? asked : "a";
-});
 
 /** `latest` put in the query rather than left to `authFetch`, which adds it in
  * an `onRequest` that returns early on the server - so the SSR request goes
