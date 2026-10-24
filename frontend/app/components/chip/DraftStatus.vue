@@ -24,12 +24,16 @@
 
     <!-- Publishing from the page that is the draft. Until now the only way in
          was /admin/rewizje/<id>, so the reviewer who had just read the page and
-         made up their mind had to leave it to act on the decision. -->
+         made up their mind had to leave it to act on the decision.
+         The control tint, like the history's „Dodaj” and a relation's own
+         „Opublikuj” (`EdgeDraftStatus`), rather than `variant="text"
+         color="primary"`: sage ink on white is 1.85:1, and sage is a fill,
+         never text. Szymon on sage text, 2026-10-23: "controls only,
+         now". -->
     <v-btn
       v-if="canPublish"
       size="x-small"
-      variant="text"
-      color="primary"
+      variant="tonal"
       data-testid="draft-status-publish"
       @click="publishOpen = true"
     >

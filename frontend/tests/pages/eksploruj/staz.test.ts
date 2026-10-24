@@ -320,6 +320,45 @@ describe("eksploruj/staz", () => {
     expect(scroll.props("emptyText")).toBe(
       "To już wszystkie okrągłe staże z tego okresu.",
     );
-    expect(scroll.props("loadMoreText")).toBe("Pokaż więcej");
+  });
+
+  it("offers „Pokaż więcej” in its own button, which loads the next page", async () => {
+    // The page draws the button through the `load-more` slot, in the control
+    // tint: Vuetify's own is outlined in the text colour, and labelled in
+    // English unless told otherwise.
+    pages.first = response({
+      milestones: [milestone("a")],
+      total: 4,
+      nextOffset: 1,
+    });
+    pages["1"] = response({
+      milestones: [milestone("b")],
+      total: 4,
+      nextOffset: 2,
+    });
+    pages["2"] = response({
+      milestones: [milestone("c")],
+      total: 4,
+      nextOffset: 3,
+    });
+    pages["3"] = response({ milestones: [milestone("d")], total: 4 });
+
+    const wrapper = await mountPage();
+    const scroll = wrapper.findComponent({ name: "VInfiniteScroll" });
+    await scrollToEnd(wrapper);
+    await scrollToEnd(wrapper);
+    expect(scroll.props("mode")).toBe("manual");
+
+    const more = scroll
+      .findAllComponents({ name: "VBtn" })
+      .find((button) => button.text() === "Pokaż więcej");
+    expect(more?.props("variant")).toBe("tonal");
+    expect(scroll.text()).not.toContain("infiniteScroll");
+
+    await more!.trigger("click");
+    await vi.waitUntil(() => wrapper.text().includes("Osoba d"), {
+      timeout: 2000,
+    });
+    expect(asked.at(-1)).toBe("3");
   });
 });

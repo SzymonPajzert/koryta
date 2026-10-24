@@ -7,7 +7,6 @@
     v-if="mentions.length > 0"
     title="Artykuły, które o tym wspominają"
     :icon="mdiNewspaperVariantOutline"
-    class="mt-4"
     data-testid="node-mentions"
   >
     <template #lead>

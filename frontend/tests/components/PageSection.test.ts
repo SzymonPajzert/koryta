@@ -28,8 +28,10 @@ const mountSection = (
 describe("PageSection", () => {
   it("heads itself with a title, and an icon only when given one", async () => {
     const bare = mountSection({ title: "Notatki" });
-    expect(bare.get("h3").classes()).toContain("text-h6");
-    expect(bare.get("h3").text()).toBe("Notatki");
+    // An h2: the section sits under the page's one h1, the entity's name.
+    expect(bare.find("h3").exists()).toBe(false);
+    expect(bare.get("h2").classes()).toContain("text-h6");
+    expect(bare.get("h2").text()).toBe("Notatki");
     expect(bare.find(".sec-head__icon").exists()).toBe(false);
 
     const withIcon = mountSection({
@@ -118,17 +120,22 @@ describe("PageSection", () => {
     expect(wrapper.element.tagName).toBe("SECTION");
   });
 
-  // The gap to the next section belongs to the page that stacks them, and the
-  // e2e suite navigates by testid - both arrive as fall-through attributes,
-  // and both have to survive alongside the shell's own `px-2`.
-  it("keeps its own padding when the caller passes a class and a testid", async () => {
+  // The gap to the next section belongs to the page that stacks them
+  // (`k-sections`), and the section shares the page's one left edge rather
+  // than an 8px inset of its own: a class of the shell's would add to the
+  // page's spacing instead of following it. What the caller passes - a block
+  // that belongs to the one above keeps its `mt-4`, and the e2e suite
+  // navigates by testid - arrives as fall-through attributes.
+  it("has no inset or margin of its own, and takes the caller's class and testid", async () => {
+    expect(mountSection().classes()).toEqual([]);
+
     const wrapper = mount(PageSection, {
       global: { plugins: [vuetify] },
       props: { title: "Fakty z artykułów" },
       attrs: { class: "mt-4", "data-testid": "person-extractions" },
     });
 
-    expect(wrapper.classes()).toEqual(expect.arrayContaining(["px-2", "mt-4"]));
+    expect(wrapper.classes()).toEqual(["mt-4"]);
     expect(wrapper.attributes("data-testid")).toBe("person-extractions");
   });
 });

@@ -24,12 +24,16 @@
          /admin/krawedzie, a queue of several hundred rows ordered by document
          id - so the one relation the reviewer had just added was the hardest
          one there to find. `stop.prevent` because every row that mounts this is
-         itself a link to the other end of the relation. -->
+         itself a link to the other end of the relation.
+         The control tint, like the history's „Dodaj” and the page badge's own
+         „Opublikuj” (`DraftStatus`), rather than `variant="text"
+         color="primary"`: sage ink on white is 1.85:1, and sage is a fill,
+         never text. Szymon on sage text, 2026-10-23: "controls only,
+         now". -->
     <v-btn
       v-if="canPublish"
       size="x-small"
-      variant="text"
-      color="primary"
+      variant="tonal"
       :loading="publishing"
       :data-testid="`edge-draft-publish-${edgeId}`"
       @click.stop.prevent="publish"

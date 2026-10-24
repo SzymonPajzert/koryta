@@ -67,10 +67,13 @@ const unitText = computed(() => {
 
 .stat-tile__value {
   /* Proportional figures on purpose: tabular-nums makes a large standalone
-     number look loose. Columns of numbers get tabular-nums, tiles do not. */
-  font-size: 1.75rem;
-  line-height: 1.15;
-  font-weight: 600;
+     number look loose. Columns of numbers get tabular-nums - the site sets
+     them on everything - and tiles opt out. */
+  font-size: 2rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  font-variant-numeric: proportional-nums;
   color: rgb(var(--v-theme-on-surface));
 }
 

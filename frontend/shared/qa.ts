@@ -59,6 +59,90 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zrodla-na-telefonie",
+    title: "Źródła na telefonie pokazują artykuły",
+    description:
+      "Na telefonie /zrodla pokazywało same nazwy kolumn, bo długi tytuł wypychał resztę wiersza poza ekran. Teraz każdy wiersz ma cały tytuł, datę i tematy.",
+    steps: [
+      "Otwórz /zrodla na telefonie - pod każdym tytułem są data i tematy.",
+    ],
+    link: "/zrodla",
+    area: "public",
+  },
+  {
+    id: "rowny-odstep-nad-stopka",
+    title: "Ten sam odstęp nad stopką na każdej stronie",
+    description:
+      "Ostatni blok strony stoi nad stopką tak daleko, jak sekcje strony osoby od siebie - 40 px, 32 na telefonie - a nie od 16 do 68 px, zależnie od strony.",
+    steps: [
+      "Zjedź na dół strony osoby, /o-nas i /eksploruj/statystyki - nad stopką jest wszędzie ten sam odstęp.",
+    ],
+    area: "public",
+  },
+  {
+    id: "cala-nazwa-koryta-pl-pogrubiona",
+    title: "Cała nazwa „koryta.pl” pogrubiona",
+    description:
+      "W górnym pasku cała nazwa „koryta.pl” jest pogrubiona, a nie tylko „koryta”.",
+    steps: [
+      "Otwórz dowolną stronę - „koryta.pl” obok logo w pasku jest w całości pogrubione.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
+    id: "zwiniety-opis-osoby-na-telefonie",
+    title: "Długi opis osoby na telefonie zwinięty do czterech linii",
+    description:
+      "Na telefonie długi opis osoby pokazuje cztery linie i „Pokaż więcej”, które rozwija resztę w miejscu. Na komputerze opis jest cały.",
+    steps: [
+      "Otwórz na telefonie stronę Grzegorza Ganowicza i kliknij „Pokaż więcej” ze strzałką w dół - opis rozwija się w całości, a przycisk znika.",
+      "Otwórz tę samą stronę na komputerze - opis jest cały i nie ma przycisku.",
+    ],
+    link: "/entity/person/2wqY7arTL25S5bGyhjcO",
+    area: "public",
+  },
+  {
+    id: "cichy-pasek-i-stopka",
+    title: "Niższy górny pasek z „Zgłoś”",
+    description:
+      "Górny pasek ma 56 px zamiast 64, wyraźną linię zamiast cienia (cień pojawia się dopiero po przewinięciu) i menu pisane zwykłymi literami. „Zgłoś” nie wisi już nad stroną, tylko jest w pasku: słowo na komputerze, ikona na telefonie. Pasek zalogowanego jest niższy i zaczyna się od lewej krawędzi strony.",
+    steps: [
+      "Otwórz dowolną stronę na komputerze - w pasku obok „Zaloguj się” jest „Zgłoś”, który otwiera okno zgłoszenia; nic nie wisi w prawym dolnym rogu.",
+      "Na telefonie kliknij ikonę zgłoszenia w pasku - otwiera to samo okno.",
+      "Po zalogowaniu pasek „Admin / Rewizje / Aktywność / Zespół” zaczyna się na lewej krawędzi treści, a otwarta sekcja jest podkreślona.",
+    ],
+    area: "public",
+  },
+  {
+    id: "jedna-cienka-linia",
+    title: "Jedna cienka linia zamiast ramek i cieni",
+    description:
+      "Każda ramka na stronie to jedna szara linia, przyciski zamiast czarnej obwódki mają szare tło, a cień zostaje tylko pod menu i oknami. Strona osoby i spółki nie leży już na osobnej karcie, „Historia powiązań” jest jedną listą z liniami między wierszami, a przełączniki takie jak „1 krok / 2 kroki” są jednym segmentem z białą zakładką.",
+    steps: [
+      "Otwórz stronę osoby - nie ma karty z cieniem wokół strony, nagłówek z nazwiskiem jest oddzielony od reszty cienką linią, a „Historia powiązań” to jedno pudełko z wierszami.",
+      "Na telefonie ta sama strona - lista powiązań sięga krawędzi ekranu.",
+      "Na stronie spółki przyciski „Graf połączeń” i „Zaproponuj zmianę” mają szare tło, bez czarnej ramki.",
+      "Na /eksploruj/szpitale przełącz „Partii / Województwa” - wybrana opcja to biała zakładka.",
+      "Otwórz /o-nas i /pomoc - strona nie leży w ramce na szarym tle, a przyciski i zdjęcie nie mają cienia.",
+    ],
+    area: "public",
+  },
+  {
+    id: "jeden-system-typografii",
+    title:
+      "Jeden tytuł na stronę, mniej rozmiarów tekstu, przyciski bez wersalików",
+    description:
+      "Strony zaczynają się jednym pogrubionym tytułem - na stronie osoby i spółki jest nim nazwa, a na /eksploruj/tabela stoi nad paskiem filtrów. Tekst ma 8 rozmiarów zamiast 25 i żaden nie jest mniejszy niż 12 px. Przyciski, zakładki i menu są pisane zwykłymi literami, etykiety takie jak „Data urodzenia” są szare.",
+    steps: [
+      "Otwórz stronę osoby - imię i nazwisko jest dużym tytułem, a „Historia powiązań” wyraźnie mniejszym nagłówkiem sekcji.",
+      "Otwórz stronę spółki - nazwa jest tytułem; nazwa pisana wielkimi literami jest o stopień mniejsza.",
+      "Otwórz /eksploruj/tabela - tytuł jest nad paskiem filtrów, a obok niego przycisk udostępniania widoku.",
+      "Przejrzyj przyciski i menu na kilku stronach - żaden nie jest pisany wersalikami.",
+    ],
+    area: "public",
+  },
+  {
     id: "opis-w-wyszukiwarce",
     title: "Google i podgląd linku opisują osobę albo spółkę konkretnie",
     description:

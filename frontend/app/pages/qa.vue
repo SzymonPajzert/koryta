@@ -2,7 +2,7 @@
   <!-- `data-qa-loaded` is what the e2e spec waits on: the verdicts arriving is
        both the page becoming truthful and the proof that it has hydrated, so
        a filter clicked before that would silently do nothing. -->
-  <div class="w-100 pa-2" :data-qa-loaded="loaded">
+  <div class="w-100 pa-2 pb-0" :data-qa-loaded="loaded">
     <h1 class="text-h5 text-sm-h4 mb-2">QA - zmiany do sprawdzenia</h1>
     <p class="text-body-2 text-medium-emphasis mb-4">
       Lista zmian na stronie, od najnowszej. Przejdź krokami z wpisu, a potem

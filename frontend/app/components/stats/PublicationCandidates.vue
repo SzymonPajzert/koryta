@@ -26,9 +26,12 @@
         sięga powyżej +5 i obejmuje osoby, na które nikt jeszcze nie zagłosował.
       </div>
 
+      <!-- A sage fill with dark text rather than sage text: sage is a fill
+           and never text, 1.85:1 on white (Szymon, 2026-10-23: „controls
+           only, now”). -->
       <div class="d-flex justify-end mt-2">
         <v-btn
-          variant="text"
+          variant="flat"
           color="primary"
           size="small"
           :append-icon="mdiChevronRight"
@@ -168,7 +171,7 @@ const options = computed(() => {
         dataLabels: {
           total: {
             enabled: true,
-            style: { color: ink.secondary, fontSize: "11px", fontWeight: 500 },
+            style: { color: ink.secondary, fontSize: "12px", fontWeight: 500 },
             offsetY: -4,
           },
         },

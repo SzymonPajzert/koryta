@@ -32,11 +32,11 @@ test(
       page.locator('[class*="-enter-active"], [class*="-leave-active"]'),
     ).toHaveCount(0);
     // On a phone the open panel is taller than the window, so the shot scrolls
-    // and the fixed app bar lands across its title, the feedback launcher
-    // across its first source. Neither is part of the panel: hidden, as in
-    // ./home-cta.spec.ts, rather than masked into magenta blocks.
+    // and the fixed app bar lands across its title. It is not part of the
+    // panel: hidden, as in ./home-cta.spec.ts, rather than masked into a
+    // magenta block.
     await page.addStyleTag({
-      content: ".v-app-bar, .feedback-fab { visibility: hidden !important; }",
+      content: ".v-app-bar { visibility: hidden !important; }",
     });
     await page.evaluate(() => document.fonts.ready);
 

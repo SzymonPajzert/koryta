@@ -1,7 +1,8 @@
 <template>
   <!-- Full width takes the layout's padding away too, so the page puts its
-       own back. -->
-  <div class="w-100 pa-3 pa-sm-4">
+       own back: its own sides, and the page-top inset and page-end gap every
+       other page gets from the layout (assets/css/edges.css). -->
+  <div class="w-100 pa-3 pa-sm-4 k-page-top k-page-end">
     <div class="tasks-page__head d-flex align-start flex-wrap ga-2 mb-2">
       <div class="tasks-page__intro">
         <h1 class="text-h5 text-sm-h4 mb-2">Zadania</h1>
@@ -10,17 +11,10 @@
           co na co czeka. Agenci dopisują tu to, co zostawiają po sesji.
         </p>
       </div>
-      <v-btn-toggle
-        v-model="view"
-        mandatory
-        density="comfortable"
-        variant="outlined"
-        divided
-        data-task-view
-      >
+      <SegmentedToggle v-model="view" data-task-view>
         <v-btn value="lista" :prepend-icon="mdiFormatListBulleted">Lista</v-btn>
         <v-btn value="mapa" :prepend-icon="mdiSitemapOutline">Mapa</v-btn>
-      </v-btn-toggle>
+      </SegmentedToggle>
       <v-btn
         color="ink-sage"
         variant="flat"
@@ -114,15 +108,7 @@
         class="tasks-page__goal"
         data-task-goal-filter
       />
-      <v-btn-toggle
-        v-if="view === 'lista'"
-        v-model="order"
-        mandatory
-        density="compact"
-        variant="outlined"
-        divided
-        data-task-order
-      >
+      <SegmentedToggle v-if="view === 'lista'" v-model="order" data-task-order>
         <v-btn
           value="najstarsze"
           size="small"
@@ -139,7 +125,7 @@
         >
           Najnowsze
         </v-btn>
-      </v-btn-toggle>
+      </SegmentedToggle>
       <template v-if="view === 'mapa'">
         <v-switch
           v-model="showClosed"
@@ -713,7 +699,7 @@ onMounted(async () => {
   max-height: calc(100vh - 100px);
   overflow-y: auto;
   padding: 16px;
-  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border: 1px solid var(--k-line);
   border-radius: 10px;
   background: rgb(var(--v-theme-surface));
 }

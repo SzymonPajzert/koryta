@@ -1,5 +1,5 @@
 <template>
-  <v-card class="mb-4" rounded="lg">
+  <v-card class="mb-4">
     <v-card-title>Twoje propozycje zmian</v-card-title>
     <v-card-subtitle v-if="subtitle" class="text-wrap">
       {{ subtitle }}

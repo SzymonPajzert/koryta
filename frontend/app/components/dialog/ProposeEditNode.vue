@@ -1,5 +1,8 @@
 <template>
-  <div class="d-inline-block">
+  <!-- Inline-block only around the activator. With none, an empty inline-block
+       still opens a line of text, which put 24px of nothing under /pomoc's last
+       section; a block with nothing in it takes no room. -->
+  <div :class="{ 'd-inline-block': !hideActivator }">
     <slot
       v-if="!hideActivator"
       name="activator"
@@ -8,9 +11,8 @@
       <v-btn
         icon
         border="sm current"
-        class="text-none pa-1 me-2"
+        class="text-none pa-1 me-2 k-r-control"
         color="warning"
-        rounded="lg"
         size="44"
         variant="outlined"
         @click="handleActivatorClick"

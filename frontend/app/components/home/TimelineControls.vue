@@ -4,24 +4,13 @@
     class="pt-2 mt-2 mx-auto"
     data-testid="home-timeline-controls"
     max-width="400"
-    rounded="lg"
   >
-    <v-card-title class="text-subtitle-1 font-weight-medium">
-      Ustawienia wykresu
-    </v-card-title>
+    <v-card-title class="text-subtitle-1"> Ustawienia wykresu </v-card-title>
     <v-divider />
 
     <v-card-text>
       <div class="text-body-2 text-medium-emphasis mb-2">Zakres czasu</div>
-      <v-btn-toggle
-        v-model="range"
-        data-testid="home-timeline-range"
-        density="compact"
-        divided
-        mandatory
-        rounded="lg"
-        variant="outlined"
-      >
+      <SegmentedToggle v-model="range" data-testid="home-timeline-range">
         <v-btn
           v-for="option in timelineRanges"
           :key="option.value"
@@ -30,7 +19,7 @@
           :text="option.label"
           :value="option.value"
         />
-      </v-btn-toggle>
+      </SegmentedToggle>
 
       <!-- Radios rather than a second button group: the three are a question
            („czym dzielimy?”) with one answer and a sentence of explanation

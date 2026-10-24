@@ -882,8 +882,14 @@ a.person-name:focus-visible {
   .name-cell {
     max-width: 120px;
     /* A surname long enough to not fit is broken across lines rather than
-     * pushing the history column out. */
-    overflow-wrap: anywhere;
+     * pushing the history column out. `break-word` rather than `anywhere`:
+     * both break a word wider than the cell, but `anywhere` also counts the
+     * gap between every two letters when the table sizes its columns. On
+     * /eksploruj/nowe, five columns wider than a phone, every column comes
+     * down to that minimum, which left the name as narrow as the header's
+     * „Osoba” and broke a two-word name into four pieces mid-word. Now the
+     * column is as wide as the name's longest word, up to the 120px. */
+    overflow-wrap: break-word;
   }
 
   /* The same 120px, on PartyChip's own root element - a scoped rule reaches a

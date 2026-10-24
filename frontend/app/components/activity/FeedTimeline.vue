@@ -338,7 +338,7 @@ function reasons(batch: FeedBatch) {
   align-items: center;
   color: rgb(var(--v-theme-on-surface));
   display: flex;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
   gap: 12px;
   letter-spacing: 0.01em;
@@ -483,7 +483,7 @@ function reasons(batch: FeedBatch) {
   align-items: center;
   border-radius: 999px;
   display: inline-flex;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   gap: 3px;
   line-height: 18px;
@@ -532,7 +532,7 @@ function reasons(batch: FeedBatch) {
   border-radius: 14px;
   color: rgb(var(--v-theme-ink-strong));
   display: inline-flex;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   gap: 6px;
   line-height: 18px;
   max-width: 100%;
@@ -621,12 +621,12 @@ function reasons(batch: FeedBatch) {
 .ft-more {
   align-items: center;
   background: none;
-  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border: 1px solid var(--k-line);
   border-radius: 14px;
   cursor: pointer;
   display: inline-flex;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   gap: 2px;
   line-height: 18px;
@@ -644,7 +644,7 @@ function reasons(batch: FeedBatch) {
 }
 
 .ft-rest {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   padding: 0 2px;
 }
 
