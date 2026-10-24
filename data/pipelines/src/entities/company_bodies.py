@@ -44,12 +44,14 @@ RADA_SPOLECZNA = "rada-spoleczna"
 
 #: Legal form -> what that form's supervisory organ is called.
 #:
-#: Only forms whose organ is *not* an ordinary rada nadzorcza belong here. The
-#: register holds others - a cech and an izba rzemieslnicza are supervised by a
-#: ``KOMISJA REWIZYJNA``, an izba gospodarcza by a ``RADA IZBY``, and those are
-#: unpaid too - but no such seat is stored on the site today, so adding them
-#: would be a rule with nothing to apply it to. When one arrives, it is a line
-#: here and a value in `companyBodies.ts`.
+#: Only forms whose organ is *not* an ordinary rada nadzorcza belong here, and
+#: only where the form settles whether a seat is paid. The register holds
+#: others - a cech and an izba rzemieslnicza are supervised by a ``KOMISJA
+#: REWIZYJNA``, an izba gospodarcza by a ``RADA IZBY`` - and the site stores
+#: seats on them: 979 on a komisja rewizyjna on 2026-10-24. It names those
+#: after the organ the register lists, ``supervisory_organ`` (see
+#: `supervisoryOrganTitle` in `companyBodies.ts`), and still counts them as
+#: employment. Stopping that is a line here and a value in `companyBodies.ts`.
 SUPERVISORY_BODY_BY_FORM: dict[str, str] = {
     SPZOZ: RADA_SPOLECZNA,
 }
