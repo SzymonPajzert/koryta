@@ -30,7 +30,7 @@ import { displayRole } from "~~/shared/companyBodies";
 import { categoryTitle } from "~~/shared/companyCategories";
 import { companyIdentifiers } from "~~/shared/identifiers";
 import { partyColors } from "~~/shared/misc";
-import { readableInkOn } from "~~/shared/colors";
+import { brand, card, ink, readableInkOn } from "~~/shared/colors";
 import { truncateDescription } from "~/composables/entitySeo";
 import { polishCounting, nominativeNoun } from "~/composables/polish";
 import { edgeCompany, edgePerson, type EdgeNode } from "~/composables/edges";
@@ -200,11 +200,11 @@ export function personCardProps(input: PersonCardInput): NodeCardProps {
   // stand for both.
   let chipLabel: string;
   let chipFill = "";
-  let chipInk = "#0b0b0b";
-  let chipRule = "#0b0b0b";
+  let chipInk: string = ink.strong;
+  let chipRule: string = ink.strong;
   if (parties.length === 0) {
     chipLabel = "bez partii w bazie";
-    chipRule = "#c3d4bd";
+    chipRule = card.rule;
   } else if (parties.length === 1) {
     const fill = partyColors[parties[0]!] ?? "";
     chipLabel = `partia w bazie: ${parties[0]}`;
@@ -212,8 +212,8 @@ export function personCardProps(input: PersonCardInput): NodeCardProps {
     // The 2px rule in the label's own ink is what stops the pale fills - Polska
     // 2050 at 1.44:1 on this background, PSL 1.83, PO 1.92 - dissolving into
     // the card.
-    chipInk = fill ? readableInkOn(fill) : "#0b0b0b";
-    chipRule = fill ? chipInk : "#0b0b0b";
+    chipInk = fill ? readableInkOn(fill) : ink.strong;
+    chipRule = fill ? chipInk : ink.strong;
   } else {
     chipLabel = truncateDescription(
       `partie w bazie: ${parties.join(", ")}`,
@@ -335,13 +335,13 @@ export function companyCardProps(input: CompanyCardInput): NodeCardProps {
   // `chip/PublicCompany.vue` and may not be reworded independently of it.
   let chipLabel: string;
   let chipFill = "";
-  let chipInk = "#4c616b";
-  let chipRule = "#c3d4bd";
+  let chipInk: string = ink.neutral;
+  let chipRule: string = card.rule;
   if (company.isPublic === true) {
     chipLabel = "Instytucja publiczna";
-    chipFill = "#a8c79f";
-    chipInk = "#0b0b0b";
-    chipRule = "#0b0b0b";
+    chipFill = brand.primary;
+    chipInk = ink.strong;
+    chipRule = ink.strong;
   } else if (publicSectorKnown(company)) {
     chipLabel = "Podmiot prywatny";
   } else {

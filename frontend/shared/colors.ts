@@ -221,6 +221,17 @@ export const external = {
 } as const;
 
 /**
+ * The social card (`OgImage/NodeCard.satori.vue`), a PNG satori draws outside
+ * the site's stylesheet: its paper, its ink and its hairline, which the site's
+ * own ramps do not have. Its other colours are the site's tokens.
+ */
+export const card = {
+  paper: "#f6faf4",
+  ink: "#1d1d1b",
+  rule: "#c3d4bd",
+} as const;
+
+/**
  * The notification emails. Mail clients drop stylesheets, so these go inline
  * as literals rather than as theme variables.
  */
