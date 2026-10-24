@@ -454,11 +454,12 @@ describe("api/ingest/person", () => {
       expect(call[4]).toEqual({ ...storedCandidacy, elected: true });
     });
 
-    it("still proposes a result that arrives with an unrecognised committee", async () => {
+    it("writes the result out and leaves an unrecognised committee for a reviewer", async () => {
       // The guard on the rule above: `enrichedEdge` fills every blank it can,
       // so a revision vouched for because it carries a result would write a
       // one-gmina KWW out with it - which is the review the committee rule
-      // exists for.
+      // exists for. So the result goes out on its own, and the committee is
+      // proposed on top of it.
       personWithStoredEdges([storedCandidacy]);
       mockReadBody.mockResolvedValue(
         payload({
@@ -470,8 +471,17 @@ describe("api/ingest/person", () => {
 
       await handler({} as any);
 
-      expect(createRevisionTransaction).not.toHaveBeenCalled();
+      expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+      const [written] = vi.mocked(createRevisionTransaction).mock.calls;
+      expect(written![3]).toMatchObject({ id: "stored-0" });
+      expect(written![4]).toEqual({ ...storedCandidacy, elected: true });
+      expect(written![5]).toEqual({
+        automatic: true,
+        approve: true,
+        stored: storedCandidacy,
+      });
       const call = vi.mocked(proposeRevisionTransaction).mock.calls[0]!;
+      expect(call[3]).toMatchObject({ id: "stored-0" });
       expect(call[4]).toMatchObject({
         elected: true,
         committee: "KWW Nasza Gmina",
@@ -1019,7 +1029,10 @@ describe("api/ingest/person", () => {
         expect(call[5]).toMatchObject({ approve: true });
       });
 
-      it("still waits for a reviewer when it brings a committee nobody recognised", async () => {
+      it("is written out beside a committee nobody recognised, which waits for a reviewer", async () => {
+        // All eight of Robert Marek Starzyński's runs on 2026-10-24: each row
+        // named its office and a one-gmina KWW, and the page said „Samorząd”
+        // for as long as the committees waited.
         personWithStoredEdges([storedCandidacy]);
         mockReadBody.mockResolvedValue(
           payload({
@@ -1031,12 +1044,173 @@ describe("api/ingest/person", () => {
 
         await handler({} as any);
 
-        expect(createRevisionTransaction).not.toHaveBeenCalled();
+        expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+        const written = vi.mocked(createRevisionTransaction).mock.calls[0]!;
+        expect(written[3]).toMatchObject({ id: "stored-0" });
+        expect(written[4]).toEqual({
+          ...storedCandidacy,
+          position: "Rada gminy",
+        });
+        expect(written[5]).toMatchObject({ approve: true });
+        // The offer is the whole of what the row says, so approving it writes
+        // the committee onto the office already there.
         const call = vi.mocked(proposeRevisionTransaction).mock.calls[0]!;
-        expect(call[4]).toMatchObject({
+        expect(call[4]).toEqual({
+          ...storedCandidacy,
           position: "Rada gminy",
           committee: kww,
         });
+      });
+
+      it("goes out with the result, in one revision", async () => {
+        // Starzyński's 2010 wójt race, won, under a KWW.
+        personWithStoredEdges([
+          { ...storedCandidacy, start_date: "2010-01-01" },
+        ]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Wójt",
+            election_year: "2010",
+            elected: true,
+            committee: kww,
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(createRevisionTransaction).mock.calls[0]![4]).toEqual({
+          ...storedCandidacy,
+          start_date: "2010-01-01",
+          position: "Wójt",
+          elected: true,
+        });
+        expect(proposeRevisionTransaction).toHaveBeenCalledTimes(1);
+      });
+
+      it("is left in an offer a reviewer has answered", async () => {
+        // Their answer was about the whole of it, and it stands.
+        personWithStoredEdges([storedCandidacy]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Rada gminy",
+            election_year: "2024",
+            committee: kww,
+          }),
+        );
+        vi.mocked(proposeRevisionTransaction).mockResolvedValueOnce({
+          revisionRef: { id: "proposal_stored-0_x" },
+          targetRef: { id: "stored-0" },
+          outcome: "decided",
+        } as never);
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+      });
+
+      it("is not written onto a removed candidacy", async () => {
+        personWithStoredEdges([
+          { ...storedCandidacy, deleted: true, delete_reason: "duplikat" },
+        ]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Rada gminy",
+            election_year: "2024",
+            committee: kww,
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+      });
+
+      it("writes nothing more once it is stored, and offers the committee again", async () => {
+        // The send after the first: the office is there, the committee still
+        // waits, and restating the offer is `proposeRevisionTransaction`'s to
+        // leave alone.
+        personWithStoredEdges([{ ...storedCandidacy, position: "Rada gminy" }]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Rada gminy",
+            election_year: "2024",
+            committee: kww,
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+        expect(proposeRevisionTransaction).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe("a candidacy stored with no office at all", () => {
+      const kww = "KWW Nasza Gmina";
+      const { position: _, ...bare } = storedCandidacy;
+
+      it("is named in a year that held only local elections", async () => {
+        // Hubert Papaj's 2018 mayoral race in Jelenia Góra, live with no office
+        // since the March upload.
+        personWithStoredEdges([{ ...bare, start_date: "2018-01-01" }]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Prezydent",
+            election_year: "2018",
+            committee: kww,
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(createRevisionTransaction).mock.calls[0]![4]).toEqual({
+          ...bare,
+          start_date: "2018-01-01",
+          position: "Prezydent",
+        });
+        expect(
+          vi.mocked(proposeRevisionTransaction).mock.calls[0]![4],
+        ).toMatchObject({ position: "Prezydent", committee: kww });
+      });
+
+      it("is named without a reviewer when nothing else comes with it", async () => {
+        personWithStoredEdges([{ ...bare, start_date: "2018-01-01" }]);
+        mockReadBody.mockResolvedValue(
+          payload({ election_type: "Prezydent", election_year: "2018" }),
+        );
+
+        await handler({} as any);
+
+        expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+        expect(vi.mocked(createRevisionTransaction).mock.calls[0]![4]).toEqual({
+          ...bare,
+          start_date: "2018-01-01",
+          position: "Prezydent",
+        });
+      });
+
+      it("waits for a reviewer whole in a year that held the European election too", async () => {
+        // A 2024 copy with no office could be the European run, so nothing of
+        // the row is written - its result neither, which would leave a revision
+        // that does not say which office it was for.
+        personWithStoredEdges([bare]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Prezydent",
+            election_year: "2024",
+            elected: true,
+            committee: kww,
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+        expect(
+          vi.mocked(proposeRevisionTransaction).mock.calls[0]![4],
+        ).toMatchObject({ position: "Prezydent", elected: true });
       });
     });
 
@@ -3799,6 +3973,25 @@ describe("api/ingest/person, a district's candidacy filed under the candidate's 
       expect(created()).toEqual([]);
     });
 
+    it("names a copy stored without its office as it moves it, whatever the committee", async () => {
+      // A committee nobody vouched for waits for the next send to offer it, but
+      // which election the run was is PKW's to say, and moved bare the copy
+      // would be a revision that never says.
+      sejmAtHome({ position: undefined });
+      sejmPayload({
+        committee: "KOMITET WYBORCZY WYBORCÓW NOWA LISTA",
+        party_from_committee: false,
+      });
+
+      await handler({} as any);
+
+      const [move, ...more] = writtenOnto("at-home");
+      expect(more).toEqual([]);
+      expect(move!.data).toMatchObject({ target: "teryt10", position: "Sejm" });
+      expect(move!.data).not.toHaveProperty("committee");
+      expect(created()).toEqual([]);
+    });
+
     it("leaves a 2019 copy without its office, which could be the European run", async () => {
       sejmAtHome({ position: undefined, start_date: "2019-01-01" });
       sejmPayload({ election_year: "2019" });
@@ -3886,6 +4079,33 @@ describe("api/ingest/person, a district's candidacy filed under the candidate's 
         position: "Sejmik",
         committee: KKW,
       });
+      expect(created()).toEqual([]);
+    });
+
+    it("names it as it moves it, beside a committee nobody vouched for", async () => {
+      // Moved as it was, it would read „Samorząd” under its województwo: the
+      // 43 sejmik runs the fold of the runs stored twice moved that way on
+      // 2026-10-23 had to be named afterwards.
+      sejmikAtHome();
+      mockReadBody.mockResolvedValue({
+        name: "Jan Kowalski",
+        rejestrIo: "https://rejestr.io/osoby/123",
+        parties: [],
+        companies: [],
+        elections: [
+          { ...SEJMIK, committee: "KWW ŁÓDŹ", party_from_committee: false },
+        ],
+      });
+
+      await handler({} as any);
+
+      const [move, ...more] = writtenOnto("at-home");
+      expect(more).toEqual([]);
+      expect(move!.data).toMatchObject({
+        target: "teryt10",
+        position: "Sejmik",
+      });
+      expect(move!.data).not.toHaveProperty("committee");
       expect(created()).toEqual([]);
     });
 

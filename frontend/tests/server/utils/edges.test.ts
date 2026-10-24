@@ -13,8 +13,10 @@ import {
   isSameRun,
   misfiledRunOf,
   misfiledSejmikRunOf,
+  namesOffice,
   preferredCopy,
   unnamedLocal,
+  withRecordedFacts,
   type EdgeCopy,
   type EdgeLike,
 } from "../../../server/utils/edges";
@@ -329,6 +331,113 @@ describe("an office the pipeline names", () => {
     expect(
       addsOnlyRecordedFacts({ ...candidacy }, { ...candidacy, elected: true }),
     ).toBe(true);
+  });
+
+  it("fills in a copy with no office where the year says which election it was", () => {
+    const { position: _, ...bare } = candidacy;
+    const of = (year: string) => ({ ...bare, start_date: `${year}-01-01` });
+    // 2018 held only local elections, so a copy with no office is local.
+    expect(addsOnlyRecordedFacts(of("2018"), { ...named, ...of("2018") })).toBe(
+      true,
+    );
+    // 2024 held the European election as well.
+    expect(addsOnlyRecordedFacts(of("2024"), named)).toBe(false);
+    // Still not with a committee.
+    expect(
+      addsOnlyRecordedFacts(of("2018"), {
+        ...named,
+        ...of("2018"),
+        committee: "KWW Nasza Gmina",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("namesOffice", () => {
+  const { position: _, ...bare } = candidacy;
+
+  it("names a „Samorząd” copy's local office, never a national one", () => {
+    expect(namesOffice(candidacy, { ...candidacy, position: "Wójt" })).toBe(
+      true,
+    );
+    expect(namesOffice(candidacy, { ...candidacy, position: "Sejm" })).toBe(
+      false,
+    );
+    expect(namesOffice(candidacy, candidacy)).toBe(false);
+  });
+
+  it("never renames an office already stored", () => {
+    const named = { ...candidacy, position: "Rada gminy" } as EdgeLike;
+    expect(namesOffice(named, { ...candidacy, position: "Wójt" })).toBe(false);
+  });
+
+  it("names a copy with no office only in a year of one kind of election", () => {
+    const names = (year: string, position: string) =>
+      namesOffice({ ...bare, start_date: `${year}-01-01` }, {
+        ...candidacy,
+        start_date: `${year}-01-01`,
+        position,
+      } as EdgeLike);
+    expect(names("2018", "Prezydent")).toBe(true);
+    expect(names("2023", "Sejm")).toBe(true);
+    // Two kinds of election in each of these.
+    expect(names("2024", "Prezydent")).toBe(false);
+    expect(names("2019", "Sejm")).toBe(false);
+  });
+
+  it("is only about candidacies", () => {
+    expect(namesOffice(spell, { ...spell, position: "Wójt" } as EdgeLike)).toBe(
+      false,
+    );
+  });
+});
+
+describe("withRecordedFacts", () => {
+  const kww = "KWW Nasza Gmina";
+
+  it("writes in the office and the result, and leaves the committee out", () => {
+    expect(
+      withRecordedFacts(
+        { ...candidacy },
+        { ...candidacy, position: "Wójt", elected: true, committee: kww },
+      ),
+    ).toEqual({ ...candidacy, position: "Wójt", elected: true });
+  });
+
+  it("keeps everything the stored edge says", () => {
+    expect(
+      withRecordedFacts(
+        { ...candidacy, name: "kandydatura na wójta", term: "2024-2029" },
+        { ...candidacy, position: "Wójt" },
+      ),
+    ).toEqual({
+      ...candidacy,
+      name: "kandydatura na wójta",
+      term: "2024-2029",
+      position: "Wójt",
+    });
+  });
+
+  it("is nothing when the payload records nothing new", () => {
+    expect(
+      withRecordedFacts({ ...candidacy }, { ...candidacy, committee: kww }),
+    ).toBeUndefined();
+    expect(
+      withRecordedFacts(
+        { ...candidacy, elected: true },
+        { ...candidacy, elected: true },
+      ),
+    ).toBeUndefined();
+  });
+
+  it("leaves a 2024 copy's missing office missing, which could be the European run", () => {
+    const { position: _, ...bare } = candidacy;
+    expect(
+      withRecordedFacts(
+        { ...bare },
+        { ...candidacy, position: "Wójt", elected: true },
+      ),
+    ).toEqual({ ...bare, elected: true });
   });
 });
 
