@@ -129,8 +129,9 @@ export const onEdgeWritten = onDocumentWritten(
     ];
 
     // The pages this write says something different about - both endpoints,
-    // before and after, and nothing at all for a draft. The rule lives in
-    // shared/lastmod.ts, next to the `<lastmod>` that reads its answer back.
+    // before and after, and for a draft only the company whose board it
+    // changed. The rule lives in shared/lastmod.ts, next to the `<lastmod>`
+    // that reads its answer back.
     const endpoints = pagesChangedByEdgeWrite(beforeData, afterData);
 
     if (sources.length === 0) {
