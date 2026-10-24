@@ -1,4 +1,4 @@
-import { pageIsPublic, type NodeRevisions } from "./model";
+import { pageIsPublic, type NodeRevisions, type NodeType } from "./model";
 import { normalizeUpdateTime } from "./revisions";
 
 /** When a page last said something different, and how the sitemap says so.
@@ -21,6 +21,50 @@ import { normalizeUpdateTime } from "./revisions";
  * all when a relation appears on them. `content_changed_at` is what closes
  * that gap; this module is the pair of it that reads the answer back.
  */
+
+/** Node types whose entity page renders a page of its own.
+ *
+ * `region` is deliberately absent. A region has no page of its own:
+ * app/composables/slugs.ts `generateNodeUrl` sends every one to
+ * `/eksploruj/tabela?teryt=...`, and app/pages/[seoType]/[slug].vue then
+ * redirects there on the server - so listing them advertised URLs that exist
+ * only to bounce a crawler into the heaviest response on the site, and one
+ * robots.txt blocks besides. None of them could ever rank, because the page
+ * they land on renders no markup. The one region with a real page, teryt1261,
+ * is reachable from the homepage and from the explore table, so dropping the
+ * type here does not hide it.
+ *
+ * `place` was absent for the same reason until 2026-08-26, when companies got
+ * their page back, and then stayed absent because putting the URLs in was a
+ * decision nobody had taken. The Search Console export of 2026-09-10 took it:
+ * over the preceding three months 554 `/instytucja/` URLs drew 4,903
+ * impressions - 42% of the site's total, more than person and article pages
+ * together - entirely on Google's own discovery, with no sitemap entry behind
+ * any of them. Whatever share of the other ~3,860 published companies would
+ * rank the same way was being left on the table.
+ */
+export const SITEMAP_NODE_TYPES: readonly NodeType[] = [
+  "person",
+  "article",
+  "place",
+];
+
+/** Whether a node's page is in the sitemap: a live page of one of those types,
+ * with a name to make its url from. The pages a change to the whole site is
+ * dated on (scripts/migrate/stamp-site-changes.ts) are these too. */
+export function inSitemap(node: {
+  type?: unknown;
+  name?: unknown;
+  published?: unknown;
+  deleted?: unknown;
+}): node is { type: NodeType; name: string } {
+  return (
+    pageIsPublic(node) &&
+    typeof node.name === "string" &&
+    node.name.length > 0 &&
+    (SITEMAP_NODE_TYPES as readonly unknown[]).includes(node.type)
+  );
+}
 
 /** The field, on a node document.
  *
@@ -60,8 +104,10 @@ function instant(value: unknown): number | undefined {
  * The newer of two recorded instants:
  *
  * 1. `content_changed_at` - the page went live, came down, a relation at
- *    either end of it was published, hidden or edited while live, or a post
- *    on a company's board started, ended or changed (`pagesChangedByEdgeWrite`).
+ *    either end of it was published, hidden or edited while live, a post on
+ *    a company's board started, ended or changed (`pagesChangedByEdgeWrite`),
+ *    or a change to the whole site reached it
+ *    (scripts/migrate/stamp-site-changes.ts).
  * 2. `revisions.latest_time` - the newest revision written against the node.
  *    Present, a string, and exact on 6,802 of 6,802 sitemap-eligible pages,
  *    which is what gives every url an honest date on the day this ships with no
