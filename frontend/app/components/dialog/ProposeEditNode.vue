@@ -49,7 +49,25 @@
             }}
           </p>
           <v-form ref="form" @submit.prevent="submit">
+            <!-- An article's title is a sentence, and half of them are longer
+                 than a one-line field is wide - so the end of it, where a
+                 scraped title keeps its „| Newsweek”, sat out of sight while
+                 it was being corrected. The whole of it shows here. Enter
+                 adds no line, since a title is one line wherever it is drawn. -->
+            <v-textarea
+              v-if="type === 'article'"
+              v-model="editData.name"
+              label="Tytuł"
+              auto-grow
+              rows="1"
+              max-rows="6"
+              required
+              class="mb-2"
+              data-testid="propose-article-title"
+              @keydown.enter.prevent
+            />
             <v-text-field
+              v-else
               v-model="editData.name"
               label="Nazwa / Imię i nazwisko"
               required
@@ -367,7 +385,8 @@ watch(dialog, (val) => {
 
 async function submit() {
   if (!editData.name.trim()) {
-    error.value = "Nazwa jest wymagana";
+    error.value =
+      type.value === "article" ? "Tytuł jest wymagany" : "Nazwa jest wymagana";
     return;
   }
 
