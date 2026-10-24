@@ -61,10 +61,9 @@
       height: 630px;
       display: flex;
       flex-direction: column;
-      background-color: #f6faf4;
       font-family: Roboto;
-      color: #1d1d1b;
     "
+    :style="{ backgroundColor: card.paper, color: card.ink }"
   >
     <!-- Band A: masthead. The wordmark shares the band with the eyebrow so it
          is not brand-only real estate. -->
@@ -85,8 +84,8 @@
           font-size: 32px;
           font-weight: 700;
           letter-spacing: -0.5px;
-          color: #1d1d1b;
         "
+        :style="{ color: card.ink }"
       >
         koryta.pl
       </div>
@@ -97,19 +96,22 @@
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 4px;
-          color: #46673c;
           max-width: 800px;
           overflow: hidden;
           white-space: nowrap;
           text-overflow: ellipsis;
         "
+        :style="{ color: ink.sage }"
       >
         {{ eyebrow }}
       </div>
     </div>
 
     <!-- Band B: the sage rule. -->
-    <div style="width: 1200px; height: 3px; background-color: #a8c79f"></div>
+    <div
+      style="width: 1200px; height: 3px"
+      :style="{ backgroundColor: brand.primary }"
+    ></div>
 
     <!-- Band C: the nameplate. -->
     <div
@@ -151,18 +153,21 @@
           width: 1088px;
           font-size: 32px;
           font-weight: 500;
-          color: #1d1d1b;
           overflow: hidden;
           white-space: nowrap;
           text-overflow: ellipsis;
         "
+        :style="{ color: card.ink }"
       >
         {{ fact }}
       </div>
 
       <div style="flex-grow: 1"></div>
 
-      <div style="width: 1088px; height: 2px; background-color: #c3d4bd"></div>
+      <div
+        style="width: 1088px; height: 2px"
+        :style="{ backgroundColor: card.rule }"
+      ></div>
 
       <div
         style="
@@ -171,11 +176,11 @@
           width: 1088px;
           font-size: 22px;
           font-weight: 400;
-          color: #4c616b;
           overflow: hidden;
           white-space: nowrap;
           text-overflow: ellipsis;
         "
+        :style="{ color: ink.neutral }"
       >
         {{ foot }}
       </div>
@@ -187,20 +192,21 @@
          rather than printing a row of zeroes. -->
     <div
       v-if="statCount === 0"
-      style="width: 1200px; height: 16px; background-color: #a8c79f"
+      style="width: 1200px; height: 16px"
+      :style="{ backgroundColor: brand.primary }"
     ></div>
     <div
       v-else
       style="
         width: 1200px;
         height: 132px;
-        background-color: #a8c79f;
         display: flex;
         flex-direction: row;
         align-items: center;
         padding-left: 56px;
         padding-right: 56px;
       "
+      :style="{ backgroundColor: brand.primary }"
     >
       <div
         v-if="statCount === 1"
@@ -211,9 +217,9 @@
             display: flex;
             font-size: 96px;
             font-weight: 700;
-            color: #0b0b0b;
             line-height: 1;
           "
+          :style="{ color: ink.strong }"
         >
           {{ stat1Value }}
         </div>
@@ -223,12 +229,12 @@
             margin-left: 24px;
             font-size: 30px;
             font-weight: 500;
-            color: #0b0b0b;
             line-height: 1.15;
             overflow: hidden;
             max-width: 860px;
             max-height: 65px;
           "
+          :style="{ color: ink.strong }"
           v-text="stat1Label"
         ></div>
       </div>
@@ -244,10 +250,10 @@
             style="
               width: 2px;
               height: 72px;
-              background-color: #ffffff;
               margin-left: 22px;
               margin-right: 22px;
             "
+            :style="{ backgroundColor: surface.white }"
           ></div>
           <div
             :style="`display:flex;flex-direction:column;justify-content:center;width:${cellWidth}px`"
@@ -257,14 +263,14 @@
                 display: flex;
                 font-size: 64px;
                 font-weight: 700;
-                color: #0b0b0b;
                 line-height: 1;
               "
+              :style="{ color: ink.strong }"
             >
               {{ cell.value }}
             </div>
             <div
-              :style="`display:flex;margin-top:6px;font-size:24px;font-weight:500;color:#0b0b0b;line-height:1.15;overflow:hidden;max-height:51px;width:${cellWidth}px`"
+              :style="`display:flex;margin-top:6px;font-size:24px;font-weight:500;color:${ink.strong};line-height:1.15;overflow:hidden;max-height:51px;width:${cellWidth}px`"
               v-text="cell.label"
             ></div>
           </div>
@@ -275,6 +281,8 @@
 </template>
 
 <script setup lang="ts">
+import { brand, card, ink, surface } from "~~/shared/colors";
+
 /** Kept in step with `NodeCardProps` in app/composables/ogCard.ts, which is
  * where every one of these values is decided. */
 const props = defineProps<{
@@ -324,6 +332,6 @@ const nameStyle = computed(
   () =>
     `margin-top:26px;width:1088px;display:flex;overflow:hidden;` +
     `max-height:${twoLines(props.nameSize, 1.06)}px;font-size:${props.nameSize}px;` +
-    `font-weight:700;line-height:1.06;letter-spacing:-1px;color:#1d1d1b`,
+    `font-weight:700;line-height:1.06;letter-spacing:-1px;color:${card.ink}`,
 );
 </script>
