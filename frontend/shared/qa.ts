@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "polityka-prywatnosci-adres-kontaktowy",
+    title: "Adres kontaktowy w polityce prywatności",
+    description:
+      "W sprawach ochrony danych osobowych polityka prywatności podaje teraz adres kontakt@koryta.pl.",
+    steps: [
+      "Otwórz politykę prywatności - w punkcie 1 ma być adres kontakt@koryta.pl, a na dole data aktualizacji 24 października 2026r.",
+    ],
+    link: "/plik/polityka_prywatnosci",
+    area: "public",
+  },
+  {
     id: "newsletter-bez-konta",
     title: "Newsletter bez zakładania konta",
     description:
