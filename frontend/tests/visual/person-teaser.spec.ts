@@ -92,11 +92,8 @@ test(
 
     const teaser = page.getByTestId("person-teaser");
     await expect(teaser).toBeVisible({ timeout: 30_000 });
-    const chip = teaser.getByTestId("party-locked");
+    const chip = teaser.getByTestId("hidden-party");
     await expect(chip).toHaveText("???");
-    // On the name's line on a computer; on a phone a long name may push it to
-    // the next one, whole.
-    await expect(chip).toHaveAttribute("href", /powod=partia-osoby/);
     // And the banner names them first among what signing in shows.
     await expect(teaser.getByTestId("person-teaser-more")).toContainText(
       "możliwe powiązania polityczne, wszystkie 4 stanowiska",

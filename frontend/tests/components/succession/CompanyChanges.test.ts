@@ -378,9 +378,14 @@ describe("SuccessionCompanyChanges, unpublished holders", () => {
   it("stands a chip in for the party it is not told, and says what it is", async () => {
     const wrapper = await mountChanges();
 
-    const chips = wrapper.findAll('[data-testid="party-locked"]');
+    const chips = wrapper.findAll('[data-testid="hidden-party"]');
     expect(chips).toHaveLength(1);
     expect(chips[0]!.text()).toBe("???");
+    // Says what it stands for, and leads nowhere (Szymon, 2026-10-24).
+    expect(chips[0]!.attributes("aria-label")).toBe(
+      "Informacja o partii nie jest jeszcze zweryfikowana. Widoczna tylko dla zalogowanych.",
+    );
+    expect(chips[0]!.element.closest("a")).toBeNull();
     // On the card of the holder whose party is held back, and only there.
     const card = chips[0]!.element.closest(".k-card");
     expect(card?.textContent).toContain("Jan Kowalski");
@@ -389,12 +394,9 @@ describe("SuccessionCompanyChanges, unpublished holders", () => {
     expect(wrapper.text()).toContain("PO");
   });
 
-  it("leads the chip and the banner to the sign in, back to this page", async () => {
+  it("leads the banner to the sign in, back to this page", async () => {
     const wrapper = await mountChanges();
 
-    const href = wrapper.get('[data-testid="party-locked"]').attributes("href");
-    expect(href).toContain("/login");
-    expect(href).toContain("powod=partie-w-skladzie");
     const banner = wrapper.get('[data-testid="current-party-teaser"]');
     // „przy 1 osobie”: the locative, whatever the count.
     expect(banner.text()).toContain("Przy 1 osobie z obecnego składu");
@@ -448,7 +450,7 @@ describe("SuccessionCompanyChanges, unpublished holders", () => {
     };
     const wrapper = await mountChanges();
 
-    expect(wrapper.find('[data-testid="party-locked"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="hidden-party"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="current-party-teaser"]').exists()).toBe(
       false,
     );
@@ -491,7 +493,7 @@ describe("SuccessionCompanyChanges, unpublished holders", () => {
     const wrapper = await mountChanges();
 
     await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
-    await wrapper.get('[data-testid="party-locked"]').trigger("click");
+    await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
 
     expect(trackGoal).toHaveBeenCalledWith("teaser:click", {
       surface: "instytucja",

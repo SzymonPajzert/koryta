@@ -190,12 +190,13 @@ describe("CardPersonTeaser", () => {
   it("offers the „???” chip beside the name where a party is on record", async () => {
     const wrapper = await mount({ ...TEASER, partyHidden: true });
 
-    const chip = wrapper.get('[data-testid="party-locked"]');
+    const chip = wrapper.get('[data-testid="hidden-party"]');
     expect(chip.text()).toBe("???");
     expect(chip.attributes("aria-label")).toBe(
-      "Możliwe powiązania polityczne, widoczne po zalogowaniu",
+      "Informacja o partii nie jest jeszcze zweryfikowana. Widoczna tylko dla zalogowanych.",
     );
-    expect(chip.attributes("href")).toContain("powod=partia-osoby");
+    // An explanation, not a way in: the banner's buttons are that.
+    expect(chip.element.closest("a")).toBeNull();
     // In the header, by the name, as the full page puts the party chips.
     expect(chip.element.parentElement?.querySelector("h2")?.textContent).toBe(
       "Jan Kowalski",
@@ -208,25 +209,9 @@ describe("CardPersonTeaser", () => {
   it("says nothing of a party where none is on record", async () => {
     const wrapper = await mount();
 
-    expect(wrapper.find('[data-testid="party-locked"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="hidden-party"]').exists()).toBe(false);
     expect(
       wrapper.get('[data-testid="person-teaser-more"]').text(),
     ).not.toContain("powiązania polityczne");
-  });
-
-  it("counts the party chip as a teaser of its own", async () => {
-    const wrapper = await mount({ ...TEASER, partyHidden: true });
-
-    expect(trackGoal).toHaveBeenCalledWith("teaser:shown", {
-      surface: "osoba",
-      kind: "partia",
-      from: expect.any(String),
-    });
-    await wrapper.get('[data-testid="party-locked"]').trigger("click");
-    expect(trackGoal).toHaveBeenCalledWith("teaser:click", {
-      surface: "osoba",
-      kind: "partia",
-      mode: "login",
-    });
   });
 });

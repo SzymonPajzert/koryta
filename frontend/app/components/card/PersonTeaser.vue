@@ -4,16 +4,11 @@
       <!-- Headed as the full page heads a person (`EntityDetailsCard`): the
            name, and beside it where the full page puts the party chips, the
            stand-in a company's board shows for the same person when a party
-           is on record - „???” in the „Inne” grey, leading to the sign in
-           (Szymon, 2026-10-24). Never the party itself, which the teaser
-           does not carry. -->
+           is on record - „???” in the „Inne” grey (Szymon, 2026-10-24).
+           Never the party itself, which the teaser does not carry. -->
       <div class="d-flex flex-wrap align-center ga-2 text-wrap">
         <h2 class="text-h5 font-weight-bold">{{ teaser.name }}</h2>
-        <ChipPartyLocked
-          v-if="teaser.partyHidden"
-          :to="partyLoginTarget"
-          @click="onPartyClick()"
-        />
+        <ChipHiddenParty v-if="teaser.partyHidden" />
       </div>
 
       <!-- The latest post as the first row of the history the full page lists,
@@ -86,8 +81,6 @@ const route = useRoute();
 const router = useRouter();
 
 const GOAL = { surface: "osoba", kind: "profil" } as const;
-/** The party chip beside the name, as its own teaser. */
-const PARTY_GOAL = { surface: "osoba", kind: "partia" } as const;
 
 /** The post as a row of `CardEmploymentHistory`, made the way `useEdges`
  * makes the full page's rows - the label is the role, or the edge type's own
@@ -141,16 +134,6 @@ function onClick(mode: TeaserClickMode) {
   trackGoal("teaser:click", { ...GOAL, mode });
 }
 
-/** Where the party chip leads: the sign in, back here, giving its own reason. */
-const partyLoginTarget = computed(() => ({
-  path: "/login",
-  query: { redirect: route.fullPath, powod: "partia-osoby" },
-}));
-
-function onPartyClick() {
-  trackGoal("teaser:click", { ...PARTY_GOAL, mode: "login" });
-}
-
 let stopWatchingExit: (() => void) | undefined;
 
 onMounted(async () => {
@@ -158,11 +141,7 @@ onMounted(async () => {
   // this for the moment before their page loads. Only a reader who is really
   // logged out has been shown a teaser.
   if (await getCurrentUser()) return;
-  const from = teaserArrival(props.nodeId);
-  trackGoal("teaser:shown", { ...GOAL, from });
-  if (props.teaser.partyHidden) {
-    trackGoal("teaser:shown", { ...PARTY_GOAL, from });
-  }
+  trackGoal("teaser:shown", { ...GOAL, from: teaserArrival(props.nodeId) });
   stopWatchingExit = watchTeaserExit(router, route.path, GOAL);
 });
 
