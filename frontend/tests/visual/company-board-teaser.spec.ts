@@ -33,7 +33,7 @@ test(
     const board = page.getByTestId("successions-current");
     await expect(board).toBeVisible({ timeout: 30_000 });
     await expect(board).toContainText("Krzysztof Stanisław Wielkopolański");
-    const chips = board.getByTestId("party-locked");
+    const chips = board.getByTestId("hidden-party");
     await expect(chips).toHaveCount(2);
     await expect(chips.first()).toHaveText("???");
     const banner = board.getByTestId("current-party-teaser");
@@ -62,5 +62,49 @@ test(
     );
 
     await expectFitsThePhone(page, testInfo);
+  },
+);
+
+/** What the chip says when it is pointed at: that the party is not verified
+ * yet and only signed in readers see it. Not a link, so this is all it does
+ * (Szymon, 2026-10-24). The shot is the chip and its tooltip. */
+test(
+  "instytucja-sklad-ukryta-partia-podpowiedz",
+  { tag: pageTag("[seoType]/[slug]") },
+  async ({ page }) => {
+    await freezeClock(page);
+    await page.route(
+      (url) => url.pathname === "/api/edges/successions",
+      (route) => route.fulfill({ json: companyBoard }),
+    );
+    await openInApp(page, COMPANY_URL);
+
+    const chip = page.getByTestId("hidden-party").first();
+    await expect(chip).toBeVisible({ timeout: 30_000 });
+    await chip.hover();
+    // The one shown: Vuetify keeps every tooltip it has drawn in the overlay
+    // container, the board's other chip and the header's among them.
+    const tooltip = page
+      .locator(".v-tooltip > .v-overlay__content:visible")
+      .filter({ hasText: "Informacja o partii" });
+    await expect(tooltip).toHaveText(
+      "Informacja o partii nie jest jeszcze zweryfikowana. Widoczna tylko dla zalogowanych.",
+    );
+    // Settled where it is going, not mid-fade.
+    await expect(
+      page.locator('[class*="-enter-active"], [class*="-leave-active"]'),
+    ).toHaveCount(0);
+    await page.evaluate(() => document.fonts.ready);
+
+    const a = (await chip.boundingBox())!;
+    const b = (await tooltip.boundingBox())!;
+    const x = Math.max(0, Math.min(a.x, b.x) - 16);
+    const y = Math.max(0, Math.min(a.y, b.y) - 16);
+    const right = Math.max(a.x + a.width, b.x + b.width) + 16;
+    const bottom = Math.max(a.y + a.height, b.y + b.height) + 16;
+    await expect(page).toHaveScreenshot(
+      "instytucja-sklad-ukryta-partia-podpowiedz.png",
+      { clip: { x, y, width: right - x, height: bottom - y } },
+    );
   },
 );

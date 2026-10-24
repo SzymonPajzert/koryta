@@ -89,11 +89,7 @@
                       />
                       <!-- The party of an unpublished holder, which a logged
                            out reader is told is there and not what it is. -->
-                      <ChipPartyLocked
-                        v-if="post.partyHidden"
-                        :to="loginTarget"
-                        @click="onTeaserClick('login')"
-                      />
+                      <ChipHiddenParty v-if="post.partyHidden" />
                     </div>
 
                     <div class="d-flex align-center flex-wrap ga-2 mt-2">

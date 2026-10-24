@@ -46,7 +46,10 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
 - **A party a logged-out reader is not shown** is a chip in its place, as
   tall as a party chip: „???” in black on the „Inne” chip's grey, with six
   small dots of the parties' colours at its edges and corners (none under the
-  marks), no icon, linking to the sign in; one sign-in banner under the list.
+  marks), no icon. Not a link - one that led to the sign in confused
+  (Szymon, 2026-10-24): pointed at, focused or tapped it says „Informacja o
+  partii nie jest jeszcze zweryfikowana. Widoczna tylko dla zalogowanych.”
+  The sign-in buttons are one banner under the list.
   Never the party's name or colour. Picked 2026-10-24 for the company page's
   „Obecny skład” and an unpublished person's teaser, over rounds of renders:
   the label („możliwe powiązania”, „partia”, then „???”), the backdrop (blur,
