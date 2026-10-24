@@ -122,6 +122,12 @@ env:
     availability:
       - BUILD
 
+  - variable: NUXT_PUBLIC_NEWSLETTER_SIGNUP_OPEN
+    value: "true"
+    availability:
+      - BUILD
+      - RUNTIME
+
 # Grant access to secrets in Cloud Secret Manager.
 # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
 # - variable: MY_SECRET
