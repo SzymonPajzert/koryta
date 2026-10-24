@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
+import { VTooltip } from "vuetify/components";
 import * as directives from "vuetify/directives";
 import InfoBubble from "../../app/components/InfoBubble.vue";
 
@@ -15,6 +17,18 @@ const mountBubble = (label = "Sprawdzanie osób", text = "Wyjaśnienie.") =>
     props: { label },
     slots: { default: text },
   });
+
+/** Answers `(hover: hover)` as a mouse (true) or a phone's finger (false)
+ * would. */
+function pointer(canHover: boolean) {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: query === "(hover: hover)" && canHover,
+        media: query,
+      }) as MediaQueryList,
+  );
+}
 
 /** The „(i)” that both entity sections and the help page hang their optional
  * half of an explanation on. It moved out of `PageSection` so the help page
@@ -43,5 +57,42 @@ describe("InfoBubble", () => {
     await wrapper.get("[data-testid='section-info']").trigger("click");
 
     expect(document.body.textContent).toContain("Nikt tu nie bierze pensji.");
+  });
+
+  describe("on a phone", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // A tap sends an emulated hover and then a click: on a tooltip open on
+    // both, the hover opened it and the click, a toggle, shut it again half a
+    // second later. Where nothing hovers, the tap is the only way in.
+    it("opens on hover only where the pointer can hover", async () => {
+      pointer(true);
+      const mouse = mountBubble();
+      await nextTick();
+      expect(mouse.findComponent(VTooltip).props("openOnHover")).toBe(true);
+
+      pointer(false);
+      const finger = mountBubble();
+      await nextTick();
+      expect(finger.findComponent(VTooltip).props("openOnHover")).toBe(false);
+      expect(finger.findComponent(VTooltip).props("openOnClick")).toBe(true);
+    });
+
+    it("stays open after a tap", async () => {
+      pointer(false);
+      const wrapper = mountBubble("Zmiany na stanowisku", "Skąd te pary.");
+      await nextTick();
+
+      const icon = wrapper.get("[data-testid='section-info']");
+      await icon.trigger("mouseenter");
+      await icon.trigger("click");
+
+      expect(
+        wrapper.findComponent(VTooltip).emitted("update:modelValue"),
+      ).toEqual([[true]]);
+      expect(document.body.textContent).toContain("Skąd te pary.");
+    });
   });
 });

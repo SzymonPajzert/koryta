@@ -68,7 +68,7 @@ describe("sections drawn through PageSection", () => {
     expect(section.text()).toContain("Jan Kowalski");
   });
 
-  it("mentions: heading, icon and the lead with its testid", async () => {
+  it("mentions: heading, and where the articles come from behind the (i)", async () => {
     const wrapper = await mountSuspended(MentionArticleList, {
       props: { nodeId: "p1" },
     });
@@ -77,10 +77,19 @@ describe("sections drawn through PageSection", () => {
     // owns the gap above it, and a margin here would add to that.
     expect(section.classes().filter((c) => /^m[tby]?-/.test(c))).toEqual([]);
     expect(section.get("h2").text()).toBe("Artykuły, które o tym wspominają");
-    expect(section.find(".sec-head__icon").exists()).toBe(true);
+    // No icon beside the heading, and no lead under it: the cards say what
+    // they are, and the sentence on where they come from is a click away.
     expect(
-      section.get('[data-testid="node-mentions-lead"]').classes(),
-    ).toContain("k-lead");
+      section.find(".sec-head > .sec-head__icon:not(.sec-head__info)").exists(),
+    ).toBe(false);
+    expect(section.find("p.k-lead").exists()).toBe(false);
+    expect(section.find('[data-testid="node-mentions-lead"]').exists()).toBe(
+      false,
+    );
+    await section.get("[data-testid='section-info']").trigger("click");
+    expect(
+      document.querySelector('[data-testid="node-mentions-lead"]')?.textContent,
+    ).toContain("Teksty prasowe, w których pada ta nazwa");
     expect(section.find('[data-testid="node-mention-card"]').exists()).toBe(
       true,
     );

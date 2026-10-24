@@ -138,4 +138,40 @@ describe("PageSection", () => {
     expect(wrapper.classes()).toEqual(["mt-4"]);
     expect(wrapper.attributes("data-testid")).toBe("person-extractions");
   });
+
+  // How much a section holds - „2 zmiany · 3 pominięte” - on the heading's
+  // line, where a lead sentence used to spend a line of its own saying it.
+  it("says how much it holds in a caption beside the heading", async () => {
+    expect(mountSection().find(".sec-head__caption").exists()).toBe(false);
+
+    const wrapper = mountSection({
+      title: "Zmiany na stanowisku",
+      caption: "2 zmiany · 3 pominięte",
+      captionTestid: "person-successions-count",
+    });
+
+    const caption = wrapper.get(".sec-head .sec-head__caption");
+    expect(caption.text()).toBe("2 zmiany · 3 pominięte");
+    expect(caption.attributes("data-testid")).toBe("person-successions-count");
+    // After the heading, on its line rather than under it.
+    expect(caption.element.previousElementSibling?.tagName).toBe("H2");
+  });
+
+  it("takes the caption as a slot, for one that needs markup", async () => {
+    const wrapper = mountSection(
+      { title: "Obecny skład" },
+      { caption: "stan na <time>24 października 2026</time>" },
+    );
+
+    expect(wrapper.get(".sec-head__caption time").text()).toBe(
+      "24 października 2026",
+    );
+  });
+
+  // The 8px between a heading and what it heads, the gap „Historia
+  // powiązań” keeps: every section head on an entity page stands the same
+  // distance over its first entry.
+  it("stands its head 8px over what it heads", async () => {
+    expect(mountSection().get(".sec-head").classes()).toContain("mb-2");
+  });
 });

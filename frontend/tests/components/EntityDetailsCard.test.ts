@@ -29,8 +29,9 @@ const person: Person = {
   name: "Jan Kowalski",
 } as Person;
 
-/** The admin controls sit behind `d-none d-md-flex`, so a query on the text is
- * what tells them apart - the class is a media query, not a mount condition. */
+/** The buttons' labels, which is what tells the admin's tools apart: the row
+ * is the same markup on every screen, and a phone folds the tools to squares
+ * with CSS rather than leaving them out. */
 const buttonLabels = (wrapper: {
   findAll: (s: string) => { text(): string }[];
 }) => wrapper.findAll(".v-btn").map((b) => b.text());
@@ -157,11 +158,11 @@ describe("EntityDetailsCard", () => {
   });
 
   it("lets a long name send the party chips to the next line rather than squeeze them", async () => {
-    // jsdom lays nothing out, so this pins the two things the row needs: it
-    // may wrap, and `v-card-title`'s `white-space: nowrap` is lifted. With the
-    // row on one line a long name kept its full width and the chip - the only
-    // item whose `overflow: hidden` lets it shrink - took all the squeeze: on a
-    // 393px phone „Wioletta Paprocka-Ślusarska” left her „PO” 13px of its 40.
+    // jsdom lays nothing out, so this pins what the row needs: the name and
+    // its chips in one row that may wrap. On one line a long name kept its
+    // full width and the chip - the only item whose `overflow: hidden` lets it
+    // shrink - took all the squeeze: on a 393px phone „Wioletta
+    // Paprocka-Ślusarska” left her „PO” 13px of its 40.
     const wrapper = await mountSuspended(EntityDetailsCard, {
       props: {
         entity: {
@@ -172,10 +173,12 @@ describe("EntityDetailsCard", () => {
         type: "person",
       },
     });
-    const title = wrapper.get(".v-card-title");
-    expect(title.find(".chip").text()).toBe("PO");
-    expect(title.classes()).toContain("flex-wrap");
-    expect(title.classes()).toContain("text-wrap");
+    const head = wrapper.get(".entity-head");
+    expect(head.get("h1").text()).toBe("Wioletta Paprocka-Ślusarska");
+    expect(head.find(".chip").text()).toBe("PO");
+    expect(head.classes()).toEqual(
+      expect.arrayContaining(["d-flex", "flex-wrap", "align-center"]),
+    );
   });
 
   it("lets „Pokaż więcej” go once the bio is open, and hands focus to the bio", async () => {
@@ -304,5 +307,155 @@ describe("EntityDetailsCard", () => {
       },
     });
     expect(live.text()).not.toContain("szkic");
+  });
+
+  describe("the header", () => {
+    /** The person with whatever the test gives them. */
+    const mountPerson = (fields: Partial<Person>, isAdmin = false) => {
+      (useAuthState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        user: ref({ uid: "test-user" }),
+        isAdmin: ref(isAdmin),
+      });
+      return mountSuspended(EntityDetailsCard, {
+        props: { entity: { ...person, ...fields } as Person, type: "person" },
+      });
+    };
+
+    /** The facts line's items, as a reader sees each of them. */
+    const facts = async (fields: Partial<Person>) =>
+      (await mountPerson(fields))
+        .findAll("[data-testid='person-facts'] .entity-facts__item")
+        .map((item) => item.text());
+
+    it("is the page's own header, unboxed, the same on a phone as on a computer", async () => {
+      // Three lines, the way a company's page opens: the name, one line of
+      // facts, one row of controls. The row used to be hidden on a phone, so
+      // the change anybody may propose was not on the page at all.
+      const wrapper = await mountPerson({ birthDate: "1975-01-16" });
+
+      const header = wrapper.get("header.entity-header");
+      expect(header.find(".v-card").exists()).toBe(false);
+      for (const testid of ["person-facts", "person-actions"]) {
+        const row = header.get(`[data-testid='${testid}']`);
+        expect(row.classes()).not.toContain("d-none");
+        expect(row.classes()).not.toContain("d-md-flex");
+      }
+    });
+
+    it("gives the birth date in words, „ur. 16 stycznia 1975”", async () => {
+      expect(await facts({ birthDate: "1975-01-16" })).toEqual([
+        "ur.\u00a016 stycznia 1975",
+      ]);
+    });
+
+    it("keeps a birth date that is not a whole day as it was written", async () => {
+      // A year a register gave on its own is not a 1 January nobody recorded.
+      expect(await facts({ birthDate: "1975" })).toEqual(["ur.\u00a01975"]);
+      expect(await facts({ birthDate: "16.01.1975" })).toEqual([
+        "ur.\u00a016.01.1975",
+      ]);
+    });
+
+    it("leaves out a birth date that is blank", async () => {
+      expect(
+        await facts({ birthDate: " ", wikipedia: "https://pl.wikipedia.org" }),
+      ).toEqual(["Wikipedia"]);
+    });
+
+    it("labels the education, which bare would read as the person's job", async () => {
+      // Production's values are words like „prawnik” and „dziennikarz”.
+      const wrapper = await mountPerson({ education: "prawnik" });
+
+      const item = wrapper.get(
+        "[data-testid='person-facts'] .entity-facts__item",
+      );
+      expect(item.get(".entity-facts__label").text()).toBe("wykształcenie:");
+      expect(item.text()).toBe("wykształcenie:\u00a0prawnik");
+    });
+
+    it("names each profile by the site it is on, with no middot in its text", async () => {
+      const wrapper = await mountPerson({
+        birthDate: "1975-01-16",
+        wikipedia: "https://pl.wikipedia.org/wiki/Jan_Kowalski",
+        rejestrIo: "https://rejestr.io/osoby/1/jan-kowalski",
+        ktomaco: "https://ktomaco.pl/jan-kowalski",
+      });
+
+      const line = wrapper.get("[data-testid='person-facts']");
+      expect(
+        line.findAll(".entity-facts__item").map((item) => item.text()),
+      ).toEqual([
+        "ur.\u00a016 stycznia 1975",
+        "Wikipedia",
+        "Rejestr.io",
+        "Kto ma co",
+      ]);
+      // The dot between them is the stylesheet's, read by nobody.
+      expect(line.text()).not.toContain("·");
+      expect(line.findAll("a").map((a) => a.attributes("href"))).toEqual([
+        "https://pl.wikipedia.org/wiki/Jan_Kowalski",
+        "https://rejestr.io/osoby/1/jan-kowalski",
+        "https://ktomaco.pl/jan-kowalski",
+      ]);
+    });
+
+    it("draws no facts line for a person with no facts", async () => {
+      const wrapper = await mountPerson({});
+
+      expect(wrapper.find("[data-testid='person-facts']").exists()).toBe(false);
+    });
+
+    /** The row's three parts, in order: „Zaproponuj zmianę” (inside its
+     * dialog's activator), the vote, the tools' line. */
+    const rowParts = async (isAdmin: boolean) => {
+      const wrapper = await mountPerson({}, isAdmin);
+      // The vote is client-only: it renders once mounted.
+      await flushPromises();
+      const row = wrapper.get("[data-testid='person-actions']");
+      return {
+        row,
+        parts: [...row.element.children],
+        propose: row.get("[data-testid='person-propose-change']"),
+        // The vote's arrows: its root is `<client-only>`, which has no
+        // element of its own to compare.
+        vote: row.findComponent({ name: "ButtonVoteNumber" }).findAll(".v-btn"),
+        tools: row.get(".entity-actions__tools"),
+      };
+    };
+
+    it("leads the row with „Zaproponuj zmianę”, then the vote, then an admin's tools", async () => {
+      const { parts, propose, vote, tools } = await rowParts(true);
+
+      // „Zaproponuj zmianę”, the one action every signed in reader has, and
+      // how interesting they found the person right after it (Szymon,
+      // 2026-10-16), then the tools on a line of their own.
+      expect(parts).toHaveLength(3);
+      expect(parts[0]!.contains(propose.element)).toBe(true);
+      expect(propose.text()).toBe("Zaproponuj zmianę");
+      expect(vote).toHaveLength(2);
+      expect(vote.every((arrow) => parts[1]!.contains(arrow.element))).toBe(
+        true,
+      );
+      expect(parts[2]).toBe(tools.element);
+      expect(tools.findAll(".v-btn").map((button) => button.text())).toEqual([
+        "Eksploruj",
+        "Rewizje",
+        "Ta strona to duplikat",
+        "Ta strona to dwie osoby",
+      ]);
+    });
+
+    it("keeps the same row for a reader with no tools, its tools' line empty", async () => {
+      const { parts, propose, vote, tools } = await rowParts(false);
+
+      expect(parts[0]!.contains(propose.element)).toBe(true);
+      expect(vote).toHaveLength(2);
+      expect(vote.every((arrow) => parts[1]!.contains(arrow.element))).toBe(
+        true,
+      );
+      // Empty, which the stylesheet does not draw (`:empty`).
+      expect(tools.text()).toBe("");
+      expect(tools.find(".v-btn").exists()).toBe(false);
+    });
   });
 });

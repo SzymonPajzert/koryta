@@ -70,7 +70,9 @@ test.describe("Wikipedia firmy", { tag: pageTag("[seoType]/[slug]") }, () => {
 
     const link = card.getByTestId("company-wikipedia").getByRole("link");
     await expect(link).toHaveAttribute("href", WIKIPEDIA);
-    await expect(link).toHaveText("Artykuł z Wikipedii");
+    // Named by the site it is on, as a person's is, in the facts line under
+    // the name (entity/Facts.vue).
+    await expect(link).toHaveText("Wikipedia");
 
     // Off the card: the mouse is left where the login button was, and a link
     // or button under it would be photographed in its hover state.

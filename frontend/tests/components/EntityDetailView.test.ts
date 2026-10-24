@@ -8,6 +8,7 @@ import { createError } from "h3";
 import { ref } from "vue";
 import EntityDetailView from "../../app/components/EntityDetailView.vue";
 import NoteEditor from "../../app/components/note/Editor.vue";
+import PageSection from "../../app/components/PageSection.vue";
 import PersonChanges from "../../app/components/succession/PersonChanges.vue";
 import PersonTeaser from "../../app/components/card/PersonTeaser.vue";
 import { authFetch } from "~/composables/auth";
@@ -120,6 +121,59 @@ describe("EntityDetailView", () => {
     } finally {
       outgoing.edges = [];
     }
+  });
+});
+
+/** The graph, headed like every other section of the page, so the page reads
+ * as a list of titled blocks down to its end rather than a canvas that starts
+ * where the last list stops. */
+describe("EntityDetailView, the graph", () => {
+  const post = {
+    id: "job",
+    type: "employed",
+    source: "n1",
+    target: "pzo",
+    label: "Prezes",
+    start_date: "2026-07-14",
+    richNode: { id: "pzo", type: "place", name: "PZO Gliwice" },
+  };
+
+  afterEach(() => {
+    outgoing.edges = [];
+  });
+
+  it("stands under its own heading, „Graf powiązań”", async () => {
+    outgoing.edges = [post];
+    const person = await mountFor("person");
+
+    const section = person
+      .findAllComponents(PageSection)
+      .find((shell) => shell.props("title") === "Graf powiązań");
+    expect(section?.attributes("data-testid")).toBe("entity-graph");
+    // Two hops for a person: one is the history above, redrawn as a star.
+    expect(
+      person
+        .get("[data-testid='entity-graph'] [max-depth]")
+        .attributes("max-depth"),
+    ).toBe("2");
+  });
+
+  it("goes one hop from a region, whose first ring is a hundred companies", async () => {
+    outgoing.edges = [post];
+    const region = await mountFor("region");
+
+    expect(
+      region
+        .get("[data-testid='entity-graph'] [max-depth]")
+        .attributes("max-depth"),
+    ).toBe("1");
+  });
+
+  it("is not drawn for a page with no relations", async () => {
+    // Its graph is the one node, which is a heading over nothing.
+    const person = await mountFor("person");
+
+    expect(person.find("[data-testid='entity-graph']").exists()).toBe(false);
   });
 });
 

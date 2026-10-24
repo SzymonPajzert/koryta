@@ -563,12 +563,19 @@ describe("EmploymentHistory sources", () => {
     return wrapper.find('[data-testid="edge-sources-open-e1"]');
   }
 
+  // The buttons are `CardHistoryRowActions` now, which the card imports
+  // itself: under a plain mount an auto-imported component renders as
+  // nothing, and every case here would have passed over an empty row.
   it("counts the articles a relation is cited to", () => {
     const wrapper = mountHistory([
       candidacy({ references: ["a1", "a2"], label: "Prezes" }),
     ]);
 
-    expect(sourcesButton(wrapper).text()).toContain("2");
+    expect(sourcesButton(wrapper).exists()).toBe(true);
+    expect(sourcesButton(wrapper).text()).toBe("2");
+    expect(sourcesButton(wrapper).attributes("title")).toBe(
+      "Pokaż źródła powiązania",
+    );
   });
 
   it("offers an editor a way in on a relation with no source at all", () => {
@@ -583,6 +590,9 @@ describe("EmploymentHistory sources", () => {
 
     expect(sourcesButton(wrapper).exists()).toBe(true);
     expect(sourcesButton(wrapper).text()).toBe("");
+    expect(sourcesButton(wrapper).attributes("title")).toBe(
+      "Dodaj źródło powiązania",
+    );
   });
 
   it("says nothing to a reader who cannot cite anything", () => {
@@ -590,12 +600,16 @@ describe("EmploymentHistory sources", () => {
     // anonymous reader would otherwise get a row of dead buttons down the page.
     const wrapper = mountHistory([candidacy()]);
 
+    // The row itself is drawn, so the button's absence is the card's answer
+    // and not an empty mount.
+    expect(wrapper.find(".history-row").text()).toContain("Kraków");
     expect(sourcesButton(wrapper).exists()).toBe(false);
   });
 
   it("asks for the sources rather than following the row's link", async () => {
     const wrapper = mountHistory([candidacy({ references: ["a1"] })]);
 
+    expect(sourcesButton(wrapper).exists()).toBe(true);
     await sourcesButton(wrapper).trigger("click");
 
     expect(wrapper.emitted("sources")?.[0]?.[0]).toMatchObject({ id: "e1" });
@@ -716,5 +730,358 @@ describe("EmploymentHistory links to drafts", () => {
     const to = await links(true);
     expect(to.filter((link) => !link)).toHaveLength(1);
     expect(to.filter((link) => typeof link === "string")).toHaveLength(1);
+  });
+});
+
+/** A row as a person's page holds it: an employment at a company, dated as
+ * given. */
+function post(id: string, start?: string, end?: string, fields = {}) {
+  return edge({
+    id,
+    label: "Członek Zarządu",
+    start_date: start,
+    end_date: end,
+    richNode: { id: `c-${id}`, type: "place", name: `Spółka ${id}` },
+    ...fields,
+  } as Partial<EdgeNode>);
+}
+
+/** A row as a company's page holds it: the far end is the person. */
+function holder(id: string, start?: string, end?: string) {
+  return edge({
+    id,
+    source: `p-${id}`,
+    target: "pkp",
+    start_date: start,
+    end_date: end,
+    richNode: { id: `p-${id}`, type: "person", name: `Osoba ${id}` },
+  } as Partial<EdgeNode>);
+}
+
+/** The groups a ledger drew, by key, in order. */
+const groupKeys = (wrapper: {
+  findAll: (s: string) => { attributes(a: string): string | undefined }[];
+}) =>
+  wrapper
+    .findAll("[data-testid^='history-box-']")
+    .map((box) => box.attributes("data-testid")?.replace("history-box-", ""));
+
+/** A person's page and a company's read the list as a ledger: groups, the
+ * period in a column of its own in one date format, and what ended a step
+ * quieter. Every other host - the drawer, /eksploruj/nowe, the queues - keeps
+ * the one list. */
+describe("EmploymentHistory as a ledger", () => {
+  const ledger = (edges: EdgeNode[], props: Record<string, unknown> = {}) =>
+    mountSuspended(EmploymentHistory, {
+      props: { edges, ledger: true, ...props },
+    });
+
+  it("files a person's rows under the people, then what is held, what ended and what has no dates", async () => {
+    const wrapper = await ledger([
+      post("ended", "2023-05-15", "2024-12-04"),
+      post("undated"),
+      post("current", "2026-08-19"),
+      acquaintance() as unknown as EdgeNode,
+    ]);
+
+    // The people first: „they are in a sense current as well and the crux of
+    // the whole website” (Szymon, 2026-10-16).
+    expect(groupKeys(wrapper)).toEqual([
+      "people",
+      "current",
+      "ended",
+      "undated",
+    ]);
+    const heads = wrapper.findAll("h3.k-group-head");
+    expect(heads.map((head) => head.text().replace(/\s+/g, " "))).toEqual([
+      "Osoby 1",
+      "Obecnie 1",
+      "Zakończone 1",
+      "Bez dat 1",
+    ]);
+    expect(wrapper.get("[data-testid='history-box-people']").text()).toContain(
+      "Anna Nowak",
+    );
+    expect(wrapper.get("[data-testid='history-box-undated']").text()).toContain(
+      "Spółka undated",
+    );
+  });
+
+  it("heads no group when there is only one", async () => {
+    // „Zakończone 1” over the teaser's one post read as the count of
+    // everything the person ever held.
+    const wrapper = await ledger([
+      post("a", "2010-01-01", "2012-01-01"),
+      post("b", "2013-01-01", "2015-01-01"),
+    ]);
+
+    expect(groupKeys(wrapper)).toEqual(["ended"]);
+    expect(wrapper.find("h3").exists()).toBe(false);
+  });
+
+  it("files a company's people by their period, with no group of people", async () => {
+    const wrapper = await ledger(
+      [
+        holder("held", "2026-08-19"),
+        holder("left", "2016-02-16", "2024-04-12"),
+        holder("undated"),
+      ],
+      { peopleByPeriod: true, company: { id: "pkp" } },
+    );
+
+    expect(groupKeys(wrapper)).toEqual(["current", "ended", "undated"]);
+    expect(wrapper.text()).not.toContain("Osoby");
+  });
+
+  it("prints a post held today from its first day, and an ended one with both", async () => {
+    const wrapper = await ledger([
+      post("current", "2026-08-19"),
+      post("ended", "2023-05-15", "2024-12-04"),
+    ]);
+
+    const current = wrapper.get("[data-testid='edge-period-current']");
+    expect(current.get(".history-period__full").text()).toBe("od 19.08.2026");
+    expect(current.classes()).toContain("history-period--current");
+    // Never „- obecnie”: „od” already says the post is held.
+    expect(current.text()).not.toContain("obecnie");
+
+    const ended = wrapper.get("[data-testid='edge-period-ended']");
+    expect(ended.get(".history-period__full").text()).toBe(
+      "15.05.2023 - 04.12.2024",
+    );
+    // The phone's form of an ended post: its years, unspaced.
+    expect(ended.get(".history-period__years").text()).toBe("2023-2024");
+    expect(ended.classes()).not.toContain("history-period--current");
+  });
+
+  it("keeps a term whose end is still ahead among what is held", async () => {
+    const wrapper = await ledger([
+      post("term", "2023-01-01", "2099-06-30"),
+      post("ended", "2010-01-01", "2012-01-01"),
+    ]);
+
+    expect(
+      wrapper
+        .find(
+          "[data-testid='history-box-current'] [data-testid='edge-period-term']",
+        )
+        .exists(),
+    ).toBe(true);
+    expect(
+      wrapper
+        .get("[data-testid='edge-period-term'] .history-period__full")
+        .text(),
+    ).toBe("01.01.2023 - 30.06.2099");
+  });
+
+  it("sets what ended a step quieter than what is held", async () => {
+    const wrapper = await ledger([
+      post("current", "2026-08-19"),
+      post("ended", "2023-05-15", "2024-12-04"),
+    ]);
+
+    const rows = wrapper.findAll(".history-row");
+    expect(
+      rows.every((row) => row.classes().includes("history-row--ledger")),
+    ).toBe(true);
+    expect(
+      wrapper.get("[data-testid='history-box-ended'] .history-row").classes(),
+    ).toContain("history-row--ended");
+    expect(
+      wrapper.get("[data-testid='history-box-current'] .history-row").classes(),
+    ).not.toContain("history-row--ended");
+  });
+
+  it("prints a candidacy's year alone, the part of its date that is true", async () => {
+    // The server substitutes one election day per year whatever the office,
+    // so a 2010 council candidacy would read 20.06.2010 - the presidential
+    // vote.
+    const wrapper = await ledger([
+      edge({
+        id: "run",
+        type: "election",
+        label: "kandydatura",
+        start_date: "2010-06-20",
+        end_date: "2010-06-20",
+        committee: "KWW Wspólny Kalisz",
+        richNode: { id: "teryt3061", type: "region", name: "Kalisz" },
+      }),
+    ]);
+
+    expect(
+      wrapper
+        .get("[data-testid='edge-period-run'] .history-period__full")
+        .text(),
+    ).toBe("2010");
+    // Last on its role line, where its long name wraps rather than pushing
+    // the draft's „Opublikuj” down.
+    expect(wrapper.get(".history-meta__committee").text()).toBe(
+      "KWW Wspólny Kalisz",
+    );
+  });
+
+  it("draws the bar bare beside its own column of dates", async () => {
+    const wrapper = await ledger([post("ended", "2023-05-15", "2024-12-04")]);
+
+    const bar = wrapper.findComponent(ChipRelativeDuration);
+    expect(bar.props("bare")).toBe(true);
+    // The dates are the ledger's column, not the bar's caption under it.
+    expect(bar.text()).toBe("");
+  });
+
+  it("draws no period for a relation with no dates", async () => {
+    const wrapper = await ledger([post("undated")]);
+
+    expect(wrapper.find("[data-testid='edge-period-undated']").exists()).toBe(
+      false,
+    );
+    expect(wrapper.findComponent(ChipRelativeDuration).exists()).toBe(false);
+  });
+
+  it("says whose a company is only where it is the exception, on a person's ledger", async () => {
+    // Nearly every row there is a public company, which is what the page is
+    // about, and fifteen identical sage chips said nothing per row.
+    const company = (id: string, fields: Record<string, unknown>) =>
+      post(id, "2020-01-01", "2021-01-01", {
+        richNode: { id, type: "place", name: id, ...fields },
+      });
+
+    const onLedger = await ledger([
+      company("publiczna", { isPublic: true }),
+      company("prywatna", { isPublic: false, isPublicSource: "manual" }),
+    ]);
+    expect(onLedger.text()).not.toContain("Instytucja publiczna");
+    expect(onLedger.text()).toContain("Podmiot prywatny");
+
+    const elsewhere = await render([company("publiczna", { isPublic: true })]);
+    expect(elsewhere.text()).toContain("Instytucja publiczna");
+  });
+
+  it("offers the row's buttons on a ledger row as on any other", async () => {
+    const wrapper = await ledger(
+      [post("e1", "2023-05-15", "2024-12-04", { references: ["a1"] })],
+      { canCite: true, canCorrect: true, canRemove: true },
+    );
+
+    for (const testid of [
+      "edge-sources-open-e1",
+      "edge-edit-e1",
+      "edge-remove-e1",
+    ]) {
+      expect(wrapper.find(`[data-testid='${testid}']`).exists()).toBe(true);
+    }
+    await wrapper.get("[data-testid='edge-edit-e1']").trigger("click");
+    expect(wrapper.emitted("edit")?.[0]?.[0]).toMatchObject({ id: "e1" });
+  });
+
+  // A reader who cannot cite sees the sources button on the cited rows only,
+  // and a dated row without one had its dates 58px to the right of its
+  // neighbours'.
+  it("keeps the sources button's room on an uncited row beside a cited one", async () => {
+    const wrapper = await ledger([
+      post("cited", "2023-05-15", "2024-12-04", { references: ["a1"] }),
+      post("uncited", "2016-01-01", "2019-03-31"),
+    ]);
+
+    const rowOf = (id: string) =>
+      wrapper
+        .findAll(".history-row")
+        .find((row) => row.find(`[data-testid='edge-period-${id}']`).exists())!;
+    expect(
+      rowOf("cited").find("[data-testid='edge-sources-open-cited']").exists(),
+    ).toBe(true);
+    expect(rowOf("uncited").find(".row-actions__gap").exists()).toBe(true);
+    // Both rows take the buttons' column, so their dates stand in one line.
+    for (const id of ["cited", "uncited"]) {
+      expect(rowOf(id).get(".history-cell").classes()).toEqual(
+        expect.arrayContaining(["history-cell--dated", "history-cell--acts"]),
+      );
+    }
+  });
+
+  it("holds no room where nothing on the list is cited, or the reader may cite", async () => {
+    const bare = await ledger([
+      post("a", "2023-05-15", "2024-12-04"),
+      post("b", "2016-01-01", "2019-03-31"),
+    ]);
+    expect(bare.find(".row-actions__gap").exists()).toBe(false);
+    expect(bare.find(".history-cell--acts").exists()).toBe(false);
+
+    // Signed in, every row has the button itself.
+    const editor = await ledger(
+      [
+        post("a", "2023-05-15", "2024-12-04", { references: ["a1"] }),
+        post("b", "2016-01-01", "2019-03-31"),
+      ],
+      { canCite: true },
+    );
+    expect(editor.find(".row-actions__gap").exists()).toBe(false);
+    expect(editor.find("[data-testid='edge-sources-open-b']").exists()).toBe(
+      true,
+    );
+  });
+
+  it("leaves every other host's list as it was", async () => {
+    // The drawer, /eksploruj/nowe and the queues pass no `ledger`.
+    const wrapper = await render([
+      post("current", "2026-08-19"),
+      post("ended", "2014-11-06", "2017-08-25"),
+    ]);
+
+    expect(groupKeys(wrapper)).toEqual(["all"]);
+    expect(wrapper.find("h3").exists()).toBe(false);
+    expect(wrapper.find("[data-testid^='edge-period-']").exists()).toBe(false);
+    expect(wrapper.find(".history-row--ledger").exists()).toBe(false);
+    // The bar with its own caption, and the phone's period line.
+    const bars = wrapper.findAllComponents(ChipRelativeDuration);
+    expect(bars.every((bar) => !bar.props("bare"))).toBe(true);
+    expect(wrapper.text()).toContain("2014-11-06 - 2017-08-25");
+    expect(wrapper.text()).toContain("2026-08-19 - obecnie");
+  });
+});
+
+/** „12 osób · wpisy od 2001” beside the head of a company's history. */
+describe("EmploymentHistory caption", () => {
+  it("counts the people a company's history holds and how far back it goes", async () => {
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [
+          holder("a", "2016-02-16", "2024-04-12"),
+          holder("b", "2001-05-01", "2006-01-01"),
+        ],
+        company: { id: "pkp", type: "place", name: "PKP" },
+      },
+    });
+
+    expect(wrapper.get("[data-testid='history-caption']").text()).toBe(
+      "2 osoby · wpisy od 2001",
+    );
+  });
+
+  it("counts the whole history while it lists less of it", async () => {
+    // The posts „Obecny skład” draws as cards are left out of the rows
+    // (Szymon, 2026-10-23), and the caption still counts them.
+    const board = holder("board", "1998-03-01");
+    const left = holder("left", "2016-02-16", "2024-04-12");
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [left],
+        captionEdges: [board, left],
+        company: { id: "pkp", type: "place", name: "PKP" },
+      },
+    });
+
+    expect(wrapper.findAll(".history-row")).toHaveLength(1);
+    expect(wrapper.get("[data-testid='history-caption']").text()).toBe(
+      "2 osoby · wpisy od 1998",
+    );
+  });
+
+  it("has no caption on a person's page", async () => {
+    const wrapper = await render([post("a", "2016-02-16", "2024-04-12")]);
+
+    expect(wrapper.find("[data-testid='history-caption']").exists()).toBe(
+      false,
+    );
   });
 });

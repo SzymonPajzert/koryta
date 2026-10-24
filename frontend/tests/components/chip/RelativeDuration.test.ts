@@ -45,4 +45,50 @@ describe("ChipRelativeDuration", () => {
   it("says nothing at all when no date was recorded", async () => {
     expect(await textOf({})).toBe("");
   });
+
+  // A ledger prints the period in a column of its own beside the bar
+  // (card/EmploymentHistory.vue), so there the bar is the background to the
+  // dates: no caption, the quiet tint, and the column's whole width.
+  it("draws the bare track alone, as wide as its column", async () => {
+    const bare = await mountSuspended(RelativeDuration, {
+      props: {
+        start: "2014-11-06",
+        end: "2017-08-25",
+        minStart: "2000-01-01",
+        maxEnd: "2026-01-01",
+        bare: true,
+      },
+    });
+
+    expect(bare.text()).toBe("");
+    expect(bare.get(".relative-duration-wrapper").classes()).toContain(
+      "relative-duration--bare",
+    );
+    expect(bare.get(".relative-duration-wrapper").classes()).not.toContain(
+      "bg-surface-variant",
+    );
+    expect(
+      bare.get(".relative-duration-wrapper").attributes("style"),
+    ).toContain("width: 100%");
+    expect(bare.get("div").classes()).toContain("w-100");
+  });
+
+  it("keeps the 200px track and its caption everywhere else", async () => {
+    const wrapper = await mountSuspended(RelativeDuration, {
+      props: {
+        start: "2014-11-06",
+        end: "2017-08-25",
+        minStart: "2000-01-01",
+        maxEnd: "2026-01-01",
+      },
+    });
+
+    expect(wrapper.get(".relative-duration-wrapper").classes()).toContain(
+      "bg-surface-variant",
+    );
+    expect(
+      wrapper.get(".relative-duration-wrapper").attributes("style"),
+    ).toContain("width: 200px");
+    expect(wrapper.get(".text-caption").text()).toBe("2014-11-06 - 2017-08-25");
+  });
 });
