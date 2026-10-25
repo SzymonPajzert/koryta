@@ -2107,6 +2107,150 @@ def test_a_later_revision_never_drops_a_field(revisions, within_budget):
     )
 
 
+def party_list(value) -> list[str]:
+    """The parties a stored `parties` field lists, in a comparable order.
+
+    A list, or the numbered map the old `sanitizeFirestoreData` made of one
+    (`test_array_fields_are_stored_as_arrays`); anything else lists none.
+    """
+    if isinstance(value, dict):
+        value = list(value.values())
+    if not isinstance(value, list):
+        return []
+    return sorted(str(party) for party in value if party)
+
+
+def test_a_party_list_a_person_pinned_is_changed_only_by_a_person(
+    nodes, revisions, snapshot, within_budget
+):
+    """Once a person has set a page's parties, only a person changes them.
+
+    `partiesSource: "manual"` is the pin: the list was typed in or confirmed by
+    somebody, rather than worked out from the registers, and the people import
+    leaves a pinned list alone. Before the pin existed it did not, and a robot
+    widening a list a person had set was the defect. Read with a person's own
+    revision of the list as the pin, this check flags 31 revisions on the
+    2026-10-25 export: 15 lists an upload or a merge widened between
+    2026-08-18 and 10-06, Delewicz, Piętniewicz, Szymanek, Sobczak, Zaczyński,
+    Huzarski, Barczyk and Bujak among them, and the 16 revisions of
+    backfill-parties-source.ts that narrowed 14 of those back on 10-06, pinned,
+    and emptied 2 others.
+
+    So after an applied revision that pins the list, no applied revision may
+    state a different one unless a person wrote it. A robot is an automatic
+    revision, a `migration:` one, or one written within 10 s of a merge into
+    the page: `carriedFields` in server/utils/merge.ts still unions the
+    tombstone's parties into the survivor, pinned or not, and files that under
+    the admin who merged. The window is open on both sides, as that revision is
+    stamped just before the merge's audit entry, in the same request.
+
+    A page's history is replayed as the drop check replays it (`replay`), from
+    the revision that created the page, so a draft a person made with a pinned
+    list is pinned from its first revision while that one still waits. One
+    filed before 10-06 and still waiting pins it only from when
+    backfill-parties-source.ts ran, as that stamped the pin into it after the
+    fact (the drop check's `stamped_later`).
+
+    The revision that sets the pin is not judged, so a robot that pinned a
+    list it changed in the same write is outside this check, as
+    backfill-parties-source.ts was when it emptied the lists a contributor had
+    stated in February on Olkiewicz (raqQZJO5CAbtU18aBmsx) and Myszko
+    (ExeCUCt1Ik5tFOD4tshJ). A revision that leaves `parties` out is passed
+    over, and one that takes `partiesSource` off unpins the page from there
+    on: both are the drop check's (`test_a_later_revision_never_drops_a_field`)
+    to catch, so a migration taking pins off has to be accounted for there.
+    """
+    # None on the 2026-10-25T03:00:33.098Z export, nor on the 10-24 one: the
+    # guard has held since the pins were stamped. The replay sees every page
+    # pinned on the node pinned too: 662 on 10-25, 650 on 10-24.
+    KNOWN_CHANGED = 0
+
+    # The last write of migration:backfill-parties-source, 2026-10-06 (UTC).
+    PARTIES_SOURCE_BACKFILLED = "2026-10-06T10:34:26"
+
+    def instant(value) -> datetime.datetime | None:
+        """A stored timestamp as a naive UTC datetime, or None if it has none."""
+        try:
+            moment = datetime.datetime.fromisoformat(timestamp_key(value))
+        except ValueError:
+            return None
+        if moment.tzinfo is not None:
+            moment = moment.astimezone(datetime.UTC).replace(tzinfo=None)
+        return moment
+
+    merged_at: dict[str, list[datetime.datetime]] = collections.defaultdict(list)
+    for entry in snapshot.collection("audit"):
+        merge = entry.get("merge")
+        into = merge.get("into") if isinstance(merge, dict) else None
+        at = instant(entry.get("at"))
+        if entry.get("action") == "merge" and into and at:
+            merged_at[reference_id(into) or ""].append(at)
+
+    people = {
+        document["id"]
+        for document in nodes
+        if document.get("type") == "person" and not is_removed(document)
+    }
+    by_document: dict[str, list[dict]] = collections.defaultdict(list)
+    for revision in revisions:
+        document_id = reference_id(revision.get("node_id"))
+        if document_id in people and isinstance(revision.get("data"), dict):
+            by_document[document_id].append(revision)
+
+    def by_a_robot(revision: dict, page_id: str) -> bool:
+        if revision.get("update_automatic") is True:
+            return True
+        if str(revision.get("update_user") or "").startswith("migration:"):
+            return True
+        written = instant(revision.get("update_time"))
+        return written is not None and any(
+            abs((written - merge).total_seconds()) < 10 for merge in merged_at[page_id]
+        )
+
+    def pinned_from(revision: dict) -> str | None:
+        """From when the page the revision wrote is pinned, if it is."""
+        if revision["data"].get("partiesSource") != "manual":
+            return None
+        if applied(revision) or filed_at(revision) > PARTIES_SOURCE_BACKFILLED:
+            return applied_at(revision)
+        return PARTIES_SOURCE_BACKFILLED
+
+    changed = []
+    for page_id, history in by_document.items():
+        pin, page = None, None
+        for position, revision in enumerate(replay(history)):
+            if position and not applied(revision):
+                continue  # never the page; the first one created it
+            if "parties" not in revision["data"]:
+                continue
+            parties = party_list(revision["data"]["parties"])
+            if (
+                pin is not None
+                and applied_at(revision) >= pin
+                and parties != page
+                and by_a_robot(revision, page_id)
+            ):
+                changed.append(
+                    (
+                        page_id,
+                        revision["id"],
+                        applied_at(revision)[:10],
+                        revision.get("update_user"),
+                        page,
+                        parties,
+                    )
+                )
+            pin = pinned_from(revision)
+            page = parties
+
+    assert within_budget(len(changed), KNOWN_CHANGED), (
+        f"{len(changed)} revisions by an upload, a migration or a merge changed a "
+        f"party list a person had pinned, up from the {KNOWN_CHANGED} known. As "
+        f"(page, revision, applied on, author, pinned list, list it states): "
+        f"{sample(changed, 5)}"
+    )
+
+
 def test_revisions_record_who_changed_what_and_when(revisions, within_budget):
     """`update_time` and `update_user` back the history view and the credits.
 
