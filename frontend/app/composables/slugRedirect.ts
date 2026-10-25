@@ -33,9 +33,12 @@ export function nodeUrlLocation(
  * rename that went A -> B -> A would leave a browser that saw the first answer
  * looping, A sending it to B from its cache and the server sending it back.
  *
- * Kept out of `slugs.ts`, which the server imports and which has to stay free
- * of the app's composables. */
-export function redirectToNodeUrl(url: string) {
+ * Kept out of shared/slugs.ts, which the server imports too and which has to
+ * stay free of the app's composables. */
+export function redirectToNodeUrl(
+  url: string,
+  from: { query: LocationQuery; hash: string },
+) {
   useResponseHeader("cache-control").value = "no-store";
   return navigateTo(nodeUrlLocation(url, from), {
     redirectCode: slugRedirectCode(url),
