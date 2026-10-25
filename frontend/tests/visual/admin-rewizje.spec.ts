@@ -198,6 +198,9 @@ test("rewizje-wpis", ENTRY, async ({ page }, testInfo) => {
   // the comparison's second card is the later of the two to arrive.
   await expect(page.getByText("ID: rev5")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("ID: rev6")).toBeVisible();
+  // The relations section between them is a third, and the seed gives him
+  // none. With relations, see rewizje-powiazania.spec.ts.
+  await expect(page.getByText("Ta strona nie ma powiązań.")).toBeVisible();
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("rewizje-wpis.png", { fullPage: true });
