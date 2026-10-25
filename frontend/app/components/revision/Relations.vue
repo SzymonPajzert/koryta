@@ -6,7 +6,7 @@
       info="Kandydatury, stanowiska i inne powiązania tej strony, każde z historią swoich rewizji. Najpierw te, które czekają: propozycje zmian i szkice, których nie ma jeszcze na stronie. Propozycję można tu zatwierdzić albo odrzucić, a szkic opublikować."
     >
       <v-chip-group
-        v-if="variant === 'a' && data && data.relations.length > 0"
+        v-if="data && data.relations.length > 0"
         v-model="filter"
         mandatory
         column
@@ -61,226 +61,212 @@
           szkice, potem najnowsze.
         </p>
 
-        <template v-for="group in groups" :key="group.key">
-          <h3
-            v-if="group.title"
-            class="relations__group text-body-2 text-medium-emphasis"
+        <AdminRowList v-if="shown.length > 0">
+          <AdminExpandRow
+            v-for="relation in shown"
+            :key="relation.id"
+            :row-id="`powiazanie-${relation.id}`"
+            :tone="tones[relation.state]"
+            :dimmed="relation.state === 'removed'"
+            :expanded="open.has(relation.id)"
+            :data-relation-row="relation.id"
+            :data-relation-state="relation.state"
+            @update:expanded="(value: boolean) => setOpen(relation.id, value)"
           >
-            {{ group.title }}
-          </h3>
-          <AdminRowList v-if="group.rows.length > 0">
-            <AdminExpandRow
-              v-for="relation in group.rows"
-              :key="relation.id"
-              :row-id="`powiazanie-${relation.id}`"
-              :tone="tones[relation.state]"
-              :dimmed="relation.state === 'removed'"
-              :expanded="open.has(relation.id)"
-              :data-relation-row="relation.id"
-              :data-relation-state="relation.state"
-              @update:expanded="(value: boolean) => setOpen(relation.id, value)"
-            >
-              <template #summary>
-                <span class="rel-line">
-                  <v-icon
-                    class="flex-0-0 text-medium-emphasis"
-                    size="small"
-                    :icon="typeIcon(relation.type)"
-                  />
-                  <span class="rel-kind text-body-2" :title="kindOf(relation)">
-                    {{ kindOf(relation) }}
-                  </span>
-                  <span
-                    class="arow-grow rel-place text-body-2"
-                    :title="placeOf(relation)"
-                  >
-                    {{ placeOf(relation) }}
-                  </span>
-                  <span
-                    v-if="stateTag(relation)"
-                    class="arow-tag rel-tag"
-                    :class="stateTagClass[relation.state]"
-                    data-relation-tag
-                  >
-                    {{ stateTag(relation) }}
-                  </span>
-                  <span
-                    v-if="clashOf(relation)"
-                    class="arow-tag rel-tag bg-surface-danger text-ink-danger"
-                  >
-                    dwa miejsca
-                  </span>
-                  <!-- Where the line breaks on a phone: what and its state
-                       above, where and when below. Nothing on a wider screen. -->
-                  <span class="rel-break" aria-hidden="true" />
-                  <span
-                    class="arow-fixed rel-when text-caption text-medium-emphasis"
-                  >
-                    {{ lastChange(relation) }}
-                  </span>
-                </span>
-              </template>
-
-              <template #meta>
-                <AdminRowFact label="Stan">
-                  {{ stateText(relation) }}
-                </AdminRowFact>
-                <AdminRowFact
-                  :label="otherLabel(relation)"
-                  class="rel-fact-wide"
-                >
-                  <NuxtLink
-                    v-if="relation.other.path"
-                    :to="relation.other.path"
-                    class="text-ink-info"
-                  >
-                    {{ relation.other.name || relation.other.id }}
-                  </NuxtLink>
-                  <span v-else>{{
-                    relation.other.name || relation.other.id
-                  }}</span>
-                  <span
-                    v-if="!relation.other.published"
-                    class="text-medium-emphasis"
-                  >
-                    (szkic)
-                  </span>
-                </AdminRowFact>
-                <AdminRowFact
-                  v-if="relation.committee"
-                  label="Komitet"
-                  class="rel-fact-wide"
-                >
-                  {{ relation.committee }}
-                </AdminRowFact>
-                <AdminRowFact v-if="relation.type === 'election'" label="Wynik">
-                  {{ relation.elected ? "wybrany/a" : "nie podano" }}
-                </AdminRowFact>
-                <AdminRowFact v-else-if="periodOf(relation)" label="Okres">
-                  {{ periodOf(relation) }}
-                </AdminRowFact>
-              </template>
-
-              <v-alert
-                v-if="clashOf(relation)"
-                type="error"
-                variant="tonal"
-                density="compact"
-                class="mb-3"
-              >
-                {{ clashOf(relation) }}
-              </v-alert>
-
-              <p
-                v-if="relation.revisions.length === 0"
-                class="text-body-2 text-medium-emphasis mb-0"
-              >
-                To powiązanie nie ma rewizji: zapisano je, zanim powstały.
-              </p>
-              <ol v-else class="rel-ledger" aria-label="Historia powiązania">
-                <li
-                  v-for="revision in ledgerOf(relation)"
-                  :key="revision.id"
-                  class="rel-rev"
-                  :data-relation-revision="revision.id"
-                >
-                  <div class="rel-rev__line">
-                    <v-icon
-                      class="flex-0-0"
-                      size="small"
-                      :icon="revisionStatusIcons[revision.status]"
-                      :color="proposalStatusLabels[revision.status].color"
-                      role="img"
-                      aria-hidden="false"
-                      :aria-label="proposalStatusLabels[revision.status].label"
-                      :title="proposalStatusLabels[revision.status].label"
-                    />
-                    <span class="rel-rev__when text-body-2">
-                      {{ formatMoment(revision.updateTime) }}
-                    </span>
-                    <span class="rel-rev__who text-body-2 font-weight-bold">
-                      {{ authorName(revision) }}
-                    </span>
-                    <span
-                      class="arow-tag"
-                      :class="
-                        revision.automatic
-                          ? 'bg-surface-muted text-ink-neutral'
-                          : 'bg-surface-sage text-ink-sage'
-                      "
-                    >
-                      {{ revision.automatic ? "Auto" : "Ręczna" }}
-                    </span>
-                    <span
-                      class="rel-rev__status text-caption"
-                      :class="`text-${proposalStatusLabels[revision.status].color}`"
-                    >
-                      {{ revisionState(relation, revision) }}
-                    </span>
-                  </div>
-                  <div
-                    v-if="revision.id !== relation.approvedRevisionId"
-                    class="rel-rev__body"
-                  >
-                    <RevisionChangeCell
-                      :proposal="revision"
-                      :max="revision.changeCount"
-                      wide
-                    />
-                    <RevisionReviewActions
-                      v-if="isAdmin && waits(revision)"
-                      class="mt-1"
-                      :proposal="revision"
-                      :offer-publish="false"
-                      :reviewable="true"
-                      :rejectable="true"
-                      :loading="deciding === revision.id"
-                      @approve="(options) => approve(revision, options)"
-                      @reject="openReject(revision)"
-                      @permalink="copyPermalink(revision)"
-                    />
-                  </div>
-                </li>
-              </ol>
-              <v-btn
-                v-if="relation.revisions.length > ledgerOf(relation).length"
-                variant="text"
-                size="small"
-                class="mt-1"
-                :data-testid="`relation-all-revisions-${relation.id}`"
-                @click="fullLedger.add(relation.id)"
-              >
-                Pokaż wszystkie ({{ relation.revisions.length }})
-              </v-btn>
-
-              <template v-if="isAdmin && relation.state === 'draft'" #footer>
-                <v-btn
-                  color="ink-success"
-                  variant="flat"
+            <template #summary>
+              <span class="rel-line">
+                <v-icon
+                  class="flex-0-0 text-medium-emphasis"
                   size="small"
-                  :prepend-icon="mdiEarth"
-                  :loading="publishing === relation.id"
-                  :disabled="!relation.publishable"
-                  :data-testid="`relation-publish-${relation.id}`"
-                  @click="publish(relation)"
-                >
-                  Opublikuj powiązanie
-                </v-btn>
-                <span
-                  v-if="!relation.publishable"
-                  class="text-caption text-medium-emphasis"
-                >
-                  {{ blockedReason }}
+                  :icon="typeIcon(relation.type)"
+                />
+                <span class="rel-kind text-body-2" :title="kindOf(relation)">
+                  {{ kindOf(relation) }}
                 </span>
-              </template>
-            </AdminExpandRow>
-          </AdminRowList>
-        </template>
+                <span
+                  class="arow-grow rel-place text-body-2"
+                  :title="placeOf(relation)"
+                >
+                  {{ placeOf(relation) }}
+                </span>
+                <span
+                  v-if="stateTag(relation)"
+                  class="arow-tag rel-tag"
+                  :class="stateTagClass[relation.state]"
+                  data-relation-tag
+                >
+                  {{ stateTag(relation) }}
+                </span>
+                <span
+                  v-if="clashOf(relation)"
+                  class="arow-tag rel-tag bg-surface-danger text-ink-danger"
+                >
+                  dwa miejsca
+                </span>
+                <!-- Where the line breaks on a phone: what and its state
+                       above, where and when below. Nothing on a wider screen. -->
+                <span class="rel-break" aria-hidden="true" />
+                <span
+                  class="arow-fixed rel-when text-caption text-medium-emphasis"
+                >
+                  {{ lastChange(relation) }}
+                </span>
+              </span>
+            </template>
 
-        <p
-          v-if="variant === 'a' && shown.length === 0"
-          class="text-body-2 text-medium-emphasis"
-        >
+            <template #meta>
+              <AdminRowFact label="Stan">
+                {{ stateText(relation) }}
+              </AdminRowFact>
+              <AdminRowFact :label="otherLabel(relation)" class="rel-fact-wide">
+                <NuxtLink
+                  v-if="relation.other.path"
+                  :to="relation.other.path"
+                  class="text-ink-info"
+                >
+                  {{ relation.other.name || relation.other.id }}
+                </NuxtLink>
+                <span v-else>{{
+                  relation.other.name || relation.other.id
+                }}</span>
+                <span
+                  v-if="!relation.other.published"
+                  class="text-medium-emphasis"
+                >
+                  (szkic)
+                </span>
+              </AdminRowFact>
+              <AdminRowFact
+                v-if="relation.committee"
+                label="Komitet"
+                class="rel-fact-wide"
+              >
+                {{ relation.committee }}
+              </AdminRowFact>
+              <AdminRowFact v-if="relation.type === 'election'" label="Wynik">
+                {{ relation.elected ? "wybrany/a" : "nie podano" }}
+              </AdminRowFact>
+              <AdminRowFact v-else-if="periodOf(relation)" label="Okres">
+                {{ periodOf(relation) }}
+              </AdminRowFact>
+            </template>
+
+            <v-alert
+              v-if="clashOf(relation)"
+              type="error"
+              variant="tonal"
+              density="compact"
+              class="mb-3"
+            >
+              {{ clashOf(relation) }}
+            </v-alert>
+
+            <p
+              v-if="relation.revisions.length === 0"
+              class="text-body-2 text-medium-emphasis mb-0"
+            >
+              To powiązanie nie ma rewizji: zapisano je, zanim powstały.
+            </p>
+            <ol v-else class="rel-ledger" aria-label="Historia powiązania">
+              <li
+                v-for="revision in ledgerOf(relation)"
+                :key="revision.id"
+                class="rel-rev"
+                :data-relation-revision="revision.id"
+              >
+                <div class="rel-rev__line">
+                  <v-icon
+                    class="flex-0-0"
+                    size="small"
+                    :icon="revisionStatusIcons[revision.status]"
+                    :color="proposalStatusLabels[revision.status].color"
+                    role="img"
+                    aria-hidden="false"
+                    :aria-label="proposalStatusLabels[revision.status].label"
+                    :title="proposalStatusLabels[revision.status].label"
+                  />
+                  <span class="rel-rev__when text-body-2">
+                    {{ formatMoment(revision.updateTime) }}
+                  </span>
+                  <span class="rel-rev__who text-body-2 font-weight-bold">
+                    {{ authorName(revision) }}
+                  </span>
+                  <span
+                    class="arow-tag"
+                    :class="
+                      revision.automatic
+                        ? 'bg-surface-muted text-ink-neutral'
+                        : 'bg-surface-sage text-ink-sage'
+                    "
+                  >
+                    {{ revision.automatic ? "Auto" : "Ręczna" }}
+                  </span>
+                  <span
+                    class="rel-rev__status text-caption"
+                    :class="`text-${proposalStatusLabels[revision.status].color}`"
+                  >
+                    {{ revisionState(relation, revision) }}
+                  </span>
+                </div>
+                <div
+                  v-if="revision.id !== relation.approvedRevisionId"
+                  class="rel-rev__body"
+                >
+                  <RevisionChangeCell
+                    :proposal="revision"
+                    :max="revision.changeCount"
+                    wide
+                  />
+                  <RevisionReviewActions
+                    v-if="isAdmin && waits(revision)"
+                    class="mt-1"
+                    :proposal="revision"
+                    :offer-publish="false"
+                    :reviewable="true"
+                    :rejectable="true"
+                    :loading="deciding === revision.id"
+                    @approve="(options) => approve(revision, options)"
+                    @reject="openReject(revision)"
+                    @permalink="copyPermalink(revision)"
+                  />
+                </div>
+              </li>
+            </ol>
+            <v-btn
+              v-if="relation.revisions.length > ledgerOf(relation).length"
+              variant="text"
+              size="small"
+              class="mt-1"
+              :data-testid="`relation-all-revisions-${relation.id}`"
+              @click="fullLedger.add(relation.id)"
+            >
+              Pokaż wszystkie ({{ relation.revisions.length }})
+            </v-btn>
+
+            <template v-if="isAdmin && relation.state === 'draft'" #footer>
+              <v-btn
+                color="ink-success"
+                variant="flat"
+                size="small"
+                :prepend-icon="mdiEarth"
+                :loading="publishing === relation.id"
+                :disabled="!relation.publishable"
+                :data-testid="`relation-publish-${relation.id}`"
+                @click="publish(relation)"
+              >
+                Opublikuj powiązanie
+              </v-btn>
+              <span
+                v-if="!relation.publishable"
+                class="text-caption text-medium-emphasis"
+              >
+                {{ blockedReason }}
+              </span>
+            </template>
+          </AdminExpandRow>
+        </AdminRowList>
+
+        <p v-if="shown.length === 0" class="text-body-2 text-medium-emphasis">
           Żadne powiązanie nie czeka na decyzję.
         </p>
       </template>
@@ -347,11 +333,8 @@ const props = withDefaults(
     nodeId: string;
     /** The page's name, for the two-places warning. */
     nodeName?: string | null;
-    /** Temporary, for the screenshots: `a` filters the list, `b` opens what
-     * waits and lists the rest below it. */
-    variant?: "a" | "b";
   }>(),
-  { nodeName: null, variant: "a" },
+  { nodeName: null },
 );
 
 const emit = defineEmits<{
@@ -391,28 +374,6 @@ const filterOptions = computed(() => [
 const shown = computed(() =>
   filter.value === "waiting" ? waitingRelations.value : relations.value,
 );
-
-/** What the list is drawn as: one filtered run (`a`), or the waiting run with
- * the settled ones under their own line (`b`). */
-const groups = computed(() => {
-  if (props.variant === "a") {
-    return [{ key: "shown", title: null, rows: shown.value }];
-  }
-  const rest = relations.value.filter(
-    (relation) => !waitsForDecision(relation),
-  );
-  return [
-    { key: "waiting", title: null, rows: waitingRelations.value },
-    {
-      key: "rest",
-      title:
-        rest.length > 0 && waitingRelations.value.length > 0
-          ? "Bez spraw do rozpatrzenia"
-          : null,
-      rows: rest,
-    },
-  ];
-});
 
 const tones: Record<RelationState, RowTone> = {
   proposals: "warning",
@@ -586,13 +547,10 @@ const setOpen = (id: string, value: boolean) => {
   else open.delete(id);
 };
 
-/** On arrival: the first relation that waits is opened (`a`), or every one
- * of them (`b`), because that is what the reviewer came down here for. */
+/** On arrival the first relation that waits is opened, because that is what
+ * the reviewer came down here for. One, not all: open together, Papaj's seven
+ * made the page some 4,300 px long. */
 function openWaiting() {
-  if (props.variant === "b") {
-    for (const relation of waitingRelations.value) open.add(relation.id);
-    return;
-  }
   const first = waitingRelations.value[0];
   if (first) open.add(first.id);
 }
@@ -770,11 +728,6 @@ async function copyPermalink(revision: Proposal) {
   /* The signal at the top links here, and the sticky bar would cover the
      section's head. */
   scroll-margin-top: 96px;
-}
-
-.relations__group {
-  margin: 16px 0 8px;
-  font-weight: 500;
 }
 
 .rel-line {

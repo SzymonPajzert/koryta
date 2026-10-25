@@ -14,15 +14,6 @@
         <div v-if="nodeName" class="text-caption text-medium-emphasis">
           Węzeł {{ route.params.id }}
         </div>
-        <a
-          v-if="variant === 'b' && relationSignal"
-          href="#powiazania"
-          class="relation-facts text-body-2 text-ink-warning"
-          data-testid="relation-signal"
-        >
-          <v-icon :icon="mdiVectorPolyline" size="small" />
-          Powiązania: {{ relationSignal.short }}
-        </a>
       </div>
       <v-spacer />
       <div v-if="!pending" class="d-flex align-center ga-2">
@@ -70,14 +61,14 @@
          whose own history is settled can still have a draft candidacy and
          proposals waiting. -->
     <div
-      v-if="variant === 'a' && relationSignal"
+      v-if="relationSignal"
       class="relation-signal mb-6"
       data-testid="relation-signal"
     >
       <v-icon :icon="mdiVectorPolyline" color="ink-warning" size="small" />
       <span class="text-body-2">
         <strong>Powiązania czekają na decyzję:</strong>
-        {{ relationSignal.long }}
+        {{ relationSignal }}
       </span>
       <v-btn
         href="#powiazania"
@@ -113,7 +104,6 @@
       class="mb-6"
       :node-id="nodeId"
       :node-name="nodeName"
-      :variant="variant"
       @summary="(summary) => (relationSummary = summary)"
     />
 
@@ -349,11 +339,6 @@ const highlightId = computed(() =>
 
 const { isAdmin } = useAuthState();
 
-/** Temporary: the two layouts of the relations section, for the screenshots. */
-const variant = computed<"a" | "b">(() =>
-  route.query.wariant === "b" ? "b" : "a",
-);
-
 /** What waits on the entry's relations, as the section below reported it. */
 const relationSummary = ref<RelationSummary | null>(null);
 
@@ -385,24 +370,10 @@ const relationSignal = computed(() => {
           "nieopublikowanych powiązań",
         )
       : null;
-  return {
-    long: [proposals && `${proposals}${where}`, drafts]
-      .filter(Boolean)
-      .join(" i ")
-      .concat("."),
-    short: [
-      proposals,
-      drafts &&
-        polishCounting(
-          summary.drafts,
-          "nieopublikowane",
-          "nieopublikowane",
-          "nieopublikowanych",
-        ),
-    ]
-      .filter(Boolean)
-      .join(" · "),
-  };
+  return [proposals && `${proposals}${where}`, drafts]
+    .filter(Boolean)
+    .join(" i ")
+    .concat(".");
 });
 
 const revisions = ref<Record<string, unknown>[]>([]);
@@ -786,19 +757,6 @@ function differsFromApproved(rev: Record<string, unknown>, key: string) {
 
 .relation-signal__go {
   margin-inline-start: auto;
-}
-
-.relation-facts {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 2px;
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.relation-facts:hover {
-  text-decoration: underline;
 }
 
 .comparison-scroll {
