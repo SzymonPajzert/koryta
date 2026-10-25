@@ -682,11 +682,11 @@ def test_a_node_with_a_name_index_can_be_searched_for(nodes, within_budget):
     scripts/migrate/backfill-node-group-size.ts repairs the ones already
     stored.
     """
-    # Measured against production on 2026-08-23, before the migration ran:
-    # 474 people and 204 companies. Articles are not searched and so are not
-    # counted here. This goes to zero once the backfill has been run against
-    # production.
-    UNSEEDED = 678
+    # None on the export of 2026-10-25T03:00Z. There were 678 on 2026-08-23
+    # (474 people and 204 companies) until backfill-node-group-size.ts was run
+    # against production, and the seeding in `withSeededNodeStats` keeps new
+    # nodes out. Articles are not searched and so are not counted here.
+    UNSEEDED = 0
 
     searchable = {"person", "place", "region"}
     unfindable = [
@@ -802,14 +802,13 @@ def test_every_article_has_a_publication_date(articles, within_budget):
     `article:published_time` meta tag at all, so on the outlets that lead with
     an Organization block that was every article they published.
     """
-    # 185 of the 317 articles in the export of 2026-08-20, and the count was
-    # still climbing - 184 on 2026-08-11 - because the ingest kept adding to it.
+    # 66 of the 830 articles on the export of 2026-10-25T03:00Z, the same 66 as
+    # on 2026-10-24, all of them published. There were 185 on 2026-08-20, before
+    # `backfill-article-dates.ts` re-read the date off each page on 2026-08-22;
+    # these are the pages it found no date on.
     # `ensureArticleNode` now falls back to the time the article was added, so
-    # nothing new joins them, and
-    # `frontend/scripts/migrate/backfill-article-dates.ts` re-reads the date off
-    # each page to clear the ones already stored. This goes to zero when it has
-    # been run against production.
-    UNDATED = 185
+    # nothing new joins them, and this only falls.
+    UNDATED = 66
 
     undated = [
         document["id"]
@@ -819,7 +818,7 @@ def test_every_article_has_a_publication_date(articles, within_budget):
 
     assert within_budget(len(undated), UNDATED), (
         f"{len(undated)} articles have no publishedDate and so appear nowhere "
-        f"in /zrodla, up from the {UNDATED} the backfill knows about. "
+        f"in /zrodla, up from the {UNDATED} known ones. "
         f"Sample IDs: {sample(undated)}"
     )
 
@@ -835,10 +834,10 @@ def test_every_article_says_where_it_came_from(articles, within_budget):
     topics and `mentions` edges hanging off the old one stay on the copy nobody
     reaches. It is also what the title in the listing links out to.
     """
-    # Five in the export of 2026-08-20, all of them among the 24 that were never
-    # approved - they look like rows typed straight into the database rather
-    # than anything /api/ingest/article wrote, since that path cannot run
-    # without a url.
+    # Five in the export of 2026-08-20, all of them among the 24 that were not
+    # approved until 2026-08-22 - they look like rows typed straight into the
+    # database rather than anything /api/ingest/article wrote, since that path
+    # cannot run without a url.
     URL_LESS = 5
 
     unsourced = [
@@ -865,10 +864,10 @@ def test_every_article_has_an_approved_revision(articles, within_budget):
     They are stuck: `/api/nodes/publish` refuses to publish a node with no
     `revision_id`, which is the right rule and leaves no way out from the UI.
     """
-    # 24 in the export of 2026-08-20, unchanged since 2026-08-11 - the ingest
-    # does not add to this one. `backfill-article-dates.ts --publish` writes
-    # them an approved revision and puts them live.
-    UNAPPROVED = 24
+    # None on the export of 2026-10-25T03:00Z. There were 24 on 2026-08-20,
+    # until `backfill-article-dates.ts --publish` wrote them an approved
+    # revision on 2026-08-22, and the ingest does not add to this one.
+    UNAPPROVED = 0
 
     stuck = [document["id"] for document in articles if not document.get("revision_id")]
 
@@ -937,15 +936,12 @@ def test_array_fields_are_stored_as_arrays(nodes, within_budget):
     invisible to every party filter, and to the "no party" filter too, which
     looks for `parties == []` and does not match `{}` either.
     """
-    # The writer is fixed (server/utils/revisions.ts rewrites only an array
-    # nested directly inside another array, which is the case Firestore really
-    # cannot store), so this count no longer grows - it was 105 in the export of
-    # 2026-06-28 and 461 in that of 2026-07-28, while the number of people
-    # holding a real array stood still at 5617 in both.
-    #
-    # It goes to zero once scripts/migrate/unwrap-array-fields.ts is run against
-    # production; the budget is exactly the 3041 nodes its dry run reports.
-    MAP_VALUED = 3041
+    # None on the export of 2026-10-25T03:00Z. The writer is fixed
+    # (server/utils/revisions.ts rewrites only an array nested directly inside
+    # another array, which is the case Firestore really cannot store), and
+    # unwrap-array-fields.ts unwrapped the 3041 nodes stored that way before it
+    # was.
+    MAP_VALUED = 0
 
     fields = ("parties", "activity", "categories")
     not_arrays = [
@@ -960,7 +956,7 @@ def test_array_fields_are_stored_as_arrays(nodes, within_budget):
     assert within_budget(len(documents), MAP_VALUED), (
         f"{len(documents)} nodes store an array field as a map ({dict(by_field)}), "
         f"and are missing from any array-contains filter on it - up from the "
-        f"{MAP_VALUED} the migration knows about. "
+        f"{MAP_VALUED} known ones. "
         f"Sample: {sample(not_arrays)}"
     )
 
@@ -1045,13 +1041,26 @@ def test_every_company_is_published(nodes, within_budget):
     is the reason `PKP Cargotabor` could be found in the search box and not on
     the page the hit led to.
 
+    The exception is an institution page somebody creates by hand, which is a
+    claim like a person's: it waits as a draft until a reviewer approves it,
+    and those drafts are the known ones below.
+
     `page_is_public` rather than the raw flag, so a company retired through an
     approved removal is not reported as a hole - `deleted` is how a company
     stops having a page on purpose.
     """
-    # 136 of 4024 companies on the export of 2026-08-26T02:00Z, which is what
-    # scripts/migrate/publish-places.ts reports and publishes. Zero afterwards.
-    UNPUBLISHED_COMPANIES = 136
+    # Five on the export of 2026-10-25T03:00Z, the same five as on 2026-10-24,
+    # every one an institution page somebody created by hand and nobody has
+    # approved yet: „INSTYTUT PAMIĘCI NARODOWEJ KOMISJA ŚCIGANIA ZBRODNI
+    # PRZECIWKO NARODOWI POLSKIEMU” (1CgFdGU15k37CbAUcSHZ, 10-20), „Sejmik
+    # Województwa Kujawsko-Pomorskiego” (AuIOBqiuFjxUYsvYHGkh, 10-21), „Urząd
+    # Miasta Łodzi” (rf82ncQA6uZYrHqa0PtA, 10-21), „Miejski Ośrodek Sportu i
+    # Rekreacji w Częstochowie” (ciRcClIvnNHAxJtYO0Yw, 09-08) and „Centrum
+    # Rozwoju Komunalnego S.A.” (G5YGSqENIsJYuKMSaaQx, 10-06, the draft twin
+    # of a published company in test_companies_are_not_duplicated_by_krs).
+    # There were 136 on 2026-08-26, all of which publish-places.ts published on
+    # 08-27.
+    UNPUBLISHED_COMPANIES = 5
 
     unpublished = [
         document["id"]
@@ -1062,7 +1071,7 @@ def test_every_company_is_published(nodes, within_budget):
     assert within_budget(len(unpublished), UNPUBLISHED_COMPANIES), (
         f"{len(unpublished)} companies are not published, so every link to one "
         f"of them is a dead end for a logged out reader - up from the "
-        f"{UNPUBLISHED_COMPANIES} the migration knows about: {sample(unpublished)}"
+        f"{UNPUBLISHED_COMPANIES} known drafts: {sample(unpublished)}"
     )
 
 
@@ -1383,19 +1392,17 @@ def test_one_spell_of_employment_is_stored_once(edges, within_budget):
     about whether it had ended. `extract_people` now keeps only the last crawl
     of each query, and the ingest refuses the duplicate even if one is offered.
     """
-    # Written before either guard existed. Goes to zero once
-    # scripts/migrate/dedupe-edges.ts has been run against production.
-    #
-    # 205 on the 2026-07-28 export, 211 on the 2026-08-02 one: neither guard is
-    # deployed yet, so the nightly run still adds about one a day and this
-    # number is a measurement rather than a ceiling.
-    #
-    # 207 on 2026-10-09, counting only the copies still live - the ones removed
-    # by hand as „duplikat” are the repair. One of the 207 is new since 10-07:
-    # the people import wrote Robert Marian Soszyński's 2015 Zarząd spell at
-    # Polskie LNG twice in one request, once ending on the day it began, because
-    # the payload carried both rows and the ingest stores a row per row.
-    DUPLICATED_SPELLS = 207
+    # 205 on the export of 2026-10-25T03:00Z, as on 2026-10-24, counting only
+    # the copies still live - the ones removed by hand as „duplikat” are the
+    # repair. It was 205 on 2026-07-28 and 211 on 2026-08-02, while neither
+    # guard was deployed and the nightly run added about one a day, then 207
+    # on 2026-10-09 and 206 on 10-15. The newest is from 10-07: the people
+    # import wrote Robert Marian Soszyński's 2015 Zarząd spell at Polskie LNG
+    # twice in one request, once ending on the day it began, because the
+    # payload carried both rows and the ingest stores a row per row. Nothing
+    # has joined them since, so this only falls, and goes to zero once
+    # dedupe-edges.ts has been run against production.
+    DUPLICATED_SPELLS = 205
 
     groups: dict[tuple, list[str]] = collections.defaultdict(list)
     for edge in edges:
@@ -1697,11 +1704,12 @@ def test_revision_node_id_is_a_document_id(revisions, within_budget):
     a reference never comes back: the document's history looks empty and the
     change cannot be approved through the UI.
     """
-    # 1114 revisions from the December 2025 backfill in
-    # src/scripts/create_revisions.py, which writes `source_ref.document(doc.id)`
-    # where the frontend writes `targetRef.id`. The same batch is why
-    # test_revisions.py's source/target checks fail - see its docstring.
-    MIGRATION_REVISIONS = 1114
+    # None on the export of 2026-10-25T03:00Z. There were 1114, all from the
+    # December 2025 backfill in src/scripts/create_revisions.py, which wrote
+    # `source_ref.document(doc.id)` where the frontend writes `targetRef.id`,
+    # until scripts/migrate/archive/repair-migrated-revisions.ts rewrote them.
+    # The script is fixed too, so nothing new joins them.
+    MIGRATION_REVISIONS = 0
 
     references = [
         revision["id"]
@@ -1712,7 +1720,7 @@ def test_revision_node_id_is_a_document_id(revisions, within_budget):
     assert within_budget(len(references), MIGRATION_REVISIONS), (
         f"{len(references)} revisions store node_id as a document reference "
         f"rather than an id, so /api/revisions/byNode cannot find them - up "
-        f"from the {MIGRATION_REVISIONS} known migration rows. "
+        f"from the {MIGRATION_REVISIONS} known ones. "
         f"Sample IDs: {sample(references)}"
     )
 
