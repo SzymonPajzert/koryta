@@ -1,6 +1,6 @@
 import os
 import warnings
-from collections.abc import Callable
+from typing import Protocol
 
 import pytest
 
@@ -25,8 +25,12 @@ class BudgetWarning(UserWarning):
     """A budgeted invariant counted more than it is known to, inside the buffer."""
 
 
+class Budget(Protocol):
+    def __call__(self, count: int, known: int, *, allowance: bool = False) -> bool: ...
+
+
 @pytest.fixture
-def within_budget(request: pytest.FixtureRequest) -> Callable[[int, int], bool]:
+def within_budget(request: pytest.FixtureRequest) -> Budget:
     """Whether a count keeps to its test's budget: the `known` count the test
     carries, plus `BUDGET_BUFFER`.
 
@@ -36,13 +40,26 @@ def within_budget(request: pytest.FixtureRequest) -> Callable[[int, int], bool]:
     reads them (`budget_warnings` in jobs/nightly). Straight onto the item
     rather than through `record_property`, which warns on every test that it
     does not suit the default junit family.
+
+    A count below the known one passes quietly, and goes on the test as
+    `budget_slack_count` and `budget_slack_known`: a budget that is never
+    lowered lets that many new cases in before the test notices, so the night
+    lists them (`budget_slack` in jobs/nightly) as budgets to lower. Not
+    with `allowance=True`: that known count is a tolerance rather than a
+    measurement - the few nodes a sweep that runs once a minute can be behind
+    - and a count of zero under it is the usual night, not a budget to lower.
     """
     item = request.node
     assert isinstance(item, pytest.Item)
 
-    def check(count: int, known: int) -> bool:
+    def check(count: int, known: int, *, allowance: bool = False) -> bool:
         limit = known + BUDGET_BUFFER
-        if known < count <= limit:
+        if count < known and not allowance:
+            item.user_properties += [
+                ("budget_slack_count", count),
+                ("budget_slack_known", known),
+            ]
+        elif known < count <= limit:
             item.user_properties += [
                 ("budget_count", count),
                 ("budget_known", known),

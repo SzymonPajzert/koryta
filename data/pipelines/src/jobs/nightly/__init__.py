@@ -77,7 +77,11 @@ night; only the steps that depend on it are held:
   values) fail every night and do not hold it. Nor does an invariant that
   grows by a page or two: it passes up to ten past its budget and warns
   (`within_budget` in src/tests/pipelines/conftest.py), and the night reports
-  the warnings - `warnings` in its summary and on its run - and sends.
+  the warnings - `warnings` in its summary and on its run - and sends. An
+  invariant that counts fewer than its budget passes too, and the night lists
+  it as a budget to lower - `slack` in its summary and one line in its log,
+  not on its run: it holds nothing and is not a warning. A lag allowance
+  (`allowance=True`) is never listed.
 - `scores` needs the same, and not the people: their outcome only decides
   which new pages there are to rate as well.
 - `companies` writes to the site too, so it runs only when the people may go
@@ -390,6 +394,22 @@ class OverBudget:
 
 
 @dataclass
+class Slack:
+    """A test that counted fewer than its budget: the budget can come down to
+    the count, and until it does it lets that many new cases in unnoticed."""
+
+    test: str
+    count: int
+    known: int
+
+    def said(self) -> str:
+        """For the night's log, the test named by its module as
+        `OverBudget.said` names it."""
+        module, _, name = self.test.partition("::")
+        return f"{module.rsplit('.', 1)[-1]}::{name} {self.count} of {self.known}"
+
+
+@dataclass
 class NightSummary:
     """What one night did, kept in the shared cache."""
 
@@ -409,6 +429,9 @@ class NightSummary:
     #: Tests past their budget and inside its buffer, by check: they pass,
     #: and hold nothing, until the buffer runs out.
     warnings: dict[str, list[OverBudget]] = field(default_factory=dict)
+    #: Tests under their budget, by check: budgets to lower to the count. They
+    #: hold nothing and are not warnings.
+    slack: dict[str, list[Slack]] = field(default_factory=dict)
     #: Held pipelines rebuilt before the reprocess, and why each was due.
     rebuilt: dict[str, str] = field(default_factory=dict)
     #: Held pipelines due a rebuild that did not get one, and why; the next
@@ -664,28 +687,54 @@ def failed_tests(report: str) -> list[str] | None:
     return sorted(failed)
 
 
-def budget_warnings(report: str) -> list[OverBudget]:
-    """The tests a junit report says passed past their budget, from the
-    properties `within_budget` records on each; none without a report."""
+def case_properties(report: str) -> list[tuple[str, dict[str, str]]]:
+    """Each test in a junit report with the properties recorded on it; none
+    without a report."""
     try:
         root = ET.parse(report).getroot()
     except (OSError, ET.ParseError):
         return []
-    warned = []
-    for case in root.iter("testcase"):
-        said = {
-            prop.get("name"): prop.get("value", "") for prop in case.iter("property")
-        }
-        if {"budget_count", "budget_known", "budget_limit"} <= said.keys():
-            warned.append(
-                OverBudget(
-                    test=f"{case.get('classname')}::{case.get('name')}",
-                    count=int(said["budget_count"]),
-                    known=int(said["budget_known"]),
-                    limit=int(said["budget_limit"]),
-                )
-            )
+    return [
+        (
+            f"{case.get('classname')}::{case.get('name')}",
+            {
+                prop.get("name", ""): prop.get("value", "")
+                for prop in case.iter("property")
+            },
+        )
+        for case in root.iter("testcase")
+    ]
+
+
+def budget_warnings(report: str) -> list[OverBudget]:
+    """The tests a junit report says passed past their budget, from the
+    properties `within_budget` records on each; none without a report."""
+    warned = [
+        OverBudget(
+            test=test,
+            count=int(said["budget_count"]),
+            known=int(said["budget_known"]),
+            limit=int(said["budget_limit"]),
+        )
+        for test, said in case_properties(report)
+        if {"budget_count", "budget_known", "budget_limit"} <= said.keys()
+    ]
     return sorted(warned, key=lambda over: over.test)
+
+
+def budget_slack(report: str) -> list[Slack]:
+    """The tests a junit report says counted fewer than their budget, from the
+    properties `within_budget` records on each; none without a report."""
+    slack = [
+        Slack(
+            test=test,
+            count=int(said["budget_slack_count"]),
+            known=int(said["budget_slack_known"]),
+        )
+        for test, said in case_properties(report)
+        if {"budget_slack_count", "budget_slack_known"} <= said.keys()
+    ]
+    return sorted(slack, key=lambda under: under.test)
 
 
 def stream(
@@ -1322,6 +1371,9 @@ class Night:
         warned = budget_warnings(report)
         if warned:
             self.summary.warnings[step.name] = warned
+        slack = budget_slack(report)
+        if slack:
+            self.summary.slack[step.name] = slack
         said = []
         if failed:
             said.append(f"{len(failed)} nie przechodzi")
@@ -1579,6 +1631,12 @@ class Night:
             over.said() for overs in summary.warnings.values() for over in overs
         ]
         noted = problems + [f"warning - {warning}" for warning in warnings]
+        # The budgets the tests came in under, apart from both: a line for
+        # whoever lowers them, and nothing on the run.
+        slack = [under.said() for unders in summary.slack.values() for under in unders]
+        if slack:
+            budgets = "budget" if len(slack) == 1 else "budgets"
+            self.log(f"{len(slack)} {budgets} to lower: " + "; ".join(slack))
         self.log(f"night over: {state}; " + ("; ".join(noted) or "all well"))
         summary.log = self.write_log()
         path = self.write_summary()

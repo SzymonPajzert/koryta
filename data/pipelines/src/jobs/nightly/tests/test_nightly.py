@@ -14,12 +14,13 @@ import pytest
 import jobs.nightly as night
 from stores.storage import SHARED_BUCKET, warsaw_tz
 
-#: `test_budget_warnings_reads_what_the_invariants_budgets_record` runs the
+#: `test_budget_warnings_reads_what_the_invariants_budgets_record` and
+#: `test_budget_slack_reads_what_the_invariants_budgets_record` run the
 #: invariants' own budgets through pytest.
 pytest_plugins = ["pytester"]
 
 #: Where every budgeted invariant gets `within_budget`, which records what
-#: `budget_warnings` reads.
+#: `budget_warnings` and `budget_slack` read.
 INVARIANTS_CONFTEST = Path(__file__).parents[3] / "tests/pipelines/conftest.py"
 
 # The 04:00 Warsaw export, in UTC as its folder is named; the night starts at
@@ -83,6 +84,12 @@ class World:
             "outputs": [],
             "invariants": [],
         }
+        #: Tests under their budget, per check.
+        self.slack: dict[str, list[night.Slack]] = {
+            "tests": [],
+            "outputs": [],
+            "invariants": [],
+        }
         self.last: dict[str, list[str]] | None = {}
         self.export: str | None = FRESH
         self.commands: list[tuple[str, list[str], dict]] = []
@@ -103,6 +110,13 @@ class World:
         #: Minutes each rebuild takes on the night's clock, when it has one.
         self.rebuild_minutes = 0.0
         self.clock: datetime | None = None
+
+    def of_check(self, found: dict, report: str) -> list:
+        """What a check's junit report would say, from `found` by check."""
+        for check in night.CHECKS:
+            if report.endswith(f"-{check}.xml"):
+                return found[check]
+        raise AssertionError(report)
 
     def tree(self, path: str) -> str:
         return self.trees.get(path, "tree-of-" + path)
@@ -206,12 +220,6 @@ def world(monkeypatch, tmp_path) -> World:
                 return w.failures[check]
         raise AssertionError(report)
 
-    def budget_warnings(report):
-        for check in night.CHECKS:
-            if report.endswith(f"-{check}.xml"):
-                return w.warnings[check]
-        raise AssertionError(report)
-
     class Bucket:
         def create_object(self, bucket, name, data, content_type):
             assert name not in w.objects, f"{name} written twice"
@@ -224,7 +232,12 @@ def world(monkeypatch, tmp_path) -> World:
 
     monkeypatch.setattr(night, "stream", stream)
     monkeypatch.setattr(night, "failed_tests", failed_tests)
-    monkeypatch.setattr(night, "budget_warnings", budget_warnings)
+    monkeypatch.setattr(
+        night, "budget_warnings", lambda report: w.of_check(w.warnings, report)
+    )
+    monkeypatch.setattr(
+        night, "budget_slack", lambda report: w.of_check(w.slack, report)
+    )
     monkeypatch.setattr(night, "newest_export", lambda client: w.export)
     monkeypatch.setattr(night, "last_failures", lambda client, before: w.last)
     monkeypatch.setattr(night, "Client", Bucket)
@@ -682,6 +695,7 @@ def test_the_summary_and_the_log_land_in_the_shared_cache(world):
     assert (summary["export"], summary["export_fresh"]) == (FRESH, True)
     assert summary["failures"] == {"tests": [], "outputs": [], "invariants": []}
     assert summary["warnings"] == {}
+    assert summary["slack"] == {}
     assert summary["log"].startswith(f"gs://{SHARED_BUCKET}/{night.LOGS_PREFIX}")
     [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
     assert b"[koryta_people_import]" not in world.objects[log]  # faked: no output
@@ -1074,6 +1088,49 @@ def test_a_budget_eaten_into_warns_and_holds_nothing(world):
     ) in world.objects[log].decode()
 
 
+def test_a_budget_to_lower_is_listed_and_holds_nothing(world):
+    fell = "src.tests.pipelines.test_invariants::test_fell"
+    world.slack["invariants"] = [night.Slack(fell, 0, 5)]
+
+    assert night.main([]) == 0
+
+    assert world.steps()["invariants"] == ("succeeded", "")
+    assert world.steps()["people"] == ("succeeded", "")
+    assert world.steps()["scores"] == ("succeeded", "")
+    assert world.summary()["slack"] == {
+        "invariants": [{"test": fell, "count": 0, "known": 5}]
+    }
+    assert world.summary()["warnings"] == {}
+    # Not a warning, and nothing wrong: the run says nothing of it.
+    ending = world.runs[-1].ending()
+    assert (ending["state"], ending["stop_reason"]) == ("succeeded", None)
+    assert (ending["errors"], ending["warnings"]) == ([], [])
+    [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
+    said = world.objects[log].decode()
+    assert "1 budget to lower: test_invariants::test_fell 0 of 5" in said
+    assert "night over: succeeded; all well" in said
+
+
+def test_the_budgets_to_lower_are_one_line_across_the_checks(world):
+    world.slack["tests"] = [night.Slack("src.a::test_x", 1, 3)]
+    world.slack["invariants"] = [
+        night.Slack("src.b::test_y[one]", 0, 24),
+        night.Slack("src.b::test_z", 96, 394),
+    ]
+
+    assert night.main([]) == 0
+
+    [log] = [n for n in world.objects if n.startswith(night.LOGS_PREFIX)]
+    lines = [
+        line for line in world.objects[log].decode().splitlines() if "to lower:" in line
+    ]
+    assert len(lines) == 1
+    assert lines[0].endswith(
+        "3 budgets to lower: a::test_x 1 of 3; b::test_y[one] 0 of 24; "
+        "b::test_z 96 of 394"
+    )
+
+
 def test_a_check_says_what_fails_and_what_warns(world):
     world.last = {"tests": [], "outputs": [], "invariants": ["a::known"]}
     world.failures["invariants"] = ["a::known"]
@@ -1346,6 +1403,55 @@ def test_budget_warnings_reads_what_the_invariants_budgets_record(pytester):
         night.OverBudget("test_budgets::test_grew", 25, 24, 34),
     ]
     assert night.budget_warnings(str(pytester.path / "missing.xml")) == []
+
+
+def test_budget_slack_reads_what_the_invariants_budgets_record(pytester):
+    pytester.makeconftest(INVARIANTS_CONFTEST.read_text())
+    pytester.makepyfile(
+        test_budgets="""
+        def test_kept(within_budget):
+            assert within_budget(24, 24)
+
+        def test_fell(within_budget):
+            assert within_budget(20, 24)
+
+        def test_cleared(within_budget):
+            assert within_budget(0, 24)
+
+        def test_grew(within_budget):
+            assert within_budget(25, 24)
+
+        def test_none_known(within_budget):
+            assert within_budget(0, 0)
+
+        def test_lag_allowed(within_budget):
+            assert within_budget(0, 5, allowance=True)
+
+        def test_lag_past(within_budget):
+            assert within_budget(6, 5, allowance=True)
+        """
+    )
+    report = pytester.path / "report.xml"
+
+    # In a process of its own: the conftest imports duckdb, which cannot be
+    # imported a second time into this one once pytester has unloaded it
+    # after the run in the test above.
+    result = pytester.runpytest_subprocess(
+        f"--junitxml={report}", "-p", "no:cacheprovider"
+    )
+
+    result.assert_outcomes(passed=7)
+    # An allowance under its count is not a budget to lower.
+    assert night.budget_slack(str(report)) == [
+        night.Slack("test_budgets::test_cleared", 0, 24),
+        night.Slack("test_budgets::test_fell", 20, 24),
+    ]
+    # Under the budget is not over it; an allowance grown past it is.
+    assert night.budget_warnings(str(report)) == [
+        night.OverBudget("test_budgets::test_grew", 25, 24, 34),
+        night.OverBudget("test_budgets::test_lag_past", 6, 5, 15),
+    ]
+    assert night.budget_slack(str(pytester.path / "missing.xml")) == []
 
 
 def test_the_newest_finished_export_is_found_past_a_running_one():
