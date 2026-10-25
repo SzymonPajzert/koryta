@@ -1,6 +1,6 @@
 ---
 name: design-feedback
-description: Show Szymon a round of UI screenshots on the design board, wait for the comments he pins to them, and work through them round after round. Use whenever a UI or design change has screenshots or variants for him to look at, before tests and baselines.
+description: Show Szymon a round of UI screenshots on the design board, wait for the comments he pins to them, and work through them round after round. Use only when he asks for a round on the board, or points you at notes he left on one; otherwise show screenshots in chat as before.
 ---
 
 # The design board
@@ -11,6 +11,11 @@ variant, answers your questions, then sends the round back or OKs it. You get
 his comments as a digest, each with a crop of the screenshot around its box.
 The board runs on predator's loopback only. He reaches it with
 `ssh -L 4848:localhost:4848 predator` and opens http://localhost:4848.
+
+**Only on request.** Szymon, 2026-10-25: "only on request for now". Put a
+round on the board when he asks for it, and read one when he points you at
+notes he left there (`read <round>`). Otherwise show screenshots in chat and
+wait for his OK there, as before.
 
 Commands run from `frontend/`, on the host, not under `devns`: inside a
 namespace the board's port is the namespace's own loopback.
