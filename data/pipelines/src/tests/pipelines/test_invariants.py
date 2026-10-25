@@ -1167,6 +1167,48 @@ def test_a_company_can_be_told_apart_from_the_others(nodes, within_budget):
     )
 
 
+def test_a_company_is_not_named_by_its_number(nodes, within_budget):
+    """A company page is called what the company is called.
+
+    `CompanyPayloads` falls back to the KRS number when the register row it
+    builds the payload from has no name (analysis/payloads/company.py), so a
+    company the scrape caught half-way gets a page titled "0000123456": in
+    every listing, in search, and on the page of everybody employed there.
+    Nothing else fails, which is why it lasted until somebody read the list.
+
+    A name that is only digits, that is the page's own `krsNumber`, or that
+    reads "KRS 0000123456" is counted. A removed page is not: it has no page.
+    """
+    # None on the 2026-10-25T03:00:33.098Z export, nor on the 10-24 one. The
+    # 10-09 to 10-15 ones had four (C6Bs5LQTAXtzJGByQZrM, GIc2UKHYmIr4GEXRUn9C,
+    # jmBJNu3lIkNppL7ZsVwj, uLGIS8xvGWzcJ4NjFudg), which the upload after the
+    # 10-15 export renamed; the fallback that named them is still there.
+    KNOWN_NUMBERED = 0
+
+    def named_by_a_number(document: dict) -> bool:
+        name = str(document.get("name") or "").strip()
+        if document.get("krsNumber") and name == document["krsNumber"]:
+            return True
+        if name[:3].lower() == "krs":
+            name = name[3:].lstrip(" :")
+        digits = "".join(name.split())
+        return digits.isascii() and digits.isdigit()
+
+    numbered = [
+        (document["id"], document.get("name"), document.get("krsNumber"))
+        for document in nodes
+        if document.get("type") == "place"
+        and not is_removed(document)
+        and named_by_a_number(document)
+    ]
+
+    assert within_budget(len(numbered), KNOWN_NUMBERED), (
+        f"{len(numbered)} company pages are named by a number rather than by the "
+        f"company's name, up from the {KNOWN_NUMBERED} known. As (page, name, "
+        f"krsNumber): {sample(numbered)}"
+    )
+
+
 def test_every_company_is_published(nodes, within_budget):
     """A company node is published, or nothing on the site can link to it.
 
