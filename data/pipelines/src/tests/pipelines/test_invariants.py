@@ -1205,14 +1205,20 @@ def wikipedia_article(link) -> tuple[str, str] | None:
     titles of one article still read as two.
 
     None for a link that names no article by its title: another site, an
-    `index.php` address by page or revision number, or a bare `/wiki/`.
+    `index.php` address by page or revision number, or a bare `/wiki/`. None
+    too for text that is no address at all: the form takes any string, and a
+    bracket before the first slash („[[Beata Szydło]]”) reads as a broken IPv6
+    host, which `urlsplit` refuses.
     """
     if not isinstance(link, str) or not link.strip():
         return None
     text = link.strip()
     if "//" not in text:
         text = "//" + text
-    parts = urllib.parse.urlsplit(text)
+    try:
+        parts = urllib.parse.urlsplit(text)
+    except ValueError:
+        return None
     wiki = parts.netloc.lower().replace(".m.wikipedia.", ".wikipedia.")
     if not wiki.endswith(".wikipedia.org"):
         return None
