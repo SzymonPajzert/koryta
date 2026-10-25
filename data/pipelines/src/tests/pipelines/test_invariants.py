@@ -2130,6 +2130,53 @@ def test_a_national_run_is_filed_under_its_district(edges, nodes, within_budget)
     )
 
 
+def test_a_candidacy_names_its_office(edges, entered_by_hand, within_budget):
+    """Every candidacy an ingest wrote says which office was contested.
+
+    Without an office the page lists a run with nothing to say what it was
+    for, the elections list has nothing to show for it, and the checks on
+    national runs can read it only by its year (`election_stood_in`), which in
+    2014, 2019 and 2024 says nothing. The payload has sent an office on every
+    row since the 2026-10-15 night - a named one where PKW's files give it,
+    „Samorząd” where they do not - and the nights' sends fill it in on the
+    stored candidacies they reach, so this count only falls. It also holds the
+    national home copies with no office that
+    `test_a_national_run_is_filed_under_its_district` leaves out.
+
+    So this asks the ingests, as `test_employment_says_what_the_person_did`
+    does: a person adding a candidacy through the site may not know the
+    office, and a blank they leave is not a regression to hold the night's
+    upload over. The revision side, counted since 2026-05-01, is
+    `test_required_field_present[election.position]` in test_revisions.py.
+    """
+    # 1,440 on the 2026-10-25T03:00:33.098Z export, 1,017 of them published,
+    # down from 1,620 on 10-09 and 1,478 on 10-24 as the nights' sends named
+    # them. Every one was first written by the uploads of March (986) and April
+    # 2026 (454); by year 2010 272, 2014 255, 2002 252, 2018 160, 2024 153,
+    # 2006 116 and fewer in the rest. Expected only to fall. 15 more live
+    # candidacies have no office and were typed in.
+    KNOWN_OFFICELESS = 1440
+
+    officeless = [
+        edge
+        for edge in edges
+        if edge.get("type") == "election"
+        and not is_removed(edge)
+        and edge["id"] not in entered_by_hand
+        and field(edge, "position") is None
+    ]
+    by_year = collections.Counter(
+        str(edge.get("start_date"))[:4] for edge in officeless
+    )
+
+    assert within_budget(len(officeless), KNOWN_OFFICELESS), (
+        f"{len(officeless)} candidacies an ingest wrote do not say which office "
+        f"was contested, up from the {KNOWN_OFFICELESS} known ones, by year "
+        f"{dict(sorted(by_year.items()))}: "
+        f"{sample(edge['id'] for edge in officeless)}"
+    )
+
+
 def test_one_spell_of_employment_is_stored_once(edges, within_budget):
     """A person may hold the same role at the same company twice - not at once.
 
