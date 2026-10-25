@@ -740,6 +740,147 @@ def test_revision_id_points_at_the_documents_own_revision(
     )
 
 
+#: Fields a document owns rather than states, so no revision of it carries them:
+#: `INTERNAL_FIELDS` in `frontend/server/utils/revisions.ts`, plus `stored_id`,
+#: which is where `read_collection` keeps a document's own `id` field. The drop
+#: check (`test_a_later_revision_never_drops_a_field`) keeps a narrower set.
+INTERNAL_FIELDS = {
+    "stats",
+    "revision_id",
+    "published",
+    "revisions",
+    "votes",
+    "id",
+    "stored_id",
+    "deleted",
+    "delete_reason",
+    "visibility",
+    "merged_into",
+    "needs_split",
+    "nameChunksLower",
+    "content_changed_at",
+}
+
+
+def same_stored_value(a, b) -> bool:
+    """Whether two stored values say the same thing.
+
+    A port of `sameStoredValue` in `frontend/server/utils/revisions.ts`, which
+    `holdsRevision` asks: a reference is the document it names, a timestamp
+    its instant, an array its items in order and a map its keys. A boolean is
+    not the number it equals in Python, as `===` keeps them apart there.
+    """
+    if is_reference(a) or is_reference(b):
+        return (
+            is_reference(a) and is_reference(b) and reference_id(a) == reference_id(b)
+        )
+    if isinstance(a, list) or isinstance(b, list):
+        return (
+            isinstance(a, list)
+            and isinstance(b, list)
+            and len(a) == len(b)
+            and all(same_stored_value(x, y) for x, y in zip(a, b))
+        )
+    if isinstance(a, dict) or isinstance(b, dict):
+        return (
+            isinstance(a, dict)
+            and isinstance(b, dict)
+            and a.keys() == b.keys()
+            and all(same_stored_value(a[key], b[key]) for key in a)
+        )
+    if isinstance(a, bool) or isinstance(b, bool):
+        return type(a) is type(b) and a == b
+    return a == b
+
+
+def test_publishing_an_edge_approves_only_what_the_edge_says(
+    edges, revisions, within_budget
+):
+    """An edge revision marked approved is one the edge holds, or held.
+
+    Approving a revision is `applyRevision` writing it over the document, so
+    "approved" is the history's word for "this is what the page said". Until
+    prod took a73fb7c2 on 2026-10-10, publishing a draft edge broke that:
+    `publishEdgeInBatch` pointed the edge at its newest revision and stamped it
+    approved, writing only `published` and `revision_id`, and the newest was
+    often a `proposal_` one, which the edge never held. So a committee or a
+    correction somebody proposed reads in the history as accepted and is on no
+    page, and nothing will offer it to a reviewer again: the queue lists what
+    is pending.
+
+    So every approved edge proposal must say what its edge says, bar the
+    fields the edge owns and its two ends, which a merge moves without a
+    revision. One the edge has moved on from since is not counted: a revision
+    applied after its approval explains the difference.
+
+    The drop check reads these as never applied (`approved_by_publishing`),
+    and keeps doing so until
+    scripts/migrate/repair-unapplied-proposal-approvals.ts has run on prod.
+    """
+    # 21 on the 2026-10-25T03:00:33.098Z export, 21 on the 10-24 one: the 23
+    # edge proposals publishing marked approved between 2026-08-29 and 10-09,
+    # bar Gm2XbS1oTAmdH7GP1yEi, removed as a duplicate on 08-30, and
+    # WQ6rgpfnBmCxk3GdUEpw, which the night of 10-10 wrote to. Every one lacks
+    # its proposal's `committee`; 20 were filed by an upload, and one,
+    # hXj75PkY7O5jf4RI8qSP, is a contributor's correction of one of Michał
+    # Rado's candidacies. Nothing can add to them since the fix, so this only
+    # goes down, and to zero once
+    # scripts/migrate/repair-unapplied-proposal-approvals.ts has put them back
+    # in the queue.
+    UNAPPLIED_APPROVALS = 21
+
+    edges_by_id = {edge["id"]: edge for edge in edges}
+    by_document: dict[str, list[dict]] = collections.defaultdict(list)
+    for revision in revisions:
+        by_document[reference_id(revision.get("node_id")) or ""].append(revision)
+
+    def stated(document: dict) -> dict:
+        return {
+            field: value
+            for field, value in document.items()
+            if field not in INTERNAL_FIELDS and field not in ("source", "target")
+        }
+
+    unapplied = []
+    for revision in revisions:
+        if (
+            revision.get("collection") != "edges"
+            or revision.get("status") != "approved"
+            or not str(revision.get("id", "")).startswith("proposal_")
+        ):
+            continue
+        edge = edges_by_id.get(reference_id(revision.get("node_id")) or "")
+        if edge is None:
+            continue  # test_every_revision_belongs_to_a_document covers it
+        proposed, stored = stated(revision.get("data") or {}), stated(edge)
+        if same_stored_value(proposed, stored):
+            continue
+        approved_at = timestamp_key(revision.get("review_time"))
+        # applied and applied_at are the revision checks', defined with them.
+        if any(
+            other["id"] != revision["id"]
+            and applied(other)
+            and applied_at(other) > approved_at
+            for other in by_document[edge["id"]]
+        ):
+            continue
+        differing = sorted(
+            field
+            for field in set(proposed) | set(stored)
+            if field not in proposed
+            or field not in stored
+            or not same_stored_value(proposed[field], stored[field])
+        )
+        unapplied.append((edge["id"], revision["id"], approved_at[:10], differing))
+
+    assert within_budget(len(unapplied), UNAPPLIED_APPROVALS), (
+        f"{len(unapplied)} edge proposals are marked approved and are not what "
+        f"their edge says, with nothing applied to the edge since, up from the "
+        f"{UNAPPLIED_APPROVALS} publishing approved before a73fb7c2. As (edge, "
+        f"revision, approved on, fields that differ): {sample(unapplied, 5)}"
+    )
+
+
 def test_node_types_are_known(nodes, within_budget):
     """Every node is one of the four types the frontend can render.
 
@@ -1907,9 +2048,12 @@ def test_a_later_revision_never_drops_a_field(revisions, within_budget):
     # without writing it to the edge.
     KNOWN_DROPS = 2
 
-    # Bookkeeping the node owns rather than the revision, listed in
-    # server/utils/revisions.ts as INTERNAL_FIELDS. They are regenerated or
-    # maintained elsewhere, so a revision is right not to carry them.
+    # Bookkeeping the node owns rather than the revision, from
+    # server/utils/revisions.ts's INTERNAL_FIELDS. They are regenerated or
+    # maintained elsewhere, so a revision is right not to carry them. Narrower
+    # than the module's INTERNAL_FIELDS on purpose, as KNOWN_DROPS was counted
+    # with it: losing `published`, `merged_into`, `needs_split` or
+    # `content_changed_at` still counts here.
     internal = {
         "stats",
         "revision_id",
