@@ -101,6 +101,42 @@ describe("planSchema's moves", () => {
   });
 });
 
+describe("planSchema's birth dates", () => {
+  const page = { page: "p", expect_link: null };
+
+  it("takes a date with the one the review saw", () => {
+    expect(() =>
+      planSchema.parse({
+        pages: [
+          {
+            ...page,
+            expect_birth_date: "1972-02-07",
+            set_birth_date: "1965-05-19",
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it("refuses a date without the one the review saw", () => {
+    // Without it a second run could not tell a date typed in by hand since
+    // from the namesake's it was written to replace.
+    expect(() =>
+      planSchema.parse({ pages: [{ ...page, set_birth_date: "1965-05-19" }] }),
+    ).toThrow();
+  });
+
+  it("refuses a date not written the way pages store one", () => {
+    expect(() =>
+      planSchema.parse({
+        pages: [
+          { ...page, expect_birth_date: null, set_birth_date: "19.05.1965" },
+        ],
+      }),
+    ).toThrow();
+  });
+});
+
 describe("newPerson", () => {
   it("is the person a split makes: name, link and date, no parties", () => {
     // The night fills in the rest from the entry's own row once the export
@@ -192,6 +228,78 @@ describe("checkPage", () => {
       checkPage({ ...person(link("88058")), deleted: true }, step()).ok,
     ).toBe(false);
     expect(checkPage(undefined, step()).ok).toBe(false);
+  });
+});
+
+describe("checkPage's birth dates", () => {
+  // Kleszcz: the night of 10-25 gave the page 88058's date while it still
+  // linked 88058; the page is 416593's, born 1969-07-01.
+  const dated = (birthDate: string, rejestrIo = link("88058")) => ({
+    ...person(rejestrIo),
+    birthDate,
+  });
+  const fix = step({
+    set_link: link("416593"),
+    expect_birth_date: "1968-10-04",
+    set_birth_date: "1969-07-01",
+  });
+
+  it("writes the entry's date with its link", () => {
+    expect(checkPage(dated("1968-10-04"), fix)).toEqual({
+      ok: true,
+      linkToWrite: link("416593"),
+      birthDateToWrite: "1969-07-01",
+    });
+  });
+
+  it("writes a date on a page whose link stays", () => {
+    // Pawlicki: the link is right, the date is the namesake's.
+    expect(
+      checkPage(
+        dated("1966-07-14"),
+        step({ expect_birth_date: "1966-07-14", set_birth_date: "1965-07-03" }),
+      ),
+    ).toEqual({
+      ok: true,
+      linkToWrite: undefined,
+      birthDateToWrite: "1965-07-03",
+    });
+  });
+
+  it("dates a page the review found undated", () => {
+    expect(
+      checkPage(
+        person(link("88058")),
+        step({ expect_birth_date: null, set_birth_date: "1969-07-01" }),
+      ),
+    ).toEqual({
+      ok: true,
+      linkToWrite: undefined,
+      birthDateToWrite: "1969-07-01",
+    });
+  });
+
+  it("does not write a date the page already stores", () => {
+    // A second run, or the date typed in by hand in between.
+    expect(checkPage(dated("1969-07-01", link("416593")), fix)).toEqual({
+      ok: true,
+      linkToWrite: undefined,
+      birthDateToWrite: undefined,
+    });
+  });
+
+  it("refuses a page whose date changed since the review", () => {
+    // Somebody typed another date since: theirs to reconcile, not this list's.
+    const verdict = checkPage(dated("1970-01-01"), fix);
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("leaves the date alone where the plan names none", () => {
+    expect(checkPage(dated("1968-10-04"), step())).toEqual({
+      ok: true,
+      linkToWrite: undefined,
+      birthDateToWrite: undefined,
+    });
   });
 });
 
