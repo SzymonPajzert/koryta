@@ -1058,13 +1058,19 @@ function repaintTable() {
           "div",
           { class: "hint" },
           h("div", null, "Drag a box, or click an element", censusHint(plates)),
-          h(
-            "button",
-            {
-              class: "btn small quiet",
-              onclick: () => openDraft(plates[0].image, null, null, null),
-            },
-            "+ Note on the whole screenshot",
+          // Side by side, each variant gets its own: one button for all of
+          // them put every such note on whichever plate came first.
+          plates.map((p) =>
+            h(
+              "button",
+              {
+                class: "btn small quiet",
+                onclick: () => openDraft(p.image, null, null, null),
+              },
+              plates.length > 1
+                ? `+ Note on all of ${p.image.variant}`
+                : "+ Note on the whole screenshot",
+            ),
           ),
         ),
   );
@@ -1410,6 +1416,9 @@ function kindPicker(current, onPick, name) {
   );
 }
 
+const draftVariant = (d) =>
+  round().images.find((i) => i.id === d.image)?.variant ?? null;
+
 function composer() {
   const d = S.draft;
   const ta = h("textarea", {
@@ -1418,7 +1427,7 @@ function composer() {
         ? "A note on the whole round"
         : d.region
           ? "What is wrong here?"
-          : "A note on the whole screenshot",
+          : `A note on the whole screenshot${draftVariant(d) ? ` of ${draftVariant(d)}` : ""}`,
     value: d.text,
     oninput: (e) => {
       d.text = e.target.value;
@@ -1957,7 +1966,12 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "p" && imgs.length > 1 && !S.side) {
     pick(imgs[S.active]);
   } else if (e.key === "n") {
-    openDraft(visibleImages(r.key)[0], null, null, null);
+    const shown = visibleImages(r.key);
+    if (shown.length === 1) openDraft(shown[0], null, null, null);
+    else
+      toast(
+        "Side by side: use + Note on all of … in the margin, or show one variant (1-9)",
+      );
   } else return;
   e.preventDefault();
 });
