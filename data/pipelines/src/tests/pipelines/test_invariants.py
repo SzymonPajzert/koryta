@@ -36,7 +36,13 @@ import zoneinfo
 
 import pytest
 
-from analysis.payloads.site import ELECTION_YEARS, election_kind, field, register_entry
+from analysis.payloads.site import (
+    ELECTION_YEARS,
+    edge_relation,
+    election_kind,
+    field,
+    register_entry,
+)
 from scrapers.koryta.snapshot import is_reference, reference_id
 from scrapers.wiki.shareholders import normalize_title
 from util.polish import format_person_name, names_agree
@@ -1888,6 +1894,92 @@ def test_occurrence_edges_may_repeat(edges, within_budget):
         f"can only be stood for once, up from the {KNOWN_COPIES} known copies, "
         f"so the repeats are not two real candidacies after all: "
         f"{sample(list(duplicated.items()), 5)}"
+    )
+
+
+def test_a_single_seat_run_is_stored_once(edges, nodes, within_budget):
+    """A run for the Sejm, the Senat or the European Parliament is one document.
+
+    Nobody stands twice in one national election, so two candidacies of one
+    person in one of them are two people under one name or one run stored
+    twice. They are a copy when neither contradicts the other - `edge_relation`
+    finds no field they disagree about, read both ways, which also keeps a Sejm
+    run apart from a Senat one - and their places agree: the same region, or
+    one inside the other, which is where a run filed under the candidate's home
+    powiat sits beside the one filed under the district's województwo. Any two
+    places agree for the European Parliament, whose districts join several
+    województwa, so a copy of its run need not lie inside the other. A copy
+    with no office counts in a year that held only one kind of election
+    (`election_stood_in`), as the ingest's `isSameRun` reads it. A run is the
+    person, the year and the election, so a copy dated on another day of the
+    year still meets its twin. Each run counts once, however many copies it
+    has.
+
+    The copies came from two writers. Uploads before 2026-07-30 could file a
+    national run under the residence powiat, and european ones until the fix
+    of 2026-10-12, and the ingest looked for a run only under the district, so
+    every later send stored a twin beside it: 170 runs on the 2026-10-23
+    export, 168 of which the national-runs-stored-twice migration cleared that
+    evening; the other two are page-merge copies (below). Since then the
+    ingest moves the home copy to the district (`misfiledRunOf`), so a twin
+    here means that move stopped matching. And a page merge keeps the
+    identical candidacies of the two pages it folds, for a reviewer to remove.
+
+    Two namesakes' runs in one district contradict each other, so they are not
+    counted here: the upload sends them as drafts on purpose, for a reviewer to
+    reject, and `test_a_person_stands_once_in_a_national_election` counts them
+    once both are published.
+    """
+    # 2 on the 2026-10-25T03:00:33.098Z export and on the 10-24 one, both on
+    # unpublished pages. Tomasz Pawlak AaAjgAyGQH4Ru1nZsJU7, Sejm 2005: the copy
+    # edge_Xkt3x0BtxfzO5oHRl4iC_teryt30_election_6_bWisJ104 came with the page
+    # merge-duplicate-people folded into his in August. Witold Stępień
+    # p1HPFg4Y63DNYZOeJFtz, European Parliament 2019: fgXV1yaF2okWbz6jzT6A,
+    # the 06-01 upload's copy, came with the page merged into his on 10-12.
+    # Removing the two copies as „duplikat” takes this to zero.
+    KNOWN_STORED_TWICE = 2
+
+    teryt_of = {
+        node["id"]: node.get("teryt") or ""
+        for node in nodes
+        if node.get("type") == "region"
+    }
+    runs: dict[tuple, list[dict]] = collections.defaultdict(list)
+    for edge in edges:
+        if edge.get("type") != "election" or is_removed(edge):
+            continue
+        if not has_date(edge, "start_date"):
+            continue
+        kind = election_stood_in(edge)
+        if kind in ("parliament", "european"):
+            year = str(edge["start_date"])[:4]
+            runs[(edge["source"], year, kind)].append(edge)
+
+    def copies(kind: str, a: dict, b: dict) -> bool:
+        if "conflict" in (edge_relation(a, b), edge_relation(b, a)):
+            return False
+        if kind == "european":
+            return True
+        here, there = teryt_of.get(a["target"]), teryt_of.get(b["target"])
+        if not here or not there:
+            return False
+        return here.startswith(there) or there.startswith(here)
+
+    stored_twice = {}
+    for (person, year, kind), candidacies in runs.items():
+        pairs = [
+            (a["id"], b["id"])
+            for i, a in enumerate(candidacies)
+            for b in candidacies[i + 1 :]
+            if copies(kind, a, b)
+        ]
+        if pairs:
+            stored_twice[(person, year, kind)] = pairs
+
+    assert within_budget(len(stored_twice), KNOWN_STORED_TWICE), (
+        f"{len(stored_twice)} single-seat runs are stored more than once, up "
+        f"from the {KNOWN_STORED_TWICE} known ones, as ((person, year, "
+        f"election), [pairs of copies]): {sample(list(stored_twice.items()), 5)}"
     )
 
 
