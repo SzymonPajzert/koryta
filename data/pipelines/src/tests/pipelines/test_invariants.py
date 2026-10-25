@@ -36,7 +36,7 @@ import zoneinfo
 
 import pytest
 
-from analysis.payloads.site import register_entry
+from analysis.payloads.site import ELECTION_YEARS, election_kind, field, register_entry
 from scrapers.koryta.snapshot import is_reference, reference_id
 from scrapers.wiki.shareholders import normalize_title
 from util.polish import format_person_name, names_agree
@@ -161,6 +161,26 @@ def is_removed(document: dict) -> bool:
     „duplikat” reads as a new duplicate the night it happens.
     """
     return document.get("deleted") is True
+
+
+def election_stood_in(edge: dict) -> str | None:
+    """Which kind of election a candidacy was stood in: "parliament",
+    "european" or "local", or None where nothing stored says.
+
+    A named office says, by `election_kind`: the Sejm and the Senat are filled
+    in one parliamentary election, and every other office, „Samorząd”
+    included, in a local one. A candidacy with no office says only through its
+    year, and only in a year that held one kind of election - which is how
+    `isSameRun` in frontend/server/utils/edges.ts reads one. A 2005 candidacy
+    without an office is that year's Sejm or Senat run; a 2024 one could be the
+    local or the european one, and is None.
+    """
+    office = field(edge, "position")
+    if office is not None:
+        return election_kind(office)
+    year = str(edge.get("start_date"))[:4]
+    held = [kind for kind, years in ELECTION_YEARS.items() if year in years]
+    return held[0] if len(held) == 1 else None
 
 
 def timestamp_key(value) -> str:
@@ -1738,7 +1758,15 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
     the sejmik and for a local council in the same region is ordinary, and the
     two are recorded at different depths. Two kinds of election in one year are
     two contests - 2024 held both the local and the european ones - so the
-    office has to match too.
+    candidacies are grouped by the election they were stood in
+    (`election_stood_in`), not by the office. Keyed by the office, as this test
+    was until 2026-10-25, a council run in Bytom beside a „Samorząd” one in
+    powiat poznański never met, and every office the ingest named split one
+    election into more groups that could not clash. A candidacy with no office
+    in a year that held two kinds of election (2014, 2019, 2024) says neither,
+    so a person's such runs of one year form one group of their own: it may
+    join a european run with a local one, which is two contests rather than a
+    clash, and only PKW can tell which.
 
     Only reviewed candidacies count, the ones `pageIsPublic` shows a visitor.
     Since 2026-10-07 a person is sent every PKW record nothing contradicts, and
@@ -1747,15 +1775,32 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
     reject. Counted with them, this read 152 on the 2026-10-08 export, all but
     24 of them waiting in the queue.
 
-    The publish dialog warns a reviewer by the same rule before a click adds
+    The publish dialog warns a reviewer by the place rule before a click adds
     to this count: `placeClashes` in frontend/shared/twoPlaces.ts. A change to
-    one belongs in the other.
+    one belongs in the other, but that port still groups by the office: moving
+    it to the election is a follow-up, because it changes what the dialog
+    shows. Until then the dialog misses the clashes this test finds by the
+    election alone.
     """
-    # 24 on 18 published pages on the 2026-10-08 export, among them Mariusz
-    # Michał Wiśniewski, whose two June candidacies for 2014 (Poznań, powiat
-    # grójecki) were approved on 2026-10-07. In each, one of the two is somebody
-    # else's; the count goes down as reviewers unpublish them.
-    KNOWN_CONTRADICTIONS = 24
+    # 29 on the 2026-10-25T03:00:33.098Z export, 29 on the 10-24 one. 24 of
+    # them are the clashes the office key counted, on 18 published pages on the
+    # 2026-10-08 export, among them Mariusz Michał Wiśniewski, whose two June
+    # candidacies for 2014 (Poznań, powiat grójecki) were approved on
+    # 2026-10-07. The other five only the election key sees: Michał Bieda
+    # 5rbdMT3pAeKIaqQyp4XG 2018 (Rada miasta Bytom and „Samorząd” in powiat
+    # poznański), Adam Dziedzic t0cokSaabblva2ROLqKC 2014 (Wójt in powiat
+    # rzeszowski, the podkarpackie sejmik and Rada powiatu kartuskiego), and
+    # Tomasz Wiśniewski 4HydyClSHkXhj48tVC55 2010, Paweł Stolarczyk
+    # 7Sy7yo2Uh768n74xEcnR 2010 and Sebastian Lorenc iHoGSMlr6ebLTChHErKD 2018,
+    # each a run with no office beside a „Samorząd” one in another województwo.
+    # In each, one of the places is somebody else's; the count goes down as
+    # reviewers unpublish them. Four of the 29 are runs with no office in a
+    # year of two elections, from the March 2026 upload, and may be a european
+    # run beside a local one rather than a clash: Górski 7YCsfPftvPtrOyA2fOlJ
+    # 2024 (0801, 2007), Mazur GWgzZD52BLymQwWCQ4Qf 2014 (0206, 0807), Mucha
+    # aWxbUBV1x7YjXjus2Egf 2014 (1208, 3206) and Adamski VBeJC8Q0WNCAbHhGBV00
+    # 2014 (3008, 3027). The office key pooled them the same way.
+    KNOWN_CONTRADICTIONS = 29
 
     nodes_by_id = {node["id"]: node for node in nodes}
     regions: dict[tuple, set[str]] = collections.defaultdict(set)
@@ -1765,7 +1810,11 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
         teryt = nodes_by_id.get(edge["target"], {}).get("teryt")
         if not teryt:
             continue
-        key = (edge["source"], str(edge.get("start_date"))[:4], edge.get("position"))
+        key = (
+            edge["source"],
+            str(edge.get("start_date"))[:4],
+            election_stood_in(edge),
+        )
         regions[key].add(teryt)
 
     def contradict(teryts: set[str]) -> bool:
