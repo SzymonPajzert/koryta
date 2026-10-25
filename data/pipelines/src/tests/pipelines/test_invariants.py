@@ -1414,6 +1414,45 @@ def test_edges_join_the_node_types_they_are_defined_for(edges, snapshot, within_
     )
 
 
+def test_a_company_has_one_registered_seat(edges, within_budget):
+    """A company is seated in one region.
+
+    The register gives a company one registered seat, and EDGE_SEMANTICS says
+    as much of `seat`: one per pair, and in fact one per company. A second seat
+    in another region puts the company in both: `computeNodes` folds every seat
+    into the regions of the people employed there, and the region filter on
+    /eksploruj reads seats too, so a company registered in Katowice is listed
+    as one of another region's as well.
+
+    The company ingest will not write one (`findSeatFromAnotherRegion` in
+    server/api/ingest/company.post.ts refuses a seat when another region holds
+    one), so a second seat is a person's, added through the edit form. Two
+    copies of one seat are `test_a_state_edge_is_not_stored_twice`; this
+    counts companies seated by two regions or more. A removed seat is not one,
+    as the region filter skips it; an unpublished one is, as the filter does
+    not.
+    """
+    # One on the 2026-10-25T03:00:33.098Z export, as on the 10-24 one: KOLEJE
+    # ŚLĄSKIE (DMvg3qYqBqMhVlCR42zD), seated in Katowice by the ingest and in
+    # Województwo śląskie by a draft seat made by hand, 4mlH10nwVU6WiEsp9Dgj.
+    KNOWN_TWO_SEATS = 1
+
+    regions: dict[str, set[str]] = collections.defaultdict(set)
+    for edge in edges:
+        if edge.get("type") == "seat" and not is_removed(edge):
+            regions[edge["target"]].add(edge["source"])
+
+    seated_twice = {
+        company: sorted(seats) for company, seats in regions.items() if len(seats) > 1
+    }
+
+    assert within_budget(len(seated_twice), KNOWN_TWO_SEATS), (
+        f"{len(seated_twice)} companies are seated in more than one region, up "
+        f"from the {KNOWN_TWO_SEATS} known. As (company, regions): "
+        f"{sample(list(seated_twice.items()), 5)}"
+    )
+
+
 def test_a_state_edge_is_not_stored_twice(edges, within_budget):
     """A tie that either holds or does not may only be recorded once.
 
