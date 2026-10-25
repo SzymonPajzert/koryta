@@ -34,6 +34,7 @@ import zoneinfo
 
 import pytest
 
+from analysis.payloads.site import register_entry
 from scrapers.koryta.snapshot import is_reference, reference_id
 from util.polish import format_person_name
 
@@ -193,6 +194,19 @@ def page_is_public(document: dict) -> bool:
     if is_removed(document):
         return False
     return document.get("published") is True
+
+
+def is_merged_away(document: dict) -> bool:
+    """Whether the page was merged into another one.
+
+    `server/utils/merge.ts` keeps the duplicate's document, so its url still
+    resolves and its votes and revisions still hang off something, and marks it
+    `merged_into: <survivor>` beside `deleted: true`. Asked on its own rather
+    than through `is_removed`, since a page that says it lives elsewhere is not
+    a page whatever its `deleted` says.
+    """
+    value = document.get("merged_into")
+    return isinstance(value, str) and bool(value.strip())
 
 
 def compute_vote_stats(votes: list[dict]) -> dict:
@@ -1066,6 +1080,64 @@ def test_person_names_are_capitalised(nodes, within_budget):
         f"{len(misformatted)} person nodes are not named in the capitalised form "
         f"the pipeline writes, up from the {MISFORMATTED} known ones. "
         f"Sample: {sample(misformatted)}"
+    )
+
+
+def test_a_register_entry_has_one_page(nodes, within_budget):
+    """One rejestr.io entry, one person page.
+
+    An entry is one person - a namesake has an entry of their own - so two
+    pages linking the same entry are one person filed twice, and the night
+    cannot tell which of them to write to. `koryta_match` in analysis/people.py
+    refuses an entry that two pages claim, so its payload carries no page id,
+    and the ingest then lands on whichever page
+    `where("rejestrIo", "==", link).limit(1)` returns. The register's jobs and
+    candidacies go on arriving at one of the two, and the other keeps what it
+    had.
+
+    Pages are grouped by the entry's number, the way `registerEntry` in
+    `person.post.ts` reads a link (`register_entry` here), not by the link as
+    stored. 18 live pages of the 2026-10-25 export keep a link pasted from a
+    browser, with the person's name after the number. The exact lookup misses
+    such a page, which matters where no `korytaId` carries the payload to it
+    instead: beside a twin, where `koryta_match` refuses the entry. It is why
+    Beata Szydło's published page gets nothing while the night writes into her
+    draft twin.
+
+    A page merged away is left out: `lookupNodeDoc` follows its `merged_into`
+    to the survivor, so merging one of two pages into the other is the repair.
+    A removed page is counted, since the same lookup does not skip it, and a
+    removed page beside a live one can still take the night's writes.
+    """
+    # 4 on the 2026-10-25T03:00:33.098Z export, as on the 10-14, 10-15, 10-23
+    # and 10-24 ones, all made between 05-11 and 09-10, before the ingest and
+    # the planner read a link by its number. None of them is a removed page:
+    # - 1353470 Beata Szydło: the published IGdabqsPzTIfvEcoyyuZ stores the
+    #   slugged link, so the night writes into the draft YiQRzcVwcbwPsf6Zy4dU.
+    # - 1012219 Krzysztof Piotr Wojciechowski: the draft exMqDvCfDxrMY1S4ZZHQ
+    #   beside the published IjpbUfURDSHkA3UhfOhF.
+    # - 2732239 Łukasz Kenig: two drafts, 7HGps3vupBSxiyDNoU4f with the
+    #   slugged link and mEYLagiXKzVevXUznKJj.
+    # - 748966 Łukasz Grabowski: the draft RAD8Oh25J2omGaU76X2i beside the
+    #   published BAfWPA4edipeM8mUIMWY.
+    # Merging each pair takes this to zero; nothing should add to it.
+    SHARED_ENTRIES = 4
+
+    pages: dict[str, list[str]] = collections.defaultdict(list)
+    for document in nodes:
+        if document.get("type") != "person" or is_merged_away(document):
+            continue
+        link = document.get("rejestrIo")
+        entry = register_entry(link.strip() if isinstance(link, str) else None)
+        if entry:
+            pages[entry].append(document["id"])
+    shared = {entry: ids for entry, ids in pages.items() if len(ids) > 1}
+
+    assert within_budget(len(shared), SHARED_ENTRIES), (
+        f"{len(shared)} rejestr.io entries are linked by more than one person "
+        f"page not merged away, up from the {SHARED_ENTRIES} known ones, so "
+        f"the night writes each of them to one page only, as (entry, pages): "
+        f"{sample(sorted(shared.items()))}"
     )
 
 
