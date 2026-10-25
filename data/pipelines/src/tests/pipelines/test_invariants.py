@@ -1612,7 +1612,7 @@ def job_ends_by_day(edges) -> collections.Counter:
     )
 
 
-def test_a_job_does_not_end_on_the_day_a_crawl_ran(edges):
+def test_a_job_does_not_end_on_the_day_a_crawl_ran(edges, within_budget):
     """No employment ends on a day PeopleKRS ran rather than one somebody left.
 
     Until 5fe9e12b `end_time()` in `scrapers/krs/list.py` read rejestr.io's
@@ -1646,7 +1646,7 @@ def test_a_job_does_not_end_on_the_day_a_crawl_ran(edges):
         and end_day(edge) in CRAWL_STAMPS
     )
 
-    assert len(stamped) <= STAMPED_ENDS, (
+    assert within_budget(len(stamped), STAMPED_ENDS), (
         f"{len(stamped)} employment edges end on a day PeopleKRS ran "
         f"({', '.join(CRAWL_STAMPS)}) rather than one the register gives, up "
         f"from the {STAMPED_ENDS} known ones. Run "
