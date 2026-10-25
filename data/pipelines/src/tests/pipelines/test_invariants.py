@@ -1340,35 +1340,62 @@ def test_companies_are_not_duplicated_by_krs(nodes, within_budget):
 
 
 def test_a_company_can_be_told_apart_from_the_others(nodes, within_budget):
-    """No two companies go by the same name.
+    """No two companies go by the same name unless the register tells them apart.
 
     Municipal companies are named after what they do and every town has one:
-    24 are called "Przedsiębiorstwo Energetyki Cieplnej", and three separate
-    registrations are all called exactly "Zakład Utylizacji Odpadów". Nothing
-    is duplicated in the register - `test_companies_are_not_duplicated_by_krs`
-    covers that - but on a person's page two of them are the same line twice,
-    which is the "wypisany dwa razy" note on Marek Staniszewski.
+    in August 24 were called "Przedsiębiorstwo Energetyki Cieplnej", and three
+    separate registrations were all called exactly "Zakład Utylizacji Odpadów".
+    On a person's page two of them are the same line twice, which is the
+    "wypisany dwa razy" note on Marek Staniszewski. `display_name` has since
+    put the town in the name where the name does not already carry it, and the
+    companies were re-ingested with it.
 
-    `display_name` puts the town in the name where the name does not already
-    carry it, so this shrinks as companies are re-ingested.
+    What is left is mostly separate registrations with the same name in the
+    same town, each with a KRS number of its own. The ingest adds a few of
+    those whenever it adds companies, and each is a register entry of its own,
+    so they are not counted here: telling them apart on the page is a change
+    to `display_name`, not a repair of the data. A name shared by a company without
+    a KRS number is counted, because that is a page somebody made by hand for
+    a company the site may already have - a duplicate page, not a namesake. Two
+    copies of one KRS number are counted too, as well as by
+    `test_companies_are_not_duplicated_by_krs`. A removed page is not counted:
+    nobody sees it, and merging a duplicate away is how this one falls.
     """
-    # 393 on the 2026-07-28 export, 394 on the 2026-08-02 one. It climbs by
-    # about a company a week until `display_name` is deployed and the affected
-    # companies are re-ingested.
-    KNOWN_SHARED_NAMES = 394
+    # Four companies across two names on the export of 2026-10-25T03:00Z, the
+    # same as on 2026-10-24, both pages made by hand beside another:
+    # „Agencja Mienia Wojskowego”, N8QXbyrfpBkoJl046MUE (2025-12-20) and
+    # SMcIlqAzyajlKgRbaVWM (2026-01-13), neither with a KRS number, and
+    # „Towarzystwo Budownictwa Społecznego w Zgierzu”, iQsP5LyZ9zcwIldwk3CP
+    # (2026-01-25, no KRS number) beside AytDzuZYHftDO0pJh054 (KRS 0000041704),
+    # which differ only in case. Merging each pair
+    # (merge-krs-less-hand-company-twins) takes this to zero. Counting every
+    # shared name gave 106 companies across 53 names on 10-25 and 96 on 10-24 -
+    # the other 51 pairs are two KRS registrations each, five of them added on
+    # 10-24 and four on 10-21 - and 394 on 2026-08-02, before `display_name`.
+    KNOWN_SHARED_NAMES = 4
 
-    counts = collections.Counter(
-        (document.get("name") or "").strip().lower()
-        for document in nodes
-        if document.get("type") == "place" and (document.get("name") or "").strip()
-    )
-    shared = {name: count for name, count in counts.items() if count > 1}
-    affected = sum(shared.values())
+    by_name: dict[str, list[dict]] = collections.defaultdict(list)
+    for document in nodes:
+        name = (document.get("name") or "").strip().lower()
+        if document.get("type") == "place" and name and not is_removed(document):
+            by_name[name].append(document)
+
+    def told_apart_by_krs(companies: list[dict]) -> bool:
+        numbers = [company.get("krsNumber") for company in companies]
+        return all(numbers) and len(set(numbers)) == len(numbers)
+
+    shared = {
+        name: [company["id"] for company in companies]
+        for name, companies in by_name.items()
+        if len(companies) > 1 and not told_apart_by_krs(companies)
+    }
+    affected = sum(len(ids) for ids in shared.values())
 
     assert within_budget(affected, KNOWN_SHARED_NAMES), (
         f"{affected} companies across {len(shared)} names cannot be told apart "
-        f"from another company by name, up from the {KNOWN_SHARED_NAMES} known "
-        f"ones: {sample(shared, 5)}"
+        f"from another company by name, and not all by a KRS number of their "
+        f"own either, up from the {KNOWN_SHARED_NAMES} known ones: "
+        f"{sample(sorted(shared.items()), 5)}"
     )
 
 
