@@ -2067,6 +2067,69 @@ def test_a_person_stands_once_in_a_national_election(edges, within_budget):
     )
 
 
+def test_a_national_run_is_filed_under_its_district(edges, nodes, within_budget):
+    """A Sejm, Senat or European Parliament candidacy is filed under a
+    województwo.
+
+    A national run is stood in a district, and the pipeline files every one
+    under a województwo of its district (`DISTRICT_OFFICES`; a european
+    district joins several): a two-digit TERYT, never a powiat or a gmina.
+    Uploads before 2026-07-30 could file one under the
+    candidate's residence instead, and european ones until the fix of
+    2026-10-12, which the page then shows as a run for the European
+    Parliament in powiat pabianicki, and which is how a run came to be stored
+    twice: the ingest looked for it only under the district, did not find the
+    home copy and stored a twin beside it
+    (`test_a_single_seat_run_is_stored_once`). The ingest now moves a home
+    copy to the district when the run is sent again (`misfiledRunOf`), so
+    this count only falls, by as many as the night's sends reach. A new one
+    means the payload places national runs at the residence again.
+
+    Only a candidacy that names its office is counted. A home copy with no
+    office, in a year of one kind of election, is the same misfile, and the
+    ingest moves it the same way (`isSameRun` reads it by its year), but it
+    says which election it was only through that year: the 21 below a
+    województwo on the 2026-10-25 export (20 of 2023, one of 2001, 13
+    published) are left to `test_a_candidacy_names_its_office`, which counts
+    the 20 an ingest wrote.
+
+    Four of the counted ones stay where they are on purpose: the home lies in
+    another województwo than the district, so the copy cannot be told from a
+    namesake's run and the ingest does not move it. They are the Sejm runs of
+    Koszarek 2oj0TW6vjOkQOA8xjs4a, Norbert Kwiatkowski xyjpVBtsHW37sjgul9JD,
+    Jabłoński KN947LkbkLBG3Z6Agbwq and Protasiewicz ENb8CrCGTG2q9TANeyZo. The
+    fifth left on purpose, Cieślukowski's Senat run JKqh2x1GW6DbQnVWik4u, has
+    no office, so it is not counted here.
+    """
+    # 281 on the 2026-10-25T03:00:33.098Z export: Sejm 199, European
+    # Parliament 60, Senat 22, 17 of them published. 300 on the 10-24 export,
+    # 299 of them written by the bulk uploads of 2026 (234 in June) and one by
+    # the night of 10-07; nothing has written one since. The 10-24 night's
+    # sends moved 19 to their district. Expected only to fall.
+    KNOWN_UNDER_HOME = 281
+
+    teryt_of = {
+        node["id"]: node.get("teryt") or ""
+        for node in nodes
+        if node.get("type") == "region"
+    }
+    under_home = [
+        (edge["id"], edge.get("position"), teryt_of.get(edge["target"]))
+        for edge in edges
+        if edge.get("type") == "election"
+        and not is_removed(edge)
+        and edge.get("position") in DISTRICT_OFFICES
+        and len(teryt_of.get(edge["target"]) or "") > 2
+    ]
+    by_office = collections.Counter(office for _, office, _ in under_home)
+
+    assert within_budget(len(under_home), KNOWN_UNDER_HOME), (
+        f"{len(under_home)} national candidacies are filed below a województwo "
+        f"({dict(by_office)}), up from the {KNOWN_UNDER_HOME} known ones, as "
+        f"(edge, office, teryt): {sample(under_home)}"
+    )
+
+
 def test_one_spell_of_employment_is_stored_once(edges, within_budget):
     """A person may hold the same role at the same company twice - not at once.
 
