@@ -1,4 +1,5 @@
 import collections
+import re
 import sys
 import typing
 from dataclasses import dataclass
@@ -6,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from analysis.payloads.site import day_of
+from analysis.payloads.site import ALLOWED_MISSING_REGION, DISTRICT_OFFICES, day_of
 from entities.composite import Person
 from koryta import setup_context
 from pipelines import PeoplePayloads
@@ -124,6 +125,41 @@ def spells_stated_twice(payloads: typing.Iterable[dict]) -> list[tuple]:
     return twice
 
 
+def dropped_for_want_of_a_region(row: dict) -> bool:
+    """Whether the ingest drops a candidacy with no TERYT on purpose
+    (`ALLOWED_MISSING_REGION`, matched as `_region_of` matches it)."""
+    return any(
+        office == row.get("election_type")
+        and (year is None or year == str(row.get("election_year")))
+        for office, year in ALLOWED_MISSING_REGION
+    )
+
+
+def national_rows_off_a_wojewodztwo(payloads: typing.Iterable[dict]) -> list[tuple]:
+    """The Sejm, Senat and European Parliament rows a payload places somewhere
+    other than a województwo, or nowhere when the ingest needs a place."""
+    off = []
+    for payload in payloads:
+        for row in rows_of(payload, "elections"):
+            if row.get("election_type") not in DISTRICT_OFFICES:
+                continue
+            teryt = row.get("teryt")
+            if teryt is None or teryt == "" or teryt != teryt:
+                if dropped_for_want_of_a_region(row):
+                    continue
+            elif isinstance(teryt, str) and re.fullmatch(r"\d{2}", teryt):
+                continue
+            off.append(
+                (
+                    *who(payload),
+                    row.get("election_type"),
+                    row.get("election_year"),
+                    teryt,
+                )
+            )
+    return off
+
+
 @dataclass(frozen=True)
 class EveryPayload:
     """What the checks below find in every payload `PeoplePayloads --all`
@@ -131,6 +167,7 @@ class EveryPayload:
 
     payloads: int
     spells_stated_twice: list[tuple]
+    national_rows_off_a_wojewodztwo: list[tuple]
 
 
 @pytest.fixture(scope="module")
@@ -149,6 +186,7 @@ def every_payload() -> EveryPayload:
     return EveryPayload(
         len(payloads),
         spells_stated_twice(payloads),
+        national_rows_off_a_wojewodztwo(payloads),
     )
 
 
@@ -178,6 +216,49 @@ def test_a_payload_states_each_spell_once(every_payload, within_budget):
         f"employment twice, up from the {KNOWN_TWICE} known, and the ingest "
         f"stores each copy (name, entry or page, birth date, "
         f"{{(krs, role, start): rows}}): {twice[:10]}"
+    )
+
+
+def test_a_national_candidacy_is_sent_under_its_wojewodztwo(
+    every_payload, within_budget
+):
+    """A Sejm, Senat or European Parliament run is placed in a województwo.
+
+    A district is wider than any powiat, so the pipeline files a national run
+    under the województwo it lies in (`DISTRICT_OFFICES` in
+    analysis/payloads/site.py). Uploads filed some under the person's home
+    powiat instead, the Sejm and Senat runs until 2026-07-30 and the European
+    Parliament ones until the fix of 2026-10-12. Since the ingest looks for a
+    stored run in the payload's region only, every later send stored a
+    district copy beside the home one: 168 runs were stored twice on the
+    2026-10-23 export until merge-national-runs-stored-twice folded them that
+    evening. The ingest now moves a home copy it finds, but a payload placing
+    the run at home again would write new ones.
+
+    A TERYT is read as it is sent, two digits in a string: a number may have
+    lost its leading zero on the way, and the ingest looks a code up as it
+    comes. A row with no TERYT counts too, unless it is a run the ingest
+    drops on purpose for want of a district (`ALLOWED_MISSING_REGION` in
+    analysis/payloads/site.py): any other is reported by the ingest as an
+    unplaced candidacy and not stored. On 2026-10-25 the rows with none were
+    all Sejm 1991 to 1997 and Senat 1993 to 2001, which PKW gives no
+    district; the allow-list takes in a few years more.
+    """
+    # 0 on the outputs of the 2026-10-25 night: in the 157,724 payloads `--all`
+    # builds off them (Sejm 20,518, Senat 1,934 and European Parliament 2,986
+    # placed rows, and 4,669 with no TERYT, all allowed), and in the 2,550
+    # placed rows its people import built to send. 0 on 10-24 too, and in the
+    # elections payload of 10-23.
+    KNOWN_OFF = 0
+
+    off = every_payload.national_rows_off_a_wojewodztwo
+
+    assert within_budget(len(off), KNOWN_OFF), (
+        f"{len(off)} national candidacies are sent under a TERYT that is not a "
+        f"województwo, or under none where the ingest needs one, up from the "
+        f"{KNOWN_OFF} known: the ingest would store them beside the district's "
+        f"copy, or not at all (name, entry or page, birth date, office, year, "
+        f"teryt): {off[:10]}"
     )
 
 
