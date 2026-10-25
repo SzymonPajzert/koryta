@@ -60,6 +60,7 @@ import {
   roundUrl,
   storeHome,
   waitingOn,
+  workspaceRoot,
   type Author,
 } from "./store";
 
@@ -70,7 +71,8 @@ const port = boardPort();
 const inNamespace = () => Boolean(process.env.DEVNS_RUN);
 
 function author(): Author {
-  const workspace = process.env.CLAUDE_PROJECT_DIR || null;
+  const workspace =
+    process.env.CLAUDE_PROJECT_DIR || workspaceRoot(process.cwd());
   let change: string | null = null;
   try {
     // --ignore-working-copy: reading the change must not snapshot scratch

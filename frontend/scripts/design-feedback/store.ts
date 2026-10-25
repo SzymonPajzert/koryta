@@ -35,7 +35,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 export const storeHome = (env: NodeJS.ProcessEnv = process.env): string =>
   env.DESIGN_FEEDBACK_HOME ||
@@ -531,10 +531,24 @@ export function liveWaiters(id: string, home: string): Waiter[] {
   return waiters;
 }
 
+/** The top of the jj (or git) workspace `dir` is in, or null outside one. */
+export function workspaceRoot(dir: string): string | null {
+  for (let at = resolve(dir); ; at = dirname(at)) {
+    if (existsSync(join(at, ".jj")) || existsSync(join(at, ".git"))) return at;
+    if (dirname(at) === at) return null;
+  }
+}
+
 /** Who the log says did something: an agent and the workspace it ran in,
- * which is named after its session (see agentActor in ../mcp/tasks.ts). */
-export function agentActor(env: NodeJS.ProcessEnv = process.env): string {
-  const dir = env.CLAUDE_PROJECT_DIR || process.cwd();
+ * which is named after its session (see agentActor in ../mcp/tasks.ts).
+ * CLAUDE_PROJECT_DIR is set for hooks and MCP servers but not in an agent's
+ * shell, where the workspace is found from the working directory instead:
+ * `frontend` names no session. */
+export function agentActor(
+  env: NodeJS.ProcessEnv = process.env,
+  cwd = process.cwd(),
+): string {
+  const dir = env.CLAUDE_PROJECT_DIR || workspaceRoot(cwd) || cwd;
   const name = basename(dir).replace(/[^A-Za-z0-9_.-]/g, "");
   return name ? `agent:${name}` : "agent";
 }
