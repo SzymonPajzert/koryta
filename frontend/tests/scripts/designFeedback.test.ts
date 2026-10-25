@@ -30,6 +30,7 @@ import {
 } from "../../scripts/design-feedback/publish";
 import { startServer, type Board } from "../../scripts/design-feedback/server";
 import {
+  agentActor,
   appendEvent,
   carriedComments,
   foldRound,
@@ -177,6 +178,20 @@ describe("foldRound", () => {
       { at: T(4), verdict: "iterate", text: "more" },
     ]);
     expect(state.lastAck).toBe(T(6));
+  });
+});
+
+describe("agentActor", () => {
+  it("names the workspace, found from a directory inside it", () => {
+    const ws = join(dir, "bridge-cse_01ABC");
+    mkdirSync(join(ws, ".jj"), { recursive: true });
+    mkdirSync(join(ws, "frontend", "scripts"), { recursive: true });
+    expect(agentActor({}, join(ws, "frontend", "scripts"))).toBe(
+      "agent:bridge-cse_01ABC",
+    );
+    expect(agentActor({ CLAUDE_PROJECT_DIR: "/x/other" }, ws)).toBe(
+      "agent:other",
+    );
   });
 });
 
