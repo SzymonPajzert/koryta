@@ -91,8 +91,10 @@ EDGE_ENDPOINT_TYPES: dict[str, set[tuple[str, str]]] = {
 # the type are the whole of what they say, so there is nothing to count and a
 # second document is always redundant. `employed` and `election` are the other
 # kind - one bounded episode, which can legitimately repeat between the same two
-# nodes. Kept in step with EDGE_SEMANTICS in `frontend/server/utils/edges.ts`.
-STATE_EDGE_TYPES = {"owns", "mentions", "comment", "source"}
+# nodes. Kept in step with EDGE_SEMANTICS in `frontend/server/utils/edges.ts`,
+# which has classed `seat` as one since the 2026-08-29 split took it out of
+# `owns`, a while before this list learned it.
+STATE_EDGE_TYPES = {"owns", "seat", "mentions", "comment", "source"}
 
 # Edge types that record a period rather than a standing tie, and so have to say
 # when it began. Every other type asserts something with no beginning - an
@@ -1415,21 +1417,32 @@ def test_edges_join_the_node_types_they_are_defined_for(edges, snapshot, within_
 def test_a_state_edge_is_not_stored_twice(edges, within_budget):
     """A tie that either holds or does not may only be recorded once.
 
-    `owns`, `mentions` and `comment` assert a relationship rather than an
-    occurrence - a region seats a company, an article names a person - so the
+    `owns`, `seat`, `mentions` and `comment` assert a relationship rather than
+    an occurrence - a region seats a company, an article names a person - so the
     pair and the type are the whole of what they say and a second document adds
     nothing. This is the only edge duplication that can be judged from the
     stored data alone; see `test_occurrence_edges_may_repeat` for why the rest
     cannot. The rule this mirrors lives in `frontend/server/utils/edges.ts`.
     """
-    # 64 region->company links written twice by one company ingest, before the
-    # edge id was derived from the pair. Goes to zero once
-    # scripts/migrate/dedupe-edges.ts has been run against production.
-    DUPLICATED_STATE_EDGES = 64
+    # Region->company links written twice by one company ingest, before the
+    # edge id was derived from the pair: 64 when this was first counted. The
+    # 2026-08-29 split retyped them to `seat`, which this did not count until
+    # 2026-10-25, so they went out of its sight unrepaired and it read 1. With
+    # `seat` counted, 66 on the 2026-10-25T03:00:33.098Z export, as on the
+    # 10-24 one, all unchanged since 10-09. 65 are seat pairs: 63 of that
+    # ingest's, both copies filed between February and May 2026, and two with
+    # a copy from August, one of them a seat made by hand on 08-24 beside its
+    # derived id (UUfXaWU5JeZ8ZOpXAX9S, edge_teryt2461_CJ7iv0ZAQ6eYBmDq41Pr_seat).
+    # The other is an `owns` pair in the region tree (xCI1ADtvW9UF7jvlpPD5,
+    # OsHePx3pZCQjCbKuwurs). Only goes down, and to zero once
+    # scripts/migrate/dedupe-edges.ts has been run against production. A
+    # removed copy is the repair rather than one more duplicate, so it is not
+    # counted.
+    DUPLICATED_STATE_EDGES = 66
 
     groups: dict[tuple, list[str]] = collections.defaultdict(list)
     for edge in edges:
-        if edge.get("type") not in STATE_EDGE_TYPES:
+        if edge.get("type") not in STATE_EDGE_TYPES or is_removed(edge):
             continue
         groups[(edge["source"], edge["target"], edge["type"])].append(edge["id"])
 
