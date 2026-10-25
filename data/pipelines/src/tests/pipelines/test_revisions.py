@@ -5,13 +5,14 @@ schema, and its absence signals a data problem - see
 ``analysis/scripts/field_presence.py``, which is how this list was derived.
 Referential and cross-collection invariants live in ``test_invariants.py``.
 
-Most of what still fails here comes from one event: the December 2025 backfill
+Much of what used to fail here came from one event: the December 2025 backfill
 in ``src/scripts/create_revisions.py``, which minted a revision for every node
-and edge that did not have one. It deletes ``source`` and ``target`` from the
+and edge that did not have one. It deleted ``source`` and ``target`` from the
 data before writing (``for removable in ["user", "date", "source", "target"]``),
-so its 1114 edge revisions describe a link without saying what it links. The
-same batch also writes ``node_id`` as a document reference rather than an id,
-which is what ``test_revision_node_id_is_a_document_id`` covers.
+so its edge revisions described a link without saying what it links, until
+``scripts/migrate/archive/repair-migrated-revisions.ts`` restored them from the
+edges. The same batch also wrote ``node_id`` as a document reference rather than
+an id, which is what ``test_revision_node_id_is_a_document_id`` covers.
 """
 
 import pytest
@@ -28,11 +29,13 @@ REQUIRED_FIELDS = [
     # Every election revision should say which office was contested; 1891 do
     # not, and the elections list has nothing to show for them.
     ("election", "position", 1891),
-    # Entirely the create_revisions.py backfill described above.
-    ("employed", "source", 183),
-    ("employed", "target", 183),
-    ("owns", "source", 98),
-    ("owns", "target", 98),
+    # None on the export of 2026-10-25T03:00Z. There were 183 and 98, all from
+    # the create_revisions.py backfill described above, until
+    # repair-migrated-revisions.ts restored them, and the script is fixed.
+    ("employed", "source", 0),
+    ("employed", "target", 0),
+    ("owns", "source", 0),
+    ("owns", "target", 0),
     # 40 from that backfill; the other 129 are employment recorded without a
     # job title. 163 on the 2026-07-28 export and 169 on the 2026-08-02 one -
     # the revision side of KNOWN_ROLELESS in test_invariants.py, which grew by
