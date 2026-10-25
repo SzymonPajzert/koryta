@@ -555,7 +555,9 @@ function frame(image, label, sub = null) {
     },
     h(
       "div",
-      { class: "print" },
+      // A page fills the frame from its top; anything shorter than the
+      // frame's shape (a dialog, a section) shows whole on the mat.
+      { class: image.height >= image.width * 1.25 ? "print" : "print whole" },
       image.thumb
         ? h("img", {
             src: fileUrl(S.roundId, image.thumb),
