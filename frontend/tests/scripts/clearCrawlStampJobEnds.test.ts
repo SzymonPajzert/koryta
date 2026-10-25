@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 // The class `firebase-admin/firestore` re-exports. Imported from its source
 // because under the Nuxt test environment firebase-admin's lazy exports read
@@ -7,12 +10,13 @@ import {
   dayOf,
   decide,
   exactCopies,
+  newestRegister,
   parseRegister,
   type Case,
   type RegisterRow,
   type RevisionFacts,
   type SpellFacts,
-} from "../../scripts/migrate/clear-crawl-stamp-job-ends";
+} from "../../scripts/migrate/archive/clear-crawl-stamp-job-ends";
 
 const KRS = "0000123456";
 const STAMP = "2026-04-06";
@@ -490,5 +494,45 @@ describe("parseRegister", () => {
     expect(parseRegister(text)).toEqual([
       row({ krs: "0000123456", birthDate: null }),
     ]);
+  });
+});
+
+describe("newestRegister", () => {
+  /** A cache folder holding a `crawl-stamps-<day>` folder for each day given,
+   * each with a register unless the day is listed in `empty`. */
+  function cache(days: string[], empty: string[] = []): string {
+    const home = mkdtempSync(join(tmpdir(), "crawl-stamps-"));
+    for (const day of days) {
+      const folder = join(home, `crawl-stamps-${day}`);
+      mkdirSync(folder);
+      if (!empty.includes(day))
+        writeFileSync(join(folder, "register.jsonl"), "");
+    }
+    return home;
+  }
+
+  it("takes the register of the latest day", () => {
+    const home = cache(["2026-10-14", "2026-10-25", "2026-09-30"]);
+    expect(newestRegister(home)).toBe(
+      join(home, "crawl-stamps-2026-10-25", "register.jsonl"),
+    );
+  });
+
+  it("skips a day whose folder holds no register", () => {
+    const home = cache(["2026-10-14", "2026-10-25"], ["2026-10-25"]);
+    expect(newestRegister(home)).toBe(
+      join(home, "crawl-stamps-2026-10-14", "register.jsonl"),
+    );
+  });
+
+  it("reads no other folder as a register's", () => {
+    const home = cache([]);
+    mkdirSync(join(home, "crawl-stamps-latest"));
+    writeFileSync(join(home, "crawl-stamps-latest", "register.jsonl"), "");
+    expect(newestRegister(home)).toBeUndefined();
+  });
+
+  it("finds nothing where there is no cache at all", () => {
+    expect(newestRegister(join(cache([]), "missing"))).toBeUndefined();
   });
 });

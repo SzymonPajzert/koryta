@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { initializeApp } from "firebase-admin/app";
 import {
   FieldValue,
@@ -7,10 +9,10 @@ import {
   type DocumentSnapshot,
   type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
-import { approvedRevisionId, pageIsPublic } from "../../shared/model";
-import { withoutInternalFields } from "../../server/utils/revisions";
-import { edgeRevisionsForMany } from "../../server/utils/edgePublication";
-import { reportRemaining } from "./remaining";
+import { approvedRevisionId, pageIsPublic } from "../../../shared/model";
+import { withoutInternalFields } from "../../../server/utils/revisions";
+import { edgeRevisionsForMany } from "../../../server/utils/edgePublication";
+import { reportRemaining } from "../remaining";
 
 /**
  * Put back what the register says about the jobs a crawl stamped as ended.
@@ -77,19 +79,30 @@ import { reportRemaining } from "./remaining";
  * 53 left alone (45 no evidence - 9 of them pages linking another entry than
  * the one whose row fits - 5 open spells without an edge, 1 real 03-18 end,
  * 1 pending proposal, 1 removed edge), and 6 rewritten edges becoming exact
- * copies of a sibling. 52 live edges stay stamped, which is the budget
- * `test_invariants.py` holds them to.
+ * copies of a sibling. 52 live edges stay stamped.
  *
- * It stays in scripts/migrate/ rather than archive/ (see the README): it
- * needs the register file, and the 45 without evidence are worth re-checking
- * against a later one.
+ * On the 2026-10-25 15:12 export with that day's register - what the
+ * production run started from - it planned 832 cleared (721 by rejestr.io id,
+ * 111 by name), 155 rewritten (146 + 9) and 61 left alone (48 no evidence, 12
+ * of them pages linking another entry; 5 open spells without an edge; 6 real
+ * ends on a stamp day; 1 pending proposal; 1 removed edge), with 6 copies. 60
+ * live edges stay stamped, which is the budget `test_invariants.py` holds them
+ * to.
+ *
+ * Run on production on 2026-10-25, and archived. Given no register, it reads
+ * the newest `~/.cache/koryta/crawl-stamps-<date>/register.jsonl` - the
+ * folder the run's steps write to - which is how `check:archived-migrations`
+ * runs it. That makes its dry run a real comparison of the export with a
+ * register wherever one has been written, and a failure, not a pass, where
+ * none has. The 45 without evidence are still worth a run against a later
+ * register: write one with `register_job_ends.py` and pass it.
  *
  * Usage, from frontend/, against the running emulators:prod-data emulator:
- *   npx tsx scripts/migrate/clear-crawl-stamp-job-ends.ts <register.jsonl>           # dry run
- *   npx tsx scripts/migrate/clear-crawl-stamp-job-ends.ts <register.jsonl> --commit
+ *   npx tsx scripts/migrate/archive/clear-crawl-stamp-job-ends.ts [register.jsonl]           # dry run
+ *   npx tsx scripts/migrate/archive/clear-crawl-stamp-job-ends.ts [register.jsonl] --commit
  * Against production:
- *   npx tsx scripts/migrate/clear-crawl-stamp-job-ends.ts <register.jsonl> --prod
- *   npx tsx scripts/migrate/clear-crawl-stamp-job-ends.ts <register.jsonl> --prod --commit
+ *   npx tsx scripts/migrate/archive/clear-crawl-stamp-job-ends.ts [register.jsonl] --prod
+ *   npx tsx scripts/migrate/archive/clear-crawl-stamp-job-ends.ts [register.jsonl] --prod --commit
  *
  * Each edge written fires `onEdgeWritten`, which re-reads its person's edges:
  * about a thousand of those, so not in the middle of the night's upload.
@@ -505,15 +518,34 @@ function gone(data: Record<string, unknown> | undefined): boolean {
   return !data || data.deleted === true || !!data.merged_into;
 }
 
+/** The newest register the run's steps wrote, for a run handed none: the
+ * `register.jsonl` in the latest `crawl-stamps-<date>` folder under `home`.
+ * Undefined where there is none - the caller fails rather than compare the
+ * export with nothing. */
+export function newestRegister(
+  home = join(homedir(), ".cache", "koryta"),
+): string | undefined {
+  if (!existsSync(home)) return undefined;
+  return readdirSync(home)
+    .filter((name) => /^crawl-stamps-\d{4}-\d{2}-\d{2}$/.test(name))
+    .sort()
+    .map((name) => join(home, name, "register.jsonl"))
+    .filter((path) => existsSync(path))
+    .at(-1);
+}
+
 async function main() {
   const isProd = process.argv.includes("--prod");
   const commit = process.argv.includes("--commit");
-  const file = process.argv.slice(2).find((arg) => !arg.startsWith("--"));
+  const file =
+    process.argv.slice(2).find((arg) => !arg.startsWith("--")) ??
+    newestRegister();
   if (!file) {
     console.error(
-      "Usage: npx tsx scripts/migrate/clear-crawl-stamp-job-ends.ts " +
-        "<register.jsonl> [--commit] [--prod]\n" +
-        "The register file comes from data/pipelines/src/scripts/register_job_ends.py.",
+      "Usage: npx tsx scripts/migrate/archive/clear-crawl-stamp-job-ends.ts " +
+        "[register.jsonl] [--commit] [--prod]\n" +
+        "No register given and none in ~/.cache/koryta/crawl-stamps-<date>/. " +
+        "Write one with data/pipelines/src/scripts/register_job_ends.py.",
     );
     process.exit(1);
   }

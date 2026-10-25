@@ -4,8 +4,9 @@ Until 5fe9e12b (2026-05-05) `end_time()` in `scrapers/krs/list.py` gave every
 post rejestr.io still listed as current the day PeopleKRS ran as its end. Two
 runs of it reached the site: 1,044 `employed` edges on the 2026-10-14 export end
 on 2026-04-06 (825) or 2026-03-18 (219), and most of those people still hold
-the post. The migration in `frontend/scripts/migrate/clear-crawl-stamp-job-ends.ts`
-puts back what the register says about each of them. This writes the register
+the post. The migration in
+`frontend/scripts/migrate/archive/clear-crawl-stamp-job-ends.ts` puts back what
+the register says about each of them. This writes the register
 it reads.
 
 The register is `person_krs_combined` (`PeopleKRSCombined`): for each company,
