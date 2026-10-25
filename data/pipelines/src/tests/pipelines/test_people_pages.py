@@ -34,6 +34,7 @@ from conductor import setup_context
 from koryta import Pipeline
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.krs.odpis_people import PeopleKRSCombined
+from util.polish import names_agree
 
 
 def text(value: typing.Any) -> str | None:
@@ -134,6 +135,18 @@ def site(ctx, site_nodes) -> SiteSnapshot:
 
 
 @pytest.fixture(scope="module")
+def companies(site_nodes) -> dict[str, str]:
+    """Every company page's KRS number, by its node id. Read off the nodes
+    rather than `SiteSnapshot.companies`, which keeps one page per number."""
+    places = site_nodes[site_nodes["type"] == "place"]
+    return {
+        str(node): krs
+        for node, number in zip(places["id"], places["krsNumber"])
+        if (krs := text(number)) is not None
+    }
+
+
+@pytest.fixture(scope="module")
 def register(ctx) -> Register:
     combined: PeopleKRSCombined = Pipeline.create(PeopleKRSCombined)
     return Register.of(combined.read_or_process(ctx))
@@ -200,4 +213,90 @@ def test_a_page_stores_its_register_entry_s_birth_date(site, register, within_bu
         f"{len(contradicted)} linked pages store a birth date their register "
         f"entry contradicts, up from the {KNOWN_CONTRADICTED} known (page, name, "
         f"entry, page's date, register's): {contradicted[:10]}"
+    )
+
+
+def namesake_jobs(
+    site: SiteSnapshot, companies: dict[str, str], register: Register
+) -> list[tuple]:
+    """The live jobs on linked pages the register gives to a namesake:
+    (edge, page, name, the page's entry, the namesakes', krs, role, start)."""
+    pages = live_pages(site)
+    jobs = []
+    for edges in site.edges.values():
+        for edge in edges:
+            if edge.get("type") != "employed" or edge.get("deleted") == 1:
+                continue
+            page = pages.get(str(edge.get("source")))
+            entry = register_entry(field(page, "rejestrIo")) if page else None
+            krs = companies.get(str(edge.get("target")))
+            if page is None or entry is None or krs is None:
+                continue
+            rows = register.at.get(krs, ())
+            if any(register.holds(row, entry) for row in rows):
+                # The entry was at the company: in another role or from
+                # another day this is a question of dates, not of who.
+                continue
+            role, start = field(edge, "name"), day_of(field(edge, "start_date"))
+            holders = sorted(
+                {
+                    row.entry
+                    for row in rows
+                    if row.entry is not None
+                    and (row.role, row.start) == (role, start)
+                    and names_agree(row.name, page.get("name"))
+                    and register.born_apart(row.entry, entry)
+                }
+            )
+            if holders:
+                jobs.append(
+                    (
+                        edge.get("id"),
+                        page.get("id"),
+                        page.get("name"),
+                        entry,
+                        holders,
+                        krs,
+                        role,
+                        start,
+                    )
+                )
+    return sorted(jobs, key=lambda job: (str(job[1]), str(job[0])))
+
+
+def test_a_page_holds_no_namesake_s_job(site, companies, register, within_budget):
+    """A job on a linked page is the linked entry's, not a namesake's.
+
+    The register names who held each spell, and a page links one entry. So a
+    job on the page that the register gives, with that role from that day, to
+    another entry under an agreeing name, born another day, while the page's
+    own entry was never at the company, is either a namesake's job that
+    reached the page by the name rather than the entry, or a page linking the
+    wrong entry: the register cannot tell which, and the page shows a
+    stranger's job either way. remove-namesake-jobs removes or moves the ones
+    in its plan.
+
+    Counted only where the register can tell: an entry with a row at the
+    company in another role or from another day is the page's own spell with
+    other dates; a row only an odpis holds is the entry's own when its PESEL
+    fingerprint is one the entry's rows carry, and nobody's otherwise; and two
+    entries no birth date tells apart may be one osoba bez PESEL entered twice.
+    The strict check needs the ingest to record the entry each job came from,
+    which no edge stores yet.
+    """
+    # 275 on 127 pages on the 2026-10-25 export against that night's
+    # person_krs_combined, the same jobs as on 10-24: 33 published jobs, and 38
+    # jobs on 20 published pages. It was 268 on 10-15: it drifts up by about one
+    # a day, so the 10 of room last about two weeks. Expected to fall to about
+    # 134 once remove-namesake-jobs has run, which removes or moves the 141 jobs
+    # in its plan (111 removals, 30 moves).
+    KNOWN_NAMESAKE_JOBS = 275
+
+    jobs = namesake_jobs(site, companies, register)
+    pages = {job[1] for job in jobs}
+
+    assert within_budget(len(jobs), KNOWN_NAMESAKE_JOBS), (
+        f"{len(jobs)} jobs on {len(pages)} linked pages are a namesake's by the "
+        f"register, up from the {KNOWN_NAMESAKE_JOBS} known (edge, page, name, "
+        f"page's entry, namesakes' entries, krs, role, start): {jobs[:10]}"
     )
