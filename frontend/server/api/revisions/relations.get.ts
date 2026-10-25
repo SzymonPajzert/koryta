@@ -12,7 +12,7 @@ import {
   nodeTypeOf,
   targetIdOf,
 } from "~~/server/utils/revisionQueue";
-import { generateEntityUrl } from "~~/app/composables/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import {
   approvedRevisionId,
   pageIsPublic,
