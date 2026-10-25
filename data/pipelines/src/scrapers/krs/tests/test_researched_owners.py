@@ -1,6 +1,8 @@
 """Owners found by hand, and `CompaniesKRS.add_researched_owners`."""
 
+import csv
 import re
+from pathlib import Path
 
 import pandas as pd
 
@@ -43,6 +45,38 @@ def test_every_entry_names_its_source_and_an_owner():
         assert researched.owners, krs
         for owner in researched.owners:
             assert owner.krs is None or re.fullmatch(r"\d{10}", owner.krs), krs
+
+
+def test_a_researched_company_keeps_no_known_gap():
+    """No company found by hand keeps a known gap in the expected public companies.
+
+    `add_researched_owners` marks every company here public whatever its
+    owners resolve to, so its row in expected_public_companies.csv passes the
+    night it lands. A `known_gap` on that row makes it an expected failure,
+    and a strict one: the row passes, and the night's tests step goes red and
+    holds the upload. That is what PCO and PIT-RADWAR did on 2026-10-24, still
+    waiting on mark-pgz-subsidiaries-public after they were added here. Every
+    row of such a company is held to it, enforced by the night or not: a row
+    the night skips today (a proposal, a correction not applied yet) is
+    enforced once the reason goes. Read here, at review time, rather than by
+    the night over the pipeline's output.
+    """
+    expected = (
+        Path(__file__).parents[3] / "tests/pipelines/expected_public_companies.csv"
+    )
+    with expected.open(newline="", encoding="utf-8") as file:
+        gaps = {
+            row["krs"]: row["known_gap"]
+            for row in csv.DictReader(file)
+            if row["krs"] in RESEARCHED_OWNERS and row["known_gap"].strip()
+        }
+
+    assert not gaps, (
+        f"{len(gaps)} companies with researched owners carry a known_gap in "
+        f"{expected.name}, but the pipeline marks each of them public, so the "
+        f"row passes and fails the night as a strict expected failure. Take the "
+        f"gap off (krs, task): {sorted(gaps.items())}"
+    )
 
 
 def test_a_researched_company_is_public_and_joined_to_its_owner():
