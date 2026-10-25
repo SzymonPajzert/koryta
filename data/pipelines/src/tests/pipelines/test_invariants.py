@@ -1141,7 +1141,7 @@ def test_edge_stats_cover_every_edge_of_the_node(nodes, edges, within_budget):
         if missing:
             incomplete.append((document["id"], sample(missing, 3)))
 
-    assert within_budget(len(incomplete), RECOMPUTE_LAG), (
+    assert within_budget(len(incomplete), RECOMPUTE_LAG, allowance=True), (
         f"{len(incomplete)} nodes have live edge targets missing from "
         f"stats.edges.all.targetNodeIds, so the table filters cannot find them, "
         f"more than the {RECOMPUTE_LAG} the sweep's lag explains: "
@@ -2085,7 +2085,7 @@ def test_notes_count_matches_the_notes(notes, nodes, within_budget):
         not in (sources_by_node[document["id"]], notes_by_node[document["id"]])
     ]
 
-    assert within_budget(len(wrong), RECOMPUTE_LAG), (
+    assert within_budget(len(wrong), RECOMPUTE_LAG, allowance=True), (
         f"{len(wrong)} nodes have a stats.notesCount that is neither the number of "
         f"their notes nor the number of sources in them, more than the "
         f"{RECOMPUTE_LAG} a normal recompute lag explains. "

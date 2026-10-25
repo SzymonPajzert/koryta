@@ -289,7 +289,9 @@ A failed step does not end the night; the steps that depend on it are held:
   past their measured values. A budgeted invariant fails only when it grows
   more than ten past its budget: up to that it passes with a warning
   (`within_budget` in `src/tests/pipelines/conftest.py`), which holds nothing
-  and goes into the summary's `warnings` and onto the night's run.
+  and goes into the summary's `warnings` and onto the night's run. One that
+  counts fewer than its budget passes too, and goes into the summary's `slack`
+  and one log line ("3 budgets to lower: ..."), not onto the run.
 - `scores` needs the same, but not the people: however they went, the scores
   go up, with whatever pages the people step did create.
 - `companies` runs only when `people` may - skipped, not held, when it may
@@ -425,6 +427,13 @@ way, and the timer runs the night on a VM that is already up too.
   the ten it may grow before it fails and holds the upload; the summary's
   `warnings` name it with its count. Repair the data, or measure the count
   again and write it into the test with what grew it.
+- **Budgets to lower.** An invariant counted fewer than its budget, so until
+  the budget comes down it lets that many new cases in before it warns. The
+  summary's `slack` names each with its count and known count, and the log
+  says "N budgets to lower". Write the count into the test, with the export it
+  was measured on. Nothing is held or warned for it. A lag allowance
+  (`within_budget(count, RECOMPUTE_LAG, allowance=True)`, the few nodes a
+  sweep can be behind) is not a budget and is never listed.
 - **Log in during a night.** `sudo touch /etc/koryta/stay-up` before 04:30 and
   the VM stays up afterwards; remove it, or the VM runs - and bills - until
   the schedule's 09:00 stop. A boot outside the night window runs no night -
