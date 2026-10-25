@@ -37,6 +37,7 @@ import zoneinfo
 import pytest
 
 from analysis.payloads.site import (
+    DISTRICT_OFFICES,
     ELECTION_YEARS,
     edge_relation,
     election_kind,
@@ -1844,39 +1845,61 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
 
 
 def test_occurrence_edges_may_repeat(edges, within_budget):
-    """Two identical `election` or `employed` edges are not a defect to fix.
+    """Two identical local candidacies are not a defect to fix; two identical
+    runs for one national seat are.
 
-    They are how the database says a person stood twice or was employed twice,
-    and for `election` the fields that would tell two candidacies apart are
-    destroyed before the ingest sees them: the office collapses into the
-    "Samorząd" bucket, the gmina TERYT is truncated to its powiat, `committee`
-    is dropped at the API boundary, and the run-off round is discarded by the
-    scraper. Standing for burmistrz and for that town's rada in 2024 is stored
-    as two byte-identical documents - and so is one mayoral bid that went to a
-    second round.
+    Identical local candidacies are how the database says a person stood
+    twice, and the fields that would tell two of them apart are destroyed
+    before the ingest sees them: the office collapses into the "Samorząd"
+    bucket where PKW's files do not name it, the gmina TERYT is truncated to
+    its powiat, `committee` is dropped at the API boundary, and the run-off
+    round is discarded by the scraper. Standing for burmistrz and for that
+    town's rada in 2024 is stored as two byte-identical documents - and so is
+    one mayoral bid that went to a second round. So nothing counts those.
 
-    So this test asserts nothing about how many there are. What it does check is
-    that the *reason* they cannot be judged still holds: if a duplicated
-    candidacy ever turns up for an office nobody can stand for twice - Sejm,
-    Senat, the European Parliament - then the repeats are a write bug after all
-    and the whole question is worth reopening.
+    Nobody stands twice for the Sejm, the Senat or the European Parliament,
+    though, so a repeat of one of those offices is a write bug, and this test
+    counts its plainest form: two candidacies of one person for one office,
+    under one region and on one day, that contradict nothing (`edge_relation`,
+    read both ways). It is the narrow form of
+    `test_a_single_seat_run_is_stored_once`, which took the question over on
+    2026-10-25 and also sees the copies filed in two places one inside the
+    other, the copies with no office and the ones dated on another day; every
+    run counted here counts there too.
+
+    Two such candidacies that do contradict each other - another committee,
+    another party - are two namesakes' runs on one page. Since 2026-10-07 the
+    upload sends every PKW record nothing contradicts, so they arrive as
+    drafts on purpose, for a reviewer to reject, and a budget on them would
+    rise with ordinary sends; `test_a_person_stands_once_in_a_national_election`
+    counts them once both are published. Until 2026-10-25 this test counted
+    them too, and they were most of the warning it gave every night since the
+    10-17 export.
+
+    Employment was named here too, as an occurrence that may repeat. It is
+    `test_one_spell_of_employment_is_stored_once`'s now, and was never counted
+    here: that test keys an employment on the pair, the role and the start,
+    which two identical employments always share, so it counts every
+    identical copy as well as the ones that differ only in their end.
     """
-    # Three on 2026-10-09, all copies on unpublished pages rather than second
-    # candidacies, and all written before the ingest counted the rows it had
-    # placed. Paweł Tomasz Kurek's 2019 Sejm and 2024 European Parliament runs
-    # were each written by the 2026-06-01 upload and again by the 07-02 one;
-    # Tomasz Pawlak's 2005 Sejm run came once with each of the two pages
-    # merge-duplicate-people folded into one in August. None has been added
-    # since, and removing the three copies as „duplikat” takes this to zero.
-    KNOWN_COPIES = 3
+    # 2 on the 2026-10-25T03:00:33.098Z export and on the 10-24 one, both on
+    # unpublished pages, both kept by a page merge and both counted by
+    # `test_a_single_seat_run_is_stored_once` too. Tomasz Pawlak
+    # AaAjgAyGQH4Ru1nZsJU7, Sejm 2005 in wielkopolskie: the copy
+    # edge_Xkt3x0BtxfzO5oHRl4iC_teryt30_election_6_bWisJ104. Witold Stępień
+    # p1HPFg4Y63DNYZOeJFtz, European Parliament 2019 under powiat 1008:
+    # fgXV1yaF2okWbz6jzT6A. Paweł Tomasz Kurek's two copies, known on
+    # 2026-10-09, were removed on 10-12. Removing these two as „duplikat”
+    # takes this to zero. The five namesakes' runs this also counted until
+    # 2026-10-25 (Kozłowski Sejm 2015, Bury Sejm 2005, 2007 and 2011, Nowak
+    # Sejm 2005) are drafts for a reviewer and no longer count.
+    KNOWN_COPIES = 2
 
-    single_seat = {"Sejm", "Senat", "Parlament Europejski"}
-
-    groups: dict[tuple, list[str]] = collections.defaultdict(list)
+    groups: dict[tuple, list[dict]] = collections.defaultdict(list)
     for edge in edges:
         if edge.get("type") != "election" or is_removed(edge):
             continue
-        if edge.get("position") not in single_seat:
+        if edge.get("position") not in DISTRICT_OFFICES:
             continue
         groups[
             (
@@ -1885,9 +1908,20 @@ def test_occurrence_edges_may_repeat(edges, within_budget):
                 edge.get("position"),
                 edge.get("start_date"),
             )
-        ].append(edge["id"])
+        ].append(edge)
 
-    duplicated = {key: ids for key, ids in groups.items() if len(ids) > 1}
+    def contradict(a: dict, b: dict) -> bool:
+        return "conflict" in (edge_relation(a, b), edge_relation(b, a))
+
+    duplicated = {
+        key: [candidacy["id"] for candidacy in candidacies]
+        for key, candidacies in groups.items()
+        if any(
+            not contradict(a, b)
+            for i, a in enumerate(candidacies)
+            for b in candidacies[i + 1 :]
+        )
+    }
 
     assert within_budget(len(duplicated), KNOWN_COPIES), (
         f"{len(duplicated)} candidacies are recorded twice for an office that "
