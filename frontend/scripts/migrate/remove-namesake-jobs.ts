@@ -32,7 +32,10 @@ import { reportRemaining } from "./remaining";
  * What the old rows wrote is still on the pages. The audit of 2026-10-14 (task
  * audit-pages-from-collapsed-register-rows) found 199 such jobs on 93 pages,
  * 142 of them proven by the KRS odpis filing the seat under the other entry's
- * PESEL; this repairs the 88 pages no other task already covers.
+ * PESEL; this repairs the 88 pages no other task already covers. Namesakes'
+ * jobs that came by other paths (the name-only ingest before 2026-08-31, a
+ * night's name match on an unlinked page) are reviewed into plans of the same
+ * shape.
  *
  * NOTHING HERE DECIDES WHOSE A JOB IS. Relations carry no record of the entry
  * they were read off (see `/api/nodes/split`), so that is a reviewer's
@@ -46,6 +49,11 @@ import { reportRemaining } from "./remaining";
  *     person it is about - where the review found the page's own link to be
  *     the namesake's (a pre-08-31 name match overwrote it) or missing. Not
  *     where another live page already links that entry: that is a merge.
+ *   - `set_birth_date`: the register entry's birth date, in that same
+ *     approved revision (or one of its own), where the page stores another
+ *     person's - a namesake's payload left it, or it was read off the wrong
+ *     record. The ingest only fills a date a page lacks (`updatedPerson`), so
+ *     a corrected link alone would leave the namesake's date there for good.
  *   - `remove`: the soft delete an administrator's „Usuń powiązanie” makes
  *     (`removeEdgeInBatch`, shared with `/api/edges/delete`), with the reason.
  *   - `move`: the job removed here and written, approved and unpublished, on
@@ -61,11 +69,12 @@ import { reportRemaining } from "./remaining";
  *
  * WHAT IT WILL NOT DO, each reported and skipped rather than guessed:
  *   - touch a page whose link is not the one the review saw - somebody has
- *     changed it since, so the review is out of date;
+ *     changed it since, so the review is out of date - nor, where it puts a
+ *     birth date back, one storing another date than the review saw;
  *   - touch a job that has moved, changed company, or carries a revision a
  *     person wrote: a reviewer's own edit outranks this list;
- *   - remove a job again, or write a link the page already has. A second run
- *     writes nothing.
+ *   - remove a job again, or write a link or a birth date the page already
+ *     has. A second run writes nothing.
  *
  * Every write is signed `migration:remove-namesake-jobs` (`isMigrationUid`).
  * Each removed or created relation fires `onEdgeWritten`, which recomputes its
@@ -88,6 +97,11 @@ import { reportRemaining } from "./remaining";
  */
 
 const AUTHOR = { uid: "migration:remove-namesake-jobs" };
+
+/** A birth date as a page stores it. */
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "a date written YYYY-MM-DD");
 
 const removal = z.object({
   edge: z.string().min(1),
@@ -125,6 +139,10 @@ export const planSchema = z.object({
         /** The register link the page carried when it was reviewed. */
         expect_link: z.string().nullable(),
         set_link: z.string().min(1).optional(),
+        /** The birth date the page stored when it was reviewed. */
+        expect_birth_date: z.string().nullable().optional(),
+        /** The page's own entry's birth date, to replace another person's. */
+        set_birth_date: isoDate.optional(),
         remove: z.array(removal).default([]),
         move: z.array(move).default([]),
         new_pages: z.array(newPage).default([]),
@@ -137,6 +155,12 @@ export const planSchema = z.object({
               step.new_pages.some((page) => page.entry === item.entry),
           ),
         "A move with no page to go to needs a new page for its entry.",
+      )
+      .refine(
+        (step) =>
+          step.set_birth_date === undefined ||
+          step.expect_birth_date !== undefined,
+        "A birth date to write needs the one the review saw (expect_birth_date, null for none).",
       ),
   ),
 });
@@ -172,10 +196,21 @@ export function entryOf(link: unknown): string | undefined {
 }
 
 export type PageVerdict =
-  { ok: true; linkToWrite: string | undefined } | { ok: false; why: string };
+  | {
+      ok: true;
+      linkToWrite: string | undefined;
+      birthDateToWrite?: string | undefined;
+    }
+  | { ok: false; why: string };
 
-/** Whether a page is still the one the review saw, and whether its link still
- * needs writing. */
+function storedBirthDate(stored: Record<string, unknown>): string | null {
+  return typeof stored.birthDate === "string" && stored.birthDate
+    ? stored.birthDate
+    : null;
+}
+
+/** Whether a page is still the one the review saw, and whether its link and
+ * birth date still need writing. */
 export function checkPage(
   stored: Record<string, unknown> | undefined,
   step: PageStep,
@@ -186,10 +221,8 @@ export function checkPage(
     return { ok: false, why: "removed or merged away since the review" };
   }
   const now = entryOf(stored.rejestrIo);
-  if (step.set_link && now === entryOf(step.set_link)) {
-    return { ok: true, linkToWrite: undefined };
-  }
-  if (now !== entryOf(step.expect_link ?? undefined)) {
+  const linked = step.set_link !== undefined && now === entryOf(step.set_link);
+  if (!linked && now !== entryOf(step.expect_link ?? undefined)) {
     return {
       ok: false,
       why:
@@ -197,7 +230,26 @@ export function checkPage(
         `${step.expect_link ?? "nothing"}: re-review it`,
     };
   }
-  return { ok: true, linkToWrite: step.set_link };
+  const born = storedBirthDate(stored);
+  const dated =
+    step.set_birth_date !== undefined && born === step.set_birth_date;
+  if (
+    step.set_birth_date !== undefined &&
+    !dated &&
+    born !== (step.expect_birth_date ?? null)
+  ) {
+    return {
+      ok: false,
+      why:
+        `stores the birth date ${born ?? "none"} now, the review saw ` +
+        `${step.expect_birth_date ?? "none"}: re-review it`,
+    };
+  }
+  return {
+    ok: true,
+    linkToWrite: linked ? undefined : step.set_link,
+    birthDateToWrite: dated ? undefined : step.set_birth_date,
+  };
 }
 
 export type EdgeVerdict =
@@ -259,6 +311,7 @@ type Counts = {
   remove: number;
   move: number;
   link: number;
+  birthDate: number;
   pages: number;
   done: number;
   refused: number;
@@ -320,22 +373,29 @@ async function runPage(
   let writes = 0;
   const lines: string[] = [];
 
-  if (verdict.linkToWrite) {
-    const others = await pagesLinking(db, verdict.linkToWrite, step.page);
+  const { linkToWrite, birthDateToWrite } = verdict;
+  if (linkToWrite) {
+    const others = await pagesLinking(db, linkToWrite, step.page);
     if (others.length > 0) {
       say(
-        `  SKIP ${title}: ${verdict.linkToWrite} already has a page ` +
+        `  SKIP ${title}: ${linkToWrite} already has a page ` +
           `(${others.join(", ")}) - merge them instead`,
       );
       counts.refused += step.remove.length + step.move.length;
       return;
     }
+  }
+  if (linkToWrite || birthDateToWrite) {
     const { revisionRef } = createRevisionTransaction(
       db,
       batch,
       AUTHOR,
       pageRef,
-      { ...withoutInternalFields(page!), rejestrIo: verdict.linkToWrite },
+      {
+        ...withoutInternalFields(page!),
+        ...(linkToWrite ? { rejestrIo: linkToWrite } : {}),
+        ...(birthDateToWrite ? { birthDate: birthDateToWrite } : {}),
+      },
       // Approved, and published or not as it was: the review is what decided
       // whose page it is, and nothing about who may see it changes.
       { stored: page, approve: true },
@@ -352,13 +412,21 @@ async function runPage(
       batch,
     );
     writes++;
-    counts.link++;
-    lines.push(
-      `    link ${String(page!.rejestrIo ?? "none")} -> ${verdict.linkToWrite}`,
-    );
-  } else if (step.set_link) {
-    counts.done++;
+    if (linkToWrite) {
+      counts.link++;
+      lines.push(
+        `    link ${String(page!.rejestrIo ?? "none")} -> ${linkToWrite}`,
+      );
+    }
+    if (birthDateToWrite) {
+      counts.birthDate++;
+      lines.push(
+        `    birth date ${String(page!.birthDate ?? "none")} -> ${birthDateToWrite}`,
+      );
+    }
   }
+  if (step.set_link && !linkToWrite) counts.done++;
+  if (step.set_birth_date && !birthDateToWrite) counts.done++;
 
   for (const item of step.remove) {
     const edgeRef = db.collection("edges").doc(item.edge);
@@ -616,6 +684,7 @@ export async function main(): Promise<void> {
     remove: 0,
     move: 0,
     link: 0,
+    birthDate: 0,
     pages: 0,
     done: 0,
     refused: 0,
@@ -624,6 +693,7 @@ export async function main(): Promise<void> {
 
   say(
     `\n${commit ? "Wrote" : "Would write"}: ${counts.link} links, ` +
+      `${counts.birthDate} birth dates, ` +
       `${counts.pages} new pages, ${counts.remove} removals, ` +
       `${counts.move} moves. ` +
       `Already done: ${counts.done}. Skipped: ${counts.refused}.`,
@@ -631,6 +701,7 @@ export async function main(): Promise<void> {
   if (!commit) {
     reportRemaining({
       links: counts.link,
+      birthDates: counts.birthDate,
       pages: counts.pages,
       removals: counts.remove,
       moves: counts.move,
