@@ -570,6 +570,11 @@ kbd {
   object-position: top;
   display: block;
 }
+.frame .print.whole img {
+  object-fit: contain;
+  object-position: center top;
+  padding: var(--s2);
+}
 .frame .edge {
   display: flex;
   justify-content: space-between;
