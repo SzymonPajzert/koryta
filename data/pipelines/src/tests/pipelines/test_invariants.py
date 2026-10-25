@@ -39,7 +39,7 @@ import pytest
 from analysis.payloads.site import register_entry
 from scrapers.koryta.snapshot import is_reference, reference_id
 from scrapers.wiki.shareholders import normalize_title
-from util.polish import format_person_name
+from util.polish import format_person_name, names_agree
 
 #: Every test here reads the production export rather than a fixture, which is
 #: what `e2e` marks: a test that needs state this repository does not carry.
@@ -1890,6 +1890,99 @@ def test_one_spell_of_employment_is_stored_once(edges, within_budget):
         f"{len(duplicated)} (person, company, role, start) groups, up from the "
         f"{DUPLICATED_SPELLS} known ones. "
         f"Sample: {sample(list(duplicated.values()), 5)}"
+    )
+
+
+def test_a_spell_of_employment_is_on_one_page(
+    edges, live_people, revisions, within_budget
+):
+    """One spell, one person: two pages of one name do not both hold it.
+
+    A role at a company that began on a given day is one person's - two
+    namesakes do not join one board on one day - so the same (company, role,
+    start) on two live pages whose names agree (`names_agree`, the ingest's
+    own test) is one person filed twice, or one page holding a namesake's job.
+    `test_one_spell_of_employment_is_stored_once` asks it of one page; this
+    asks it across pages, where neither page looks wrong on its own.
+
+    The register link does not settle it either way. Most of these pair a
+    linked page with an unlinked one from the 2026-03-26 upload, made before
+    the register reached the person. A payload with a link that finds no page
+    by it falls back to the exact name (`lookupByName`), so a given name the
+    older page writes and the payload does not makes a second page; seven
+    pairs carry exactly the same name, which that does not explain. Some pair
+    two entries, where one of the pages holds a namesake's job. Counted is a
+    pair of pages, however many spells the two share, and only a spell with a
+    start, since an undated one names no day to be the same on.
+
+    The message lists the pairs newest first, by when the younger page of the
+    two was made, so the pairs that pushed the count up come before the ones
+    known for weeks.
+    """
+    # 47 page pairs on the 2026-10-25T03:00:33.098Z export, up from 36 on
+    # 10-14 and 45 on 10-24:
+    # - 27 pair a linked page with an unlinked one, 18 of them both published;
+    #   among them Kulicki shares 12 spells, Świątkowski and Lisiewicz 9, Gut
+    #   and Soszyński 8.
+    # - 19 link two entries, a namesake's job on one of the pages.
+    # - 1 links one entry twice, Wojciechowski's pair from
+    #   `test_a_register_entry_has_one_page`.
+    # The two new since 10-24 show both ways it grows. The night made the
+    # linked Krzysztof Zaremba Krf3YgfPgU3qShbbX8OG beside the unlinked
+    # Krzysztof Piotr Zaremba OxOLyO2vZ2YPSJ2dGET9 of 03-26: one person filed
+    # twice, which only a merge stops (merge-linked-and-unlinked-person-twins).
+    # And it filed a namesake's jobs on a page of his own, Paweł Wiśniewski
+    # c4IOvR5Lz5pKSm440Fn5 beside uapqPAzp4VSQ38UghAhr (remove-namesake-jobs).
+    # At about one a day this passes 57, the end of the buffer, around
+    # 2026-11-04 and holds that night's upload: measure it again before then,
+    # once those two have run.
+    SHARED_SPELL_PAIRS = 47
+
+    pages = {document["id"]: document for document in live_people}
+    holders: dict[tuple, set[str]] = collections.defaultdict(set)
+    for edge in edges:
+        if edge.get("type") != "employed" or is_removed(edge):
+            continue
+        if edge.get("source") not in pages or not has_date(edge, "start_date"):
+            continue
+        spell = (edge["target"], edge.get("name") or None, str(edge["start_date"])[:10])
+        holders[spell].add(edge["source"])
+
+    shared: collections.Counter = collections.Counter()
+    for spell, ids in holders.items():
+        ordered = sorted(ids)
+        for i, one in enumerate(ordered):
+            for other in ordered[i + 1 :]:
+                if names_agree(pages[one].get("name"), pages[other].get("name")):
+                    shared[(one, other)] += 1
+
+    paired = {page for pair in shared for page in pair}
+    made: dict[str, str] = {}
+    for revision in revisions:
+        page = reference_id(revision.get("node_id"))
+        if page in paired:
+            stamp = timestamp_key(revision.get("update_time"))
+            made[page] = min(made.get(page, stamp), stamp)
+    newest = sorted(
+        (
+            (
+                max(made.get(one, ""), made.get(other, ""))[:10],
+                one,
+                other,
+                pages[one].get("name"),
+                count,
+            )
+            for (one, other), count in shared.items()
+        ),
+        reverse=True,
+    )
+
+    assert within_budget(len(shared), SHARED_SPELL_PAIRS), (
+        f"{len(shared)} pairs of live person pages whose names agree hold the "
+        f"same (company, role, start), up from the {SHARED_SPELL_PAIRS} known, "
+        f"so each pair is one person on two pages, or one of them holds a "
+        f"namesake's job, newest first as (younger page made, page, page, "
+        f"name, spells shared): {sample(newest)}"
     )
 
 
