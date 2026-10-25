@@ -547,6 +547,13 @@ async function runPage(
     );
   }
 
+  // The copies this batch writes, by identity. Two jobs of a page can say one
+  // spell - the same company, role and start, written twice by an upload - and
+  // they land on one relation on the other page, as the ingest would write
+  // them. The batch cannot be read back, so the query below would not see the
+  // first copy: without this the second would take the same document id and
+  // silently replace it.
+  const copied = new Map<string, string>();
   for (const { item, edgeRef, stored } of moving) {
     const target = item.to
       ? { id: item.to, made: false }
@@ -577,6 +584,17 @@ async function runPage(
 
     const copy = movedCopy(stored, to);
     const identity = edgeIdentity(copy as EdgeLike);
+    const earlier = copied.get(identity);
+    if (earlier) {
+      await removeEdgeInBatch(db, batch, AUTHOR, edgeRef, stored, item.reason);
+      writes++;
+      counts.move++;
+      lines.push(
+        `    move ${item.edge} -> ${to} (the same spell as ${earlier}, ` +
+          `copied in this run)`,
+      );
+      continue;
+    }
     const there = target.made
       ? []
       : (
@@ -627,6 +645,7 @@ async function runPage(
         },
         batch,
       );
+      copied.set(identity, created.id);
     }
     await removeEdgeInBatch(db, batch, AUTHOR, edgeRef, stored, item.reason);
     writes++;
