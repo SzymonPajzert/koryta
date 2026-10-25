@@ -1532,6 +1532,63 @@ def test_edge_endpoints_exist(edges, node_ids):
     )
 
 
+def test_a_live_edge_joins_two_live_pages(edges, snapshot, within_budget):
+    """An edge nobody removed has a page that is still a page at each end.
+
+    `test_edge_endpoints_exist` cannot see this, because a page that was taken
+    down or merged away keeps its document: `deleted: true`, and for a merge
+    `merged_into` the survivor. Readers drop that document, so an edge still
+    hanging off it leads from a live page to one that is gone - the person
+    loses a job or a candidacy the site had, or a company a board member - and
+    a draft edge waits in the review queue for a page readers are sent away
+    from. A merge re-points each of the duplicate's edges at the survivor, or
+    removes the ones the survivor already states (`server/utils/merge.ts`), so
+    it must not leave one behind, and neither may an ingest that reached the
+    tombstone instead of the page it was merged into.
+
+    A plain removal is not held to that yet. Approving one (`applyRevision`)
+    writes only the page and leaves its edges as they are, so the first such
+    removal of a page with edges shows up here. None had been approved by the
+    2026-10-25 export, and whether the approval should take the page's edges
+    with it is still to be decided.
+
+    Counted is a retired page with at least one live edge, however many it
+    has, so that one bad merge or removal costs one and not the page's degree.
+    A live edge counts whether it is published or still a draft, since the
+    merge moves both. An edge the merge or a reviewer removed is the repair
+    and is left out: 763 removed edges hang off 166 of the 174 retired pages of
+    the 2026-10-25 export, which is what the merges left.
+    """
+    # 0 on the 2026-10-25T03:00:33.098Z export, as on the 10-14, 10-15, 10-23
+    # and 10-24 ones. All 174 retired pages are person pages both removed and
+    # merged away. The company merges about to start are what this guards.
+    RETIRED_PAGES_WITH_LIVE_EDGES = 0
+
+    nodes_by_id = snapshot.by_id("nodes")
+
+    def retired(node_id) -> bool:
+        node = nodes_by_id.get(node_id)
+        return node is not None and not is_live(node)
+
+    stranded: dict[str, list[str]] = collections.defaultdict(list)
+    for edge in edges:
+        if is_removed(edge):
+            continue
+        for end in {edge.get("source"), edge.get("target")}:
+            if retired(end):
+                stranded[end].append(edge["id"])
+    pages = [
+        (page, nodes_by_id[page].get("merged_into"), len(ids), sorted(ids)[:3])
+        for page, ids in sorted(stranded.items())
+    ]
+
+    assert within_budget(len(pages), RETIRED_PAGES_WITH_LIVE_EDGES), (
+        f"{len(pages)} removed or merged-away pages still have live edges, up "
+        f"from the {RETIRED_PAGES_WITH_LIVE_EDGES} known, as (page, merged "
+        f"into, live edges, first edges): {sample(pages)}"
+    )
+
+
 def test_edge_types_are_known(edges, within_budget):
     """Only the edge types `shared/model.ts` declares may be stored."""
     # 64 `source` and 3 `mentioned_person` edges. `source` predates article
