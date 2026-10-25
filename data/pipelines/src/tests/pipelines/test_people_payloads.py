@@ -1,3 +1,4 @@
+import collections
 import sys
 import typing
 from dataclasses import dataclass
@@ -5,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from analysis.payloads.site import day_of
 from entities.composite import Person
 from koryta import setup_context
 from pipelines import PeoplePayloads
@@ -79,6 +81,103 @@ def test_names_are_capitalised(outputs_df):
     assert not misformatted, (
         f"{len(misformatted)} of {len(outputs_df)} payloads carry a name that is "
         f"not in the capitalised form: {misformatted[:10]}"
+    )
+
+
+def rows_of(payload: dict, column: str) -> list[dict]:
+    """A payload's `companies` or `elections`, or none where it has none."""
+    rows = payload.get(column)
+    return (
+        [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+    )
+
+
+def given(value: typing.Any) -> str | None:
+    """A payload field as sent, or None where it is missing. A field one
+    payload lacks reads as NaN off the pipeline's frame."""
+    return value if isinstance(value, str) and value else None
+
+
+def who(payload: dict) -> tuple:
+    """A payload's person as the offender lists below name them: the name, the
+    register entry or else the page, and the birth date, which is what finds a
+    person only an odpis names (most payloads with neither id)."""
+    return (
+        payload.get("name"),
+        given(payload.get("rejestrIo")) or given(payload.get("korytaId")),
+        given(payload.get("birthDate")),
+    )
+
+
+def spells_stated_twice(payloads: typing.Iterable[dict]) -> list[tuple]:
+    """The payloads with two employment rows for one (krs, role, start), with
+    the spells they repeat and how many times."""
+    twice = []
+    for payload in payloads:
+        spells = collections.Counter(
+            (row.get("krs"), row.get("role") or None, day_of(row.get("start")))
+            for row in rows_of(payload, "companies")
+        )
+        repeated = {spell: n for spell, n in spells.items() if n > 1}
+        if repeated:
+            twice.append((*who(payload), repeated))
+    return twice
+
+
+@dataclass(frozen=True)
+class EveryPayload:
+    """What the checks below find in every payload `PeoplePayloads --all`
+    builds."""
+
+    payloads: int
+    spells_stated_twice: list[tuple]
+
+
+@pytest.fixture(scope="module")
+def every_payload() -> EveryPayload:
+    """Every payload `--all` builds, read once by each check below.
+
+    Only what the checks find is kept. The pipeline is volatile, so
+    `outputs_df` builds it again for test_expected_wikipedia and
+    test_election_year_counts later in the module, and the payloads held
+    beside each of those builds would add about 0.7 GB to the tests step's
+    peak.
+    """
+    with patch.object(sys, "argv", ["koryta", "PeoplePayloads", "--all"]):
+        df = PeoplePayloads().read_or_process(setup_context()[0])
+    payloads = df.to_dict(orient="records")
+    return EveryPayload(
+        len(payloads),
+        spells_stated_twice(payloads),
+    )
+
+
+def test_a_payload_states_each_spell_once(every_payload, within_budget):
+    """No payload carries one spell of employment twice.
+
+    The ingest tells two employments apart by the role and the day it began
+    (`EDGE_SEMANTICS` in frontend/server/utils/edges.ts), and stores a row per
+    row of the payload. So a spell stated twice is stored twice, as two edges
+    that may disagree about its end: that is how Robert Marian Soszyński's
+    2015 Zarząd spell at Polskie LNG came to be stored twice on 2026-10-07,
+    when the register gave it an extra row ending the day it began. The
+    copies are what `test_one_spell_of_employment_is_stored_once` counts on
+    the site. The payload folds such rows into one (`one_row_per_spell` in
+    analysis/payloads/person.py) on this same key, so this checks that the
+    fold ran on every payload, not that its key is the ingest's.
+    """
+    # 0 on the outputs of the 2026-10-25 night: in the 157,724 payloads `--all`
+    # builds off them (268,375 employment rows), and in the 8,266 its people
+    # import built to send. 0 on 10-24 too (156,725 and 8,720).
+    KNOWN_TWICE = 0
+
+    twice = every_payload.spells_stated_twice
+
+    assert within_budget(len(twice), KNOWN_TWICE), (
+        f"{len(twice)} of {every_payload.payloads} payloads state a spell of "
+        f"employment twice, up from the {KNOWN_TWICE} known, and the ingest "
+        f"stores each copy (name, entry or page, birth date, "
+        f"{{(krs, role, start): rows}}): {twice[:10]}"
     )
 
 
