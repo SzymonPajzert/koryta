@@ -367,6 +367,8 @@ const failed = ref(false);
 const open = reactive(new Set<string>());
 
 type Filter = "waiting" | "all";
+/** „Czekają” even when nothing waits: a settled page then says so in one
+ * line, rather than listing every relation it has above the comparison. */
 const filter = ref<Filter>("waiting");
 
 const waitsForDecision = (relation: RelationHistory) =>
@@ -603,7 +605,6 @@ async function load() {
       "/api/revisions/relations",
       { method: "GET", query: { nodeId: props.nodeId } },
     );
-    if (waitingRelations.value.length === 0) filter.value = "all";
     emit("summary", {
       total: data.value.total,
       drafts: data.value.drafts,

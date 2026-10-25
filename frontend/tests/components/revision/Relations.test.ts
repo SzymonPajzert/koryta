@@ -199,6 +199,35 @@ describe("RevisionRelations", () => {
     expect(rowIds(wrapper)).toEqual(["bare-2018", "draft-2024", "job"]);
   });
 
+  it("stays on „Czekają” when nothing waits, and says so in one line", async () => {
+    // Not every relation under „Wszystkie”: above the side-by-side comparison,
+    // a person's 72 pushed it some 3,200 px down a settled page.
+    const settled: NodeRelationHistory = {
+      ...structuredClone(PAGE),
+      drafts: 0,
+      withProposals: 0,
+      proposals: 0,
+    };
+    settled.relations = settled.relations.map((relation) => ({
+      ...relation,
+      state: "settled",
+      published: true,
+      waiting: 0,
+    }));
+    mockAuthRequest.mockImplementation(async (url: string) =>
+      url === "/api/revisions/relations" ? settled : {},
+    );
+    const wrapper = await mountSection();
+
+    expect(rowIds(wrapper)).toEqual([]);
+    expect(wrapper.text()).toContain("Żadne powiązanie nie czeka na decyzję.");
+    expect(
+      wrapper.get("[data-testid='relation-filter-waiting']").text(),
+    ).toContain("Czekają (0)");
+    await wrapper.get("[data-testid='relation-filter-all']").trigger("click");
+    expect(rowIds(wrapper)).toEqual(["bare-2018", "draft-2024", "job"]);
+  });
+
   it("names a candidacy by its year, office and place", async () => {
     const wrapper = await mountSection();
 
