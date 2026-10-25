@@ -30,12 +30,15 @@ marked ``e2e`` and deselected by default. Run it with::
 import collections
 import datetime
 import re
+import unicodedata
+import urllib.parse
 import zoneinfo
 
 import pytest
 
 from analysis.payloads.site import register_entry
 from scrapers.koryta.snapshot import is_reference, reference_id
+from scrapers.wiki.shareholders import normalize_title
 from util.polish import format_person_name
 
 #: Every test here reads the production export rather than a fixture, which is
@@ -209,6 +212,12 @@ def is_merged_away(document: dict) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def is_live(document: dict) -> bool:
+    """Whether a document is still one of the site's own: neither removed nor
+    merged away."""
+    return not is_removed(document) and not is_merged_away(document)
+
+
 def compute_vote_stats(votes: list[dict]) -> dict:
     """Recompute a vote aggregate the way the site does.
 
@@ -368,6 +377,21 @@ def articles(nodes) -> list[dict]:
     the tests below are about the fields the site then needs.
     """
     return [document for document in nodes if document.get("type") == "article"]
+
+
+@pytest.fixture(scope="session")
+def live_people(nodes) -> list[dict]:
+    """The person pages that are still pages: neither removed nor merged away.
+
+    A tombstone keeps every field it had, its `rejestrIo` and `wikipedia`
+    among them, so a check of who is filed where that read it would count every
+    merge as one person on two pages.
+    """
+    return [
+        document
+        for document in nodes
+        if document.get("type") == "person" and is_live(document)
+    ]
 
 
 @pytest.fixture(scope="session")
@@ -1138,6 +1162,80 @@ def test_a_register_entry_has_one_page(nodes, within_budget):
         f"page not merged away, up from the {SHARED_ENTRIES} known ones, so "
         f"the night writes each of them to one page only, as (entry, pages): "
         f"{sample(sorted(shared.items()))}"
+    )
+
+
+def wikipedia_article(link) -> tuple[str, str] | None:
+    """The article a stored Wikipedia link names, as (wiki, title), or None.
+
+    One article has many addresses, and pages store all of them: a link pasted
+    from a browser is percent-encoded („Beata_Szyd%C5%82o”) where the pipeline
+    writes the letters (`article_url`), a phone gives the `pl.m.` host, and a
+    section, a query or a trailing slash does not make another article. Neither
+    does the scheme, or a link written without one. The title is read the way
+    MediaWiki resolves it (`normalize_title`): an underscore is a space and the
+    first letter's case does not count. A redirect is not followed, so two
+    titles of one article still read as two.
+
+    None for a link that names no article by its title: another site, an
+    `index.php` address by page or revision number, or a bare `/wiki/`.
+    """
+    if not isinstance(link, str) or not link.strip():
+        return None
+    text = link.strip()
+    if "//" not in text:
+        text = "//" + text
+    parts = urllib.parse.urlsplit(text)
+    wiki = parts.netloc.lower().replace(".m.wikipedia.", ".wikipedia.")
+    if not wiki.endswith(".wikipedia.org"):
+        return None
+    path = urllib.parse.unquote(parts.path)
+    if path.startswith("/wiki/"):
+        raw = path.removeprefix("/wiki/").rstrip("/")
+    else:
+        raw = urllib.parse.parse_qs(parts.query).get("title", [""])[0]
+    title = normalize_title(unicodedata.normalize("NFC", raw))
+    return (wiki, title) if title else None
+
+
+def test_a_biography_belongs_to_one_page(live_people, within_budget):
+    """One Wikipedia article, one person page.
+
+    A biography is about one person, so two live pages linking the same
+    article are either one person filed twice - the case
+    `test_a_register_entry_has_one_page` catches when both pages also link the
+    register - or two people of whom one carries the other's biography, which
+    the page shows as its own. Either way a reader of one of the two pages is
+    told something about the wrong person, or not told it at all.
+
+    Links are compared as the article they name (`wikipedia_article`), not as
+    stored. A merged-away page keeps its link, so only live pages count.
+
+    It cannot see a page that links a namesake's article no other page links:
+    one page per article is all this asks.
+    """
+    # 2 on the 2026-10-25T03:00:33.098Z export, as on the 10-14, 10-15, 10-23
+    # and 10-24 ones. Every link on it is https://pl.wikipedia.org/wiki/<title>:
+    # - Józef_Pilch on two published pages for two register entries born in
+    #   different months, 135yGE2ykTSkgphVaBiM (2199291) and
+    #   RjGHK4cve38bskqQNOXE (2140078), left by the 2026-08-29 hand split: one
+    #   of the two links the other's biography.
+    # - Beata_Szydło on IGdabqsPzTIfvEcoyyuZ and YiQRzcVwcbwPsf6Zy4dU, the pair
+    #   that also shares entry 1353470.
+    # Unlinking Pilch's wrong page and merging Szydło's take this to zero.
+    SHARED_BIOGRAPHIES = 2
+
+    pages: dict[tuple[str, str], list[str]] = collections.defaultdict(list)
+    for document in live_people:
+        article = wikipedia_article(document.get("wikipedia"))
+        if article:
+            pages[article].append(document["id"])
+    shared = {article: ids for article, ids in pages.items() if len(ids) > 1}
+
+    assert within_budget(len(shared), SHARED_BIOGRAPHIES), (
+        f"{len(shared)} Wikipedia articles are linked by more than one live "
+        f"person page, up from the {SHARED_BIOGRAPHIES} known ones, as "
+        f"((wiki, title), pages): {sample(sorted(shared.items()))}"
     )
 
 
