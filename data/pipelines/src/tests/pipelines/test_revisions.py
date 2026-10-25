@@ -15,6 +15,8 @@ edges. The same batch also wrote ``node_id`` as a document reference rather than
 an id, which is what ``test_revision_node_id_is_a_document_id`` covers.
 """
 
+import datetime
+
 import pytest
 
 #: Reads the production export rather than a fixture, so it is deselected by
@@ -26,9 +28,10 @@ pytestmark = pytest.mark.e2e
 # keeps a known problem from failing the build; it should shrink, never grow,
 # and a count past it warns until the buffer in conftest.py runs out.
 REQUIRED_FIELDS = [
-    # Every election revision should say which office was contested; 1891 do
-    # not, and the elections list has nothing to show for them.
-    ("election", "position", 1891),
+    # Every election revision should say which office was contested, and the
+    # elections list has nothing to show for one that does not. Counted only
+    # since CHECKED_SINCE: 0 on the 2026-10-25T03:00:33.098Z export.
+    ("election", "position", 0),
     # None on the export of 2026-10-25T03:00Z. There were 183 and 98, all from
     # the create_revisions.py backfill described above, until
     # repair-migrated-revisions.ts restored them, and the script is fixed.
@@ -42,6 +45,31 @@ REQUIRED_FIELDS = [
     # the same six, and stops growing with the same fix.
     ("employed", "name", 169),
 ]
+
+# Fields checked only on the revisions written since a day, because the ones
+# written before it are history no repair can lower: a revision is a record of
+# what was written, and repairing the document writes a new one beside it.
+#
+# The 1,891 election revisions without an office (on every export read from
+# 2026-10-09 to 2026-10-25) were all written by the uploads of March (1,324)
+# and April 2026 (567). 1,478 of them sat on candidacies still without one on
+# 10-24, 388 on candidacies named since and 25 on removed ones, so naming
+# every office would still have left this at 1,891. Since May none has been
+# written without one; the 16 written by the fold of local runs on 2026-10-23
+# were rewritten in place that evening. A revision that carries the field as
+# null still has it, as everywhere in this list: 15 election revisions since
+# May do, all typed in by hand. The candidacies themselves are
+# `test_a_candidacy_names_its_office` in test_invariants.py, which does fall
+# as offices are named.
+CHECKED_SINCE = {("election", "position"): "2026-05-01"}
+
+
+def written_on(revision: dict) -> str:
+    """The day a revision was written, as `YYYY-MM-DD`, or "" if it says not."""
+    value = revision.get("update_time")
+    if isinstance(value, datetime.datetime):
+        return value.date().isoformat()
+    return str(value or "")[:10]
 
 
 @pytest.fixture(scope="session")
@@ -82,12 +110,18 @@ def test_revisions_have_type(revisions, within_budget):
     ids=[f"{t}.{f}" for t, f, _ in REQUIRED_FIELDS],
 )
 def test_required_field_present(revisions, node_type, field, budget, within_budget):
-    """Every revision of ``node_type`` must have ``field`` present."""
+    """Every revision of ``node_type`` must have ``field`` present, counting
+    from ``CHECKED_SINCE`` where the field has a day there."""
+    since = CHECKED_SINCE.get((node_type, field), "")
     total = 0
     missing = []
     for revision in revisions:
         data = node_data(revision)
         if data is None or data.get("type") != node_type:
+            continue
+        # An undated revision stays in, so a writer that stops stamping its
+        # revisions does not drop out of the check unseen.
+        if since and "" < written_on(revision) < since:
             continue
         # A removal restates the document it takes down, so it has exactly the
         # fields that document had: taking down an election edge that never
@@ -105,6 +139,7 @@ def test_required_field_present(revisions, node_type, field, budget, within_budg
 
     assert within_budget(len(missing), budget), (
         f"Found {len(missing)}/{total} '{node_type}' revisions missing the "
-        f"'{field}' field, up from the {budget} known ones. "
+        f"'{field}' field{f' since {since}' if since else ''}, up from the "
+        f"{budget} known ones. "
         f"Sample IDs: {missing[:10]}"
     )
