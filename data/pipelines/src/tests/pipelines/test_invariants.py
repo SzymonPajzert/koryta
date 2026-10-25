@@ -1983,6 +1983,56 @@ def test_a_single_seat_run_is_stored_once(edges, nodes, within_budget):
     )
 
 
+def test_a_person_stands_once_in_a_national_election(edges, within_budget):
+    """A visitor sees at most one run of a person in one national election.
+
+    A candidate stands in one district for one chamber: the Sejm and the Senat
+    are filled in one parliamentary election, and nobody is on both ballots.
+    So two published candidacies of one person in one Sejm-and-Senat election,
+    or in one European one, are a run shown twice or two people on one page,
+    whether or not their places agree and whatever their committees say.
+    `test_nobody_stands_in_two_places_at_once` sees only the ones in places
+    that disagree and `test_a_single_seat_run_is_stored_once` only the copies;
+    this sees what a reader is shown. A by-election (`by_election`, „wybory
+    uzupełniające”) is a contest of its own, so it is left out. A candidacy
+    with no office counts in a year that held only one kind of election
+    (`election_stood_in`).
+
+    Only reviewed candidacies count, the ones `pageIsPublic` shows. The upload
+    files every PKW record nothing contradicts, so namesakes' runs reach a page
+    as drafts on purpose, for a reviewer to reject: 28 person-elections hold
+    more than one live candidacy on the 2026-10-25 export. Published, 28 had
+    two before the national-runs-stored-twice migration of 2026-10-23.
+    """
+    # 1 on the 2026-10-25T03:00:33.098Z export and on the 10-24 one: Piotr
+    # Mazurek MYdOK2dYhoCVkBmc50oo, two published 2005 candidacies with no
+    # office, 1bWXvAKJ83U33aX01ZSD in dolnośląskie (02) and
+    # vBhkkFwffITYmjipDl26 in mazowieckie (14). 2005 held only the
+    # parliamentary election, so one of the two is somebody else's; it is also
+    # one of the clashes `test_nobody_stands_in_two_places_at_once` counts.
+    KNOWN_TWICE_PUBLISHED = 1
+
+    runs: dict[tuple, list[str]] = collections.defaultdict(list)
+    for edge in edges:
+        if edge.get("type") != "election" or not page_is_public(edge):
+            continue
+        if edge.get("by_election") is True or not has_date(edge, "start_date"):
+            continue
+        kind = election_stood_in(edge)
+        if kind in ("parliament", "european"):
+            year = str(edge["start_date"])[:4]
+            runs[(edge["source"], year, kind)].append(edge["id"])
+
+    twice = {key: ids for key, ids in runs.items() if len(ids) > 1}
+
+    assert within_budget(len(twice), KNOWN_TWICE_PUBLISHED), (
+        f"{len(twice)} people are shown more than one run in one national "
+        f"election, up from the {KNOWN_TWICE_PUBLISHED} known ones, as "
+        f"((person, year, election), [candidacies]): "
+        f"{sample(list(twice.items()), 5)}"
+    )
+
+
 def test_one_spell_of_employment_is_stored_once(edges, within_budget):
     """A person may hold the same role at the same company twice - not at once.
 
