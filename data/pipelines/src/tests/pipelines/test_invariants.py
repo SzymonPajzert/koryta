@@ -1753,6 +1753,97 @@ def test_every_revision_belongs_to_a_document(
     )
 
 
+# How the revision checks tell which revisions were written over their document,
+# and when. Written for `test_a_later_revision_never_drops_a_field` and shared
+# with the checks that replay a document's history the same way.
+#
+# When the last backend took a73fb7c2, after which publishing an edge
+# approves only a revision the edge already holds: prod's rollout of
+# f0a02878 went live at this time (UTC). autopush built it at 18:57 on
+# 10-09, after the last of the 23 (18:31 that day).
+PUBLISHING_STOPPED_FAKING = "2026-10-10T21:29:35"
+
+
+def approved_by_publishing(revision: dict) -> bool:
+    """Whether publishing stamped the revision approved without writing it.
+
+    That is every edge proposal approved before the fix: not one edge
+    proposal was applied through /api/revisions/approve before then, and
+    none could be approved by publishing after it, since a proposal is not
+    what its edge holds. A node proposal is applied when it is approved.
+    Once scripts/migrate/repair-unapplied-proposal-approvals.ts has run on
+    prod they are pending again, and this matches nothing.
+    """
+    return (
+        revision.get("status") == "approved"
+        and revision.get("collection") == "edges"
+        and str(revision.get("id", "")).startswith("proposal_")
+        and timestamp_key(revision.get("review_time")) < PUBLISHING_STOPPED_FAKING
+    )
+
+
+def applied(revision: dict) -> bool:
+    """Whether the revision was written over its document.
+
+    An approved one was, unless publishing approved it. So was an automatic
+    one when it was filed, whatever its status says, unless it is a
+    `proposal_` one, which files without writing. A revision with no status
+    predates statuses (August 2026) and is taken as applied, which is what
+    `test_a_later_revision_never_drops_a_field` assumed of every revision
+    before. A document's first revision also created it, pending or not,
+    which this does not say: a check that replays a history starts from that
+    revision itself (`replay`).
+    """
+    if approved_by_publishing(revision):
+        return False
+    if revision.get("status") in (None, "approved"):
+        return True
+    return revision.get("update_automatic") is True and not str(
+        revision.get("id", "")
+    ).startswith("proposal_")
+
+
+def applied_at(revision: dict) -> str:
+    """When the revision was written over its document, as a sortable stamp.
+
+    An approved revision was written when it was approved: `applyRevision`
+    sets the document and stamps `review_time` in one batch. Anything else
+    that was applied was applied as it was filed, and one that was not is
+    placed where it was filed, to be compared with the page it was offered
+    against.
+    """
+    if (
+        revision.get("status") == "approved"
+        and revision.get("review_time")
+        and not approved_by_publishing(revision)
+    ):
+        return timestamp_key(revision["review_time"])
+    return timestamp_key(revision.get("update_time"))
+
+
+def filed_at(revision: dict) -> str:
+    """When the revision was filed, as a sortable stamp."""
+    return timestamp_key(revision.get("update_time"))
+
+
+def replay(history: list[dict]) -> list[dict]:
+    """A document's revisions in the order they were written over it.
+
+    It starts from the first one filed, which created the document - as a
+    pending revision if it was approved later, since it was one until then.
+    `applyRevision` wrote it over the page again when it was approved, so it
+    comes back at that point, approved.
+    """
+    created = min(history, key=filed_at)
+    rest = [revision for revision in history if revision is not created]
+    if applied_at(created) > filed_at(created):
+        return [
+            {**created, "status": "pending"},
+            *sorted([*rest, created], key=applied_at),
+        ]
+    return [created, *sorted(rest, key=applied_at)]
+
+
 def test_a_later_revision_never_drops_a_field(revisions, within_budget):
     """A revision is a whole snapshot, so it must not lose an earlier field.
 
@@ -1836,85 +1927,6 @@ def test_a_later_revision_never_drops_a_field(revisions, within_budget):
         document_id = reference_id(revision.get("node_id"))
         if document_id and isinstance(revision.get("data"), dict):
             by_document[document_id].append(revision)
-
-    # When the last backend took a73fb7c2, after which publishing an edge
-    # approves only a revision the edge already holds: prod's rollout of
-    # f0a02878 went live at this time (UTC). autopush built it at 18:57 on
-    # 10-09, after the last of the 23 (18:31 that day).
-    publishing_stopped_faking = "2026-10-10T21:29:35"
-
-    def approved_by_publishing(revision: dict) -> bool:
-        """Whether publishing stamped the revision approved without writing it.
-
-        That is every edge proposal approved before the fix: not one edge
-        proposal was applied through /api/revisions/approve before then, and
-        none could be approved by publishing after it, since a proposal is not
-        what its edge holds. A node proposal is applied when it is approved.
-        Once scripts/migrate/repair-unapplied-proposal-approvals.ts has run on
-        prod they are pending again, and this matches nothing.
-        """
-        return (
-            revision.get("status") == "approved"
-            and revision.get("collection") == "edges"
-            and str(revision.get("id", "")).startswith("proposal_")
-            and timestamp_key(revision.get("review_time")) < publishing_stopped_faking
-        )
-
-    def applied(revision: dict) -> bool:
-        """Whether the revision was written over its document.
-
-        An approved one was, unless publishing approved it. So was an automatic
-        one when it was filed, whatever its status says, unless it is a
-        `proposal_` one, which files without writing. A revision with no status
-        predates statuses (August 2026) and is taken as applied, which is what
-        this test assumed of every revision before. A document's first revision
-        created it, pending or not.
-        """
-        if approved_by_publishing(revision):
-            return False
-        if revision.get("status") in (None, "approved"):
-            return True
-        return revision.get("update_automatic") is True and not str(
-            revision.get("id", "")
-        ).startswith("proposal_")
-
-    def applied_at(revision: dict) -> str:
-        """When the revision was written over its document, as a sortable stamp.
-
-        An approved revision was written when it was approved: `applyRevision`
-        sets the document and stamps `review_time` in one batch. Anything else
-        that was applied was applied as it was filed, and one that was not is
-        placed where it was filed, to be compared with the page it was offered
-        against.
-        """
-        if (
-            revision.get("status") == "approved"
-            and revision.get("review_time")
-            and not approved_by_publishing(revision)
-        ):
-            return timestamp_key(revision["review_time"])
-        return timestamp_key(revision.get("update_time"))
-
-    def filed_at(revision: dict) -> str:
-        """When the revision was filed, as a sortable stamp."""
-        return timestamp_key(revision.get("update_time"))
-
-    def replay(history: list[dict]) -> list[dict]:
-        """A document's revisions in the order they were written over it.
-
-        It starts from the first one filed, which created the document - as a
-        pending revision if it was approved later, since it was one until then.
-        `applyRevision` wrote it over the page again when it was approved, so it
-        comes back at that point, approved.
-        """
-        created = min(history, key=filed_at)
-        rest = [revision for revision in history if revision is not created]
-        if applied_at(created) > filed_at(created):
-            return [
-                {**created, "status": "pending"},
-                *sorted([*rest, created], key=applied_at),
-            ]
-        return [created, *sorted(rest, key=applied_at)]
 
     # backfill-parties-source.ts (2026-10-06) stamped `partiesSource` into the
     # pending human revisions after the fact, a page's creating one among them,
