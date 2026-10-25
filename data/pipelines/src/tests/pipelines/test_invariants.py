@@ -2484,7 +2484,7 @@ def test_employment_does_not_end_before_it_starts(edges, within_budget):
 
 #: The days PeopleKRS ran before 5fe9e12b (2026-05-05) and wrote as the end of
 #: every post rejestr.io still listed as current. Kept in step with
-#: `CRAWL_STAMPS` in `frontend/scripts/migrate/clear-crawl-stamp-job-ends.ts`.
+#: `CRAWL_STAMPS` in `frontend/scripts/migrate/archive/clear-crawl-stamp-job-ends.ts`.
 CRAWL_STAMPS = ("2026-03-18", "2026-04-06")
 
 WARSAW = zoneinfo.ZoneInfo("Europe/Warsaw")
@@ -2530,19 +2530,21 @@ def test_a_job_does_not_end_on_the_day_a_crawl_ran(edges, within_budget):
     current. The ingest never rewrites a stored end, so nothing repairs them by
     itself - the night only reports them as `dropped`.
 
-    `frontend/scripts/migrate/clear-crawl-stamp-job-ends.ts` puts back the
+    `frontend/scripts/migrate/archive/clear-crawl-stamp-job-ends.ts` puts back the
     register's answer on 991 of them. The rest it lists for a reviewer by id.
     """
-    # 1,043 live on the 2026-10-14 export, before the migration. After it, 52
-    # by its dry run against that export: 45 the register has no row for (33
-    # spells from before 05-05 under another role or start, 9 pages linking a
+    # 1,048 on the 2026-10-25 15:12 export, the one the production run of that
+    # day started from. Its dry run there, with that day's register, left 61
+    # for a reviewer, 60 of them live: 48 the register has no row for (33
+    # spells from before 05-05 under another role or start, 12 pages linking a
     # rejestr.io entry other than the one whose row fits, 3 people the register
     # does not place at the company), 5 old spells whose person's open spell
     # has no edge, 1 contributor's proposal clearing the end that waits at
-    # /admin/rewizje, and the 1 post the register really ends on 2026-03-18.
-    # Lower it as reviewers resolve them; a re-run of the migration against a
-    # newer register picks up any its rows now answer.
-    STAMPED_ENDS = 52
+    # /admin/rewizje, and 6 posts the register really ends on a stamp day.
+    # (52 by the dry run against the 2026-10-14 export.) Lower it as reviewers
+    # resolve them; a re-run of the migration against a newer register picks
+    # up any its rows now answer.
+    STAMPED_ENDS = 60
 
     stamped = sorted(
         edge["id"]
@@ -2556,7 +2558,8 @@ def test_a_job_does_not_end_on_the_day_a_crawl_ran(edges, within_budget):
         f"{len(stamped)} employment edges end on a day PeopleKRS ran "
         f"({', '.join(CRAWL_STAMPS)}) rather than one the register gives, up "
         f"from the {STAMPED_ENDS} known ones. Run "
-        f"scripts/migrate/clear-crawl-stamp-job-ends.ts. Sample: {sample(stamped)}"
+        f"scripts/migrate/archive/clear-crawl-stamp-job-ends.ts. "
+        f"Sample: {sample(stamped)}"
     )
 
 

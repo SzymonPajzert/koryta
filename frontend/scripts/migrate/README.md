@@ -93,22 +93,6 @@ itself from the PKD codes on the node. That could not survive the mapping
 moving to Python: keeping it would have meant a second copy of the answer in
 TypeScript, which is the thing the move was for.
 
-`clear-crawl-stamp-job-ends.ts` stays out of `archive/` for a different
-reason. It puts back the register's answer on job ends a pre-05-05 PeopleKRS
-run stamped with its own date, and the register is a file it is handed -
-`data/pipelines/src/scripts/register_job_ends.py` writes it from
-`person_krs_combined`, outside the repository, because it names people. The
-archive check runs every script with no arguments, so this one could only be
-archived with a no-file path that reports zero without looking at anything,
-which is the fake pass the check exists to rule out. And it is not done when it
-has run: the stamped edges it leaves to a reviewer - 52 after the run against
-the 2026-10-14 export, most of them spells the register lists under another
-role or start - are worth re-running against a newer register, which may answer
-some. The guard against a regression lives in the invariants suite instead:
-`test_a_job_does_not_end_on_the_day_a_crawl_ran` holds the edges still ending
-on a stamp day to their budget, and `test_no_day_ends_a_hundred_jobs` fails on
-any new stamp date, on every night's export.
-
 Everything above still applies to these: the dry run reports, a clean run
 writes nothing, and it takes `--prod --commit` to touch production.
 
@@ -229,6 +213,21 @@ usage lines in its docstring, and whatever imports it — usually its test —
 follows. The check runs every script under Nuxt's server tsconfig, so one that
 imports through `~~/`, like `merge-duplicate-people.ts`, needs nothing more than
 `npx nuxt prepare` to have been run.
+
+`clear-crawl-stamp-job-ends.ts` needs one more thing than the others: a
+register. It puts back the register's answer on the job ends a pre-05-05
+PeopleKRS run stamped with its own date, and the register is a file that
+`data/pipelines/src/scripts/register_job_ends.py` writes from
+`person_krs_combined` outside the repository, because it names people. Run with
+no arguments, as the check runs it, the script reads the newest
+`~/.cache/koryta/crawl-stamps-<date>/register.jsonl`, the folder its run steps
+write to. So on a machine that has written one, the check compares the export
+with a real register, and on one that has not it fails instead of passing
+without looking. Its invariants budget stays above zero on purpose:
+`test_a_job_does_not_end_on_the_day_a_crawl_ran` counts the stamped edges it
+leaves to a reviewer (60 after the production run of 2026-10-25), which a
+run against a newer register may still answer. `test_no_day_ends_a_hundred_jobs`
+catches a new stamp date on every night's export.
 
 ## Note on the older scripts
 
