@@ -1045,9 +1045,10 @@ def test_every_company_is_published(nodes, within_budget):
     claim like a person's: it waits as a draft until a reviewer approves it,
     and those drafts are the known ones below.
 
-    `page_is_public` rather than the raw flag, so a company retired through an
-    approved removal is not reported as a hole - `deleted` is how a company
-    stops having a page on purpose.
+    A company retired through an approved removal is not reported as a hole -
+    `deleted` is how a company stops having a page on purpose, and a merge
+    leaves a removed tombstone - so only the live ones are counted, by the raw
+    flag: `page_is_public` is false for a removed page too.
     """
     # Five on the export of 2026-10-25T03:00Z, the same five as on 2026-10-24,
     # every one an institution page somebody created by hand and nobody has
@@ -1065,7 +1066,9 @@ def test_every_company_is_published(nodes, within_budget):
     unpublished = [
         document["id"]
         for document in nodes
-        if document.get("type") == "place" and not page_is_public(document)
+        if document.get("type") == "place"
+        and not is_removed(document)
+        and document.get("published") is not True
     ]
 
     assert within_budget(len(unpublished), UNPUBLISHED_COMPANIES), (
