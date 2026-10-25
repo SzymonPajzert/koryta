@@ -215,6 +215,87 @@ def test_every_settled_revision_belongs_to_the_document_it_settled(audit, snapsh
     )
 
 
+def moment(value) -> datetime.datetime | None:
+    """A stored timestamp as a naive UTC datetime, whichever way it was stored.
+
+    Revisions carry Firestore timestamps and the log carries ISO strings
+    (`test_every_entry_names_who_decided_and_when`), and the two are compared.
+    """
+    if isinstance(value, datetime.datetime):
+        if value.tzinfo is not None:
+            value = value.astimezone(datetime.UTC).replace(tzinfo=None)
+        return value
+    if isinstance(value, str) and value:
+        return moment(datetime.datetime.fromisoformat(value.replace("Z", "+00:00")))
+    return None
+
+
+def test_a_person_settling_a_waiting_revision_leaves_an_audit_entry(
+    audit, snapshot, within_budget
+):
+    """Every approval or rejection a person makes of a waiting revision is logged.
+
+    The other tests here check that what the log holds is coherent, and the
+    last one that it is not empty; none of them notices a decision that left
+    no entry. `/api/revisions/approve` and the reject endpoint file one in the
+    same batch as `review_user`, so a revision a person settled with no
+    approve or reject entry naming it means a path has stopped writing it.
+
+    Only decisions on a revision that was already waiting are asked about,
+    which is a review time more than 2 s after it was filed. A revision
+    approved as it is written (a person's own edit, a migration's write) is
+    stamped in the same request and is not a decision the log records. Nor
+    are the night's: the ingest approves what it writes and publishing a batch
+    approves without an entry (`publishEdgeInBatch(audit=false)`), all under a
+    `pipeline` reviewer, and a `migration:` reviewer is a script. A decision
+    from before the log began cannot be in it.
+    """
+    # None on the 2026-10-25T03:00:33.098Z export, nor on the 10-24 one: every
+    # such decision since the log began on 2026-08-03 has its entry. That is
+    # 4,843 approvals and 5 rejections on the 10-25 export, against 19,940
+    # approved as they were written and 10,731 settled by a robot.
+    KNOWN_UNLOGGED = 0
+
+    if not audit:
+        pytest.skip("the export holds no audit log to look decisions up in")
+
+    began = min(moment(entry.get("at")) or datetime.datetime.max for entry in audit)
+    logged = {
+        (
+            reference_id(entry.get("target_id")),
+            reference_id(entry.get("revision_id")),
+            entry.get("action"),
+        )
+        for entry in audit
+        if entry.get("revision_id")
+    }
+
+    unlogged = []
+    for revision in snapshot.collection("revisions"):
+        action = {"approved": "approve", "rejected": "reject"}.get(
+            revision.get("status") or ""
+        )
+        reviewed = moment(revision.get("review_time"))
+        filed = moment(revision.get("update_time"))
+        if action is None or reviewed is None or filed is None or reviewed < began:
+            continue
+        reviewer = str(revision.get("review_user") or "")
+        if reviewer.startswith("migration:") or "pipeline" in reviewer:
+            continue
+        if (reviewed - filed).total_seconds() <= 2:
+            continue
+        target = reference_id(revision.get("node_id"))
+        if (target, revision["id"], action) not in logged:
+            unlogged.append((revision["id"], target, action, reviewer, reviewed))
+
+    assert within_budget(len(unlogged), KNOWN_UNLOGGED), (
+        f"{len(unlogged)} revisions a person approved or rejected after they had "
+        f"been waiting have no audit entry for it, up from the {KNOWN_UNLOGGED} "
+        f"known, as (revision, target, action, reviewer, review_time): "
+        f"{sample(unlogged)}"
+    )
+
+
 def test_audit_log_is_written_once_pages_are_being_published(audit, snapshot):
     """Somebody publishing a page has to leave an entry behind.
 
