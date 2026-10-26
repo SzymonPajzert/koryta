@@ -2791,6 +2791,15 @@ def test_a_later_revision_never_drops_a_field(revisions, within_budget):
     that kind was a contributor's correction of 09-06 dating each to its
     election day. Read as their page, the import's revisions seemed to lose an
     `end_date` that neither edge has ever had, and the 10-11 night failed on it.
+
+    Nor does a migration lose a field it was written to take off.
+    clear-crawl-stamp-job-ends.ts filed 832 revisions on 2026-10-25, each an
+    employment edge without the `end_date` a crawl had stamped on it
+    (`CRAWL_STAMPS`): the register lists those posts as current, and an open
+    job is stored with no end. Read as erased ends, they held the 10-26 night's
+    upload at 834 drops. So a migration named in `cleared_on_purpose` is
+    excused the field it clears, on the values it clears, and nothing else it
+    leaves out.
     """
     # One article, oYkxDlD1KfkO96p6PIwK, whose January 2026 edit lost the
     # `estimates` field the previous revision carried. It is still on the node
@@ -2803,7 +2812,8 @@ def test_a_later_revision_never_drops_a_field(revisions, within_budget):
     # day after the upload, and the content is on her page. And the removal of
     # election edge Gm2XbS1oTAmdH7GP1yEi as a duplicate on 08-30, which "lost"
     # a `committee` that publishing had marked approved 15 seconds earlier
-    # without writing it to the edge.
+    # without writing it to the edge. Still these 2 on the
+    # 2026-10-26T03:00:37.354Z export, with the crawl-stamp migration excused.
     KNOWN_DROPS = 2
 
     # Bookkeeping the node owns rather than the revision, from
@@ -2836,6 +2846,19 @@ def test_a_later_revision_never_drops_a_field(revisions, within_budget):
     # revision standing for the page it created does not say the page had it.
     stamped_later = {"partiesSource"}
 
+    def cleared_on_purpose(revision: dict, field: str, page: dict) -> bool:
+        """Whether a migration took the field off the page on purpose.
+
+        clear-crawl-stamp-job-ends.ts took off an `end_date` only where it fell
+        on a day PeopleKRS ran, so an end it dropped on any other day still
+        counts.
+        """
+        return (
+            revision.get("update_user") == "migration:clear-crawl-stamp-job-ends"
+            and field == "end_date"
+            and end_day(page["data"]) in CRAWL_STAMPS
+        )
+
     dropped = []
     for document_id, history in by_document.items():
         page = None
@@ -2849,6 +2872,7 @@ def test_a_later_revision_never_drops_a_field(revisions, within_budget):
                     and field not in unknown
                     and value not in (None, "", [], {})
                     and field not in revision["data"]
+                    and not cleared_on_purpose(revision, field, page)
                 }
                 if lost:
                     dropped.append(
