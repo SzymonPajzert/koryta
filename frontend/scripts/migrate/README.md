@@ -165,6 +165,13 @@ the number of documents known to be broken — so after running a migration
 against production, lower the matching budget to the new count. A migration is
 not finished until its budget reaches zero.
 
+A migration that takes a field off documents files revisions without it, and
+`test_a_later_revision_never_drops_a_field` reads each one as a field erased
+from the page. Name the migration in that test's `cleared_on_purpose`, with the
+field and the values it clears, in the same change as the script. Otherwise the
+first night after the production run holds its upload, as the 2026-10-26 night
+did on the 832 ends `clear-crawl-stamp-job-ends.ts` cleared.
+
 ## Finished migrations go to `archive/`
 
 A migration is finished when it has run against production, a dry run against
