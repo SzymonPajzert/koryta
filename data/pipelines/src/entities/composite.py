@@ -34,17 +34,13 @@ class Election:
     # is usually a one-gmina KWW, but it is also where a misspelt national
     # committee hides, so those are proposed and left for review.
     party_from_committee: bool = False
-    # Whether PKW recorded this candidacy as winning the mandate. Tri-state,
-    # and the third state is the whole difficulty: PKW says nothing for 74.5%
-    # of its rows, which is not a loss. Ten (type, year) blocks are complete -
-    # samorzadu 2010 and 2024, sejmu and senatu 2011/2019/2023, europarlamentu
-    # 2019/2024 - samorzadu 2002 and 2018 are about 4%, and everything else is
-    # silent. Reading a missing value as False would file every politician who
-    # stood before 2010 as having lost.
-    #
-    # The value has been carried this far since `people_pkw_merged` first
-    # selected `candidacy_success` into the elections struct; it stopped here,
-    # because nothing read it off the row.
+    # Whether PKW recorded this candidacy as winning the mandate. Tri-state:
+    # None is a row that came without a result. Since the scrapers read the
+    # `Mandat` column (0022d0e5) and the 2024 run-offs, every row of
+    # person_pkw carries one, 1991 to 2024, and the winners match the seats -
+    # 460 to the Sejm and 100 to the Senate each time, which
+    # `test_every_election_marks_its_winners` holds them to. The site stores
+    # both answers (2026-10-27), so a False here goes up as a defeat.
     elected: bool | None = None
 
 

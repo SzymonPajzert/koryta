@@ -139,6 +139,52 @@ def test_a_european_home_is_not_read_as_the_district(df):
     assert european["teryt_living"].str.fullmatch(r"\d{6}").all()
 
 
+#: How many candidates each national election elected: the Sejm's 460 and the
+#: Senate's 100 are fixed by the constitution, and Poland's share of the
+#: European Parliament is set for each term. PKW marks 52 in 2019, the seat
+#: Brexit added among them.
+NATIONAL_SEATS = {"sejmu": 460, "senatu": 100}
+EUROPEAN_SEATS_BY_YEAR = {"2004": 54, "2009": 50, "2014": 51, "2019": 52, "2024": 53}
+
+
+def test_every_election_marks_its_winners(df):
+    """Since 2026-10-27 the site stores PKW's losses as well as its wins, so a
+    file read without its result column no longer just leaves its winners
+    unmarked. `parse_yes_no` and `parse_mandate` read a blank cell as a loss,
+    which in a column that is there is what it means, and every candidate the
+    file lists would go up as beaten. So every office of every election has
+    winners and losers, and a national election as many winners as it had
+    seats. On the 2026-10-24 build every block passes, Sejm and Senate to the
+    seat."""
+    result = df["candidacy_success"].astype(str).str.upper()
+    blocks = (
+        df.assign(
+            won=result == "TRUE",
+            lost=result == "FALSE",
+            year=df["election_year"].astype(str),
+            office=df["office"].fillna(""),
+        )
+        .groupby(["election_type", "year", "office"])[["won", "lost"]]
+        .sum()
+    )
+    for (kind, year, office), row in blocks.iterrows():
+        name = " ".join(part for part in (kind, year, office) if part)
+        with check:
+            assert row["won"] > 0, f"nobody won {name}"
+        with check:
+            assert row["lost"] > 0, f"nobody lost {name}"
+
+    winners = blocks["won"].groupby(level=["election_type", "year"]).sum()
+    for (kind, year), count in winners.items():
+        seats = NATIONAL_SEATS.get(kind)
+        if kind == "europarlamentu":
+            seats = EUROPEAN_SEATS_BY_YEAR.get(year)
+        if seats is None:
+            continue
+        with check:
+            assert count == seats, f"{kind} {year}: {count} marked won of {seats} seats"
+
+
 def test_every_2024_mayor_reads_as_elected(df):
     """PKW's list of who was elected in 2024 (wybrani_wojt_burmistrz_prezydent)
     names 1,457 wójtowie, 912 burmistrzowie and 107 prezydenci, and one more
