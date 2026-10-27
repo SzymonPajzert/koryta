@@ -95,7 +95,7 @@ type NodeEdgeStats = {
    *
    * Optional because a node not recomputed since the field was added does not
    * carry it, and such a person is simply not found under any election until
-   * `scripts/migrate/backfill-election-stats.ts`, `sweepEdgeStats` or
+   * `scripts/migrate/archive/backfill-election-stats.ts`, `sweepEdgeStats` or
    * /api/stats/computeNodes reaches them. */
   elections?: string[];
 };
