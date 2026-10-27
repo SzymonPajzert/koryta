@@ -568,3 +568,60 @@ describe("buildStructuralFilterOps, the election filter", () => {
     expect(ops).toHaveLength(0);
   });
 });
+
+describe("buildStructuralFilterOps, the result of an election", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDb();
+  });
+
+  it("asks for the result's own key, for each election", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { election: ["parliament-2023", "local-2024"], electionResult: "won" },
+      "approved",
+    );
+
+    const query = { where: vi.fn().mockReturnThis() };
+    ops[0]!.applyFs(query as unknown as FirebaseFirestore.Query);
+    expect(query.where).toHaveBeenCalledWith(
+      "stats.edges.approved.elections",
+      "array-contains-any",
+      ["parliament-2023:won", "local-2024:won"],
+    );
+    expect(
+      ops[0]!
+        .applyMem([
+          {
+            id: "won",
+            stats: {
+              edges: {
+                approved: {
+                  elections: ["parliament-2023", "parliament-2023:won"],
+                },
+              },
+            },
+          },
+          {
+            id: "lost",
+            stats: {
+              edges: {
+                approved: { elections: ["local-2024", "local-2024:lost"] },
+              },
+            },
+          },
+        ])
+        .map((n) => n.id),
+    ).toEqual(["won"]);
+  });
+
+  it("means nothing without an election", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { electionResult: "lost" },
+      "approved",
+    );
+
+    expect(ops).toHaveLength(0);
+  });
+});

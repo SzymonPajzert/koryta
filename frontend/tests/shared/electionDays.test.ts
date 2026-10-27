@@ -5,6 +5,8 @@ import {
   electionKindsIn,
   electionName,
   electionOptions,
+  electionResultKey,
+  electionResultOptions,
 } from "../../shared/electionDays";
 import { isoDay } from "../../shared/dates";
 import { electionPositions } from "../../shared/misc";
@@ -207,5 +209,22 @@ describe("electionName", () => {
     expect(electionName("sejm-2025")).toBeNull();
     expect(electionName("parliament-2006")).toBeNull();
     expect(electionName("")).toBeNull();
+  });
+});
+
+describe("the result of an election", () => {
+  it("is stored as its own key beside the election's", () => {
+    expect(electionResultKey("parliament-2023", "won")).toBe(
+      "parliament-2023:won",
+    );
+    expect(electionResultKey("local-2018", "lost")).toBe("local-2018:lost");
+  });
+
+  it("is offered as ran, won, lost - in that order", () => {
+    expect(electionResultOptions.map((option) => option.title)).toEqual([
+      "Kandydowali",
+      "Wygrali",
+      "Przegrali",
+    ]);
   });
 });

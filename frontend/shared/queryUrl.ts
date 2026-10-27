@@ -22,7 +22,7 @@
 
 import { categoryTitle } from "./companyCategories";
 import { longDate } from "./dates";
-import { electionName } from "./electionDays";
+import { electionName, electionResultOptions } from "./electionDays";
 
 /** A query value as it reaches us: from `route.query` (string, repeated
  * string, or null), from the api's `Query` type (numbers, already coerced), or
@@ -50,6 +50,7 @@ const SHARE_KEYS = [
   "party",
   "parties",
   "election",
+  "electionResult",
   "place",
   "krs",
   "currentlyEmployed",
@@ -79,6 +80,7 @@ export type TableQuery = Partial<
  */
 const NEUTRAL: Partial<Record<ShareKey, string>> = {
   currentlyEmployed: "all",
+  electionResult: "all",
   visibility: "all",
   hideVoted: "all",
   sortDesc: "false",
@@ -350,7 +352,17 @@ export function queryChips(
   // list does not know - typed into the url, or from a later version of it -
   // is shown as it came, like an unresolved region code: the chip has to say
   // which filter it is for the reader to clear it.
+  //
+  // A result reads in front of the elections it narrows - „Wygrali: Sejm i
+  // Senat 2023” - and is one chip with them, cleared with them: on its own it
+  // narrows nothing, and left in the url it would come back the next time an
+  // election is picked.
   const elections = values(query.election);
+  const result = electionResultOptions.find(
+    (option) =>
+      option.value !== "all" &&
+      option.value === values(query.electionResult)[0],
+  );
   if (elections.length > 0) {
     const key = elections[0]!;
     // „Sejm i Senat 2023”, as the menu names it, or the key as it came.
@@ -360,10 +372,12 @@ export function queryChips(
         : (electionName(key) ?? key);
     chips.push({
       key: "election",
-      label: `Wybory: ${elections.length > 1 ? elections.length : what}`,
-      short: what,
+      label: result
+        ? `${result.title}: ${what}`
+        : `Wybory: ${elections.length > 1 ? elections.length : what}`,
+      short: result ? `${result.title.toLowerCase()}: ${what}` : what,
       admin: false,
-      clears: ["election"],
+      clears: ["election", "electionResult"],
     });
   }
 

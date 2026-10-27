@@ -1005,3 +1005,60 @@ describe("ExploreTable's matched and won runs", () => {
     );
   });
 });
+
+/** With a result asked for, only the run that won - or lost - is the one that
+ * put the row in the table. */
+describe("ExploreTable's runs under a result", () => {
+  const WITH_ELECTIONS = [
+    { title: "Osoba", key: "name", sortable: true },
+    { title: "Firmy", key: "latestEmploymentStart", sortable: true },
+    { title: "Wybory", key: "elections", sortable: false },
+  ];
+
+  const candidate = (): PersonRich => ({
+    ...person(),
+    elections: [
+      {
+        year: "2024",
+        location: "Gdynia",
+        teryt: "2262",
+        position: "Rada miasta",
+        key: "local-2024",
+        elected: true,
+      },
+      {
+        year: "2024",
+        location: "Gdynia",
+        teryt: "2262",
+        position: "Prezydent",
+        key: "local-2024",
+        elected: false,
+      },
+    ],
+  });
+
+  const filled = async (matchedResult: string) => {
+    const wrapper = await mountTable({
+      headers: WITH_ELECTIONS,
+      items: [candidate()],
+      matchedElections: ["local-2024"],
+      matchedResult,
+    });
+    return wrapper
+      .findAll("tbody td")[2]!
+      .findAll(".v-chip")
+      .map((chip) => chip.classes().includes("election-matched"));
+  };
+
+  it("fills the run that won, under „Wygrali”", async () => {
+    expect(await filled("won")).toEqual([true, false]);
+  });
+
+  it("fills the run that lost, under „Przegrali”", async () => {
+    expect(await filled("lost")).toEqual([false, true]);
+  });
+
+  it("fills every run of the election, under „Kandydowali”", async () => {
+    expect(await filled("all")).toEqual([true, true]);
+  });
+});

@@ -76,6 +76,7 @@ async function backfill() {
       "start_date",
       "position",
       "by_election",
+      "elected",
       "published",
       "deleted",
     )

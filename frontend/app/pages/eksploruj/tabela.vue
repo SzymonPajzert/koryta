@@ -34,6 +34,7 @@
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
         v-model:election="filterElection"
+        v-model:election-result="filterElectionResult"
         v-model:teryt="filterTeryt"
         v-model:company-teryt="filterCompanyTeryt"
         v-model:place="filterPlace"
@@ -74,6 +75,7 @@
           score-on-phone
           :draft-with-name="!!user"
           :matched-elections="filterElection"
+          :matched-result="filterElectionResult"
           @focus="focusPerson"
         />
       </v-card>
@@ -384,7 +386,24 @@ const filterVisibility = choiceFilter<"all" | "public" | "private">(
   "all",
 );
 const filterParty = arrayFilter("party");
-const filterElection = arrayFilter("election");
+const electionParam = arrayFilter("election");
+/** Emptied, it takes the result with it in the same write: two models written
+ * in one tick both start from the url as it was, and the second would put the
+ * first's election back - see `clearFilters` below. */
+const filterElection = computed<string[] | null>({
+  get: () => electionParam.value,
+  set: (value) =>
+    void setQuery(
+      value?.length
+        ? { election: value }
+        : { election: undefined, electionResult: undefined },
+      { reset: true },
+    ),
+});
+const filterElectionResult = choiceFilter<"all" | "won" | "lost">(
+  "electionResult",
+  "all",
+);
 const filterTeryt = stringFilter("teryt");
 const filterCompanyTeryt = stringFilter("companyTeryt");
 const { filterPlace, legacyKrs, availableCompanies } = usePlaceFilter(
@@ -435,6 +454,7 @@ const clearFilters = () => {
     party: undefined,
     parties: undefined,
     election: undefined,
+    electionResult: undefined,
     place: undefined,
     krs: undefined,
     currentlyEmployed: undefined,
@@ -477,6 +497,12 @@ const apiQuery = computed(
       election:
         filterElection.value && filterElection.value.length > 0
           ? filterElection.value
+          : undefined,
+      // Only beside an election: on its own it narrows nothing, and the api
+      // would ignore it anyway.
+      electionResult:
+        filterElection.value?.length && filterElectionResult.value !== "all"
+          ? filterElectionResult.value
           : undefined,
       place:
         filterPlace.value && filterPlace.value.length > 0

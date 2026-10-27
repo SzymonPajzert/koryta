@@ -13,10 +13,11 @@ const vuetify = createVuetify({ components, directives });
 // Same shape as tests/pages/eksploruj/nowe.test.ts: live boxes the tests
 // rewrite between mounts, because `vi.mock` is hoisted above anything this
 // file defines.
-const { routeQuery, lastQuery, authUser } = vi.hoisted(() => ({
+const { routeQuery, lastQuery, authUser, routerPush } = vi.hoisted(() => ({
   routeQuery: { value: {} as Record<string, string> },
   lastQuery: { value: null as { value: Query } | null },
   authUser: { value: null as { getIdTokenResult: () => unknown } | null },
+  routerPush: vi.fn(),
 }));
 
 // `mountSuspended` is not an option here: it brings Nuxt's own router, and the
@@ -31,7 +32,11 @@ vi.mock("vue-router", async (importOriginal) => {
       path: "/eksploruj/tabela",
       params: {},
     }),
-    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), afterEach: vi.fn() }),
+    useRouter: () => ({
+      push: routerPush,
+      replace: vi.fn(),
+      afterEach: vi.fn(),
+    }),
   };
 });
 
@@ -303,5 +308,37 @@ describe("/eksploruj/tabela's columns", () => {
     expect(
       unfiltered.findComponent(ExploreTable).props("matchedElections"),
     ).toBeNull();
+  });
+
+  it("asks for a result only beside an election", async () => {
+    await mountPage({ election: "parliament-2023", electionResult: "won" });
+    expect(currentQuery()).toMatchObject({
+      election: ["parliament-2023"],
+      electionResult: "won",
+    });
+
+    await mountPage({ electionResult: "won" });
+    expect(currentQuery().electionResult).toBeUndefined();
+  });
+
+  /** Two models written in one tick both start from the url as it was, and
+   * the second would put the first's election back - so emptying the
+   * elections drops the result in the same navigation. */
+  it("drops the result in the same write that empties the elections", async () => {
+    const wrapper = await mountPage({
+      election: "parliament-2023",
+      electionResult: "lost",
+      category: "szpitale",
+    });
+
+    wrapper
+      .findComponent({ name: "FormEksplorujTabelaFilters" })
+      .vm.$emit("update:election", null);
+    await flushPromises();
+
+    expect(routerPush).toHaveBeenCalledTimes(1);
+    expect(routerPush.mock.calls[0]![0].query).toEqual({
+      category: "szpitale",
+    });
   });
 });

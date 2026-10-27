@@ -21,6 +21,7 @@ const queryValidator = z.object({
   minVotes: z.coerce.number().optional(),
   queueTier: z.coerce.number().optional(),
   election: z.union([z.string(), z.array(z.string())]).optional(),
+  electionResult: z.enum(["won", "lost"]).optional(),
 });
 
 // Re-exported because the components fetching this endpoint import the type

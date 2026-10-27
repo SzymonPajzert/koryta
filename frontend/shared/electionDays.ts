@@ -214,3 +214,22 @@ export function electionName(key: string): string | null {
   if (!ELECTION_DAYS[kind][match[2]!]) return null;
   return `${KIND_NAMES[kind]} ${match[2]}`;
 }
+
+/** What became of a person in an election: a seat won with any of their runs
+ * in it, or every run they stood in lost. */
+export type ElectionResult = "won" | "lost";
+
+/** The key for a result, stored beside the bare one in
+ * `NodeEdgeStats.elections` - „parliament-2023:won” - so that one
+ * `array-contains-any` answers „ran”, „won” and „lost” alike. */
+export function electionResultKey(key: string, result: ElectionResult): string {
+  return `${key}:${result}`;
+}
+
+/** The three answers the filter offers, in the order it offers them. `all` is
+ * the default and never reaches the url. */
+export const electionResultOptions = [
+  { value: "all", title: "Kandydowali" },
+  { value: "won", title: "Wygrali" },
+  { value: "lost", title: "Przegrali" },
+] as const;

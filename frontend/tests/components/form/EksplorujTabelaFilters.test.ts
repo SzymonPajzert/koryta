@@ -732,3 +732,35 @@ describe("the query bar's election chip", () => {
     expect(toggle(wrapper).text()).toBe("Filtry (1)");
   });
 });
+
+describe("the query bar's election result", () => {
+  it("puts the result in front of the election on the rail", async () => {
+    const wrapper = await mount({
+      election: ["parliament-2023"],
+      electionResult: "won",
+    });
+
+    expect(railChips(wrapper).map((chip) => chip.text())).toContain(
+      "Wygrali: Sejm i Senat 2023",
+    );
+  });
+
+  /** One write: the page's election model drops the result alongside, so the
+   * bar must not write the result as well - two writes in one tick would each
+   * start from the url as it was, and the second would bring the elections
+   * back. */
+  it("clears both through the election alone", async () => {
+    const wrapper = await mount({
+      election: ["parliament-2023"],
+      electionResult: "lost",
+    });
+
+    const chip = railChips(wrapper).find((candidate) =>
+      candidate.text().includes("Przegrali"),
+    );
+    await chip!.get(".v-chip__close").trigger("click");
+
+    expect(wrapper.emitted("update:election")?.[0]).toEqual([null]);
+    expect(wrapper.emitted("update:electionResult")).toBeUndefined();
+  });
+});

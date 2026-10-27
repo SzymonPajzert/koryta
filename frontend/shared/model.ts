@@ -87,9 +87,11 @@ type NodeEdgeStats = {
   /** Public companies (and their regions) the person still holds a post in. */
   currentlyEmployedTargetNodeIds?: string[];
   /** The general elections the person stood in, as `ElectionKey`s
-   * („parliament-2023”) - what /eksploruj/tabela's „Wybory” filter matches
-   * with `array-contains-any`. The candidacies are edges of their own, and
-   * Firestore cannot filter people by a field of another collection.
+   * („parliament-2023”), each followed by its result where one is known
+   * („parliament-2023:won”, „local-2018:lost”) - what /eksploruj/tabela's
+   * „Wybory” filter matches with `array-contains-any`. The candidacies are
+   * edges of their own, and Firestore cannot filter people by a field of
+   * another collection.
    *
    * Optional because a node not recomputed since the field was added does not
    * carry it, and such a person is simply not found under any election until
@@ -376,8 +378,8 @@ export interface ElectionRich {
   teryt?: string;
   position: string;
   committee?: string;
-  /** `Edge.elected` as stored. Only `true` says anything - a recorded win;
-   * see `elected` in shared/api.ts for why a `false` does not. */
+  /** `Edge.elected` as stored: true for a recorded win, false for a recorded
+   * loss, absent where nobody said. */
   elected?: boolean;
   /** The election it was in, read from the edge the way the stats read it
    * (`candidacyElection`) - not from `position`, which falls back to the

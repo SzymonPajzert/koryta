@@ -4,6 +4,7 @@
 import { applyPartiesFilter, fetchNodes } from "~~/server/utils/fetch";
 import { asArray } from "~~/shared/model";
 import { isInWojewodztwo, isWojewodztwoTeryt } from "~~/shared/teryt";
+import { electionResultKey, type ElectionResult } from "~~/shared/electionDays";
 
 // Still exported from here, which is where every caller and half the comments
 // in the repo look for it. The definition moved to `shared/model` so that a
@@ -49,6 +50,9 @@ export type StructuralQuery = {
   /** General elections the person stood in, as `ElectionKey`s
    * („parliament-2023”). Several mean any of them. */
   election?: string | string[];
+  /** Narrows `election` to the people it gave a seat, or to those who lost
+   * every run in it. Means nothing without an election. */
+  electionResult?: ElectionResult;
 };
 
 /** A query parameter that may arrive once, repeated, or not at all. */
@@ -274,7 +278,10 @@ export async function buildStructuralFilterOps(
   // through. A memory-only op also takes every op after it out of Firestore
   // with it (the caller's fallback drops ops from the end until the query
   // runs), and here there are none.
-  const elections = [...new Set(toArray(query.election))];
+  const outcome = query.electionResult;
+  const elections = [...new Set(toArray(query.election))].map((key) =>
+    outcome ? electionResultKey(key, outcome) : key,
+  );
   if (elections.length > 0) {
     const field = `stats.edges.${edgeScope}.elections`;
     const applyMem = (nodes: any[]) =>

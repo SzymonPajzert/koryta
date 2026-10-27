@@ -330,6 +330,7 @@
           :class="{ 'd-md-none': hasElectionsColumn }"
           :elections="item.elections"
           :matched="matchedElections"
+          :matched-result="matchedResult"
         />
       </div>
     </template>
@@ -349,6 +350,7 @@
         class="elections-column"
         :elections="item.elections"
         :matched="matchedElections"
+        :matched-result="matchedResult"
       />
     </template>
 
@@ -568,6 +570,9 @@ const props = withDefaults(
     /** The elections the page is filtered by, so each row can mark the runs
      * that put it there among the others it lists. */
     matchedElections?: string[] | null;
+    /** The result the page asks for alongside them, so a row marks the run
+     * that won or lost rather than every run of that election. */
+    matchedResult?: "all" | "won" | "lost";
   }>(),
   {
     page: 1,
@@ -595,6 +600,7 @@ const props = withDefaults(
     region: undefined,
     company: undefined,
     matchedElections: null,
+    matchedResult: "all",
   },
 );
 

@@ -59,6 +59,7 @@
             v-model:visibility="visibility"
             v-model:party="party"
             v-model:election="election"
+            v-model:election-result="electionResult"
             v-model:teryt="teryt"
             v-model:company-teryt="companyTeryt"
             v-model:place="place"
@@ -116,6 +117,7 @@
               v-model:visibility="visibility"
               v-model:party="party"
               v-model:election="election"
+              v-model:election-result="electionResult"
               v-model:teryt="teryt"
               v-model:company-teryt="companyTeryt"
               v-model:place="place"
@@ -484,6 +486,7 @@ const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
 /** General elections, as `ElectionKey`s - see shared/electionDays.ts. */
 const election = defineModel<string[] | null>("election");
+const electionResult = defineModel<"all" | "won" | "lost">("electionResult");
 const teryt = defineModel<string | null>("teryt");
 const companyTeryt = defineModel<string | null>("companyTeryt");
 /** Selected employers, by place node id. */
@@ -525,6 +528,7 @@ const query = computed<TableQuery>(() => ({
   companyTeryt: companyTeryt.value,
   party: party.value,
   election: election.value,
+  electionResult: electionResult.value,
   place: place.value,
   currentlyEmployed: currentlyEmployed.value,
   visibility: visibility.value,
@@ -852,8 +856,9 @@ function clearChip(chip: QueryChip) {
         minVotes.value = null;
         break;
       default:
-        // `krs` and `parties` are cleared by the models above; `sortBy` and
-        // `sortDesc` never reach a chip.
+        // `krs`, `parties` and `electionResult` are cleared by the models
+        // above - the page's election model drops the result in the same
+        // write; `sortBy` and `sortDesc` never reach a chip.
         break;
     }
   }

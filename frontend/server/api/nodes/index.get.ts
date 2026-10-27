@@ -43,6 +43,7 @@ const queryValidator = z.object({
   minVotes: z.coerce.number().optional(),
   queueTier: z.coerce.number().optional(),
   election: z.union([z.string(), z.array(z.string())]).optional(),
+  electionResult: z.enum(["won", "lost"]).optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),

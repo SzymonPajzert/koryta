@@ -480,6 +480,7 @@ export const TABELA_FILTER_NAMES = {
   place: "company",
   krs: "company",
   election: "election",
+  electionResult: "election-result",
   category: "category",
   currentlyEmployed: "currently-employed",
   minEmploymentDate: "employed-since",

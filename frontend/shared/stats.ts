@@ -1,7 +1,11 @@
 import type { NodeStats, VoteDocument, Note, Edge } from "./model";
 import { pageIsPublic } from "./model";
 import { namesASupervisorySeat } from "./companyBodies";
-import { candidacyElection, type ElectionKey } from "./electionDays";
+import {
+  candidacyElection,
+  electionResultKey,
+  type ElectionKey,
+} from "./electionDays";
 
 export function calculateExperience(edges: Edge[]): number {
   const intervals: { start: number; end: number }[] = [];
@@ -270,11 +274,11 @@ function publicEmployment(
  * edges from both ends, so without `nodeId` a region would be filed under every
  * election anybody ran in there. The sweeper reads a node's outgoing edges
  * alone and could leave it out; it passes it anyway. */
-export function candidacyElections(
-  edges: Edge[],
-  nodeId?: string,
-): ElectionKey[] {
-  const keys = new Set<ElectionKey>();
+export function candidacyElections(edges: Edge[], nodeId?: string): string[] {
+  // Per election, whether any run in it won and whether every one of them is
+  // a recorded loss. A council seat won and a mayoralty lost on the same day is
+  // a win: the question is whether the election gave them a seat.
+  const results = new Map<ElectionKey, { won: boolean; allLost: boolean }>();
   for (const edge of edges) {
     if (edge.type !== "election") continue;
     if (nodeId !== undefined && edge.source !== nodeId) continue;
@@ -283,9 +287,21 @@ export function candidacyElections(
       edge.position,
       edge.by_election,
     );
-    if (key) keys.add(key);
+    if (!key) continue;
+    const result = results.get(key) ?? { won: false, allLost: true };
+    if (edge.elected === true) result.won = true;
+    // Only a recorded loss is one. A run with no result says nothing either
+    // way, so a single such run keeps the election off the „lost” list.
+    if (edge.elected !== false) result.allLost = false;
+    results.set(key, result);
   }
-  return [...keys].sort();
+  const keys: string[] = [];
+  for (const [key, result] of results) {
+    keys.push(key);
+    if (result.won) keys.push(electionResultKey(key, "won"));
+    else if (result.allLost) keys.push(electionResultKey(key, "lost"));
+  }
+  return keys.sort();
 }
 
 export function computeEdgeStats(
