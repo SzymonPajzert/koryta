@@ -20,6 +20,7 @@ const queryValidator = z.object({
   minEmploymentDate: z.string().optional(),
   minVotes: z.coerce.number().optional(),
   queueTier: z.coerce.number().optional(),
+  election: z.union([z.string(), z.array(z.string())]).optional(),
 });
 
 // Re-exported because the components fetching this endpoint import the type

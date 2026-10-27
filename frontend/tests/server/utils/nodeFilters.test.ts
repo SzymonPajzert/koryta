@@ -451,3 +451,120 @@ describe("buildStructuralFilterOps, company level filters", () => {
     expect(ops).toHaveLength(2);
   });
 });
+
+describe("buildStructuralFilterOps, the election filter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDb();
+  });
+
+  it("asks Firestore for anybody in any of the elections", async () => {
+    const { ops, fields } = await buildStructuralFilterOps(
+      db,
+      { election: ["parliament-2023", "local-2024"] },
+      "approved",
+    );
+
+    expect(fields).toContain("stats.edges.approved.elections");
+
+    const query = { where: vi.fn().mockReturnThis() };
+    ops[0]!.applyFs(query as unknown as FirebaseFirestore.Query);
+    expect(query.where).toHaveBeenCalledWith(
+      "stats.edges.approved.elections",
+      "array-contains-any",
+      ["parliament-2023", "local-2024"],
+    );
+
+    const nodes = [
+      {
+        id: "sejm",
+        stats: { edges: { approved: { elections: ["parliament-2023"] } } },
+      },
+      // The map shape a sanitized array is stored in.
+      {
+        id: "rada",
+        stats: { edges: { approved: { elections: { 0: "local-2024" } } } },
+      },
+      {
+        id: "inne",
+        stats: { edges: { approved: { elections: ["european-2019"] } } },
+      },
+      // Not recomputed since the field was added: under no election.
+      { id: "niepoliczony", stats: { edges: { approved: {} } } },
+    ];
+    expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual(["sejm", "rada"]);
+  });
+
+  it("reads a signed-in reader's drafts from the scope with them in", async () => {
+    const { ops, fields } = await buildStructuralFilterOps(
+      db,
+      { election: "parliament-2023" },
+      "all",
+    );
+
+    expect(fields).toEqual(["stats.edges.all.elections"]);
+    const query = { where: vi.fn().mockReturnThis() };
+    ops[0]!.applyFs(query as unknown as FirebaseFirestore.Query);
+    expect(query.where).toHaveBeenCalledWith(
+      "stats.edges.all.elections",
+      "array-contains-any",
+      ["parliament-2023"],
+    );
+  });
+
+  /** Firestore takes one array filter per query, and the party had it first.
+   * The election narrows what that lets through, in memory, as the last op -
+   * so nothing after it is pushed out of Firestore with it. */
+  it("narrows in memory once another filter holds the array slot", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { party: "PiS", election: "parliament-2023" },
+      "approved",
+    );
+
+    const election = ops.at(-1)!;
+    expect(() =>
+      election.applyFs({
+        where: vi.fn(),
+      } as unknown as FirebaseFirestore.Query),
+    ).toThrow(/index/);
+    expect(
+      election
+        .applyMem([
+          {
+            id: "a",
+            stats: { edges: { approved: { elections: ["parliament-2023"] } } },
+          },
+          { id: "b", stats: { edges: { approved: { elections: [] } } } },
+        ])
+        .map((n) => n.id),
+    ).toEqual(["a"]);
+  });
+
+  it("asks for all 25 elections in one query rather than reading everybody", async () => {
+    const all = Array.from({ length: 25 }, (_, i) => `local-${1990 + i}`);
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { election: all },
+      "approved",
+    );
+
+    const query = { where: vi.fn().mockReturnThis() };
+    ops[0]!.applyFs(query as unknown as FirebaseFirestore.Query);
+    expect(query.where).toHaveBeenCalledWith(
+      "stats.edges.approved.elections",
+      "array-contains-any",
+      all,
+    );
+  });
+
+  it("adds no op when the query names no election", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { election: [] },
+      "approved",
+    );
+
+    expect(ops).toHaveLength(0);
+  });
+});
