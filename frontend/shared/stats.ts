@@ -1,6 +1,7 @@
 import type { NodeStats, VoteDocument, Note, Edge } from "./model";
 import { pageIsPublic } from "./model";
 import { namesASupervisorySeat } from "./companyBodies";
+import { candidacyElection, type ElectionKey } from "./electionDays";
 
 export function calculateExperience(edges: Edge[]): number {
   const intervals: { start: number; end: number }[] = [];
@@ -261,6 +262,32 @@ function publicEmployment(
   );
 }
 
+/** The general elections a node stood in, each once, in a stable order - see
+ * `NodeEdgeStats.elections`.
+ *
+ * Only candidacies the node is the source of. A candidacy runs from the person
+ * to the region they stood in, and /api/stats/computeNodes hands each node its
+ * edges from both ends, so without `nodeId` a region would be filed under every
+ * election anybody ran in there. The sweeper reads a node's outgoing edges
+ * alone and could leave it out; it passes it anyway. */
+export function candidacyElections(
+  edges: Edge[],
+  nodeId?: string,
+): ElectionKey[] {
+  const keys = new Set<ElectionKey>();
+  for (const edge of edges) {
+    if (edge.type !== "election") continue;
+    if (nodeId !== undefined && edge.source !== nodeId) continue;
+    const key = candidacyElection(
+      edge.start_date,
+      edge.position,
+      edge.by_election,
+    );
+    if (key) keys.add(key);
+  }
+  return [...keys].sort();
+}
+
 export function computeEdgeStats(
   nodeEdges: Edge[],
   publicPlaceIds: ReadonlySet<string>,
@@ -270,6 +297,9 @@ export function computeEdgeStats(
    * computed before this existed rather than silently dropping seats it cannot
    * classify. */
   unpaidSeatPlaceIds: ReadonlySet<string> = new Set(),
+  /** The node these are the edges of, so its elections count only the
+   * candidacies it stood in - see `candidacyElections`. */
+  nodeId?: string,
 ) {
   // A removed relation is not a quiet one. `/api/edges/delete` and a merge's
   // `collapsed` verdict both keep the document and set `deleted: true` - 775 of
@@ -341,6 +371,7 @@ export function computeEdgeStats(
             .flatMap((e) => [e.target, ...(transitiveTargets[e.target] || [])]),
         ),
       ].filter(Boolean),
+      elections: candidacyElections(liveEdges, nodeId),
     },
     approved: {
       experienceMonths: calculateExperience(publicApprovedEdges),
@@ -356,6 +387,9 @@ export function computeEdgeStats(
             .flatMap((e) => [e.target, ...(transitiveTargets[e.target] || [])]),
         ),
       ].filter(Boolean),
+      // Published candidacies only, so a reader who may not see drafts cannot
+      // find a person under an election their page does not show.
+      elections: candidacyElections(approvedEdges, nodeId),
     },
   };
 }
@@ -373,6 +407,8 @@ export function computeNodeStats(
    * there are none: the field has to be on the document for `orderBy
    * stats.factsCount` to return the person at all. */
   nodeFactsCount: number = 0,
+  /** See `computeEdgeStats`. */
+  nodeId?: string,
 ): NodeStats {
   return {
     isApproved: nodeIsApproved,
@@ -387,6 +423,7 @@ export function computeNodeStats(
       publicPlaceIds,
       transitiveTargets,
       unpaidSeatPlaceIds,
+      nodeId,
     ),
   };
 }

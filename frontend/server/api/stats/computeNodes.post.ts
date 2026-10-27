@@ -80,6 +80,7 @@ function buildNodeUpdateData(
     transitiveTargets,
     unpaidSeatPlaceIds,
     nodeFactsCount,
+    node.id,
   );
 
   stats.nodeGroupSize = nodeGroupSizeMap[node.id] || 0;
