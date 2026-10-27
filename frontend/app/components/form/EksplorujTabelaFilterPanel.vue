@@ -18,6 +18,11 @@
          category 34, currentlyEmployed 28. The other three are a click lower,
          under „Więcej filtrów”: place was used twice in that week.
 
+         „Wybory” joined them without a week of logs behind it, on the request
+         that added it („everyone who ran in 2023 for the Sejm or the Senate”):
+         it is a question about the person, which is what this block answers,
+         and it takes the cell the three left empty in the two-column grid.
+
          Each block is headed the way the entity page heads its groups: a small
          uppercase label with a count on the right („ZARZĄD ... 1 osoba”). The
          count here is how many of the block's filters are set, so that a panel
@@ -65,6 +70,22 @@
           variant="outlined"
           density="comfortable"
           hide-details
+        />
+      </v-col>
+      <v-col cols="12" md="6">
+        <!-- Several elections mean any of them, the way several parties do. -->
+        <v-autocomplete
+          v-model="election"
+          :items="electionOptions"
+          label="Wybory"
+          no-data-text="Nie ma takich wyborów"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          multiple
+          chips
+          closable-chips
         />
       </v-col>
     </v-row>
@@ -221,6 +242,7 @@ import { mdiInformationOutline } from "@mdi/js";
 import { computed, ref } from "vue";
 import { ink, surface } from "~~/shared/colors";
 import { companyCategories } from "~~/shared/companyCategories";
+import { electionOptions } from "~~/shared/electionDays";
 import { partyChipPaint } from "~~/shared/misc";
 import { polishCounting } from "~/composables/polish";
 import FormEksplorujTabelaVerificationFields from "./EksplorujTabelaVerificationFields.vue";
@@ -247,6 +269,8 @@ const emit = defineEmits<{ close: []; clear: [] }>();
 
 const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
+/** General elections, as `ElectionKey`s - see shared/electionDays.ts. */
+const election = defineModel<string[] | null>("election");
 const teryt = defineModel<string | null>("teryt");
 const companyTeryt = defineModel<string | null>("companyTeryt");
 /** Selected employers, by place node id. */
@@ -287,6 +311,7 @@ const basicCount = computed(
       set(teryt.value),
       set(category.value),
       set(currentlyEmployed.value),
+      !!election.value?.length,
     ].filter(Boolean).length,
 );
 

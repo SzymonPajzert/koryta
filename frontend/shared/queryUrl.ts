@@ -22,6 +22,7 @@
 
 import { categoryTitle } from "./companyCategories";
 import { longDate } from "./dates";
+import { electionName } from "./electionDays";
 
 /** A query value as it reaches us: from `route.query` (string, repeated
  * string, or null), from the api's `Query` type (numbers, already coerced), or
@@ -48,6 +49,7 @@ const SHARE_KEYS = [
   "companyTeryt",
   "party",
   "parties",
+  "election",
   "place",
   "krs",
   "currentlyEmployed",
@@ -344,6 +346,27 @@ export function queryChips(
     });
   }
 
+  // Several elections mean any of them, the way several parties do. A key the
+  // list does not know - typed into the url, or from a later version of it -
+  // is shown as it came, like an unresolved region code: the chip has to say
+  // which filter it is for the reader to clear it.
+  const elections = values(query.election);
+  if (elections.length > 0) {
+    const key = elections[0]!;
+    // „Sejm i Senat 2023”, as the menu names it, or the key as it came.
+    const what =
+      elections.length > 1
+        ? counted(elections.length, "wybory", "wybory", "wyborów")
+        : (electionName(key) ?? key);
+    chips.push({
+      key: "election",
+      label: `Wybory: ${elections.length > 1 ? elections.length : what}`,
+      short: what,
+      admin: false,
+      clears: ["election"],
+    });
+  }
+
   const employment = values(query.currentlyEmployed)[0];
   const employmentLabels = employment
     ? EMPLOYMENT_LABELS[employment]
@@ -431,6 +454,7 @@ const SENTENCE_ORDER: readonly ShareKey[] = [
   "teryt",
   "companyTeryt",
   "party",
+  "election",
   "currentlyEmployed",
   "visibility",
   "hideVoted",

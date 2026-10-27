@@ -329,6 +329,7 @@
         <ExploreTableElectionChips
           :class="{ 'd-md-none': hasElectionsColumn }"
           :elections="item.elections"
+          :matched="matchedElections"
         />
       </div>
     </template>
@@ -347,6 +348,7 @@
       <ExploreTableElectionChips
         class="elections-column"
         :elections="item.elections"
+        :matched="matchedElections"
       />
     </template>
 
@@ -563,6 +565,9 @@ const props = withDefaults(
      * - it hardcodes `visibility: "private"` - and dropped its „Widoczność”
      * column precisely because every row of it said the same word. */
     draftWithName?: boolean;
+    /** The elections the page is filtered by, so each row can mark the runs
+     * that put it there among the others it lists. */
+    matchedElections?: string[] | null;
   }>(),
   {
     page: 1,
@@ -589,6 +594,7 @@ const props = withDefaults(
     draftWithName: false,
     region: undefined,
     company: undefined,
+    matchedElections: null,
   },
 );
 

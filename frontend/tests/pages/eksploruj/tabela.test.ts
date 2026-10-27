@@ -287,4 +287,21 @@ describe("/eksploruj/tabela's columns", () => {
         .attributes("showvisibility"),
     ).toBe("true");
   });
+
+  /** The url is the filter's whole state: a shared link carrying elections
+   * has to reach the api, and the rows have to know which runs to fill. */
+  it("asks for the elections a link names, and has the rows mark them", async () => {
+    const wrapper = await mountPage({ election: "parliament-2023" });
+
+    expect(currentQuery().election).toEqual(["parliament-2023"]);
+    expect(
+      wrapper.findComponent(ExploreTable).props("matchedElections"),
+    ).toEqual(["parliament-2023"]);
+
+    const unfiltered = await mountPage();
+    expect(currentQuery().election).toBeUndefined();
+    expect(
+      unfiltered.findComponent(ExploreTable).props("matchedElections"),
+    ).toBeNull();
+  });
 });

@@ -284,3 +284,50 @@ describe("describeQuery", () => {
     );
   });
 });
+
+describe("the election filter in a link", () => {
+  it("names one election on its chip the way the menu does", () => {
+    expect(queryChips({ election: "parliament-2023" })).toEqual([
+      {
+        key: "election",
+        label: "Wybory: Sejm i Senat 2023",
+        short: "Sejm i Senat 2023",
+        admin: false,
+        clears: ["election"],
+      },
+    ]);
+  });
+
+  it("counts several on one chip", () => {
+    const [chip] = queryChips({ election: ["parliament-2023", "local-2024"] });
+    expect(chip).toMatchObject({ label: "Wybory: 2", short: "2 wybory" });
+  });
+
+  /** Typed into the url, or from a later version of the list: the chip has
+   * to say which filter it is, or the reader cannot clear it. */
+  it("shows a key the list does not offer as it came", () => {
+    const [chip] = queryChips({ election: "sejm-2025" });
+    expect(chip).toMatchObject({
+      label: "Wybory: sejm-2025",
+      short: "sejm-2025",
+    });
+  });
+
+  it("keeps the elections in a shared link, after the party", () => {
+    expect(
+      shareUrl({
+        election: ["parliament-2023", "local-2024"],
+        party: "PiS",
+        category: "szpitale",
+      }),
+    ).toBe(
+      "/eksploruj/tabela?category=szpitale&party=PiS&election=parliament-2023&election=local-2024",
+    );
+  });
+
+  it("reads in the sentence after the party", () => {
+    expect(describeQuery({ party: "PiS", election: "parliament-2023" })).toBe(
+      "PiS · Sejm i Senat 2023",
+    );
+  });
+});

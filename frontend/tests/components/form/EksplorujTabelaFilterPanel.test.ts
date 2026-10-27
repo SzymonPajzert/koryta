@@ -125,3 +125,39 @@ describe("the filter panel's party chips", () => {
     expect(contrastRatio(chipInk, background)).toBeGreaterThanOrEqual(AA_TEXT);
   });
 });
+
+describe("the filter panel's elections", () => {
+  const electionField = (wrapper: Awaited<ReturnType<typeof mount>>) =>
+    wrapper
+      .findAll(".v-autocomplete")
+      .find((field) => field.text().includes("Wybory"));
+
+  /** A question about the person, so in the block that answers those - in the
+   * cell the three filters there left empty - and not a click lower under
+   * „Więcej filtrów”, where a new filter would be found by nobody. */
+  it("offers them among the person's filters, not under „Więcej filtrów”", async () => {
+    const wrapper = await mount();
+
+    const field = electionField(wrapper)!;
+    expect(field.element.closest(".v-expansion-panel")).toBeNull();
+    // The same row as „Region osoby”: the first block's grid.
+    const row = field.element.closest(".v-row");
+    expect(row?.textContent).toContain("Region osoby");
+  });
+
+  it("names a chosen election the way the list does", async () => {
+    const wrapper = await mount({ election: ["parliament-2023"] });
+
+    expect(electionField(wrapper)!.find(".v-chip").text()).toBe(
+      "Sejm i Senat 2023",
+    );
+  });
+
+  it("counts the elections as one filter of their group", async () => {
+    const wrapper = await mount({
+      election: ["parliament-2023", "local-2024"],
+    });
+
+    expect(wrapper.text()).toContain("1 filtr");
+  });
+});
