@@ -84,13 +84,11 @@ export default defineEventHandler(async (event): Promise<EdgeUpdated> => {
   const edited: Record<string, unknown> = Object.fromEntries(
     Object.entries(fields).filter(([, value]) => value !== undefined),
   );
-  // An unticked „Uzyskano mandat" says nobody recorded a win, not that the
-  // person lost, so it is stored as nothing rather than as `false` - see
-  // `elected` in shared/api.ts, and /api/edges/create, which does the same.
-  // Null rather than a dropped key, so that unticking takes a win back off the
-  // relation instead of leaving the stored `true` under the overlay;
-  // `sanitizeFirestoreData` drops the null on the way to Firestore.
-  if (edited.elected === false) edited.elected = null;
+  // „Uzyskano mandat: nie wiadomo” arrives as `null`, and stays one rather
+  // than becoming a dropped key, so that it takes a stored win or defeat back
+  // off the relation instead of leaving it under the overlay;
+  // `sanitizeFirestoreData` drops the null on the way to Firestore. A `false`
+  // is a defeat - see `elected` in shared/api.ts.
   const data = { ...withoutInternalFields(stored), ...edited };
 
   const isAdmin = user.admin === true;

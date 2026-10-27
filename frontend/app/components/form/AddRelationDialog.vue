@@ -171,7 +171,7 @@ function emptyDetails(): RelationDetails {
     party: "",
     committee: "",
     position: "",
-    elected: false,
+    elected: null,
   };
 }
 
@@ -282,12 +282,12 @@ async function submit() {
         end_date: details.value.end_date,
         party: details.value.party,
         committee: details.value.committee,
-        // Only a candidacy shows the box and the kind of election, and
-        // `details` is cleared only when the dialog opens - a tick or a „Sejm"
-        // picked on a region would otherwise ride along, unseen, onto the
-        // company picked after it.
+        // Only a candidacy shows the result and the kind of election, and
+        // `details` is cleared only when the dialog opens - a result or a
+        // „Sejm" picked on a region would otherwise ride along, unseen, onto
+        // the company picked after it.
         position: type === "election" ? details.value.position : "",
-        elected: type === "election" && details.value.elected,
+        elected: type === "election" ? details.value.elected : null,
         references: reference.value ? [reference.value.id] : [],
       },
     });

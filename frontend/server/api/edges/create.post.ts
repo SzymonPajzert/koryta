@@ -36,7 +36,7 @@ const bodyValidator = z.object({
       "Nieznane stanowisko wyborcze.",
     )
     .optional(),
-  elected: z.boolean().optional(),
+  elected: z.boolean().nullable().optional(),
   term: z.string().optional(),
   by_election: z.boolean().optional(),
   update_automatic: z.boolean().optional(),
@@ -69,13 +69,14 @@ export default defineEventHandler(async (event) => {
     party: body.party || "",
     committee: body.committee || "",
     position: (body.position || "") as ElectionPosition | "",
-    // Null rather than false for a box nobody ticked. `false` is the one
-    // value here that would read as a claim - "stood and did not take the
-    // seat" - about a named person, made by a form the contributor never
-    // touched, and 15 stored candidacies say it for that reason alone. And
-    // only on a candidacy: the dialog keeps a ticked box across a change of
-    // mind, so a win can arrive riding on the employment picked after it.
-    elected: body.type === "election" && body.elected === true ? true : null,
+    // Won or lost as the form says it, and null for „nie wiadomo” - see
+    // `elected` in shared/api.ts. Only on a candidacy: the dialog keeps a
+    // result across a change of mind, so one could arrive riding on the
+    // employment picked after it.
+    elected:
+      body.type === "election" && typeof body.elected === "boolean"
+        ? body.elected
+        : null,
     term: body.term || "",
     by_election: !!body.by_election,
     update_automatic: body.update_automatic || undefined,

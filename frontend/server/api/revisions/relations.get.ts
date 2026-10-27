@@ -67,7 +67,8 @@ export type RelationHistory = {
   /** A candidacy's office. */
   position: string | null;
   committee: string | null;
-  elected: boolean;
+  /** A candidacy's result: won, lost, or null where nobody knows. */
+  elected: boolean | null;
   published: boolean;
   deleted: boolean;
   state: RelationState;
@@ -202,7 +203,7 @@ export default defineEventHandler(
         endDate: text(edge.end_date),
         position: text(edge.position),
         committee: text(edge.committee),
-        elected: edge.elected === true,
+        elected: typeof edge.elected === "boolean" ? edge.elected : null,
         published,
         deleted,
         state: deleted

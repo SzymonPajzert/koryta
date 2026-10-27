@@ -161,13 +161,9 @@
           />
         </v-col>
         <v-col cols="12" md="6" class="d-flex align-center">
-          <v-checkbox
+          <FormElectionResultField
             v-model="newEdge.elected"
-            label="Uzyskano mandat"
-            density="compact"
-            hide-details="auto"
-            class="mb-0"
-            data-testid="edge-elected-checkbox"
+            test-id="edge-elected"
           />
         </v-col>
         <v-col cols="12" md="6" class="d-flex align-center">

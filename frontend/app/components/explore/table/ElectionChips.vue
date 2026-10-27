@@ -24,7 +24,8 @@
         </div>
         <div v-if="election.committee">{{ election.committee }}</div>
         <div v-if="election.elected === true">Wybrany</div>
-        <div v-else-if="election.elected === false">Nie wybrany</div>
+        <div v-else-if="election.elected === false">Bez mandatu</div>
+        <div v-else>Wynik nieznany</div>
       </v-tooltip>
       <v-icon
         v-if="election.elected === true"
@@ -32,6 +33,13 @@
         size="14"
         class="mr-1 election-won"
         aria-label="wybrany"
+      />
+      <v-icon
+        v-else-if="election.elected === false"
+        :icon="lossIcon"
+        size="14"
+        class="mr-1 election-lost"
+        aria-label="bez mandatu"
       />
       <span v-if="election.year" class="font-weight-bold mr-1">
         {{ election.year }}
@@ -52,7 +60,11 @@
  * data-table cells. Copying it into both slots would have left the tooltip -
  * which is where the committee name lives, and the whole reason this column is
  * narrow - to drift between the two copies. */
-import { mdiCheckCircle } from "@mdi/js";
+import {
+  mdiCheckCircle,
+  mdiCloseCircleOutline,
+  mdiMinusCircleOutline,
+} from "@mdi/js";
 import type { ElectionRich, PersonRich } from "~~/shared/model";
 
 const props = defineProps<{
@@ -64,6 +76,15 @@ const props = defineProps<{
    * lost) is filled, not the election's other runs. */
   matchedResult?: "all" | "won" | "lost";
 }>();
+
+/** A recorded defeat's mark: an outline beside the win's filled circle, so
+ * it reads as the quieter of the two. MOCK: `?wariant=b` tries a minus. */
+const mockRoute = useRoute();
+const lossIcon = computed(() =>
+  mockRoute.query.wariant === "b"
+    ? mdiMinusCircleOutline
+    : mdiCloseCircleOutline,
+);
 
 /** Whether this run is one the filter asked for: the same election, and the
  * result asked for if one was. */
@@ -121,6 +142,11 @@ const getWojewodztwo = (teryt?: string) => {
 /* A recorded win, in the chip's own ink. */
 .election-won {
   opacity: 0.85;
+}
+
+/* A recorded defeat, a step quieter than the win. */
+.election-lost {
+  opacity: 0.6;
 }
 
 .elections-cell :deep(.v-chip__content) {

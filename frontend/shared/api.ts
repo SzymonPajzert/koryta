@@ -579,7 +579,8 @@ export const edgeEditSchema = z.object({
   committee: z.string().optional(),
   position: z.enum(electionPositionValues).optional(),
   term: z.string().optional(),
-  elected: z.boolean().optional(),
+  /** Won, lost, or `null`: nobody knows, which takes a stored result off. */
+  elected: z.boolean().nullable().optional(),
   by_election: z.boolean().optional(),
 }) satisfies z.ZodType<
   Pick<
@@ -592,9 +593,8 @@ export const edgeEditSchema = z.object({
     | "committee"
     | "position"
     | "term"
-    | "elected"
     | "by_election"
-  >
+  > & { elected?: boolean | null }
 >;
 
 export type EdgeEditRequest = z.infer<typeof edgeEditSchema>;

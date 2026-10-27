@@ -86,6 +86,27 @@
           >
             Wybrany
           </v-chip>
+          <!-- A recorded defeat, quieter than the win beside it: the fact is
+               who took a seat. Nothing at all where nobody knows. MOCK:
+               `?wariant=b` draws it as words, for the board round. -->
+          <template v-if="lostSeat(edge)">
+            <span
+              v-if="lossAsWords"
+              class="text-caption text-medium-emphasis"
+              :data-testid="`edge-lost-${edge.id}`"
+            >
+              · bez mandatu
+            </span>
+            <v-chip
+              v-else
+              size="x-small"
+              variant="outlined"
+              class="text-medium-emphasis"
+              :data-testid="`edge-lost-${edge.id}`"
+            >
+              Bez mandatu
+            </v-chip>
+          </template>
           <ChipPublicCompany :company="edgeCompany(edge)" />
           <!-- Which sector the employer belongs to, so a career reads as the
                shape it has - three railways and a water utility - rather than
@@ -476,18 +497,24 @@ function committeeOf(edge: EdgeNode): string | undefined {
 
 /** Whether PKW recorded this candidacy as winning the mandate.
  *
- * Only a win renders. `elected` is stored as a bare boolean, and `false` is
- * what `useEdgeEdit` writes for every box a contributor left unticked, so it
- * does not mean "lost" - it means nobody said, which is also true of the 70%
- * of PKW's register that publishes no result at all. A "Przegrał" chip built
- * on that would be a claim about a named person drawn from an absence.
- *
  * Guarded on the type for the reason `committeeOf` is: the card lists every
  * relation a person has, and only a candidacy can be won.
  */
 function wonSeat(edge: EdgeNode): boolean {
   return edge.type === "election" && edge.elected === true;
 }
+
+/** Whether it records the candidacy as lost. A stored `false` is a defeat
+ * since 2026-10-27 - PKW's, or a contributor's „Uzyskano mandat: nie” - and
+ * no longer a box somebody left unticked; see `elected` in shared/api.ts. A
+ * candidacy nobody knows the result of draws neither. */
+function lostSeat(edge: EdgeNode): boolean {
+  return edge.type === "election" && edge.elected === false;
+}
+
+// MOCK, see the template.
+const mockRoute = useRoute();
+const lossAsWords = computed(() => mockRoute.query.wariant === "b");
 
 /** Whether the edge asserts a period at all.
  *

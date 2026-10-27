@@ -3,7 +3,10 @@ import type { NodeType, Edge, Link } from "~~/shared/model";
 import { edgeTypeOptions, type edgeTypeExt } from "./useEdgeTypes";
 import { authRequest } from "./auth";
 
-export type InternalEdge = Partial<Edge> & {
+export type InternalEdge = Omit<Partial<Edge>, "elected"> & {
+  /** Won, lost, or `null` where the form says nobody knows - which the
+   * update stores as no result at all. */
+  elected?: boolean | null;
   direction?: "outgoing" | "incoming";
   richNode?: {
     id: string;
@@ -265,9 +268,9 @@ function emptyEdge(direction?: "incoming" | "outgoing"): InternalEdge {
     end_date: "",
     direction: direction ?? "outgoing",
     references: [],
-    // Left out rather than defaulted to false: an untouched form says nothing
-    // about whether anybody won, and `/api/edges/create` stores that silence
-    // as null.
+    // Left out rather than defaulted: an untouched form says nothing about
+    // whether anybody won, and `/api/edges/create` stores that silence as
+    // null.
     elected: undefined,
     by_election: false,
   };

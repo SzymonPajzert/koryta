@@ -144,7 +144,13 @@
                 {{ relation.committee }}
               </AdminRowFact>
               <AdminRowFact v-if="relation.type === 'election'" label="Wynik">
-                {{ relation.elected ? "wybrany/a" : "nie podano" }}
+                {{
+                  relation.elected === true
+                    ? "wybrany/a"
+                    : relation.elected === false
+                      ? "bez mandatu"
+                      : "nie podano"
+                }}
               </AdminRowFact>
               <AdminRowFact v-else-if="periodOf(relation)" label="Okres">
                 {{ periodOf(relation) }}

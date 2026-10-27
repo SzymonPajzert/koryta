@@ -127,7 +127,7 @@ function emptyDetails(): RelationDetails {
     party: "",
     committee: "",
     position: "",
-    elected: false,
+    elected: null,
   };
 }
 
@@ -145,9 +145,8 @@ function detailsOf(edge: EdgeNode | undefined): RelationDetails {
     party: edge.party ?? "",
     committee: edge.committee ?? "",
     position: edge.position ?? "",
-    // A stored `false` is a box somebody left unticked, not a defeat, so it
-    // reads as no answer - see `elected` in shared/api.ts.
-    elected: edge.elected === true,
+    // Won, lost, or not known - see `elected` in shared/api.ts.
+    elected: typeof edge.elected === "boolean" ? edge.elected : null,
   };
 }
 
@@ -183,9 +182,9 @@ async function submit() {
   if (!readyToSubmit.value) return;
   saving.value = true;
   error.value = null;
-  // The win and the kind of election only where the form showed them.
-  // Anywhere else the win is a `false` nobody saw, sent with every correction
-  // of a job title.
+  // The result and the kind of election only where the form showed them.
+  // Anywhere else the result is a value nobody saw, sent with every
+  // correction of a job title.
   const { elected, position, start_date, end_date, ...fields } = details.value;
   const candidacy = props.edge!.type === "election";
   // A candidacy's dates are the row's rather than the stored ones: `edgeFromDB`
