@@ -46,6 +46,9 @@ export type StructuralQuery = {
   /** Difficulty tier, as `stats.queueTier` on the person - see
    * shared/queueTiers.ts. */
   queueTier?: number;
+  /** General elections the person stood in, as `ElectionKey`s
+   * („parliament-2023”). Several mean any of them. */
+  election?: string | string[];
 };
 
 /** A query parameter that may arrive once, repeated, or not at all. */
@@ -211,9 +214,8 @@ export async function buildStructuralFilterOps(
       return result(true);
     }
     ops.push(targetNodesOp(regionIds, query, edgeScope, arrayFilterUsed));
-    // Nothing reads this today, but every op that consumes the array-filter
-    // slot has to claim it, or the next filter added below reads a stale false.
-    // eslint-disable-next-line no-useless-assignment
+    // Every op that consumes the array-filter slot has to claim it, or the
+    // next filter below - the election - reads a stale false.
     arrayFilterUsed = true;
   }
 
@@ -265,6 +267,39 @@ export async function buildStructuralFilterOps(
         nodes.filter((n) => n.stats?.queueTier === queueTier),
       fields: ["stats.queueTier"],
     });
+  }
+
+  // Last, and the last to claim the array-filter slot: with a party, a place or
+  // a region set as well, the election narrows in memory whatever those let
+  // through. A memory-only op also takes every op after it out of Firestore
+  // with it (the caller's fallback drops ops from the end until the query
+  // runs), and here there are none.
+  const elections = [...new Set(toArray(query.election))];
+  if (elections.length > 0) {
+    const field = `stats.edges.${edgeScope}.elections`;
+    const applyMem = (nodes: any[]) =>
+      nodes.filter((n) =>
+        asArray<string>(n.stats?.edges?.[edgeScope]?.elections).some((key) =>
+          elections.includes(key),
+        ),
+      );
+    // array-contains-any takes up to 30 values, and nothing else in this query
+    // is a disjunction once the slot is free - so all 25 elections the filter
+    // offers fit, and picking every one of them never reads each person into
+    // memory to compare.
+    ops.push(
+      arrayFilterUsed || elections.length > 30
+        ? { ...memOnly(applyMem), fields: [field] }
+        : {
+            applyFs: (q) => q.where(field, "array-contains-any", elections),
+            applyMem,
+            fields: [field],
+          },
+    );
+    // Nothing reads this today, but every op that consumes the array-filter
+    // slot has to claim it, or the next filter added below reads a stale false.
+    // eslint-disable-next-line no-useless-assignment
+    arrayFilterUsed = true;
   }
 
   return result(false);

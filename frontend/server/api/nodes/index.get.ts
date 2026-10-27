@@ -42,6 +42,7 @@ const queryValidator = z.object({
   minEmploymentDate: z.string().optional(),
   minVotes: z.coerce.number().optional(),
   queueTier: z.coerce.number().optional(),
+  election: z.union([z.string(), z.array(z.string())]).optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),
