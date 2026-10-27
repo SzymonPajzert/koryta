@@ -2878,13 +2878,16 @@ def test_a_later_revision_never_drops_a_field(revisions, within_budget):
 
         clear-crawl-stamp-job-ends.ts took off an `end_date` only where it fell
         on a day PeopleKRS ran, so an end it dropped on any other day still
-        counts.
+        counts. clear-unticked-elected.ts took off an `elected` only where it
+        was the `false` an edit form saved for a box left unticked, so a result
+        it dropped that said anything else still counts.
         """
-        return (
-            revision.get("update_user") == "migration:clear-crawl-stamp-job-ends"
-            and field == "end_date"
-            and end_day(page["data"]) in CRAWL_STAMPS
-        )
+        user = revision.get("update_user")
+        if user == "migration:clear-crawl-stamp-job-ends":
+            return field == "end_date" and end_day(page["data"]) in CRAWL_STAMPS
+        if user == "migration:clear-unticked-elected":
+            return field == "elected" and page["data"].get("elected") is False
+        return False
 
     dropped = []
     for document_id, history in by_document.items():
