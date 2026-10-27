@@ -336,12 +336,11 @@ describe("api/ingest/person", () => {
     );
   });
 
-  it("does not record a defeat, which it cannot tell from a blank form", async () => {
-    // PKW published no result for 68,728 of its 97,748 candidacy rows, and
-    // `useEdgeEdit` writes `elected: false` for every box a human left
-    // unticked - so a stored `false` does not mean "this person lost", it
-    // means "nobody said". Writing one would print a defeat on a named
-    // person's page on the strength of a silent register.
+  it("records a defeat PKW records, as it records a win", async () => {
+    // Every row of PKW's files carries a result now, and the pipeline holds
+    // the winners to the seats, so a `false` is a defeat rather than a column
+    // that went missing. Until 2026-10-27 only a win was written, because the
+    // edit forms had saved every unticked box as `false`.
     mockReadBody.mockResolvedValue({
       name: "Test Person",
       parties: [],
@@ -380,7 +379,7 @@ describe("api/ingest/person", () => {
     await handler({} as any);
 
     const written = vi.mocked(createRevisionTransaction).mock.calls[1]![4];
-    expect(written).not.toHaveProperty("elected");
+    expect(written).toHaveProperty("elected", false);
   });
 
   describe("a candidacy the database already has", () => {
@@ -452,6 +451,48 @@ describe("api/ingest/person", () => {
       const call = vi.mocked(createRevisionTransaction).mock.calls[0]!;
       expect(call[3]).toMatchObject({ id: "stored-0" });
       expect(call[4]).toEqual({ ...storedCandidacy, elected: true });
+    });
+
+    it("keeps a stored win PKW records as lost, rather than storing the run again", async () => {
+      // A win a reviewer set, or one an earlier send wrote onto the wrong copy
+      // (clear-wins-written-onto-lost-mayoral-runs). The stored answer stands,
+      // and the row is that copy's still: read as another candidacy, the
+      // defeat was stored a second time beside the win.
+      personWithStoredEdges([{ ...storedCandidacy, elected: true }]);
+      mockReadBody.mockResolvedValue(
+        payload({ election_year: "2024", elected: false }),
+      );
+
+      const result = await handler({} as any);
+
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+      expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+      expect(result.elections![0]).toMatchObject({
+        edgeId: "stored-0",
+        created: false,
+      });
+    });
+
+    it("names the office of a stored win PKW records as lost, and keeps the win", async () => {
+      personWithStoredEdges([{ ...storedCandidacy, elected: true }]);
+      mockReadBody.mockResolvedValue(
+        payload({
+          election_type: "Prezydent",
+          election_year: "2024",
+          elected: false,
+        }),
+      );
+
+      const result = await handler({} as any);
+
+      const call = vi.mocked(createRevisionTransaction).mock.calls[0]!;
+      expect(call[3]).toMatchObject({ id: "stored-0" });
+      expect(call[4]).toEqual({
+        ...storedCandidacy,
+        position: "Prezydent",
+        elected: true,
+      });
+      expect(result.elections![0]!.created).toBe(false);
     });
 
     it("writes the result out and leaves an unrecognised committee for a reviewer", async () => {
@@ -929,13 +970,20 @@ describe("api/ingest/person", () => {
           // Paired by position, the lost row took whichever copy sorted first.
           // With the won one first, the won row was left the lost copy and
           // wrote its win onto it, approved; with the lost one first, it found
-          // nothing and stored the win a third time.
+          // nothing and stored the win a third time. Now each row takes its
+          // own, and the lost one learns its defeat.
           storedCopies([{ ...copy, elected: true }, copy], [wonId!, lostId!]);
           mockReadBody.mockResolvedValue(lostThenWon);
 
           const result = await handler({} as any);
 
-          expect(createRevisionTransaction).not.toHaveBeenCalled();
+          const written = vi
+            .mocked(createRevisionTransaction)
+            .mock.calls.map((call) => [
+              (call[3] as { id: string }).id,
+              call[4],
+            ]);
+          expect(written).toEqual([[lostId, { ...copy, elected: false }]]);
           expect(proposeRevisionTransaction).not.toHaveBeenCalled();
           expect(result.elections!.map((e) => e.edgeId)).toEqual([
             lostId,
@@ -955,7 +1003,7 @@ describe("api/ingest/person", () => {
 
         expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
         const written = vi.mocked(createRevisionTransaction).mock.calls[0]!;
-        expect(written[4]).not.toHaveProperty("elected");
+        expect(written[4]).toHaveProperty("elected", false);
         const [lost, won] = result.elections!;
         expect(won!.edgeId).toBe("copy-won");
         expect(lost!.edgeId).not.toBe("copy-won");
@@ -992,7 +1040,7 @@ describe("api/ingest/person", () => {
           );
           expect(written).toEqual({
             [wonId!]: { ...copy, position: "Rada miasta", elected: true },
-            [lostId!]: { ...copy, position: "Prezydent" },
+            [lostId!]: { ...copy, position: "Prezydent", elected: false },
           });
           expect(proposeRevisionTransaction).not.toHaveBeenCalled();
           expect(result.elections!.map((e) => e.edgeId)).toEqual([

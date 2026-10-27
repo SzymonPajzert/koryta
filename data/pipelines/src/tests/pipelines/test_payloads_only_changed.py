@@ -573,11 +573,23 @@ def test_a_won_and_a_lost_run_sent_again_change_nothing(stored):
     Paired by position, the lost row took whichever copy sorted first. With the
     won copy first, the won row was left the lost copy to write its win onto;
     with the lost copy first, it found nothing and was a new candidacy, the win
-    stored a third time.
+    stored a third time. Once the defeat is stored too, nothing is left to
+    write; which row takes which copy is in `person.test.ts`.
     """
-    snapshot = SiteSnapshot(nodes(), edges(*stored))
+    recorded = [dict(copy, elected=copy.get("elected", False)) for copy in stored]
+    snapshot = SiteSnapshot(nodes(), edges(*recorded))
 
     assert snapshot.changes(payload(elections=[LOST_RUN, WON_RUN])) == []
+
+
+def test_the_lost_run_teaches_its_copy_the_defeat():
+    """Witko's lost copy as the 10-12 night stored it, with no result: a send
+    now writes PKW's defeat onto it, as it writes a win."""
+    snapshot = SiteSnapshot(nodes(), edges(WON_COPY, LOST_COPY))
+
+    assert snapshot.changes(payload(elections=[LOST_RUN, WON_RUN])) == [
+        ENRICHED_CANDIDACY
+    ]
 
 
 def test_the_won_run_keeps_the_only_copy_that_says_it_was_won():
@@ -592,12 +604,43 @@ def test_the_won_run_keeps_the_only_copy_that_says_it_was_won():
     assert snapshot.changes(payload(elections=[LOST_RUN, WON_RUN])) == [NEW_CANDIDACY]
 
 
-def test_a_recorded_defeat_is_not_something_the_upload_would_write():
-    """`createElection` writes only a win, so predicting one would be wrong."""
+def test_a_candidacy_that_would_learn_it_was_lost_is_kept():
+    """`createElection` writes a defeat PKW records as it writes a win, since
+    2026-10-27."""
     snapshot = SiteSnapshot(nodes(), edges(STORED_CANDIDACY))
     lost = dict(CANDIDACY, elected=False)
 
+    assert snapshot.changes(payload(elections=[lost])) == [ENRICHED_CANDIDACY]
+
+
+def test_a_defeat_already_stored_is_dropped():
+    stored = dict(STORED_CANDIDACY, elected=False)
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    lost = dict(CANDIDACY, elected=False)
+
     assert snapshot.changes(payload(elections=[lost])) == []
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        pytest.param(dict(CANDIDACY, elected=False), id="same-run"),
+        pytest.param(
+            dict(CANDIDACY, election_type="Prezydent", elected=False),
+            id="naming-its-office",
+        ),
+    ],
+)
+def test_a_stored_win_pkw_records_as_lost_is_not_stored_again(row):
+    """A win a reviewer set, or one an earlier send wrote onto the wrong copy
+    (clear-wins-written-onto-lost-mayoral-runs), against PKW's defeat: the
+    stored answer stands and the row is that copy's still. Read as another
+    candidacy, it was stored a second time beside it."""
+    stored = dict(STORED_CANDIDACY, elected=True)
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    expected = [] if row["election_type"] == "Samorząd" else [ENRICHED_CANDIDACY]
+
+    assert snapshot.changes(payload(elections=[row])) == expected
 
 
 def test_a_committee_that_differs_only_in_case_is_dropped():

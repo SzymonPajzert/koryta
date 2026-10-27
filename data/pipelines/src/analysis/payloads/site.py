@@ -61,8 +61,8 @@ INTERNAL_FIELDS = frozenset(
 FOLDED_FIELDS = frozenset({"committee"})
 
 #: Fields stored as booleans, which a frame read back off jsonl holds as 1.0,
-#: 0.0 and NaN. `false` is a blank, as `field` in `server/utils/edges.ts` reads
-#: it: an edit form's unticked box, not a recorded defeat.
+#: 0.0 and NaN. `false` is an answer, as `field` in `server/utils/edges.ts`
+#: reads it: a defeat PKW records, since the site stores those (2026-10-27).
 FLAG_FIELDS = frozenset({"elected"})
 
 #: The office of a local candidacy nothing named: what the payload called every
@@ -325,12 +325,14 @@ def field(edge: typing.Mapping[str, typing.Any], name: str) -> typing.Any:
     re-stating facts the site already holds.
     """
     value = edge.get(name)
-    if value is None or value is False:
+    if value is None:
         return None
     if isinstance(value, float) and math.isnan(value):
         return None
     if name in FLAG_FIELDS:
-        return True if value == 1 else None
+        return bool(value == 1)
+    if value is False:
+        return None
     if isinstance(value, str):
         if not value:
             return None
@@ -382,6 +384,7 @@ def specifies(name: str, stored: typing.Any, incoming: typing.Any) -> bool:
 def edge_relation(
     stored: typing.Mapping[str, typing.Any],
     incoming: typing.Mapping[str, typing.Any],
+    stored_annotations_stand: bool = False,
 ) -> str:
     """How `incoming` stands to a stored edge of the same pair and type.
 
@@ -391,6 +394,10 @@ def edge_relation(
     only the *stored* edge knows - a `term` a reviewer typed in - is not a
     disagreement, because the pipeline saying nothing is not saying "none". An
     office a reviewer narrowed down is not one either; see `narrows`.
+
+    `stored_annotations_stand`: a stored result the row answers otherwise
+    stands rather than making the two different facts, the way the ingest
+    places a row. See `storedAnnotationsStand` in `server/utils/edges.ts`.
     """
     added = 0
     rules = semantics(incoming.get("type"))
@@ -406,6 +413,8 @@ def edge_relation(
                 continue
             if specifies(name, before, after):
                 added += 1
+                continue
+            if stored_annotations_stand and name in rules.annotations:
                 continue
             return "conflict"
     return "enriches" if added else "same"
@@ -518,7 +527,7 @@ def misfiled_run_of(
         or not stored_teryt.startswith(district_teryt)
     ):
         return False
-    return edge_relation(stored, incoming) != "conflict"
+    return edge_relation(stored, incoming, stored_annotations_stand=True) != "conflict"
 
 
 def unnamed_local(stored: typing.Mapping[str, typing.Any]) -> bool:
@@ -559,7 +568,7 @@ def misfiled_sejmik_run_of(
         district_teryt
     ):
         return False
-    return edge_relation(stored, incoming) != "conflict"
+    return edge_relation(stored, incoming, stored_annotations_stand=True) != "conflict"
 
 
 def placing_order(elections: list[dict]) -> list[dict]:
@@ -1307,11 +1316,9 @@ class SiteSnapshot:
                 edge["party"] = election["party"]
             if election.get("committee"):
                 edge["committee"] = election["committee"]
-            # Only a win, the way `createElection` writes only a win - so the
-            # prediction does not count a recorded defeat as something the
-            # upload would store.
-            if election.get("elected") is True:
-                edge["elected"] = True
+            # The result either way, as `createElection` writes it.
+            if isinstance(election.get("elected"), bool):
+                edge["elected"] = election["elected"]
             if election.get("election_year"):
                 edge["start_date"] = f"{election['election_year']}-01-01"
 
@@ -1447,14 +1454,17 @@ class _EdgeMatcher:
                 # The same episode by everything that says which episode it is,
                 # and still possibly missing an annotation this row carries -
                 # which is a write. See the same branch in `findEdgeMatches`.
-                if may_enrich and edge_relation(stored, edge) == "enriches":
+                if may_enrich and (
+                    edge_relation(stored, edge, stored_annotations_stand=True)
+                    == "enriches"
+                ):
                     enrichable.append(stored)
                 else:
                     same.append(stored)
                 continue
             if not may_enrich or not meets_enrich_floor(stored):
                 continue
-            match edge_relation(stored, edge):
+            match edge_relation(stored, edge, stored_annotations_stand=True):
                 case "enriches":
                     enrichable.append(stored)
                 case "same":

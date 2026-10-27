@@ -168,17 +168,17 @@ const electionRequestSchema = z.object({
    * True for a coalition as well, where the map knows the committee but `party`
    * stays empty because a joint list names no single party. */
   party_from_committee: z.boolean().optional(),
-  /** Whether PKW recorded the candidacy as winning the mandate.
+  /** Whether PKW recorded the candidacy as winning the mandate: true won,
+   * false lost, absent where the row says nothing.
    *
-   * Sent only when it won. The payload's own field is tri-state - see
-   * `entities.composite.Election.elected`, where None is "PKW said nothing",
-   * which is 68,728 of its 97,748 rows and all of them before 2010 - but a
-   * stored `false` cannot carry that third state here: `useEdgeEdit` defaults
-   * a hand-made edge to `elected: false` for every box the form left blank,
-   * and `field()` in server/utils/edges.ts folds `false` to null so the two
-   * writers agree. An ingested `false` would therefore be indistinguishable
-   * from a blank form while reading, on the page, as an assertion that a named
-   * person lost.
+   * Tri-state as the payload's own field is (`entities.composite.Election.
+   * elected`), and stored that way since 2026-10-27: every row of PKW's files
+   * carries a result now, and the pipeline holds the winners to the seats
+   * (`test_every_election_marks_its_winners`), so a `false` is a defeat PKW
+   * records rather than a column that went missing. Until then only a win was
+   * written, because the edit forms had saved every unticked box as `false`
+   * and a stored one meant nothing; those are gone
+   * (scripts/migrate/clear-unticked-elected.ts).
    *
    * Accepted here or zod strips it, which is what happened to `committee` for
    * as long as it went undeclared. */

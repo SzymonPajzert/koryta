@@ -48,22 +48,21 @@ describe("revisionChanges", () => {
     expect(revisionChanges({ content: "Senator." }, stored)).toHaveLength(1);
   });
 
-  it("reports a win taken back, which the proposal says by leaving it out", () => {
-    // `elected` is stored for a win and never as `false`, so a correction that
-    // unticks „Uzyskano mandat” reaches the queue with no key at all - and
-    // approving it, a `set`, deletes the win. Skipped as an omission, the
-    // reviewer saw an empty proposal whose approval removed a claim about a
-    // named person.
+  it("reports a result taken back, which the proposal says by leaving it out", () => {
+    // A correction saying nobody knows whether the candidacy won reaches the
+    // queue with no `elected` at all - and approving it, a `set`, deletes the
+    // result. Skipped as an omission, the reviewer saw an empty proposal whose
+    // approval removed a claim about a named person.
     const candidacy = { type: "election", position: "Senat", elected: true };
     const { elected: _won, ...unticked } = candidacy;
 
     expect(revisionChanges(unticked, candidacy)).toEqual([
       { field: "elected", label: "wybrany", from: "tak", to: null },
     ]);
-    // A stored `false` reads as a blank everywhere (see `elected` in
-    // shared/api.ts), so dropping one is not a change anybody has to decide on.
+    // A defeat taken back is one too: `false` is a result since 2026-10-27
+    // (see `elected` in shared/api.ts).
     expect(revisionChanges(unticked, { ...candidacy, elected: false })).toEqual(
-      [],
+      [{ field: "elected", label: "wybrany", from: "nie", to: null }],
     );
   });
 

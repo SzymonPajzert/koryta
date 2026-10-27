@@ -264,6 +264,43 @@ describe("the result of a candidacy", () => {
 
   it("is a conflict where the stored edge says otherwise", () => {
     expect(edgeRelation({ ...candidacy, elected: true }, won)).toBe("same");
+    expect(edgeRelation(won, { ...candidacy, elected: false })).toBe(
+      "conflict",
+    );
+  });
+
+  it("reads a stored defeat as an answer, not a blank", () => {
+    // Until 2026-10-27 a stored `false` was an unticked box and read as
+    // nothing, so a win filled it in. It is a defeat now.
+    const lost: EdgeLike = { ...candidacy, elected: false };
+    expect(edgeRelation(candidacy, lost)).toBe("enriches");
+    expect(edgeRelation(lost, lost)).toBe("same");
+    expect(edgeRelation(lost, won)).toBe("conflict");
+    expect(addsOnlyAnnotations(candidacy, lost)).toBe(true);
+  });
+
+  it("lets a stored answer stand where the ingest places a row", () => {
+    const lost: EdgeLike = { ...candidacy, elected: false };
+    const stand = { storedAnnotationsStand: true };
+    expect(edgeRelation(won, lost, stand)).toBe("same");
+    expect(edgeRelation(lost, won, stand)).toBe("same");
+    // Whatever else the row says still fills in the copy, and only blanks
+    // are filled, so the win stays.
+    expect(edgeRelation(won, { ...lost, position: "Prezydent" }, stand)).toBe(
+      "enriches",
+    );
+    expect(enrichedEdge(won, { ...lost, position: "Prezydent" })).toEqual({
+      ...won,
+      position: "Prezydent",
+    });
+    // Two offices are still two runs.
+    expect(
+      edgeRelation(
+        { ...won, position: "Sejm" },
+        { ...lost, position: "Senat" },
+        stand,
+      ),
+    ).toBe("conflict");
   });
 
   it("can be written out on its own, but not alongside a committee", () => {
@@ -459,6 +496,16 @@ describe("preferredCopy", () => {
     const pick = preferredCopy(won, [
       copy("a", { ...candidacy }, won),
       copy("b", { ...won }, won),
+    ]);
+
+    expect(pick?.id).toBe("b");
+  });
+
+  it("gives a lost row the copy that says it was lost before one that says nothing", () => {
+    const lost: EdgeLike = { ...candidacy, elected: false };
+    const pick = preferredCopy(lost, [
+      copy("a", { ...candidacy }, lost),
+      copy("b", { ...lost }, lost),
     ]);
 
     expect(pick?.id).toBe("b");

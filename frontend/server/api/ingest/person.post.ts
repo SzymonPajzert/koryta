@@ -678,11 +678,14 @@ async function createElection(
   // has one - and why two candidacies in one town in one year are so often
   // indistinguishable. It is the strongest discriminator the payload carries.
   if (election.committee) edgeData.committee = election.committee;
-  // Only a win is written. `false` is what the edit form stores for a box
-  // nobody ticked, so an ingested one would claim a named person lost an
-  // election PKW may simply have said nothing about - and it says nothing
-  // about 70% of the register. See `elected` in shared/api.ts.
-  if (election.elected) edgeData.elected = true;
+  // The result as PKW records it, a defeat as well as a win: every row of its
+  // files carries one now, and the `false` the edit forms used to save for an
+  // unticked box is gone (scripts/migrate/clear-unticked-elected.ts). A row
+  // without one says nothing and writes nothing. See `elected` in
+  // shared/api.ts.
+  if (typeof election.elected === "boolean") {
+    edgeData.elected = election.elected;
+  }
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }

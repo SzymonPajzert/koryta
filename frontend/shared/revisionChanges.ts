@@ -200,13 +200,14 @@ export function revisionChanges(
     // but the ingest endpoints write whatever the scrapers found. Only fields
     // the proposal actually states are read as claims about them.
     //
-    // Except a win. `elected` is stored as `true` or not at all - an unticked
-    // „Uzyskano mandat” is written as nothing, never as `false`, see `elected`
-    // in shared/api.ts - so a correction that takes a win back off a candidacy
-    // says it by leaving the key out. Approving is a `set` and does delete the
-    // win, and skipped here that proposal read as an empty diff.
-    const winTakenBack = field === "elected" && baseline.elected === true;
-    if (!(field in proposed) && !winTakenBack) continue;
+    // Except a result. A correction saying nobody knows whether the candidacy
+    // won stores no `elected` at all - the null the form sends is dropped on
+    // the way to Firestore - so it takes a win or a defeat back off a
+    // candidacy by leaving the key out. Approving is a `set` and does delete
+    // the result, and skipped here that proposal read as an empty diff.
+    const resultTakenBack =
+      field === "elected" && typeof baseline.elected === "boolean";
+    if (!(field in proposed) && !resultTakenBack) continue;
 
     // Compared after rendering rather than by identity: `["PiS"]` and
     // `{ 0: "PiS" }` are the same claim written two ways, and a revision that

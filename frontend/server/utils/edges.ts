@@ -35,8 +35,9 @@ type EdgeSemantics = {
    * episode it is.
    *
    * They take part in enrichment - filling one in is a reason to write, and
-   * disagreeing about one is a conflict - but never in identity, so learning
-   * one cannot move an edge to a different document id. `elected` is the case
+   * disagreeing about one is a conflict, except where the ingest places a row
+   * (`storedAnnotationsStand`) - but never in identity, so learning one cannot
+   * move an edge to a different document id. `elected` is the case
    * this exists for: the outcome of a candidacy is worth storing and worth
    * refusing to overwrite, but two candidacies are not made different episodes
    * by one of them having won. Putting it in `discriminators` would hash every
@@ -180,37 +181,24 @@ export type EdgeLike = Partial<Edge> & Pick<Edge, "source" | "target" | "type">;
  */
 const FOLDED_FIELDS = new Set(["committee"]);
 
-/** Why `elected: false` is still read as a blank, below.
- *
- * "Stood and did not take the seat" would be worth recording, and reading it
- * as "nobody said" makes it unstorable. It is read that way anyway, because
- * nothing in this codebase asserts it: the ingest sends a win and never a
- * defeat (see `elected` in shared/api.ts), and all 15 of the stored `false`
- * values are checkboxes a contributor left unticked, not defeats anybody
- * entered. Treating those 15 as recorded losses would freeze them - an
- * incoming win would be a conflict rather than an enrichment - which is
- * exactly the backfill this annotation exists for, blocked on the people it
- * would be most wrong about.
- *
- * Neither `/api/edges/create` nor `/api/edges/update` writes one any more, so
- * the set cannot grow. Whatever starts meaning "lost" is what should make
- * `false` an answer here. */
-
 /** One writer's "unset" has to equal another's.
  *
- * /api/edges/create writes `name: ""`, `party: ""` and `elected: false` for
- * every field the form left blank, while the ingest omits them entirely. Left
- * alone a hand-made edge could never match an ingested one asserting the same
- * thing, and the database would keep both.
+ * /api/edges/create writes `name: ""` and `party: ""` for every field the
+ * form left blank, while the ingest omits them entirely. Left alone a
+ * hand-made edge could never match an ingested one asserting the same thing,
+ * and the database would keep both.
+ *
+ * `false` is not one of them. It used to be: until 2026-09-23 the forms saved
+ * an unticked „Uzyskano mandat” as `elected: false`, so a stored `false` said
+ * nothing, and reading it as a blank let a win fill it in. Since 2026-10-27 it
+ * is a defeat PKW records (or a reviewer picks), and the boxes are gone
+ * (scripts/migrate/clear-unticked-elected.ts). So a stored win against an
+ * incoming defeat, or a defeat against a win, is a conflict, which the ingest
+ * never writes over: the stored answer is a reviewer's or an earlier run's.
  */
 function field(edge: EdgeLike, name: string): unknown {
   const value = (edge as Record<string, unknown>)[name];
-  if (
-    value === undefined ||
-    value === null ||
-    value === "" ||
-    value === false
-  ) {
+  if (value === undefined || value === null || value === "") {
     return null;
   }
   if (FOLDED_FIELDS.has(name) && typeof value === "string") {
@@ -385,11 +373,24 @@ function specifies(name: string, stored: unknown, incoming: unknown): boolean {
 export function edgeRelation(
   stored: EdgeLike,
   incoming: EdgeLike,
+  {
+    storedAnnotationsStand = false,
+  }: {
+    /** Whether an annotation the stored edge answers stands against a row
+     * that answers it otherwise, rather than making the two different facts.
+     * How the ingest places a row: a candidacy stored as won that PKW records
+     * as lost is that candidacy still - a result a reviewer set, or one an
+     * earlier run got wrong (clear-wins-written-onto-lost-mayoral-runs) - and
+     * read as a conflict the row was stored a second time beside it. The
+     * migrations folding copies, and a merge, ask the strict question: two
+     * copies saying won and lost are not one run to them. */
+    storedAnnotationsStand?: boolean;
+  } = {},
 ): EdgeRelation {
-  const { discriminators, annotations } = edgeSemantics(incoming.type);
+  const { discriminators, annotations = [] } = edgeSemantics(incoming.type);
 
   let added = 0;
-  for (const name of [...discriminators, ...(annotations ?? [])]) {
+  for (const name of [...discriminators, ...annotations]) {
     const before = field(stored, name);
     const after = field(incoming, name);
     if (before === null) {
@@ -402,6 +403,7 @@ export function edgeRelation(
         added++;
         continue;
       }
+      if (storedAnnotationsStand && annotations.includes(name)) continue;
       return "conflict";
     }
   }
@@ -642,7 +644,10 @@ export function misfiledRunOf(
   ) {
     return false;
   }
-  return edgeRelation(stored, incoming) !== "conflict";
+  return (
+    edgeRelation(stored, incoming, { storedAnnotationsStand: true }) !==
+    "conflict"
+  );
 }
 
 /** Whether a stored candidacy says no more than that it was local: „Samorząd”,
@@ -689,7 +694,10 @@ export function misfiledSejmikRunOf(
   ) {
     return false;
   }
-  return edgeRelation(stored, incoming) !== "conflict";
+  return (
+    edgeRelation(stored, incoming, { storedAnnotationsStand: true }) !==
+    "conflict"
+  );
 }
 
 /** A stored edge one payload row could be placed onto, and how the row stands
@@ -815,7 +823,9 @@ export async function findEdgeMatches(
       // earlier run's, and `enrichedEdge` fills blanks rather than
       // overwriting, so there is nothing there for the payload to do.
       const relation = mayEnrich
-        ? edgeRelation(stored as EdgeLike, edge)
+        ? edgeRelation(stored as EdgeLike, edge, {
+            storedAnnotationsStand: true,
+          })
         : "same";
       if (relation === "enriches") enrichable.push({ id: doc.id, stored });
       else same.push(doc.id);
@@ -823,7 +833,11 @@ export async function findEdgeMatches(
     }
     if (!mayEnrich || !meetsEnrichFloor(stored as EdgeLike)) continue;
 
-    switch (edgeRelation(stored as EdgeLike, edge)) {
+    // A result the stored copy answers stands against a row answering it
+    // otherwise, as in the branch above: the row is that copy's still.
+    switch (
+      edgeRelation(stored as EdgeLike, edge, { storedAnnotationsStand: true })
+    ) {
       case "enriches":
         enrichable.push({ id: doc.id, stored });
         break;

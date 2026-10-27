@@ -160,9 +160,9 @@ export function queueTier(
   // the declaration is what carries the date of birth to compare against the
   // register.
   //
-  // `elected` is written for a win and never for a defeat - see `elected` in
-  // shared/api.ts - so this reads a bare `true` rather than distinguishing
-  // false from absent, both of which mean nobody said.
+  // A bare `true`: a defeat (`false`) and a run nobody recorded a result for
+  // (absent) both leave the person without the mandate this tier is about -
+  // see `elected` in shared/api.ts.
   const winSince = isoYearsAgo(now, WIN_WINDOW_YEARS);
   const wonRecently = edges.some(
     (edge) =>
