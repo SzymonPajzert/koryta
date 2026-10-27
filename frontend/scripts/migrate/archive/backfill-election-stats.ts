@@ -1,8 +1,8 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { pageIsPublic, type Edge } from "../../shared/model";
-import { candidacyElections } from "../../shared/stats";
-import { reportRemaining } from "./remaining";
+import { pageIsPublic, type Edge } from "../../../shared/model";
+import { candidacyElections } from "../../../shared/stats";
+import { reportRemaining } from "../remaining";
 
 /**
  * Give every person who stood in an election `stats.edges.{all,approved}.elections`.
@@ -27,11 +27,17 @@ import { reportRemaining } from "./remaining";
  * edges move - the night's people step alone touches hundreds. The dry run's
  * count growing back is how that shows.
  *
+ * Run on production on 2026-10-27, and archived: its dry run against that
+ * day's 09:30 export reports no one left. A count coming back means
+ * something writes `stats.edges` without the field again: the sweeper or
+ * /api/stats/computeNodes deployed from before it, or a new writer that builds
+ * the map by hand.
+ *
  * Usage (against the running dev:prod-data emulator):
- *   npx tsx scripts/migrate/backfill-election-stats.ts            # dry run
- *   npx tsx scripts/migrate/backfill-election-stats.ts --commit   # apply
+ *   npx tsx scripts/migrate/archive/backfill-election-stats.ts            # dry run
+ *   npx tsx scripts/migrate/archive/backfill-election-stats.ts --commit   # apply
  * Against production:
- *   npx tsx scripts/migrate/backfill-election-stats.ts --prod --commit
+ *   npx tsx scripts/migrate/archive/backfill-election-stats.ts --prod --commit
  */
 
 const isProd = process.argv.includes("--prod");
