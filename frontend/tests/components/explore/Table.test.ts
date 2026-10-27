@@ -938,3 +938,70 @@ describe("ExploreTable's cells on a desktop", () => {
     expect(phone).not.toContain("min-width: 100%");
   });
 });
+
+/** A row can list a dozen runs, and only one of them is why it is in the
+ * table: the election the page is filtered by. That one is filled; a run
+ * PKW records as won carries a mark wherever it is. */
+describe("ExploreTable's matched and won runs", () => {
+  const WITH_ELECTIONS = [
+    { title: "Osoba", key: "name", sortable: true },
+    { title: "Firmy", key: "latestEmploymentStart", sortable: true },
+    { title: "Wybory", key: "elections", sortable: false },
+  ];
+
+  const candidate = (): PersonRich => ({
+    ...person(),
+    elections: [
+      {
+        year: "2018",
+        location: "Gdynia",
+        teryt: "2262",
+        position: "Rada miasta",
+        key: "local-2018",
+      },
+      {
+        year: "2023",
+        location: "Województwo pomorskie",
+        teryt: "22",
+        position: "Sejm",
+        key: "parliament-2023",
+        elected: true,
+      },
+    ],
+  });
+
+  const columnChips = async (props: Record<string, unknown>) => {
+    const wrapper = await mountTable({
+      headers: WITH_ELECTIONS,
+      items: [candidate()],
+      ...props,
+    });
+    return wrapper.findAll("tbody td")[2]!.findAll(".v-chip");
+  };
+
+  it("fills the runs in the elections the page is filtered by", async () => {
+    const chips = await columnChips({ matchedElections: ["parliament-2023"] });
+
+    expect(chips[0]!.classes()).not.toContain("election-matched");
+    expect(chips[1]!.classes()).toContain("election-matched");
+    expect(chips[1]!.classes()).toContain("bg-surface-sage");
+  });
+
+  it("fills nothing where the page filters by no election", async () => {
+    const chips = await columnChips({});
+
+    for (const chip of chips) {
+      expect(chip.classes()).not.toContain("election-matched");
+    }
+  });
+
+  it("marks a recorded win, and only that", async () => {
+    const chips = await columnChips({});
+
+    expect(chips[0]!.find(".election-won").exists()).toBe(false);
+    expect(chips[1]!.find(".election-won").exists()).toBe(true);
+    expect(chips[1]!.find(".election-won").attributes("aria-label")).toBe(
+      "wybrany",
+    );
+  });
+});

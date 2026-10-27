@@ -2,6 +2,7 @@ import type { ElectionRich, PersonRich, Person } from "~~/shared/model";
 import type { Edge, Node } from "~~/shared/graph/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { workLocationNames } from "~/utils/companyLocation";
+import { candidacyElection } from "~~/shared/electionDays";
 
 import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
 
@@ -163,6 +164,13 @@ export async function useListWithStats(
                 : undefined,
             position: listPosition,
             committee: edge.committee,
+            elected:
+              typeof edge.elected === "boolean" ? edge.elected : undefined,
+            key: candidacyElection(
+              edge.start_date,
+              edge.position,
+              edge.by_election,
+            ),
           });
         }
       }

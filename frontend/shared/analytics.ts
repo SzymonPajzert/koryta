@@ -479,6 +479,7 @@ export const TABELA_FILTER_NAMES = {
   companyTeryt: "company-region",
   place: "company",
   krs: "company",
+  election: "election",
   category: "category",
   currentlyEmployed: "currently-employed",
   minEmploymentDate: "employed-since",

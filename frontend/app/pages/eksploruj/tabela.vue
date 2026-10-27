@@ -33,6 +33,7 @@
       <FormEksplorujTabelaFilters
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
+        v-model:election="filterElection"
         v-model:teryt="filterTeryt"
         v-model:company-teryt="filterCompanyTeryt"
         v-model:place="filterPlace"
@@ -72,6 +73,7 @@
           search-with-name
           score-on-phone
           :draft-with-name="!!user"
+          :matched-elections="filterElection"
           @focus="focusPerson"
         />
       </v-card>
@@ -382,6 +384,7 @@ const filterVisibility = choiceFilter<"all" | "public" | "private">(
   "all",
 );
 const filterParty = arrayFilter("party");
+const filterElection = arrayFilter("election");
 const filterTeryt = stringFilter("teryt");
 const filterCompanyTeryt = stringFilter("companyTeryt");
 const { filterPlace, legacyKrs, availableCompanies } = usePlaceFilter(
@@ -431,6 +434,7 @@ const clearFilters = () => {
     companyTeryt: undefined,
     party: undefined,
     parties: undefined,
+    election: undefined,
     place: undefined,
     krs: undefined,
     currentlyEmployed: undefined,
@@ -470,6 +474,10 @@ const apiQuery = computed(
           : undefined,
       visibility:
         filterVisibility.value !== "all" ? filterVisibility.value : undefined,
+      election:
+        filterElection.value && filterElection.value.length > 0
+          ? filterElection.value
+          : undefined,
       place:
         filterPlace.value && filterPlace.value.length > 0
           ? filterPlace.value

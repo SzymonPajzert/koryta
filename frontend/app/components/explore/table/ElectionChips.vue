@@ -10,6 +10,7 @@
       :key="i"
       size="small"
       class="mb-1"
+      :class="{ 'bg-surface-sage election-matched': matches(election) }"
       variant="outlined"
     >
       <v-tooltip activator="parent" location="top" open-delay="200">
@@ -22,7 +23,15 @@
           }}
         </div>
         <div v-if="election.committee">{{ election.committee }}</div>
+        <div v-if="election.elected === true">Wybrany</div>
       </v-tooltip>
+      <v-icon
+        v-if="election.elected === true"
+        :icon="mdiCheckCircle"
+        size="14"
+        class="mr-1 election-won"
+        aria-label="wybrany"
+      />
       <span v-if="election.year" class="font-weight-bold mr-1">
         {{ election.year }}
       </span>
@@ -42,9 +51,19 @@
  * data-table cells. Copying it into both slots would have left the tooltip -
  * which is where the committee name lives, and the whole reason this column is
  * narrow - to drift between the two copies. */
-import type { PersonRich } from "~~/shared/model";
+import { mdiCheckCircle } from "@mdi/js";
+import type { ElectionRich, PersonRich } from "~~/shared/model";
 
-defineProps<{ elections?: PersonRich["elections"] }>();
+const props = defineProps<{
+  elections?: PersonRich["elections"];
+  /** The page's election filter: the runs it matched are filled, so a row
+   * that lists thirteen runs says which one put it in the table. */
+  matched?: string[] | null;
+}>();
+
+/** Whether this run is in one of the elections the filter asked for. */
+const matches = (election: ElectionRich) =>
+  !!election.key && !!props.matched?.includes(election.key);
 
 const terytToWojewodztwo: Record<string, string> = {
   "02": "dolnośląskie",
@@ -80,6 +99,18 @@ const getWojewodztwo = (teryt?: string) => {
 
 .elections-cell .v-chip {
   max-width: 100%;
+}
+
+/* The run the filter matched: the bar's sage, outline kept, a touch heavier -
+ * filled without its outline it read as quieter than its neighbours, not
+ * louder. */
+.election-matched {
+  font-weight: 500;
+}
+
+/* A recorded win, in the chip's own ink. */
+.election-won {
+  opacity: 0.85;
 }
 
 .elections-cell :deep(.v-chip__content) {

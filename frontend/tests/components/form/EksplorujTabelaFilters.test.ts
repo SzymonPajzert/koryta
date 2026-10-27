@@ -696,3 +696,39 @@ describe("the filter panel's groups", () => {
     expect(contrastRatio(ink, background)).toBeGreaterThanOrEqual(AA_TEXT);
   });
 });
+
+describe("the query bar's election chip", () => {
+  it("names the election on the rail, in the grey of the person's filters", async () => {
+    const wrapper = await mount({ election: ["parliament-2023"] });
+
+    const chip = railChips(wrapper).find((candidate) =>
+      candidate.text().includes("Sejm i Senat 2023"),
+    );
+    expect(chip!.text()).toBe("Wybory: Sejm i Senat 2023");
+    expect(chip!.classes()).toContain("bg-surface-muted");
+  });
+
+  it("clears the elections from the chip's x", async () => {
+    const wrapper = await mount({
+      election: ["parliament-2023", "local-2024"],
+    });
+
+    const chip = railChips(wrapper).find((candidate) =>
+      candidate.text().includes("Wybory: 2"),
+    );
+    expect(chip!.get(".v-chip__close").attributes("aria-label")).toBe(
+      "Usuń filtr: Wybory: 2",
+    );
+    await chip!.get(".v-chip__close").trigger("click");
+
+    expect(wrapper.emitted("update:election")?.[0]).toEqual([null]);
+  });
+
+  it("counts any number of elections as one filter", async () => {
+    const wrapper = await mount({
+      election: ["parliament-2023", "local-2024"],
+    });
+
+    expect(toggle(wrapper).text()).toBe("Filtry (1)");
+  });
+});

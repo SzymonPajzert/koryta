@@ -25,12 +25,20 @@
            display state from a placeholder 1280px and corrects it only when
            the app's suspense resolves, so a width-driven `v-if` renders the
            desktop overlay into the phone's html and sometimes never takes it
-           back. -->
+           back.
+
+           `width` and not `min-width`: for a menu opening below its button
+           Vuetify 3.13 caps the minimum at the button's own width
+           (`Math.min(minWidth, targetBox.width)` in VOverlay's location
+           strategy), so `min-width="760"` came out as 96px. The panel then
+           took the width of whatever it held - 449px with nothing chosen -
+           and grew under the pointer as chips were picked into „Partia”,
+           „Instytucje” or „Wybory”. -->
       <v-menu
         v-model="menuOpen"
         :close-on-content-click="false"
         location="bottom start"
-        min-width="760"
+        width="760"
         max-width="760"
       >
         <template #activator="{ props: activatorProps }">
@@ -50,6 +58,7 @@
           <FormEksplorujTabelaFilterPanel
             v-model:visibility="visibility"
             v-model:party="party"
+            v-model:election="election"
             v-model:teryt="teryt"
             v-model:company-teryt="companyTeryt"
             v-model:place="place"
@@ -106,6 +115,7 @@
             <FormEksplorujTabelaFilterPanel
               v-model:visibility="visibility"
               v-model:party="party"
+              v-model:election="election"
               v-model:teryt="teryt"
               v-model:company-teryt="companyTeryt"
               v-model:place="place"
@@ -364,7 +374,7 @@
  * a chip per filter, the row count, the sort and the share link.
  *
  * /eksploruj/autograf/[type] mounts the same component over a chart: the same
- * ten filters, but no table under it and no progress data, so everything that
+ * eleven filters, but no table under it and no progress data, so everything that
  * belongs to the table - the count, the sort control, the work row, the share
  * link - appears only when the page passes it in.
  */
@@ -472,6 +482,8 @@ const emit = defineEmits<{
 
 const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
+/** General elections, as `ElectionKey`s - see shared/electionDays.ts. */
+const election = defineModel<string[] | null>("election");
 const teryt = defineModel<string | null>("teryt");
 const companyTeryt = defineModel<string | null>("companyTeryt");
 /** Selected employers, by place node id. */
@@ -512,6 +524,7 @@ const query = computed<TableQuery>(() => ({
   teryt: teryt.value,
   companyTeryt: companyTeryt.value,
   party: party.value,
+  election: election.value,
   place: place.value,
   currentlyEmployed: currentlyEmployed.value,
   visibility: visibility.value,
@@ -560,6 +573,7 @@ const CHIP_SURFACES: Partial<Record<ShareKey, string>> = {
   teryt: "bg-surface-info",
   companyTeryt: "bg-surface-info",
   party: "bg-surface-muted",
+  election: "bg-surface-muted",
   hideVoted: "bg-surface-muted",
   minEmploymentDate: "bg-surface-muted",
   minVotes: "bg-surface-muted",
@@ -818,6 +832,9 @@ function clearChip(chip: QueryChip) {
         break;
       case "party":
         party.value = null;
+        break;
+      case "election":
+        election.value = null;
         break;
       case "currentlyEmployed":
         currentlyEmployed.value = "all";
