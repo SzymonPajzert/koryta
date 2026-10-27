@@ -59,7 +59,12 @@ type Post = (
 export async function startRunner(
   now: Date = new Date(),
   config: RunnerConfig = runnerConfig(),
-  post: Post = (url, options) => $fetch(url, options),
+  // Called through `Post`: given a bare `string`, nitro's typed `$fetch`
+  // matches the url against every route the app serves, a comparison that
+  // sits at TypeScript's depth limit - an unrelated query field elsewhere
+  // tipped it into TS2321 (2026-10-27). The url is Compute Engine's, never one
+  // of ours, so the route types have nothing to say about it anyway.
+  post: Post = (url, options) => ($fetch as unknown as Post)(url, options),
 ): Promise<RunDispatch> {
   const at = now.toISOString();
   if (config.mode === "off") {
