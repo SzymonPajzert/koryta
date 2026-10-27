@@ -618,4 +618,59 @@ describe("shared/stats.ts", () => {
       expect(stats.all.elections).toEqual([]);
     });
   });
+
+  describe("computeEdgeStats, what became of a node in each election", () => {
+    const run = (fields: Partial<Edge>) =>
+      ({
+        type: "election",
+        source: "p1",
+        target: "teryt22",
+        start_date: "2024-01-01",
+        position: "Rada miasta",
+        published: true,
+        ...fields,
+      }) as Edge;
+    const elections = (edges: Edge[]) =>
+      computeEdgeStats(edges, new Set(), {}, new Set(), "p1");
+
+    /** The question is whether the election gave them a seat: a council
+     * won and a mayoralty lost on the same day is a win. */
+    it("files an election any run won as won", () => {
+      const stats = elections([
+        run({ elected: true }),
+        run({ position: "Prezydent", elected: false }),
+      ]);
+
+      expect(stats.all.elections).toEqual(["local-2024", "local-2024:won"]);
+    });
+
+    it("files one as lost only when every run is a recorded loss", () => {
+      expect(
+        elections([
+          run({ elected: false }),
+          run({ position: "Prezydent", elected: false }),
+        ]).all.elections,
+      ).toEqual(["local-2024", "local-2024:lost"]);
+
+      // A run with no result says nothing, so it keeps the election off the
+      // „lost” list: not knowing is not losing.
+      expect(
+        elections([run({ elected: false }), run({ position: "Prezydent" })]).all
+          .elections,
+      ).toEqual(["local-2024"]);
+    });
+
+    it("gives a guest only what published runs say", () => {
+      const stats = elections([
+        run({ elected: false }),
+        run({ position: "Prezydent", elected: true, published: false }),
+      ]);
+
+      expect(stats.all.elections).toEqual(["local-2024", "local-2024:won"]);
+      expect(stats.approved.elections).toEqual([
+        "local-2024",
+        "local-2024:lost",
+      ]);
+    });
+  });
 });

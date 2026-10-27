@@ -269,6 +269,7 @@ const progressQuery = computed(() => ({
   minEmploymentDate: props.query.minEmploymentDate,
   minVotes: props.query.minVotes,
   election: props.query.election,
+  electionResult: props.query.electionResult,
 }));
 
 const { data: stats } = await useAsyncData(

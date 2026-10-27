@@ -161,3 +161,31 @@ describe("the filter panel's elections", () => {
     expect(wrapper.text()).toContain("1 filtr");
   });
 });
+
+describe("the filter panel's election result", () => {
+  /** The choice is made inside the list, so once the list closes the field's
+   * label is the only thing on screen that says it. */
+  it("names a chosen result in the field's label", async () => {
+    const wrapper = await mount({
+      election: ["parliament-2023"],
+      electionResult: "won",
+    });
+
+    const field = wrapper
+      .findAll(".v-autocomplete")
+      .find((candidate) => candidate.text().includes("Wybory"));
+    expect(field!.find("label").text()).toBe("Wybory: wygrali");
+  });
+
+  it("keeps the plain label for „Kandydowali”", async () => {
+    const wrapper = await mount({
+      election: ["parliament-2023"],
+      electionResult: "all",
+    });
+
+    const field = wrapper
+      .findAll(".v-autocomplete")
+      .find((candidate) => candidate.text().includes("Wybory"));
+    expect(field!.find("label").text()).toBe("Wybory");
+  });
+});

@@ -73,11 +73,19 @@
         />
       </v-col>
       <v-col cols="12" md="6">
-        <!-- Several elections mean any of them, the way several parties do. -->
+        <!-- Several elections mean any of them, the way several parties do.
+
+             Whether they won or lost sits in the list's own header, above
+             the elections it narrows - Szymon's pick of three placements
+             (board round election-filter-r1, 2026-10-27). The header is
+             outside the list's scroll, so the list jumping to the election
+             already chosen cannot take it out of sight, which is what
+             happened to it as the list's first row. Once the list closes the
+             field's label carries the choice. -->
         <v-autocomplete
           v-model="election"
           :items="electionOptions"
-          label="Wybory"
+          :label="electionLabel"
           no-data-text="Nie ma takich wyborów"
           variant="outlined"
           density="comfortable"
@@ -86,7 +94,33 @@
           multiple
           chips
           closable-chips
-        />
+        >
+          <template #menu-header>
+            <div class="d-flex align-center flex-wrap ga-2 px-4 py-2">
+              <span class="text-caption text-ink-neutral">Pokaż:</span>
+              <v-btn-toggle
+                v-model="electionResult"
+                mandatory
+                divided
+                variant="outlined"
+                density="compact"
+                color="ink-sage"
+                aria-label="Wynik w wybranych wyborach"
+              >
+                <v-btn
+                  v-for="option in electionResultOptions"
+                  :key="option.value"
+                  :value="option.value"
+                  size="small"
+                  class="text-none"
+                >
+                  {{ option.title }}
+                </v-btn>
+              </v-btn-toggle>
+            </div>
+            <v-divider />
+          </template>
+        </v-autocomplete>
       </v-col>
     </v-row>
 
@@ -242,7 +276,7 @@ import { mdiInformationOutline } from "@mdi/js";
 import { computed, ref } from "vue";
 import { ink, surface } from "~~/shared/colors";
 import { companyCategories } from "~~/shared/companyCategories";
-import { electionOptions } from "~~/shared/electionDays";
+import { electionOptions, electionResultOptions } from "~~/shared/electionDays";
 import { partyChipPaint } from "~~/shared/misc";
 import { polishCounting } from "~/composables/polish";
 import FormEksplorujTabelaVerificationFields from "./EksplorujTabelaVerificationFields.vue";
@@ -271,6 +305,9 @@ const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
 /** General elections, as `ElectionKey`s - see shared/electionDays.ts. */
 const election = defineModel<string[] | null>("election");
+/** Narrows the elections to the people who won or lost them. */
+const electionResult = defineModel<"all" | "won" | "lost">("electionResult");
+
 const teryt = defineModel<string | null>("teryt");
 const companyTeryt = defineModel<string | null>("companyTeryt");
 /** Selected employers, by place node id. */
@@ -282,6 +319,18 @@ const currentlyEmployed = defineModel<"all" | "any" | "selected">(
 );
 const minEmploymentDate = defineModel<string | null>("minEmploymentDate");
 const minVotes = defineModel<number | null>("minVotes");
+
+/** The result is chosen inside the list and out of sight once it closes, so
+ * the field's label carries it: „Wybory: wygrali”. */
+const electionLabel = computed(() => {
+  if (!electionResult.value) return "Wybory";
+  const option = electionResultOptions.find(
+    (item) => item.value === electionResult.value,
+  );
+  return option && option.value !== "all"
+    ? `Wybory: ${option.title.toLowerCase()}`
+    : "Wybory";
+});
 
 const availableCategories = companyCategories.map((c) => ({
   title: c.title,

@@ -293,7 +293,8 @@ describe("the election filter in a link", () => {
         label: "Wybory: Sejm i Senat 2023",
         short: "Sejm i Senat 2023",
         admin: false,
-        clears: ["election"],
+        // The result goes with them: on its own it narrows nothing.
+        clears: ["election", "electionResult"],
       },
     ]);
   });
@@ -329,5 +330,45 @@ describe("the election filter in a link", () => {
     expect(describeQuery({ party: "PiS", election: "parliament-2023" })).toBe(
       "PiS · Sejm i Senat 2023",
     );
+  });
+});
+
+describe("the result of an election in a link", () => {
+  it("reads in front of the election, on the one chip that clears both", () => {
+    expect(
+      queryChips({ election: "parliament-2023", electionResult: "won" }),
+    ).toEqual([
+      {
+        key: "election",
+        label: "Wygrali: Sejm i Senat 2023",
+        short: "wygrali: Sejm i Senat 2023",
+        admin: false,
+        clears: ["election", "electionResult"],
+      },
+    ]);
+  });
+
+  it("counts several elections behind it", () => {
+    const [chip] = queryChips({
+      election: ["parliament-2023", "local-2024"],
+      electionResult: "lost",
+    });
+    expect(chip).toMatchObject({ label: "Przegrali: 2 wybory" });
+  });
+
+  it("names nothing on its own, and nothing for „Kandydowali”", () => {
+    expect(queryChips({ electionResult: "won" })).toEqual([]);
+    expect(
+      queryChips({ election: "parliament-2023", electionResult: "all" })[0],
+    ).toMatchObject({ label: "Wybory: Sejm i Senat 2023" });
+  });
+
+  it("keeps the result in a shared link beside the elections, and drops „all”", () => {
+    expect(
+      shareUrl({ election: "parliament-2023", electionResult: "won" }),
+    ).toBe("/eksploruj/tabela?election=parliament-2023&electionResult=won");
+    expect(
+      shareUrl({ election: "parliament-2023", electionResult: "all" }),
+    ).toBe("/eksploruj/tabela?election=parliament-2023");
   });
 });

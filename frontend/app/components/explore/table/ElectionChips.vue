@@ -24,6 +24,7 @@
         </div>
         <div v-if="election.committee">{{ election.committee }}</div>
         <div v-if="election.elected === true">Wybrany</div>
+        <div v-else-if="election.elected === false">Nie wybrany</div>
       </v-tooltip>
       <v-icon
         v-if="election.elected === true"
@@ -59,11 +60,20 @@ const props = defineProps<{
   /** The page's election filter: the runs it matched are filled, so a row
    * that lists thirteen runs says which one put it in the table. */
   matched?: string[] | null;
+  /** And the result the filter asks for, if any: only the run that won (or
+   * lost) is filled, not the election's other runs. */
+  matchedResult?: "all" | "won" | "lost";
 }>();
 
-/** Whether this run is in one of the elections the filter asked for. */
-const matches = (election: ElectionRich) =>
-  !!election.key && !!props.matched?.includes(election.key);
+/** Whether this run is one the filter asked for: the same election, and the
+ * result asked for if one was. */
+const matches = (election: ElectionRich) => {
+  if (!props.matched?.length || !election.key) return false;
+  if (!props.matched.includes(election.key)) return false;
+  if (props.matchedResult === "won") return election.elected === true;
+  if (props.matchedResult === "lost") return election.elected === false;
+  return true;
+};
 
 const terytToWojewodztwo: Record<string, string> = {
   "02": "dolnośląskie",
