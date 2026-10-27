@@ -309,6 +309,7 @@ export async function recomputeEdgeStats(
     publicPlaceIds,
     transitiveTargets,
     unpaidSeatPlaceIds,
+    sourceId,
   );
 
   try {

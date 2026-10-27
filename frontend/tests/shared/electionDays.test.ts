@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { candidacyDay, electionKindsIn } from "../../shared/electionDays";
+import {
+  candidacyDay,
+  candidacyElection,
+  electionKindsIn,
+  electionName,
+  electionOptions,
+} from "../../shared/electionDays";
 import { isoDay } from "../../shared/dates";
 import { electionPositions } from "../../shared/misc";
 
@@ -128,5 +134,78 @@ describe("electionKindsIn", () => {
     // candidacy in.
     expect(electionKindsIn("2020")).toEqual([]);
     expect(electionKindsIn("2025")).toEqual([]);
+  });
+});
+
+describe("candidacyElection", () => {
+  it("files a run under the kind and the year of its election", () => {
+    expect(candidacyElection("2023-01-01", "Sejm")).toBe("parliament-2023");
+    expect(candidacyElection("2023-01-01", "Senat")).toBe("parliament-2023");
+    expect(candidacyElection("2018-01-01", "Rada miasta")).toBe("local-2018");
+    expect(candidacyElection("2018-01-01", "Samorząd")).toBe("local-2018");
+    expect(candidacyElection("2019-01-01", "Parlament Europejski")).toBe(
+      "european-2019",
+    );
+  });
+
+  /** The same reading `candidacyDay` gives, so a person listed under an
+   * election is one whose page dates the run to that election's day. */
+  it("files a run stored without an office the way its page dates it", () => {
+    expect(candidacyElection("2023-01-01", null)).toBe("parliament-2023");
+    expect(candidacyElection("2019-01-01", null)).toBe("parliament-2019");
+    expect(candidacyElection("2024-01-01", "")).toBe("local-2024");
+    expect(candidacyElection("2004-01-01", undefined)).toBe("european-2004");
+  });
+
+  it("counts a date that names a day by its year", () => {
+    // A mayor's run-off, typed in by a reviewer.
+    expect(candidacyElection("2024-04-21", "Prezydent")).toBe("local-2024");
+    expect(candidacyElection("2023", "Sejm")).toBe("parliament-2023");
+  });
+
+  it("names no election where there was none to stand in", () => {
+    // A by-election is a contest of its own.
+    expect(candidacyElection("2023-01-01", "Senat", true)).toBeNull();
+    // No Sejm was elected in 2006, and nothing at all in 2022.
+    expect(candidacyElection("2006-01-01", "Sejm")).toBeNull();
+    expect(candidacyElection("2022-01-01", null)).toBeNull();
+    expect(candidacyElection(undefined, "Sejm")).toBeNull();
+    expect(candidacyElection("", "Sejm")).toBeNull();
+  });
+});
+
+describe("electionOptions", () => {
+  /** Szymon's pick on the design board (election-filter-r1, 2026-10-27):
+   * the chamber as the name, one line, newest first. */
+  it("offers every election newest first, by what it elected", () => {
+    expect(electionOptions.slice(0, 4).map((option) => option.title)).toEqual([
+      "Parlament Europejski 2024",
+      "Samorządowe 2024",
+      "Sejm i Senat 2023",
+      // October's Sejm after May's European Parliament: by day, not by kind.
+      "Sejm i Senat 2019",
+    ]);
+    expect(electionOptions.at(-1)!.title).toBe("Sejm i Senat 1989");
+  });
+
+  it("offers each election once, under a key the stats can hold", () => {
+    const values = electionOptions.map((option) => option.value);
+    expect(new Set(values).size).toBe(values.length);
+    for (const { value, title } of electionOptions) {
+      expect(electionName(value)).toBe(title);
+    }
+  });
+});
+
+describe("electionName", () => {
+  it("names a key the way the menu does", () => {
+    expect(electionName("parliament-2023")).toBe("Sejm i Senat 2023");
+    expect(electionName("local-2024")).toBe("Samorządowe 2024");
+  });
+
+  it("names nothing the list does not offer", () => {
+    expect(electionName("sejm-2025")).toBeNull();
+    expect(electionName("parliament-2006")).toBeNull();
+    expect(electionName("")).toBeNull();
   });
 });

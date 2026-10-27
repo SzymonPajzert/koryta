@@ -128,3 +128,89 @@ export function candidacyDay(
   }
   return year;
 }
+
+/** One general election, the way /eksploruj/tabela filters people by it:
+ * `parliament-2023`, `local-2024`, `european-2019`.
+ *
+ * A kind and a year and nothing finer. The Sejm and the Senate are elected on
+ * one day and every local office on another, so „who ran in 2023” is one
+ * question whichever chamber the answer stood for - and an office is not a
+ * reliable thing to split on anyway, with 11,255 of the 19,518 live candidacies
+ * on the 2026-10-26 export still filed under the pipeline's bare „Samorząd”. */
+export type ElectionKey = `${ElectionKind}-${string}`;
+
+/** The election a candidacy stood in, or null where there is none to name: a
+ * by-election, which is a contest of its own; a date with no year; a year in
+ * which no election of the candidacy's kind was held.
+ *
+ * Read the way `candidacyDay` reads it, so that a person listed under an
+ * election is one whose page dates the run to that election's day: the office
+ * settles the kind, and a candidacy stored without one goes to the first kind
+ * in `UNNAMED_OFFICE_ORDER` held that year. Unlike `candidacyDay`, a date that
+ * names a day still counts by its year - it is somebody's correction of the
+ * same run, like the 21 April 2024 of a mayor's run-off. */
+export function candidacyElection(
+  startDate: string | null | undefined,
+  position?: string | null,
+  byElection?: boolean | null,
+): ElectionKey | null {
+  if (byElection) return null;
+  const year = /^(\d{4})/.exec(startDate ?? "")?.[1];
+  if (!year) return null;
+  const kind = electionKind(position);
+  for (const each of kind ? [kind] : UNNAMED_OFFICE_ORDER) {
+    if (ELECTION_DAYS[each][year]) return `${each}-${year}`;
+  }
+  return null;
+}
+
+/** What each kind of election is called: by what it elected where that is
+ * one body or two, and by its usual name where it is every local office at
+ * once. Szymon picked these over „Parlamentarne 2023” with „Sejm i Senat” on a
+ * second line (board round election-filter-r1, 2026-10-27): the chamber is
+ * what a reader looks for. */
+const KIND_NAMES: Record<ElectionKind, string> = {
+  parliament: "Sejm i Senat",
+  local: "Samorządowe",
+  european: "Parlament Europejski",
+};
+
+export interface ElectionOption {
+  value: ElectionKey;
+  /** „Sejm i Senat 2023”: the entry in the menu, and the chip once picked. */
+  title: string;
+}
+
+/** Every election `candidacyElection` can name, newest first - the order a
+ * reader looks for them in, since the last two are what most searches are
+ * about.
+ *
+ * All of them, including the few no page holds a candidacy in yet: the night's
+ * payloads on 2026-10-26 carried runs from 1991, 1993, 1994 and 1997 for pages
+ * the site has not sent them to, so an election with nobody under it today is
+ * one the backlog has not reached, not one the site does not cover. */
+export const electionOptions: readonly ElectionOption[] = (
+  Object.keys(ELECTION_DAYS) as ElectionKind[]
+)
+  .flatMap((kind) =>
+    Object.entries(ELECTION_DAYS[kind]).map(([year, day]) => ({
+      day,
+      option: {
+        value: `${kind}-${year}` as ElectionKey,
+        title: `${KIND_NAMES[kind]} ${year}`,
+      },
+    })),
+  )
+  .sort((a, b) => b.day.localeCompare(a.day))
+  .map(({ option }) => option);
+
+/** „Sejm i Senat 2023” for a key, as the menu names it; null for anything
+ * that is not one - a key typed into a url by hand, or one from a later
+ * version of the list. */
+export function electionName(key: string): string | null {
+  const match = /^(parliament|local|european)-(\d{4})$/.exec(key);
+  if (!match) return null;
+  const kind = match[1] as ElectionKind;
+  if (!ELECTION_DAYS[kind][match[2]!]) return null;
+  return `${KIND_NAMES[kind]} ${match[2]}`;
+}

@@ -110,6 +110,7 @@ function edgeStatsBySource(
       publicPlaceIds,
       transitiveTargets,
       unpaidSeatPlaceIds,
+      source,
     );
   }
   return bySource;

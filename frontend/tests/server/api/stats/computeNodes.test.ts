@@ -136,4 +136,43 @@ describe("POST /api/stats/computeNodes", () => {
     );
     expect(written).toEqual({ "person-1": 2, "person-2": 0 });
   });
+
+  /** The candidacies are edges, and the table's „Wybory” filter cannot read
+   * another collection - so the elections are written onto the person. A
+   * region is handed every candidacy filed in it too, and none of them is its
+   * own. */
+  it("files a person under the elections they stood in, and a region under none", async () => {
+    collections.nodes = [
+      { id: "person-1", data: () => ({ type: "person", name: "A" }) },
+      {
+        id: "teryt22",
+        data: () => ({ type: "region", name: "pomorskie", teryt: "22" }),
+      },
+    ];
+    collections.edges = [
+      {
+        data: () => ({
+          type: "election",
+          source: "person-1",
+          target: "teryt22",
+          start_date: "2023-01-01",
+          position: "Sejm",
+          published: true,
+        }),
+      },
+    ];
+
+    await handler({} as never);
+
+    const written = Object.fromEntries(
+      batchUpdate.mock.calls.map(([, data], index) => [
+        collections.nodes[index]!.id,
+        [data.stats.edges.all.elections, data.stats.edges.approved.elections],
+      ]),
+    );
+    expect(written).toEqual({
+      "person-1": [["parliament-2023"], ["parliament-2023"]],
+      teryt22: [[], []],
+    });
+  });
 });

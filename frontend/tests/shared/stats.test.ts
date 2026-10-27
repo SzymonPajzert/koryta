@@ -562,4 +562,60 @@ describe("shared/stats.ts", () => {
       expect(counted.factsCount).toBe(4);
     });
   });
+
+  describe("computeEdgeStats, the elections a node stood in", () => {
+    const run = (fields: Partial<Edge>) =>
+      ({
+        type: "election",
+        source: "p1",
+        target: "teryt22",
+        start_date: "2023-01-01",
+        position: "Sejm",
+        ...fields,
+      }) as Edge;
+
+    it("lists each election once, and a guest's only from published runs", () => {
+      const stats = computeEdgeStats(
+        [
+          run({ published: true }),
+          run({ position: "Senat" }),
+          run({ start_date: "2024-01-01", position: "Rada miasta" }),
+        ],
+        new Set(),
+        {},
+        new Set(),
+        "p1",
+      );
+
+      expect(stats.all.elections).toEqual(["local-2024", "parliament-2023"]);
+      expect(stats.approved.elections).toEqual(["parliament-2023"]);
+    });
+
+    it("forgets a run somebody has removed", () => {
+      const stats = computeEdgeStats(
+        [run({ published: true, deleted: true } as Partial<Edge>)],
+        new Set(),
+        {},
+        new Set(),
+        "p1",
+      );
+
+      expect(stats.all.elections).toEqual([]);
+      expect(stats.approved.elections).toEqual([]);
+    });
+
+    /** /api/stats/computeNodes hands a node its edges from both ends, so a
+     * region gets every candidacy filed in it. Those are not its runs. */
+    it("counts only the node's own runs", () => {
+      const stats = computeEdgeStats(
+        [run({ source: "p2", published: true })],
+        new Set(),
+        {},
+        new Set(),
+        "teryt22",
+      );
+
+      expect(stats.all.elections).toEqual([]);
+    });
+  });
 });
