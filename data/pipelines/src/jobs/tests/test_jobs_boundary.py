@@ -55,6 +55,23 @@ def test_importing_the_pipeline_entry_points_loads_no_job():
     assert out.stdout.strip().splitlines()[-1] == "[]"
 
 
+def test_every_job_directory_is_a_package():
+    """A job without an __init__.py is invisible to import-linter.
+
+    So it is outside every contract, and nothing says so: rejestr_umow and
+    custom_scrapers came in that way on 2026-10-26.
+    """
+    jobs = Path(__file__).resolve().parents[1]
+    loose = sorted(
+        child.name
+        for child in jobs.iterdir()
+        if child.is_dir()
+        and child.name not in ("tests", "__pycache__")
+        and not (child / "__init__.py").is_file()
+    )
+    assert loose == []
+
+
 def test_every_console_script_names_a_callable():
     """A job that moves keeps its script name; the target must follow it."""
     pyproject = Path(__file__).resolve().parents[3] / "pyproject.toml"
