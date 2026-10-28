@@ -4,11 +4,11 @@ import time
 from typing import List
 
 import requests as r
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
-from jobs.custom_scrapers.scrapers.url_scraper import UrlScraper
 from jobs.custom_scrapers.scrapers.url.file_url_client import FileUrlClient
 from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
+from jobs.custom_scrapers.scrapers.url_scraper import UrlScraper
 
 POLAND_URL = 'https://wiadomosci.wp.pl/polska-6750773603044864k'
 REGIONAL_URL = 'https://wiadomosci.wp.pl/regionalne-6750773603061248k'
@@ -29,8 +29,12 @@ class WpScraper(UrlScraper):
 
         # <script type="application/ld+json">
         script_tag = soup.find('script', attrs={'type': 'application/ld+json'})
+        ld_json = script_tag.string if isinstance(script_tag, Tag) else None
+        if ld_json is None:
+            logging.warning(f"[WP] No ld+json found on page {page}")
+            return []
 
-        json_loads = json.loads(script_tag.string)
+        json_loads = json.loads(ld_json)
         articles_object = None
         for item in json_loads['@graph']:
             if item['@type'] == 'CollectionPage':
@@ -40,7 +44,10 @@ class WpScraper(UrlScraper):
             logging.info(f"[WP] No articles found on page {page}")
             # TODO monitor it
             return []
-        urls = [item['url'] for item in articles_object['mainEntity']['itemListElement']]
+        urls = [
+            item['url']
+            for item in articles_object['mainEntity']['itemListElement']
+        ]
 
         logging.info(f"[WP] Found {len(urls)} articles on page {page}")
         return urls
@@ -55,7 +62,9 @@ class WpScraper(UrlScraper):
     def collect_urls_from_base(self, url_base: str):
         page = 1  # Starts from page 1
         for _ in range(self.max_pages):
-            response_urls = self.get_articles_from_polska_page(page=page, url_base=url_base)
+            response_urls = self.get_articles_from_polska_page(
+                page=page, url_base=url_base
+            )
             some_url_exists = self.url_client.any_url_exists(response_urls)
             self.url_client.add_urls(response_urls)
             if not response_urls or some_url_exists:

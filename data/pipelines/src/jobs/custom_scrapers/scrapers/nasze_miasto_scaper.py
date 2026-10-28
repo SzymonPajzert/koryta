@@ -14,7 +14,10 @@ class NaszeMiastoScraper(UrlScraper):
     def __init__(self, url_client: UrlClient):
         self.url_client: UrlClient = url_client
         self.headers = {
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'accept': (
+                'text/html,application/xhtml+xml,application/xml;q=0.9,'
+                'image/avif,image/webp,image/apng,*/*;q=0.8'
+            ),
             'accept-language': 'en-GB,en;q=0.8',
             'priority': 'u=0, i',
             'sec-ch-ua': '"Not:A-Brand";v="99", "Brave";v="145", "Chromium";v="145"',
@@ -26,7 +29,11 @@ class NaszeMiastoScraper(UrlScraper):
             'sec-fetch-user': '?1',
             'sec-gpc': '1',
             'upgrade-insecure-requests': '1',
-            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
+            'user-agent': (
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/145.0.0.0 Safari/537.36'
+            ),
         }
         self.max_pages = 5
 
@@ -49,12 +56,20 @@ class NaszeMiastoScraper(UrlScraper):
         articles_section = soup.find('section', attrs={'data-ea': 'articles_left'})
 
         if not articles_section:
-            logging.info(f"[NaszeMiasto] No articles section found for city {city} page {page}")
+            logging.info(
+                f"[NaszeMiasto] No articles section found for city {city} page {page}"
+            )
             return []
 
-        all_urls = articles_section.find_all('a', attrs={'data-ec': "atomsListingArticleTileWithSeparatedLink"})
-        all_urls = [article['href'] for article in all_urls if 'href' in article.attrs and article['href'].startswith('/')]
-        all_urls = [f"https://{city}.naszemiasto.pl{url}" for url in all_urls]
+        tiles = articles_section.find_all(
+            'a', attrs={'data-ec': "atomsListingArticleTileWithSeparatedLink"}
+        )
+        paths: list[str] = []
+        for article in tiles:
+            href = article.get('href')
+            if isinstance(href, str) and href.startswith('/'):
+                paths.append(href)
+        all_urls = [f"https://{city}.naszemiasto.pl{path}" for path in paths]
 
         return list(set(all_urls))  # remove duplicates
 
@@ -85,8 +100,7 @@ class NaszeMiastoScraper(UrlScraper):
 def main():
     client = create_url_store_client('nasze_miasto')
     scraper = NaszeMiastoScraper(client)
-    cities = scraper._collect_urls_from_city('bierutow')
-    pass
+    scraper._collect_urls_from_city('bierutow')
 
 
 if __name__ == '__main__':

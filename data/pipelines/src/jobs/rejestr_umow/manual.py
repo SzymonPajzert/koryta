@@ -4,6 +4,7 @@ from typing import Any
 
 from jobs.rejestr_umow.scraper.client import ApiClient
 from jobs.rejestr_umow.scraper.runner import run
+from jobs.rejestr_umow.scraper.storage import SqlAgreementRepository
 
 
 def start_search(date_from, date_to, wojewodztwo) -> None:
@@ -23,7 +24,6 @@ def start_search(date_from, date_to, wojewodztwo) -> None:
 
     if wojewodztwo:
         filters["jsfp"] = {"wojewodztwo": wojewodztwo}
-    from jobs.rejestr_umow.scraper.storage import SqlAgreementRepository
 
     with ApiClient(throttle=0.3) as client, \
             SqlAgreementRepository(dsn=os.environ["DATABASE_URL"]) as repo:

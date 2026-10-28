@@ -24,7 +24,8 @@ def setup_logging(log_file_prefix='', console_level=logging.INFO):
     if ENV != LOCAL_ENV:
         if not os.path.exists(LOG_DIR):
             os.makedirs(LOG_DIR)
-        log_file = f"{LOG_DIR}/{log_file_prefix}{str(datetime.datetime.now()).replace(' ', '-')}-debug.log"
+        stamp = str(datetime.datetime.now()).replace(' ', '-')
+        log_file = f"{LOG_DIR}/{log_file_prefix}{stamp}-debug.log"
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging.DEBUG)
         handlers.append(file_handler)

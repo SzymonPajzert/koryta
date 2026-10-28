@@ -86,7 +86,9 @@ class JsonAgreementRepository(AgreementRepository):
                 try:
                     yield json.loads(line)["idUmowy"]
                 except (json.JSONDecodeError, KeyError):
-                    log.warning("Pominięto uszkodzoną linię w %s", self.search_index_path)
+                    log.warning(
+                        "Pominięto uszkodzoną linię w %s", self.search_index_path
+                    )
 
     def _load_failed_details_ids(self) -> Iterable[str]:
         if not self.details_failed_path.exists():
@@ -99,4 +101,6 @@ class JsonAgreementRepository(AgreementRepository):
                 try:
                     yield json.loads(line)["idUmowy"]
                 except (json.JSONDecodeError, KeyError):
-                    log.warning("Pominięto uszkodzoną linię w %s", self.details_failed_path)
+                    log.warning(
+                        "Pominięto uszkodzoną linię w %s", self.details_failed_path
+                    )

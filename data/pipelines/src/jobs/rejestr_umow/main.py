@@ -17,7 +17,11 @@ from typing import Any, Optional
 from jobs.rejestr_umow import config
 from jobs.rejestr_umow.scraper.client import ApiClient
 from jobs.rejestr_umow.scraper.runner import run
-from jobs.rejestr_umow.scraper.storage import AgreementRepository, JsonAgreementRepository
+from jobs.rejestr_umow.scraper.storage import (
+    AgreementRepository,
+    JsonAgreementRepository,
+    SqlAgreementRepository,
+)
 
 # Format daty wymagany przez API w ciele zapytania (np. "2026.07.01").
 API_DATE_FORMAT = "%Y.%m.%d"
@@ -75,7 +79,9 @@ def build_filters(args: argparse.Namespace) -> Optional[dict[str, Any]]:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Scraper Rejestru Umów (rejestrumow.gov.pl)")
+    p = argparse.ArgumentParser(
+        description="Scraper Rejestru Umów (rejestrumow.gov.pl)"
+    )
     p.add_argument("--page-size", type=int, default=config.PAGE_SIZE,
                    help=f"Rozmiar strony wyszukiwania (domyślnie {config.PAGE_SIZE})")
     p.add_argument("--max-records", type=int, default=None,
@@ -133,9 +139,6 @@ def parse_args() -> argparse.Namespace:
 def make_repository(args: argparse.Namespace) -> AgreementRepository:
     """Zbuduj repozytorium wskazanego backendu (json | db)."""
     if args.storage == "db":
-        # Import leniwy — backend JSON nie wymaga sterownika psycopg.
-        from jobs.rejestr_umow.scraper.storage import SqlAgreementRepository
-
         return SqlAgreementRepository(dsn=args.dsn)
     return JsonAgreementRepository(data_dir=args.data_dir)
 

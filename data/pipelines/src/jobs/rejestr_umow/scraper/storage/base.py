@@ -6,7 +6,6 @@ from typing import Iterable
 from jobs.rejestr_umow.scraper.models import AgreementDetails, AgreementSearchResult
 
 
-
 class AgreementRepository(ABC):
     @abstractmethod
     def save_search_result(self, result: AgreementSearchResult) -> None:

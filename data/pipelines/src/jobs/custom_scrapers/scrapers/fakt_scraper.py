@@ -1,10 +1,9 @@
-import json
 import logging
 import time
 from typing import List
 
 import requests as r
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from jobs.custom_scrapers.scrapers.url.file_url_client import FileUrlClient
 from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
@@ -32,10 +31,15 @@ class FaktScraper(UrlScraper):
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # <script type="application/ld+json">
-        items = soup.find_all('div', class_='list-item', attrs={'data-section': None})
+        items = soup.find_all('div', class_='list-item', attrs={'data-section': False})
 
 
-        urls = [entry.find('a').attrs['href'] for entry in items if entry.find('a')]
+        urls: List[str] = []
+        for entry in items:
+            link = entry.find('a')
+            href = link.get('href') if isinstance(link, Tag) else None
+            if isinstance(href, str):
+                urls.append(href)
         logging.info(f"[Fakt] Found {len(urls)} articles on page {page}")
         return urls
 
