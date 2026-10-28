@@ -5,6 +5,7 @@ import {
   categoryFilterUrl,
   categoryTitle,
   isKnownCategory,
+  isSector,
 } from "../../shared/companyCategories";
 import { companyEditSchema } from "../../shared/api";
 
@@ -32,6 +33,7 @@ describe("companyCategories", () => {
       "komunikacja-miejska",
       "sport",
       "obronnosc",
+      "skarb-panstwa",
     ]);
   });
 
@@ -155,5 +157,17 @@ describe("companyEditSchema.categories", () => {
       categories: [...companyCategoryValues],
     });
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe("isSector", () => {
+  it("is every category but the owner one, Skarb Państwa", () => {
+    // Filed beside a company's sector: counted as one, a post at PGE would
+    // be on the home page's „Branże” twice.
+    expect(companyCategoryValues.filter((value) => !isSector(value))).toEqual([
+      "skarb-panstwa",
+    ]);
+    expect(isSector("energetyka")).toBe(true);
+    expect(isSector("hutnictwo")).toBe(false);
   });
 });

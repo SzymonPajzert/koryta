@@ -385,6 +385,7 @@ import {
   mdiArrowDown,
   mdiArrowRight,
   mdiArrowUp,
+  mdiBankOutline,
   mdiBus,
   mdiChevronDown,
   mdiClose,
@@ -599,8 +600,10 @@ const CHIP_FALLBACK = "bg-surface-muted";
  * with the heading, the „Filtry” button, the count and the sort. */
 const CATEGORY_FALLBACK_ICON = mdiTagOutline;
 
-/** A sector's own icon, keyed by the values in `shared/companyCategories`. A
- * category added there and not here keeps the generic tag. */
+/** A category's own icon, keyed by the values in `shared/companyCategories`. A
+ * category added there and not here keeps the generic tag. Skarb Państwa, an
+ * owner rather than a sector, takes the portico the „Instytucja publiczna”
+ * chip draws (`ChipPublicCompany`), narrowed by its label (Szymon, 2026-10-28). */
 const CATEGORY_ICONS: Record<string, string> = {
   szpitale: mdiHospitalBuilding,
   przychodnie: mdiStethoscope,
@@ -612,6 +615,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   "komunikacja-miejska": mdiBus,
   sport: mdiSoccer,
   obronnosc: mdiShieldOutline,
+  "skarb-panstwa": mdiBankOutline,
 };
 
 interface ChipLook {
