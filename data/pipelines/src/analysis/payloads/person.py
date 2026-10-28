@@ -10,7 +10,7 @@ from functools import cached_property
 import numpy as np
 import pandas as pd
 
-from analysis.extract import Extract
+from analysis.extract import Extract, category_companies
 from analysis.payloads.election import get_election_type
 from analysis.payloads.priority import MISSING, Pick, prioritised
 from analysis.payloads.site import (
@@ -32,8 +32,10 @@ from analysis.payloads.target import (
 from analysis.utils import as_sequence
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
+from entities.priority_groups import KRS, TREASURY, Group
 from scrapers.koryta.download import KorytaNotes, KorytaPeople
 from scrapers.krs.columns import is_public
+from scrapers.krs.data import read_treasury_list, treasury_companies, treasury_stakes
 from scrapers.pkw.elections import parties_of_committee, party_sort_key
 from scrapers.pkw.offices import LOCAL_OFFICES
 from scrapers.stores import Context, Pipeline
@@ -245,6 +247,7 @@ class PeoplePayloads(Pipeline[Person]):
         today: date,
         recent_days: int,
         bought: typing.Container[str],
+        groups: typing.Sequence[Group] = (),
     ) -> list[Pick]:
         """Both halves of `--all` in the order a capped upload sends them.
 
@@ -257,6 +260,8 @@ class PeoplePayloads(Pipeline[Person]):
         `analysis.payloads.priority`. One build
         for what would otherwise take two runs, `--not-on-koryta` and
         `--on-koryta --only-changed`, each guarded as that run would be.
+
+        Each says which of the priority `groups` it belongs to.
         """
         people_df = self.registered_people(ctx)
         snapshot = self.site_snapshot(ctx)
@@ -272,7 +277,30 @@ class PeoplePayloads(Pipeline[Person]):
             noted=self.noted_pages(ctx),
             today=today,
             recent_days=recent_days,
+            groups={group.name: self.group_companies(ctx, group) for group in groups},
         )
+
+    def group_companies(self, ctx: Context, group: Group) -> frozenset[str]:
+        """The KRS numbers of a priority group's companies
+        (`entities.priority_groups`)."""
+        if group.source == KRS:
+            found = frozenset(group.krs)
+        else:
+            companies = self.people.companies.read_or_process(ctx)
+            if group.source == TREASURY:
+                stakes = treasury_stakes(read_treasury_list(ctx))
+                found = treasury_companies(companies, stakes)
+            else:
+                # Public, as the night's tiers are and as a run of
+                # --company-category is: a sector's codes reach private firms.
+                found = frozenset(
+                    category_companies(companies, group.category)
+                    & self.people.public_companies(ctx)
+                )
+        print(
+            f"Priority group {group.name}: {len(found)} companies, {group.describe()}"
+        )
+        return found
 
     def targeted(self, ctx: Context, target: PageTarget) -> Targeted:
         """The payloads a button on one page asks for - a company's people or

@@ -20,6 +20,7 @@ from analysis.payloads.site import SiteSnapshot
 from analysis.payloads.target import NEW, Targeted
 from entities.composite import Company, Person
 from entities.person import RejestrIOKey
+from entities.priority_groups import parse_group
 from jobs.krs_common import answer_name
 from jobs.nightly import Export
 from jobs.people_import import payloads as build
@@ -2620,7 +2621,7 @@ def test_each_planned_person_says_which_companies_the_export_has_no_page_for(
     )
 
     class Payloads:
-        def prioritised(self, ctx, today, recent_days, bought):
+        def prioritised(self, ctx, today, recent_days, bought, groups=()):
             return [Pick(hire, HIRE, "2026-09-30")]
 
         def site_snapshot(self, ctx):
@@ -2638,3 +2639,40 @@ def test_each_planned_person_says_which_companies_the_export_has_no_page_for(
 
     assert (found.payload["name"], found.tier) == ("Anna Nowak", HIRE)
     assert found.missing == ("0000000009",)
+
+
+def test_each_planned_person_names_the_priority_groups_they_belong_to(monkeypatch):
+    class Dumper:
+        def dump_pandas(self):
+            pass
+
+    seated = Person(
+        name="Jan Mazur",
+        companies=[Company(krs="0000000001", role="Prezes", start="2020-01-01")],
+        elections=[],
+        sources=[],
+        rejestrIo="https://rejestr.io/osoby/3",
+    )
+    asked: list[list] = []
+
+    class Payloads:
+        def prioritised(self, ctx, today, recent_days, bought, groups=()):
+            asked.append(list(groups))
+            return [Pick(seated, LINKED, "2020-01-01", groups=("skarb",))]
+
+        def site_snapshot(self, ctx):
+            return SiteSnapshot(pd.DataFrame(), pd.DataFrame())
+
+    monkeypatch.setattr(build, "setup_context", lambda *a, **k: ("ctx", Dumper()))
+    monkeypatch.setattr(
+        build.Pipeline, "create", staticmethod(lambda kind, nested=0: Payloads())
+    )
+    monkeypatch.setattr(sys, "argv", ["koryta_people_import"])
+    group = parse_group("skarb:treasury:10")
+
+    [found] = build.build_priority(
+        None, ProcessPolicy(set()), date(2026, 10, 28), 30, set(), [group]
+    )
+
+    assert asked == [[group]]
+    assert (found.payload["name"], found.groups) == ("Jan Mazur", ("skarb",))

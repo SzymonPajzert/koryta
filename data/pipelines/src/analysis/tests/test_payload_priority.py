@@ -5,6 +5,7 @@ public post that is not new, published pages, the rest."""
 import sys
 from dataclasses import asdict
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pandas as pd
@@ -31,6 +32,7 @@ from analysis.payloads.priority import (
 from analysis.payloads.site import UNRESOLVED_REGION, SiteSnapshot
 from entities.composite import Company, Election, Person
 from entities.person import PageNote
+from entities.priority_groups import parse_group
 from scrapers.koryta.download import KorytaNotes
 
 TODAY = date(2026, 10, 4)
@@ -811,3 +813,106 @@ def test_somebody_with_an_entry_in_a_current_seat_keeps_a_new_page_s_guards():
         ("Jan Kowalski", ON_SITE),
     ]
     assert picks[0].person.rejestrIo == "https://rejestr.io/osoby/8"
+
+
+# ---------------------------------------------------------------------------
+# Priority groups
+
+
+def test_each_pick_names_the_groups_whose_companies_the_person_holds_a_post_at():
+    """Szymon, 2026-10-27: groups of companies whose people go first, the
+    Treasury's to begin with. A member holds a post there now - not one that
+    ended - and a group changes no tier, and no order."""
+    site = snapshot(
+        stored_person("draft", "Ewa Lis", "https://rejestr.io/osoby/3"),
+        stored_person("other", "Olga Wilk", "https://rejestr.io/osoby/4"),
+    )
+    new = [
+        person(
+            "Anna Nowak",
+            "https://rejestr.io/osoby/1",
+            Company(krs=PUBLIC, start="2021-01-01"),
+        ),
+        person(
+            "Beata Kos",
+            "https://rejestr.io/osoby/2",
+            Company(krs=PUBLIC, start="2022-01-01"),
+            Company(krs=OTHER_PUBLIC, start="2023-01-01"),
+        ),
+        person(
+            "Dorota Mazur",
+            "https://rejestr.io/osoby/5",
+            Company(krs=PUBLIC, start="2019-01-01", end="2020-01-01"),
+            Company(krs=OTHER_PUBLIC, start="2020-02-01"),
+        ),
+    ]
+    on_site = [
+        person(
+            "Ewa Lis",
+            "https://rejestr.io/osoby/3",
+            Company(krs=PUBLIC, start="2020-03-01"),
+        ),
+        person(
+            "Olga Wilk",
+            "https://rejestr.io/osoby/4",
+            Company(krs=PRIVATE, start="2026-08-01"),
+        ),
+    ]
+
+    def picks(groups):
+        return prioritised(
+            new,
+            on_site,
+            site,
+            public_krs={PUBLIC, OTHER_PUBLIC},
+            published_ids=set(),
+            bought=set(),
+            noted={},
+            today=TODAY,
+            recent_days=30,
+            groups=groups,
+        )
+
+    grouped = picks({"skarb": {PUBLIC}, "druga": {OTHER_PUBLIC}})
+
+    assert [(p.person.name, p.groups) for p in grouped] == [
+        ("Beata Kos", ("skarb", "druga")),
+        ("Anna Nowak", ("skarb",)),
+        ("Dorota Mazur", ("druga",)),
+        ("Olga Wilk", ()),
+        ("Ewa Lis", ("skarb",)),
+    ]
+    assert [(p.person.name, p.tier, p.since) for p in grouped] == [
+        (p.person.name, p.tier, p.since) for p in picks(None)
+    ]
+    assert all(p.groups == () for p in picks(None))
+
+
+def test_a_group_s_companies_are_read_off_its_source():
+    """The Treasury's by the NIP the register gives each, a category's public
+    companies by the rule `--company-category` uses, or the ones named."""
+    companies = pd.DataFrame(
+        {
+            "krs": [PUBLIC, OTHER_PUBLIC, PRIVATE],
+            "nip": ["782-000-61-69", "1111111111", "2222222222"],
+            "activity": [["35.11.Z"], ["35.13.Z"], ["35.11.Z"]],
+            "form": [None, None, None],
+        }
+    )
+    # The list prints Wielkopolska Gildia's NIP wrong (787 for 782).
+    wykaz = pd.DataFrame(
+        [["1", "787-000-61-69", "Gildia", "Poznań", "aktywna", "5.97", "MAP"]]
+    )
+    payloads = PeoplePayloads()
+    payloads.people = SimpleNamespace(  # type: ignore[assignment]
+        companies=SimpleNamespace(read_or_process=lambda ctx: companies),
+        public_companies=lambda ctx: {PUBLIC, OTHER_PUBLIC},
+    )
+
+    def found(text: str) -> frozenset[str]:
+        return payloads.group_companies(None, parse_group(text))  # type: ignore[arg-type]
+
+    with patch("analysis.payloads.person.read_treasury_list", return_value=wykaz):
+        assert found("skarb:treasury:10") == {PUBLIC}
+    assert found("energia:category=energetyka:10") == {PUBLIC, OTHER_PUBLIC}
+    assert found("reczna:krs=3,104717:10") == {OTHER_PUBLIC, "0000104717"}
