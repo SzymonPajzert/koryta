@@ -19,6 +19,7 @@ from scrapers.krs.data import (
     TREASURY_STAKE,
     CompaniesHardcoded,
     nip_digits,
+    public_name_key,
     read_treasury_list,
     regon_stem,
     treasury_stakes,
@@ -494,8 +495,10 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         #: NIP -> the Treasury's share - see `scrapers.krs.data.treasury_stakes`.
         self.treasury_stakes: dict[str, str] = {}
         #: The same for an owner: entities outside KRS only - see
-        #: `scrapers.krs.data.public_owner_regons`.
+        #: `scrapers.krs.data.public_owner_regons` - and their names, for an
+        #: owner the register gives no REGON (`public_owner_names`).
         self.public_owner_regons: frozenset[str] = frozenset()
+        self.public_owner_names: frozenset[str] = frozenset()
         #: `(owner's REGON, owned)` for each owner an odpis names without a KRS
         #: number - see `add_owners_by_regon`.
         self.owner_regons: list[tuple[str, str]] = []
@@ -758,7 +761,12 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         if "Biuletyn" in blob_name:
             return
         c = company_from_api_krs(
-            postal_codes, self.teryt, data, self.jst_index, self.public_owner_regons
+            postal_codes,
+            self.teryt,
+            data,
+            self.jst_index,
+            self.public_owner_regons,
+            self.public_owner_names,
         )
         if c is None:
             return
@@ -902,6 +910,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.public_nips = self.hardcoded_companies.public_nips
         self.treasury_stakes = treasury_stakes(read_treasury_list(ctx))
         self.public_owner_regons = self.hardcoded_companies.public_owner_regons
+        self.public_owner_names = self.hardcoded_companies.public_owner_names
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             self.process_rejestrio_blob(blob_name, data, postal_codes)
@@ -1090,12 +1099,15 @@ def company_from_api_krs(  # noqa: PLR0915
     data: dict,
     jst: "JstIndex | None" = None,
     public_owner_regons: typing.Collection[str] = frozenset(),
+    public_owner_names: typing.Collection[str] = frozenset(),
 ) -> KrsCompany | None:
     """The company an OdpisAktualny describes, or None for a 404.
 
     `public_owner_regons` are the REGON numbers of entities outside KRS that
     REGON files as publicly owned (`scrapers.krs.data.public_owner_regons`);
-    an owner named without a KRS number is public if its REGON is one of them.
+    an owner named without a KRS number is public if its REGON is one of them,
+    or, named with no REGON either, if its name is one of
+    `public_owner_names`.
     """
     try:
         if data.get("title") == "Not Found":
@@ -1217,6 +1229,14 @@ def company_from_api_krs(  # noqa: PLR0915
                 # draw an edge to. Only for an entity outside KRS: a company
                 # has its own odpis, whose owners outrank the code, and is
                 # joined by `CompaniesKRS.add_owners_by_regon` instead.
+                is_public = True
+            elif (
+                not owner_regon(w) and public_name_key(w["nazwa"]) in public_owner_names
+            ):
+                # Named with neither a KRS number nor a REGON, by a name the
+                # catalogue files as public: Uniwersytet Medyczny im. Karola
+                # Marcinkowskiego, owner of Uniwersyteckie Centrum Transferu
+                # Technologii Medycznych (0000369095).
                 is_public = True
 
         identyfikatory = dzial1.get("danePodmiotu", {}).get("identyfikatory", {})
