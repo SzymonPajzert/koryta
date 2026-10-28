@@ -7,12 +7,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-# Wczytaj zmienne z pliku .env (jeśli istnieje) do środowiska procesu.
-# Zmienne już ustawione w środowisku mają pierwszeństwo (override=False).
-load_dotenv()
-
 # --- API ---------------------------------------------------------------------
 BASE_URL = "https://rejestrumow.gov.pl"
 SEARCH_PATH = "/api-dp/v1/agreements/search"      # POST
@@ -37,7 +31,7 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 
 # --- Baza danych (backend SQL) -----------------------------------------------
 # DSN do PostgreSQL. Domyślnie łączy się lokalnie z bazą `rejestr_umow`
-# (utworzoną skryptami z katalogu `sql/`). Hasło/host podawaj przez zmienne
-# środowiskowe (DATABASE_URL lub standardowe PGHOST/PGUSER/PGPASSWORD/...),
-# nie trzymaj ich w repozytorium.
+# (utworzoną skryptami z katalogu `sql/`). Host i użytkownika podawaj przez
+# zmienne środowiskowe (DATABASE_URL lub standardowe PGHOST/PGUSER/...),
+# hasło w ~/.pgpass; nie trzymaj ich w repozytorium.
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql:///rejestr_umow")
