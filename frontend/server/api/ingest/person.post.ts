@@ -47,6 +47,7 @@ import {
   spacedSurname,
   withoutDiacritics,
 } from "~~/shared/names";
+import { indexedWords } from "~~/shared/search";
 import {
   personRequestSchema,
   type DroppedChange,
@@ -1268,7 +1269,12 @@ function isoBirthDate(value: unknown): string | undefined {
  * it (`spacedSurname`) would miss the page it has to be held back for. The
  * index cuts a hyphenated word into its parts too, so the last part finds
  * the pages written either way; the whole word stays in the query for a page
- * whose index predates that. */
+ * whose index predates that.
+ *
+ * And the last word as the index holds it (`indexedWords`), which drops an
+ * apostrophe or a full stop the way a space would: „D'obyrn” is indexed as „d”
+ * and „obyrn”, so the surname as written finds only a page indexed before
+ * that, and its last word every page since. */
 async function namesakes(
   ctx: Context,
   name: string,
@@ -1277,9 +1283,13 @@ async function namesakes(
   if (!surname) return [];
   const lastPart =
     spacedSurname(name).trim().toLowerCase().split(/\s+/).at(-1) || surname;
+  const indexedWord = indexedWords(name, "person").at(-1) || lastPart;
   const spellings = [
     ...new Set(
-      [surname, lastPart].flatMap((word) => [word, withoutDiacritics(word)]),
+      [surname, lastPart, indexedWord].flatMap((word) => [
+        word,
+        withoutDiacritics(word),
+      ]),
     ),
   ];
   const snapshot = await ctx.db

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { onNodeWritten } from "../../functions/src/nodes";
-import { generateChunksLower } from "~~/shared/search";
+import { generateChunksLower, townChunk } from "~~/shared/search";
 
 vi.mock("firebase-functions/v2/firestore", () => ({
   // The handler itself, so a test can hand it an event.
@@ -89,6 +89,25 @@ describe("onNodeWritten, the search index", () => {
     expect(update).toHaveBeenCalledWith({
       nameChunksLower: generateChunksLower("Anna Nowak"),
     });
+  });
+
+  it("indexes a company's town apart from the words of its name", async () => {
+    // The node's type is what tells the town in the bracket from a word of the
+    // name: a person's bracket stays words of theirs.
+    const name = 'PRZEDSIĘBIORSTWO GOSPODARKI KOMUNALNEJ "SANIKOM" (Lubawka)';
+    const update = await write(null, {
+      type: "place",
+      name,
+      published: true,
+      stats: { isApproved: true },
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      nameChunksLower: generateChunksLower(name, "place"),
+    });
+    const chunks = update.mock.calls[0]![0].nameChunksLower as string[];
+    expect(chunks).toContain(townChunk("lubawka"));
+    expect(chunks).not.toContain("lubawka");
   });
 
   it("leaves the kinds search does not read alone", async () => {

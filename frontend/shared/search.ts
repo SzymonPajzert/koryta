@@ -1,3 +1,98 @@
+/** Anything that is not part of a word: every character but a letter (with
+ * its accents), a digit, whitespace or the hyphen, which the index cuts on its
+ * own terms (`generateChunksLower`, `nameWords`). */
+const NOT_A_WORD = /[^\p{L}\p{M}\p{N}\s-]+/gu;
+
+/** A name, or what was typed, as the search reads it: composed, lowercased,
+ * every run of characters `NOT_A_WORD` matches turned into a space, and the
+ * whitespace flattened to single spaces.
+ *
+ * A word is what somebody can type, and nobody types the punctuation the
+ * register writes a name with. Cut at its spaces alone, a name kept that
+ * punctuation on the word beside it, and every prefix of the word began with
+ * it: „STADNINA KONI "KRASNE"” was indexed under „"krasne"”, so „krasne”
+ * found nothing, and „HUTA"KOŚCIUSZKO"” under one word with the quote in the
+ * middle. So did „IM.PROF.STANISŁAWA”, „GERIATRII,REUMATOLOGII”, „...DOMARO”
+ * and the town in the bracket a company name ends in (`QUALIFIER`). In the
+ * 2026-10-28 export 842 company names carry a quote, and searched for by the
+ * word in the quotes on 10-27 and 10-28 they read as companies the site did not
+ * have.
+ *
+ * Composed (NFC), so the one name stored with its accents as separate marks,
+ * a hospital in Świecie, is found by the letters typed whole. A name with none
+ * of this comes out as it always did - trimmed, flattened and lowercased - and
+ * so keeps the index it has.
+ */
+export function searchableText(text: string): string {
+  return text
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(NOT_A_WORD, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The bracket a company or a region name ends in when it says where the
+ * thing is rather than what it is called: the town the pipeline appends to a
+ * company's register name (`display_name`), the seat that tells two powiats of
+ * one name apart, the city of a Warsaw district - 6,587 companies and 25
+ * regions of the 2026-10-28 export. Told apart by the small letters a town
+ * written out has („(wykreślone)”, the one other bracket with any, is no word
+ * anybody searches by). The register's own brackets, „(OPS)”, „(DBFO)”, „(W
+ * SKRÓCIE: ... GIWK SP. Z O.O.)”, are what the place is called, and stay words
+ * of its name. A person's bracket is never one (`QUALIFIED_TYPES`): „Bartosz
+ * Kopania (Pablo Morales)” is found by „morales”.
+ *
+ * Its words are in the prefixes of the whole name and are matched
+ * (`nameWords`), and the index holds them apart from the name's own words,
+ * each marked (`townChunk`). A query of one word never asks for them. One of
+ * several does, by the word it anchors on, and keeps what answers something
+ * besides the town (`reachesBeyondTown`). So „wodociągów myślibórz”, „sanikom
+ * lubawka” and „orlen płock” find the companies based there, and „jelenia
+ * góra” the town. „chmiel” alone, though, is not answered by GMINNE PRZEDSIĘBIORSTWO
+ * KOMUNALNE (Chmielno), which as a word of the name took Piotr Łukasz Chmiel
+ * off a logged-out reader's twenty, nor „kraków” by the companies merely based
+ * there, which took ARENA KRAKÓW and twelve more off it. Replayed over the
+ * 10-28 export, a town indexed as a word of the name took a hit away from 17
+ * of the 516 queries typed into the box since 10-15.
+ *
+ * The old index reached some of these towns by accident - the words of a
+ * bracket after its first, „góra)” of „(Jelenia Góra)”, did not begin with a
+ * bracket - and a query of one word no longer does.
+ */
+const QUALIFIER = /\s*\(([^()]*\p{Ll}[^()]*)\)\s*$/u;
+
+/** The node types whose name can end in a `QUALIFIER`. */
+const QUALIFIED_TYPES = new Set(["place", "region"]);
+
+/** A name as what it is called and the town its `QUALIFIER` names, the second
+ * empty where it has none. */
+function splitQualifier(name: string, type?: string): [string, string] {
+  const match =
+    type !== undefined && QUALIFIED_TYPES.has(type)
+      ? QUALIFIER.exec(name)
+      : null;
+  return match ? [name.slice(0, match.index), match[1]!] : [name, ""];
+}
+
+/** What the index puts before each chunk of a town's words, so that nothing
+ * typed can ask for one: `searchableText` leaves a query letters, digits and
+ * hyphens only. */
+const TOWN_MARK = "@";
+
+/** The chunk that asks the index for `chunk` as a word of the town a name's
+ * bracket names (`QUALIFIER`). */
+export function townChunk(chunk: string): string {
+  return TOWN_MARK + chunk;
+}
+
+/** The words of a name the index holds by themselves, each with all its
+ * prefixes: every word but those of the town in its bracket (`QUALIFIER`),
+ * cut as `nameWords` cuts them. What a lookup of one chunk finds a name by. */
+export function indexedWords(name: string, type?: string): string[] {
+  return nameWords(splitQualifier(name, type)[0]);
+}
+
 /** The name index `/api/search` matches against.
  *
  * Firestore has no substring search, so a node carries every prefix of its own
@@ -33,16 +128,25 @@
  * gain a part, and the index grows by 4,804 chunks over the 777,634 it
  * carried. The parts come after everything else, so a name without a hyphen
  * gets exactly the index it had, in the same order.
+ *
+ * The words are the ones `searchableText` leaves, which is how every side of
+ * the search cuts a name - the words typed (`searchTokens`) and the check of
+ * a hit against them (`nameMatchesTokens`) as much as this index. The quotes
+ * and full stops a register name is written with cut a word the way a space
+ * does, so „STADNINA KONI "KRASNE"” is found by „krasne”. The town in the
+ * bracket a company or region name ends in is cut the same way, but its words
+ * come last and marked (`QUALIFIER`), which is why the index needs `type`.
  */
-export function generateChunksLower(name: string): string[] {
+export function generateChunksLower(name: string, type?: string): string[] {
   const chunks: string[] = [""];
-  const lowerName = name.trim().replace(/\s+/g, " ").toLowerCase();
+  const lowerName = searchableText(name);
 
   for (let i = 1; i <= lowerName.length; i++) {
     chunks.push(lowerName.substring(0, i));
   }
 
-  const words = lowerName.split(" ");
+  const [called, town] = splitQualifier(name, type);
+  const words = searchableText(called).split(" ");
   if (words.length > 1) {
     for (const word of words) {
       if (word.length > 0) {
@@ -57,6 +161,14 @@ export function generateChunksLower(name: string): string[] {
     for (const part of word.split("-").slice(1)) {
       for (let i = 1; i <= part.length; i++) {
         chunks.push(part.substring(0, i));
+      }
+    }
+  }
+
+  for (const word of searchableText(town).split(" ")) {
+    for (const part of [word, ...word.split("-").slice(1)]) {
+      for (let i = 1; i <= part.length; i++) {
+        chunks.push(townChunk(part.substring(0, i)));
       }
     }
   }
@@ -78,25 +190,27 @@ export function generateChunksLower(name: string): string[] {
 export function nameChunksToWrite(
   name: string,
   stored: unknown,
+  type?: string,
 ): string[] | undefined {
-  const chunks = generateChunksLower(name);
+  const chunks = generateChunksLower(name, type);
   return JSON.stringify(stored) === JSON.stringify(chunks) ? undefined : chunks;
 }
 
-/** The words a typed query is matched by: lowercased, whitespace collapsed.
- * A hyphen typed stays inside its word here, which is what the index holds
- * whole; `nameWords` is where it cuts one.
+/** The words a typed query is matched by: cut the way a name is
+ * (`searchableText`), so quotes or a bracket typed around a word are dropped
+ * as the index drops them. A hyphen typed stays inside its word here, which
+ * is what the index holds whole; `nameWords` is where it cuts one.
  *
  * An empty query yields no tokens, which every name answers - that is what
  * makes `/api/search` with no `q` the top of the collection rather than
- * nothing.
+ * nothing. So does a query of punctuation alone.
  */
 export function searchTokens(query: string): string[] {
-  return query.toLowerCase().split(/\s+/).filter(Boolean);
+  return searchableText(query).split(" ").filter(Boolean);
 }
 
 /** The words of a name, or of what was typed, as `nameMatchesTokens` pairs
- * them: lowercased, and cut at hyphens as well as at whitespace.
+ * them: cut by `searchableText`, and at hyphens as well as at whitespace.
  *
  * "Kupczak-Wiśniowska" is two words, so "kupczak wiśniowska" finds her as
  * much as the hyphen does, and so does a page still titled the register's
@@ -104,10 +218,27 @@ export function searchTokens(query: string): string[] {
  * standing alone - "Ewa Kukulska - Zając" - is no word at all.
  */
 export function nameWords(text: string): string[] {
-  return text
-    .toLowerCase()
+  return searchableText(text)
     .split(/[\s-]+/)
     .filter(Boolean);
+}
+
+/** The KRS number a query is, when it is one written out whole: ten digits,
+ * as the register prints it and as anybody copies it from there, with spaces
+ * between them allowed and „KRS” in front of them too. Undefined for anything
+ * else.
+ *
+ * Whole, because the box searches while it is typed into: read with its
+ * leading zeros left off, „00000297” on its way to „0000029741” would be KRS
+ * 297, and the box would offer whichever company that is. A name with a number
+ * in it is no KRS number either, which the digits-only rule keeps out.
+ */
+export function krsNumberQuery(query: string): string | undefined {
+  const typed = query
+    .trim()
+    .replace(/^krs[\s:.#]*/i, "")
+    .replace(/\s+/g, "");
+  return /^\d{10}$/.test(typed) ? typed : undefined;
 }
 
 /** The one token to spend Firestore's single `array-contains` slot on.
@@ -147,6 +278,46 @@ export function anchorToken(tokens: string[]): string {
 export function anchorChunk(tokens: string[]): string {
   const typed = tokens.filter((token) => nameWords(token).length > 0);
   return anchorToken(nameWords(anchorToken(typed)));
+}
+
+/** The chunk `/api/search` asks for after a pass on the anchor came back full:
+ * the longest of the other words typed, cut at its hyphens, if it has three
+ * letters or more. Undefined where there is none.
+ *
+ * A full pass is one cut off before its end, and the town of Warsaw holds more
+ * companies than one reads: of 1,314 under it in the 2026-10-28 export, 814
+ * lie past the 500th. „paged warszawa” anchors on „warszawa”, and the seven
+ * PAGED companies based there are as small as companies get, so all but the one
+ * whose whole name it is fell past the end. Asked by „paged” too, they are nine
+ * reads. Three letters at the least, because one or two are what is typed on
+ * the way to a word, and what they ask for is larger still.
+ */
+export function nextAnchorChunk(tokens: string[]): string | undefined {
+  const anchor = anchorChunk(tokens);
+  const others = tokens
+    .flatMap(nameWords)
+    .filter((word) => word !== anchor && word.length >= 3);
+  return others.length > 0 ? anchorToken(others) : undefined;
+}
+
+/** Whether `tokens` reach a name by more than the town its bracket names
+ * (`QUALIFIER`): some word typed begins a word of the name itself.
+ *
+ * What the town pass of `/api/search` keeps a hit by. It is there for
+ * „<the name> <its town>”, and every company based in a town answers the town
+ * typed alone - which a town of two words, or one hyphen, is as much as
+ * „sanikom lubawka” is two: „jelenia góra” listed 45 companies merely based
+ * there, as „kraków” would every one in Kraków.
+ */
+export function reachesBeyondTown(
+  name: string,
+  type: string,
+  tokens: string[],
+): boolean {
+  const own = indexedWords(name, type);
+  return tokens
+    .flatMap(nameWords)
+    .some((typed) => own.some((word) => word.startsWith(typed)));
 }
 
 /** Whether `name` answers every word the searcher typed.

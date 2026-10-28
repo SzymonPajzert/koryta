@@ -59,11 +59,13 @@ const doc = (
 });
 
 /** The docs each `array-contains` chunk answers with, so a test can describe
- * the index rather than the order the endpoint happens to query it in. */
+ * the index rather than the order the endpoint happens to query it in. A
+ * lookup by KRS number answers from the key `krsNumber=<number>`. */
 const respondWith = (byChunk: Record<string, ReturnType<typeof doc>[]>) => {
   let chunk = "";
   mockWhere.mockImplementation((field: string, _op: string, value: string) => {
     if (field === "nameChunksLower") chunk = value;
+    if (field === "krsNumber") chunk = `krsNumber=${value}`;
     return {
       where: mockWhere,
       orderBy: mockOrderBy,
@@ -71,7 +73,10 @@ const respondWith = (byChunk: Record<string, ReturnType<typeof doc>[]>) => {
       get: mockGet,
     };
   });
-  mockGet.mockImplementation(async () => ({ docs: byChunk[chunk] ?? [] }));
+  mockGet.mockImplementation(async () => {
+    const docs = byChunk[chunk] ?? [];
+    return { docs, size: docs.length };
+  });
 };
 
 const search = (q: string) => handler({ query: { q }, context: {} } as any);
@@ -113,13 +118,13 @@ describe("/api/search", () => {
   });
 
   it("anchors the second pass on the rarest word it can pick", async () => {
-    respondWith({});
+    respondWith({ namysło: [doc("a1", "Andrzej Józef Namysło")] });
     await search("Andrzej Namysło");
 
     const chunks = mockWhere.mock.calls
       .filter(([field]) => field === "nameChunksLower")
       .map(([, , value]) => value);
-    expect(chunks).toEqual(["andrzej namysło", "namysło"]);
+    expect(chunks).toEqual(["andrzej namysło", "namysło", "@namysło"]);
   });
 
   it("drops the names the anchor pulled in that were not asked for", async () => {
@@ -191,7 +196,7 @@ describe("/api/search", () => {
     const chunks = mockWhere.mock.calls
       .filter(([field]) => field === "nameChunksLower")
       .map(([, , value]) => value);
-    expect(chunks).toEqual(["kupczak-wiśniowska", "wiśniowska"]);
+    expect(chunks).toEqual(["kupczak-wiśniowska", "wiśniowska", "@wiśniowska"]);
     expect(results.map((r) => r.id)).toEqual(["a1", "a2"]);
   });
 
@@ -213,8 +218,205 @@ describe("/api/search", () => {
     expect(chunks).toEqual([
       "przedsiębiorstwo usługowo-produkcyjne",
       "produkcyjne",
+      "@produkcyjne",
     ]);
     expect(results.map((r) => r.id)).toEqual(["p2"]);
+  });
+
+  it("asks for the anchor as a word of a town too", async () => {
+    // „lubawka” is the anchor, and only Lubawka itself carries it as a word:
+    // the town in the bracket a company name ends in is marked in the index.
+    const pgk = 'PRZEDSIĘBIORSTWO GOSPODARKI KOMUNALNEJ "SANIKOM" (Lubawka)';
+    respondWith({
+      lubawka: [doc("town", "Lubawka", { type: "region" })],
+      "@lubawka": [doc("pgk", pgk, { type: "place" })],
+    });
+
+    const results = await search("sanikom lubawka");
+
+    const chunks = mockWhere.mock.calls
+      .filter(([field]) => field === "nameChunksLower")
+      .map(([, , value]) => value);
+    expect(chunks).toEqual(["sanikom lubawka", "lubawka", "@lubawka"]);
+    expect(results.map((r) => r.id)).toEqual(["pgk"]);
+  });
+
+  it("puts what the name's own words found ahead of what the town found", async () => {
+    // ORLEN (Płock) is a prefix of the whole name typed; its sister companies
+    // carry Płock only in their bracket, and come after it.
+    respondWith({
+      "orlen płock": [doc("o1", "ORLEN (Płock)", { type: "place" })],
+      "@płock": [
+        doc("o2", "ORLEN PROJEKT (Płock)", { type: "place" }),
+        doc("o1", "ORLEN (Płock)", { type: "place" }),
+        doc("x", "PŁOCKI PARK PRZEMYSŁOWO-TECHNOLOGICZNY (Płock)", {
+          type: "place",
+        }),
+      ],
+    });
+
+    expect((await search("orlen płock")).map((r) => r.id)).toEqual([
+      "o1",
+      "o2",
+    ]);
+  });
+
+  it("finds the companies by their own word whichever way round it was typed", async () => {
+    // Anchored on „orlen”, the word the companies carry: nothing for the
+    // town to add.
+    respondWith({
+      orlen: [
+        doc("o1", "ORLEN (Płock)", { type: "place" }),
+        doc("o3", "ORLEN SERWIS (Kraków)", { type: "place" }),
+      ],
+    });
+
+    expect((await search("płock orlen")).map((r) => r.id)).toEqual(["o1"]);
+  });
+
+  it("keeps out what only the town of a two-word query answers", async () => {
+    // „jelenia góra” is two words, and every company based there answers both.
+    respondWith({
+      "jelenia góra": [doc("town", "Jelenia Góra", { type: "region" })],
+      "@jelenia": [
+        doc("tauron", "TAURON EKOENERGIA (Jelenia Góra)", { type: "place" }),
+      ],
+    });
+
+    expect((await search("jelenia góra")).map((r) => r.id)).toEqual(["town"]);
+  });
+
+  it("ranks what the town found after the people the name found, for a logged out reader", async () => {
+    // On the way to „Piotr Wróblewski”: the companies of Piotrków Trybunalski
+    // in liquidation answer „piotr w” as well.
+    respondWith({
+      piotr: [doc("draft", "Piotr Wróblewski", { published: false })],
+      "@piotr": [
+        doc("piocel", "PIOCEL W LIKWIDACJI (Piotrków Trybunalski)", {
+          type: "place",
+        }),
+      ],
+    });
+
+    expect(
+      (await search("piotr w")).map((r: any) => [r.id, r.published]),
+    ).toEqual([
+      ["draft", false],
+      ["piocel", true],
+    ]);
+  });
+
+  it("asks for the next word when a pass on the anchor came back full", async () => {
+    // Warsaw's town holds 1,314 companies, past the 500 a pass reads.
+    const warsaw = Array.from({ length: 500 }, (_, i) =>
+      doc(`w${i}`, `SPÓŁKA ${i} (Warszawa)`, { type: "place" }),
+    );
+    respondWith({
+      "@warszawa": warsaw,
+      paged: [doc("green", "PAGED GREEN (Warszawa)", { type: "place" })],
+    });
+
+    const results = await search("paged warszawa");
+
+    const chunks = mockWhere.mock.calls
+      .filter(([field]) => field === "nameChunksLower")
+      .map(([, , value]) => value);
+    expect(chunks).toEqual([
+      "paged warszawa",
+      "warszawa",
+      "@warszawa",
+      "paged",
+      "@paged",
+    ]);
+    expect(results.map((r) => r.id)).toEqual(["green"]);
+  });
+
+  it("asks no next word when the anchor's passes ended inside the window", async () => {
+    respondWith({
+      "@warszawa": [doc("paged", "PAGED (Warszawa)", { type: "place" })],
+    });
+
+    await search("paged warszawa");
+
+    const chunks = mockWhere.mock.calls
+      .filter(([field]) => field === "nameChunksLower")
+      .map(([, , value]) => value);
+    expect(chunks).toEqual(["paged warszawa", "warszawa", "@warszawa"]);
+  });
+
+  it("asks no town for a query of one word", async () => {
+    // Which is what keeps every company in Kraków out of „kraków”.
+    respondWith({ kraków: [doc("k", "Kraków", { type: "region" })] });
+
+    await search("Kraków");
+
+    const chunks = mockWhere.mock.calls
+      .filter(([field]) => field === "nameChunksLower")
+      .map(([, , value]) => value);
+    expect(chunks).toEqual(["kraków"]);
+  });
+
+  it("answers a KRS number pasted whole with the company carrying it, first", async () => {
+    // Its name holds no digits, so the box keeps it by the number it returns.
+    respondWith({
+      "krsNumber=0000029741": [
+        doc(
+          "pgk",
+          'PRZEDSIĘBIORSTWO GOSPODARKI KOMUNALNEJ "SANIKOM" (Lubawka)',
+          {
+            type: "place",
+            krsNumber: "0000029741",
+          },
+        ),
+      ],
+    });
+
+    const results = await search("KRS 0000029741");
+
+    expect(mockWhere).toHaveBeenCalledWith("krsNumber", "==", "0000029741");
+    expect(results).toEqual([
+      expect.objectContaining({ id: "pgk", krsNumber: "0000029741" }),
+    ]);
+  });
+
+  it("keeps a company nobody published from a logged out reader, by number too", async () => {
+    respondWith({
+      "krsNumber=0000029741": [
+        doc("draft", "SANIKOM", {
+          type: "place",
+          krsNumber: "0000029741",
+          published: false,
+        }),
+      ],
+    });
+
+    expect(await search("0000029741")).toEqual([]);
+    vi.clearAllMocks();
+    respondWith({
+      "krsNumber=0000029741": [
+        doc("draft", "SANIKOM", {
+          type: "place",
+          krsNumber: "0000029741",
+          published: false,
+        }),
+      ],
+    });
+    expect((await searchSignedIn("0000029741")).map((r: any) => r.id)).toEqual([
+      "draft",
+    ]);
+  });
+
+  it("asks nothing by KRS number where no number was typed", async () => {
+    respondWith({ namysło: [doc("a1", "Andrzej Józef Namysło")] });
+
+    await search("Andrzej Namysło");
+    await search("00000297");
+
+    expect(mockWhere).not.toHaveBeenCalledWith(
+      "krsNumber",
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("ignores the padding around a typed query", async () => {

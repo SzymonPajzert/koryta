@@ -98,7 +98,11 @@ import {
   mdiMapMarkerRadiusOutline,
 } from "@mdi/js";
 import { parties } from "~~/shared/misc";
-import { nameMatchesTokens, searchTokens } from "~~/shared/search";
+import {
+  krsNumberQuery,
+  nameMatchesTokens,
+  searchTokens,
+} from "~~/shared/search";
 import { generateEntityUrl } from "~~/shared/slugs";
 import { omniSearchTarget } from "~/composables/omniSearch";
 import { trackGoal } from "~/composables/analytics";
@@ -219,11 +223,20 @@ const onNodeCreated = () => {
  * The substring test stays as the first branch: the parties and „Lista
  * wszystkich osób” are client-side entries that never go near the server, and
  * they were being narrowed by exactly that rule.
+ *
+ * A company the server found by the KRS number typed is kept by that number,
+ * since its name holds no digits for the words to match.
  */
-const matchesTypedWords = (title: string, query: string) => {
+const matchesTypedWords = (
+  title: string,
+  query: string,
+  item?: { raw?: ListItem },
+) => {
   const typed = query.trim();
   if (!typed) return true;
   if (title.toLowerCase().includes(typed.toLowerCase())) return true;
+  const krs = item?.raw?.krsNumber;
+  if (krs !== undefined && krs === krsNumberQuery(typed)) return true;
   return nameMatchesTokens(title, searchTokens(typed));
 };
 
@@ -244,6 +257,9 @@ type ListItem = {
    * page, for a logged out reader. Not drawn, only kept with the search that
    * opened it. */
   unverified?: boolean;
+  /** The KRS number the hit was found by, where `/api/search` found it by
+   * the number typed rather than by its name. */
+  krsNumber?: string;
   path?: string;
   query?: Record<string, string>;
 };
@@ -320,6 +336,8 @@ const searchData = ref<
     /** False for a page nobody has published. */
     published?: boolean;
     query?: Record<string, string>;
+    /** Set on a company found by the KRS number typed. */
+    krsNumber?: string;
   }>
 >([]);
 
@@ -422,6 +440,7 @@ const items = computed<ListItem[]>(() => {
         analyticsKind: searchPickKind(itemType),
         nodeId: item.id,
         unverified: isUnverifiedPerson(item),
+        krsNumber: item.krsNumber,
         ...routing,
       });
     });

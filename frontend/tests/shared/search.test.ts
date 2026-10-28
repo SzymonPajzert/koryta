@@ -3,11 +3,64 @@ import {
   anchorChunk,
   anchorToken,
   generateChunksLower,
+  indexedWords,
+  krsNumberQuery,
+  nextAnchorChunk,
+  reachesBeyondTown,
   nameChunksToWrite,
   nameMatchesTokens,
   nameWords,
+  searchableText,
   searchTokens,
+  townChunk,
 } from "~~/shared/search";
+
+describe("searchableText", () => {
+  it("cuts the punctuation a register name is written with as a space does", () => {
+    expect(searchableText('STADNINA KONI "KRASNE"')).toBe(
+      "stadnina koni krasne",
+    );
+    expect(searchableText('HUTA"KOŚCIUSZKO" W UPADŁOŚCI')).toBe(
+      "huta kościuszko w upadłości",
+    );
+    expect(searchableText("SZPITAL IM.PROF.STANISŁAWA SZYSZKO")).toBe(
+      "szpital im prof stanisława szyszko",
+    );
+    expect(searchableText("INSTYTUT GERIATRII,REUMATOLOGII")).toBe(
+      "instytut geriatrii reumatologii",
+    );
+    expect(searchableText("...DOMARO (Wodzisław Śląski)")).toBe(
+      "domaro wodzisław śląski",
+    );
+    expect(searchableText("ERNST & YOUNG „POLSKA”")).toBe("ernst young polska");
+  });
+
+  it("keeps the hyphen, which the index cuts on its own terms", () => {
+    expect(searchableText("Władysław Kosiniak-Kamysz")).toBe(
+      "władysław kosiniak-kamysz",
+    );
+    expect(searchableText("Ewa Kukulska - Zając")).toBe("ewa kukulska - zając");
+  });
+
+  it("composes a letter stored with its accent as a separate mark", () => {
+    // How one hospital in Świecie is stored: "S" followed by U+0301.
+    expect(searchableText("W ŚWIECIU")).toBe("w świeciu");
+  });
+
+  it("leaves a name without any of it as trimming, flattening and lowercasing did", () => {
+    // Which keeps every such name's stored index from reading as out of date.
+    for (const name of [
+      "Anna Nowak",
+      "   \t Grzegorz Franciszek Franczak",
+      "PEC SPÓŁKA Z OGRANICZONĄ \nODPOWIEDZIALNOŚCIĄ",
+      "Bielsko-Biała",
+    ]) {
+      expect(searchableText(name)).toBe(
+        name.trim().replace(/\s+/g, " ").toLowerCase(),
+      );
+    }
+  });
+});
 
 describe("generateChunksLower", () => {
   it("indexes the whole name, so typing all of it finds the person", () => {
@@ -133,6 +186,133 @@ describe("generateChunksLower", () => {
       "rudnik",
     ]);
   });
+
+  it("indexes the word in quotes by itself", () => {
+    // Searched for as „krasne” on 2026-10-28, and found only typed in quotes.
+    const chunks = generateChunksLower('STADNINA KONI "KRASNE"');
+    expect(chunks).toContain("krasne");
+    expect(chunks).toContain("kras");
+    expect(chunks).toContain("stadnina koni krasne");
+    expect(chunks.some((chunk) => chunk.includes('"'))).toBe(false);
+  });
+
+  it("cuts a word at a quote glued to it", () => {
+    const chunks = generateChunksLower(
+      'HUTA"KOŚCIUSZKO" W UPADŁOŚCI LIKWIDACYJNEJ (Chorzów)',
+    );
+    expect(chunks).toContain("huta");
+    expect(chunks).toContain("kościuszko");
+  });
+
+  it("gives words glued by full stops and commas a chunk each", () => {
+    const chunks = generateChunksLower(
+      "SZPITAL KLINICZNY IM.PROF.STANISŁAWA SZYSZKO",
+    );
+    expect(chunks).toContain("prof");
+    expect(chunks).toContain("stanisława");
+    expect(
+      generateChunksLower("INSTYTUT GERIATRII,REUMATOLOGII I REHABILITACJI"),
+    ).toContain("reumatologii");
+  });
+
+  it("puts a company's town into the whole name, and into marked chunks of its own", () => {
+    // The town of the company's seat: typed after the name it tells apart
+    // one of 34 alike, but a reader typing the town alone wants the town, not
+    // every company based there.
+    const chunks = generateChunksLower(
+      "PRZEDSIĘBIORSTWO WODOCIĄGÓW I KANALIZACJI (Myślibórz)",
+      "place",
+    );
+    expect(chunks).toContain(
+      "przedsiębiorstwo wodociągów i kanalizacji myślibórz",
+    );
+    expect(chunks).toContain("wodociągów");
+    expect(chunks).not.toContain("myślibórz");
+    expect(chunks).not.toContain("myśl");
+    expect(chunks).toContain(townChunk("myślibórz"));
+    expect(chunks).toContain(townChunk("myśl"));
+    expect(chunks.some((chunk) => /[()]/.test(chunk))).toBe(false);
+  });
+
+  it("marks each part of a hyphenated town, and each word of a town of two", () => {
+    const hyphenated = generateChunksLower(
+      'ZAKŁAD REMONTOWY "REKOM" (Kędzierzyn-Koźle)',
+      "place",
+    );
+    expect(hyphenated).toContain(townChunk("kędzierzyn"));
+    expect(hyphenated).toContain(townChunk("koźle"));
+    expect(hyphenated).not.toContain("koźle");
+    const twoWords = generateChunksLower("WIND T1 (Jelenia Góra)", "place");
+    expect(twoWords).toContain(townChunk("jelenia"));
+    expect(twoWords).toContain(townChunk("góra"));
+  });
+
+  it("gives a region's seat the same treatment as a company's town", () => {
+    const chunks = generateChunksLower("Powiat świdnicki (Świdnica)", "region");
+    expect(chunks).toContain("świdnicki");
+    expect(chunks).toContain(townChunk("świdnica"));
+    expect(chunks).not.toContain("świdnica");
+  });
+
+  it("keeps a person's bracket as words of the name", () => {
+    // A pseudonym is what somebody is called, not where they are.
+    const chunks = generateChunksLower(
+      "Bartosz Kopania (Pablo Morales)",
+      "person",
+    );
+    expect(chunks).toContain("morales");
+    expect(chunks).toContain("pablo");
+    expect(chunks.some((chunk) => chunk.startsWith(townChunk("")))).toBe(false);
+  });
+
+  it("keeps a register bracket in capitals as words of the name", () => {
+    // Not a town: what the place is called, short.
+    expect(
+      generateChunksLower(
+        "Ośrodek Pomocy Społecznej w Legionowie (OPS)",
+        "place",
+      ),
+    ).toContain("ops");
+    expect(
+      generateChunksLower(
+        "GDAŃSKA INFRASTRUKTURA (W SKRÓCIE: GIWK SP. Z O.O.)",
+        "place",
+      ),
+    ).toContain("giwk");
+  });
+
+  it("indexes the words of a bracket inside the name like any other", () => {
+    const chunks = generateChunksLower(
+      "Zarząd Transportu Miejskiego (ZTM) w Warszawie",
+      "place",
+    );
+    expect(chunks).toContain("ztm");
+    expect(chunks).toContain("warszawie");
+  });
+
+  it("takes the last bracket for the town, when a name has two", () => {
+    const chunks = generateChunksLower(
+      "STOWARZYSZENIE NA RZECZ BUDOWY DRÓG EKSPRESOWYCH S-8 (PRZEZ SIERADZ-ŁÓDŹ) I S-14 (Łask)",
+      "place",
+    );
+    expect(chunks).toContain("sieradz");
+    expect(chunks).toContain("łódź");
+    expect(chunks).not.toContain("łask");
+    expect(chunks).toContain(townChunk("łask"));
+    // A bracket with small letters in it before the end is a word of the name.
+    const hospital = generateChunksLower(
+      "SZPITAL (dawniej Miejski) W KŁODZKU (Kłodzko)",
+      "place",
+    );
+    expect(hospital).toContain("dawniej");
+    expect(hospital).toContain("kłodzku");
+    expect(hospital).toContain(townChunk("kłodzko"));
+    expect(hospital).not.toContain(townChunk("dawniej"));
+  });
+
+  it("knows no town without the node's type", () => {
+    expect(generateChunksLower("WARS (Warszawa)")).toContain("warszawa");
+  });
 });
 
 describe("nameChunksToWrite", () => {
@@ -182,6 +362,140 @@ describe("searchTokens", () => {
   it("gives an empty query no tokens, which every name answers", () => {
     expect(searchTokens("   ")).toEqual([]);
     expect(nameMatchesTokens("Anna Nowak", [])).toBe(true);
+  });
+
+  it("drops quotes and brackets typed around a word, as the index drops them", () => {
+    expect(searchTokens('stadnina koni "krasne"')).toEqual([
+      "stadnina",
+      "koni",
+      "krasne",
+    ]);
+    expect(searchTokens('"widawa')).toEqual(["widawa"]);
+    expect(searchTokens('" ( )')).toEqual([]);
+  });
+
+  it("keeps a typed hyphen inside its word", () => {
+    expect(searchTokens("Kupczak-Wiśniowska")).toEqual(["kupczak-wiśniowska"]);
+  });
+});
+
+describe("krsNumberQuery", () => {
+  it.each([
+    ["0000029741"],
+    [" 0000029741 "],
+    ["0000 029 741"],
+    ["KRS 0000029741"],
+    ["krs: 0000029741"],
+    ["krs0000029741"],
+  ])("reads %s as KRS 0000029741", (typed) => {
+    expect(krsNumberQuery(typed)).toBe("0000029741");
+  });
+
+  it.each([
+    // On its way to "0000029741": KRS 297 is another company altogether.
+    ["00000297"],
+    ["29741"],
+    ["000002974100"],
+    ["0000029741x"],
+    ["sanikom 0000029741"],
+    ["krs"],
+    [""],
+  ])("reads %s as no KRS number", (typed) => {
+    expect(krsNumberQuery(typed)).toBeUndefined();
+  });
+});
+
+describe("indexedWords", () => {
+  it("leaves out a company's town, and nothing else", () => {
+    expect(
+      indexedWords(
+        'PRZEDSIĘBIORSTWO GOSPODARKI KOMUNALNEJ "SANIKOM" (Lubawka)',
+        "place",
+      ),
+    ).toEqual(["przedsiębiorstwo", "gospodarki", "komunalnej", "sanikom"]);
+    expect(
+      indexedWords("Zarząd Transportu Miejskiego (ZTM) w Warszawie", "place"),
+    ).toContain("ztm");
+  });
+
+  it("cuts a surname at an apostrophe, as the index does", () => {
+    expect(indexedWords("Kajetan Ludwik D'obyrn", "person").at(-1)).toBe(
+      "obyrn",
+    );
+  });
+
+  it("keeps a person's bracket", () => {
+    expect(
+      indexedWords("Bartosz Kopania (Pablo Morales)", "person").at(-1),
+    ).toBe("morales");
+  });
+
+  it("is a word of the index each, prefixes included", () => {
+    const name = 'AMW TOWARZYSTWO BUDOWNICTWA SPOŁECZNEGO "KWATERA" (Warszawa)';
+    const chunks = generateChunksLower(name, "place");
+    for (const word of indexedWords(name, "place")) {
+      expect(chunks).toContain(word);
+    }
+  });
+});
+
+describe("nextAnchorChunk", () => {
+  it("asks for the longest other word once the anchor's pass is full", () => {
+    // „warszawa” is the anchor, and Warsaw holds more than one pass reads.
+    expect(anchorChunk(["paged", "warszawa"])).toBe("warszawa");
+    expect(nextAnchorChunk(["paged", "warszawa"])).toBe("paged");
+    expect(nextAnchorChunk(["przedsiębiorstwo", "darłowo"])).toBe("darłowo");
+  });
+
+  it("asks nothing for a word of one or two letters, typed on the way", () => {
+    expect(nextAnchorChunk(["piotr", "w"])).toBeUndefined();
+    expect(nextAnchorChunk(["piotr", "wa"])).toBeUndefined();
+    expect(nextAnchorChunk(["piotr", "wyb"])).toBe("wyb");
+  });
+
+  it("asks nothing where no other word was typed", () => {
+    expect(nextAnchorChunk(["warszawa"])).toBeUndefined();
+    expect(nextAnchorChunk(["jan", "jan"])).toBeUndefined();
+  });
+});
+
+describe("reachesBeyondTown", () => {
+  it("keeps a company a word of its name was typed for", () => {
+    expect(
+      reachesBeyondTown("ORLEN PROJEKT (Płock)", "place", ["orlen", "płock"]),
+    ).toBe(true);
+    expect(
+      reachesBeyondTown(
+        'PRZEDSIĘBIORSTWO GOSPODARKI KOMUNALNEJ "SANIKOM" (Lubawka)',
+        "place",
+        ["lubawka", "s"],
+      ),
+    ).toBe(true);
+  });
+
+  it("drops a company only its town was typed for, two words of it or one hyphen", () => {
+    expect(
+      reachesBeyondTown("TAURON EKOENERGIA (Jelenia Góra)", "place", [
+        "jelenia",
+        "góra",
+      ]),
+    ).toBe(false);
+    expect(
+      reachesBeyondTown(
+        "SEVEN SYSTEM (Bielsko-Biała)",
+        "place",
+        searchTokens("bielsko-biała"),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("townChunk", () => {
+  it("marks a chunk so that nothing typed can ask for it", () => {
+    // `searchableText` leaves a query letters, digits and hyphens only.
+    const marked = townChunk("lubawka");
+    expect(marked).not.toBe("lubawka");
+    expect(searchTokens(marked)).toEqual(["lubawka"]);
   });
 });
 
@@ -324,6 +638,31 @@ describe("nameMatchesTokens", () => {
     );
     expect(nameMatchesTokens("Ewa Kukulska - Zając", ["ewa", "-"])).toBe(true);
   });
+
+  it("finds a company by the word in its quotes", () => {
+    expect(nameMatchesTokens('STADNINA KONI "KRASNE"', ["krasne"])).toBe(true);
+    expect(
+      nameMatchesTokens(
+        'HUTA"KOŚCIUSZKO" W UPADŁOŚCI LIKWIDACYJNEJ (Chorzów)',
+        searchTokens("huta kościuszko"),
+      ),
+    ).toBe(true);
+  });
+
+  it("matches the town in the bracket beside another word, as the town pass needs", () => {
+    expect(
+      nameMatchesTokens(
+        "PRZEDSIĘBIORSTWO WODOCIĄGÓW I KANALIZACJI (Myślibórz)",
+        searchTokens("wodociągów myślibórz"),
+      ),
+    ).toBe(true);
+    expect(
+      nameMatchesTokens(
+        'PRZEDSIĘBIORSTWO GOSPODARKI KOMUNALNEJ "SANIKOM" (Lubawka)',
+        searchTokens("sanikom lubawka"),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("nameWords", () => {
@@ -343,5 +682,13 @@ describe("nameWords", () => {
     ]);
     expect(nameWords("nowak-")).toEqual(["nowak"]);
     expect(nameWords(" - ")).toEqual([]);
+  });
+
+  it("cuts at quotes and brackets too, and keeps the bracket's words", () => {
+    expect(nameWords('PGK "SANIKOM" (Lubawka)')).toEqual([
+      "pgk",
+      "sanikom",
+      "lubawka",
+    ]);
   });
 });

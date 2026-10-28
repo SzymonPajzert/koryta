@@ -189,7 +189,10 @@ async function seedDatabase() {
     // used to carry it by hand and had drifted to a different scheme entirely,
     // which is why every spec that searched for a full name found nobody.
     if (typeof nodeData.name === "string") {
-      nodeData.nameChunksLower = generateChunksLower(nodeData.name);
+      nodeData.nameChunksLower = generateChunksLower(
+        nodeData.name,
+        typeof nodeData.type === "string" ? nodeData.type : undefined,
+      );
     }
     // JSON has no timestamp, and the collection stores one - the same
     // conversion the extractions below need. Without a date at all an article

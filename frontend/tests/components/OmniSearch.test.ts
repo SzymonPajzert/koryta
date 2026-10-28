@@ -187,6 +187,44 @@ describe("OmniSearch", () => {
     wrapper.unmount();
   });
 
+  it("keeps a company by the word in its quotes, and by the KRS number it was found by", async () => {
+    const wrapper = mount(
+      defineComponent({
+        render() {
+          return h(Suspense, null, {
+            default: () => h(OmniSearch),
+            fallback: () => h("div", "fallback"),
+          });
+        },
+      }),
+      { global: { plugins: [vuetify, router] } },
+    );
+
+    await flushPromises();
+
+    const filter = wrapper
+      .findComponent({ name: "VAutocomplete" })
+      .props("customFilter") as (
+      value: string,
+      query: string,
+      item?: { raw?: { krsNumber?: string } },
+    ) => boolean;
+
+    const pgk = 'PRZEDSIĘBIORSTWO GOSPODARKI KOMUNALNEJ "SANIKOM" (Lubawka)';
+    expect(filter(pgk, "sanikom lubawka")).toBe(true);
+    expect(filter('STADNINA KONI "KRASNE"', "stadnina koni krasne")).toBe(true);
+    // No name holds the number: only the hit the server found by it is kept.
+    expect(
+      filter(pgk, "0000029741", { raw: { krsNumber: "0000029741" } }),
+    ).toBe(true);
+    expect(filter(pgk, "0000029741", { raw: {} })).toBe(false);
+    expect(
+      filter(pgk, "0000029742", { raw: { krsNumber: "0000029741" } }),
+    ).toBe(false);
+
+    wrapper.unmount();
+  });
+
   /** The register name that started this: 97 characters, and the search box
    * used to show the first 40 of them. */
   const LONG_NAME =

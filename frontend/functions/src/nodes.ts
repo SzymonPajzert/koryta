@@ -39,6 +39,7 @@ export const onNodeWritten = onDocumentWritten(
       const nameChunksLower = nameChunksToWrite(
         afterData.name,
         afterData.nameChunksLower,
+        afterData.type,
       );
       if (nameChunksLower) updatePayload["nameChunksLower"] = nameChunksLower;
     }

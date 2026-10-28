@@ -47,12 +47,14 @@ describe("plan", () => {
 
   it("leaves alone a name the old cut already indexes right", () => {
     // No hyphen at all, and one standing between two spaces, which cuts
-    // nothing: 262 hyphenated names of 2026-10-11 are like that.
+    // nothing: 262 hyphenated names of 2026-10-11 are like that. No bracket
+    // either, which the cut of 2026-10-28 takes off a word (`searchableText`):
+    // the plan is the trigger's own rule, so it re-indexes those as well.
     expect(
       plan([
         stored("a", "Anna Nowak"),
         stored("e", "Ewa Kukulska - Zając"),
-        stored("p", "TOTO - SPORT (Warszawa)", "place"),
+        stored("p", "TOTO - SPORT", "place"),
       ]),
     ).toEqual([]);
   });
