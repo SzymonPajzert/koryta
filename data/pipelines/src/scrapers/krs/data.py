@@ -5,6 +5,7 @@ import pandas as pd
 
 from entities.company import KRS
 from entities.person import RejestrIOKey
+from scrapers.map.jst import normalise
 from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
 from scrapers.stores.file import DownloadableFile as FileSource
@@ -145,6 +146,39 @@ def public_owner_regons(catalogue: pd.DataFrame) -> frozenset[str]:
     return public_regons(catalogue) - set(in_krs.dropna())
 
 
+def public_name_key(name: object) -> str | None:
+    """A name as `public_owner_names` holds it: normalised, quotes trimmed."""
+    if not isinstance(name, str) or not name.strip():
+        return None
+    return normalise(name).strip(' "') or None
+
+
+def public_owner_names(catalogue: pd.DataFrame) -> frozenset[str]:
+    """The names of the entities outside KRS that REGON files as public.
+
+    For an owner the register names with neither a KRS number nor a REGON,
+    which `public_owner_regons` cannot place: Uniwersytet Medyczny im. Karola
+    Marcinkowskiego w Poznaniu holds Uniwersyteckie Centrum Transferu
+    Technologii Medycznych (0000369095) under its name alone, while the
+    catalogue files the university, REGON 000288811, under 112. Matched whole,
+    never by a word or a prefix: "UNIWERSYTET WSB MERITO W TORUNIU" is a
+    private university's name. A name the catalogue also files under the
+    private sector is left out, as `_public_ids` leaves out such an id.
+    """
+    if "Nazwa podmiotu" not in catalogue.columns:
+        return frozenset()
+    names = catalogue["Nazwa podmiotu"].map(public_name_key)
+    code = catalogue["Forma własności"].astype(str)
+    outside_krs = (
+        catalogue["KRS"].isna()
+        if "KRS" in catalogue.columns
+        else pd.Series(True, index=catalogue.index)
+    )
+    public = set(names[code.str.startswith("1") & outside_krs].dropna())
+    private = set(names[code.str.startswith("2")].dropna())
+    return frozenset(public - private)
+
+
 def treasury_stakes(wykaz: pd.DataFrame) -> dict[str, str]:
     """The Treasury's share in each company of Prokuratoria's list, by NIP.
 
@@ -177,10 +211,12 @@ class CompaniesHardcoded(Pipeline[KRS]):
 
     all_companies_krs: dict[str, KRS] = dict()
     #: The REGON and NIP numbers the catalogue files as publicly owned - see
-    #: `public_regons`, `public_nips` and `public_owner_regons`.
+    #: `public_regons`, `public_nips` and `public_owner_regons` - and the names
+    #: of such entities outside KRS, `public_owner_names`.
     public_regons: frozenset[str] = frozenset()
     public_nips: frozenset[str] = frozenset()
     public_owner_regons: frozenset[str] = frozenset()
+    public_owner_names: frozenset[str] = frozenset()
     teryt: Teryt
 
     @property
@@ -270,6 +306,7 @@ class CompaniesHardcoded(Pipeline[KRS]):
         self.public_regons = public_regons(catalogue)
         self.public_nips = public_nips(catalogue)
         self.public_owner_regons = public_owner_regons(catalogue)
+        self.public_owner_names = public_owner_names(catalogue)
         public_companies = self.read_public_companies(catalogue)
         self.register_partials(
             "PUBLIC_COMPANIES_KRS",

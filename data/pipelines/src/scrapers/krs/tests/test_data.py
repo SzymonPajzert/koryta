@@ -5,7 +5,9 @@ from scrapers.krs.data import (
     WOJEWODZTWA_SPOLKI,
     CompaniesHardcoded,
     nip_digits,
+    public_name_key,
     public_nips,
+    public_owner_names,
     public_owner_regons,
     public_regons,
     regon_stem,
@@ -224,6 +226,49 @@ def test_an_owner_is_read_by_its_code_only_outside_krs():
 
     assert public_regons(rows) == {"000001583", "361123585"}
     assert public_owner_regons(rows) == {"000001583"}
+
+
+def test_an_owner_is_named_public_only_whole_and_outside_krs():
+    """For an owner the register gives no REGON: UM Poznań, UCTTM's owner."""
+    rows = pd.DataFrame(
+        [
+            [
+                "UNIWERSYTET MEDYCZNY IM. KAROLA MARCINKOWSKIEGO W POZNANIU",
+                "000288811",
+                "112 - WŁASNOŚĆ PAŃSTWOWYCH OSÓB PRAWNYCH",
+                None,
+            ],
+            # A company has an odpis of its own that says who owns it
+            [
+                "WYDAWNICTWO RBA POLAND",
+                "361123585",
+                "112 - WŁASNOŚĆ PAŃSTWOWYCH OSÓB PRAWNYCH",
+                "0000549918",
+            ],
+            # A private university, which a word of the name would not tell apart
+            [
+                "UNIWERSYTET WSB MERITO W TORUNIU",
+                "871092619",
+                "215 - WŁASNOŚĆ PRYWATNA KRAJOWA POZOSTAŁA",
+                None,
+            ],
+            # One name filed both ways is nobody's to call
+            ["GMINNA SPÓŁKA WODNA", "000000001", "113 - SAMORZĄDOWA", None],
+            ["GMINNA SPÓŁKA WODNA", "000000002", "214 - PRYWATNA", None],
+        ],
+        columns=["Nazwa podmiotu", "REGON", "Forma własności", "KRS"],
+    )
+
+    names = public_owner_names(rows)
+
+    assert names == {"UNIWERSYTET MEDYCZNY IM. KAROLA MARCINKOWSKIEGO W POZNANIU"}
+    assert (
+        public_name_key(
+            ' "Uniwersytet  Medyczny im. Karola Marcinkowskiego w Poznaniu" '
+        )
+        in names
+    )
+    assert public_name_key("UNIWERSYTET MEDYCZNY") not in names
 
 
 def test_the_treasury_list_is_read_by_nip_with_the_share():

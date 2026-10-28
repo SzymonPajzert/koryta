@@ -8,6 +8,7 @@ from scrapers.krs.data import (
     REGON_PUBLIC_IDENTITY,
     REGON_PUBLIC_OWNERSHIP,
     TREASURY_STAKE,
+    public_name_key,
 )
 from scrapers.krs.list import (
     CompaniesKRS,
@@ -772,6 +773,43 @@ def test_an_owner_regon_does_not_know_is_not_public():
         NO_TERYT,
         owned(WODOCIAGI_ZGIERZ, SPZOO, wspolnicy=[ZGIERSKA_SPOLKA_WODNA]),
         public_owner_regons=frozenset({"000001583"}),
+    )
+
+    assert company is not None
+    assert not company.is_public
+
+
+#: Uniwersytet Medyczny im. Karola Marcinkowskiego w Poznaniu, as the register
+#: names it as the owner of UCTTM (0000369095): no KRS number, no REGON.
+UM_POZNAN = {
+    "nazwa": "UNIWERSYTET MEDYCZNY IM. KAROLA MARCINKOWSKIEGO W POZNANIU",
+    "posiadaneUdzialy": "100 UDZIAŁÓW O ŁĄCZNEJ WARTOŚCI 5.000,00 ZŁ",
+    "czyPosiadaCaloscUdzialow": True,
+}
+UM_POZNAN_NAME = "UNIWERSYTET MEDYCZNY IM. KAROLA MARCINKOWSKIEGO W POZNANIU"
+
+
+def test_an_owner_named_with_no_regon_is_public_by_its_catalogue_name():
+    company = company_from_api_krs(
+        NO_POSTAL_CODES,
+        NO_TERYT,
+        owned("0000369095", SPZOO, wspolnicy=[UM_POZNAN]),
+        public_owner_names=frozenset({public_name_key(UM_POZNAN_NAME)}),
+    )
+
+    assert company is not None
+    assert company.is_public
+    assert company.parents == []
+
+
+def test_a_name_is_not_read_where_the_register_gives_a_regon():
+    """The REGON answers, and here the code says nothing public about it."""
+    with_regon = {**UM_POZNAN, "identyfikator": {"regon": "12345678900000"}}
+    company = company_from_api_krs(
+        NO_POSTAL_CODES,
+        NO_TERYT,
+        owned("0000369095", SPZOO, wspolnicy=[with_regon]),
+        public_owner_names=frozenset({public_name_key(UM_POZNAN_NAME)}),
     )
 
     assert company is not None
