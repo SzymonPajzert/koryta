@@ -7,6 +7,9 @@
     koryta_nightly --max-uploads 300  # more people, once the first nights look right
     koryta_nightly --max-published 50 # fewer changes to published pages a night
     koryta_nightly --paid-max-calls 0 # buy nothing from rejestr.io tonight
+    koryta_nightly --priority-group skarb-panstwa:treasury:100:new=50
+                                      # the Treasury's companies' people
+                                      # first, out of 100 of their own
     koryta_nightly --register-backlog 2000
                                       # the register's backlog too, not only
                                       # the day's new registrations
@@ -50,12 +53,16 @@ The steps, in order (`STEPS`):
                 first, so that every job goes up with its person
     people      koryta_people_import --scope priority --max-uploads 100: new
                 hires first, then the pages of the people rejestr.io was paid
-                for this week, then the pages with an open note, then at most
-                --max-odpis-only-current (10) people only an odpis names in a
-                public post that is not new and --max-rejestrio-current (50)
-                with a rejestr.io entry in one, then published pages, then the
-                rest; of all those pages at most --max-published (10) that
-                are published, whichever tier sends them
+                for this week, then the pages with an open note, then the
+                people of each --priority-group, out of a budget of its own,
+                then at most --max-odpis-only-current (10) people only an
+                odpis names in a public post that is not new and
+                --max-rejestrio-current (50) with a rejestr.io entry in one,
+                then published pages, then the rest; of all those pages at
+                most --max-published (10) that are published, whichever tier
+                sends them; and with --fill-rejestrio-current, more of the
+                people with a rejestr.io entry when that comes to fewer than
+                --max-uploads
     scores      koryta_score_import: every scoring model rebuilt over the
                 day's newest export and the pages the people step has just
                 created, and its votes reconciled with the site's
@@ -170,6 +177,7 @@ from datetime import UTC, datetime, timedelta
 
 from uuid_extensions import uuid7str  # type: ignore
 
+from entities.priority_groups import parse_group, repeated
 from stores.config import DOWNLOADED_DIR, PROJECT_ROOT, VERSIONED_DIR
 from stores.job_runs import FinalState, JobRun
 from stores.storage import CRAWLED_BUCKET, SHARED_BUCKET, Client, warsaw_tz
@@ -1447,6 +1455,7 @@ class Night:
             str(self.args.max_rejestrio_current),
             "--max-published",
             str(self.args.max_published),
+            *self.group_argv(),
             "--max-minutes",
             f"{self.minutes_for(step):.0f}",
             # The reprocess has just rebuilt every pipeline the payloads read.
@@ -1460,6 +1469,15 @@ class Night:
             argv += ["--export", self.summary.export]
         if self.args.people_dry_run:
             argv.append("--dry-run")
+        return argv
+
+    def group_argv(self) -> list[str]:
+        """The priority groups and the fill, as the night was given them."""
+        argv = []
+        for group in self.args.priority_group or ():
+            argv += ["--priority-group", group]
+        if self.args.fill_rejestrio_current:
+            argv.append("--fill-rejestrio-current")
         return argv
 
     def step_companies(self, step: Step) -> tuple[str, str, int | None]:
@@ -1527,6 +1545,7 @@ class Night:
             f"{self.args.max_odpis_only_current} --max-rejestrio-current "
             f"{self.args.max_rejestrio_current} --max-published "
             f"{self.args.max_published}"
+            + "".join(f" {arg}" for arg in self.group_argv())
             + (" --dry-run" if self.args.people_dry_run else "")
             # Only a night with the export step has an export to name.
             + (" --export <the export step's>" if self.needs("export") else "")
@@ -1698,6 +1717,14 @@ def clock(text: str) -> str:
     return f"{int(hour):02d}:{int(minute):02d}"
 
 
+def group_text(text: str) -> str:
+    """A `--priority-group` the people step will take, as it was given: a
+    group it would refuse is better refused here, at `--dry-run`, than at
+    the end of the night by both steps that send."""
+    parse_group(text)
+    return text
+
+
 def parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="koryta_nightly",
@@ -1764,6 +1791,25 @@ def parser() -> argparse.ArgumentParser:
         "that a night leaves no more for review than this however many people "
         "it sends; 0 changes none. Default: %(default)s, no more than a night "
         "of 10 people could change.",
+    )
+    parser.add_argument(
+        "--priority-group",
+        action="append",
+        type=group_text,
+        metavar="NAME:SOURCE:BUDGET[:new=N]",
+        help="A group of companies whose people in a post now the people step "
+        "sends right after the noted pages, out of a budget of the group's "
+        "own, within --max-uploads: e.g. skarb-panstwa:treasury:100:new=50, "
+        "the companies the Treasury holds a stake in, 100 people a night, at "
+        "most 50 of them new pages. Repeatable; see koryta_people_import "
+        "--help.",
+    )
+    parser.add_argument(
+        "--fill-rejestrio-current",
+        action="store_true",
+        help="When the people step's plan comes to fewer than --max-uploads, "
+        "fill the slots left with more people with a rejestr.io entry in a "
+        "public post that is not new, past --max-rejestrio-current.",
     )
     parser.add_argument(
         "--krs-minutes",
@@ -1839,7 +1885,10 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = parser().parse_args(argv)
+    parse = parser()
+    args = parse.parse_args(argv)
+    if twice := repeated([parse_group(text) for text in args.priority_group or ()]):
+        parse.error(f"--priority-group: more than one group called {', '.join(twice)}")
     # The steps get their own flags; nothing of the night's reaches them.
     sys.argv = sys.argv[:1]
     return Night(args).run()

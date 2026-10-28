@@ -258,6 +258,35 @@ wait for the next nights, and the night goes on to the pages behind them. At
 changed 45 to 87 published pages each, 33 to 49 of them bought or noted - and
 it stays put when `--max-uploads` goes up.
 
+Priority groups: between 4 and 5, the people in a post now at a group of
+companies, each group named in `KORYTA_NIGHTLY_ARGS` with a budget of its own
+(Szymon, 2026-10-27 and 10-28):
+
+    --priority-group skarb-panstwa:treasury:100:new=50
+
+is up to 100 people a night with a post now at a company on Prokuratoria's
+list of the Treasury's stakes, at most 50 of them new pages. A send for a group
+takes nothing of the caps of 5, 6 and 7; only `--max-new`, every page the
+night creates, is shared, and the night still sends `--max-uploads` in all, so
+a group displaces the drafts in 8. Members past the budget go in their own
+tier, as if there were no group. A group's members go only from 6 and 8: a
+published page and somebody only an odpis names keep their caps. The source
+can also be `krs=<KRS,KRS...>`, companies named by hand, or
+`category=<category>`, a sector's public companies; the flag repeats, and a
+person in two groups goes for the first. Each group's numbers are in the
+people run's summary (`groups`, and `order` for the payloads part by position),
+and each line of what was sent names its group.
+
+On the night of 2026-10-28, replayed: 1,504 people held a post at one of the
+Treasury's 317 companies, 981 of them waiting for a page, and the night sent
+35, 17 of them new pages. With the group above it would have sent 103, 50
+new, and 50 fewer drafts from 8; at 150 with new=100, 153, 100 new.
+
+`--fill-rejestrio-current`: once 8 runs out - late November 2026 at 500 a
+night - every tier left has a cap, and the night sends about 214 of its 500.
+The flag gives the slots left to more people from 6, within `--max-new`;
+never to published pages or to the people only an odpis names.
+
 Companies: before the people go, the companies they name that tonight's export
 has no page for are created, through `/api/ingest/company` from `Companies`
 (`koryta_people_import --companies-only`, run with the people step's own
