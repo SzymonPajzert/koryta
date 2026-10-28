@@ -280,6 +280,29 @@ describe("the result of a candidacy", () => {
   });
 });
 
+describe("what a candidate declared about their own party", () => {
+  const declared: EdgeLike = {
+    ...candidacy,
+    party_member: "członek partii politycznej: Prawo i Sprawiedliwość",
+  };
+
+  it("fills in a stored candidacy without changing which one it is", () => {
+    // Every stored candidacy predates the field, so as a discriminator each
+    // one carrying an answer would hash to a new id and be stored twice.
+    expect(edgeRelation(candidacy, declared)).toBe("enriches");
+    expect(edgeIdentity(declared)).toBe(edgeIdentity(candidacy));
+  });
+
+  it("reaches a candidacy that already has its committee", () => {
+    // The ones a migration was going to be needed for: nothing else is left
+    // to fill in, and PKW records the answer outright.
+    const complete = { ...candidacy, committee: "KW PiS" };
+    expect(
+      addsOnlyAnnotations(complete, { ...declared, committee: "KW PiS" }),
+    ).toBe(true);
+  });
+});
+
 describe("an office the pipeline names", () => {
   // Marcin Witko's 2010 council seat, stored as „Samorząd” before the pipeline
   // carried the office out of PKW's files.

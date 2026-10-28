@@ -728,6 +728,10 @@ def _party_member(value: typing.Any) -> str | None:
         return None
     if text.lstrip("-").isdigit():
         return None
+    # A cell with no letters in it is a placeholder, not an answer: PKW's
+    # workbooks print "-" where nobody answered, and the chip would show it.
+    if not any(c.isalpha() for c in text):
+        return None
     if text.lower().startswith("popierany przez"):
         return None
     return text

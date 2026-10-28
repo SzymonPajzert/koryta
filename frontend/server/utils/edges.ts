@@ -128,16 +128,18 @@ export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
   // beside the original as a duplicate.
   election: {
     kind: "occurrence",
-    // `party_member` is deliberately absent. The same candidacy is the same
-    // candidacy whether or not PKW's membership answer has been read yet, and
-    // the answer is a 1,084-spelling free-text field - making it part of the
-    // identity would fork every candidacy carrying one the first time anybody
-    // normalises the string. It rides in as an enrichment instead, which is
-    // what `enrichable` below is for.
+    // `party_member` is an annotation, not a discriminator. The same candidacy
+    // is the same candidacy whether or not PKW's membership answer has been
+    // read yet, and the answer is a 1,084-spelling free-text field - making it
+    // part of the identity would fork every candidacy carrying one the first
+    // time anybody normalises the string. As an annotation it fills in on the
+    // stored candidacy, which is also what reaches the ones that already have
+    // every discriminator: PKW records the answer outright, so it goes out
+    // without a reviewer, the way the result does.
     discriminators: ["position", "start_date", "party", "committee", "term"],
     identicalMeansSame: false,
     enrichable: true,
-    annotations: ["elected"],
+    annotations: ["elected", "party_member"],
   },
 
   // Written by hand through /api/edges/create, never by an ingest.

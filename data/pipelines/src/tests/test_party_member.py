@@ -52,6 +52,13 @@ def test_drops_an_absence(value):
     assert _party_member(value) is None
 
 
+@pytest.mark.parametrize("value", ["-", " - ", "--", "?"])
+def test_drops_a_placeholder(value):
+    # Where nobody answered, some workbooks print a dash rather than leave the
+    # cell empty. It names no party and denies none.
+    assert _party_member(value) is None
+
+
 @pytest.mark.parametrize("value", ["1", "2", "31", "314", "-1"])
 def test_drops_the_1997_party_id(value):
     # The Sejm 1997 workbook's "Id partii" is an integer key into a table PKW
