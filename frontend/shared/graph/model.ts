@@ -84,6 +84,9 @@ export interface Edge {
   committee?: string;
   position?: ElectionPosition;
   elected?: boolean;
+  /** PKW's verbatim answer to the membership question - see `Edge` in
+   * shared/model.ts. Copied here or the card never sees it. */
+  party_member?: string;
   term?: string;
   by_election?: boolean;
   start_date?: string;

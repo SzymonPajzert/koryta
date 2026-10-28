@@ -205,6 +205,7 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       committee: edge.committee,
       position: edge.position,
       elected: edge.elected,
+      party_member: edge.party_member,
       term: edge.term,
       by_election: edge.by_election,
       start_date: edge.start_date,

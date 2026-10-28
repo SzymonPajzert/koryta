@@ -1,5 +1,5 @@
 <template>
-  <v-tooltip v-if="chip" :text="chip.tooltip" location="bottom">
+  <v-tooltip v-if="chip" :text="chip.tooltip" location="bottom" max-width="300">
     <template #activator="{ props: tooltipProps }">
       <!-- Outlined and never party-coloured, unlike `PartyChip` beside it.
            The two make different claims: the filled chip is the site's own
@@ -62,7 +62,7 @@ const chip = computed(() => {
     label: party,
     icon: mdiCardAccountDetailsOutline,
     tooltip:
-      `Przynależność zadeklarowana PKW przy tych wyborach: „${raw}". ` +
+      `Przynależność zadeklarowana PKW przy tych wyborach: „${raw}”. ` +
       "To oświadczenie kandydata o sobie - nie to samo co partia " +
       "odczytana przez serwis z nazwy komitetu.",
   };

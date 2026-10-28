@@ -184,6 +184,22 @@ describe("graph utils", () => {
       expect(forPerson1?.connected).not.toContain("p2");
     });
   });
+
+  it("carries what a candidate declared about their party", () => {
+    // `getEdges` copies a list of fields, so one left off it never reaches the
+    // card - which is how the declaration first went missing.
+    const [edge] = getEdges([
+      {
+        id: "e1",
+        source: "p1",
+        target: "teryt1465",
+        type: "election",
+        party_member: "nie należy do partii politycznej",
+      } as DBEdge,
+    ]);
+
+    expect(edge!.party_member).toBe("nie należy do partii politycznej");
+  });
 });
 
 /** A node as `getNodes` hands it on, which is what both functions below take. */
