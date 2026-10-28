@@ -1,4 +1,5 @@
 import dataclasses
+from collections.abc import Mapping
 from typing import Callable
 
 import pandas as pd
@@ -27,6 +28,15 @@ TREASURY_LIST = FileSource(
     "https://api.dane.gov.pl/resources/2383706/file",
     "wykaz-spolek-z-udzialem-skarbu-panstwa-2026-06-30.xls",
 )
+
+#: NIPs the list prints wrong, by the NIP the register gives the company:
+#: Wielkopolska Gildia Rolno-Ogrodnicza (0000104717) and Federal-Mogul BIMET
+#: (0000054418), found by name on 2026-10-27 in the 2025-12-31 edition and
+#: still wrong on 2026-06-30. Recheck them when `TREASURY_LIST` moves on.
+TREASURY_NIP_FIXES = {
+    "7870006169": "7820006169",
+    "5840253579": "5841008149",
+}
 
 
 def publicly_owned(catalogue: pd.DataFrame) -> pd.DataFrame:
@@ -156,14 +166,28 @@ def treasury_stakes(wykaz: pd.DataFrame) -> dict[str, str]:
     nobody's. Every stake counts, as for any public owner, down to RAFAKO's
     0.0000148%.
 
-    Read by position, NIP second and share sixth, as the office prints them.
+    Read by position, NIP second and share sixth, as the office prints them,
+    and keyed by the register's NIP where the list prints another
+    (`TREASURY_NIP_FIXES`).
     """
     stakes = {}
     for nip, share in zip(wykaz.iloc[:, 1], wykaz.iloc[:, 5]):
         digits = nip_digits(nip)
         if digits:
-            stakes[digits] = str(share).strip()
+            stakes[TREASURY_NIP_FIXES.get(digits, digits)] = str(share).strip()
     return stakes
+
+
+def treasury_companies(
+    companies: pd.DataFrame, stakes: Mapping[str, str]
+) -> frozenset[str]:
+    """The KRS numbers of the companies (`CompaniesKRS`) whose NIP is among
+    the Treasury's `stakes`: every entry of one, a predecessor struck off
+    under the same NIP included."""
+    if companies.empty or "nip" not in companies:
+        return frozenset()
+    listed = companies["nip"].map(nip_digits).isin(set(stakes))
+    return frozenset(companies.loc[listed, "krs"].astype(str).str.zfill(10))
 
 
 def read_treasury_list(ctx: Context) -> pd.DataFrame:
