@@ -10,6 +10,8 @@ that log, and the companies found public are `CompaniesPublicByRegister`.
     koryta_krs_register_owners --reads 20000
     koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25
                                   # the night's step (`jobs.nightly`)
+    koryta_krs_register_owners --krs-file companies.txt
+                                  # numbers somebody listed, read first
     python -m jobs.krs_register_owners --reads 500 --dry-run
 
 The queue's head is every number registered since the log began that has no
@@ -21,6 +23,13 @@ names 231-307 new registrations (2026-09-29 to 10-08), a weekend's none -
 two to three minutes a night at the default pace. How much backlog a night
 takes besides is task decide-register-sweep-pace; the night reads none until
 it is decided.
+
+`--krs-file` puts a list ahead of all that, read whatever the queue says: the
+companies some other source says the public owns and nothing has read, which
+in number order the queue would reach months from now. Prokuratoria's
+Treasury-list companies nobody crawled were such a list, and so were the
+companies the register's own name search finds behind a university's or a
+state agency's name (2026-10-28).
 
 Stopping is free at any point: Ctrl+C, SIGTERM or `--max-minutes` ends the run
 after the read in hand, and what was read is flushed first. A rerun recomputes
@@ -108,6 +117,12 @@ def parser() -> argparse.ArgumentParser:
         "queue. The night's step.",
     )
     parser.add_argument(
+        "--krs-file",
+        help="Read the KRS numbers in this file first, before anything the "
+        "queue holds: one a line, anything after a # ignored. Counted apart "
+        "from --reads.",
+    )
+    parser.add_argument(
         "--max-minutes",
         type=float,
         help="Stop asking this many minutes after the start, the queue's "
@@ -155,6 +170,40 @@ def to_read(queue: pd.DataFrame, reads: int, new_registrations: bool) -> list[st
     return numbers[: new + max(reads, 0)]
 
 
+def listed_numbers(path: str) -> list[str]:
+    """The KRS numbers a `--krs-file` lists, padded, each once, in its order.
+
+    A line that is anything but a number once its comment is cut off stops the
+    run before it asks anything: a list drawn up by hand is where a NIP or a
+    name pasted in by mistake would otherwise be asked about, and logged, as a
+    KRS number nobody has.
+    """
+    numbers: dict[str, None] = {}
+    with open(path) as f:
+        for line_number, line in enumerate(f, 1):
+            text = line.split("#", 1)[0].strip()
+            if not text:
+                continue
+            if not text.isdigit() or len(text) > 10:
+                raise ValueError(f"{path}:{line_number}: not a KRS number: {text!r}")
+            numbers[text.zfill(10)] = None
+    return list(numbers)
+
+
+def plan(
+    queue: pd.DataFrame, listed: Sequence[str], queued: Sequence[str]
+) -> tuple[list[str], Counter]:
+    """What a run reads - `listed` first, then `queued` less what that already
+    asks - and how many of each reason, a listed number counting as listed."""
+    first = set(listed)
+    todo = list(listed) + [krs for krs in queued if krs not in first]
+    reason_of = dict(zip((str(krs).zfill(10) for krs in queue["krs"]), queue["reason"]))
+    reasons = Counter(
+        "listed" if krs in first else reason_of.get(krs, "") for krs in todo
+    )
+    return todo, reasons
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     started = time.monotonic()
     args = parser().parse_args(argv)
@@ -163,11 +212,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Pipelines read sys.argv themselves - PeoplePKW takes --limit, and anything
     # argparse abbreviates to it - so the job's own flags must not reach them.
     sys.argv = sys.argv[:1]
+    listed = listed_numbers(args.krs_file) if args.krs_file else []
 
     ctx, _ = setup_context(policy=ProcessPolicy(set(REFRESH)))
     queue = KRSRegisterQueue().read_or_process(ctx)
-    todo = to_read(queue, args.reads, args.new_registrations)
-    reasons = Counter(queue["reason"][: len(todo)]) if len(queue) else Counter()
+    todo, reasons = plan(
+        queue, listed, to_read(queue, args.reads, args.new_registrations)
+    )
     print(
         f"Queue: {len(queue)} KRS numbers owed a read; "
         f"this run asks about {len(todo)} {dict(reasons)}"
