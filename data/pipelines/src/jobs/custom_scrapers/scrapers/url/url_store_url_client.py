@@ -15,7 +15,9 @@ class UrlStoreUrlClient(UrlClient):
 
     def add_urls(self, urls: List[str]):
         if urls:
-            self.store_client.create_urls([UrlIn(url=u, source=self.source) for u in urls])
+            self.store_client.create_urls(
+                [UrlIn(url=u, source=self.source) for u in urls]
+            )
 
     def any_url_exists(self, urls: List[str]) -> bool:
         if urls:

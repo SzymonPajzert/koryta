@@ -3,9 +3,8 @@ import os
 import time
 from typing import List
 
+from bs4 import BeautifulSoup, Tag
 from curl_cffi import requests as r
-
-from bs4 import BeautifulSoup
 
 from jobs.custom_scrapers.scrapers.url.file_url_client import FileUrlClient
 from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
@@ -18,7 +17,7 @@ class TVN24Scraper(UrlScraper):
         self.url_client: UrlClient = url_client
         self.max_pages: int = max_pages
         proxy_url = os.environ['PROXY_URL']
-        self.proxies = {
+        self.proxies: r.ProxySpec = {
             'http': proxy_url,
             'https': proxy_url,
         }
@@ -28,14 +27,22 @@ class TVN24Scraper(UrlScraper):
 
         url = f'https://tvn24.pl/najnowsze/s-{page}' if page > 1 else 'https://tvn24.pl/najnowsze'
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36'
+            'User-Agent': (
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/149.0.0.0 Safari/537.36'
+            )
         }
 
         response = r.get(url=url, headers=headers, proxies=self.proxies)
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        urls = [s.find('a').attrs['href'] for s in soup.find_all('slot') if s.find('a')]
-        urls = [url for url in urls if url.startswith('https://tvn24.pl/')]
+        urls: List[str] = []
+        for slot in soup.find_all('slot'):
+            link = slot.find('a')
+            href = link.get('href') if isinstance(link, Tag) else None
+            if isinstance(href, str) and href.startswith('https://tvn24.pl/'):
+                urls.append(href)
 
         logging.info(f"[TVN24] Found {len(urls)} articles on page {page}")
         return urls

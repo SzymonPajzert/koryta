@@ -3,7 +3,7 @@ import re
 import time
 from typing import List
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from curl_cffi import requests as r
 
 from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
@@ -25,13 +25,23 @@ class OnetScraper(UrlScraper):
         response = r.get(url=url, params=params, impersonate='chrome')
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        list_div = soup.find('div', attrs={'data-section': re.compile('list-feed-[0-9]')})
-        articles_divs = list_div.findChildren('div', recursive=False)
-        urls = [self.__get_url_from_article_div(article_div) for article_div in articles_divs]
+        list_div = soup.find(
+            'div', attrs={'data-section': re.compile('list-feed-[0-9]')}
+        )
+        if not isinstance(list_div, Tag):
+            logging.warning(f"[Onet] No article list found on page {page}")
+            return []
+        articles_divs = list_div.find_all('div', recursive=False)
+        urls = [
+            self.__get_url_from_article_div(article_div)
+            for article_div in articles_divs
+        ]
 
         head_article_a = soup.find('a', attrs={'class': 'ods-o-card__link'})
-        if head_article_a['href']:
-            urls = [head_article_a['href']] + urls
+        if isinstance(head_article_a, Tag):
+            head_href = head_article_a.get('href')
+            if isinstance(head_href, str) and head_href:
+                urls = [head_href] + urls
 
         logging.info(f"[Onet] Found {len(urls)} articles on page {page}")
         return urls

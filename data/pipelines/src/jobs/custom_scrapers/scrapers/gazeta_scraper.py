@@ -1,10 +1,9 @@
-import json
 import logging
 import time
 from typing import List
 
 import requests as r
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from jobs.custom_scrapers.scrapers.url.file_url_client import FileUrlClient
 from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
@@ -33,7 +32,12 @@ class GazetaScraper(UrlScraper):
         # <script type="application/ld+json">
         entries = soup.find_all('li', class_='entry')
 
-        urls = [entry.find('a').attrs['href'] for entry in entries if entry.find('a')]
+        urls: List[str] = []
+        for entry in entries:
+            link = entry.find('a')
+            href = link.get('href') if isinstance(link, Tag) else None
+            if isinstance(href, str):
+                urls.append(href)
         logging.info(f"[Gazeta] Found {len(urls)} articles on page {page}")
         return urls
 
@@ -48,7 +52,9 @@ class GazetaScraper(UrlScraper):
     def collect_urls_from_base(self, url_base: str):
         page = 1  # Starts from page 1
         for _ in range(self.max_pages):
-            response_urls = self.get_articles_from_polska_page(page=page, url_base=url_base)
+            response_urls = self.get_articles_from_polska_page(
+                page=page, url_base=url_base
+            )
             some_url_exists = self.url_client.any_url_exists(response_urls)
             self.url_client.add_urls(response_urls)
             if not response_urls or some_url_exists:

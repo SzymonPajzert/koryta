@@ -115,7 +115,10 @@ def run_details(
         except ApiError as e:
             # Wyczerpano wszystkie próby — oznacz umowę jako trwale niepobieralną,
             # aby nie ponawiać jej detali przy kolejnych przebiegach.
-            log.error("Błąd pobierania detali umowy %s: %s — oznaczam jako niedostępną", id_umowy, e)
+            log.error(
+                "Błąd pobierania detali umowy %s: %s — oznaczam jako niedostępną",
+                id_umowy, e,
+            )
             repo.mark_details_failed(id_umowy, str(e))
             continue
         if details is not None:

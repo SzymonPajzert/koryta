@@ -124,7 +124,7 @@ _STRONA_COLUMNS = (
 
 
 def _strona_row(id_umowy: str, s: Any) -> tuple:
-    """Krotka wartości dla jednego wiersza `strona_umowy` (kolejność = _STRONA_COLUMNS)."""
+    """Krotka wartości dla wiersza `strona_umowy` (kolejność = _STRONA_COLUMNS)."""
     a = s.dane_adresowe
     return (
         id_umowy,
