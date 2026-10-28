@@ -420,6 +420,49 @@ def test_the_companies_the_people_need_go_up_first_planned_as_the_people_are(wor
     assert world.steps()["companies"] == ("succeeded", "")
 
 
+SKARB = "skarb-panstwa:treasury:100:new=50"
+
+
+def test_the_priority_groups_and_the_fill_reach_both_steps_that_plan_people(world):
+    """Szymon, 2026-10-27: groups of companies whose people go first, defined
+    in flags. The companies step plans tonight's people as the people step
+    does, so both are given them, in order."""
+    obrona = "obrona:category=obronnosc:20"
+    night.main(
+        ["--priority-group", SKARB, "--priority-group", obrona]
+        + ["--fill-rejestrio-current"]
+    )
+
+    for name in ("koryta_people_import", "koryta_people_import --companies-only"):
+        argv, _ = world.command(name)
+        groups = [argv[n + 1] for n, a in enumerate(argv) if a == "--priority-group"]
+        assert groups == [SKARB, obrona]
+        assert "--fill-rejestrio-current" in argv
+
+
+def test_a_night_given_no_group_plans_as_before(world):
+    night.main([])
+
+    argv, _ = world.command("koryta_people_import")
+    assert "--priority-group" not in argv
+    assert "--fill-rejestrio-current" not in argv
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--priority-group", "skarb:prokuratoria:100"],
+        ["--priority-group", "skarb:treasury:100:new=200"],
+        ["--priority-group", SKARB, "--priority-group", "skarb-panstwa:krs=1:5"],
+    ],
+)
+def test_a_group_the_people_step_would_refuse_is_refused_before_the_night(world, argv):
+    with pytest.raises(SystemExit):
+        night.main(argv)
+
+    assert world.ran() == []
+
+
 def test_a_held_upload_skips_the_companies_and_reports_the_people_as_held(world):
     world.export = STALE
 
@@ -1543,3 +1586,14 @@ def test_stream_logs_every_line_and_stops_a_command_out_of_time():
     )
     assert timed_out is True
     assert code is not None and code < 0  # killed by a signal
+
+
+def test_a_dry_run_names_the_priority_groups_and_the_fill(world, capsys):
+    argv = ["--dry-run", "--priority-group", SKARB, "--fill-rejestrio-current"]
+
+    assert night.main(argv) == 0
+
+    assert (
+        f"--max-published 10 --priority-group {SKARB} --fill-rejestrio-current "
+        "--export <the export step's>" in capsys.readouterr().out
+    )
