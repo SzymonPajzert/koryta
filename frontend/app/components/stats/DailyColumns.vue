@@ -28,6 +28,7 @@ import {
   everyNthDayLabel,
   formatDayLabel,
   formatDayRange,
+  formatShare,
   ink,
 } from "~/utils/chartTheme";
 
@@ -247,6 +248,26 @@ const options = computed(() => {
           const first = props.dates[index];
           const last = props.ends[index];
           return first && last ? formatDayRange(first, last) : value;
+        },
+      },
+      // Over shares, each band's share of its column and the count behind
+      // it. Left to itself the tooltip runs the count through the value
+      // axis's formatter, which over shares only adds a "%": 19 searches
+      // read „19%”.
+      y: {
+        formatter: (
+          value: number,
+          opts?: { seriesIndex?: number; dataPointIndex?: number },
+        ) => {
+          const index = opts?.dataPointIndex ?? -1;
+          const count = props.bands[opts?.seriesIndex ?? -1]?.values[index];
+          if (count === undefined) return String(value);
+          if (!props.shares) return String(count);
+          const total = props.bands.reduce(
+            (sum, band) => sum + (band.values[index] ?? 0),
+            0,
+          );
+          return formatShare(count, total);
         },
       },
     },

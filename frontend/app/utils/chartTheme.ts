@@ -212,6 +212,12 @@ export function formatPercent(part: number, whole: number): string {
   return `${Math.round((part / whole) * 100)}%`;
 }
 
+/** A part of a 100% column as the tooltip gives it: its share, then the count
+ * it stands for, `45% (19)`. */
+export function formatShare(part: number, whole: number): string {
+  return `${formatPercent(part, whole)} (${formatCount(part)})`;
+}
+
 /** "dzisiaj" / "3 dni temu" — how long ago an instant was, in whole days.
  *
  * A leaderboard row is read for recency, not for the minute somebody clicked,
