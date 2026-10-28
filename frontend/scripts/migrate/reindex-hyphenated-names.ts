@@ -39,6 +39,16 @@ import { reportRemaining } from "./remaining";
  * old trigger would index every page the ingest renames afterwards the old
  * way, and those would need it again.
  *
+ * Done: the 2026-10-28 export holds no index this cut would change. That day
+ * the cut took punctuation off a word as well, and this plan is the trigger's
+ * own rule, so its dry run counts those names too, under whichever line their
+ * hyphen puts them (970 hyphenated and 5,869 other on 10-28), until
+ * `reindex-punctuated-names.ts` has run. That one checks the deployed trigger
+ * before it writes. This one, written when the deployed trigger still
+ * re-indexed only on a rename, checks nothing: run before the function is
+ * deployed, every write it made would be undone by the trigger a moment later.
+ * Use the other.
+ *
  * Each write is the field alone, conditional on the node being as it was
  * read: a rename landing in between fails the run rather than being answered
  * with the old name's index, and a re-run picks up from there. Each fires the
@@ -75,7 +85,7 @@ export function plan(
     const { type, name } = data;
     if (typeof type !== "string" || !SEARCHED.has(type)) continue;
     if (typeof name !== "string" || !name) continue;
-    const chunks = nameChunksToWrite(name, data.nameChunksLower);
+    const chunks = nameChunksToWrite(name, data.nameChunksLower, type);
     if (!chunks) continue;
     rewrites.push({ id, type, name, chunks, hyphenated: name.includes("-") });
   }
