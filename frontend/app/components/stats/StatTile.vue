@@ -23,7 +23,9 @@
         </v-tooltip>
       </span>
     </div>
-    <div class="stat-tile__value">{{ formatCompact(value) }}{{ unitText }}</div>
+    <div class="stat-tile__value" :class="{ 'stat-tile__value--hero': hero }">
+      {{ formatCompact(value) }}{{ unitText }}
+    </div>
     <div v-if="hint" class="text-caption text-medium-emphasis mt-1">
       {{ hint }}
     </div>
@@ -52,6 +54,9 @@ const props = defineProps<{
   to?: string;
   /** After the number: "%" sits against it, a word ("mln zł") gets a space. */
   unit?: string;
+  /** The one number a view leads with, drawn at the hero size /eksploruj/statystyki
+   * gives „Osoby w bazie”. One per view. */
+  hero?: boolean;
 }>();
 
 const unitText = computed(() => {
@@ -72,6 +77,11 @@ const unitText = computed(() => {
   line-height: 1.15;
   font-weight: 600;
   color: rgb(var(--v-theme-on-surface));
+}
+
+.stat-tile__value--hero {
+  font-size: 3rem;
+  line-height: 1.05;
 }
 
 .stat-tile__dot {
