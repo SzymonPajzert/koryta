@@ -56,6 +56,26 @@ def krs_ids(ids: pd.Series) -> pd.Series:
     return ids.astype(str).str.zfill(10)
 
 
+def category_companies(companies: pd.DataFrame, category: str) -> set[str]:
+    """KRS ids of the companies (`CompaniesKRS`) filed under `category`.
+
+    The same rule the ingest payload carries, so a run scoped this way
+    selects the people behind exactly what the site files under that
+    category - see `analysis.payloads.company`, which calls the same
+    function. Not `all_descendants` like --krs: a category is a statement
+    about a company, and a subsidiary of a hospital is not thereby a hospital.
+    """
+    found = set()
+    for company in companies.itertuples():
+        form = getattr(company, "form", None)
+        if not isinstance(form, str):
+            form = None
+        activity = empty_list_if_nan(getattr(company, "activity", None))
+        if category in categories_for(str(company.krs), list(activity), form):
+            found.add(str(company.krs))
+    return found
+
+
 class Extract(Pipeline):
     filename = None
 
@@ -320,21 +340,7 @@ details."
                     "so none of them will be selected. Rebuild with --refresh "
                     "CompaniesKRS to include them."
                 )
-            # The same rule the ingest payload carries, so a run scoped this way
-            # selects the people behind exactly what the site files under that
-            # category - see `analysis.payloads.company`, which calls the same
-            # function. Not `all_descendants` like --krs above: a category is a
-            # statement about a company, and a subsidiary of a hospital is not
-            # thereby a hospital.
-            for company in companies_df.itertuples():
-                form = getattr(company, "form", None)
-                if not isinstance(form, str):
-                    form = None
-                activity = empty_list_if_nan(getattr(company, "activity", None))
-                if self.company_category in categories_for(
-                    str(company.krs), list(activity), form
-                ):
-                    result.add(company.krs)
+            result |= category_companies(companies_df, self.company_category)
 
         self._relevant_companies = result
         return result
