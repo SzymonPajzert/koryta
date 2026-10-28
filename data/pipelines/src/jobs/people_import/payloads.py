@@ -49,6 +49,12 @@ class Candidate:
     missing: tuple[str, ...] = ()
     #: The priority groups the person belongs to (`Pick.groups`).
     groups: tuple[str, ...] = ()
+    #: Planned: the group the run sends the payload for, out of its budget -
+    #: "" for the run's own tiers (`plan_priority`).
+    group: str = ""
+    #: Planned past the plan's end, into the slots it left under
+    #: --max-uploads (`--fill-rejestrio-current`).
+    filled: bool = False
 
 
 def pipeline_argv(
