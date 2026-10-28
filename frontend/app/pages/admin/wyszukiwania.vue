@@ -21,56 +21,75 @@
       :text="error"
     />
 
-    <v-card class="mb-4 pa-3">
-      <div class="d-flex align-center flex-wrap ga-3">
-        <v-btn-toggle
-          v-model="days"
-          mandatory
-          density="compact"
-          variant="outlined"
-          divided
-          data-testid="searches-days"
+    <!-- The window and whose searches: they scope the chart and the list
+         under it alike, so they come first, above both. -->
+    <div class="d-flex align-center flex-wrap ga-3 mb-4">
+      <v-btn-toggle
+        v-model="days"
+        mandatory
+        density="compact"
+        variant="outlined"
+        divided
+        data-testid="searches-days"
+      >
+        <v-btn
+          v-for="option in DAY_OPTIONS"
+          :key="option"
+          :value="option"
+          size="small"
         >
-          <v-btn
-            v-for="option in DAY_OPTIONS"
-            :key="option"
-            :value="option"
-            size="small"
-          >
-            {{ option }} dni
-          </v-btn>
-        </v-btn-toggle>
-        <v-chip-group v-model="view" mandatory>
-          <v-chip value="all" filter>Wszystkie</v-chip>
-          <v-chip value="none" filter data-testid="searches-view-none">
-            Bez wyników
-          </v-chip>
-          <v-chip value="unverified" filter>Tylko niezweryfikowane</v-chip>
-        </v-chip-group>
-        <v-switch
-          v-model="signedOutOnly"
-          label="Tylko niezalogowani"
-          density="compact"
-          hide-details
-          color="primary"
-        />
-        <v-spacer />
-        <div v-if="summary" class="text-caption text-medium-emphasis">
-          {{
-            polishCounting(
-              summary.total,
-              "wyszukiwanie",
-              "wyszukiwania",
-              "wyszukiwań",
-            )
-          }}, w tym {{ summary.signedOut }} przez niezalogowanych
-          <span v-if="summary.truncated"> · liczone tylko najnowsze</span>
-          <span v-if="rows.length > shownRows.length">
-            · {{ shownRows.length }} najczęstszych z {{ rows.length }} zapytań
-          </span>
-        </div>
+          {{ option }} dni
+        </v-btn>
+      </v-btn-toggle>
+      <v-switch
+        v-model="signedOutOnly"
+        label="Tylko niezalogowani"
+        density="compact"
+        hide-details
+        color="primary"
+      />
+      <v-spacer />
+      <div v-if="summary" class="text-caption text-medium-emphasis">
+        {{
+          polishCounting(
+            summary.total,
+            "wyszukiwanie",
+            "wyszukiwania",
+            "wyszukiwań",
+          )
+        }}, w tym {{ summary.signedOut }} przez niezalogowanych
+        <span v-if="summary.truncated"> · liczone tylko najnowsze</span>
       </div>
-    </v-card>
+    </div>
+
+    <!-- Not after a failed first load: the alert above says why, and an
+         empty card would say nobody searched. -->
+    <AdminSearchEndings
+      v-if="summary || !error"
+      class="mb-6"
+      :daily="summary?.daily"
+      :signed-out-only="signedOutOnly"
+      :loading="pending"
+    />
+
+    <!-- Which queries the list shows. A view of the list alone: the chart
+         above counts every search of the window, whichever is picked. -->
+    <div class="d-flex align-center flex-wrap ga-3 mb-2">
+      <v-chip-group v-model="view" mandatory>
+        <v-chip value="all" filter>Wszystkie</v-chip>
+        <v-chip value="none" filter data-testid="searches-view-none">
+          Bez wyników
+        </v-chip>
+        <v-chip value="unverified" filter>Tylko niezweryfikowane</v-chip>
+      </v-chip-group>
+      <v-spacer />
+      <div
+        v-if="rows.length > shownRows.length"
+        class="text-caption text-medium-emphasis"
+      >
+        {{ shownRows.length }} najczęstszych z {{ rows.length }} zapytań
+      </div>
+    </div>
 
     <v-data-table
       density="compact"
