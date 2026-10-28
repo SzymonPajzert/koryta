@@ -31,7 +31,8 @@ export const companyRequestSchema = z.object({
   teryt: z.string().optional(),
   /** PKD codes from KRS, e.g. "86.10.Z" */
   activity: z.array(z.string()).optional(),
-  /** Which sectors the company belongs to, decided by the pipelines in
+  /** Which sectors the company belongs to, and after them its owner where
+   * the site files one (`skarb-panstwa`), decided by the pipelines in
    * `data/pipelines/src/entities/company_categories.py`.
    *
    * Not validated against `companyCategoryValues`: the pipelines and the site

@@ -28,7 +28,8 @@ export type RecentEmployment = {
    * flags mean nothing on their own - see `publicSectorKnown`. */
   companyIsPublic?: boolean;
   companyIsPublicSource?: "manual";
-  /** The sectors the company is filed under, for `ChipCompanyCategories`.
+  /** The categories the company is filed under (its sectors, then its owner),
+   * for `ChipCompanyCategories`.
    * Already unwrapped from the sanitized-array form, and omitted rather than
    * sent empty - most companies have none, and this is twenty cards. */
   companyCategories?: string[];

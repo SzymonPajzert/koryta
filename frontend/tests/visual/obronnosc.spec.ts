@@ -68,8 +68,8 @@ test("kolejka-obronnosc-wybor", NOWE, async ({ page }) => {
   test.setTimeout(120_000);
   const filters = await openQueue(page);
 
-  // „Typ podmiotu” open: the sector is the list's last entry, and the one
-  // picked. The menu scrolls it into view itself.
+  // „Typ podmiotu” open: the last sector, just above „Skarb Państwa”, and the
+  // one picked. The menu scrolls it into view itself.
   await filters.locator(".v-select", { hasText: "Typ podmiotu" }).click();
   const menu = page.getByRole("listbox");
   await expect(

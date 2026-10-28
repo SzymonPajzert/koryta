@@ -64,7 +64,7 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Na liście kategorii, za sektorami, jest „Skarb Państwa”: spółki z wykazu spółek z udziałem Skarbu Państwa Prokuratorii Generalnej, z każdym udziałem. To nie sektor, tylko właściciel, więc spółka ma go obok swojego sektora (PKP S.A.: „Koleje” i „Skarb Państwa”), a wykres „Branże” na stronie głównej go nie liczy. Spółki dostają tę kategorię z najbliższym wgraniem danych spółek.",
     steps: [
-      "Otwórz tabelę, kliknij „Filtry” i w polu kategorii wybierz „Skarb Państwa” - ma być ostatnia na liście. Na pasku ma się pojawić „Skarb Państwa”, a w tabeli osoby ze spółek Skarbu Państwa.",
+      "Otwórz tabelę, kliknij „Filtry” i na liście „Typ podmiotu” (tak nazywa się filtr kategorii) wybierz „Skarb Państwa” - ma być ostatnia. Na pasku ma się pojawić „Skarb Państwa”, a w tabeli osoby ze spółek Skarbu Państwa.",
       "Otwórz stronę PKP S.A. - pod nazwą mają być dwie kategorie, „Koleje” i „Skarb Państwa”, a kliknięcie „Skarb Państwa” ma otworzyć tabelę z tym filtrem.",
       "Na stronie głównej w wykresie „Branże” nie ma linii „Skarb Państwa”.",
     ],
@@ -3324,7 +3324,7 @@ export const QA_ITEMS: QaItem[] = [
       "kategorii. Spółka może być w dwóch kategoriach naraz i to nie jest " +
       "błąd: zakład gospodarki komunalnej dostarcza wodę i ciepło.",
     steps: [
-      "Wejdź na Eksploruj → Tabela, kliknij „Filtry” i rozwiń listę „Typ podmiotu” (tak nazywa się filtr kategorii). Ma mieć dziewięć pozycji, nie trzy.",
+      "Wejdź na Eksploruj → Tabela, kliknij „Filtry” i rozwiń listę „Typ podmiotu” (tak nazywa się filtr kategorii). Ma mieć wszystkie sektory, nie trzy pozycje.",
       "Wybierz „Ciepłownictwo”. Mają się pokazać przedsiębiorstwa energetyki cieplnej (MPEC, PEC, Ciepłownia), a nie wodociągi.",
       "Wybierz „Wodociągi i kanalizacja”. Nie powinno tam być ciepłowni ani zakładów chemicznych - sprawdź, że nie ma Grupy Azoty Puławy ani PCC Rokita.",
       "Wybierz „Szpitale” i poszukaj samodzielnego publicznego zakładu opieki zdrowotnej, np. SPZOZ w Sanoku. Wcześniej nie było go w żadnej kategorii.",

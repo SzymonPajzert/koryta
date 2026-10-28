@@ -51,7 +51,8 @@ export type ServiceMilestone = {
   /** Enough of the company for `ChipPublicCompany` to decide what to say. */
   companyIsPublic?: boolean;
   companyIsPublicSource?: "manual";
-  /** The sectors the company is filed under, for `ChipCompanyCategories`.
+  /** The categories the company is filed under (its sectors, then its owner),
+   * for `ChipCompanyCategories`.
    * Already unwrapped from the sanitized-array form, and omitted rather than
    * sent empty. */
   companyCategories?: string[];
