@@ -5,23 +5,12 @@
     :loading="loading"
   >
     <template #chart>
-      <div ref="chartBox">
-        <ClientOnly>
-          <apexchart
-            v-if="hasData"
-            type="bar"
-            height="340"
-            :options="options"
-            :series="series"
-          />
-          <div v-else class="text-body-2 text-medium-emphasis py-8 text-center">
-            W tym okresie nikt nic nie zmieniał.
-          </div>
-          <template #fallback>
-            <v-skeleton-loader type="image" height="340" />
-          </template>
-        </ClientOnly>
-      </div>
+      <StatsDailyColumns
+        :dates="daily.map((day) => day.date)"
+        :bands="bands"
+        value-title="Liczba zmian"
+        empty-text="W tym okresie nikt nic nie zmieniał."
+      />
     </template>
 
     <template #table>
@@ -56,21 +45,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed } from "vue";
 import {
   activityKinds,
   activityKindLabels,
   type ActivityCounts,
 } from "~~/shared/activity";
-import {
-  activityColors,
-  barPlotOptions,
-  baseChartOptions,
-  dayLabelStep,
-  everyNthDayLabel,
-  formatDayLabel,
-  ink,
-} from "~/utils/chartTheme";
+import { activityColors, formatDayLabel } from "~/utils/chartTheme";
 
 /** Columns show a day's total broken into the kinds of change that made it up,
  * which is what "co się działo" means here: one stacked series per interaction
@@ -87,73 +68,6 @@ const props = defineProps<{
   loading?: boolean;
 }>();
 
-/** Past this many columns a value on every cap is noise rather than a label. */
-const DIRECT_LABEL_LIMIT = 14;
-
-/** How much of a day's slot the column fills, and how wide it may ever get.
- *
- * Both are wider than `barPlotOptions` gives a bar by default (60% of the slot,
- * 24px), and deliberately. The shared numbers are the mark spec for a chart of a
- * handful of named categories, where a thin mark with air around it reads as one
- * thing per band. Here the bands are consecutive days: the axis is a stretch of
- * time and the columns are supposed to read as a series across it, which at 30
- * days and full width they stopped doing - a 24px cap against a 37px slot puts a
- * third of the width between neighbours, and the eye reads scattered pins rather
- * than a shape. 90% leaves the 2px surface gap that separates them and nothing
- * more; the cap is what keeps a 7-day window, where a slot is 157px, from
- * drawing slabs. */
-const COLUMN_WIDTH = "90%";
-const MAX_COLUMN_PX = 48;
-
-/** The surface-coloured line between two stacked segments of one day.
- *
- * `barPlotOptions` draws it 2px wide, which is the method's spacer and what
- * every other chart on the site uses. This one is denser than they are - four
- * bands on every column, 30 or 90 columns across - so the separators add up to
- * a visible amount of the ink, and at 2px they read as part of the pattern
- * rather than as the absence of one. 1px still separates, which is what the
- * palette needs it for: two of these four hues are only allowed adjacent
- * because a gap keeps them apart. Zero is not an option for that reason. */
-const SEGMENT_GAP_PX = 1;
-
-/** What the value axis and its title take off the left of the chart, so that
- * the rest is the width the columns share. */
-const VALUE_AXIS_PX = 50;
-
-/** How wide the chart is drawn, which is what decides how many dates fit under
- * it. Measured rather than read off `useDisplay()`: the window is not the
- * chart - on a desktop the page stops at 1200px, and on a phone the layout's,
- * the page's and the card's padding take a quarter of it. A zero is the table
- * view hiding the chart, and keeps the last real width. */
-const chartBox = ref<HTMLElement | null>(null);
-const chartWidth = ref(0);
-let resizeObserver: ResizeObserver | undefined;
-
-const measure = (width: number) => {
-  if (width > 0) chartWidth.value = width;
-};
-
-onMounted(() => {
-  if (!chartBox.value) return;
-  measure(chartBox.value.clientWidth);
-  resizeObserver = new ResizeObserver(([entry]) => {
-    if (entry) measure(entry.contentRect.width);
-  });
-  resizeObserver.observe(chartBox.value);
-});
-
-onBeforeUnmount(() => resizeObserver?.disconnect());
-
-/** Every other day on a desktop's month, once a week on a phone's - reported
- * from a 375px screen, where fifteen dates ran into each other. A number, so
- * the chart is redrawn when the step changes and not on every pixel of a
- * resize. */
-const labelStep = computed(() =>
-  dayLabelStep(props.daily.length, chartWidth.value - VALUE_AXIS_PX),
-);
-
-const hasData = computed(() => props.daily.some((day) => day.total > 0));
-
 const subtitle = computed(() => {
   const total = props.daily.reduce((sum, day) => sum + day.total, 0);
   return `${total} zmian w ${props.daily.length} dniach, po rodzaju działania`;
@@ -161,73 +75,14 @@ const subtitle = computed(() => {
 
 const reversed = computed(() => [...props.daily].reverse());
 
-const series = computed(() =>
+const bands = computed(() =>
   activityKinds.map((kind) => ({
-    name: activityKindLabels[kind],
-    data: props.daily.map((day) => day.counts[kind]),
+    key: kind,
+    label: activityKindLabels[kind],
+    color: activityColors[kind],
+    values: props.daily.map((day) => day.counts[kind]),
   })),
 );
-
-const options = computed(() => {
-  const base = baseChartOptions();
-  const labelEveryCap = props.daily.length <= DIRECT_LABEL_LIMIT;
-
-  return {
-    ...base,
-    chart: { ...base.chart, type: "bar", stacked: true },
-    colors: activityKinds.map((kind) => activityColors[kind]),
-    ...barPlotOptions(),
-    stroke: { ...barPlotOptions().stroke, width: SEGMENT_GAP_PX },
-    plotOptions: {
-      bar: {
-        ...barPlotOptions().plotOptions.bar,
-        columnWidth: COLUMN_WIDTH,
-        maxBarThickness: MAX_COLUMN_PX,
-        // The running total on the cap, but only while the columns are far
-        // enough apart for it to be read.
-        dataLabels: {
-          total: {
-            enabled: labelEveryCap,
-            style: {
-              color: ink.secondary,
-              fontSize: "11px",
-              fontWeight: 500,
-            },
-            offsetY: -4,
-          },
-        },
-      },
-    },
-    xaxis: {
-      ...base.xaxis,
-      categories: props.daily.map((day) => formatDayLabel(day.date)),
-      // Not `tickAmount`, which thinned the labels by count alone - every
-      // other day of a month whether the chart was 1100px wide or 230px.
-      labels: {
-        ...base.xaxis.labels,
-        rotate: 0,
-        formatter: everyNthDayLabel(props.daily.length, labelStep.value),
-      },
-    },
-    yaxis: {
-      ...base.yaxis,
-      title: { text: "Liczba zmian", style: { color: ink.muted } },
-      // Whole changes only; a fractional tick on a count is nonsense.
-      forceNiceScale: true,
-      labels: {
-        ...base.yaxis.labels,
-        formatter: (value: number) => String(Math.round(value)),
-      },
-    },
-    tooltip: {
-      ...base.tooltip,
-      shared: true,
-      intersect: false,
-      // The day under the pointer, labelled on the axis or not.
-      x: { formatter: (value: string) => value },
-    },
-  };
-});
 </script>
 
 <style scoped>

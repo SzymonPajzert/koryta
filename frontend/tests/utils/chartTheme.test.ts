@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { dayLabelStep, everyNthDayLabel } from "~/utils/chartTheme";
+import {
+  dayLabelStep,
+  everyNthDayLabel,
+  formatDayRange,
+} from "~/utils/chartTheme";
 
 /** The plot of „Co się działo w bazie” at 375px: the page's and the card's
  * padding and the value axis leave about 227px for the columns. */
@@ -51,5 +55,19 @@ describe("everyNthDayLabel", () => {
 
   it("gives the tooltip, which passes no index, nothing", () => {
     expect(everyNthDayLabel(days.length, 1)("5", undefined, {})).toBe("");
+  });
+});
+
+describe("formatDayRange", () => {
+  it("names a week by its days, the month once", () => {
+    expect(formatDayRange("2026-10-19", "2026-10-25")).toBe("19-25 paź");
+  });
+
+  it("names both months across a month's end", () => {
+    expect(formatDayRange("2026-09-28", "2026-10-04")).toBe("28 wrz-4 paź");
+  });
+
+  it("names a single day as itself", () => {
+    expect(formatDayRange("2026-10-28", "2026-10-28")).toBe("28 paź");
   });
 });

@@ -1,5 +1,6 @@
 import plLocale from "apexcharts/dist/locales/pl.json";
 import type { ActivityKind } from "~~/shared/activity";
+import type { SearchEnding } from "~~/shared/searchLog";
 
 /**
  * The chart palette and the chrome every chart on the site shares.
@@ -108,6 +109,20 @@ export const activityColors: Record<ActivityKind, string> = {
   revision: categorical[1],
   noteSource: categorical[2],
   publication: categorical[3],
+};
+
+/** How a search ended, on /admin/wyszukiwania. These are states, not
+ * identities - a result opened is the search box working, nothing found is it
+ * failing - so they wear the status tokens rather than categorical slots, and
+ * are stacked good, warning, critical so that green and red never touch.
+ * Checked as a stack against white: worst adjacent CVD ΔE 11.3 (protan,
+ * warning↔good), normal-vision 27.6. Warning sits below 3:1, which the
+ * method allows for status with relief: the card's tiles name every band and
+ * its table view carries every number. */
+export const searchEndingColors: Record<SearchEnding, string> = {
+  opened: status.good,
+  notOpened: status.warning,
+  nothing: status.critical,
 };
 
 const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -224,6 +239,16 @@ export function formatDayLabel(date: string): string {
     month: "short",
     timeZone: "UTC",
   }).format(parsed);
+}
+
+/** The days a column covers: `20-26 paź`, `29 wrz-5 paź` across a month's
+ * end, and one day as itself. */
+export function formatDayRange(first: string, last: string): string {
+  if (first === last) return formatDayLabel(first);
+  if (first.slice(0, 7) === last.slice(0, 7)) {
+    return `${Number(first.slice(8, 10))}-${formatDayLabel(last)}`;
+  }
+  return `${formatDayLabel(first)}-${formatDayLabel(last)}`;
 }
 
 /** How far apart two dates under a column chart have to be. `30 wrz` is about
