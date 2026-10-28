@@ -44,7 +44,13 @@ class Companies(Pipeline[Company]):
     # All identifiers, never numbers. A REGON may start with a zero and a NIP
     # is a 10-digit string; pandas reads either as an integer without this and
     # the leading zeros are gone for good.
-    dtype = {"krs": str, "teryt_code": str, "nip": str, "regon": str}
+    dtype = {
+        "krs": str,
+        "teryt_code": str,
+        "nip": str,
+        "regon": str,
+        "treasury_share": str,
+    }
 
     scraped_companies: CompaniesKRS
     hardcoded_companies: CompaniesHardcoded
@@ -165,6 +171,8 @@ class Companies(Pipeline[Company]):
                     parents=parents,
                     wikipedia=wiki.source if wiki is not None else None,
                     wiki_categories=list(wiki.categories) if wiki is not None else [],
+                    # Only KRS's output has it, off Prokuratoria's list.
+                    treasury_share=krs.treasury_share if krs is not None else None,
                 )
             )
 

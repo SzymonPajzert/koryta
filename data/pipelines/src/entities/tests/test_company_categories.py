@@ -724,3 +724,38 @@ class TestWikipediaCategories(unittest.TestCase):
             ),
             [],
         )
+
+
+class TestSkarbPanstwa(unittest.TestCase):
+    """Szymon, 2026-10-28: the companies on Prokuratoria's list of the
+    Treasury's stakes, as a category to filter by beside their sector."""
+
+    def test_a_listed_company_keeps_its_sector_and_takes_the_treasury_after_it(self):
+        # KRS 0000019193, PKP S.A.: 100% the Treasury's; KOLEJE names it
+        self.assertEqual(categories_for("0000019193", []), ["koleje"])
+        self.assertEqual(
+            categories_for("0000019193", [], treasury=True),
+            ["koleje", "skarb-panstwa"],
+        )
+
+    def test_the_treasury_does_not_keep_the_article_from_placing_a_company(self):
+        # KRS 0000059307, PGE Polska Grupa Energetyczna: 60.86% the Treasury's,
+        # PKD 70.10 like any group holding company, filed by its article
+        self.assertEqual(
+            categories_for(
+                "0000059307",
+                ["70.10.Z"],
+                wiki_categories=["Przedsiębiorstwa energetyczne w Polsce"],
+                treasury=True,
+            ),
+            ["energetyka", "skarb-panstwa"],
+        )
+
+    def test_a_listed_company_in_no_sector_is_filed_under_the_treasury_alone(self):
+        self.assertEqual(
+            categories_for("0000059307", ["70.10.Z"], treasury=True),
+            ["skarb-panstwa"],
+        )
+
+    def test_the_treasury_comes_last_among_the_values_the_site_offers(self):
+        self.assertEqual(CATEGORY_VALUES[-1], "skarb-panstwa")

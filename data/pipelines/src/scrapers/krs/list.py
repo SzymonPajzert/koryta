@@ -469,7 +469,13 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     # the pin pandas types the columns as floats, so a REGON of "010053589"
     # comes back as 10053589.0 -- the leading zero gone, and a ".0" appended to
     # every identifier downstream of here.
-    dtype = {"krs": str, "nip": str, "regon": str, "teryt_code": str}
+    dtype = {
+        "krs": str,
+        "nip": str,
+        "regon": str,
+        "teryt_code": str,
+        "treasury_share": str,
+    }
     postal_codes: PostalCodes
     jst: Jst
     hardcoded_companies: CompaniesHardcoded
@@ -789,10 +795,13 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         """
         public_krss = set()
         for company in self.companies.values():
-            if nip_digits(company.nip) in self.treasury_stakes:
+            nip = nip_digits(company.nip)
+            if nip is not None and nip in self.treasury_stakes:
                 # Prokuratoria's own list of the Treasury's stakes. No gate:
                 # an owner the odpis names does not contradict a stake the
-                # register leaves out.
+                # register leaves out. The share files it under Skarb
+                # Państwa too (`entities.company_categories`).
+                company.treasury_share = self.treasury_stakes[nip]
                 if not company.is_public:
                     self.company_sources[company.krs] = self.company_sources.get(
                         company.krs, set()

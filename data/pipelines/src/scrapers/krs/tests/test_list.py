@@ -1044,6 +1044,20 @@ def test_a_company_off_the_treasury_list_is_not_public_by_it():
     assert pipeline.compute_public_krss({}) == set()
 
 
+def test_a_company_on_the_treasury_list_carries_the_treasury_s_share():
+    """What files it under Skarb Państwa (`entities.company_categories`)."""
+    pipeline = CompaniesKRS()
+    pipeline.treasury_stakes = {"5861034090": "9.09"}
+    pipeline.add_company(KrsCompany(krs="0000185947", nip="586-103-40-90"))
+    pipeline.add_company(KrsCompany(krs="0000000001", nip="1234567890"))
+    pipeline.add_company(KrsCompany(krs="0000000002"))
+
+    pipeline.compute_public_krss({})
+
+    shares = {krs: c.treasury_share for krs, c in pipeline.companies.items()}
+    assert shares == {"0000185947": "9.09", "0000000001": None, "0000000002": None}
+
+
 def test_a_companys_sources_are_listed_in_the_same_order_every_run():
     """They are collected in a set, which iterates differently every run."""
 

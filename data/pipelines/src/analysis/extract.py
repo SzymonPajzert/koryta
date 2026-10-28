@@ -7,6 +7,7 @@ import pandas as pd
 from analysis.people import PeopleEnriched
 from analysis.utils import as_sequence, empty_list_if_nan
 from analysis.utils.elections import candidacy_teryt
+from entities.company import on_the_treasury_list
 from entities.company_bodies import RADA_SPOLECZNA, supervisory_body
 from entities.company_categories import CATEGORY_VALUES, categories_for
 from scrapers.krs.columns import is_public
@@ -71,7 +72,10 @@ def category_companies(companies: pd.DataFrame, category: str) -> set[str]:
         if not isinstance(form, str):
             form = None
         activity = empty_list_if_nan(getattr(company, "activity", None))
-        if category in categories_for(str(company.krs), list(activity), form):
+        treasury = on_the_treasury_list(getattr(company, "treasury_share", None))
+        if category in categories_for(
+            str(company.krs), list(activity), form, treasury=treasury
+        ):
             found.add(str(company.krs))
     return found
 

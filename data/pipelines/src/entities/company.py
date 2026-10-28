@@ -236,10 +236,21 @@ class Company:
     #: sector a reader filed the company under, which
     #: `entities.company_categories` reads beside the PKD codes.
     wiki_categories: list[str] = field(default_factory=list)
+    #: The Treasury's share in the company as Prokuratoria's list prints it
+    #: ("100", "9.09"), for a company the list names; None for one it does
+    #: not - see `scrapers.krs.data.treasury_stakes`. What files a company
+    #: under `skarb-panstwa` (`entities.company_categories`).
+    treasury_share: str | None = None
 
     def __post_init__(self):
         """Ensures the KRS ID is zero-padded to 10 digits."""
         self.krs = str(self.krs).zfill(10)
+
+
+def on_the_treasury_list(share: object) -> bool:
+    """Whether a `Company.treasury_share` read back from an output says the
+    list names the company: a frame gives NaN, not None, for one it does not."""
+    return isinstance(share, str) and bool(share)
 
 
 @dataclass

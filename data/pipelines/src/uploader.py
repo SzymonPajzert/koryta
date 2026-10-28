@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from analysis.interesting import Companies
 from conductor import setup_context
-from entities.company import display_name
+from entities.company import display_name, on_the_treasury_list
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
 from entities.composite import PersonScore
@@ -759,6 +759,7 @@ class CompanyUploader(Uploader):
                 list(wiki_categories)
                 if isinstance(wiki_categories, (list, np.ndarray))
                 else [],
+                treasury=on_the_treasury_list(payload.get("treasury_share")),
             )
         if "supervisory_body" not in payload:
             payload["supervisory_body"] = supervisory_body(form)
