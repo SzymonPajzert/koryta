@@ -446,7 +446,9 @@ export interface Company extends Omit<Node, "type"> {
   location?: string;
   /** PKD codes from KRS, e.g. "86.10.Z" */
   activity?: string[];
-  /** Which sectors the company is filed under, e.g. `["koleje"]`.
+  /** Which sectors the company is filed under, e.g. `["koleje"]`, and after
+   * them its owner where the site files one (`"skarb-panstwa"`, see
+   * `isSector`).
    *
    * What the category filter on /eksploruj matches with `array-contains`, and
    * a node field like any other: revisioned, and editable from the page. The

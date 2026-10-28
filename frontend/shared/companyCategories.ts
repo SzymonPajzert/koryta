@@ -1,4 +1,5 @@
-/** The sectors a company can be filed under, and what to call them.
+/** The categories a company can be filed under - its sectors, and after
+ * them one owner (see `isSector`) - and what to call them.
  *
  * This is the list the category filter on /eksploruj offers and the edit form
  * puts in its dropdown. It is *only* the vocabulary: which companies belong to
