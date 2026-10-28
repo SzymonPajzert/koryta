@@ -8,9 +8,13 @@ import {
 import { getValidatedQuery } from "h3";
 import {
   anchorChunk,
+  krsNumberQuery,
   nameMatchesTokens,
   nameWords,
+  nextAnchorChunk,
+  reachesBeyondTown,
   searchTokens,
+  townChunk,
 } from "~~/shared/search";
 
 const queryValidator = z.object({
@@ -25,6 +29,8 @@ type node = {
   teryt?: string;
   visibility: boolean;
   revision_id?: unknown;
+  /** The KRS number the query was, on a hit found by it rather than by name. */
+  matchedKrs?: string;
 };
 
 /** How far down the anchor's hit list a multi-word query reads.
@@ -33,9 +39,10 @@ type node = {
  * answered by matching the rarest of them and checking the rest against the
  * names that come back - which only reaches as far as this window. It is
  * ordered by node group size, so what falls off the end is the least connected
- * of the loose matches, and 500 is well clear of the largest bucket any one
- * word has today: the whole searchable collection is under 12k documents, and
- * the commonest given name in it is carried by about 400.
+ * of the loose matches. Some buckets are larger: of the 22,806 searchable
+ * documents of 2026-10-28, „gmina” carries 987, „przedsiębiorstwo” 788,
+ * „piotr” 676, and the town of Warsaw 1,314. A pass that comes back full is
+ * followed by one on the next word typed (`nextAnchorChunk`).
  */
 const MULTI_WORD_SCAN_LIMIT = 500;
 
@@ -74,12 +81,10 @@ export default editorFreshCachedEventHandler(async (event) => {
   // What the index answers by itself: everything the typed text is a prefix
   // of, whole name or single word. An empty query is the top of the
   // collection, "" being a chunk of every node.
-  const passes = [
-    byChunk(
-      tokens.join(" "),
-      includeDrafts ? query.limit : Math.max(query.limit, PUBLIC_SCAN_LIMIT),
-    ),
-  ];
+  const whole = byChunk(
+    tokens.join(" "),
+    includeDrafts ? query.limit : Math.max(query.limit, PUBLIC_SCAN_LIMIT),
+  );
 
   // The rest of a multi-word query, which the index cannot answer because it
   // holds no chunk spanning a word the searcher skipped - a middle name, most
@@ -93,15 +98,57 @@ export default editorFreshCachedEventHandler(async (event) => {
   // carries no chunk with the hyphen in it; and "kupczak wiśniowska" reaches
   // the page titled with the hyphen, whose whole name is no chunk of that.
   // Which word to anchor on is still decided as typed (`anchorChunk`).
-  if (nameWords(query.q).length > 1) {
-    passes.push(byChunk(anchorChunk(tokens), MULTI_WORD_SCAN_LIMIT));
-  }
+  //
+  // And the same word as a word of a town: the town in the bracket a company
+  // name ends in is held apart from its name's words (`QUALIFIER` in
+  // shared/search.ts), so „sanikom lubawka”, anchored on „lubawka”, reaches
+  // the company based there only this way. Only for a query of several words,
+  // which is what keeps every company in Kraków out of the answer to „kraków”.
+  // An anchor no town is called by, a surname mostly, costs the one read a
+  // query that finds nothing does.
+  const anchor =
+    nameWords(query.q).length > 1 ? anchorChunk(tokens) : undefined;
+  const byWord = (chunk: string) =>
+    Promise.all([
+      byChunk(chunk, MULTI_WORD_SCAN_LIMIT),
+      byChunk(townChunk(chunk), MULTI_WORD_SCAN_LIMIT),
+    ]);
 
-  const snapshots = await Promise.all(passes);
+  // A KRS number pasted whole is answered by the company that carries it, ahead
+  // of anything the name index makes of the digits - which is nothing, as no
+  // name holds one. Somebody holding the number has the company in front of
+  // them, and its name may be one the index cannot reach the way they would
+  // spell it. The name passes still run: they cost one read when they find
+  // nothing.
+  const krs = krsNumberQuery(query.q);
+  const byKrs = krs
+    ? db.collection("nodes").where("krsNumber", "==", krs).limit(5).get()
+    : undefined;
 
-  const results: node[] = [];
+  const [krsSnapshot, wholeSnapshot, anchored] = await Promise.all([
+    byKrs,
+    whole,
+    anchor === undefined ? undefined : byWord(anchor),
+  ]);
+
+  // The hits in three groups, ranked in this order: what the KRS number
+  // found, what the words of a name found, and what only its town found - each
+  // in the order the index gave it. Town hits last, because they answer the
+  // town typed: while a reader is still typing „piotr w” on the way to a
+  // surname, the companies of Piotrków Trybunalski in liquidation („W
+  // LIKWIDACJI”) answer it too, and would otherwise go ahead of the people.
+  const byNumber: node[] = [];
+  const byName: node[] = [];
+  const byTown: node[] = [];
   const seen = new Set<string>();
-  for (const snapshot of snapshots) {
+  for (const doc of krsSnapshot?.docs ?? []) {
+    const node = parseNodeDoc<node>(doc);
+    if (seen.has(node.id) || doc.data().deleted === true) continue;
+    if (!includeDrafts && !node.visibility) continue;
+    seen.add(node.id);
+    byNumber.push({ ...node, matchedKrs: krs });
+  }
+  const take = (snapshot: FirebaseFirestore.QuerySnapshot, town: boolean) => {
     for (const doc of snapshot.docs) {
       const node = parseNodeDoc<node>(doc);
       if (seen.has(node.id)) continue;
@@ -129,21 +176,50 @@ export default editorFreshCachedEventHandler(async (event) => {
         continue;
       }
       if (!nameMatchesTokens(node.name, tokens)) continue;
+      // Reached through its town, a hit has to answer something besides the
+      // town: „jelenia góra” is two words, and every company based there
+      // answers both (`reachesBeyondTown`).
+      if (town && !reachesBeyondTown(node.name, node.type, tokens)) continue;
       seen.add(node.id);
-      results.push(node);
+      (town ? byTown : byName).push(node);
     }
+  };
+  take(wholeSnapshot, false);
+  if (anchored) {
+    take(anchored[0], false);
+    take(anchored[1], true);
   }
 
-  // Published pages first for a logged out reader, each group in the order the
-  // index gave it. Nine in ten people are unpublished, so the top twenty of a
-  // common name would otherwise be twenty teasers with the one full page that
-  // answers the question below them.
-  const ranked = includeDrafts
-    ? results
-    : [
-        ...results.filter((node) => node.visibility),
-        ...results.filter((node) => !node.visibility),
-      ];
+  // One more word where a pass on the anchor was cut off before its end
+  // (`MULTI_WORD_SCAN_LIMIT`): „paged warszawa” reaches the PAGED companies
+  // past the 500th of Warsaw's by „paged”. After the passes above rather than
+  // beside them, so that only a query that fills one pays for it.
+  const cutOff = anchored?.some(
+    (snapshot) => snapshot.size >= MULTI_WORD_SCAN_LIMIT,
+  );
+  const next = cutOff ? nextAnchorChunk(tokens) : undefined;
+  if (next !== undefined) {
+    const [plain, town] = await byWord(next);
+    take(plain, false);
+    take(town, true);
+  }
+
+  // Published pages first for a logged out reader, within each group. Nine in
+  // ten people are unpublished, so the top twenty of a common name would
+  // otherwise be twenty teasers with the one full page that answers the
+  // question below them.
+  const publishedFirst = (hits: node[]) =>
+    includeDrafts
+      ? hits
+      : [
+          ...hits.filter((node) => node.visibility),
+          ...hits.filter((node) => !node.visibility),
+        ];
+  const ranked = [
+    ...byNumber,
+    ...publishedFirst(byName),
+    ...publishedFirst(byTown),
+  ];
 
   return ranked.slice(0, query.limit).map((node) => {
     // The query that opens the table on this hit, for the node kinds whose
@@ -163,6 +239,9 @@ export default editorFreshCachedEventHandler(async (event) => {
       // teaser rather than a page, before they click.
       published: node.visibility,
       ...(Object.keys(query).length > 0 ? { query } : {}),
+      // So the search box keeps the hit: its own filter matches what was
+      // typed against the name, and no name holds the number.
+      ...(node.matchedKrs ? { krsNumber: node.matchedKrs } : {}),
     };
   });
 });

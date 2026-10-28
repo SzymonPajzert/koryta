@@ -2647,6 +2647,19 @@ describe("api/ingest/person, somebody only an odpis names: the name and the birt
     expect(result.personId).toBe("anna");
   });
 
+  it("finds the page of a surname the index cuts at an apostrophe", async () => {
+    // Indexed as „d” and „obyrn”, so the surname as written is no chunk of it.
+    nodes.kajetan = person({
+      name: "Kajetan Ludwik D'obyrn",
+      birthDate: "1971-03-14",
+    });
+    payload({ name: "Kajetan Ludwik D'obyrn" });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("kajetan");
+  });
+
   it("lands on a linked page of that name and birth date", async () => {
     // 12 people only an odpis named on 2026-10-09 shared name and date with a
     // linked page. The pipeline holds back the ones the page's entry has
