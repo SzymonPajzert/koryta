@@ -19,7 +19,7 @@ does - but in one process, unattended, and with guardrails a pipe has not got:
     koryta_people_import --scope priority --max-uploads 100 --companies-only
                                            # the companies those 100 need, first
     koryta_people_import --scope priority --max-uploads 500 \\
-        --priority-group skarb-panstwa:treasury:100:new=50
+        --priority-group skarb-panstwa:100:new=50
                                            # the Treasury's companies' people
                                            # first, out of 100 of their own
     koryta_people_import --request <run id>   # what a page's button asked for
@@ -101,10 +101,10 @@ the 100 they sent, and 33 to 49 of those were bought or noted. Past the cap
 they are left to the next runs, and the run goes on to the pages behind them.
 Without it a run changes as many as `--max-uploads` lets it.
 
-A priority group (`--priority-group`, `entities.priority_groups`) is a set
-of companies whose people in a post now go right after the noted pages, out
-of a budget of the group's own: so many sent, at most so many of those pages
-to create. Szymon, 2026-10-27, for the companies the Treasury holds a stake
+A priority group (`--priority-group`, `entities.priority_groups`) is a
+category's companies, whose people in a post now go right after the noted
+pages, out of a budget of the group's own: so many sent, at most so many of
+those pages to create. Szymon, 2026-10-27, for the companies the Treasury holds a stake
 in: "if a person payload is uploaded for a higher priority group, it doesn't
 count against a lower priority group". So a member sent for a group takes
 nothing of `--max-rejestrio-current`, `--max-odpis-only-current` or
@@ -1860,16 +1860,16 @@ def parser() -> argparse.ArgumentParser:
         "--priority-group",
         action="append",
         type=parse_group,
-        metavar="NAME:SOURCE:BUDGET[:new=N]",
+        metavar="CATEGORY:BUDGET[:new=N]",
         help="Priority: right after the noted pages, the people in a post now "
-        "at a group of companies, out of a budget of the group's own: BUDGET "
-        "people, at most N of them pages to create (default: BUDGET). They "
-        "count against no --max-* cap but --max-new, and the ones past the "
-        "budget go as if there were no group. SOURCE is treasury (the "
-        "companies on Prokuratoria's list of the Treasury's stakes), "
-        "krs=<KRS,KRS...> or category=<a company category>. Only drafts to "
-        "change and pages for people in an older public post: published "
-        "pages and the people only an odpis names keep their caps. "
+        f"at the public companies of a category, one of "
+        f"{', '.join(CATEGORY_VALUES)} (skarb-panstwa: those on Prokuratoria's "
+        "list of the Treasury's stakes), out of a budget of the "
+        "group's own: BUDGET people, at most N of them pages to create "
+        "(default: BUDGET). They count against no --max-* cap but --max-new, "
+        "and the ones past the budget go as if there were no group. Only "
+        "drafts to change and pages for people in an older public post: "
+        "published pages and the people only an odpis names keep their caps. "
         "Repeatable: the groups go in the order given, and somebody in two "
         "is sent for the first with room (entities.priority_groups).",
     )

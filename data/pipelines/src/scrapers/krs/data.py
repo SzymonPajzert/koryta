@@ -1,5 +1,4 @@
 import dataclasses
-from collections.abc import Mapping
 from typing import Callable
 
 import pandas as pd
@@ -210,18 +209,6 @@ def treasury_stakes(wykaz: pd.DataFrame) -> dict[str, str]:
         if digits:
             stakes[TREASURY_NIP_FIXES.get(digits, digits)] = str(share).strip()
     return stakes
-
-
-def treasury_companies(
-    companies: pd.DataFrame, stakes: Mapping[str, str]
-) -> frozenset[str]:
-    """The KRS numbers of the companies (`CompaniesKRS`) whose NIP is among
-    the Treasury's `stakes`: every entry of one, a predecessor struck off
-    under the same NIP included."""
-    if companies.empty or "nip" not in companies:
-        return frozenset()
-    listed = companies["nip"].map(nip_digits).isin(set(stakes))
-    return frozenset(companies.loc[listed, "krs"].astype(str).str.zfill(10))
 
 
 def read_treasury_list(ctx: Context) -> pd.DataFrame:

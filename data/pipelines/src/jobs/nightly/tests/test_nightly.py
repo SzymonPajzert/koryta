@@ -420,14 +420,14 @@ def test_the_companies_the_people_need_go_up_first_planned_as_the_people_are(wor
     assert world.steps()["companies"] == ("succeeded", "")
 
 
-SKARB = "skarb-panstwa:treasury:100:new=50"
+SKARB = "skarb-panstwa:100:new=50"
 
 
 def test_the_priority_groups_and_the_fill_reach_both_steps_that_plan_people(world):
     """Szymon, 2026-10-27: groups of companies whose people go first, defined
     in flags. The companies step plans tonight's people as the people step
     does, so both are given them, in order."""
-    obrona = "obrona:category=obronnosc:20"
+    obrona = "obronnosc:20"
     night.main(
         ["--priority-group", SKARB, "--priority-group", obrona]
         + ["--fill-rejestrio-current"]
@@ -451,9 +451,9 @@ def test_a_night_given_no_group_plans_as_before(world):
 @pytest.mark.parametrize(
     "argv",
     [
-        ["--priority-group", "skarb:prokuratoria:100"],
-        ["--priority-group", "skarb:treasury:100:new=200"],
-        ["--priority-group", SKARB, "--priority-group", "skarb-panstwa:krs=1:5"],
+        ["--priority-group", "prokuratoria:100"],
+        ["--priority-group", "skarb-panstwa:100:new=200"],
+        ["--priority-group", SKARB, "--priority-group", "skarb-panstwa:5"],
     ],
 )
 def test_a_group_the_people_step_would_refuse_is_refused_before_the_night(world, argv):

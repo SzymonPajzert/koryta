@@ -2658,7 +2658,7 @@ def charged(planned: list[build.Candidate]) -> list[tuple[str, str, str]]:
     return [(c.payload["name"], c.tier, c.group) for c in planned]
 
 
-SKARB = "skarb:treasury:3:new=2"
+SKARB = "skarb-panstwa:3:new=2"
 
 
 def test_a_group_goes_after_the_noted_out_of_a_budget_of_its_own():
@@ -2667,16 +2667,16 @@ def test_a_group_goes_after_the_noted_out_of_a_budget_of_its_own():
     2026-10-28: the groups go after the noted pages."""
     found = [
         candidate("Anna Nowak", HIRE),
-        member("Beata Kos", HIRE, "skarb"),
+        member("Beata Kos", HIRE, "skarb-panstwa"),
         candidate("Olga Sowa", BOUGHT),
         candidate("Piotr Lis", NOTED),
         odpis_only("Celina Bąk", tier=SEATED),
-        member("Jan Mazur", LINKED, "skarb"),
+        member("Jan Mazur", LINKED, "skarb-panstwa"),
         candidate("Adam Wójcik", LINKED),
-        member("Ewa Wilk", LINKED, "skarb"),
-        member("Iga Pawlak", LINKED, "skarb"),
-        member("Zofia Kruk", PUBLISHED, "skarb"),
-        member("Marta Sikora", ON_SITE, "skarb"),
+        member("Ewa Wilk", LINKED, "skarb-panstwa"),
+        member("Iga Pawlak", LINKED, "skarb-panstwa"),
+        member("Zofia Kruk", PUBLISHED, "skarb-panstwa"),
+        member("Marta Sikora", ON_SITE, "skarb-panstwa"),
         candidate("Marek Zając", ON_SITE),
     ]
 
@@ -2696,10 +2696,10 @@ def test_a_group_goes_after_the_noted_out_of_a_budget_of_its_own():
         ("Beata Kos", HIRE, ""),
         ("Olga Sowa", BOUGHT, ""),
         ("Piotr Lis", NOTED, ""),
-        ("Jan Mazur", LINKED, "skarb"),
-        ("Ewa Wilk", LINKED, "skarb"),
+        ("Jan Mazur", LINKED, "skarb-panstwa"),
+        ("Ewa Wilk", LINKED, "skarb-panstwa"),
         # Two pages are the group's new=2: the third goes a draft's way.
-        ("Marta Sikora", ON_SITE, "skarb"),
+        ("Marta Sikora", ON_SITE, "skarb-panstwa"),
         ("Celina Bąk", SEATED, ""),
         # The run's own one, as if there were no group; Iga Pawlak, past both
         # the group's pages and the run's own cap, waits.
@@ -2711,7 +2711,7 @@ def test_a_group_goes_after_the_noted_out_of_a_budget_of_its_own():
 
 
 def test_members_past_a_group_s_budget_go_in_their_own_tier_as_without_it():
-    found = [member(f"Osoba {i}", LINKED, "skarb") for i in range(1, 6)]
+    found = [member(f"Osoba {i}", LINKED, "skarb-panstwa") for i in range(1, 6)]
     found.append(candidate("Jan Mazur", ON_SITE))
 
     planned, _ = job.plan_priority(
@@ -2719,12 +2719,12 @@ def test_members_past_a_group_s_budget_go_in_their_own_tier_as_without_it():
         set(),
         50,
         max_rejestrio_current=1,
-        groups=[parse_group("skarb:treasury:2")],
+        groups=[parse_group("skarb-panstwa:2")],
     )
 
     assert charged(planned) == [
-        ("Osoba 1", LINKED, "skarb"),
-        ("Osoba 2", LINKED, "skarb"),
+        ("Osoba 1", LINKED, "skarb-panstwa"),
+        ("Osoba 2", LINKED, "skarb-panstwa"),
         ("Osoba 3", LINKED, ""),
         ("Jan Mazur", ON_SITE, ""),
     ]
@@ -2732,20 +2732,20 @@ def test_members_past_a_group_s_budget_go_in_their_own_tier_as_without_it():
 
 def test_somebody_in_two_groups_is_sent_for_the_first_with_room():
     found = [
-        member("Anna Nowak", LINKED, "skarb", "druga"),
-        member("Beata Kos", LINKED, "skarb", "druga"),
-        member("Ewa Lis", ON_SITE, "druga"),
+        member("Anna Nowak", LINKED, "skarb-panstwa", "energetyka"),
+        member("Beata Kos", LINKED, "skarb-panstwa", "energetyka"),
+        member("Ewa Lis", ON_SITE, "energetyka"),
     ]
-    groups = [parse_group("skarb:treasury:1"), parse_group("druga:krs=104717:5")]
+    groups = [parse_group("skarb-panstwa:1"), parse_group("energetyka:5")]
 
     planned, _ = job.plan_priority(
         found, set(), 50, max_rejestrio_current=0, groups=groups
     )
 
     assert charged(planned) == [
-        ("Anna Nowak", LINKED, "skarb"),
-        ("Beata Kos", LINKED, "druga"),
-        ("Ewa Lis", ON_SITE, "druga"),
+        ("Anna Nowak", LINKED, "skarb-panstwa"),
+        ("Beata Kos", LINKED, "energetyka"),
+        ("Ewa Lis", ON_SITE, "energetyka"),
     ]
 
 
@@ -2754,20 +2754,20 @@ def test_the_pages_a_group_makes_count_against_max_new_after_the_new_hires():
     a group's pages count too: after the new hires', ahead of the run's own."""
     found = [
         candidate("Anna Nowak", HIRE),
-        member("Jan Mazur", LINKED, "skarb"),
-        member("Ewa Wilk", LINKED, "skarb"),
+        member("Jan Mazur", LINKED, "skarb-panstwa"),
+        member("Ewa Wilk", LINKED, "skarb-panstwa"),
         candidate("Adam Wójcik", LINKED),
-        member("Zofia Kruk", ON_SITE, "skarb"),
+        member("Zofia Kruk", ON_SITE, "skarb-panstwa"),
     ]
 
     planned, _ = job.plan_priority(
-        found, set(), 2, groups=[parse_group("skarb:treasury:5")]
+        found, set(), 2, groups=[parse_group("skarb-panstwa:5")]
     )
 
     assert charged(planned) == [
         ("Anna Nowak", HIRE, ""),
-        ("Jan Mazur", LINKED, "skarb"),
-        ("Zofia Kruk", ON_SITE, "skarb"),
+        ("Jan Mazur", LINKED, "skarb-panstwa"),
+        ("Zofia Kruk", ON_SITE, "skarb-panstwa"),
     ]
 
 
@@ -2780,12 +2780,12 @@ def test_a_group_with_no_budget_or_nobody_in_it_changes_nothing():
         candidate("Iga Pawlak", NOTED, published=True),
         odpis_only("Celina Bąk", tier=SEATED),
         odpis_only("Dorota Wilk", tier=SEATED),
-        member("Jan Mazur", LINKED, "skarb"),
+        member("Jan Mazur", LINKED, "skarb-panstwa"),
         candidate("Adam Wójcik", LINKED),
-        member("Ewa Lis", LINKED, "skarb"),
-        member("Zofia Kruk", PUBLISHED, "skarb"),
+        member("Ewa Lis", LINKED, "skarb-panstwa"),
+        member("Zofia Kruk", PUBLISHED, "skarb-panstwa"),
         candidate("Marek Zając", PUBLISHED),
-        member("Marta Sikora", ON_SITE, "skarb"),
+        member("Marta Sikora", ON_SITE, "skarb-panstwa"),
     ]
 
     def plan(*groups: str) -> list[build.Candidate]:
@@ -2801,8 +2801,8 @@ def test_a_group_with_no_budget_or_nobody_in_it_changes_nothing():
         )
         return planned
 
-    assert plan("skarb:treasury:0") == plan()
-    assert plan("inna:krs=104717:100") == plan()
+    assert plan("skarb-panstwa:0") == plan()
+    assert plan("koleje:100") == plan()
 
 
 def test_the_fill_gives_the_slots_left_to_the_people_past_their_cap_alone():
@@ -2844,14 +2844,14 @@ def test_the_fill_gives_the_slots_left_to_the_people_past_their_cap_alone():
 def test_a_run_with_a_priority_group_says_what_it_planned_and_sent_for_it(
     priority, capsys
 ):
-    group = parse_group("skarb:treasury:2:new=1")
+    group = parse_group("skarb-panstwa:2:new=1")
     priority.candidates = [
         candidate("Anna Nowak", HIRE, "2026-09-30"),
-        member("Beata Kos", HIRE, "skarb"),
-        member("Jan Mazur", LINKED, "skarb"),
-        member("Ewa Wilk", LINKED, "skarb"),
+        member("Beata Kos", HIRE, "skarb-panstwa"),
+        member("Jan Mazur", LINKED, "skarb-panstwa"),
+        member("Ewa Wilk", LINKED, "skarb-panstwa"),
         candidate("Adam Wójcik", LINKED),
-        member("Marta Sikora", ON_SITE, "skarb"),
+        member("Marta Sikora", ON_SITE, "skarb-panstwa"),
         candidate("Marek Zając", ON_SITE),
     ]
     priority.answers = [person("created", page) for page in ("a", "b", "c")]
@@ -2874,7 +2874,7 @@ def test_a_run_with_a_priority_group_says_what_it_planned_and_sent_for_it(
     summary = priority.summary()
     assert summary["state"] == "succeeded"
     assert summary["groups"] == {
-        "skarb": {
+        "skarb-panstwa": {
             "budget": 2,
             "new": 1,
             "members": {HIRE: 1, LINKED: 2, ON_SITE: 1},
@@ -2886,8 +2886,8 @@ def test_a_run_with_a_priority_group_says_what_it_planned_and_sent_for_it(
     }
     assert summary["order"] == [
         ["", HIRE, 2],
-        ["skarb", LINKED, 1],
-        ["skarb", ON_SITE, 1],
+        ["skarb-panstwa", LINKED, 1],
+        ["skarb-panstwa", ON_SITE, 1],
         ["", LINKED, 1],
         ["", ON_SITE, 1],
     ]
@@ -2895,14 +2895,14 @@ def test_a_run_with_a_priority_group_says_what_it_planned_and_sent_for_it(
     assert [row["group"] for row in sent_part(priority)] == [
         None,
         None,
-        "skarb",
-        "skarb",
+        "skarb-panstwa",
+        "skarb-panstwa",
         None,
         None,
     ]
     out = capsys.readouterr().out
     assert (
-        "Priority group skarb: 2 of 4 members planned (budget 2), 1 of them "
+        "Priority group skarb-panstwa: 2 of 4 members planned (budget 2), 1 of them "
         "pages to create (new=1); 2 more in the run's own tiers" in out
     )
     assert (
@@ -2915,16 +2915,16 @@ def test_a_run_with_a_priority_group_says_what_it_planned_and_sent_for_it(
 def test_a_priority_dry_run_shows_the_first_by_group(priority, capsys):
     priority.candidates = [
         candidate("Anna Nowak", HIRE),
-        member("Jan Mazur", LINKED, "skarb"),
+        member("Jan Mazur", LINKED, "skarb-panstwa"),
         candidate("Ewa Lis", ON_SITE),
     ]
     argv = ["--scope", "priority", "--dry-run", "--max-uploads", "2"]
 
-    assert job.main([*argv, "--priority-group", "skarb:treasury:5"]) == 0
+    assert job.main([*argv, "--priority-group", "skarb-panstwa:5"]) == 0
 
     assert priority.sent() == [] and priority.objects == {}
     assert (
-        "The first 2 (--max-uploads) by priority group: {'skarb': 1}; the "
+        "The first 2 (--max-uploads) by priority group: {'skarb-panstwa': 1}; the "
         "run's own tiers: 1" in capsys.readouterr().out
     )
 
@@ -2956,16 +2956,16 @@ def test_a_priority_run_takes_its_groups_in_order_and_the_fill():
             "--scope",
             "priority",
             "--priority-group",
-            "skarb-panstwa:treasury:100:new=50",
+            "skarb-panstwa:100:new=50",
             "--priority-group",
-            "obrona:category=obronnosc:20",
+            "obronnosc:20",
             "--fill-rejestrio-current",
         ]
     )
 
     assert [(g.name, g.budget, g.new) for g in args.priority_group] == [
         ("skarb-panstwa", 100, 50),
-        ("obrona", 20, 20),
+        ("obronnosc", 20, 20),
     ]
     assert args.fill_rejestrio_current
     assert job.parse_args(["--scope", "priority"]).priority_group is None
@@ -2974,17 +2974,17 @@ def test_a_priority_run_takes_its_groups_in_order_and_the_fill():
 @pytest.mark.parametrize(
     "argv",
     [
-        ["--priority-group", "skarb:treasury:100"],
+        ["--priority-group", "skarb-panstwa:100"],
         ["--scope", "not-on-koryta", "--max-new", "5", "--fill-rejestrio-current"],
-        ["--request", "run-asked", "--priority-group", "skarb:treasury:100"],
-        ["--scope", "priority", "--priority-group", "skarb:prokuratoria:100"],
+        ["--request", "run-asked", "--priority-group", "skarb-panstwa:100"],
+        ["--scope", "priority", "--priority-group", "prokuratoria:100"],
         [
             "--scope",
             "priority",
             "--priority-group",
-            "skarb:treasury:100",
+            "skarb-panstwa:100",
             "--priority-group",
-            "skarb:krs=104717:5",
+            "skarb-panstwa:5",
         ],
     ],
 )
@@ -3010,7 +3010,7 @@ def test_each_planned_person_names_the_priority_groups_they_belong_to(monkeypatc
     class Payloads:
         def prioritised(self, ctx, today, recent_days, bought, groups=()):
             asked.append(list(groups))
-            return [Pick(seated, LINKED, "2020-01-01", groups=("skarb",))]
+            return [Pick(seated, LINKED, "2020-01-01", groups=("skarb-panstwa",))]
 
         def site_snapshot(self, ctx):
             return SiteSnapshot(pd.DataFrame(), pd.DataFrame())
@@ -3020,11 +3020,11 @@ def test_each_planned_person_names_the_priority_groups_they_belong_to(monkeypatc
         build.Pipeline, "create", staticmethod(lambda kind, nested=0: Payloads())
     )
     monkeypatch.setattr(sys, "argv", ["koryta_people_import"])
-    group = parse_group("skarb:treasury:10")
+    group = parse_group("skarb-panstwa:10")
 
     [found] = build.build_priority(
         None, ProcessPolicy(set()), date(2026, 10, 28), 30, set(), [group]
     )
 
     assert asked == [[group]]
-    assert (found.payload["name"], found.groups) == ("Jan Mazur", ("skarb",))
+    assert (found.payload["name"], found.groups) == ("Jan Mazur", ("skarb-panstwa",))
