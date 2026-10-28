@@ -36,6 +36,10 @@ export const companyCategories = [
   { value: "komunikacja-miejska", title: "Komunikacja miejska i autobusowa" },
   { value: "sport", title: "Sport i rekreacja" },
   { value: "obronnosc", title: "Obronność" },
+  // Not a sector but an owner: the companies on Prokuratoria's list of the
+  // Treasury's stakes (Szymon, 2026-10-28). Last, as the pipelines file it
+  // after a company's sectors - see `isSector`.
+  { value: "skarb-panstwa", title: "Skarb Państwa" },
 ] as const satisfies readonly { value: string; title: string }[];
 
 export type CompanyCategory = (typeof companyCategories)[number]["value"];
@@ -78,4 +82,15 @@ export function categoryFilterUrl(value: string): string {
  */
 export function isKnownCategory(value: string): value is CompanyCategory {
   return companyCategories.some((c) => c.value === value);
+}
+
+/** The categories that say who owns a company rather than what it does.
+ * Filed beside a sector, not in place of one, so whatever counts companies by
+ * sector leaves them out: the home page's „Branże” would otherwise draw
+ * „Skarb Państwa” as a sector, and count a post at PGE under both. */
+const OWNERS: readonly string[] = ["skarb-panstwa"];
+
+/** Whether `value` is a sector the site offers, not an owner. */
+export function isSector(value: string): value is CompanyCategory {
+  return isKnownCategory(value) && !OWNERS.includes(value);
 }

@@ -17,18 +17,20 @@ export const STAND_IN = "sukspolka";
  * votes, so with them the stand-in's people are nobody too. */
 const QUEUE_CONDITIONS = ["visibility", "hideVoted", "minVotes"];
 
-const asksForTheSector = (url: URL, path: string) =>
-  url.pathname === path && url.searchParams.get("category") === SECTOR;
+const asksFor = (url: URL, path: string, category: string) =>
+  url.pathname === path && url.searchParams.get("category") === category;
 
 /** Answers the pages' requests for the sector - the people, and the progress
  * bar's counts - with the stand-in company's, as the server gives them.
  *
  * `queue` drops the queue's own conditions from the people request, so the
  * queue has somebody in it and says how many. The request itself is left as
- * the page made it, which is what the specs assert the sector reached. */
+ * the page made it, which is what the specs assert the sector reached.
+ * `category` is another category to answer for the same way: Skarb Państwa,
+ * in ../skarb-panstwa.spec.ts. */
 export async function answerForTheSector(
   page: Page,
-  { queue }: { queue: boolean },
+  { queue, category = SECTOR }: { queue: boolean; category?: string },
 ) {
   const standIn = (route: Route) => {
     const url = new URL(route.request().url());
@@ -41,12 +43,12 @@ export async function answerForTheSector(
   };
 
   await page.route(
-    (url) => asksForTheSector(url, "/api/nodes"),
+    (url) => asksFor(url, "/api/nodes", category),
     async (route) =>
       route.fulfill({ response: await route.fetch({ url: standIn(route) }) }),
   );
   await page.route(
-    (url) => asksForTheSector(url, "/api/stats/progress"),
+    (url) => asksFor(url, "/api/stats/progress", category),
     async (route) =>
       route.fulfill({ response: await route.fetch({ url: standIn(route) }) }),
   );

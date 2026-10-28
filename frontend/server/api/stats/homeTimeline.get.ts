@@ -4,7 +4,7 @@ import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
 import { fetchEdgeEndpointNodes } from "~~/server/utils/edgeNodes";
 import { asArray, pageIsPublic } from "~~/shared/model";
 import { canonicalParty, partyColors, partyMergedLabels } from "~~/shared/misc";
-import { categoryTitle, isKnownCategory } from "~~/shared/companyCategories";
+import { categoryTitle, isSector } from "~~/shared/companyCategories";
 import { wojewodztwoLabel, wojewodztwoOf } from "~~/shared/teryt";
 import { warsawDate } from "~~/shared/dates";
 import {
@@ -252,10 +252,11 @@ const cachedTimeline = defineCachedFunction(
       // Absent and empty differ on this field - absent means nobody has decided,
       // which is true of most companies - so a post with no sector is left out
       // of that grouping rather than counted as "other". `coverage` is what says
-      // how many that is.
+      // how many that is. Sectors alone: Skarb Państwa says who owns the
+      // company, beside its sector (`isSector`).
       const categories = asArray<string>(
         (employer as Company).categories,
-      ).filter((value) => typeof value === "string" && isKnownCategory(value));
+      ).filter((value) => typeof value === "string" && isSector(value));
       if (categories.length > 0) {
         byGrouping.category.push({ ...post, groups: categories });
       }
