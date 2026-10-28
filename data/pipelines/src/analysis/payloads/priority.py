@@ -82,9 +82,18 @@ run caps those across the tiers (`--max-published` in `jobs.people_import`).
 The new-hire tier and the two of the people in a current seat are
 `missing_from_koryta`, and the other five `matching_one_page`, with their
 guards: nobody here is someone a run of either scope would not have sent.
+
+Each pick also names the priority groups whose companies the person holds a
+post at now (`Pick.groups`, `entities.priority_groups`). The tiers and their
+order stay as they are: a run sends a group's members right after the noted
+pages (`AHEAD_OF_GROUPS`), out of a budget of the group's own, and only those
+in the tiers that make pages or change drafts (`GROUPED`) - a published page
+waits for a reviewer, and somebody only an odpis names is checked by hand, so
+those keep the run's own caps (`jobs.people_import.plan_priority`).
 """
 
 import typing
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 
@@ -110,6 +119,13 @@ TIERS = (
     ON_SITE,
 )
 
+#: The tiers sent ahead of every priority group: news, and what somebody asked
+#: for. Szymon, 2026-10-28: the groups go after the noted.
+AHEAD_OF_GROUPS = (NEW_HIRE, BOUGHT, NOTED_MISSING, NOTED)
+#: The tiers a group sends its members from: pages made for people in a public
+#: post, and drafts the payload would change.
+GROUPED = (REJESTRIO_CURRENT, ON_SITE)
+
 #: The kind of note entry that says data is missing ("Brakuje danych").
 MISSING = "missing"
 
@@ -127,6 +143,9 @@ class Pick:
     #: (`published_ids`), whatever the tier; False for somebody the site has
     #: no page for.
     published: bool = False
+    #: The priority groups whose companies the person holds a post at now
+    #: (`group_names`), in the order the groups were given.
+    groups: tuple[str, ...] = ()
 
 
 def newest_public_start(
@@ -158,6 +177,23 @@ def current_public_seats(
         and str(company.krs) in public_krs
         and day_of(company.end) is None
     ]
+
+
+def group_names(
+    person: Person, groups: typing.Mapping[str, typing.Container[str]]
+) -> tuple[str, ...]:
+    """The groups, of `groups` (name -> KRS numbers), at whose companies the
+    person holds a post now: any post, with no end."""
+    current = {
+        str(company.krs)
+        for company in person.companies
+        if company.krs is not None and day_of(company.end) is None
+    }
+    return tuple(
+        name
+        for name, companies in groups.items()
+        if any(krs in companies for krs in current)
+    )
 
 
 def only_an_odpis_names(person: Person) -> bool:
@@ -256,6 +292,7 @@ def prioritised(
     noted: typing.Mapping[str, typing.Collection[str]],
     today: date,
     recent_days: int,
+    groups: typing.Mapping[str, typing.Container[str]] | None = None,
 ) -> list[Pick]:
     """Every person a capped run may send, in the order it sends them.
 
@@ -263,21 +300,24 @@ def prioritised(
     `matching_one_page` kept, both from the same payloads and `snapshot`.
     `published_ids` are the node ids of the published person pages, `bought`
     the rejestr.io ids of the people whose feed was bought lately, `noted` the
-    kinds of the note entries still open, by the page they are on.
+    kinds of the note entries still open, by the page they are on, and
+    `groups` the KRS numbers of each priority group's companies, by its name.
     """
+    groups = groups or {}
     since = (today - timedelta(days=recent_days)).isoformat()
     hires: list[Pick] = []
     seated: list[Pick] = []
     linked: list[Pick] = []
     for person in new:
+        member = group_names(person, groups)
         if (start := newest_public_start(person, public_krs, since)) is not None:
-            hires.append(Pick(person, NEW_HIRE, start))
+            hires.append(Pick(person, NEW_HIRE, start, groups=member))
         elif seats := current_public_seats(person, public_krs):
             newest = max((seat for seat in seats if seat is not None), default=None)
             if only_an_odpis_names(person):
-                seated.append(Pick(person, ODPIS_ONLY_CURRENT, newest))
+                seated.append(Pick(person, ODPIS_ONLY_CURRENT, newest, groups=member))
             else:
-                linked.append(Pick(person, REJESTRIO_CURRENT, newest))
+                linked.append(Pick(person, REJESTRIO_CURRENT, newest, groups=member))
 
     paid_for: list[Pick] = []
     missing: list[Pick] = []
@@ -291,16 +331,17 @@ def prioritised(
             continue
         stored = snapshot.person_for(payload)
         live = stored is not None and str(stored.get("id")) in published_ids
+        member = group_names(person, groups)
         if register_id(person) in bought:
-            paid_for.append(Pick(person, BOUGHT, newest, live))
+            paid_for.append(Pick(person, BOUGHT, newest, live, member))
         elif (tier := note_tier(person, stored, snapshot, noted)) is not None:
             (missing if tier == NOTED_MISSING else asked).append(
-                Pick(person, tier, newest, live)
+                Pick(person, tier, newest, live, member)
             )
         elif live:
-            published.append(Pick(person, PUBLISHED, newest, live))
+            published.append(Pick(person, PUBLISHED, newest, live, member))
         else:
-            unpublished.append(Pick(person, ON_SITE, newest))
+            unpublished.append(Pick(person, ON_SITE, newest, groups=member))
 
     print(
         f"Priority: {len(hires)} new hires (a public post since {since}), "
@@ -317,7 +358,7 @@ def prioritised(
             sorted(picks, key=lambda pick: seat_order(pick, public_krs, snapshot))
         )
 
-    return (
+    picks = (
         newest_first(hires)
         + newest_first(paid_for)
         + newest_first(missing)
@@ -327,3 +368,13 @@ def prioritised(
         + newest_first(published)
         + newest_first(unpublished)
     )
+    for name in groups:
+        # Before any cap: the pools a run's plan cannot show, since it keeps
+        # only the people under the caps.
+        tiers = Counter(pick.tier for pick in picks if name in pick.groups)
+        print(
+            f"Priority group {name}: {sum(tiers.values())} people with a post "
+            f"now at its companies, by tier "
+            f"{ {tier: tiers[tier] for tier in TIERS if tiers[tier]} }"
+        )
+    return picks

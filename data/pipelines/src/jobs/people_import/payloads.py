@@ -8,7 +8,7 @@ through JSON and back the way it went through the pipe.
 
 import json
 import sys
-from collections.abc import Container
+from collections.abc import Container, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date
 
@@ -17,6 +17,7 @@ import pandas as pd
 from analysis.payloads.person import PeoplePayloads
 from analysis.payloads.target import PageTarget, Targeted
 from conductor import setup_context
+from entities.priority_groups import Group
 from scrapers.stores import (
     Context,
     Pipeline,
@@ -46,6 +47,8 @@ class Candidate:
     #: KRS number (`SiteSnapshot.missing_companies`): what `--companies-only`
     #: creates before the people.
     missing: tuple[str, ...] = ()
+    #: The priority groups the person belongs to (`Pick.groups`).
+    groups: tuple[str, ...] = ()
 
 
 def pipeline_argv(
@@ -128,10 +131,12 @@ def build_priority(
     today: date,
     recent_days: int,
     bought: Container[str],
+    groups: Sequence[Group] = (),
 ) -> list[Candidate]:
     """Every payload a priority run may send, in the order it sends them.
 
-    `bought` are the rejestr.io ids of the people whose feed was bought lately.
+    `bought` are the rejestr.io ids of the people whose feed was bought lately;
+    each payload names the priority `groups` it belongs to.
 
     Built as `build_payloads` builds, flags on sys.argv included, then each
     payload made what the pipe would have carried: through a one-row frame and
@@ -146,7 +151,7 @@ def build_priority(
         ctx, dumper = setup_context(required_resources(PeoplePayloads), policy=policy)
         try:
             pipeline = Pipeline.create(PeoplePayloads)
-            picks = pipeline.prioritised(ctx, today, recent_days, bought)
+            picks = pipeline.prioritised(ctx, today, recent_days, bought, groups)
             # Read once already, by the plan: `site_snapshot` keeps it.
             snapshot = pipeline.site_snapshot(ctx)
         finally:
@@ -164,6 +169,7 @@ def build_priority(
             pick.since,
             pick.published,
             tuple(snapshot.missing_companies(row)),
+            pick.groups,
         )
         for row, pick in zip(rows, picks, strict=True)
     ]
