@@ -7,7 +7,7 @@
     koryta_nightly --max-uploads 300  # more people, once the first nights look right
     koryta_nightly --max-published 50 # fewer changes to published pages a night
     koryta_nightly --paid-max-calls 0 # buy nothing from rejestr.io tonight
-    koryta_nightly --priority-group skarb-panstwa:treasury:100:new=50
+    koryta_nightly --priority-group skarb-panstwa:100:new=50
                                       # the Treasury's companies' people
                                       # first, out of 100 of their own
     koryta_nightly --register-backlog 2000
@@ -1796,10 +1796,10 @@ def parser() -> argparse.ArgumentParser:
         "--priority-group",
         action="append",
         type=group_text,
-        metavar="NAME:SOURCE:BUDGET[:new=N]",
-        help="A group of companies whose people in a post now the people step "
-        "sends right after the noted pages, out of a budget of the group's "
-        "own, within --max-uploads: e.g. skarb-panstwa:treasury:100:new=50, "
+        metavar="CATEGORY:BUDGET[:new=N]",
+        help="A category whose companies' people in a post now the people "
+        "step sends right after the noted pages, out of a budget of the "
+        "group's own, within --max-uploads: e.g. skarb-panstwa:100:new=50, "
         "the companies the Treasury holds a stake in, 100 people a night, at "
         "most 50 of them new pages. Repeatable; see koryta_people_import "
         "--help.",

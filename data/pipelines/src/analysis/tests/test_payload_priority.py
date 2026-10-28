@@ -888,20 +888,18 @@ def test_each_pick_names_the_groups_whose_companies_the_person_holds_a_post_at()
     assert all(p.groups == () for p in picks(None))
 
 
-def test_a_group_s_companies_are_read_off_its_source():
-    """The Treasury's by the NIP the register gives each, a category's public
-    companies by the rule `--company-category` uses, or the ones named."""
+def test_a_group_s_companies_are_its_category_s_public_ones():
+    """By the rule the site's filter and `--company-category` read: Skarb
+    Państwa off the Treasury's share on Prokuratoria's list, a sector off the
+    codes - less a private firm the codes reach too."""
     companies = pd.DataFrame(
         {
             "krs": [PUBLIC, OTHER_PUBLIC, PRIVATE],
-            "nip": ["782-000-61-69", "1111111111", "2222222222"],
-            "activity": [["35.11.Z"], ["35.13.Z"], ["35.11.Z"]],
+            "activity": [["70.10.Z"], ["35.13.Z"], ["35.11.Z"]],
             "form": [None, None, None],
+            # Read back from an output, a company off the list holds NaN.
+            "treasury_share": ["60.86", float("nan"), "0.5"],
         }
-    )
-    # The list prints Wielkopolska Gildia's NIP wrong (787 for 782).
-    wykaz = pd.DataFrame(
-        [["1", "787-000-61-69", "Gildia", "Poznań", "aktywna", "5.97", "MAP"]]
     )
     payloads = PeoplePayloads()
     payloads.people = SimpleNamespace(  # type: ignore[assignment]
@@ -912,7 +910,5 @@ def test_a_group_s_companies_are_read_off_its_source():
     def found(text: str) -> frozenset[str]:
         return payloads.group_companies(None, parse_group(text))  # type: ignore[arg-type]
 
-    with patch("analysis.payloads.person.read_treasury_list", return_value=wykaz):
-        assert found("skarb:treasury:10") == {PUBLIC}
-    assert found("energia:category=energetyka:10") == {PUBLIC, OTHER_PUBLIC}
-    assert found("reczna:krs=3,104717:10") == {OTHER_PUBLIC, "0000104717"}
+    assert found("skarb-panstwa:10") == {PUBLIC}
+    assert found("energetyka:10") == {OTHER_PUBLIC}

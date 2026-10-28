@@ -32,10 +32,9 @@ from analysis.payloads.target import (
 from analysis.utils import as_sequence
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
-from entities.priority_groups import KRS, TREASURY, Group
+from entities.priority_groups import Group
 from scrapers.koryta.download import KorytaNotes, KorytaPeople
 from scrapers.krs.columns import is_public
-from scrapers.krs.data import read_treasury_list, treasury_companies, treasury_stakes
 from scrapers.pkw.elections import parties_of_committee, party_sort_key
 from scrapers.pkw.offices import LOCAL_OFFICES
 from scrapers.stores import Context, Pipeline
@@ -281,22 +280,14 @@ class PeoplePayloads(Pipeline[Person]):
         )
 
     def group_companies(self, ctx: Context, group: Group) -> frozenset[str]:
-        """The KRS numbers of a priority group's companies
-        (`entities.priority_groups`)."""
-        if group.source == KRS:
-            found = frozenset(group.krs)
-        else:
-            companies = self.people.companies.read_or_process(ctx)
-            if group.source == TREASURY:
-                stakes = treasury_stakes(read_treasury_list(ctx))
-                found = treasury_companies(companies, stakes)
-            else:
-                # Public, as the night's tiers are and as a run of
-                # --company-category is: a sector's codes reach private firms.
-                found = frozenset(
-                    category_companies(companies, group.category)
-                    & self.people.public_companies(ctx)
-                )
+        """The KRS numbers of a priority group's companies: its category's,
+        public, as the night's tiers are and as a run of --company-category
+        is - a sector's codes reach private firms (`entities.priority_groups`)."""
+        companies = self.people.companies.read_or_process(ctx)
+        found = frozenset(
+            category_companies(companies, group.name)
+            & self.people.public_companies(ctx)
+        )
         print(
             f"Priority group {group.name}: {len(found)} companies, {group.describe()}"
         )

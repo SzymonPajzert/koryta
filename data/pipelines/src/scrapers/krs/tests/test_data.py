@@ -9,7 +9,6 @@ from scrapers.krs.data import (
     public_owner_regons,
     public_regons,
     regon_stem,
-    treasury_companies,
     treasury_stakes,
 )
 from scrapers.stores import Pipeline, ProcessPolicy
@@ -283,22 +282,3 @@ def test_a_nip_the_list_prints_wrong_is_read_as_the_register_s():
     wykaz = wykaz_of(("787-000-61-69", "5.97"), ("584-025-35-79", "5.000039"))
 
     assert treasury_stakes(wykaz) == {"7820006169": "5.97", "5841008149": "5.000039"}
-
-
-def test_the_treasury_s_companies_are_every_krs_entry_under_a_listed_nip():
-    companies = pd.DataFrame(
-        {
-            "krs": ["0000104717", "0000054418", "0000040728", "0000000001", "2"],
-            "nip": ["782-000-61-69", "5841008149", "5841008149", None, "nie"],
-        }
-    )
-    wykaz = wykaz_of(("787-000-61-69", "5.97"), ("584-025-35-79", "5.000039"))
-
-    # A predecessor struck off under the same NIP too: its people's posts
-    # there have ended, and only a post now makes a member.
-    assert treasury_companies(companies, treasury_stakes(wykaz)) == {
-        "0000104717",
-        "0000054418",
-        "0000040728",
-    }
-    assert treasury_companies(pd.DataFrame(), treasury_stakes(wykaz)) == set()

@@ -258,22 +258,22 @@ wait for the next nights, and the night goes on to the pages behind them. At
 changed 45 to 87 published pages each, 33 to 49 of them bought or noted - and
 it stays put when `--max-uploads` goes up.
 
-Priority groups: between 4 and 5, the people in a post now at a group of
-companies, each group named in `KORYTA_NIGHTLY_ARGS` with a budget of its own
-(Szymon, 2026-10-27 and 10-28):
+Priority groups: between 4 and 5, the people in a post now at the companies
+of a category, each group named in `KORYTA_NIGHTLY_ARGS` with a budget of its
+own (Szymon, 2026-10-27 and 10-28):
 
-    --priority-group skarb-panstwa:treasury:100:new=50
+    --priority-group skarb-panstwa:100:new=50
 
-is up to 100 people a night with a post now at a company on Prokuratoria's
-list of the Treasury's stakes, at most 50 of them new pages. A send for a group
+is up to 100 people a night with a post now at a company filed under Skarb
+Państwa - one on Prokuratoria's list of the Treasury's stakes - at most 50 of
+them new pages. A send for a group
 takes nothing of the caps of 5, 6 and 7; only `--max-new`, every page the
 night creates, is shared, and the night still sends `--max-uploads` in all, so
 a group displaces the drafts in 8. Members past the budget go in their own
 tier, as if there were no group. A group's members go only from 6 and 8: a
-published page and somebody only an odpis names keep their caps. The source
-can also be `krs=<KRS,KRS...>`, companies named by hand, or
-`category=<category>`, a sector's public companies; the flag repeats, and a
-person in two groups goes for the first. Each group's numbers are in the
+published page and somebody only an odpis names keep their caps. Any other
+category the site offers makes a group too (`energetyka:50`, its public
+companies); the flag repeats, and a person in two groups goes for the first. Each group's numbers are in the
 people run's summary (`groups`, and `order` for the payloads part by position),
 and each line of what was sent names its group.
 
