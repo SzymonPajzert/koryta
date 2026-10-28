@@ -18,6 +18,10 @@ does - but in one process, unattended, and with guardrails a pipe has not got:
     koryta_people_import --scope priority --max-uploads 100   # the nightly VM
     koryta_people_import --scope priority --max-uploads 100 --companies-only
                                            # the companies those 100 need, first
+    koryta_people_import --scope priority --max-uploads 500 \\
+        --priority-group skarb-panstwa:treasury:100:new=50
+                                           # the Treasury's companies' people
+                                           # first, out of 100 of their own
     koryta_people_import --request <run id>   # what a page's button asked for
 
 `--request` is a run the datascience group asked for from a company's or a
@@ -97,6 +101,31 @@ the 100 they sent, and 33 to 49 of those were bought or noted. Past the cap
 they are left to the next runs, and the run goes on to the pages behind them.
 Without it a run changes as many as `--max-uploads` lets it.
 
+A priority group (`--priority-group`, `entities.priority_groups`) is a set
+of companies whose people in a post now go right after the noted pages, out
+of a budget of the group's own: so many sent, at most so many of those pages
+to create. Szymon, 2026-10-27, for the companies the Treasury holds a stake
+in: "if a person payload is uploaded for a higher priority group, it doesn't
+count against a lower priority group". So a member sent for a group takes
+nothing of `--max-rejestrio-current`, `--max-odpis-only-current` or
+`--max-published`, and only `--max-new`, every page the run creates, is
+shared. The run still sends `--max-uploads` in all: the groups come before
+the backlog, which is what they displace. Only drafts to change and pages to
+make for people in an older public post go for a group; a published page and
+somebody only an odpis names keep the run's caps, which are a reviewer's and
+a hand check's (`plan_priority`). Replayed on the night of 2026-10-28, on its
+own outputs - the plan came to its 7,409 - 1,504 people held a post at one of
+the Treasury's 317 companies, 981 of them waiting for a page. The night sent
+35 of them, 17 new pages; a group of 100 with new=50 sends 103, 50 new, and
+one of 150 with new=100 sends 153, 100 new. The rest of the 500 goes as
+before, less as many drafts to change.
+
+Once the drafts to change run out - late November 2026 at 500 a night - every
+tier left has a cap: the 2026-10-28 plan without them sends 214.
+`--fill-rejestrio-current` gives the slots left to the people with a
+rejestr.io entry in an older public post past their cap: never to published
+pages or to the people only an odpis names.
+
 What was bought is read off the crawl bucket, which files every rejestr.io
 answer under the day it was bought, whoever bought it (`bought_since`). A week
 of it rather than the day, so that a feed a hand run bought after the night's
@@ -159,13 +188,15 @@ import time
 import typing
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 
 from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
 from analysis.payloads.priority import (
+    AHEAD_OF_GROUPS,
+    GROUPED,
     NEW_HIRE,
     ODPIS_ONLY_CURRENT,
     REJESTRIO_CURRENT,
@@ -173,6 +204,7 @@ from analysis.payloads.priority import (
 )
 from analysis.payloads.target import NEW, PageTarget
 from entities.company_categories import CATEGORY_VALUES
+from entities.priority_groups import Group, parse_group, repeated
 from jobs.nightly import export_refusal, export_time, latest_export
 from jobs.people_import.payloads import (
     PRIORITY,
@@ -379,6 +411,20 @@ class RunSummary:
     #: how many more it left to the next runs past it.
     published_pages: int = 0
     published_left: int = 0
+    #: A priority run: each priority group (`--priority-group`) by its name -
+    #: its budget and `new`, its members by tier before any cap, how many it
+    #: planned and how many of those are pages to create, how many more of
+    #: its members the run's own tiers planned, and what the site did with
+    #: the ones sent for it.
+    groups: dict[str, dict] = field(default_factory=dict)
+    #: A priority run: the plan, in sending order, as runs of
+    #: [group, tier, count] - group "" for the run's own tiers - so that the
+    #: payloads part reads back by position: with groups, a tier is no longer
+    #: in one piece, nor in `TIERS` order.
+    order: list[list] = field(default_factory=list)
+    #: A priority run: payloads planned into the slots the plan left under
+    #: --max-uploads (`--fill-rejestrio-current`), at its end.
+    filled: int = 0
     #: A priority run: the gs:// path of what it took (`SENT_PREFIX`).
     sent: str = ""
     #: A run asked for on a page: which page, and what of its people it left.
@@ -732,6 +778,8 @@ def plan_priority(
     max_odpis_only_current: int | None = None,
     max_published: int | None = None,
     max_rejestrio_current: int | None = None,
+    groups: Sequence[Group] = (),
+    fill_to: int | None = None,
 ) -> tuple[list[Candidate], int]:
     """What a priority run sends, in order, and how many it left out as sent.
 
@@ -745,47 +793,159 @@ def plan_priority(
     run stops as failed past it, so a plan past it would fail the night by
     itself. And the changes to published pages past `max_published`, in
     whichever tier they come (`Candidate.published`).
+
+    The priority `groups` go in before the first payload of a tier past the
+    noted pages (`AHEAD_OF_GROUPS`), one after another, each with its
+    members (`Candidate.groups`) in the order they come: at most
+    `Group.budget` of them, and at most `Group.new` of those pages to create.
+    A member sent for a group counts against no cap of the run's own but
+    `max_new`, which is every page the run creates; Szymon, 2026-10-27: "if a
+    person payload is uploaded for a higher priority group, it doesn't count
+    against a lower priority group". The groups are part of the run all the
+    same, so the run sends --max-uploads in all, as before. A member past a
+    group's budget goes in their own tier, as if there were no group, and
+    somebody in two groups is sent for the first that has room. Only the
+    members in the `GROUPED` tiers: the tiers before the groups go first
+    anyway, a published page leaves a reviewer a proposal, and somebody only
+    an odpis names is checked by hand, so those keep the run's own caps.
+
+    `fill_to` is what the run sends at most, given to have the slots its
+    plan leaves under it filled (`--fill-rejestrio-current`): by the people
+    with a rejestr.io entry in an older public post that
+    `max_rejestrio_current` left out, newest seat first, within `max_new`.
+    Planned behind everything else, as the plan's tail.
     """
-    planned: list[Candidate] = []
-    skipped = created = odpis_only = seated = linked = published = 0
-    for candidate in candidates:
-        if (
-            person_key(candidate.payload),
-            payload_hash(candidate.payload),
-        ) in already_sent:
-            skipped += 1
-            continue
-        if candidate.tier == NEW_HIRE:
-            by_name = only_an_odpis_names(candidate.payload)
-            if created >= max_new or (
-                by_name
-                and max_new_odpis_only is not None
-                and odpis_only >= max_new_odpis_only
-            ):
-                continue
-            created += 1
-            if by_name:
-                odpis_only += 1
-        elif candidate.tier == ODPIS_ONLY_CURRENT:
-            if created >= max_new or (
-                max_odpis_only_current is not None and seated >= max_odpis_only_current
-            ):
-                continue
-            created += 1
-            seated += 1
-        elif candidate.tier == REJESTRIO_CURRENT:
-            if created >= max_new or (
-                max_rejestrio_current is not None and linked >= max_rejestrio_current
-            ):
-                continue
-            created += 1
-            linked += 1
+    unsent = [
+        candidate
+        for candidate in candidates
+        if (person_key(candidate.payload), payload_hash(candidate.payload))
+        not in already_sent
+    ]
+    plan = PriorityPlan(
+        max_new,
+        max_new_odpis_only,
+        max_odpis_only_current,
+        max_published,
+        max_rejestrio_current,
+    )
+    # Where the groups go: before the first payload past the noted pages.
+    at = next(
+        (n for n, c in enumerate(unsent) if c.tier not in AHEAD_OF_GROUPS),
+        len(unsent),
+    )
+    plan.own_tiers(unsent[:at])
+    rest = unsent[at:]
+    for group in groups:
+        rest = plan.group(group, rest)
+    waiting = plan.own_tiers(rest)
+    if fill_to is not None:
+        plan.fill(waiting, fill_to)
+    return plan.planned, len(candidates) - len(unsent)
+
+
+def at_cap(count: int, cap: int | None) -> bool:
+    return cap is not None and count >= cap
+
+
+@dataclass
+class PriorityPlan:
+    """A priority run's plan as `plan_priority` makes it: the payloads in
+    sending order, and how much of each cap they have taken."""
+
+    max_new: int
+    max_new_odpis_only: int | None = None
+    max_odpis_only_current: int | None = None
+    max_published: int | None = None
+    max_rejestrio_current: int | None = None
+    planned: list[Candidate] = field(default_factory=list)
+    #: Pages to create, in every tier and group: at most `max_new`.
+    created: int = 0
+    odpis_only: int = 0
+    seated: int = 0
+    linked: int = 0
+    published: int = 0
+
+    def own_tiers(self, found: Sequence[Candidate]) -> list[Candidate]:
+        """Plan `found` in the run's own tiers, under their caps; and say
+        which of the people with a rejestr.io entry in an older public post
+        were left out, for the fill."""
+        waiting = []
+        for candidate in found:
+            if self.admits(candidate):
+                self.planned.append(candidate)
+            elif candidate.tier == REJESTRIO_CURRENT:
+                waiting.append(candidate)
+        return waiting
+
+    def admits(self, candidate: Candidate) -> bool:
+        """Whether the run's own tiers have room for `candidate`; counted in
+        when they have."""
+        tier = candidate.tier
+        if tier in CREATING and self.created >= self.max_new:
+            return False
+        if tier == NEW_HIRE:
+            if only_an_odpis_names(candidate.payload):
+                if at_cap(self.odpis_only, self.max_new_odpis_only):
+                    return False
+                self.odpis_only += 1
+        elif tier == ODPIS_ONLY_CURRENT:
+            if at_cap(self.seated, self.max_odpis_only_current):
+                return False
+            self.seated += 1
+        elif tier == REJESTRIO_CURRENT:
+            if at_cap(self.linked, self.max_rejestrio_current):
+                return False
+            self.linked += 1
         elif candidate.published:
-            if max_published is not None and published >= max_published:
+            if at_cap(self.published, self.max_published):
+                return False
+            self.published += 1
+        if tier in CREATING:
+            self.created += 1
+        return True
+
+    def group(self, group: Group, found: Sequence[Candidate]) -> list[Candidate]:
+        """Plan the members of `group` among `found`, out of its own budget;
+        and give back the rest, in their order, for the next."""
+        sends = new = 0
+        rest = []
+        for candidate in found:
+            if (
+                sends >= group.budget
+                or candidate.tier not in GROUPED
+                or group.name not in candidate.groups
+            ):
+                rest.append(candidate)
                 continue
-            published += 1
-        planned.append(candidate)
-    return planned, skipped
+            if candidate.tier in CREATING:
+                if self.created >= self.max_new or new >= group.new:
+                    rest.append(candidate)
+                    continue
+                self.created += 1
+                new += 1
+            sends += 1
+            self.planned.append(replace(candidate, group=group.name))
+        return rest
+
+    def fill(self, waiting: Sequence[Candidate], fill_to: int) -> None:
+        """Plan the first of `waiting` into the slots left under `fill_to`."""
+        for candidate in waiting:
+            if len(self.planned) >= fill_to or self.created >= self.max_new:
+                return
+            self.created += 1
+            self.planned.append(replace(candidate, filled=True))
+
+
+def runs(planned: Sequence[Candidate]) -> list[list]:
+    """The plan as runs of [group, tier, count], in sending order
+    (`RunSummary.order`)."""
+    order: list[list] = []
+    for candidate in planned:
+        if order and order[-1][:2] == [candidate.group, candidate.tier]:
+            order[-1][2] += 1
+        else:
+            order.append([candidate.group, candidate.tier, 1])
+    return order
 
 
 def companies_needed(
@@ -889,10 +1049,14 @@ class PeopleImport:
         #: ...and the companies each names that the export has no page for
         #: (`Candidate.missing`).
         self.missing: list[tuple[str, ...]] | None = None
+        #: ...and the priority group each is sent for, "" for none
+        #: (`Candidate.group`).
+        self.groups: list[str] | None = None
         #: A priority run, or one asked for: what the site took - payload,
-        #: tier, outcome, the page it filed the person under, and the
-        #: companies it took them without a job at, for want of a page.
-        self.taken: list[tuple[dict, str, str, str | None, list[str]]] = []
+        #: tier, outcome, the page it filed the person under, the companies
+        #: it took them without a job at, for want of a page, and the
+        #: priority group it was sent for.
+        self.taken: list[tuple[dict, str, str, str | None, list[str], str]] = []
         #: A run asked for on a page: what was asked, once read.
         self.request: Request | None = None
         #: ...and what of the page's people it found and left, for the page.
@@ -1018,8 +1182,12 @@ class PeopleImport:
         odpis names at --max-new-odpis-only, the people in an older public
         post only an odpis names at --max-odpis-only-current and those with a
         rejestr.io entry at --max-rejestrio-current, and the changes to
-        published pages at --max-published."""
+        published pages at --max-published; each priority group's members
+        after the noted pages, out of its own budget (--priority-group); and
+        with --fill-rejestrio-current, the slots left under --max-uploads
+        filled."""
         args = self.args
+        groups: list[Group] = args.priority_group or []
         today = warsaw_now().date()
         bought_from = (today - timedelta(days=args.bought_days)).isoformat()
         bought = bought_since(self.client(), bought_from)
@@ -1031,6 +1199,7 @@ class PeopleImport:
             today,
             args.recent_days,
             bought,
+            groups,
         )
         already: set[tuple[str, str]] = set()
         if args.resend_after:
@@ -1044,12 +1213,16 @@ class PeopleImport:
             args.max_odpis_only_current,
             args.max_published,
             args.max_rejestrio_current,
+            groups=groups,
+            fill_to=args.max_uploads if args.fill_rejestrio_current else None,
         )
         self.tiers = [candidate.tier for candidate in planned]
         self.published = [candidate.published for candidate in planned]
         self.missing = [candidate.missing for candidate in planned]
+        self.groups = [candidate.group for candidate in planned]
         counts = Counter(self.tiers)
         self.summary.tiers = {tier: counts.get(tier, 0) for tier in TIERS}
+        self.summary.order = runs(planned)
         print(
             f"Planned by tier: {self.summary.tiers}; left out as sent unchanged "
             f"in the last {args.resend_after} days: {self.summary.already_sent}"
@@ -1089,10 +1262,16 @@ class PeopleImport:
                 f"(--max-odpis-only-current {args.max_odpis_only_current})"
             )
         if waiting := unsent(linked(candidates)):
+            # All of the tier that is planned, groups and fill included: the
+            # rest of "N of M planned" is what the tier leaves to later runs.
+            mine = [c for c in linked(planned) if not c.group and not c.filled]
+            beyond = len(linked(planned)) - len(mine)
             print(
                 f"People with a rejestr.io entry in an older public post: "
                 f"{len(linked(planned))} of {len(waiting)} planned "
-                f"(--max-rejestrio-current {args.max_rejestrio_current})"
+                f"(--max-rejestrio-current {args.max_rejestrio_current}"
+                + (f"; {beyond} more for priority groups or the fill" if beyond else "")
+                + ")"
             )
         if pages := unsent([c for c in candidates if c.published]):
             # The cap is the one thing that leaves a published page out.
@@ -1104,6 +1283,36 @@ class PeopleImport:
                 f"Published pages to change: {summary.published_pages} of "
                 f"{len(pages)} planned"
                 + ("" if cap is None else f" (--max-published {cap})")
+            )
+        for group in groups:
+            members = unsent([c for c in candidates if group.name in c.groups])
+            sent_for = [c for c in planned if c.group == group.name]
+            pool = Counter(c.tier for c in members)
+            report = self.summary.groups[group.name] = {
+                "budget": group.budget,
+                "new": group.new,
+                "members": {tier: pool[tier] for tier in TIERS if pool[tier]},
+                "planned": len(sent_for),
+                "to_create": sum(c.tier in CREATING for c in sent_for),
+                # Sent ahead of the group (a new hire, a bought or noted page),
+                # past its budget, or in a tier that keeps the run's caps.
+                "planned_in_own_tiers": sum(
+                    group.name in c.groups and not c.group for c in planned
+                ),
+            }
+            print(
+                f"Priority group {group.name}: {report['planned']} of "
+                f"{len(members)} members planned (budget {group.budget}), "
+                f"{report['to_create']} of them pages to create "
+                f"(new={group.new}); {report['planned_in_own_tiers']} more in "
+                "the run's own tiers"
+            )
+        if args.fill_rejestrio_current:
+            self.summary.filled = sum(c.filled for c in planned)
+            print(
+                f"Filled up to --max-uploads {args.max_uploads}: "
+                f"{self.summary.filled} more people with a rejestr.io entry in "
+                "an older public post"
             )
         return [candidate.payload for candidate in planned]
 
@@ -1169,6 +1378,13 @@ class PeopleImport:
                 f"The first {sent} (--max-uploads) by tier: "
                 f"{ {tier: first.get(tier, 0) for tier in TIERS} }"
             )
+        if self.summary.groups and self.groups is not None:
+            by_group = Counter(self.groups[:sent])
+            print(
+                f"The first {sent} (--max-uploads) by priority group: "
+                f"{ {name: by_group[name] for name in self.summary.groups} }; "
+                f"the run's own tiers: {by_group['']}"
+            )
         if self.published is not None:
             print(
                 f"Of the first {sent}, changes to published pages: "
@@ -1225,6 +1441,7 @@ class PeopleImport:
                                 result.outcome,
                                 result.person_id,
                                 result.unplaced_companies(),
+                                self.groups[n] if self.groups else "",
                             )
                         )
                     if result.outcome == "created" and tier not in CREATING:
@@ -1271,6 +1488,10 @@ class PeopleImport:
         summary = self.summary
         if self.taken and not self.dry:
             summary.sent = self.write_sent()
+        for _, _, outcome, _, _, group in self.taken:
+            if group in summary.groups:
+                sent = summary.groups[group].setdefault("sent", {})
+                sent[outcome] = sent.get(outcome, 0) + 1
         summary.state = state
         summary.exit_code = code
         summary.counters = self.counters()
@@ -1331,11 +1552,14 @@ class PeopleImport:
                     # The companies the site took the person without a job
                     # at: such a line is not left alone (`remembered`).
                     "unplaced": unplaced,
+                    # The priority group it was sent for; None for the run's
+                    # own tiers.
+                    "group": group or None,
                 },
                 ensure_ascii=False,
             )
             + "\n"
-            for payload, tier, outcome, node, unplaced in self.taken
+            for payload, tier, outcome, node, unplaced, group in self.taken
         )
         data = gzip.compress(lines.encode("utf-8"), mtime=0)
         try:
@@ -1633,6 +1857,32 @@ def parser() -> argparse.ArgumentParser:
         "on to the pages behind them. Default: no cap but --max-uploads.",
     )
     parser.add_argument(
+        "--priority-group",
+        action="append",
+        type=parse_group,
+        metavar="NAME:SOURCE:BUDGET[:new=N]",
+        help="Priority: right after the noted pages, the people in a post now "
+        "at a group of companies, out of a budget of the group's own: BUDGET "
+        "people, at most N of them pages to create (default: BUDGET). They "
+        "count against no --max-* cap but --max-new, and the ones past the "
+        "budget go as if there were no group. SOURCE is treasury (the "
+        "companies on Prokuratoria's list of the Treasury's stakes), "
+        "krs=<KRS,KRS...> or category=<a company category>. Only drafts to "
+        "change and pages for people in an older public post: published "
+        "pages and the people only an odpis names keep their caps. "
+        "Repeatable: the groups go in the order given, and somebody in two "
+        "is sent for the first with room (entities.priority_groups).",
+    )
+    parser.add_argument(
+        "--fill-rejestrio-current",
+        action="store_true",
+        help="Priority: when the plan comes to fewer than --max-uploads, fill "
+        "the slots left with the people with a rejestr.io entry in an older "
+        "public post that --max-rejestrio-current left out, newest seat "
+        "first, within --max-new. Never published pages, nor the people only "
+        "an odpis names.",
+    )
+    parser.add_argument(
         "--companies-only",
         action="store_true",
         help="Priority: send no people. Of the people the run would send - the "
@@ -1733,6 +1983,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "--companies-only creates the companies of the people a priority run "
             "sends: it needs --scope priority"
         )
+    if (args.priority_group or args.fill_rejestrio_current) and args.scope != PRIORITY:
+        parse.error(
+            "--priority-group and --fill-rejestrio-current order a priority "
+            "run's plan: they need --scope priority"
+        )
+    if twice := repeated(args.priority_group or []):
+        parse.error(f"--priority-group: more than one group called {', '.join(twice)}")
     if args.refresh:
         known = pipeline_names() | {"all", REFRESH_NONE}
         unknown = sorted({name.removeprefix(":") for name in args.refresh} - known)
