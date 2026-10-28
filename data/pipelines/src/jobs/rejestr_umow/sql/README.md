@@ -40,9 +40,12 @@ Pozostałe skrypty są idempotentne (`IF NOT EXISTS`, warunkowe `CREATE ROLE`).
 Obie są rolami grupowymi (`NOLOGIN`). Aby utworzyć login aplikacyjny:
 
 ```sql
-CREATE ROLE app_scraper LOGIN PASSWORD '...';
+CREATE ROLE app_scraper LOGIN;
 GRANT rejestr_rw TO app_scraper;
 
-CREATE ROLE app_readonly LOGIN PASSWORD '...';
+CREATE ROLE app_readonly LOGIN;
 GRANT rejestr_ro TO app_readonly;
 ```
+
+Hasła ustaw w psql poleceniem `\password app_scraper` (i `\password app_readonly`),
+żeby nie trafiły do skryptu ani historii poleceń; klient trzyma je w `~/.pgpass`.

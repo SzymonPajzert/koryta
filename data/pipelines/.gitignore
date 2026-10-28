@@ -38,3 +38,6 @@ bip_crawl_out
 
 # The nightly's expected row counts and column coverage - tracked on purpose
 !src/tests/e2e/baseline.json
+
+# rejestr_umow --storage json writes here unless given --data-dir
+src/jobs/rejestr_umow/data/

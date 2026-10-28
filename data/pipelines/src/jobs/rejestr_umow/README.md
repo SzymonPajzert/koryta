@@ -90,9 +90,8 @@ brakujące umowy).
 ## Architektura
 
 ```
-config.py              # stałe (URL-e, limity, throttling, ścieżki) + DATABASE_URL (.env)
+config.py              # stałe (URL-e, limity, throttling, ścieżki) + DATABASE_URL
 main.py                # CLI, wybór backendu zapisu
-.env                   # zmienne środowiskowe (DATABASE_URL); ładowany automatycznie
 scraper/
 ├── models.py          # modele danych (dataclasses) + from_dict/to_dict
 ├── client.py          # klient HTTP (sesja, retry, backoff, throttle)
@@ -128,27 +127,26 @@ psql -d rejestr_umow -f sql/02_schema.sql
 psql -d rejestr_umow -f sql/03_roles.sql
 psql -d rejestr_umow -f sql/04_grants.sql
 
-# 2. Ustaw DATABASE_URL w pliku .env (ładowany automatycznie), np.:
-#    DATABASE_URL=postgresql://user:haslo@host/rejestr_umow
+# 2. Wskaż bazę zmienną DATABASE_URL: DSN bez hasła, hasło w ~/.pgpass
+export DATABASE_URL=postgresql://user@host/rejestr_umow
 python -m jobs.rejestr_umow.main --storage db --max-records 20
 ```
 
 Wybór backendu: `--storage db` (domyślnie) lub `--storage json`. DSN można podać
-przez `--dsn`, zmienną `DATABASE_URL` albo plik `.env` (wczytywany automatycznie
-przez `config.py` dzięki `python-dotenv`). Schemat bazy tworzą skrypty z `sql/` —
+przez `--dsn` albo zmienną `DATABASE_URL`. Schemat bazy tworzą skrypty z `sql/` —
 repozytorium zakłada, że tabele już istnieją.
 
 Skrypty z `sql/` zakładają też dwie role: `rejestr_rw` (odczyt+zapis, dla scrapera)
 i `rejestr_ro` (tylko odczyt). Szczegóły i kolejność uruchomienia — `sql/README.md`.
 
-> `.env` jest w `.gitignore` — nie commituj danych dostępowych.
+> Hasło nie trafia do DSN, flagi ani repozytorium: trzymaj je w `~/.pgpass`, jak
+> hasło do lustra CRU (patrz `data/pipelines/README.md`).
 
 #### Przykład: pełny przepływ z bazą danych
 
 ```bash
-# 0. Zależności
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+# 0. Zależności (z katalogu data/pipelines)
+uv sync && source .venv/bin/activate
 
 # 1. Baza, tabele, role i granty (PostgreSQL musi działać)
 psql -f sql/01_database.sql
@@ -156,22 +154,23 @@ psql -d rejestr_umow -f sql/02_schema.sql
 psql -d rejestr_umow -f sql/03_roles.sql
 psql -d rejestr_umow -f sql/04_grants.sql
 
-# 2. Login aplikacyjny dziedziczący z roli zapisu (jednorazowo)
-psql -d rejestr_umow -c "CREATE ROLE scraper LOGIN PASSWORD 'tajne';" \
+# 2. Login aplikacyjny dziedziczący z roli zapisu (jednorazowo); hasło ustaw
+#    w psql poleceniem \password scraper i wpisz do ~/.pgpass
+psql -d rejestr_umow -c "CREATE ROLE scraper LOGIN;" \
                      -c "GRANT rejestr_rw TO scraper;"
 
-# 3. Połączenie w .env (ładowane automatycznie)
-echo 'DATABASE_URL=postgresql://scraper:tajne@localhost:5432/rejestr_umow' > .env
+# 3. Połączenie: DSN bez hasła
+export DATABASE_URL=postgresql://scraper@localhost:5432/rejestr_umow
 
 # 4. Scrape do bazy — najpierw smoke test, potem pełny przebieg
 python -m jobs.rejestr_umow.main --storage db --max-records 20
 python -m jobs.rejestr_umow.main --storage db
 ```
 
-Alternatywnie, bez `.env`, DSN można podać wprost:
+Alternatywnie DSN można podać wprost:
 
 ```bash
-python -m jobs.rejestr_umow.main --storage db --dsn "postgresql://scraper:tajne@localhost:5432/rejestr_umow"
+python -m jobs.rejestr_umow.main --storage db --dsn "postgresql://scraper@localhost:5432/rejestr_umow"
 ```
 
 Scrape jest **wznawialny** — po przerwaniu ponowne uruchomienie dokańcza tylko
@@ -221,8 +220,9 @@ LIMIT 20;
 Do samego odczytu (raporty, analizy) używaj roli tylko-do-odczytu `rejestr_ro`:
 
 ```bash
-psql -d rejestr_umow -c "CREATE ROLE analityk LOGIN PASSWORD 'tajne';" \
+psql -d rejestr_umow -c "CREATE ROLE analityk LOGIN;" \
                      -c "GRANT rejestr_ro TO analityk;"
+# hasło: \password analityk w psql
 ```
 
 ## Testy
