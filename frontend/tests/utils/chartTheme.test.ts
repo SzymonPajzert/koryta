@@ -3,6 +3,7 @@ import {
   dayLabelStep,
   everyNthDayLabel,
   formatDayRange,
+  formatShare,
 } from "~/utils/chartTheme";
 
 /** The plot of „Co się działo w bazie” at 375px: the page's and the card's
@@ -69,5 +70,16 @@ describe("formatDayRange", () => {
 
   it("names a single day as itself", () => {
     expect(formatDayRange("2026-10-28", "2026-10-28")).toBe("28 paź");
+  });
+});
+
+describe("formatShare", () => {
+  it("gives a part's share of its column, then its count", () => {
+    expect(formatShare(19, 38)).toBe("50% (19)");
+    expect(formatShare(1, 3)).toBe("33% (1)");
+  });
+
+  it("calls an empty column's parts nothing", () => {
+    expect(formatShare(0, 0)).toBe("0% (0)");
   });
 });
