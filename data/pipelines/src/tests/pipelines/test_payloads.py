@@ -655,3 +655,44 @@ def test_upload_payloads_carry_the_wikipedia_article(mock_ctx, monkeypatch):
     # An owner the article named travels as the register's would.
     assert energa["owners"] == ["0000028860"]
     assert pd.isna(by_krs["0000076705"]["wikipedia"])
+
+
+def test_upload_payloads_file_the_treasury_s_companies_under_skarb_panstwa(
+    mock_ctx, monkeypatch
+):
+    """Beside their sector: PKP S.A. is the Treasury's whole, and a railway.
+    `treasury_share` comes back NaN, not None, for a company off the list."""
+    pipeline = Pipeline.create(CompaniesPayloads)
+    pipeline.companies = MockPipeline(
+        [
+            {
+                "krs": "0000019193",
+                "name": "POLSKIE KOLEJE PAŃSTWOWE",
+                "activity": ["70.10.Z"],
+                "is_public": True,
+                "parents": [],
+                "treasury_share": "100",
+            },
+            {
+                "krs": "0000076705",
+                "name": "PKP Szybka Kolej Miejska w Trojmiescie",
+                "activity": ["49.12.Z"],
+                "is_public": True,
+                "parents": [],
+                "treasury_share": float("nan"),
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [{"krs": krs} for krs in ("0000019193", "0000076705")]
+        ),
+    )
+
+    by_krs = {
+        row["krs"]: row for row in pipeline.process(mock_ctx).to_dict(orient="records")
+    }
+
+    assert by_krs["0000019193"]["categories"] == ["koleje", "skarb-panstwa"]
+    assert by_krs["0000076705"]["categories"] == ["koleje"]

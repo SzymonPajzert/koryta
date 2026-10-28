@@ -1045,7 +1045,7 @@ OBRONNOSC = Category(
     ),
 )
 
-COMPANY_CATEGORIES: tuple[Category, ...] = (
+SECTORS: tuple[Category, ...] = (
     SZPITALE,
     PRZYCHODNIE,
     WODOCIAGI,
@@ -1057,6 +1057,16 @@ COMPANY_CATEGORIES: tuple[Category, ...] = (
     SPORT,
     OBRONNOSC,
 )
+
+#: Not a sector but an owner: the companies the Treasury holds a stake in,
+#: any stake, as Prokuratoria's list names them (`Company.treasury_share`) -
+#: the list that makes them public too. Szymon, 2026-10-28: a category to
+#: filter by on the site, beside a company's sector rather than in place of
+#: one, so it has no rules of its own and `categories_for` adds it after the
+#: sectors.
+SKARB_PANSTWA = Category("skarb-panstwa", "Skarb Państwa")
+
+COMPANY_CATEGORIES: tuple[Category, ...] = (*SECTORS, SKARB_PANSTWA)
 
 CATEGORY_VALUES: tuple[str, ...] = tuple(c.value for c in COMPANY_CATEGORIES)
 
@@ -1143,6 +1153,7 @@ def categories_for(
     activity: list[str] | None,
     form: str | None = None,
     wiki_categories: list[str] | None = None,
+    treasury: bool = False,
 ) -> list[str]:
     """Every category a company belongs to, in `COMPANY_CATEGORIES` order.
 
@@ -1165,12 +1176,19 @@ def categories_for(
     sectors the filter had no category for: arms, chemicals, mining, finance.
     Arms has had one since 2026-10-20, `obronnosc`.
 
+    `treasury` is whether Prokuratoria's list names the company, which files it
+    under `SKARB_PANSTWA` as well - after its sectors, and without counting as
+    one: taken for a sector, it would keep the Wikipedia fallback from the
+    listed companies that declare no sector of their own, PGE Polska Grupa
+    Energetyczna among them.
+
     Returns a list rather than a set so the value is stable from one run to the
     next - it ends up in a Firestore document that a diff is taken against.
     """
+    owners = [SKARB_PANSTWA.value] if treasury else []
     normalized = str(krs).zfill(10) if krs is not None else None
     result = []
-    for category in COMPANY_CATEGORIES:
+    for category in SECTORS:
         if normalized is not None and normalized in category.excluded_krs:
             continue
         if normalized is not None and normalized in category.included_krs:
@@ -1184,10 +1202,10 @@ def categories_for(
         ):
             result.append(category.value)
     if result:
-        return result
+        return result + owners
     return [
         category.value
-        for category in COMPANY_CATEGORIES
+        for category in SECTORS
         if not (normalized is not None and normalized in category.excluded_krs)
         and matches_wikipedia(wiki_categories, category.wikipedia)
-    ]
+    ] + owners

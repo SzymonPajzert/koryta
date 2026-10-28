@@ -111,6 +111,18 @@ def test_the_supervisory_organ_is_filled_in_from_the_legal_form():
     assert payload["categories"] == ["szpitale"]
 
 
+def test_a_company_the_treasury_holds_a_stake_in_is_filed_under_skarb_panstwa():
+    """The `Companies` shape: a company created because somebody works there
+    carries the Treasury's share off Prokuratoria's list, and nothing worked
+    out from it."""
+    instance = uploader()
+    instance.submit_company(
+        "0000019193",
+        {"krs": "0000019193", "name": "PKP S.A.", "treasury_share": "100"},
+    )
+    assert sent(instance)["categories"] == ["koleje", "skarb-panstwa"]
+
+
 def test_an_ordinary_company_says_its_organ_is_nothing_special():
     """The empty string rather than a missing key: it is what clears a value
     written before the mapping was corrected. See `ingest/company.post.ts`."""

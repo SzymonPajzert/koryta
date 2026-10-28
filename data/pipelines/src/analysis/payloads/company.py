@@ -7,7 +7,7 @@ import pandas as pd
 
 from analysis.interesting import Companies
 from analysis.payloads.site import SiteSnapshot
-from entities.company import display_name
+from entities.company import display_name, on_the_treasury_list
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
 from scrapers.koryta.download import KorytaCompanies
@@ -267,7 +267,11 @@ class CompaniesPayloads(Pipeline):
                 "name": name,
                 "activity": list(activity),
                 "categories": categories_for(
-                    krs, list(activity), form, wiki_categories(row)
+                    krs,
+                    list(activity),
+                    form,
+                    wiki_categories(row),
+                    treasury=on_the_treasury_list(row.get("treasury_share")),
                 ),
                 "supervisory_body": supervisory_body(form),
                 "owners": owners,
