@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 import requests
 
-import config
+from jobs.rejestr_umow import config
 
 log = logging.getLogger(__name__)
 

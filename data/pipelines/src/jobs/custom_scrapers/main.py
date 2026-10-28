@@ -4,14 +4,14 @@ import os
 import sys
 from typing import List
 
-from scrapers.common import create_url_store_client
-from scrapers.fakt_scraper import FaktScraper
-from scrapers.gazeta_scraper import GazetaScraper
-from scrapers.nasze_miasto_scaper import NaszeMiastoScraper
-from scrapers.onet_scraper import OnetScraper
-from scrapers.tvn24_scraper import TVN24Scraper
-from scrapers.url_scraper import UrlScraper
-from scrapers.wp_scraper import WpScraper
+from jobs.custom_scrapers.scrapers.common import create_url_store_client
+from jobs.custom_scrapers.scrapers.fakt_scraper import FaktScraper
+from jobs.custom_scrapers.scrapers.gazeta_scraper import GazetaScraper
+from jobs.custom_scrapers.scrapers.nasze_miasto_scaper import NaszeMiastoScraper
+from jobs.custom_scrapers.scrapers.onet_scraper import OnetScraper
+from jobs.custom_scrapers.scrapers.tvn24_scraper import TVN24Scraper
+from jobs.custom_scrapers.scrapers.url_scraper import UrlScraper
+from jobs.custom_scrapers.scrapers.wp_scraper import WpScraper
 
 LOCAL_ENV = 'LOCAL'
 ENV = os.environ.get("ENV", LOCAL_ENV)

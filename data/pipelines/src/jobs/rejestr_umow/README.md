@@ -8,10 +8,12 @@ się flagą `--storage` bez zmian w reszcie kodu.
 
 ## Instalacja
 
+Scraper jest pakietem `jobs.rejestr_umow` w `data/pipelines` i działa w jego
+środowisku: wszystkie zależności są w `pyproject.toml`. Z katalogu `data/pipelines`:
+
 ```bash
-python -m venv .venv
+uv sync
 source .venv/bin/activate
-pip install -r requirements.txt
 ```
 
 ## Uruchomienie
@@ -22,13 +24,13 @@ pip install -r requirements.txt
 > przetestować bez bazy, dodaj `--storage json`.
 
 ```bash
-python main.py --max-records 20     # szybki smoke test (20 umów, do bazy)
-python main.py                      # pełny scrape: lista + detale wszystkich umów
-python main.py --search-only        # tylko lista umów
-python main.py --details-only       # tylko detale dla już pobranej listy
-python main.py --details-only --max-details 500   # detale, ale najwyżej 500 umów na przebieg
-python main.py --from 2026-07-01 --to 2026-07-02   # zakres dat zawarcia umowy
-python main.py --storage json --max-records 20     # test bez bazy (pliki JSON)
+python -m jobs.rejestr_umow.main --max-records 20     # szybki smoke test (20 umów, do bazy)
+python -m jobs.rejestr_umow.main                      # pełny scrape: lista + detale wszystkich umów
+python -m jobs.rejestr_umow.main --search-only        # tylko lista umów
+python -m jobs.rejestr_umow.main --details-only       # tylko detale dla już pobranej listy
+python -m jobs.rejestr_umow.main --details-only --max-details 500   # detale, ale najwyżej 500 umów na przebieg
+python -m jobs.rejestr_umow.main --from 2026-07-01 --to 2026-07-02   # zakres dat zawarcia umowy
+python -m jobs.rejestr_umow.main --storage json --max-records 20     # test bez bazy (pliki JSON)
 ```
 
 Najważniejsze opcje CLI:
@@ -103,8 +105,9 @@ scraper/
     └── sql_repo.py    # SqlAgreementRepository — implementacja PostgreSQL
 sql/                   # skrypty: baza, tabele, role, granty (patrz sql/README.md)
 tests/
-├── test_models.py     # round-trip parsowania na realnych odpowiedziach
-└── test_sql_repo.py   # testy backendu SQL (jednostkowe + integracyjne)
+├── conftest.py                    # realne odpowiedzi API jako fixture'y
+├── test_rejestr_umow_models.py    # round-trip parsowania na realnych odpowiedziach
+└── test_rejestr_umow_sql_repo.py  # testy backendu SQL (jednostkowe + integracyjne)
 ```
 
 ### Backend bazodanowy (PostgreSQL)
@@ -127,7 +130,7 @@ psql -d rejestr_umow -f sql/04_grants.sql
 
 # 2. Ustaw DATABASE_URL w pliku .env (ładowany automatycznie), np.:
 #    DATABASE_URL=postgresql://user:haslo@host/rejestr_umow
-python main.py --storage db --max-records 20
+python -m jobs.rejestr_umow.main --storage db --max-records 20
 ```
 
 Wybór backendu: `--storage db` (domyślnie) lub `--storage json`. DSN można podać
@@ -161,14 +164,14 @@ psql -d rejestr_umow -c "CREATE ROLE scraper LOGIN PASSWORD 'tajne';" \
 echo 'DATABASE_URL=postgresql://scraper:tajne@localhost:5432/rejestr_umow' > .env
 
 # 4. Scrape do bazy — najpierw smoke test, potem pełny przebieg
-python main.py --storage db --max-records 20
-python main.py --storage db
+python -m jobs.rejestr_umow.main --storage db --max-records 20
+python -m jobs.rejestr_umow.main --storage db
 ```
 
 Alternatywnie, bez `.env`, DSN można podać wprost:
 
 ```bash
-python main.py --storage db --dsn "postgresql://scraper:tajne@localhost:5432/rejestr_umow"
+python -m jobs.rejestr_umow.main --storage db --dsn "postgresql://scraper:tajne@localhost:5432/rejestr_umow"
 ```
 
 Scrape jest **wznawialny** — po przerwaniu ponowne uruchomienie dokańcza tylko
@@ -178,7 +181,7 @@ zostaną doczytane przy kolejnym uruchomieniu (dzięki wznawialności). Przydatn
 rozłożenia dużego backlogu detali na mniejsze porcje:
 
 ```bash
-python main.py --storage db --details-only --max-details 500
+python -m jobs.rejestr_umow.main --storage db --details-only --max-details 500
 ```
 
 ##### Aktualizacja inkrementalna (`--incremental`)
@@ -189,10 +192,10 @@ od najnowszych oznacza to, że kolejne strony też już mamy, więc nie są pobi
 
 ```bash
 # pierwszy, pełny import
-python main.py --storage db
+python -m jobs.rejestr_umow.main --storage db
 
 # kolejne uruchomienia (np. z crona) — pobiera tylko nowości i ich detale
-python main.py --storage db --incremental
+python -m jobs.rejestr_umow.main --storage db --incremental
 ```
 
 > Tryb zakłada, że API zwraca wyniki od najnowszych. Jeśli zmieniasz kolejność
@@ -224,16 +227,13 @@ psql -d rejestr_umow -c "CREATE ROLE analityk LOGIN PASSWORD 'tajne';" \
 
 ## Testy
 
-```bash
-python tests/test_models.py       # round-trip modeli (bez zależności)
-python tests/test_sql_repo.py     # testy jednostkowe _parse_date (bez bazy)
-pytest tests/                     # cały zestaw (wymaga: pip install pytest)
-```
-
-Testy **integracyjne** backendu SQL uruchamiają się tylko, gdy wskażesz bazę
-testową zmienną `TEST_DATABASE_URL` (inaczej są pomijane). Tworzą schemat
-i czyszczą tabele — użyj osobnej bazy, nie produkcyjnej:
+Z katalogu `data/pipelines`:
 
 ```bash
-TEST_DATABASE_URL="postgresql://user:haslo@localhost/rejestr_umow_test" pytest tests/test_sql_repo.py
+.venv/bin/pytest src/jobs/rejestr_umow
 ```
+
+Testy **integracyjne** backendu SQL stawiają tymczasowy PostgreSQL
+(pytest-postgresql, jak testy kolejki crawlera artykułów) i każdy dostaje świeżą
+bazę ze schematem z `sql/02_schema.sql`. Potrzebne są tylko binarki PostgreSQL
+(`pg_ctl`); żadnej istniejącej bazy nie dotykają.

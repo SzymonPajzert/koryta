@@ -8,9 +8,9 @@ import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
-import config
-from scraper.models import AgreementDetails, AgreementSearchResult
-from scraper.storage.base import AgreementRepository
+from jobs.rejestr_umow import config
+from jobs.rejestr_umow.scraper.models import AgreementDetails, AgreementSearchResult
+from jobs.rejestr_umow.scraper.storage.base import AgreementRepository
 
 log = logging.getLogger(__name__)
 

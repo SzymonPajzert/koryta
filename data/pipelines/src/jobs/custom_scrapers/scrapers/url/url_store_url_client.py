@@ -1,7 +1,7 @@
 from typing import List
 
-from scrapers.url.url_client import UrlClient
-from scrapers.url.url_store_client import UrlIn, UrlStoreClient
+from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
+from jobs.custom_scrapers.scrapers.url.url_store_client import UrlIn, UrlStoreClient
 
 
 class UrlStoreUrlClient(UrlClient):

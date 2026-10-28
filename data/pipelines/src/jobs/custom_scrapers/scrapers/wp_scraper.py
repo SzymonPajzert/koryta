@@ -6,9 +6,9 @@ from typing import List
 import requests as r
 from bs4 import BeautifulSoup
 
-from scrapers.url_scraper import UrlScraper
-from scrapers.url.file_url_client import FileUrlClient
-from scrapers.url.url_client import UrlClient
+from jobs.custom_scrapers.scrapers.url_scraper import UrlScraper
+from jobs.custom_scrapers.scrapers.url.file_url_client import FileUrlClient
+from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
 
 POLAND_URL = 'https://wiadomosci.wp.pl/polska-6750773603044864k'
 REGIONAL_URL = 'https://wiadomosci.wp.pl/regionalne-6750773603061248k'

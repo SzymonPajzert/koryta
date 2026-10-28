@@ -5,11 +5,11 @@ import itertools
 import logging
 from typing import Any, Optional
 
-import config
-from scraper.client import ApiClient, ApiError
-from scraper.details import fetch_details
-from scraper.search import iter_search_results
-from scraper.storage.base import AgreementRepository
+from jobs.rejestr_umow import config
+from jobs.rejestr_umow.scraper.client import ApiClient, ApiError
+from jobs.rejestr_umow.scraper.details import fetch_details
+from jobs.rejestr_umow.scraper.search import iter_search_results
+from jobs.rejestr_umow.scraper.storage.base import AgreementRepository
 
 log = logging.getLogger(__name__)
 

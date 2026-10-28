@@ -14,10 +14,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-import config
-from scraper.client import ApiClient
-from scraper.runner import run
-from scraper.storage import AgreementRepository, JsonAgreementRepository
+from jobs.rejestr_umow import config
+from jobs.rejestr_umow.scraper.client import ApiClient
+from jobs.rejestr_umow.scraper.runner import run
+from jobs.rejestr_umow.scraper.storage import AgreementRepository, JsonAgreementRepository
 
 # Format daty wymagany przez API w ciele zapytania (np. "2026.07.01").
 API_DATE_FORMAT = "%Y.%m.%d"
@@ -134,7 +134,7 @@ def make_repository(args: argparse.Namespace) -> AgreementRepository:
     """Zbuduj repozytorium wskazanego backendu (json | db)."""
     if args.storage == "db":
         # Import leniwy — backend JSON nie wymaga sterownika psycopg.
-        from scraper.storage import SqlAgreementRepository
+        from jobs.rejestr_umow.scraper.storage import SqlAgreementRepository
 
         return SqlAgreementRepository(dsn=args.dsn)
     return JsonAgreementRepository(data_dir=args.data_dir)
