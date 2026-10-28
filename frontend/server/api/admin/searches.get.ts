@@ -1,11 +1,14 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { defineEventHandler, getQuery, setResponseHeader } from "h3";
 import { z } from "zod";
+import { daysBetween } from "~~/server/utils/activityStats";
 import { requireOwner } from "~~/server/utils/auth";
 import {
   RETENTION_DAYS,
   SEARCHES_COLLECTION,
+  countSearchDays,
   summariseSearches,
+  type SearchDay,
   type SearchQuerySummary,
   type StoredSearch,
 } from "~~/shared/searchLog";
@@ -31,10 +34,40 @@ export type SearchesSummary = {
    * are counted. */
   truncated: boolean;
   queries: SearchQuerySummary[];
+  /** The window's searches by how they ended, a row per day from the first
+   * day it holds a search to today. Empty when it holds none. */
+  daily: SearchDay[];
 };
 
-/** What readers searched for over the last `days`, one row per query, for
- * /admin/wyszukiwania.
+/** The days to chart: from the oldest search read to today.
+ *
+ * Not from the window's first day, because the log is younger than the
+ * longer windows: it went live on 2026-10-20, and weeks of zeros before that
+ * would say nobody searched. When the answer stopped at `MAX_SEARCHES`, the
+ * oldest day read is only partly counted, so the chart starts the day after.
+ */
+function chartedDays(
+  searches: readonly StoredSearch[],
+  truncated: boolean,
+  today: string,
+): string[] {
+  const oldest = searches
+    .map((search) => search.at.slice(0, 10))
+    .reduce<string | undefined>(
+      (min, day) => (min === undefined || day < min ? day : min),
+      undefined,
+    );
+  if (!oldest) return [];
+  const days = daysBetween(oldest, today);
+  return truncated && days.length > 1 ? days.slice(1) : days;
+}
+
+/** What readers searched for over the last `days`, one row per query, and
+ * how those searches ended day by day, for /admin/wyszukiwania.
+ *
+ * The last `days` UTC days, today among them, as /api/stats/activity counts
+ * them: a window of whole days, so the chart's first column is not cut short
+ * at the hour the page was opened.
  *
  * The owner only, like the task list: the queries are names - mostly people
  * the site already has, but also whoever else a reader thought to look for -
@@ -48,10 +81,12 @@ export default defineEventHandler(async (event): Promise<SearchesSummary> => {
     throw createError({ statusCode: 400, message: "Invalid days" });
   }
   const { days } = parsed.data;
+  const today = new Date().toISOString().slice(0, 10);
+  const since = Date.parse(`${today}T00:00:00.000Z`) - (days - 1) * DAY_MS;
 
   const snapshot = await getFirestore(OPS_DATABASE)
     .collection(SEARCHES_COLLECTION)
-    .where("at", ">=", Timestamp.fromMillis(Date.now() - days * DAY_MS))
+    .where("at", ">=", Timestamp.fromMillis(since))
     .orderBy("at", "desc")
     .limit(MAX_SEARCHES)
     .get();
@@ -73,11 +108,13 @@ export default defineEventHandler(async (event): Promise<SearchesSummary> => {
     };
   });
 
+  const truncated = snapshot.size >= MAX_SEARCHES;
   return {
     days,
     total: searches.length,
     signedOut: searches.filter((search) => !search.signedIn).length,
-    truncated: snapshot.size >= MAX_SEARCHES,
+    truncated,
     queries: summariseSearches(searches),
+    daily: countSearchDays(searches, chartedDays(searches, truncated, today)),
   };
 });

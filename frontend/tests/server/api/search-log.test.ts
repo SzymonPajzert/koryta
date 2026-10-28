@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import logHandler from "../../../server/api/search/log.post";
 import summaryHandler from "../../../server/api/admin/searches.get";
 
@@ -172,6 +172,24 @@ describe("GET /api/admin/searches", () => {
     owner.yes = true;
     stored.length = 0;
     wheres.length = 0;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-14T15:30:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A stored search, as the log route writes it. */
+  const doc = (at: string, fields: Record<string, unknown> = {}) => ({
+    query: "jan kowalski",
+    results: 1,
+    unverified: 0,
+    outcome: "pick",
+    picked: "person",
+    signedIn: false,
+    at: Timestamp.fromMillis(Date.parse(at)),
+    ...fields,
   });
 
   it("is the owner's alone", async () => {
@@ -180,15 +198,8 @@ describe("GET /api/admin/searches", () => {
   });
 
   it("reads the window asked for and puts each query on one row", async () => {
+    // Newest first, as the route asks Firestore for them.
     stored.push(
-      {
-        query: "jan kowalski",
-        results: 0,
-        unverified: 0,
-        outcome: "abandon",
-        signedIn: false,
-        at: Timestamp.fromMillis(Date.parse("2026-10-13T10:00:00Z")),
-      },
       {
         query: "jan kowalski",
         results: 2,
@@ -199,16 +210,22 @@ describe("GET /api/admin/searches", () => {
         signedIn: true,
         at: Timestamp.fromMillis(Date.parse("2026-10-14T10:00:00Z")),
       },
+      {
+        query: "jan kowalski",
+        results: 0,
+        unverified: 0,
+        outcome: "abandon",
+        signedIn: false,
+        at: Timestamp.fromMillis(Date.parse("2026-10-13T10:00:00Z")),
+      },
     );
 
     const answer = (await summary({ days: "7" })) as Record<string, unknown>;
 
-    // Seven days back from when it ran, give or take the test's own time.
+    // Seven whole UTC days, today the seventh.
     const since = (wheres[0]![2] as InstanceType<typeof Timestamp>).millis;
     expect(wheres[0]!.slice(0, 2)).toEqual(["at", ">="]);
-    expect(Math.abs(Date.now() - since - 7 * 24 * 60 * 60 * 1000)).toBeLessThan(
-      1000,
-    );
+    expect(new Date(since).toISOString()).toBe("2026-10-08T00:00:00.000Z");
     expect(answer).toEqual({
       days: 7,
       total: 2,
@@ -226,7 +243,62 @@ describe("GET /api/admin/searches", () => {
           lastAt: "2026-10-14T10:00:00.000Z",
         },
       ],
+      daily: [
+        {
+          date: "2026-10-13",
+          all: { opened: 0, notOpened: 0, nothing: 1 },
+          signedOut: { opened: 0, notOpened: 0, nothing: 1 },
+        },
+        {
+          date: "2026-10-14",
+          all: { opened: 1, notOpened: 0, nothing: 0 },
+          signedOut: { opened: 0, notOpened: 0, nothing: 0 },
+        },
+      ],
     });
+  });
+
+  it("charts from the first day it holds a search, quiet days as zeros", async () => {
+    stored.push(
+      doc("2026-10-14T09:00:00Z"),
+      doc("2026-10-11T09:00:00Z", { outcome: "abandon", results: 0 }),
+    );
+
+    const answer = (await summary({ days: "30" })) as {
+      daily: { date: string; all: Record<string, number> }[];
+    };
+
+    expect(answer.daily.map((day) => day.date)).toEqual([
+      "2026-10-11",
+      "2026-10-12",
+      "2026-10-13",
+      "2026-10-14",
+    ]);
+    expect(answer.daily[1]!.all).toEqual({
+      opened: 0,
+      notOpened: 0,
+      nothing: 0,
+    });
+  });
+
+  it("charts nothing for a window nobody searched in", async () => {
+    const answer = (await summary()) as { daily: unknown[] };
+    expect(answer.daily).toEqual([]);
+  });
+
+  it("leaves the oldest day off the chart when it read only part of it", async () => {
+    stored.push(
+      ...Array.from({ length: 4999 }, () => doc("2026-10-14T09:00:00Z")),
+      doc("2026-10-13T23:00:00Z"),
+    );
+
+    const answer = (await summary()) as {
+      truncated: boolean;
+      daily: { date: string }[];
+    };
+
+    expect(answer.truncated).toBe(true);
+    expect(answer.daily.map((day) => day.date)).toEqual(["2026-10-14"]);
   });
 
   it("will not read past what is kept", async () => {
