@@ -4,9 +4,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterator, Optional
 
-import config
-from scraper.client import ApiClient
-from scraper.models import AgreementSearchResult, SearchPage
+from jobs.rejestr_umow import config
+from jobs.rejestr_umow.scraper.client import ApiClient
+from jobs.rejestr_umow.scraper.models import AgreementSearchResult, SearchPage
 
 log = logging.getLogger(__name__)
 

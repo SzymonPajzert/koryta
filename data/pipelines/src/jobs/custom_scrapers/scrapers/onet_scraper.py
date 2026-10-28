@@ -6,8 +6,8 @@ from typing import List
 from bs4 import BeautifulSoup
 from curl_cffi import requests as r
 
-from scrapers.url.url_client import UrlClient
-from scrapers.url_scraper import UrlScraper
+from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
+from jobs.custom_scrapers.scrapers.url_scraper import UrlScraper
 
 
 class OnetScraper(UrlScraper):

@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
-import config
-from scraper.models import AgreementDetails, AgreementSearchResult
-from scraper.storage.base import AgreementRepository
+from jobs.rejestr_umow import config
+from jobs.rejestr_umow.scraper.models import AgreementDetails, AgreementSearchResult
+from jobs.rejestr_umow.scraper.storage.base import AgreementRepository
 
 log = logging.getLogger(__name__)
 

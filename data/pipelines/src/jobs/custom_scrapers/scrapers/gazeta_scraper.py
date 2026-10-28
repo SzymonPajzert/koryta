@@ -6,9 +6,9 @@ from typing import List
 import requests as r
 from bs4 import BeautifulSoup
 
-from scrapers.url.file_url_client import FileUrlClient
-from scrapers.url.url_client import UrlClient
-from scrapers.url_scraper import UrlScraper
+from jobs.custom_scrapers.scrapers.url.file_url_client import FileUrlClient
+from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
+from jobs.custom_scrapers.scrapers.url_scraper import UrlScraper
 
 POLAND_URL = 'https://wiadomosci.gazeta.pl/polska/0,0.html#e=NavLink'
 POLITICAL_URL = 'https://wiadomosci.gazeta.pl/polityka/0,0.html#e=NavLink'

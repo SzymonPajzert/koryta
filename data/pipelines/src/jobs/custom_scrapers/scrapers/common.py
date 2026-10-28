@@ -1,8 +1,8 @@
 import os
 
-from scrapers.url.url_client import UrlClient
-from scrapers.url.url_store_client import UrlStoreClient
-from scrapers.url.url_store_url_client import UrlStoreUrlClient
+from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
+from jobs.custom_scrapers.scrapers.url.url_store_client import UrlStoreClient
+from jobs.custom_scrapers.scrapers.url.url_store_url_client import UrlStoreUrlClient
 
 
 def create_url_store_client(source: str) -> UrlClient:

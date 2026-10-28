@@ -1,7 +1,7 @@
 import logging
 from typing import List
 
-from scrapers.url.url_client import UrlClient
+from jobs.custom_scrapers.scrapers.url.url_client import UrlClient
 
 
 class FileUrlClient(UrlClient):

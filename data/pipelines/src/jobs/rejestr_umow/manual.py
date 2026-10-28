@@ -2,8 +2,8 @@ import logging
 import os
 from typing import Any
 
-from scraper.client import ApiClient
-from scraper.runner import run
+from jobs.rejestr_umow.scraper.client import ApiClient
+from jobs.rejestr_umow.scraper.runner import run
 
 
 def start_search(date_from, date_to, wojewodztwo) -> None:
@@ -23,7 +23,7 @@ def start_search(date_from, date_to, wojewodztwo) -> None:
 
     if wojewodztwo:
         filters["jsfp"] = {"wojewodztwo": wojewodztwo}
-    from scraper.storage import SqlAgreementRepository
+    from jobs.rejestr_umow.scraper.storage import SqlAgreementRepository
 
     with ApiClient(throttle=0.3) as client, \
             SqlAgreementRepository(dsn=os.environ["DATABASE_URL"]) as repo:

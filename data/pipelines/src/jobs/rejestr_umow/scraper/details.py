@@ -6,8 +6,8 @@ from typing import Optional
 
 import requests
 
-from scraper.client import ApiClient
-from scraper.models import AgreementDetails
+from jobs.rejestr_umow.scraper.client import ApiClient
+from jobs.rejestr_umow.scraper.models import AgreementDetails
 
 log = logging.getLogger(__name__)
 

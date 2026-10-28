@@ -1,12 +1,11 @@
-"""Testy parsowania modeli na realnych odpowiedziach API (round-trip)."""
-import sys
-from pathlib import Path
+"""Prawdziwe odpowiedzi API rejestrumow.gov.pl, wspólne dla testów scrapera."""
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import copy
+from typing import Any
 
-from scraper.models import AgreementDetails, AgreementSearchResult, SearchPage
+import pytest
 
-SEARCH_RESPONSE = {
+SEARCH_RESPONSE: dict[str, Any] = {
     "content": [
         {
             "idUmowy": "00008114-9087-4c3e-adbd-68183eb30998",
@@ -25,7 +24,7 @@ SEARCH_RESPONSE = {
     "limit": 2,
 }
 
-DETAILS_RESPONSE = {
+DETAILS_RESPONSE: dict[str, Any] = {
     "idUmowy": "00008114-9087-4c3e-adbd-68183eb30998",
     "podstawoweDane": {
         "statusUmowy": "Aktywna",
@@ -72,30 +71,13 @@ DETAILS_RESPONSE = {
 }
 
 
-def test_search_result_roundtrip():
-    result = AgreementSearchResult.from_dict(SEARCH_RESPONSE["content"][0])
-    assert result.id_umowy == "00008114-9087-4c3e-adbd-68183eb30998"
-    assert result.wartosc_przedmiotu_umowy == 3048.78
-    assert result.to_dict() == SEARCH_RESPONSE["content"][0]
+@pytest.fixture
+def search_response() -> dict[str, Any]:
+    """Strona wyników wyszukiwania (`POST /api-dp/v1/agreements/search`)."""
+    return copy.deepcopy(SEARCH_RESPONSE)
 
 
-def test_search_page():
-    page = SearchPage.from_dict(SEARCH_RESPONSE)
-    assert page.total_elements == 61223
-    assert len(page.content) == 1
-    assert page.content[0].status_umowy == "Aktywna"
-
-
-def test_details_roundtrip():
-    details = AgreementDetails.from_dict(DETAILS_RESPONSE)
-    assert details.id_umowy == "00008114-9087-4c3e-adbd-68183eb30998"
-    assert details.podstawowe_dane.numer_umowy == "GMT-5637/26"
-    assert details.strony_umowy[0].dane_adresowe.kod_pocztowy == "26-600"
-    assert details.to_dict() == DETAILS_RESPONSE
-
-
-if __name__ == "__main__":
-    test_search_result_roundtrip()
-    test_search_page()
-    test_details_roundtrip()
-    print("OK — wszystkie testy przeszły")
+@pytest.fixture
+def details_response() -> dict[str, Any]:
+    """Detale umowy z tej strony (`GET /api-dp/v1/agreement/{idUmowy}`)."""
+    return copy.deepcopy(DETAILS_RESPONSE)
