@@ -444,6 +444,87 @@ def test_the_new_registrations_are_read_whole_then_the_backlog_counted():
     assert job.to_read(queue_of(("200", "never")), 0, new_registrations=True) == []
 
 
+def test_a_listed_file_gives_each_number_once_in_its_order(tmp_path):
+    path = tmp_path / "list.txt"
+    path.write_text(
+        "# Prokuratoria's companies nobody crawled\n"
+        "427979\n"
+        "0000290680  # IDH Development\n"
+        "\n"
+        "427979\n"
+    )
+
+    assert job.listed_numbers(str(path)) == ["0000427979", "0000290680"]
+
+
+@pytest.mark.parametrize("line", ["7010379476 1", "VITRA TRADE", "00001109928000"])
+def test_a_line_that_is_not_a_krs_number_stops_the_run(tmp_path, line):
+    path = tmp_path / "list.txt"
+    path.write_text(f"427979\n{line}\n")
+
+    with pytest.raises(ValueError, match="list.txt:2"):
+        job.listed_numbers(str(path))
+
+
+def test_the_listed_numbers_are_read_first_and_never_twice(
+    monkeypatch, runs, a_queue, tmp_path
+):
+    path = tmp_path / "list.txt"
+    path.write_text("3\n959172\n")
+    seen: dict = {}
+
+    class Client:
+        def create_object(self, *args, **kwargs):
+            raise AssertionError("nothing is written here")
+
+    def read_register(todo, log, interval, run, status=None, deadline=None):
+        seen.update(todo=todo)
+        return 0
+
+    monkeypatch.setattr(job, "Client", Client)
+    monkeypatch.setattr(job, "read_register", read_register)
+
+    assert job.main(["--krs-file", str(path), "--reads", "3"]) == 0
+
+    assert seen["todo"] == ["0000000003", "0000959172", "0000000001", "0000000002"]
+    [run] = runs
+    assert run.kwargs["total"] == 4
+
+
+def test_a_listed_file_is_read_with_no_backlog_asked_for(
+    monkeypatch, runs, a_queue, tmp_path
+):
+    path = tmp_path / "list.txt"
+    path.write_text("959172\n")
+    seen: dict = {}
+
+    class Client:
+        def create_object(self, *args, **kwargs):
+            raise AssertionError("nothing is written here")
+
+    def read_register(todo, log, interval, run, status=None, deadline=None):
+        seen.update(todo=todo)
+        return 0
+
+    monkeypatch.setattr(job, "Client", Client)
+    monkeypatch.setattr(job, "read_register", read_register)
+
+    assert job.main(["--krs-file", str(path)]) == 0
+
+    assert seen["todo"] == ["0000959172"]
+
+
+def test_a_plan_counts_a_listed_number_as_listed():
+    queue = queue_of(("0000000001", "new"), ("0000000002", "never"))
+
+    todo, reasons = job.plan(
+        queue, ["0000000002", "0000959172"], ["0000000001", "0000000002"]
+    )
+
+    assert todo == ["0000000002", "0000959172", "0000000001"]
+    assert reasons == {"listed": 2, "new": 1}
+
+
 def test_a_night_with_no_new_registrations_still_reports_its_run(monkeypatch, runs):
     """A weekend's bulletin registers nobody; the page should still see the
     night ran rather than wonder whether it did."""
