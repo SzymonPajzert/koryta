@@ -4,13 +4,16 @@ import io
 
 import pandas as pd
 
+from scrapers.krs.data import public_name_key
 from scrapers.krs.public_owners import (
     REASON_FOUNDING_ORGAN,
     REASON_JST,
     REASON_PUBLIC_BODY,
+    REASON_PUBLIC_NAME,
     REASON_PUBLIC_PARENT,
     REASON_PUBLIC_REGON,
     REASON_SKARB_PANSTWA,
+    REASON_TREASURY_LIST,
     classify,
     direct_public_owner,
     ledger_records,
@@ -143,6 +146,81 @@ def test_an_owner_with_a_krs_number_is_left_to_the_parent_test():
         )
         is None
     )
+
+
+UM_POZNAN = "UNIWERSYTET MEDYCZNY IM. KAROLA MARCINKOWSKIEGO W POZNANIU"
+
+
+def test_an_owner_with_no_regon_is_read_by_its_whole_catalogue_name():
+    # Uniwersyteckie Centrum Transferu Technologii Medycznych (0000369095): the
+    # register names the university and gives neither a KRS number nor a REGON.
+    names = frozenset({public_name_key(UM_POZNAN)})
+    spin_off = entry("0000369095", owner(UM_POZNAN))
+
+    assert direct_public_owner(spin_off, pomorskie()) is None
+    assert direct_public_owner(spin_off, pomorskie(), frozenset(), names) == (
+        REASON_PUBLIC_NAME,
+        UM_POZNAN,
+        None,
+        None,
+    )
+
+
+def test_a_name_is_not_read_where_the_register_gives_a_regon():
+    names = frozenset({public_name_key(UM_POZNAN)})
+    with_regon = entry("0000369095", owner(UM_POZNAN, regon="12345678900000"))
+
+    assert direct_public_owner(with_regon, pomorskie(), frozenset(), names) is None
+
+
+#: Prokuratoria's list as `treasury_stakes` reads it: NIP to percent.
+TREASURY = {"5272661780": "1.25", "7010379476": "100"}
+
+
+def test_a_company_on_the_treasury_list_is_public_when_the_register_is_silent():
+    # LED Lease S.A. (0000427979): an S.A. with several shareholders, so the
+    # register names none, while Prokuratoria lists ARP's stake in it.
+    led_lease = entry("0000427979", nip="5272661780")
+
+    assert direct_public_owner(led_lease, pomorskie()) is None
+    assert direct_public_owner(led_lease, pomorskie(), treasury=TREASURY) == (
+        REASON_TREASURY_LIST,
+        "SKARB PAŃSTWA",
+        SKARB_PANSTWA,
+        0.0125,
+    )
+
+
+def test_an_owner_the_register_names_outranks_the_treasury_list():
+    city = entry("0000000002", owner("GMINA MIASTA GDAŃSKA"), nip="5272661780")
+
+    found = direct_public_owner(city, pomorskie(), treasury=TREASURY)
+
+    assert found is not None
+    assert found[0] == REASON_JST
+
+
+def test_classify_passes_the_names_and_the_treasury_list_on():
+    found = classify(
+        [
+            entry("0000369095", owner(UM_POZNAN)),
+            # VITRA TRADE: the register gives KOWR the company's own KRS number
+            entry(
+                "0000465110",
+                owner("KRAJOWY OŚRODEK WSPARCIA ROLNICTWA", krs="0000465110"),
+                nip="7010379476",
+            ),
+        ],
+        pomorskie(),
+        set(),
+        public_names=frozenset({public_name_key(UM_POZNAN)}),
+        treasury=TREASURY,
+    )
+
+    assert [(row.krs, row.reason) for row in found] == [
+        ("0000369095", REASON_PUBLIC_NAME),
+        ("0000465110", REASON_TREASURY_LIST),
+    ]
 
 
 def test_classify_reads_owners_by_their_regon_and_follows_them_down():

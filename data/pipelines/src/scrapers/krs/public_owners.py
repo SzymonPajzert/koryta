@@ -1,7 +1,7 @@
 """Which companies in the register ledger the public owns, and through whom.
 
 `KRSRegisterEntries` holds what the register says about who owns each company;
-this decides which of those owners are the public. Six kinds of answer, most
+this decides which of those owners are the public. Seven kinds of answer, most
 direct first, and a company carries the first one that fits:
 
 - **founding organ** - `organPodmiotZalozycielskiMinisterNadzorujacy`, which is
@@ -19,7 +19,14 @@ direct first, and a company carries the first one that fits:
   catalogue has the ownership code for it
   (`scrapers.krs.data.public_owner_regons`):
   a public university, owner of its spin-offs, a water association, a gmina
-  whose name the register misspells.
+  whose name the register misspells. Where the register gives no REGON either,
+  the owner's whole name, if the catalogue files an entity of that name as
+  public (`public_owner_names`).
+- **Prokuratoria's list of the Treasury's stakes**, by the company's own NIP,
+  for a company whose register names no owner the rules above place: an S.A.
+  with several shareholders lists none, a spółka z o.o. none under 10%, so the
+  stakes ARP took for debts in LED Lease or TXM read as nobody's. The list
+  `CompaniesKRS` marks companies public by (`treasury_stakes`).
 - **a company already known to be public**, by its KRS number: anything
   `CompaniesKRS` marks public, and anything this finds, followed to a fixed
   point, so a subsidiary of a subsidiary of a gmina's holding company arrives
@@ -30,11 +37,12 @@ direct first, and a company carries the first one that fits:
 Two things it cannot see, and says so rather than guessing. An S.A. with several
 shareholders names none of them in the register, so a województwo's minority
 in one is invisible here; REGON's ownership code (`REGON_PUBLIC_OWNERSHIP`)
-covers some of those. And a public owner under 10% of a spółka z o.o. is not
-listed at all.
+covers some of those, and Prokuratoria's list the Treasury's. And a public
+owner under 10% of a spółka z o.o. is not listed at all.
 """
 
 import itertools
+import math
 import typing
 from dataclasses import asdict, dataclass
 
@@ -42,7 +50,14 @@ import numpy as np
 import pandas as pd
 
 from scrapers.krs.columns import is_public, padded_krs
-from scrapers.krs.data import CompaniesHardcoded, regon_stem
+from scrapers.krs.data import (
+    CompaniesHardcoded,
+    nip_digits,
+    public_name_key,
+    read_treasury_list,
+    regon_stem,
+    treasury_stakes,
+)
 from scrapers.krs.list import CompaniesKRS, krs_by_regon
 from scrapers.krs.public_bodies import public_body
 from scrapers.krs.register import (
@@ -60,6 +75,8 @@ REASON_SKARB_PANSTWA = "skarb_panstwa"
 REASON_JST = "jst"
 REASON_PUBLIC_BODY = "public_body"
 REASON_PUBLIC_REGON = "public_regon"
+REASON_PUBLIC_NAME = "public_name"
+REASON_TREASURY_LIST = "treasury_list"
 REASON_PUBLIC_PARENT = "public_parent"
 
 
@@ -86,15 +103,27 @@ class PublicOwnership:
     share: float | None
 
 
+def treasury_share(stake: str | None) -> float | None:
+    """The fraction Prokuratoria's list gives, which it prints in percent."""
+    try:
+        share = float(str(stake).replace(",", ".")) / 100
+    except ValueError:
+        return None
+    return None if math.isnan(share) else share
+
+
 def direct_public_owner(
     entry: dict,
     jst: JstIndex | None,
     public_regons: typing.Collection[str] = frozenset(),
+    public_names: typing.Collection[str] = frozenset(),
+    treasury: typing.Mapping[str, str] | None = None,
 ) -> tuple[str, str, str | None, float | None] | None:
     """`(reason, owner, owner_id, share)` if an owner is plainly the public.
 
     Plainly meaning without knowing anything about other companies - the parent
-    test needs the whole public set and is `classify` below.
+    test needs the whole public set and is `classify` below. `treasury` is
+    Prokuratoria's list, NIP to the share it prints (`treasury_stakes`).
     """
     if entry.get("founding_organ"):
         return REASON_FOUNDING_ORGAN, "", None, None
@@ -113,6 +142,20 @@ def direct_public_owner(
             return REASON_PUBLIC_BODY, name, None, share
         if not owner.get("krs") and regon_stem(owner.get("regon")) in public_regons:
             return REASON_PUBLIC_REGON, name, None, share
+        if (
+            not owner.get("krs")
+            and not owner.get("regon")
+            and public_name_key(name) in public_names
+        ):
+            return REASON_PUBLIC_NAME, name, None, share
+    stake = (treasury or {}).get(nip_digits(entry.get("nip")) or "")
+    if stake is not None:
+        return (
+            REASON_TREASURY_LIST,
+            "SKARB PAŃSTWA",
+            SKARB_PANSTWA,
+            treasury_share(stake),
+        )
     return None
 
 
@@ -123,6 +166,8 @@ def classify(
     public_regons: typing.Collection[str] = frozenset(),
     crawl: typing.Iterable[tuple[str | None, str]] = (),
     struck_off: typing.Collection[str] = frozenset(),
+    public_names: typing.Collection[str] = frozenset(),
+    treasury: typing.Mapping[str, str] | None = None,
 ) -> list[PublicOwnership]:
     """Every entry the public owns, directly or through a public parent.
 
@@ -136,6 +181,8 @@ def classify(
     over the ledger's entries and the crawl's `(regon, krs)` together, so a
     REGON either holds twice is the holder not struck off: `struck_off` from
     the crawl, and the ledger's own struck-off entries.
+
+    `public_names` and `treasury` go to `direct_public_owner` as they are.
     """
     entries = list(entries)
     rows = [e for e in entries if e.get("status") == STATUS_OK]
@@ -162,7 +209,7 @@ def classify(
         )
 
     for entry in rows:
-        direct = direct_public_owner(entry, jst, public_regons)
+        direct = direct_public_owner(entry, jst, public_regons, public_names, treasury)
         if direct is not None:
             record(entry, *direct)
 
@@ -251,6 +298,8 @@ class CompaniesPublicByRegister(Pipeline[PublicOwnership]):
             self.hardcoded.public_owner_regons,
             zip(companies["regon"], padded_krs(companies["krs"])),
             struck_off_krss(companies),
+            self.hardcoded.public_owner_names,
+            treasury_stakes(read_treasury_list(ctx)),
         )
         df = pd.DataFrame([asdict(row) for row in found], columns=columns)
         print(
