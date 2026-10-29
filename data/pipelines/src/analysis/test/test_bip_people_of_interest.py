@@ -167,8 +167,7 @@ def test_rows_carry_the_unit_people_and_priority(frames):
     assert jan.unit_level == "gmina"
     assert list(jan.koryta_ids) == ["k1"]
     assert list(jan.rejestrio_ids) == ["111", "333"]
-    assert list(jan.register_birth_dates) == ["1960-05-01"]
-    assert jan.page_birth_date is None
+    assert not jan.page_has_birth_date
     assert jan.on_site and jan.published
     assert jan.priority == 0  # published, and the page shows no birth date
     assert jan.namesakes == 1  # the younger Jan Kowalski on the same council
@@ -224,12 +223,12 @@ def test_priority_puts_undated_published_pages_first():
     assert priority(False, False, False) == 3
 
 
-def test_page_birth_date_comes_from_the_page(frames):
+def test_whether_the_page_shows_a_birth_date(frames):
     people, person_pkw, koryta = frames
     koryta.loc[koryta.id == "k1", "birth_date"] = "1960-05-01T00:00:00"
     out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
     jan = out[out.last_name == "Kowalski"].iloc[0]
-    assert jan.page_birth_date == "1960-05-01" and jan.priority == 2
+    assert jan.page_has_birth_date and jan.priority == 2
 
 
 def test_unit_level():
@@ -282,12 +281,24 @@ def test_double_surname_joins_whatever_the_separator(frames):
     assert "RAZIK-TRZISZKA" in set(out.last_name)
 
 
-def test_birth_year_may_match_the_register_year(frames):
+def test_no_register_birth_date_goes_in_or_out(frames):
     people, person_pkw, koryta = frames
-    # PeopleMerged's attached PKW record says 1958, the register says 1960; the
-    # 2024 row (1960) is two years off the first and none off the second.
+    people["birth_date"] = "1111-11-11"  # the register's, sentinel
+    people["birth_year"] = 1111
+    out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2018)
+    assert "1111" not in out.to_json()
+    assert not {c for c in out.columns if "birth_date" in c} - {"page_has_birth_date"}
+    # and the register's columns are not needed at all
+    bare = people.drop(columns=["birth_date", "birth_year"])
+    again = people_of_interest(duckdb.connect(), bare, person_pkw, koryta, since=2018)
+    assert list(again.key) == list(out.key)
+
+
+def test_pkw_rows_of_one_person_two_years_apart_join(frames):
+    people, person_pkw, koryta = frames
+    # PeopleMerged attached the 1958 record; the 2024 row says 1960 (wiek is
+    # counted on different days in different elections).
     people.loc[0, "pkw_birth_year"] = 1958
-    people.loc[0, "birth_year"] = 1960
     out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
     assert ("Kowalski", 1960) in {
         (r.last_name, r.pkw_birth_year) for r in out.itertuples()
@@ -331,4 +342,4 @@ def test_a_candidacy_with_an_undated_page_counts_as_undated(frames):
     out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
     jan = out[out.last_name == "Kowalski"].iloc[0]
     assert sorted(jan.koryta_ids) == ["k1", "k3"]
-    assert jan.page_birth_date is None and jan.priority == 0
+    assert not jan.page_has_birth_date and jan.priority == 0

@@ -11,15 +11,19 @@ not uploaded yet. Their PKW record there names the office and the year but
 places the candidacy only to the powiat, so each won local candidacy is joined
 back to ``PeoplePKW``, whose ``teryt_candidacy`` is the unit itself - the gmina
 whose BIP has the declaration. The join is by name, year, office and powiat,
-with PKW's birth year within one of the merged record's: both sides are PKW's
+with PKW's birth year within two of the merged record's: both sides are PKW's
 own rows, so this finds the row ``PeopleMerged`` was built from, not a new
 match.
 
+No register birth date goes in or out: the declarations are read to check the
+register against, so the register's date must not travel with them or stand
+in for theirs. KRS and BIP meet later, in a join of their own (task
+link-bip-birth-dates-to-people).
+
     koryta BipPeopleOfInterest [--bip-poi-since 2018]
 
-Site pages with no register link are not in ``PeopleMerged`` and so not here
-yet; their candidacies are edges on the page, not PKW rows (task
-bip-people-of-interest-site-only-pages).
+Site pages with no register link are not here: without a KRS match they are
+out of scope (Szymon, 10-29), and a match brings them in through PeopleMerged.
 """
 
 import argparse
@@ -36,6 +40,15 @@ from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import Context, Pipeline
 
 DEFAULT_SINCE = 2018
+#: The PeopleMerged columns read: PKW's names and year, the elections, the ids.
+MERGED_COLUMNS = (
+    "koryta_id",
+    "rejestrio_id",
+    "base_first_name",
+    "base_last_name",
+    "pkw_birth_year",
+    "elections",
+)
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -90,6 +103,10 @@ def people_of_interest(
         # Built before PeoplePKW had the office: every local candidacy would
         # look like every other in its town, so refuse rather than guess.
         raise ValueError("person_pkw has no `office` column; rebuild PeoplePKW")
+    # Only PKW's side of PeopleMerged and the ids that point back at people:
+    # the register's birth date never enters, so it cannot travel with the
+    # declarations, nor stand in for one; KRS and BIP meet in a later join.
+    people_merged = people_merged[list(MERGED_COLUMNS)]
     for name, frame in (
         ("bip_poi_merged", people_merged),
         ("bip_poi_pkw", person_pkw),
@@ -113,8 +130,6 @@ def people_of_interest(
                 bip_poi_fold(base_first_name) AS fn,
                 bip_poi_fold(base_last_name) AS ln,
                 TRY_CAST(pkw_birth_year AS INTEGER) AS pkw_birth_year,
-                TRY_CAST(birth_year AS INTEGER) AS register_birth_year,
-                CAST(TRY_CAST(birth_date AS DATE) AS VARCHAR) AS birth_date,
                 unnest(elections) AS e
             FROM bip_poi_merged
             WHERE elections IS NOT NULL
@@ -122,7 +137,6 @@ def people_of_interest(
         won AS (
             SELECT DISTINCT
                 koryta_id, rejestrio_ids, fn, ln, pkw_birth_year,
-                register_birth_year, birth_date,
                 CAST(e.election_year AS INTEGER) AS election_year,
                 CAST(e.office AS VARCHAR) AS office,
                 CAST(e.teryt_candidacy_powiat AS VARCHAR) AS powiat
@@ -167,28 +181,24 @@ def people_of_interest(
             FROM pkw p JOIN people_by_name n USING (fn, ln, teryt, election_year)
         ),
         joined AS (
-            SELECT p.*, w.koryta_id, w.rejestrio_ids, w.birth_date
+            SELECT p.*, w.koryta_id, w.rejestrio_ids
             FROM won w
             JOIN pkw_counted p
               ON p.fn = w.fn AND p.ln = w.ln
              AND p.election_year = w.election_year
              AND p.office = w.office
              AND left(p.teryt, 4) = w.powiat
-             -- Within a year of the register's birth year or of the PKW record
-             -- PeopleMerged attached: either is the person's own.
-             AND (p.pkw_birth_year IS NULL
-                  OR (w.pkw_birth_year IS NULL AND w.register_birth_year IS NULL)
-                  OR abs(p.pkw_birth_year - w.pkw_birth_year) <= 1
-                  OR abs(p.pkw_birth_year - w.register_birth_year) <= 1)
+             -- PKW's years only: two of one person's rows can differ by two,
+             -- as "wiek" counts on different days in different elections.
+             AND (p.pkw_birth_year IS NULL OR w.pkw_birth_year IS NULL
+                  OR abs(p.pkw_birth_year - w.pkw_birth_year) <= 2)
         ),
         site AS (
             SELECT
                 CAST(id AS VARCHAR) AS koryta_id,
                 coalesce(CAST(is_public AS BOOLEAN), false) AS published,
-                CAST(
-                    TRY_CAST(nullif(CAST(birth_date AS VARCHAR), '') AS DATE) AS VARCHAR
-                )
-                    AS birth_date
+                -- Whether the page shows one, not which: the date stays out.
+                coalesce(CAST(birth_date AS VARCHAR), '') <> '' AS dated
             FROM bip_poi_koryta
             WHERE merged_into IS NULL OR CAST(merged_into AS VARCHAR) = ''
         )
@@ -201,12 +211,9 @@ def people_of_interest(
             ))) AS koryta_ids,
             list_sort(list_distinct(flatten(list(coalesce(j.rejestrio_ids, [])))))
                 AS rejestrio_ids,
-            list_sort(list_distinct(coalesce(
-                list(j.birth_date) FILTER (WHERE j.birth_date IS NOT NULL), []
-            ))) AS register_birth_dates,
-            -- A candidacy's page shows a birth date only if every page of it does.
-            CASE WHEN bool_or(s.koryta_id IS NOT NULL AND s.birth_date IS NULL)
-                 THEN NULL ELSE min(s.birth_date) END AS page_birth_date,
+            -- Dated only if every page of the candidacy shows a birth date.
+            coalesce(bool_and(s.dated) FILTER (WHERE s.koryta_id IS NOT NULL), false)
+                AS page_has_birth_date,
             bool_or(s.koryta_id IS NOT NULL) AS on_site,
             coalesce(bool_or(s.published), false) AS published
         FROM joined j
@@ -219,7 +226,7 @@ def people_of_interest(
         return pd.DataFrame(
             columns=[f for f in BipPersonOfInterest.__dataclass_fields__]
         )
-    for column in ("koryta_ids", "rejestrio_ids", "register_birth_dates"):
+    for column in ("koryta_ids", "rejestrio_ids"):
         # DuckDB hands lists over as numpy arrays; the dataclass wants lists.
         rows[column] = rows[column].map(
             lambda v: [] if v is None else [str(x) for x in v]
@@ -234,13 +241,10 @@ def people_of_interest(
         )
     ]
     rows["unit_level"] = rows.teryt.map(unit_level)
-    rows["page_birth_date"] = rows.page_birth_date.astype(object).where(
-        rows.page_birth_date.notna(), None
-    )
     rows["priority"] = [
-        priority(published, on_site, page_date is not None)
-        for published, on_site, page_date in zip(
-            rows.published, rows.on_site, rows.page_birth_date
+        priority(published, on_site, dated)
+        for published, on_site, dated in zip(
+            rows.published, rows.on_site, rows.page_has_birth_date
         )
     ]
     rows["key"] = [
