@@ -4,20 +4,74 @@
        failed to load. The same rule `ExtractionPersonFacts` and
        `SuccessionPersonChanges` follow. -->
   <PageSection
-    v-if="mentions.length > 0"
-    title="Artykuły, które o tym wspominają"
+    v-if="mentions.length > 0 || declarations.length > 0"
+    :id="declarations.length > 0 ? DECLARATIONS_ANCHOR : undefined"
+    :title="sectionTitle"
     :icon="mdiNewspaperVariantOutline"
-    class="mt-4"
+    class="mt-4 mention-section"
     data-testid="node-mentions"
   >
     <template #lead>
       <p class="k-lead" data-testid="node-mentions-lead">
-        Teksty prasowe, w których pada ta nazwa - z artykułów przeanalizowanych
-        przez model i ze źródeł dodanych w notatkach oraz przy powiązaniach.
+        <template v-if="mentions.length > 0">
+          Teksty prasowe, w których pada ta nazwa - z artykułów
+          przeanalizowanych przez model i ze źródeł dodanych w notatkach oraz
+          przy powiązaniach.
+        </template>
+        <template v-if="declarations.length > 0">
+          {{
+            declarations.length > 1
+              ? "Oświadczenia majątkowe z BIP mają tę samą datę urodzenia co ta strona."
+              : "Oświadczenie majątkowe z BIP ma tę samą datę urodzenia co ta strona."
+          }}
+        </template>
       </p>
     </template>
 
     <v-row dense>
+      <!-- The declarations first: on a page the site published because of
+           them they are why the page is here. A card like an article's, but
+           out to the office's own BIP rather than to a page of ours - a
+           declaration is not an article and gets no page on the site. -->
+      <v-col
+        v-for="declaration in declarations"
+        :key="declaration.url"
+        cols="12"
+        md="6"
+        data-nosnippet
+        data-testid="person-declarations"
+      >
+        <v-card
+          variant="outlined"
+          class="h-100"
+          :href="declaration.url"
+          target="_blank"
+          rel="noopener"
+          :aria-label="declarationLabel(declaration)"
+        >
+          <v-card-text class="d-flex align-start ga-3 py-3">
+            <v-avatar
+              :image="getDomainIcon(declaration.url)"
+              size="24"
+              class="mt-1"
+            />
+            <div class="flex-grow-1 min-w-0">
+              <div class="text-body-2 font-weight-medium">
+                {{ declarationTitle(declaration) }}
+              </div>
+              <div
+                class="d-flex align-center flex-wrap ga-2 mt-1 text-caption text-medium-emphasis"
+              >
+                <span>{{ declarationPlace(declaration) }}</span>
+                <span v-if="hostOf(declaration.url)"
+                  >· {{ hostOf(declaration.url) }}
+                  <v-icon :icon="mdiOpenInNew" size="12"
+                /></span>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
       <!-- Keyed on the article, which the endpoint lists once, not on the
            edge: a relation citing two articles puts its id on both cards. -->
       <v-col v-for="mention in mentions" :key="mention.nodeId" cols="12" md="6">
@@ -78,8 +132,13 @@
  * piece that says who sits on which board names both of them.
  */
 import { computed } from "vue";
-import { mdiNewspaperVariantOutline } from "@mdi/js";
+import { mdiNewspaperVariantOutline, mdiOpenInNew } from "@mdi/js";
 import { authFetch, useAuthState } from "~/composables/auth";
+import {
+  DECLARATIONS_ANCHOR,
+  uniqueDeclarations,
+  usePersonDeclarations,
+} from "~/composables/personDeclarations";
 import { useDomainIcon } from "~/composables/useDomainIcon";
 import { generateEntityUrl } from "~~/shared/slugs";
 import type {
@@ -87,7 +146,14 @@ import type {
   NodeMentions,
 } from "~~/server/api/nodes/[id]/mentions.get";
 
-const { nodeId } = defineProps<{ nodeId: string }>();
+const { nodeId, withDeclarations = false } = defineProps<{
+  nodeId: string;
+  /** A person's page also lists their asset declarations on BIP here, with
+   * the articles: Szymon, round bip-osoba-r1 (2026-10-29), "This could be
+   * integrated with the articles mentioning section to not duplicate the
+   * ideas". */
+  withDeclarations?: boolean;
+}>();
 
 const { user } = useAuthState();
 const { getDomainIcon } = useDomainIcon();
@@ -108,6 +174,63 @@ const { data } = authFetch<NodeMentions>(
 );
 
 const mentions = computed(() => data.value?.mentions ?? []);
+
+const declarationData = withDeclarations
+  ? usePersonDeclarations(nodeId).data
+  : ref(null);
+const declarations = computed(() => uniqueDeclarations(declarationData.value));
+
+type Declaration = (typeof declarations.value)[number];
+
+/** The section's name for what it holds: articles, or a person's own
+ * declarations, or both. A declaration does not mention the person - it is
+ * theirs - so on its own it is called what it is. */
+const sectionTitle = computed(() => {
+  if (declarations.value.length === 0)
+    return "Artykuły, które o tym wspominają";
+  if (mentions.value.length === 0) {
+    return declarations.value.length > 1
+      ? "Oświadczenia majątkowe"
+      : "Oświadczenie majątkowe";
+  }
+  // Szymon's wording, round bip-osoba-r2 (2026-10-29): "Może po prostu
+  // Prasa i dokumenty".
+  return "Prasa i dokumenty";
+});
+
+function declarationTitle(declaration: Declaration) {
+  return declaration.year
+    ? `Oświadczenie majątkowe za ${declaration.year}`
+    : "Oświadczenie majątkowe";
+}
+
+/** „Rada gminy · Strzelin (gmina miejsko-wiejska)”: the office before the
+ * unit, joined rather than declined - „Rada Gminy Strzelin” would take a
+ * grammar of Polish place names the site does not have. */
+function declarationPlace(declaration: Declaration) {
+  return [declaration.office, declaration.unit].filter(Boolean).join(" · ");
+}
+
+/** What a screen reader says for the card: its title first, so a reader who
+ * steers by voice can name it by what they see, then where it opens. */
+function declarationLabel(declaration: Declaration) {
+  return [
+    declarationTitle(declaration),
+    declarationPlace(declaration),
+    hostOf(declaration.url),
+    "otwiera się w nowej karcie",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function hostOf(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
 
 function articleUrl(mention: NodeMention) {
   return generateEntityUrl(
@@ -136,5 +259,10 @@ function dateOf(mention: NodeMention) {
 <style scoped>
 .min-w-0 {
   min-width: 0;
+}
+
+/* Clear of the app bar when the header's line scrolls here. */
+.mention-section {
+  scroll-margin-top: 80px;
 }
 </style>
