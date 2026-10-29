@@ -15,7 +15,7 @@ from urllib.robotparser import RobotFileParser
 from curl_cffi import CurlHttpVersion
 from curl_cffi import requests as cffi_requests
 
-from scrapers.common.fetch import wants_http1
+from scrapers.common.fetch import verify, wants_http1
 from scrapers.stores import Context, Web
 
 
@@ -26,6 +26,7 @@ def _get_robots(url: str, user_agent: str) -> Any:
         "impersonate": "chrome136",
         "headers": {"User-Agent": user_agent},
         "timeout": 10,
+        "verify": verify(),
     }
     try:
         return cffi_requests.get(url, **kwargs)

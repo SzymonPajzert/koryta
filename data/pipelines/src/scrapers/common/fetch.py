@@ -17,11 +17,25 @@ DEFAULT_UA = "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"
 _HTTP1_ONLY = re.compile(r"curl: \((?:16|52|92)\)")
 
 _sessions = threading.local()
+#: The certificates every GET verifies against; None is curl's own roots.
+_ca_bundle: str | None = None
 
 
 def wants_http1(error: object) -> bool:
     """Whether a failed GET is worth asking again over HTTP/1.1."""
     return bool(_HTTP1_ONLY.search(str(error)))
+
+
+def use_ca_bundle(path: str | None) -> None:
+    """Verify every GET from now on against ``path``: `stores.tls.ca_bundle`,
+    curl's roots and the intermediates servers leave out."""
+    global _ca_bundle
+    _ca_bundle = path
+
+
+def verify() -> str | bool:
+    """What a GET passes as ``verify``: the bundle when there is one."""
+    return _ca_bundle or True
 
 
 def _session(impersonate: str) -> requests.Session:
@@ -62,6 +76,8 @@ def http_get(
             headers={"User-Agent": user_agent},
             timeout=timeout,
             allow_redirects=True,
+            # A str is taken as the CA file (CURLOPT_CAINFO); the stub says bool.
+            verify=verify(),  # type: ignore[arg-type]
             **http1,  # type: ignore[arg-type]
         )
 
