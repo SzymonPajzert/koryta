@@ -91,6 +91,9 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   of public bodies and the "BIP" link on it. The registry has an office for only
   905 of 2,479 gminas; with the catalogue 2,335 of the 2,418 units on the 10-29
   list have a start.
+- `unit_starts.csv` holds checked BIP addresses for units whose start is
+  missing or dead in both lists; a row's declarations page and BIP replace
+  what the lists had.
 - Each unit's walk reads `--pages-per-candidacy` (15) pages for each of its
   candidacies, at least `--unit-pages` (150) and at most `--max-unit-pages`
   (1000), best first towards "oświadczenia majątkowe" and the seekers' own
@@ -131,7 +134,7 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   `unreachable`, `robots`, `no_declarations`, `not_listed`, `download_failed`,
   `timeout`, `error`. Tables `bip_poi`, `bip_poi_docs` and `bip_units`
   (`stores/bip_people.py`) hold that. A later run searches the pending ones and
-  the `--poi-retry` reasons (default `unreachable,error,timeout`; add
+  the `--poi-retry` reasons (default `unreachable,error,timeout,no_seed`; add
   `unconfirmed` or any other); `--poi-refresh` searches everybody. A search that
   finds nothing never undoes an earlier find or an earlier downloaded file.
 - The run ends with this run's outcomes, every candidacy's, and both per election
