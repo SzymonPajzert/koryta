@@ -43,6 +43,8 @@ class BipPersonOfInterest:
     election_year: int
     priority: int
     middle_name: str | None = None
+    #: "Strzelin (gmina miejsko-wiejska)", for people reading the record.
+    unit_name: str = ""
     pkw_age: int | None = None
     pkw_birth_year: int | None = None
     namesakes: int = 0

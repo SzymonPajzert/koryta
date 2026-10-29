@@ -298,3 +298,12 @@ def test_unit_seeds_merge_both_lists(terc):
     assert seeds["180701"].bip_urls == [] and seeds["180701"].www_urls == [
         "http://www.chorkowka.pl"
     ]
+
+
+def test_unit_names_for_people(terc):
+    assert terc.unit_name("140302") == "Garwolin (gmina wiejska)"
+    assert terc.unit_name("140305") == "Łaskarzew (gmina miejsko-wiejska)"
+    assert terc.unit_name("146502") == "Bemowo (dzielnica)"
+    assert terc.unit_name("140300") == "powiat garwoliński"
+    assert terc.unit_name("140000") == "województwo mazowieckie"
+    assert terc.unit_name("999999") == ""

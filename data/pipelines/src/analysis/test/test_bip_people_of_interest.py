@@ -11,6 +11,7 @@ from analysis.bip_people_of_interest import (
 )
 from analysis.people import PeopleMerged
 from entities.bip import BipPersonOfInterest
+from scrapers.bip.units import terc_index
 from scrapers.koryta.download import KorytaPeople
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import _annotated_classes, iterate_pipeline
@@ -343,3 +344,24 @@ def test_a_candidacy_with_an_undated_page_counts_as_undated(frames):
     jan = out[out.last_name == "Kowalski"].iloc[0]
     assert sorted(jan.koryta_ids) == ["k1", "k3"]
     assert not jan.page_has_birth_date and jan.priority == 0
+
+
+def test_rows_name_their_unit_for_people(frames):
+    terc = terc_index(
+        pd.DataFrame(
+            [
+                ("12", "", "", "", "MAŁOPOLSKIE"),
+                ("12", "01", "", "", "bocheński"),
+                ("12", "01", "05", "3", "Nowy Wiśnicz"),
+                ("10", "", "", "", "ŁÓDZKIE"),
+                ("10", "03", "", "", "kutnowski"),
+            ],
+            columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"],
+        )
+    )
+    out = people_of_interest(duckdb.connect(), *frames, since=2018, terc=terc)
+    names = dict(zip(out.teryt, out.unit_name))
+    assert names["120105"] == "Nowy Wiśnicz (gmina miejsko-wiejska)"
+    assert names["100300"] == "powiat kutnowski"
+    plain = people_of_interest(duckdb.connect(), *frames, since=2018)
+    assert set(plain.unit_name) == {""}

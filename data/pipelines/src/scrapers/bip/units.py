@@ -47,6 +47,12 @@ from scrapers.bip.registry import RegistryEntry, host_from_url
 #: TERC's kinds of gmina (RODZ): 1 urban, 2 rural, 3 urban-rural, 8 a Warsaw
 #: dzielnica. 4 and 5, the town and rural part of a 3, share its code.
 URBAN, RURAL, MIXED, DZIELNICA = "1", "2", "3", "8"
+_KIND_WORDS = {
+    URBAN: "gmina miejska",
+    RURAL: "gmina wiejska",
+    MIXED: "gmina miejsko-wiejska",
+    DZIELNICA: "dzielnica",
+}
 
 _GMINA_OFFICE = re.compile(
     r"^(urzad\s+(gminy|miasta|miejski|miasta i gminy|gminy i miasta|miejsko[ -]gminny|"
@@ -106,6 +112,20 @@ class Terc:
     gmina_kinds: dict[str, str]
     powiat_names: dict[str, str]
     woj_codes: dict[str, str]
+    woj_names: dict[str, str] = field(default_factory=dict)
+
+    def unit_name(self, teryt: str) -> str:
+        """A unit's name for people: "Strzelin (gmina miejsko-wiejska)",
+        "powiat garwoliński", "województwo mazowieckie"; "" when TERC lacks it."""
+        if teryt.endswith("0000"):
+            name = self.woj_names.get(teryt[:2], "")
+            return f"województwo {name.lower()}" if name else ""
+        if teryt.endswith("00"):
+            name = self.powiat_names.get(teryt[:4], "")
+            return f"powiat {name}" if name else ""
+        name = self.gmina_names.get(teryt[:6], "")
+        kind = _KIND_WORDS.get(self.gmina_kinds.get(teryt[:6], ""), "")
+        return f"{name} ({kind})" if name and kind else name
 
     def gminas_named(self, powiat: str, name: str) -> list[str]:
         wanted = fold(name)
@@ -131,18 +151,20 @@ def terc_index(frame: pd.DataFrame) -> Terc:
     gmina_kinds: dict[str, str] = {}
     powiat_names: dict[str, str] = {}
     woj_codes: dict[str, str] = {}
+    woj_names: dict[str, str] = {}
     for row in frame.fillna("").itertuples(index=False):
         woj, pow_, gmi, kind, name = (
             str(getattr(row, c)) for c in ("WOJ", "POW", "GMI", "RODZ", "NAZWA")
         )
         if not pow_:
             woj_codes[fold(name)] = woj
+            woj_names[woj] = name
         elif not gmi:
             powiat_names[woj + pow_] = name
         elif kind in (URBAN, RURAL, MIXED, DZIELNICA):
             gmina_names[woj + pow_ + gmi] = name
             gmina_kinds[woj + pow_ + gmi] = kind
-    return Terc(gmina_names, gmina_kinds, powiat_names, woj_codes)
+    return Terc(gmina_names, gmina_kinds, powiat_names, woj_codes, woj_names)
 
 
 def is_city_powiat(powiat: str) -> bool:

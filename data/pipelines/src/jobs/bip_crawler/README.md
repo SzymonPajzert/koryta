@@ -73,7 +73,7 @@ writing untouched.
 ### `crawl --people-of-interest`
 
 Instead of the blind crawl, looks up the oświadczenia majątkowe of the people in
-`BipPeopleOfInterest` (one row per won local candidacy since 2018, read as the
+`BipPeopleOfInterest` (one row per won local candidacy since 2014, read as the
 KRS jobs read `ScrapeRejestrIO`), unit by unit. Meant for predator, by hand, not
 the nightly: it is a long one-off with its own CPU budget.
 
@@ -112,6 +112,9 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   the `--poi-retry` reasons (default `unreachable,error,timeout`; add
   `unconfirmed` or any other); `--poi-refresh` searches everybody. A search that
   finds nothing never undoes an earlier find or an earlier downloaded file.
+- The run ends with this run's outcomes, every candidacy's, and both per election
+  year: 2014-only candidacies are past BIP's six years more often than not, and the
+  per-year counts are where that shows.
 - `--poi-max-priority`: 0 published pages without a birth date, 1 drafts without
   one, 2 pages with one, 3 people not on the site yet. `--poi-limit` caps the
   candidacies, `--max-minutes` the run (walks stop at it, units not started stay

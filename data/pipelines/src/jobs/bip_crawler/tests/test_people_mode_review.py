@@ -314,3 +314,20 @@ def test_one_crawler_per_out(tmp_path):
     with single_crawler(tmp_path), pytest.raises(SystemExit):
         with single_crawler(tmp_path):
             pass
+
+
+def test_outcomes_by_election_year():
+    store = MemoryBipPeopleStore()
+    store.upsert_people(
+        [
+            PersonRow("a", "u1", 0, 2014, "Ewa", "Lis", {}),
+            PersonRow("b", "u1", 0, 2014, "Jan", "Kot", {}),
+            PersonRow("c", "u1", 0, 2024, "Ola", "Mak", {}),
+        ]
+    )
+    store.record_person("a", "not_found", "not_listed", 0, "r")
+    store.record_person("c", "found", "named", 1, "r")
+    assert store.outcomes_by_year() == {
+        2014: {"not_found:not_listed": 1, "pending": 1},
+        2024: {"found": 1},
+    }

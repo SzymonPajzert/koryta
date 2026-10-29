@@ -568,7 +568,11 @@ def run_people_mode(
         robots_unreachable=robots_unreachable,
     )
     counts = search.run(todo)
-    print(
-        json.dumps({"this_run": counts, "all_candidacies": store.outcomes()}, indent=2)
-    )
+    summary = {
+        "this_run": counts,
+        "all_candidacies": store.outcomes(),
+        # 2014's declarations are mostly past BIP's six years: this shows how many
+        "by_election_year": store.outcomes_by_year(),
+    }
+    print(json.dumps(summary, indent=2))
     return EXIT_TRY_LATER if search.timed_out else 0
