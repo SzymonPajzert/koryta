@@ -12,6 +12,8 @@ import {
 } from "~~/server/utils/fetch";
 import {
   buildStructuralFilterOps,
+  matchedTargets,
+  placeNames,
   type NodeFilterOp,
 } from "~~/server/utils/nodeFilters";
 import {
@@ -122,10 +124,11 @@ export default defineEventHandler(async (event) => {
     const db = getFirestore("koryta-pl");
 
     type Op = NodeFilterOp;
-    const { ops, empty } = await buildStructuralFilterOps(
+    const edgeScope = user ? "all" : "approved";
+    const { ops, empty, targetIds } = await buildStructuralFilterOps(
       db,
       query,
-      user ? "all" : "approved",
+      edgeScope,
     );
     if (empty) {
       return { nodes: {}, total: 0 };
@@ -307,6 +310,26 @@ export default defineEventHandler(async (event) => {
       // Published pages only, by the filter above, and still not their
       // unpublished relations - see `dropDraftStats`.
       nodesRecord[node.id] = user ? node : dropDraftStats(node);
+    }
+
+    // Only beside a company or region filter, and only for the page being
+    // returned: which employers and regions put each row here, so the table
+    // can mark them, and the names of the companies among them, for a row
+    // that reached one only through the company it works for. Present but
+    // empty means the filters are set and nothing the rows hold matched them.
+    if (targetIds) {
+      const matched = matchedTargets(
+        nodesArray,
+        targetIds,
+        edgeScope,
+        query.currentlyEmployed,
+      );
+      return {
+        nodes: nodesRecord,
+        total,
+        matched,
+        matchedPlaces: await placeNames(Object.values(matched).flat(), !!user),
+      };
     }
 
     return { nodes: nodesRecord, total };

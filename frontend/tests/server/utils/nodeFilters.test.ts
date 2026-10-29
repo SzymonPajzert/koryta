@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { buildStructuralFilterOps } from "../../../server/utils/nodeFilters";
+import {
+  buildStructuralFilterOps,
+  matchedTargets,
+  placeNames,
+} from "../../../server/utils/nodeFilters";
 
 const { mockFetchNodes, mockGet, mockWhere, mockCollection } = vi.hoisted(
   () => {
@@ -623,5 +627,129 @@ describe("buildStructuralFilterOps, the result of an election", () => {
     );
 
     expect(ops).toHaveLength(0);
+  });
+});
+
+describe("what the company and region filters resolved to", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchNodes.mockImplementation((type: string) =>
+      Promise.resolve(
+        type === "region"
+          ? regions
+          : {
+              szpitalWarszawa: { categories: ["szpitale"] },
+              szpitalRadom: { categories: ["szpitale"] },
+              szpitalKrakow: { categories: ["szpitale"] },
+              wodociagiWarszawa: { categories: ["wodociagi"] },
+            },
+      ),
+    );
+  });
+
+  it("gives the places the company filters intersected to", async () => {
+    mockDb();
+    const { targetIds } = await buildStructuralFilterOps(
+      db,
+      { category: "szpitale", companyTeryt: "14" },
+      "approved",
+    );
+    expect(targetIds?.sort()).toEqual(["szpitalRadom", "szpitalWarszawa"]);
+  });
+
+  it("adds the regions a region filter covers after them", async () => {
+    mockDb({ regionByTeryt: "teryt1261" });
+    const { targetIds } = await buildStructuralFilterOps(
+      db,
+      { category: "wodociagi", teryt: "1261" },
+      "approved",
+    );
+    expect(targetIds).toEqual(["wodociagiWarszawa", "teryt1261"]);
+  });
+
+  it("gives none when neither kind of filter is set", async () => {
+    mockDb();
+    const { targetIds } = await buildStructuralFilterOps(
+      db,
+      { parties: ["PiS"], minVotes: 3 },
+      "approved",
+    );
+    expect(targetIds).toBeUndefined();
+  });
+});
+
+describe("matchedTargets", () => {
+  /** A person, with what each scope says they point at. */
+  const somebody = (
+    id: string,
+    all: {
+      targetNodeIds?: string[];
+      currentlyEmployedTargetNodeIds?: string[];
+    },
+    approved = all,
+  ) => ({ id, stats: { edges: { all, approved } } });
+
+  it("gives each person the ids that let them through", () => {
+    const nodes = [
+      somebody("a", { targetNodeIds: ["mesko", "mpk", "teryt26"] }),
+      somebody("b", { targetNodeIds: ["mpk"] }),
+    ];
+    expect(matchedTargets(nodes, ["mesko", "pgz"], "all")).toEqual({
+      a: ["mesko"],
+    });
+  });
+
+  it("reads the scope the filter read", () => {
+    const nodes = [
+      somebody(
+        "a",
+        { targetNodeIds: ["mesko", "pgz"] },
+        { targetNodeIds: ["pgz"] },
+      ),
+    ];
+    expect(matchedTargets(nodes, ["mesko", "pgz"], "approved")).toEqual({
+      a: ["pgz"],
+    });
+  });
+
+  it("counts only the posts held now under `selected`, as the filter does", () => {
+    const nodes = [
+      somebody("a", {
+        targetNodeIds: ["telesystem", "mesko"],
+        currentlyEmployedTargetNodeIds: ["mesko"],
+      }),
+    ];
+    expect(
+      matchedTargets(nodes, ["telesystem", "mesko"], "all", "selected"),
+    ).toEqual({ a: ["mesko"] });
+  });
+
+  it("copes with a person whose stats hold no arrays", () => {
+    expect(matchedTargets([{ id: "a" }], ["mesko"], "all")).toEqual({});
+  });
+});
+
+describe("placeNames", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchNodes.mockResolvedValue({
+      pgz: { name: "POLSKA GRUPA ZBROJENIOWA (Radom)", visibility: true },
+      szkic: { name: "SPÓŁKA W SZKICU", visibility: false },
+    });
+  });
+
+  it("names the places, each once, and skips what is not a place", async () => {
+    expect(await placeNames(["pgz", "teryt26", "pgz"], true)).toEqual({
+      pgz: "POLSKA GRUPA ZBROJENIOWA (Radom)",
+    });
+  });
+
+  it("names a draft only to a reader who may see drafts", async () => {
+    expect(await placeNames(["pgz", "szkic"], false)).toEqual({
+      pgz: "POLSKA GRUPA ZBROJENIOWA (Radom)",
+    });
+    expect(await placeNames(["szkic"], true)).toEqual({
+      szkic: "SPÓŁKA W SZKICU",
+    });
   });
 });

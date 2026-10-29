@@ -102,18 +102,29 @@ function memOnly(applyMem: NodeFilterOp["applyMem"]): NodeFilterOp {
  * Returns `empty: true` when a filter value resolves to nothing (e.g. an
  * unknown KRS number), meaning the result set is empty regardless of the
  * other filters. `fields` is the union of what the ops read, for callers that
- * project their query - see `NodeFilterOp.fields`.
+ * project their query - see `NodeFilterOp.fields`. `targetIds` are the place
+ * and region ids the company and region filters resolved to, absent when
+ * neither is set - see `matchedTargets`.
  */
 export async function buildStructuralFilterOps(
   db: FirebaseFirestore.Firestore,
   query: StructuralQuery,
   edgeScope: "all" | "approved",
-): Promise<{ ops: NodeFilterOp[]; fields: string[]; empty: boolean }> {
+): Promise<{
+  ops: NodeFilterOp[];
+  fields: string[];
+  empty: boolean;
+  targetIds?: string[];
+}> {
   const ops: NodeFilterOp[] = [];
+  // Every id a `targetNodesOp` below was handed. Place and region node ids
+  // cannot collide, so the two filters share one list.
+  let targetIds: string[] | undefined;
   const result = (empty: boolean) => ({
     ops,
     fields: [...new Set(ops.flatMap((op) => op.fields ?? []))],
     empty,
+    targetIds,
   });
   // Firestore allows only one array-contains/array-contains-any clause per
   // query, so once one op uses it, later array ops must run in memory.
@@ -209,6 +220,7 @@ export async function buildStructuralFilterOps(
       return result(true);
     }
     ops.push(targetNodesOp(placeIds, query, edgeScope, arrayFilterUsed));
+    targetIds = placeIds;
     arrayFilterUsed = true;
   }
 
@@ -218,6 +230,7 @@ export async function buildStructuralFilterOps(
       return result(true);
     }
     ops.push(targetNodesOp(regionIds, query, edgeScope, arrayFilterUsed));
+    targetIds = [...(targetIds ?? []), ...regionIds];
     // Every op that consumes the array-filter slot has to claim it, or the
     // next filter below - the election - reads a stale false.
     arrayFilterUsed = true;
@@ -398,6 +411,55 @@ async function placesInRegions(
     }
   }
   return [...placeIds];
+}
+
+/** For each node, which of `targetIds` let it through: the employers and
+ * regions behind a row, so the table can mark them among everything else the
+ * row lists.
+ *
+ * Read off the same arrays `targetNodesOp` matches against, and narrowed the
+ * same way by `currentlyEmployed`, so what a row marks is exactly what put it
+ * on the page - including the current-post rule and the regions folded in
+ * above a company, which the browser has no copy of. A node none of them
+ * reached is left out rather than given an empty list. */
+export function matchedTargets(
+  nodes: any[],
+  targetIds: string[],
+  edgeScope: "all" | "approved",
+  currentlyEmployed?: string,
+): Record<string, string[]> {
+  const wanted = new Set(targetIds);
+  const matched: Record<string, string[]> = {};
+  for (const node of nodes) {
+    const hits = memTargets(node, edgeScope, currentlyEmployed).filter((id) =>
+      wanted.has(id),
+    );
+    if (hits.length > 0) matched[node.id] = hits;
+  }
+  return matched;
+}
+
+/** What to call the places among `ids`, from the cached place list.
+ *
+ * `targetNodeIds` carries every company above a person's employer as well as
+ * the employer itself, so a person can be in a sector only because the company
+ * they work for is owned by one in it - in energetyka that is 722 of 1,596
+ * people on the 2026-10-29 export, none of whose own employers is filed under
+ * the sector. Their row has no company of its own to mark, so it names the one
+ * that brought them in, and needs the name to do it. Region ids are skipped,
+ * and so are drafts for a reader who may not see them. */
+export async function placeNames(
+  ids: string[],
+  showDrafts: boolean,
+): Promise<Record<string, string>> {
+  const places = await fetchNodes("place");
+  const names: Record<string, string> = {};
+  for (const id of new Set(ids)) {
+    const place = places[id];
+    if (!place?.name || (!showDrafts && !place.visibility)) continue;
+    names[id] = place.name;
+  }
+  return names;
 }
 
 /** Filter to people connected to any of the given place/region node ids. */

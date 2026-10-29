@@ -52,6 +52,8 @@ type Listed = {
     string,
     { id: string; stats?: { edges?: Record<string, unknown> } }
   >;
+  matched?: Record<string, string[]>;
+  matchedPlaces?: Record<string, string>;
 };
 
 async function list(query: Record<string, string>, signedIn = false) {
@@ -131,5 +133,30 @@ describe("GET /api/nodes", () => {
   it("leaves a signed in reader's paginated page whole", async () => {
     const { nodes } = await list({ type: "person", limit: "10" }, true);
     expect(nodes.published!.stats!.edges).toHaveProperty("all");
+  });
+
+  it("says which companies put each row on a page filtered by company", async () => {
+    const page = await list(
+      { type: "person", limit: "10", place: "company-3" },
+      true,
+    );
+    expect(page.matched).toEqual({ published: ["company-3"] });
+  });
+
+  it("reads a logged out reader's matches off the published relations", async () => {
+    // company-3 is in the `all` scope only, so to a guest the row reached it
+    // through nothing they may see.
+    const page = await list({
+      type: "person",
+      limit: "10",
+      place: "company-3",
+    });
+    expect(page.matched).toEqual({});
+  });
+
+  it("says nothing of matches where no company or region filter is set", async () => {
+    const page = await list({ type: "person", limit: "10" }, true);
+    expect(page).not.toHaveProperty("matched");
+    expect(page).not.toHaveProperty("matchedPlaces");
   });
 });
