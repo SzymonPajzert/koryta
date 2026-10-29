@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from dataclasses import dataclass
 
-from curl_cffi import requests
+from curl_cffi import CurlHttpVersion, requests
 
 DEFAULT_UA = "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"
 
+#: curl's errors for a server that spoils HTTP/2 (16 framing, 92 a stream it
+#: resets) or closes without a word (52). Plenty of BIP servers answer the same
+#: request over HTTP/1.1: 235 of the people mode's unreachable candidacies on
+#: 10-29.
+_HTTP1_ONLY = re.compile(r"curl: \((?:16|52|92)\)")
+
 _sessions = threading.local()
+
+
+def wants_http1(error: object) -> bool:
+    """Whether a failed GET is worth asking again over HTTP/1.1."""
+    return bool(_HTTP1_ONLY.search(str(error)))
 
 
 def _session(impersonate: str) -> requests.Session:
@@ -44,13 +56,22 @@ def http_get(
     user_agent: str = DEFAULT_UA,
     impersonate: str = "chrome136",
 ) -> HttpResult:
-    try:
-        response = _session(impersonate).get(
+    def get(**http1: object) -> requests.Response:
+        return _session(impersonate).get(
             url,
             headers={"User-Agent": user_agent},
             timeout=timeout,
             allow_redirects=True,
+            **http1,  # type: ignore[arg-type]
         )
+
+    try:
+        try:
+            response = get()
+        except Exception as exc:
+            if not wants_http1(exc):
+                raise
+            response = get(http_version=CurlHttpVersion.V1_1)
     except Exception as exc:
         return HttpResult(
             url=url, status=0, content_type="", content=b"", error=str(exc)[:200]

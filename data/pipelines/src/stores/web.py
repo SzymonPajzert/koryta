@@ -12,9 +12,27 @@ from typing import Any
 from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
+from curl_cffi import CurlHttpVersion
 from curl_cffi import requests as cffi_requests
 
+from scrapers.common.fetch import wants_http1
 from scrapers.stores import Context, Web
+
+
+def _get_robots(url: str, user_agent: str) -> Any:
+    """robots.txt as the crawlers' fetch asks for it, again over HTTP/1.1 when
+    the server spoils HTTP/2 or says nothing (`wants_http1`)."""
+    kwargs: dict[str, Any] = {
+        "impersonate": "chrome136",
+        "headers": {"User-Agent": user_agent},
+        "timeout": 10,
+    }
+    try:
+        return cffi_requests.get(url, **kwargs)
+    except Exception as exc:
+        if not wants_http1(exc):
+            raise
+        return cffi_requests.get(url, http_version=CurlHttpVersion.V1_1, **kwargs)
 
 
 def _host_of(url: str) -> str:
@@ -47,11 +65,8 @@ class RobotsCache:
         allow_all = False
         for scheme in ("https", "http"):
             try:
-                response = cffi_requests.get(
-                    f"{scheme}://{host}/robots.txt",
-                    impersonate="chrome136",
-                    headers={"User-Agent": self.user_agent},
-                    timeout=10,
+                response = _get_robots(
+                    f"{scheme}://{host}/robots.txt", self.user_agent
                 )
             except Exception:
                 continue
