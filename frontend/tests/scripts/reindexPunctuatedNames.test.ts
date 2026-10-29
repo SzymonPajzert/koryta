@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   checkVerdict,
   plan,
-} from "../../scripts/migrate/reindex-punctuated-names";
+} from "../../scripts/migrate/archive/reindex-punctuated-names";
 import { generateChunksLower, townChunk } from "~~/shared/search";
 
 /** A node as stored before 2026-10-28: its index cut by trimming, flattening

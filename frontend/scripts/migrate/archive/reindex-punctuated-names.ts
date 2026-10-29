@@ -4,8 +4,8 @@ import {
   type DocumentReference,
   type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
-import { nameChunksToWrite, searchableText } from "../../shared/search";
-import { reportRemaining } from "./remaining";
+import { nameChunksToWrite, searchableText } from "../../../shared/search";
+import { reportRemaining } from "../remaining";
 
 /**
  * Re-index every searchable name whose stored `nameChunksLower` is not the
@@ -55,15 +55,20 @@ import { reportRemaining } from "./remaining";
  * read: a rename landing in between fails the run rather than being answered
  * with the old name's index, and a re-run picks up from there. Each fires the
  * trigger once, which finds the index up to date and writes nothing.
+
+ *
+ * Run on production on 2026-10-29, and archived. A count coming back means
+ * something writes `nameChunksLower` by the old cut again: an onNodeWritten
+ * deployed from before it, or a writer that builds the index by hand.
  *
  * Usage, against the running dev:prod-data emulator (`--no-trigger` where the
  * functions emulator is not running, so nothing would answer the check; it is
  * refused with `--prod`):
- *   npx tsx scripts/migrate/reindex-punctuated-names.ts            # dry run
- *   npx tsx scripts/migrate/reindex-punctuated-names.ts --commit
+ *   npx tsx scripts/migrate/archive/reindex-punctuated-names.ts            # dry run
+ *   npx tsx scripts/migrate/archive/reindex-punctuated-names.ts --commit
  * Against production, once the function is deployed:
- *   npx tsx scripts/migrate/reindex-punctuated-names.ts --prod
- *   npx tsx scripts/migrate/reindex-punctuated-names.ts --prod --commit
+ *   npx tsx scripts/migrate/archive/reindex-punctuated-names.ts --prod
+ *   npx tsx scripts/migrate/archive/reindex-punctuated-names.ts --prod --commit
  */
 
 /** The kinds `/api/search` reads, which are the kinds the trigger indexes. */
