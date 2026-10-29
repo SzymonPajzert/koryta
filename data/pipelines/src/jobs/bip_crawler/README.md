@@ -91,9 +91,28 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   of public bodies and the "BIP" link on it. The registry has an office for only
   905 of 2,479 gminas; with the catalogue 2,335 of the 2,418 units on the 10-29
   list have a start.
-- Each unit gets `--unit-pages` (150) pages, walked best first towards
-  "oświadczenia majątkowe" (`scrapers/bip/people.py`), and stays under its own
-  path on shared platforms (bip.malopolska.pl, samorzad.gov.pl).
+- Each unit's walk reads `--pages-per-candidacy` (15) pages for each of its
+  candidacies, at least `--unit-pages` (150) and at most `--max-unit-pages`
+  (1000), best first towards "oświadczenia majątkowe" and the seekers' own
+  council or office (`scrapers/bip/people.py` `link_score`, `office_terms`), and
+  stays under its own path on shared platforms (bip.malopolska.pl,
+  samorzad.gov.pl). A big BIP files thousands of declarations beside the
+  council's: with 150 pages bip.warszawa.pl gave none of 96 councillors.
+- Before walking, the declaration URLs already known for the unit's hosts seed
+  it: the BIP's sitemaps (robots.txt `Sitemap:`, else `/sitemap.xml`;
+  `--no-sitemaps` skips them) and `--known-urls`, newline-delimited JSON rows
+  with a `url` (and a `category`), such as the blind crawl's
+  `BipUrlsClassified`. Their pages go first; their files count when the address
+  names a seeker.
+- Pages a script draws (next to no links and a `<script>`: Madkom's BIPs,
+  bip.malopolska.pl) are rendered in headless Chromium, `--render-workers` (2)
+  at once, pictures and styles skipped, one turn of the host's rate a render
+  (`render.py`). Needs the `render` dependency group and its browser
+  (`.venv/bin/playwright install chromium`); without it, or with `--no-render`,
+  they are read as their HTML.
+- Certificates verify against curl's roots plus Mozilla's published
+  intermediates (`stores/tls.py`, kept at `--ca-bundle`, rebuilt weekly), so a
+  server that leaves its intermediate out still verifies, as in a browser.
 - A link counts for a person when it names them: its label or address first,
   then its table row or list item, then the heading over it, then the page's
   title (`scrapers/bip/people.py` `candidates`); a narrower part that names

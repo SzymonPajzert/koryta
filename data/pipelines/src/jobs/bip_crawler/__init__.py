@@ -362,6 +362,18 @@ def build_parser() -> argparse.ArgumentParser:
         "crawl's BipUrlsClassified): declaration-like ones seed each unit's walk",
     )
     people.add_argument(
+        "--no-render",
+        action="store_true",
+        help="read JavaScript-drawn pages as their HTML instead of rendering them "
+        "in headless Chromium (needs the render dependency group)",
+    )
+    people.add_argument(
+        "--render-workers",
+        type=int,
+        default=2,
+        help="headless browsers rendering at once (default 2)",
+    )
+    people.add_argument(
         "--no-sitemaps",
         action="store_true",
         help="do not read the BIPs' sitemaps for declaration pages before walking",

@@ -1,5 +1,6 @@
 """People mode on big BIPs: a budget by unit size, the seekers' own council
-first, and walks that start from declaration URLs known before walking."""
+first, walks that start from declaration URLs known before walking, and pages
+drawn by a script rendered first."""
 
 from __future__ import annotations
 
@@ -11,8 +12,10 @@ from typing import cast
 from jobs.bip_crawler.people import PeopleOptions, PeopleSearch, load_known_urls
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row
+from scrapers.bip.classify import normalize_url
 from scrapers.bip.people import link_score, office_terms
 from scrapers.bip.units import UnitSeed
+from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.stores import BipQueue
@@ -20,7 +23,9 @@ from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import MemoryBipPeopleStore
 
 
-def search(tmp_path: Path, sites, rows, *, known=None, scopes=None, **options):
+def search(
+    tmp_path: Path, sites, rows, *, known=None, scopes=None, render=None, **options
+):
     web = Web(sites)
     store = MemoryBipPeopleStore()
     store.upsert_people(rows)
@@ -42,6 +47,7 @@ def search(tmp_path: Path, sites, rows, *, known=None, scopes=None, **options):
         limiter=HostTokenBucket(0),
         sleep=lambda s: None,
         known=known,
+        render=render,
     )
     people.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
     return people, store, web
@@ -175,3 +181,49 @@ def test_known_urls_are_read_by_host(tmp_path):
             "https://bip.u1.pl/dok/77",
         ]
     }
+
+
+SHELL = (
+    200,
+    "text/html",
+    b'<html><head><script src="/static/js/main.js"></script></head>'
+    b'<body><nav><a href="/">Home</a></nav><div id="root"></div></body></html>',
+)
+JS_SITE = {
+    "https://u1.pl": SHELL,
+    "https://u1.pl/om": SHELL,
+    "https://u1.pl/api/files/7": (200, "application/pdf", PDF + b"7"),
+}
+DRAWN = {
+    "https://u1.pl": html("BIP", '<a href="/om">Oświadczenia majątkowe</a>'),
+    "https://u1.pl/om": html(
+        "Oświadczenia majątkowe radnych",
+        '<a href="/api/files/7">Ewa Lis - oświadczenie majątkowe za 2024</a>',
+    ),
+}
+
+
+def test_a_page_a_script_draws_is_read_once_rendered(tmp_path):
+    drawn: list[str] = []
+
+    def render(url: str) -> HttpResult:
+        drawn.append(url)
+        status, kind, body = DRAWN[normalize_url(url).rstrip("/")]
+        return HttpResult(url, status, kind, body)
+
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    _, store, _ = search(tmp_path, JS_SITE, rows, render=render, sitemaps=False)
+    assert store.people["lis"].status == "found"
+    assert [normalize_url(u).rstrip("/") for u in drawn] == [
+        "https://u1.pl",
+        "https://u1.pl/om",
+    ]
+
+
+def test_unrendered_a_script_drawn_bip_shows_nothing(tmp_path):
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    _, store, _ = search(tmp_path, JS_SITE, rows, sitemaps=False)
+    assert (store.people["lis"].status, store.people["lis"].reason) == (
+        "not_found",
+        "no_declarations",
+    )
