@@ -65,9 +65,10 @@ const props = defineProps<{
   matchedResult?: "all" | "won" | "lost";
 }>();
 
-/** Whether this run is one the filter asked for: the same election, and the
- * result asked for if one was. */
+/** Whether this run is one the filters asked for: in the region the page is
+ * narrowed to, or the same election - and the result asked for if one was. */
 const matches = (election: ElectionRich) => {
+  if (election.inMatchedRegion) return true;
   if (!props.matched?.length || !election.key) return false;
   if (!props.matched.includes(election.key)) return false;
   if (props.matchedResult === "won") return election.elected === true;

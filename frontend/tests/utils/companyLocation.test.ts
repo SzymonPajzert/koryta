@@ -208,7 +208,7 @@ describe("regionsByPlaceId", () => {
       r1: region("Województwo Pomorskie", "22", { approved: ["c1"] }),
     };
     expect(regionsByPlaceId(regions, "approved")).toEqual({
-      c1: { name: "Województwo Pomorskie", teryt: "22" },
+      c1: { id: "r1", name: "Województwo Pomorskie", teryt: "22" },
     });
   });
 
@@ -218,6 +218,7 @@ describe("regionsByPlaceId", () => {
       pow: region("Płock", "1462", { approved: ["c1"] }),
     };
     expect(regionsByPlaceId(regions, "approved").c1).toEqual({
+      id: "pow",
       name: "Płock",
       teryt: "1462",
     });

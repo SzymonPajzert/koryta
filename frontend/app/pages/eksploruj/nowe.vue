@@ -251,6 +251,7 @@
           disable-focus
           score-with-name
           hide-default-footer
+          :matched-category="filterCategory"
           no-data-text="Brak danych do wyświetlenia. Prawdopodobnie przejrzałeś wszystkie nowe powiązania."
           @action:explored="actionExplored = true"
           @action:voted="actionVoted = true"

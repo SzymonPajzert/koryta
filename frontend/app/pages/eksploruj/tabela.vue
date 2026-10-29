@@ -76,6 +76,7 @@
           :draft-with-name="!!user"
           :matched-elections="filterElection"
           :matched-result="filterElectionResult"
+          :matched-category="filterCategory"
           @focus="focusPerson"
         />
       </v-card>
@@ -534,7 +535,7 @@ const apiQuery = computed(
 const { tableItems, totalItems, pending } = await useListWithStats(
   apiQuery,
   "eksploruj-tabela-data",
-  { server: false, companyLocations },
+  { server: false, companyLocations, companyRegions },
 );
 
 const openDrawer = shallowRef(false);
