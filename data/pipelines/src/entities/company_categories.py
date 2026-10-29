@@ -27,9 +27,10 @@ shared by more than one entity.
 
 A category set computed here is a *default*. Once a person edits the
 categories of a company on the site, the node records
-`categoriesSource: "manual"` and the ingest stops writing over it, the same
-contract `isPublic`/`isPublicSource` already has. See
-`frontend/server/api/ingest/company.post.ts`.
+`categoriesSource: "manual"` and the ingest stops writing over its sectors,
+the same contract `isPublic`/`isPublicSource` already has. Not over its owner:
+`SKARB_PANSTWA` follows Prokuratoria's list even there (`with_owners_from`).
+See `frontend/server/api/ingest/company.post.ts`.
 """
 
 from dataclasses import dataclass
@@ -1069,6 +1070,29 @@ SKARB_PANSTWA = Category("skarb-panstwa", "Skarb Państwa")
 COMPANY_CATEGORIES: tuple[Category, ...] = (*SECTORS, SKARB_PANSTWA)
 
 CATEGORY_VALUES: tuple[str, ...] = tuple(c.value for c in COMPANY_CATEGORIES)
+
+#: The categories that say who owns a company rather than what it does - every
+#: one that is not a sector, today `SKARB_PANSTWA` alone. `OWNERS` in
+#: `frontend/shared/companyCategories.ts` is the same list.
+OWNER_VALUES: frozenset[str] = frozenset(
+    c.value for c in COMPANY_CATEGORIES if c not in SECTORS
+)
+
+
+def with_owners_from(categories: list[str], owners_from: list[str]) -> list[str]:
+    """`categories` with its owners swapped for the ones in `owners_from`.
+
+    `withOwnersFrom` in `frontend/shared/companyCategories.ts`, which
+    `/api/ingest/company` applies to a company whose categories a person set:
+    it keeps their sectors - a reader judges those better than PKD codes - and
+    takes the payload's owner, because Prokuratoria's list is no less right on
+    a page somebody has edited (Szymon, 2026-10-28). Owners go last, where
+    `categories_for` files them, and a value that is not an owner stays on the
+    `categories` side, one this module does not know included.
+    """
+    return [value for value in categories if value not in OWNER_VALUES] + [
+        value for value in owners_from if value in OWNER_VALUES
+    ]
 
 
 def matches_pkd(activity: list[str] | None, prefixes: tuple[str, ...]) -> bool:

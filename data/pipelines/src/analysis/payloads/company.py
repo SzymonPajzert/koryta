@@ -109,7 +109,9 @@ class CompaniesPayloads(Pipeline):
     of PKD, and an override list for the companies neither vintage places
     correctly - behind a frontend constant that nothing could test against the
     register. A category a person has edited on the site is not overwritten:
-    the ingest endpoint skips any node carrying `categoriesSource: "manual"`.
+    on a node carrying `categoriesSource: "manual"` the ingest endpoint keeps
+    the person's sectors and takes only the owner, `SKARB_PANSTWA`, from the
+    payload (`entities.company_categories.with_owners_from`).
 
     They also carry `supervisory_body`, from `entities.company_bodies`: the
     243 SPZOZ hospitals are supervised by a rada spoleczna rather than a rada

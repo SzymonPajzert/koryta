@@ -27,6 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from entities.company_categories import with_owners_from
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.pkw.elections import party_sort_key
 from scrapers.stores import Context
@@ -1041,7 +1042,8 @@ class SiteSnapshot:
         said who owns it has the last word, and the ingest then declines to
         write the payload's answer at all - so disagreeing with them is not a
         change. "Stawy Milickie" against the register's "STAWY MILICKIE (Ruda
-        Sułowska)" is none.
+        Sułowska)" is none. Categories are the one partial case: the person's
+        word is final on the sectors, and the payload's on the Treasury's stake.
         """
         data = {k: v for k, v in stored.items() if k not in INTERNAL_FIELDS}
         named_by_hand = data.get("nameSource") == "manual" and data.get("name")
@@ -1057,9 +1059,19 @@ class SiteSnapshot:
 
         # An empty `categories`, by contrast, is a real answer: this company is
         # in no sector we track. Absent means the payload did not work them out.
+        #
+        # Categories a person set keep their sectors, but not their owner: the
+        # ingest lays the payload's owner over them (`with_owners_from`), so on
+        # such a node a Treasury stake the list adds or drops is a change, and
+        # the payload's own sectors are not.
         categories = payload.get("categories")
-        if categories is not None and data.get("categoriesSource") != "manual":
-            written["categories"] = _as_list(categories)
+        if categories is not None:
+            stated = _as_list(categories)
+            written["categories"] = (
+                with_owners_from(_as_list(data.get("categories")), stated)
+                if data.get("categoriesSource") == "manual"
+                else stated
+            )
 
         is_public = payload.get("is_public")
         if is_public is not None and data.get("isPublicSource") != "manual":

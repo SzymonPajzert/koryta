@@ -133,12 +133,48 @@ class TestTheNode:
         assert changes(payload(categories=[])) == [COMPANY_FIELDS]
 
     def test_a_category_a_person_set_is_not_overwritten(self):
-        # `categoriesSource: "manual"` makes the ingest skip the field, so
-        # disagreeing with it is not a change.
+        # `categoriesSource: "manual"` makes the ingest keep the person's
+        # sectors, so disagreeing with them is not a change.
         assert (
             changes(
                 payload(categories=["szpitale"]),
                 node_rows=nodes(company={"categoriesSource": "manual"}),
+            )
+            == []
+        )
+
+    def test_a_treasury_stake_the_list_adds_reaches_a_pinned_company(self):
+        # PGE was pinned to energetyka by hand. The ingest keeps that and lays
+        # the payload's owner over it (`with_owners_from`), so the stake is
+        # news even though the payload's own sector is not.
+        assert changes(
+            payload(categories=["cieplownictwo", "skarb-panstwa"]),
+            node_rows=nodes(
+                company={"categories": ["energetyka"], "categoriesSource": "manual"}
+            ),
+        ) == [COMPANY_FIELDS]
+
+    def test_a_stake_the_list_drops_reaches_a_pinned_company_too(self):
+        assert changes(
+            payload(categories=["energetyka"]),
+            node_rows=nodes(
+                company={
+                    "categories": ["energetyka", "skarb-panstwa"],
+                    "categoriesSource": "manual",
+                }
+            ),
+        ) == [COMPANY_FIELDS]
+
+    def test_a_pinned_company_already_holding_its_stake_is_not_a_change(self):
+        assert (
+            changes(
+                payload(categories=["skarb-panstwa"]),
+                node_rows=nodes(
+                    company={
+                        "categories": ["energetyka", "skarb-panstwa"],
+                        "categoriesSource": "manual",
+                    }
+                ),
             )
             == []
         )

@@ -13,9 +13,11 @@ from entities.company_categories import (
     COMPANY_CATEGORIES,
     KOLEJE,
     OBRONNOSC,
+    OWNER_VALUES,
     SPZOZ,
     categories_for,
     matches_pkd,
+    with_owners_from,
 )
 
 
@@ -759,3 +761,36 @@ class TestSkarbPanstwa(unittest.TestCase):
 
     def test_the_treasury_comes_last_among_the_values_the_site_offers(self):
         self.assertEqual(CATEGORY_VALUES[-1], "skarb-panstwa")
+
+    def test_the_owners_are_every_category_but_the_sectors(self):
+        self.assertEqual(OWNER_VALUES, frozenset({"skarb-panstwa"}))
+
+
+class TestWithOwnersFrom(unittest.TestCase):
+    """What the ingest writes over categories a person set: their sectors, and
+    the owner the payload names (Szymon, 2026-10-28)."""
+
+    def test_a_pinned_company_keeps_its_sectors_and_takes_the_listed_owner(self):
+        # KRS 0000059307, PGE, pinned to energetyka by hand
+        self.assertEqual(
+            with_owners_from(["energetyka"], ["cieplownictwo", "skarb-panstwa"]),
+            ["energetyka", "skarb-panstwa"],
+        )
+
+    def test_an_owner_the_payload_no_longer_names_goes(self):
+        self.assertEqual(
+            with_owners_from(["energetyka", "skarb-panstwa"], ["energetyka"]),
+            ["energetyka"],
+        )
+
+    def test_a_company_pinned_to_no_sector_still_takes_its_owner(self):
+        # KRS 0000014381, OHZZ, pinned to none
+        self.assertEqual(with_owners_from([], ["skarb-panstwa"]), ["skarb-panstwa"])
+
+    def test_the_owner_goes_after_the_sectors_and_an_unknown_value_stays(self):
+        self.assertEqual(
+            with_owners_from(
+                ["skarb-panstwa", "lotniska"], ["hutnictwo", "skarb-panstwa"]
+            ),
+            ["lotniska", "skarb-panstwa"],
+        )
