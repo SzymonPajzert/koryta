@@ -13,9 +13,10 @@ type RegionWithTargets = {
   };
 };
 
-/** A region as the rest of the app needs it: what to call it, and the TERYT
- * code that puts it on the map. */
-export type PlaceRegion = { name: string; teryt?: string };
+/** A region as the rest of the app needs it: what to call it, the TERYT code
+ * that puts it on the map, and its node id - which the table matches against
+ * the regions its region filter let through (`matchedTargets`). */
+export type PlaceRegion = { id?: string; name: string; teryt?: string };
 
 /** The region every company the loaded regions claim sits in, keyed by place id.
  *
@@ -44,7 +45,7 @@ export function regionsByPlaceId(
   const seats: Record<string, PlaceRegion> = {};
   const specificities: Record<string, number> = {};
 
-  for (const region of Object.values(regions)) {
+  for (const [regionId, region] of Object.entries(regions)) {
     const scoped = region.stats?.edges?.[edgeScope];
     const targets = Array.isArray(scoped?.seatNodeIds)
       ? scoped.seatNodeIds
@@ -54,7 +55,7 @@ export function regionsByPlaceId(
     const specificity = region.teryt?.length ?? 0;
     for (const id of targets) {
       if (id in seats && specificities[id]! >= specificity) continue;
-      seats[id] = { name: region.name, teryt: region.teryt };
+      seats[id] = { id: regionId, name: region.name, teryt: region.teryt };
       specificities[id] = specificity;
     }
   }

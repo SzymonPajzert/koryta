@@ -247,23 +247,49 @@
           class="companies-cell"
           :class="{ 'companies-cell--fill': hasElectionsColumn }"
         >
+          <!-- On a page filtered by sector, employer or seat (or region), the
+               companies that put the person in the table come first and are
+               filled - see `companyChips`. A company above the person's
+               employer, which the filters reach through ownership, is not
+               theirs, so it is a dashed „grupa …” chip and never filled. Why a
+               chip is marked is said twice: under its name in the tooltip, for
+               the pointer, and in a hidden line for a screen reader, which a
+               fill does not reach. -->
           <div class="d-flex flex-wrap ga-1 py-1">
             <span
-              v-for="companyName in item.companies"
-              :key="companyName"
+              v-for="employer in companyChips(item)"
+              :key="`${employer.match ?? 'own'}:${employer.name}`"
               class="company-slot"
             >
-              <v-tooltip :text="shortCompanyName(companyName)" location="top">
+              <v-tooltip location="top">
                 <template #activator="{ props: shortCompanyProps }">
                   <v-chip
                     v-bind="shortCompanyProps"
                     size="small"
                     class="mb-1 text-truncate d-flex company-chip"
+                    :class="chipClasses(employer)"
                     variant="outlined"
+                    :prepend-icon="chipIcon(employer)"
+                    :data-match="employer.match"
                   >
-                    {{ shortCompanyName(companyName) }}
+                    <span class="company-name">
+                      <span
+                        v-if="employer.match === 'owner'"
+                        class="company-group"
+                      >
+                        grupa
+                      </span>
+                      {{ shortCompanyName(employer.name) }}
+                    </span>
+                    <span v-if="employer.match" class="d-sr-only">
+                      ({{ MATCH_REASONS[employer.match] }})
+                    </span>
                   </v-chip>
                 </template>
+                <div>{{ shortCompanyName(employer.name) }}</div>
+                <div v-if="employer.match" class="font-weight-medium">
+                  {{ MATCH_REASONS[employer.match] }}
+                </div>
               </v-tooltip>
             </span>
           </div>
@@ -444,6 +470,7 @@ import {
   executeSearchAll,
 } from "~/composables/usePersonSearch";
 import { polishCounting } from "~/composables/polish";
+import { categoryIcon } from "~/utils/categoryIcons";
 import { longDate, monthYear } from "~~/shared/dates";
 import { voteMeaning, voteScaleSummary } from "~/composables/votes";
 import type { PersonRich } from "~~/shared/model";
@@ -573,6 +600,9 @@ const props = withDefaults(
     /** The result the page asks for alongside them, so a row marks the run
      * that won or lost rather than every run of that election. */
     matchedResult?: "all" | "won" | "lost";
+    /** The sector the page is filtered by, so a company it matched can carry
+     * the icon the sector's chip has in the filter bar. */
+    matchedCategory?: string | null;
   }>(),
   {
     page: 1,
@@ -601,8 +631,79 @@ const props = withDefaults(
     company: undefined,
     matchedElections: null,
     matchedResult: "all",
+    matchedCategory: null,
   },
 );
+
+/** Why a company chip is marked, read out by a screen reader and shown under
+ * the name in its tooltip. */
+const MATCH_REASONS = {
+  company: "pasuje do filtrów",
+  region: "siedziba w wybranym regionie",
+  owner: "do tej grupy należy jedna z firm tej osoby",
+} as const;
+
+type CompanyChip = {
+  name: string;
+  /** What put the chip on the row's list of matches, if anything: an
+   * employer the company filters let through, an employer seated in the
+   * region the page filters by, or a company above one of the person's
+   * employers that the filters reached through ownership. */
+  match?: keyof typeof MATCH_REASONS;
+};
+
+/** The row's companies, matches first: the employers the filters let
+ * through, then the companies they reached through ownership, then the rest.
+ *
+ * First because a row can list dozens of employers - 46 is not unusual - and
+ * the one that put the person in the table was wherever the graph happened to
+ * return it, as the 31st chip as easily as the first. The order of the others
+ * is the graph's, as before. (Szymon picked this over marking in place and
+ * over quieting the rest, design board tabela-highlight-r1, 2026-10-29.) */
+function companyChips(item: PersonRich): CompanyChip[] {
+  const matched = new Set(item.matchedCompanies ?? []);
+  const seated = new Set(item.seatedInMatchedRegion ?? []);
+  const own: CompanyChip[] = item.companies
+    .filter((name): name is string => !!name)
+    .map((name) => ({
+      name,
+      match: matched.has(name)
+        ? "company"
+        : seated.has(name)
+          ? "region"
+          : undefined,
+    }));
+  const through: CompanyChip[] = (item.matchedThrough ?? []).map((name) => ({
+    name,
+    match: "owner",
+  }));
+  return [
+    ...own.filter((chip) => chip.match),
+    ...through,
+    ...own.filter((chip) => !chip.match),
+  ];
+}
+
+/** A match in the pale sage the matched election run takes, outline kept. A
+ * company above the employer is not the person's own, so it keeps no fill and
+ * is dashed instead. */
+function chipClasses(chip: CompanyChip) {
+  if (!chip.match) return undefined;
+  return chip.match === "owner"
+    ? "company-matched company-through"
+    : "bg-surface-sage company-matched";
+}
+
+/** The sector's own icon, the one its chip in the filter bar has, on a company
+ * in the sector: one the company filters let through, or one above an
+ * employer. A company only seated in the region is not in the sector for
+ * being there, so it carries none. */
+function chipIcon(chip: CompanyChip) {
+  if (!props.matchedCategory) return undefined;
+  return chip.match === "company" || chip.match === "owner"
+    ? categoryIcon(props.matchedCategory)
+    : undefined;
+}
 
 const emit = defineEmits<{
   (e: "update:page" | "update:itemsPerPage", val: number): void;
@@ -835,6 +936,37 @@ a.person-name:focus-visible {
  * the desktop rules below do so that the chip can grow with its column. */
 .company-chip {
   max-width: 300px;
+}
+
+/* The name is cut inside the chip rather than at its edge, so a chip with a
+ * sector icon in front still ends in an ellipsis. */
+.company-chip :deep(.v-chip__content) {
+  min-width: 0;
+}
+
+.company-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A company the page's filters matched: the sage the matched election run
+ * takes (explore/table/ElectionChips.vue), outline kept, a touch heavier. */
+.company-matched {
+  font-weight: 500;
+}
+
+/* A company the filters reached through ownership - above one of the
+ * person's employers, never their own - so an outline only, dashed, in the
+ * sage ink (6.43:1 on white). */
+.company-through {
+  border-style: dashed;
+  color: rgb(var(--v-theme-ink-sage)) !important;
+}
+
+.company-group {
+  font-weight: 400;
 }
 
 /* Above the breakpoint the two halves of the history sit side by side and

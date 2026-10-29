@@ -385,25 +385,14 @@ import {
   mdiArrowDown,
   mdiArrowRight,
   mdiArrowUp,
-  mdiBankOutline,
-  mdiBus,
   mdiChevronDown,
   mdiClose,
-  mdiFlashOutline,
-  mdiHospitalBuilding,
   mdiPlus,
-  mdiRadiator,
-  mdiRecycle,
-  mdiShieldOutline,
-  mdiSoccer,
   mdiSort,
-  mdiStethoscope,
-  mdiTagOutline,
-  mdiTrain,
   mdiTuneVariant,
-  mdiWaterPump,
 } from "@mdi/js";
 import { computed, ref } from "vue";
+import { categoryIcon } from "~/utils/categoryIcons";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { partyChipPaint } from "~~/shared/misc";
 import {
@@ -589,40 +578,11 @@ const CHIP_SURFACES: Partial<Record<ShareKey, string>> = {
  * and so cannot say anything wrong. */
 const CHIP_FALLBACK = "bg-surface-muted";
 
-/** The one chip that gets an icon: the category, whose label is a bare sector
- * name („Szpitale”) with nothing in front of it to say what is being filtered.
- * Its own sector icon where there is one, below.
- *
- * Every other chip names its filter in the label - „Region: Małopolskie”,
- * „Siedziba: Małopolskie”, „Zatrudnieni od 1 marca 2021”, „Min. 5 głosów”,
- * „Tylko szkice” - so the icon repeated the word beside it, and it repeated it
- * in the width of a glyph and its gap, on a rail that shares one 44px line
- * with the heading, the „Filtry” button, the count and the sort. */
-const CATEGORY_FALLBACK_ICON = mdiTagOutline;
-
-/** A category's own icon, keyed by the values in `shared/companyCategories`. A
- * category added there and not here keeps the generic tag. Skarb Państwa, an
- * owner rather than a sector, takes the portico the „Instytucja publiczna”
- * chip draws (`ChipPublicCompany`), narrowed by its label (Szymon, 2026-10-28). */
-const CATEGORY_ICONS: Record<string, string> = {
-  szpitale: mdiHospitalBuilding,
-  przychodnie: mdiStethoscope,
-  wodociagi: mdiWaterPump,
-  cieplownictwo: mdiRadiator,
-  energetyka: mdiFlashOutline,
-  odpady: mdiRecycle,
-  koleje: mdiTrain,
-  "komunikacja-miejska": mdiBus,
-  sport: mdiSoccer,
-  obronnosc: mdiShieldOutline,
-  "skarb-panstwa": mdiBankOutline,
-};
-
 interface ChipLook {
   /** A `bg-surface-*` class, or nothing where `style` paints the chip. */
   surface: string;
-  /** Only the category chip has one - see `CATEGORY_FALLBACK_ICON`. `v-chip`
-   * draws no `prepend` slot for `undefined`, so the chip is its label. */
+  /** Only the category chip has one - see `chipLook`. `v-chip` draws no
+   * `prepend` slot for `undefined`, so the chip is its label. */
   icon: string | undefined;
   /** Only the party chip, which takes the party's own colour. */
   style?: { backgroundColor: string; color: string };
@@ -658,10 +618,18 @@ function chipLook(chip: QueryChip): ChipLook {
       style: partyPaint.value,
     };
   }
+  // The one chip that gets an icon: the category, whose label is a bare sector
+  // name („Szpitale”) with nothing in front of it to say what is being
+  // filtered. Every other chip names its filter in the label - „Region:
+  // Małopolskie”, „Siedziba: Małopolskie”, „Zatrudnieni od 1 marca 2021”,
+  // „Min. 5 głosów”, „Tylko szkice” - so the icon repeated the word beside it,
+  // in the width of a glyph and its gap, on a rail that shares one 44px line
+  // with the heading, the „Filtry” button, the count and the sort. The rows
+  // below put the same icon on the companies the sector matched.
   if (chip.key === "category") {
     return {
       surface: CHIP_SURFACES.category!,
-      icon: CATEGORY_ICONS[category.value ?? ""] ?? CATEGORY_FALLBACK_ICON,
+      icon: categoryIcon(category.value),
     };
   }
   // „Tylko szkice” in the same amber the table's `szkic` badge uses, and

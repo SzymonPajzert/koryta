@@ -4,6 +4,7 @@ import {
   computeVoteStats,
   computeEdgeStats,
   computeNodeStats,
+  isCurrentPost,
 } from "~~/shared/stats";
 import type { Edge, VoteDocument, Note } from "~~/shared/model";
 
@@ -672,5 +673,36 @@ describe("shared/stats.ts", () => {
         "local-2024:lost",
       ]);
     });
+  });
+});
+
+describe("isCurrentPost", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-29T12:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("holds a job with no end date, or one still ahead", () => {
+    expect(isCurrentPost({ type: "employed" })).toBe(true);
+    expect(isCurrentPost({ type: "employed", end_date: null })).toBe(true);
+    expect(isCurrentPost({ type: "employed", end_date: "2027-01-01" })).toBe(
+      true,
+    );
+  });
+
+  it("does not hold one that has ended, or anything but a job", () => {
+    expect(isCurrentPost({ type: "employed", end_date: "2026-06-25" })).toBe(
+      false,
+    );
+    expect(isCurrentPost({ type: "election" })).toBe(false);
+  });
+
+  it("does not hold a job whose end date it cannot read", () => {
+    expect(isCurrentPost({ type: "employed", end_date: "wkrótce" })).toBe(
+      false,
+    );
   });
 });

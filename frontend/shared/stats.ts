@@ -62,19 +62,24 @@ export function calculateExperience(edges: Edge[]): number {
   return Math.floor((experienceMonths / 12) * 10) / 10;
 }
 
+/** Whether one relation is a post still held: a job with no end date, or with
+ * one that has not passed yet.
+ *
+ * Typed to the two fields it reads, so that the table can ask it of the edges
+ * the graph endpoint hands it - which are not the stored shape - and mark the
+ * posts `currentlyEmployed` counts by the rule that counted them. */
+export function isCurrentPost(edge: {
+  type?: string;
+  end_date?: string | null;
+}): boolean {
+  if (edge.type !== "employed") return false;
+  if (!edge.end_date) return true;
+  const end = new Date(edge.end_date).getTime();
+  return !isNaN(end) && end >= new Date().getTime();
+}
+
 export function calculateCurrentlyEmployed(edges: Edge[]): boolean {
-  for (const edge of edges) {
-    if (edge.type === "employed") {
-      if (!edge.end_date) {
-        return true;
-      }
-      const end = new Date(edge.end_date).getTime();
-      if (!isNaN(end) && end >= new Date().getTime()) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return edges.some(isCurrentPost);
 }
 
 export function calculateLatestEmploymentStart(edges: Edge[]): string | null {

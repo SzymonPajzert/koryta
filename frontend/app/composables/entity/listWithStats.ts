@@ -1,7 +1,8 @@
 import type { ElectionRich, PersonRich, Person } from "~~/shared/model";
 import type { Edge, Node } from "~~/shared/graph/model";
 import type { Query } from "~~/server/api/nodes/index.get";
-import { workLocationNames } from "~/utils/companyLocation";
+import { workLocationNames, type PlaceRegion } from "~/utils/companyLocation";
+import { rowMatches, type RowEmployment } from "~/utils/rowMatches";
 import { candidacyElection } from "~~/shared/electionDays";
 
 import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
@@ -16,6 +17,11 @@ export type UseListWithStatsOptions = {
    * so without this the cities they worked in cannot be worked out and
    * `workLocations` is left absent. */
   companyLocations?: MaybeRefOrGetter<Record<string, string>>;
+  /** The region each company is seated in, from `useCompanyLocations`, for a
+   * page with a region filter: what the api says matched there is a region,
+   * and a row marks the companies seated in it. Without it only the elections
+   * in that region are marked. */
+  companyRegions?: MaybeRefOrGetter<Record<string, PlaceRegion>>;
 };
 
 export async function useListWithStats(
@@ -54,6 +60,8 @@ export async function useListWithStats(
       const nodesRes = await $fetch<{
         nodes: Record<string, Person>;
         total?: number;
+        matched?: Record<string, string[]>;
+        matchedPlaces?: Record<string, string>;
       }>("/api/nodes", {
         query: apiQuery.value,
         headers,
@@ -94,7 +102,17 @@ export async function useListWithStats(
         }
       }
 
-      return { nodes, total, subgraphEdges: sEdges, subgraphNodes: sNodes };
+      return {
+        nodes,
+        total,
+        subgraphEdges: sEdges,
+        subgraphNodes: sNodes,
+        matched: nodesRes.matched,
+        matchedPlaces: nodesRes.matchedPlaces ?? {},
+        // Read with the answer rather than off `apiQuery` later, which moves
+        // the moment a filter does - before the rows it describes are back.
+        currentOnly: apiQuery.value.currentlyEmployed === "selected",
+      };
     },
     {
       watch: [apiQuery, user],
@@ -126,14 +144,29 @@ export async function useListWithStats(
   const locations = computed(() =>
     options.companyLocations ? toValue(options.companyLocations) : undefined,
   );
+  const seats = computed(() =>
+    options.companyRegions ? toValue(options.companyRegions) : undefined,
+  );
 
   const tableItems = computed<PersonRich[]>(() => {
+    const matched = pageData.value?.matched;
+    const matchedPlaces = pageData.value?.matchedPlaces ?? {};
+    const currentOnly = pageData.value?.currentOnly ?? false;
+
     return fetchedItems.value.map((person) => {
       // Reconstruct companies and elections from subgraph
       const companies = new Set<string>();
       const elections: ElectionRich[] = [];
 
       const employerIds: string[] = [];
+
+      // What the api says put this row here: employers (or companies above
+      // them) for a company filter, regions for a region filter. Undefined
+      // when the page sets neither.
+      const hits = matched
+        ? new Set<string>(matched[person.id as string] ?? [])
+        : undefined;
+      const employments: RowEmployment[] = [];
 
       const personEdges = subgraphEdges.value.filter(
         (e) => e.source === person.id || e.target === person.id,
@@ -147,6 +180,11 @@ export async function useListWithStats(
         if (edge.type === "employed" && otherNode?.entityType === "place") {
           companies.add(otherNode.name);
           employerIds.push(otherNodeId);
+          employments.push({
+            placeId: otherNodeId,
+            name: otherNode.name,
+            edge,
+          });
         } else if (edge.type === "election") {
           const listYear =
             edge.start_date && typeof edge.start_date === "string"
@@ -171,6 +209,10 @@ export async function useListWithStats(
               edge.position,
               edge.by_election,
             ),
+            // Not under `selected`, which matches on the posts held now and
+            // never on a candidacy.
+            inMatchedRegion:
+              !currentOnly && !!hits?.has(otherNodeId) ? true : undefined,
           });
         }
       }
@@ -190,6 +232,11 @@ export async function useListWithStats(
         ...person,
         id: person.id as string,
         companies: Array.from(companies),
+        ...rowMatches(employments, hits, {
+          seats: seats.value,
+          matchedPlaces,
+          currentOnly,
+        }),
         elections,
         experience: Math.floor(exp * 10) / 10,
         latestEmploymentStart: latestEmpStr,

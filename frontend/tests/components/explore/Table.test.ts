@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
+import { mdiShieldOutline } from "@mdi/js";
 import { nextTick } from "vue";
 import ExploreTable from "../../../app/components/explore/Table.vue";
 import PartyChip from "../../../app/components/PartyChip.vue";
@@ -1060,5 +1061,130 @@ describe("ExploreTable's runs under a result", () => {
 
   it("fills every run of the election, under „Kandydowali”", async () => {
     expect(await filled("all")).toEqual([true, true]);
+  });
+});
+
+/** The companies that put the person on a filtered page - in the sector, among
+ * the chosen employers or seated in the chosen region - come first and are
+ * filled, the way the matched election run is. Szymon picked this look on the
+ * design board (tabela-highlight-r1, 2026-10-29). */
+describe("ExploreTable's matched companies", () => {
+  const employee = (fields: Partial<PersonRich> = {}): PersonRich => ({
+    ...person(),
+    companies: ["MPK KIELCE", "ZIELEŃ KIELCE", "MESKO (Skarżysko-Kamienna)"],
+    ...fields,
+  });
+
+  const chips = (wrapper: Wrapper) => wrapper.findAll(".company-chip");
+  const names = (wrapper: Wrapper) =>
+    chips(wrapper).map((chip) => flat(chip.get(".company-name").text()));
+
+  it("marks nothing on a page with no company or region filter", async () => {
+    const wrapper = await mountTable({ items: [employee()] });
+    expect(names(wrapper)).toEqual([
+      "MPK KIELCE",
+      "ZIELEŃ KIELCE",
+      "MESKO (Skarżysko-Kamienna)",
+    ]);
+    expect(wrapper.findAll("[data-match]")).toHaveLength(0);
+  });
+
+  it("puts the matched employer first, in the sage of a matched run", async () => {
+    const wrapper = await mountTable({
+      items: [employee({ matchedCompanies: ["MESKO (Skarżysko-Kamienna)"] })],
+    });
+    expect(names(wrapper)).toEqual([
+      "MESKO (Skarżysko-Kamienna)",
+      "MPK KIELCE",
+      "ZIELEŃ KIELCE",
+    ]);
+    const first = chips(wrapper)[0]!;
+    expect(first.attributes("data-match")).toBe("company");
+    expect(first.classes()).toEqual(
+      expect.arrayContaining(["bg-surface-sage", "company-matched"]),
+    );
+    expect(chips(wrapper)[1]!.classes()).not.toContain("company-matched");
+  });
+
+  it("gives it the sector's icon, the one the filter bar's chip has", async () => {
+    const wrapper = await mountTable({
+      items: [employee({ matchedCompanies: ["MESKO (Skarżysko-Kamienna)"] })],
+      matchedCategory: "obronnosc",
+    });
+    const [matched, other] = chips(wrapper);
+    expect(matched!.find(".v-chip__prepend svg path").attributes("d")).toBe(
+      mdiShieldOutline,
+    );
+    expect(other!.find(".v-chip__prepend").exists()).toBe(false);
+  });
+
+  it("says why it is marked, for a screen reader", async () => {
+    const wrapper = await mountTable({
+      items: [employee({ matchedCompanies: ["MESKO (Skarżysko-Kamienna)"] })],
+    });
+    expect(chips(wrapper)[0]!.get(".d-sr-only").text()).toBe(
+      "(pasuje do filtrów)",
+    );
+  });
+
+  it("names the group above an employer when none of theirs matched", async () => {
+    const wrapper = await mountTable({
+      items: [
+        employee({
+          matchedCompanies: [],
+          matchedThrough: ["POLSKA GRUPA ZBROJENIOWA (Radom)"],
+        }),
+      ],
+      matchedCategory: "obronnosc",
+    });
+    const group = chips(wrapper)[0]!;
+    expect(group.attributes("data-match")).toBe("owner");
+    expect(group.classes()).toContain("company-through");
+    expect(group.classes()).not.toContain("bg-surface-sage");
+    expect(flat(group.get(".company-name").text())).toBe(
+      "grupa POLSKA GRUPA ZBROJENIOWA (Radom)",
+    );
+    expect(group.find(".v-chip__prepend").exists()).toBe(true);
+  });
+
+  it("marks a company seated in the region without the sector's icon", async () => {
+    const wrapper = await mountTable({
+      items: [
+        employee({
+          matchedCompanies: [],
+          seatedInMatchedRegion: ["MPK KIELCE"],
+        }),
+      ],
+      matchedCategory: "obronnosc",
+    });
+    const seated = chips(wrapper)[0]!;
+    expect(flat(seated.get(".company-name").text())).toBe("MPK KIELCE");
+    expect(seated.attributes("data-match")).toBe("region");
+    expect(seated.classes()).toContain("bg-surface-sage");
+    expect(seated.find(".v-chip__prepend").exists()).toBe(false);
+  });
+
+  it("fills a run in the region the page is narrowed to", async () => {
+    const wrapper = await mountTable({
+      items: [
+        employee({
+          elections: [
+            { year: "2018", location: "Kielce", position: "Rada miasta" },
+            {
+              year: "2024",
+              location: "Kielce",
+              position: "Rada miasta",
+              inMatchedRegion: true,
+            },
+          ],
+        }),
+      ],
+    });
+    expect(
+      wrapper
+        .get(".elections-cell")
+        .findAll(".v-chip")
+        .map((chip) => chip.classes().includes("election-matched")),
+    ).toEqual([false, true]);
   });
 });

@@ -385,6 +385,9 @@ export interface ElectionRich {
    * (`candidacyElection`) - not from `position`, which falls back to the
    * edge's name for a run stored without an office. */
   key?: string | null;
+  /** The run was in a region the page's region filter let the person through
+   * on - see `matchedTargets` in server/utils/nodeFilters.ts. */
+  inMatchedRegion?: boolean;
 }
 
 export type PersonRich = Person & {
@@ -401,6 +404,20 @@ export type PersonRich = Person & {
    * every view loads. An empty array means the question was asked and nothing
    * came back. */
   workLocations?: string[];
+  /** Which of `companies` put the person on a page filtered by employer,
+   * sector or seat - see `matchedTargets` in server/utils/nodeFilters.ts. Absent where the page sets none of those
+   * filters, so that "none of these matched" and "nothing was asked" read
+   * differently. */
+  matchedCompanies?: string[];
+  /** Which of `companies` are seated in a region the page's region filter let
+   * the person through on. Kept apart from `matchedCompanies`, which are in
+   * the sector or among the employers the page asks for: a company merely
+   * seated in the region is neither. */
+  seatedInMatchedRegion?: string[];
+  /** The companies that brought the person in when none of `companies` did:
+   * ones above an employer of theirs, which the filters fold in through
+   * ownership. Empty where a company of their own matched. */
+  matchedThrough?: string[];
 };
 
 /** A node identified on the graph, carrying the extra fields a person has when
