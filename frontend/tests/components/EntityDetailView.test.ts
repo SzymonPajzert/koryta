@@ -10,7 +10,8 @@ import EntityDetailView from "../../app/components/EntityDetailView.vue";
 import NoteEditor from "../../app/components/note/Editor.vue";
 import PersonChanges from "../../app/components/succession/PersonChanges.vue";
 import PersonTeaser from "../../app/components/card/PersonTeaser.vue";
-import { authFetch } from "~/composables/auth";
+import EntityDetailsCard from "../../app/components/EntityDetailsCard.vue";
+import { authFetch, authRequest } from "~/composables/auth";
 
 /** Who is reading. Signed in unless a test says otherwise, so the notes on a
  * person are on the page at all - logged out, a reader does not get them. */
@@ -24,6 +25,7 @@ vi.mock("~/composables/auth", () => ({
     isAdmin: ref(false),
   })),
   authFetch: vi.fn(),
+  authRequest: vi.fn(),
 }));
 
 /** What /api/nodes/[id]/teaser answers, or null for its 404. Each test of a
@@ -71,6 +73,7 @@ async function mountFor(
   type: "person" | "region",
   status = "success",
   node = "n1",
+  route?: string,
 ) {
   vi.mocked(authFetch).mockReturnValue({
     data: ref(
@@ -83,6 +86,7 @@ async function mountFor(
   } as never);
   return mountSuspended(EntityDetailView, {
     props: { node, type },
+    route,
     // Every child stubbed - the relations, the graph and the comments each
     // fetch on their own - but the card's content still drawn, since the
     // notes sit inside it.
@@ -182,5 +186,78 @@ describe("EntityDetailView, logged out on a page nobody has published", () => {
 
     expect(view.findComponent(PersonTeaser).exists()).toBe(false);
     expect(view.text()).toContain(WALL);
+  });
+});
+
+/** The review queue on /eksploruj/nowe draws the person it is on through this
+ * view, under its one-row table, and ticks its steps off on what the reader
+ * does here. */
+describe("EntityDetailView, inside the queue", () => {
+  it("passes a saved note on, for the queue's „Notatka” step", async () => {
+    const view = await mountFor("person", "success", "q1");
+
+    view.findComponent(NoteEditor).vm.$emit("saved");
+
+    expect(view.emitted("noted")).toHaveLength(1);
+  });
+
+  it("passes a vote from its header on, for the „Głos” step", async () => {
+    // The row in the table above has a vote pill of its own; this is the one
+    // on the page, which the step would not otherwise hear about.
+    const view = await mountFor("person", "success", "q2");
+
+    view.findComponent(EntityDetailsCard).vm.$emit("voted");
+
+    expect(view.emitted("voted")).toHaveLength(1);
+  });
+});
+
+/** `?revisionId=` names a proposed change to preview. On /eksploruj/nowe the
+ * url outlives the person - the queue moves on without leaving the page - so
+ * the id in it can be a change to somebody else. Each test names its own
+ * revision: the preview is async data keyed by the id. */
+describe("EntityDetailView, previewing a proposed change", () => {
+  const PREVIEW = "Wyświetlasz podgląd zaproponowanej zmiany";
+
+  afterEach(() => {
+    vi.mocked(authRequest).mockReset();
+  });
+
+  it("lays a change proposed for this page over it", async () => {
+    vi.mocked(authRequest).mockResolvedValue({
+      node_id: "r1",
+      data: { name: "Jan Nowak" },
+    });
+
+    const view = await mountFor(
+      "person",
+      "success",
+      "r1",
+      "/?revisionId=rev-1",
+    );
+
+    expect(view.text()).toContain(PREVIEW);
+    expect(view.findComponent(EntityDetailsCard).props("entity")).toMatchObject(
+      { name: "Jan Nowak" },
+    );
+  });
+
+  it("does not lay one proposed for somebody else over it", async () => {
+    vi.mocked(authRequest).mockResolvedValue({
+      node_id: "somebody-else",
+      data: { name: "Jan Nowak" },
+    });
+
+    const view = await mountFor(
+      "person",
+      "success",
+      "r2",
+      "/?revisionId=rev-2",
+    );
+
+    expect(view.text()).not.toContain(PREVIEW);
+    expect(view.findComponent(EntityDetailsCard).props("entity")).toMatchObject(
+      { name: "Jan Kowalski" },
+    );
   });
 });

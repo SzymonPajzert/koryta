@@ -101,7 +101,7 @@
     </template>
     <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">
-        <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
+        <v-alert v-if="revision" type="info" variant="tonal" class="mb-4">
           Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
           <br />
           <nuxt-link :to="`/admin/rewizje/${node}?revisionId=${revisionId}`"
@@ -125,6 +125,7 @@
           :type="type"
           :extra-locations="searchLocations"
           @published="refreshNode()"
+          @voted="emit('voted')"
         />
 
         <div class="mt-4">
@@ -260,6 +261,7 @@
           :node-type="type"
           :columns="type === 'person'"
           class="mt-4"
+          @saved="emit('noted')"
         />
 
         <!-- Last on the page, under the relations it draws. The rows above are
@@ -496,6 +498,15 @@ const props = defineProps<{
   type: NodeType;
 }>();
 
+/** For the review queue on /eksploruj/nowe, which draws this page under its
+ * one-row table and ticks its „Notatka” and „Głos” steps off on these. */
+const emit = defineEmits<{
+  /** A note was saved on the page. */
+  noted: [];
+  /** The reader voted from the page's own header. */
+  voted: [];
+}>();
+
 const node = props.node;
 const type = props.type;
 
@@ -575,11 +586,23 @@ const { data: revisionResponse } = await useAsyncData<Revision | null>(
   { watch: [revisionId, user], server: false },
 );
 
+/** The proposed change, once it is known to be about this page. The id is the
+ * url's, and on /eksploruj/nowe the url outlives the person: the queue moves on
+ * without leaving the page, so a change proposed for one person would otherwise
+ * be laid over whoever came next. */
+const revision = computed(() => {
+  const loaded = revisionResponse.value;
+  if (!revisionId.value || !loaded?.data) return undefined;
+  // Both spellings are in the data; see `revisionTargetRef`.
+  const target = loaded.node_id ?? loaded.nodeId;
+  return target && target !== node ? undefined : loaded;
+});
+
 const entity = computed(() => {
-  if (revisionId.value && revisionResponse.value?.data) {
+  if (revision.value) {
     return {
       ...response.value?.node,
-      ...revisionResponse.value.data,
+      ...revision.value.data,
     } as unknown as Person | Company | Article | Region;
   }
   return response.value?.node;

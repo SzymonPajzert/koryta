@@ -100,6 +100,7 @@
           :key="entity.id ?? ''"
           category="interesting"
           show-label
+          @voted="emit('voted')"
         />
       </div>
     </v-card-title>
@@ -213,8 +214,9 @@ const props = withDefaults(
 );
 
 /** The page went live from the badge above. The card holds no data of its own
- * - the entity is handed to it - so the only thing it can do is say so. */
-const emit = defineEmits<{ published: [] }>();
+ * - the entity is handed to it - so the only thing it can do is say so.
+ * `voted` passes the vote pill's on, for the queue that ticks a step off on it. */
+const emit = defineEmits<{ published: []; voted: [] }>();
 
 const { user, isAdmin } = useAuthState();
 
