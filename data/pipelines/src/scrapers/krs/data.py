@@ -216,6 +216,26 @@ def read_treasury_list(ctx: Context) -> pd.DataFrame:
     return pd.read_excel(ctx.io.read_data(TREASURY_LIST).read_file(), dtype=str)
 
 
+#: The dane.gov.pl catalogue of public bodies (August 2025): every public
+#: entity's REGON, NIP, KRS, seat and website - urzędy gmin and starostwa too.
+PUBLIC_BODIES_CATALOGUE = FileSource(
+    "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file",
+    "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv",
+)
+
+
+def read_public_bodies_catalogue(ctx: Context) -> pd.DataFrame:
+    """The whole catalogue. REGON and NIP are read as text: as numbers the
+    columns turn to floats, for the entries that have none, and lose their
+    leading zeros - the Mazowieckie marshal's office is 013272636."""
+    return pd.read_csv(
+        ctx.io.read_data(PUBLIC_BODIES_CATALOGUE).read_file(),
+        sep=";",
+        low_memory=False,
+        dtype={"REGON": str, "NIP": str},
+    )
+
+
 class CompaniesHardcoded(Pipeline[KRS]):
     filename = None
     volatile = True
@@ -291,18 +311,7 @@ class CompaniesHardcoded(Pipeline[KRS]):
         for the entries that have none, and lose their leading zeros - the
         Mazowieckie marshal's office is 013272636.
         """
-        _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
-        public_companies = FileSource(
-            _PUBLIC_COMPANIES_SOURCE,
-            "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv",
-        )
-
-        return pd.read_csv(
-            ctx.io.read_data(public_companies).read_file(),
-            sep=";",
-            low_memory=False,
-            dtype={"REGON": str, "NIP": str},
-        )
+        return read_public_bodies_catalogue(ctx)
 
     def read_public_companies(self, catalogue: pd.DataFrame) -> pd.DataFrame:
         """The catalogue entries with a KRS number, and the TERYT of their seat."""
