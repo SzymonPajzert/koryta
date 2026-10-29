@@ -196,6 +196,21 @@ describe("api/ingest/declarations", () => {
     expect(stored[IMAGES]!.date).toBeInstanceOf(Buffer);
   });
 
+  it("puts drafts first, an undated one before a dated one, and published pages last", async () => {
+    const priorityOf = async (node: Record<string, unknown>) => {
+      stored = {
+        "nodes/kowalska": { type: "person", name: "Anna Kowalska", ...node },
+      };
+      await send({ candidacies: [candidacy()], extracts: [extract()] });
+      return stored[EXTRACT]!.priority;
+    };
+    expect(await priorityOf({})).toBe(0);
+    expect(await priorityOf({ birthDate: "1979-07-15" })).toBe(1);
+    expect(await priorityOf({ published: true, birthDate: "1979-07-15" })).toBe(
+      3,
+    );
+  });
+
   it("does not write the same picture twice", async () => {
     await send({ candidacies: [candidacy()], extracts: [extract()] });
     const result = await send({ extracts: [extract()] });

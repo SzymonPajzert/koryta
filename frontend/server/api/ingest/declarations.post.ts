@@ -3,6 +3,7 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
 import { resolveMergedNode } from "~~/server/utils/merge";
+import { pageIsPublic } from "~~/shared/model";
 import {
   declarationIngestSchema,
   extractId,
@@ -63,9 +64,13 @@ export default defineEventHandler(async (event) => {
   };
 
   // --- candidacies -------------------------------------------------------
+  /** Every live page met on the way, by its id: how soon readers see its
+   * crops. */
+  const pages = new Map<string, LivePage>();
   const people = await livePeople(
     db,
     body.candidacies.flatMap((candidacy) => candidacy.kids),
+    pages,
   );
   const candidacyRefs = body.candidacies.map((candidacy) =>
     db.collection("declarationCandidacies").doc(candidacy.key),
@@ -139,7 +144,7 @@ export default defineEventHandler(async (event) => {
       const personIds = asStrings(data.personIds);
       // People are re-checked: a page merged or removed since the candidacy
       // was sent must not take the crop.
-      const resolved = await livePeople(db, personIds);
+      const resolved = await livePeople(db, personIds, pages);
       candidacyByKey.set(snapshot.id, {
         ...data,
         personIds: unique(
@@ -203,6 +208,9 @@ export default defineEventHandler(async (event) => {
           ...candidacies.map((c) => c.key),
         ]),
         personIds: unique([...asStrings(existing?.personIds), ...personIds]),
+        priority: Math.min(
+          ...personIds.map((pageId) => pages.get(pageId)?.priority ?? 3),
+        ),
         units: unitsOf(candidacies, existing?.units),
         linkNamed: extract.linkNamed ?? null,
         outcome: extract.outcome,
@@ -260,11 +268,22 @@ type StoredCandidacy = {
   files: number;
 };
 
+/** A live person page and how soon readers should see its crops.
+ *
+ * Szymon, 2026-10-29: the interest is in drafts nobody has verified yet, so
+ * those come first - without a birth date (0), then with one (1); a published
+ * page is verified already and comes last (3). The same order the crawl uses
+ * (2 there is a person with no page, who never reaches the site). Only
+ * whether a page has a date is read, never the date. */
+type LivePage = { id: string; priority: 0 | 1 | 3 };
+
 /** Each kid's live person page, followed through merges: a page that is gone,
- * deleted or not a person maps to nothing. */
+ * deleted or not a person maps to nothing. Every page found is also put in
+ * `pages`. */
 async function livePeople(
   db: FirebaseFirestore.Firestore,
   ids: readonly string[],
+  pages: Map<string, LivePage>,
 ): Promise<Map<string, string | undefined>> {
   const wanted = unique(ids);
   const answer = new Map<string, string | undefined>();
@@ -280,6 +299,12 @@ async function livePeople(
     const data = page?.exists ? page.data() : undefined;
     const live = data?.type === "person" && data.deleted !== true;
     answer.set(wanted[i]!, live ? page!.id : undefined);
+    if (live) {
+      pages.set(page!.id, {
+        id: page!.id,
+        priority: pageIsPublic(data) ? 3 : data.birthDate ? 1 : 0,
+      });
+    }
   }
   return answer;
 }

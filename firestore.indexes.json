@@ -1031,6 +1031,28 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priority",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "answerCount",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "rand",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
