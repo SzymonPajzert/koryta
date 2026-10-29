@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { flushPromises } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import PomocPage from "../../app/pages/pomoc.vue";
+import type CardAction from "../../app/components/card/Action.vue";
 import { HELP_PATHS, HELP_TASKS } from "../../shared/analytics";
 
 /** Mocked at the composable rather than at the tracker: the question is which
@@ -37,6 +38,15 @@ registerEndpoint("/api/stats/progress", () => ({
   reviewed: 30,
   toCheck: 30,
 }));
+
+/** The cards in one part of the page. A section is a DOM wrapper, whose
+ * `findAllComponents` is untyped, so the cards are named here. */
+const cardsIn = (section: {
+  findAllComponents: (selector: object) => unknown;
+}) =>
+  section.findAllComponents({ name: "CardAction" }) as VueWrapper<
+    InstanceType<typeof CardAction>
+  >[];
 
 const mount = async () => {
   const wrapper = await mountSuspended(PomocPage);
@@ -87,20 +97,33 @@ describe("PomocPage", () => {
   it("says which of the checking tasks need an account", async () => {
     const wrapper = await mount();
 
-    // The four tasks, and the three difficulty tiers the page opens with -
-    // every door out of either is the queue or a vote, and none of those can
-    // be cast without a name attached.
-    for (const [selector, count] of [
-      ["section#wiecej-sprawdzania", 4],
-      ["section#sprawdzanie", 3],
-    ] as const) {
-      const chips = wrapper
-        .get(selector)
-        .findAll(".v-chip")
-        .map((chip) => chip.text());
-      expect(chips, selector).toHaveLength(count);
-      for (const chip of chips) expect(chip).toBe("po zalogowaniu");
-    }
+    // The three difficulty tiers the page opens with - every door out of them
+    // is the queue or a vote, and none of those can be cast without a name
+    // attached.
+    const tiers = wrapper
+      .get("section#sprawdzanie")
+      .findAll(".v-chip")
+      .map((chip) => chip.text());
+    expect(tiers).toEqual(Array(3).fill("po zalogowaniu"));
+
+    // The same goes for four of the rest. Reading a declaration's crop is
+    // open to readers without an account (Szymon, bip-czytanie-r1), and the
+    // note above the cards says so.
+    const more = wrapper.get("section#wiecej-sprawdzania");
+    const access = Object.fromEntries(
+      cardsIn(more).map((card) => [
+        card.props("to"),
+        card.get(".v-chip").text(),
+      ]),
+    );
+    expect(access).toEqual({
+      "/eksploruj/nowe": "po zalogowaniu",
+      "/oswiadczenia": "bez konta",
+      "/ekstrakcje/kategoryzacja": "po zalogowaniu",
+      "/eksploruj/tabela": "po zalogowaniu",
+      "/qa": "po zalogowaniu",
+    });
+    expect(more.text()).toContain("Daty z oświadczeń odczytasz i bez konta.");
   });
 
   // The owner's report: the tiers sat inside the third section, under two
@@ -187,6 +210,22 @@ describe("PomocPage", () => {
 
     expect(trackGoal).toHaveBeenCalledWith("cta:task", {
       task: "tabela",
+      from: "pomoc",
+    });
+  });
+
+  // The card went up before HELP_TASKS had a name for it, and its clicks went
+  // uncounted until it did.
+  it("counts a click on the declarations card under its own name", async () => {
+    const wrapper = await mount();
+
+    const card = cardsIn(wrapper.get("section#wiecej-sprawdzania")).find(
+      (card) => card.props("to") === "/oswiadczenia",
+    );
+    await card!.trigger("click");
+
+    expect(trackGoal).toHaveBeenCalledWith("cta:task", {
+      task: "oswiadczenia",
       from: "pomoc",
     });
   });

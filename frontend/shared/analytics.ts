@@ -327,6 +327,7 @@ export type HelpPath = (typeof HELP_PATHS)[number];
  * `cta:donate` and `cta:community` all end on somebody else's domain. */
 export const HELP_TASKS = [
   "kolejka",
+  "oswiadczenia",
   "fakty",
   "fakty-osoby",
   "qa",

@@ -254,7 +254,7 @@
             :to="card.to"
             ink="ink-info"
             :access="card.access ?? 'login'"
-            @click="card.task && task(card.task)"
+            @click="task(card.task)"
           />
         </v-col>
       </v-row>
@@ -612,14 +612,11 @@ const checkingCards = computed(() => [
   {
     // Second, after the queue: it is the smallest unit of work on the page,
     // a few seconds a crop, and an agreed date can publish a page by itself.
-    // No `task` yet: HELP_TASKS in shared/analytics.ts is a closed list and
-    // has no name for it („oswiadczenia” is the one to add), so its clicks go
-    // uncounted until it does.
     icon: mdiTextRecognition,
     title: "Odczytuj daty urodzenia z oświadczeń",
     desc: "Przepisujesz z wycinka oświadczenia majątkowego odręcznie wpisaną datę urodzenia - kilka sekund na jeden wycinek.",
     to: "/oswiadczenia",
-    task: null,
+    task: "oswiadczenia" as const,
     // Open without an account (Szymon, bip-czytanie-r1): the readings count
     // once an account claims them.
     access: "none" as const,
