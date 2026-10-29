@@ -7,6 +7,9 @@
 1. Writes documents to local `tar.gz` bundles; `BipUrlsClassified` and
    `BipDocumentsParsed` read them
 1. Not part of the nightly yet: run it by hand.
+1. `--people-of-interest`: looks up the oświadczenia majątkowe of the people in
+   `BipPeopleOfInterest` unit by unit instead, and records for each candidacy
+   whether a file came down or why not (`bip_poi`); by hand on predator.
 
 ## krs_scrape_bulletin
 1. Reads KRS bulletin for updates on dates we haven't scraped yet

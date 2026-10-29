@@ -70,6 +70,45 @@ koryta_scrape_bip repair [--out PATH] [--older-than-minutes N] [--keep-missing]
 `--older-than-minutes` (default 10) leaves bundles a live crawl may still be
 writing untouched.
 
+### `crawl --people-of-interest`
+
+Instead of the blind crawl, looks up the oświadczenia majątkowe of the people in
+`BipPeopleOfInterest` (one row per won local candidacy since 2018, read as the
+KRS jobs read `ScrapeRejestrIO`), unit by unit. Meant for predator, by hand, not
+the nightly: it is a long one-off with its own CPU budget.
+
+```bash
+koryta BipPeopleOfInterest                 # build or refresh the list first (optional)
+koryta_scrape_bip crawl --people-of-interest --poi-max-priority 1 --max-minutes 120
+koryta_scrape_bip crawl --people-of-interest              # everyone still pending
+```
+
+- Where a unit's search starts (`scrapers/bip/units.py`): the office's BIP from
+  the gov.pl registry, else the office's website from the dane.gov.pl catalogue
+  of public bodies and the "BIP" link on it. The registry has an office for only
+  905 of 2,479 gminas; with the catalogue 2,308 of the 2,397 units on the 10-29
+  list have a start.
+- Each unit gets `--unit-pages` (150) pages, walked best first towards
+  "oświadczenia majątkowe" (`scrapers/bip/people.py`), and stays under its own
+  path on shared platforms (bip.malopolska.pl, samorzad.gov.pl).
+- A link counts for a person when its label, table row or list item, nearest
+  heading, or the page's title names them (`scrapers/common/links.py`
+  `extract_link_contexts`); when some of a person's links carry the first name
+  too, only those. At most `--per-person` (3) files are downloaded per
+  candidacy, into the same bundles and `bip_docs` as the blind crawl's. A unit's
+  declaration files that name nobody (one file for the whole council) go to the
+  people nothing named, at most three.
+- Every candidacy ends the run `found` (`named`, or `unnamed` for such a shared
+  file) or `not_found` with a reason: `no_seed`, `unreachable`, `robots`,
+  `no_declarations`, `not_listed`, `download_failed`. Tables `bip_poi`,
+  `bip_poi_docs` and `bip_units` (`stores/bip_people.py`) hold that; a later run
+  searches only the pending ones (`--poi-refresh` all of them), so a new election
+  or a wider list only costs its new rows.
+- `--poi-max-priority`: 0 published pages without a birth date, 1 drafts without
+  one, 2 pages with one, 3 people not on the site yet. `--poi-limit` caps the
+  candidacies, `--max-minutes` the run (exit 75 with units left), `--workers`
+  the units searched at once, `--rate` the seconds between hits on one host.
+
 ### `stats`
 
 Print queue counters and the last-hour throughput.

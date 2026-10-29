@@ -19,6 +19,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
+from jobs.bip_crawler.people import run_people_mode
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import BipQueue
@@ -46,6 +47,16 @@ def parse_freshness(value: str | None) -> int | None:
     return amount * (86400 if unit == "d" else 3600)
 
 
+def registry_xml(xml_cache: Path, *, refresh: bool) -> tuple[bytes, str]:
+    """The gov.pl registry's XML (cached unless `refresh`) and where it came from."""
+    if xml_cache.exists() and not refresh:
+        return xml_cache.read_bytes(), f"cache {xml_cache}"
+    xml = download_subjects_xml()
+    xml_cache.parent.mkdir(parents=True, exist_ok=True)
+    xml_cache.write_bytes(xml)
+    return xml, "gov.pl"
+
+
 def ingest_registry(
     bip_queue: BipQueue, xml_cache: Path, *, refresh: bool
 ) -> tuple[int, int, int, str]:
@@ -53,14 +64,7 @@ def ingest_registry(
 
     Returns (registry rows, hosts inserted, hosts updated, source).
     """
-    if xml_cache.exists() and not refresh:
-        xml = xml_cache.read_bytes()
-        source = f"cache {xml_cache}"
-    else:
-        xml = download_subjects_xml()
-        xml_cache.parent.mkdir(parents=True, exist_ok=True)
-        xml_cache.write_bytes(xml)
-        source = "gov.pl"
+    xml, source = registry_xml(xml_cache, refresh=refresh)
     entries = parse_subjects_xml(xml)
     inserted, updated = bip_queue.upsert_hosts(hosts_from_entries(entries))
     return len(entries), inserted, updated, source
@@ -100,6 +104,11 @@ def cmd_crawl(args: argparse.Namespace) -> int:
             )
     store = LocalBundleStore(root)
     robots = RobotsCache(USER_AGENT)
+    if args.people_of_interest:
+        try:
+            return run_people_mode(args, pg, bip_queue, store, robots.allowed)
+        finally:
+            pg.close()
     options = CoordinatorOptions(
         out_dir=args.out,
         workers=args.workers,
@@ -256,6 +265,39 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-repair",
         action="store_true",
         help="skip the startup re-wrap of .part bundles left by a killed run",
+    )
+    people = crawl.add_argument_group(
+        "people mode",
+        "Look up the candidacies of BipPeopleOfInterest unit by unit instead of "
+        "the blind crawl; --workers is units at once, --rate and --max-minutes apply.",
+    )
+    people.add_argument(
+        "--people-of-interest", action="store_true", help="run the people mode"
+    )
+    people.add_argument(
+        "--poi-max-priority",
+        type=int,
+        default=None,
+        help="only candidacies up to this priority: 0 a published page without "
+        "a birth date, "
+        "1 a draft without one, 2 a page with one, 3 a person not on the site",
+    )
+    people.add_argument(
+        "--poi-limit", type=int, default=None, help="at most this many candidacies"
+    )
+    people.add_argument(
+        "--poi-refresh",
+        action="store_true",
+        help="search found and not-found ones again",
+    )
+    people.add_argument(
+        "--unit-pages", type=int, default=150, help="pages read per unit (default 150)"
+    )
+    people.add_argument(
+        "--per-person",
+        type=int,
+        default=3,
+        help="files downloaded per candidacy (default 3)",
     )
     crawl.set_defaults(func=cmd_crawl)
 
