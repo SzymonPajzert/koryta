@@ -170,11 +170,11 @@ def test_rows_carry_the_unit_people_and_priority(frames):
     assert list(jan.rejestrio_ids) == ["111", "333"]
     assert not jan.page_has_birth_date
     assert jan.on_site and jan.published
-    assert jan.priority == 0  # published, and the page shows no birth date
+    assert jan.priority == 3  # published: verified already, so last
     assert jan.namesakes == 1  # the younger Jan Kowalski on the same council
     zak = out.loc[("Żak", 2024)]
     assert zak.unit_level == "powiat" and not zak.on_site
-    assert zak.priority == 3
+    assert zak.priority == 2  # no page yet
     assert zak.pkw_age == 49
 
 
@@ -217,11 +217,13 @@ def test_refuses_a_pkw_output_without_offices(frames):
         )
 
 
-def test_priority_puts_undated_published_pages_first():
-    assert priority(True, True, False) == 0
-    assert priority(False, True, False) == 1
-    assert priority(True, True, True) == 2
-    assert priority(False, False, False) == 3
+def test_priority_puts_drafts_first_and_published_pages_last():
+    # Szymon, 10-29: drafts are what nobody has verified yet
+    assert priority(published=False, on_site=True, page_has_birth_date=False) == 0
+    assert priority(published=False, on_site=True, page_has_birth_date=True) == 1
+    assert priority(published=False, on_site=False, page_has_birth_date=False) == 2
+    assert priority(published=True, on_site=True, page_has_birth_date=False) == 3
+    assert priority(published=True, on_site=True, page_has_birth_date=True) == 3
 
 
 def test_whether_the_page_shows_a_birth_date(frames):
@@ -229,7 +231,7 @@ def test_whether_the_page_shows_a_birth_date(frames):
     koryta.loc[koryta.id == "k1", "birth_date"] = "1960-05-01T00:00:00"
     out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
     jan = out[out.last_name == "Kowalski"].iloc[0]
-    assert jan.page_has_birth_date and jan.priority == 2
+    assert jan.page_has_birth_date and jan.priority == 3  # published
 
 
 def test_unit_level():
@@ -343,7 +345,7 @@ def test_a_candidacy_with_an_undated_page_counts_as_undated(frames):
     out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
     jan = out[out.last_name == "Kowalski"].iloc[0]
     assert sorted(jan.koryta_ids) == ["k1", "k3"]
-    assert not jan.page_has_birth_date and jan.priority == 0
+    assert not jan.page_has_birth_date and jan.priority == 3  # k1 is published
 
 
 def test_rows_name_their_unit_for_people(frames):
@@ -365,3 +367,12 @@ def test_rows_name_their_unit_for_people(frames):
     assert names["100300"] == "powiat kutnowski"
     plain = people_of_interest(duckdb.connect(), *frames, since=2018)
     assert set(plain.unit_name) == {""}
+
+
+def test_a_draft_comes_before_a_person_with_no_page(frames):
+    people, person_pkw, koryta = frames
+    koryta.loc[koryta.id == "k1", "is_public"] = False  # Jan's page is a draft
+    out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
+    order = list(out.last_name)
+    assert order.index("Kowalski") < order.index("Żak")
+    assert out[out.last_name == "Kowalski"].priority.iloc[0] == 0

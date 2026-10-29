@@ -304,9 +304,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--poi-max-priority",
         type=int,
         default=None,
-        help="only candidacies up to this priority: 0 a published page without "
-        "a birth date, "
-        "1 a draft without one, 2 a page with one, 3 a person not on the site",
+        help="only candidacies up to this priority: 0 a draft page without a birth "
+        "date, 1 a draft with one, 2 a person not on the site yet, 3 a published page",
     )
     people.add_argument(
         "--poi-limit", type=int, default=None, help="at most this many candidacies"

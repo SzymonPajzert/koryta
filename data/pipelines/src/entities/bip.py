@@ -29,8 +29,9 @@ class BipPersonOfInterest:
     are one human, not a new fact; it is a new fact for a page that shows none
     (``page_has_birth_date``). No birth date from the register or the site is
     carried here, on purpose: the declaration is read to check them. ``priority``
-    orders the crawl: 0 a published page with no birth date, 1 a draft page with
-    none, 2 a page with one, 3 a person not on the site yet.
+    orders the crawl, drafts first as they are what nobody has verified yet: 0 a
+    draft page with no birth date, 1 a draft with one, 2 a person not on the site
+    yet, 3 a published page.
     """
 
     key: str
