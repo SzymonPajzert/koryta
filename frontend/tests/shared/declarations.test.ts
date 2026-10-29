@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   agreedName,
+  machineSettles,
   declarationIngestSchema,
   extractId,
   isPng,
@@ -130,15 +131,6 @@ describe("settleReading", () => {
     expect(settleReading(robots)).toEqual({ status: "open" });
   });
 
-  it("lets a high-confidence machine reading count as one voice", () => {
-    expect(
-      settleReading(answers("1979-07-15"), { machine: "1979-07-15" }),
-    ).toMatchObject({ status: "agreed", value: "1979-07-15", readers: 2 });
-    expect(
-      settleReading(answers("1979-07-16"), { machine: "1979-07-15" }),
-    ).toEqual({ status: "open" });
-  });
-
   it("ignores skips", () => {
     expect(settleReading(answers("skip", "skip", "1979-07-15"))).toEqual({
       status: "open",
@@ -175,6 +167,21 @@ describe("settleReading", () => {
         ),
       ),
     ).toEqual({ status: "disputed" });
+  });
+});
+
+describe("machineSettles", () => {
+  it("settles a high-confidence full date and nothing else", () => {
+    expect(
+      machineSettles({ birthDate: "1979-07-15", confidence: "high" }),
+    ).toBe("1979-07-15");
+    expect(
+      machineSettles({ birthDate: "1979", confidence: "high" }),
+    ).toBeNull();
+    expect(
+      machineSettles({ birthDate: "1979-07-15", confidence: "medium" }),
+    ).toBeNull();
+    expect(machineSettles(undefined)).toBeNull();
   });
 });
 

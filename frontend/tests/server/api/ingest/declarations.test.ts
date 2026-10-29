@@ -59,12 +59,10 @@ const { mockGetUser } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.defineEventHandler = (fn: any) => fn;
   return {
-    mockGetUser: vi
-      .fn()
-      .mockResolvedValue({
-        uid: "pipeline-bip-declarations",
-        datascience: true,
-      }),
+    mockGetUser: vi.fn().mockResolvedValue({
+      uid: "pipeline-bip-declarations",
+      datascience: true,
+    }),
   };
 });
 
@@ -308,6 +306,38 @@ describe("api/ingest/declarations", () => {
       failure: "blank_form",
     });
     expect(stored[IMAGES]).toBeUndefined();
+  });
+
+  it("settles a typed date the job read with high confidence, without readers", async () => {
+    await send({
+      candidacies: [candidacy()],
+      extracts: [
+        extract({
+          outcome: "read",
+          images: undefined,
+          machine: {
+            birthDate: "1979-07-15",
+            confidence: "high",
+            method: "text_layer",
+          },
+        }),
+      ],
+    });
+    expect(stored[EXTRACT]).toMatchObject({
+      status: "agreed",
+      agreed: { value: "1979-07-15", kind: "date", by: "machine" },
+    });
+    expect(stored[IMAGES]).toBeUndefined();
+  });
+
+  it("leaves a lower-confidence reading to readers", async () => {
+    await send({
+      candidacies: [candidacy()],
+      extracts: [
+        extract({ machine: { birthDate: "1979-07-15", confidence: "medium" } }),
+      ],
+    });
+    expect(stored[EXTRACT]).toMatchObject({ status: "open", agreed: null });
   });
 
   it("refuses a request heavier than the limit", async () => {

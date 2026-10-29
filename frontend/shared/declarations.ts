@@ -128,6 +128,19 @@ export const machineReadingSchema = z.object({
 });
 export type MachineReading = z.infer<typeof machineReadingSchema>;
 
+/** The date the job's own reading settles, or null when readers must read.
+ *
+ * Only a typed date inside the candidacy's exact PKW birth-date window comes
+ * as "high" (Szymon, 2026-10-29: such a date settles without readers;
+ * handwriting and scans go to them). A year alone is never enough: there is
+ * no day to compare with the page's. */
+export function machineSettles(
+  machine: MachineReading | null | undefined,
+): string | null {
+  if (machine?.confidence !== "high" || !machine.birthDate) return null;
+  return readingKind(machine.birthDate) === "date" ? machine.birthDate : null;
+}
+
 const base64Png = z.string().max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 8);
 
 export const declarationExtractSchema = z
@@ -153,7 +166,11 @@ export const declarationExtractSchema = z
      * heading or page title), rather than the person being found inside a
      * council-wide file that names nobody. */
     linkNamed: z.boolean().optional(),
-    outcome: z.enum(["crop", "failed"]),
+    /** `crop`: a picture for readers. `read`: the job read a typed date
+     * inside the candidacy's exact PKW window, which settles it without
+     * readers (Szymon, 2026-10-29); a picture is optional. `failed`: nothing
+     * to read. */
+    outcome: z.enum(["crop", "read", "failed"]),
     /** Why nothing could be cut, when the outcome is `failed`. */
     reason: reasonCode.nullable().optional(),
     machine: machineReadingSchema.optional(),
@@ -161,10 +178,17 @@ export const declarationExtractSchema = z
       .object({ date: base64Png, name: base64Png.nullable().optional() })
       .optional(),
   })
-  .refine((extract) => extract.outcome === "failed" || !!extract.images, {
+  .refine((extract) => extract.outcome !== "crop" || !!extract.images, {
     message: "a crop needs its images",
     path: ["images"],
-  });
+  })
+  .refine(
+    (extract) => extract.outcome !== "read" || machineSettles(extract.machine),
+    {
+      message: "a read needs a high-confidence full date",
+      path: ["machine"],
+    },
+  );
 export type DeclarationExtractInput = z.infer<typeof declarationExtractSchema>;
 
 export const declarationIngestSchema = z.object({
@@ -399,13 +423,13 @@ function compatible(a: string, b: string): boolean {
  * when one more reader than it takes to agree says so and no day has the
  * support to agree.
  *
- * `machine` is the job's own reading. It counts as one voice when the caller
- * says so (a high-confidence read), and never on its own.
+ * The job's own reading is not a voice here: a high-confidence one settles
+ * the crop at upload (`machineSettles`) and never reaches readers, and any
+ * other is a guess readers must not be anchored by.
  */
 export function settleReading(
   answers: readonly ReaderAnswer[],
   options: {
-    machine?: string | null;
     agree?: number;
     disputedAfter?: number;
   } = {},
@@ -422,9 +446,6 @@ export function settleReading(
   const readings = [...byReader.values()]
     .filter((a) => a.verdict === "date" && a.value && readingKind(a.value))
     .map((a) => a.value as string);
-  if (options.machine && readingKind(options.machine)) {
-    readings.push(options.machine);
-  }
   const unreadable = [...byReader.values()].filter(
     (a) => a.verdict === "unreadable" || a.verdict === "empty",
   ).length;
