@@ -284,13 +284,18 @@ def unit_level(teryt: str) -> str:
 
 
 def priority(published: bool, on_site: bool, page_has_birth_date: bool) -> int:
-    """0 a published page with no birth date, 1 a draft with none, 2 a page with
-    one, 3 a person not on the site."""
-    if not on_site:
+    """0 a draft page with no birth date, 1 a draft with one, 2 a person not on the
+    site yet, 3 a published page.
+
+    Szymon, 10-29: drafts first - pages nobody has verified yet, where a
+    declaration is most of what there is to go on; a published page has been
+    verified, so it waits even behind people with no page at all.
+    """
+    if published:
         return 3
-    if page_has_birth_date:
+    if not on_site:
         return 2
-    return 0 if published else 1
+    return 1 if page_has_birth_date else 0
 
 
 def candidacy_key(

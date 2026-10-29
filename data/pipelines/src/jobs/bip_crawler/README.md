@@ -115,8 +115,8 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
 - The run ends with this run's outcomes, every candidacy's, and both per election
   year: 2014-only candidacies are past BIP's six years more often than not, and the
   per-year counts are where that shows.
-- `--poi-max-priority`: 0 published pages without a birth date, 1 drafts without
-  one, 2 pages with one, 3 people not on the site yet. `--poi-limit` caps the
+- `--poi-max-priority`: 0 draft pages without a birth date, 1 drafts with one,
+  2 people not on the site yet, 3 published pages (verified already, so last). `--poi-limit` caps the
   candidacies, `--max-minutes` the run (walks stop at it, units not started stay
   pending; exit 75), `--workers` the units searched at once, `--rate` the seconds
   between hits on one host.
