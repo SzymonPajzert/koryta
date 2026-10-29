@@ -12,7 +12,7 @@ from analysis.bip_people_of_interest import BipPeopleOfInterest
 from jobs.bip_crawler.people import PeopleOptions, PeopleSearch, list_policy
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from scrapers.bip.classify import normalize_url
-from scrapers.bip.people import Seeker, candidates, choose, stem
+from scrapers.bip.people import Seeker, candidates, choose, names_somebody, stem
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
@@ -357,6 +357,34 @@ def test_first_name_rule_and_stems():
     picks = choose(found, [jan, anna], per_person=3, unnamed_cap=0)
     assert [c.url for c in picks["j"]] == ["https://b.pl/1.pdf"]
     assert [c.url for c in picks["a"]] == ["https://b.pl/2.pdf"]
+
+
+def test_a_page_about_somebody_else_lends_nobody_its_files():
+    # Chojnów's BIP gives each councillor a page titled with an initial and the
+    # surname, and labels that name nobody: the 10-29 trial took three of them
+    # for Jan Serkies as the council's unnamed files.
+    page = "https://bip.chojnow.net.pl/wiadomosc/884071/b_kulacz"
+    title = (
+        "BIP - Urząd Miejski w Chojnowie - Rada Miejska - Oświadczenia majątkowe - "
+        "Rada Miejska 2024-2029 - B. Kułacz - Stan majątkowy na 31.12.2025 r."
+    )
+    links = [
+        LinkContext(
+            "https://files.example.pl/884071/files/kulacz.pdf",
+            "Stan majątkowy na 31.12.2025 r. 2.81 MB pdf Pobierz",
+            "",
+            "Załączniki",
+        )
+    ]
+    serkies, kulacz = (
+        Seeker.of("s", "Jan", "Serkies"),
+        Seeker.of("k", "Barbara", "Kułacz"),
+    )
+    assert candidates(page, title, links, [serkies]) == []
+    assert [c.key for c in candidates(page, title, links, [serkies, kulacz])] == ["k"]
+    assert names_somebody("Oświadczenie majątkowe - B. Kułacz")
+    assert not names_somebody("Rada Miejska Chojnowa", initials_only=True)
+    assert not names_somebody("Załącznik A. Oświadczenie majątkowe")
 
 
 @pytest.mark.parametrize(
