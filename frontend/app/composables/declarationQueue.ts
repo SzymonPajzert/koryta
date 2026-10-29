@@ -5,8 +5,79 @@ import type {
   DeclarationQueue,
   DeclarationTask,
 } from "~~/shared/declarations";
+import { useCurrentUser } from "vuefire";
 import { authRequest } from "~/composables/auth";
 import { typedFromValue } from "~/utils/declarationReading";
+
+/** Where a reader without an account keeps the id their readings are filed
+ * under. Szymon, round bip-czytanie-r1 (2026-10-29): reading is open to
+ * readers who are not signed in, "We'd assign them some identifier and they
+ * can either convert their found things to a signed up account or the answers
+ * are aggregated under their ID - it doesn't count towards auto publish for
+ * now". A random id in this browser, never an account: a Firebase anonymous
+ * sign-in would make the reader "signed in" everywhere, and a signed-in
+ * reader sees drafts and their dates, which a blind reading must not. */
+const READER_KEY = "koryta:declaration-reader";
+
+/** The id of this browser's readings without an account, made on first use,
+ * or null where the browser keeps nothing (a private window that refuses
+ * storage): such a reader reads with no count kept. */
+export function storedReaderId(create = false): string | null {
+  try {
+    const stored = window.localStorage.getItem(READER_KEY);
+    if (stored || !create) return stored;
+    const made = crypto.randomUUID();
+    window.localStorage.setItem(READER_KEY, made);
+    return made;
+  } catch {
+    return null;
+  }
+}
+
+function forgetReaderId() {
+  try {
+    window.localStorage.removeItem(READER_KEY);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+}
+
+/** A request on the reader's behalf: with their token when they are signed
+ * in, with this browser's reader id when they are not. */
+async function readerRequest<T>(
+  url: string,
+  options: {
+    method?: string;
+    body?: unknown;
+    query?: unknown;
+    timeout?: number;
+  },
+): Promise<T> {
+  const user = useCurrentUser();
+  if (user.value) return authRequest<T>(url, options);
+  const id = storedReaderId(true);
+  return await $fetch<T>(url, {
+    method: (options.method || "POST") as "POST",
+    body: options.body as Record<string, unknown>,
+    query: options.query as Record<string, unknown>,
+    timeout: options.timeout,
+    headers: id ? { "X-Reader-Id": id } : {},
+  });
+}
+
+/** Moves this browser's readings without an account onto the account the
+ * reader just signed in to, so what they read before counts as theirs. Kept
+ * for another try when it fails; forgotten once the server has them. */
+export async function claimStoredReadings(): Promise<number> {
+  const readerId = storedReaderId();
+  if (!readerId) return 0;
+  const result = await authRequest<{ claimed: number }>(
+    "/api/declarations/claim",
+    { method: "POST", body: { readerId }, timeout: 20_000 },
+  );
+  forgetReaderId();
+  return result.claimed;
+}
 
 /** How many crops /oswiadczenia asks for at a time: the one to read and two
  * behind it, so the next is drawn the moment an answer is given. */
@@ -93,7 +164,7 @@ export function useDeclarationQueue() {
   }
 
   function fetchNext() {
-    return authRequest<DeclarationQueue>("/api/declarations/next", {
+    return readerRequest<DeclarationQueue>("/api/declarations/next", {
       method: "GET",
       query: { count: BATCH },
       timeout: 20_000,
@@ -136,7 +207,7 @@ export function useDeclarationQueue() {
     inFlight.value += 1;
     const seq = ++sent;
     try {
-      const result = await authRequest<DeclarationAnswerResult>(
+      const result = await readerRequest<DeclarationAnswerResult>(
         `/api/declarations/${encodeURIComponent(task.id)}/answer`,
         { method: "POST", body, timeout: 20_000 },
       );
@@ -183,6 +254,18 @@ export function useDeclarationQueue() {
     }
   });
 
+  /** Starts over, for a reader who just signed in: the server's queue and
+   * counts are the account's now, not this browser's. */
+  function reset() {
+    queue.value = [];
+    open.value = null;
+    mine.value = null;
+    exhausted.value = false;
+    answered.value = null;
+    answeredHere.clear();
+    loadState.value = "idle";
+  }
+
   return {
     queue,
     open,
@@ -196,5 +279,6 @@ export function useDeclarationQueue() {
     failure,
     start,
     answer,
+    reset,
   };
 }

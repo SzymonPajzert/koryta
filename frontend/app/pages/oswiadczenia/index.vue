@@ -1,6 +1,5 @@
 <template>
-  <!-- TEMP(wariant): the column is as wide as the variant needs. -->
-  <div class="ow" :class="`ow--${variant}`" data-testid="declaration-page">
+  <div class="ow" data-testid="declaration-page">
     <div class="sec-head ow-head">
       <h1 class="ow-title">Odczytaj datę urodzenia</h1>
       <InfoBubble label="Odczytaj datę urodzenia">
@@ -14,41 +13,27 @@
           imieniem i nazwiskiem. Czytasz na ślepo - link do całego oświadczenia
           pojawia się dopiero po odpowiedzi.
         </p>
+        <p class="mb-2">
+          Każdy wycinek czyta kilka osób. Gdy dwie zalogowane osoby wpiszą tę
+          samą datę, uznajemy ją za odczytaną, a jeśli zgadza się z datą osoby,
+          której szkic mamy na stronie, strona może zostać opublikowana
+          automatycznie - kilka osób dziennie.
+        </p>
         <p class="mb-0">
-          Każdy wycinek czyta kilka osób. Gdy dwie wpiszą tę samą datę, uznajemy
-          ją za odczytaną, a jeśli zgadza się z datą osoby, której szkic mamy na
-          stronie, strona może zostać opublikowana automatycznie - kilka osób
-          dziennie.
+          Bez konta też możesz czytać. Twoje odczyty zapisujemy wtedy w tej
+          przeglądarce, a po założeniu konta przechodzą na nie i zaczynają się
+          liczyć.
         </p>
       </InfoBubble>
     </div>
 
     <!-- Who is signed in is known in the browser only, and every crop is
-         fetched there with the reader's token: the server render draws the
-         title and a placeholder, never a crop. -->
+         fetched there, with the reader's token or this browser's reader id:
+         the server render draws the title and a placeholder, never a crop. -->
     <ClientOnly>
       <div v-if="!authReady" class="ow-work">
         <div class="ow-skeleton" />
       </div>
-
-      <section
-        v-else-if="!user"
-        class="ow-login"
-        data-testid="declaration-login"
-      >
-        <p class="ow-lead">
-          Radni, wójtowie i burmistrzowie wpisują datę urodzenia w
-          oświadczeniach majątkowych odręcznie - pokazujemy Ci wycinek tej
-          linijki, a Ty wpisujesz, co na nim widzisz. Kilka zgodnych odczytów
-          potwierdza, że osoba z oświadczenia to ta sama osoba co na naszej
-          stronie.
-        </p>
-        <ExploreLoginBanner
-          :to="loginTarget"
-          :signup-to="signupTarget"
-          message="Zaloguj się, aby odczytywać daty - każdy odczyt ma autora."
-        />
-      </section>
 
       <template v-else>
         <p class="ow-lead">
@@ -94,36 +79,9 @@
           </div>
 
           <template v-else>
-            <!-- TEMP(wariant): in the series the line about the last answer
-                 leads the list, where the eye is when Enter is pressed. -->
-            <div v-if="variant === 'c'" class="ow-answered-slot">
-              <OswiadczeniaAnswered v-if="answered" :crop="answered" />
-              <p v-else class="ow-answered-slot__empty">
-                Po zapisaniu pokażemy tu link do całego oświadczenia.
-              </p>
-            </div>
-
-            <!-- TEMP(wariant): variant c -->
-            <OswiadczeniaSeries
-              v-if="variant === 'c' && current"
-              :tasks="visible"
-              :drafts="drafts"
-              :autofocus="autofocus"
-              @answer="answer"
-            />
-            <!-- TEMP(wariant): variant b -->
             <OswiadczeniaTaskCard
-              v-else-if="variant === 'b' && current"
-              :key="`b-${current.task.id}`"
-              :task="current.task"
-              :draft="current.draft"
-              :autofocus="autofocus"
-              @answer="answer"
-            />
-            <!-- TEMP(wariant): variant a, the default -->
-            <OswiadczeniaTaskForm
-              v-else-if="current"
-              :key="`a-${current.task.id}`"
+              v-if="current"
+              :key="current.task.id"
               :task="current.task"
               :draft="current.draft"
               :autofocus="autofocus"
@@ -166,13 +124,22 @@
               </v-btn>
             </section>
 
-            <!-- TEMP(wariant): under the crop in variants a and b. -->
             <OswiadczeniaAnswered
-              v-if="variant !== 'c' && answered"
+              v-if="answered"
               :crop="answered"
               class="mt-3"
             />
           </template>
+        </div>
+
+        <!-- Under the work, never in its way: reading needs no account, and
+             the banner says what one adds - that the readings count. -->
+        <div v-if="!user" class="ow-login" data-testid="declaration-login">
+          <ExploreLoginBanner
+            :to="loginTarget"
+            :signup-to="signupTarget"
+            message="Czytasz bez konta. Twoje odczyty zapisujemy w tej przeglądarce - załóż konto, a przejdą na nie i zaczną się liczyć."
+          />
         </div>
       </template>
 
@@ -197,12 +164,19 @@
 <script setup lang="ts">
 import { mdiCheckAll } from "@mdi/js";
 import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
-import { useDeclarationQueue } from "~/composables/declarationQueue";
+import {
+  claimStoredReadings,
+  useDeclarationQueue,
+} from "~/composables/declarationQueue";
 import { polishNumber } from "~/composables/polish";
 
 /**
- * /oswiadczenia: signed-in readers type the birth date off a line cut out of
- * a councillor's asset declaration, one crop at a time.
+ * /oswiadczenia: readers type the birth date off a line cut out of a
+ * councillor's asset declaration, one crop at a time. Signed in or not
+ * (Szymon, bip-czytanie-r1): without an account the readings are filed under
+ * this browser's reader id and count for nothing until an account claims
+ * them; with one that is a Google sign-in or a confirmed address they count
+ * towards the agreement that can publish a page.
  *
  * The crop is the page. Everything else - who the declarations belong to, why
  * the page exists, what an agreed date does - is either withheld until the
@@ -226,10 +200,6 @@ useSeoMeta({
 
 const route = useRoute();
 
-// TEMP(wariant): the round's three variants, a by default.
-const pick = (v: unknown) => (v === "b" || v === "c" ? v : "a"); // TEMP(wariant)
-const variant = computed(() => pick(route.query.wariant)); // TEMP(wariant)
-
 const user = useCurrentUser();
 const authReady = useIsCurrentUserLoaded();
 
@@ -246,19 +216,10 @@ const {
   failure,
   start,
   answer,
+  reset,
 } = useDeclarationQueue();
 
 const current = computed(() => queue.value[0] ?? null);
-// TEMP(wariant): the series shows the crop to read and the two behind it.
-const visible = computed(() => queue.value.slice(0, 3).map((e) => e.task));
-// TEMP(wariant): what was typed into the series' rows whose save failed.
-const drafts = computed(() =>
-  Object.fromEntries(
-    queue.value
-      .filter((entry) => entry.draft)
-      .map((entry) => [entry.task.id, entry.draft!]),
-  ),
-);
 
 const finished = computed(
   () => exhausted.value && inFlight.value === 0 && !refilling.value,
@@ -283,11 +244,27 @@ const signupTarget = computed(() => ({
   query: { ...loginTarget.value.query, konto: "nowe" },
 }));
 
-// Signing in from the app bar's dialog lands here without a reload.
+// Reading starts once it is known who reads, signed in or not. Signing in
+// from the app bar's dialog lands here without a reload: what this browser
+// read without an account goes over to the account first, then the queue
+// starts again as the account's.
 watch(
   [authReady, user],
-  ([ready, signedIn]) => {
-    if (ready && signedIn && loadState.value === "idle") void start();
+  async ([ready, signedIn], previous) => {
+    if (!ready) return;
+    const wasSignedIn = previous?.[1];
+    if (signedIn && !wasSignedIn && loadState.value !== "idle") {
+      await claimStoredReadings().catch((err) => {
+        console.error(
+          "Failed to claim the readings made without an account",
+          err,
+        );
+      });
+      reset();
+    } else if (signedIn) {
+      await claimStoredReadings().catch(() => 0);
+    }
+    if (loadState.value === "idle") void start();
   },
   { immediate: true },
 );
@@ -308,21 +285,12 @@ onMounted(() => {
 
 .ow-work {
   margin-top: 20px;
-  max-width: 960px;
+  max-width: 880px;
 }
 
 .ow-login {
-  max-width: 720px;
-}
-
-/* TEMP(wariant): b is the compact card, c the whole column. */
-.ow--b .ow-work {
-  max-width: 720px;
-}
-
-/* TEMP(wariant) */
-.ow--c .ow-work {
-  max-width: none;
+  margin-top: 24px;
+  max-width: 880px;
 }
 
 .ow-head {
@@ -347,10 +315,6 @@ onMounted(() => {
   text-wrap: pretty;
 }
 
-.ow-login .ow-lead {
-  margin-bottom: 20px;
-}
-
 .ow-progress {
   align-items: baseline;
   color: rgb(var(--v-theme-ink-neutral));
@@ -369,18 +333,6 @@ onMounted(() => {
 
 .ow-progress__sep {
   opacity: 0.6;
-}
-
-.ow-answered-slot {
-  margin-bottom: 10px;
-  min-height: 20px;
-}
-
-.ow-answered-slot__empty {
-  color: rgb(var(--v-theme-ink-neutral));
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  margin: 0;
 }
 
 /* A crop's shape, held while one is on its way, so the page does not jump
