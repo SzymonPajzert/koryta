@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "oswiadczenia-odczytaj-date-urodzenia",
+    title: "Odczytaj datę urodzenia z oświadczenia majątkowego",
+    description:
+      "Nowa strona /oswiadczenia: przepisujesz datę urodzenia z wyciętej linijki oświadczenia majątkowego, a strona mówi, jak zrozumiała wpisaną datę. Bez konta też można czytać: odczyty zapisujemy w przeglądarce i przechodzą na konto po zalogowaniu.",
+    steps: [
+      "Otwórz /oswiadczenia i wpisz 15.07.1979 - przy etykiecie pola ma się pojawić „15 lipca 1979”. Zapisz: pod następnym wycinkiem ma być „Zapisane: 15 lipca 1979” i link „Zobacz całe oświadczenie”.",
+      "Otwórz /oswiadczenia w oknie prywatnym - wycinek da się odczytać bez logowania, a pod nim jest pasek z „Zaloguj się” i „Rejestracja”.",
+      "Na /pomoc, w „Więcej do sprawdzania”, karta „Odczytuj daty urodzenia z oświadczeń” ma znaczek „bez konta” i prowadzi na /oswiadczenia.",
+    ],
+    link: "/oswiadczenia",
+    area: "public",
+  },
+  {
     id: "formularz-spolki-branze-bez-skarbu-panstwa",
     title: "Formularz spółki pyta o branże, a „Skarb Państwa” idzie za wykazem",
     description:
