@@ -331,8 +331,10 @@ def file_lines(filename):
         Person(krs_name="Dariusz Jerzy Kowalczyk", pkw_name="KOWALCZYK Dariusz Anatol"),
         # Łukasz Krawiec and Jerzy Skrzypek were here too. Both have a page on
         # the site now, linked by their register id and voted on, and the
-        # merge is meant to reach a page by its register id.
-        Person(any="Andrzej Osiadacz"),
+        # merge is meant to reach a page by its register id. So was Andrzej
+        # Osiadacz, an expert rather than a politician, until the night made
+        # him a page on 2026-10-28 for his seat at Zakład Usług Komunalnych w
+        # Warce: everybody in a public post gets one now.
     ],
 )
 def test_missing(person, find_column_match):
