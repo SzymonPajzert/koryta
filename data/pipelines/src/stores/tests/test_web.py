@@ -99,3 +99,31 @@ def test_other_failures_are_not_asked_again(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(fetch, "_session", lambda impersonate: server)
     result = fetch.http_get("https://opole.pl/")
     assert not result.ok and "(6)" in result.error and server.versions == [None]
+
+
+def test_gets_verify_against_the_bundle_once_one_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[object] = []
+
+    class Server:
+        def get(self, url: str, **kwargs: object) -> object:
+            seen.append(kwargs.get("verify"))
+
+            class Response:
+                status_code = 200
+                text = "User-agent: *\n"
+                content = b"<html></html>"
+                headers = {"Content-Type": "text/html"}
+
+            Response.url = url  # type: ignore[attr-defined]
+            return Response()
+
+    server = Server()
+    monkeypatch.setattr(fetch, "_session", lambda impersonate: server)
+    monkeypatch.setattr(web.cffi_requests, "get", server.get)
+    assert fetch.http_get("https://bip.x.pl/").ok
+    monkeypatch.setattr(fetch, "_ca_bundle", "/cache/tls/ca-bundle.pem")
+    assert fetch.http_get("https://bip.x.pl/").ok
+    assert RobotsCache("test-agent").allowed("https://bip.y.pl/")
+    assert seen == [True, "/cache/tls/ca-bundle.pem", "/cache/tls/ca-bundle.pem"]

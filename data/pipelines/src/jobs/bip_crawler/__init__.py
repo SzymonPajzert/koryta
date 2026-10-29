@@ -24,17 +24,20 @@ from tqdm import tqdm
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from jobs.bip_crawler.people import run_people_mode
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
+from scrapers.common.fetch import use_ca_bundle
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import BipQueue
 from stores.bip_bundles import LocalBundleStore, rewrap_part
 from stores.bip_queue import PostgresBipQueue
 from stores.bip_registry import download_subjects_xml
+from stores.tls import ca_bundle
 from stores.web import RobotsCache
 
 USER_AGENT = "KorytaBIPCrawler/0.1 (+http://koryta.pl/crawler)"
 EXIT_TRY_LATER = 75
 DEFAULT_OUT = Path("bip_crawl_out")
 DEFAULT_XML_CACHE = Path("bip_crawl_out/registry/subjects.xml")
+DEFAULT_CA_BUNDLE = Path("bip_crawl_out/tls/ca-bundle.pem")
 
 _FRESHNESS_RE = re.compile(r"^\s*(\d+)\s*([dh])\s*$", re.IGNORECASE)
 
@@ -96,6 +99,11 @@ def cmd_crawl(args: argparse.Namespace) -> int:
 
 def _crawl(args: argparse.Namespace) -> int:
     root = Path(args.out)
+    # Servers that leave out their intermediate certificate verify against
+    # this bundle (stores/tls.py); the checks themselves stay on.
+    bundle = ca_bundle(Path(args.ca_bundle))
+    use_ca_bundle(str(bundle) if bundle else None)
+    print(f"certificates: {bundle or 'curl roots only'}", flush=True)
     pg = PostgresClient.from_env(max_size=4)
     bip_queue = PostgresBipQueue(pg)
     if not args.no_registry and bip_queue.stats().get("hosts", 0) == 0:
@@ -261,6 +269,13 @@ def build_parser() -> argparse.ArgumentParser:
     crawl = sub.add_parser("crawl", help="crawl hosts and harvest documents")
     crawl.add_argument("--out", type=Path, default=DEFAULT_OUT)
     crawl.add_argument("--xml-cache", type=Path, default=DEFAULT_XML_CACHE)
+    crawl.add_argument(
+        "--ca-bundle",
+        type=Path,
+        default=DEFAULT_CA_BUNDLE,
+        help="where to keep curl's roots plus Mozilla's intermediate certificates "
+        "(rebuilt weekly)",
+    )
     crawl.add_argument(
         "--refresh-registry",
         action="store_true",
