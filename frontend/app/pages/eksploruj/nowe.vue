@@ -257,99 +257,36 @@
         />
       </v-card>
 
-      <template v-if="focusedPerson">
-        <!-- The record first. Where somebody has worked and what they ran for
-             is what the reader is being asked to judge; the searches next to
-             the note below are written against it, and reading them in the
-             other order meant scrolling past both to find out who this is. -->
-        <v-card class="mb-4 pa-2 pa-md-3" data-testid="explore-relations">
-          <CardEmploymentHistory
-            v-if="focusedEdges.length"
-            :key="focusedPerson.id"
-            :edges="focusedEdges"
-            :can-correct="canEditRelations"
-            :can-remove="canRemoveRelations"
-            :subject-published="
-              focusedPerson.published ?? focusedPerson.visibility
-            "
-            @edit="openEdit"
-            @remove="openRemove"
-            @published="refreshFocusedEdges()"
-          />
-          <div v-else class="pa-2">
-            <div class="sec-head mb-1">
-              <v-icon
-                :icon="mdiTimelineTextOutline"
-                size="18"
-                class="sec-head__icon"
-              />
-              <h3 class="text-h6">Historia powiązań</h3>
-            </div>
-            <p class="k-lead mb-0">
-              Nie znamy jeszcze żadnych powiązań tej osoby - tym bardziej warto
-              poszukać.
-            </p>
-          </div>
-        </v-card>
+      <!-- The person's own page, as /osoba draws it, rather than cards built
+           for the queue. Those were kept up by hand beside the page and kept
+           falling behind it: adding a relation, citing one, who held the seat
+           before, the articles, the facts, the graph and the comments were all
+           on the profile and none of them here.
 
-        <DialogEditRelationHost
-          v-model="editOpen"
-          v-model:outcome="editedOutcome"
-          :edge="editEdge"
-          :label="editLabel"
-          :can-apply="canApplyEdits"
-          @saved="onEdgeEdited"
+           Its own `<Suspense>`, keyed by the person, as on
+           /admin/notatki/kategoryzacja. The view awaits its reads, which makes
+           it an async component, and a boundary of its own is what gives it a
+           fallback rather than an empty space under the table until the next
+           person has loaded. The key also starts each person from a fresh
+           view, which reads its node once, when it is set up. -->
+      <Suspense v-if="focusedPerson" :key="focusedPerson.id">
+        <EntityDetailView
+          :node="focusedPerson.id"
+          type="person"
+          data-testid="queue-person-page"
+          @noted="actionNoted = true"
+          @voted="actionVoted = true"
         />
-
-        <DialogRemoveEdgeHost
-          v-model="removeOpen"
-          v-model:shown="removedShown"
-          :edge="removeEdge"
-          :label="removeLabel"
-          @removed="onEdgeRemoved()"
-        />
-
-        <v-row>
-          <v-col cols="12" md="6">
-            <v-card class="mb-4">
-              <CardExplorePerson
-                :key="focusedPerson.id"
-                :person="focusedPerson"
-                :region="undefined"
-                :company="undefined"
-                :work-locations="workLocations"
-              />
-
-              <ChartPersonLocations
-                v-if="mapLocations.length"
-                :key="`map-${focusedPerson.id}`"
-                :locations="mapLocations"
-              />
-
-              <div class="pa-4 pt-0">
-                <ExploreProposeChange
-                  :key="focusedPerson.id"
-                  :person="focusedPerson"
-                />
-              </div>
-            </v-card>
-          </v-col>
-
-          <!-- The notes carry their own heading and sit on the page background
-               everywhere else they appear. Here they are one of two columns,
-               so they get the same surface as the card beside them - a bare
-               section next to a raised card read as an unfinished half. -->
-          <v-col cols="12" md="6">
-            <v-card class="mb-4 pa-2 pa-md-3">
-              <NoteEditor
-                :key="focusedPerson.id"
-                :node-id="focusedPerson.id"
-                @saved="actionNoted = true"
-              />
-            </v-card>
-          </v-col>
-        </v-row>
-      </template>
+        <template #fallback>
+          <v-card
+            class="d-flex align-center justify-center ga-2 py-8 text-caption text-medium-emphasis"
+            data-testid="queue-person-loading"
+          >
+            <v-progress-circular indeterminate size="16" width="2" />
+            Ładowanie strony osoby…
+          </v-card>
+        </template>
+      </Suspense>
     </div>
   </ClientOnly>
 </template>
@@ -367,7 +304,6 @@ import {
   mdiHelpCircleOutline,
   mdiStarOutline,
   mdiTable,
-  mdiTimelineTextOutline,
 } from "@mdi/js";
 import { ref, computed, watch } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
@@ -383,18 +319,19 @@ import { companyCategories } from "~~/shared/companyCategories";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 
-import { useEdges } from "~/composables/edges";
-import { useEdgeRemoval } from "~/composables/edgeRemoval";
-import { useEdgeEditing } from "~/composables/edgeEditing";
-
 definePageMeta({
   affineLink: "BYOEeL1iG0mvIR3yz2pOs",
   middleware: "auth",
   maxWidth: 1300,
 });
-useHead({
-  title: "Eksploruj Nowe - koryta.pl",
-});
+// `high`: the person's page under the table names the tab after the person,
+// and the tab is the queue's.
+useHead(
+  {
+    title: "Eksploruj Nowe - koryta.pl",
+  },
+  { tagPriority: "high" },
+);
 
 const page = ref(1);
 const showInstructions = useCookie<boolean>("show-explore-new-instructions", {
@@ -663,9 +600,9 @@ const progressQuery = computed(() => ({
 
 // Same as /eksploruj/tabela: the template is a single <ClientOnly>, so nothing
 // this returns is rendered on the server.
-// Which region each employer sits in, so the search suggestions below can put
-// the person in their local context and the map can draw it.
-const { companyRegions, companyLocations } = useCompanyLocations();
+// Which region each employer sits in, so the row's „Eksploruj” can put the
+// person in their local context.
+const { companyLocations } = useCompanyLocations();
 
 const { tableItems, totalItems, pending } = await useListWithStats(
   apiQuery,
@@ -675,60 +612,6 @@ const { tableItems, totalItems, pending } = await useListWithStats(
 
 const focusedPerson = computed<PersonRich | undefined>(
   () => tableItems.value?.[0],
-);
-const focusedPersonId = computed(() => focusedPerson.value?.id);
-const {
-  sources: focusedSources,
-  targets: focusedTargets,
-  refresh: refreshFocusedEdges,
-} = await useEdges(focusedPersonId);
-const focusedEdges = computed(() => [
-  ...(focusedSources.value || []),
-  ...(focusedTargets.value || []),
-]);
-
-/** Removing a relation from the queue itself. This is where a wrongly merged
- * person is most likely to be caught - it is the page for judging whether one
- * is worth publishing - so sending the reviewer off to the profile to clear the
- * relation, and then back, is a detour through the thing they are reviewing.
- * See `.claude/skills/relation-surfaces/SKILL.md` for why this page and
- * /eksploruj/tabela get the same capabilities. */
-const {
-  canRemove: canRemoveRelations,
-  removeOpen,
-  removeEdge,
-  removedShown,
-  removeLabel,
-  openRemove,
-  onEdgeRemoved,
-} = useEdgeRemoval({
-  subjectName: () => focusedPerson.value?.name,
-  refresh: refreshFocusedEdges,
-});
-
-/** And correcting one without leaving the queue. This is the page where a
- * wrong job title is actually noticed - it is the page for judging whether the
- * person is worth publishing - so sending the reviewer to the profile to fix it
- * and back is a detour through the thing they are reviewing. Same argument as
- * the removal above. */
-const {
-  canEdit: canEditRelations,
-  canApply: canApplyEdits,
-  editOpen,
-  editEdge,
-  editedOutcome,
-  editLabel,
-  openEdit,
-  onEdgeEdited,
-} = useEdgeEditing({
-  subjectName: () => focusedPerson.value?.name,
-  refresh: refreshFocusedEdges,
-});
-
-const { workLocations, mapLocations } = usePersonPlaces(
-  focusedPerson,
-  focusedEdges,
-  companyRegions,
 );
 </script>
 
