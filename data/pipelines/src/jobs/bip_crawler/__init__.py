@@ -8,11 +8,14 @@ the coordinator in `coordinator.py`.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import multiprocessing
 import os
 import re
 import time
+from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -70,7 +73,28 @@ def ingest_registry(
     return len(entries), inserted, updated, source
 
 
+@contextlib.contextmanager
+def single_crawler(root: Path) -> Iterator[None]:
+    """Hold ``root`` for this run: the startup repair re-wraps every ``.part``
+    bundle there, which is only safe when no other crawler writes to it."""
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / ".crawl.lock").open("w") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise SystemExit(
+                f"another koryta_scrape_bip is using {root}; "
+                "give this run its own --out"
+            ) from None
+        yield
+
+
 def cmd_crawl(args: argparse.Namespace) -> int:
+    with single_crawler(Path(args.out)):
+        return _crawl(args)
+
+
+def _crawl(args: argparse.Namespace) -> int:
     root = Path(args.out)
     pg = PostgresClient.from_env(max_size=4)
     bip_queue = PostgresBipQueue(pg)
@@ -106,7 +130,9 @@ def cmd_crawl(args: argparse.Namespace) -> int:
     robots = RobotsCache(USER_AGENT)
     if args.people_of_interest:
         try:
-            return run_people_mode(args, pg, bip_queue, store, robots.allowed)
+            return run_people_mode(
+                args, pg, bip_queue, store, robots.allowed, robots.unreachable
+            )
         finally:
             pg.close()
     options = CoordinatorOptions(
@@ -289,6 +315,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--poi-refresh",
         action="store_true",
         help="search found and not-found ones again",
+    )
+    people.add_argument(
+        "--poi-retry",
+        default="unreachable,error,timeout",
+        help="not_found reasons to search again (comma-separated; 'unconfirmed' for "
+        "those only unnamed files were found for); default unreachable,error,timeout",
     )
     people.add_argument(
         "--unit-pages", type=int, default=150, help="pages read per unit (default 150)"

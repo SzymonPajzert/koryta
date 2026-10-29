@@ -54,8 +54,13 @@ _GMINA_OFFICE = re.compile(
 )
 _POWIAT_OFFICE = re.compile(r"^(starostwo\b|powiat\s)")
 _WOJ_OFFICE = re.compile(r"^urzad\s+marszalkowski")
-_RURAL_OFFICE = re.compile(r"^(urzad\s+gminy|gmina\b)(?!.*\bmiast)")
-_URBAN_OFFICE = re.compile(r"^(urzad\s+(miasta|miejski)|miasto\b)(?!.*\bgmin)")
+#: "Urząd Gminy X", "Gmina X" - but not "Gmina Miejska X" nor "... i Miasta".
+_RURAL_OFFICE = re.compile(r"^(urzad\s+gminy|gmina\b)(?!.*(miejsk|miast))")
+#: "Urząd Miasta X", "Urząd Miejski", "Miasto X", "Gmina Miejska X" - not "... i Gminy".
+_URBAN_OFFICE = re.compile(
+    r"^(urzad\s+(miasta|miejski)|miasto\b|gmina\s+miejska|urzad\s+gminy\s+miejskiej)"
+    r"(?!.*\b(i|oraz)\s+gmin)"
+)
 #: Catalogue types that are offices serving a council.
 CATALOGUE_TYPES = {
     "urzędy miast i gmin": "gmina",
@@ -145,55 +150,90 @@ def is_city_powiat(powiat: str) -> bool:
     return powiat[2:4] >= "61"
 
 
-#: Cities whose land powiat's name starts no more like theirs than another's:
-#: nowosądecki and nowotarski both share "now" with Nowy Sącz.
-LAND_POWIAT_OF_CITY = {"1262": "1210"}
-
-
-def _common_prefix(a: str, b: str) -> int:
-    n = 0
-    for x, y in zip(a, b):
-        if x != y:
-            break
-        n += 1
-    return n
+#: The land powiats whose starostwo stands in a city with powiat rights, by the
+#: city. The two lists name the city as the starostwo's seat; the powiat's name
+#: is the city's adjective, but no rule on the letters gets all of them
+#: (Łódź - łódzki wschodni, Jelenia Góra - jeleniogórski) without also
+#: "finding" one for cities that have none (Szczecin, Gdynia, Warszawa).
+LAND_POWIAT_SEATED_IN = {
+    "jelenia gora": "jeleniogórski",
+    "legnica": "legnicki",
+    "wroclaw": "wrocławski",
+    "walbrzych": "wałbrzyski",
+    "bydgoszcz": "bydgoski",
+    "grudziadz": "grudziądzki",
+    "torun": "toruński",
+    "wloclawek": "włocławski",
+    "biala podlaska": "bialski",
+    "chelm": "chełmski",
+    "lublin": "lubelski",
+    "zamosc": "zamojski",
+    "gorzow wielkopolski": "gorzowski",
+    "zielona gora": "zielonogórski",
+    "lodz": "łódzki wschodni",
+    "piotrkow trybunalski": "piotrkowski",
+    "skierniewice": "skierniewicki",
+    "krakow": "krakowski",
+    "nowy sacz": "nowosądecki",
+    "tarnow": "tarnowski",
+    "ostroleka": "ostrołęcki",
+    "plock": "płocki",
+    "radom": "radomski",
+    "siedlce": "siedlecki",
+    "opole": "opolski",
+    "krosno": "krośnieński",
+    "przemysl": "przemyski",
+    "rzeszow": "rzeszowski",
+    "tarnobrzeg": "tarnobrzeski",
+    "bialystok": "białostocki",
+    "lomza": "łomżyński",
+    "suwalki": "suwalski",
+    "slupsk": "słupski",
+    "bielsko biala": "bielski",
+    "czestochowa": "częstochowski",
+    "gliwice": "gliwicki",
+    "rybnik": "rybnicki",
+    "kielce": "kielecki",
+    "elblag": "elbląski",
+    "olsztyn": "olsztyński",
+    "kalisz": "kaliski",
+    "konin": "koniński",
+    "leszno": "leszczyński",
+    "poznan": "poznański",
+    "koszalin": "koszaliński",
+}
 
 
 def land_powiat_of_city(terc: Terc, city_powiat: str, city_name: str) -> str | None:
-    """The land powiat whose starostwo stands in a city with powiat rights.
-
-    Its name is the city's adjective - krośnieński for Krosno, siedlecki for
-    Siedlce - so it is the land powiat of that województwo whose name starts
-    most like the city's, three letters at least, when one starts more like it
-    than any other (siedlecki, not sierpecki; płocki, not płoński).
-    """
-    if city_powiat in LAND_POWIAT_OF_CITY:
-        return LAND_POWIAT_OF_CITY[city_powiat]
-    city = fold(city_name).replace(" ", "")
-    scored = sorted(
-        (
-            (_common_prefix(city, fold(n).replace(" ", "")), c)
-            for c, n in terc.powiat_names.items()
-            if c[:2] == city_powiat[:2] and not is_city_powiat(c)
-        ),
-        reverse=True,
-    )
-    if (
-        not scored
-        or scored[0][0] < 3
-        or (len(scored) > 1 and scored[1][0] == scored[0][0])
-    ):
+    """The land powiat whose starostwo stands in this city with powiat rights."""
+    land = LAND_POWIAT_SEATED_IN.get(fold(city_name))
+    if land is None:
         return None
-    return scored[0][1]
+    return terc.powiat_named(city_powiat[:2], land)
 
 
 def _pick_by_kind(terc: Terc, codes: list[str], kind: str | None) -> str | None:
-    if len(codes) == 1:
-        return codes[0]
-    if kind is None:
+    """The one code of ``kind`` (a mixed gmina fits either), or the only code when
+    the office does not say its kind; None when the kinds contradict."""
+    if kind is not None:
+        codes = [c for c in codes if terc.gmina_kinds.get(c) in (kind, MIXED)]
+    return codes[0] if len(codes) == 1 else None
+
+
+def _rural_gmina_around_city(
+    terc: Terc, city_gmina: str, kind: str | None
+) -> str | None:
+    """A rural gmina's office standing in the city with powiat rights it is named
+    after (Urząd Gminy Chełm, in Chełm): the gmina is in the land powiat."""
+    if kind != RURAL or not is_city_powiat(city_gmina[:4]):
         return None
-    matching = [c for c in codes if terc.gmina_kinds.get(c) == kind]
-    return matching[0] if len(matching) == 1 else None
+    city = terc.powiat_names.get(city_gmina[:4], "")
+    land = land_powiat_of_city(terc, city_gmina[:4], city)
+    if land is None:
+        return None
+    return _pick_by_kind(
+        terc, terc.gminas_named(land, terc.gmina_names.get(city_gmina, city)), kind
+    )
 
 
 def registry_unit(entry: RegistryEntry, terc: Terc) -> str | None:
@@ -219,8 +259,7 @@ def registry_unit(entry: RegistryEntry, terc: Terc) -> str | None:
         pair = _pick_by_kind(
             terc, terc.gminas_named(gmina[:4], terc.gmina_names.get(gmina, "")), kind
         )
-        if pair is not None:
-            return pair
+        return pair or _rural_gmina_around_city(terc, gmina, kind)
     return gmina
 
 
@@ -250,7 +289,11 @@ def catalogue_unit(row: dict, terc: Terc) -> str | None:
             for c in terc.gmina_names
             if c[:4] == powiat and terc.gmina_kinds.get(c) == URBAN
         ]
-    return _pick_by_kind(terc, codes, office_kind(str(row.get("Nazwa podmiotu", ""))))
+    kind = office_kind(str(row.get("Nazwa podmiotu", "")))
+    picked = _pick_by_kind(terc, codes, kind)
+    if picked is None and len(codes) == 1:
+        return _rural_gmina_around_city(terc, codes[0], kind)
+    return picked
 
 
 @dataclass

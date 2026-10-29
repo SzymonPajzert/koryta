@@ -14,6 +14,7 @@ the pages and downloads what these pick.
 
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -83,18 +84,22 @@ class Seeker:
         longest = max(parts, key=len) if parts else ""
         return cls(key, stem(first_name, min_a=4), stem(longest))
 
+    @property
+    def name(self) -> tuple[str, str]:
+        return self.first, self.last
+
     def named_in(self, text: str, url: str = "") -> tuple[bool, bool]:
         """(surname, first name too) in folded ``text``; a long surname may run
         into ``url`` with no separator."""
         if not self.last:
             return False, False
-        last = re.search(r"(?:^| )" + re.escape(self.last), text) is not None
+        last = _word(self.last).search(text) is not None
         if not last and url and len(self.last) >= 6:
             last = self.last in url.replace(" ", "")
         if not last:
             return False, False
         first = bool(self.first) and (
-            re.search(r"(?:^| )" + re.escape(self.first), text) is not None
+            _word(self.first).search(text) is not None
             or (
                 bool(url)
                 and len(self.first) >= 4
@@ -102,6 +107,75 @@ class Seeker:
             )
         )
         return True, first
+
+
+#: What may follow a name's stem in Polish, folded: Kowalsk-i/-iego/-iemu,
+#: Nowak-a/-iem, Ann-a/-y/-ie. Nothing longer, so "Nowak" does not find
+#: "Nowakowski" and "Jan" does not find "Janina".
+_ENDINGS = (
+    "",
+    "a",
+    "e",
+    "i",
+    "o",
+    "u",
+    "y",
+    "em",
+    "ie",
+    "im",
+    "om",
+    "ow",
+    "ej",
+    "ego",
+    "emu",
+    "owi",
+    "owie",
+    "ach",
+    "ami",
+    "iego",
+    "iej",
+    "iemu",
+    "ich",
+    "imi",
+    "owa",
+    "owej",
+)
+
+
+@functools.cache
+def _word(stem_: str) -> re.Pattern[str]:
+    endings = "|".join(sorted(_ENDINGS, key=len, reverse=True))
+    return re.compile(r"(?:^| )" + re.escape(stem_) + r"(?:" + endings + r")(?= |$)")
+
+
+#: Words that start with a capital in a BIP label without being anybody's name.
+_NOT_NAMES = frozenset(
+    fold(w)
+    for w in """oświadczenie oświadczenia majątkowe majątkowy majątkowego radny radnego
+    radnej radnych rada rady gminy gmina miasta miasto powiatu powiat województwa
+    sejmiku sejmik wójt wójta burmistrz burmistrza prezydent prezydenta starosta
+    starosty zastępca zastępcy sekretarz sekretarza skarbnik skarbnika kierownik
+    kierownika dyrektor dyrektora przewodniczący przewodniczącego urząd urzędu
+    miejski miejskiej gminny gminnego powiatowy powiatowego korekta korekty pobierz
+    plik pliki rok roku stan stanu dzień początek koniec kadencji kadencja
+    uzupełnienie załącznik pan pani członek członka zarządu zarząd biuletyn
+    informacji publicznej bip pdf doc docx""".split()
+)
+_TOKEN = re.compile(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+(?:-[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+)?")
+
+
+def names_somebody(text: str) -> bool:
+    """Whether raw (unfolded) ``text`` holds what looks like a person's name: two
+    capitalised words in a row that are not the vocabulary of a declarations page."""
+    previous = False
+    for token in _TOKEN.findall(text or ""):
+        name_like = (
+            token[0].isupper() and len(token) > 1 and fold(token) not in _NOT_NAMES
+        )
+        if name_like and previous:
+            return True
+        previous = name_like
+    return False
 
 
 def link_score(link: LinkContext, seekers: list[Seeker], depth: int) -> float:
@@ -142,43 +216,70 @@ def _years(text: str) -> list[int]:
     return [int(y) for y in YEAR.findall(text)]
 
 
+_ID_QUERY = re.compile(r"[?&](?:id|zid|iddok|idplik)=[^&#]*", re.I)
+
+
+def is_file_link(url: str) -> bool:
+    """A link to a document, when more than an ``?id=`` query says so.
+
+    ``is_document_url`` takes any ``?id=`` for a file, and on a CMS of
+    ``index.php?id=N`` pages that makes every menu link one.
+    """
+    return is_document_url(url) and is_document_url(_ID_QUERY.sub("", url))
+
+
+def _named(text: str, url: str, seekers: list[Seeker]) -> list[tuple[Seeker, bool]]:
+    found = [(s, *s.named_in(text, url)) for s in seekers]
+    return [(s, first) for s, last, first in found if last]
+
+
 def candidates(
     page_url: str, page_title: str, links: list[LinkContext], seekers: list[Seeker]
 ) -> list[Candidate]:
     """Document links on one page that name one of the seekers, or that name nobody.
 
-    A page about one person ("Jan Kowalski - oświadczenia majątkowe") lends that
-    person to every document on it whose own label names nobody else. A
-    declarations page's documents that name nobody at all (one file for the
-    whole council, or labels like "za 2023") come back with an empty ``key``.
+    A link names whoever its label (or address) names; failing that, its row or
+    list item; failing that, the heading over it; failing that, the page's title
+    (a page about one person, "Jan Kowalski - oświadczenia majątkowe", lends that
+    person its documents). A tier that names somebody who is not a seeker ends
+    the search: the link is theirs, not anybody's from a wider tier. Documents
+    on a declarations page that name nobody at all (one file for the whole
+    council, or labels like "za 2023") come back with an empty ``key``.
     """
     title = fold(page_title)
-    page_people = [s for s in seekers if s.named_in(title)[0]]
+    title_names = {s.name for s in seekers if s.named_in(title)[0]}
+    page_people = (
+        [s for s in seekers if s.name in title_names] if len(title_names) == 1 else []
+    )
     page_declarations = bool(DECLARATION.search(title) or ASSETS.search(title))
     out: list[Candidate] = []
     for link in links:
         if not is_document_url(link.url):
             continue
         address = url_words(link.url)
-        own = fold(link.anchor) + " " + address
-        around = (
-            " ".join(fold(x) for x in (link.anchor, link.row, link.heading))
-            + " "
-            + address
-        )
-        matched = [(s, *s.named_in(around, address)) for s in seekers]
-        named = [(s, first) for s, last, first in matched if last]
-        if (
-            not named
-            and len(page_people) == 1
-            and not any(s.named_in(own)[0] for s in seekers if s is not page_people[0])
+        label = fold(link.anchor) + " " + address
+        if BLANK_FORM.search(label):
+            continue
+        around = " ".join(fold(x) for x in (link.anchor, link.row, link.heading))
+        around += " " + address
+        named: list[tuple[Seeker, bool]] = []
+        somebody_else = False
+        for text, raw, url in (
+            (label, link.anchor, address),
+            (fold(link.row), link.row, ""),
+            (fold(link.heading), link.heading, ""),
         ):
-            named = [(page_people[0], page_people[0].named_in(title)[1])]
+            named = _named(text, url, seekers)
+            if named:
+                break
+            if names_somebody(raw):
+                somebody_else = True
+                break
+        if not named and not somebody_else and page_people:
+            named = [(s, s.named_in(title)[1]) for s in page_people]
         declaration_like = bool(
             DECLARATION.search(around) or ASSETS.search(around) or page_declarations
         )
-        if BLANK_FORM.search(own):
-            continue
         years = _years(around)
         base: float = (3 if declaration_like else 0) + (
             1 if ".pdf" in link.url.lower() else 0
@@ -199,7 +300,14 @@ def candidates(
                     base + (2 if first else 0),
                 )
             )
-        if not named and page_declarations and declaration_like:
+        unnamed = (
+            not named
+            and not somebody_else
+            and page_declarations
+            and bool(ASSETS.search(around) or ASSETS.search(title))
+            and is_file_link(link.url)
+        )
+        if unnamed:
             out.append(
                 Candidate(
                     "", link.url, link.anchor, context, page_url, True, False, base

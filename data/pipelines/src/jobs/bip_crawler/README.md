@@ -86,28 +86,40 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
 - Where a unit's search starts (`scrapers/bip/units.py`): the office's BIP from
   the gov.pl registry, else the office's website from the dane.gov.pl catalogue
   of public bodies and the "BIP" link on it. The registry has an office for only
-  905 of 2,479 gminas; with the catalogue 2,308 of the 2,397 units on the 10-29
+  905 of 2,479 gminas; with the catalogue 2,335 of the 2,418 units on the 10-29
   list have a start.
 - Each unit gets `--unit-pages` (150) pages, walked best first towards
   "oświadczenia majątkowe" (`scrapers/bip/people.py`), and stays under its own
   path on shared platforms (bip.malopolska.pl, samorzad.gov.pl).
-- A link counts for a person when its label, table row or list item, nearest
-  heading, or the page's title names them (`scrapers/common/links.py`
-  `extract_link_contexts`); when some of a person's links carry the first name
-  too, only those. At most `--per-person` (3) files are downloaded per
-  candidacy, into the same bundles and `bip_docs` as the blind crawl's. A unit's
-  declaration files that name nobody (one file for the whole council) go to the
-  people nothing named, at most three.
-- Every candidacy ends the run `found` (`named`, or `unnamed` for such a shared
-  file) or `not_found` with a reason: `no_seed`, `unreachable`, `robots`,
-  `no_declarations`, `not_listed`, `download_failed`. Tables `bip_poi`,
-  `bip_poi_docs` and `bip_units` (`stores/bip_people.py`) hold that; a later run
-  searches only the pending ones (`--poi-refresh` all of them), so a new election
-  or a wider list only costs its new rows.
+- A link counts for a person when it names them: its label or address first,
+  then its table row or list item, then the heading over it, then the page's
+  title (`scrapers/bip/people.py` `candidates`); a narrower part that names
+  somebody else ends the search. Names match as stems with Polish endings
+  ("Nowaka" is Nowak, "Nowakowski" is not); when some of a person's links carry
+  the first name too, only those count. Pages are read in the charset they
+  declare. At most `--per-person` (3) files are downloaded per candidacy, into
+  the same bundles and `bip_docs` as the blind crawl's; a file the walk reached
+  through a link it took for a page is not fetched twice.
+- A declarations page's files that name nobody (one file for the whole council)
+  go to the people nothing named, at most three, when they say "majątkowe" and
+  are not blank forms.
+- Every candidacy ends the run `found` (a file a link names them in came down),
+  `unconfirmed` (only files that name nobody came down: the OCR step has to
+  find the person in them), or `not_found` with a reason: `no_seed`,
+  `unreachable`, `robots`, `no_declarations`, `not_listed`, `download_failed`,
+  `timeout`, `error`. Tables `bip_poi`, `bip_poi_docs` and `bip_units`
+  (`stores/bip_people.py`) hold that. A later run searches the pending ones and
+  the `--poi-retry` reasons (default `unreachable,error,timeout`; add
+  `unconfirmed` or any other); `--poi-refresh` searches everybody. A search that
+  finds nothing never undoes an earlier find or an earlier downloaded file.
 - `--poi-max-priority`: 0 published pages without a birth date, 1 drafts without
   one, 2 pages with one, 3 people not on the site yet. `--poi-limit` caps the
-  candidacies, `--max-minutes` the run (exit 75 with units left), `--workers`
-  the units searched at once, `--rate` the seconds between hits on one host.
+  candidacies, `--max-minutes` the run (walks stop at it, units not started stay
+  pending; exit 75), `--workers` the units searched at once, `--rate` the seconds
+  between hits on one host.
+- One crawler per `--out`: the startup repair re-wraps every `.part` bundle
+  there, so a second run on the same directory refuses to start
+  (`.crawl.lock`).
 
 ### `stats`
 

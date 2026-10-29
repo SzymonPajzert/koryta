@@ -3,13 +3,17 @@ import pandas as pd
 import pytest
 
 from analysis.bip_people_of_interest import (
+    BipPeopleOfInterest,
     candidacy_key,
     people_of_interest,
     priority,
     unit_level,
 )
+from analysis.people import PeopleMerged
 from entities.bip import BipPersonOfInterest
-from scrapers.stores import iterate_pipeline
+from scrapers.koryta.download import KorytaPeople
+from scrapers.pkw.process import PeoplePKW
+from scrapers.stores import _annotated_classes, iterate_pipeline
 
 
 def election(year, office, powiat, success="TRUE", kind="samorządu"):
@@ -22,13 +26,16 @@ def election(year, office, powiat, success="TRUE", kind="samorządu"):
     }
 
 
-def merged(koryta_id, rejestrio, first, last, born, birth_date, elections):
+def merged(
+    koryta_id, rejestrio, first, last, born, birth_date, elections, krs_year=None
+):
     return {
         "koryta_id": koryta_id,
         "rejestrio_id": rejestrio,
         "base_first_name": first,
         "base_last_name": last,
         "pkw_birth_year": born,
+        "birth_year": krs_year if krs_year is not None else born,
         "birth_date": birth_date,
         "elections": elections,
     }
@@ -230,3 +237,98 @@ def test_unit_level():
     assert unit_level("120100") == "powiat"
     assert unit_level("120105") == "gmina"
     assert unit_level("146502") == "gmina"
+
+
+def test_sources_are_declared_so_the_runner_builds_them():
+    # A string annotation (from __future__ import annotations) is not a class,
+    # and the runner would leave the pipeline without its sources.
+    sources = dict(_annotated_classes(BipPeopleOfInterest))
+    assert sources["people"] is PeopleMerged
+    assert sources["pkw"] is PeoplePKW
+    assert sources["koryta"] is KorytaPeople
+
+
+def test_double_surname_joins_whatever_the_separator(frames):
+    people, person_pkw, koryta = frames
+    people = pd.concat(
+        [
+            people,
+            pd.DataFrame(
+                [
+                    merged(
+                        None,
+                        ["555"],
+                        "ewa",
+                        "razik trziszka",
+                        1970,
+                        None,
+                        [election(2024, "Rada gminy", "1201")],
+                    )
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    person_pkw = pd.concat(
+        [
+            person_pkw,
+            pd.DataFrame(
+                [pkw("Ewa", None, "RAZIK-TRZISZKA", 2024, "120105", "Rada gminy", 1970)]
+            ),
+        ],
+        ignore_index=True,
+    )
+    out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
+    assert "RAZIK-TRZISZKA" in set(out.last_name)
+
+
+def test_birth_year_may_match_the_register_year(frames):
+    people, person_pkw, koryta = frames
+    # PeopleMerged's attached PKW record says 1958, the register says 1960; the
+    # 2024 row (1960) is two years off the first and none off the second.
+    people.loc[0, "pkw_birth_year"] = 1958
+    people.loc[0, "birth_year"] = 1960
+    out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
+    assert ("Kowalski", 1960) in {
+        (r.last_name, r.pkw_birth_year) for r in out.itertuples()
+    }
+
+
+def test_a_mayor_who_also_won_a_council_seat_is_one_person(frames):
+    people, person_pkw, koryta = frames
+    person_pkw = pd.concat(
+        [
+            person_pkw,
+            pd.DataFrame([pkw("Łukasz", None, "Żak", 2024, "100300", "Wójt", 1975)]),
+        ],
+        ignore_index=True,
+    )
+    out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
+    assert out[out.last_name == "Żak"].namesakes.max() == 0
+
+
+def test_a_candidacy_with_an_undated_page_counts_as_undated(frames):
+    people, person_pkw, koryta = frames
+    people.loc[2, "koryta_id"] = (
+        "k3"  # the second register entry of Jan, on its own page
+    )
+    koryta = pd.concat(
+        [
+            koryta,
+            pd.DataFrame(
+                [
+                    {
+                        "id": "k3",
+                        "is_public": False,
+                        "birth_date": "1960-05-01",
+                        "merged_into": None,
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    out = people_of_interest(duckdb.connect(), people, person_pkw, koryta, since=2024)
+    jan = out[out.last_name == "Kowalski"].iloc[0]
+    assert sorted(jan.koryta_ids) == ["k1", "k3"]
+    assert jan.page_birth_date is None and jan.priority == 0
