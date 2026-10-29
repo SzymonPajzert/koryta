@@ -8,7 +8,8 @@ from typing import cast
 
 import pytest
 
-from jobs.bip_crawler.people import PeopleOptions, PeopleSearch
+from analysis.bip_people_of_interest import BipPeopleOfInterest
+from jobs.bip_crawler.people import PeopleOptions, PeopleSearch, list_policy
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from scrapers.bip.classify import normalize_url
 from scrapers.bip.people import Seeker, candidates, choose, stem
@@ -16,7 +17,7 @@ from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
-from scrapers.stores import BipQueue, PersonRow
+from scrapers.stores import BipQueue, PersonRow, Pipeline
 from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import MemoryBipPeopleStore
 
@@ -356,3 +357,24 @@ def test_first_name_rule_and_stems():
     picks = choose(found, [jan, anna], per_person=3, unnamed_cap=0)
     assert [c.url for c in picks["j"]] == ["https://b.pl/1.pdf"]
     assert [c.url for c in picks["a"]] == ["https://b.pl/2.pdf"]
+
+
+@pytest.mark.parametrize(
+    "inputs_on_disk", [set(), {"PeopleMerged", "PeoplePKW", "KorytaPeople"}]
+)
+def test_a_list_on_disk_is_read_not_rebuilt(monkeypatch, inputs_on_disk):
+    # A workspace on predator: the list (and maybe its inputs) on disk, the
+    # trees under them not. The default policy rebuilt the list on the second
+    # run and PeopleMerged under it on the third.
+    on_disk = {"BipPeopleOfInterest"} | inputs_on_disk
+    monkeypatch.setattr(
+        Pipeline,
+        "output_time",
+        lambda self, ctx: 1.0 if self.pipeline_name in on_disk else None,
+    )
+    policy = list_policy()
+    policy.decide(BipPeopleOfInterest(), None)
+    decisions = policy.execution_decisions
+    assert decisions["BipPeopleOfInterest"] == (False, "up to date")
+    if inputs_on_disk:
+        assert decisions["PeopleMerged"] == (False, "up to date")

@@ -74,7 +74,14 @@ from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.krs.data import read_public_bodies_catalogue
 from scrapers.map.teryt import read_terc
-from scrapers.stores import BipPeopleStore, BipQueue, PersonDocRow, PersonRow, UnitRow
+from scrapers.stores import (
+    BipPeopleStore,
+    BipQueue,
+    PersonDocRow,
+    PersonRow,
+    ProcessPolicy,
+    UnitRow,
+)
 from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import PostgresBipPeopleStore
 
@@ -138,6 +145,16 @@ _NOT_A_UNITS_BIP = frozenset(
 ROBOTS, UNREACHABLE = "robots", "unreachable"
 #: Reasons a later run searches again by default: the BIP may answer next time.
 DEFAULT_RETRY = frozenset({"unreachable", "error", "timeout"})
+#: Read as they are on disk, else restored from the shared cache: the night
+#: builds the list, the crawler never rebuilds it. Unpinned, a workspace with
+#: the list but not every tree under its inputs took it for stale: the second
+#: run rebuilt the list, the third PeopleMerged as well, and each went up to
+#: the shared cache.
+PINNED = frozenset({"BipPeopleOfInterest", "PeopleMerged"})
+
+
+def list_policy() -> ProcessPolicy:
+    return ProcessPolicy(set(), exclude_refresh=set(PINNED))
 
 
 @dataclass
@@ -527,7 +544,7 @@ def run_people_mode(
         registry_xml,
     )
 
-    ctx, _ = setup_context()
+    ctx, _ = setup_context(policy=list_policy())
     people = list(BipPeopleOfInterest().read_or_process_list(ctx))
     store = PostgresBipPeopleStore(pg)
     new = store.upsert_people([person_row(p) for p in people])
