@@ -24,12 +24,13 @@ class BipPersonOfInterest:
     other winners of that name in the unit and year: above zero, the name alone
     does not say whose declaration a link is.
 
-    Nearly every KRS person has a register birth date (``register_birth_dates``),
-    so for most rows the declaration's date is evidence that PKW's candidate and
-    the register's person are one human, not a new fact; it is a new fact for a
-    page that shows none (``page_birth_date``). ``priority`` orders the crawl by
-    that: 0 a published page with no birth date, 1 a draft page with none, 2 a
-    page with one, 3 a person not on the site yet.
+    Nearly every KRS person has a register birth date, so for most rows the
+    declaration's date is evidence that PKW's candidate and the register's person
+    are one human, not a new fact; it is a new fact for a page that shows none
+    (``page_has_birth_date``). No birth date from the register or the site is
+    carried here, on purpose: the declaration is read to check them. ``priority``
+    orders the crawl: 0 a published page with no birth date, 1 a draft page with
+    none, 2 a page with one, 3 a person not on the site yet.
     """
 
     key: str
@@ -47,10 +48,9 @@ class BipPersonOfInterest:
     namesakes: int = 0
     on_site: bool = False
     published: bool = False
-    page_birth_date: str | None = None
+    page_has_birth_date: bool = False
     koryta_ids: list[str] = field(default_factory=list)
     rejestrio_ids: list[str] = field(default_factory=list)
-    register_birth_dates: list[str] = field(default_factory=list)
 
 
 @dataclass
