@@ -102,6 +102,10 @@ class PersonResult:
     employments_published: int = 0
     #: Candidacies the site did not have before this upload.
     candidacies_created: int = 0
+    #: Changes to stored candidacies this upload left for a reviewer: filed,
+    #: or a waiting one made to say what the payload says now
+    #: (`proposals_filed`).
+    proposals_filed: int = 0
     #: Companies created first, because the payload named them and the site
     #: had no page for them to hang the employment on.
     companies_created: int = 0
@@ -142,6 +146,7 @@ class PersonResult:
                 self.employments_published + later.employments_published
             ),
             candidacies_created=self.candidacies_created + later.candidacies_created,
+            proposals_filed=self.proposals_filed + later.proposals_filed,
             companies_created=self.companies_created + later.companies_created,
             unplaced=later.unplaced,
             dropped=later.dropped,
@@ -245,6 +250,28 @@ def flagged(body: dict, rows: str, flag: str) -> int:
     return sum(1 for row in found if isinstance(row, dict) and row.get(flag) is True)
 
 
+#: What the person ingest did with a proposal that wrote one: filed it, or
+#: made one still waiting say what the payload says now. The other two,
+#: `unchanged` and `decided`, wrote nothing (`proposeRevisionTransaction` in
+#: `frontend/server/utils/revisions.ts`).
+FILED = ("created", "refreshed")
+
+
+def proposals_filed(body: dict) -> int:
+    """How many changes to stored candidacies the answer says the site left for
+    a reviewer (`proposals`, by what became of each: `FILED`).
+
+    Read defensively, like `flagged`: the field is there only when the request
+    proposed anything, and a site deployed before it answered without it.
+    """
+    found = body.get("proposals")
+    if not isinstance(found, dict):
+        return 0
+    return sum(
+        n for outcome, n in found.items() if outcome in FILED and isinstance(n, int)
+    )
+
+
 def dropped_line(change: dict) -> str:
     """One change the site did not write, as the run's log prints it."""
     why = (
@@ -332,6 +359,7 @@ def person_answer(resp: requests.Response) -> PersonResult:
         employments_created=flagged(body, "companies", "created"),
         employments_published=flagged(body, "companies", "published"),
         candidacies_created=flagged(body, "elections", "created"),
+        proposals_filed=proposals_filed(body),
         dropped=dropped_changes(body),
         person_id=str(person_id) if person_id else None,
         unplaced_jobs=unplaced_employments(body),

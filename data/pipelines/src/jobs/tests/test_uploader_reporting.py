@@ -322,6 +322,25 @@ def test_a_site_from_before_the_flags_counts_no_new_job_or_candidacy(runs):
     assert counters["candidacies_created"] == 0
 
 
+def test_the_proposals_an_answer_filed_are_the_new_and_the_refreshed():
+    """A proposal restated as it stands, or one a reviewer has answered, is
+    not written again; only the other two are left for a reviewer."""
+    answer = person("unchanged")
+    answer.body["proposals"] = {  # type: ignore[index]
+        "created": 2,
+        "refreshed": 1,
+        "unchanged": 5,
+        "decided": 1,
+    }
+    garbled = person("unchanged")
+    garbled.body["proposals"] = ["created"]  # type: ignore[index]
+
+    assert uploader.person_answer(answer).proposals_filed == 3  # type: ignore[arg-type]
+    # The field is there only when the request proposed anything.
+    assert uploader.person_answer(person()).proposals_filed == 0  # type: ignore[arg-type]
+    assert uploader.person_answer(garbled).proposals_filed == 0  # type: ignore[arg-type]
+
+
 def test_a_change_the_site_did_not_write_is_counted_and_printed(runs, capsys):
     """Every one printed as it comes, so the run's log says which and why."""
     removed = dict(KEPT_END, edgeId="e2", stored=None, reason="removed")
@@ -531,6 +550,7 @@ def test_two_answers_about_one_person_add_up():
         employments_created=2,
         employments_published=1,
         candidacies_created=4,
+        proposals_filed=2,
         companies_created=1,
         unplaced=3,
         dropped=[KEPT_END],
@@ -542,6 +562,7 @@ def test_two_answers_about_one_person_add_up():
         "unchanged",
         status=200,
         employments_created=1,
+        proposals_filed=1,
         unplaced=3,
         dropped=[KEPT_END],
         person_id="p1",
@@ -553,6 +574,7 @@ def test_two_answers_about_one_person_add_up():
         employments_created=3,
         employments_published=1,
         candidacies_created=4,
+        proposals_filed=3,
         companies_created=1,
         unplaced=3,
         dropped=[KEPT_END],

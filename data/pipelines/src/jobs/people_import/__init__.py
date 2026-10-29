@@ -400,6 +400,10 @@ class RunSummary:
     unplaced_employments: list[dict] = field(default_factory=list)
     #: A priority run: how many of the planned are in each tier.
     tiers: dict[str, int] = field(default_factory=dict)
+    #: A priority run, or one asked for: what the site did with the people
+    #: sent from each tier - its answers about the person node, and the edges
+    #: they came with (`edges_written`) added up.
+    sent_by_tier: dict[str, dict[str, int]] = field(default_factory=dict)
     #: A priority run: the people whose rejestr.io feed was bought within
     #: --bought-days. Those with a page the payload would change are the
     #: `bought` tier.
@@ -1005,6 +1009,27 @@ def send_one(uploader: PersonUploader, payload: object) -> PersonResult | None:
     return result
 
 
+def edges_written(result: PersonResult) -> dict[str, int]:
+    """What the site wrote of one person besides the node, as its answer says:
+    the jobs and candidacies it created, the jobs it put live, and the changes
+    to stored candidacies it left for a reviewer.
+
+    The answer's `person` is about the node alone, so a person answered
+    `unchanged` may have had all of these written. Every one of the 106
+    bought pages sent 2026-10-24..28 had edges written, and 91 of them were
+    answered `unchanged`. On 10-28 the 20 of them wrote 87 new jobs, every
+    one at a company the bought feed names and 81 of them put live, and 15
+    new candidacies. Not counted, as the answer does not say: a stored edge
+    filled in - a job's end, a candidacy's office or result.
+    """
+    return {
+        "employments_created": result.employments_created,
+        "employments_published": result.employments_published,
+        "candidacies_created": result.candidacies_created,
+        "proposals_filed": result.proposals_filed,
+    }
+
+
 class PeopleImport:
     """One run: what it was asked to do, how far it got, and where it says so."""
 
@@ -1054,9 +1079,11 @@ class PeopleImport:
         self.groups: list[str] | None = None
         #: A priority run, or one asked for: what the site took - payload,
         #: tier, outcome, the page it filed the person under, the companies
-        #: it took them without a job at, for want of a page, and the
-        #: priority group it was sent for.
-        self.taken: list[tuple[dict, str, str, str | None, list[str], str]] = []
+        #: it took them without a job at, for want of a page, the priority
+        #: group it was sent for, and the edges written (`edges_written`).
+        self.taken: list[
+            tuple[dict, str, str, str | None, list[str], str, dict[str, int]]
+        ] = []
         #: A run asked for on a page: what was asked, once read.
         self.request: Request | None = None
         #: ...and what of the page's people it found and left, for the page.
@@ -1442,6 +1469,7 @@ class PeopleImport:
                                 result.person_id,
                                 result.unplaced_companies(),
                                 self.groups[n] if self.groups else "",
+                                edges_written(result),
                             )
                         )
                     if result.outcome == "created" and tier not in CREATING:
@@ -1488,10 +1516,15 @@ class PeopleImport:
         summary = self.summary
         if self.taken and not self.dry:
             summary.sent = self.write_sent()
-        for _, _, outcome, _, _, group in self.taken:
+        for _, tier, outcome, _, _, group, edges in self.taken:
+            tally = summary.sent_by_tier.setdefault(tier, {})
+            for name, n in {outcome: 1, **edges}.items():
+                tally[name] = tally.get(name, 0) + n
             if group in summary.groups:
                 sent = summary.groups[group].setdefault("sent", {})
                 sent[outcome] = sent.get(outcome, 0) + 1
+        for tier, tally in summary.sent_by_tier.items():
+            print(f"Sent from {tier}: {tally}")
         summary.state = state
         summary.exit_code = code
         summary.counters = self.counters()
@@ -1555,11 +1588,13 @@ class PeopleImport:
                     # The priority group it was sent for; None for the run's
                     # own tiers.
                     "group": group or None,
+                    # What came with an `outcome` that is the node's alone.
+                    **edges,
                 },
                 ensure_ascii=False,
             )
             + "\n"
-            for payload, tier, outcome, node, unplaced, group in self.taken
+            for payload, tier, outcome, node, unplaced, group, edges in self.taken
         )
         data = gzip.compress(lines.encode("utf-8"), mtime=0)
         try:
