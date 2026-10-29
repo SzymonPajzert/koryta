@@ -170,7 +170,22 @@ describe("DefaultLayout", () => {
       "Panel administracyjny",
       "Kolejka zmian",
       "Notatki",
+      "Oświadczenia majątkowe",
     ]);
+  });
+
+  // The readings of BIP declarations are every administrator's to work
+  // through, as the review queue and the notes are.
+  it("lists the declarations' overview under Admin", async () => {
+    const entries = await menuEntries(mountLayout(true), "Admin");
+
+    expect(entries).toContainEqual({
+      title: "Oświadczenia majątkowe",
+      to: "/admin/oswiadczenia",
+    });
+    expect(
+      (await menuEntries(mountLayout(false), "Admin")).map((e) => e.title),
+    ).not.toContain("Oświadczenia majątkowe");
   });
 
   // /admin/procesy is the datascience group's, and the group is not only
@@ -180,7 +195,13 @@ describe("DefaultLayout", () => {
     const admin = mountLayout(true, { isDatascience: true });
     expect(
       (await menuEntries(admin, "Admin")).map((entry) => entry.title),
-    ).toEqual(["Panel administracyjny", "Kolejka zmian", "Notatki", "Procesy"]);
+    ).toEqual([
+      "Panel administracyjny",
+      "Kolejka zmian",
+      "Notatki",
+      "Oświadczenia majątkowe",
+      "Procesy",
+    ]);
 
     const member = mountLayout(false, { isDatascience: true });
     expect(await menuEntries(member, "Admin")).toEqual([

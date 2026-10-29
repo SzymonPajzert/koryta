@@ -60,4 +60,18 @@ describe("/admin", () => {
 
     expect(newAdminsLink(wrapper)).toBeUndefined();
   });
+
+  it("has a tile for the readings of the asset declarations", async () => {
+    claims.current = { admin: true };
+    const wrapper = await mountSuspended(AdminPage);
+    await flushPromises();
+
+    // A card with `to` renders no href under mountSuspended either: read its
+    // props, by its title.
+    const tile = wrapper
+      .findAllComponents({ name: "VCard" })
+      .find((card) => card.text().startsWith("Oświadczenia majątkowe"));
+    expect(tile?.props("to")).toBe("/admin/oswiadczenia");
+    expect(tile?.text()).toContain("Daty urodzenia odczytane z oświadczeń");
+  });
 });

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
+import { flushPromises } from "@vue/test-utils";
 import { nextTick, ref } from "vue";
 import EntityDetailsCard from "../../app/components/EntityDetailsCard.vue";
-import { useAuthState } from "~/composables/auth";
+import { authRequest, useAuthState } from "~/composables/auth";
 import type { Article, Person } from "../../shared/model";
+import type { PersonDeclarations } from "../../shared/declarations";
 
 vi.mock("~/composables/auth", () => ({
   useAuthState: vi.fn(() => ({
@@ -11,6 +13,8 @@ vi.mock("~/composables/auth", () => ({
     isAdmin: ref(false),
   })),
   authFetch: vi.fn(),
+  // A person's declarations, for the line under the facts.
+  authRequest: vi.fn(),
 }));
 
 vi.mock("@plausible-analytics/tracker", () => ({
@@ -43,6 +47,55 @@ const mountCard = (isAdmin: boolean, extraLocations?: string[]) => {
 describe("EntityDetailsCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // What the endpoint says of a page with no declaration on record.
+    vi.mocked(authRequest).mockRejectedValue(new Error("Page not found"));
+  });
+
+  it("vouches for the birth date under the facts when a declaration confirms it", async () => {
+    const declarations: PersonDeclarations = {
+      autoPublished: null,
+      declarations: [
+        {
+          url: "https://bip.example.pl/oswiadczenie-2024.pdf",
+          year: 2024,
+          unit: "Strzelin (gmina miejsko-wiejska)",
+          office: "Rada gminy",
+        },
+      ],
+    };
+    vi.mocked(authRequest).mockResolvedValue(declarations);
+    // Its own id: the declarations are kept under the node's key.
+    const wrapper = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, id: "jan-bip", birthDate: "1968-03-14" } as Person,
+        type: "person",
+      },
+    });
+    await flushPromises();
+
+    expect(authRequest).toHaveBeenCalledWith(
+      "/api/nodes/jan-bip/declarations",
+      { method: "GET" },
+    );
+    const html = wrapper.html();
+    const facts = html.indexOf("Data urodzenia");
+    const note = html.indexOf('data-testid="person-declarations-pointer"');
+    expect(facts).toBeGreaterThan(-1);
+    expect(note).toBeGreaterThan(facts);
+    expect(
+      wrapper.get('[data-testid="person-declarations-pointer"]').text(),
+    ).toContain("zgadza się");
+  });
+
+  it("says nothing of declarations a page does not have", async () => {
+    const wrapper = await mountSuspended(EntityDetailsCard, {
+      props: { entity: { ...person, id: "jan-none" }, type: "person" },
+    });
+    await flushPromises();
+
+    expect(
+      wrapper.find('[data-testid="person-declarations-pointer"]').exists(),
+    ).toBe(false);
   });
 
   it("offers an admin the explore shortcut next to the revisions one", async () => {
