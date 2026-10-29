@@ -31,6 +31,7 @@ Politeness is the blind crawl's: robots.txt, one request per host per
 
 from __future__ import annotations
 
+import csv
 import gzip
 import hashlib
 import heapq
@@ -161,7 +162,8 @@ _NOT_A_UNITS_BIP = frozenset(
 #: What `_get` answers instead of a response.
 ROBOTS, UNREACHABLE = "robots", "unreachable"
 #: Reasons a later run searches again by default: the BIP may answer next time.
-DEFAULT_RETRY = frozenset({"unreachable", "error", "timeout"})
+#: no_seed too: a unit that gains a start (`UNIT_STARTS`) is searched then.
+DEFAULT_RETRY = frozenset({"unreachable", "error", "timeout", "no_seed"})
 #: Read as they are on disk, else restored from the shared cache: the night
 #: builds the list, the crawler never rebuilds it. Unpinned, a workspace with
 #: the list but not every tree under its inputs took it for stale: the second
@@ -241,6 +243,41 @@ def _app_shell(content: bytes, links: list[LinkContext]) -> bool:
 def _declaration_like(url: str) -> bool:
     words = url_words(url)
     return bool(DECLARATION.search(words) or ASSETS.search(words))
+
+
+#: BIP addresses checked by hand or by a verified search for units whose start
+#: is missing or dead in both lists (the gov.pl registry, the catalogue): one row
+#: a unit, ``unit,bip_url,declarations_url,checked,source,note``.
+UNIT_STARTS = Path(__file__).with_name("unit_starts.csv")
+
+
+def read_unit_starts(path: Path = UNIT_STARTS) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open(newline="", encoding="utf-8") as rows:
+        return [row for row in csv.DictReader(rows) if row.get("unit")]
+
+
+def apply_unit_starts(seeds: dict[str, UnitSeed], starts: list[dict[str, str]]) -> int:
+    """Put the checked addresses in place of what the lists had for those units,
+    the declarations page first; return how many units changed."""
+    shared = {
+        scope.split("/", 1)[0]
+        for seed in seeds.values()
+        for scope in seed.scopes
+        if "/" in scope
+    } | {"samorzad.gov.pl"}
+    for row in starts:
+        urls = [
+            u.strip() for u in (row.get("declarations_url"), row.get("bip_url")) if u
+        ]
+        urls = [u for u in dict.fromkeys(urls) if u]
+        if not urls:
+            continue
+        seed = seeds.setdefault(row["unit"], UnitSeed(row["unit"]))
+        seed.bip_urls = urls
+        seed.scopes = sorted({scope_of(u, shared) for u in urls})
+    return len(starts)
 
 
 def load_known_urls(path: Path) -> dict[str, list[str]]:
@@ -725,7 +762,12 @@ def run_people_mode(
         read_public_bodies_catalogue(ctx),
         terc_index(read_terc(ctx)),
     )
-    print(f"unit starts: {len(seeds):,} units (registry from {source})", flush=True)
+    checked = apply_unit_starts(seeds, read_unit_starts())
+    print(
+        f"unit starts: {len(seeds):,} units (registry from {source}; "
+        f"{checked:,} from {UNIT_STARTS.name})",
+        flush=True,
+    )
     options = PeopleOptions(
         unit_pages=args.unit_pages,
         pages_per_candidacy=args.pages_per_candidacy,

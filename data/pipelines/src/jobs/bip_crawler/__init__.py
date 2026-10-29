@@ -332,9 +332,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     people.add_argument(
         "--poi-retry",
-        default="unreachable,error,timeout",
+        default="unreachable,error,timeout,no_seed",
         help="not_found reasons to search again (comma-separated; 'unconfirmed' for "
-        "those only unnamed files were found for); default unreachable,error,timeout",
+        "those only unnamed files were found for); default unreachable,error,timeout,"
+        "no_seed",
     )
     people.add_argument(
         "--unit-pages",

@@ -9,7 +9,13 @@ import json
 from pathlib import Path
 from typing import cast
 
-from jobs.bip_crawler.people import PeopleOptions, PeopleSearch, load_known_urls
+from jobs.bip_crawler.people import (
+    PeopleOptions,
+    PeopleSearch,
+    apply_unit_starts,
+    load_known_urls,
+    read_unit_starts,
+)
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row
 from scrapers.bip.classify import normalize_url
@@ -227,3 +233,46 @@ def test_unrendered_a_script_drawn_bip_shows_nothing(tmp_path):
         "not_found",
         "no_declarations",
     )
+
+
+def test_checked_starts_replace_what_the_lists_had():
+    seeds = {
+        "020101": UnitSeed(
+            "020101", ["http://www.boleslawiec.pl"], [], ["boleslawiec.pl"]
+        ),
+        "120000": UnitSeed("120000", ["https://bip.x.pl/umwm"], [], ["bip.x.pl/umwm"]),
+    }
+    starts = [
+        {
+            "unit": "020101",
+            "bip_url": "https://bip.um.boleslawiec.pl/",
+            "declarations_url": "https://bip.um.boleslawiec.pl/oswiadczenia-majatkowe",
+        },
+        {
+            "unit": "140000",
+            "bip_url": "https://bip.mazovia.pl/",
+            "declarations_url": "",
+        },
+        {
+            "unit": "180509",
+            "bip_url": "https://samorzad.gov.pl/web/gmina-skolyszyn",
+            "declarations_url": "",
+        },
+    ]
+    assert apply_unit_starts(seeds, starts) == 3
+    assert seeds["020101"].bip_urls == [
+        "https://bip.um.boleslawiec.pl/oswiadczenia-majatkowe",
+        "https://bip.um.boleslawiec.pl/",
+    ]
+    assert seeds["020101"].scopes == ["bip.um.boleslawiec.pl"]
+    assert seeds["140000"].bip_urls == ["https://bip.mazovia.pl/"]
+    assert seeds["180509"].scopes == ["samorzad.gov.pl/web/gmina-skolyszyn"]
+    # Untouched units keep what the lists had.
+    assert seeds["120000"].scopes == ["bip.x.pl/umwm"]
+
+
+def test_the_checked_in_starts_parse(tmp_path):
+    for start in read_unit_starts():
+        assert len(start["unit"]) == 6 and start["unit"].isdigit()
+        assert start["bip_url"].startswith(("http://", "https://"))
+    assert read_unit_starts(tmp_path / "missing.csv") == []
