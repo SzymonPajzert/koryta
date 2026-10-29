@@ -78,18 +78,24 @@ const host = computed(() =>
   font-weight: 500;
 }
 
+/* Dark sage, underlined, as the person page's declaration links: Szymon
+   picked it over the blue link ink (bip-osoba-r1). The two inks are the same
+   lightness, so the underline is what tells the link from the text. */
 .ow-answered__link {
   align-items: center;
-  color: rgb(var(--v-theme-ink-info));
+  color: rgb(var(--v-theme-ink-sage));
   display: inline-flex;
   gap: 2px;
   font-weight: 500;
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--v-theme-ink-sage), 0.45);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 .ow-answered__link:hover,
 .ow-answered__link:focus-visible {
-  text-decoration: underline;
+  text-decoration-color: currentColor;
 }
 
 .ow-answered__host {

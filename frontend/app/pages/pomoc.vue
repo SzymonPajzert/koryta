@@ -226,8 +226,9 @@
       </p>
       <div class="k-note mb-4 d-flex flex-wrap align-center ga-3">
         <span class="text-body-2">
-          Wszystko poniżej wymaga konta - zakładasz je w niecałą minutę, a po
-          zalogowaniu wracasz dokładnie w to miejsce, z którego klikasz.
+          Cztery z nich wymagają konta - zakładasz je w niecałą minutę, a po
+          zalogowaniu wracasz dokładnie w to miejsce, z którego klikasz. Daty z
+          oświadczeń odczytasz i bez konta.
         </span>
         <v-btn
           variant="text"
@@ -252,7 +253,7 @@
             :desc="card.desc"
             :to="card.to"
             ink="ink-info"
-            access="login"
+            :access="card.access ?? 'login'"
             @click="card.task && task(card.task)"
           />
         </v-col>
@@ -619,6 +620,9 @@ const checkingCards = computed(() => [
     desc: "Przepisujesz z wycinka oświadczenia majątkowego odręcznie wpisaną datę urodzenia - kilka sekund na jeden wycinek.",
     to: "/oswiadczenia",
     task: null,
+    // Open without an account (Szymon, bip-czytanie-r1): the readings count
+    // once an account claims them.
+    access: "none" as const,
   },
   {
     icon: mdiTextBoxSearchOutline,

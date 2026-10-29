@@ -125,7 +125,8 @@ import type {
 import { readTyped, taskContext } from "~/utils/declarationReading";
 
 /**
- * TEMP(wariant): variant b, „jedno pole”, of the /oswiadczenia round.
+ * The reading card of /oswiadczenia, „jedno pole”: Szymon's pick over the
+ * form-like line and the series (bip-czytanie-r1, 2026-10-29).
  *
  * A compact card made for a phone: the two lines of the paper on a tray, and
  * under them one field for the date, typed whichever way the reader likes,
@@ -284,9 +285,11 @@ onMounted(() => {
   font-weight: 400;
 }
 
+/* Firm enough to find, quieter than the crops: the dark sage ink rather
+   than black, which in round 1 outweighed the lines it is there to copy. */
 .ow-card__input:focus {
-  border-color: rgb(var(--v-theme-ink-strong));
-  box-shadow: inset 0 0 0 1px rgb(var(--v-theme-ink-strong));
+  border-color: rgb(var(--v-theme-ink-sage));
+  box-shadow: inset 0 0 0 1px rgb(var(--v-theme-ink-sage));
   outline: none;
 }
 
