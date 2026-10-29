@@ -238,20 +238,13 @@
           </v-row>
         </div>
 
-        <!-- TEMP(wariant) the whole element below: variant c's section. -->
-        <PersonDeclarationNote
-          v-if="entity?.type === 'person' && route.query.wariant === 'c'"
-          :node-id="node"
-          placement="section"
-          class="mt-4"
-        />
-
         <!-- Where a claim on this page came from, and what else has been
              written about them. Only for the kinds `mentions` is declared
              between; a region is never one end of one. -->
         <MentionArticleList
           v-if="entity?.type === 'person' || entity?.type === 'place'"
           :node-id="node"
+          :with-declarations="entity?.type === 'person'"
         />
 
         <!-- Notes on a person are unreviewed claims about a named individual,
