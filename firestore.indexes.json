@@ -1033,5 +1033,16 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "declarationExtractImages",
+      "fieldPath": "date",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationExtractImages",
+      "fieldPath": "name",
+      "indexes": []
+    }
+  ]
 }

@@ -153,6 +153,39 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // BIP asset declarations: crops of the handwritten birth date, what
+    // readers typed off them, and what the site published because of it.
+    // Everything goes through /api/ingest/declarations, /api/declarations/*
+    // and /api/nodes/<id>/declarations with the admin SDK. A crop is a named
+    // person's birth date in their own hand, an answer is a reader's reading of
+    // one, and a reader must not see the others' answers before giving theirs,
+    // so no client reads any of it - not even datascience, unlike
+    // `extractions`. The daily count is what bounds automatic publication.
+    // Unmatched paths are denied anyway; spelled out so nobody opens them.
+    match /declarationCandidacies/{key} {
+      allow read, write: if false;
+    }
+
+    match /declarationExtracts/{extractId} {
+      allow read, write: if false;
+    }
+
+    match /declarationExtractImages/{extractId} {
+      allow read, write: if false;
+    }
+
+    match /declarationAnswers/{answerId} {
+      allow read, write: if false;
+    }
+
+    match /declarationPublications/{personId} {
+      allow read, write: if false;
+    }
+
+    match /declarationPublishLimits/{day} {
+      allow read, write: if false;
+    }
+
     // Pages captured from someone's browser. Written only by /api/ingest/page
     // and by the extractor, both of which hold admin credentials and so are not
     // subject to these rules at all — the client reads through /api/pages,
