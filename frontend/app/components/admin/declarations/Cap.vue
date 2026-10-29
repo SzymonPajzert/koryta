@@ -146,7 +146,7 @@ const queueText = computed(() => {
   // Switched off, the tile above already says so.
   if (days === null) return `${head} w kolejce.`;
   if (days <= 1) return `${head} na kolejny dzień.`;
-  return `${head} na kolejne dni, przy limicie ${props.dailyLimit} to około ${days} dni.`;
+  return `${head} na kolejne dni, przy limicie ${polishNumber(props.dailyLimit)} to około ${polishNumber(days)} dni.`;
 });
 </script>
 

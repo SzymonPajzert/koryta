@@ -697,9 +697,12 @@ const withdrawQuestion = computed(() =>
  * shrinking past reading. The empty item ordered between the halves forces
  * the break. */
 @media (max-width: 599.98px) {
+  /* A flex item keeps its content's width unless told otherwise, and the
+   * dates, the tag and a long name would push the page sideways. */
   .drev :deep(.arow__toggle) {
     flex-wrap: wrap;
     row-gap: 2px;
+    min-width: 0;
   }
 
   .drev :deep(.arow__toggle)::after {
@@ -718,6 +721,8 @@ const withdrawQuestion = computed(() =>
   .drev__who {
     flex: 1 1 0;
     padding-inline-start: 28px;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   /* Three readings do not fit a phone's line; the open row lists them all.

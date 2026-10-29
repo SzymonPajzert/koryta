@@ -59,21 +59,17 @@
     </div>
 
     <template v-if="overview">
-      <!-- TEMP(wariant): round 1's switch, the chain unless ?wariant=b.
-           Stripping it drops the v-if / v-else and the head not picked. -->
-      <AdminDeclarationsChain
-        v-if="wariant === 'a'"
-        :overview="overview"
-        :publishing="publishing"
-        @publish="publishQueued"
-      />
-      <!-- TEMP(wariant): variant b, the tiles. -->
-      <AdminDeclarationsTiles
-        v-else
-        :overview="overview"
-        :publishing="publishing"
-        @publish="publishQueued"
-      />
+      <!-- The whole run by state first, then the chain that walks through it
+           stage by stage: Szymon, round bip-admin-r2 (2026-10-29), "Maybe
+           put it above the chain". -->
+      <div class="dprogress">
+        <AdminDeclarationsStates :overview="overview" />
+        <AdminDeclarationsChain
+          :overview="overview"
+          :publishing="publishing"
+          @publish="publishQueued"
+        />
+      </div>
 
       <!-- Before the first upload the head still stands, at nought and with
            the limit the automation will publish at; the lists have nothing
@@ -107,8 +103,10 @@
                 :now="now"
                 :busy="busy.get(row.id) ?? null"
                 :expanded="openRows.has(`disputed:${row.id}`)"
-                @update:expanded="(open) => setOpen(`disputed:${row.id}`, open)"
-                @settle="(value) => decide(row, 'settle', value)"
+                @update:expanded="
+                  (open: boolean) => setOpen(`disputed:${row.id}`, open)
+                "
+                @settle="(value: string) => decide(row, 'settle', value)"
                 @unreadable="decide(row, 'unreadable')"
                 @withdraw="decide(row, 'withdraw')"
               />
@@ -134,9 +132,9 @@
                 :busy="busy.get(row.id) ?? null"
                 :expanded="openRows.has(`different:${row.id}`)"
                 @update:expanded="
-                  (open) => setOpen(`different:${row.id}`, open)
+                  (open: boolean) => setOpen(`different:${row.id}`, open)
                 "
-                @settle="(value) => decide(row, 'settle', value)"
+                @settle="(value: string) => decide(row, 'settle', value)"
                 @unreadable="decide(row, 'unreadable')"
                 @withdraw="decide(row, 'withdraw')"
               />
@@ -162,7 +160,7 @@
                 :now="now"
                 :expanded="openRows.has(`held:${row.personId}`)"
                 @update:expanded="
-                  (open) => setOpen(`held:${row.personId}`, open)
+                  (open: boolean) => setOpen(`held:${row.personId}`, open)
                 "
               />
             </AdminRowList>
@@ -199,7 +197,7 @@
                 :now="now"
                 :expanded="openRows.has(`recent:${row.personId}`)"
                 @update:expanded="
-                  (open) => setOpen(`recent:${row.personId}`, open)
+                  (open: boolean) => setOpen(`recent:${row.personId}`, open)
                 "
               />
             </AdminRowList>
@@ -294,11 +292,6 @@ definePageMeta({
 });
 
 useHead({ title: "Oświadczenia majątkowe (Admin) - koryta.pl" });
-
-const route = useRoute();
-
-// TEMP(wariant): which head round 1 draws, "a" the chain, "b" the tiles.
-const wariant = computed(() => (route.query.wariant === "b" ? "b" : "a")); // TEMP(wariant)
 
 const overview = ref<DeclarationOverview | null>(null);
 const loading = ref(false);
@@ -450,6 +443,14 @@ async function publishQueued() {
 </script>
 
 <style scoped>
+/* The chain and the bar under it are one block: the stages, then the whole
+ * of the run by state. */
+.dprogress {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 /* ---- head: the admin pages' approved frame, 40/700 and 28 on a phone ---- */
 
 .dhead {

@@ -131,6 +131,13 @@ const groups = computed(() => [
   font-size: 0.875rem;
 }
 
+/* A code the labels do not know yet is shown as it came, and a crawler's
+   code is one long word of underscores: it breaks anywhere rather than run
+   under its count and off a phone. */
+.dreasons__label {
+  overflow-wrap: anywhere;
+}
+
 .dreasons__count {
   font-weight: 600;
   font-variant-numeric: tabular-nums;

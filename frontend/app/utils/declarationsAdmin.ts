@@ -188,8 +188,13 @@ export function compareDeclarationDates(
  * runs share one declaration and one crop can serve two pages. */
 export function declarationStages(overview: DeclarationOverview) {
   const { candidacies, extracts, pages, publications } = overview;
-  const crops =
-    extracts.total - extracts.byStatus.failed - extracts.byStatus.withdrawn;
+  // Counted by separate aggregations, a moment apart: an upload landing in
+  // between can make the parts outrun the whole, and a stage never shows
+  // less than nothing.
+  const crops = Math.max(
+    0,
+    extracts.total - extracts.byStatus.failed - extracts.byStatus.withdrawn,
+  );
   return {
     candidacies: candidacies.total,
     found: candidacies.byStatus.found,
