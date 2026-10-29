@@ -154,6 +154,60 @@ describe("settleReading", () => {
     });
   });
 
+  it("hears only the answers that vote", () => {
+    const strangers: ReaderAnswer[] = [
+      { uid: "anon:1", verdict: "date", value: "1979-07-15", votes: false },
+      { uid: "anon:2", verdict: "date", value: "1979-07-15", votes: false },
+    ];
+    expect(settleReading(strangers)).toEqual({ status: "open" });
+    const oneVoter: ReaderAnswer[] = [
+      ...strangers,
+      { uid: "a", verdict: "date", value: "1979-07-15" },
+    ];
+    expect(settleReading(oneVoter)).toEqual({ status: "open" });
+    // An answer that says nothing about its vote, as the one above, votes.
+    expect(
+      settleReading([
+        ...oneVoter,
+        { uid: "b", verdict: "date", value: "1979-07-15", votes: true },
+      ]),
+    ).toEqual({
+      status: "agreed",
+      value: "1979-07-15",
+      kind: "date",
+      readers: 2,
+    });
+  });
+
+  it("lets answers without a vote neither outvote a date nor close a crop", () => {
+    const against = ["1979-07-16", "1979-07-17", "1980"].map(
+      (value, i): ReaderAnswer => ({
+        uid: `anon:${i}`,
+        verdict: "date",
+        value,
+        votes: false,
+      }),
+    );
+    expect(
+      settleReading([...against, ...answers("1979-07-15", "1979-07-15")]),
+    ).toMatchObject({ status: "agreed", value: "1979-07-15" });
+
+    const unreadable = [0, 1, 2].map((i): ReaderAnswer => ({
+      uid: `anon:${i}`,
+      verdict: "unreadable",
+      votes: false,
+    }));
+    expect(settleReading(unreadable)).toEqual({ status: "open" });
+
+    const many = [0, 1, 2, 3, 4, 5].map((i): ReaderAnswer => ({
+      uid: `anon:${i}`,
+      verdict: "date",
+      value: `1979-07-1${i}`,
+      votes: false,
+    }));
+    expect(settleReading(many)).toEqual({ status: "open" });
+  });
+
   it("hands six answers nobody agrees on to an admin", () => {
     expect(
       settleReading(
@@ -199,6 +253,21 @@ describe("agreedName", () => {
     expect(
       agreedName([
         { uid: "a", verdict: "date", value: "1979", name: "Jan Nowak" },
+      ]),
+    ).toBeNull();
+  });
+
+  it("takes no name from an answer without a vote", () => {
+    expect(
+      agreedName([
+        { uid: "a", verdict: "date", value: "1979", name: "Jan Nowak" },
+        {
+          uid: "anon:1",
+          verdict: "date",
+          value: "1979",
+          name: "Jan Nowak",
+          votes: false,
+        },
       ]),
     ).toBeNull();
   });

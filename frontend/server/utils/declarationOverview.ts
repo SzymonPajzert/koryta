@@ -73,6 +73,11 @@ async function byReason(
  * Counts are Firestore aggregations, billed a read per thousand entries; only
  * the distinct pages and the last month's answers are read document by
  * document, and both are capped.
+ *
+ * The readers' figures are those of the answers that vote, as a crop's own
+ * counts are (`writeSettlement` in server/utils/declarations.ts): an answer
+ * without a vote, given without an account or by one nobody confirmed, has
+ * no say in what settles, and a browser's reader id is no reader to count.
  */
 export async function countEverything(
   db: Firestore,
@@ -109,7 +114,7 @@ export async function countEverything(
         count(extracts.where("status", "==", status)),
       ),
     ),
-    count(answers.where("counted", "==", true)),
+    count(answers.where("counted", "==", true).where("votes", "==", true)),
     Promise.all(
       (["same", "different", "no_date"] as const).map((match) =>
         count(extracts.where("pageMatch", "==", match)),
@@ -214,8 +219,13 @@ async function distinctPages(db: Firestore): Promise<number> {
   return pages.size;
 }
 
-/** Answers and settled crops per Warsaw day over the last month, oldest day
- * first, every day present, and how many readers answered in it. */
+/** Answers that vote and settled crops per Warsaw day over the last month,
+ * oldest day first, every day present, and how many readers answered in it.
+ *
+ * Answers without a vote are read too and passed over: leaving them out of
+ * the query would take an index of its own. They take room under the cap,
+ * which is why the newest are read first - past it, it is the oldest days
+ * that come up short, not today. */
 async function readingDays(
   db: Firestore,
   since: Date,
@@ -225,7 +235,8 @@ async function readingDays(
     db
       .collection("declarationAnswers")
       .where("at", ">=", Timestamp.fromDate(since))
-      .select("day", "uid", "counted")
+      .orderBy("at", "desc")
+      .select("day", "uid", "counted", "votes")
       .limit(20_000)
       .get(),
     db
@@ -245,7 +256,7 @@ async function readingDays(
   }
   const readers = new Set<string>();
   for (const doc of answered.docs) {
-    if (doc.get("counted") !== true) continue;
+    if (doc.get("counted") !== true || doc.get("votes") !== true) continue;
     readers.add(String(doc.get("uid")));
     const day = days.get(String(doc.get("day")));
     if (day) day.answers += 1;

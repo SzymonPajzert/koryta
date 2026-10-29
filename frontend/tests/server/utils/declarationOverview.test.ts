@@ -156,6 +156,7 @@ beforeEach(() => {
       {
         uid: "r1",
         counted: true,
+        votes: true,
         day: "2026-10-29",
         at: at("2026-10-29T09:00:00Z"),
       },
@@ -165,8 +166,20 @@ beforeEach(() => {
       {
         uid: "r2",
         counted: true,
+        votes: true,
         day: "2026-10-29",
         at: at("2026-10-29T09:30:00Z"),
+      },
+    ],
+    [
+      // Read without an account: no vote, so no reader and no answer here.
+      "declarationAnswers/x1_anon:0f8fad5b-d9cb-469f-a165-000000000001",
+      {
+        uid: "anon:0f8fad5b-d9cb-469f-a165-000000000001",
+        counted: true,
+        votes: false,
+        day: "2026-10-29",
+        at: at("2026-10-29T10:30:00Z"),
       },
     ],
     [
@@ -174,6 +187,7 @@ beforeEach(() => {
       {
         uid: "r1",
         counted: false,
+        votes: true,
         day: "2026-10-28",
         at: at("2026-10-28T08:00:00Z"),
       },
@@ -210,7 +224,7 @@ beforeEach(() => {
 });
 
 describe("countEverything", () => {
-  it("counts the searches, the crops, the readers and the publications", async () => {
+  it("counts the searches, the crops, the readers who vote and the publications", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const overview = await countEverything(db as any, 10, NOW);
 
@@ -256,6 +270,29 @@ describe("countEverything", () => {
       held: 1,
       today: 3,
       heldBy: [{ reason: "pending_proposal", count: 1 }],
+    });
+  });
+
+  it("reads the newest answers first, so a month past the cap leaves the oldest days short, never today", async () => {
+    // Stored first, as Firestore would hand them first by their time.
+    const older: [string, Data][] = Array.from({ length: 20_000 }, (_, i) => [
+      `declarationAnswers/old_anon:${i}`,
+      {
+        uid: `anon:${i}`,
+        counted: true,
+        votes: false,
+        day: "2026-10-20",
+        at: at("2026-10-20T09:00:00Z"),
+      },
+    ]);
+    stored = new Map([...older, ...stored]);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const overview = await countEverything(db as any, 0, NOW);
+
+    expect(overview.readers.days.at(-1)).toMatchObject({
+      day: "2026-10-29",
+      answers: 2,
     });
   });
 

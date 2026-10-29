@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nuxt";
+import type { Event } from "@sentry/nuxt";
 
 /** Only a deployed nitro server reports.
  *
@@ -48,6 +49,40 @@ const tracesSampleRate = environment === "autopush" ? 0.005 : 0.05;
  * everything but its own closed collections. */
 const PRIVATE_BODIES = /\/api\/(?:ingest\/declarations|declarations\/)/;
 
+/** Request headers that never go to Sentry, beside the cookies and addresses
+ * the SDK leaves out by itself.
+ *
+ * A reader without an account sends their browser's reader id as
+ * `X-Reader-Id` with every request to /api/declarations/, and the id is all
+ * it takes to claim that browser's readings for an account (`claimAnswers`).
+ * The SDK copies every other header into an error event as it came, and in a
+ * sampled transaction it hides only names that look like credentials - auth,
+ * token, key, session - which this one does not. */
+const PRIVATE_HEADERS = ["x-reader-id"];
+
+/** An error event or a transaction without `PRIVATE_HEADERS`: gone from the
+ * request it carries, and from its spans' `http.request.header.*`
+ * attributes, where the SDK writes a header's dashes as underscores. */
+export function withoutPrivateHeaders<T extends Event>(event: T): T {
+  const attributes = PRIVATE_HEADERS.map(
+    (name) => `http.request.header.${name.replace(/-/g, "_")}`,
+  );
+  if (event.request?.headers) {
+    event.request.headers = Object.fromEntries(
+      Object.entries(event.request.headers).filter(
+        ([name]) => !PRIVATE_HEADERS.includes(name.toLowerCase()),
+      ),
+    );
+  }
+  for (const span of [event.contexts?.trace, ...(event.spans ?? [])]) {
+    if (!span?.data) continue;
+    span.data = Object.fromEntries(
+      Object.entries(span.data).filter(([key]) => !attributes.includes(key)),
+    );
+  }
+  return event;
+}
+
 Sentry.init({
   enabled,
   environment,
@@ -61,6 +96,9 @@ Sentry.init({
       ignoreIncomingRequestBody: (url) => PRIVATE_BODIES.test(url),
     }),
   ],
+
+  beforeSend: (event) => withoutPrivateHeaders(event),
+  beforeSendTransaction: (event) => withoutPrivateHeaders(event),
 
   // Enable logs to be sent to Sentry
   enableLogs: true,

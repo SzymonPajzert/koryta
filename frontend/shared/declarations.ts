@@ -3,10 +3,11 @@
  *
  * A job on predator finds the declarations of people the site has a page for,
  * cuts the handwritten "urodzony(a) ..." line out of each one and uploads the
- * crop through `/api/ingest/declarations`. Signed-in readers type what the
- * crop says on /oswiadczenia; once enough of them agree, the site compares the
- * reading with the birth date the page already stores, and a draft whose date
- * matches is published automatically, a few a day.
+ * crop through `/api/ingest/declarations`. Readers type what the crop says on
+ * /oswiadczenia, signed in or not; once enough readers whose answers count
+ * agree, the site compares the reading with the birth date the page already
+ * stores, and a draft whose date matches is published automatically, a few a
+ * day.
  *
  * The declaration is evidence against the register, so nothing on the BIP
  * side ever carries a date the site already knows: not the upload, not the
@@ -399,6 +400,12 @@ export type ReaderAnswer = {
   /** `YYYY-MM-DD` or `YYYY` when the verdict is `date`. */
   value?: string | null;
   name?: string | null;
+  /** False for an answer that has no say in the agreement: one given without
+   * an account, or by an account without a confirmed address. It still counts
+   * as the reader's own work. Every answer the site stores says which it is,
+   * and the server reads a crop's answers that vote by it; an answer that
+   * leaves it out, as one put together for this rule alone may, votes. */
+  votes?: boolean;
 };
 
 export type Settlement =
@@ -413,14 +420,27 @@ function compatible(a: string, b: string): boolean {
   return a === b || a.startsWith(`${b}-`) || b.startsWith(`${a}-`);
 }
 
+/** Whether an answer has a say in what a crop settles: a person's, and not
+ * one stored without a vote. */
+export function answerVotes(answer: ReaderAnswer): boolean {
+  return !isAutomatedUid(answer.uid) && answer.votes !== false;
+}
+
 /**
  * What the answers given so far settle.
  *
  * One reader, one voice: answers are counted by person, never summed, and
- * automated uids are not readers. A date is agreed when at least
- * `READERS_TO_AGREE` readers typed it and it leads the answers that contradict
- * it - another day, or a year it is not in - by as many: 2-0 and 3-1 settle,
- * 2-1 and 3-2 wait. A year typed alone supports every day in it.
+ * automated uids are not readers. Nor is an answer that does not vote
+ * (`votes: false`), given without an account or by one whose address nobody
+ * confirmed: either costs nothing to make, so two of them must not publish a
+ * page (Szymon, 2026-10-29, of readers without an account: "it doesn't count
+ * towards auto publish for now"). An account that votes can claim the answers
+ * it gave before it signed in.
+ *
+ * A date is agreed when at least `READERS_TO_AGREE` readers typed it and it
+ * leads the answers that contradict it - another day, or a year it is not in -
+ * by as many: 2-0 and 3-1 settle, 2-1 and 3-2 wait. A year typed alone
+ * supports every day in it.
  *
  * "Unreadable" and "empty" contradict nothing - a reader who could not make the
  * date out has not read another one - but they settle the crop as unreadable
@@ -441,10 +461,11 @@ export function settleReading(
   const agree = options.agree ?? READERS_TO_AGREE;
   const disputedAfter = options.disputedAfter ?? DISPUTED_AFTER;
 
-  // The last answer of each reader, robots left out.
+  // The last answer of each reader, leaving out robots and answers without a
+  // say.
   const byReader = new Map<string, ReaderAnswer>();
   for (const answer of answers) {
-    if (isAutomatedUid(answer.uid) || answer.verdict === "skip") continue;
+    if (!answerVotes(answer) || answer.verdict === "skip") continue;
     byReader.set(answer.uid, answer);
   }
   const readings = [...byReader.values()]
@@ -500,14 +521,15 @@ export function settleReading(
 }
 
 /** The name readers agree the form gives, or null: the most common spelling
- * once folded, when at least `READERS_TO_AGREE` of them gave it. */
+ * once folded, when at least `READERS_TO_AGREE` of them gave it. Only answers
+ * that vote count, as in `settleReading`. */
 export function agreedName(
   answers: readonly ReaderAnswer[],
   agree: number = READERS_TO_AGREE,
 ): string | null {
   const byKey = new Map<string, { name: string; uids: Set<string> }>();
   for (const answer of answers) {
-    if (isAutomatedUid(answer.uid) || !answer.name?.trim()) continue;
+    if (!answerVotes(answer) || !answer.name?.trim()) continue;
     const key = normalizePersonName(answer.name);
     if (!key) continue;
     const entry = byKey.get(key) ?? {
@@ -584,6 +606,23 @@ export type DeclarationAnswerResult = DeclarationQueue & {
   /** The crop just answered, now that it was read blind: the whole form on
    * BIP, for a reader who wants to see it. */
   answered: { id: string; documentUrl: string; host: string | null };
+};
+
+/** The id a browser files its readings under while nobody is signed in, sent
+ * as `X-Reader-Id`: `crypto.randomUUID()`, a version 4 UUID, made once and
+ * kept in that browser. */
+export const READER_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** `POST /api/declarations/claim` with `{ readerId }`: the readings made in
+ * this browser without an account, for the account that has just signed in. */
+export type DeclarationClaimResult = {
+  /** Answers that are the account's now. One to a crop where the account's
+   * own answer stands is dropped and not counted, and so is one read off a
+   * picture the crop has since been cut again from. */
+  claimed: number;
+  /** Crops the claimed answers settled. */
+  settled: number;
 };
 
 /** Why a page whose date matches was not published automatically. Each is
