@@ -233,6 +233,21 @@ class PostgresBipPeopleStore(BipPeopleStore):
         )
         return [PersonDocRow(*r) for r in rows]
 
+    def outcomes_by_year(self) -> dict[int, dict[str, int]]:
+        rows = self.pg.fetchall(
+            """
+            SELECT election_year,
+                   CASE WHEN status = 'not_found' THEN status || ':' || reason
+                        ELSE status END,
+                   count(*)
+              FROM bip_poi GROUP BY 1, 2 ORDER BY 1, 2
+            """
+        )
+        by_year: dict[int, dict[str, int]] = {}
+        for year, label, count in rows:
+            by_year.setdefault(int(year), {})[str(label)] = int(count)
+        return by_year
+
     def outcomes(self) -> dict[str, int]:
         rows = self.pg.fetchall(
             """
@@ -335,6 +350,14 @@ class MemoryBipPeopleStore(BipPeopleStore):
             (d for (k, _), d in self.docs.items() if k == key),
             key=lambda d: (-d.score, d.url),
         )
+
+    def outcomes_by_year(self) -> dict[int, dict[str, int]]:
+        by_year: dict[int, dict[str, int]] = {}
+        for r in self.people.values():
+            label = f"{r.status}:{r.reason}" if r.status == "not_found" else r.status
+            year = by_year.setdefault(r.election_year, {})
+            year[label] = year.get(label, 0) + 1
+        return {y: dict(sorted(c.items())) for y, c in sorted(by_year.items())}
 
     def outcomes(self) -> dict[str, int]:
         counts: dict[str, int] = {}

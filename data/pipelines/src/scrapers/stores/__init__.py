@@ -1481,6 +1481,11 @@ class BipPeopleStore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    def outcomes_by_year(self) -> dict[int, dict[str, int]]:
+        """``outcomes`` per election year: what a term's BIPs still hold."""
+        raise NotImplementedError()
+
+    @abstractmethod
     def outcomes(self) -> dict[str, int]:
         """Counts by status and reason: {"found": 12, "not_found:not_listed": 4}."""
         raise NotImplementedError()

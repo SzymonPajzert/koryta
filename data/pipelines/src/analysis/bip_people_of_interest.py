@@ -20,7 +20,7 @@ register against, so the register's date must not travel with them or stand
 in for theirs. KRS and BIP meet later, in a join of their own (task
 link-bip-birth-dates-to-people).
 
-    koryta BipPeopleOfInterest [--bip-poi-since 2018]
+    koryta BipPeopleOfInterest [--bip-poi-since 2014]
 
 Site pages with no register link are not here: without a KRS match they are
 out of scope (Szymon, 10-29), and a match brings them in through PeopleMerged.
@@ -35,11 +35,13 @@ import pandas as pd
 
 from analysis.people import PeopleMerged
 from entities.bip import BipPersonOfInterest
+from scrapers.bip.units import Terc, terc_index
 from scrapers.koryta.download import KorytaPeople
+from scrapers.map.teryt import read_terc
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import Context, Pipeline
 
-DEFAULT_SINCE = 2018
+DEFAULT_SINCE = 2014
 #: The PeopleMerged columns read: PKW's names and year, the elections, the ids.
 MERGED_COLUMNS = (
     "koryta_id",
@@ -57,7 +59,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=DEFAULT_SINCE,
         help="BipPeopleOfInterest: the first local election year to look up "
-        f"(default {DEFAULT_SINCE}; declarations stay on BIP about six years).",
+        f"(default {DEFAULT_SINCE}; declarations stay on BIP about six years, so "
+        "many 2014-only ones are gone - the crawl records which).",
     )
 
 
@@ -87,6 +90,7 @@ class BipPeopleOfInterest(Pipeline[BipPersonOfInterest]):
             self.pkw.read_or_process(ctx),
             self.koryta.read_or_process(ctx),
             since=_args().bip_poi_since,
+            terc=terc_index(read_terc(ctx)),
         )
 
 
@@ -97,6 +101,7 @@ def people_of_interest(
     koryta_people: pd.DataFrame,
     *,
     since: int = DEFAULT_SINCE,
+    terc: Terc | None = None,
 ) -> pd.DataFrame:
     """One row per won local candidacy since ``since`` of a ``PeopleMerged`` person."""
     if "office" not in person_pkw.columns:
@@ -241,6 +246,7 @@ def people_of_interest(
         )
     ]
     rows["unit_level"] = rows.teryt.map(unit_level)
+    rows["unit_name"] = rows.teryt.map(terc.unit_name) if terc else ""
     rows["priority"] = [
         priority(published, on_site, dated)
         for published, on_site, dated in zip(
