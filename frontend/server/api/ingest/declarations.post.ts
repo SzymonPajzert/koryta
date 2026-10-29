@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
+import { matchAndDrain } from "~~/server/utils/declarationPublish";
 import { resolveMergedNode } from "~~/server/utils/merge";
 import { pageIsPublic } from "~~/shared/model";
 import {
@@ -12,6 +13,7 @@ import {
   MAX_IMAGE_BYTES,
   MAX_REQUEST_IMAGE_BYTES,
   pngSize,
+  publishLimitOf,
   type DeclarationCandidacyInput,
   type DeclarationExtractInput,
   type DeclarationIngestResult,
@@ -31,8 +33,10 @@ import {
  * An extract is one crop to read, with the candidacies it serves; its
  * images go to their own collection so that listing extracts never loads bytes.
  *
- * Nothing here publishes or settles anything. A reading starts open and only
- * readers move it (`/api/declarations/<id>/answer`).
+ * A reading starts open and readers move it (`/api/declarations/<id>/answer`),
+ * except a typed date the job read with high confidence, which settles here.
+ * A crop settled either way is then compared with its pages, which is where
+ * anything is published (server/utils/declarationPublish.ts).
  */
 export default defineEventHandler(async (event) => {
   // The gate comes before the body: a request with 8 MB of images should not
@@ -161,6 +165,10 @@ export default defineEventHandler(async (event) => {
   );
   const storedExtracts =
     extractRefs.length > 0 ? await db.getAll(...extractRefs) : [];
+  /** Crops to compare with their pages once stored: the ones this request
+   * settles - a typed date the job read with high confidence - and the ones
+   * settled already that it names more pages or units for. */
+  const toCompare: string[] = [];
 
   body.extracts.forEach((extract, i) => {
     const id = extractId(extract.sha256, extract.page);
@@ -191,6 +199,22 @@ export default defineEventHandler(async (event) => {
     // while nobody has answered it.
     const writeImages =
       imageHash !== null && !answered && existing?.imageHash !== imageHash;
+    const reading = readingState(extract, existing, now);
+    const nextPersonIds = unique([
+      ...asStrings(existing?.personIds),
+      ...personIds,
+    ]);
+    const nextUnits = unitsOf(candidacies, existing?.units);
+    // A settled crop is compared with the pages it named when it settled, so
+    // one sent again for a page or a candidacy more has not met those yet: it
+    // is compared again now, and marked uncompared for the sweep in case
+    // this fails. Both lists only ever grow.
+    const widened =
+      existing?.status === "agreed" &&
+      (nextPersonIds.length > asStrings(existing.personIds).length ||
+        nextUnits.length >
+          (Array.isArray(existing.units) ? existing.units.length : 0));
+    if (reading.status === "agreed" || widened) toCompare.push(id);
 
     writes.set(
       ref,
@@ -207,11 +231,11 @@ export default defineEventHandler(async (event) => {
           ...asStrings(existing?.candidacyKeys),
           ...candidacies.map((c) => c.key),
         ]),
-        personIds: unique([...asStrings(existing?.personIds), ...personIds]),
+        personIds: nextPersonIds,
         priority: Math.min(
           ...personIds.map((pageId) => pages.get(pageId)?.priority ?? 3),
         ),
-        units: unitsOf(candidacies, existing?.units),
+        units: nextUnits,
         linkNamed: extract.linkNamed ?? null,
         outcome: extract.outcome,
         failure: extract.outcome === "failed" ? (extract.reason ?? null) : null,
@@ -232,7 +256,8 @@ export default defineEventHandler(async (event) => {
         runId: body.runId ?? null,
         uploaderUid: user.uid,
         updatedAt: now,
-        ...readingState(extract, existing, now),
+        ...reading,
+        ...(widened ? { pageMatch: null } : {}),
       },
       0,
     );
@@ -249,6 +274,26 @@ export default defineEventHandler(async (event) => {
   });
 
   await writes.flush();
+
+  // A crop that arrives settled meets its pages now, the way one settled by
+  // readers does after the answer that settles it. Never at the upload's
+  // expense: the crops are stored, and the sweep the job calls next compares
+  // whatever this did not.
+  if (toCompare.length > 0) {
+    try {
+      const { drain } = await matchAndDrain(
+        db,
+        toCompare,
+        new Date(),
+        publishLimitOf(useRuntimeConfig(event)),
+      );
+      if (drain.published.length > 0) {
+        await useStorage("cache").clear("nitro:handlers");
+      }
+    } catch (error) {
+      console.error("[declarations] comparing uploaded readings failed", error);
+    }
+  }
   return result;
 });
 
@@ -346,6 +391,9 @@ function readingState(
       answerCount: 0,
       answers: {},
       agreed,
+      // Not compared with its pages yet. Stored rather than left out, so the
+      // sweep's `pageMatch == null` finds a crop whose comparison failed.
+      pageMatch: null,
       // Spreads concurrent readers over the queue without offsets.
       rand: Math.random(),
       createdAt: now,

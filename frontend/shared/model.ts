@@ -752,6 +752,13 @@ export type NoteSource = {
    * table view has room for. Keeps the entry out of the phone queue without
    * pretending it has been classified; cleared as soon as a type is given. */
   adminTypeDeferred?: boolean;
+
+  /** The crop of a BIP asset declaration this entry is about, on an entry the
+   * site filed itself because the birth date readers agreed on differs from
+   * the page's (server/utils/declarationPublish.ts). What a second comparison
+   * finds the entry by, so it is filed once however often the crop is
+   * compared. */
+  declarationExtractId?: string;
 };
 
 /** Entries written before kinds existed are all sources.

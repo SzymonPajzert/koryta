@@ -21,6 +21,8 @@ export const EXTRACTS = "declarationExtracts";
 export const EXTRACT_IMAGES = "declarationExtractImages";
 export const ANSWERS = "declarationAnswers";
 export const READER_LIMITS = "declarationReaderLimits";
+export const PUBLICATIONS = "declarationPublications";
+export const PUBLISH_LIMITS = "declarationPublishLimits";
 
 /** Answers one reader may give in a Warsaw day. Far above what a person reads
  * in a sitting (the 10-29 review read 145 crops in an afternoon), low enough
@@ -59,8 +61,9 @@ export function answerId(extractId: string, uid: string): string {
   return `${extractId}_${uid}`;
 }
 
-/** The unit, office and year of a crop, as the reading task names them. */
-function unitOf(data: DocumentData): {
+/** The unit and office of a crop, as the reading task names them, and as a
+ * page that links the declaration does. */
+export function unitOf(data: DocumentData): {
   unit: string;
   office: LocalOffice | null;
 } {

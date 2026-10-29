@@ -92,6 +92,12 @@ export default defineNuxtConfig({
       process.env.GCLOUD_PROJECT ||
       process.env.GOOGLE_CLOUD_PROJECT ||
       "koryta-pl",
+    // People the site publishes itself a Warsaw day, once enough readers agree
+    // that their asset declaration gives the birth date their page does
+    // (server/utils/declarationPublish.ts). 0 is off, and it ships off until
+    // Szymon sets NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT; the readings and the
+    // queue build up either way.
+    declarationsDailyPublishLimit: 0,
     public: {
       isLocal,
       /** The published extension's id, so `/rozszerzenie` knows who to hand a

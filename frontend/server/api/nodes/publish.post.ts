@@ -1,13 +1,15 @@
 import { getFirestore } from "firebase-admin/firestore";
-import type { DocumentReference, Firestore } from "firebase-admin/firestore";
+import type { DocumentReference } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
 import { recordAudit } from "~~/server/utils/audit";
 import { cascadeUnpublishEdges } from "~~/server/utils/edgePublication";
-import { applyRevision } from "~~/server/utils/revisions";
+import {
+  applyRevision,
+  latestApplicableRevision,
+} from "~~/server/utils/revisions";
 import { CONTENT_CHANGED_AT } from "~~/shared/lastmod";
 import { notifyRevisionReviewed } from "~~/server/utils/revisionNotifications";
-import { latestPublishableRevision } from "~~/shared/revisions";
 import type { Revision } from "~~/shared/model";
 import { z } from "zod";
 
@@ -15,48 +17,6 @@ const bodyValidator = z.object({
   node_id: z.string(),
   published: z.boolean(),
 });
-
-/** The revision a page goes live with when nobody has picked one.
- *
- * Most pages have never had a revision approved by hand - the ingests write
- * their snapshot and move on - so the reviewer who opened one and clicked
- * "Opublikuj" was met with a refusal and no way forward from that screen.
- * What they mean by publishing is "show what this page says now", and what it
- * says now is its newest revision, so that is the one approved on their
- * behalf. Which one that is, `latestPublishableRevision` decides, because the
- * button has to be able to name it before the click.
- */
-async function latestApplicableRevision(
-  db: Firestore,
-  nodeId: string,
-): Promise<{ ref: DocumentReference; revision: Revision } | null> {
-  // Both spellings, the same way `/api/revisions/byNode` reads them: which one
-  // a revision carries depends on which writer created it. Ordering happens in
-  // memory rather than in the query - `update_time` is a Timestamp on some
-  // rows and an ISO string on others, which no single index sorts correctly,
-  // and a node's revisions number in the tens.
-  const [byUnderscore, byCamel] = await Promise.all([
-    db.collection("revisions").where("node_id", "==", nodeId).get(),
-    db.collection("revisions").where("nodeId", "==", nodeId).get(),
-  ]);
-
-  const candidates = new Map<string, Revision & { id: string }>();
-  for (const doc of [...byUnderscore.docs, ...byCamel.docs]) {
-    if (candidates.has(doc.id)) continue;
-    candidates.set(doc.id, {
-      ...(doc.data() as Partial<Revision>),
-      id: doc.id,
-    } as Revision & { id: string });
-  }
-
-  const newest = latestPublishableRevision(Array.from(candidates.values()));
-  if (!newest) return null;
-
-  return {
-    ref: db.collection("revisions").doc(newest.id),
-    revision: newest,
-  };
-}
 
 /** Toggles the public visibility of a node. Publication is independent of
  * revision approval: a node needs an approved revision (`revision_id`) before

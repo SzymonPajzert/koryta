@@ -8,6 +8,7 @@ import {
   compressedMirror,
   jobsOverview,
   latestFirestoreExport,
+  peopleImportRunning,
   reportedRuns,
 } from "../../../server/utils/jobs";
 import { JOBS, RUNS_SHOWN } from "../../../shared/jobs";
@@ -685,6 +686,36 @@ describe("/api/ops/jobs", () => {
         counters: { planned: 1305 },
       });
       expect(people.record!.lastScheduledAt).toBe("2026-10-01T03:00:04.000Z");
+    });
+  });
+
+  describe("whether a people import is running", () => {
+    /** A run of `job` going since `minutes` before NOW, last heard from then. */
+    const running = (job: string, minutes: number, state = "running") =>
+      reported(`${job}-run`, job, minutesBefore(NOW.toISOString(), minutes), {
+        state,
+        finishedAt: null,
+      });
+
+    it("is so for the night, its people step and a run asked for on a page", async () => {
+      for (const job of ["nightly", "people_import", "people_request"]) {
+        collections.clear();
+        running(job, 5);
+        expect(await peopleImportRunning(NOW)).toBe(true);
+      }
+    });
+
+    it("is not for another job, nor for a people run waiting or done", async () => {
+      running("krs_scrape_free", 5);
+      running("people_request", 5, "queued");
+      reported("pe-done", "people_import", "2026-10-02T09:00:00Z");
+      expect(await peopleImportRunning(NOW)).toBe(false);
+    });
+
+    it("is not for a run quiet for longer than its job's heartbeat", async () => {
+      // people_import heartbeats every 60 minutes at most.
+      running("people_import", 61);
+      expect(await peopleImportRunning(NOW)).toBe(false);
     });
   });
 

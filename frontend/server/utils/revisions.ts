@@ -10,6 +10,7 @@ import {
   revisionCollection,
   revisionIsPending,
 } from "../../shared/model";
+import { latestPublishableRevision } from "../../shared/revisions";
 import { recordAudit } from "./audit";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
@@ -469,6 +470,64 @@ export function revisionTargetRef(
     });
   }
   return db.collection(revisionCollection(revision)).doc(targetId);
+}
+
+/** The revision a page goes live with when nobody has picked one.
+ *
+ * Most pages have never had a revision approved by hand - the ingests write
+ * their snapshot and move on - so the reviewer who opened one and clicked
+ * "Opublikuj" was met with a refusal and no way forward from that screen.
+ * What they mean by publishing is "show what this page says now", and what it
+ * says now is its newest revision, so that is the one approved on their
+ * behalf. Which one that is, `latestPublishableRevision` decides, because the
+ * button has to be able to name it before the click.
+ *
+ * Here rather than in /api/nodes/publish, where it was written, because the
+ * declarations automation publishes a page the same way
+ * (server/utils/declarationPublish.ts) and must approve the same revision.
+ */
+export async function latestApplicableRevision(
+  db: Firestore,
+  nodeId: string,
+): Promise<{ ref: DocumentReference; revision: Revision } | null> {
+  const newest = latestPublishableRevision(await nodeRevisions(db, nodeId));
+  if (!newest) return null;
+
+  return {
+    ref: db.collection("revisions").doc(newest.id),
+    revision: newest,
+  };
+}
+
+/** Every revision written against a node, in no particular order.
+ *
+ * Both spellings, the same way `/api/revisions/byNode` reads them: which one
+ * a revision carries depends on which writer created it. Ordering is left to
+ * the caller, in memory rather than in the query - `update_time` is a
+ * Timestamp on some rows and an ISO string on others, which no single index
+ * sorts correctly, and a node's revisions number in the tens. The
+ * declarations automation reads all of them, not just the newest, because a
+ * person's proposal or a reviewer's no anywhere among them is a reason not to
+ * publish the page on its own authority.
+ */
+export async function nodeRevisions(
+  db: Firestore,
+  nodeId: string,
+): Promise<(Revision & { id: string })[]> {
+  const [byUnderscore, byCamel] = await Promise.all([
+    db.collection("revisions").where("node_id", "==", nodeId).get(),
+    db.collection("revisions").where("nodeId", "==", nodeId).get(),
+  ]);
+
+  const revisions = new Map<string, Revision & { id: string }>();
+  for (const doc of [...byUnderscore.docs, ...byCamel.docs]) {
+    if (revisions.has(doc.id)) continue;
+    revisions.set(doc.id, {
+      ...(doc.data() as Partial<Revision>),
+      id: doc.id,
+    } as Revision & { id: string });
+  }
+  return Array.from(revisions.values());
 }
 
 /** Makes `revision` the one its target points at.

@@ -119,3 +119,15 @@ export function warsawDate(now: Date = new Date()): string {
     day: "2-digit",
   }).format(now);
 }
+
+/** The hour on a Warsaw clock, 0-23: what a job scheduled in Warsaw time is
+ * keyed on, whichever offset the server runs at and whatever the season. */
+export function warsawHour(now: Date = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Warsaw",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(now),
+  );
+}
