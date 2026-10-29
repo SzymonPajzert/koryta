@@ -18,17 +18,17 @@ from scrapers.stores import Context, Web
 
 
 def _host_of(url: str) -> str:
-    """Hostname for the robots cache.
+    """Hostname for the robots cache, as written: robots.txt binds the host it
+    is served from, and www.opole.pl has no address without its www.
 
     Deliberately not NormalizedParse: that one parses the query string and
     raises on params without '=' (e.g. '?debug'), which used to take a whole
     crawl result down. Robots only needs the host.
     """
     try:
-        host = (urlsplit(url).hostname or "").lower()
+        return (urlsplit(url).hostname or "").lower()
     except ValueError:
         return ""
-    return host[4:] if host.startswith("www.") else host
 
 
 class RobotsCache:
