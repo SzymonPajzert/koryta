@@ -220,12 +220,13 @@
         </InfoBubble>
       </div>
       <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
-        Poza poziomami: cała kolejka naraz, pojedyncze fakty z artykułów i
-        nowości na stronie do przeklikania.
+        Poza poziomami: cała kolejka naraz, daty urodzenia z oświadczeń
+        majątkowych, pojedyncze fakty z artykułów i nowości na stronie do
+        przeklikania.
       </p>
       <div class="k-note mb-4 d-flex flex-wrap align-center ga-3">
         <span class="text-body-2">
-          Te cztery rzeczy wymagają konta - zakładasz je w niecałą minutę, a po
+          Wszystko poniżej wymaga konta - zakładasz je w niecałą minutę, a po
           zalogowaniu wracasz dokładnie w to miejsce, z którego klikasz.
         </span>
         <v-btn
@@ -252,7 +253,7 @@
             :to="card.to"
             ink="ink-info"
             access="login"
-            @click="task(card.task)"
+            @click="card.task && task(card.task)"
           />
         </v-col>
       </v-row>
@@ -495,6 +496,7 @@ import {
   mdiSwapVertical,
   mdiTagOutline,
   mdiTextBoxSearchOutline,
+  mdiTextRecognition,
   mdiThumbsUpDown,
   mdiToolboxOutline,
 } from "@mdi/js";
@@ -605,6 +607,18 @@ const checkingCards = computed(() => [
       (toCheck.value ? ` Do sprawdzenia: ${polishNumber(toCheck.value)}.` : ""),
     to: "/eksploruj/nowe",
     task: "kolejka" as const,
+  },
+  {
+    // Second, after the queue: it is the smallest unit of work on the page,
+    // a few seconds a crop, and an agreed date can publish a page by itself.
+    // No `task` yet: HELP_TASKS in shared/analytics.ts is a closed list and
+    // has no name for it („oswiadczenia” is the one to add), so its clicks go
+    // uncounted until it does.
+    icon: mdiTextRecognition,
+    title: "Odczytuj daty urodzenia z oświadczeń",
+    desc: "Przepisujesz z wycinka oświadczenia majątkowego odręcznie wpisaną datę urodzenia - kilka sekund na jeden wycinek.",
+    to: "/oswiadczenia",
+    task: null,
   },
   {
     icon: mdiTextBoxSearchOutline,
