@@ -196,6 +196,9 @@ test = [
     "types-tqdm (>=4.67.3.20260508,<5.0.0.0)",
     "types-networkx (>=3.6.1.20260724,<4.0.0.0)",
 ]
+render = [
+    "playwright==1.62.0",
+]
 
 # rapidocr-onnxruntime 1.4.4 declares Python <3.13 and the GUI opencv-python,
 # but runs fine on this headless 3.13 host (that is what tools/ocrenv proved).

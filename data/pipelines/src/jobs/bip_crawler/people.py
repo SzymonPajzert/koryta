@@ -50,6 +50,7 @@ from urllib.parse import urlsplit
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
 from entities.bip import BipPersonOfInterest
+from jobs.bip_crawler import render as rendering
 from scrapers.bip.classify import (
     filename_from_url,
     host_of,
@@ -230,6 +231,13 @@ def _is_file(url: str) -> bool:
     return bool(_FILE.search(url)) or is_file_link(url)
 
 
+def _app_shell(content: bytes, links: list[LinkContext]) -> bool:
+    """Whether a page is drawn by a script: next to no links, and a script.
+
+    Madkom's shell has two (Home, Calculators), bip.malopolska.pl's none."""
+    return len(links) <= 5 and b"<script" in content[:200_000].lower()
+
+
 def _declaration_like(url: str) -> bool:
     words = url_words(url)
     return bool(DECLARATION.search(words) or ASSETS.search(words))
@@ -270,6 +278,7 @@ class PeopleSearch:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         known: dict[str, list[str]] | None = None,
+        render: Callable[[str], HttpResult] | None = None,
     ) -> None:
         self.people_store = people_store
         self.bip_queue = bip_queue
@@ -278,6 +287,8 @@ class PeopleSearch:
         self.options = options
         #: Declaration-like URLs already known, by host (`load_known_urls`).
         self.known = known or {}
+        #: Draws a JavaScript page as a browser would (`render.Renderer.render`).
+        self.render = render
         self.fetch = fetch
         self.robots_allowed = robots_allowed
         self.robots_unreachable = robots_unreachable
@@ -494,12 +505,27 @@ class PeopleSearch:
         title, links = extract_link_contexts(
             result.content, result.url, result.content_type
         )
+        if self.render is not None and _app_shell(result.content, links):
+            drawn = self._drawn(result.url)
+            if drawn.ok and self._is_page(drawn):
+                result = drawn
+                title, links = extract_link_contexts(
+                    drawn.content, drawn.url, drawn.content_type
+                )
         folded_title = fold(title)
         if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
             out.declaration_pages += 1
         out.found.extend(candidates(result.url, title, links, seekers))
         if depth < self.options.max_depth:
             frontier.follow(links, seekers, depth + 1, prefer)
+
+    def _drawn(self, url: str) -> HttpResult:
+        """``url`` rendered, after a turn of its host's rate like any request."""
+        assert self.render is not None
+        host = host_of(url)
+        while not self.limiter.acquire(host):
+            self.sleep(max(0.05, self.limiter.next_available_in(host)))
+        return self.render(url)
 
     # -- downloads -----------------------------------------------------------------
     def _download(
@@ -718,6 +744,14 @@ def run_people_mode(
             f"on {len(known):,} hosts",
             flush=True,
         )
+    renderer = None
+    if not args.no_render and rendering.available():
+        renderer = rendering.Renderer(USER_AGENT, workers=args.render_workers)
+    print(
+        "JavaScript pages: "
+        + ("rendered in headless Chromium" if renderer else "read as their HTML"),
+        flush=True,
+    )
     search = PeopleSearch(
         store,
         bip_queue,
@@ -727,8 +761,13 @@ def run_people_mode(
         robots_allowed=robots_allowed,
         robots_unreachable=robots_unreachable,
         known=known,
+        render=renderer.render if renderer else None,
     )
-    counts = search.run(todo)
+    try:
+        counts = search.run(todo)
+    finally:
+        if renderer:
+            renderer.close()
     summary = {
         "this_run": counts,
         "all_candidacies": store.outcomes(),
