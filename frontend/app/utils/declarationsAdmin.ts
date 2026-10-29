@@ -49,6 +49,11 @@ export const declarationHoldLabels: Record<PublicationHoldReason, string> = {
   no_candidacy_on_page: "na stronie brak tej kandydatury",
   ambiguous_candidacy: "dwie pasujące kandydatury w powiecie",
   two_places: "kandydatura w dwóch miejscach naraz",
+  no_revision: "strona nie pokazuje wersji z importu",
+  no_longer_matches: "data na stronie się zmieniła",
+  candidacy_reviewed: "kandydaturę ktoś już rozpatrzył",
+  revision_rejected: "ktoś odrzucił wersję tej strony",
+  conflicting_reading: "inne oświadczenie podaje inną datę",
 };
 
 /** What an admin can do about a hold, for the open row. */
@@ -69,6 +74,16 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
     "W powiecie z oświadczenia pasują dwie kandydatury tej osoby. Nie wiadomo, którą opublikować.",
   two_places:
     "Ta sama kandydatura wypada w dwóch miejscach naraz. Sprawdź, czy to na pewno jedna osoba.",
+  no_revision:
+    "Strona nie pokazuje ostatniej wersji z importu albo nie ma żadnej. Automat publikuje tylko to, co sprawdził.",
+  no_longer_matches:
+    "Od odczytu zmieniła się data urodzenia na stronie albo sam odczyt. Porównaj je jeszcze raz.",
+  candidacy_reviewed:
+    "Ktoś już rozpatrzył tę kandydaturę: odrzucił ją albo czeka jego własna wersja. Automat jej nie publikuje.",
+  revision_rejected:
+    "Ktoś z recenzentów odrzucił wersję tej strony. Automat tej decyzji nie zmienia.",
+  conflicting_reading:
+    "Inny odczytany wycinek tej osoby podaje inną datę. Sprawdź oba oświadczenia.",
 };
 
 /** Blue for a hold that is somebody's decision, which the automation only
@@ -76,7 +91,10 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
 export function declarationHoldTone(
   reason: PublicationHoldReason | null,
 ): RowTone {
-  return reason === "kept_hidden" || reason === "pending_proposal"
+  return reason === "kept_hidden" ||
+    reason === "pending_proposal" ||
+    reason === "revision_rejected" ||
+    reason === "candidacy_reviewed"
     ? "info"
     : "warning";
 }
