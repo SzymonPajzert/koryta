@@ -48,6 +48,17 @@ teryt_data = DownloadableFile(
 )
 
 
+def read_terc(ctx: Context) -> pd.DataFrame:
+    """TERC's register of units: WOJ, POW, GMI, RODZ as text, and NAZWA."""
+    return (
+        ctx.io.read_data(teryt_data)
+        .read_zip("TERC_Urzedowy_2025-11-15.csv")
+        .read_dataframe(
+            "csv", csv_sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str}
+        )
+    )
+
+
 class Teryt(Pipeline):
     filename = None  # Never cache
     volatile = True  # Always reprocess to get the latest data
