@@ -22,8 +22,6 @@ yet; their candidacies are edges on the page, not PKW rows (task
 bip-people-of-interest-site-only-pages).
 """
 
-from __future__ import annotations
-
 import argparse
 import hashlib
 from functools import cache
@@ -101,7 +99,9 @@ def people_of_interest(
     con.execute(
         """
         CREATE OR REPLACE TEMP MACRO bip_poi_fold(x) AS
-            replace(strip_accents(lower(trim(x))), 'ł', 'l')
+            trim(regexp_replace(
+                replace(strip_accents(lower(x)), 'ł', 'l'), '[^a-z0-9]+', ' ', 'g'
+            ))
         """
     )
     rows = con.execute(
@@ -113,6 +113,7 @@ def people_of_interest(
                 bip_poi_fold(base_first_name) AS fn,
                 bip_poi_fold(base_last_name) AS ln,
                 TRY_CAST(pkw_birth_year AS INTEGER) AS pkw_birth_year,
+                TRY_CAST(birth_year AS INTEGER) AS register_birth_year,
                 CAST(TRY_CAST(birth_date AS DATE) AS VARCHAR) AS birth_date,
                 unnest(elections) AS e
             FROM bip_poi_merged
@@ -120,7 +121,8 @@ def people_of_interest(
         ),
         won AS (
             SELECT DISTINCT
-                koryta_id, rejestrio_ids, fn, ln, pkw_birth_year, birth_date,
+                koryta_id, rejestrio_ids, fn, ln, pkw_birth_year,
+                register_birth_year, birth_date,
                 CAST(e.election_year AS INTEGER) AS election_year,
                 CAST(e.office AS VARCHAR) AS office,
                 CAST(e.teryt_candidacy_powiat AS VARCHAR) AS powiat
@@ -150,11 +152,19 @@ def people_of_interest(
               AND CAST(election_year AS INTEGER) >= $since
         ),
         -- Winners of one name in one unit and year: a father and a son on one
-        -- council are two rows here, and only their declarations tell them apart.
-        pkw_counted AS (
-            SELECT *, count(*) OVER (PARTITION BY fn, ln, teryt, election_year) - 1
-                AS namesakes
+        -- council are two people here, and only their declarations tell them
+        -- apart. One person's mayoral and council wins are one person.
+        people_by_name AS (
+            SELECT fn, ln, teryt, election_year,
+                   count(DISTINCT coalesce(middle_name, '') || '|'
+                         || coalesce(CAST(pkw_birth_year AS VARCHAR), '')) - 1
+                       AS namesakes
             FROM pkw
+            GROUP BY ALL
+        ),
+        pkw_counted AS (
+            SELECT p.*, n.namesakes
+            FROM pkw p JOIN people_by_name n USING (fn, ln, teryt, election_year)
         ),
         joined AS (
             SELECT p.*, w.koryta_id, w.rejestrio_ids, w.birth_date
@@ -164,8 +174,12 @@ def people_of_interest(
              AND p.election_year = w.election_year
              AND p.office = w.office
              AND left(p.teryt, 4) = w.powiat
-             AND (w.pkw_birth_year IS NULL OR p.pkw_birth_year IS NULL
-                  OR abs(p.pkw_birth_year - w.pkw_birth_year) <= 1)
+             -- Within a year of the register's birth year or of the PKW record
+             -- PeopleMerged attached: either is the person's own.
+             AND (p.pkw_birth_year IS NULL
+                  OR (w.pkw_birth_year IS NULL AND w.register_birth_year IS NULL)
+                  OR abs(p.pkw_birth_year - w.pkw_birth_year) <= 1
+                  OR abs(p.pkw_birth_year - w.register_birth_year) <= 1)
         ),
         site AS (
             SELECT
@@ -190,7 +204,9 @@ def people_of_interest(
             list_sort(list_distinct(coalesce(
                 list(j.birth_date) FILTER (WHERE j.birth_date IS NOT NULL), []
             ))) AS register_birth_dates,
-            min(s.birth_date) AS page_birth_date,
+            -- A candidacy's page shows a birth date only if every page of it does.
+            CASE WHEN bool_or(s.koryta_id IS NOT NULL AND s.birth_date IS NULL)
+                 THEN NULL ELSE min(s.birth_date) END AS page_birth_date,
             bool_or(s.koryta_id IS NOT NULL) AS on_site,
             coalesce(bool_or(s.published), false) AS published
         FROM joined j

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tarfile
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -15,7 +16,7 @@ from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
-from scrapers.stores import PersonRow
+from scrapers.stores import BipQueue, PersonRow
 from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import MemoryBipPeopleStore
 
@@ -208,24 +209,37 @@ PEOPLE = [
 
 @pytest.fixture
 def run(tmp_path: Path):
-    def go(rows=PEOPLE, store=None, robots=lambda url: True, **options):
-        web = FakeWeb()
+    def go(
+        rows=PEOPLE,
+        store=None,
+        robots=lambda url: True,
+        unreachable=lambda url: False,
+        web=None,
+        refresh=False,
+        retry=frozenset(),
+        seeds=None,
+        **options,
+    ):
+        web = web or FakeWeb()
         store = store or MemoryBipPeopleStore()
         store.upsert_people(rows)
         queue = FakeFrontier([])
         search = PeopleSearch(
             store,
-            queue,
+            cast("BipQueue", queue),  # test double
             LocalBundleStore(tmp_path / "bundles"),
-            SEEDS,
+            seeds or SEEDS,
             PeopleOptions(workers=3, **options),
             fetch=web.fetch,
             robots_allowed=robots,
+            robots_unreachable=unreachable,
             limiter=HostTokenBucket(0),
             sleep=lambda s: None,
         )
         counts = search.run(
-            store.people_to_search(refresh=False, max_priority=None, limit=None)
+            store.people_to_search(
+                refresh=refresh, max_priority=None, limit=None, retry=retry
+            )
         )
         return search, store, queue, web, counts
 
@@ -247,9 +261,9 @@ def test_every_candidacy_ends_found_or_with_a_reason(run):
     assert status["bak"] == ("found", "named")
     assert status["noseed"] == ("not_found", "no_seed")
     assert status["down"] == ("not_found", "unreachable")
-    assert status["radny"] == ("found", "unnamed")
+    assert status["radny"] == ("unconfirmed", "unnamed")  # the OCR step decides
     assert status["nothing"] == ("not_found", "no_declarations")
-    assert counts["found"] == 7
+    assert counts["found"] == 6
 
 
 def test_only_the_persons_own_files_come_down(run):

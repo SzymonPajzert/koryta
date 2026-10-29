@@ -72,6 +72,13 @@ class RobotsCache:
             self._parsers[host] = parser
         return parser
 
+    def unreachable(self, url: str) -> bool:
+        """Whether ``allowed`` said no because the host did not answer for its
+        robots.txt (down, timing out, or an error status), not because it said no."""
+        host = _host_of(url)
+        with self._lock:
+            return host in self._unreachable
+
     def allowed(self, url: str) -> bool:
         host = _host_of(url)
         if not host:

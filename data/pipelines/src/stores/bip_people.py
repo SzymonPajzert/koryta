@@ -128,17 +128,24 @@ class PostgresBipPeopleStore(BipPeopleStore):
         return new
 
     def people_to_search(
-        self, *, refresh: bool, max_priority: int | None, limit: int | None
+        self,
+        *,
+        refresh: bool,
+        max_priority: int | None,
+        limit: int | None,
+        retry: frozenset[str] = frozenset(),
     ) -> list[PersonRow]:
         rows = self.pg.fetchall(
             f"""
             SELECT {_PERSON_COLUMNS} FROM bip_poi
-             WHERE (%s OR status = 'pending')
+             WHERE (%s OR status = 'pending'
+                    OR (status = 'not_found' AND reason = ANY(%s))
+                    OR (status = 'unconfirmed' AND 'unconfirmed' = ANY(%s)))
                AND (%s::int IS NULL OR priority <= %s::int)
              ORDER BY priority, election_year DESC, unit, key
              LIMIT %s
             """,
-            (refresh, max_priority, max_priority, limit),
+            (refresh, sorted(retry), sorted(retry), max_priority, max_priority, limit),
         )
         return [_person(r) for r in rows]
 
@@ -173,8 +180,10 @@ class PostgresBipPeopleStore(BipPeopleStore):
             UPDATE bip_poi
                SET status = %s, reason = %s, docs = %s, run_id = %s, checked_at = now()
              WHERE key = %s
+               -- A search that finds nothing again does not undo an earlier find.
+               AND (status <> 'found' OR %s = 'found')
             """,
-            (status, reason, docs, run_id, key),
+            (status, reason, docs, run_id, key, status),
         )
 
     def record_person_docs(self, rows: list[PersonDocRow], run_id: str) -> None:
@@ -195,6 +204,7 @@ class PostgresBipPeopleStore(BipPeopleStore):
                            anchor = EXCLUDED.anchor, context = EXCLUDED.context,
                            page_url = EXCLUDED.page_url, run_id = EXCLUDED.run_id,
                            fetched_at = now()
+                     WHERE bip_poi_docs.status <> 'ok' OR EXCLUDED.status = 'ok'
                     """,
                     (
                         row.key,
@@ -269,13 +279,25 @@ class MemoryBipPeopleStore(BipPeopleStore):
         return new
 
     def people_to_search(
-        self, *, refresh: bool, max_priority: int | None, limit: int | None
+        self,
+        *,
+        refresh: bool,
+        max_priority: int | None,
+        limit: int | None,
+        retry: frozenset[str] = frozenset(),
     ) -> list[PersonRow]:
+        def due(r: PersonRow) -> bool:
+            return (
+                refresh
+                or r.status == "pending"
+                or (r.status == "not_found" and r.reason in retry)
+                or (r.status == "unconfirmed" and "unconfirmed" in retry)
+            )
+
         rows = [
             r
             for r in self.people.values()
-            if (refresh or r.status == "pending")
-            and (max_priority is None or r.priority <= max_priority)
+            if due(r) and (max_priority is None or r.priority <= max_priority)
         ]
         rows.sort(key=lambda r: (r.priority, -r.election_year, r.unit, r.key))
         return rows[:limit] if limit else rows
@@ -287,6 +309,8 @@ class MemoryBipPeopleStore(BipPeopleStore):
         self, key: str, status: str, reason: str, docs: int, run_id: str
     ) -> None:
         r = self.people[key]
+        if r.status == "found" and status != "found":
+            return
         self.people[key] = PersonRow(
             r.key,
             r.unit,
@@ -302,7 +326,9 @@ class MemoryBipPeopleStore(BipPeopleStore):
 
     def record_person_docs(self, rows: list[PersonDocRow], run_id: str) -> None:
         for row in rows:
-            self.docs[(row.key, row.url)] = row
+            known = self.docs.get((row.key, row.url))
+            if known is None or known.status != "ok" or row.status == "ok":
+                self.docs[(row.key, row.url)] = row
 
     def person_docs(self, key: str) -> list[PersonDocRow]:
         return sorted(

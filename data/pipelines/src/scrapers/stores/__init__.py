@@ -1450,9 +1450,16 @@ class BipPeopleStore(metaclass=ABCMeta):
 
     @abstractmethod
     def people_to_search(
-        self, *, refresh: bool, max_priority: int | None, limit: int | None
+        self,
+        *,
+        refresh: bool,
+        max_priority: int | None,
+        limit: int | None,
+        retry: frozenset[str] = frozenset(),
     ) -> list[PersonRow]:
-        """Pending candidacies (all, with ``refresh``), most wanted first."""
+        """Pending candidacies, and the not_found ones whose reason (or the
+        unconfirmed ones, for "unconfirmed") is in ``retry``; all of them with
+        ``refresh``. Most wanted first."""
         raise NotImplementedError()
 
     @abstractmethod

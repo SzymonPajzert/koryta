@@ -88,24 +88,63 @@ def test_starostwo_in_a_city_serves_the_land_powiat(terc):
     assert registry_unit(starostwo, terc) == "180700"
 
 
-def test_land_powiat_by_longest_common_prefix():
+def test_land_powiat_seated_in_a_city_comes_from_the_table():
     terc = terc_index(
         pd.DataFrame(
             [
-                ("14", "", "", "", "MAZOWIECKIE"),
-                ("14", "26", "", "", "siedlecki"),
-                ("14", "27", "", "", "sierpecki"),
-                ("14", "64", "", "", "Siedlce"),
-                ("12", "", "", "", "MAŁOPOLSKIE"),
-                ("12", "10", "", "", "nowosądecki"),
-                ("12", "11", "", "", "nowotarski"),
-                ("12", "62", "", "", "Nowy Sącz"),
+                ("06", "", "", "", "LUBELSKIE"),
+                ("06", "08", "", "", "lubartowski"),
+                ("06", "09", "", "", "lubelski"),
+                ("06", "63", "", "", "Lublin"),
+                ("10", "", "", "", "ŁÓDZKIE"),
+                ("10", "06", "", "", "łódzki wschodni"),
+                ("10", "07", "", "", "łowicki"),
+                ("10", "61", "", "", "Łódź"),
+                ("32", "", "", "", "ZACHODNIOPOMORSKIE"),
+                ("32", "15", "", "", "szczecinecki"),
+                ("32", "62", "", "", "Szczecin"),
             ],
             columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"],
         )
     )
-    assert land_powiat_of_city(terc, "1464", "Siedlce") == "1426"
-    assert land_powiat_of_city(terc, "1262", "Nowy Sącz") == "1210"
+    assert land_powiat_of_city(terc, "0663", "Lublin") == "0609"
+    assert land_powiat_of_city(terc, "1061", "Łódź") == "1006"
+    # powiat szczecinecki's starostwo is in Szczecinek; Szczecin has no land powiat
+    assert land_powiat_of_city(terc, "3262", "Szczecin") is None
+
+
+def test_gmina_miejska_is_the_town_and_a_rural_office_in_its_city_is_the_rural_gmina():
+    terc = terc_index(
+        pd.DataFrame(
+            [
+                ("28", "", "", "", "WARMIŃSKO-MAZURSKIE"),
+                ("28", "06", "", "", "giżycki"),
+                ("28", "06", "01", "1", "Giżycko"),
+                ("28", "06", "02", "2", "Giżycko"),
+                ("06", "", "", "", "LUBELSKIE"),
+                ("06", "03", "", "", "chełmski"),
+                ("06", "03", "05", "2", "Chełm"),
+                ("06", "62", "", "", "Chełm"),
+                ("06", "62", "01", "1", "Chełm"),
+            ],
+            columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"],
+        )
+    )
+    assert office_kind("Gmina Miejska Giżycko") == "1"
+    town = entry("Gmina Miejska Giżycko", "2806011", "http://bip.gizycko.pl")
+    assert registry_unit(town, terc) == "280601"
+    # Urząd Gminy Chełm stands in the city of Chełm (0662); the gmina is in chełmski
+    rural = entry("Urząd Gminy Chełm", "0662011", "http://bip.gmina.chelm.pl")
+    assert registry_unit(rural, terc) == "060305"
+    row = catalogue_row(
+        "urzędy miast i gmin",
+        "Urząd Gminy Chełm",
+        "LUBELSKIE",
+        "Chełm",
+        "Chełm",
+        "www.x.pl",
+    )
+    assert catalogue_unit(row, terc) == "060305"
 
 
 def test_dzielnica_without_an_office_falls_back_to_the_city(terc):

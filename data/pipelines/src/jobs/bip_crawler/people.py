@@ -11,17 +11,19 @@ the links most likely to lead to "oświadczenia majątkowe" first
 the unit's people in are downloaded - into the same bundles and ``bip_docs``
 as the blind crawl's, so ``BipDocumentsParsed`` reads them too.
 
-Every candidacy ends the run found (at least one file downloaded that a link
-names them in) or not_found with a reason, in ``bip_poi``
-(``stores.bip_people``):
+Every candidacy ends the run found (a file that a link names them in came
+down), unconfirmed (only files that name nobody did: the OCR step decides), or
+not_found with a reason, in ``bip_poi`` (``stores.bip_people``):
 
 - ``no_seed``: neither list has an office for the unit;
-- ``unreachable``: no page of the unit's BIP answered;
+- ``unreachable``: no page of the unit's BIP answered (retried by default);
 - ``robots``: robots.txt keeps the crawler out of where it starts;
 - ``no_declarations``: no page read looked like a declarations page;
 - ``not_listed``: declarations were found, none named the person, and the
   unit had no unnamed declaration file to look inside either;
-- ``download_failed``: links named the person, and no file came down.
+- ``download_failed``: links named the person, and no file came down;
+- ``timeout``: the run's time ran out during the walk (retried by default);
+- ``error``: the unit's search failed unexpectedly (retried by default).
 
 Politeness is the blind crawl's: robots.txt, one request per host per
 ``--rate`` seconds, the same User-Agent and fetch.
@@ -61,13 +63,14 @@ from scrapers.bip.people import (
     candidates,
     choose,
     fold,
+    is_file_link,
     link_score,
     satisfied,
 )
 from scrapers.bip.registry import parse_subjects_xml
-from scrapers.bip.units import UnitSeed, terc_index, unit_seeds
+from scrapers.bip.units import UnitSeed, scope_of, terc_index, unit_seeds
 from scrapers.common.fetch import HttpResult, http_get
-from scrapers.common.links import extract_link_contexts
+from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.krs.data import read_public_bodies_catalogue
 from scrapers.map.teryt import read_terc
@@ -122,6 +125,69 @@ class UnitSearch:
     pages_ok: int = 0
     declaration_pages: int = 0
     found: list[Candidate] = field(default_factory=list)
+    #: Files the walk reached as links it could not tell from pages, kept so the
+    #: download does not fetch them a second time.
+    files: dict[str, HttpResult] = field(default_factory=dict)
+
+
+#: Hosts no unit's BIP lives on, though a unit's website may link to them.
+_NOT_A_UNITS_BIP = frozenset(
+    {"bip.gov.pl", "gov.pl", "epuap.gov.pl", "obywatel.gov.pl", "biznes.gov.pl"}
+)
+#: What `_get` answers instead of a response.
+ROBOTS, UNREACHABLE = "robots", "unreachable"
+#: Reasons a later run searches again by default: the BIP may answer next time.
+DEFAULT_RETRY = frozenset({"unreachable", "error", "timeout"})
+
+
+@dataclass
+class _Frontier:
+    """A unit's pages to read, best first, kept to the unit's (host, path) scopes."""
+
+    scopes: list[tuple[str, str]]
+    heap: list[tuple[float, int, int, str]] = field(default_factory=list)
+    seen: set[str] = field(default_factory=set)
+    sequence: int = 0
+
+    def __bool__(self) -> bool:
+        return bool(self.heap)
+
+    def add(self, url: str, score: float, depth: int) -> None:
+        if url in self.seen:
+            return
+        self.seen.add(url)
+        heapq.heappush(self.heap, (-score, depth, self.sequence, url))
+        self.sequence += 1
+
+    def pop(self) -> tuple[int, str]:
+        _, depth, _, url = heapq.heappop(self.heap)
+        return depth, url
+
+    def adopt(self, host: str) -> None:
+        if host and host not in {h for h, _ in self.scopes}:
+            self.scopes.append((host, ""))
+
+    def in_scope(self, url: str) -> bool:
+        host, path = host_of(url), urlsplit(url).path.lower()
+        return any(host == h and (not p or path.startswith(p)) for h, p in self.scopes)
+
+    def follow(
+        self, links: list[LinkContext], seekers: list[Seeker], depth: int
+    ) -> None:
+        """Queue a page's links to other pages; files are for the download."""
+        for link in links:
+            target = normalize_url(link.url)
+            if (
+                target in self.seen
+                or _FILE.search(target)
+                or is_file_link(target)
+                or is_low_value_url(target)
+                or not self.in_scope(target)
+            ):
+                continue
+            score = link_score(link, seekers, depth)
+            if score > -3:
+                self.add(target, score, depth)
 
 
 class PeopleSearch:
@@ -135,6 +201,7 @@ class PeopleSearch:
         *,
         fetch: Callable[[str, float, str], HttpResult] = http_get,
         robots_allowed: Callable[[str], bool] = lambda url: True,
+        robots_unreachable: Callable[[str], bool] = lambda url: False,
         limiter: HostTokenBucket | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
@@ -146,19 +213,34 @@ class PeopleSearch:
         self.options = options
         self.fetch = fetch
         self.robots_allowed = robots_allowed
+        self.robots_unreachable = robots_unreachable
         self.limiter = limiter or HostTokenBucket(options.rate_interval_s)
         self.sleep = sleep
         self.clock = clock
         self.run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.crawl_id = f"{self.run_id}-people"
         self.timed_out = False
+        self.deadline: float | None = None
+        self.shared_hosts = {
+            scope.split("/", 1)[0]
+            for seed in seeds.values()
+            for scope in seed.scopes
+            if "/" in scope
+        } | {"samorzad.gov.pl"}
         self._write_lock = threading.Lock()
 
+    def _past_deadline(self) -> bool:
+        return self.deadline is not None and self.clock() > self.deadline
+
     # -- one request -----------------------------------------------------------
-    def _get(self, url: str) -> HttpResult | None:
-        """robots.txt, the host's rate, then the fetch; None when robots.txt says no."""
+    def _get(self, url: str) -> HttpResult | str:
+        """robots.txt, the host's rate, then the fetch.
+
+        ROBOTS when robots.txt keeps the crawler out, UNREACHABLE when the host
+        did not even answer for its robots.txt (the cache denies those too).
+        """
         if not self.robots_allowed(url):
-            return None
+            return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
         host = host_of(url)
         while not self.limiter.acquire(host):
             self.sleep(max(0.05, self.limiter.next_available_in(host)))
@@ -175,33 +257,32 @@ class PeopleSearch:
     def _roots(self, seed: UnitSeed) -> tuple[list[str], list[tuple[str, str]], str]:
         """Start pages, the (host, path prefix) scopes they allow, and why none."""
         if seed.bip_urls:
-            scopes = [
-                (s.split("/", 1)[0], "/" + s.split("/", 1)[1] if "/" in s else "")
-                for s in seed.scopes
-            ]
-            return list(seed.bip_urls), scopes, ""
+            return list(seed.bip_urls), [_split_scope(s) for s in seed.scopes], ""
         roots: list[str] = []
-        reason = "unreachable"
+        reason = UNREACHABLE
         for www in seed.www_urls[:2]:
             result = self._get(www)
-            if result is None:
-                reason = "robots"
+            if isinstance(result, str):
+                reason = result
                 continue
             if not result.ok or not self._is_page(result):
                 continue
             _, links = extract_link_contexts(
-                result.content.decode("utf-8", "replace"), result.url
+                result.content, result.url, result.content_type
             )
             found = [
                 link.url
                 for link in links
-                if _BIP_LINK.search(fold(link.anchor))
-                or "bip" in host_of(link.url).split(".")
+                if host_of(link.url) not in _NOT_A_UNITS_BIP
+                and (
+                    _BIP_LINK.search(fold(link.anchor))
+                    or "bip" in host_of(link.url).split(".")
+                )
             ]
             # Some offices keep the BIP on the main site itself.
             roots.extend(dict.fromkeys(found or [result.url]))
         roots = roots[:3]
-        scopes = [(host_of(r), "") for r in roots]
+        scopes = [_split_scope(scope_of(r, self.shared_hosts)) for r in roots]
         return roots, scopes, "" if roots else reason
 
     # -- the walk ----------------------------------------------------------------
@@ -216,76 +297,69 @@ class PeopleSearch:
         if not roots:
             out.status = reason
             return out
-
-        def in_scope(url: str) -> bool:
-            host, path = host_of(url), urlsplit(url).path.lower()
-            return any(host == h and (not p or path.startswith(p)) for h, p in scopes)
-
-        frontier: list[tuple[float, int, int, str]] = []
-        for n, root in enumerate(roots):
-            heapq.heappush(frontier, (-100.0, 0, n, normalize_url(root)))
-        sequence = len(roots)
-        seen: set[str] = {f[3] for f in frontier}
-        robots_blocked = 0
-        while frontier and out.pages < self.options.unit_pages:
-            _, depth, _, url = heapq.heappop(frontier)
+        frontier = _Frontier(scopes)
+        for root in roots:
+            frontier.add(normalize_url(root), 100.0, 0)
+        blocked = down = requests = 0
+        budget = self.options.unit_pages
+        # Links that keep turning out to be files cost requests, not pages.
+        while frontier and out.pages < budget and requests < 2 * budget:
+            if self._past_deadline():
+                out.status = "timeout"
+                break
+            depth, url = frontier.pop()
             result = self._get(url)
-            out.pages += 1
-            if result is None:
-                robots_blocked += 1
+            if isinstance(result, str):
+                blocked += result == ROBOTS
+                down += result == UNREACHABLE
                 continue
-            if (
-                not result.ok
-                or not self._is_page(result)
-                or len(result.content) > self.options.max_doc_bytes
-            ):
+            requests += 1
+            if not result.ok or len(result.content) > self.options.max_doc_bytes:
+                down += result.status == 0
+                out.pages += 1
                 continue
-            out.pages_ok += 1
-            if depth == 0:
-                # A start page that redirected elsewhere brings its new host into scope.
-                final = host_of(result.url)
-                if final and final not in {h for h, _ in scopes}:
-                    scopes.append((final, ""))
-            title, links = extract_link_contexts(
-                result.content.decode("utf-8", "replace"), result.url
-            )
-            folded_title = fold(title)
-            if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
-                out.declaration_pages += 1
-            out.found.extend(candidates(result.url, title, links, seekers))
-            if depth >= self.options.max_depth:
+            if not self._is_page(result):
+                out.files[url] = result  # a file behind a page-like link
                 continue
-            for link in links:
-                target = normalize_url(link.url)
-                if (
-                    target in seen
-                    or _FILE.search(target)
-                    or is_low_value_url(target)
-                    or not in_scope(target)
-                ):
-                    continue
-                score = link_score(link, seekers, depth + 1)
-                if score <= -3:
-                    continue
-                seen.add(target)
-                heapq.heappush(frontier, (-score, depth + 1, sequence, target))
-                sequence += 1
+            self._read_page(out, result, depth, frontier, seekers)
             if satisfied(out.found, seekers, self.options.per_person):
                 break
-        if out.pages_ok == 0:
-            out.status = (
-                "robots"
-                if robots_blocked and robots_blocked == out.pages
-                else "unreachable"
-            )
+        if out.pages_ok == 0 and out.status == "searched":
+            only_robots = blocked and not down and requests == 0
+            out.status = ROBOTS if only_robots else UNREACHABLE
         return out
 
+    def _read_page(
+        self,
+        out: UnitSearch,
+        result: HttpResult,
+        depth: int,
+        frontier: _Frontier,
+        seekers: list[Seeker],
+    ) -> None:
+        out.pages += 1
+        out.pages_ok += 1
+        if depth == 0:
+            # A start page that redirected elsewhere brings its host into scope.
+            frontier.adopt(host_of(result.url))
+        title, links = extract_link_contexts(
+            result.content, result.url, result.content_type
+        )
+        folded_title = fold(title)
+        if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
+            out.declaration_pages += 1
+        out.found.extend(candidates(result.url, title, links, seekers))
+        if depth < self.options.max_depth:
+            frontier.follow(links, seekers, depth + 1)
+
     # -- downloads -----------------------------------------------------------------
-    def _download(self, url: str, page_url: str) -> tuple[str, str, str]:
+    def _download(
+        self, url: str, page_url: str, fetched: HttpResult | None = None
+    ) -> tuple[str, str, str]:
         """(status, sha256, bundle) of one file, stored as the blind crawl stores."""
-        result = self._get(url)
-        if result is None:
-            return "robots", "", ""
+        result = fetched if fetched is not None else self._get(url)
+        if isinstance(result, str):
+            return result, "", ""
         if result.error:
             return "error", "", ""
         if not result.ok:
@@ -312,7 +386,24 @@ class PeopleSearch:
         return "ok", digest, doc.bundle
 
     # -- a unit, start to end ------------------------------------------------------
-    def _unit(self, unit: str, rows: list[PersonRow]) -> dict[str, str]:
+    def _unit(self, unit: str, rows: list[PersonRow]) -> dict[str, str] | None:
+        """Search one unit and record every candidacy's outcome; None if it is
+        past the deadline before it starts (its candidacies stay pending)."""
+        if self._past_deadline():
+            return None
+        try:
+            return self._search_and_record(unit, rows)
+        except Exception:  # noqa: BLE001 - one unit's surprise is not the run's
+            logger.exception("unit %s failed", unit)
+            with self._write_lock:
+                for r in rows:
+                    self.people_store.record_person(
+                        r.key, "not_found", "error", 0, self.run_id
+                    )
+                self.people_store.record_unit(UnitRow(unit, "error"), self.run_id)
+            return {r.key: "not_found:error" for r in rows}
+
+    def _search_and_record(self, unit: str, rows: list[PersonRow]) -> dict[str, str]:
         seekers = [Seeker.of(r.key, r.first_name, r.last_name) for r in rows]
         search = self.search_unit(unit, seekers)
         picks = choose(
@@ -324,7 +415,8 @@ class PeopleSearch:
         for key, chosen in picks.items():
             for c in chosen:
                 if c.url not in downloaded:
-                    downloaded[c.url] = self._download(c.url, c.page_url)
+                    cached = search.files.get(normalize_url(c.url))
+                    downloaded[c.url] = self._download(c.url, c.page_url, cached)
                 status, sha, bundle = downloaded[c.url]
                 doc_rows.append(
                     PersonDocRow(
@@ -349,26 +441,8 @@ class PeopleSearch:
         with self._write_lock:
             self.people_store.record_person_docs(doc_rows, self.run_id)
             for r in rows:
-                mine = [d for d in doc_rows if d.key == r.key]
-                ok = [d for d in mine if d.status == "ok"]
-                if ok:
-                    status, reason = (
-                        "found",
-                        "named" if any(d.named for d in ok) else "unnamed",
-                    )
-                elif search.status != "searched":
-                    status, reason = "not_found", search.status
-                elif mine:
-                    status, reason = "not_found", "download_failed"
-                elif search.declaration_pages == 0 and not any(
-                    c.declaration_like for c in search.found
-                ):
-                    status, reason = "not_found", "no_declarations"
-                else:
-                    status, reason = "not_found", "not_listed"
-                self.people_store.record_person(
-                    r.key, status, reason, len(ok), self.run_id
-                )
+                status, reason, ok = _outcome(r.key, doc_rows, search)
+                self.people_store.record_person(r.key, status, reason, ok, self.run_id)
                 outcomes[r.key] = status if status == "found" else f"{status}:{reason}"
             self.people_store.record_unit(
                 UnitRow(
@@ -392,34 +466,49 @@ class PeopleSearch:
             by_unit,
             key=lambda u: (min(r.priority for r in by_unit[u]), -len(by_unit[u]), u),
         )
-        started = self.clock()
+        if self.options.max_run_seconds is not None:
+            self.deadline = self.clock() + self.options.max_run_seconds
         counts: dict[str, int] = defaultdict(int)
         with ThreadPoolExecutor(max_workers=self.options.workers) as pool:
-            futures = {}
-            for unit in order:
-                if (
-                    self.options.max_run_seconds is not None
-                    and self.clock() - started > self.options.max_run_seconds
-                ):
-                    self.timed_out = True
-                    break
-                futures[pool.submit(self._unit, unit, by_unit[unit])] = unit
-                # Keep the queue short so the time budget is checked as units finish.
-                while (
-                    len([f for f in futures if not f.done()])
-                    >= self.options.workers * 2
-                ):
-                    self.sleep(0.2)
-                    if (
-                        self.options.max_run_seconds is not None
-                        and self.clock() - started > self.options.max_run_seconds
-                    ):
-                        break
+            futures = [pool.submit(self._unit, unit, by_unit[unit]) for unit in order]
             for future in as_completed(futures):
-                for outcome in future.result().values():
+                outcomes = future.result()
+                if outcomes is None:
+                    self.timed_out = True
+                    continue
+                for outcome in outcomes.values():
                     counts[outcome] += 1
+                    self.timed_out |= outcome.endswith(":timeout")
         self.bundles.flush()
         return dict(sorted(counts.items()))
+
+
+def _split_scope(scope: str) -> tuple[str, str]:
+    host, _, path = scope.partition("/")
+    return host, "/" + path if path else ""
+
+
+def _outcome(
+    key: str, docs: list[PersonDocRow], search: UnitSearch
+) -> tuple[str, str, int]:
+    """(status, reason, files down) of one candidacy after its unit's search."""
+    mine = [d for d in docs if d.key == key]
+    ok = [d for d in mine if d.status == "ok"]
+    if any(d.named for d in ok):
+        return "found", "named", len(ok)
+    if ok:
+        # Only files that name nobody: the OCR step has to find the person in
+        # them before this counts.
+        return "unconfirmed", "unnamed", len(ok)
+    if search.status != "searched":
+        return "not_found", search.status, 0
+    if mine:
+        return "not_found", "download_failed", 0
+    if search.declaration_pages == 0 and not any(
+        c.declaration_like for c in search.found
+    ):
+        return "not_found", "no_declarations", 0
+    return "not_found", "not_listed", 0
 
 
 def run_people_mode(
@@ -428,6 +517,7 @@ def run_people_mode(
     bip_queue: BipQueue,
     bundles: LocalBundleStore,
     robots_allowed: Callable[[str], bool],
+    robots_unreachable: Callable[[str], bool] = lambda url: False,
 ) -> int:
     """`koryta_scrape_bip crawl --people-of-interest`: read the list, search, report."""
     # The package imports this module, so its helpers come in at call time.
@@ -441,10 +531,12 @@ def run_people_mode(
     people = list(BipPeopleOfInterest().read_or_process_list(ctx))
     store = PostgresBipPeopleStore(pg)
     new = store.upsert_people([person_row(p) for p in people])
+    retry = frozenset(r.strip() for r in args.poi_retry.split(",") if r.strip())
     todo = store.people_to_search(
         refresh=args.poi_refresh,
         max_priority=args.poi_max_priority,
         limit=args.poi_limit,
+        retry=retry,
     )
     print(
         f"people of interest: {len(people):,} candidacies ({new:,} new); "
@@ -467,7 +559,13 @@ def run_people_mode(
         max_run_seconds=args.max_minutes * 60 if args.max_minutes else None,
     )
     search = PeopleSearch(
-        store, bip_queue, bundles, seeds, options, robots_allowed=robots_allowed
+        store,
+        bip_queue,
+        bundles,
+        seeds,
+        options,
+        robots_allowed=robots_allowed,
+        robots_unreachable=robots_unreachable,
     )
     counts = search.run(todo)
     print(
