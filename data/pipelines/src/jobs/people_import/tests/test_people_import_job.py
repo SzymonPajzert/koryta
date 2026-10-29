@@ -1657,6 +1657,62 @@ def test_what_was_sent_names_the_page_each_person_went_to(priority):
     ]
 
 
+#: What a line of the sent part says the site wrote besides the person node.
+EDGES = (
+    "employments_created",
+    "employments_published",
+    "candidacies_created",
+    "proposals_filed",
+)
+
+
+def test_what_was_sent_says_what_came_with_a_page_answered_unchanged(priority):
+    """`unchanged` is the person node alone. 91 of the 106 bought pages sent
+    2026-10-24..28 were answered so, and every one had edges written - most
+    of them jobs its bought feed named, put live - which the part did not
+    say, so a night's bought tier read as sent for nothing."""
+    priority.candidates = [
+        candidate("Jan Kowalski", BOUGHT, published=True),
+        candidate("Ewa Lis", ON_SITE),
+    ]
+    wrote = Response(
+        200,
+        {
+            "personId": "kowalski",
+            "person": "unchanged",
+            "companies": [
+                {"nodeId": "c1", "edgeId": "j1", "created": True, "published": True},
+                {"nodeId": "c2", "edgeId": "j2", "created": True, "published": False},
+                {"nodeId": "c3", "edgeId": "j3", "created": False, "published": False},
+            ],
+            "elections": [{"nodeId": "r1", "edgeId": "b1", "created": True}],
+            "proposals": {"created": 1, "unchanged": 2},
+        },
+    )
+    priority.answers = [wrote, person("unchanged", "lis")]
+
+    assert job.main(["--scope", "priority"]) == 0
+
+    kowalski, lis = sent_part(priority)
+    assert {name: kowalski[name] for name in EDGES} == {
+        "employments_created": 2,
+        "employments_published": 1,
+        "candidacies_created": 1,
+        "proposals_filed": 1,
+    }
+    assert {name: lis[name] for name in EDGES} == dict.fromkeys(EDGES, 0)
+    assert priority.summary()["sent_by_tier"] == {
+        BOUGHT: {
+            "unchanged": 1,
+            "employments_created": 2,
+            "employments_published": 1,
+            "candidacies_created": 1,
+            "proposals_filed": 1,
+        },
+        ON_SITE: {"unchanged": 1, **dict.fromkeys(EDGES, 0)},
+    }
+
+
 def test_somebody_only_an_odpis_names_is_remembered_by_name_and_birth_date():
     """No link and no page id: two such people may share a name, never a name
     and a day - and their PESEL is not the pipeline's to write down here."""
