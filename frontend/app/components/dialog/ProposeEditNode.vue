@@ -161,8 +161,8 @@
               <v-select
                 v-model="editData.categories"
                 :items="categoryOptions"
-                label="Kategorie"
-                hint="Branża, po której można filtrować na Eksploruj. Wyliczamy ją z kodów PKD, a te mówią, czym firma się zajmuje, a nie do jakiej branży należy - kopalnia z własną bocznicą ma kod kolejowy. Jeśli źle trafiliśmy, popraw."
+                label="Branże"
+                hint="Branże wyliczone z kodów PKD spółki albo grup kapitałowych, do których należy."
                 persistent-hint
                 multiple
                 chips
@@ -232,10 +232,7 @@ import { authRequest } from "@/composables/auth";
 import { generateEntityUrl } from "~~/shared/slugs";
 import { parties } from "~~/shared/misc";
 import { asArray, publicSectorKnown, type NodeType } from "~~/shared/model";
-import {
-  companyCategories,
-  isKnownCategory,
-} from "~~/shared/companyCategories";
+import { companyCategories, isSector } from "~~/shared/companyCategories";
 import { isValidNip, isValidRegon } from "~~/shared/identifiers";
 
 const props = defineProps<{
@@ -311,11 +308,12 @@ const ownershipOptions = [
 
 /** The sectors the filter on /eksploruj offers, which is the whole of what may
  * be proposed: a value off this list would file the company under a category
- * nothing can ever filter on. */
-const categoryOptions = companyCategories.map((category) => ({
-  title: category.title,
-  value: category.value,
-}));
+ * nothing can ever filter on. Its owner, „Skarb Państwa”, is left out: it
+ * follows Prokuratoria's list rather than anybody's edit, and
+ * `/api/revisions/create` keeps whatever the entry carries (`withOwnersFrom`). */
+const categoryOptions = companyCategories
+  .filter((category) => isSector(category.value))
+  .map((category) => ({ title: category.title, value: category.value }));
 
 const editData = reactive({
   name: "",
@@ -373,10 +371,9 @@ watch(dialog, (val) => {
   // arrays as `{"0": "koleje"}` maps. A stored value the site no longer offers
   // is dropped rather than shown, since the select cannot render an option it
   // has no entry for - and submitting the form would then silently delete it
-  // either way, so dropping it visibly is the honest version.
-  editData.categories = asArray<string>(entity.categories).filter(
-    isKnownCategory,
-  );
+  // either way, so dropping it visibly is the honest version. The owner is
+  // left out with it, and that one is not deleted: the server keeps it.
+  editData.categories = asArray<string>(entity.categories).filter(isSector);
   editData.ktomaco = entity.ktomaco || "";
   editData.sourceURL = entity.sourceURL || "";
   editData.shortName = entity.shortName || "";
