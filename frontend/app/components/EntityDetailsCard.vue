@@ -115,6 +115,8 @@
         :needs-split="personEntity?.needs_split"
       />
       <CardPersonInfo :person="personEntity" class="mb-2" />
+      <!-- Under the facts, as it vouches for one of them: the birth date. -->
+      <PersonDeclarationNote v-if="entity?.id" :node-id="entity.id" />
       {{ entity?.content }}
     </v-card-text>
   </v-card>
