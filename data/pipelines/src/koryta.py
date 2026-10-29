@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import pandas as pd
 
 from analysis.bip_documents_parsed import add_arguments as bip_parse_args
+from analysis.bip_people_of_interest import add_arguments as bip_poi_args
 from analysis.bip_urls_classified import add_arguments as bip_classify_args
 from conductor import setup_context
 from pipelines import PIPELINES
@@ -124,6 +125,7 @@ def get_args():
     cru_args.add_arguments(parser)
     bip_parse_args(parser)
     bip_classify_args(parser)
+    bip_poi_args(parser)
     args, _ = parser.parse_known_args()
     return args
 
