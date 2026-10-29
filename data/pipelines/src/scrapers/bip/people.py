@@ -164,17 +164,25 @@ _NOT_NAMES = frozenset(
 _TOKEN = re.compile(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+(?:-[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+)?")
 
 
-def names_somebody(text: str) -> bool:
-    """Whether raw (unfolded) ``text`` holds what looks like a person's name: two
-    capitalised words in a row that are not the vocabulary of a declarations page."""
+def names_somebody(text: str, *, initials_only: bool = False) -> bool:
+    """Whether raw (unfolded) ``text`` holds what looks like a person's name: an
+    initial and a capitalised word ("B. Kułacz"), or two capitalised words in a
+    row, none of them the vocabulary of a declarations page.
+
+    ``initials_only`` takes the first form alone, for a page title: titles carry
+    office and place names too ("Rada Miejska Chojnowa").
+    """
+    text = text or ""
     previous = False
-    for token in _TOKEN.findall(text or ""):
+    for match in _TOKEN.finditer(text):
+        token = match.group()
+        initial = len(token) == 1 and token.isupper() and text[match.end() :][:1] == "."
         name_like = (
             token[0].isupper() and len(token) > 1 and fold(token) not in _NOT_NAMES
         )
         if name_like and previous:
             return True
-        previous = name_like
+        previous = initial or (name_like and not initials_only)
     return False
 
 
@@ -252,6 +260,9 @@ def candidates(
         [s for s in seekers if s.name in title_names] if len(title_names) == 1 else []
     )
     page_declarations = bool(DECLARATION.search(title) or ASSETS.search(title))
+    # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
+    # 31.12.2025 r."): its files are theirs, whatever the labels say.
+    title_somebody = not title_names and names_somebody(page_title, initials_only=True)
     out: list[Candidate] = []
     for link in links:
         if not is_document_url(link.url):
@@ -303,6 +314,7 @@ def candidates(
         unnamed = (
             not named
             and not somebody_else
+            and not title_somebody
             and page_declarations
             and bool(ASSETS.search(around) or ASSETS.search(title))
             and is_file_link(link.url)
