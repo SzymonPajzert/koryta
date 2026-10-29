@@ -394,6 +394,7 @@ import {
   mdiGestureTapButton,
   mdiRefresh,
   mdiMessageAlertOutline,
+  mdiFileDocumentCheckOutline,
 } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { noteAdminTypeLabel, noteKindConfig } from "~/composables/notes";
@@ -434,6 +435,12 @@ const subpages = [
     to: "/admin/opinie",
     icon: mdiMessageAlertOutline,
     desc: "Opinie i błędy zgłoszone przyciskiem na stronie i przy sprawdzaniu QA.",
+  },
+  {
+    title: "Oświadczenia majątkowe",
+    to: "/admin/oswiadczenia",
+    icon: mdiFileDocumentCheckOutline,
+    desc: "Daty urodzenia odczytane z oświadczeń radnych: spory, niezgodności ze stroną i to, co automat dziś opublikował.",
   },
   {
     title: "QA",

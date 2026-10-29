@@ -113,6 +113,14 @@
               to="/admin/notatki"
               title="Notatki"
             />
+            <!-- The readings of BIP declarations: what is disputed, what the
+                 page contradicts, what the automation published today. -->
+            <v-list-item
+              v-if="isAdmin"
+              :prepend-icon="mdiFileDocumentCheckOutline"
+              to="/admin/oswiadczenia"
+              title="Oświadczenia majątkowe"
+            />
             <v-list-item
               v-if="isOwner"
               :prepend-icon="mdiSitemapOutline"
@@ -248,6 +256,7 @@ import {
   mdiSitemapOutline,
   mdiCogSyncOutline,
   mdiEmailFastOutline,
+  mdiFileDocumentCheckOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
