@@ -10,7 +10,8 @@ import {
   companyRequestSchema,
   type CompanyRequest as Request,
 } from "#shared/api";
-import { pageIsPublic, type EdgeType } from "#shared/model";
+import { asArray, pageIsPublic, type EdgeType } from "#shared/model";
+import { withOwnersFrom } from "#shared/companyCategories";
 import { edgeDocumentId, findEdge } from "~~/server/utils/edges";
 
 /** The site's „Skarb Państwa" node.
@@ -77,12 +78,19 @@ export default defineEventHandler(async (event) => {
   //
   // A human answer wins permanently, on the same terms as `isPublic` below:
   // the pipelines see PKD codes, and a code is a claim about activity, not
-  // about a sector.
-  if (
-    body.categories !== undefined &&
-    revisionData.categoriesSource !== "manual"
-  ) {
-    revisionData.categories = body.categories;
+  // about a sector. Only about the sectors, though. „Skarb Państwa” comes from
+  // Prokuratoria's list, which is no less right on a page somebody has edited,
+  // so the payload's owner replaces the stored one even there - PGE was pinned
+  // to „Energetyka” by hand before the category existed, and no upload could
+  // have filed it under the Treasury.
+  if (body.categories !== undefined) {
+    revisionData.categories =
+      revisionData.categoriesSource === "manual"
+        ? withOwnersFrom(
+            asArray<string>(revisionData.categories as string[] | undefined),
+            body.categories,
+          )
+        : body.categories;
   }
   // Which organ supervises the company, on the same terms as `categories`: an
   // empty string is a real answer and an absent one leaves the stored value

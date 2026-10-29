@@ -662,6 +662,99 @@ describe("api/ingest/company", () => {
     );
   });
 
+  /** A company whose categories a person set to `categories`. */
+  function storedPinned(categories: string[]) {
+    const ref = { id: "existing-id", parent: nodesParent };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          ref,
+          data: () => ({
+            categories,
+            categoriesSource: "manual",
+            published: true,
+          }),
+        },
+      ],
+    });
+    return ref;
+  }
+
+  it("takes Skarb Państwa from the list onto a company whose sectors a person set", async () => {
+    // PGE was pinned to „Energetyka” by hand before the owner category
+    // existed. The pin is for the sectors, which a reader judges better than
+    // PKD codes; the owner is Prokuratoria's list's to say. So the payload's
+    // owner goes over the person's sectors, and the payload's sectors do not.
+    mockReadBody.mockResolvedValue({
+      krs: "0000059307",
+      name: "PGE Polska Grupa Energetyczna",
+      categories: ["cieplownictwo", "skarb-panstwa"],
+    });
+    const existingRef = storedPinned(["energetyka"]);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      existingRef,
+      expect.objectContaining({
+        categories: ["energetyka", "skarb-panstwa"],
+        categoriesSource: "manual",
+      }),
+      expect.objectContaining({ automatic: true }),
+    );
+  });
+
+  it("gives the owner to a company a person filed under no sector", async () => {
+    // An empty pin says "none of these sectors" and nothing about who owns
+    // the company. OHZZ was pinned that way, and it is on the list.
+    mockReadBody.mockResolvedValue({
+      krs: "0000014381",
+      name: "Ośrodek Hodowli Zwierząt Zarodowych",
+      categories: ["skarb-panstwa"],
+    });
+    const existingRef = storedPinned([]);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      existingRef,
+      expect.objectContaining({ categories: ["skarb-panstwa"] }),
+      expect.objectContaining({ automatic: true }),
+    );
+  });
+
+  it("takes the owner off a pinned company the list no longer names", async () => {
+    // Following the list cuts both ways: a stake a later edition drops goes
+    // from a page somebody edited as it does from any other.
+    mockReadBody.mockResolvedValue({
+      krs: "0000059307",
+      name: "PGE Polska Grupa Energetyczna",
+      categories: [],
+    });
+    const existingRef = storedPinned(["energetyka", "skarb-panstwa"]);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      existingRef,
+      expect.objectContaining({ categories: ["energetyka"] }),
+      expect.objectContaining({ automatic: true }),
+    );
+  });
+
   it("stores the legal form and the organ the register names", async () => {
     // Both are carried for display on /eksploruj/szpitale. Neither decides
     // anything: what follows from the form about pay is `supervisoryBody`,
@@ -1393,6 +1486,24 @@ describe("api/ingest/company, re-run over a company nothing has changed", () => 
 
     expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ company: "updated" });
+  });
+
+  it("writes nothing over a pinned company whose owner the list already gave", async () => {
+    // The payload's sectors disagree with the person's, which is the pin
+    // doing its job rather than news, and the owner is the one stored.
+    mockReadBody.mockResolvedValue({
+      ...payload,
+      categories: ["skarb-panstwa"],
+    });
+    storedAs({
+      ...storedCompany,
+      categories: ["koleje", "skarb-panstwa"],
+      categoriesSource: "manual",
+    });
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).not.toHaveBeenCalled();
   });
 
   it("still writes a company whose counters nothing has filled in", async () => {

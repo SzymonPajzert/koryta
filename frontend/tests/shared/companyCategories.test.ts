@@ -5,7 +5,9 @@ import {
   categoryFilterUrl,
   categoryTitle,
   isKnownCategory,
+  isOwner,
   isSector,
+  withOwnersFrom,
 } from "../../shared/companyCategories";
 import { companyEditSchema } from "../../shared/api";
 
@@ -169,5 +171,48 @@ describe("isSector", () => {
     ]);
     expect(isSector("energetyka")).toBe(true);
     expect(isSector("hutnictwo")).toBe(false);
+  });
+});
+
+describe("isOwner", () => {
+  it("is Skarb Państwa alone, not everything that is not a sector", () => {
+    expect(companyCategoryValues.filter(isOwner)).toEqual(["skarb-panstwa"]);
+    // A value this build does not know is neither. Read as an owner, a new
+    // sector in a payload would land on a company a person had pinned.
+    expect(isOwner("hutnictwo")).toBe(false);
+  });
+});
+
+describe("withOwnersFrom", () => {
+  it("keeps the sectors and takes the owner from the other side", () => {
+    // PGE, pinned to „Energetyka” by hand: the payload's own sectors do not
+    // get past the pin, its owner does.
+    expect(
+      withOwnersFrom(["energetyka"], ["cieplownictwo", "skarb-panstwa"]),
+    ).toEqual(["energetyka", "skarb-panstwa"]);
+  });
+
+  it("drops an owner the other side does not name", () => {
+    // A stake the list stops naming goes from a page somebody edited too.
+    expect(
+      withOwnersFrom(["energetyka", "skarb-panstwa"], ["energetyka"]),
+    ).toEqual(["energetyka"]);
+  });
+
+  it("gives a company filed under no sector its owner", () => {
+    // An empty pin says "none of these sectors" and nothing about the owner.
+    expect(withOwnersFrom([], ["skarb-panstwa"])).toEqual(["skarb-panstwa"]);
+  });
+
+  it("files the owner after the sectors, wherever it stood", () => {
+    expect(
+      withOwnersFrom(["skarb-panstwa", "koleje"], ["skarb-panstwa"]),
+    ).toEqual(["koleje", "skarb-panstwa"]);
+  });
+
+  it("keeps a value this build does not know on the sectors' side", () => {
+    expect(
+      withOwnersFrom(["lotniska"], ["hutnictwo", "skarb-panstwa"]),
+    ).toEqual(["lotniska", "skarb-panstwa"]);
   });
 });

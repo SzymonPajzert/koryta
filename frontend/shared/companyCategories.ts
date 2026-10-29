@@ -1,11 +1,11 @@
 /** The categories a company can be filed under - its sectors, and after
  * them one owner (see `isSector`) - and what to call them.
  *
- * This is the list the category filter on /eksploruj offers and the edit form
- * puts in its dropdown. It is *only* the vocabulary: which companies belong to
- * which sector is decided by the pipelines, in
- * `data/pipelines/src/entities/company_categories.py`, and arrives on the node
- * through `/api/ingest/company`.
+ * This is the list the category filter on /eksploruj offers, and less its
+ * owner, the one the edit form puts in its dropdown. It is *only* the
+ * vocabulary: which companies belong to which sector is decided by the
+ * pipelines, in `data/pipelines/src/entities/company_categories.py`, and
+ * arrives on the node through `/api/ingest/company`.
  *
  * The order matches `COMPANY_CATEGORIES` in the pipelines, because that is the
  * order a company's categories are stored in and the filter reads better when
@@ -23,7 +23,9 @@
  * `categories` is a node field like any other from here on: revisioned, shown
  * in the edit form, and once a person has set it, marked
  * `categoriesSource: "manual"` so the next ingest leaves it alone - the same
- * contract `isPublic` and `isPublicSource` already have.
+ * contract `isPublic` and `isPublicSource` already have. Its sectors, that is:
+ * the owner follows Prokuratoria's list whatever a person set, and the edit
+ * form does not offer it (see `withOwnersFrom`).
  */
 
 export const companyCategories = [
@@ -93,5 +95,35 @@ const OWNERS: readonly string[] = ["skarb-panstwa"];
 
 /** Whether `value` is a sector the site offers, not an owner. */
 export function isSector(value: string): value is CompanyCategory {
-  return isKnownCategory(value) && !OWNERS.includes(value);
+  return isKnownCategory(value) && !isOwner(value);
+}
+
+/** Whether `value` says who owns a company. Not the same as `!isSector`: a
+ * value this list does not know is neither. */
+export function isOwner(value: string): boolean {
+  return OWNERS.includes(value);
+}
+
+/** `categories` with its owners swapped for the ones in `ownersFrom`.
+ *
+ * The field holds two kinds of fact that answer to different authorities. A
+ * sector is a judgement, and a person who corrects it on the page outranks the
+ * pipelines, which see only PKD codes - that is what `categoriesSource:
+ * "manual"` pins. An owner is not a judgement: „Skarb Państwa” is whatever
+ * Prokuratoria's list of the Treasury's stakes says, and a pin set for the
+ * sectors must not freeze it (Szymon, 2026-10-28). So `/api/ingest/company`
+ * lays the payload's owners over a person's sectors, and
+ * `/api/revisions/create` lays the stored owners over a person's proposal.
+ *
+ * Owners go last, where the pipelines file them. Everything that is not an
+ * owner stays on the `categories` side, a value this build does not know
+ * included. */
+export function withOwnersFrom(
+  categories: readonly string[],
+  ownersFrom: readonly string[],
+): string[] {
+  return [
+    ...categories.filter((value) => !isOwner(value)),
+    ...ownersFrom.filter(isOwner),
+  ];
 }

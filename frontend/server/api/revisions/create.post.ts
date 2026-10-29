@@ -8,7 +8,8 @@ import {
   sanitizeFirestoreData,
   withSeededNodeStats,
 } from "~~/server/utils/revisions";
-import { revisionIsPending } from "~~/shared/model";
+import { asArray, revisionIsPending } from "~~/shared/model";
+import { withOwnersFrom } from "~~/shared/companyCategories";
 import {
   editSchemas,
   proposableNodeTypes,
@@ -80,7 +81,17 @@ export default defineEventHandler(async (event) => {
     // difference outranks them. Checked against `undefined` rather than for
     // truthiness: an empty array is a person saying "none of these", and it
     // has to pin the field just as firmly as a non-empty one.
+    //
+    // What it pins is the sectors. The owner, „Skarb Państwa”, is
+    // Prokuratoria's list's to say, so a proposal keeps whatever the entry
+    // carries now, and what it says on the subject is dropped. The form no
+    // longer offers the value; this is what holds for a tab opened before it
+    // stopped, or a request made by hand.
     if (dataFields.categories !== undefined) {
+      dataFields.categories = withOwnersFrom(
+        dataFields.categories as string[],
+        asArray<string>(baseFields.categories as string[] | undefined),
+      );
       dataFields.categoriesSource = "manual";
     }
 
