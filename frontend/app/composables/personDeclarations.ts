@@ -13,7 +13,11 @@ export const DECLARATIONS_ANCHOR = "oswiadczenia-majatkowe";
  * Asked for in the browser only and never awaited: it is a footnote to the
  * page, all `data-nosnippet`, and must not hold up the rest of it. The
  * endpoint answers 404 for a page that is not public or has nothing to show,
- * which here is simply nothing. */
+ * which here is simply nothing.
+ *
+ * `dedupe: "defer"`: the line and the section mount in one pass, and under
+ * the default ("cancel") the second one's first fetch cancelled the first
+ * one's and asked again - two requests a page view, the first thrown away. */
 export function usePersonDeclarations(nodeId: string) {
   return useAsyncData<PersonDeclarations | null>(
     `person-declarations-${nodeId}`,
@@ -21,7 +25,7 @@ export function usePersonDeclarations(nodeId: string) {
       authRequest<PersonDeclarations>(`/api/nodes/${nodeId}/declarations`, {
         method: "GET",
       }).catch(() => null),
-    { server: false, lazy: true },
+    { server: false, lazy: true, dedupe: "defer" },
   );
 }
 
