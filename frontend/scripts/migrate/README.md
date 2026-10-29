@@ -85,8 +85,9 @@ category immediately and finds nothing under it until either the company upload
 runs again or this does. It holds no mapping of its own: point it with
 `--input` at a file of `{krs, categories}` records, which is the shape
 `CompaniesPayloads` emits, so it needs no edit when the rules change. Each
-change is filed as a revision rather than written past one, and a node a person
-has edited (`categoriesSource: "manual"`) is left alone.
+change is filed as a revision rather than written past one, and on a node a
+person has edited (`categoriesSource: "manual"`) only the owner, „Skarb
+Państwa”, is brought in line: the sectors are theirs.
 
 It replaced `recompute-company-categories.ts`, which derived the categories
 itself from the PKD codes on the node. That could not survive the mapping

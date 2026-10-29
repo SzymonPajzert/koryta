@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { asArray } from "../../shared/model";
-import { companyCategories } from "../../shared/companyCategories";
+import {
+  companyCategories,
+  withOwnersFrom,
+} from "../../shared/companyCategories";
 
 /**
  * Bring `categories` on company nodes in line with what the pipelines say.
@@ -34,9 +37,12 @@ import { companyCategories } from "../../shared/companyCategories";
  * thing for `isPublic` and is the model for this.
  *
  * What it will not do:
- *   - touch a node carrying `categoriesSource: "manual"`. A person has answered
- *     for that company and the pipelines do not outrank them; this is the same
- *     contract `/api/ingest/company` follows.
+ *   - change the sectors of a node carrying `categoriesSource: "manual"`. A
+ *     person has answered for that company and the pipelines do not outrank
+ *     them; this is the same contract `/api/ingest/company` follows, and like
+ *     it, this still brings the owner in line there: „Skarb Państwa” comes
+ *     from Prokuratoria's list, not from anybody's reading of the company
+ *     (see `withOwnersFrom`).
  *   - write a company whose stored set already matches. Re-running when nothing
  *     changed writes nothing.
  *   - invent a category. A value the site does not offer is reported and
@@ -139,7 +145,10 @@ function readInput(path: string): Map<string, string[]> {
 type Stats = {
   matched: number;
   unchanged: number;
+  /** Matched nodes a person has edited, whatever happened to them. */
   manual: number;
+  /** Of those, the ones whose owner the file changes. Counted in `changed`. */
+  manualOwner: number;
   changed: number;
   unknownCategory: number;
   notOnSite: number;
@@ -162,6 +171,7 @@ async function main() {
     matched: 0,
     unchanged: 0,
     manual: 0,
+    manualOwner: 0,
     changed: 0,
     unknownCategory: 0,
     notOnSite: 0,
@@ -181,29 +191,35 @@ async function main() {
     seen.add(krs);
     stats.matched++;
 
-    if (data.categoriesSource === "manual") {
-      stats.manual++;
-      continue;
-    }
-
-    const unknown = derived.filter((value) => !KNOWN_CATEGORIES.has(value));
-    if (unknown.length > 0) {
-      stats.unknownCategory++;
-      console.warn(
-        `  ${data.name}: pipeline sent unknown categories [${unknown.join(", ")}] - add them to shared/companyCategories.ts first. Skipping.`,
-      );
-      continue;
-    }
-
     const stored = asArray<string>(data.categories);
-    if (sameSet(stored, derived)) {
+    const pinned = data.categoriesSource === "manual";
+    let target: string[];
+    if (pinned) {
+      // Only the owner is taken from the file, and an owner is a value the
+      // site knows, so there is nothing unknown to check for here.
+      stats.manual++;
+      target = withOwnersFrom(stored, derived);
+    } else {
+      const unknown = derived.filter((value) => !KNOWN_CATEGORIES.has(value));
+      if (unknown.length > 0) {
+        stats.unknownCategory++;
+        console.warn(
+          `  ${data.name}: pipeline sent unknown categories [${unknown.join(", ")}] - add them to shared/companyCategories.ts first. Skipping.`,
+        );
+        continue;
+      }
+      target = derived;
+    }
+
+    if (sameSet(stored, target)) {
       stats.unchanged++;
       continue;
     }
 
     stats.changed++;
+    if (pinned) stats.manualOwner++;
     console.log(
-      `  ${data.name}: [${stored.join(", ") || "-"}] -> [${derived.join(", ") || "-"}]`,
+      `  ${data.name}: [${stored.join(", ") || "-"}] -> [${target.join(", ") || "-"}]${pinned ? " (pinned by a person: the owner only)" : ""}`,
     );
     if (!commit) continue;
 
@@ -215,7 +231,7 @@ async function main() {
     for (const [key, value] of Object.entries(data)) {
       if (!INTERNAL_FIELDS.has(key)) revisionData[key] = value;
     }
-    revisionData.categories = derived;
+    revisionData.categories = target;
 
     const revisionRef = db.collection("revisions").doc();
     batch.set(revisionRef, {
@@ -241,7 +257,7 @@ async function main() {
     // whatever this script did not happen to carry. `revision_id` is repointed
     // only where the node already had an approved revision; a draft stays a
     // draft.
-    const update: Record<string, unknown> = { categories: derived };
+    const update: Record<string, unknown> = { categories: target };
     if (data.revision_id) update.revision_id = revisionRef;
     batch.update(doc.ref, update);
 
@@ -259,8 +275,10 @@ async function main() {
 
   console.log("");
   console.log(`  matched on the site:       ${stats.matched}`);
+  console.log(
+    `    pinned by a person:      ${stats.manual}, sectors kept (${stats.manualOwner} with a new owner)`,
+  );
   console.log(`  already correct:           ${stats.unchanged}`);
-  console.log(`  pinned by a person:        ${stats.manual}`);
   console.log(`  unknown category, skipped: ${stats.unknownCategory}`);
   console.log(`  in the file, not on site:  ${stats.notOnSite}`);
   console.log(

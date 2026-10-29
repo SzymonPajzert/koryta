@@ -175,6 +175,90 @@ describe("api/revisions/create, place edits", () => {
     expect(writtenRevision().data).not.toHaveProperty("categoriesSource");
   });
 
+  it("keeps the owner the entry carries, whatever the proposal says of it", async () => {
+    // „Skarb Państwa” follows Prokuratoria's list, so what a person proposes
+    // is the sectors. A tab opened before the form stopped offering the owner
+    // can still send it - here unticked, beside a sector added.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "PGE Polska Grupa Energetyczna",
+      categories: ["energetyka", "skarb-panstwa"],
+      categoriesSource: "manual",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "pge",
+      name: "PGE Polska Grupa Energetyczna",
+      categories: ["energetyka", "cieplownictwo"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      categories: ["energetyka", "cieplownictwo", "skarb-panstwa"],
+      categoriesSource: "manual",
+    });
+  });
+
+  it("does not let a proposal file a company under the Treasury", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Wodociągi Miasta Krakowa",
+      categories: ["wodociagi"],
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "wodociagi-krakow",
+      name: "Wodociągi Miasta Krakowa",
+      categories: ["wodociagi", "skarb-panstwa"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    // Still filed: it states the sectors, which pins them.
+    expect(writtenRevision().data).toMatchObject({
+      categories: ["wodociagi"],
+      categoriesSource: "manual",
+    });
+  });
+
+  it("gives a proposed new company no owner", async () => {
+    // There is no entry to keep one from, and the list is what gives one.
+    mockReadBody.mockResolvedValue({
+      type: "place",
+      name: "Nowa Spółka",
+      categories: ["skarb-panstwa"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({ categories: [] });
+  });
+
+  it("turns down a proposal that changes nothing but the owner", async () => {
+    // Unticking „Skarb Państwa” in an old tab is the one way to send it, and
+    // what it asks for is not the proposal's to give.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "PGE Polska Grupa Energetyczna",
+      categories: ["energetyka", "skarb-panstwa"],
+      categoriesSource: "manual",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "pge",
+      name: "PGE Polska Grupa Energetyczna",
+      categories: ["energetyka"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Ta propozycja niczego nie zmienia - wpis już to zawiera.",
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
   it("marks a person's parties as decided by hand", async () => {
     // `ingest/person` unions the parties it was handed into the stored ones,
     // so without the marker a removal is undone by the next nightly run.
