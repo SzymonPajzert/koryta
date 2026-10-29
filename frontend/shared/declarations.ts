@@ -514,34 +514,156 @@ export function nameFitsPage(readName: string, pageName: string): boolean {
 // What the pages are sent
 // ---------------------------------------------------------------------------
 
-/** A crop to read, as /oswiadczenia gets it. Nothing about whose it is beyond
- * the office it was filed for, and no date from anywhere. */
+/** A crop to read, as /oswiadczenia gets it.
+ *
+ * Read blind: nothing about whose it is beyond the unit and office it was
+ * filed for, no date from anywhere, and not even the link to the whole form,
+ * which names the person - a reader who looked them up on the site could copy
+ * the page's date instead of reading the crop, and that is exactly the
+ * agreement that publishes. The link comes back with the answer. */
 export type DeclarationTask = {
   id: string;
-  /** The unit and office, e.g. "Rada Gminy Strzelin". */
+  /** The unit, e.g. "Strzelin (gmina miejsko-wiejska)". */
   unit: string;
   office: LocalOffice | null;
   declarationYear: number | null;
-  /** The declaration on BIP, for a reader who wants the whole form. */
-  documentUrl: string;
-  host: string;
   /** data: URLs, because an <img> cannot send the reader's token. */
   images: { date: string; name: string | null };
+  imageSize: {
+    date: { width: number; height: number };
+    name: { width: number; height: number } | null;
+  };
 };
 
+/** `GET /api/declarations/next?count=N`: the crop to read now, and up to
+ * N-1 more after it (N at most 5), so the next one shows without a wait. */
 export type DeclarationQueue = {
   task: DeclarationTask | null;
+  upcoming: DeclarationTask[];
   /** Crops still waiting for a reader, and what this reader has done. */
   open: number;
   mine: { today: number; total: number };
 };
 
+/** `POST /api/declarations/<id>/answer`. */
+export type DeclarationAnswer = {
+  verdict: AnswerVerdict;
+  /** `YYYY-MM-DD` or `YYYY`, as `parseTypedDate` reads the reader's typing. */
+  value?: string | null;
+  name?: string | null;
+};
+
 export type DeclarationAnswerResult = DeclarationQueue & {
   /** Whether this answer settled the crop it answered. */
   settled: boolean;
+  /** The crop just answered, now that it was read blind: the whole form on
+   * BIP, for a reader who wants to see it. */
+  answered: { id: string; documentUrl: string; host: string | null };
 };
 
-/** What a published person's page says about their declarations. */
+/** Why a page whose date matches was not published automatically. Each is
+ * somebody's decision the automation must not overrule, or a doubt it cannot
+ * settle itself. */
+export const publicationHoldReasons = [
+  "two_pages",
+  "needs_split",
+  "kept_hidden",
+  "pending_proposal",
+  "name_differs",
+  "no_candidacy_on_page",
+  "ambiguous_candidacy",
+  "two_places",
+] as const;
+export type PublicationHoldReason = (typeof publicationHoldReasons)[number];
+
+/** A crop on an admin list: what readers typed, and the pages it is for. */
+export type DeclarationReviewRow = {
+  id: string;
+  unit: string;
+  office: LocalOffice | null;
+  declarationYear: number | null;
+  documentUrl: string;
+  status: ExtractStatus;
+  /** Readers' readings, most first. Admins only: readers never see these. */
+  readings: { value: string; readers: number }[];
+  unreadable: number;
+  agreed: string | null;
+  machine: { birthDate: string | null; confidence: string | null } | null;
+  /** The pages, with the date each stores: admins compare them. */
+  people: {
+    id: string;
+    name: string;
+    published: boolean;
+    birthDate: string | null;
+  }[];
+  updatedAt: string;
+};
+
+/** A person the automation published, queued or held. */
+export type DeclarationPublicationRow = {
+  personId: string;
+  name: string;
+  status: "queued" | "published" | "held";
+  reason: PublicationHoldReason | null;
+  at: string;
+  unit: string;
+  documentUrl: string;
+  /** Relations that went live with the page, and those held back. */
+  edges: { published: number; held: number };
+};
+
+/** Everything /admin/oswiadczenia shows, counted when asked. */
+export type DeclarationOverview = {
+  at: string;
+  /** People published automatically a day; 0 means switched off. */
+  dailyLimit: number;
+  candidacies: {
+    total: number;
+    /** Distinct pages the candidacies are for. */
+    people: number;
+    byStatus: Record<CandidacyStatus, number>;
+    notFound: { reason: string; count: number }[];
+  };
+  extracts: {
+    total: number;
+    byStatus: Record<ExtractStatus, number>;
+    failed: { reason: string; count: number }[];
+  };
+  readers: {
+    answers: number;
+    readers: number;
+    /** The last 30 Warsaw days, oldest first. */
+    days: { day: string; answers: number; settled: number }[];
+  };
+  /** What settled readings said about the pages they are for. */
+  pages: {
+    same: number;
+    different: number;
+    noDate: number;
+    /** Same date, page already public. */
+    confirmed: number;
+  };
+  publications: {
+    queued: number;
+    published: number;
+    held: number;
+    /** Published today (Warsaw), against `dailyLimit`. */
+    today: number;
+    heldBy: { reason: PublicationHoldReason; count: number }[];
+  };
+  lists: {
+    disputed: DeclarationReviewRow[];
+    different: DeclarationReviewRow[];
+    held: DeclarationPublicationRow[];
+    recent: DeclarationPublicationRow[];
+  };
+  /** Uploads, newest first. */
+  runs: { tag: string; runId: string | null; extracts: number; at: string }[];
+};
+
+/** What a published person's page says about their declarations. A 404, never
+ * an empty answer, for a page that is not public: an empty 200 would be cached
+ * for hours and outlive the publication. */
 export type PersonDeclarations = {
   /** Set when the site published the page itself. */
   autoPublished: { at: string } | null;
