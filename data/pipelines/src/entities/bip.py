@@ -2,9 +2,55 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
+
+
+@dataclass
+class BipPersonOfInterest:
+    """One won local candidacy to look up on the unit's BIP.
+
+    A row is PKW's candidacy - the name as PKW printed it, the unit, the office
+    and the year - with the koryta pages and rejestr.io entries that carry it.
+    Two register entries of one person stay two (a rejestr.io entry is one
+    person, never merged), and both point at the same candidacy here, so the
+    crawler looks for the declaration once. ``key`` is stable across rebuilds:
+    it hashes the candidacy, not the people.
+
+    ``teryt`` is PKW's six digits for the unit the seat belongs to: ``WWPPGG`` a
+    gmina (a Warsaw dzielnica for „Rada dzielnicy”), ``WWPP00`` a powiat,
+    ``WW0000`` a województwo; ``unit_level`` says which. ``namesakes`` counts the
+    other winners of that name in the unit and year: above zero, the name alone
+    does not say whose declaration a link is.
+
+    Nearly every KRS person has a register birth date (``register_birth_dates``),
+    so for most rows the declaration's date is evidence that PKW's candidate and
+    the register's person are one human, not a new fact; it is a new fact for a
+    page that shows none (``page_birth_date``). ``priority`` orders the crawl by
+    that: 0 a published page with no birth date, 1 a draft page with none, 2 a
+    page with one, 3 a person not on the site yet.
+    """
+
+    key: str
+    full_name: str
+    first_name: str
+    last_name: str
+    teryt: str
+    unit_level: str
+    office: str
+    election_year: int
+    priority: int
+    middle_name: str | None = None
+    pkw_age: int | None = None
+    pkw_birth_year: int | None = None
+    namesakes: int = 0
+    on_site: bool = False
+    published: bool = False
+    page_birth_date: str | None = None
+    koryta_ids: list[str] = field(default_factory=list)
+    rejestrio_ids: list[str] = field(default_factory=list)
+    register_birth_dates: list[str] = field(default_factory=list)
 
 
 @dataclass
