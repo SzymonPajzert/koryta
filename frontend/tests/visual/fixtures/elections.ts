@@ -47,7 +47,7 @@ function runsFor(ids: string[]) {
 
 /** The people the subgraph request is about: the one in its path, then the
  * rest of the page's rows in its body. */
-function askedAbout(route: Route): string[] {
+export function askedAbout(route: Route): string[] {
   const first = new URL(route.request().url()).pathname.split("/").pop()!;
   const body = route.request().postDataJSON() as { subjects?: string } | null;
   return [first, ...(body?.subjects ?? "").split(",").filter(Boolean)];
@@ -67,9 +67,14 @@ export async function answerForTheElection(page: Page) {
       url.searchParams.delete("election");
       url.searchParams.delete("electionResult");
       url.searchParams.set("place", STAND_IN);
-      await route.fulfill({
-        response: await route.fetch({ url: url.toString() }),
-      });
+      // Without the company the answer was asked for in place of the
+      // election: `matched` is what the table marks its rows' companies
+      // from, and an election filter matches no company.
+      const response = await route.fetch({ url: url.toString() });
+      const answer = (await response.json()) as Record<string, unknown>;
+      delete answer.matched;
+      delete answer.matchedPlaces;
+      await route.fulfill({ response, json: answer });
     },
   );
   await page.route("**/api/graph/local/**", async (route) => {
