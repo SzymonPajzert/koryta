@@ -7,6 +7,7 @@ import {
   declarationIngestSchema,
   extractId,
   isPng,
+  machineSettles,
   MAX_IMAGE_BYTES,
   MAX_REQUEST_IMAGE_BYTES,
   pngSize,
@@ -170,10 +171,8 @@ export default defineEventHandler(async (event) => {
     if (!namesItsPerson(extract, candidacies)) return skip("unconfirmed_name");
 
     const images = decoded.get(i);
-    if (extract.outcome === "crop") {
-      if (!images?.date) return skip("no_images");
-      if (images.bad) return skip("bad_image");
-    }
+    if (extract.outcome === "crop" && !images?.date) return skip("no_images");
+    if (extract.outcome !== "failed" && images?.bad) return skip("bad_image");
 
     const snapshot = storedExtracts[i];
     const existing = snapshot?.exists
@@ -182,7 +181,7 @@ export default defineEventHandler(async (event) => {
     const answered = Number(existing?.answerCount ?? 0) > 0;
     const ref = extractRefs[i]!;
     const imageHash =
-      extract.outcome === "crop" && images?.date ? hashOf(images) : null;
+      extract.outcome !== "failed" && images?.date ? hashOf(images) : null;
     // The same picture again costs nothing; a new one replaces the old only
     // while nobody has answered it.
     const writeImages =
@@ -302,20 +301,26 @@ function namesItsPerson(
 
 /** The reading fields: seeded on the first write, so the queue's
  * `status == "open"` query can find the crop (Firestore never matches an
- * absent field), and left alone afterwards except to let a crop that was cut
- * again come back from `failed` - or go there - before anybody answered it. */
+ * absent field), and left alone afterwards except while nobody has answered:
+ * a file cut again may come back from `failed` or go there, and a typed date
+ * the job reads with high confidence settles the crop without readers. */
 function readingState(
   extract: DeclarationExtractInput,
   existing: Record<string, unknown> | undefined,
   now: Timestamp,
 ): Record<string, unknown> {
-  const status = extract.outcome === "failed" ? "failed" : "open";
+  const settled = machineSettles(extract.machine);
+  const status =
+    extract.outcome === "failed" ? "failed" : settled ? "agreed" : "open";
+  const agreed = settled
+    ? { value: settled, kind: "date", by: "machine", at: now }
+    : null;
   if (!existing) {
     return {
       status,
       answerCount: 0,
       answers: {},
-      agreed: null,
+      agreed,
       // Spreads concurrent readers over the queue without offsets.
       rand: Math.random(),
       createdAt: now,
@@ -323,7 +328,9 @@ function readingState(
   }
   const answered = Number(existing.answerCount ?? 0) > 0;
   const movable = existing.status === "open" || existing.status === "failed";
-  return !answered && movable && existing.status !== status ? { status } : {};
+  return !answered && movable && existing.status !== status
+    ? { status, agreed }
+    : {};
 }
 
 /** The units the crop is evidence for: the candidacies' unit, office and

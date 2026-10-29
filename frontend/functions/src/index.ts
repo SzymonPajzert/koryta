@@ -164,6 +164,15 @@ export const scheduledFirestoreExport = onSchedule(
           // when the collection shipped, so `tests/pipelines/test_audit.py`
           // has been reading an empty list and passing vacuously ever since.
           "audit",
+          // BIP declarations, without the crops and without who answered
+          // what (declarationExtractImages and declarationAnswers stay out):
+          // the settled readings, the searches and what was published. The
+          // pipeline's join reads them to propose a birth date where the
+          // page has none - the site never holds the register's date for
+          // those, and the BIP side must never carry it.
+          "declarationCandidacies",
+          "declarationExtracts",
+          "declarationPublications",
         ],
       });
 
