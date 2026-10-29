@@ -349,11 +349,13 @@ test.describe("Correcting a relation", () => {
     page,
   }) => {
     test.setTimeout(180_000);
-    // The queue and the profile stay in parity - see
-    // .claude/skills/relation-surfaces/SKILL.md.
+    // The queue draws the person's own page under its row, so this is the
+    // profile's pencil, reached without leaving the queue.
     await logIn(page, USERS.admin, `/eksploruj/nowe?minVotes=${QUEUE_SCORE}`);
 
-    const relations = page.getByTestId("explore-relations");
+    const relations = page
+      .getByTestId("queue-person-page")
+      .getByTestId("relations-history");
     await expect(relations.getByText(`Spolka Poprawiana ${stamp}`)).toBeVisible(
       { timeout: 30_000 },
     );

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { mockNuxtImport } from "@nuxt/test-utils/runtime";
 import { computed, ref } from "vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
@@ -11,7 +12,7 @@ const vuetify = createVuetify({ components, directives });
 
 // The route query is what the filters read and write, so it is a live object
 // the tests rewrite between mounts rather than a fixed one.
-const { routeQuery, lastQuery, items, authUser, edges } = vi.hoisted(() => ({
+const { routeQuery, lastQuery, items, authUser } = vi.hoisted(() => ({
   routeQuery: { value: {} as Record<string, string> },
   lastQuery: { value: null as { value: Query } | null },
   // What the list composable hands back. Empty unless a test asks for a
@@ -21,10 +22,11 @@ const { routeQuery, lastQuery, items, authUser, edges } = vi.hoisted(() => ({
   // hoisted box rather than a fixed mock return, because `vi.mock` is lifted
   // above anything this file defines and the tests need to change it.
   authUser: { value: null as { getIdTokenResult: () => unknown } | null },
-  // The focused person's relations. Empty by default: the card is behind a
-  // `v-if` on there being any, so a test that wants to look at it has to say so.
-  edges: { value: [] as Record<string, unknown>[] },
 }));
+
+/** What the page asked of the tab. */
+const head = vi.hoisted(() => vi.fn());
+mockNuxtImport("useHead", () => head);
 
 vi.mock("vue-router", async (importOriginal) => {
   const actual = await importOriginal<typeof import("vue-router")>();
@@ -64,16 +66,6 @@ vi.mock("~~/app/composables/entity/listWithStats", () => ({
   }),
 }));
 
-vi.mock("~/composables/edges", () => ({
-  useEdges: vi.fn(() =>
-    Promise.resolve({
-      sources: ref(edges.value),
-      targets: ref([]),
-      refresh: vi.fn(),
-    }),
-  ),
-}));
-
 // Auto-imported, so a `vi.stubGlobal` would not be consulted: the page reaches
 // them through the module Nuxt resolved at build time.
 vi.mock("~/composables/companyLocations", () => ({
@@ -81,12 +73,6 @@ vi.mock("~/composables/companyLocations", () => ({
     companyRegions: ref({}),
     companyLocations: ref({}),
     regions: ref({}),
-  })),
-}));
-vi.mock("~/composables/personPlaces", () => ({
-  usePersonPlaces: vi.fn(() => ({
-    workLocations: ref([]),
-    mapLocations: ref([]),
   })),
 }));
 
@@ -124,29 +110,14 @@ async function mountPage(query: Record<string, string> = {}) {
           ClientOnly: { template: "<div><slot></slot></div>" },
           ExploreProgressBar: true,
           ExploreTable: true,
-          ExploreProposeChange: true,
-          CardExplorePerson: true,
-          CardEmploymentHistory: true,
-          ChartPersonLocations: true,
-          NoteEditor: true,
+          // The person's own page, which fetches everything it draws.
+          EntityDetailView: true,
         },
       },
     },
   );
   await flushPromises();
   return wrapper;
-}
-
-/** One relation of the focused person, enough for the card to draw a row. */
-function relation() {
-  return {
-    id: "edge-1",
-    type: "employed",
-    label: "Zatrudniony/a w",
-    source: "company-1",
-    target: "person-1",
-    richNode: { id: "company-1", type: "place", name: "Orlen" },
-  };
 }
 
 function currentQuery(): Query {
@@ -159,7 +130,6 @@ describe("/eksploruj/nowe", () => {
     lastQuery.value = null;
     items.value = [];
     authUser.value = null;
-    edges.value = [];
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -395,55 +365,52 @@ describe("/eksploruj/nowe", () => {
     ).toBe(false);
   });
 
-  /** The queue is where a wrongly merged person is most likely to be caught, so
-   * it carries the same admin control as the profile - see
-   * `.claude/skills/relation-surfaces/SKILL.md` on keeping this page and
-   * /eksploruj/tabela in parity. */
-  it("offers an admin the removal on the relations card", async () => {
-    authUser.value = {
-      getIdTokenResult: () => Promise.resolve({ claims: { admin: true } }),
-    };
-    items.value = [{ id: "person-1", name: "Testowa Osoba", type: "person" }];
-    edges.value = [relation()];
-
-    const wrapper = await mountPage();
-    await flushPromises();
-
-    expect(
-      wrapper
-        .findComponent({ name: "CardEmploymentHistory" })
-        .props("canRemove"),
-    ).toBe(true);
-  });
-
-  it("does not offer it to a contributor who is not an admin", async () => {
-    authUser.value = {
-      getIdTokenResult: () => Promise.resolve({ claims: {} }),
-    };
-    items.value = [{ id: "person-1", name: "Testowa Osoba", type: "person" }];
-    edges.value = [relation()];
-
-    const wrapper = await mountPage();
-    await flushPromises();
-
-    expect(
-      wrapper
-        .findComponent({ name: "CardEmploymentHistory" })
-        .props("canRemove"),
-    ).toBeFalsy();
-  });
-
-  it("puts the relations above the person card and the notes", async () => {
+  /** The person the queue is on, drawn by their own page rather than by cards
+   * built for the queue - those kept falling behind the profile. */
+  it("shows the person's own page under the table", async () => {
     items.value = [{ id: "person-1", name: "Testowa Osoba", type: "person" }];
     const wrapper = await mountPage();
 
+    const view = wrapper.findComponent({ name: "EntityDetailView" });
+    expect(view.props()).toMatchObject({ node: "person-1", type: "person" });
     const html = wrapper.html();
-    const relations = html.indexOf("explore-relations");
-    const person = html.indexOf("card-explore-person-stub");
-    const notes = html.indexOf("note-editor-stub");
+    expect(html.indexOf("entity-detail-view-stub")).toBeGreaterThan(
+      html.indexOf("explore-table-stub"),
+    );
+  });
 
-    expect(relations).toBeGreaterThan(-1);
-    expect(person).toBeGreaterThan(relations);
-    expect(notes).toBeGreaterThan(relations);
+  it("draws no page while the queue is empty", async () => {
+    const wrapper = await mountPage();
+
+    expect(wrapper.findComponent({ name: "EntityDetailView" }).exists()).toBe(
+      false,
+    );
+  });
+
+  it("ticks „Notatka” and „Głos” off on what the reader does on the page", async () => {
+    items.value = [{ id: "person-1", name: "Testowa Osoba", type: "person" }];
+    const wrapper = await mountPage();
+
+    const view = wrapper.findComponent({ name: "EntityDetailView" });
+    view.vm.$emit("noted");
+    view.vm.$emit("voted");
+    await flushPromises();
+
+    const steps = wrapper.get('[data-testid="explore-steps"]');
+    expect(steps.findAll("li.step--done").map((s) => s.text())).toEqual([
+      "Notatka",
+      "Głos",
+    ]);
+  });
+
+  /** The page under the table names the tab after the person, as it does on
+   * the profile. The tab belongs to the queue. */
+  it("keeps the queue's title on the tab", async () => {
+    await mountPage();
+
+    expect(head).toHaveBeenCalledWith(
+      { title: "Eksploruj Nowe - koryta.pl" },
+      { tagPriority: "high" },
+    );
   });
 });

@@ -13,7 +13,7 @@ one usually belongs on the others.
 | Person page                  | `card/EmploymentHistory.vue`          | `EntityDetailView.vue`                                 |
 | Region page                  | `card/ConnectionList` + `ShortNode`   | `EntityDetailView.vue`                                 |
 | Company page                 | `card/EmploymentHistory` + `ConnectionList` | `place/DetailView.vue`                           |
-| `/eksploruj/nowe`            | `card/EmploymentHistory.vue`          | `pages/eksploruj/nowe.vue`                             |
+| `/eksploruj/nowe`            | the person page, whole                | `EntityDetailView.vue`, in `pages/eksploruj/nowe.vue`  |
 | `/eksploruj/tabela`, `/admin/notatki` | `card/EmploymentHistory.vue` | `explore/NodeDrawer.vue`                               |
 
 An **article** (`article/DetailView.vue`) and a **topic**
@@ -33,9 +33,15 @@ to do too - in its own shape, not by copying the layout.** A control that lives
 in the drawer on `tabela` may be an inline button on `nowe`; what must not differ
 is whether the capability exists at all.
 
-They are hosted differently, which is the trap: `tabela` and `/admin/notatki`
-both go through `explore/NodeDrawer.vue`, so a change there covers two pages and
-misses `nowe`, which renders the same card directly. Check both hosts.
+They are hosted differently, which is the trap. `nowe` draws the person page
+itself under its one-row table, so whatever the profile gains, the queue has
+the same day. It used to draw its own copy of the relations card, the notes and
+a person card, and that copy kept falling behind the profile (adding a relation,
+citing one, who held the seat before, the articles and the facts were all
+missing). `tabela` and `/admin/notatki` both go through
+`explore/NodeDrawer.vue`, which is still kept up by hand: a capability added to
+the person page is not in the drawer until somebody puts it there. Check the
+drawer.
 
 ## What a row can do, and who may do it
 
@@ -62,9 +68,8 @@ removal and an addition, each with its own record. Both edit surfaces say so
 above their fields; do not "fix" one by wiring the pickers up.
 
 Pass `can-cite` only where the host actually renders `FormEdgeSourcesDialog` and
-handles `@sources`. The drawer and `/eksploruj/nowe` do not, which is why they
-pass `can-correct` alone - a button that emits into nothing is worse than no
-button.
+handles `@sources`. The drawer does not, which is why it passes `can-correct`
+alone - a button that emits into nothing is worse than no button.
 
 ## Shared pieces
 
