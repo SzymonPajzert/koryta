@@ -3,13 +3,18 @@ import { resolve } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useRuntimeConfig } from "#app";
 import answer from "../../../../server/api/declarations/[id]/answer.post";
+import claim from "../../../../server/api/declarations/claim.post";
+import next from "../../../../server/api/declarations/next.get";
 import sweep from "../../../../server/api/declarations/sweep.post";
 import publishQueued from "../../../../server/api/declarations/publish-queued.post";
 
-/** What the three endpoints hand to server/utils/declarationPublish.ts, which
- * is tested on its own: the crop an answer settles, the configured limit, and
- * the gate in front of each. The limit is read from the runtime config the
- * way the site reads it (`publishLimitOf`), not handed in by a mock. */
+/** What the endpoints hand to server/utils/declarationPublish.ts and
+ * server/utils/declarations.ts, which are tested on their own: the reader
+ * they answer for, the crops an answer or a claim settles, the configured
+ * limit, and the gate in front of each. Who the reader is (`getReader`) runs
+ * for real on the request's headers. The limit is read from the runtime
+ * config the way the site reads it (`publishLimitOf`), not handed in by a
+ * mock. */
 const mocks = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.createError = (err: any) =>
@@ -18,15 +23,28 @@ const mocks = vi.hoisted(() => {
   globalThis.defineEventHandler = (fn: any) => fn;
   globalThis.getRouterParam = () => `${"a".repeat(64)}-p0`;
   globalThis.setResponseHeader = vi.fn();
+  const request = {
+    headers: {} as Record<string, string>,
+    query: {} as Record<string, string>,
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).getQuery = () => request.query;
+  // Node hands h3 the headers lower-cased, whatever the browser sent.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).getRequestHeader = (_event: unknown, name: string) =>
+    request.headers[name.toLowerCase()];
   const clear = vi.fn();
   globalThis.useStorage = vi.fn(() => ({ clear }));
   return {
     body: {} as unknown,
+    request,
     clear,
     getUser: vi.fn(),
     requireAdmin: vi.fn(),
     recordAnswer: vi.fn(),
     queueFor: vi.fn(),
+    admitToQueue: vi.fn(),
+    claimAnswers: vi.fn(),
     matchAndDrain: vi.fn(),
     sweepDeclarations: vi.fn(),
     drainPublications: vi.fn(),
@@ -57,6 +75,8 @@ vi.mock("../../../../server/utils/declarations", async (original) => ({
   ...(await original<typeof import("../../../../server/utils/declarations")>()),
   recordAnswer: mocks.recordAnswer,
   queueFor: mocks.queueFor,
+  admitToQueue: mocks.admitToQueue,
+  claimAnswers: mocks.claimAnswers,
 }));
 vi.mock("../../../../server/utils/declarationPublish", () => ({
   matchAndDrain: mocks.matchAndDrain,
@@ -65,16 +85,30 @@ vi.mock("../../../../server/utils/declarationPublish", () => ({
 }));
 
 const ID = `${"a".repeat(64)}-p0`;
+const READER = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const QUEUE = {
   task: null,
   upcoming: [],
   open: 0,
   mine: { today: 1, total: 1 },
 };
+const ON_A_DAY = {
+  status: "agreed",
+  value: "1979-07-15",
+  kind: "date",
+  readers: 2,
+} as const;
+const UNCONFIRMED = {
+  uid: "unconfirmed",
+  email_verified: false,
+  firebase: { sign_in_provider: "password" },
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   configure(4);
+  mocks.request.headers = { authorization: "Bearer token" };
+  mocks.request.query = { count: "3" };
   mocks.getUser.mockResolvedValue({
     uid: "reader",
     email_verified: true,
@@ -98,16 +132,14 @@ function settles(settled: unknown) {
 
 describe("api/declarations/[id]/answer", () => {
   it("compares a crop it settles on a day with its pages, one page of the queue at most", async () => {
-    settles({
-      status: "agreed",
-      value: "1979-07-15",
-      kind: "date",
-      readers: 2,
-    });
+    settles(ON_A_DAY);
 
     const result = await answer({} as never);
 
     expect(result).toMatchObject({ settled: true, answered: { id: ID } });
+    expect(mocks.recordAnswer.mock.calls[0]![1]).toMatchObject({
+      reader: { uid: "reader", votes: true, anonymous: false },
+    });
     const [, ids, , limit, options] = mocks.matchAndDrain.mock.calls[0]!;
     expect(ids).toEqual([ID]);
     expect(limit).toBe(4);
@@ -124,18 +156,206 @@ describe("api/declarations/[id]/answer", () => {
   });
 
   it("still answers the reader when the comparison fails", async () => {
-    settles({
-      status: "agreed",
-      value: "1979-07-15",
-      kind: "date",
-      readers: 2,
-    });
+    settles(ON_A_DAY);
     mocks.matchAndDrain.mockRejectedValueOnce(new Error("contention"));
     vi.spyOn(console, "error").mockImplementationOnce(() => {});
 
     const result = await answer({} as never);
 
     expect(result).toMatchObject({ ...QUEUE, settled: true });
+  });
+
+  it("takes a reader without an account by their reader id, and never sets publication going", async () => {
+    mocks.request.headers = { "x-reader-id": READER };
+    // Their answer never settles a crop (`recordAnswer` does not even read
+    // the others). Were one ever reported settled, the sweep would compare
+    // it, not a stranger's request.
+    settles(ON_A_DAY);
+
+    await answer({} as never);
+
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.recordAnswer.mock.calls[0]![1]).toMatchObject({
+      reader: { uid: `anon:${READER}`, votes: false, anonymous: true },
+    });
+    expect(mocks.queueFor.mock.calls[0]![1]).toBe(`anon:${READER}`);
+    expect(mocks.matchAndDrain).not.toHaveBeenCalled();
+  });
+
+  it("lets an account without a confirmed address answer, without a vote", async () => {
+    mocks.getUser.mockResolvedValue(UNCONFIRMED);
+    settles(ON_A_DAY);
+
+    await answer({} as never);
+
+    expect(mocks.recordAnswer.mock.calls[0]![1]).toMatchObject({
+      reader: { uid: "unconfirmed", votes: false, anonymous: false },
+    });
+    expect(mocks.matchAndDrain).not.toHaveBeenCalled();
+  });
+
+  it("refuses a bad token even beside a reader id", async () => {
+    mocks.request.headers = {
+      authorization: "Bearer stale",
+      "x-reader-id": READER,
+    };
+    mocks.getUser.mockRejectedValue(
+      Object.assign(new Error("nieważny token"), { statusCode: 401 }),
+    );
+
+    await expect(answer({} as never)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    expect(mocks.recordAnswer).not.toHaveBeenCalled();
+  });
+});
+
+describe("api/declarations/next", () => {
+  it("serves a reader without an account by their reader id, within the day's room for them", async () => {
+    mocks.request.headers = { "x-reader-id": READER };
+
+    expect(await next({} as never)).toBe(QUEUE);
+    expect(mocks.admitToQueue.mock.calls[0]![1]).toEqual({
+      uid: `anon:${READER}`,
+      votes: false,
+      anonymous: true,
+    });
+    expect(mocks.queueFor.mock.calls[0]!.slice(1, 3)).toEqual([
+      `anon:${READER}`,
+      3,
+    ]);
+  });
+
+  it("serves an account without a confirmed address", async () => {
+    mocks.getUser.mockResolvedValue(UNCONFIRMED);
+
+    expect(await next({} as never)).toBe(QUEUE);
+    expect(mocks.admitToQueue.mock.calls[0]![1]).toMatchObject({
+      votes: false,
+    });
+    expect(mocks.queueFor.mock.calls[0]![1]).toBe("unconfirmed");
+  });
+
+  it("serves nothing once the day's room for readers without a vote is used up", async () => {
+    mocks.request.headers = { "x-reader-id": READER };
+    mocks.admitToQueue.mockRejectedValueOnce(
+      Object.assign(new Error("Na dziś przyjęliśmy już tyle odczytów"), {
+        statusCode: 429,
+      }),
+    );
+
+    await expect(next({} as never)).rejects.toMatchObject({ statusCode: 429 });
+    expect(mocks.queueFor).not.toHaveBeenCalled();
+  });
+
+  it("takes ten crops at most as held by the page", async () => {
+    const ids = Array.from(
+      { length: 12 },
+      (_, i) => `${String(i).padStart(64, "0")}-p0`,
+    );
+    mocks.request.query = { count: "3", exclude: [...ids, "nope"].join(",") };
+
+    await next({} as never);
+
+    expect([...mocks.queueFor.mock.calls[0]![3]]).toEqual(ids.slice(0, 10));
+  });
+
+  it("refuses a request with neither a token nor a reader id", async () => {
+    mocks.request.headers = {};
+
+    await expect(next({} as never)).rejects.toMatchObject({ statusCode: 401 });
+    expect(mocks.queueFor).not.toHaveBeenCalled();
+  });
+});
+
+describe("api/declarations/claim", () => {
+  beforeEach(() => {
+    mocks.body = { readerId: READER.toUpperCase() };
+    mocks.claimAnswers.mockResolvedValue({ claimed: 0, settled: [] });
+  });
+
+  it("refuses a claim without a token", async () => {
+    // The real lookup, which is what a request without a token meets.
+    const { getUser } = await vi.importActual<
+      typeof import("../../../../server/utils/auth")
+    >("../../../../server/utils/auth");
+    mocks.getUser.mockImplementation(getUser);
+    mocks.request.headers = { "x-reader-id": READER };
+
+    await expect(claim({} as never)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    expect(mocks.claimAnswers).not.toHaveBeenCalled();
+  });
+
+  it("refuses a reader id that is not one", async () => {
+    mocks.body = { readerId: `anon:${READER}` };
+    await expect(claim({} as never)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    mocks.body = {};
+    await expect(claim({} as never)).rejects.toThrow();
+
+    expect(mocks.claimAnswers).not.toHaveBeenCalled();
+  });
+
+  it("claims for the account and compares the crops it settled on a day", async () => {
+    mocks.claimAnswers.mockResolvedValue({
+      claimed: 3,
+      settled: [
+        { extractId: "day", settlement: ON_A_DAY },
+        {
+          extractId: "year",
+          settlement: { status: "agreed", value: "1979", kind: "year" },
+        },
+        { extractId: "unreadable", settlement: { status: "unreadable" } },
+      ],
+    });
+
+    expect(await claim({} as never)).toEqual({ claimed: 3, settled: 3 });
+
+    expect(mocks.claimAnswers.mock.calls[0]![1]).toMatchObject({
+      readerId: READER,
+      user: { uid: "reader" },
+    });
+    const [, ids, , limit, options] = mocks.matchAndDrain.mock.calls[0]!;
+    expect(ids).toEqual(["day"]);
+    expect(limit).toBe(4);
+    expect(options).toEqual({ maxPages: 1 });
+  });
+
+  it("compares ten crops at most, and leaves the rest to the sweep", async () => {
+    mocks.claimAnswers.mockResolvedValue({
+      claimed: 12,
+      settled: Array.from({ length: 12 }, (_, i) => ({
+        extractId: `day-${i}`,
+        settlement: ON_A_DAY,
+      })),
+    });
+
+    await claim({} as never);
+
+    expect(mocks.matchAndDrain.mock.calls[0]![1]).toHaveLength(10);
+  });
+
+  it("refuses an account without a confirmed address before anything moves, so the page keeps the id", async () => {
+    // The real claim, which refuses before it reads a thing: the database
+    // here has nothing to read.
+    const { claimAnswers } = await vi.importActual<
+      typeof import("../../../../server/utils/declarations")
+    >("../../../../server/utils/declarations");
+    mocks.claimAnswers.mockImplementation(claimAnswers);
+    mocks.getUser.mockResolvedValue(UNCONFIRMED);
+
+    await expect(claim({} as never)).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(mocks.matchAndDrain).not.toHaveBeenCalled();
+  });
+
+  it("answers 0 when there is nothing to claim", async () => {
+    expect(await claim({} as never)).toEqual({ claimed: 0, settled: 0 });
+    expect(mocks.matchAndDrain).not.toHaveBeenCalled();
   });
 });
 
