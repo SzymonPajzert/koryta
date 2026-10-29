@@ -31,6 +31,7 @@ Politeness is the blind crawl's: robots.txt, one request per host per
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import heapq
 import json
@@ -42,6 +43,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
@@ -65,7 +67,9 @@ from scrapers.bip.people import (
     fold,
     is_file_link,
     link_score,
+    office_terms,
     satisfied,
+    url_words,
 )
 from scrapers.bip.registry import parse_subjects_xml
 from scrapers.bip.units import UnitSeed, scope_of, terc_index, unit_seeds
@@ -92,11 +96,23 @@ _FILE = re.compile(
     r"\.(pdf|docx?|odt|rtf|xlsx?|ods|jpe?g|png|tiff?|zip|7z|rar)(?:$|[?#])", re.I
 )
 _BIP_LINK = re.compile(r"(?:^| )bip(?: |$)|biuletyn informacji publicznej")
+_SITEMAP = re.compile(r"(?im)^\s*sitemap:\s*(\S+)")
+_LOC = re.compile(rb"<loc>\s*([^<\s]+)\s*</loc>")
 
 
 @dataclass
 class PeopleOptions:
+    #: Pages a unit's walk reads: ``pages_per_candidacy`` for each of its
+    #: candidacies, never fewer than ``unit_pages`` nor more than
+    #: ``max_unit_pages``. A sejmik or a city files thousands of declarations
+    #: (staff, districts) beside the council's: 150 pages found 0 of Warsaw's 96.
     unit_pages: int = 150
+    pages_per_candidacy: int = 15
+    max_unit_pages: int = 1000
+    #: Read the BIP's sitemaps (robots.txt "Sitemap:", else /sitemap.xml) for
+    #: declaration pages and files before walking, at most this many files.
+    sitemaps: bool = True
+    max_sitemap_files: int = 10
     per_person: int = 3
     unnamed_cap: int = 3
     workers: int = 12
@@ -189,22 +205,53 @@ class _Frontier:
         return any(host == h and (not p or path.startswith(p)) for h, p in self.scopes)
 
     def follow(
-        self, links: list[LinkContext], seekers: list[Seeker], depth: int
+        self,
+        links: list[LinkContext],
+        seekers: list[Seeker],
+        depth: int,
+        prefer: re.Pattern[str] | None = None,
     ) -> None:
         """Queue a page's links to other pages; files are for the download."""
         for link in links:
             target = normalize_url(link.url)
             if (
                 target in self.seen
-                or _FILE.search(target)
-                or is_file_link(target)
+                or _is_file(target)
                 or is_low_value_url(target)
                 or not self.in_scope(target)
             ):
                 continue
-            score = link_score(link, seekers, depth)
+            score = link_score(link, seekers, depth, prefer)
             if score > -3:
                 self.add(target, score, depth)
+
+
+def _is_file(url: str) -> bool:
+    return bool(_FILE.search(url)) or is_file_link(url)
+
+
+def _declaration_like(url: str) -> bool:
+    words = url_words(url)
+    return bool(DECLARATION.search(words) or ASSETS.search(words))
+
+
+def load_known_urls(path: Path) -> dict[str, list[str]]:
+    """Declaration-like URLs by host, from newline-delimited JSON rows with a
+    ``url`` and maybe a ``category``: the blind crawl's ``BipUrlsClassified``
+    output (300k such URLs on 2,127 hosts on 10-22)."""
+    known: dict[str, list[str]] = defaultdict(list)
+    with path.open(encoding="utf-8") as rows:
+        for line in rows:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            url = str(row.get("url") or "")
+            if url and (
+                row.get("category") == "oswiadczenia" or _declaration_like(url)
+            ):
+                known[host_of(url)].append(url)
+    return dict(known)
 
 
 class PeopleSearch:
@@ -222,12 +269,15 @@ class PeopleSearch:
         limiter: HostTokenBucket | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        known: dict[str, list[str]] | None = None,
     ) -> None:
         self.people_store = people_store
         self.bip_queue = bip_queue
         self.bundles = bundles
         self.seeds = seeds
         self.options = options
+        #: Declaration-like URLs already known, by host (`load_known_urls`).
+        self.known = known or {}
         self.fetch = fetch
         self.robots_allowed = robots_allowed
         self.robots_unreachable = robots_unreachable
@@ -302,8 +352,83 @@ class PeopleSearch:
         scopes = [_split_scope(scope_of(r, self.shared_hosts)) for r in roots]
         return roots, scopes, "" if roots else reason
 
+    def _budget(self, candidacies: int) -> int:
+        """Pages a unit's walk may read (see `PeopleOptions.unit_pages`)."""
+        wanted = self.options.pages_per_candidacy * candidacies
+        return min(self.options.max_unit_pages, max(self.options.unit_pages, wanted))
+
+    def _sitemap_urls(self, root: str) -> list[str]:
+        """Declaration-like URLs in the sitemaps of ``root``'s host: those robots.txt
+        names, else /sitemap.xml; an index's declaration-like sitemaps first."""
+        parts = urlsplit(root)
+        base = f"{parts.scheme}://{parts.netloc}"
+        robots = self._get(base + "/robots.txt")
+        todo: list[str] = []
+        if isinstance(robots, HttpResult) and robots.ok:
+            todo = _SITEMAP.findall(robots.content.decode("utf-8", "replace"))
+        todo = todo or [base + "/sitemap.xml"]
+        seen: set[str] = set()
+        found: list[str] = []
+        while todo and len(seen) < self.options.max_sitemap_files:
+            sitemap = todo.pop(0)
+            if sitemap in seen:
+                continue
+            seen.add(sitemap)
+            result = self._get(sitemap)
+            if isinstance(result, str) or not result.ok:
+                continue
+            body = result.content
+            if body[:2] == b"\x1f\x8b":
+                try:
+                    body = gzip.decompress(body)
+                except OSError:
+                    continue
+            locs = [m.decode("utf-8", "replace") for m in _LOC.findall(body)]
+            if b"<sitemapindex" in body[:4000]:
+                todo = sorted(locs, key=lambda u: not _declaration_like(u)) + todo
+            else:
+                found.extend(u for u in locs if _declaration_like(u))
+        return found
+
+    def _seed_known(
+        self,
+        out: UnitSearch,
+        frontier: _Frontier,
+        roots: list[str],
+        seekers: list[Seeker],
+        prefer: re.Pattern[str] | None,
+    ) -> None:
+        """Start from declaration URLs known before walking: the blind crawl's
+        (``--known-urls``) and the sitemaps'. Their pages go to the head of the
+        frontier; their files are candidates when the address names a seeker."""
+        sources: list[tuple[str, list[str]]] = [
+            (
+                "known-urls",
+                [u for h, _ in frontier.scopes for u in self.known.get(h, ())],
+            )
+        ]
+        if self.options.sitemaps and roots:
+            sources.append(("sitemap", self._sitemap_urls(roots[0])))
+        for source, urls in sources:
+            files: list[LinkContext] = []
+            for url in dict.fromkeys(urls):
+                target = normalize_url(url)
+                if not frontier.in_scope(target):
+                    continue
+                if _is_file(target):
+                    files.append(LinkContext(target, ""))
+                elif target not in frontier.seen:
+                    link = LinkContext(target, "")
+                    frontier.add(target, 50 + link_score(link, seekers, 1, prefer), 1)
+            out.found.extend(c for c in candidates(source, "", files, seekers) if c.key)
+
     # -- the walk ----------------------------------------------------------------
-    def search_unit(self, unit: str, seekers: list[Seeker]) -> UnitSearch:
+    def search_unit(
+        self,
+        unit: str,
+        seekers: list[Seeker],
+        prefer: re.Pattern[str] | None = None,
+    ) -> UnitSearch:
         out = UnitSearch(unit)
         seed = self.seeds.get(unit)
         if seed is None:
@@ -317,10 +442,16 @@ class PeopleSearch:
         frontier = _Frontier(scopes)
         for root in roots:
             frontier.add(normalize_url(root), 100.0, 0)
+        self._seed_known(out, frontier, roots, seekers, prefer)
         blocked = down = requests = 0
-        budget = self.options.unit_pages
+        budget = self._budget(len(seekers))
         # Links that keep turning out to be files cost requests, not pages.
-        while frontier and out.pages < budget and requests < 2 * budget:
+        while (
+            frontier
+            and out.pages < budget
+            and requests < 2 * budget
+            and not satisfied(out.found, seekers, self.options.per_person)
+        ):
             if self._past_deadline():
                 out.status = "timeout"
                 break
@@ -338,10 +469,10 @@ class PeopleSearch:
             if not self._is_page(result):
                 out.files[url] = result  # a file behind a page-like link
                 continue
-            self._read_page(out, result, depth, frontier, seekers)
-            if satisfied(out.found, seekers, self.options.per_person):
-                break
-        if out.pages_ok == 0 and out.status == "searched":
+            self._read_page(out, result, depth, frontier, seekers, prefer)
+        # Known URLs may find everybody before a page is asked for.
+        tried = requests or blocked or down
+        if out.pages_ok == 0 and out.status == "searched" and tried:
             only_robots = blocked and not down and requests == 0
             out.status = ROBOTS if only_robots else UNREACHABLE
         return out
@@ -353,6 +484,7 @@ class PeopleSearch:
         depth: int,
         frontier: _Frontier,
         seekers: list[Seeker],
+        prefer: re.Pattern[str] | None = None,
     ) -> None:
         out.pages += 1
         out.pages_ok += 1
@@ -367,7 +499,7 @@ class PeopleSearch:
             out.declaration_pages += 1
         out.found.extend(candidates(result.url, title, links, seekers))
         if depth < self.options.max_depth:
-            frontier.follow(links, seekers, depth + 1)
+            frontier.follow(links, seekers, depth + 1, prefer)
 
     # -- downloads -----------------------------------------------------------------
     def _download(
@@ -422,7 +554,8 @@ class PeopleSearch:
 
     def _search_and_record(self, unit: str, rows: list[PersonRow]) -> dict[str, str]:
         seekers = [Seeker.of(r.key, r.first_name, r.last_name) for r in rows]
-        search = self.search_unit(unit, seekers)
+        prefer = office_terms(str(r.person.get("office") or "") for r in rows)
+        search = self.search_unit(unit, seekers, prefer)
         picks = choose(
             search.found, seekers, self.options.per_person, self.options.unnamed_cap
         )
@@ -569,12 +702,22 @@ def run_people_mode(
     print(f"unit starts: {len(seeds):,} units (registry from {source})", flush=True)
     options = PeopleOptions(
         unit_pages=args.unit_pages,
+        pages_per_candidacy=args.pages_per_candidacy,
+        max_unit_pages=args.max_unit_pages,
+        sitemaps=not args.no_sitemaps,
         per_person=args.per_person,
         workers=args.workers,
         rate_interval_s=args.rate,
         user_agent=USER_AGENT,
         max_run_seconds=args.max_minutes * 60 if args.max_minutes else None,
     )
+    known = load_known_urls(Path(args.known_urls)) if args.known_urls else {}
+    if known:
+        print(
+            f"known declaration URLs: {sum(map(len, known.values())):,} "
+            f"on {len(known):,} hosts",
+            flush=True,
+        )
     search = PeopleSearch(
         store,
         bip_queue,
@@ -583,6 +726,7 @@ def run_people_mode(
         options,
         robots_allowed=robots_allowed,
         robots_unreachable=robots_unreachable,
+        known=known,
     )
     counts = search.run(todo)
     summary = {
