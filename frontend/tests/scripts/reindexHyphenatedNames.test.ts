@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { plan } from "../../scripts/migrate/reindex-hyphenated-names";
+import { plan } from "../../scripts/migrate/archive/reindex-hyphenated-names";
 import { generateChunksLower } from "~~/shared/search";
 
 /** A node as stored, its index cut the way it was before the hyphen parts:

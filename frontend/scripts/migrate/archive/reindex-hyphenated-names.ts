@@ -3,8 +3,8 @@ import {
   getFirestore,
   type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
-import { nameChunksToWrite } from "../../shared/search";
-import { reportRemaining } from "./remaining";
+import { nameChunksToWrite } from "../../../shared/search";
+import { reportRemaining } from "../remaining";
 
 /**
  * Re-index every searchable name whose stored `nameChunksLower` is not the
@@ -49,17 +49,20 @@ import { reportRemaining } from "./remaining";
  * deployed, every write it made would be undone by the trigger a moment later.
  * Use the other.
  *
+ * Archived on 2026-10-29 with the other, once it had run on production. Its
+ * dry run counts by the same rule, so the two come back together.
+ *
  * Each write is the field alone, conditional on the node being as it was
  * read: a rename landing in between fails the run rather than being answered
  * with the old name's index, and a re-run picks up from there. Each fires the
  * trigger once, which finds the index up to date and writes nothing.
  *
  * Usage, against the running dev:prod-data emulator:
- *   npx tsx scripts/migrate/reindex-hyphenated-names.ts            # dry run
- *   npx tsx scripts/migrate/reindex-hyphenated-names.ts --commit
+ *   npx tsx scripts/migrate/archive/reindex-hyphenated-names.ts            # dry run
+ *   npx tsx scripts/migrate/archive/reindex-hyphenated-names.ts --commit
  * Against production:
- *   npx tsx scripts/migrate/reindex-hyphenated-names.ts --prod
- *   npx tsx scripts/migrate/reindex-hyphenated-names.ts --prod --commit
+ *   npx tsx scripts/migrate/archive/reindex-hyphenated-names.ts --prod
+ *   npx tsx scripts/migrate/archive/reindex-hyphenated-names.ts --prod --commit
  */
 
 /** The kinds `/api/search` reads, which are the kinds the trigger indexes. */
