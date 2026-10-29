@@ -257,10 +257,10 @@ def test_one_failing_unit_does_not_end_the_run(tmp_path, monkeypatch):
     }
     original = PeopleSearch.search_unit
 
-    def flaky(self, unit, seekers):
+    def flaky(self, unit, seekers, *args, **kwargs):
         if unit == "u2":
             raise RuntimeError("boom")
-        return original(self, unit, seekers)
+        return original(self, unit, seekers, *args, **kwargs)
 
     monkeypatch.setattr(PeopleSearch, "search_unit", flaky)
     _, store, _, counts = search(

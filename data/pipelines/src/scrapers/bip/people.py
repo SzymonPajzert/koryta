@@ -17,6 +17,7 @@ from __future__ import annotations
 import functools
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from entities.util import decode_url
@@ -186,8 +187,36 @@ def names_somebody(text: str, *, initials_only: bool = False) -> bool:
     return False
 
 
-def link_score(link: LinkContext, seekers: list[Seeker], depth: int) -> float:
-    """How likely following a page link leads to the unit's declarations."""
+#: What the seekers' own council or office is called, folded, by a candidacy's
+#: ``office``. A big BIP files the declarations of its staff, its youth council
+#: and, in Warsaw, 18 district councils beside the council's: the 10-29 walk of
+#: bip.warszawa.pl read 149 declaration pages and found none of 96 councillors.
+_OFFICE_TERMS = {
+    "Rada gminy": r"rad\w* gmin\w*|radn\w*",
+    "Rada miasta": r"rad\w* miast\w*|rad\w* miejsk\w*|radn\w*",
+    "Rada powiatu": r"rad\w* powiat\w*|radn\w*",
+    "Sejmik": r"sejmik\w*|radn\w* wojewodztw\w*",
+    "Rada dzielnicy": r"dzielnic\w*",
+    "Wójt": r"wojt\w*",
+    "Burmistrz": r"burmistrz\w*",
+    "Prezydent": r"prezydent\w*",
+}
+
+
+def office_terms(offices: Iterable[str]) -> re.Pattern[str] | None:
+    """The folded words naming the seekers' own councils and offices, or None."""
+    terms = sorted({_OFFICE_TERMS[o] for o in offices if o in _OFFICE_TERMS})
+    return re.compile(r"(?:^| )(?:" + "|".join(terms) + ")") if terms else None
+
+
+def link_score(
+    link: LinkContext,
+    seekers: list[Seeker],
+    depth: int,
+    prefer: re.Pattern[str] | None = None,
+) -> float:
+    """How likely following a page link leads to the unit's declarations;
+    ``prefer`` (`office_terms`) names the seekers' own council."""
     text = fold(link.anchor) + " " + url_words(link.url)
     score = 0.0
     if DECLARATION.search(text) and ASSETS.search(text):
@@ -196,6 +225,8 @@ def link_score(link: LinkContext, seekers: list[Seeker], depth: int) -> float:
         score += 4
     if OFFICE.search(text):
         score += 2
+    if prefer is not None and prefer.search(text):
+        score += 3
     if any(s.named_in(text)[0] for s in seekers):
         score += 3
     years = [int(y) for y in YEAR.findall(text)]

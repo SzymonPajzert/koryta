@@ -337,7 +337,34 @@ def build_parser() -> argparse.ArgumentParser:
         "those only unnamed files were found for); default unreachable,error,timeout",
     )
     people.add_argument(
-        "--unit-pages", type=int, default=150, help="pages read per unit (default 150)"
+        "--unit-pages",
+        type=int,
+        default=150,
+        help="pages a unit's walk reads at least (default 150)",
+    )
+    people.add_argument(
+        "--pages-per-candidacy",
+        type=int,
+        default=15,
+        help="pages a unit's walk reads for each of its candidacies, between "
+        "--unit-pages and --max-unit-pages (default 15)",
+    )
+    people.add_argument(
+        "--max-unit-pages",
+        type=int,
+        default=1000,
+        help="pages a unit's walk reads at most (default 1000)",
+    )
+    people.add_argument(
+        "--known-urls",
+        default=None,
+        help="newline-delimited JSON of known URLs ({url, category}, e.g. the blind "
+        "crawl's BipUrlsClassified): declaration-like ones seed each unit's walk",
+    )
+    people.add_argument(
+        "--no-sitemaps",
+        action="store_true",
+        help="do not read the BIPs' sitemaps for declaration pages before walking",
     )
     people.add_argument(
         "--per-person",
