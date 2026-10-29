@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useRuntimeConfig } from "#app";
 import handler from "../../../../server/api/ingest/declarations.post";
 
 /** Every document, keyed by `collection/id`, and what each commit wrote. */
@@ -52,19 +53,32 @@ vi.mock("firebase-admin/firestore", () => ({
 }));
 vi.mock("firebase-admin/app", () => ({ getApp: vi.fn() }));
 
-const { mockGetUser } = vi.hoisted(() => {
+const { mockGetUser, mockMatchAndDrain, mockCacheClear } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.createError = (err: any) =>
     Object.assign(new Error(err.message), err);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.defineEventHandler = (fn: any) => fn;
+  const mockCacheClear = vi.fn();
+  globalThis.useStorage = vi.fn(() => ({ clear: mockCacheClear }));
   return {
     mockGetUser: vi.fn().mockResolvedValue({
       uid: "pipeline-bip-declarations",
       datascience: true,
     }),
+    mockMatchAndDrain: vi.fn(),
+    mockCacheClear,
   };
 });
+
+// What a settled crop does to its pages is tested in
+// tests/server/utils/declarationPublish.test.ts; here only that the upload
+// hands over the crops it settles, under the configured limit, and survives
+// a failure there. The limit is the runtime config's, which ships at 0, read
+// as the site reads it.
+vi.mock("../../../../server/utils/declarationPublish", () => ({
+  matchAndDrain: mockMatchAndDrain,
+}));
 
 // `requireDatascience` stays real; only the token lookup is faked.
 vi.mock("../../../../server/utils/auth", async (importOriginal) => ({
@@ -136,6 +150,16 @@ describe("api/ingest/declarations", () => {
     vi.clearAllMocks();
     stored = { "nodes/kowalska": { type: "person", name: "Anna Kowalska" } };
     commits = [];
+    // In the runtime config the handler reads: Nitro's in the site, the Nuxt
+    // app's here, which is what its `useRuntimeConfig` is auto-imported as in
+    // the test environment.
+    (
+      useRuntimeConfig() as Record<string, unknown>
+    ).declarationsDailyPublishLimit = 3;
+    mockMatchAndDrain.mockResolvedValue({
+      matched: [],
+      drain: { published: [] },
+    });
   });
 
   it("refuses a caller outside the datascience group before reading the body", async () => {
@@ -343,6 +367,101 @@ describe("api/ingest/declarations", () => {
       agreed: { value: "1979-07-15", kind: "date", by: "machine" },
     });
     expect(stored[IMAGES]).toBeUndefined();
+  });
+
+  it("compares a crop it settles with its pages, once the crops are stored", async () => {
+    mockMatchAndDrain.mockImplementationOnce(async () => {
+      // Stored first: the comparison reads the crop back.
+      expect(stored[EXTRACT]).toMatchObject({ status: "agreed" });
+      return { matched: [], drain: { published: ["kowalska"] } };
+    });
+    await send({
+      candidacies: [candidacy()],
+      extracts: [
+        extract({
+          outcome: "read",
+          images: undefined,
+          machine: { birthDate: "1979-07-15", confidence: "high" },
+        }),
+      ],
+    });
+    expect(mockMatchAndDrain).toHaveBeenCalledTimes(1);
+    const [db, ids, , limit] = mockMatchAndDrain.mock.calls[0]!;
+    expect(db).toBe(mockDb);
+    expect(ids).toEqual([`${SHA}-p0`]);
+    expect(limit).toBe(3);
+    // Something went up, so the cached pages that counted it as a draft go.
+    expect(mockCacheClear).toHaveBeenCalledWith("nitro:handlers");
+  });
+
+  it("leaves the comparison alone when nothing it stores is settled", async () => {
+    await send({ candidacies: [candidacy()], extracts: [extract()] });
+    expect(stored[EXTRACT]).toMatchObject({ status: "open", pageMatch: null });
+    expect(mockMatchAndDrain).not.toHaveBeenCalled();
+  });
+
+  it("still answers the upload when the comparison fails", async () => {
+    mockMatchAndDrain.mockRejectedValueOnce(new Error("contention"));
+    const result = await send({
+      candidacies: [candidacy()],
+      extracts: [
+        extract({
+          outcome: "read",
+          images: undefined,
+          machine: { birthDate: "1979-07-15", confidence: "high" },
+        }),
+      ],
+    });
+    expect(result.extracts.created).toBe(1);
+    // Not compared, which is what the sweep's `pageMatch == null` finds.
+    expect(stored[EXTRACT]).toMatchObject({
+      status: "agreed",
+      pageMatch: null,
+    });
+  });
+
+  it("compares a settled crop again when it is sent for one more page", async () => {
+    await send({ candidacies: [candidacy()], extracts: [extract()] });
+    stored[EXTRACT] = {
+      ...stored[EXTRACT],
+      status: "agreed",
+      agreed: { value: "1979-07-15", kind: "date", by: "readers" },
+      answerCount: 2,
+      pageMatch: "same",
+    };
+    stored["nodes/kowalska-2"] = { type: "person", name: "Anna Kowalska" };
+    mockMatchAndDrain.mockClear();
+
+    await send({
+      candidacies: [candidacy({ kids: ["kowalska", "kowalska-2"] })],
+      extracts: [extract()],
+    });
+
+    // Compared now, and uncompared for the sweep should that fail.
+    expect(stored[EXTRACT]).toMatchObject({
+      status: "agreed",
+      personIds: ["kowalska", "kowalska-2"],
+      pageMatch: null,
+    });
+    expect(mockMatchAndDrain).toHaveBeenCalledTimes(1);
+    expect(mockMatchAndDrain.mock.calls[0]![1]).toEqual([`${SHA}-p0`]);
+  });
+
+  it("leaves a settled crop sent again for the same pages as it was", async () => {
+    await send({ candidacies: [candidacy()], extracts: [extract()] });
+    stored[EXTRACT] = {
+      ...stored[EXTRACT],
+      status: "agreed",
+      agreed: { value: "1979-07-15", kind: "date", by: "readers" },
+      answerCount: 2,
+      pageMatch: "same",
+    };
+    mockMatchAndDrain.mockClear();
+
+    await send({ candidacies: [candidacy()], extracts: [extract()] });
+
+    expect(stored[EXTRACT]).toMatchObject({ pageMatch: "same" });
+    expect(mockMatchAndDrain).not.toHaveBeenCalled();
   });
 
   it("leaves a lower-confidence reading to readers", async () => {

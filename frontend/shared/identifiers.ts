@@ -49,6 +49,24 @@ export function companyIdentifiers(company: {
     }));
 }
 
+/** The register entry a rejestr.io link names: its number, where it has one.
+ *
+ * The pipelines send `https://rejestr.io/osoby/<number>`. A link pasted from a
+ * browser carries the person's name after the number, or a trailing slash, and
+ * 10 published pages store one of those. Read as written, eight of them looked
+ * linked to some other entry than the payloads the 10-06 run had for them,
+ * which named the very same number. Anything else is compared as written.
+ *
+ * Here rather than in the people import, where it was written, because the
+ * declarations automation asks the same question of a page's birth date: did
+ * it come with the entry the page's jobs are listed under
+ * (server/utils/declarationPublish.ts).
+ */
+export function registerEntry(link: unknown): string | undefined {
+  if (typeof link !== "string" || !link) return undefined;
+  return /rejestr\.io\/osoby\/(\d+)/.exec(link)?.[1] ?? link;
+}
+
 /** Digits of an identifier as typed, with the separators people use.
  *
  * Both numbers are habitually written in groups ("123-456-32-18", "000 000 000")

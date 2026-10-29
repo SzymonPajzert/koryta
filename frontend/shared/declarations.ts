@@ -27,8 +27,12 @@ export const READERS_TO_AGREE = 2;
  * the admin list instead. */
 export const DISPUTED_AFTER = 6;
 
-/** People published automatically per Warsaw day. Over it they wait, oldest
- * first, for the next day. */
+/** People published automatically per Warsaw day, as proposed to Szymon. Over
+ * it they wait, oldest first, for the next day.
+ *
+ * Not what the site enforces: that is `declarationsDailyPublishLimit` in the
+ * runtime config (NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT), which ships at 0, so
+ * nothing is published automatically until he sets it. */
 export const DAILY_AUTO_PUBLISH_LIMIT = 10;
 
 /** The uid the automatic publication writes under. It contains "pipeline", so
@@ -584,7 +588,17 @@ export type DeclarationAnswerResult = DeclarationQueue & {
 
 /** Why a page whose date matches was not published automatically. Each is
  * somebody's decision the automation must not overrule, or a doubt it cannot
- * settle itself. */
+ * settle itself.
+ *
+ * The last five are checked as the page is published rather than when it is
+ * queued: `no_revision`, nothing the automation may approve is what the page
+ * shows (no revision at all, or the newest one is not the page as it stands);
+ * `no_longer_matches`, the page's birth date or the reading changed while the
+ * page waited; `candidacy_reviewed`, a reviewer rejected a revision of the
+ * candidacy the declaration is for, or a person's own is waiting on it;
+ * `revision_rejected`, a reviewer turned down a revision of the page itself;
+ * `conflicting_reading`, another settled declaration that names the page was
+ * read as another birth date. */
 export const publicationHoldReasons = [
   "two_pages",
   "needs_split",
@@ -594,8 +608,105 @@ export const publicationHoldReasons = [
   "no_candidacy_on_page",
   "ambiguous_candidacy",
   "two_places",
+  "no_revision",
+  "no_longer_matches",
+  "candidacy_reviewed",
+  "revision_rejected",
+  "conflicting_reading",
 ] as const;
 export type PublicationHoldReason = (typeof publicationHoldReasons)[number];
+
+/** The daily limit as the runtime config gives it: a whole number, 0 for
+ * anything else. An environment override arrives as whatever `destr` made of
+ * the string, so it is not trusted to be a number. Here rather than beside
+ * the queue, so the endpoints' tests read the config through it for real. */
+export function publishLimitOf(config: {
+  declarationsDailyPublishLimit?: unknown;
+}): number {
+  const limit = Number(config.declarationsDailyPublishLimit);
+  return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
+}
+
+/** Where an automatic publication stands, as `declarationPublications` stores
+ * it. `confirmed` is a page that was public already when its date matched:
+ * nothing to publish, but the declaration is linked on it. `publishing` is a
+ * page whose slot of the day is taken and whose writes are under way, or were
+ * cut short; one left there for long is tried again. */
+export const publicationStatuses = [
+  "queued",
+  "publishing",
+  "published",
+  "held",
+  "confirmed",
+] as const;
+export type PublicationStatus = (typeof publicationStatuses)[number];
+
+/** What a settled reading said about one page it is for. `held` is a match the
+ * automation will not act on (two pages with the same date), `queued` a draft
+ * waiting for its slot, `confirmed` a page that was public already. */
+export type PageOutcome =
+  "no_date" | "different" | "confirmed" | "queued" | "held";
+
+/** What a settled reading said about its pages, summed up on the crop: `same`
+ * when any page has the date, else `different` when any has another one. */
+export type PageMatch = "same" | "different" | "no_date";
+
+/** Why a relation of an automatically published page stayed off the site: its
+ * company is a draft, or it fails the rule the people import uses for jobs it
+ * puts live without a reviewer (`waitingEdgeRefusal` in
+ * server/utils/edgePublication.ts), or - `date_not_from_entry` - the page's
+ * birth date did not come with the register entry the jobs are listed under,
+ * so the date the declaration confirms says nothing about whose jobs they are.
+ *
+ * A candidacy is listed only by a pass that finishes one cut short after the
+ * page went up, for what came in between: a reviewer's rejection
+ * (`rejected`), a person's version waiting (`by_hand`), or a run elsewhere in
+ * the same election (`two_places`). Before the page is up, each of those holds
+ * the whole page. `needs_split` is every relation of a page marked as two
+ * people after it went up. */
+export type PublicationEdgeHold =
+  | "company_draft"
+  | "approved_hidden"
+  | "rejected"
+  | "by_hand"
+  | "not_held"
+  | "date_not_from_entry"
+  | "two_places"
+  | "needs_split";
+
+/** What one pass over the queue did. `skipped` says why it took up no new
+ * page: `off` while the daily limit is 0, `night` inside the people import's
+ * window, `import` while a people import is running, or while whether one is
+ * cannot be told. At a limit of 0 a pass still finishes the relations of a
+ * page an earlier pass put up and did not finish. */
+export type DrainResult = {
+  day: string;
+  limit: number;
+  skipped: "off" | "night" | "import" | null;
+  published: string[];
+  held: { personId: string; reason: PublicationHoldReason }[];
+  /** Queued pages somebody else made public in the meantime. */
+  confirmed: string[];
+  /** Pages whose writes failed: left `publishing`, to be tried again. */
+  failed: string[];
+  /** Whether it stopped because the day's limit was reached. */
+  capReached: boolean;
+};
+
+/** What `POST /api/declarations/sweep` did: the settled crops it compared with
+ * their pages again, the pages it found taken off the site by a stale write
+ * and put back up (or held, with their relations taken down), and the pass
+ * over the queue after it. */
+export type SweepResult = {
+  checked: number;
+  /** Crops whose comparison came out differently this time. */
+  changed: number;
+  reverted: {
+    restored: string[];
+    held: { personId: string; reason: PublicationHoldReason }[];
+  };
+  drain: DrainResult;
+};
 
 /** A crop on an admin list: what readers typed, and the pages it is for. */
 export type DeclarationReviewRow = {

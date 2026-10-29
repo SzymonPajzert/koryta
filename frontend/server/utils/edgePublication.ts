@@ -306,6 +306,99 @@ export function publishEdgeInBatch(
   return { approvedRevision };
 }
 
+/** Why `approveWaitingEdge` leaves an edge as it is.
+ *
+ * The first three need nothing but the edge: it is live already, it was
+ * removed, or it carries an approved revision while it is off the site. The
+ * rest are read off its revisions: a reviewer rejected one, one was not
+ * written automatically, or the newest says something the edge does not. */
+export type WaitingEdgeRefusal =
+  "live" | "deleted" | "approved_hidden" | "rejected" | "by_hand" | "not_held";
+
+/** The part of `waitingEdgeRefusal` the edge alone answers, so a caller can
+ * skip reading the revisions of an edge it would refuse anyway. */
+export function settledEdgeRefusal(
+  stored: Record<string, unknown>,
+): "live" | "deleted" | "approved_hidden" | null {
+  if (pageIsPublic(stored)) return "live";
+  if (stored.deleted === true) return "deleted";
+  if (approvedRevisionId(stored.revision_id)) return "approved_hidden";
+  return null;
+}
+
+/** Whether an edge still waiting for its first review may be put live by an
+ * automatic rule, and if not why not; null when it may.
+ *
+ * Nothing anybody has decided is reopened. A live edge is done with; an
+ * approved one that is not live was approved and kept off the site by
+ * somebody, or taken off it; a rejected revision is a reviewer's no; and a
+ * revision not written automatically is a person's word on the relation. Each
+ * of those stays theirs.
+ *
+ * The newest revision is the one approved, and only where the edge already
+ * holds it, so what goes live is what the page would show. Only the newest: an
+ * older revision the edge holds would put the edge up past a newer one saying
+ * something else, which is a change nobody has looked at.
+ *
+ * `revisions` are every revision of the edge, newest first, as `edgeRevisions`
+ * and `edgeRevisionsForMany` return them. */
+export function waitingEdgeRefusal(
+  stored: Record<string, unknown>,
+  revisions: (Revision & { id: string })[],
+): WaitingEdgeRefusal | null {
+  const settled = settledEdgeRefusal(stored);
+  if (settled) return settled;
+  if (revisions.some((revision) => revision.status === "rejected")) {
+    return "rejected";
+  }
+  if (revisions.some((revision) => revision.update_automatic !== true)) {
+    return "by_hand";
+  }
+  if (!publishCandidateRevision(revisions.slice(0, 1), stored)) {
+    return "not_held";
+  }
+  return null;
+}
+
+/** Approves and publishes a stored edge still waiting for its first review,
+ * where `waitingEdgeRefusal` finds nothing against it. Whether it did.
+ *
+ * How the people import puts a verified person's restated job live
+ * (`findEdgeOrCreate` in server/api/ingest/person.post.ts), and how the
+ * declarations automation publishes an auto-published person's jobs
+ * (server/utils/declarationPublish.ts): the same rule for both, so neither
+ * reopens what a person decided. `publishEdgeInBatch`'s rule for a reviewer,
+ * without the audit row an administrator's decision gets - the approval is
+ * recorded on the revision, under `user`.
+ *
+ * The revisions are read here unless the caller has them already, and only
+ * once the edge itself gives no reason to refuse: the import calls this for
+ * every job a verified person's payload restates.
+ */
+export async function approveWaitingEdge(
+  db: Firestore,
+  batch: WriteBatch,
+  edgeId: string,
+  stored: Record<string, unknown>,
+  user: { uid: string },
+  revisions?: (Revision & { id: string })[],
+): Promise<boolean> {
+  if (settledEdgeRefusal(stored)) return false;
+  const all = revisions ?? (await edgeRevisions(db, edgeId));
+  if (waitingEdgeRefusal(stored, all)) return false;
+
+  publishEdgeInBatch(
+    db,
+    batch,
+    db.collection("edges").doc(edgeId),
+    stored,
+    all.slice(0, 1),
+    user,
+    false,
+  );
+  return true;
+}
+
 /** Hides one edge. The proposal it was published from is left alone - taking a
  * relation off the site says nothing about whether the claim was right. */
 export function unpublishEdgeInBatch(

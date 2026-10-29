@@ -26,11 +26,7 @@ import {
   withRecordedFacts,
   type EdgeLike,
 } from "~~/server/utils/edges";
-import {
-  edgeRevisions,
-  publishCandidateRevision,
-  publishEdgeInBatch,
-} from "~~/server/utils/edgePublication";
+import { approveWaitingEdge } from "~~/server/utils/edgePublication";
 import { resolveMergedNode } from "~~/server/utils/merge";
 import { electionPositions, sortParties } from "~~/shared/misc";
 import type {
@@ -41,6 +37,7 @@ import type {
   NodeType,
 } from "~~/shared/model";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
+import { registerEntry } from "~~/shared/identifiers";
 import {
   learnsName,
   namesAgree,
@@ -1394,7 +1391,7 @@ async function findEdgeOrCreate(
   }
   if (existing) {
     ctx.claimedEdgeIds.set(existing, identity);
-    const published = verified && (await approveWaitingEdge(ctx, existing));
+    const published = verified && (await approveVerifiedEdge(ctx, existing));
     fillAnnotations(ctx, existing, documents.get(existing), edge, published);
     return { edgeId: existing, created: false, published };
   }
@@ -1701,74 +1698,30 @@ async function verifiedEmployments(
   return employments;
 }
 
-/** The register entry a rejestr.io link names: its number, where it has one.
- *
- * The pipelines send `https://rejestr.io/osoby/<number>`. A link pasted from a
- * browser carries the person's name after the number, or a trailing slash, and
- * 10 published pages store one of those. Read as written, eight of them looked
- * linked to some other entry than the payloads the 10-06 run had for them,
- * which named the very same number. Anything else is compared as written.
- */
-function registerEntry(link: unknown): string | undefined {
-  if (typeof link !== "string" || !link) return undefined;
-  return /rejestr\.io\/osoby\/(\d+)/.exec(link)?.[1] ?? link;
-}
-
 /** Approves and publishes a stored employment the payload restates, if it is
- * still waiting for its first review.
+ * still waiting for its first review (`approveWaitingEdge`, which the
+ * declarations automation shares).
  *
  * That is how a job left for a reviewer reaches the site once its person is
  * verified: one sent before this rule existed, or before a reviewer published
- * the job that corroborates the link. Nothing anybody has decided is reopened.
- * A live edge is done with; an approved one that is not live was approved and
- * kept off the site by somebody, or taken off it; a rejected revision is a
- * reviewer's no; and a revision not written automatically is a person's word
- * on the relation. Each of those stays theirs.
- *
- * The newest revision is approved only where the edge already holds it, so
- * what goes live is what the page would show - `publishEdgeInBatch`'s rule for
- * a reviewer, without the audit row an administrator's decision gets. Only the
- * newest: an older revision the edge holds would put the job up past a newer
- * one saying something else, which is a change nobody has looked at.
+ * the job that corroborates the link.
  *
  * Whether it published the job, which `fillAnnotations` needs to know: a job
  * learning its end in the same request goes live with it.
  */
-async function approveWaitingEdge(
+async function approveVerifiedEdge(
   ctx: Context,
   edgeId: string,
 ): Promise<boolean> {
   const stored = ctx.verifiedEmployments?.get(edgeId);
   if (!stored) return false;
-  if (
-    pageIsPublic(stored) ||
-    stored.deleted === true ||
-    approvedRevisionId(stored.revision_id)
-  ) {
-    return false;
-  }
-
-  const revisions = await edgeRevisions(ctx.db, edgeId);
-  if (
-    revisions.some(
-      (revision) =>
-        revision.status === "rejected" || revision.update_automatic !== true,
-    )
-  ) {
-    return false;
-  }
-  const newest = revisions.slice(0, 1);
-  if (!publishCandidateRevision(newest, stored)) return false;
-
-  publishEdgeInBatch(
+  const published = await approveWaitingEdge(
     ctx.db,
     ctx.batch,
-    ctx.db.collection("edges").doc(edgeId),
+    edgeId,
     stored,
-    newest,
     ctx.user,
-    false,
   );
-  console.info(`[ingest] approved waiting employment ${edgeId}`);
-  return true;
+  if (published) console.info(`[ingest] approved waiting employment ${edgeId}`);
+  return published;
 }

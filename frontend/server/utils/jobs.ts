@@ -8,11 +8,14 @@ import {
   JOBS_COLLECTION,
   JOB_RUNS_COLLECTION,
   CAPTURE_WINDOW_DAYS,
+  PEOPLE_REQUEST,
   RECENT_RUNS,
   RUNS_SHOWN,
   RUN_STATES,
   captureRun,
   compareRunsNewest,
+  isStalled,
+  jobDefinition,
   jobRecordFromData,
   jobRunFromData,
   lastRunsMissing,
@@ -78,6 +81,40 @@ export function recordFromDoc(data: DocumentData): JobRecord {
 }
 
 const opsDb = () => getFirestore(OPS_DATABASE);
+
+/** The jobs whose runs write people's pages through /api/ingest/person: the
+ * night, whose people step is one of its own, that step reported on its own,
+ * and the runs asked for from a company's or a person's page. */
+export const PEOPLE_WRITING_JOBS: readonly string[] = [
+  "nightly",
+  "people_import",
+  PEOPLE_REQUEST,
+];
+
+/** Whether a run that writes people's pages is going now.
+ *
+ * The people import reads a page outside a transaction and writes it back
+ * whole with the visibility it read, so a page published while that request
+ * is in flight is a draft again when it lands, its relations still live
+ * (server/api/ingest/person.post.ts). The declarations automation publishes
+ * pages on its own and keeps out of the way of every such run, not only the
+ * night's: a run asked for on a page starts whenever it is asked for
+ * (data/pipelines/src/jobs/requests). A run that has gone quiet for longer
+ * than its job's heartbeat (`isStalled`) died without saying so and holds
+ * nothing up.
+ */
+export async function peopleImportRunning(now = new Date()): Promise<boolean> {
+  const snapshot = await opsDb()
+    .collection(JOB_RUNS_COLLECTION)
+    .where("state", "==", "running")
+    .get();
+  return snapshot.docs.some((doc) => {
+    const run = runFromDoc(doc.id, doc.data());
+    if (!run || !PEOPLE_WRITING_JOBS.includes(run.job)) return false;
+    const definition = jobDefinition(run.job);
+    return !definition || !isStalled(run, definition, now);
+  });
+}
 
 /** Every job's newest reported runs, newest first, and its record. The
  * agents' `jobs_status` (scripts/mcp/jobs.ts) reads them the same way, over
