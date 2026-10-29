@@ -78,11 +78,14 @@ KRS jobs read `ScrapeRejestrIO`), unit by unit. Meant for predator, by hand, not
 the nightly: it is a long one-off with its own CPU budget.
 
 ```bash
-koryta BipPeopleOfInterest                 # build or refresh the list first (optional)
 koryta_scrape_bip crawl --people-of-interest --poi-max-priority 1 --max-minutes 120
 koryta_scrape_bip crawl --people-of-interest              # everyone still pending
 ```
 
+- The list is read as it is on disk, else as the night left it in the shared
+  cache, and built from its inputs only when neither has it. A list on disk is
+  never rebuilt, nor PeopleMerged under it (`PINNED` in `people.py`); to take
+  the night's newer one, delete `versioned/bip_people_of_interest` first.
 - Where a unit's search starts (`scrapers/bip/units.py`): the office's BIP from
   the gov.pl registry, else the office's website from the dane.gov.pl catalogue
   of public bodies and the "BIP" link on it. The registry has an office for only
