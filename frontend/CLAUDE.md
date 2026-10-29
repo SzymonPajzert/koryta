@@ -9,8 +9,9 @@
    - The site's design decisions are in `.interface-design/system.md` at the
      repo root. Only Szymon's dated decisions go there; propose a new rule as a
      task instead of writing it in.
-   - When Szymon asks for a design round on the design board, or points you at
-     notes he left there, see `.claude/skills/design-feedback/SKILL.md`.
+   - A UI change that waits for Szymon's OK goes to him as a round on the
+     design board, and notes he left on a round are read from there. See
+     `.claude/skills/design-feedback/SKILL.md`.
    - The Vuetify MCP server (`vuetify-mcp`), where it is installed, answers for
      Vuetify 4 unless told otherwise. Always pass the installed version
      (`npm ls vuetify`, 3.13.0 in October 2026). Its feature and install guides
