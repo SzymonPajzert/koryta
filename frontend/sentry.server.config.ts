@@ -40,6 +40,14 @@ const environment =
  * the half that was actually missing. */
 const tracesSampleRate = environment === "autopush" ? 0.005 : 0.05;
 
+/** Requests whose body never goes to Sentry with an error.
+ *
+ * The SDK attaches up to 10 kB of a request body to every error event by
+ * default. These bodies are crops of named people's birth dates in their own
+ * hand, and the dates readers typed off them: personal data that is kept out of
+ * everything but its own closed collections. */
+const PRIVATE_BODIES = /\/api\/(?:ingest\/declarations|declarations\/)/;
+
 Sentry.init({
   enabled,
   environment,
@@ -47,6 +55,12 @@ Sentry.init({
   dsn: "https://bd99c377832328230cfd5519914b9984@o4510028768870400.ingest.de.sentry.io/4510028773392464",
 
   tracesSampleRate,
+
+  integrations: [
+    Sentry.httpIntegration({
+      ignoreIncomingRequestBody: (url) => PRIVATE_BODIES.test(url),
+    }),
+  ],
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
