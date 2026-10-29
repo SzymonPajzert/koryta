@@ -1390,3 +1390,90 @@ class BipQueue(metaclass=ABCMeta):
     @abstractmethod
     def stats(self) -> dict[str, object]:
         raise NotImplementedError()
+
+
+@dataclass(frozen=True)
+class PersonRow:
+    """One candidacy the BIP crawler's people mode looks for (BipPersonOfInterest)."""
+
+    key: str
+    unit: str
+    priority: int
+    election_year: int
+    first_name: str
+    last_name: str
+    person: dict[str, object] = field(default_factory=dict)
+    status: str = "pending"
+    reason: str = ""
+    docs: int = 0
+
+
+@dataclass(frozen=True)
+class PersonDocRow:
+    """A file the people mode tried for a candidacy, and how that went."""
+
+    key: str
+    url: str
+    status: str  # ok | html | http <code> | error | robots | too_large
+    sha256: str = ""
+    bundle: str = ""
+    named: bool = True
+    first_name: bool = False
+    score: float = 0.0
+    anchor: str = ""
+    context: str = ""
+    page_url: str = ""
+
+
+@dataclass(frozen=True)
+class UnitRow:
+    """A unit the people mode searched, where it started and how far it got."""
+
+    unit: str
+    status: str  # searched | no_seed | unreachable | robots
+    roots: list[str] = field(default_factory=list)
+    pages: int = 0
+    declaration_pages: int = 0
+
+
+class BipPeopleStore(metaclass=ABCMeta):
+    """What the people mode knows about each candidacy (`stores.bip_people`)."""
+
+    @abstractmethod
+    def ensure_schema(self) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def upsert_people(self, rows: list[PersonRow]) -> int:
+        """Add new candidacies as pending, refresh known ones; how many are new."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def people_to_search(
+        self, *, refresh: bool, max_priority: int | None, limit: int | None
+    ) -> list[PersonRow]:
+        """Pending candidacies (all, with ``refresh``), most wanted first."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def record_unit(self, row: UnitRow, run_id: str) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def record_person(
+        self, key: str, status: str, reason: str, docs: int, run_id: str
+    ) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def record_person_docs(self, rows: list[PersonDocRow], run_id: str) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def person_docs(self, key: str) -> list[PersonDocRow]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def outcomes(self) -> dict[str, int]:
+        """Counts by status and reason: {"found": 12, "not_found:not_listed": 4}."""
+        raise NotImplementedError()

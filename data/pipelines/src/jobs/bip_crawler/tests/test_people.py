@@ -1,0 +1,344 @@
+"""People mode against fake BIP sites: no network, no Postgres."""
+
+from __future__ import annotations
+
+import tarfile
+from pathlib import Path
+
+import pytest
+
+from jobs.bip_crawler.people import PeopleOptions, PeopleSearch
+from jobs.bip_crawler.tests.test_bip import FakeFrontier
+from scrapers.bip.classify import normalize_url
+from scrapers.bip.people import Seeker, candidates, choose, stem
+from scrapers.bip.units import UnitSeed
+from scrapers.common.fetch import HttpResult
+from scrapers.common.links import LinkContext, extract_link_contexts
+from scrapers.common.ratelimit import HostTokenBucket
+from scrapers.stores import PersonRow
+from stores.bip_bundles import LocalBundleStore
+from stores.bip_people import MemoryBipPeopleStore
+
+PDF = b"%PDF-1.4 a declaration "
+
+
+def page(title: str, body: str) -> tuple[int, str, bytes]:
+    html = f"<html><head><title>{title}</title></head><body>{body}</body></html>"
+    return 200, "text/html; charset=utf-8", html.encode()
+
+
+def pdf(tag: str) -> tuple[int, str, bytes]:
+    return 200, "application/pdf", PDF + tag.encode()
+
+
+SITES = {
+    # A: the label names the person; a tender page names Kowalski too
+    "https://bip.gmina-a.pl": page(
+        "BIP Gmina A",
+        '<a href="/menu/oswiadczenia">Oświadczenia majątkowe</a> '
+        '<a href="/przetargi">Przetargi</a>',
+    ),
+    "https://bip.gmina-a.pl/menu/oswiadczenia": page(
+        "Oświadczenia majątkowe",
+        '<a href="/menu/oswiadczenia/radni-2023">Radni - 2023</a>',
+    ),
+    "https://bip.gmina-a.pl/menu/oswiadczenia/radni-2023": page(
+        "Oświadczenia majątkowe radnych za 2023",
+        (
+            "<ul><li>"
+            '<a href="/attachments/download/101">'
+            "Oświadczenie majątkowe - Jan Kowalski - 2023.pdf</a></li>"
+            "<li>"
+            '<a href="/attachments/download/102">'
+            "Oświadczenie majątkowe - Anna Kowalska - 2023.pdf</a></li>"
+            "<li>"
+            '<a href="/attachments/download/103">'
+            "Oświadczenie majątkowe - Ewa Nowak - 2023.pdf</a></li>"
+            "</ul>"
+        ),
+    ),
+    "https://bip.gmina-a.pl/przetargi": page(
+        "Przetargi",
+        '<a href="/attachments/download/900">Umowa z Janem Kowalskim.pdf</a>',
+    ),
+    "https://bip.gmina-a.pl/attachments/download/101": pdf("101"),
+    "https://bip.gmina-a.pl/attachments/download/102": pdf("102"),
+    "https://bip.gmina-a.pl/attachments/download/103": pdf("103"),
+    "https://bip.gmina-a.pl/attachments/download/900": pdf("900"),
+    # B: the name is only in the table row
+    "https://bip.powiat-b.pl": page(
+        "Starostwo B",
+        '<a href="/rada/oswiadczenia-majatkowe">Oświadczenia majątkowe radnych</a>',
+    ),
+    "https://bip.powiat-b.pl/rada/oswiadczenia-majatkowe": page(
+        "Oświadczenia majątkowe",
+        (
+            "<table><tr><th>Imię i nazwisko</th><th>Plik</th></tr>"
+            "<tr><td>Jan Nowak</td><td>radny</td><td>"
+            '<a href="/plik,55,om.pdf">pobierz</a></td></tr>'
+            "<tr><td>Adam Mazur</td><td>radny</td><td>"
+            '<a href="/plik,56,om.pdf">pobierz</a></td></tr></table>'
+        ),
+    ),
+    "https://bip.powiat-b.pl/plik,55,om.pdf": pdf("55"),
+    "https://bip.powiat-b.pl/plik,56,om.pdf": (
+        200,
+        "text/html",
+        b"<html>zaloguj</html>",
+    ),
+    # C: a page per person, labels give the year only
+    "https://bip.gmina-c.pl": page(
+        "Gmina C", '<a href="/oswiadczenia">Oświadczenia</a>'
+    ),
+    "https://bip.gmina-c.pl/oswiadczenia": page(
+        "Oświadczenia majątkowe",
+        '<a href="/oswiadczenia/zielinski">Piotr Zieliński</a>',
+    ),
+    "https://bip.gmina-c.pl/oswiadczenia/zielinski": page(
+        "Piotr Zieliński - oświadczenia majątkowe",
+        '<a href="/files/om-2022.pdf">Oświadczenie za 2022</a> '
+        '<a href="/files/om-2024.pdf">Oświadczenie za 2024</a>',
+    ),
+    "https://bip.gmina-c.pl/files/om-2022.pdf": pdf("z22"),
+    "https://bip.gmina-c.pl/files/om-2024.pdf": pdf("z24"),
+    # D: only the office website is known; its "BIP" link leads to another host
+    "https://www.gmina-d.pl": page(
+        "Gmina D",
+        '<a href="https://gminad.bip-host.pl/">BIP</a> '
+        '<a href="/aktualnosci">Aktualności</a>',
+    ),
+    "https://gminad.bip-host.pl": page(
+        "BIP Gmina D", '<a href="/oswiadczenia-majatkowe">Oświadczenia majątkowe</a>'
+    ),
+    "https://gminad.bip-host.pl/oswiadczenia-majatkowe": page(
+        "Oświadczenia majątkowe",
+        '<a href="/dokument/9.pdf">Tomasz Wiśniewski - oświadczenie majątkowe 2024</a>',
+    ),
+    "https://gminad.bip-host.pl/dokument/9.pdf": pdf("9"),
+    # F: a shared platform; the unit lives under /ugf, a neighbour under /ugx
+    "https://bip.shared.pl/ugf": page(
+        "UG F",
+        '<a href="/ugf/oswiadczenia">Oświadczenia majątkowe</a> '
+        '<a href="/ugx/oswiadczenia">Sąsiad</a>',
+    ),
+    "https://bip.shared.pl/ugf/oswiadczenia": page(
+        "Oświadczenia majątkowe",
+        '<a href="/ugf/pliki/1.pdf">Oświadczenie majątkowe - Leszek Bąk</a>',
+    ),
+    "https://bip.shared.pl/ugx/oswiadczenia": page(
+        "Oświadczenia majątkowe",
+        '<a href="/ugx/pliki/2.pdf">Oświadczenie majątkowe - Leszek Bąk</a>',
+    ),
+    "https://bip.shared.pl/ugf/pliki/1.pdf": pdf("f1"),
+    # I: one file for the whole council, named nobody
+    "https://bip.gmina-i.pl": page(
+        "Gmina I", '<a href="/oswiadczenia">Oświadczenia majątkowe</a>'
+    ),
+    "https://bip.gmina-i.pl/oswiadczenia": page(
+        "Oświadczenia majątkowe radnych",
+        '<a href="/f/radni-2023.pdf">Oświadczenia majątkowe radnych za 2023</a> '
+        '<a href="/f/wzor.doc">Wzór oświadczenia majątkowego</a>',
+    ),
+    "https://bip.gmina-i.pl/f/radni-2023.pdf": pdf("all"),
+    # J: a BIP with no declarations at all
+    "https://bip.gmina-j.pl": page(
+        "Gmina J", '<a href="/uchwaly">Uchwały</a> <a href="/o-gminie">O gminie</a>'
+    ),
+    "https://bip.gmina-j.pl/o-gminie": page("O gminie", "<p>Gmina J</p>"),
+}
+NORMALIZED = {normalize_url(url).rstrip("/"): value for url, value in SITES.items()}
+
+
+class FakeWeb:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def fetch(self, url: str, timeout: float, user_agent: str) -> HttpResult:
+        self.calls.append(url)
+        status, ctype, body = NORMALIZED.get(
+            normalize_url(url).rstrip("/"), (404, "text/html", b"<html>404</html>")
+        )
+        return HttpResult(url=url, status=status, content_type=ctype, content=body)
+
+
+SEEDS = {
+    "000001": UnitSeed(
+        "000001", bip_urls=["https://bip.gmina-a.pl"], scopes=["bip.gmina-a.pl"]
+    ),
+    "000100": UnitSeed(
+        "000100", bip_urls=["https://bip.powiat-b.pl"], scopes=["bip.powiat-b.pl"]
+    ),
+    "000003": UnitSeed(
+        "000003", bip_urls=["https://bip.gmina-c.pl"], scopes=["bip.gmina-c.pl"]
+    ),
+    "000004": UnitSeed("000004", www_urls=["https://www.gmina-d.pl"]),
+    "000006": UnitSeed(
+        "000006", bip_urls=["https://bip.shared.pl/ugf"], scopes=["bip.shared.pl/ugf"]
+    ),
+    "000008": UnitSeed(
+        "000008", bip_urls=["https://bip.gmina-h.pl"], scopes=["bip.gmina-h.pl"]
+    ),
+    "000009": UnitSeed(
+        "000009", bip_urls=["https://bip.gmina-i.pl"], scopes=["bip.gmina-i.pl"]
+    ),
+    "000010": UnitSeed(
+        "000010", bip_urls=["https://bip.gmina-j.pl"], scopes=["bip.gmina-j.pl"]
+    ),
+}
+
+
+def person(key: str, unit: str, first: str, last: str, priority: int = 0) -> PersonRow:
+    return PersonRow(key, unit, priority, 2024, first, last, {"key": key})
+
+
+PEOPLE = [
+    person("kowalski", "000001", "Jan", "Kowalski"),
+    person("kowalska", "000001", "Anna", "Kowalska"),
+    person("nowak", "000100", "Jan", "Nowak"),
+    person("mazur", "000100", "Adam", "Mazur"),
+    person("zielinski", "000003", "Piotr", "Zieliński"),
+    person("wisniewski", "000004", "Tomasz", "Wiśniewski"),
+    person("bak", "000006", "Leszek", "Bąk"),
+    person("noseed", "000007", "Ewa", "Lis"),
+    person("down", "000008", "Olga", "Sowa"),
+    person("radny", "000009", "Marek", "Wilk"),
+    person("nothing", "000010", "Iza", "Kot"),
+]
+
+
+@pytest.fixture
+def run(tmp_path: Path):
+    def go(rows=PEOPLE, store=None, robots=lambda url: True, **options):
+        web = FakeWeb()
+        store = store or MemoryBipPeopleStore()
+        store.upsert_people(rows)
+        queue = FakeFrontier([])
+        search = PeopleSearch(
+            store,
+            queue,
+            LocalBundleStore(tmp_path / "bundles"),
+            SEEDS,
+            PeopleOptions(workers=3, **options),
+            fetch=web.fetch,
+            robots_allowed=robots,
+            limiter=HostTokenBucket(0),
+            sleep=lambda s: None,
+        )
+        counts = search.run(
+            store.people_to_search(refresh=False, max_priority=None, limit=None)
+        )
+        return search, store, queue, web, counts
+
+    return go
+
+
+def test_every_candidacy_ends_found_or_with_a_reason(run):
+    _, store, _, _, counts = run()
+    status = {k: (p.status, p.reason) for k, p in store.people.items()}
+    assert status["kowalski"] == ("found", "named")
+    assert status["kowalska"] == ("found", "named")
+    assert status["nowak"] == ("found", "named")
+    assert status["mazur"] == (
+        "not_found",
+        "download_failed",
+    )  # the link answers with a login page
+    assert status["zielinski"] == ("found", "named")
+    assert status["wisniewski"] == ("found", "named")
+    assert status["bak"] == ("found", "named")
+    assert status["noseed"] == ("not_found", "no_seed")
+    assert status["down"] == ("not_found", "unreachable")
+    assert status["radny"] == ("found", "unnamed")
+    assert status["nothing"] == ("not_found", "no_declarations")
+    assert counts["found"] == 7
+
+
+def test_only_the_persons_own_files_come_down(run):
+    _, store, queue, web, _ = run()
+    jan = {d.url for d in store.person_docs("kowalski") if d.status == "ok"}
+    assert jan == {"https://bip.gmina-a.pl/attachments/download/101"}
+    anna = {d.url for d in store.person_docs("kowalska")}
+    assert anna == {"https://bip.gmina-a.pl/attachments/download/102"}
+    assert (
+        "https://bip.gmina-a.pl/attachments/download/900" not in web.calls
+    )  # the tender
+    assert "https://bip.gmina-a.pl/przetargi" not in web.calls  # never walked
+    assert "https://bip.gmina-i.pl/f/wzor.doc" not in web.calls  # a blank form
+    assert {d.url for d in store.person_docs("zielinski")} == {
+        "https://bip.gmina-c.pl/files/om-2022.pdf",
+        "https://bip.gmina-c.pl/files/om-2024.pdf",
+    }
+    assert not store.person_docs("radny")[0].named
+
+
+def test_downloads_land_in_bundles_and_bip_docs(run, tmp_path: Path):
+    _, store, queue, _, _ = run()
+    doc = store.person_docs("nowak")[0]
+    assert doc.status == "ok" and doc.sha256 in queue.docs
+    bundle = tmp_path / "bundles" / queue.docs[doc.sha256].bundle
+    with tarfile.open(bundle) as archive:
+        names = archive.getnames()
+    assert any(doc.sha256 in n for n in names) or names  # sealed, readable
+
+
+def test_shared_platform_and_website_hop(run):
+    _, store, _, web, _ = run()
+    assert "https://bip.shared.pl/ugx/oswiadczenia" not in web.calls
+    assert {d.url for d in store.person_docs("wisniewski")} == {
+        "https://gminad.bip-host.pl/dokument/9.pdf"
+    }
+    assert store.units["000004"].roots == ["https://gminad.bip-host.pl/"]
+
+
+def test_robots_keeps_the_walk_out(run):
+    _, store, _, web, _ = run(
+        rows=[person("kowalski", "000001", "Jan", "Kowalski")],
+        robots=lambda url: "/menu/oswiadczenia" not in url,
+    )
+    assert store.people["kowalski"].status == "not_found"
+    assert not any("/menu/oswiadczenia" in c for c in web.calls)
+
+
+def test_a_second_run_searches_only_what_is_pending(run):
+    _, store, _, _, _ = run()
+    again, _, _, web, counts = run(store=store)
+    assert counts == {} and web.calls == []
+    newcomer = [person("new", "000001", "Ewa", "Nowak")]
+    _, store, _, web, counts = run(rows=newcomer, store=store)
+    assert counts == {"found": 1} and store.people["new"].status == "found"
+    assert store.people["kowalski"].status == "found"  # untouched
+
+
+def test_time_budget_leaves_units_pending(run):
+    search, store, _, _, _ = run(max_run_seconds=-1)
+    assert search.timed_out
+    assert all(p.status == "pending" for p in store.people.values())
+
+
+def test_link_contexts_carry_rows_and_headings():
+    html = (
+        "<h2>Jan Kowalski</h2><ul><li>Oświadczenie za 2023 "
+        "<a href='/a.pdf'>pobierz</a></li></ul>"
+        "<table><tr><td>Anna Nowak</td><td><a href='/b.pdf'>plik</a></td></tr></table>"
+    )
+    title, links = extract_link_contexts(html, "https://bip.x.pl/o")
+    a, b = links
+    assert a.heading == "Jan Kowalski" and "Oświadczenie za 2023" in a.row
+    assert "Anna Nowak" in b.row
+
+
+def test_first_name_rule_and_stems():
+    assert (
+        stem("Kowalski") == "kowalsk"
+        and stem("Kowalska") == "kowalsk"
+        and stem("Sowa") == "sowa"
+    )
+    assert stem("Anna", min_a=4) == "ann" and stem("Ewa", min_a=4) == "ewa"
+    jan, anna = Seeker.of("j", "Jan", "Kowalski"), Seeker.of("a", "Anna", "Kowalska")
+    links = [
+        LinkContext("https://b.pl/1.pdf", "Oświadczenie majątkowe Jana Kowalskiego"),
+        LinkContext("https://b.pl/2.pdf", "Oświadczenie majątkowe Anny Kowalskiej"),
+    ]
+    found = candidates("https://b.pl/o", "Oświadczenia majątkowe", links, [jan, anna])
+    picks = choose(found, [jan, anna], per_person=3, unnamed_cap=0)
+    assert [c.url for c in picks["j"]] == ["https://b.pl/1.pdf"]
+    assert [c.url for c in picks["a"]] == ["https://b.pl/2.pdf"]

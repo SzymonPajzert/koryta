@@ -1,7 +1,7 @@
 """Utility data classes and functions for data processing."""
 
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, urlencode, urlparse
+from urllib.parse import parse_qsl, unquote, urlencode, urlparse
 
 
 @dataclass
@@ -87,3 +87,11 @@ def parse_query(query: str) -> list[tuple[str, str]]:
 def format_query(pairs: list[tuple[str, str]]) -> str:
     """Encode key/value pairs back into a query string."""
     return urlencode(pairs)
+
+
+def decode_url(url: str) -> str:
+    """A URL with its %-escapes decoded: as UTF-8, or as the cp1250 some BIPs serve."""
+    try:
+        return unquote(url, encoding="utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return unquote(url, encoding="cp1250", errors="replace")
