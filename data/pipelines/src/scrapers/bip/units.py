@@ -67,6 +67,8 @@ _URBAN_OFFICE = re.compile(
     r"^(urzad\s+(miasta|miejski)|miasto\b|gmina\s+miejska|urzad\s+gminy\s+miejskiej)"
     r"(?!.*\b(i|oraz)\s+gmin)"
 )
+#: A page of one office on Madkom's shared BIP: <office>,<type>,<id>,<slug>.html.
+_MADKOM_PAGE = re.compile(r"([^.,=]+),[a-z],\d+(?:,|\.html|$)")
 #: Catalogue types that are offices serving a council.
 CATALOGUE_TYPES = {
     "urzędy miast i gmin": "gmina",
@@ -343,7 +345,11 @@ def scope_of(url: str, shared_hosts: set[str]) -> str:
     segments = [
         s for s in NormalizedParse.parse(_with_scheme(url)).path.lower().split("/") if s
     ]
-    if segments and re.search(r"[.,=]", segments[-1]):
+    office = _MADKOM_PAGE.match(segments[0]) if len(segments) == 1 else None
+    if office:
+        # Madkom's <office>,m,<id>,<slug>.html: a page of the office's own.
+        segments = [office.group(1)]
+    elif segments and re.search(r"[.,=]", segments[-1]):
         segments = segments[:-1]  # a page, not a section
     keep = 2 if segments and segments[0] in ("web", "bip", "index", "start") else 1
     return host + ("/" + "/".join(segments[:keep]) if segments[:keep] else "")

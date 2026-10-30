@@ -249,9 +249,13 @@ def test_scopes_keep_a_unit_to_its_path_on_shared_hosts():
         scope_of("http://bip.malopolska.pl/ugtomice", shared)
         == "bip.malopolska.pl/ugtomice"
     )
+    # A page of Madkom's: the office's own, not the whole platform's.
     assert (
         scope_of("http://bip.malopolska.pl/ugtomice,m,1,start.html", shared)
-        == "bip.malopolska.pl"
+        == "bip.malopolska.pl/ugtomice"
+    )
+    assert (
+        scope_of("http://bip.malopolska.pl/a,7,x.html", shared) == "bip.malopolska.pl"
     )
     assert (
         scope_of("https://samorzad.gov.pl/web/gmina-x", shared)

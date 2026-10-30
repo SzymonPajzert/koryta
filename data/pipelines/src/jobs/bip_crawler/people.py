@@ -23,10 +23,13 @@ not_found with a reason, in ``bip_poi`` (``stores.bip_people``):
   unit had no unnamed declaration file to look inside either;
 - ``download_failed``: links named the person, and no file came down;
 - ``timeout``: the run's time ran out during the walk (retried by default);
+- ``budget``: the unit's own time (``--max-unit-minutes``) ran out;
 - ``error``: the unit's search failed unexpectedly (retried by default).
 
 Politeness is the blind crawl's: robots.txt, one request per host per
-``--rate`` seconds, the same User-Agent and fetch.
+``--rate`` seconds, the same User-Agent and fetch. Madkom's BIPs are read
+through the API their pages are drawn from (``madkom``), other pages a script
+draws are rendered (``render``).
 """
 
 from __future__ import annotations
@@ -53,6 +56,7 @@ from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
 from entities.bip import BipPersonOfInterest
 from jobs.bip_crawler import render as rendering
+from jobs.bip_crawler.madkom import Madkom
 from scrapers.bip.classify import (
     filename_from_url,
     host_of,
@@ -223,7 +227,7 @@ class _Frontier:
 
     def in_scope(self, url: str) -> bool:
         host, path = host_of(url), urlsplit(url).path.lower()
-        return any(host == h and (not p or path.startswith(p)) for h, p in self.scopes)
+        return any(host == h and _under(path, p) for h, p in self.scopes)
 
     def follow(
         self,
@@ -245,6 +249,14 @@ class _Frontier:
             score = link_score(link, seekers, depth, prefer)
             if score > -3:
                 self.add(target, score, depth)
+
+
+def _under(path: str, prefix: str) -> bool:
+    """Whether ``path`` is ``prefix`` or below it: on bip.malopolska.pl /ugt is
+    Tarnów's office (its pages /ugt,m,<id>,<slug>.html), /ugtomice another."""
+    if not prefix or path == prefix or prefix.endswith("/"):
+        return path.startswith(prefix)
+    return path.startswith(prefix) and path[len(prefix)] in "/,"
 
 
 def _same_page(url: str) -> str:
@@ -374,6 +386,8 @@ class PeopleSearch:
             if "/" in scope
         } | {"samorzad.gov.pl"}
         self._write_lock = threading.Lock()
+        #: Madkom's BIPs, read through the API their pages are drawn from.
+        self.madkom = Madkom(self._get, robots_allowed)
 
     def _past_deadline(self) -> bool:
         return self.deadline is not None and self.clock() > self.deadline
@@ -393,6 +407,22 @@ class PeopleSearch:
     def _wait_turn(self, host: str) -> None:
         while not self.limiter.acquire(host):
             self.sleep(max(0.05, self.limiter.next_available_in(host)))
+
+    def _get_page(self, url: str) -> HttpResult | str:
+        """A page of the walk: on a Madkom BIP drawn from its API (`madkom`), at
+        a call or two instead of a render's dozen; elsewhere fetched. A host's
+        first page tells which it is."""
+        if self.madkom.knows(url):
+            if not self.robots_allowed(url):
+                return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+            page = self.madkom.page(url)
+            return self._get(url) if page is None else page
+        result = self._get(url)
+        if isinstance(result, HttpResult) and result.ok and self.madkom.probe(result):
+            page = self.madkom.page(result.url)
+            if page is not None:
+                return page
+        return result
 
     @staticmethod
     def _is_page(result: HttpResult) -> bool:
@@ -567,7 +597,7 @@ class PeopleSearch:
                 out.status = "budget"
                 break
             depth, url = frontier.pop()
-            result = self._get(url)
+            result = self._get_page(url)
             if isinstance(result, str):
                 blocked += result == ROBOTS
                 down += result == UNREACHABLE
@@ -606,7 +636,13 @@ class PeopleSearch:
             result.content, result.url, result.content_type
         )
         follow = links
-        if self.render is not None and _app_shell(result.content, links):
+        if (
+            self.render is not None
+            # A Madkom page the API does not draw (a form, a calculator) has
+            # nothing a render would show.
+            and not self.madkom.knows(result.url)
+            and _app_shell(result.content, links)
+        ):
             drawn = self._drawn(result.url)
             if drawn.ok and self._is_page(drawn):
                 drawn_title, drawn_links = extract_link_contexts(
