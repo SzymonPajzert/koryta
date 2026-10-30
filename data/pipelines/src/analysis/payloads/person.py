@@ -304,6 +304,8 @@ class PeoplePayloads(Pipeline[Person]):
         person run without a register link reads everybody.
         """
         people_df = self.people.read_or_process(ctx)
+        if people_df.empty and target.kind == "person" and target.register:
+            people_df = self.everybody(ctx, target, people_df)
         if not people_df.empty:
             people_df = people_df[
                 [row_is_about(row, target) for _, row in people_df.iterrows()]
@@ -324,6 +326,39 @@ class PeoplePayloads(Pipeline[Person]):
             + (f" ({result.reason})" if result.reason else "")
         )
         return result
+
+    def everybody(
+        self, ctx: Context, target: PageTarget, selected: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Every person Extract reads, for a person page whose register link
+        selected nobody: the page is then read as a page without a link is,
+        by its id and name (`row_is_about`), and `for_person` decides as the
+        ingest would - by the page's id, then the name and the birth date it
+        stores.
+
+        `--rejestrio-id` keeps the rows holding the page's entry and no others
+        (`target_argv`), and a link typed in by hand can name an entry the
+        pipeline never bought. Maria Iwona Kasprzycka's page links 2346874,
+        which no row of the 10-29 people_enriched holds; her posts and her
+        2018 sejmik run are in a row only an odpis names, with no entry at all.
+        Her request said there was nobody in the data, and so did that of
+        every one of the 92 live pages of the 10-30 export whose link no row
+        holds.
+
+        Extract's own input (`PeopleEnriched`), read already to select from -
+        `read_or_process` keeps the frame - rather than the pipelines run again
+        with `--all`, which would read every person a second time to select the
+        same rows. `selected` where Extract has no such input of its own.
+        """
+        enriched = getattr(self.people, "people", None)
+        if enriched is None:
+            return selected
+        print(
+            f"No row holds rejestr.io {target.register}, the entry page "
+            f"{target.node_id} links: reading it out of everybody, by its id "
+            "and name"
+        )
+        return enriched.read_or_process(ctx)
 
     def published_people(self, ctx: Context) -> set[str]:
         """Node ids of the person pages the export shows as published.
