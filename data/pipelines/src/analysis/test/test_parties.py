@@ -314,11 +314,106 @@ def test_two_places_in_different_elections_are_a_career():
         [
             placed(SLD, "2010", "1208"),
             placed(PSL, "2014", "3206"),
-            # Two kinds of election in one year are two contests.
-            placed(PIS, "2023", "12", kind="Sejm"),
-            placed(PIS, "2023", "26", kind="Senat"),
+            # Two kinds of election in one year are two contests: 2019 held
+            # the European election and the parliamentary one.
+            placed(PIS, "2019", "12", kind="Parlament Europejski"),
+            placed(PIS, "2019", "26", kind="Senat"),
         ]
     ) == ["PSL", "PiS", "SLD"]
+
+
+TRZECIA_DROGA = "KKW TRZECIA DROGA PSL-PL2050 SZYMONA HOŁOWNI"
+
+
+def test_two_offices_of_one_local_election_are_one_election():
+    """Kamil Klimek, a Suwałki councillor, and a Warsaw namesake.
+
+    PKW has the two as one record, „KLIMEK Kamil Paweł 1984”: in 2024 it
+    stands for Rada miasta in Suwałki and for Rada dzielnicy in Warszawa, on
+    the Trzecia Droga list. The payload names the office as the election type,
+    and keyed by it the two runs never met, so the Warsaw committee's PSL and
+    Polska 2050 went into his page's parties on 2026-10-26. Every office of
+    one year's local election is one election.
+    """
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "election_type": "samorządu",
+                    "office": "Rada dzielnicy",
+                    "party": TRZECIA_DROGA,
+                    "election_year": 2024,
+                    "teryt_candidacy_powiat": "1465",
+                },
+                {
+                    "election_type": "samorządu",
+                    "office": "Rada miasta",
+                    "party": "KWW „RAZEM DLA SUWAŁK - CZESŁAW RENKIEWICZ”",
+                    "election_year": 2024,
+                    "teryt_candidacy_powiat": "2063",
+                },
+                {
+                    "election_type": "samorządu",
+                    "office": "Rada miasta",
+                    "party": "KOMITET WYBORCZY WYBORCÓW ŁĄCZĄ NAS "
+                    "SUWAŁKI-CZESŁAW RENKIEWICZ",
+                    "election_year": 2018,
+                    "teryt_candidacy_powiat": "2063",
+                },
+            ]
+        }
+    )
+
+    elections = _extract_elections(row)
+
+    assert [e.election_type for e in elections] == [
+        "Rada dzielnicy",
+        "Rada miasta",
+        "Rada miasta",
+    ]
+    assert in_two_places(elections) == {0, 1}
+    assert parties_from_committees(elections) == []
+
+
+def test_the_sejm_and_the_senat_of_one_year_are_one_election():
+    """Łukasz Mikołajczyk, elected to the Senat for PiS in wielkopolskie in 2015.
+
+    His undated PKW record, „MIKOŁAJCZYK Łukasz ?”, also holds a 2015 Sejm
+    run on the PSL list in dolnośląskie, likely a namesake's from there: the
+    Sejm and the Senat are filled in one election, and nobody stands for both.
+    Keyed by the chamber, the two never met and the payload named PSL for him.
+    Neither 2015 run speaks for a party now, and his PiS stands on his others.
+    """
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "election_type": "sejmu",
+                    "party": "Komitet Wyborczy Polskie Stronnictwo Ludowe",
+                    "election_year": 2015,
+                    "teryt_candidacy_powiat": "02",
+                },
+                {
+                    "election_type": "senatu",
+                    "party": "Komitet Wyborczy Prawo i Sprawiedliwość",
+                    "election_year": 2015,
+                    "teryt_candidacy_powiat": "30",
+                },
+                {
+                    "election_type": "senatu",
+                    "party": PIS,
+                    "election_year": 2019,
+                    "teryt_candidacy_powiat": "30",
+                },
+            ]
+        }
+    )
+
+    elections = _extract_elections(row)
+
+    assert in_two_places(elections) == {0, 1}
+    assert parties_from_committees(elections) == ["PiS"]
+    assert parties_from_committees(elections[:2]) == []
 
 
 def test_a_candidacy_with_no_place_is_in_no_second_place():

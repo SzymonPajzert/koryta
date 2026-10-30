@@ -19,6 +19,7 @@ from analysis.payloads.site import (
     INFORMATIONAL_REASONS,
     SiteSnapshot,
     day_of,
+    election_kind,
     field,
     register_entry,
 )
@@ -1144,18 +1145,38 @@ def parties_from_committees(elections: list[Election]) -> list[str]:
 def in_two_places(elections: list[Election]) -> set[int]:
     """The candidacies that share an election with one in another place.
 
-    By their position in `elections`. One office per election: somebody who
-    stands in two places in one year's election of one kind is two people, the
-    rule `split_records_by_place` splits PKW records by and
+    By their position in `elections`. One place per election: somebody who
+    stands in two places in one election is two people, the rule
     `test_nobody_stands_in_two_places_at_once` counts on the site. A code
     another one starts with is not a second place - a sejmik candidacy and a
     council one in the same województwo - and a candidacy with no code, as on
     the European lists, is in none.
+
+    An election is a year and the kind of election the office is filled in
+    (`election_kind`), which is how that test groups the site's candidacies
+    (`election_stood_in` reads a named office the same way, and a payload's
+    candidacy always names one): the Sejm and the Senat of one year are one
+    parliamentary election, and every local office of one year, „Samorząd”
+    included, is one local election. Until 2026-10-30 this keyed by the office,
+    as `_extract_elections` names it, so a Warsaw namesake's 2024 Rada
+    dzielnicy run never met Kamil Klimek's Rada miasta run in Suwałki, and its
+    Trzecia Droga list gave his page PSL and Polska 2050. On the 2026-10-30
+    people_enriched the office key missed a clash in 5,955 rows, and the
+    payloads of 37 published pages carried a party only such a clash names.
+
+    A Sejm and a Senat run of one year in one województwo are one place here,
+    as they are to that test, though nobody stands for both chambers:
+    `test_a_person_stands_once_in_a_national_election` counts such a pair
+    once both are published. `split_records_by_place` compares PKW's election
+    types, so a Sejm run beside a Senat one does not split a record there.
+    Splitting on it would change no payload: on the 2026-10-24 person_pkw it
+    splits 21 undated records, and each part keeps the record's name and birth
+    year, so it attaches to everyone the record did. The clash is caught here.
     """
     by_election: dict[tuple, list[tuple[int, str]]] = collections.defaultdict(list)
     for index, election in enumerate(elections):
         if election.teryt:
-            key = (election.election_year, election.election_type)
+            key = (election.election_year, election_kind(election.election_type))
             by_election[key].append((index, election.teryt))
     clashing: set[int] = set()
     for placed in by_election.values():
