@@ -682,6 +682,28 @@ class TestWaterPairWithoutAWaterUtility(unittest.TestCase):
                     categories_for(krs, activity, treasury=True), ["skarb-panstwa"]
                 )
 
+    def test_a_works_filed_by_the_pair_alone_is_left_in_no_sector(self):
+        # KRS 0000051491, Fabryka Lozysk Tocznych - Krasnik: bearings, the
+        # pair 6th and 7th of 10, and `wodociagi` was all the site filed it
+        # under. Its article names no sector either, so the answer is none.
+        flt = "28.15.Z 25.73.Z 28.41.Z 33.12.Z 35.13.Z 36.00.Z 37.00.Z".split()
+        self.assertNotWater("0000051491", flt)
+        wiki = ["Polskie przedsiębiorstwa przemysłu metalowego", "Producenci łożysk"]
+        self.assertEqual(categories_for("0000051491", flt, wiki_categories=wiki), [])
+
+    def test_a_generator_keeps_its_own_sector(self):
+        # KRS 0000973325, ARP Energia: the pair 5th and 6th of 10
+        arp = ["35.11.Z", "35.12.Z", "35.13.Z", "35.14.Z", "36.00.Z", "37.00.Z"]
+        self.assertNotWater("0000973325", arp)
+        self.assertEqual(categories_for("0000973325", arp), ["energetyka"])
+
+    def test_a_waste_company_outside_any_gmina_keeps_its_own_sector(self):
+        # KRS 0000191663, Ekotar (Tarnow), held by Grupa Azoty companies: the
+        # pair 5th and 6th of 60
+        ekotar = ["38.32.Z", "23.64.Z", "42.21.Z", "43.99.Z", "36.00.Z", "37.00.Z"]
+        self.assertNotWater("0000191663", ekotar)
+        self.assertEqual(categories_for("0000191663", ekotar), ["odpady"])
+
 
 class TestWikipediaCategories(unittest.TestCase):
     """The categories of a company's Polish article, where the register is silent.
