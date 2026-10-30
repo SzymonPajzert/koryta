@@ -10,7 +10,7 @@
   >
     <template #summary>
       <!-- Disputed: what the readers typed, since that is the dispute.
-           Different: the agreed reading against the page's date, the digits
+           Different: the settled reading against the page's date, the digits
            that differ marked - which is the decision. -->
       <template v-if="kind === 'different' && row.agreed">
         <AdminDeclarationsDateCompare
@@ -49,6 +49,11 @@
       <AdminRowFact label="Oświadczenie za rok">
         {{ row.declarationYear ?? "nie podano" }}
       </AdminRowFact>
+      <AdminRowFact v-if="row.agreed && row.agreedBy" label="Kto ustalił datę">
+        <span data-agreed-by>{{
+          declarationSettledByLabels[row.agreedBy]
+        }}</span>
+      </AdminRowFact>
       <AdminRowFact label="Odczyt maszyny">{{ machineText }}</AdminRowFact>
       <AdminRowFact label="Ostatnia zmiana">
         {{ shortWarsawTime(row.updatedAt, now) }}
@@ -71,7 +76,7 @@
             Spróbuj ponownie
           </v-btn>
         </p>
-        <template v-else-if="images">
+        <template v-else-if="images?.date">
           <!-- At its own size and scrolled sideways on a phone: scaled to a
                375px screen a crop is about 40px tall, which is too small to
                read the digits that are the whole point of it. -->
@@ -88,6 +93,11 @@
             />
           </div>
         </template>
+        <!-- A date the job read itself off a typed form settles without
+             readers, and need not come with a picture. -->
+        <p v-else-if="images" class="drev__note" data-crop-missing>
+          Zadanie odczytało tę datę samo i nie przysłało wycinka.
+        </p>
         <a
           class="drev__document"
           :href="row.documentUrl"
@@ -129,10 +139,11 @@
               {{ polishCounting(reading.readers, "osoba", "osoby", "osób") }}
             </span>
             <span
-              v-if="reading.value === row.agreed"
+              v-if="agreedTag && reading.value === row.agreed"
               class="arow-tag bg-surface-sage text-ink-sage"
+              data-agreed-tag
             >
-              uzgodniony
+              {{ agreedTag }}
             </span>
             <v-btn
               v-else-if="kind === 'disputed'"
@@ -161,8 +172,18 @@
               {{ polishCounting(row.unreadable, "osoba", "osoby", "osób") }}
             </span>
           </li>
-          <li v-if="!row.readings.length && !row.unreadable" class="drev__note">
-            Nikt jeszcze nie odpowiedział.
+          <!-- No crop on these lists is still waiting for readers: one
+               without readings was settled before any reader read it. -->
+          <li
+            v-if="!row.readings.length && !row.unreadable"
+            class="drev__note"
+            data-no-readings
+          >
+            {{
+              row.agreedBy === "machine"
+                ? "Nikt z czytelników nie odczytał tego wycinka: datę odczytało zadanie."
+                : "Nikt z czytelników nie odczytał tego wycinka."
+            }}
           </li>
         </ul>
 
@@ -191,8 +212,9 @@
             </span>
             <!-- A dispute is read blind here too: the page's date beside
                  the crop is the one answer that must not be copied, since a
-                 reading that matches it publishes. It is a click away for
-                 when the crop has been decided. -->
+                 date that matches it is taken for a match, whichever of the
+                 two is wrong. It is a click away for when the crop has been
+                 decided. -->
             <template v-if="kind === 'different' && row.agreed">
               <AdminDeclarationsDateCompare
                 :reading="row.agreed"
@@ -315,6 +337,7 @@ import {
   declarationDateText,
   declarationDifferenceLabels,
   declarationDifferenceTone,
+  declarationSettledByLabels,
 } from "~/utils/declarationsAdmin";
 import { longDate } from "~~/shared/dates";
 import { parseTypedDate } from "~~/shared/declarations";
@@ -322,8 +345,8 @@ import type { DeclarationReviewRow } from "~~/shared/declarations";
 import { shortWarsawTime } from "~~/shared/jobs";
 
 /** One crop an admin has to decide on: readers who could not agree on it
- * (`disputed`), or a date they agreed on that the page contradicts
- * (`different`).
+ * (`disputed`), or a settled date the page contradicts (`different`) -
+ * readers', the job's or an admin's, which the open row names.
  *
  * Open, it shows the crop itself - fetched when the row opens, since a list of
  * crops is a list of handwriting nobody asked to see yet - with what readers
@@ -430,6 +453,16 @@ const maxReaders = computed(() =>
   ),
 );
 
+/** The tag beside the reading the crop is settled on: „uzgodniony” where
+ * readers agreed on it, „przyjęty” where an admin took it, even one some
+ * readers typed. None for the job's date: the job settles only a crop nobody
+ * has answered. */
+const agreedTag = computed(() => {
+  if (props.row.agreedBy === "admin") return "przyjęty";
+  if (props.row.agreedBy === "machine") return null;
+  return "uzgodniony";
+});
+
 const machineText = computed(() => {
   const machine = props.row.machine;
   if (!machine?.birthDate) return "brak";
@@ -448,7 +481,9 @@ const host = computed(() => {
 
 // ---- the crop ----
 
-const images = ref<{ date: string; name: string | null } | null>(null);
+/** The pictures, as data URLs; both null for a crop the job read itself
+ * and sent without one. */
+const images = ref<{ date: string | null; name: string | null } | null>(null);
 const imagesLoading = ref(false);
 const imagesError = ref<string | null>(null);
 
@@ -456,10 +491,12 @@ async function loadImages() {
   imagesLoading.value = true;
   imagesError.value = null;
   try {
-    images.value = await authRequest<{ date: string; name: string | null }>(
-      `/api/declarations/${encodeURIComponent(props.row.id)}/images`,
-      { method: "GET" },
-    );
+    images.value = await authRequest<{
+      date: string | null;
+      name: string | null;
+    }>(`/api/declarations/${encodeURIComponent(props.row.id)}/images`, {
+      method: "GET",
+    });
   } catch {
     imagesError.value = "Nie udało się wczytać wycinka.";
   } finally {

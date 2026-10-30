@@ -115,7 +115,7 @@
           <AdminSectionHead
             title="Inna data niż na stronie"
             :count="overview.lists.different.length"
-            info="Czytelnicy zgodzili się co do daty, ale strona osoby ma inną. Jedna cyfra różnicy to zwykle źle odczytany wycinek albo literówka na stronie; inny rok to częściej oświadczenie innej osoby, i wtedy wycinek się wycofuje."
+            info="Data z wycinka nie zgadza się z datą na stronie osoby. Tę datę uzgodnili czytelnicy, odczytało zadanie albo przyjął administrator; kto, widać w otwartym wierszu. Jedna cyfra różnicy to zwykle źle odczytany wycinek albo literówka na stronie; inny rok to częściej oświadczenie innej osoby, i wtedy wycinek się wycofuje. Przyjęta tu data, która dalej różni się od strony, wraca na tę listę, a szkic z tą samą datą trafia do sekcji „Wstrzymane publikacje”."
           />
           <div data-testid="declarations-different">
             <AdminRowList v-if="overview.lists.different.length">
@@ -145,7 +145,7 @@
           <AdminSectionHead
             title="Wstrzymane publikacje"
             :count="overview.lists.held.length"
-            info="Osoby z tą samą datą, których stron nie opublikowano ani automatycznie, ani przyciskiem „Opublikuj z kolejki”, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. Opublikować można je ręcznie z ich strony."
+            info="Osoby z tą samą datą, których stron nie opublikowano ani automatycznie, ani przyciskiem „Opublikuj z kolejki”, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. Szkic można opublikować ręcznie z jego strony. Wiersz zostaje wtedy na liście, ze stroną oznaczoną jako publiczna."
           />
           <div data-testid="declarations-held">
             <AdminRowList v-if="overview.lists.held.length">
@@ -168,7 +168,7 @@
           <AdminSectionHead
             title="Opublikowane ostatnio"
             :count="overview.lists.recent.length"
-            info="Strony, które opublikował automat albo administrator przyciskiem „Opublikuj z kolejki”, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia; kto, widać w otwartym wierszu. Każda ma na sobie notkę z linkiem do oświadczenia."
+            info="Strony, które opublikował automat albo administrator przyciskiem „Opublikuj z kolejki”, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia; kto, widać w otwartym wierszu. Każda ma na sobie notkę z linkiem do oświadczenia, dopóki jego odczyt potwierdza datę urodzenia na stronie."
           >
             <v-btn
               v-if="overview.lists.recent.length > RECENT_LIMIT"
@@ -314,13 +314,15 @@ const headInfo = computed(() => {
   return (
     "Zadanie na predatorze szuka w BIP-ach oświadczeń majątkowych radnych, " +
     "którzy mają stronę w serwisie, wycina z nich linię z datą urodzenia i " +
-    "przesyła wycinki tutaj. Czytelnicy przepisują datę z wycinka, nie " +
-    "widząc daty ze strony osoby. Odczyt jest " +
+    "przesyła wycinki tutaj. Datę wpisaną na komputerze zadanie ustala samo, " +
+    "gdy odczyt jest pewny; z pozostałych wycinków datę przepisują " +
+    "czytelnicy, nie widząc daty ze strony osoby. Odczyt czytelników jest " +
     `rozstrzygnięty przy zgodzie co najmniej ${polishCountingGenitive(READERS_TO_AGREE, "osoby", "osób")} ` +
-    `i przewadze ${polishCountingGenitive(READERS_TO_AGREE, "głosu", "głosów")} nad każdą inną datą; ` +
-    "wtedy porównuje się go z datą na stronie osoby. Szkic z tą samą datą " +
-    "publikuje się sam, razem z zatrudnieniami w KRS i wyborami w regionie " +
-    `z oświadczenia, ${pace}. ` +
+    `i przewadze ${polishCountingGenitive(READERS_TO_AGREE, "głosu", "głosów")} nad każdą inną datą, ` +
+    "a wycinek, co do którego się nie zgodzą, rozstrzyga administrator. " +
+    "Ustaloną datę porównuje się z datą na stronie osoby. Szkic z tą samą " +
+    "datą publikuje się sam, razem z zatrudnieniami w KRS i wyborami w " +
+    `regionie z oświadczenia, ${pace}. ` +
     "Przycisk „Opublikuj z kolejki” publikuje od razu do " +
     `${polishCountingGenitive(PRESS_BATCH, "czekającej osoby", "czekających osób")}, ` +
     "ponad dzienny limit, także przy wyłączonym publikowaniu automatycznym. " +
@@ -328,7 +330,9 @@ const headInfo = computed(() => {
     "automatycznej, więc część może zostać wstrzymana, a „Dziś” liczy tylko " +
     "publikacje automatyczne. W czasie " +
     `importu osób, w tym nocnego od ${from}:00 do ${to}:00, nie publikuje ` +
-    "się nikogo, także przyciskiem."
+    "się nikogo, także przyciskiem. Data przyjęta przez administratora " +
+    "nikogo nie publikuje: szkic z nią czeka w sekcji „Wstrzymane " +
+    "publikacje” na publikację ręczną."
   );
 });
 

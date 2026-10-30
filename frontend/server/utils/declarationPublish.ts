@@ -17,6 +17,18 @@
  *   was filed for. Two pages born that day are both held: one of them is the
  *   person, and the reading cannot say which.
  *
+ * A date an admin settled on /admin/oswiadczenia (`decideExtract`) meets the
+ * pages the same way, but a draft born that day is held (`admin_decision`)
+ * and a public one is left as it is: the admin chose the date with the
+ * pages' dates a click away, so it confirms nothing. It is linked on no page
+ * and publishes none, the default until Szymon decides whether an admin's
+ * date may.
+ *
+ * What a public page shows is read off the crops when it is asked for
+ * (`confirmedDeclarations`), not off the record: the record keeps what
+ * matched when it was written, and the page's date, or the crop's, can
+ * change after that.
+ *
  * Publishing re-reads everything and holds the page rather than overrule
  * anybody (`publishPage`). The daily limit lives in the runtime config and is
  * 0 until Szymon sets it, so as shipped the site queues pages and publishes
@@ -94,7 +106,7 @@ const READINGS_PER_PAGE = 50;
 const actor = { uid: DECLARATION_ACTOR };
 
 /** A declaration as a page links it. */
-type LinkedDeclaration = {
+export type LinkedDeclaration = {
   url: string;
   year: number | null;
   unit: string;
@@ -207,6 +219,13 @@ async function peopleImportBusy(now: Date): Promise<boolean> {
  * compared again (`pageRecheck`): the import may bring the undated page a
  * date, and a reviewer may correct the other one, and either can make the
  * crop a match - or a second page with its date, which holds both.
+ *
+ * A date an admin settled holds every draft born that day, for somebody to
+ * publish by hand (`admin_decision`), and joins no record that readers or
+ * the job made (`nextPublication`). A public page born that day gets no
+ * record at all: it is up already, the admin's date links nothing on it, and
+ * a hold would sit on the admin's list of held pages asking for nothing. A
+ * page born on another day is flagged as for any reading.
  */
 export async function matchPages(
   db: Firestore,
@@ -220,6 +239,7 @@ export async function matchPages(
     return { extractId, pageMatch: null, outcomes: {}, changed: false };
   }
 
+  const byAdmin = settledByAdmin(extract);
   const pages = await livePages(db, asStrings(extract.personIds));
   const outcomes: Record<string, PageOutcome> = {};
   const born: LivePage[] = [];
@@ -231,7 +251,7 @@ export async function matchPages(
   }
   for (const page of born) {
     outcomes[page.id] =
-      born.length > 1
+      byAdmin || born.length > 1
         ? "held"
         : pageIsPublic(page.data)
           ? "confirmed"
@@ -243,11 +263,13 @@ export async function matchPages(
   for (const page of pages) {
     const outcome = outcomes[page.id]!;
     if (outcome === "no_date") continue;
+    if (outcome === "held" && byAdmin && pageIsPublic(page.data)) continue;
     const wrote =
       outcome === "different"
         ? await flagAnotherDate(db, page.id, extractId, extract, now)
         : await recordPublication(db, page.id, {
             outcome,
+            byAdmin,
             extractId,
             declaration,
             now,
@@ -287,6 +309,15 @@ function agreedDay(extract: DocumentData | undefined): string | null {
   const agreed = extract.agreed as { value?: unknown; kind?: unknown } | null;
   if (agreed?.kind !== "date" || typeof agreed.value !== "string") return null;
   return isoDay(agreed.value) ? agreed.value : null;
+}
+
+/** Whether the crop's date is one an admin settled (`decideExtract`), rather
+ * than one readers agreed on without seeing the page's or the job read off a
+ * typed form at upload. */
+function settledByAdmin(extract: DocumentData | undefined): boolean {
+  return (
+    (extract?.agreed as { by?: unknown } | null | undefined)?.by === "admin"
+  );
 }
 
 /** The page's birth date as stored, "" for none. Compared as written, the way
@@ -408,6 +439,8 @@ async function recordPublication(
   pageId: string,
   args: {
     outcome: "queued" | "held" | "confirmed";
+    /** The crop's date is an admin's: `held` then means `admin_decision`. */
+    byAdmin: boolean;
     extractId: string;
     declaration: LinkedDeclaration;
     now: Date;
@@ -434,18 +467,30 @@ async function recordPublication(
  * published that is left as the reason for the pass that holds its slot,
  * which holds the page and gives the slot back (`publishPage`): taking the
  * status from under it here would strand the slot.
+ *
+ * An admin's date only ever holds a page: one no record names yet, or one an
+ * admin's date holds already. It joins no other record, where it would be
+ * linked on the page and read as a match when the page is published. A
+ * reading nobody chose takes a page only an admin's date held over as if it
+ * were new, without the admin's crops: that hold stood for no doubt, only for
+ * the lack of such a reading.
  */
 function nextPublication(
   existing: StoredPublication | undefined,
   pageId: string,
   args: {
     outcome: "queued" | "held" | "confirmed";
+    byAdmin: boolean;
     extractId: string;
     declaration: LinkedDeclaration;
     now: Date;
   },
 ): Partial<StoredPublication> | null {
-  const was = existing?.status;
+  const adminHold =
+    existing?.status === "held" && existing.reason === "admin_decision";
+  if (args.byAdmin && existing && !adminHold) return null;
+  const before = adminHold && !args.byAdmin ? undefined : existing;
+  const was = before?.status;
   const status: PublicationStatus =
     was === "published" || was === "publishing"
       ? was
@@ -454,20 +499,20 @@ function nextPublication(
         : args.outcome;
   const reason: PublicationHoldReason | null =
     status === "held"
-      ? (existing?.reason ?? "two_pages")
+      ? (before?.reason ?? (args.byAdmin ? "admin_decision" : "two_pages"))
       : status === "publishing" &&
-          (args.outcome === "held" || existing?.reason === "two_pages")
+          (args.outcome === "held" || before?.reason === "two_pages")
         ? "two_pages"
         : null;
-  const knownIds = existing?.extractIds ?? [];
-  const known = existing?.declarations ?? [];
+  const knownIds = before?.extractIds ?? [];
+  const known = before?.declarations ?? [];
   const extractIds = unique([...knownIds, args.extractId]);
   const declarations = withDeclaration(known, args.declaration);
 
   if (
-    existing &&
+    before &&
     was === status &&
-    (existing.reason ?? null) === reason &&
+    (before.reason ?? null) === reason &&
     extractIds.length === knownIds.length &&
     declarations.length === known.length
   ) {
@@ -486,7 +531,7 @@ function nextPublication(
     // When the page first waited: the queue is first come, first served by
     // it, and the admin list of held pages is ordered by it, so a page held
     // the moment it matched - two pages with one date - is stamped too.
-    ...((status === "queued" || status === "held") && !existing?.queuedAt
+    ...((status === "queued" || status === "held") && !before?.queuedAt
       ? { queuedAt: at }
       : {}),
     ...(status === "held" && was !== "held" ? { heldAt: at } : {}),
@@ -1316,7 +1361,10 @@ function oldestFirst(a: StoredRevision, b: StoredRevision): number {
   return a.id.localeCompare(b.id);
 }
 
-/** The crops still settled on a full date, of those named. */
+/** The crops still settled on a full date, of those named. One an admin has
+ * settled since it was recorded is left out: an admin's date is no match the
+ * automation acts on (`matchPages`), so a page whose crop an admin corrected
+ * to the page's date is held as no longer matching, not published on it. */
 async function agreedExtracts(
   db: Firestore,
   ids: readonly string[],
@@ -1327,7 +1375,38 @@ async function agreedExtracts(
   );
   return snapshots
     .map((snapshot) => snapshot.data())
-    .filter((data): data is DocumentData => agreedDay(data) !== null);
+    .filter(
+      (data): data is DocumentData =>
+        agreedDay(data) !== null && !settledByAdmin(data),
+    );
+}
+
+/**
+ * The declarations a page's record may show on the page
+ * (/api/nodes/<id>/declarations): those of its crops that still confirm the
+ * page's birth date as it stands, settled on that very day by readers or by
+ * the job and never by an admin (`agreedExtracts`), each file once.
+ *
+ * The record lists the crops that matched when it was written, and nothing
+ * takes one off it: since then a reviewer may have corrected the page's
+ * date, and an admin may have withdrawn the crop or settled it on another
+ * day, the page's new one included. So the crops are read again here, the
+ * way `publishPage` reads them, rather than the record trusted.
+ */
+export async function confirmedDeclarations(
+  db: Firestore,
+  record: DocumentData | undefined,
+  page: DocumentData,
+): Promise<LinkedDeclaration[]> {
+  const born = birthDateOf(page);
+  if (!born) return [];
+  const crops = await agreedExtracts(db, asStrings(record?.extractIds));
+  return crops
+    .filter((crop) => agreedDay(crop) === born)
+    .reduce<LinkedDeclaration[]>(
+      (linked, crop) => withDeclaration(linked, declarationOf(crop)),
+      [],
+    );
 }
 
 type Unit = {

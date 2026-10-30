@@ -117,19 +117,24 @@ const readers = `co najmniej ${READERS_TO_AGREE} ${plural(READERS_TO_AGREE, "oso
 
 /** How a date is read and what the publication brought with it - the
  * method, which a reader may want and does not need to follow the link. In
- * general terms on purpose: nothing here is about this person's crop. A typed
- * date is read by the job alone (Szymon, 2026-10-29), so the readers are said
- * to read the handwritten ones. The page's date is not said to be KRS's: it
- * can come from Wikipedia or an editor as well. The limit is not given as a
- * number - it lives in the runtime config, not on this page. */
+ * general terms on purpose: nothing here is about this person's crop. Only a
+ * typed date the job is sure of settles without readers (Szymon, 2026-10-29);
+ * handwriting, scans and a typed date it is unsure of go to them, so the
+ * readers are said to read everything else, not the handwritten ones alone.
+ * A date an admin settled never reaches this line, nor a reading the page's
+ * date no longer matches: the endpoint lists only crops readers or the job
+ * settled on that very day (`confirmedDeclarations`). The page's date is not
+ * said to be KRS's: it can come from Wikipedia or an editor as well. The
+ * limit is not given as a number - it lives in the runtime config, not on
+ * this page. */
 const method = computed(() => {
   const read =
     "Samorządowcy co roku składają oświadczenia majątkowe, a urząd " +
     "publikuje je w swoim BIP. Datę urodzenia z oświadczenia odczytuje " +
-    "program, gdy jest wpisana na komputerze, a gdy odręcznie - " +
-    `${readers}, każda osobno i nie widząc daty z tej strony. Odczyt ` +
-    "zgadza się z datą urodzenia na tej stronie, więc to oświadczenie tej " +
-    "samej osoby.";
+    "program, gdy jest wpisana na komputerze i odczyt jest pewny, a w " +
+    `pozostałych przypadkach - ${readers}, każda osobno i nie widząc daty ` +
+    "z tej strony. Odczyt zgadza się z datą urodzenia na tej stronie, więc " +
+    "to oświadczenie tej samej osoby.";
   if (!autoPublished.value) return withoutOrphans(read);
   return withoutOrphans(
     `${read} Dlatego strona została opublikowana automatycznie, w ramach ` +

@@ -4,6 +4,7 @@ import type {
   DrainResult,
   ExtractStatus,
   PublicationHoldReason,
+  SettledBy,
 } from "~~/shared/declarations";
 import { shortDate, warsawDate } from "~~/shared/dates";
 import { nominativeNoun, polishNumber } from "~/composables/polish";
@@ -44,6 +45,7 @@ export function declarationReasonLabel(code: string): string {
 
 export const declarationHoldLabels: Record<PublicationHoldReason, string> = {
   two_pages: "dwie strony tej osoby",
+  admin_decision: "datę ustalił administrator",
   needs_split: "strona do rozdzielenia",
   kept_hidden: "administrator zostawił stronę ukrytą",
   pending_proposal: "czeka propozycja zmiany od osoby",
@@ -62,6 +64,7 @@ export const declarationHoldLabels: Record<PublicationHoldReason, string> = {
 export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   two_pages:
     "Ta osoba ma w serwisie dwie strony. Połącz je albo opublikuj właściwą ręcznie.",
+  admin_decision: "Opublikuj ręcznie ze strony osoby, jeśli się zgadza.",
   needs_split:
     "Strona jest oznaczona do rozdzielenia. Najpierw ją rozdziel, potem publikuj.",
   kept_hidden:
@@ -88,11 +91,38 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
     "Inny odczytany wycinek tej osoby podaje inną datę. Sprawdź oba oświadczenia.",
 };
 
+/** What the open row says instead when the page is public now. An admin's
+ * date gives a public page no record (`matchPages`), but a hold is never
+ * cleared, so a draft held for one and then published by hand stays on the
+ * list, where „Opublikuj ręcznie” would ask for what cannot be done. */
+const declarationPublicHoldNotes: Partial<
+  Record<PublicationHoldReason, string>
+> = {
+  admin_decision:
+    "Strona jest już publiczna. Oświadczenia na niej nie podpięto, bo datę ustalił administrator.",
+};
+
+/** The note of a held row: what an admin can do about it, or, on a page that
+ * is public now and has nothing left to publish, what stands. */
+export function declarationHoldNote(
+  reason: PublicationHoldReason,
+  pagePublic: boolean,
+): string {
+  return (
+    (pagePublic ? declarationPublicHoldNotes[reason] : undefined) ??
+    declarationHoldNotes[reason]
+  );
+}
+
 /** Blue for a hold that is somebody's decision, which the automation only
- * respects; amber for a doubt somebody has to clear up. */
+ * respects; amber for a doubt somebody has to clear up. An admin's date is
+ * amber on a draft, which waits for somebody to check it and publish it by
+ * hand, and blue on a page that is public already, where it asks nothing. */
 export function declarationHoldTone(
   reason: PublicationHoldReason | null,
+  pagePublic = false,
 ): RowTone {
+  if (reason === "admin_decision") return pagePublic ? "info" : "warning";
   return reason === "kept_hidden" ||
     reason === "pending_proposal" ||
     reason === "revision_rejected" ||
@@ -100,6 +130,13 @@ export function declarationHoldTone(
     ? "info"
     : "warning";
 }
+
+/** Who settled the date of a crop on an admin list, for its open row. */
+export const declarationSettledByLabels: Record<SettledBy, string> = {
+  readers: "czytelnicy",
+  machine: "zadanie, z daty wpisanej na komputerze",
+  admin: "administrator",
+};
 
 export const declarationStatusLabels: Record<ExtractStatus, string> = {
   open: "czeka na czytelników",

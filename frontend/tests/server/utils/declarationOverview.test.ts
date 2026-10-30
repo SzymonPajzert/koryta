@@ -132,7 +132,12 @@ beforeEach(() => {
       {
         status: "agreed",
         pageMatch: "different",
-        agreed: { value: "1980-01-01", at: at("2026-10-28T09:00:00Z") },
+        agreed: {
+          value: "1980-01-01",
+          kind: "date",
+          by: "admin",
+          at: at("2026-10-28T09:00:00Z"),
+        },
         personIds: ["nowak"],
         units: [{ teryt: "021704", office: "Rada gminy" }],
         url: "https://bip.strzelin.pl/2",
@@ -309,6 +314,8 @@ describe("countEverything", () => {
           { value: "1979-07-16", readers: 2 },
         ],
         unreadable: 2,
+        agreed: null,
+        agreedBy: null,
         people: [
           {
             id: "kowalska",
@@ -319,16 +326,19 @@ describe("countEverything", () => {
         ],
       }),
     ]);
+    // Whose date it is, so the row does not take an admin's for the readers'.
     expect(lists.different[0]).toMatchObject({
       id: "x2",
       unit: "TERYT 021704",
       agreed: "1980-01-01",
+      agreedBy: "admin",
     });
     expect(lists.held).toEqual([
       expect.objectContaining({
         personId: "kowalska",
         name: "Anna Kowalska",
         reason: "pending_proposal",
+        pagePublic: false,
         unit: "Strzelin",
       }),
     ]);
@@ -336,6 +346,39 @@ describe("countEverything", () => {
       ["run-1", 2],
       ["run-0", 1],
     ]);
+  });
+
+  it("says whose a date is, readers' or the job's, and whether a held page is public by now", async () => {
+    stored.set("declarationExtracts/x2", {
+      ...stored.get("declarationExtracts/x2")!,
+      agreed: { value: "1980-01-01", kind: "date", by: "machine" },
+    });
+    // Published by hand while it waited.
+    stored.set("nodes/kowalska", {
+      ...stored.get("nodes/kowalska")!,
+      published: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { lists } = await countEverything(db as any, 0, NOW);
+
+    expect(lists.different[0]).toMatchObject({ agreedBy: "machine" });
+    expect(lists.held[0]).toMatchObject({
+      personId: "kowalska",
+      pagePublic: true,
+    });
+
+    stored.set("declarationExtracts/x2", {
+      ...stored.get("declarationExtracts/x2")!,
+      agreed: { value: "1980-01-01", kind: "date", by: "readers" },
+    });
+    const again = await countEverything(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      db as any,
+      0,
+      NOW,
+    );
+    expect(again.lists.different[0]).toMatchObject({ agreedBy: "readers" });
   });
 });
 

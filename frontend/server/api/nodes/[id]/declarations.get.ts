@@ -1,15 +1,23 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getRouterParam } from "h3";
+import { confirmedDeclarations } from "~~/server/utils/declarationPublish";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { resolveMergedNode } from "~~/server/utils/merge";
 import { pageIsPublic } from "~~/shared/model";
-import type { LocalOffice, PersonDeclarations } from "~~/shared/declarations";
+import type { PersonDeclarations } from "~~/shared/declarations";
 
 /** The asset declarations a published person's page links, and whether the
  * site published the page itself because of one.
  *
  * Only public facts: the declaration's address on BIP, its year, the unit and
  * office. Never the crops, never what readers typed.
+ *
+ * Only a declaration whose crop still confirms the page's birth date is
+ * listed (`confirmedDeclarations`): the record keeps what matched when it was
+ * written, and since then the page's date may have been corrected, or an
+ * admin may have withdrawn the crop or settled it on another day. A page left
+ * with none says nothing, the line about its automatic publication included,
+ * since that line rests on the match.
  *
  * A 404, never an empty answer, for a page that is not public or has nothing
  * to show. Nitro does not cache a 404, so the note appears the moment a page
@@ -33,35 +41,26 @@ export default authCachedEventHandler(
     ).data();
     const shown =
       record?.status === "published" || record?.status === "confirmed";
-    const declarations = (
-      Array.isArray(record?.declarations) ? record.declarations : []
-    ).filter(
-      (declaration: { url?: unknown }) =>
-        typeof declaration.url === "string" &&
-        /^https?:\/\//.test(declaration.url),
-    );
-    if (!shown || declarations.length === 0) {
+    const declarations = shown
+      ? (await confirmedDeclarations(db, record, person)).filter(
+          (declaration) => /^https?:\/\//.test(declaration.url),
+        )
+      : [];
+    if (declarations.length === 0) {
       throw createError({ statusCode: 404, message: `No declarations ${id}` });
     }
 
     return {
       autoPublished:
-        record.status === "published" && record.autoPublished === true
+        record?.status === "published" && record.autoPublished === true
           ? { at: isoOf(record.publishedAt) }
           : null,
-      declarations: declarations.map(
-        (declaration: {
-          url: string;
-          year?: number | null;
-          unit?: string | null;
-          office?: LocalOffice | null;
-        }) => ({
-          url: declaration.url,
-          year: declaration.year ?? null,
-          unit: declaration.unit ?? "",
-          office: declaration.office ?? null,
-        }),
-      ),
+      declarations: declarations.map(({ url, year, unit, office }) => ({
+        url,
+        year,
+        unit,
+        office,
+      })),
     };
   },
 );
