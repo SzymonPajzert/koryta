@@ -22,6 +22,10 @@ class PeopleKorytaMerged(Pipeline):
             # A `KorytaPeople` built before 2026-10-10, restored from the
             # shared cache: no page's date, so no name match is refused on one.
             koryta_data = koryta_data.assign(birth_date=None)
+        if "merged_into" not in koryta_data.columns:
+            # A `KorytaPeople` built before 2026-09-22, restored from the
+            # shared cache: it knew of no merge, so it has none to leave out.
+            koryta_data = koryta_data.assign(merged_into=None)
 
         con.execute(
             """
@@ -76,7 +80,30 @@ class PeopleKorytaMerged(Pipeline):
                     1
                 ), '') as birth_date
             FROM koryta_data
-            WHERE full_name IS NOT NULL
+            -- A page merged into another is left out: nobody is on it any
+            -- more. The merge keeps it as a tombstone, with the name and the
+            -- register link it had, and carries what it knew onto the page
+            -- that survives (`carriedFields` in frontend/server/utils/merge.ts).
+            -- So the survivor is here already, linking the same entry, and a
+            -- tombstone kept beside it is a second page for one person:
+            -- `koryta_match`, which never chooses between two pages, refused
+            -- the entry. On 2026-10-24 it refused every entry a merged page
+            -- links, 171 of 171, Golimont's 383093 and Saługa's 1230481 among
+            -- them, and each was sent without the `korytaId` naming its page.
+            --
+            -- Left out rather than followed to the survivor, as the planner
+            -- follows one (`_survivor` in analysis/payloads/site.py), because
+            -- the survivor is a row of its own already. Followed, the
+            -- tombstone would be that page a second time, and the name it
+            -- lent would bring the survivor into the name tier, which keeps
+            -- out every page linking an entry: the tombstone of Witold Heronim
+            -- Stępień links none and fits two namesakes by name, 405711 and
+            -- 1396271, and the page it went into links 1332974.
+            --
+            -- `deleted` would add nothing: only a merge sets it on a person
+            -- page, and it sets `merged_into` with it. All 174 retired pages
+            -- of 2026-10-24 carry both.
+            WHERE full_name IS NOT NULL AND merged_into IS NULL
             """
         )
 
