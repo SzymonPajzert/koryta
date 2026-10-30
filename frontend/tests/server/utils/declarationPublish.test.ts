@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   confirmedDeclarations,
+  creditFinds,
   drainPublications,
   inPeopleImportWindow,
   matchAndDrain,
@@ -683,40 +684,32 @@ describe("matchPages", () => {
   });
 });
 
-// The admin chose the date on /admin/oswiadczenia with the pages' dates a
-// click away, so it confirms nothing: until decided otherwise, it holds the
-// page and publishes nobody.
-/** A reader's answer to Kowalska's crop. */
-function answered(uid: string, fields: Data) {
-  put(`declarationAnswers/kowalska-crop_${uid}`, {
-    extractId: "kowalska-crop",
-    uid,
-    ...fields,
-  });
-}
-
 const finds = () =>
   [...stored.keys()]
     .filter((path) => path.startsWith("declarationReaderFinds/"))
     .sort();
 
-// The tally's „Znaleziono”: a person is found by the readers who typed the
-// date their crop settled on, once it is the birth date on their page.
-describe("who found the person", () => {
-  it("credits the readers who typed the date it settled on, or its year, and nobody else", async () => {
-    kowalska();
-    answered("a", { verdict: "date", value: BORN, votes: true });
-    answered("b", { verdict: "date", value: "1979", votes: true });
-    answered("c", { verdict: "date", value: "1979-07-16", votes: true });
-    answered("d", { verdict: "skip", votes: true });
-    // A reader without an account found her too, under the browser's id.
-    answered("anon:x", { verdict: "date", value: BORN, votes: false });
+/** Reader `uid` saves `value` off Kowalska's crop, linked to `personIds`. */
+const typed = (uid: string, value: string, personIds = ["kowalska"]) =>
+  creditFinds(
+    firestore,
+    { uid, extractId: "kowalska-crop", personIds, value },
+    NOON,
+  );
 
-    await matchPages(firestore, "kowalska-crop", NOON);
+// The tally's „Znaleziono”: a reader finds a person with a date the birth
+// date on the person's page does not contradict, as the answer is saved.
+describe("creditFinds", () => {
+  it("credits a date the page was born on, or its year, and not another one", async () => {
+    kowalska();
+
+    expect(await typed("a", BORN)).toBe(1);
+    expect(await typed("b", "1979")).toBe(1);
+    expect(await typed("c", "1979-07-16")).toBe(0);
+    expect(await typed("d", "1980")).toBe(0);
 
     expect(finds()).toEqual([
       "declarationReaderFinds/a_kowalska",
-      "declarationReaderFinds/anon:x_kowalska",
       "declarationReaderFinds/b_kowalska",
     ]);
     expect(read("declarationReaderFinds/a_kowalska")).toMatchObject({
@@ -726,44 +719,69 @@ describe("who found the person", () => {
     });
   });
 
-  it("credits them once: comparing again writes nothing", async () => {
+  it("credits any date for a page without a birth date, which has nothing to contradict", async () => {
+    person("kowalska", {}, { birthDate: undefined });
+
+    expect(await typed("a", "1984-02-29")).toBe(1);
+    expect(await typed("anon:x", "1961")).toBe(1);
+
+    expect(finds()).toEqual([
+      "declarationReaderFinds/a_kowalska",
+      "declarationReaderFinds/anon:x_kowalska",
+    ]);
+  });
+
+  it("credits a published person the same as a draft", async () => {
+    person("kowalska", { published: true });
+
+    expect(await typed("a", BORN)).toBe(1);
+  });
+
+  it("keeps one record a reader and a person", async () => {
     kowalska();
-    answered("a", { verdict: "date", value: BORN, votes: true });
-    await matchPages(firestore, "kowalska-crop", NOON);
-    const counted = writes;
 
-    await matchPages(firestore, "kowalska-crop", NOON);
+    await typed("a", BORN);
+    await typed("a", "1979");
 
-    expect(writes).toBe(counted);
     expect(finds()).toEqual(["declarationReaderFinds/a_kowalska"]);
   });
 
-  it("credits nobody for another day, a date the job read, or one an admin decided", async () => {
+  it("credits the page a merged one went into", async () => {
     kowalska();
-    answered("a", { verdict: "date", value: BORN, votes: true });
-    put("nodes/kowalska", {
-      ...read("nodes/kowalska")!,
-      birthDate: "1979-07-16",
+    put("nodes/old", {
+      type: "person",
+      deleted: true,
+      merged_into: "kowalska",
     });
-    await matchPages(firestore, "kowalska-crop", NOON);
-    expect(finds()).toEqual([]);
 
-    for (const by of ["machine", "admin"]) {
-      kowalska();
-      answered("a", { verdict: "date", value: BORN, votes: true });
-      extract("kowalska-crop", {
-        agreed: { value: BORN, kind: "date", by, readers: 0 },
-      });
-      await matchPages(firestore, "kowalska-crop", NOON);
-      expect(finds(), by).toEqual([]);
-    }
+    expect(await typed("a", BORN, ["old"])).toBe(1);
+    expect(finds()).toEqual(["declarationReaderFinds/a_kowalska"]);
   });
 
-  it("credits nobody where two pages were born that day: that is a question, not a find", async () => {
+  it("credits each of a crop's people the date does not contradict, and no page that is gone", async () => {
     kowalska();
-    person("namesake");
-    extract("kowalska-crop", { personIds: ["kowalska", "namesake"] });
-    answered("a", { verdict: "date", value: BORN, votes: true });
+    person("namesake", {}, { birthDate: "1981-01-01" });
+    person("undated", {}, { birthDate: undefined });
+    put("nodes/gone", { type: "person", deleted: true });
+
+    expect(
+      await typed("a", BORN, ["kowalska", "namesake", "undated", "gone"]),
+    ).toBe(2);
+    expect(finds()).toEqual([
+      "declarationReaderFinds/a_kowalska",
+      "declarationReaderFinds/a_undated",
+    ]);
+  });
+
+  it("is not what comparing a settled crop does: readers were credited as they answered", async () => {
+    kowalska();
+    put("declarationAnswers/kowalska-crop_a", {
+      extractId: "kowalska-crop",
+      uid: "a",
+      verdict: "date",
+      value: BORN,
+      votes: true,
+    });
 
     await matchPages(firestore, "kowalska-crop", NOON);
 
@@ -771,6 +789,9 @@ describe("who found the person", () => {
   });
 });
 
+// The admin chose the date on /admin/oswiadczenia with the pages' dates a
+// click away, so it confirms nothing: until decided otherwise, it holds the
+// page and publishes nobody.
 describe("a date an admin settled", () => {
   /** A crop of hers readers could not agree on, settled by an admin on
    * `BORN`, the way /admin/oswiadczenia settles it. */

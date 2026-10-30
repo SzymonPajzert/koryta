@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { z } from "zod";
+import { creditFinds } from "~~/server/utils/declarationPublish";
 import { compareSettled } from "~~/server/utils/declarationSettled";
 import {
   getReader,
@@ -71,19 +72,26 @@ export default defineEventHandler(async (event) => {
     reader,
     answer: { verdict: body.verdict, value, name: body.name ?? null },
   });
+  // A date finds the crop's people as it is saved, so they are in the
+  // reader's „Znaleziono” on the way back.
+  if (value) {
+    await creditFinds(db, {
+      uid: reader.uid,
+      extractId: id,
+      personIds: recorded.personIds,
+      value,
+    });
+  }
   const settledOnDay =
     reader.votes &&
     recorded.settled?.status === "agreed" &&
     recorded.settled.kind === "date";
-  // The answer that settles a crop meets its pages first, so a person it
-  // found is in the reader's „Znaleziono” on the way back.
-  if (settledOnDay) await compareSettled(event, db, [id], PAGES_PER_ANSWER);
-  const queue = await queueFor(
-    db,
-    reader.uid,
-    3,
-    new Set([id, ...(body.holding ?? [])]),
-  );
+  const [queue] = await Promise.all([
+    queueFor(db, reader.uid, 3, new Set([id, ...(body.holding ?? [])])),
+    settledOnDay
+      ? compareSettled(event, db, [id], PAGES_PER_ANSWER)
+      : undefined,
+  ]);
 
   setResponseHeader(event, "Cache-Control", "private, no-store");
   return {

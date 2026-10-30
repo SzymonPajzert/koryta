@@ -610,9 +610,9 @@ export type DeclarationQueue = {
   mine: {
     today: number;
     total: number;
-    /** The people this reader found: crops they typed the date of settled
-     * on it, and it is the birth date on the person's page. The tally's
-     * „Znaleziono”. */
+    /** The people this reader found: those they typed a date for that the
+     * birth date on the person's page does not contradict, counted as each
+     * answer is saved. The tally's „Znaleziono”. */
     found: number;
   };
 };

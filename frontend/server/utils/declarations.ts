@@ -32,9 +32,10 @@ export const ANSWERS = "declarationAnswers";
 export const READER_LIMITS = "declarationReaderLimits";
 export const PUBLICATIONS = "declarationPublications";
 export const PUBLISH_LIMITS = "declarationPublishLimits";
-/** One record a reader and a person they found: a crop the reader typed the
- * date of settled on that date, and it is the birth date on the person's page
- * (`creditFinders` in declarationPublish.ts). Server-only, like the answers. */
+/** One record a reader and a person they found: the reader typed a date off
+ * one of the person's crops that the birth date on the person's page does not
+ * contradict (`creditFinds` in declarationPublish.ts). Server-only, like the
+ * answers. */
 export const READER_FINDS = "declarationReaderFinds";
 
 /** Answers one reader may give in a Warsaw day. Far above what a person reads
@@ -452,6 +453,9 @@ export type RecordedAnswer = {
   settled: Settlement | null;
   documentUrl: string;
   host: string | null;
+  /** The person pages the crop is linked to, for crediting the reader with
+   * whom a date found (`creditFinds`). */
+  personIds: string[];
 };
 
 /**
@@ -564,6 +568,9 @@ export async function recordAnswer(
         : null,
       documentUrl: String(data.url ?? ""),
       host: (data.host as string | null) ?? null,
+      personIds: Array.isArray(data.personIds)
+        ? data.personIds.filter((id): id is string => typeof id === "string")
+        : [],
     };
   });
 }
