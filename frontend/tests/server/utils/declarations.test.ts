@@ -354,6 +354,7 @@ describe("recordAnswer", () => {
       settled: null,
       documentUrl: "https://bip.example.pl/c1.pdf",
       host: "bip.example.pl",
+      personIds: ["kowalska"],
     });
     expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
       extractId: "c1",

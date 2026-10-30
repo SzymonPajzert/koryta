@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => {
     matchAndDrain: vi.fn(),
     sweepDeclarations: vi.fn(),
     drainPublications: vi.fn(),
+    creditFinds: vi.fn(),
   };
 });
 
@@ -89,6 +90,7 @@ vi.mock("../../../../server/utils/declarationPublish", () => ({
   matchAndDrain: mocks.matchAndDrain,
   sweepDeclarations: mocks.sweepDeclarations,
   drainPublications: mocks.drainPublications,
+  creditFinds: mocks.creditFinds,
 }));
 
 const ID = `${"a".repeat(64)}-p0`;
@@ -123,6 +125,7 @@ beforeEach(() => {
     firebase: { sign_in_provider: "password" },
   });
   mocks.queueFor.mockResolvedValue(QUEUE);
+  mocks.creditFinds.mockResolvedValue(0);
   mocks.matchAndDrain.mockResolvedValue({
     matched: [],
     drain: { published: [] },
@@ -135,6 +138,7 @@ function settles(settled: unknown) {
     settled,
     documentUrl: "https://bip.strzelin.pl/download/1",
     host: "bip.strzelin.pl",
+    personIds: ["kowalska"],
   });
 }
 
@@ -188,6 +192,53 @@ describe("api/declarations/[id]/answer", () => {
     });
     expect(mocks.queueFor.mock.calls[0]![1]).toBe(`anon:${READER}`);
     expect(mocks.matchAndDrain).not.toHaveBeenCalled();
+  });
+
+  // The tally's „Znaleziono” goes up with the answer that found somebody,
+  // not once other readers agree.
+  it("credits the reader with whom their date found before it reads their queue, with or without an account", async () => {
+    settles(null);
+    const order: string[] = [];
+    mocks.creditFinds.mockImplementation(async () => {
+      order.push("credit");
+      return 1;
+    });
+    mocks.queueFor.mockImplementation(async () => {
+      order.push("queue");
+      return QUEUE;
+    });
+
+    await answer({} as never);
+    mocks.request.headers = { "x-reader-id": READER };
+    mocks.body = { verdict: "date", value: "1979" };
+    await answer({} as never);
+
+    expect(mocks.creditFinds.mock.calls.map((call) => call[1])).toEqual([
+      {
+        uid: "reader",
+        extractId: ID,
+        personIds: ["kowalska"],
+        value: "1979-07-15",
+      },
+      {
+        uid: `anon:${READER}`,
+        extractId: ID,
+        personIds: ["kowalska"],
+        value: "1979",
+      },
+    ]);
+    expect(order).toEqual(["credit", "queue", "credit", "queue"]);
+  });
+
+  it("credits nobody for an answer that is not a date", async () => {
+    settles(null);
+    for (const verdict of ["unreadable", "empty", "skip"]) {
+      mocks.body = { verdict };
+      await answer({} as never);
+    }
+
+    expect(mocks.recordAnswer).toHaveBeenCalledTimes(3);
+    expect(mocks.creditFinds).not.toHaveBeenCalled();
   });
 
   it("lets an account without a confirmed address answer, without a vote", async () => {

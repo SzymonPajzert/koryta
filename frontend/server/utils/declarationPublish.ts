@@ -68,7 +68,6 @@ import { isAutomatedUid } from "~~/shared/stats";
 import { placeClashes } from "~~/shared/twoPlaces";
 import { recordAudit } from "./audit";
 import {
-  ANSWERS,
   EXTRACTS,
   PUBLICATIONS,
   PUBLISH_LIMITS,
@@ -265,16 +264,6 @@ export async function matchPages(
           : "queued";
   }
 
-  // One page born that day is somebody found; two are a question for a person.
-  const found = born.length === 1 ? born[0]! : null;
-  if (
-    found &&
-    settledByReaders(extract) &&
-    !FOUND_OUTCOMES.has(String(extract.pageOutcomes?.[found.id] ?? ""))
-  ) {
-    await creditFinders(db, extractId, agreed, found.id, now);
-  }
-
   const declaration = declarationOf(extract);
   let changed = false;
   for (const page of pages) {
@@ -328,68 +317,54 @@ function agreedDay(extract: DocumentData | undefined): string | null {
   return isoDay(agreed.value) ? agreed.value : null;
 }
 
-/** Outcomes of a page born on the crop's date: once a page has had one, its
- * finders are credited already. */
-const FOUND_OUTCOMES: ReadonlySet<string> = new Set([
-  "confirmed",
-  "queued",
-  "held",
-]);
-
-/** Whether readers settled the crop's date by agreeing on it, rather than
- * the job reading it at upload or an admin deciding it. */
-function settledByReaders(extract: DocumentData): boolean {
-  return (extract.agreed as { by?: unknown } | null)?.by === "readers";
-}
-
 /**
- * Credits the readers who found this person: those who typed the date the
- * crop settled on, or its year alone, now that it is the birth date on the
- * person's page. One record a reader and a person, so a person read twice is
- * found once; the reader's „Znaleziono” counts them (`queueFor`). A reader
- * without an account is credited under the browser's id and keeps it when
- * they sign in (`claimAnswers`). Only a date readers agreed on credits
- * anybody: the job's reading and an admin's decision find nobody for a
- * reader. Called once a page, the first time it matches.
+ * Credits a reader with the people a date they typed found, as the answer is
+ * saved: each live page of the crop whose birth date the date does not
+ * contradict. A page without a birth date has nothing to contradict, and a
+ * year alone is held to the year. The reward is for the reading, so it comes
+ * at once, before anybody else has read the crop and whether or not the
+ * person is ever published. One record a reader and a person, so a person
+ * read twice is found once; the reader's „Znaleziono” counts them
+ * (`queueFor`). A reader without an account is credited under the browser's
+ * id and keeps it when they sign in (`claimAnswers`). Returns how many people
+ * the date found.
  */
-async function creditFinders(
+export async function creditFinds(
   db: Firestore,
-  extractId: string,
-  agreed: string,
-  personId: string,
-  now: Date,
-): Promise<void> {
-  const answers = await db
-    .collection(ANSWERS)
-    .where("extractId", "==", extractId)
-    .get();
-  const year = agreed.slice(0, 4);
-  const uids = unique(
-    answers.docs
-      .map((doc) => doc.data())
-      .filter(
-        (answer) =>
-          answer.verdict === "date" &&
-          (answer.value === agreed || answer.value === year),
-      )
-      .map((answer) => String(answer.uid)),
+  find: {
+    uid: string;
+    extractId: string;
+    personIds: readonly string[];
+    /** `YYYY-MM-DD` or `YYYY`, as `parseTypedDate` reads the typing. */
+    value: string;
+  },
+  now: Date = new Date(),
+): Promise<number> {
+  const found = (await livePages(db, find.personIds)).filter(
+    (page) => !contradicts(find.value, birthDateOf(page.data)),
   );
+  if (found.length === 0) return 0;
   const at = Timestamp.fromDate(now);
-  for (let i = 0; i < uids.length; i += FINDS_PER_BATCH) {
-    const batch = db.batch();
-    for (const uid of uids.slice(i, i + FINDS_PER_BATCH)) {
-      batch.set(
-        db.collection(READER_FINDS).doc(`${uid}_${personId}`),
-        { uid, personId, extractId, at },
-        { merge: true },
-      );
-    }
-    await batch.commit();
+  const batch = db.batch();
+  for (const page of found) {
+    batch.set(
+      db.collection(READER_FINDS).doc(`${find.uid}_${page.id}`),
+      { uid: find.uid, personId: page.id, extractId: find.extractId, at },
+      { merge: true },
+    );
   }
+  await batch.commit();
+  return found.length;
 }
 
-/** Writes a batch of credits takes, under Firestore's 500. */
-const FINDS_PER_BATCH = 400;
+/** Whether a typed date says the person was born on another day than the
+ * page's stored `YYYY-MM-DD`: a year alone is compared with the year, and a
+ * page without a date contradicts nothing. */
+function contradicts(typed: string, stored: string): boolean {
+  if (!stored) return false;
+  const length = Math.min(typed.length, stored.length);
+  return typed.slice(0, length) !== stored.slice(0, length);
+}
 
 /** Whether the crop's date is one an admin settled (`decideExtract`), rather
  * than one readers agreed on without seeing the page's or the job read off a
