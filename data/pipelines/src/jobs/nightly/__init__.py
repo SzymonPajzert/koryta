@@ -485,7 +485,8 @@ STEPS = (
     Step("tidy", "porządki", 5, always=True),
 )
 STEP_NAMES = tuple(step.name for step in STEPS)
-#: The checks whose failures the night compares with the last one's.
+#: The checks whose failures the night compares, each with the last run that
+#: ran it.
 CHECKS = ("tests", "outputs", "invariants")
 
 
@@ -914,8 +915,14 @@ def export_refusal(
 
 
 def last_failures(client: Client, before: str) -> dict[str, list[str]] | None:
-    """The failures recorded by the newest night that ran the checks, before
-    the run `before`; None when no night has."""
+    """Each check's failures as recorded by the newest run that ran it, before
+    the run `before`; None when no run has recorded any.
+
+    Check by check, since a run may record some checks and not others: a
+    night whose reprocess fails holds the tests and the outputs and records
+    the invariants alone. Taken whole, such a night's failures left the next
+    run no tests to compare with - on 2026-10-24 a hand run after one sent
+    500 people past a test that had begun to fail."""
     bucket = client.storage_client.bucket(SHARED_BUCKET)
     names = sorted(
         blob.name
@@ -924,19 +931,24 @@ def last_failures(client: Client, before: str) -> dict[str, list[str]] | None:
         )
         if not blob.name.endswith(f"/{before}.json")
     )
+    last: dict[str, list[str]] = {}
     for name in reversed(names):
         summary = json.loads(bucket.blob(name).download_as_bytes())
         failures = summary.get("failures") or {}
-        if failures:
-            return failures
-    return None
+        for check in CHECKS:
+            if check in failures and check not in last:
+                last[check] = failures[check]
+        if len(last) == len(CHECKS):
+            break
+    return last or None
 
 
 def new_failures(
     tonight: dict[str, list[str]], last: dict[str, list[str]] | None
 ) -> list[str]:
     """Tests failing tonight that did not fail on the last night that ran
-    their check. None before: every failure is the first night's baseline."""
+    their check (`last_failures`). None before, or a check no night has
+    recorded: every failure is that check's first baseline."""
     if last is None:
         return []
     found = []

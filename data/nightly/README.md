@@ -313,9 +313,12 @@ A failed step does not end the night; the steps that depend on it are held:
 - `people` needs tonight's export, a reprocess that succeeded, and checks with
   nothing new failing. "New" is against the last night that ran the check: a
   test that passed then and fails now - most likely after the last upload -
-  holds the upload until somebody looks. The first night's failures are its
-  baseline; on 2026-10-03, 18 invariants failed on budgets that had drifted
-  past their measured values. A budgeted invariant fails only when it grows
+  holds the upload until somebody looks. Check by check: a night that held one
+  leaves its baseline where it was, so after a night whose reprocess failed,
+  which ran the invariants alone, the tests and the outputs are compared with
+  the night before it. The first night's failures are its baseline; on
+  2026-10-03, 18 invariants failed on budgets that had drifted past their
+  measured values. A budgeted invariant fails only when it grows
   more than ten past its budget: up to that it passes with a warning
   (`within_budget` in `src/tests/pipelines/conftest.py`), which holds nothing
   and goes into the summary's `warnings` and onto the night's run. One that

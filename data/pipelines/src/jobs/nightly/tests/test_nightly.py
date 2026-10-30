@@ -8,11 +8,16 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 import jobs.nightly as night
 from stores.storage import SHARED_BUCKET, warsaw_tz
+
+#: The real one: the `world` fixture stands in for it with `World.last`, and a
+#: test that wants the gate to read what the world's runs wrote puts it back.
+LAST_FAILURES = night.last_failures
 
 #: `test_budget_warnings_reads_what_the_invariants_budgets_record` and
 #: `test_budget_slack_reads_what_the_invariants_budgets_record` run the
@@ -64,6 +69,29 @@ class RecordingRun:
     def ending(self) -> dict:
         [end] = [args for call, args in self.calls if call == "finish"]
         return end
+
+
+class SharedCache:
+    """The shared cache's bucket as `last_failures` reads it: the objects by
+    name, and the ones it downloaded, in order."""
+
+    def __init__(self, objects: dict[str, bytes]):
+        self.objects = objects
+        self.downloaded: list[str] = []
+
+    def bucket(self, name):
+        assert name == SHARED_BUCKET
+        return self
+
+    def list_blobs(self, prefix, fields):
+        return [SimpleNamespace(name=n) for n in self.objects if n.startswith(prefix)]
+
+    def blob(self, name):
+        def download_as_bytes():
+            self.downloaded.append(name)
+            return self.objects[name]
+
+        return SimpleNamespace(download_as_bytes=download_as_bytes)
 
 
 class World:
@@ -175,7 +203,8 @@ class World:
         return argv, env
 
     def summary(self) -> dict:
-        [name] = [n for n in self.objects if n.startswith(night.RUNS_PREFIX)]
+        """The summary of the newest run, the last one written."""
+        *_, name = [n for n in self.objects if n.startswith(night.RUNS_PREFIX)]
         return json.loads(self.objects[name])
 
     def steps(self) -> dict[str, tuple[str, str]]:
@@ -221,6 +250,9 @@ def world(monkeypatch, tmp_path) -> World:
         raise AssertionError(report)
 
     class Bucket:
+        #: What the world's runs wrote, as the gate reads it back.
+        storage_client = SharedCache(w.objects)
+
         def create_object(self, bucket, name, data, content_type):
             assert name not in w.objects, f"{name} written twice"
             w.objects[name] = data
@@ -1201,6 +1233,52 @@ def test_on_the_first_night_every_failure_is_the_baseline(world):
     assert world.steps()["people"][0] == "succeeded"
 
 
+def test_a_test_failing_after_a_night_that_held_the_tests_holds_the_people_once(
+    world, monkeypatch
+):
+    # 2026-10-24: the 04:30 night failed in the reprocess and ran the
+    # invariants alone. The hand run at 09:06 compared its tests with that
+    # night's failures, which had none, and sent 500 people past a test that
+    # had passed on 10-23.
+    monkeypatch.setattr(night, "last_failures", LAST_FAILURES)
+    began = "src.tests.pipelines.test_people_enriched::test_second_names_match"
+    assert night.main([]) == 0
+    world.codes["koryta"] = 1
+    assert night.main([]) == night.EXIT_FAILED
+    assert world.summary()["failures"] == {"invariants": []}
+    world.codes["koryta"] = 0
+    world.failures["tests"] = [began]
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.summary()["new_failures"] == [began]
+    assert world.steps()["people"] == (
+        "held",
+        f"wstrzymane: nowe błędy testów: {began}",
+    )
+    # The held run wrote its failures: the next one has the test in its
+    # baseline, and sends.
+    assert night.main([]) == 0
+    assert world.steps()["people"] == ("succeeded", "")
+
+
+def test_a_test_failing_as_on_the_last_night_that_ran_the_tests_holds_nothing(
+    world, monkeypatch
+):
+    # A night that held the tests did not see them pass.
+    monkeypatch.setattr(night, "last_failures", LAST_FAILURES)
+    world.failures["tests"] = ["t::known"]
+    assert night.main([]) == 0
+    world.codes["koryta"] = 1
+    assert night.main([]) == night.EXIT_FAILED
+    world.codes["koryta"] = 0
+
+    assert night.main([]) == 0
+
+    assert world.summary()["new_failures"] == []
+    assert world.steps()["people"] == ("succeeded", "")
+
+
 def test_a_check_that_gives_no_verdict_holds_the_people(world):
     world.failures["outputs"] = None  # no report written
     world.pytest_codes["outputs"] = 4
@@ -1384,6 +1462,35 @@ def test_new_failures_compare_each_check_with_the_last_night_that_ran_it():
 
     assert night.new_failures(tonight, last) == ["t::new"]
     assert night.new_failures(tonight, None) == []
+
+
+def test_last_failures_takes_each_check_from_the_newest_run_that_ran_it():
+    def summary(day: str, run: str, failures: dict) -> tuple[str, bytes]:
+        name = f"{night.RUNS_PREFIX}date={day}/{run}.json"
+        return name, json.dumps({"run": run, "failures": failures}).encode()
+
+    older = {"tests": ["t::older"], "outputs": ["o::older"], "invariants": ["i::older"]}
+    old = {"tests": ["t::old"], "outputs": [], "invariants": []}
+    runs = [
+        summary("2026-10-22", "r1", older),
+        summary("2026-10-23", "r2", old),
+        # The reprocess failed, and held the tests and the outputs.
+        summary("2026-10-24", "r3", {"invariants": ["i::new"]}),
+        # A hand run of the people alone.
+        summary("2026-10-24", "r4", {}),
+        # Tonight's own.
+        summary("2026-10-24", "r5", {"tests": ["t::tonight"]}),
+    ]
+    stored = SharedCache(dict(runs))
+    client = SimpleNamespace(storage_client=stored)
+
+    last = night.last_failures(client, "r5")  # type: ignore[arg-type]
+
+    assert last == {"tests": ["t::old"], "outputs": [], "invariants": ["i::new"]}
+    # Back until every check has its baseline, and no further: r1 is not read.
+    assert stored.downloaded == [name for name, _ in runs[1:4][::-1]]
+    nothing = SimpleNamespace(storage_client=SharedCache(dict(runs[3:4])))
+    assert night.last_failures(nothing, "r5") is None  # type: ignore[arg-type]
 
 
 def test_failed_tests_reads_a_junit_report(tmp_path):
