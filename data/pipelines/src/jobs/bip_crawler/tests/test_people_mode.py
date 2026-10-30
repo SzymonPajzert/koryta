@@ -12,7 +12,14 @@ from analysis.bip_people_of_interest import BipPeopleOfInterest
 from jobs.bip_crawler.people import PeopleOptions, PeopleSearch, list_policy
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from scrapers.bip.classify import normalize_url
-from scrapers.bip.people import Seeker, candidates, choose, names_somebody, stem
+from scrapers.bip.people import (
+    Seeker,
+    candidates,
+    choose,
+    initialled_names,
+    names_somebody,
+    stem,
+)
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
@@ -385,6 +392,48 @@ def test_a_page_about_somebody_else_lends_nobody_its_files():
     assert names_somebody("Oświadczenie majątkowe - B. Kułacz")
     assert not names_somebody("Rada Miejska Chojnowa", initials_only=True)
     assert not names_somebody("Załącznik A. Oświadczenie majątkowe")
+
+
+def test_initials_in_addresses_and_abbreviations_name_nobody():
+    for title in (
+        "Szkoła Podstawowa im. M. Konopnickiej - oświadczenia majątkowe",
+        "Urząd Miasta, ul. J. Słowackiego 5",
+        "Rada M.St. Warszawy",
+        "PGK S.A. - oświadczenia majątkowe",
+        "II. Radni",
+    ):
+        assert initialled_names(title) == [], title
+    assert initialled_names("B. Kułacz - Stan majątkowy") == [("B", "Kułacz")]
+
+
+def test_a_seekers_own_page_keeps_an_initialled_label():
+    # The title names Jan Kaczmarek; the label's "J. Kaczmarka" is him in a form
+    # Seeker.named_in misses, not somebody else.
+    kaczmarek = Seeker.of("k", "Jan", "Kaczmarek")
+    links = [
+        LinkContext(
+            "https://u.pl/f/1.pdf", "J. Kaczmarka - oświadczenie majątkowe za 2024"
+        )
+    ]
+    title = "Jan Kaczmarek - oświadczenia majątkowe"
+    found = candidates("https://u.pl/radni/kaczmarek", title, links, [kaczmarek])
+    assert [c.key for c in found] == ["k"]
+
+
+def test_a_title_initial_a_seeker_could_be_keeps_the_unnamed_files():
+    kaczmarek = Seeker.of("k", "Jan", "Kaczmarek")
+    links = [
+        LinkContext(
+            "https://u.pl/files/1.pdf",
+            "Stan majątkowy na 31.12.2025 r.",
+            "",
+            "Załączniki",
+        )
+    ]
+    title = "Rada Miejska - J. Kaczmarka - Stan majątkowy na 31.12.2025 r."
+    found = candidates("https://u.pl/w/1", title, links, [kaczmarek])
+    # Unnamed: whether it is his, the OCR step decides.
+    assert [c.key for c in found] == [""]
 
 
 @pytest.mark.parametrize(

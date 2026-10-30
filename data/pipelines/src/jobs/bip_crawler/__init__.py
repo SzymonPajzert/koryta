@@ -101,9 +101,9 @@ def _crawl(args: argparse.Namespace) -> int:
     root = Path(args.out)
     # Servers that leave out their intermediate certificate verify against
     # this bundle (stores/tls.py); the checks themselves stay on.
-    bundle = ca_bundle(Path(args.ca_bundle))
+    bundle, how = ca_bundle(Path(args.ca_bundle))
     use_ca_bundle(str(bundle) if bundle else None)
-    print(f"certificates: {bundle or 'curl roots only'}", flush=True)
+    print(f"certificates: {how}", flush=True)
     pg = PostgresClient.from_env(max_size=4)
     bip_queue = PostgresBipQueue(pg)
     if not args.no_registry and bip_queue.stats().get("hosts", 0) == 0:

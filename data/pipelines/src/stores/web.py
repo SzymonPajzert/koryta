@@ -31,7 +31,7 @@ def _get_robots(url: str, user_agent: str) -> Any:
     try:
         return cffi_requests.get(url, **kwargs)
     except Exception as exc:
-        if not wants_http1(exc):
+        if not wants_http1(exc, url):
             raise
         return cffi_requests.get(url, http_version=CurlHttpVersion.V1_1, **kwargs)
 

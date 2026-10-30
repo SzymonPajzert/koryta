@@ -10,20 +10,25 @@ from curl_cffi import CurlHttpVersion, requests
 
 DEFAULT_UA = "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"
 
-#: curl's errors for a server that spoils HTTP/2 (16 framing, 92 a stream it
-#: resets) or closes without a word (52). Plenty of BIP servers answer the same
-#: request over HTTP/1.1: 235 of the people mode's unreachable candidacies on
-#: 10-29.
-_HTTP1_ONLY = re.compile(r"curl: \((?:16|52|92)\)")
+#: curl's errors for a server that spoils HTTP/2: 16 framing, 92 a stream it
+#: resets. On plain http also 52, an empty reply: the impersonated browser offers
+#: to upgrade to HTTP/2 there, and some servers hang up on the offer. Asked again
+#: over HTTP/1.1 they answer: 235 of the people mode's unreachable candidacies on
+#: 10-29, all of them on http://.
+_HTTP2_SPOILED = re.compile(r"curl: \((?:16|92)\)")
+_EMPTY_REPLY = re.compile(r"curl: \(52\)")
 
 _sessions = threading.local()
 #: The certificates every GET verifies against; None is curl's own roots.
 _ca_bundle: str | None = None
 
 
-def wants_http1(error: object) -> bool:
-    """Whether a failed GET is worth asking again over HTTP/1.1."""
-    return bool(_HTTP1_ONLY.search(str(error)))
+def wants_http1(error: object, url: str) -> bool:
+    """Whether a failed GET of ``url`` is worth asking again over HTTP/1.1."""
+    text = str(error)
+    if _HTTP2_SPOILED.search(text):
+        return True
+    return url.lower().startswith("http://") and bool(_EMPTY_REPLY.search(text))
 
 
 def use_ca_bundle(path: str | None) -> None:
@@ -85,7 +90,7 @@ def http_get(
         try:
             response = get()
         except Exception as exc:
-            if not wants_http1(exc):
+            if not wants_http1(exc, url):
                 raise
             response = get(http_version=CurlHttpVersion.V1_1)
     except Exception as exc:

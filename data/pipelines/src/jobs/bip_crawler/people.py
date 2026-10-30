@@ -40,9 +40,10 @@ import logging
 import re
 import threading
 import time
-from collections import defaultdict
+import zlib
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -55,6 +56,7 @@ from jobs.bip_crawler import render as rendering
 from scrapers.bip.classify import (
     filename_from_url,
     host_of,
+    is_document_url,
     is_html,
     is_low_value_url,
     normalize_url,
@@ -70,6 +72,7 @@ from scrapers.bip.people import (
     is_file_link,
     link_score,
     office_terms,
+    same_file,
     satisfied,
     url_words,
 )
@@ -99,6 +102,8 @@ _FILE = re.compile(
 )
 _BIP_LINK = re.compile(r"(?:^| )bip(?: |$)|biuletyn informacji publicznej")
 _SITEMAP = re.compile(r"(?im)^\s*sitemap:\s*(\S+)")
+#: The page_url of candidates the blind crawl's URLs gave (`--known-urls`).
+KNOWN_URLS = "known-urls"
 _LOC = re.compile(rb"<loc>\s*([^<\s]+)\s*</loc>")
 
 
@@ -189,11 +194,14 @@ class _Frontier:
         return bool(self.heap)
 
     def add(self, url: str, score: float, depth: int) -> None:
-        if url in self.seen:
+        if self.has(url):
             return
-        self.seen.add(url)
+        self.seen.add(_same_page(url))
         heapq.heappush(self.heap, (-score, depth, self.sequence, url))
         self.sequence += 1
+
+    def has(self, url: str) -> bool:
+        return _same_page(url) in self.seen
 
     def pop(self) -> tuple[int, str]:
         _, depth, _, url = heapq.heappop(self.heap)
@@ -218,7 +226,7 @@ class _Frontier:
         for link in links:
             target = normalize_url(link.url)
             if (
-                target in self.seen
+                self.has(target)
                 or _is_file(target)
                 or is_low_value_url(target)
                 or not self.in_scope(target)
@@ -227,6 +235,12 @@ class _Frontier:
             score = link_score(link, seekers, depth, prefer)
             if score > -3:
                 self.add(target, score, depth)
+
+
+def _same_page(url: str) -> str:
+    """``url`` as the frontier tells pages apart: a host's home with or without
+    its slash is one page (a start "https://x.pl" and a "Home" link to "/")."""
+    return url[:-1] if url.endswith("/") and urlsplit(url).path == "/" else url
 
 
 def _is_file(url: str) -> bool:
@@ -315,7 +329,8 @@ class PeopleSearch:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         known: dict[str, list[str]] | None = None,
-        render: Callable[[str], HttpResult] | None = None,
+        render: Callable[[str], rendering.Drawn] | None = None,
+        unit_sizes: dict[str, int] | None = None,
     ) -> None:
         self.people_store = people_store
         self.bip_queue = bip_queue
@@ -326,6 +341,12 @@ class PeopleSearch:
         self.known = known or {}
         #: Draws a JavaScript page as a browser would (`render.Renderer.render`).
         self.render = render
+        #: Every candidacy a unit has, searched in this run or not: the budget's
+        #: measure, so a retry of a big unit's few left gets a big unit's pages.
+        self.unit_sizes = unit_sizes or {}
+        #: A host's sitemaps, read once a run: a shared platform's units share them.
+        self._sitemaps: dict[str, list[str]] = {}
+        self._sitemap_locks: dict[str, threading.Lock] = {}
         self.fetch = fetch
         self.robots_allowed = robots_allowed
         self.robots_unreachable = robots_unreachable
@@ -356,10 +377,12 @@ class PeopleSearch:
         """
         if not self.robots_allowed(url):
             return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
-        host = host_of(url)
+        self._wait_turn(host_of(url))
+        return self.fetch(url, self.options.request_timeout_s, self.options.user_agent)
+
+    def _wait_turn(self, host: str) -> None:
         while not self.limiter.acquire(host):
             self.sleep(max(0.05, self.limiter.next_available_in(host)))
-        return self.fetch(url, self.options.request_timeout_s, self.options.user_agent)
 
     @staticmethod
     def _is_page(result: HttpResult) -> bool:
@@ -406,8 +429,17 @@ class PeopleSearch:
         return min(self.options.max_unit_pages, max(self.options.unit_pages, wanted))
 
     def _sitemap_urls(self, root: str) -> list[str]:
-        """Declaration-like URLs in the sitemaps of ``root``'s host: those robots.txt
-        names, else /sitemap.xml; an index's declaration-like sitemaps first."""
+        """Declaration-like URLs in the sitemaps of ``root``'s host, read once a
+        run however many units the host serves; each unit's scope picks its own."""
+        host = host_of(root)
+        with self._sitemap_locks.setdefault(host, threading.Lock()):
+            if host not in self._sitemaps:
+                self._sitemaps[host] = self._read_sitemaps(root)
+        return self._sitemaps[host]
+
+    def _read_sitemaps(self, root: str) -> list[str]:
+        """Those robots.txt names, else /sitemap.xml; an index's declaration-like
+        sitemaps first, at most `PeopleOptions.max_sitemap_files` files."""
         parts = urlsplit(root)
         base = f"{parts.scheme}://{parts.netloc}"
         robots = self._get(base + "/robots.txt")
@@ -429,8 +461,8 @@ class PeopleSearch:
             if body[:2] == b"\x1f\x8b":
                 try:
                     body = gzip.decompress(body)
-                except OSError:
-                    continue
+                except (OSError, EOFError, zlib.error):
+                    continue  # truncated or corrupt: as if unreadable
             locs = [m.decode("utf-8", "replace") for m in _LOC.findall(body)]
             if b"<sitemapindex" in body[:4000]:
                 todo = sorted(locs, key=lambda u: not _declaration_like(u)) + todo
@@ -451,12 +483,15 @@ class PeopleSearch:
         frontier; their files are candidates when the address names a seeker."""
         sources: list[tuple[str, list[str]]] = [
             (
-                "known-urls",
+                KNOWN_URLS,
                 [u for h, _ in frontier.scopes for u in self.known.get(h, ())],
             )
         ]
         if self.options.sitemaps and roots:
-            sources.append(("sitemap", self._sitemap_urls(roots[0])))
+            try:
+                sources.append(("sitemap", self._sitemap_urls(roots[0])))
+            except Exception:  # noqa: BLE001 - an optional step fails alone
+                logger.warning("unit %s: sitemaps of %s failed", out.unit, roots[0])
         for source, urls in sources:
             files: list[LinkContext] = []
             for url in dict.fromkeys(urls):
@@ -465,10 +500,18 @@ class PeopleSearch:
                     continue
                 if _is_file(target):
                     files.append(LinkContext(target, ""))
-                elif target not in frontier.seen:
+                elif is_document_url(target):
+                    # A document by its address alone (?id=...): an attachment as
+                    # often as a page, and its labelled link brings it anyway.
+                    continue
+                elif not frontier.has(target):
                     link = LinkContext(target, "")
                     frontier.add(target, 50 + link_score(link, seekers, 1, prefer), 1)
-            out.found.extend(c for c in candidates(source, "", files, seekers) if c.key)
+            found = [c for c in candidates(source, "", files, seekers) if c.key]
+            if source == KNOWN_URLS:
+                # Addresses from an older crawl: a page found today ranks first.
+                found = [replace(c, score=c.score - 0.5) for c in found]
+            out.found.extend(found)
 
     # -- the walk ----------------------------------------------------------------
     def search_unit(
@@ -492,13 +535,18 @@ class PeopleSearch:
             frontier.add(normalize_url(root), 100.0, 0)
         self._seed_known(out, frontier, roots, seekers, prefer)
         blocked = down = requests = 0
-        budget = self._budget(len(seekers))
+        budget = self._budget(max(len(seekers), self.unit_sizes.get(unit, 0)))
         # Links that keep turning out to be files cost requests, not pages.
         while (
             frontier
             and out.pages < budget
             and requests < 2 * budget
-            and not satisfied(out.found, seekers, self.options.per_person)
+            # The blind crawl's addresses may be gone: they never end a walk.
+            and not satisfied(
+                [c for c in out.found if c.page_url != KNOWN_URLS],
+                seekers,
+                self.options.per_person,
+            )
         ):
             if self._past_deadline():
                 out.status = "timeout"
@@ -542,27 +590,41 @@ class PeopleSearch:
         title, links = extract_link_contexts(
             result.content, result.url, result.content_type
         )
+        follow = links
         if self.render is not None and _app_shell(result.content, links):
             drawn = self._drawn(result.url)
             if drawn.ok and self._is_page(drawn):
-                result = drawn
-                title, links = extract_link_contexts(
+                drawn_title, drawn_links = extract_link_contexts(
                     drawn.content, drawn.url, drawn.content_type
                 )
+                if normalize_url(drawn.url) == normalize_url(result.url):
+                    # The script drew this very page: its links, then the shell's.
+                    shown = {link.url for link in drawn_links}
+                    links = drawn_links + [x for x in links if x.url not in shown]
+                    title, follow = drawn_title or title, links
+                else:
+                    # The script went elsewhere: what it drew counts there.
+                    out.found.extend(
+                        candidates(drawn.url, drawn_title, drawn_links, seekers)
+                    )
+                    follow = links + drawn_links
         folded_title = fold(title)
         if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
             out.declaration_pages += 1
         out.found.extend(candidates(result.url, title, links, seekers))
         if depth < self.options.max_depth:
-            frontier.follow(links, seekers, depth + 1, prefer)
+            frontier.follow(follow, seekers, depth + 1, prefer)
 
     def _drawn(self, url: str) -> HttpResult:
-        """``url`` rendered, after a turn of its host's rate like any request."""
+        """``url`` rendered, paid for as the requests it made: a turn of the
+        host's rate for the page, and one for each of its own scripts and calls."""
         assert self.render is not None
         host = host_of(url)
-        while not self.limiter.acquire(host):
-            self.sleep(max(0.05, self.limiter.next_available_in(host)))
-        return self.render(url)
+        self._wait_turn(host)
+        drawn, asked = self.render(url)
+        for _ in range(asked):
+            self._wait_turn(host)
+        return drawn
 
     # -- downloads -----------------------------------------------------------------
     def _download(
@@ -617,20 +679,26 @@ class PeopleSearch:
 
     def _search_and_record(self, unit: str, rows: list[PersonRow]) -> dict[str, str]:
         seekers = [Seeker.of(r.key, r.first_name, r.last_name) for r in rows]
-        prefer = office_terms(str(r.person.get("office") or "") for r in rows)
+        prefer = office_terms(
+            (str(r.person.get("office") or "") for r in rows),
+            (str(r.person.get("unit_name") or "") for r in rows),
+        )
         search = self.search_unit(unit, seekers, prefer)
         picks = choose(
             search.found, seekers, self.options.per_person, self.options.unnamed_cap
         )
         named_urls = {(c.key, c.url) for c in search.found if c.key}
         downloaded: dict[str, tuple[str, str, str]] = {}
+        hosts: set[str] = set()
         doc_rows: list[PersonDocRow] = []
         for key, chosen in picks.items():
             for c in chosen:
-                if c.url not in downloaded:
+                once = same_file(c.url)  # http and https, www. or not: one file
+                if once not in downloaded:
                     cached = search.files.get(normalize_url(c.url))
-                    downloaded[c.url] = self._download(c.url, c.page_url, cached)
-                status, sha, bundle = downloaded[c.url]
+                    downloaded[once] = self._download(c.url, c.page_url, cached)
+                    hosts.add(host_of(c.url))
+                status, sha, bundle = downloaded[once]
                 doc_rows.append(
                     PersonDocRow(
                         key,
@@ -646,7 +714,7 @@ class PeopleSearch:
                         c.page_url,
                     )
                 )
-        for host in {host_of(url) for url in downloaded}:
+        for host in hosts:
             # Seal the bundle now, as the blind crawl does when a host is done:
             # thousands of open bundles would run out of file descriptors.
             self.bundles.close_host(host)
@@ -786,14 +854,14 @@ def run_people_mode(
             f"on {len(known):,} hosts",
             flush=True,
         )
-    renderer = None
-    if not args.no_render and rendering.available():
-        renderer = rendering.Renderer(USER_AGENT, workers=args.render_workers)
-    print(
-        "JavaScript pages: "
-        + ("rendered in headless Chromium" if renderer else "read as their HTML"),
-        flush=True,
-    )
+    renderer, how = None, "read as their HTML"
+    if not args.no_render and args.render_workers > 0 and rendering.available():
+        try:
+            renderer = rendering.Renderer(USER_AGENT, workers=args.render_workers)
+            how = "rendered in headless Chromium"
+        except rendering.RendererDown as exc:
+            how = f"read as their HTML (no browser started: {exc})"
+    print(f"JavaScript pages: {how}", flush=True)
     search = PeopleSearch(
         store,
         bip_queue,
@@ -804,6 +872,7 @@ def run_people_mode(
         robots_unreachable=robots_unreachable,
         known=known,
         render=renderer.render if renderer else None,
+        unit_sizes=Counter(p.teryt for p in people),
     )
     try:
         counts = search.run(todo)

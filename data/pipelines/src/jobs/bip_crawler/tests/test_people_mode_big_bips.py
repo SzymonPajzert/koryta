@@ -212,10 +212,10 @@ DRAWN = {
 def test_a_page_a_script_draws_is_read_once_rendered(tmp_path):
     drawn: list[str] = []
 
-    def render(url: str) -> HttpResult:
+    def render(url: str) -> tuple[HttpResult, int]:
         drawn.append(url)
         status, kind, body = DRAWN[normalize_url(url).rstrip("/")]
-        return HttpResult(url, status, kind, body)
+        return HttpResult(url, status, kind, body), 0
 
     rows = [row("lis", "u1", "Ewa", "Lis")]
     _, store, _ = search(tmp_path, JS_SITE, rows, render=render, sitemaps=False)
@@ -276,3 +276,192 @@ def test_the_checked_in_starts_parse(tmp_path):
         assert len(start["unit"]) == 6 and start["unit"].isdigit()
         assert start["bip_url"].startswith(("http://", "https://"))
     assert read_unit_starts(tmp_path / "missing.csv") == []
+
+
+class CountingLimiter:
+    def __init__(self) -> None:
+        self.turns: list[str] = []
+
+    def acquire(self, host: str) -> bool:
+        self.turns.append(host)
+        return True
+
+    def next_available_in(self, host: str) -> float:
+        return 0.0
+
+
+def test_a_render_pays_a_turn_for_each_request_to_the_host(tmp_path):
+    limiter = CountingLimiter()
+    people = PeopleSearch(
+        MemoryBipPeopleStore(),
+        cast("BipQueue", FakeFrontier([])),
+        LocalBundleStore(tmp_path / "b"),
+        {},
+        PeopleOptions(),
+        limiter=cast("HostTokenBucket", limiter),
+        sleep=lambda s: None,
+        render=lambda url: (HttpResult(url, 200, "text/html", b"<html></html>"), 3),
+    )
+    people._drawn("https://u1.pl/om")
+    assert limiter.turns == ["u1.pl"] * 4
+
+
+def test_a_retry_of_a_big_unit_gets_a_big_units_pages(tmp_path, monkeypatch):
+    asked: list[int] = []
+    original = PeopleSearch._budget
+
+    def budget(self, candidacies):
+        asked.append(candidacies)
+        return original(self, candidacies)
+
+    monkeypatch.setattr(PeopleSearch, "_budget", budget)
+    sites = {"https://u1.pl": html("BIP", "")}
+    rows = [row(f"r{i}", "u1", "Ewa", f"Lis{i}") for i in range(10)]
+    web = Web(sites)
+    store = MemoryBipPeopleStore()
+    store.upsert_people(rows)
+    people = PeopleSearch(
+        store,
+        cast("BipQueue", FakeFrontier([])),
+        LocalBundleStore(tmp_path / "b"),
+        {"u1": UnitSeed("u1", bip_urls=["https://u1.pl"], scopes=["u1.pl"])},
+        PeopleOptions(workers=1, sitemaps=False),
+        fetch=web.fetch,
+        limiter=HostTokenBucket(0),
+        sleep=lambda s: None,
+        unit_sizes={"u1": 60},
+    )
+    people.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
+    assert asked == [60] and original(people, 60) == 900
+
+
+def test_a_drawn_page_elsewhere_keeps_the_fetched_pages_links(tmp_path):
+    sites = {
+        "https://u1.pl": SHELL,
+        "https://u1.pl/om": html(
+            "Oświadczenia majątkowe radnych",
+            '<a href="/f/1.pdf">Ewa Lis - oświadczenie majątkowe za 2024</a>',
+        ),
+        "https://u1.pl/f/1.pdf": (200, "application/pdf", PDF + b"1"),
+    }
+
+    def render(url: str) -> tuple[HttpResult, int]:
+        # The script sends the browser to a cookie wall on another host.
+        return HttpResult(
+            "https://consent.example/", 200, "text/html", b"<html></html>"
+        ), 0
+
+    shell_with_link = (
+        200,
+        "text/html",
+        SHELL[2].replace(b'<div id="root">', b'<a href="/om">x</a><div id="root">'),
+    )
+    sites["https://u1.pl"] = shell_with_link
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    _, store, _ = search(tmp_path, sites, rows, render=render, sitemaps=False)
+    assert store.people["lis"].status == "found"
+
+
+def test_a_broken_gzip_sitemap_is_skipped_not_fatal(tmp_path):
+    whole = gzip.compress(b"<urlset><url><loc>https://u1.pl/x</loc></url></urlset>")
+    sites = {
+        "https://u1.pl": html("BIP", '<a href="/om">Oświadczenia majątkowe</a>'),
+        "https://u1.pl/robots.txt": (
+            200,
+            "text/plain",
+            b"Sitemap: https://u1.pl/sm.xml.gz\n",
+        ),
+        "https://u1.pl/sm.xml.gz": (200, "application/gzip", whole[:-6]),
+        "https://u1.pl/om": html(
+            "Oświadczenia majątkowe radnych",
+            '<a href="/f/1.pdf">Ewa Lis - oświadczenie majątkowe za 2024</a>',
+        ),
+        "https://u1.pl/f/1.pdf": (200, "application/pdf", PDF + b"1"),
+    }
+    _, store, _ = search(tmp_path, sites, [row("lis", "u1", "Ewa", "Lis")])
+    assert store.people["lis"].status == "found"
+
+
+def test_known_id_addresses_are_not_walked_as_pages(tmp_path):
+    # bip.podkarpackie.pl: every known address is an attachment behind an ?id=.
+    attachment = (
+        "https://u1.pl/component/govarticle?id=1000&task=article.downloadAttachment"
+    )
+    sites = {
+        "https://u1.pl": html("BIP", '<a href="/om">Oświadczenia majątkowe</a>'),
+        "https://u1.pl/om": html(
+            "Oświadczenia majątkowe radnych",
+            '<a href="/f/1.pdf">Ewa Lis - oświadczenie majątkowe za 2024</a>',
+        ),
+        "https://u1.pl/f/1.pdf": (200, "application/pdf", PDF + b"1"),
+        attachment: (200, "application/pdf", PDF + b"other"),
+    }
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    _, store, web = search(
+        tmp_path, sites, rows, known={"u1.pl": [attachment]}, sitemaps=False
+    )
+    assert store.people["lis"].status == "found"
+    assert not any("govarticle" in c for c in web.calls)
+
+
+def test_known_files_never_end_a_walk_before_it_starts(tmp_path):
+    known = {
+        "u1.pl": [
+            f"https://u1.pl/pliki/oswiadczenie-majatkowe-ewa-lis-{year}.pdf"
+            for year in (2022, 2023, 2024)
+        ]
+    }
+    sites = {"https://u1.pl": html("BIP", "")}  # the old files are gone
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    people, store, web = search(tmp_path, sites, rows, known=known, sitemaps=False)
+    assert "https://u1.pl" in [c.rstrip("/") for c in web.calls]  # the BIP was asked
+    assert store.people["lis"].status == "not_found"
+
+
+def test_a_file_spelt_twice_counts_and_comes_down_once(tmp_path):
+    files = [
+        "http://u1.pl/f/oswiadczenie-majatkowe-ewa-lis-2024.pdf",
+        "https://u1.pl/f/oswiadczenie-majatkowe-ewa-lis-2024.pdf",
+        "https://www.u1.pl/f/oswiadczenie-majatkowe-ewa-lis-2024.pdf",
+    ]
+    links = "".join(
+        f'<a href="{u}">Ewa Lis - oświadczenie majątkowe</a>' for u in files
+    )
+    sites = {
+        "https://u1.pl": html("Oświadczenia majątkowe radnych", links),
+        **{u: (200, "application/pdf", PDF + b"1") for u in files},
+    }
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    _, store, web = search(tmp_path, sites, rows, sitemaps=False)
+    assert store.people["lis"].status == "found"
+    assert len([c for c in web.calls if c.endswith(".pdf")]) == 1
+
+
+def test_a_shared_hosts_sitemaps_are_read_once(tmp_path):
+    sites = {
+        "https://bip.x.pl/u1": html("BIP", ""),
+        "https://bip.x.pl/u2": html("BIP", ""),
+        "https://bip.x.pl/robots.txt": (200, "text/plain", b"User-agent: *\n"),
+    }
+    rows = [row("a", "u1", "Ewa", "Lis"), row("b", "u2", "Jan", "Kot")]
+    _, _, web = search(
+        tmp_path, sites, rows, scopes={"u1": "bip.x.pl/u1", "u2": "bip.x.pl/u2"}
+    )
+    assert web.calls.count("https://bip.x.pl/robots.txt") == 1
+    assert web.calls.count("https://bip.x.pl/sitemap.xml") == 1
+
+
+def test_the_city_council_comes_before_the_districts_in_warsaw():
+    city = office_terms(["Rada miasta"])
+    council = LinkContext(
+        "https://x.pl/1", "Oświadczenia majątkowe radnych m.st. Warszawy"
+    )
+    district = LinkContext(
+        "https://x.pl/2", "Oświadczenia majątkowe radnych Dzielnicy Bemowo"
+    )
+    assert link_score(council, [], 1, city) > link_score(district, [], 1, city)
+    bemowo = office_terms(["Rada dzielnicy"], ["Bemowo (dzielnica)"])
+    wola = LinkContext(
+        "https://x.pl/3", "Oświadczenia majątkowe radnych Dzielnicy Wola"
+    )
+    assert link_score(district, [], 1, bemowo) > link_score(wola, [], 1, bemowo)
