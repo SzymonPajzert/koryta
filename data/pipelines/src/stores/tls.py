@@ -13,12 +13,15 @@ Certificate checks stay on; Szymon agreed to the bundle on 10-29.
 import csv
 import io
 import os
+import re
 import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
 from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from curl_cffi import requests as cffi_requests
 from curl_cffi.curl import DEFAULT_CACERT
 
 from scrapers.common.fetch import HttpResult, http_get
@@ -28,8 +31,11 @@ from scrapers.common.fetch import HttpResult, http_get
 MOZILLA_INTERMEDIATES = (
     "https://ccadb.my.salesforce-sites.com/mozilla/MozillaIntermediateCertsCSVReport"
 )
-#: A bundle older than this is built again: CCADB adds intermediates weekly.
+#: Intermediates older than this are fetched again: CCADB adds them weekly.
 MAX_AGE_S = 7 * 86400
+#: Past this without a refresh that worked, curl goes back to its roots alone
+#: rather than trust a list nobody has looked at for a month.
+STALE_AFTER_S = 30 * 86400
 USER_AGENT = "KorytaBIPCrawler/0.1 (+http://koryta.pl/crawler)"
 
 
@@ -47,8 +53,33 @@ def intermediates(report: str, now: datetime) -> list[str]:
         except ValueError:
             continue
         if certificate.not_valid_after_utc > now:
-            pems.append(pem)
+            # Written as cryptography reads it, not as the CSV spelt it.
+            pems.append(
+                certificate.public_bytes(serialization.Encoding.PEM).decode().strip()
+            )
     return pems
+
+
+def curl_loads(path: Path) -> str:
+    """ "" when curl takes ``path`` for its CA file, else why not.
+
+    BoringSSL, not cryptography, reads the bundle, and one certificate it
+    refuses makes it refuse the whole file (curl 77): every HTTPS fetch would
+    fail. Only that answer counts; a site that does not answer says nothing."""
+    try:
+        # A str is taken as the CA file (CURLOPT_CAINFO); the stub says bool.
+        cffi_requests.head(MOZILLA_INTERMEDIATES, verify=str(path), timeout=20)  # type: ignore[arg-type]
+    except Exception as exc:  # noqa: BLE001
+        if re.search(r"curl: \(77\)", str(exc)):
+            return str(exc)[:160]
+    return ""
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(f"{path.name}.{os.getpid()}.partial")
+    partial.write_text(text)
+    os.replace(partial, path)
 
 
 def ca_bundle(
@@ -57,26 +88,39 @@ def ca_bundle(
     fetch: Callable[[str, float, str], HttpResult] = http_get,
     roots: str = DEFAULT_CACERT,
     clock: Callable[[], float] = time.time,
-) -> Path | None:
-    """The bundle at ``path``: curl's roots and Mozilla's intermediates, built
-    again when missing or a week old.
+    loads: Callable[[Path], str] = curl_loads,
+) -> tuple[Path | None, str]:
+    """The bundle at ``path`` and a line saying how it was made.
 
-    A download that fails keeps the bundle there is; with none, None, and curl
-    verifies against its roots alone, as before.
+    The intermediates are kept beside it (``<name>.intermediates``) and fetched
+    again when a week old; the bundle itself is written anew from curl's live
+    roots and them on every call, so a refresh that fails never freezes the
+    roots. None when there are no intermediates fresher than `STALE_AFTER_S`:
+    curl then verifies against its roots alone.
     """
-    if path.exists() and clock() - path.stat().st_mtime < MAX_AGE_S:
-        return path
-    result = fetch(MOZILLA_INTERMEDIATES, 120.0, USER_AGENT)
-    now = datetime.fromtimestamp(clock(), timezone.utc)
-    pems = (
-        intermediates(result.content.decode("utf-8", "replace"), now)
-        if result.ok
-        else []
-    )
-    if not pems:
-        return path if path.exists() else None
-    path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(path.name + ".partial")
-    partial.write_text(Path(roots).read_text().rstrip() + "\n" + "\n".join(pems) + "\n")
-    os.replace(partial, path)
-    return path
+    kept = path.with_name(path.name + ".intermediates")
+    age = clock() - kept.stat().st_mtime if kept.exists() else None
+    note = f"Mozilla's intermediates from {(age or 0) / 86400:.0f} days ago"
+    if age is None or age >= MAX_AGE_S:
+        result = fetch(MOZILLA_INTERMEDIATES, 120.0, USER_AGENT)
+        now = datetime.fromtimestamp(clock(), timezone.utc)
+        pems = (
+            intermediates(result.content.decode("utf-8", "replace"), now)
+            if result.ok
+            else []
+        )
+        if pems:
+            _write(kept, "\n".join(pems) + "\n")
+            note = f"{len(pems):,} of Mozilla's intermediates, fetched now"
+        else:
+            reason = result.error[:80] or f"HTTP {result.status}"
+            if result.ok:
+                reason = "no certificates in the report"
+            if age is None or age >= STALE_AFTER_S:
+                return None, f"CCADB refresh failed ({reason}): curl's roots only"
+            note = f"CCADB refresh failed ({reason}); {note}"
+    _write(path, Path(roots).read_text().rstrip() + "\n" + kept.read_text())
+    refused = loads(path)
+    if refused:
+        return None, f"curl refused the bundle ({refused}): curl's roots only"
+    return path, note

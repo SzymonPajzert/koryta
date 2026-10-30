@@ -21,7 +21,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from entities.util import decode_url
-from scrapers.bip.classify import is_document_url
+from scrapers.bip.classify import host_of, is_document_url, normalize_url, path_of
 from scrapers.common.links import LinkContext
 
 # On folded text: lower case, ASCII, words separated by single spaces.
@@ -160,31 +160,73 @@ _NOT_NAMES = frozenset(
     miejski miejskiej gminny gminnego powiatowy powiatowego korekta korekty pobierz
     plik pliki rok roku stan stanu dzień początek koniec kadencji kadencja
     uzupełnienie załącznik pan pani członek członka zarządu zarząd biuletyn
-    informacji publicznej bip pdf doc docx""".split()
+    informacji publicznej bip pdf doc docx radni kierownicy pracownicy dyrektorzy
+    członkowie""".split()
 )
 _TOKEN = re.compile(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+(?:-[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+)?")
+#: Words an initial follows in an address or a patron's name, not a person's:
+#: "ul. J. Słowackiego", "Szkoła Podstawowa im. M. Konopnickiej".
+_BEFORE_A_NAMESAKE = frozenset("ul al pl os im ks sw gen prof dr nr".split())
 
 
-def names_somebody(text: str, *, initials_only: bool = False) -> bool:
+def initialled_names(text: str) -> list[tuple[str, str]]:
+    """(initial, name) for each "B. Kułacz" in raw ``text``: not after an address
+    or patron's abbreviation, nor in a chain like "S.A." or "M.St."."""
+    text = text or ""
+    tokens = list(_TOKEN.finditer(text))
+    found = []
+    for i, match in enumerate(tokens[:-1]):
+        token, after = match.group(), tokens[i + 1]
+        word = after.group()
+        if not (
+            len(token) == 1
+            and token.isupper()
+            and re.fullmatch(r"\.\s*", text[match.end() : after.start()])
+        ):
+            continue
+        if i and fold(tokens[i - 1].group()) in _BEFORE_A_NAMESAKE:
+            continue
+        if len(word) < 2 or not word[0].isupper() or fold(word) in _NOT_NAMES:
+            continue
+        if len(word) <= 3 and text[after.end() :][:1] == ".":
+            continue  # "M.St.", "S.A."
+        found.append((token, word))
+    return found
+
+
+def names_somebody(
+    text: str, *, initials_only: bool = False, initials: bool = True
+) -> bool:
     """Whether raw (unfolded) ``text`` holds what looks like a person's name: an
     initial and a capitalised word ("B. Kułacz"), or two capitalised words in a
     row, none of them the vocabulary of a declarations page.
 
     ``initials_only`` takes the first form alone, for a page title: titles carry
-    office and place names too ("Rada Miejska Chojnowa").
+    office and place names too ("Rada Miejska Chojnowa"). ``initials=False``
+    takes the second alone: on a page about one seeker, "J. Kaczmarka" is the
+    seeker in a form ``Seeker.named_in`` misses, not somebody else.
     """
-    text = text or ""
+    if initials and initialled_names(text):
+        return True
+    if initials_only:
+        return False
     previous = False
-    for match in _TOKEN.finditer(text):
+    for match in _TOKEN.finditer(text or ""):
         token = match.group()
-        initial = len(token) == 1 and token.isupper() and text[match.end() :][:1] == "."
         name_like = (
             token[0].isupper() and len(token) > 1 and fold(token) not in _NOT_NAMES
         )
         if name_like and previous:
             return True
-        previous = initial or (name_like and not initials_only)
+        previous = name_like
     return False
+
+
+def _could_be(seekers: list[Seeker], initial: str, word: str) -> bool:
+    """Whether a seeker could be "initial. word": the same first letter, and a
+    surname that starts as the word does (declined, Kaczmarek is "Kaczmarka")."""
+    first, last = fold(initial), fold(word)
+    return any(s.first.startswith(first) and s.last[:4] == last[:4] for s in seekers)
 
 
 #: What the seekers' own council or office is called, folded, by a candidacy's
@@ -193,7 +235,7 @@ def names_somebody(text: str, *, initials_only: bool = False) -> bool:
 #: bip.warszawa.pl read 149 declaration pages and found none of 96 councillors.
 _OFFICE_TERMS = {
     "Rada gminy": r"rad\w* gmin\w*|radn\w*",
-    "Rada miasta": r"rad\w* miast\w*|rad\w* miejsk\w*|radn\w*",
+    "Rada miasta": r"rad\w* miast\w*|rad\w* miejsk\w*|rad\w* m st|radn\w*",
     "Rada powiatu": r"rad\w* powiat\w*|radn\w*",
     "Sejmik": r"sejmik\w*|radn\w* wojewodztw\w*",
     "Rada dzielnicy": r"dzielnic\w*",
@@ -203,10 +245,35 @@ _OFFICE_TERMS = {
 }
 
 
-def office_terms(offices: Iterable[str]) -> re.Pattern[str] | None:
-    """The folded words naming the seekers' own councils and offices, or None."""
-    terms = sorted({_OFFICE_TERMS[o] for o in offices if o in _OFFICE_TERMS})
-    return re.compile(r"(?:^| )(?:" + "|".join(terms) + ")") if terms else None
+def office_terms(
+    offices: Iterable[str], places: Iterable[str] = ()
+) -> re.Pattern[str] | None:
+    """The folded words naming the seekers' own councils and offices, or None.
+
+    A district council's seekers want their own district (``places``: unit names
+    like "Bemowo (dzielnica)"); anybody else's want no district at all: Warsaw's
+    BIP files 18 district councils beside the city's, "radnych Dzielnicy Bemowo"
+    as close to "radni" as "radnych m.st. Warszawy" is.
+    """
+    offices = set(offices)
+    terms = {_OFFICE_TERMS[o] for o in offices if o in _OFFICE_TERMS}
+    if "Rada dzielnicy" in offices:
+        districts = {fold(p.split(" (")[0]) for p in places if "(dzielnica)" in p}
+        if districts:
+            terms.discard(_OFFICE_TERMS["Rada dzielnicy"])
+            terms |= {re.escape(d) for d in districts if d}
+    if not terms:
+        return None
+    words = "(?:" + "|".join(sorted(terms)) + ")"
+    if "Rada dzielnicy" in offices:
+        return re.compile(r"(?:^| )" + words)
+    return re.compile(r"^(?!.*(?:^| )dzielnic)(?:.*? )?" + words)
+
+
+def same_file(url: str) -> str:
+    """A file however its address is spelt: http or https, with www. or without."""
+    clean = normalize_url(url)
+    return host_of(clean) + path_of(clean)
 
 
 def link_score(
@@ -292,8 +359,12 @@ def candidates(
     )
     page_declarations = bool(DECLARATION.search(title) or ASSETS.search(title))
     # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
-    # 31.12.2025 r."): its files are theirs, whatever the labels say.
-    title_somebody = not title_names and names_somebody(page_title, initials_only=True)
+    # 31.12.2025 r."): its files are theirs, whatever the labels say. Unless a
+    # seeker could be that person in a form named_in misses ("J. Kaczmarka").
+    title_somebody = not title_names and any(
+        not _could_be(seekers, initial, word)
+        for initial, word in initialled_names(page_title)
+    )
     out: list[Candidate] = []
     for link in links:
         if not is_document_url(link.url):
@@ -314,7 +385,7 @@ def candidates(
             named = _named(text, url, seekers)
             if named:
                 break
-            if names_somebody(raw):
+            if names_somebody(raw, initials=not page_people):
                 somebody_else = True
                 break
         if not named and not somebody_else and page_people:
@@ -376,14 +447,16 @@ def choose(
         ranked = sorted(firsts or own, key=lambda c: -c.score)
         urls: list[Candidate] = []
         for c in ranked:
-            if c.url not in {u.url for u in urls}:
+            if same_file(c.url) not in {same_file(u.url) for u in urls}:
                 urls.append(c)
             if len(urls) >= per_person:
                 break
         if urls:
             picked[seeker.key] = urls
     unnamed = sorted(
-        {c.url: c for c in found if c.key == "" and c.declaration_like}.values(),
+        {
+            same_file(c.url): c for c in found if c.key == "" and c.declaration_like
+        }.values(),
         key=lambda c: -c.score,
     )
     if unnamed and unnamed_cap > 0:
@@ -410,5 +483,5 @@ def satisfied(found: list[Candidate], seekers: list[Seeker], per_person: int) ->
     counts: dict[str, set[str]] = {}
     for c in found:
         if c.declaration_like and c.first_name:
-            counts.setdefault(c.key, set()).add(c.url)
+            counts.setdefault(c.key, set()).add(same_file(c.url))
     return all(len(counts.get(s.key, ())) >= per_person for s in seekers)

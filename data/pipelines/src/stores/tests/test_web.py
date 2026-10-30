@@ -69,29 +69,49 @@ class _Http2Spoiler:
         return Response()
 
 
+V11 = CurlHttpVersion.V1_1
+
+
 @pytest.mark.parametrize(
-    "error",
+    ("error", "url", "robots_asked"),
     [
-        "(52) Empty reply from server.",
-        "(92) HTTP/2 stream 1 was not closed cleanly: PROTOCOL_ERROR (err 1).",
-        "(16) nghttp2 shuts down connection with error 9: COMPRESSION_ERROR.",
+        # robots.txt is asked over https first: an empty reply there is final.
+        ("(52) Empty reply from server.", "http://bip.x.pl/", [None, None, V11]),
+        (
+            "(92) HTTP/2 stream 1 was not closed cleanly.",
+            "https://bip.x.pl/",
+            [None, V11],
+        ),
+        (
+            "(16) nghttp2 shuts down connection: COMPRESSION_ERROR.",
+            "https://bip.x.pl/",
+            [None, V11],
+        ),
     ],
 )
 def test_a_server_that_only_speaks_http1_is_asked_again(
-    monkeypatch: pytest.MonkeyPatch, error: str
+    monkeypatch: pytest.MonkeyPatch, error: str, url: str, robots_asked: list[object]
 ) -> None:
     server = _Http2Spoiler(error)
     monkeypatch.setattr(fetch, "_session", lambda impersonate: server)
-    result = fetch.http_get("https://bip.x.pl/")
-    assert result.ok and server.versions == [None, CurlHttpVersion.V1_1]
+    result = fetch.http_get(url)
+    assert result.ok and server.versions == [None, V11]
 
     robots = _Http2Spoiler(error)
     monkeypatch.setattr(web.cffi_requests, "get", robots.get)
     cache = RobotsCache("test-agent")
-    assert cache.allowed("https://bip.x.pl/") and not cache.unreachable(
-        "https://bip.x.pl/"
-    )
-    assert robots.versions == [None, CurlHttpVersion.V1_1]
+    assert cache.allowed(url) and not cache.unreachable(url)
+    assert robots.versions == robots_asked
+
+
+def test_an_empty_reply_over_https_is_not_asked_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Over https a dropped HTTP/2 shows as 16 or 92; 52 there is the server's no.
+    server = _Http2Spoiler("(52) Empty reply from server.")
+    monkeypatch.setattr(fetch, "_session", lambda impersonate: server)
+    assert not fetch.http_get("https://bip.x.pl/").ok
+    assert server.versions == [None]
 
 
 def test_other_failures_are_not_asked_again(monkeypatch: pytest.MonkeyPatch) -> None:
