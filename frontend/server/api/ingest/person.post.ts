@@ -1369,6 +1369,16 @@ async function findEdgeOrCreate(
     );
     if (copy?.relation === "same") existing = copy.id;
     else candidate = copy;
+  } else if (edgeSemantics(edge.type).kind === "state") {
+    // A pair is one fact however often a payload names it - an article cited
+    // twice is cited - so every row of it is the edge stored for it, or the one
+    // an earlier row of this request wrote. Counted as copies the way a job's
+    // rows are, a second row would find no copy left for itself and create a
+    // second edge saying the first one's fact; and while every copy of a state
+    // edge had the one id, the search below for a free one never ended.
+    existing =
+      same[0] ??
+      [...ctx.claimedEdgeIds].find(([, claim]) => claim === identity)?.[0];
   } else {
     // The n-th row of this identity onto the n-th stored edge that says it,
     // out of those no *other* identity has taken.
@@ -1491,15 +1501,8 @@ async function findEdgeOrCreate(
     return { edgeId: edgeRef.id, created: false, published: false };
   }
 
-  // A new document, at an id no stored edge already occupies. Normally
-  // `occurrence` is enough, but an enriched edge keeps the id it was created
-  // under while its fields have moved on, so a later row carrying less can hash
-  // straight back onto it - and `createRevisionTransaction` ends in a `set`,
-  // which would erase the committee that was just written there.
-  let copy = occurrence;
-  while (ids.has(edgeDocumentId(edge, copy))) copy++;
-
-  const edgeRef = ctx.db.collection("edges").doc(edgeDocumentId(edge, copy));
+  // A new document, at an id no other edge holds (`claimFreeEdgeRef`).
+  const edgeRef = await claimFreeEdgeRef(ctx, edge, identity, occurrence, ids);
   const published = ctx.autoapprove || verified;
   createRevisionTransaction(ctx.db, ctx.batch, ctx.user, edgeRef, edge, {
     automatic: true,
@@ -1511,8 +1514,47 @@ async function findEdgeOrCreate(
       `[ingest] approved employment ${edgeRef.id} on its register entry`,
     );
   }
-  ctx.claimedEdgeIds.set(edgeRef.id, identity);
   return { edgeId: edgeRef.id, created: true, published };
+}
+
+/** The document a new edge is written to: the first id from the row's own copy
+ * on (`edgeDocumentId`) that no other edge holds, claimed for the row so that
+ * no later row takes it.
+ *
+ * Normally that is the row's own copy. It is not where the id is held already,
+ * since `createRevisionTransaction` ends in a `set` and replaces whatever is
+ * there:
+ * - by an edge between the same pair (`ids`). An enriched edge keeps the id it
+ *   was created under while its fields move on, so a later row carrying less
+ *   can hash straight back onto it and erase the committee written there.
+ * - by an edge between another pair, which only a read by id finds. A split or
+ *   a merge moves an edge by re-pointing its end and leaves its id alone, so
+ *   `edge_<page>_...` can join another page, and the page it left restating
+ *   the fact hashes onto it. Written over, the edge went back, as a draft:
+ *   Józef Pilch's 2024 sejmik run went back to his Będzin namesake on
+ *   2026-10-08, five weeks after the 08-31 split gave it to him, and on 09-10
+ *   Iwona Pietrzak's live Bychawa board seat went back to her namesake and
+ *   off the site. Now the old page gets an edge of its own, which a reviewer
+ *   removes like any other, and the moved one stays where it was put.
+ * - by another row of this request, whose write is still in the batch where no
+ *   read sees it. The employments are placed concurrently, so the claim is
+ *   looked at again after the read and made before anything else runs.
+ */
+async function claimFreeEdgeRef(
+  ctx: Context,
+  edge: Edge,
+  identity: string,
+  occurrence: number,
+  ids: Set<string>,
+): Promise<FirebaseFirestore.DocumentReference> {
+  for (let copy = occurrence; ; copy++) {
+    const id = edgeDocumentId(edge, copy);
+    if (ids.has(id) || ctx.claimedEdgeIds.has(id)) continue;
+    const edgeRef = ctx.db.collection("edges").doc(id);
+    if ((await edgeRef.get()).exists || ctx.claimedEdgeIds.has(id)) continue;
+    ctx.claimedEdgeIds.set(id, identity);
+    return edgeRef;
+  }
 }
 
 /** What `findEdgeOrCreate` did with one row.

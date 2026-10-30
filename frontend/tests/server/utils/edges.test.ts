@@ -101,6 +101,16 @@ describe("edgeDocumentId", () => {
     );
   });
 
+  it("gives a later copy of a state edge an id of its own", () => {
+    // The pair's bare id can be held by an edge a split or a merge moved to
+    // another page, and a new edge for the pair needs somewhere else to go.
+    expect(edgeDocumentId(owns, 1)).toMatch(/^edge_a_b_owns_.{10}$/);
+    expect(edgeDocumentId(owns, 2)).not.toBe(edgeDocumentId(owns, 1));
+    expect(edgeDocumentId({ ...owns, start_date: "2020-01-01" }, 1)).toBe(
+      edgeDocumentId(owns, 1),
+    );
+  });
+
   it("gives two spells between the same pair different ids", () => {
     expect(edgeDocumentId(spell)).not.toBe(
       edgeDocumentId({ ...spell, start_date: "2015-06-01" }),

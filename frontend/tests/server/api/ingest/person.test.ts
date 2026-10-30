@@ -22,6 +22,10 @@ const mockCommit = vi.fn();
 // the person's.
 const nodesParent = { id: "nodes" };
 const mockRef = { id: "doc-ref-id", parent: nodesParent };
+// What reading an id the database does not hold answers. A new edge reads the
+// id it is about to be written under, which an edge a split or a merge moved
+// off the page can still hold.
+const absent = { get: async () => ({ exists: false, data: () => undefined }) };
 
 const mockDb = {
   collection: mockCollection,
@@ -187,7 +191,7 @@ describe("api/ingest/person", () => {
     });
 
     // Edge 1 creation
-    const edgeRef1 = { id: "edge-id-1" };
+    const edgeRef1 = { id: "edge-id-1", ...absent };
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] }); // Edge doesn't exist yet
     mockDoc.mockReturnValueOnce(edgeRef1);
 
@@ -263,7 +267,7 @@ describe("api/ingest/person", () => {
       empty: false,
       docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
     });
-    const edgeRef = { id: "edge-id" };
+    const edgeRef = { id: "edge-id", ...absent };
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockDoc.mockReturnValueOnce(edgeRef);
 
@@ -319,7 +323,7 @@ describe("api/ingest/person", () => {
       empty: false,
       docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
     });
-    const edgeRef = { id: "edge-id" };
+    const edgeRef = { id: "edge-id", ...absent };
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockDoc.mockReturnValueOnce(edgeRef);
 
@@ -373,7 +377,7 @@ describe("api/ingest/person", () => {
       empty: false,
       docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
     });
-    const edgeRef = { id: "edge-id" };
+    const edgeRef = { id: "edge-id", ...absent };
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockDoc.mockReturnValueOnce(edgeRef);
 
@@ -407,6 +411,7 @@ describe("api/ingest/person", () => {
         id: id ?? "new-doc-id",
         parent: nodesParent,
         ref: mockRef,
+        ...absent,
       }));
       mockGet.mockResolvedValueOnce({
         empty: false,
@@ -1758,6 +1763,7 @@ describe("api/ingest/person, a candidacy the site cannot place", () => {
       id: "new-doc-id",
       parent: nodesParent,
       ref: mockRef,
+      ...absent,
     });
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockDoc.mockReturnValueOnce({
@@ -4147,6 +4153,306 @@ describe("api/ingest/person, a district's candidacy filed under the candidate's 
 
       expect(writtenOnto("at-home")).toEqual([]);
       expect(created()).toHaveLength(1);
+    });
+  });
+});
+
+describe("api/ingest/person, an edge a split moved to another page", () => {
+  /** Every collection the request reads, keyed by id. Answered by filtering,
+   * like the suites above, and by id: an edge moved to another page is found
+   * only that way, since no query for this page's edges returns it. */
+  let store: Record<string, Record<string, Record<string, unknown>>> = {};
+
+  function fakeQuery(
+    collection: string,
+    constraints: [string, unknown][],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): any {
+    return {
+      where: (field: string, _op: string, value: unknown) =>
+        fakeQuery(collection, [...constraints, [field, value]]),
+      limit: () => fakeQuery(collection, constraints),
+      get: async () => {
+        const docs = Object.entries(store[collection] ?? {})
+          .filter(([, data]) =>
+            constraints.every(([field, value]) => data[field] === value),
+          )
+          .map(([id, data]) => ({
+            id,
+            ref: { id, parent: { id: collection } },
+            data: () => data,
+          }));
+        return { empty: docs.length === 0, docs };
+      },
+    };
+  }
+
+  function fakeCollection(collection: string) {
+    return {
+      where: (field: string, _op: string, value: unknown) =>
+        fakeQuery(collection, [[field, value]]),
+      doc: (id?: string) => ({
+        id: id ?? `new-${collection}-id`,
+        parent: { id: collection },
+        get: async () => ({
+          id,
+          exists: id !== undefined && store[collection]?.[id] !== undefined,
+          data: () => (id === undefined ? undefined : store[collection]?.[id]),
+        }),
+      }),
+    };
+  }
+
+  const ARTICLE = "https://example.com/pilch";
+
+  /** Józef Pilch of Będzin as the night sends him: his register entry, with a
+   * 2024 sejmik run and a job the pipeline pairs with it that are his Kraków
+   * namesake's. The 08-31 split gave both to the Kraków page. */
+  function bedzinPayload(overrides: Record<string, unknown> = {}) {
+    mockReadBody.mockResolvedValue({
+      name: "Józef Pilch",
+      rejestrIo: "https://rejestr.io/osoby/2140078",
+      birthDate: "1957-07-06",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          election_type: "Sejmik",
+          election_year: "2024",
+          teryt: "12",
+          committee: "KKW TRZECIA DROGA PSL-PL2050 SZYMONA HOŁOWNI",
+        },
+      ],
+      ...overrides,
+    });
+  }
+
+  const JOB = {
+    krs: "0000035770",
+    role: "Prokurent",
+    start: "2006-10-18",
+    end: "2016-01-11",
+  };
+
+  /** The run and the job as the 08-29 upload wrote them onto the Będzin page,
+   * which is the id each still has. */
+  const run: EdgeLike = {
+    source: "bedzin",
+    target: "teryt12",
+    type: "election",
+    name: "kandydatura",
+    position: "Sejmik",
+    committee: "KKW TRZECIA DROGA PSL-PL2050 SZYMONA HOŁOWNI",
+    start_date: "2024-01-01",
+  };
+  const job: EdgeLike = {
+    source: "bedzin",
+    target: "chemobudowa",
+    type: "employed",
+    name: "Prokurent",
+    start_date: "2006-10-18",
+    end_date: "2016-01-11",
+  };
+  const mention: EdgeLike = {
+    source: "bedzin",
+    target: "article",
+    type: "mentions",
+  };
+
+  /** `edge` as the split left it: on the Kraków page, under its Będzin id,
+   * live there. */
+  function movedToKrakow(edge: EdgeLike) {
+    store.edges![edgeDocumentId(edge)] = {
+      ...edge,
+      source: "krakow",
+      published: true,
+      revision_id: "revisions/approved-on-krakow",
+    };
+  }
+
+  /** What was written onto one edge id: the data and how. */
+  function writtenOnto(edgeId: string) {
+    return vi
+      .mocked(createRevisionTransaction)
+      .mock.calls.filter(
+        ([, , , ref]) => (ref as unknown as { id: string }).id === edgeId,
+      )
+      .map(([, , , , data, options]) => ({ data, options }));
+  }
+
+  /** Every edge id written onto, in the order written. */
+  function writtenEdges() {
+    return vi
+      .mocked(createRevisionTransaction)
+      .mock.calls.map(([, , , ref]) => (ref as unknown as { id: string }).id)
+      .filter((id) => id.startsWith("edge_"));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockResolvedValue({
+      uid: "pipeline-people-import",
+      datascience: true,
+    });
+    store = {
+      nodes: {
+        bedzin: {
+          type: "person",
+          name: "Józef Pilch",
+          parties: [],
+          rejestrIo: "https://rejestr.io/osoby/2140078",
+          birthDate: "1957-07-06",
+          published: true,
+        },
+        krakow: {
+          type: "person",
+          name: "Józef Adam Pilch",
+          parties: [],
+          rejestrIo: "https://rejestr.io/osoby/2199291",
+          birthDate: "1957-03-19",
+          published: true,
+        },
+        teryt12: { type: "region", name: "małopolskie", teryt: "12" },
+        chemobudowa: {
+          type: "place",
+          name: "CHEMOBUDOWA-KRAKÓW",
+          krsNumber: "0000035770",
+          published: true,
+        },
+        article: { type: "article", name: "", sourceURL: ARTICLE },
+      },
+      edges: {},
+      revisions: {},
+    };
+    mockCollection.mockImplementation((name: string) => fakeCollection(name));
+    mockBatch.mockReturnValue({
+      commit: mockCommit,
+      set: vi.fn(),
+      update: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    mockCollection.mockReset();
+    mockCollection.mockReturnValue({ where: mockWhere, doc: mockDoc });
+    mockBatch.mockReturnValue({ commit: mockCommit, set: vi.fn() });
+  });
+
+  it("leaves a run the split moved on the page it moved it to", async () => {
+    // Written over, it went back to the Będzin page: the 10-08 night did that
+    // to his 2024 sejmik run, five weeks after the split.
+    movedToKrakow(run);
+    bedzinPayload();
+
+    await handler({} as any);
+
+    expect(writtenOnto(edgeDocumentId(run))).toEqual([]);
+  });
+
+  it("gives the page it left a run of its own, as any new one", async () => {
+    // The payload still says it, so it is stored, where a reviewer can remove
+    // it like any other candidacy the pipeline wrongly paired.
+    movedToKrakow(run);
+    bedzinPayload();
+
+    const result = await handler({} as any);
+
+    const own = edgeDocumentId(run, 1);
+    expect(writtenEdges()).toEqual([own]);
+    expect(writtenOnto(own)[0]!.data).toMatchObject({
+      source: "bedzin",
+      target: "teryt12",
+      position: "Sejmik",
+    });
+    expect(writtenOnto(own)[0]!.options).toMatchObject({
+      approve: false,
+      published: false,
+    });
+    expect(result.elections).toEqual([
+      { nodeId: "teryt12", edgeId: own, created: true, published: false },
+    ]);
+  });
+
+  it("leaves a job the split moved where it is, and gives the page it left its own", async () => {
+    // Iwona Pietrzak's board seat went back to her namesake this way on 09-10,
+    // and off the site with it.
+    movedToKrakow(job);
+    bedzinPayload({ elections: [], companies: [JOB] });
+
+    const result = await handler({} as any);
+
+    const own = edgeDocumentId(job, 1);
+    expect(writtenEdges()).toEqual([own]);
+    expect(writtenOnto(own)[0]!.data).toMatchObject({ source: "bedzin" });
+    expect(result.companies).toEqual([
+      expect.objectContaining({ edgeId: own, created: true }),
+    ]);
+  });
+
+  it("gives two rows of one job a copy each past the moved one", async () => {
+    // The employments are placed side by side, so both look for a free id at
+    // once, and the second has to see what the first took while it read.
+    movedToKrakow(job);
+    bedzinPayload({ elections: [], companies: [JOB, JOB] });
+
+    await handler({} as any);
+
+    expect(writtenEdges().sort()).toEqual(
+      [edgeDocumentId(job, 1), edgeDocumentId(job, 2)].sort(),
+    );
+  });
+
+  it("leaves a mention the split moved, and gives the page it left its own", async () => {
+    // A state edge's first copy is the bare id, so it is the one moved.
+    movedToKrakow(mention);
+    bedzinPayload({ elections: [], sources: [ARTICLE] });
+
+    const result = await handler({} as any);
+
+    expect(writtenOnto("edge_bedzin_article_mentions")).toEqual([]);
+    const own = edgeDocumentId(mention, 1);
+    expect(writtenEdges()).toEqual([own]);
+    expect(writtenOnto(own)[0]!.data).toEqual(mention);
+    expect(result.articles).toEqual([
+      { nodeId: "article", created: false, edgeId: own },
+    ]);
+  });
+
+  it("writes onto the id it always did when nothing else holds it", async () => {
+    bedzinPayload();
+
+    await handler({} as any);
+
+    expect(writtenEdges()).toEqual([edgeDocumentId(run)]);
+  });
+
+  describe("an article cited twice", () => {
+    it("is the one mention the page has", async () => {
+      // A pair is one fact. Counted as two rows of a job are, the second row
+      // found no copy left and looked for a free id it never found, since
+      // every copy of a mention had the one id.
+      store.edges![edgeDocumentId(mention)] = { ...mention, published: true };
+      bedzinPayload({ elections: [], sources: [ARTICLE, ARTICLE] });
+
+      const result = await handler({} as any);
+
+      expect(writtenEdges()).toEqual([]);
+      expect(result.articles).toEqual([
+        { nodeId: "article", created: false, edgeId: edgeDocumentId(mention) },
+        { nodeId: "article", created: false, edgeId: edgeDocumentId(mention) },
+      ]);
+    });
+
+    it("is written once where the page has none", async () => {
+      bedzinPayload({ elections: [], sources: [ARTICLE, ARTICLE] });
+
+      const result = await handler({} as any);
+
+      expect(writtenEdges()).toEqual([edgeDocumentId(mention)]);
+      expect(result.articles!.map((article) => article.edgeId)).toEqual([
+        edgeDocumentId(mention),
+        edgeDocumentId(mention),
+      ]);
     });
   });
 });

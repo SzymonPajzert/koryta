@@ -248,16 +248,19 @@ export function edgeIdentity(edge: EdgeLike): string {
  * candidacies in one powiat states two facts, and both have to be stored. Copy
  * 0 keeps the plain digest, so the ordinary case is unchanged.
  *
- * State edges ignore it: they cannot repeat, so they always get the bare
- * `edge_<source>_<target>_<type>` form the company ingest and the region
- * pipeline already write.
+ * A later copy is also where a new edge goes when the id it hashes to is held
+ * by another document: an edge a split or a merge moved keeps the id of the
+ * page it left (`claimFreeEdgeRef` in the person ingest). That is the one
+ * reason a state edge has later copies. It cannot repeat, so its first copy is
+ * the bare `edge_<source>_<target>_<type>` form the company ingest and the
+ * region pipeline already write, whatever else it carries.
  */
 export function edgeDocumentId(edge: EdgeLike, occurrence = 0): string {
   const base = `edge_${edge.source}_${edge.target}_${edge.type}`;
   const { kind, discriminators } = edgeSemantics(edge.type);
-  if (kind === "state") return base;
 
-  const parts: unknown[] = discriminators.map((name) => field(edge, name));
+  const parts: unknown[] =
+    kind === "state" ? [] : discriminators.map((name) => field(edge, name));
   if (occurrence > 0) parts.push(occurrence);
   if (parts.every((value) => value === null)) return base;
 
