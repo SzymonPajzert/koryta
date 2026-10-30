@@ -24,10 +24,16 @@ import { expectFitsThePhone } from "./phoneWidth";
  *
  * The dialog is photographed alone, in a window tall enough for all of it: it
  * scrolls inside itself, and a shot of the part that fits a phone's screen
- * would leave out the warning that is the point of the second capture. */
+ * would leave out the warning that is the point of the second capture. The
+ * person's rows likewise: on a phone they are taller than the screen, and the
+ * bars fixed to its top and bottom would cover the rows they overlap. */
 
 const DIALOG = { tag: pageTag("admin/rewizje/[id]") };
 const PERSON = { tag: pageTag("[seoType]/[slug]") };
+
+/** Tall enough for the dialog with its five blocks and the warning by the
+ * button, about 1,500px on a phone, and for the person's rows. */
+const TALL = 1600;
 
 /** After the clicks: the pointer off the last button, whose hover tint would
  * otherwise be in the shot, and every ripple played out. */
@@ -39,7 +45,7 @@ async function settle(page: Page) {
 async function openDialog(page: Page) {
   await page.setViewportSize({
     width: page.viewportSize()!.width,
-    height: 1400,
+    height: TALL,
   });
   await freezeClock(page);
   await page.route("**/api/revisions/byNode**", (route) =>
@@ -59,8 +65,23 @@ async function openDialog(page: Page) {
   await expect(
     dialog.getByTestId("publish-place-clash-2002-local"),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(dialog.getByText("tu też w 2006 i 2010")).toBeVisible();
+  await expect(
+    dialog.getByText("tu też w 2006, 2010, 2018, 2023 i 2024"),
+  ).toBeVisible();
   await expect(dialog.getByText("tu tylko w 2002")).toBeVisible();
+  // And a block for each pair the office key let through: the Sejm and the
+  // Senat, a sejmik and a city council, a city and a district council, a run
+  // with no office and a „Samorząd” one.
+  for (const election of [
+    "2024-local",
+    "2023-parliament",
+    "2018-local",
+    "2010-local",
+  ]) {
+    await expect(
+      dialog.getByTestId(`publish-place-clash-${election}`),
+    ).toBeVisible();
+  }
   await expect(
     page.locator('[class*="-enter-active"], [class*="-leave-active"]'),
   ).toHaveCount(0);
@@ -112,6 +133,10 @@ test("publikacja-dwa-miejsca-obie", DIALOG, async ({ page }, testInfo) => {
 
 test("powiazania-dwa-miejsca", PERSON, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
+  await page.setViewportSize({
+    width: page.viewportSize()!.width,
+    height: TALL,
+  });
   // The rows carry dates, and their bars are scaled to today: frozen, so the
   // shot is the same tomorrow.
   await freezeClock(page);
@@ -128,6 +153,13 @@ test("powiazania-dwa-miejsca", PERSON, async ({ page }, testInfo) => {
   ).toBeVisible({ timeout: 30_000 });
   await expect(
     relations.getByTestId("place-clash-chip-visrungniezno2002"),
+  ).toBeVisible();
+  // The Senat run and the namesake's Sejm run of 2023, one election.
+  await expect(
+    relations.getByTestId("place-clash-chip-visrunsenat2023"),
+  ).toBeVisible();
+  await expect(
+    relations.getByTestId("place-clash-chip-visrunsejm2023"),
   ).toBeVisible();
   // Another election, one place: no chip.
   await expect(
