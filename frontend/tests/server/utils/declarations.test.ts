@@ -667,7 +667,7 @@ describe("queueFor", () => {
     crop("published", { priority: 3, rand: 0.1 });
     crop("fresh", { priority: 0, answerCount: 0, rand: 0.2 });
     crop("half-read", { priority: 0, answerCount: 1, rand: 0.9 });
-    crop("dated-draft", { priority: 1, rand: 0.3 });
+    crop("undated-draft", { priority: 1, rand: 0.3 });
     crop("settled", { status: "agreed", rand: 0.05 });
     stored.set("declarationAnswers/fresh_a", {
       uid: "a",
@@ -679,7 +679,7 @@ describe("queueFor", () => {
 
     expect([queue.task?.id, ...queue.upcoming.map((t) => t.id)]).toEqual([
       "half-read",
-      "dated-draft",
+      "undated-draft",
       "published",
     ]);
     expect(queue.task).toMatchObject({
