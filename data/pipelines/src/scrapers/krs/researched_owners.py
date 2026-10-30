@@ -7,10 +7,12 @@ name a shareholder under 10% of a spółka z o.o. Each company here was found by
 `CompaniesLikelyPublic` - several people on the site worked there, all of them
 scored as koryciarz - or, for SIM "KZN-Wielkopolska", by the BIP NIP list, or
 for Wodociągi i Kanalizacja-Zgierz by Szymon asking about it, or for PCO,
-PIT-RADWAR and Dezamet by the defence sector (`obronnosc`) - and its owners
-were then read off a source that says so, given beside it: the company's own
-shareholder page, its parent's group page, a stock-exchange disclosure, a
-voivodeship's or city's own page, the press where nothing better exists.
+PIT-RADWAR and Dezamet by the defence sector (`obronnosc`), or for Energa
+Elektrownie Ostrołęka by a reader's note that its owner was missing - and its
+owners were then read off a source that says so, given beside it: the
+company's own shareholder page, its parent's group page, a stock-exchange
+disclosure, a voivodeship's or city's own page, the press where nothing better
+exists.
 
 Owners are written the way an odpis writes them, so that `CompaniesKRS` treats
 them like one: a company by its KRS number becomes an ownership edge, which
@@ -21,9 +23,9 @@ A public body with neither (KOWR, KZN, PARP) is named for the record only.
 
 Every company here is public by the site's rule - any public stake, minority
 included - so `CompaniesKRS` marks it public whatever the owners resolve to.
-Checked 2026-10-09, the three defence companies 2026-10-20; a sale changes
-it, so a source older than a year or two is worth reading again before a page
-quotes it.
+Checked 2026-10-09, the three defence companies 2026-10-20, Energa
+Elektrownie Ostrołęka 2026-10-30; a sale changes it, so a source older than a
+year or two is worth reading again before a page quotes it.
 """
 
 import dataclasses
@@ -275,6 +277,13 @@ RESEARCHED_OWNERS: dict[str, Researched] = {
     "0000023369": Researched(
         (ResearchedOwner("ENEA WYTWARZANIE S.A.", "0000060541", "100%"),),
         "https://ir.enea.pl/pr/291347/polaczenie-enea-wytwarzanie-s-a-z-elektrocieplownia-bialystok-s-a-elektrowniami-wodnymi-sp-z-o-o-i-dobitt-energia-sp-z-o-o",
+    ),
+    # ENERGA ELEKTROWNIE OSTROŁĘKA S.A.: public already, by REGON's code and the
+    # hardcoded list, but owned by nobody on its page, as the register names no
+    # shareholder of an SA. The other 10.36% is not named.
+    "0000061837": Researched(
+        (ResearchedOwner("ENERGA WYTWARZANIE S.A.", "0000512140", "89.64%"),),
+        "https://energaostroleka.pl/elektrownia/kapital-zakladowy",
     ),
     # The two KOWR breeding farms that own Green Lab.
     "0000041394": Researched(

@@ -17,6 +17,8 @@ POCZTA = "0000334972"
 PODBESKIDZIE = "0000390966"
 CZH = "0000075706"
 EUROTERMINAL = "0000353127"
+OSTROLEKA = "0000061837"
+ENERGA_WYTWARZANIE = "0000512140"
 
 
 def bielsko_biala() -> JstIndex:
@@ -87,6 +89,19 @@ def test_a_researched_company_is_public_and_joined_to_its_owner():
     assert p.companies[POSTDATA].is_public
     assert Owner(krs=POCZTA, teryt=None) in p.companies[POSTDATA].parents
     assert POSTDATA in p.companies[POCZTA].children
+
+
+def test_a_company_public_already_still_gains_its_owner():
+    # Energa Elektrownie Ostrołęka is public by REGON's code and the hardcoded
+    # list, so marking it changes nothing: the edge to Energa Wytwarzanie is
+    # what its entry is for, and the page had no owner without it.
+    p = pipeline(OSTROLEKA, ENERGA_WYTWARZANIE)
+    p.companies[OSTROLEKA].is_public = True
+
+    p.add_researched_owners()
+
+    assert p.companies[OSTROLEKA].parents == [Owner(krs=ENERGA_WYTWARZANIE, teryt=None)]
+    assert OSTROLEKA in p.companies[ENERGA_WYTWARZANIE].children
 
 
 def test_an_owner_the_crawl_does_not_describe_is_left_out():
