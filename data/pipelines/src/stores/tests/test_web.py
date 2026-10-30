@@ -1,3 +1,7 @@
+import gzip
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 import pytest
 from curl_cffi import CurlHttpVersion
 
@@ -183,3 +187,33 @@ def test_a_comment_stays_a_comment() -> None:
     """bip.srodaslaska.pl's robots.txt comments both of its lines out."""
     commented = "#User-agent: *\n#Disallow: /\nDisallow: /a # not Disallow: /b"
     assert web.robots_lines(commented) == commented.splitlines()
+
+
+def test_a_page_under_an_encoding_curl_does_not_know_is_read_raw() -> None:
+    """bip.tarnobrzeg.pl answers "Content-Encoding: identity, compress" over a
+    plain page, which curl refuses (61) unless it leaves decoding alone."""
+    body = b"<html>" + b"x" * 500 + b"</html>"
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            data = gzip.compress(body) if self.path == "/gz" else body
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Encoding", "identity, compress")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        plain = fetch.http_get(base + "/")
+        assert plain.ok and plain.content == body
+        packed = fetch.http_get(base + "/gz")  # gzip under a name curl did not know
+        assert packed.ok and packed.content == body
+    finally:
+        server.shutdown()
