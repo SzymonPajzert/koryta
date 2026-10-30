@@ -154,6 +154,27 @@ describe("settleReading", () => {
     });
   });
 
+  // Szymon, 2026-10-30: the form offers „Pomiń” alone, and three skips settle
+  // a crop as unreadable.
+  it("settles as unreadable once three readers who vote skip it", () => {
+    expect(settleReading(answers("skip", "skip"))).toEqual({ status: "open" });
+    expect(settleReading(answers("skip", "?", "skip"))).toEqual({
+      status: "unreadable",
+      readers: 3,
+    });
+    // A skip contradicts no date: two readers who agree still settle it.
+    expect(
+      settleReading(answers("1979-07-15", "skip", "1979-07-15")),
+    ).toMatchObject({ status: "agreed", value: "1979-07-15" });
+    // Nor do a stranger's skips count.
+    const strangers = [0, 1, 2].map((i): ReaderAnswer => ({
+      uid: `anon:${i}`,
+      verdict: "skip",
+      votes: false,
+    }));
+    expect(settleReading(strangers)).toEqual({ status: "open" });
+  });
+
   it("hears only the answers that vote", () => {
     const strangers: ReaderAnswer[] = [
       { uid: "anon:1", verdict: "date", value: "1979-07-15", votes: false },
