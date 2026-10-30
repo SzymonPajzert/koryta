@@ -461,10 +461,11 @@ function reasons(batch: FeedBatch) {
 
 /* Filled where every other badge is a tint: the site itself, not a person,
    and the line a reader coming back after a few days should not scroll past.
-   White on ink-sage is 6.43:1. */
+   White on ink-sage is 6.43:1, and `on-ink-sage` is the theme's white for
+   it, so a new palette repaints both. */
 .ft-badge--release {
   background: rgb(var(--v-theme-ink-sage));
-  color: #ffffff;
+  color: rgb(var(--v-theme-on-ink-sage));
 }
 
 /* ---- the line ---- */
