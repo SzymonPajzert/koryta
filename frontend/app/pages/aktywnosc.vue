@@ -447,9 +447,11 @@ const filtered = computed(() =>
 /** Why the list is empty, read only while it is. A line the filters left is
  * then one the hiding took away, and a reader who is the only one at work
  * would otherwise be told that nothing matches, with no word of the box above
- * that is hiding their lines. */
+ * that is hiding their lines. The site's changes alone, empty, are a window
+ * the site did not change in only when the feed holds none: otherwise a
+ * person is picked above, and no rollout is anybody's. */
 const emptyText = computed(() => {
-  if (kindGroup.value === SITE_CHANGES) {
+  if (kindGroup.value === SITE_CHANGES && !feed.value?.siteChanges.length) {
     return "W tym okresie nic się na stronie nie zmieniło.";
   }
   if (matching.value.length > 0) {
