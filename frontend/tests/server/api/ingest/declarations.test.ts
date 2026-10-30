@@ -220,7 +220,7 @@ describe("api/ingest/declarations", () => {
     expect(stored[IMAGES]!.date).toBeInstanceOf(Buffer);
   });
 
-  it("puts drafts first, an undated one before a dated one, and published pages last", async () => {
+  it("puts drafts first, a dated one before an undated one, and published pages last", async () => {
     const priorityOf = async (node: Record<string, unknown>) => {
       stored = {
         "nodes/kowalska": { type: "person", name: "Anna Kowalska", ...node },
@@ -228,8 +228,8 @@ describe("api/ingest/declarations", () => {
       await send({ candidacies: [candidacy()], extracts: [extract()] });
       return stored[EXTRACT]!.priority;
     };
-    expect(await priorityOf({})).toBe(0);
-    expect(await priorityOf({ birthDate: "1979-07-15" })).toBe(1);
+    expect(await priorityOf({ birthDate: "1979-07-15" })).toBe(0);
+    expect(await priorityOf({})).toBe(1);
     expect(await priorityOf({ published: true, birthDate: "1979-07-15" })).toBe(
       3,
     );

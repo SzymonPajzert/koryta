@@ -315,11 +315,13 @@ type StoredCandidacy = {
 
 /** A live person page and how soon readers should see its crops.
  *
- * The interest is in drafts nobody has verified yet, so
- * those come first - without a birth date (0), then with one (1); a published
- * page is verified already and comes last (3). The same order the crawl uses
- * (2 there is a person with no page, who never reaches the site). Only
- * whether a page has a date is read, never the date. */
+ * The interest is in drafts nobody has verified yet, so those come first,
+ * and among them the ones with a birth date (0): only a date already on the
+ * page can confirm a settled crop, publish the person and count in the
+ * reader's „Znaleziono”. A draft without one comes next (1), and a published
+ * page, verified already, last (3). The crawl goes the other way round for
+ * drafts, as it looks for the dates the pages lack. Only whether a page has a
+ * date is read, never the date. */
 type LivePage = { id: string; priority: 0 | 1 | 3 };
 
 /** Each kid's live person page, followed through merges: a page that is gone,
@@ -347,7 +349,7 @@ async function livePeople(
     if (live) {
       pages.set(page!.id, {
         id: page!.id,
-        priority: pageIsPublic(data) ? 3 : data.birthDate ? 1 : 0,
+        priority: pageIsPublic(data) ? 3 : data.birthDate ? 0 : 1,
       });
     }
   }
