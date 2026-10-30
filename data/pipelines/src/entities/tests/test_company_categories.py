@@ -639,6 +639,50 @@ class TestMainCodeRules(unittest.TestCase):
         )
 
 
+class TestWaterPairWithoutAWaterUtility(unittest.TestCase):
+    """Companies that file 36.00 and 37.00 together and supply nobody's water.
+
+    The pair places a company whose main code is elsewhere, because a gmina
+    utility files water and sewage as one licence. A plant with its own intake
+    and effluent works files the pair as well, and so does an estate running
+    the mains inside its fence, so `WODOCIAGI.exclude` names them. Each list
+    is the node's `activity` up to the pair.
+    """
+
+    def assertNotWater(self, krs, activity):
+        # The exclusion is what keeps it out: under a KRS nobody named, the
+        # same codes read as a water utility's.
+        self.assertIn("wodociagi", categories_for("0000999999", activity))
+        self.assertNotIn("wodociagi", categories_for(krs, activity))
+
+    def test_the_treasury_list_s_steelworks_refinery_and_market(self):
+        # Found 2026-10-27 checking Prokuratoria's list against the site: all
+        # three were filed under `wodociagi` and the Treasury, nothing else.
+        # KRS 0000109444, Huta Kosciuszko (Chorzow), 38 codes
+        huta = (
+            "24.10.Z 25.11.Z 25.12.Z 25.62.Z 27.11.Z 33.11.Z 33.12.Z 33.14.Z "
+            "33.20.Z 35.12.Z 35.13.Z 35.14.Z 35.22.Z 35.30.Z 36.00.Z 37.00.Z"
+        ).split()
+        # KRS 0000069432, Rafineria Nafty Glimar (Strzyzow), 36 codes
+        glimar = (
+            "19.20.Z 20.14.Z 20.11.Z 20.41.Z 20.42.Z 20.59.Z 47.30.Z 46.71.Z "
+            "46.75.Z 52.10.A 22.22.Z 35.11.Z 35.12.Z 35.13.Z 35.30.Z 36.00.Z "
+            "37.00.Z"
+        ).split()
+        # KRS 0000047934, Lubelski Rynek Hurtowy (Elizowka), 10 codes
+        market = ["68.20.Z", "77.31.Z", "46.31.Z", "36.00.Z", "37.00.Z"]
+        for krs, activity in (
+            ("0000109444", huta),
+            ("0000069432", glimar),
+            ("0000047934", market),
+        ):
+            with self.subTest(krs=krs):
+                self.assertNotWater(krs, activity)
+                self.assertEqual(
+                    categories_for(krs, activity, treasury=True), ["skarb-panstwa"]
+                )
+
+
 class TestWikipediaCategories(unittest.TestCase):
     """The categories of a company's Polish article, where the register is silent.
 
