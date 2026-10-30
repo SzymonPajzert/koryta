@@ -173,6 +173,52 @@ def test_single_recommendation_in_the_body_is_left_out():
     )
 
 
+def test_article_leaves_out_the_notices_beside_it():
+    # "Komunikaty i przetargi" as pomorska.pl renders it in the column beside
+    # the article: official notices that name a wójt or a starosta, none of
+    # them the article's. parse.py names no class of this box, so only the
+    # narrowed selector keeps it out of the text.
+    html = """
+    <main class="layoutsContainer layoutsContainer--article">
+    <div class="layoutsGrid">
+    <div class="layoutsGrid__left medium-narrow large-wide"><article>
+      <header class="atomsArticleHead"><h1 class="atomsArticleHead__title">
+        Menedżer Roku 2015. Janusz Radzikowski
+      </h1></header>
+      <div class="atomsArticleLead">
+        Przygotowuje się do egzaminu na pilota samolotowego.
+      </div>
+    </article></div>
+    <aside class="layoutsGrid__right medium-narrow large-narrow">
+      <div class="atomsSectionHeaderAccent">
+        <h2 class="atomsSectionHeaderAccent__titleWrapper">
+          <span class="atomsHeaderHeaderContent__title">
+            Komunikaty i przetargi
+          </span>
+        </h2>
+      </div>
+      <div class="componentsTendersListing component">
+        <ul class="componentsTendersListing__list">
+          <li class="componentsTendersListing__element">
+            <a class="componentsTendersListing__title">
+              Bd.6721.1.202628.08.2026 r. OGŁOSZENIE WÓJTA GMINY BRENNA o...
+            </a>
+          </li>
+        </ul>
+      </div>
+    </aside>
+    </div></main>
+    """.encode()
+    selector = load_verified_selectors()["pomorska.pl"]
+
+    text = extract_article_content(html, selector)["article_content"]
+
+    assert text == (
+        "Menedżer Roku 2015. Janusz Radzikowski "
+        "Przygotowuje się do egzaminu na pilota samolotowego."
+    )
+
+
 def test_other_sites_keep_boxes_the_platform_does_not_name():
     html = b"""
     <article class="post">
