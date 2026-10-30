@@ -42,7 +42,7 @@ import threading
 import time
 import zlib
 from collections import Counter, defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -130,6 +130,15 @@ class PeopleOptions:
     max_doc_bytes: int = 60_000_000
     #: Start no new unit after this many seconds (exit 75 when some are left).
     max_run_seconds: float | None = None
+    #: A unit's walk stops after this many seconds, its candidacies left
+    #: not_found:budget (not retried by default): a rendered BIP at its host's
+    #: rate reads ~6 pages a minute, and a walk the run's deadline cut off
+    #: started again from scratch every run.
+    max_unit_seconds: float | None = 30 * 60
+    #: Units searched at once on one start host. They share its rate, so a
+    #: second one only halves both and keeps a worker waiting: 7 of
+    #: bip.malopolska.pl's units ran at once on 10-30 and 5 hit the deadline.
+    max_per_host: int = 1
 
 
 def person_row(person: BipPersonOfInterest) -> PersonRow:
@@ -521,6 +530,7 @@ class PeopleSearch:
         prefer: re.Pattern[str] | None = None,
     ) -> UnitSearch:
         out = UnitSearch(unit)
+        started = self.clock()
         seed = self.seeds.get(unit)
         if seed is None:
             out.status = "no_seed"
@@ -550,6 +560,9 @@ class PeopleSearch:
         ):
             if self._past_deadline():
                 out.status = "timeout"
+                break
+            if self._overtime(started):
+                out.status = "budget"
                 break
             depth, url = frontier.pop()
             result = self._get(url)
@@ -738,28 +751,60 @@ class PeopleSearch:
         logger.info("unit %s: %d pages, %s", unit, search.pages, outcomes)
         return outcomes
 
+    def _overtime(self, started: float) -> bool:
+        limit = self.options.max_unit_seconds
+        return limit is not None and self.clock() - started > limit
+
+    def _unit_host(self, unit: str) -> str:
+        """The host a unit's walk starts on: units that share it share its rate."""
+        seed = self.seeds.get(unit)
+        urls = (seed.bip_urls or seed.www_urls) if seed else []
+        return host_of(urls[0]) if urls else unit
+
     def run(self, rows: list[PersonRow]) -> dict[str, int]:
-        """Search every unit ``rows`` name, most wanted first; counts of outcomes."""
+        """Search every unit ``rows`` name, most wanted first, at most
+        `PeopleOptions.max_per_host` at once on one host; counts of outcomes."""
         by_unit: dict[str, list[PersonRow]] = defaultdict(list)
         for r in rows:
             by_unit[r.unit].append(r)
-        order = sorted(
+        waiting = sorted(
             by_unit,
             key=lambda u: (min(r.priority for r in by_unit[u]), -len(by_unit[u]), u),
         )
         if self.options.max_run_seconds is not None:
             self.deadline = self.clock() + self.options.max_run_seconds
+        hosts = {unit: self._unit_host(unit) for unit in waiting}
+        busy: Counter[str] = Counter()
+        limit = max(1, self.options.max_per_host)
         counts: dict[str, int] = defaultdict(int)
         with ThreadPoolExecutor(max_workers=self.options.workers) as pool:
-            futures = [pool.submit(self._unit, unit, by_unit[unit]) for unit in order]
-            for future in as_completed(futures):
-                outcomes = future.result()
-                if outcomes is None:
+            running: dict[Future[dict[str, str] | None], str] = {}
+            while waiting or running:
+                if waiting and self._past_deadline():
+                    waiting.clear()  # left pending for the next run
                     self.timed_out = True
-                    continue
-                for outcome in outcomes.values():
-                    counts[outcome] += 1
-                    self.timed_out |= outcome.endswith(":timeout")
+                while waiting and len(running) < self.options.workers:
+                    free = next(
+                        (i for i, u in enumerate(waiting) if busy[hosts[u]] < limit),
+                        None,
+                    )
+                    if free is None:
+                        break  # every waiting unit's host is busy: wait for one
+                    unit = waiting.pop(free)
+                    busy[hosts[unit]] += 1
+                    running[pool.submit(self._unit, unit, by_unit[unit])] = unit
+                if not running:
+                    break
+                done, _ = wait(running, return_when=FIRST_COMPLETED)
+                for future in done:
+                    busy[hosts[running.pop(future)]] -= 1
+                    outcomes = future.result()
+                    if outcomes is None:
+                        self.timed_out = True
+                        continue
+                    for outcome in outcomes.values():
+                        counts[outcome] += 1
+                        self.timed_out |= outcome.endswith(":timeout")
         self.bundles.flush()
         return dict(sorted(counts.items()))
 
@@ -846,6 +891,8 @@ def run_people_mode(
         rate_interval_s=args.rate,
         user_agent=USER_AGENT,
         max_run_seconds=args.max_minutes * 60 if args.max_minutes else None,
+        max_unit_seconds=args.max_unit_minutes * 60 if args.max_unit_minutes else None,
+        max_per_host=args.max_per_host,
     )
     known = load_known_urls(Path(args.known_urls)) if args.known_urls else {}
     if known:

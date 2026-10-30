@@ -132,7 +132,8 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   `unconfirmed` (only files that name nobody came down: the OCR step has to
   find the person in them), or `not_found` with a reason: `no_seed`,
   `unreachable`, `robots`, `no_declarations`, `not_listed`, `download_failed`,
-  `timeout`, `error`. Tables `bip_poi`, `bip_poi_docs` and `bip_units`
+  `timeout` (the run's time ran out), `budget` (the unit's own
+  `--max-unit-minutes`, 30, ran out; not retried by default), `error`. Tables `bip_poi`, `bip_poi_docs` and `bip_units`
   (`stores/bip_people.py`) hold that. A later run searches the pending ones and
   the `--poi-retry` reasons (default `unreachable,error,timeout,no_seed`; add
   `unconfirmed` or any other); `--poi-refresh` searches everybody. A search that
@@ -143,8 +144,9 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
 - `--poi-max-priority`: 0 draft pages without a birth date, 1 drafts with one,
   2 people not on the site yet, 3 published pages (verified already, so last). `--poi-limit` caps the
   candidacies, `--max-minutes` the run (walks stop at it, units not started stay
-  pending; exit 75), `--workers` the units searched at once, `--rate` the seconds
-  between hits on one host.
+  pending; exit 75), `--workers` the units searched at once (at most
+  `--max-per-host`, 1, on one start host: they share its rate), `--rate` the
+  seconds between hits on one host.
 - One crawler per `--out`: the startup repair re-wraps every `.part` bundle
   there, so a second run on the same directory refuses to start
   (`.crawl.lock`).

@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import gzip
 import json
+import threading
+import time
+from collections import Counter
 from pathlib import Path
 from typing import cast
 
@@ -30,7 +33,15 @@ from stores.bip_people import MemoryBipPeopleStore
 
 
 def search(
-    tmp_path: Path, sites, rows, *, known=None, scopes=None, render=None, **options
+    tmp_path: Path,
+    sites,
+    rows,
+    *,
+    known=None,
+    scopes=None,
+    render=None,
+    clock=time.monotonic,
+    **options,
 ):
     web = Web(sites)
     store = MemoryBipPeopleStore()
@@ -54,6 +65,7 @@ def search(
         sleep=lambda s: None,
         known=known,
         render=render,
+        clock=clock,
     )
     people.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
     return people, store, web
@@ -465,3 +477,72 @@ def test_the_city_council_comes_before_the_districts_in_warsaw():
         "https://x.pl/3", "Oświadczenia majątkowe radnych Dzielnicy Wola"
     )
     assert link_score(district, [], 1, bemowo) > link_score(wola, [], 1, bemowo)
+
+
+def test_units_on_one_host_are_searched_one_at_a_time(tmp_path, monkeypatch):
+    # bip.malopolska.pl: one host, one rate, many units.
+    shared = {
+        u: UnitSeed(
+            u, bip_urls=[f"https://bip.shared.pl/{u}"], scopes=[f"bip.shared.pl/{u}"]
+        )
+        for u in ("a", "b", "c")
+    }
+    own = {
+        u: UnitSeed(u, bip_urls=[f"https://{u}.pl"], scopes=[f"{u}.pl"])
+        for u in ("d", "e")
+    }
+    active: Counter[str] = Counter()
+    peak: Counter[str] = Counter()
+    lock = threading.Lock()
+
+    def unit(self, unit, rows):
+        host = self._unit_host(unit)
+        with lock:
+            active[host] += 1
+            peak[host] = max(peak[host], active[host])
+        time.sleep(0.05)
+        with lock:
+            active[host] -= 1
+        return {r.key: "found" for r in rows}
+
+    monkeypatch.setattr(PeopleSearch, "_unit", unit)
+    rows = [row(u, u, "Ewa", "Lis") for u in "abcde"]
+    store = MemoryBipPeopleStore()
+    store.upsert_people(rows)
+    people = PeopleSearch(
+        store,
+        cast("BipQueue", FakeFrontier([])),
+        LocalBundleStore(tmp_path / "b"),
+        shared | own,
+        PeopleOptions(workers=4),
+    )
+    counts = people.run(
+        store.people_to_search(refresh=False, max_priority=None, limit=None)
+    )
+    assert counts == {"found": 5}
+    assert peak["bip.shared.pl"] == 1
+    assert peak["d.pl"] == 1 and peak["e.pl"] == 1
+
+
+def test_a_walk_past_its_own_time_ends_as_budget(tmp_path):
+    # A chain of pages that never ends; each look at the clock moves it 60 s.
+    sites = {
+        f"https://u1.pl/p{i}": html("BIP", f'<a href="/p{i + 1}">dalej</a>')
+        for i in range(50)
+    }
+    sites["https://u1.pl"] = html("BIP", '<a href="/p0">dalej</a>')
+    ticks = iter(range(0, 1_000_000, 60))
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    _, store, web = search(
+        tmp_path,
+        sites,
+        rows,
+        sitemaps=False,
+        max_unit_seconds=150,
+        clock=lambda: next(ticks),
+    )
+    assert (store.people["lis"].status, store.people["lis"].reason) == (
+        "not_found",
+        "budget",
+    )
+    assert len(web.calls) <= 4  # the depth limit (6) would have allowed 7
