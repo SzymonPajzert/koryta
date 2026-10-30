@@ -9,6 +9,7 @@ import PartyChip from "../../../app/components/PartyChip.vue";
 import ChipPublicCompany from "../../../app/components/chip/PublicCompany.vue";
 import ChipRelativeDuration from "../../../app/components/chip/RelativeDuration.vue";
 import type { EdgeNode } from "../../../app/composables/edges";
+import type { PlaceClash } from "../../../shared/twoPlaces";
 
 const vuetify = createVuetify({ components, directives });
 
@@ -186,6 +187,43 @@ describe("CardEmploymentHistory", () => {
     ]);
     expect(clashOf("gniezno-2006")).toBeUndefined();
     expect(clashOf("e1")).toBeUndefined();
+  });
+
+  it("hands a Senat run and a namesake's Sejm run of one year their clash", async () => {
+    // Jerzy Andrzej Michalak's page on 2026-10-29: his 2023 Senat run in
+    // dolnośląskie (02) is live, and a namesake's Sejm run in pomorskie (22)
+    // waits as a draft. Dated to the election day, as the live API dates a
+    // candidacy (`edgeFromDB`). One election, though the offices differ.
+    const run = (id: string, teryt: string, position: "Sejm" | "Senat") =>
+      edge({
+        id,
+        type: "election",
+        label: "kandydatura",
+        source: "michalak",
+        target: `teryt${teryt}`,
+        start_date: "2023-10-15",
+        end_date: "2023-10-15",
+        position,
+        richNode: { id: `teryt${teryt}`, type: "region", name: teryt },
+      });
+    const wrapper = await render([
+      run("senat-2023", "02", "Senat"),
+      run("sejm-2023", "22", "Sejm"),
+    ]);
+
+    const clash = wrapper
+      .findAllComponents({ name: "ChipPlaceClash" })
+      .find((chip) => (chip.props("edge") as EdgeNode).id === "sejm-2023")
+      ?.props("clash") as PlaceClash<EdgeNode> | undefined;
+    expect(clash).toMatchObject({
+      year: "2023",
+      election: "parliament",
+      offices: ["Senat", "Sejm"],
+    });
+    expect(clash?.rows.map((row) => row.id)).toEqual([
+      "senat-2023",
+      "sejm-2023",
+    ]);
   });
 
   it("asks the page to remove the row an admin clicked", async () => {

@@ -26,7 +26,8 @@
  * Keyed by the office, the dialog said nothing about Łukasz Mikołajczyk's 2015
  * Senat run in wielkopolskie beside a namesake's Sejm run in dolnośląskie, nor
  * about Kamil Klimek's 2024 Rada miasta run in Suwałki beside a namesake's Rada
- * dzielnicy run in Warszawa, both drafts on published pages on 2026-10-29.
+ * dzielnicy run in Warszawa. All four runs were drafts on 2026-10-29, the first
+ * two on a published page, the other two on a draft one.
  *
  * One difference: an undated candidacy is left out here, where the check files
  * it under the year "None". Two of those are not known to be one election, and
