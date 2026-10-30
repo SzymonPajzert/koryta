@@ -79,17 +79,18 @@ class PeopleKorytaMerged(Pipeline):
                     '^([0-9]{4}(-[0-9]{2}-[0-9]{2})?)$',
                     1
                 ), '') as birth_date
-            FROM koryta_data
+            FROM koryta_data page
             -- A page merged into another is left out: nobody is on it any
             -- more. The merge keeps it as a tombstone, with the name and the
-            -- register link it had, and carries what it knew onto the page
-            -- that survives (`carriedFields` in frontend/server/utils/merge.ts).
-            -- So the survivor is here already, linking the same entry, and a
-            -- tombstone kept beside it is a second page for one person:
-            -- `koryta_match`, which never chooses between two pages, refused
-            -- the entry. On 2026-10-24 it refused every entry a merged page
-            -- links, 171 of 171, Golimont's 383093 and Saługa's 1230481 among
-            -- them, and each was sent without the `korytaId` naming its page.
+            -- register link it had, and carries onto the page that survives
+            -- whatever that page lacks (`carriedFields` in
+            -- frontend/server/utils/merge.ts). So the survivor is here
+            -- already, linking the same entry, and a tombstone kept beside it
+            -- is a second page for one person: `koryta_match`, which never
+            -- chooses between two pages, refused the entry. On 2026-10-24 it
+            -- refused every entry a merged page links, 171 of 171, Golimont's
+            -- 383093 and Saługa's 1230481 among them, and each was sent
+            -- without the `korytaId` naming its page.
             --
             -- Left out rather than followed to the survivor, as the planner
             -- follows one (`_survivor` in analysis/payloads/site.py), because
@@ -100,10 +101,38 @@ class PeopleKorytaMerged(Pipeline):
             -- Stępień links none and fits two namesakes by name, 405711 and
             -- 1396271, and the page it went into links 1332974.
             --
+            -- Kept, as it always was, where it is the one page linking its
+            -- entry: where the survivor links another entry, or none. The
+            -- merge never replaces a link the survivor has, and nothing stops
+            -- an admin merging two pages that link two entries. Left out
+            -- there, the entry would look as if no page had it and go to the
+            -- name tier, which can hand it an unlinked namesake's page, and
+            -- the ingest would write it there. Kept, it reaches the
+            -- tombstone, which the ingest follows to the survivor as it
+            -- follows the entry's own link: a survivor linking another entry
+            -- holds the payload (`refuseAnotherEntry`). None of the 173
+            -- linked tombstones of 2026-10-30 is one: each went into a page
+            -- linking its own entry.
+            --
             -- `deleted` would add nothing: only a merge sets it on a person
             -- page, and it sets `merged_into` with it. All 174 retired pages
             -- of 2026-10-24 carry both.
-            WHERE full_name IS NOT NULL AND merged_into IS NULL
+            WHERE full_name IS NOT NULL
+                AND (
+                    merged_into IS NULL
+                    OR (
+                        regexp_extract(page.rejestrIo, 'osoby/([0-9]+)', 1) != ''
+                        AND NOT EXISTS (
+                            SELECT 1 FROM koryta_data survivor
+                            WHERE survivor.id = page.merged_into
+                                AND regexp_extract(
+                                    survivor.rejestrIo, 'osoby/([0-9]+)', 1
+                                ) = regexp_extract(
+                                    page.rejestrIo, 'osoby/([0-9]+)', 1
+                                )
+                        )
+                    )
+                )
             """
         )
 
