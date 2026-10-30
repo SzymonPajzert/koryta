@@ -695,11 +695,39 @@ export function publishLimitOf(config: {
   return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
 }
 
-/** Where an automatic publication stands, as `declarationPublications` stores
+/** The Warsaw hours, from inclusive to exclusive, in which nothing is
+ * published from the queue, neither by the automation nor at an admin's
+ * press.
+ *
+ * The nightly people import runs in them, and it reads a page outside a
+ * transaction and later writes it back whole with the `published` it read
+ * (server/api/ingest/person.post.ts, `createRevisionTransaction` in
+ * server/utils/revisions.ts): a page published in between is silently made a
+ * draft again. A precondition in the import is the real fix; until then the
+ * queue keeps out of its way, and so does the check on the runs the jobs
+ * report (`peopleImportRunning`), which also covers the runs asked for during
+ * the day and a night that runs late. Here rather than beside the queue, so
+ * /admin/oswiadczenia can say the hours. */
+export const PEOPLE_IMPORT_WINDOW = { from: 3, to: 9 } as const;
+
+/** People one press of „Opublikuj z kolejki” takes up at most. The snackbar
+ * says how many still wait, for the next press.
+ *
+ * Sized so a press finishes well inside a request: a page costs about 20
+ * Firestore round trips one after another, whatever its size (2026-10-30, on
+ * the test double: one candidacy and one job 19; 20 for the heaviest of the
+ * 6,698 dated drafts in that night's export, 73 jobs, which go up in one
+ * commit). At a pessimistic 100 ms a round trip, from App Hosting in
+ * europe-west4 to the database in europe-central2, 25 pages are under a
+ * minute, a fifth of the 300 s Cloud Run gives a request on both backends. */
+export const PRESS_BATCH = 25;
+
+/** Where a page's publication stands, as `declarationPublications` stores
  * it. `confirmed` is a page that was public already when its date matched:
  * nothing to publish, but the declaration is linked on it. `publishing` is a
- * page whose slot of the day is taken and whose writes are under way, or were
- * cut short; one left there for long is tried again. */
+ * page a pass has taken up - the automation under a slot of the day, an
+ * admin's press without one - and whose writes are under way, or were cut
+ * short; one left there for long is tried again. */
 export const publicationStatuses = [
   "queued",
   "publishing",
@@ -742,11 +770,13 @@ export type PublicationEdgeHold =
   | "two_places"
   | "needs_split";
 
-/** What one pass over the queue did. `skipped` says why it took up no new
- * page: `off` while the daily limit is 0, `night` inside the people import's
- * window, `import` while a people import is running, or while whether one is
- * cannot be told. At a limit of 0 a pass still finishes the relations of a
- * page an earlier pass put up and did not finish. */
+/** What one pass over the queue did: the automation's, or an admin's press
+ * of „Opublikuj z kolejki”. `skipped` says why it took up no new page: `off`
+ * while the daily limit is 0 (never at a press, which goes past the limit),
+ * `night` inside the people import's window, `import` while a people import
+ * is running, or while whether one is cannot be told. At a limit of 0 a pass
+ * still finishes the relations of a page an earlier pass put up and did not
+ * finish. */
 export type DrainResult = {
   day: string;
   limit: number;
@@ -757,8 +787,13 @@ export type DrainResult = {
   confirmed: string[];
   /** Pages whose writes failed: left `publishing`, to be tried again. */
   failed: string[];
-  /** Whether it stopped because the day's limit was reached. */
+  /** Whether it stopped because the day's limit was reached. Never at a
+   * press. */
   capReached: boolean;
+  /** The pages still waiting in the queue after a press, as the overview
+   * counts them; null after the automation's own passes, which do not count
+   * them. */
+  waiting: number | null;
 };
 
 /** What `POST /api/declarations/sweep` did: the settled crops it compared with
@@ -799,7 +834,8 @@ export type DeclarationReviewRow = {
   updatedAt: string;
 };
 
-/** A person the automation published, queued or held. */
+/** A person published from the queue, waiting in it or held: by the
+ * automation, or at an admin's press of „Opublikuj z kolejki”. */
 export type DeclarationPublicationRow = {
   personId: string;
   name: string;
@@ -810,6 +846,9 @@ export type DeclarationPublicationRow = {
   documentUrl: string;
   /** Relations that went live with the page, and those held back. */
   edges: { published: number; held: number };
+  /** Whether an admin's press took the page up last, rather than the
+   * automation on its own. */
+  pressed: boolean;
 };
 
 /** Everything /admin/oswiadczenia shows, counted when asked. */
@@ -847,7 +886,8 @@ export type DeclarationOverview = {
     queued: number;
     published: number;
     held: number;
-    /** Published today (Warsaw), against `dailyLimit`. */
+    /** Published by the automation today (Warsaw), against `dailyLimit`. An
+     * admin's press takes no place of it, so its pages are not counted. */
     today: number;
     heldBy: { reason: PublicationHoldReason; count: number }[];
   };

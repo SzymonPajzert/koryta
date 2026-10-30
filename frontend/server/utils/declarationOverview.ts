@@ -186,11 +186,13 @@ export async function countEverything(
       confirmed: publicationCounts[3] ?? 0,
     },
     publications: {
-      // A page being published right now is still the queue's: it holds a
-      // slot, and a pass cut short leaves it there until the next one.
+      // A page being published right now is still the queue's: a pass cut
+      // short leaves it there until the next one.
       queued: (publicationCounts[0] ?? 0) + (publicationCounts[4] ?? 0),
+      // Every page that went up, the automation's and an admin's press's.
       published: publicationCounts[1] ?? 0,
       held: publicationCounts[2] ?? 0,
+      // The automation's slots: a press takes none.
       today: (todayDoc.get("count") as number | undefined) ?? 0,
       heldBy: heldBy.filter((row) => row.count > 0) as {
         reason: PublicationHoldReason;
@@ -363,6 +365,7 @@ function publicationRow(
         : 0,
       held: Array.isArray(data.edges?.held) ? data.edges.held.length : 0,
     },
+    pressed: typeof data.pressedBy === "string" && data.pressedBy !== "",
   };
 }
 

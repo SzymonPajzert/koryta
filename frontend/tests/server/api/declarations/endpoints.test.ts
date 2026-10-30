@@ -7,7 +7,10 @@ import claim from "../../../../server/api/declarations/claim.post";
 import next from "../../../../server/api/declarations/next.get";
 import sweep from "../../../../server/api/declarations/sweep.post";
 import publishQueued from "../../../../server/api/declarations/publish-queued.post";
-import { READ_NAME_MAX_LENGTH } from "../../../../shared/declarations";
+import {
+  PRESS_BATCH,
+  READ_NAME_MAX_LENGTH,
+} from "../../../../shared/declarations";
 
 /** What the endpoints hand to server/utils/declarationPublish.ts and
  * server/utils/declarations.ts, which are tested on their own: the reader
@@ -446,14 +449,27 @@ describe("api/declarations/publish-queued", () => {
     expect(mocks.drainPublications).not.toHaveBeenCalled();
   });
 
-  it("takes up the queue under the configured limit", async () => {
+  it("hands the configured limit on, and answers what the pass did", async () => {
     mocks.requireAdmin.mockResolvedValue({ uid: "admin", admin: true });
-    const done = { published: [], held: [], skipped: "off" };
+    const done = { published: [], held: [], skipped: null, waiting: 3 };
     mocks.drainPublications.mockResolvedValue(done);
 
     expect(await publishQueued({} as never)).toBe(done);
     expect(mocks.drainPublications.mock.calls[0]![2]).toBe(4);
     expect(mocks.clear).not.toHaveBeenCalled();
+  });
+
+  it("presses past the limit in the name of the admin, a batch at most", async () => {
+    mocks.requireAdmin.mockResolvedValue({ uid: "admin", admin: true });
+    mocks.drainPublications.mockResolvedValue({ published: ["kowalska"] });
+
+    await publishQueued({} as never);
+
+    expect(mocks.drainPublications.mock.calls[0]![3]).toEqual({
+      pressedBy: "admin",
+      maxPages: PRESS_BATCH,
+    });
+    expect(mocks.clear).toHaveBeenCalledWith("nitro:handlers");
   });
 });
 

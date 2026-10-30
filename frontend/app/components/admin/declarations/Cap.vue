@@ -1,16 +1,10 @@
 <template>
-  <div
-    class="dcap"
-    :class="{ 'dcap--hero': hero, 'dcap--off': off }"
-    data-testid="declarations-cap"
-    :data-limit="dailyLimit"
-  >
+  <div class="dcap" data-testid="declarations-cap" :data-limit="dailyLimit">
     <div class="dcap__figure">
       <StatsStatTile
-        :label="hero ? 'Opublikowane dziś automatycznie' : 'Dziś'"
+        label="Dziś"
         :value="today"
         :unit="off ? undefined : `z ${dailyLimit}`"
-        :hero="hero"
         :hint="off ? 'publikowanie automatyczne wyłączone' : undefined"
       />
 
@@ -26,11 +20,11 @@
           :max="dailyLimit"
           :chunk-count="dailyLimit <= MAX_CELLS ? dailyLimit : undefined"
           :chunk-gap="3"
-          :height="hero ? 12 : 10"
+          :height="10"
           color="ink-success"
           bg-color="ink-neutral"
           :bg-opacity="0.2"
-          :aria-label="`Opublikowane dziś: ${today} z ${dailyLimit}`"
+          :aria-label="`Opublikowane dziś automatycznie: ${today} z ${dailyLimit}`"
         />
         <span v-if="today > dailyLimit" class="dcap__over">
           +{{ today - dailyLimit }} ponad limit
@@ -45,17 +39,14 @@
 
       <div v-if="queued > 0" class="dcap__actions">
         <template v-if="confirming">
-          <span class="dcap__confirm">
-            Opublikować teraz {{ queuedPeople
-            }}{{ off ? " z kolejki" : ", ponad dzisiejszy limit" }}?
-          </span>
+          <span class="dcap__confirm" data-cap-question>{{ question }}</span>
           <v-btn
             size="small"
             variant="flat"
             color="ink-success"
             :loading="publishing"
             data-cap-publish-confirm
-            @click="publish"
+            @click="confirmPublish"
           >
             Opublikuj
           </v-btn>
@@ -87,8 +78,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { mdiPublish } from "@mdi/js";
-import { declarationQueueDays } from "~/utils/declarationsAdmin";
+import {
+  declarationPeopleAccusative,
+  declarationQueueDays,
+} from "~/utils/declarationsAdmin";
 import { nominativeNoun, polishNumber } from "~/composables/polish";
+import { PRESS_BATCH } from "~~/shared/declarations";
 
 /** What the automation published today against its daily limit, and the
  * people waiting for the days after.
@@ -97,42 +92,63 @@ import { nominativeNoun, polishNumber } from "~/composables/polish";
  * afternoon nobody watched, so it is drawn as places rather than a share, and
  * the queue says how many days it is at that pace. "Opublikuj z kolejki" is
  * the way past it, for a day an admin has looked at the queue and wants it
- * out - asked twice, since it publishes people. */
+ * out: it publishes now, past the limit and also while the automatic
+ * publication is switched off (Szymon, 2026-10-30: "it's an admin decision"),
+ * so it is there whenever somebody waits, as round bip-admin-r2 drew it. It
+ * takes none of the day's places, so „Dziś” does not move for it
+ * (server/api/declarations/publish-queued.post.ts).
+ *
+ * Asked twice, since it publishes people, for at most a press's batch. The
+ * question closes once the pass has answered, whatever it did - the page says
+ * what that was and how many still wait - and stays up only when the press
+ * failed, for another try. */
 const props = defineProps<{
   today: number;
   /** 0 means the automation is switched off. */
   dailyLimit: number;
   queued: number;
-  /** The publish request is out. */
-  publishing?: boolean;
-  /** The view's one big number, as the tiles variant has it. */
-  hero?: boolean;
+  /** Sends the press. Resolves true once the pass has answered, even when it
+   * published nobody, and false when the press failed. */
+  publish: () => Promise<boolean>;
 }>();
-
-const emit = defineEmits<{ publish: [] }>();
 
 const MAX_CELLS = 30;
 
 const off = computed(() => props.dailyLimit <= 0);
 
 const confirming = ref(false);
-// A finished publish empties the queue; a failed one leaves the question up.
+/** The press is out. */
+const publishing = ref(false);
+// A reload that moves the queue under an open question leaves it asking about
+// a number that is gone.
 watch(
   () => props.queued,
   () => (confirming.value = false),
 );
 
-function publish() {
-  emit("publish");
+/** A pass that published nobody - the night window, an import running - has
+ * answered as much as one that published three: a question left up would
+ * only ask for the same press again. */
+async function confirmPublish() {
+  publishing.value = true;
+  try {
+    if (await props.publish()) confirming.value = false;
+  } finally {
+    publishing.value = false;
+  }
 }
 
-/** Who the button publishes, in the accusative a count takes after
- * "opublikować": jedną osobę, 2 osoby, 5 osób, 22 osoby. */
-const queuedPeople = computed(() =>
-  props.queued === 1
-    ? "jedną osobę"
-    : `${polishNumber(props.queued)} ${nominativeNoun(props.queued, "osobę", "osoby", "osób")}`,
-);
+/** The press, as round bip-admin-r2 asked it: past the limit where one is
+ * set, plainly where the automation is off. For the queue as far as one
+ * press takes it (`PRESS_BATCH`); the snackbar says how many are left. */
+const question = computed(() => {
+  const people = declarationPeopleAccusative(
+    Math.min(props.queued, PRESS_BATCH),
+  );
+  return off.value
+    ? `Opublikować teraz ${people} z kolejki?`
+    : `Opublikować teraz ${people} z kolejki, ponad dzisiejszy limit?`;
+});
 
 /** „52 osoby czekają na kolejne dni, przy limicie 10 to około 6 dni.” The
  * verb agrees with the count the way the noun does. */
@@ -205,30 +221,5 @@ const queueText = computed(() => {
   flex-basis: 100%;
   font-size: 0.8125rem;
   font-weight: 500;
-}
-
-/* As the tiles' hero: the figure on the left at no more than the width ten
- * places read well at, the queue beside it behind a hairline, both on the
- * figure's foot - one band rather than a panel half empty. */
-@media (min-width: 600px) {
-  .dcap--hero {
-    display: grid;
-    grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
-    align-items: end;
-    gap: 16px 32px;
-  }
-
-  .dcap--hero .dcap__queue {
-    align-self: stretch;
-    justify-content: flex-end;
-    max-width: 420px;
-    padding-inline-start: 32px;
-    border-inline-start: 1px solid
-      rgba(var(--v-border-color), var(--v-border-opacity));
-  }
-
-  .dcap--hero .dcap__queue-text {
-    font-size: 0.875rem;
-  }
 }
 </style>

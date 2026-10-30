@@ -1,10 +1,12 @@
-import { readingKind } from "~~/shared/declarations";
+import { PEOPLE_IMPORT_WINDOW, readingKind } from "~~/shared/declarations";
 import type {
   DeclarationOverview,
+  DrainResult,
   ExtractStatus,
   PublicationHoldReason,
 } from "~~/shared/declarations";
 import { shortDate, warsawDate } from "~~/shared/dates";
+import { nominativeNoun, polishNumber } from "~/composables/polish";
 import type { RowTone } from "~/composables/rowTone";
 
 /**
@@ -201,9 +203,9 @@ export function compareDeclarationDates(
 }
 
 /** The stages from a candidacy searched to a person published, as the chain
- * and the tiles count them. Each stage counts in its own unit - candidacies,
- * declarations, crops, pages, people - since a re-elected councillor's two
- * runs share one declaration and one crop can serve two pages. */
+ * counts them. Each stage counts in its own unit - candidacies, declarations,
+ * crops, pages, people - since a re-elected councillor's two runs share one
+ * declaration and one crop can serve two pages. */
 export function declarationStages(overview: DeclarationOverview) {
   const { candidacies, extracts, pages, publications } = overview;
   // Counted by separate aggregations, a moment apart: an upload landing in
@@ -234,6 +236,63 @@ export function declarationQueueDays(
 ): number | null {
   if (dailyLimit <= 0) return null;
   return Math.ceil(queued / dailyLimit);
+}
+
+/** People in the accusative a count takes after "opublikować" or
+ * "wstrzymać": jedną osobę, 2 osoby, 5 osób, 22 osoby. */
+export function declarationPeopleAccusative(count: number): string {
+  return count === 1
+    ? "jedną osobę"
+    : `${polishNumber(count)} ${nominativeNoun(count, "osobę", "osoby", "osób")}`;
+}
+
+/** What a press of „Opublikuj z kolejki” did, from the server's own account of
+ * the pass: who went up and who was held, why nobody did, and how many still
+ * wait, for the next press. A press goes past the daily limit, but not past
+ * the people import's night window or a running import (`DrainResult`), so
+ * "nobody" is an answer it can give. */
+export function declarationDrainText(result: DrainResult): string {
+  const published = result.published.length;
+  const { from, to } = PEOPLE_IMPORT_WINDOW;
+  const why =
+    result.skipped === "night"
+      ? `od ${from}:00 do ${to}:00 trwa nocny import osób, który mógłby cofnąć publikację`
+      : result.skipped === "import"
+        ? "trwa import osób albo nie da się sprawdzić, czy trwa"
+        : null;
+  const lines = [
+    published > 0
+      ? `Opublikowano z kolejki ${declarationPeopleAccusative(published)}.`
+      : why
+        ? `Nikogo nie opublikowano: ${why}.`
+        : "Nikogo nie opublikowano.",
+  ];
+  if (result.held.length > 0) {
+    lines.push(
+      `Wstrzymano ${declarationPeopleAccusative(result.held.length)}; powody są na liście „Wstrzymane publikacje”.`,
+    );
+  }
+  if (result.failed.length > 0) {
+    lines.push(
+      "Części publikacji nie udało się dokończyć: poczekają na kolejną próbę.",
+    );
+  }
+  if (result.waiting !== null) {
+    lines.push(declarationWaitingText(result.waiting));
+  }
+  return lines.join(" ");
+}
+
+/** „W kolejce czekają jeszcze 2 osoby.” What a press left in the queue; the
+ * verb agrees with the count the way the noun does. */
+function declarationWaitingText(waiting: number): string {
+  if (waiting <= 0) return "W kolejce nikt już nie czeka.";
+  const verb = nominativeNoun(waiting, "czeka", "czekają", "czeka");
+  const people =
+    waiting === 1
+      ? "jedna osoba"
+      : `${polishNumber(waiting)} ${nominativeNoun(waiting, "osoba", "osoby", "osób")}`;
+  return `W kolejce ${verb} jeszcze ${people}.`;
 }
 
 /** One run of the job, or one day of a tag's uploads where the job sent no
