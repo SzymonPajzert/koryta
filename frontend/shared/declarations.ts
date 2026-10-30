@@ -658,6 +658,13 @@ export type DeclarationClaimResult = {
  * somebody's decision the automation must not overrule, or a doubt it cannot
  * settle itself.
  *
+ * `admin_decision` holds a draft whose date matches only a date an admin
+ * settled on /admin/oswiadczenia (`agreed.by` "admin"). The admin chose it
+ * with the pages' dates a click away, so it confirms nothing, and the draft
+ * waits for somebody to publish it by hand. A public page born that day is
+ * given no record: it has nothing to wait for, and the admin's date links
+ * nothing on it.
+ *
  * The last five are checked as the page is published rather than when it is
  * queued: `no_revision`, nothing the automation may approve is what the page
  * shows (no revision at all, or the newest one is not the page as it stands);
@@ -669,6 +676,7 @@ export type DeclarationClaimResult = {
  * read as another birth date. */
 export const publicationHoldReasons = [
   "two_pages",
+  "admin_decision",
   "needs_split",
   "kept_hidden",
   "pending_proposal",
@@ -738,8 +746,10 @@ export const publicationStatuses = [
 export type PublicationStatus = (typeof publicationStatuses)[number];
 
 /** What a settled reading said about one page it is for. `held` is a match the
- * automation will not act on (two pages with the same date), `queued` a draft
- * waiting for its slot, `confirmed` a page that was public already. */
+ * automation will not act on (two pages with the same date, or a date an admin
+ * settled, which holds a draft and leaves a public page without a record),
+ * `queued` a draft waiting for its slot, `confirmed` a page that was public
+ * already. */
 export type PageOutcome =
   "no_date" | "different" | "confirmed" | "queued" | "held";
 
@@ -811,6 +821,12 @@ export type SweepResult = {
   drain: DrainResult;
 };
 
+/** Who settled a crop's date (`agreed.by`): readers who agreed on it blind,
+ * the job off a typed form at upload (`machineSettles`), or an admin on
+ * /admin/oswiadczenia. */
+export const settledBy = ["readers", "machine", "admin"] as const;
+export type SettledBy = (typeof settledBy)[number];
+
 /** A crop on an admin list: what readers typed, and the pages it is for. */
 export type DeclarationReviewRow = {
   id: string;
@@ -823,6 +839,8 @@ export type DeclarationReviewRow = {
   readings: { value: string; readers: number }[];
   unreadable: number;
   agreed: string | null;
+  /** Who settled `agreed`; null while nothing is settled. */
+  agreedBy: SettledBy | null;
   machine: { birthDate: string | null; confidence: string | null } | null;
   /** The pages, with the date each stores: admins compare them. */
   people: {
@@ -841,6 +859,9 @@ export type DeclarationPublicationRow = {
   name: string;
   status: "queued" | "published" | "held";
   reason: PublicationHoldReason | null;
+  /** Whether the page is public now. A held one can be: published by hand
+   * while it waited, or public already when a second page held it. */
+  pagePublic: boolean;
   at: string;
   unit: string;
   documentUrl: string;
@@ -901,9 +922,10 @@ export type DeclarationOverview = {
   runs: { tag: string; runId: string | null; extracts: number; at: string }[];
 };
 
-/** What a published person's page says about their declarations. A 404, never
- * an empty answer, for a page that is not public: an empty 200 would be cached
- * for hours and outlive the publication. */
+/** What a published person's page says about their declarations: those whose
+ * reading still confirms the page's birth date. A 404, never an empty answer,
+ * for a page that is not public: an empty 200 would be cached for hours and
+ * outlive the publication. */
 export type PersonDeclarations = {
   /** Set when the site published the page itself. */
   autoPublished: { at: string } | null;

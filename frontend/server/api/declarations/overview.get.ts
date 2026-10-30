@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { OVERVIEW_CACHE } from "~~/server/utils/declarationDecisions";
 import { countEverything } from "~~/server/utils/declarationOverview";
 import type { DeclarationOverview } from "~~/shared/declarations";
 
@@ -10,8 +11,9 @@ import type { DeclarationOverview } from "~~/shared/declarations";
  *
  * The admin gate runs before anything is read; the computation is then shared
  * between admins for two minutes, since the answer does not depend on who
- * asks. Admins see the readers' readings and the pages' dates, which readers
- * never do.
+ * asks, and dropped when an admin decides a crop or publishes from the queue
+ * (`OVERVIEW_CACHE`). Admins see the readers' readings and the pages' dates,
+ * which readers never do.
  */
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -28,7 +30,7 @@ const overview = defineCachedFunction(
       new Date(),
     ),
   {
-    name: "declarationOverview",
+    name: OVERVIEW_CACHE,
     maxAge: 120,
     swr: false,
     getKey: (dailyLimit: number) => String(dailyLimit),

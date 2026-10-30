@@ -10,11 +10,13 @@ import {
   candidacyStatuses,
   extractStatuses,
   publicationHoldReasons,
+  settledBy,
   type DeclarationOverview,
   type DeclarationPublicationRow,
   type DeclarationReviewRow,
   type ExtractStatus,
   type PublicationHoldReason,
+  type SettledBy,
 } from "~~/shared/declarations";
 
 /** Why a search found nothing, in the crawler's words
@@ -310,6 +312,14 @@ function isoOf(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+/** Who settled a crop's date, as its row says it: null for a crop nothing
+ * settled, or for a writer this does not know. */
+function settledByOf(value: unknown): SettledBy | null {
+  return (settledBy as readonly unknown[]).includes(value)
+    ? (value as SettledBy)
+    : null;
+}
+
 function reviewRow(
   doc: DocumentSnapshot,
   people: Map<string, PersonFacts>,
@@ -332,6 +342,7 @@ function reviewRow(
     unreadable:
       Number(data.answers?.unreadable ?? 0) + Number(data.answers?.empty ?? 0),
     agreed: (data.agreed?.value as string | undefined) ?? null,
+    agreedBy: settledByOf(data.agreed?.by),
     machine: data.machine
       ? {
           birthDate: data.machine.birthDate ?? null,
@@ -356,6 +367,7 @@ function publicationRow(
     name: people.get(doc.id)?.name ?? doc.id,
     status: data.status,
     reason: (data.reason as PublicationHoldReason | undefined) ?? null,
+    pagePublic: people.get(doc.id)?.published ?? false,
     at: isoOf(data.publishedAt ?? data.heldAt ?? data.queuedAt),
     unit: String(first?.unit ?? ""),
     documentUrl: String(first?.url ?? ""),

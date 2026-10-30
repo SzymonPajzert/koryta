@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  confirmedDeclarations,
   drainPublications,
   inPeopleImportWindow,
+  matchAndDrain,
   matchPages,
   publishPage,
   sweepDeclarations,
   STUCK_PUBLISHING_MS,
 } from "../../../server/utils/declarationPublish";
+import {
+  decideExtract,
+  linkedOnAPage,
+  waitsForAdmin,
+} from "../../../server/utils/declarationDecisions";
 import {
   DECLARATION_ACTOR,
   publishLimitOf,
@@ -673,6 +680,358 @@ describe("matchPages", () => {
     expect(
       JSON.stringify(read("declarationPublications/kowalska")),
     ).not.toMatch(/1979/);
+  });
+});
+
+// The admin chose the date on /admin/oswiadczenia with the pages' dates a
+// click away, so it confirms nothing: the default until Szymon decides
+// otherwise is that it holds the page and publishes nobody.
+describe("a date an admin settled", () => {
+  /** A crop of hers readers could not agree on, settled by an admin on
+   * `BORN`, the way /admin/oswiadczenia settles it. */
+  async function settledByAdmin(id: string) {
+    extract(id, { status: "disputed", agreed: null });
+    await decideExtract(firestore, {
+      extractId: id,
+      uid: "admin-uid",
+      decision: { verdict: "date", value: BORN },
+      now: NOON,
+    });
+  }
+
+  it("holds a draft born that day for somebody to publish by hand", async () => {
+    kowalska();
+    await settledByAdmin("kowalska-crop");
+
+    const { matched, drain: pass } = await matchAndDrain(
+      firestore,
+      ["kowalska-crop"],
+      NOON,
+      3,
+    );
+
+    expect(matched).toMatchObject([
+      { pageMatch: "same", outcomes: { kowalska: "held" } },
+    ]);
+    expect(read("declarationPublications/kowalska")).toMatchObject({
+      status: "held",
+      reason: "admin_decision",
+      extractIds: ["kowalska-crop"],
+      // On the admin list of held pages, which is ordered by it.
+      queuedAt: FakeTimestamp.fromDate(NOON),
+      heldAt: FakeTimestamp.fromDate(NOON),
+    });
+    expect(pass.published).toEqual([]);
+    expect(read("nodes/kowalska")!.published).toBe(false);
+  });
+
+  it("never confirms a page that is public already, nor holds it", async () => {
+    kowalska();
+    put("nodes/kowalska", { ...read("nodes/kowalska")!, published: true });
+    await settledByAdmin("kowalska-crop");
+
+    const result = await matchPages(firestore, "kowalska-crop", NOON);
+
+    expect(result.outcomes).toEqual({ kowalska: "held" });
+    expect(read("declarationExtracts/kowalska-crop")).toMatchObject({
+      pageMatch: "same",
+      pageOutcomes: { kowalska: "held" },
+      pageRecheck: false,
+    });
+    // No record: no note on her page, and no row on the admin's list of
+    // held pages, where „Opublikuj ręcznie” would ask to publish a page that
+    // is up already.
+    expect(read("declarationPublications/kowalska")).toBeUndefined();
+    // A second run writes nothing either.
+    const before = state();
+    await matchPages(firestore, "kowalska-crop", LATER);
+    expect(state()).toBe(before);
+  });
+
+  it("still holds a draft that a public page shares the date with", async () => {
+    kowalska();
+    put("nodes/kowalska", { ...read("nodes/kowalska")!, published: true });
+    person("kowalska-2");
+    await settledByAdmin("kowalska-crop");
+    put("declarationExtracts/kowalska-crop", {
+      ...read("declarationExtracts/kowalska-crop")!,
+      personIds: ["kowalska", "kowalska-2"],
+    });
+
+    const result = await matchPages(firestore, "kowalska-crop", NOON);
+
+    expect(result.outcomes).toEqual({
+      kowalska: "held",
+      "kowalska-2": "held",
+    });
+    expect(read("declarationPublications/kowalska")).toBeUndefined();
+    expect(read("declarationPublications/kowalska-2")).toMatchObject({
+      status: "held",
+      reason: "admin_decision",
+    });
+  });
+
+  it("joins no record that readers made, and the pass publishes her on theirs alone", async () => {
+    await queued();
+    const before = read("declarationPublications/kowalska");
+    await settledByAdmin("kowalska-2022");
+
+    const result = await matchPages(firestore, "kowalska-2022", NOON);
+
+    expect(result.outcomes).toEqual({ kowalska: "held" });
+    expect(read("declarationPublications/kowalska")).toEqual(before);
+    expect((await drain()).published).toEqual(["kowalska"]);
+    expect(read("declarationPublications/kowalska")).toMatchObject({
+      extractIds: ["kowalska-crop"],
+      declarations: [{ url: "https://bip.strzelin.pl/download/kowalska-crop" }],
+    });
+  });
+
+  it("gives way to readers who match the page later, without the admin's crop", async () => {
+    kowalska();
+    await settledByAdmin("kowalska-crop");
+    await matchPages(firestore, "kowalska-crop", NOON);
+    extract("kowalska-2024", { declarationYear: 2024 });
+
+    const result = await matchPages(firestore, "kowalska-2024", LATER);
+
+    expect(result.outcomes).toEqual({ kowalska: "queued" });
+    const record = read("declarationPublications/kowalska")!;
+    expect(record).toMatchObject({
+      status: "queued",
+      reason: null,
+      extractIds: ["kowalska-2024"],
+      declarations: [
+        { url: "https://bip.strzelin.pl/download/kowalska-2024", year: 2024 },
+      ],
+      // In line from when readers matched her, not from the admin's hold.
+      queuedAt: FakeTimestamp.fromDate(LATER),
+    });
+    expect((record.declarations as unknown[]).length).toBe(1);
+    expect((await drain(3, LATER)).published).toEqual(["kowalska"]);
+  });
+
+  it("publishes nobody on a crop an admin corrected to the page's new date", async () => {
+    // Readers queued her; then the import changed her date, the comparison
+    // found the crop contradicted, and an admin settled it on the new date.
+    await queued();
+    const moved = {
+      type: "person",
+      name: "Anna Kowalska",
+      birthDate: "1980-01-02",
+    };
+    put("nodes/kowalska", { ...moved, published: false });
+    put("revisions/rev-kowalska-2", {
+      ...revision("kowalska", "nodes", moved),
+      update_time: "2026-10-20T02:00:00.000Z",
+    });
+    await matchPages(firestore, "kowalska-crop", NOON);
+    await decideExtract(firestore, {
+      extractId: "kowalska-crop",
+      uid: "admin-uid",
+      decision: { verdict: "date", value: "1980-01-02" },
+      now: NOON,
+    });
+    await matchPages(firestore, "kowalska-crop", NOON);
+
+    const pass = await drain();
+
+    expect(pass.published).toEqual([]);
+    expect(pass.held).toEqual([
+      { personId: "kowalska", reason: "no_longer_matches" },
+    ]);
+    expect(read("nodes/kowalska")!.published).toBe(false);
+  });
+
+  it("flags a page born on another day as any reading does", async () => {
+    kowalska();
+    put("nodes/kowalska", {
+      ...read("nodes/kowalska")!,
+      birthDate: "1980-01-02",
+    });
+    await settledByAdmin("kowalska-crop");
+
+    const result = await matchPages(firestore, "kowalska-crop", NOON);
+
+    expect(result.pageMatch).toBe("different");
+    const note = read(`notes/kowalska_${DECLARATION_ACTOR}`)!;
+    expect(note.sources).toMatchObject([
+      { declarationExtractId: "kowalska-crop" },
+    ]);
+    expect(read("declarationPublications/kowalska")).toBeUndefined();
+    // Back on the overview's „Inna data niż na stronie” for an admin.
+    expect(waitsForAdmin(read("declarationExtracts/kowalska-crop"))).toBe(true);
+  });
+});
+
+// What /api/nodes/<id>/declarations lists on a public page: the record keeps
+// what matched when it was written, and the crops are read again for it.
+describe("confirmedDeclarations", () => {
+  const LINK = "https://bip.strzelin.pl/download/kowalska-crop";
+  const shown = () =>
+    confirmedDeclarations(
+      firestore,
+      read("declarationPublications/kowalska"),
+      read("nodes/kowalska")!,
+    );
+
+  /** Her page public, confirmed by her crop; the crop also names a
+   * namesake's page with no date, so it is compared again later. */
+  async function confirmedWithNamesake() {
+    kowalska();
+    put("nodes/kowalska", { ...read("nodes/kowalska")!, published: true });
+    put("nodes/namesake", {
+      type: "person",
+      name: "Anna Kowalska",
+      published: false,
+    });
+    extract("kowalska-crop", { personIds: ["kowalska", "namesake"] });
+    await matchPages(firestore, "kowalska-crop", NOON);
+    expect(read("declarationPublications/kowalska")).toMatchObject({
+      status: "confirmed",
+      extractIds: ["kowalska-crop"],
+    });
+  }
+
+  /** A reviewer corrects her date; the next comparison finds the crop
+   * contradicted, and it waits for an admin. */
+  async function dateCorrected() {
+    put("nodes/kowalska", {
+      ...read("nodes/kowalska")!,
+      birthDate: "1980-01-02",
+    });
+    await matchPages(firestore, "kowalska-crop", LATER);
+    expect(waitsForAdmin(read("declarationExtracts/kowalska-crop"))).toBe(true);
+  }
+
+  it("lists each declaration whose crop confirms the page's date, a file once", async () => {
+    await confirmedWithNamesake();
+    // A second page of the same file, and her declaration of another year.
+    extract("kowalska-crop-p2", { url: LINK, page: 2 });
+    extract("kowalska-2024", { declarationYear: 2024 });
+    await matchPages(firestore, "kowalska-crop-p2", NOON);
+    await matchPages(firestore, "kowalska-2024", NOON);
+
+    expect(await shown()).toEqual([
+      {
+        url: LINK,
+        year: 2023,
+        unit: "Strzelin (gmina miejsko-wiejska)",
+        office: "Rada gminy",
+      },
+      {
+        url: "https://bip.strzelin.pl/download/kowalska-2024",
+        year: 2024,
+        unit: "Strzelin (gmina miejsko-wiejska)",
+        office: "Rada gminy",
+      },
+    ]);
+  });
+
+  it("lists nothing once the page's date is corrected, and lists it again with the date", async () => {
+    await confirmedWithNamesake();
+
+    await dateCorrected();
+    expect(await shown()).toEqual([]);
+
+    put("nodes/kowalska", { ...read("nodes/kowalska")!, birthDate: BORN });
+    expect(await shown()).toMatchObject([{ url: LINK }]);
+  });
+
+  it("lists nothing for a crop an admin withdrew, though the record still names it", async () => {
+    await confirmedWithNamesake();
+    await dateCorrected();
+    // The correction is undone before the admin takes the crop back, so the
+    // dates agree again and only the withdrawal can keep the crop off.
+    put("nodes/kowalska", { ...read("nodes/kowalska")!, birthDate: BORN });
+
+    await decideExtract(firestore, {
+      extractId: "kowalska-crop",
+      uid: "admin-uid",
+      decision: { verdict: "withdraw" },
+      now: LATER,
+    });
+
+    expect(read("declarationPublications/kowalska")).toMatchObject({
+      status: "confirmed",
+      extractIds: ["kowalska-crop"],
+    });
+    expect(await shown()).toEqual([]);
+    // So the endpoints drop the page's cached answer after the decision.
+    expect(await linkedOnAPage(firestore, "kowalska-crop")).toBe(true);
+  });
+
+  it("lists nothing for a crop an admin settled again on the page's new date", async () => {
+    await confirmedWithNamesake();
+    await dateCorrected();
+
+    await decideExtract(firestore, {
+      extractId: "kowalska-crop",
+      uid: "admin-uid",
+      decision: { verdict: "date", value: "1980-01-02" },
+      now: LATER,
+    });
+    await matchPages(firestore, "kowalska-crop", LATER);
+
+    // The crop and the page agree now, on the admin's date, which confirms
+    // nothing; the record readers made is left as it was.
+    expect(read("declarationExtracts/kowalska-crop")).toMatchObject({
+      agreed: { value: "1980-01-02", by: "admin" },
+      pageMatch: "same",
+    });
+    expect(read("declarationPublications/kowalska")).toMatchObject({
+      status: "confirmed",
+    });
+    expect(await shown()).toEqual([]);
+  });
+
+  it("lists nothing on a page without a birth date", async () => {
+    await confirmedWithNamesake();
+    put("nodes/kowalska", { ...read("nodes/kowalska")!, birthDate: "" });
+
+    expect(await shown()).toEqual([]);
+  });
+});
+
+describe("linkedOnAPage", () => {
+  it("is whether a published or confirmed record lists the crop", async () => {
+    put("declarationPublications/up", {
+      status: "published",
+      extractIds: ["a", "b"],
+    });
+    put("declarationPublications/linked", {
+      status: "confirmed",
+      extractIds: ["c"],
+    });
+    put("declarationPublications/waiting", {
+      status: "queued",
+      extractIds: ["d"],
+    });
+    put("declarationPublications/held", {
+      status: "held",
+      reason: "admin_decision",
+      extractIds: ["e"],
+    });
+
+    expect(await linkedOnAPage(firestore, "b")).toBe(true);
+    expect(await linkedOnAPage(firestore, "c")).toBe(true);
+    for (const id of ["d", "e", "nowhere"]) {
+      expect(await linkedOnAPage(firestore, id), id).toBe(false);
+    }
+  });
+
+  it("says yes when it cannot tell", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const broken = {
+      collection: () => {
+        throw new Error("unavailable");
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(await linkedOnAPage(broken as any, "a")).toBe(true);
+    expect(quiet).toHaveBeenCalled();
+    quiet.mockRestore();
   });
 });
 

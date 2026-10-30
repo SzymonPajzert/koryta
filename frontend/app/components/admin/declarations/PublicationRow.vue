@@ -23,6 +23,11 @@
 
     <template #meta>
       <AdminRowFact label="Stan">{{ statusLabel }}</AdminRowFact>
+      <AdminRowFact label="Strona">
+        <span data-page-public>{{
+          row.pagePublic ? "publiczna" : "szkic"
+        }}</span>
+      </AdminRowFact>
       <AdminRowFact :label="row.status === 'held' ? 'Wstrzymane' : 'Kiedy'">
         {{ shortWarsawTime(row.at, now) }}
       </AdminRowFact>
@@ -30,8 +35,12 @@
       <AdminRowFact label="Powiązania">{{ edgesText }}</AdminRowFact>
     </template>
 
-    <p v-if="row.status === 'held' && row.reason" class="dpub__reason">
-      {{ declarationHoldNotes[row.reason] }}
+    <p
+      v-if="row.status === 'held' && row.reason"
+      class="dpub__reason"
+      data-hold-note
+    >
+      {{ declarationHoldNote(row.reason, row.pagePublic) }}
     </p>
     <p v-else-if="row.status === 'queued'" class="dpub__reason">
       Czeka na miejsce w dziennym limicie.
@@ -68,7 +77,7 @@ import { polishCounting } from "~/composables/polish";
 import { toneClasses } from "~/utils/jobStyle";
 import {
   declarationHoldLabels,
-  declarationHoldNotes,
+  declarationHoldNote,
   declarationHoldTone,
 } from "~/utils/declarationsAdmin";
 import type { DeclarationPublicationRow } from "~~/shared/declarations";
@@ -79,7 +88,9 @@ import { shortWarsawTime } from "~~/shared/jobs";
  *
  * A held one says why in the words of the hold and what would clear it; the
  * way to act is the person's own page, where an admin publishes by hand, so
- * the row links there rather than growing a second publish button. */
+ * the row links there rather than growing a second publish button. Whether
+ * that page is public now is on the row too: a hold is never cleared, so a
+ * draft published by hand while it waited stays on the list. */
 const props = defineProps<{
   row: DeclarationPublicationRow;
   now: Date;
@@ -90,7 +101,7 @@ const expanded = defineModel<boolean>("expanded", { default: false });
 const tone = computed<RowTone>(() => {
   if (props.row.status === "published") return "success";
   if (props.row.status === "queued") return "sage";
-  return declarationHoldTone(props.row.reason);
+  return declarationHoldTone(props.row.reason, props.row.pagePublic);
 });
 
 const tag = computed(() => {

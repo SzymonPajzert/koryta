@@ -456,7 +456,8 @@ describe("api/declarations/publish-queued", () => {
 
     expect(await publishQueued({} as never)).toBe(done);
     expect(mocks.drainPublications.mock.calls[0]![2]).toBe(4);
-    expect(mocks.clear).not.toHaveBeenCalled();
+    // Nobody went up, so the cached pages stay.
+    expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
   });
 
   it("presses past the limit in the name of the admin, a batch at most", async () => {

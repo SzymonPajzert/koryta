@@ -7,19 +7,33 @@ vi.hoisted(() => {
     Object.assign(new Error(err.message), err);
 });
 
-let nodes: Record<string, Record<string, unknown> | undefined> = {};
-let publications: Record<string, Record<string, unknown> | undefined> = {};
+type Doc = Record<string, unknown>;
+let nodes: Record<string, Doc | undefined> = {};
+let publications: Record<string, Doc | undefined> = {};
+let extracts: Record<string, Doc | undefined> = {};
+
+/** The documents by collection, read when asked. */
+const table = (name: string): Record<string, Doc | undefined> =>
+  name === "declarationPublications"
+    ? publications
+    : name === "declarationExtracts"
+      ? extracts
+      : nodes;
 
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: () => ({
     collection: (name: string) => ({
       doc: (id: string) => ({
-        get: async () => ({
-          data: () =>
-            name === "declarationPublications" ? publications[id] : nodes[id],
-        }),
+        id,
+        collection: name,
+        get: async () => ({ id, data: () => table(name)[id] }),
       }),
     }),
+    getAll: async (...refs: { id: string; collection: string }[]) =>
+      refs.map((ref) => ({
+        id: ref.id,
+        data: () => table(ref.collection)[ref.id],
+      })),
   }),
 }));
 vi.mock("../../../../server/utils/merge", () => ({
@@ -39,6 +53,8 @@ vi.mock("h3", async (importOriginal) => ({
 const call = (id: string) =>
   (handler as unknown as (event: { id: string }) => Promise<unknown>)({ id });
 
+const BORN = "1979-07-15";
+
 const DECLARATION = {
   url: "https://bip.strzelin.pl/download/1",
   year: 2023,
@@ -46,11 +62,30 @@ const DECLARATION = {
   office: "Rada gminy",
 };
 
+/** A crop of `DECLARATION`, settled on `BORN` by readers unless told
+ * otherwise. */
+function crop(fields: Doc = {}): Doc {
+  return {
+    status: "agreed",
+    agreed: { value: BORN, kind: "date", by: "readers" },
+    url: DECLARATION.url,
+    declarationYear: DECLARATION.year,
+    units: [{ unitName: DECLARATION.unit, office: DECLARATION.office }],
+    ...fields,
+  };
+}
+
 beforeEach(() => {
   nodes = {
-    kowalska: { type: "person", name: "Anna Kowalska", published: true },
+    kowalska: {
+      type: "person",
+      name: "Anna Kowalska",
+      published: true,
+      birthDate: BORN,
+    },
   };
   publications = {};
+  extracts = { "abc-p0": crop() };
 });
 
 describe("api/nodes/[id]/declarations", () => {
@@ -74,6 +109,7 @@ describe("api/nodes/[id]/declarations", () => {
     publications.kowalska = {
       status: "confirmed",
       declarations: [DECLARATION],
+      extractIds: ["abc-p0"],
     };
     expect(await call("kowalska")).toEqual({
       autoPublished: null,
@@ -89,6 +125,7 @@ describe("api/nodes/[id]/declarations", () => {
       pressedBy: "admin-uid",
       publishedAt: { toDate: () => new Date("2026-10-30T12:00:00Z") },
       declarations: [DECLARATION],
+      extractIds: ["abc-p0"],
     };
     expect(await call("kowalska")).toEqual({
       autoPublished: null,
@@ -97,17 +134,18 @@ describe("api/nodes/[id]/declarations", () => {
   });
 
   it("answers 404, never an empty answer, for a draft or a page with nothing", async () => {
-    publications.kowalska = { status: "queued", declarations: [DECLARATION] };
+    publications.kowalska = {
+      status: "queued",
+      declarations: [DECLARATION],
+      extractIds: ["abc-p0"],
+    };
     await expect(call("kowalska")).rejects.toMatchObject({ statusCode: 404 });
 
-    nodes.kowalska = {
-      type: "person",
-      name: "Anna Kowalska",
-      published: false,
-    };
+    nodes.kowalska = { ...nodes.kowalska, published: false };
     publications.kowalska = {
       status: "published",
       declarations: [DECLARATION],
+      extractIds: ["abc-p0"],
     };
     await expect(call("kowalska")).rejects.toMatchObject({ statusCode: 404 });
 
@@ -115,10 +153,60 @@ describe("api/nodes/[id]/declarations", () => {
   });
 
   it("drops a declaration whose address is not a web link", async () => {
+    extracts["abc-p0"] = crop({ url: "javascript:alert(1)" });
     publications.kowalska = {
       status: "confirmed",
       declarations: [{ ...DECLARATION, url: "javascript:alert(1)" }],
+      extractIds: ["abc-p0"],
     };
+    await expect(call("kowalska")).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("lists a declaration only while its crop confirms the page's birth date", async () => {
+    const LATER = {
+      url: "https://bip.strzelin.pl/download/2",
+      year: 2024,
+      unit: DECLARATION.unit,
+      office: DECLARATION.office,
+    };
+    publications.kowalska = {
+      status: "confirmed",
+      declarations: [DECLARATION, LATER],
+      extractIds: ["abc-p0", "def-p0"],
+    };
+    // The job read the 2024 one off a typed form: that confirms too.
+    extracts["def-p0"] = crop({
+      url: LATER.url,
+      declarationYear: LATER.year,
+      agreed: { value: BORN, kind: "date", by: "machine" },
+    });
+    expect(await call("kowalska")).toMatchObject({
+      declarations: [DECLARATION, LATER],
+    });
+
+    // An admin took the 2023 one back.
+    extracts["abc-p0"] = crop({ status: "withdrawn", agreed: null });
+    expect(await call("kowalska")).toMatchObject({ declarations: [LATER] });
+
+    // An admin settled the 2024 one on her date: that confirms nothing.
+    extracts["def-p0"] = crop({
+      url: LATER.url,
+      declarationYear: LATER.year,
+      agreed: { value: BORN, kind: "date", by: "admin" },
+    });
+    await expect(call("kowalska")).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("says nothing, the automatic publication included, once the page's date is another", async () => {
+    publications.kowalska = {
+      status: "published",
+      autoPublished: true,
+      publishedAt: { toDate: () => new Date("2026-10-29T08:15:00Z") },
+      declarations: [DECLARATION],
+      extractIds: ["abc-p0"],
+    };
+    nodes.kowalska = { ...nodes.kowalska, birthDate: "1980-01-02" };
+
     await expect(call("kowalska")).rejects.toMatchObject({ statusCode: 404 });
   });
 });

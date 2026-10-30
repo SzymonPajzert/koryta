@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { OVERVIEW_CACHE_BASE } from "~~/server/utils/declarationDecisions";
 import { drainPublications } from "~~/server/utils/declarationPublish";
 import {
   PRESS_BATCH,
@@ -23,7 +24,9 @@ import {
  * published, and the record of each page it takes up names the admin.
  *
  * Answers with who went up, who was held and why, why nobody did, and how
- * many still wait, which is what the page tells the admin.
+ * many still wait, which is what the page tells the admin. The overview's
+ * cached answer goes with it, so the reload after the press shows the queue
+ * moved.
  */
 export default defineEventHandler(async (event): Promise<DrainResult> => {
   const admin = await requireAdmin(event);
@@ -36,6 +39,7 @@ export default defineEventHandler(async (event): Promise<DrainResult> => {
   if (result.published.length > 0) {
     await useStorage("cache").clear("nitro:handlers");
   }
+  await useStorage("cache").clear(OVERVIEW_CACHE_BASE);
   setResponseHeader(event, "Cache-Control", "private, no-store");
   return result;
 });
