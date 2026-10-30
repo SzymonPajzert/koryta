@@ -80,7 +80,17 @@ def person(name: str, born: str, entries: list[str], **extra) -> dict:
 HER = person("Maria Iwona Kasprzycka", "1959-07-14", [], elections=[SEJMIK_2018])
 #: A namesake with an entry of her own, born another year.
 NAMESAKE = person("Maria Kasprzycka", "1953-08-14", ["1714452"])
+#: Her name and her birth date under an entry the page does not link: another
+#: human to the ingest (`refuseAnotherEntry`), however the two are named.
+SAME_DAY_NAMESAKE = person(
+    "Maria Iwona Kasprzycka",
+    "1959-07-14",
+    ["999"],
+    pesel_fingerprint=["a namesake born the same day"],
+)
 STRANGER = person("Jan Nowak", "1970-01-01", ["5"])
+#: Her page as the morning's export holds it when the link was typed in since.
+PAGE_BEFORE_ITS_LINK = {key: PAGE[key] for key in PAGE if key != "rejestrIo"}
 
 
 def plan(
@@ -172,3 +182,42 @@ def test_a_link_a_row_holds_reads_nobody_else(monkeypatch, capsys):
     assert sent.rejestrIo == "https://rejestr.io/osoby/2346874"
     assert sent.elections == []  # HER's run is not read: the link found a row
     assert "No row holds" not in capsys.readouterr().out
+
+
+def test_a_namesake_with_another_entry_is_not_the_page(monkeypatch):
+    result = plan(monkeypatch, [SAME_DAY_NAMESAKE])
+
+    assert (result.changed, result.new) == ([], [])
+    assert result.reason == (
+        "w danych nie ma nikogo, kogo dałoby się przypisać do tej strony"
+    )
+
+
+def test_a_link_typed_in_since_the_export_is_still_the_pages(monkeypatch):
+    # The export's copy of the page has no link yet, so the namesake's entry
+    # reaches it by the name: the request carries the link the ingest reads.
+    result = plan(monkeypatch, [SAME_DAY_NAMESAKE], PAGE_BEFORE_ITS_LINK)
+
+    assert result.changed == []
+    assert "(999)" in result.reason and "(2346874)" in result.reason
+
+
+def test_a_link_typed_in_since_the_export_still_finds_her(monkeypatch):
+    result = plan(monkeypatch, [NAMESAKE, HER, STRANGER], PAGE_BEFORE_ITS_LINK)
+
+    [sent] = result.changed
+    assert (sent.korytaId, sent.rejestrIo) == ("p-1", None)
+
+
+def test_a_page_newer_than_the_export_is_never_found_by_name(monkeypatch):
+    # An export from before the page was made, holding somebody else: only
+    # the page's id or its link could say who it is (`for_person`), and no
+    # row holds the link.
+    before_the_page = {"id": "p-9", "type": "person", "name": "Jan Nowak"}
+
+    result = plan(monkeypatch, [HER], before_the_page)
+
+    assert (result.changed, result.new) == ([], [])
+    assert result.reason == (
+        "w danych nie ma nikogo, kogo dałoby się przypisać do tej strony"
+    )

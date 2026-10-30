@@ -201,6 +201,17 @@ def test_a_payload_naming_another_register_entry_does_not_overwrite_the_page():
     assert "(7)" in result.reason and "(1)" in result.reason
 
 
+def test_a_link_typed_in_since_the_export_is_the_pages_link():
+    # The export's copy of the page has no link yet, so entry 7 reaches it by
+    # the name; the request carries the link the ingest reads, entry 1.
+    site = snapshot(page("p-1", "Anna Nowak"))
+
+    result = for_person([person("Anna Nowak", "7", AT_KRS)], site, TARGET)
+
+    assert result.changed == []
+    assert "(7)" in result.reason and "(1)" in result.reason
+
+
 def test_a_page_newer_than_the_export_is_matched_by_its_register_link_alone():
     site = snapshot()  # The page was made after this morning's export.
     payloads = [person("Anna Nowak", "1", AT_KRS), person("Anna Nowak", "7", AT_KRS)]

@@ -172,11 +172,19 @@ def for_person(
     # links are two humans (task stop-korytaid-overwriting-published-link).
     # The snapshot holds it back (`HELD_ENTRY`), so `matching_one_page` left
     # it out above; it is still the payload about this page, and it is what
-    # says why nothing goes. A page newer than the export has nothing to hold
-    # it by, so the same is asked of the page's own link.
+    # says why nothing goes. A page whose link the export lacks has nothing to
+    # hold it by, so the same is asked of the page's own link: the one the
+    # request carries, which is the page as the ingest reads it. The export's
+    # copy can be older - a page made since, or a link typed in since, which
+    # is when the button gets pressed - and then a payload of the page's name
+    # carrying another entry reached the page by its name, was planned as a
+    # change, and came back a 409. Andrzej Przeliorz's and Marek Grochal's
+    # pages, links typed in by hand that no row holds, would each have been
+    # sent another entry's row that way, had the link been typed in after the
+    # 10-30 export.
     page = snapshot.people_by_id.get(target.node_id)
-    page_register = (
-        register_number(stated(page, "rejestrIo")) if page else target.register
+    page_register = target.register or (
+        register_number(stated(page, "rejestrIo")) if page else None
     )
     conflicting = [
         person
