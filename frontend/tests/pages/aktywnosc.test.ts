@@ -879,6 +879,27 @@ describe("/aktywnosc", () => {
       );
     });
 
+    it("blames the filters, not the site, when a person hides its changes", async () => {
+      // "Tylko Twoje" kept from the lines, then the site's changes picked:
+      // the site did change, and the chip above is what empties the list.
+      serve({ 7: withReleases() });
+      const wrapper = await mountPage({ rodzaj: "zmiany", kto: "ja" });
+
+      await vi.waitUntil(
+        () =>
+          wrapper.find('[data-testid="activity-empty"]').exists() &&
+          wrapper
+            .get('[data-testid="activity-empty"]')
+            .text()
+            .includes("Nic nie pasuje do wybranych filtrów."),
+        { timeout: 2000 },
+      );
+      expect(wrapper.text()).not.toContain(
+        "W tym okresie nic się na stronie nie zmieniło.",
+      );
+      expect(releaseTexts(wrapper)).toEqual([]);
+    });
+
     it("holds back a rollout older than the lines still to page through", async () => {
       // Shown straight away it would sit under a line from the last hour,
       // with a week of lines yet to come above it.

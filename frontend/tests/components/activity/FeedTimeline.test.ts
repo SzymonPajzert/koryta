@@ -286,4 +286,45 @@ describe("ActivityFeedTimeline", () => {
     });
     expect(self.find('[data-testid="feed-item-actor"]').exists()).toBe(true);
   });
+
+  it("puts a rollout of the site among the day's lines, by when it went live", async () => {
+    // Pinned to the top of its day, a morning rollout sat over the evening's
+    // work.
+    const at = "2026-09-22T11:00:00.000Z";
+    const wrapper = await mountSuspended(FeedTimeline, {
+      props: {
+        groups: [
+          {
+            day: "2026-09-22",
+            label: "Dzisiaj",
+            batches: [
+              batch({ id: "evening", lastAt: "2026-09-22T17:00:00.000Z" }),
+              batch({ id: "morning", lastAt: "2026-09-22T06:00:00.000Z" }),
+            ],
+            releases: [
+              {
+                at,
+                changes: [
+                  {
+                    id: "zmiana",
+                    at,
+                    title: "Tabela robi coś nowego",
+                    description: "Opis zmiany.",
+                    area: "public",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        actorOf: () => actor(),
+      },
+    });
+
+    expect(
+      wrapper
+        .findAll(".ft-rail > li")
+        .map((row) => row.attributes("data-testid")),
+    ).toEqual(["feed-item", "feed-release", "feed-item"]);
+  });
 });
