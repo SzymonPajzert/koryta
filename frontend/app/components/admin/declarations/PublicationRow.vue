@@ -74,8 +74,8 @@ import {
 import type { DeclarationPublicationRow } from "~~/shared/declarations";
 import { shortWarsawTime } from "~~/shared/jobs";
 
-/** A person the automation published, queued or held, as /admin/oswiadczenia
- * lists them.
+/** A person published from the queue, by the automation or at an admin's
+ * press, or waiting in it or held, as /admin/oswiadczenia lists them.
  *
  * A held one says why in the words of the hold and what would clear it; the
  * way to act is the person's own page, where an admin publishes by hand, so
@@ -101,14 +101,18 @@ const tag = computed(() => {
     : "wstrzymana";
 });
 
-const statusLabel = computed(
-  () =>
-    ({
-      published: "opublikowana automatycznie",
-      queued: "w kolejce do publikacji",
-      held: "wstrzymana",
-    })[props.row.status],
-);
+/** The state in full, for the open row. A page an admin pressed for is the
+ * admin's publication, not the automation's. */
+const statusLabel = computed(() => {
+  if (props.row.status === "published") {
+    return props.row.pressed
+      ? "opublikowana przez administratora"
+      : "opublikowana automatycznie";
+  }
+  return props.row.status === "queued"
+    ? "w kolejce do publikacji"
+    : "wstrzymana";
+});
 
 /** „12 opublikowanych, 2 wstrzymane” - the relations that went live with the
  * page and the ones that did not. */

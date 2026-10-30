@@ -338,3 +338,28 @@ describe("countEverything", () => {
     ]);
   });
 });
+
+// After an admin's press of „Opublikuj z kolejki”, which publishes past the
+// automatic daily limit and in none of its places.
+describe("countEverything, after an admin's press", () => {
+  it("counts the page as published, not as today's, and says whose it is", async () => {
+    stored.set("declarationPublications/nowak", {
+      status: "published",
+      pressedBy: "admin-uid",
+      autoPublished: false,
+      publishedAt: at("2026-10-29T11:00:00Z"),
+      declarations: [{ url: "https://bip.strzelin.pl/3", unit: "Strzelin" }],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { publications, lists } = await countEverything(db as any, 10, NOW);
+
+    expect(publications).toMatchObject({ published: 1, today: 3 });
+    expect(lists.recent).toEqual([
+      expect.objectContaining({ personId: "nowak", pressed: true }),
+    ]);
+    expect(lists.held).toEqual([
+      expect.objectContaining({ personId: "kowalska", pressed: false }),
+    ]);
+  });
+});

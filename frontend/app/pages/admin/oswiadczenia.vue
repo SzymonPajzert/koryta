@@ -64,11 +64,7 @@
            put it above the chain". -->
       <div class="dprogress">
         <AdminDeclarationsStates :overview="overview" />
-        <AdminDeclarationsChain
-          :overview="overview"
-          :publishing="publishing"
-          @publish="publishQueued"
-        />
+        <AdminDeclarationsChain :overview="overview" :publish="publishQueued" />
       </div>
 
       <!-- Before the first upload the head still stands, at nought and with
@@ -149,7 +145,7 @@
           <AdminSectionHead
             title="Wstrzymane publikacje"
             :count="overview.lists.held.length"
-            info="Osoby z tą samą datą, których automat nie opublikował, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. Opublikować można je ręcznie z ich strony."
+            info="Osoby z tą samą datą, których stron nie opublikowano ani automatycznie, ani przyciskiem „Opublikuj z kolejki”, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. Opublikować można je ręcznie z ich strony."
           />
           <div data-testid="declarations-held">
             <AdminRowList v-if="overview.lists.held.length">
@@ -172,7 +168,7 @@
           <AdminSectionHead
             title="Opublikowane ostatnio"
             :count="overview.lists.recent.length"
-            info="Strony, które automat opublikował sam, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia. Każda ma na sobie notkę z linkiem do oświadczenia."
+            info="Strony, które opublikował automat albo administrator przyciskiem „Opublikuj z kolejki”, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia; kto, widać w otwartym wierszu. Każda ma na sobie notkę z linkiem do oświadczenia."
           >
             <v-btn
               v-if="overview.lists.recent.length > RECENT_LIMIT"
@@ -202,7 +198,7 @@
               />
             </AdminRowList>
             <p v-else class="dsection__empty">
-              Automat jeszcze nikogo nie opublikował.
+              Jeszcze nikogo nie opublikowano.
             </p>
           </div>
         </section>
@@ -261,13 +257,17 @@ import { authRequest } from "~/composables/auth";
 import { polishCounting, polishCountingGenitive } from "~/composables/polish";
 import {
   declarationDateText,
+  declarationDrainText,
   groupDeclarationRuns,
 } from "~/utils/declarationsAdmin";
 import {
   DISPUTED_AFTER,
+  PEOPLE_IMPORT_WINDOW,
+  PRESS_BATCH,
   READERS_TO_AGREE,
   type DeclarationOverview,
   type DeclarationReviewRow,
+  type DrainResult,
 } from "~~/shared/declarations";
 import { shortWarsawTime } from "~~/shared/jobs";
 
@@ -275,7 +275,7 @@ import { shortWarsawTime } from "~~/shared/jobs";
  * what in it needs an admin.
  *
  * The job finds a councillor's declaration, readers type the birth date off
- * the crop without knowing whose it is, and an agreed date that matches the
+ * the crop without seeing the page's, and an agreed date that matches the
  * page publishes the page, a few a day. This page follows that chain: the
  * head says how far each stage got and what today's publications are against
  * the limit; under it come the crops readers could not agree on, the
@@ -300,7 +300,8 @@ const error = ref<string | null>(null);
 const now = ref(new Date());
 
 /** The method, behind the (i): who reads, what settles a reading, what
- * publishes. Read off the same numbers the server settles by. */
+ * publishes, and what the button at the end of the chain does. Read off the
+ * same numbers the server settles by. */
 const headInfo = computed(() => {
   const limit = overview.value?.dailyLimit;
   const pace =
@@ -309,16 +310,25 @@ const headInfo = computed(() => {
       : limit > 0
         ? `najwyżej ${polishCounting(limit, "osobę", "osoby", "osób")} dziennie`
         : "ale publikowanie automatyczne jest teraz wyłączone";
+  const { from, to } = PEOPLE_IMPORT_WINDOW;
   return (
     "Zadanie na predatorze szuka w BIP-ach oświadczeń majątkowych radnych, " +
     "którzy mają stronę w serwisie, wycina z nich linię z datą urodzenia i " +
-    "przesyła wycinki tutaj. Zalogowani czytelnicy przepisują datę na " +
-    "/oswiadczenia, nie wiedząc, czyje to oświadczenie. Odczyt jest " +
+    "przesyła wycinki tutaj. Czytelnicy przepisują datę z wycinka, nie " +
+    "widząc daty ze strony osoby. Odczyt jest " +
     `rozstrzygnięty przy zgodzie co najmniej ${polishCountingGenitive(READERS_TO_AGREE, "osoby", "osób")} ` +
     `i przewadze ${polishCountingGenitive(READERS_TO_AGREE, "głosu", "głosów")} nad każdą inną datą; ` +
     "wtedy porównuje się go z datą na stronie osoby. Szkic z tą samą datą " +
     "publikuje się sam, razem z zatrudnieniami w KRS i wyborami w regionie " +
-    `z oświadczenia, ${pace}.`
+    `z oświadczenia, ${pace}. ` +
+    "Przycisk „Opublikuj z kolejki” publikuje od razu do " +
+    `${polishCountingGenitive(PRESS_BATCH, "czekającej osoby", "czekających osób")}, ` +
+    "ponad dzienny limit, także przy wyłączonym publikowaniu automatycznym. " +
+    "Każda strona przechodzi te same sprawdzenia co przy publikacji " +
+    "automatycznej, więc część może zostać wstrzymana, a „Dziś” liczy tylko " +
+    "publikacje automatyczne. W czasie " +
+    `importu osób, w tym nocnego od ${from}:00 do ${to}:00, nie publikuje ` +
+    "się nikogo, także przyciskiem."
   );
 });
 
@@ -426,25 +436,31 @@ async function decide(
   }
 }
 
-const publishing = ref(false);
-
-async function publishQueued() {
-  publishing.value = true;
+/** The cap's button: an admin's press, past the daily limit. What the
+ * snackbar says is what the pass reports - who went up, who was held, and how
+ * many still wait - since the night window or a running import may let it
+ * publish nobody, and a check may hold a page. True once the pass has
+ * answered, so the cap closes its question; false on a failure, which leaves
+ * it up for another try. */
+async function publishQueued(): Promise<boolean> {
   try {
-    await authRequest("/api/declarations/publish-queued", { method: "POST" });
-    notify("Opublikowano osoby z kolejki.");
+    const result = await authRequest<DrainResult>(
+      "/api/declarations/publish-queued",
+      { method: "POST" },
+    );
+    notify(declarationDrainText(result));
     await load();
+    return true;
   } catch (err) {
     notify(errorText(err, "Nie udało się opublikować kolejki."), true);
-  } finally {
-    publishing.value = false;
+    return false;
   }
 }
 </script>
 
 <style scoped>
-/* The chain and the bar under it are one block: the stages, then the whole
- * of the run by state. */
+/* The bar and the chain under it are one block: the whole of the run by
+ * state, then the stages. */
 .dprogress {
   display: flex;
   flex-direction: column;

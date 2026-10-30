@@ -251,6 +251,15 @@ class FakeQuery {
   async get() {
     return run(this.state);
   }
+  /** An aggregation, as the press counts what still waits. */
+  count() {
+    return {
+      get: async () => {
+        const { size } = run(this.state);
+        return { data: () => ({ count: size }) };
+      },
+    };
+  }
 }
 
 class FakeCollection extends FakeQuery {
@@ -424,6 +433,14 @@ async function queued(id = "kowalska") {
 
 const drain = (limit = 3, now = NOON) =>
   drainPublications(firestore, now, limit);
+
+/** Who presses „Opublikuj z kolejki” on /admin/oswiadczenia. */
+const ADMIN = "admin-uid";
+
+/** Her press, as /api/declarations/publish-queued sends it: under whatever
+ * limit is set, 0 as it ships. */
+const press = (limit = 0, now = NOON, options: { maxPages?: number } = {}) =>
+  drainPublications(firestore, now, limit, { pressedBy: ADMIN, ...options });
 
 /** A reader's request, through /api/revisions/create, to take her page down:
  * the page's data with `deleted`, waiting for a reviewer. */
@@ -1540,6 +1557,225 @@ describe("a pass that was cut short", () => {
         held: [{ id: "kowalska-run", reason: "rejected" }],
       },
     });
+  });
+});
+
+// Szymon, 2026-10-30: the overview's button publishes past the automatic
+// limit, also while the automatic publication is off - "it's an admin
+// decision". Through the same checks, outside the import's way, and in none
+// of the automation's places of the day.
+describe("an admin's press of „Opublikuj z kolejki”", () => {
+  const needsSplit = (id: string) =>
+    put(`nodes/${id}`, {
+      ...read(`nodes/${id}`)!,
+      needs_split: { reason: "dwie osoby", at: "", user: "admin" },
+    });
+
+  it("publishes the queue at a limit of 0, in the admin's name and in no place of the day", async () => {
+    await queued();
+
+    const result = await press(0);
+
+    expect(result).toMatchObject({
+      skipped: null,
+      published: ["kowalska"],
+      held: [],
+      capReached: false,
+      waiting: 0,
+    });
+    expect(read("nodes/kowalska")!.published).toBe(true);
+    expect(read("edges/kowalska-run")!.published).toBe(true);
+    expect(read("edges/kowalska-job")!.published).toBe(true);
+    const record = read("declarationPublications/kowalska")!;
+    expect(record).toMatchObject({
+      status: "published",
+      pressedBy: ADMIN,
+      // So her page never says the site published it on its own.
+      autoPublished: false,
+    });
+    // No place of the day was taken: none is counted, none is named.
+    expect(record.day).toBeUndefined();
+    expect(read(`declarationPublishLimits/${DAY}`)).toBeUndefined();
+    // The checks and the writes are still the automation's, which is what a
+    // later pass recognises as its own to finish or put back.
+    expect(
+      [...stored.values()].filter(
+        (row) => row.action === "publish" && row.target_id === "kowalska",
+      ),
+    ).toEqual([expect.objectContaining({ user: DECLARATION_ACTOR })]);
+  });
+
+  it("goes past a limit already reached and leaves the automation's count as it was", async () => {
+    await queued("kowalska");
+    await queued("nowak");
+    put(`declarationPublishLimits/${DAY}`, { day: DAY, count: 2 });
+    expect(await drain(2)).toMatchObject({ published: [], capReached: true });
+
+    const result = await press(2);
+
+    expect(result).toMatchObject({
+      published: ["kowalska", "nowak"],
+      capReached: false,
+      waiting: 0,
+    });
+    expect(read(`declarationPublishLimits/${DAY}`)).toMatchObject({
+      count: 2,
+    });
+  });
+
+  it("publishes nobody inside the people import's night window", async () => {
+    await queued();
+    const before = state();
+
+    for (const now of ["2026-10-29T02:00:00Z", "2026-10-29T07:59:00Z"]) {
+      expect(await press(0, new Date(now))).toMatchObject({
+        skipped: "night",
+        published: [],
+        waiting: 1,
+      });
+    }
+    expect(state()).toBe(before);
+  });
+
+  it("publishes nobody while a people import runs, or when it cannot tell", async () => {
+    await queued();
+    const before = state();
+
+    importRunning.mockResolvedValue(true);
+    expect(await press()).toMatchObject({
+      skipped: "import",
+      published: [],
+      waiting: 1,
+    });
+    expect(importRunning).toHaveBeenCalledWith(NOON);
+
+    importRunning.mockRejectedValue(new Error("PERMISSION_DENIED"));
+    vi.spyOn(console, "error").mockImplementationOnce(() => {});
+    expect(await press()).toMatchObject({ skipped: "import", published: [] });
+    expect(state()).toBe(before);
+  });
+
+  it("holds a page a check stops, and has no place of the day to give back", async () => {
+    await queued("kowalska");
+    await queued("nowak");
+    needsSplit("kowalska");
+    // The automation's one place today, taken by a page of its own.
+    put(`declarationPublishLimits/${DAY}`, { day: DAY, count: 1 });
+
+    const result = await press(1);
+
+    expect(result.held).toEqual([
+      { personId: "kowalska", reason: "needs_split" },
+    ]);
+    expect(result.published).toEqual(["nowak"]);
+    expect(read("nodes/kowalska")!.published).toBe(false);
+    expect(read("declarationPublications/kowalska")).toMatchObject({
+      status: "held",
+      reason: "needs_split",
+      pressedBy: ADMIN,
+    });
+    expect(read(`declarationPublishLimits/${DAY}`)).toMatchObject({
+      count: 1,
+    });
+  });
+
+  it("takes up only the queue: a held page stays for somebody to decide", async () => {
+    kowalska();
+    person("kowalska-2");
+    extract("kowalska-crop", { personIds: ["kowalska", "kowalska-2"] });
+    await matchPages(firestore, "kowalska-crop", NOON);
+    const before = state();
+
+    expect(await press()).toMatchObject({
+      published: [],
+      held: [],
+      waiting: 0,
+    });
+    expect(state()).toBe(before);
+  });
+
+  it("takes up a batch at most, and says how many still wait", async () => {
+    for (const id of ["a", "b", "c"]) await queued(id);
+
+    const result = await press(0, NOON, { maxPages: 2 });
+
+    expect(result).toMatchObject({ published: ["a", "b"], waiting: 1 });
+    expect(read("declarationPublications/c")!.status).toBe("queued");
+  });
+
+  describe("cut short", () => {
+    /** Her page taken up by a press whose request died. */
+    async function pressedAndStuck() {
+      await queued();
+      put("declarationPublications/kowalska", {
+        ...read("declarationPublications/kowalska")!,
+        status: "publishing",
+        claimedAt: FakeTimestamp.fromDate(LONG_AGO),
+        pressedBy: ADMIN,
+      });
+      // The automation's one place today is another page's.
+      put(`declarationPublishLimits/${DAY}`, { day: DAY, count: 1 });
+    }
+
+    it("is finished as the admin's by the automation's next pass, in no place", async () => {
+      await pressedAndStuck();
+
+      const result = await drain(1);
+
+      expect(result.published).toEqual(["kowalska"]);
+      const record = read("declarationPublications/kowalska")!;
+      expect(record).toMatchObject({
+        status: "published",
+        pressedBy: ADMIN,
+        autoPublished: false,
+      });
+      expect(record.day).toBeUndefined();
+      expect(read(`declarationPublishLimits/${DAY}`)).toMatchObject({
+        count: 1,
+      });
+    });
+
+    it("gives no place back when it is held on the second try", async () => {
+      await pressedAndStuck();
+      needsSplit("kowalska");
+
+      const result = await drain(1);
+
+      expect(result.held).toEqual([
+        { personId: "kowalska", reason: "needs_split" },
+      ]);
+      expect(read(`declarationPublishLimits/${DAY}`)).toMatchObject({
+        count: 1,
+      });
+    });
+  });
+
+  it("is forgotten when the automation itself claims a page queued again", async () => {
+    await queued();
+    // Pressed for once and found public by then; a draft again since, and
+    // queued anew with the press still on its record.
+    put("declarationPublications/kowalska", {
+      ...read("declarationPublications/kowalska")!,
+      pressedBy: ADMIN,
+    });
+
+    expect((await drain(3)).published).toEqual(["kowalska"]);
+
+    const record = read("declarationPublications/kowalska")!;
+    expect(record).toMatchObject({ autoPublished: true, day: DAY });
+    expect(record.pressedBy).toBeUndefined();
+  });
+
+  it("forgets the place of the day an earlier claim left on a page queued again", async () => {
+    await queued();
+    put("declarationPublications/kowalska", {
+      ...read("declarationPublications/kowalska")!,
+      day: "2026-10-20",
+    });
+
+    expect((await press()).published).toEqual(["kowalska"]);
+
+    expect(read("declarationPublications/kowalska")!.day).toBeUndefined();
   });
 });
 

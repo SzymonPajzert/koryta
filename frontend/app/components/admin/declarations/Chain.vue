@@ -74,8 +74,7 @@
         :today="overview.publications.today"
         :daily-limit="overview.dailyLimit"
         :queued="overview.publications.queued"
-        :publishing="publishing"
-        @publish="emit('publish')"
+        :publish="publish"
       />
     </li>
   </ol>
@@ -90,21 +89,20 @@ import { polishCountingGenitive } from "~/composables/polish";
 import type { RowTone } from "~/composables/rowTone";
 import type { DeclarationOverview } from "~~/shared/declarations";
 
-/** Variant „łańcuch” of the overview's head: the way from a candidacy
- * searched to a person published, left to right, each stage with how many
- * made it through and what fell out there, ending in today's publications
- * against the limit. On a phone the line runs down the left edge instead,
- * the way the rows of the lists below carry theirs.
+/** The overview's chain, under the bar of declarations by state: the way
+ * from a candidacy searched to a person published, left to right, each stage
+ * with how many made it through and what fell out there, ending in today's
+ * publications against the limit. Below a desktop's width the line runs down
+ * the left edge instead, the way the rows of the lists below carry theirs.
  *
  * The figure of each stage is what moved on, and its bar the share of the
  * stage's own count that did: units change along the way - candidacies,
  * declarations, crops, pages, people - so no share is taken across two. */
 const props = defineProps<{
   overview: DeclarationOverview;
-  publishing?: boolean;
+  /** The press of „Opublikuj z kolejki”, as `AdminDeclarationsCap` takes it. */
+  publish: () => Promise<boolean>;
 }>();
-
-const emit = defineEmits<{ publish: [] }>();
 
 type Line = {
   key: string;

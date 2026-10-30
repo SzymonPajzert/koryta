@@ -19,18 +19,21 @@
  *
  * Publishing re-reads everything and holds the page rather than overrule
  * anybody (`publishPage`). The daily limit lives in the runtime config and is
- * 0 until Szymon sets it, so as shipped this queues and publishes nothing.
- * Nothing is published while a people import may be writing pages, and a page
- * a stale write of one took off the site again is found and put back
- * (`restoreReverted`).
+ * 0 until Szymon sets it, so as shipped the site queues pages and publishes
+ * none of them on its own. An admin can publish the queue from
+ * /admin/oswiadczenia past the limit, at 0 too (`drainPublications` with
+ * `pressedBy`), through the same checks. Nothing is published while a people
+ * import may be writing pages, and a page a stale write of one took off the
+ * site again is found and put back (`restoreReverted`).
  */
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { AuditEntry } from "~~/shared/audit";
 import { isoDay, warsawDate, warsawHour } from "~~/shared/dates";
 import {
   DECLARATION_ACTOR,
   nameFitsPage,
+  PEOPLE_IMPORT_WINDOW,
   type DrainResult,
   type LocalOffice,
   type PageMatch,
@@ -66,19 +69,6 @@ import { unnamedLocal } from "./edges";
 import { peopleImportRunning } from "./jobs";
 import { resolveMergedNode } from "./merge";
 import { applyRevision, holdsRevision, nodeRevisions } from "./revisions";
-
-/** The Warsaw hours, from inclusive to exclusive, in which nothing is
- * published automatically.
- *
- * The nightly people import runs in them, and it reads a page outside a
- * transaction and later writes it back whole with the `published` it read
- * (server/api/ingest/person.post.ts, `createRevisionTransaction` in
- * server/utils/revisions.ts): a page published in between is silently made a
- * draft again. A precondition in the import is the real fix; until then this
- * keeps out of its way, and so does the check on the runs the jobs report
- * (`peopleImportRunning`), which also covers the runs asked for during the
- * day and a night that runs late. */
-export const PEOPLE_IMPORT_WINDOW = { from: 3, to: 9 } as const;
 
 /** How long a page may stay `publishing` before the next pass takes it up
  * again. Publishing one takes seconds; longer means the pass that claimed it
@@ -121,12 +111,18 @@ export type StoredPublication = {
   extractIds: string[];
   declarations: LinkedDeclaration[];
   queuedAt?: Timestamp;
-  /** When a pass took the page's slot, and the Warsaw day the slot is of. */
+  /** When a pass took the page up, and the Warsaw day of the slot it took.
+   * No day where an admin's press took it up: a press takes no slot. */
   claimedAt?: Timestamp;
   day?: string;
   heldAt?: Timestamp;
   publishedAt?: Timestamp;
+  /** Whether the site published the page on its own: false where an admin
+   * pressed for it. */
   autoPublished?: boolean;
+  /** The uid of the admin whose press of „Opublikuj z kolejki” took the page
+   * up last (`drainPublications`); none where the automation did. */
+  pressedBy?: string;
   /** The import's revision approved on the way up, where the page had none. */
   approvedRevision?: string | null;
   edges?: {
@@ -162,10 +158,11 @@ export type PublishOutcome =
   | { status: "held"; reason: PublicationHoldReason }
   | { status: "confirmed" };
 
-/** A pass's hold on one page: the Warsaw day of the slot it went up under,
- * and the `claimedAt` this pass wrote, which tells it whether the page is
- * still its own when it comes to give the slot back. */
-type Claim = { day: string; claimedAt: Timestamp };
+/** A pass's hold on one page: the Warsaw day of the slot it went up under -
+ * null for a press, which takes none - and the `claimedAt` this pass wrote,
+ * which tells it whether the page is still its own when it comes to give the
+ * slot back. */
+type Claim = { day: string | null; claimedAt: Timestamp };
 
 type StoredRevision = Revision & { id: string };
 
@@ -542,16 +539,34 @@ function sameOutcomes(
  * page went up under the limit of its day, and leaving it without the
  * relations it went up for is the one state nobody chose.
  *
+ * `pressedBy` makes the pass an admin's press of „Opublikuj z kolejki” on
+ * /admin/oswiadczenia, with the admin's uid (Szymon, 2026-10-30: "it's an
+ * admin decision"). A press takes up the queue past the limit, at 0 too, and
+ * in no slot of the day: the slots are the automation's, which „Dziś” on the
+ * overview counts, so a page held on the way has none to give back. Its claim
+ * names the admin, and a page it puts up is not one the site published on its
+ * own (`autoPublished`). The night window and a running import stop it as
+ * they stop every pass, since the import's stale write would take the page
+ * down again, and `publishPage` holds a page for it as for the automation.
+ * A stuck page is finished on the terms it was claimed on, whichever pass
+ * takes it up again: the automation's under its slot, a press's without one.
+ * A press ends by counting the pages still waiting (`waiting`), for the admin
+ * to press again.
+ *
  * `maxPages` bounds the pages one call takes up; the reader whose answer
- * settled a crop is waiting for their next one.
+ * settled a crop is waiting for their next one, and the admin who pressed for
+ * the page to answer (`PRESS_BATCH`).
  */
 export async function drainPublications(
   db: Firestore,
   now: Date,
   limit: number,
-  options: { maxPages?: number } = {},
+  options: { maxPages?: number; pressedBy?: string } = {},
 ): Promise<DrainResult> {
-  const on = limit > 0;
+  const pressedBy = options.pressedBy || null;
+  // Whether the pass takes up new pages: the automation while it has a
+  // limit, a press always.
+  const on = limit > 0 || pressedBy !== null;
   const result: DrainResult = {
     day: warsawDate(now),
     limit,
@@ -561,8 +576,13 @@ export async function drainPublications(
     confirmed: [],
     failed: [],
     capReached: false,
+    waiting: null,
   };
-  if (inPeopleImportWindow(now)) return { ...result, skipped: "night" };
+  const withWaiting = async (pass: DrainResult): Promise<DrainResult> =>
+    pressedBy ? { ...pass, waiting: await stillWaiting(db) } : pass;
+  if (inPeopleImportWindow(now)) {
+    return withWaiting({ ...result, skipped: "night" });
+  }
 
   const maxPages = options.maxPages ?? DRAIN_BATCH;
   const publications = db.collection(PUBLICATIONS);
@@ -585,18 +605,21 @@ export async function drainPublications(
       : null,
   ]);
   const stuckIds = stuckSnapshot.docs.map((doc) => doc.id);
-  // The interrupted ones first: they hold a slot already.
+  // The interrupted ones first: they were claimed already, under a slot of
+  // their day or at a press.
   const ids = [
     ...(on ? stuckIds : await publicPages(db, stuckIds)),
     ...(queuedSnapshot?.docs.map((doc) => doc.id) ?? []),
   ];
-  if (ids.length === 0) return result;
-  if (await peopleImportBusy(now)) return { ...result, skipped: "import" };
+  if (ids.length === 0) return withWaiting(result);
+  if (await peopleImportBusy(now)) {
+    return withWaiting({ ...result, skipped: "import" });
+  }
 
   let taken = 0;
   for (const id of ids) {
     if (taken >= maxPages) break;
-    const claim = await claimPublication(db, id, now, limit);
+    const claim = await claimPublication(db, id, now, limit, pressedBy);
     if (claim === "cap") {
       result.capReached = true;
       break;
@@ -620,17 +643,34 @@ export async function drainPublications(
       result.failed.push(id);
     }
   }
-  return result;
+  return withWaiting(result);
+}
+
+/** The pages waiting in the queue, as the overview counts them: queued, or
+ * taken up and not finished yet - by a pass under way, or by one cut short,
+ * which the next takes up again. */
+async function stillWaiting(db: Firestore): Promise<number> {
+  const publications = db.collection(PUBLICATIONS);
+  const counts = await Promise.all(
+    (["queued", "publishing"] as const).map(
+      async (status) =>
+        (await publications.where("status", "==", status).count().get()).data()
+          .count,
+    ),
+  );
+  return counts.reduce((sum, count) => sum + count, 0);
 }
 
 /** Claims a page for this pass: a queued one takes a slot of the day if one
- * is left ("cap" if not), a stuck one is taken up again under its own. Null
+ * is left ("cap" if not), or at an admin's press none, in the admin's name; a
+ * stuck one is taken up again on its own terms, its slot or its press. Null
  * when another pass got there first. */
 async function claimPublication(
   db: Firestore,
   pageId: string,
   now: Date,
   limit: number,
+  pressedBy: string | null,
 ): Promise<Claim | "cap" | null> {
   const ref = db.collection(PUBLICATIONS).doc(pageId);
   return db.runTransaction(async (tx) => {
@@ -641,25 +681,48 @@ async function claimPublication(
       if (millisOf(publication.claimedAt) > now.getTime() - STUCK_PUBLISHING_MS)
         return null;
       tx.update(ref, { claimedAt: at, updatedAt: at });
-      return { day: publication.day ?? warsawDate(now), claimedAt: at };
+      return {
+        day: publication.pressedBy
+          ? null
+          : (publication.day ?? warsawDate(now)),
+        claimedAt: at,
+      };
     }
     if (publication?.status !== "queued") return null;
 
+    // A page can come back to the queue with an earlier claim's terms still
+    // on its record, so each claim clears the other kind's.
+    if (pressedBy) {
+      tx.update(ref, {
+        status: "publishing",
+        claimedAt: at,
+        pressedBy,
+        day: FieldValue.delete(),
+        updatedAt: at,
+      });
+      return { day: null, claimedAt: at };
+    }
     const day = warsawDate(now);
     const limitRef = db.collection(PUBLISH_LIMITS).doc(day);
     const count = Number((await tx.get(limitRef)).get("count") ?? 0);
     if (count >= limit) return "cap";
     tx.set(limitRef, { day, count: count + 1, updatedAt: at }, { merge: true });
-    tx.update(ref, { status: "publishing", claimedAt: at, day, updatedAt: at });
+    tx.update(ref, {
+      status: "publishing",
+      claimedAt: at,
+      day,
+      pressedBy: FieldValue.delete(),
+      updatedAt: at,
+    });
     return { day, claimedAt: at };
   });
 }
 
-/** Gives a page's slot back and records why it did not go up, together - but
- * only while the page is still this pass's: `publishing`, under the claim it
- * wrote. A pass slower than `STUCK_PUBLISHING_MS` has been overtaken by the
- * one that took the page up again, and what that one recorded, and the slot
- * it holds, are not this one's to change. */
+/** Gives a page's slot back, where it took one, and records why it did not go
+ * up, together - but only while the page is still this pass's: `publishing`,
+ * under the claim it wrote. A pass slower than `STUCK_PUBLISHING_MS` has been
+ * overtaken by the one that took the page up again, and what that one
+ * recorded, and the slot it holds, are not this one's to change. */
 async function releaseClaim(
   db: Firestore,
   pageId: string,
@@ -668,10 +731,13 @@ async function releaseClaim(
   now: Date,
 ): Promise<void> {
   const ref = db.collection(PUBLICATIONS).doc(pageId);
-  const limitRef = db.collection(PUBLISH_LIMITS).doc(claim.day);
+  // A press took no slot, so it has none to give back.
+  const limitRef = claim.day
+    ? db.collection(PUBLISH_LIMITS).doc(claim.day)
+    : null;
   await db.runTransaction(async (tx) => {
     const publicationSnapshot = await tx.get(ref);
-    const limitSnapshot = await tx.get(limitRef);
+    const limitSnapshot = limitRef ? await tx.get(limitRef) : null;
     const publication = publicationSnapshot.data() as
       StoredPublication | undefined;
     if (
@@ -680,13 +746,15 @@ async function releaseClaim(
     ) {
       return;
     }
-    const count = Number(limitSnapshot.get("count") ?? 0);
     const at = Timestamp.fromDate(now);
-    tx.set(
-      limitRef,
-      { day: claim.day, count: Math.max(0, count - 1), updatedAt: at },
-      { merge: true },
-    );
+    if (limitRef && limitSnapshot) {
+      const count = Number(limitSnapshot.get("count") ?? 0);
+      tx.set(
+        limitRef,
+        { day: claim.day, count: Math.max(0, count - 1), updatedAt: at },
+        { merge: true },
+      );
+    }
     tx.update(
       ref,
       outcome.status === "held"
@@ -765,10 +833,17 @@ async function publicPages(
  * A page found public already was published by somebody else while it waited
  * (`confirmed`), unless the last publication on record is this automation's:
  * then a pass was cut short after the page went up, and this one finishes the
- * relations. Such a page is never held - it went up under its day's slot, and
- * a hold would give the slot back for a page that is live. What came in
- * between holds the relations it is about instead: a candidacy reviewed or
- * standing in two places, every relation of a page marked as two people.
+ * relations. Such a page is never held - it went up under its day's slot, or
+ * at an admin's press, and a hold would give the slot back for a page that is
+ * live. What came in between holds the relations it is about instead: a
+ * candidacy reviewed or standing in two places, every relation of a page
+ * marked as two people.
+ *
+ * The record says whether the site published the page on its own
+ * (`autoPublished`): not where the claim it went up under is an admin's press
+ * (`pressedBy`), whose name the record keeps. The audit row and the approvals
+ * are still this automation's: it is what read and checked the page, and what
+ * the next pass recognises as its own work to finish or put back.
  */
 export async function publishPage(
   db: Firestore,
@@ -977,8 +1052,12 @@ export async function publishPage(
       status: "published",
       reason: null,
       publishedAt: at,
-      day: publication?.day ?? warsawDate(now),
-      autoPublished: true,
+      // The day of the slot it went up under. A page an admin pressed for
+      // took none, and was not published by the site on its own.
+      ...(publication?.pressedBy
+        ? {}
+        : { day: publication?.day ?? warsawDate(now) }),
+      autoPublished: !publication?.pressedBy,
       // A pass that finishes another's does not know what that one approved.
       ...(resumed ? {} : { approvedRevision }),
       edges: edgesRecord,
@@ -1439,8 +1518,10 @@ async function publishRelations(
  * page is this automation's publish. A person who hid it is on record, and
  * their page stays down. A removed or merged page is the merge's to tidy.
  *
- * Whatever the daily limit: the page went up under the limit of its day, and
- * a page put back is not another one. The check is `publishPage` itself, run
+ * Whatever the daily limit: the page went up under the limit of its day, or
+ * at an admin's press, and a page put back is not another one. A page an
+ * admin pressed for is put back as one: its record keeps the admin's name,
+ * and the site does not call it its own. The check is `publishPage` itself, run
  * again in full, so a page that no longer passes it is not put back; it is
  * held, and every relation still live on it is taken down
  * (`cascadeUnpublishEdges`), since none may outlive its end.

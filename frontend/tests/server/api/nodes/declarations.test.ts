@@ -81,6 +81,21 @@ describe("api/nodes/[id]/declarations", () => {
     });
   });
 
+  it("never calls a page an admin pressed for one the site published itself", async () => {
+    // As a press of „Opublikuj z kolejki” leaves the record (`publishPage`).
+    publications.kowalska = {
+      status: "published",
+      autoPublished: false,
+      pressedBy: "admin-uid",
+      publishedAt: { toDate: () => new Date("2026-10-30T12:00:00Z") },
+      declarations: [DECLARATION],
+    };
+    expect(await call("kowalska")).toEqual({
+      autoPublished: null,
+      declarations: [DECLARATION],
+    });
+  });
+
   it("answers 404, never an empty answer, for a draft or a page with nothing", async () => {
     publications.kowalska = { status: "queued", declarations: [DECLARATION] };
     await expect(call("kowalska")).rejects.toMatchObject({ statusCode: 404 });
