@@ -801,8 +801,9 @@ describe("/aktywnosc", () => {
       serve({ 7: withReleases() });
       const wrapper = await mountPage();
 
+      // Today's second line is the reader's own, hidden until they ask.
       expect(days(wrapper)).toEqual([
-        { label: "Dzisiaj", lines: 2, changes: [] },
+        { label: "Dzisiaj", lines: 1, changes: [] },
         {
           label: "Wczoraj",
           lines: 1,
