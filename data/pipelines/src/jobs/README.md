@@ -13,6 +13,20 @@
 1. `found`: writes the candidacies it found a declaration for to the shared
    cache, where the night's declaration groups read them (`stores.bip_found`).
 
+## bip_declarations
+1. `cut`: reads the files the crawler's people mode downloaded (`bip_poi_docs`, its bundles under the crawler's
+   `--out`) and cuts the date's line and the name's line out of each declaration, the files of people on the site
+   first. A PDF drawn from text gives its typed date; RapidOCR reads the rest, and what it cannot read clearly is a
+   crop for a person to read. A council's file gives a crop per declaration in it
+1. Keeps the crops and readings in its own tables beside the crawler's (`bip_decl_cuts`, `bip_decl_crops`): a file
+   once cut is not read again until `CUT_VERSION` changes, so a run stopped anywhere loses only the files in hand
+1. `upload`: sends `/api/ingest/declarations` every candidacy with a page on the site and the crops of their files,
+   only what is new or changed since the last upload (`bip_decl_sent`), then calls `/api/declarations/sweep`.
+   A typed date inside every PKW window of the person's candidacies settles without readers; the rest go to
+   /oswiadczenia. `--dry-run` says what would go and sends nothing
+1. Not part of the nightly yet: run it by hand on predator, beside the crawler. It signs in as the people import does
+   (`KORYTA_PIPELINE_UID=pipeline-declarations`)
+
 ## krs_scrape_bulletin
 1. Reads KRS bulletin for updates on dates we haven't scraped yet
 
