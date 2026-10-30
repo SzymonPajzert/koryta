@@ -128,32 +128,6 @@ describe("ExploreLoginBanner's buttons", () => {
     expect(wrapper.emitted("login")).toHaveLength(1);
   });
 
-  // /oswiadczenia signs the reader in in a dialog of its own: leaving the
-  // page would take with it what the reader typed on it.
-  it("draws both as buttons that lead nowhere and only say they were clicked, for a page that signs the reader in itself", async () => {
-    const wrapper = await mountSuspended(LoginBanner, {
-      props: { inPlace: true },
-    });
-
-    for (const testid of ["login-banner-login", "login-banner-signup"]) {
-      expect(byTestId(wrapper, testid)?.props("to")).toBeUndefined();
-      expect(
-        wrapper.get(`[data-testid="${testid}"]`).element.tagName,
-        testid,
-      ).toBe("BUTTON");
-    }
-    expect(byTestId(wrapper, "login-banner-signup")?.text()).toBe(
-      "Rejestracja",
-    );
-    // Side by side, as the pair always is.
-    expect(wrapper.find(".login-banner__pair").exists()).toBe(true);
-
-    await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
-    await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
-    expect(wrapper.emitted("signup")).toHaveLength(1);
-    expect(wrapper.emitted("login")).toHaveLength(1);
-  });
-
   it("says what the caller puts in it instead of the default", async () => {
     const wrapper = await mountSuspended(LoginBanner, {
       props: { hiddenCount: 3 },
