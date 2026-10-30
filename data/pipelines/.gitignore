@@ -9,6 +9,8 @@
 !src/**/article_url_regexes.json
 # A test's expectations, kept as a table to check and edit by hand.
 !src/tests/pipelines/expected_public_companies.csv
+# Checked BIP addresses for units both lists get wrong (jobs/bip_crawler/people.py).
+!src/jobs/bip_crawler/unit_starts.csv
 
 .coverage
 
