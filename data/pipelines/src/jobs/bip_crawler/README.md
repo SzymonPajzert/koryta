@@ -107,9 +107,18 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   with a `url` (and a `category`), such as the blind crawl's
   `BipUrlsClassified`. Their pages go first; their files count when the address
   names a seeker.
-- Pages a script draws (next to no links and a `<script>`: Madkom's BIPs,
-  bip.malopolska.pl) are rendered in headless Chromium, `--render-workers` (2)
-  at once, pictures and styles skipped, one turn of the host's rate a render
+- Madkom's BIPs (bip.malopolska.pl's offices, and single-office hosts on its
+  React app: bip.gminaolawa.pl, *.nv.pl) are read through the JSON API their
+  pages are drawn from (`madkom.py`): the office's menu, a section's articles,
+  an article and its files, one or two calls a page and drawn as an HTML page
+  the walk reads as any other. A host counts as Madkom's when its first page is
+  the app's shell and the API answers for its office. Articles and files that
+  robots.txt hides by the app's own addresses (`<office>,a,<id>,artykul.html`,
+  `e,pobierz,get.html?id=<id>`) are left out, and an API robots.txt closes is
+  not read around by rendering.
+- Other pages a script draws (next to no links and a `<script>`) are rendered
+  in headless Chromium, `--render-workers` (2) at once, pictures and styles
+  skipped, one turn of the host's rate for every request a render makes there
   (`render.py`). Needs the `render` dependency group and its browser
   (`.venv/bin/playwright install chromium`); without it, or with `--no-render`,
   they are read as their HTML.
