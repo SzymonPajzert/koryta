@@ -19,6 +19,8 @@ import datetime
 
 import pytest
 
+from scrapers.koryta.snapshot import reference_id
+
 #: Reads the production export rather than a fixture, so it is deselected by
 #: default. Run with ``.venv/bin/pytest -m e2e src/tests/pipelines``.
 pytestmark = pytest.mark.e2e
@@ -77,6 +79,23 @@ def revisions(snapshot):
     return snapshot.collection("revisions")
 
 
+@pytest.fixture(scope="session")
+def restorations(snapshot) -> set[str]:
+    """The revisions that put a removed document back, by the `restore` rows
+    of the audit log that name them.
+
+    Nothing in such a revision says so: it states the document as it stood
+    and leaves out only the removal (`scripts/migrate/restore-removed-edges.ts`),
+    so its data reads like anybody's. The row filed with it is the record.
+    """
+    restored = set()
+    for entry in snapshot.collection("audit"):
+        revision_id = reference_id(entry.get("revision_id"))
+        if entry.get("action") == "restore" and revision_id:
+            restored.add(revision_id)
+    return restored
+
+
 def node_data(revision: dict) -> dict | None:
     """The nested node fields of a revision, or None if absent.
 
@@ -109,7 +128,9 @@ def test_revisions_have_type(revisions, within_budget):
     REQUIRED_FIELDS,
     ids=[f"{t}.{f}" for t, f, _ in REQUIRED_FIELDS],
 )
-def test_required_field_present(revisions, node_type, field, budget, within_budget):
+def test_required_field_present(
+    revisions, restorations, node_type, field, budget, within_budget
+):
     """Every revision of ``node_type`` must have ``field`` present, counting
     from ``CHECKED_SINCE`` where the field has a day there."""
     since = CHECKED_SINCE.get((node_type, field), "")
@@ -129,6 +150,15 @@ def test_required_field_present(revisions, node_type, field, budget, within_budg
         # Three of each on 2026-10-09 - duplicates removed as „duplikat” in
         # September and October, and two merged away by merge-duplicate-people.
         if data.get("deleted") is True:
+            continue
+        # A restore restates the document it puts back in the same way, and is
+        # left out for the same reason. Counted, putting back
+        # 2H6Sc6wUPHpwcRBszumz, Ryszard Grobelny's 2006 run in Poznań that never
+        # said which office it was, reads as a new election revision without
+        # one from the night after the run on: 1 against the known 0 on the
+        # 2026-10-30 export with the 21 restores of
+        # restore-candidacies-removed-as-duplikat played onto it.
+        if revision["id"] in restorations:
             continue
         total += 1
         if field not in data:
