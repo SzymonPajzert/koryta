@@ -94,6 +94,15 @@ itself from the PKD codes on the node. That could not survive the mapping
 moving to Python: keeping it would have meant a second copy of the answer in
 TypeScript, which is the thing the move was for.
 
+`restore-removed-edges.ts` is a tool of another kind: it puts back relations
+that were removed, by id, because nothing else undoes a removal. It takes the
+ids as arguments or `--ids-file`, and `--reason` for the `restore` row it files
+in the audit log beside each approved revision. It finds no work of its own -
+the ids are the whole question - so a dry run without them has nothing to say,
+and it stays here once a list has been put back rather than going to
+`archive/`. The same ids run again are refused as not removed, which is its
+"nothing left to change".
+
 Everything above still applies to these: the dry run reports, a clean run
 writes nothing, and it takes `--prod --commit` to touch production.
 
