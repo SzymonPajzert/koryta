@@ -11,6 +11,7 @@ import {
   answerVerdicts,
   EXTRACT_ID_PATTERN,
   parseTypedDate,
+  READ_NAME_MAX_LENGTH,
   type DeclarationAnswerResult,
 } from "~~/shared/declarations";
 
@@ -18,7 +19,7 @@ const answerSchema = z
   .object({
     verdict: z.enum(answerVerdicts),
     value: z.string().max(20).nullable().optional(),
-    name: z.string().max(200).nullable().optional(),
+    name: z.string().max(READ_NAME_MAX_LENGTH).nullable().optional(),
     /** Crops the page already holds, so the queue sent back skips them. */
     holding: z.array(z.string().regex(EXTRACT_ID_PATTERN)).max(10).optional(),
   })

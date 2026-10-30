@@ -572,6 +572,13 @@ export type ClaimedAnswers = {
  * before its confirmation mail can even be opened (LoginForm.vue), so every
  * reader who signs up that way would claim too early.
  *
+ * The 403 is for a browser with readings to wait for, as its words promise
+ * („odczyty z tej przeglądarki przejdą na Twoje konto”). A browser that only
+ * looked has a reader id all the same, made with its first ask for crops, and
+ * a skip is no reading, as the reader's own count has it (`counted`): for such
+ * an id the claim answers 0 and moves nothing, and the page forgets the id.
+ * One read to tell, for an account without a vote only.
+ *
  * Holding the reader id is the only proof that the answers are this
  * person's, and that is enough. The id is 122 random bits, kept in the one
  * browser that made it and sent only to this site (never to Sentry: see
@@ -602,16 +609,23 @@ export async function claimAnswers(
   db: Firestore,
   args: { readerId: string; user: DecodedIdToken; now?: Date },
 ): Promise<ClaimedAnswers> {
+  const now = args.now ?? new Date();
+  const from = anonymousUid(args.readerId);
+  const to = args.user.uid;
   if (!isCountedReader(args.user)) {
+    const readings = await db
+      .collection(ANSWERS)
+      .where("uid", "==", from)
+      .where("counted", "==", true)
+      .limit(1)
+      .get();
+    if (readings.empty) return { claimed: 0, settled: [] };
     throw createError({
       statusCode: 403,
       message:
         "Potwierdź adres e-mail (link przyszedł po rejestracji), a odczyty z tej przeglądarki przejdą na Twoje konto.",
     });
   }
-  const now = args.now ?? new Date();
-  const from = anonymousUid(args.readerId);
-  const to = args.user.uid;
   const theirs = await db
     .collection(ANSWERS)
     .where("uid", "==", from)

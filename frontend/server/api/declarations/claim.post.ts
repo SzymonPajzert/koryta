@@ -27,7 +27,9 @@ const CROPS_COMPARED_PER_CLAIM = 10;
  *
  * A token is required: the answers go to its account. An account whose
  * address nobody confirmed gets a 403 (`claimAnswers`), and the page keeps
- * the id for a later visit: moved now, the answers would never vote.
+ * the id for a later visit: moved now, the answers would never vote. Only
+ * where the browser has readings to move, though: for one that only looked,
+ * this answers 0 and the page forgets the id.
  *
  * The reader id is the only proof the answers are this reader's, so it never
  * goes to Sentry: not in this body (`PRIVATE_BODIES` in

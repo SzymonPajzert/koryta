@@ -275,6 +275,12 @@ export function pngSize(bytes: Uint8Array): { width: number; height: number } {
 export const answerVerdicts = ["date", "unreadable", "empty", "skip"] as const;
 export type AnswerVerdict = (typeof answerVerdicts)[number];
 
+/** The longest name a reader can send with an answer, as they read it off
+ * the paper: what the answer endpoint takes, and so what the field on
+ * /oswiadczenia holds. A longer one would be turned down whole, the date
+ * typed beside it with it. */
+export const READ_NAME_MAX_LENGTH = 200;
+
 /** Where a crop is in its reading. */
 export const extractStatuses = [
   "open",

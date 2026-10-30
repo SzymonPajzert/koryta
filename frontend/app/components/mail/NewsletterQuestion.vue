@@ -76,7 +76,9 @@
         potwierdzający.
       </template>
       Z każdego maila wypiszesz się jednym kliknięciem. Więcej w
-      <NuxtLink to="/plik/polityka_prywatnosci">polityce prywatności</NuxtLink>.
+      <NuxtLink to="/plik/polityka_prywatnosci" target="_blank" rel="noopener"
+        >polityce prywatności</NuxtLink
+      >.
     </p>
   </section>
 </template>

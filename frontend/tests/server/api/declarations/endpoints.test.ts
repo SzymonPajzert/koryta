@@ -7,6 +7,7 @@ import claim from "../../../../server/api/declarations/claim.post";
 import next from "../../../../server/api/declarations/next.get";
 import sweep from "../../../../server/api/declarations/sweep.post";
 import publishQueued from "../../../../server/api/declarations/publish-queued.post";
+import { READ_NAME_MAX_LENGTH } from "../../../../shared/declarations";
 
 /** What the endpoints hand to server/utils/declarationPublish.ts and
  * server/utils/declarations.ts, which are tested on their own: the reader
@@ -45,6 +46,9 @@ const mocks = vi.hoisted(() => {
     queueFor: vi.fn(),
     admitToQueue: vi.fn(),
     claimAnswers: vi.fn(),
+    /** What `getFirestore` hands the endpoints: nothing to read, unless a
+     * test runs the real claim against something. */
+    db: {} as unknown,
     matchAndDrain: vi.fn(),
     sweepDeclarations: vi.fn(),
     drainPublications: vi.fn(),
@@ -64,7 +68,7 @@ function configure(limit: unknown) {
   else config.declarationsDailyPublishLimit = limit;
 }
 
-vi.mock("firebase-admin/firestore", () => ({ getFirestore: () => ({}) }));
+vi.mock("firebase-admin/firestore", () => ({ getFirestore: () => mocks.db }));
 vi.mock("firebase-admin/app", () => ({ getApp: () => ({}) }));
 vi.mock("../../../../server/utils/auth", async (original) => ({
   ...(await original<typeof import("../../../../server/utils/auth")>()),
@@ -106,6 +110,7 @@ const UNCONFIRMED = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.db = {};
   configure(4);
   mocks.request.headers = { authorization: "Bearer token" };
   mocks.request.query = { count: "3" };
@@ -207,6 +212,24 @@ describe("api/declarations/[id]/answer", () => {
       statusCode: 401,
     });
     expect(mocks.recordAnswer).not.toHaveBeenCalled();
+  });
+
+  // The page's name field holds as much and no more (TaskCard.vue): a longer
+  // name would have the whole answer turned down, the date with it.
+  it("keeps a name as long as the reading page's field holds, and turns a longer one down", async () => {
+    settles(null);
+    const name = "Ż".repeat(READ_NAME_MAX_LENGTH);
+    mocks.body = { verdict: "unreadable", name };
+
+    await answer({} as never);
+
+    expect(mocks.recordAnswer.mock.calls[0]![1]).toMatchObject({
+      answer: { verdict: "unreadable", name },
+    });
+
+    mocks.body = { verdict: "unreadable", name: `${name}Ż` };
+    await expect(answer({} as never)).rejects.toThrow();
+    expect(mocks.recordAnswer).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -338,18 +361,49 @@ describe("api/declarations/claim", () => {
     expect(mocks.matchAndDrain.mock.calls[0]![1]).toHaveLength(10);
   });
 
-  it("refuses an account without a confirmed address before anything moves, so the page keeps the id", async () => {
-    // The real claim, which refuses before it reads a thing: the database
-    // here has nothing to read.
+  /** A database that answers every query with `docs` and has nothing else:
+   * all the real claim reads for an account without a vote, which looks for
+   * a reading under the browser's id before it says anything. */
+  type Lookup = {
+    where: () => Lookup;
+    limit: () => Lookup;
+    get: () => Promise<{ empty: boolean; docs: unknown[] }>;
+  };
+  function answering(docs: unknown[]) {
+    const lookup: Lookup = {
+      where: () => lookup,
+      limit: () => lookup,
+      get: async () => ({ empty: docs.length === 0, docs }),
+    };
+    return { collection: () => lookup };
+  }
+
+  async function realClaim() {
     const { claimAnswers } = await vi.importActual<
       typeof import("../../../../server/utils/declarations")
     >("../../../../server/utils/declarations");
     mocks.claimAnswers.mockImplementation(claimAnswers);
+  }
+
+  it("refuses an account without a confirmed address before anything moves, so the page keeps the id", async () => {
+    // The real claim, on a browser with a reading to move: it reads that
+    // much and no more, and moving anything would fail on this database.
+    await realClaim();
     mocks.getUser.mockResolvedValue(UNCONFIRMED);
+    mocks.db = answering([{ id: "a-reading" }]);
 
     await expect(claim({} as never)).rejects.toMatchObject({
       statusCode: 403,
     });
+    expect(mocks.matchAndDrain).not.toHaveBeenCalled();
+  });
+
+  it("answers 0 to an account without a confirmed address for a browser that only looked, so the page forgets the id", async () => {
+    await realClaim();
+    mocks.getUser.mockResolvedValue(UNCONFIRMED);
+    mocks.db = answering([]);
+
+    expect(await claim({} as never)).toEqual({ claimed: 0, settled: 0 });
     expect(mocks.matchAndDrain).not.toHaveBeenCalled();
   });
 

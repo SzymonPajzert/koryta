@@ -819,6 +819,32 @@ describe("claimAnswers", () => {
     });
   });
 
+  // The page makes the id with its first ask for crops, answered or not, and
+  // the 403 tells the reader their readings will move: of a browser that only
+  // looked, that would be untrue.
+  it("answers 0 to an account without a confirmed address for a browser with no reading to move, and moves nothing", async () => {
+    crop("c1");
+    // Another browser's reading is not this one's to wait for.
+    await answerAs(stranger(3), "1979-07-15");
+    const before = new Map(stored);
+
+    expect(await claim(1, account("u", { email_verified: false }))).toEqual({
+      claimed: 0,
+      settled: [],
+    });
+    expect(stored).toEqual(before);
+
+    // A skip is no reading, as the reader's own count has it.
+    await skipAs(stranger(2), "c1");
+    const skipped = new Map(stored);
+
+    expect(await claim(2, account("u", { email_verified: false }))).toEqual({
+      claimed: 0,
+      settled: [],
+    });
+    expect(stored).toEqual(skipped);
+  });
+
   it("votes within the account's daily limit, on the day each answer was given, and moves the rest without a vote", async () => {
     crop("c1");
     crop("c2");
