@@ -16,6 +16,7 @@ from scrapers.krs.list import (
     BECAME_PUBLIC,
     CompaniesKRS,
     held_to_the_end,
+    outlived,
     past_ownership,
     struck_off_after,
     struck_off_on_file,
@@ -396,6 +397,43 @@ def test_an_owner_the_last_entry_replaced_with_another_had_passed_it_on():
 
     assert public_of(pipeline) == set()
     assert pipeline.companies[pkl].parents == []
+
+
+def test_an_owner_another_one_outlived_had_passed_it_on():
+    # ZAKŁAD NAPRAW INFRASTRUKTURY RADOM: PKP S.A. held a stake beside the
+    # Treasury from entry 16. Entry 20, its last before the strike-off, struck
+    # the Treasury out and entered nobody; PKP S.A. stayed until entry 21.
+    zni = "0000039491"
+    pipeline = run(
+        struck_off(zni, "2006-12-01"),
+        owner_seat(
+            zni, "SKARB PAŃSTWA", "20", "2006-12-01", role="wspolnik", added_by="7"
+        ),
+        owner_seat(
+            zni,
+            "POLSKIE KOLEJE PAŃSTWOWE SPÓŁKA AKCYJNA",
+            "21",
+            "2007-04-30",
+            role="wspolnik",
+            added_by="16",
+        ),
+    )
+
+    assert public_of(pipeline) == set()
+    assert pipeline.companies[zni].parents == []
+
+
+def test_outlived_asks_for_another_owner_struck_out_later_or_still_listed():
+    treasury, pkp = "SKARB PAŃSTWA", "PKP S.A."
+    assert outlived(treasury, "20", [(treasury, "20"), (pkp, "21")])
+    assert outlived(treasury, "20", [(treasury, "20"), (pkp, "")])
+    # Entry numbers, not text: "10" comes after "9".
+    assert outlived(treasury, "9", [(treasury, "9"), (pkp, "10")])
+    # Struck out together, as a merger or the strike-off strikes them out
+    assert not outlived(treasury, "102", [(treasury, "102"), (pkp, "102")])
+    # PORT LOTNICZY "RADOM": the city entered again is the city itself
+    radom = "GMINA MIASTA RADOMIA"
+    assert not outlived(radom, "47", [(radom, "41"), (radom, "47"), (radom, "67")])
 
 
 def test_an_owner_entered_again_under_another_name_still_holds_it():

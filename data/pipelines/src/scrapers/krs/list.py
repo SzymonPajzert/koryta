@@ -506,6 +506,26 @@ def held_to_the_end(
     return bool(stated_on) and stated_on >= last
 
 
+def struck_out_by(entry_removed: str) -> float:
+    """The number of the entry that struck an owner out, for comparing two.
+
+    Infinity for an owner still listed, and for one struck out by an entry
+    that does not read as a number, which is then taken to have stayed.
+    """
+    return float(entry_removed) if entry_removed.isdigit() else float("inf")
+
+
+def outlived(name: str, entry_removed: str, owners: list[tuple[str, str]]) -> bool:
+    """Whether another of a company's owners stayed listed after this one went.
+
+    `owners` is every owner seat the odpis lists for the company, as `(name,
+    entry_removed)`. A seat of the same name is the owner itself, entered
+    again, and does not count.
+    """
+    gone = struck_out_by(entry_removed)
+    return any(other != name and struck_out_by(entry) > gone for other, entry in owners)
+
+
 #: How an odpis describes the entry that strikes a company off KRS altogether.
 #: Not "WYKREŚLENIE Z REJESTRU PRZEDSIĘBIORCÓW": that one moves it to the
 #: register of associations, where it lives on.
@@ -842,13 +862,19 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         edge, and `public_body` names the rest. An owner with a KRS number is
         left to the feeds, as the seats do not carry the number.
 
-        An owner struck out by an entry that entered somebody else had passed
-        its stake on, though by the day it passes the test. POLSKIE KOLEJE
-        LINOWE (0000079964) is one: entry 27 of 2008-08-19, its last before the
-        strike-off, struck out the Treasury and entered PKP S.A., which held it
-        until entry 28 struck the company off. On the seats of 2026-10-10, 18 of
-        the 823 owners at struck-off companies that pass the test by the day
-        were replaced like that.
+        An owner struck out while another of the company's owners stayed listed
+        had passed its stake on, though by the day it passes the test
+        (`outlived`). POLSKIE KOLEJE LINOWE (0000079964) is one: entry 27 of
+        2008-08-19, its last before the strike-off, struck out the Treasury
+        and entered PKP S.A., which held it until entry 28 struck the company
+        off. So is ZAKŁAD NAPRAW INFRASTRUKTURY RADOM (0000039491), where the
+        one that stayed was there before: PKP S.A. held a stake beside the
+        Treasury from entry 16, entry 20 of 2006-12-01 struck the Treasury out
+        and entered nobody, and PKP S.A. stayed until entry 21, the strike-off.
+        In the odpisy on file on 2026-10-30 that end in a strike-off, 8 owners
+        that read as public went by the entry before it, and another owner
+        outlived every one of them: 5 a newcomer took over from, and 3 the
+        Treasury left to PKP S.A., which was there already.
 
         Returns how many companies it found a public owner for.
         """
@@ -856,14 +882,14 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         owners = seats.loc[seats["role"].isin(OWNER_ROLES)]
         krss = padded_krs(owners["krs"])
         names = owners["surname"].map(_cell)
-        entered: dict[tuple[str, str], set[str]] = collections.defaultdict(set)
-        for krs, name, entry in zip(krss, names, owners["entry_added"].map(_cell)):
-            if entry:
-                entered[krs, entry].add(name)
+        removed_by = owners["entry_removed"].map(_cell)
+        seats_of: dict[str, list[tuple[str, str]]] = collections.defaultdict(list)
+        for krs, name, entry in zip(krss, names, removed_by):
+            seats_of[krs].append((name, entry))
         for krs, name, entry_removed, removed, stated_on in zip(
             krss,
             names,
-            owners["entry_removed"].map(_cell),
+            removed_by,
             iso_dates(owners["date_removed"]),
             iso_dates(owners["stated_on"]),
         ):
@@ -873,7 +899,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 continue
             if not held_to_the_end(entry_removed, removed, stated_on, last):
                 continue
-            if entry_removed and entered.get((krs, entry_removed), set()) - {name}:
+            if entry_removed and outlived(name, entry_removed, seats_of[krs]):
                 continue
             if self.mark_public_owner(company, name):
                 found.add(krs)
