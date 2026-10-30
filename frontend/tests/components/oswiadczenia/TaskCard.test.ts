@@ -54,7 +54,7 @@ const SAVE = '[data-testid="declaration-submit"]';
  * while readers are not asked for names (READ_NAMES); TaskCard.names.test.ts
  * keeps them working for the day they are. */
 describe("OswiadczeniaTaskCard", () => {
-  it("lays out the date line alone, and says whose only by unit and office", async () => {
+  it("lays out the date line alone, with no word of whose it is", async () => {
     const wrapper = await mount();
 
     expect(
@@ -65,9 +65,9 @@ describe("OswiadczeniaTaskCard", () => {
       false,
     );
     expect(wrapper.find(NAME).exists()).toBe(false);
-    expect(wrapper.text()).toContain(
-      "Rada gminy · Testowice (gmina miejsko-wiejska) · oświadczenie za 2019",
-    );
+    // Nor the office, the unit or the year (Szymon, round bip-czytanie-r3).
+    expect(wrapper.text()).not.toContain("Testowice");
+    expect(wrapper.text()).not.toContain("2019");
     // A label and the field's own „dd.mm.rrrr”, and no examples under it.
     expect(wrapper.get("label").text()).toBe("Data urodzenia");
     expect(wrapper.get(DATE).attributes("placeholder")).toBe("dd.mm.rrrr");

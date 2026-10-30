@@ -47,6 +47,48 @@
           widzisz.
         </p>
 
+        <!-- Once the reader has read something, never before (Szymon,
+             2026-10-30: "it shows up after they've done some work"): what they
+             read, and for a reader without an account the way to keep it.
+             It takes the place of the counts that stood under the card, and
+             of the banner under the work, so one invitation to sign in shows
+             at a time. -->
+        <!-- Round 5 (Szymon, 2026-10-30: a vertical split, „Sprawdzono 5” and
+             „Znaleziono 2” in two lines on the left, „Zaloguj się, by zapisać
+             znalezione daty” above the button on the right, in colour and not
+             the call to action's blue). -->
+        <section
+          v-if="readSoFar > 0"
+          class="ow-tally"
+          :class="{ 'ow-tally--alone': user }"
+          data-testid="declaration-tally"
+        >
+          <dl class="ow-tally__figures">
+            <div class="ow-tally__row" data-tally-row>
+              <dt>Sprawdzono</dt>
+              <dd>{{ polishNumber(readSoFar) }}</dd>
+            </div>
+            <div class="ow-tally__row" data-tally-row>
+              <dt>Znaleziono</dt>
+              <dd>{{ polishNumber(foundInCompanies) }}</dd>
+            </div>
+          </dl>
+          <div v-if="!user" class="ow-tally__pitch">
+            <p class="ow-tally__ask">Zaloguj się, by zapisać znalezione daty</p>
+            <v-btn
+              color="tally"
+              variant="flat"
+              rounded="lg"
+              height="44"
+              class="text-none ow-tally__login"
+              data-testid="declaration-tally-login"
+              @click="openSignIn('login')"
+            >
+              Zaloguj się
+            </v-btn>
+          </div>
+        </section>
+
         <div class="ow-work">
           <div
             v-if="loadState === 'idle' || loadState === 'loading'"
@@ -144,31 +186,16 @@
           </template>
         </div>
 
-        <!-- The counts go under the work, never above it (Szymon,
-             2026-10-30): on a phone they took the room the crop and its
-             field need. -->
-        <p v-if="mine" class="ow-progress" data-testid="declaration-progress">
-          <span>
-            Twoje odczyty:
-            <template v-if="mine.total > 0">
-              dziś <b>{{ polishNumber(mine.today) }}</b
-              >, razem
-              <b>{{ polishNumber(mine.total) }}</b>
-            </template>
-            <template v-else>jeszcze żadnego</template>
-          </span>
-          <span class="ow-progress__sep" aria-hidden="true">·</span>
-          <span>
-            Do odczytania: <b>{{ polishNumber(open ?? 0) }}</b>
-          </span>
-        </p>
-
         <!-- Under the work, never in its way: reading needs no account, and
              the banner says what one adds - that the readings count. Its
              buttons sign the reader in here, in a dialog, never on /login:
              leaving the page would take with it a crop that came back with
              what the reader typed, which the account is to send. -->
-        <div v-if="!user" class="ow-login" data-testid="declaration-login">
+        <div
+          v-if="!user && readSoFar === 0"
+          class="ow-login"
+          data-testid="declaration-login"
+        >
           <ExploreLoginBanner
             in-place
             message="Czytasz bez konta. Twoje odczyty zapisujemy w tej przeglądarce - załóż konto, a przejdą na nie i zaczną się liczyć."
@@ -275,6 +302,12 @@ const {
 } = useDeclarationQueue();
 
 const current = computed(() => queue.value[0] ?? null);
+
+/** How many crops this reader has read a date off, and how many of those
+ * people sit in companies: the tally at the top, which shows from the first
+ * reading on. */
+const readSoFar = computed(() => mine.value?.total ?? 0);
+const foundInCompanies = computed(() => mine.value?.inCompanies ?? 0);
 
 /** Whether asking again can help. A reader without an account whom the day
  * has turned away has two ways on: an account, which the banner under the
@@ -476,6 +509,118 @@ onMounted(() => {
   max-width: 880px;
 }
 
+/* What the reader did so far, split down the middle at every width (Szymon,
+   2026-10-30): the two figures on a coloured pane on the left, as wide as
+   they need, and the ask with its button on paper on the right. In Oliwka, his pick. */
+.ow-tally {
+  background: rgb(var(--v-theme-tally-pale));
+  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin-top: 16px;
+  max-width: 880px;
+  overflow: hidden;
+}
+
+/* A signed-in reader has nothing to be asked: the figures alone. */
+.ow-tally--alone {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The two rows share one grid (their wrappers are `display: contents`), so
+   the labels line up on the left and the figures on the right, one above the
+   other (Szymon, 2026-10-30), whatever the width of either. */
+.ow-tally__figures {
+  align-content: center;
+  align-items: baseline;
+  background: rgb(var(--v-theme-tally));
+  color: rgb(var(--v-theme-on-tally));
+  column-gap: 14px;
+  display: grid;
+  grid-template-columns: auto auto;
+  margin: 0;
+  padding: 16px 24px;
+  row-gap: 4px;
+}
+
+.ow-tally__row {
+  display: contents;
+}
+
+.ow-tally__row dt {
+  color: rgb(var(--v-theme-tally-pale));
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.ow-tally__row dd {
+  color: rgb(var(--v-theme-on-tally));
+  font-size: 1.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0;
+  text-align: right;
+}
+
+.ow-tally__pitch {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  padding: 16px 20px;
+}
+
+.ow-tally__ask {
+  color: rgb(var(--v-theme-ink-strong));
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.ow-tally__login {
+  letter-spacing: 0.01em;
+}
+
+/* On a wider screen the ask and its button share one line and fill the
+   paper (Szymon, 2026-10-30); on a phone the ask stands above the button. */
+@media (min-width: 600px) {
+  .ow-tally__pitch {
+    align-items: center;
+    flex-direction: row;
+    gap: 20px;
+    justify-content: space-between;
+    padding: 16px 24px;
+  }
+
+  .ow-tally__ask {
+    flex: 1 1 auto;
+  }
+
+  .ow-tally__login {
+    flex: none;
+  }
+}
+
+@media (max-width: 599.98px) {
+  .ow-tally__figures {
+    padding: 14px 16px;
+  }
+
+  .ow-tally__row dd {
+    font-size: 1.5rem;
+  }
+
+  .ow-tally__pitch {
+    padding: 14px 16px;
+  }
+}
+
 .ow-login {
   margin-top: 24px;
   max-width: 880px;
@@ -501,26 +646,6 @@ onMounted(() => {
   margin: 8px 0 0;
   max-width: 68ch;
   text-wrap: pretty;
-}
-
-.ow-progress {
-  align-items: baseline;
-  color: rgb(var(--v-theme-ink-neutral));
-  column-gap: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.875rem;
-  margin: 16px 0 0;
-}
-
-.ow-progress b {
-  color: rgb(var(--v-theme-ink-strong));
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.ow-progress__sep {
-  opacity: 0.6;
 }
 
 /* A crop's shape, held while one is on its way, so the page does not jump
@@ -571,15 +696,6 @@ onMounted(() => {
 @media (max-width: 599.98px) {
   .ow-title {
     font-size: 1.75rem;
-  }
-
-  /* Two short lines rather than one that breaks after its separator. */
-  .ow-progress {
-    flex-direction: column;
-  }
-
-  .ow-progress__sep {
-    display: none;
   }
 
   .ow-lead {

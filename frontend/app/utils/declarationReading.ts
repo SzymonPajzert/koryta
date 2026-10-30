@@ -1,9 +1,5 @@
 import { longDate } from "~~/shared/dates";
-import {
-  parseTypedDate,
-  type AnswerVerdict,
-  type DeclarationTask,
-} from "~~/shared/declarations";
+import { parseTypedDate, type AnswerVerdict } from "~~/shared/declarations";
 
 /**
  * What a reader typed into a date field on /oswiadczenia, said back in words.
@@ -142,19 +138,6 @@ export function answerWords(
     case "skip":
       return "pominięte";
   }
-}
-
-/** „Rada gminy · Strzelin (gmina miejsko-wiejska) · oświadczenie za 2019”:
- * all a reader is told about whose declaration it is - the unit and the
- * office it was filed for, never the person (see `DeclarationTask`). */
-export function taskContext(task: DeclarationTask): string {
-  return [
-    task.office,
-    task.unit,
-    task.declarationYear ? `oświadczenie za ${task.declarationYear}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
 }
 
 /** A piece of a line of copy: a hyphenated word, kept whole, or the text

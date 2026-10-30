@@ -5,23 +5,11 @@ import {
   lineParts,
   readingWords,
   readTyped,
-  taskContext,
   typedFromValue,
 } from "~/utils/declarationReading";
-import type { DeclarationTask } from "~~/shared/declarations";
 import { REFUSED } from "../serverRefusals";
 
 const TODAY = new Date("2026-10-29T12:00:00Z");
-
-const task = (over: Partial<DeclarationTask> = {}): DeclarationTask => ({
-  id: "crop-1",
-  unit: "Testowice (gmina miejsko-wiejska)",
-  office: "Rada gminy",
-  declarationYear: 2019,
-  images: { date: "data:image/png;base64,AAAA", name: null },
-  imageSize: { date: { width: 950, height: 105 }, name: null },
-  ...over,
-});
 
 /** What the date field on /oswiadczenia says back, which is the one check a
  * reader gets on their own typing: a slip of one digit shows up as the wrong
@@ -138,21 +126,6 @@ describe("answerWords", () => {
     ["skip", null, "pominięte"],
   ] as const)("words a %s answer of %j as %j", (verdict, value, words) => {
     expect(answerWords(verdict, value)).toBe(words);
-  });
-});
-
-describe("taskContext", () => {
-  // All a reader is told about whose declaration it is: never the person.
-  it("names the office, the unit and the year of the declaration", () => {
-    expect(taskContext(task())).toBe(
-      "Rada gminy · Testowice (gmina miejsko-wiejska) · oświadczenie za 2019",
-    );
-  });
-
-  it("leaves out what the crop does not know", () => {
-    expect(taskContext(task({ office: null, declarationYear: null }))).toBe(
-      "Testowice (gmina miejsko-wiejska)",
-    );
   });
 });
 

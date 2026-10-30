@@ -610,7 +610,15 @@ export type DeclarationQueue = {
   upcoming: DeclarationTask[];
   /** Crops still waiting for a reader, and what this reader has done. */
   open: number;
-  mine: { today: number; total: number };
+  mine: {
+    today: number;
+    total: number;
+    /** Of the people whose dates this reader read, how many hold a seat in a
+     * company: the page's „Znaleziono N w spółkach”, said once the reader has
+     * read something (Szymon, 2026-10-30). Left out until the server counts
+     * it; the page then says how many were read and nothing of companies. */
+    inCompanies?: number;
+  };
 };
 
 /** `POST /api/declarations/<id>/answer`. */

@@ -1,7 +1,5 @@
 <template>
   <article class="ow-card" data-testid="declaration-task">
-    <p class="ow-card__context">{{ context }}</p>
-
     <!-- The paper as it is, on the desk tray: the date line, with the name
          line above it while readers are asked for names (READ_NAMES). -->
     <div class="ow-card__paper">
@@ -106,7 +104,7 @@ import {
   type DeclarationAnswer,
   type DeclarationTask,
 } from "~~/shared/declarations";
-import { readTyped, taskContext } from "~/utils/declarationReading";
+import { readTyped } from "~/utils/declarationReading";
 
 /**
  * The reading card of /oswiadczenia, „jedno pole”: Szymon's pick over the
@@ -141,7 +139,6 @@ const nameId = useId();
 const readingId = useId();
 const dateInput = useTemplateRef<HTMLInputElement>("dateInput");
 
-const context = computed(() => taskContext(props.task));
 const valid = computed(() => readTyped(dateText.value).state === "ok");
 /** Something is typed: the button saves it rather than skipping the crop. */
 const typing = computed(() => dateText.value.trim() !== "");
@@ -209,13 +206,6 @@ defineExpose({
   border: 1px solid rgba(var(--v-border-color), 0.16);
   border-radius: 10px;
   padding: 16px;
-}
-
-.ow-card__context {
-  color: rgb(var(--v-theme-ink-neutral));
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  margin: 0 0 12px;
 }
 
 /* The desk the paper lies on: the one tinted surface on the card, so the
