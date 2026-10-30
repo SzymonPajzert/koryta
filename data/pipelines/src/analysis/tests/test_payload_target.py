@@ -1,8 +1,12 @@
-"""What a button on one page sends: a company's people, or one person."""
+"""What a button on one page sends: a company's people, or one person - and
+what a list of people sends in place of a page."""
+
+from dataclasses import replace
+from types import SimpleNamespace
 
 import pandas as pd
 
-from analysis.payloads.person import row_is_about
+from analysis.payloads.person import PeoplePayloads, row_is_about
 from analysis.payloads.priority import ON_SITE
 from analysis.payloads.site import SiteSnapshot
 from analysis.payloads.target import (
@@ -10,10 +14,12 @@ from analysis.payloads.target import (
     PageTarget,
     employment_krs,
     for_company,
+    for_people,
     for_person,
     works_at,
 )
 from entities.composite import Company, Person
+from scrapers.stores import Pipeline
 
 KRS = "0000000001"
 SUBSIDIARY = "0000000002"
@@ -219,6 +225,80 @@ def test_nobody_in_the_data_is_said_so():
 
 
 # ---------------------------------------------------------------------------
+# A list of people, by their rejestr.io numbers
+
+
+LISTED = PageTarget(
+    kind="people", node_id="ids.txt", registers=frozenset({"1", "2", "3", "9"})
+)
+
+
+def test_a_list_s_run_creates_the_missing_and_changes_the_stale_it_names():
+    site = snapshot(
+        page("p-known", "Anna Nowak", "https://rejestr.io/osoby/1"),
+        page("p-done", "Ewa Lis", "https://rejestr.io/osoby/2"),
+        edges=(employed("p-done", "place-1", "2024-01-01"),),
+    )
+    payloads = [
+        person("Anna Nowak", "1", AT_KRS),  # on the site, missing the post
+        person("Ewa Lis", "2", AT_KRS),  # on the site with it already
+        person("Jan Nowy", "3", AT_KRS),  # not on the site
+        person("Obcy", "4", AT_KRS),  # not on the list
+        person("Bez Wpisu", None, AT_KRS),  # only an odpis names him
+    ]
+
+    result = for_people(payloads, site, LISTED.registers)
+
+    assert [p.name for p in result.changed] == ["Anna Nowak"]
+    assert [p.name for p in result.new] == ["Jan Nowy"]
+    assert (result.matched, result.up_to_date, result.left_out) == (3, 1, 0)
+    assert result.plan() == [(result.changed[0], ON_SITE), (result.new[0], NEW)]
+
+
+def test_a_namesake_the_list_does_not_name_does_not_hold_back_the_one_it_does():
+    # Sent in one run, the second would land on the page the first made, so a
+    # company's run leaves both out. A list's sends the one it names alone.
+    payloads = [
+        person("Jan Kowalski", "5", AT_KRS),
+        person("Jan Kowalski", None, AT_KRS),
+    ]
+
+    assert for_company(payloads, snapshot(), KRS).new == []
+    [sent] = for_people(payloads, snapshot(), {"5"}).new
+    assert sent.rejestrIo == "https://rejestr.io/osoby/5"
+
+
+def test_a_list_s_people_are_read_out_of_everybody_by_their_entries(capsys):
+    post = {
+        "employed_krs": KRS,
+        "employed_role": "Prezes",
+        "employed_start": "2024-01-01",
+    }
+    rows = pd.DataFrame(
+        {
+            "full_name": ["Anna Nowak", "Jan Nowy", "Ewa Lis"],
+            "rejestrio_id": [["1"], ["3"], ["8"]],
+            "birth_date": ["1970-01-01", "1971-02-02", "1972-03-03"],
+            "employment": [[post], [post], [post]],
+        }
+    )
+    pipeline = Pipeline.create(PeoplePayloads)
+    pipeline.people = SimpleNamespace(read_or_process=lambda ctx: rows)  # type: ignore[assignment]
+    pipeline._snapshot = snapshot(
+        page("p-known", "Anna Nowak", "https://rejestr.io/osoby/1")
+    )
+
+    result = pipeline.targeted(None, LISTED)  # type: ignore[arg-type]
+
+    assert [p.name for p in result.new] == ["Jan Nowy"]
+    assert [p.name for p in result.changed] == ["Anna Nowak"]
+    assert (result.matched, result.left_out) == (2, 0)
+    assert "For people ids.txt: 2 in the data, 1 to create, 1 to change" in (
+        capsys.readouterr().out
+    )
+
+
+# ---------------------------------------------------------------------------
 # Narrowing Extract's rows before any is a payload
 
 
@@ -240,6 +320,16 @@ def test_rows_are_narrowed_to_the_target():
     assert row_is_about(by_name, TARGET)
     assert row_is_about(by_page, TARGET)
     assert not row_is_about(stranger, TARGET)
+
+
+def test_rows_are_narrowed_to_the_entries_a_list_names():
+    assert row_is_about(pd.Series({"rejestrio_id": ["8", "2"]}), LISTED)
+    # Restored from the shared cache, an id can come back a number.
+    assert row_is_about(pd.Series({"rejestrio_id": [3]}), LISTED)
+    # By the entry alone: a list names nobody by their name.
+    named = pd.Series({"rejestrio_id": ["8"], "full_name": ["Anna Nowak"]})
+    assert not row_is_about(named, replace(LISTED, name="Anna Nowak"))
+    assert not row_is_about(pd.Series({"rejestrio_id": None}), LISTED)
 
 
 def test_employment_krs_reads_either_spelling():

@@ -185,7 +185,8 @@ def target_argv(target: PageTarget, koryta_date: str | None) -> list[str]:
     """Extract's flags for one page's people: the company's, which `--krs`
     reads with its subsidiaries (`analysis.payloads.target` keeps the company's
     own), or the person's register entry. A person page without one is read
-    out of everybody, by its id and name."""
+    out of everybody, by its id and name, and so is a list of people, by the
+    entries it names."""
     if target.kind == "company":
         argv = ["--krs", str(target.krs)]
     elif target.register:

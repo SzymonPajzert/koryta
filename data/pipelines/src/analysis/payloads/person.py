@@ -27,6 +27,7 @@ from analysis.payloads.target import (
     Targeted,
     employment_krs,
     for_company,
+    for_people,
     for_person,
 )
 from analysis.utils import as_sequence
@@ -295,13 +296,13 @@ class PeoplePayloads(Pipeline[Person]):
 
     def targeted(self, ctx: Context, target: PageTarget) -> Targeted:
         """The payloads a button on one page asks for - a company's people or
-        one person - each guarded as the nightly runs are
-        (`analysis.payloads.target`).
+        one person - or the people a list names, each guarded as the nightly
+        runs are (`analysis.payloads.target`).
 
         Extract's own flags have already narrowed the people to the target
         (`jobs.people_import.payloads.target_argv`); the rows are narrowed
         again to the target alone before any is made a payload, since a
-        person run without a register link reads everybody.
+        person run without a register link, and a list's, reads everybody.
         """
         people_df = self.people.read_or_process(ctx)
         if not people_df.empty:
@@ -314,6 +315,8 @@ class PeoplePayloads(Pipeline[Person]):
         if target.kind == "company":
             assert target.krs is not None
             result = for_company(payloads, snapshot, target.krs)
+        elif target.kind == "people":
+            result = for_people(payloads, snapshot, target.registers)
         else:
             result = for_person(payloads, snapshot, target)
         result.left_out += unidentifiable + len(people_df) - len(payloads)
@@ -851,11 +854,16 @@ NAME_COLUMNS = ("name", "full_name", "fullname", "krs_name", "base_full_name")
 def row_is_about(row: pd.Series, target: PageTarget) -> bool:
     """Whether an Extract row may be about the page a button was pressed on,
     before it is made a payload: a post at the company; for a person, the page
-    id, the register entry or the name. Loose on purpose - `for_person` decides
-    who the page is about, off the payloads, as the ingest would."""
+    id, the register entry or the name; for a list of people, one of the
+    entries it names. Loose on purpose - `for_person` decides who the page is
+    about, off the payloads, as the ingest would."""
     if target.kind == "company":
         return target.krs in employment_krs(
             row.get("employment") if "employment" in row else row.get("companies")
+        )
+    if target.kind == "people":
+        return not target.registers.isdisjoint(
+            str(value) for value in _cell_values(row.get("rejestrio_id"))
         )
     koryta_id = row.get("koryta_id")
     if isinstance(koryta_id, str) and koryta_id == target.node_id:

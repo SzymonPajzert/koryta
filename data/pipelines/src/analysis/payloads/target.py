@@ -17,6 +17,11 @@ by a tier, and kept to the same guards as the nightly runs:
   naming somebody whose data the site files on another page, send nothing:
   which of them the page is about is not something a button press says.
 
+And a target no button makes: the people a list names by their rejestr.io
+numbers (`people`), picked as a company's are, by the list rather than the
+posts - a file of them (`jobs.people_import --ids-file`), or whatever else
+draws one up of people no tier reaches.
+
 Built offline against the export, so a page made since this morning's export
 is not in it: a person there is matched by the page's own register link alone.
 """
@@ -33,24 +38,28 @@ from analysis.payloads.site import HELD_ENTRY, INFORMATIONAL_REASONS, SiteSnapsh
 from analysis.payloads.site import field as stated
 from entities.composite import Person
 
-#: The tier of a person a company's run creates a page for. Any other tier
-#: landing as "created" is the identity lookup missing somebody.
+#: The tier of a person a company's run, or a list's, creates a page for. Any
+#: other tier landing as "created" is the identity lookup missing somebody.
 NEW = "new"
 
-TargetKind = typing.Literal["company", "person"]
+TargetKind = typing.Literal["company", "person", "people"]
 
 
 @dataclass(frozen=True)
 class PageTarget:
-    """The page a button was pressed on."""
+    """The page a button was pressed on - or, `people`, the list of people
+    in its place."""
 
     kind: TargetKind
+    #: The page's node id; for `people`, what names the list - its file.
     node_id: str
     name: str = ""
     #: A company's KRS number, zero-padded.
     krs: str | None = None
     #: A person's rejestr.io number, from their page's link.
     register: str | None = None
+    #: `people`: the rejestr.io numbers of the people the list names.
+    registers: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -122,13 +131,37 @@ def register_of(person: Person) -> str | None:
 
 def for_company(payloads: list[Person], snapshot: SiteSnapshot, krs: str) -> Targeted:
     """A company's people, new and changed."""
+    return new_and_changed(
+        [person for person in payloads if works_at(person, krs)], snapshot
+    )
+
+
+def for_people(
+    payloads: list[Person], snapshot: SiteSnapshot, registers: typing.AbstractSet[str]
+) -> Targeted:
+    """The people a list names by their rejestr.io numbers, new and changed.
+
+    Kept to the list before they are told apart from anybody, as a company's
+    people are kept to its posts: two namesakes collide only where one run
+    sends both (`missing_from_koryta`), and a run of the list sends the one it
+    names alone. A payload filed under another of its row's entries
+    (`one_register_entry`) is not the person the list names, and is left out.
+    """
+    return new_and_changed(
+        [person for person in payloads if register_of(person) in registers],
+        snapshot,
+    )
+
+
+def new_and_changed(people: list[Person], snapshot: SiteSnapshot) -> Targeted:
+    """Of the `people` a target picked, the ones the site lacks and the pages
+    that would change, each guarded as the nightly runs guard them."""
     # Imported here: person.py imports this module for `PeoplePayloads`.
     from analysis.payloads.person import (  # noqa: PLC0415
         matching_one_page,
         missing_from_koryta,
     )
 
-    people = [person for person in payloads if works_at(person, krs)]
     new = missing_from_koryta(people, snapshot)
     on_site = matching_one_page(people, snapshot)
     changed = [person for person in on_site if writes(snapshot, person)]
