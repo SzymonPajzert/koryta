@@ -33,7 +33,8 @@ const kozienice = run("1407", "Powiat kozienicki");
 const clash: Clash<EdgeNode> = {
   personId: "kowalski",
   year: "2002",
-  position: "Samorząd",
+  election: "local",
+  offices: ["Samorząd"],
   rows: [sejmik, gniezno, kozienice],
 };
 

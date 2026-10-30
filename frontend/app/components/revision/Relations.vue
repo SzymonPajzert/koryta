@@ -320,7 +320,11 @@ import { formatDaysAgo } from "~/utils/chartTheme";
 import { revisionStatusIcons } from "~/utils/revisionStatus";
 import type { RowTone } from "~/composables/rowTone";
 import { proposalStatusLabels, type Proposal } from "~~/shared/proposals";
-import { placeClashes, type Candidacy } from "~~/shared/twoPlaces";
+import {
+  clashElection,
+  placeClashes,
+  type Candidacy,
+} from "~~/shared/twoPlaces";
 import type {
   NodeRelationHistory,
   RelationHistory,
@@ -504,9 +508,7 @@ const clashes = computed(() => {
   for (const draft of relations.value.filter((r) => r.state === "draft")) {
     for (const clash of placeClashes([...live, draft], candidacyOf)) {
       if (!clash.rows.includes(draft)) continue;
-      const election = clash.position
-        ? `${clash.year} · ${clash.position}`
-        : clash.year;
+      const election = clashElection(clash);
       const places = clash.rows.map((row) => row.other.name || row.other.id);
       found.set(
         draft.id,

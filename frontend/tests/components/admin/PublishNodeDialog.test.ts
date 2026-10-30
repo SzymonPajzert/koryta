@@ -692,7 +692,7 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     wrapper = mountDialog();
     await open(wrapper);
 
-    const block = el("publish-place-clash-2002-Samorząd") as HTMLElement;
+    const block = el("publish-place-clash-2002-local") as HTMLElement;
     expect(block.textContent).toContain("Wybory 2002 · Samorząd");
     expect(
       block.querySelector('[data-testid="publish-relation-kozienice-2002"]')
@@ -797,6 +797,37 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     expect(el("publish-clash-after")).toBeNull();
     expect(checkbox("sejmik-2002")?.checked).toBe(true);
     expect(checkbox("gniezno-2002")?.checked).toBe(true);
+  });
+
+  it("puts a Senat run and a Sejm run of one year in one block, and names both", async () => {
+    // Łukasz Mikołajczyk's page on 2026-10-29: his Senat run in wielkopolskie
+    // and a namesake's Sejm run in dolnośląskie, one parliamentary election.
+    serveRelations([
+      candidacy("senat-2015", "30", "2015", { position: "Senat" }),
+      candidacy("sejm-2015", "02", "2015", { position: "Sejm" }),
+      candidacy("gniezno-2010", "3003", "2010"),
+    ]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    const block = el("publish-place-clash-2015-parliament") as HTMLElement;
+    expect(block.textContent).toContain("Wybory 2015 · Senat i Sejm");
+    expect(
+      block.querySelector('[data-testid="publish-relation-senat-2015"]'),
+    ).not.toBeNull();
+    expect(
+      block.querySelector('[data-testid="publish-relation-sejm-2015"]'),
+    ).not.toBeNull();
+
+    await click(el("publish-select-all"));
+    expect(checkbox("senat-2015")?.checked).toBe(false);
+    expect(checkbox("sejm-2015")?.checked).toBe(false);
+
+    await click(checkbox("senat-2015"));
+    await click(checkbox("sejm-2015"));
+    expect(el("publish-clash-after")?.textContent).toContain(
+      "w wyborach 2015 · Senat i Sejm",
+    );
   });
 
   it("orders the blocks newest election first", async () => {

@@ -1816,11 +1816,11 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
     24 of them waiting in the queue.
 
     The publish dialog warns a reviewer by the place rule before a click adds
-    to this count: `placeClashes` in frontend/shared/twoPlaces.ts. A change to
-    one belongs in the other, but that port still groups by the office: moving
-    it to the election is a follow-up, because it changes what the dialog
-    shows. Until then the dialog misses the clashes this test finds by the
-    election alone.
+    to this count: `placeClashes` in frontend/shared/twoPlaces.ts, grouped by
+    the election as here since 2026-10-30 (`electionStoodIn` there). A change
+    to one belongs in the other. On the 2026-10-30 export the two find the
+    same 28 published clashes, and the same 525 when run over every live
+    candidacy, drafts included.
     """
     # 29 on the 2026-10-25T03:00:33.098Z export, 29 on the 10-24 one. 24 of
     # them are the clashes the office key counted, on 18 published pages on the

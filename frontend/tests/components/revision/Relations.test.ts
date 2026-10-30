@@ -345,6 +345,53 @@ describe("RevisionRelations", () => {
     );
   });
 
+  it("warns when a draft Sejm run would stand beside a live Senat run elsewhere", async () => {
+    // Jerzy Andrzej Michalak on 2026-10-29: his 2023 Senat run in
+    // dolnośląskie is live, and a namesake's Sejm run in pomorskie waits as a
+    // draft. One election, so one place.
+    mockAuthRequest.mockImplementation(async () => ({
+      ...structuredClone(PAGE),
+      relations: [
+        relation({
+          id: "senat-2023",
+          other: {
+            id: "teryt02",
+            name: "Dolnośląskie",
+            type: "region",
+            path: null,
+            published: true,
+          },
+          startDate: "2023-01-01",
+          position: "Senat",
+          state: "settled",
+          waiting: 0,
+        }),
+        relation({
+          id: "sejm-2023",
+          other: {
+            id: "teryt22",
+            name: "Pomorskie",
+            type: "region",
+            path: null,
+            published: true,
+          },
+          startDate: "2023-01-01",
+          position: "Sejm",
+          published: false,
+          state: "draft",
+          waiting: 0,
+        }),
+      ],
+    }));
+    const wrapper = await mountSection();
+
+    const draft = row(wrapper, "sejm-2023");
+    expect(draft.get("[data-row-toggle]").text()).toContain("dwa miejsca");
+    expect(draft.text()).toContain(
+      "w dwóch miejscach w wyborach 2023 · Senat i Sejm: Dolnośląskie i Pomorskie",
+    );
+  });
+
   it("says so when the entry has no relations", async () => {
     mockAuthRequest.mockImplementation(async () => ({
       ...structuredClone(PAGE),

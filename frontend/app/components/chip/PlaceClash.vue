@@ -31,7 +31,12 @@
 import { computed } from "vue";
 import { useAuthState } from "~/composables/auth";
 import type { EdgeNode } from "~/composables/edges";
-import { placesAgree, regionTeryt, type PlaceClash } from "~~/shared/twoPlaces";
+import {
+  clashElection,
+  placesAgree,
+  regionTeryt,
+  type PlaceClash,
+} from "~~/shared/twoPlaces";
 
 const props = defineProps<{
   /** The row. */
@@ -45,9 +50,7 @@ const { user } = useAuthState();
 const visible = computed(() => !!user.value && !!props.clash);
 
 const election = computed(() =>
-  props.clash?.position
-    ? `${props.clash.year}, ${props.clash.position}`
-    : (props.clash?.year ?? ""),
+  props.clash ? clashElection(props.clash, ", ") : "",
 );
 
 /** The other places, each once - not the rows that agree with this one, which

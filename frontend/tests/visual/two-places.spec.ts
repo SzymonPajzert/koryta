@@ -57,7 +57,7 @@ async function openDialog(page: Page) {
   // The block only the fixture's clash produces, so a run that somehow drew
   // the seed fails here rather than banking a dialog with no warning in it.
   await expect(
-    dialog.getByTestId("publish-place-clash-2002-Samorząd"),
+    dialog.getByTestId("publish-place-clash-2002-local"),
   ).toBeVisible({ timeout: 30_000 });
   await expect(dialog.getByText("tu też w 2006 i 2010")).toBeVisible();
   await expect(dialog.getByText("tu tylko w 2002")).toBeVisible();

@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "dwa-miejsca-wedlug-rodzaju-wyborow",
+    title:
+      "Ostrzeżenie o dwóch miejscach obejmuje różne urzędy jednych wyborów",
+    description:
+      "Okno publikacji i znaczek „dwa miejsca” porównywały tylko kandydatury na ten sam urząd. Teraz, jak nocne sprawdzenie, porównują całe wybory: Sejm z Senatem z tego samego roku, sejmik z radą miasta, radę miasta z radą dzielnicy, a kandydaturę bez urzędu czytają po roku. Nagłówek bloku wymienia oba urzędy, np. „Wybory 2015 · Senat i Sejm”.",
+    steps: [
+      "Otwórz „Opublikuj” na szkicu osoby, która w jednym roku kandydowała do Senatu w jednym województwie i do Sejmu w innym: obie kandydatury są w bloku „dwa miejsca naraz” nad listą, a „Zaznacz wszystkie” ich nie zaznacza.",
+      "Na stronie takiej osoby oba wiersze mają znaczek „dwa miejsca”.",
+    ],
+    area: "admin",
+  },
+  {
     id: "formularz-spolki-branze-bez-skarbu-panstwa",
     title: "Formularz spółki pyta o branże, a „Skarb Państwa” idzie za wykazem",
     description:

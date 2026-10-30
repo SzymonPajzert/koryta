@@ -60,7 +60,7 @@
           >
             <div class="place-clash__head">
               <v-icon :icon="mdiAlertOutline" size="small" />
-              <span>Wybory {{ electionLabel(clash) }} - dwa miejsca naraz</span>
+              <span>Wybory {{ clashElection(clash) }} - dwa miejsca naraz</span>
               <v-icon
                 :icon="mdiInformationOutline"
                 size="x-small"
@@ -187,7 +187,7 @@
             class="d-block"
           >
             Po publikacji strona pokaże tę osobę w dwóch miejscach w wyborach
-            {{ electionLabel(clash) }}: {{ placeNames(clash) }}.
+            {{ clashElection(clash) }}: {{ placeNames(clash) }}.
           </span>
           Odznacz kandydaturę, która do niej nie należy.
         </v-alert>
@@ -247,6 +247,7 @@ import {
   normalizeUpdateTime,
 } from "~~/shared/revisions";
 import {
+  clashElection,
   placeClashes,
   yearsInPlace,
   type Candidacy,
@@ -410,12 +411,9 @@ function relationLabel(relation: NodeRelation): string {
     .join(" · ");
 }
 
+/** One per election of the page: `2002-local`, `2015-parliament`. */
 function clashKey(clash: PlaceClash<NodeRelation>): string {
-  return `${clash.year}-${clash.position ?? ""}`;
-}
-
-function electionLabel(clash: PlaceClash<NodeRelation>): string {
-  return clash.position ? `${clash.year} · ${clash.position}` : clash.year;
+  return `${clash.year}-${clash.election ?? ""}`;
 }
 
 /** The years, besides the clash's own, in which the person stood in this

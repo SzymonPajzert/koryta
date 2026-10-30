@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  clashElection,
+  electionStoodIn,
   placeClashes,
   placesAgree,
   regionTeryt,
@@ -25,11 +27,12 @@ function run(
   };
 }
 
-/** The clashes of a list, as election and ids, so the assertions read as the
- * list. */
+/** The clashes of a list, as election, offices and ids, so the assertions
+ * read as the list. */
 function clashes(rows: ReturnType<typeof run>[]) {
   return placeClashes(rows, (row) => row).map((clash) => ({
-    election: `${clash.personId} ${clash.year} ${clash.position}`,
+    election: `${clash.personId} ${clash.year} ${clash.election}`,
+    offices: clash.offices,
     ids: clash.rows.map((row) => row.id),
   }));
 }
@@ -47,8 +50,114 @@ describe("placeClashes", () => {
       ]),
     ).toEqual([
       {
-        election: "kowalski 2002 Samorząd",
+        election: "kowalski 2002 local",
+        offices: ["Samorząd"],
         ids: ["gnieznienski-2002", "kozienicki-2002"],
+      },
+    ]);
+  });
+
+  it("finds the Senat in one województwo and the Sejm in another, one election", () => {
+    // Łukasz Mikołajczyk on 2026-10-29: his 2015 Senat run in wielkopolskie
+    // and a namesake's Sejm run in dolnośląskie, both drafts on his page,
+    // which the office key filed apart. The two chambers are elected on one
+    // day, and nobody stands for both.
+    expect(
+      clashes([
+        run("senat", "teryt30", "2015-01-01", { position: "Senat" }),
+        run("sejm", "teryt02", "2015-01-01", { position: "Sejm" }),
+      ]),
+    ).toEqual([
+      {
+        election: "kowalski 2015 parliament",
+        offices: ["Senat", "Sejm"],
+        ids: ["senat", "sejm"],
+      },
+    ]);
+  });
+
+  it("finds a sejmik run beside a city council run outside its województwo", () => {
+    // Anna Majchrzak's 2024 Sejmik run under mazowieckie, and her Kutno
+    // namesake's Rada miasta run under powiat kutnowski (łódzkie).
+    expect(
+      clashes([
+        run("sejmik", "teryt14", "2024-01-01", { position: "Sejmik" }),
+        run("kutno", "teryt1002", "2024-01-01", { position: "Rada miasta" }),
+      ]),
+    ).toEqual([
+      {
+        election: "kowalski 2024 local",
+        offices: ["Sejmik", "Rada miasta"],
+        ids: ["sejmik", "kutno"],
+      },
+    ]);
+  });
+
+  it("finds a city council run beside a district council run in another city", () => {
+    // Kamil Klimek, a Suwałki councillor, and a namesake's 2024 run for a
+    // Warsaw district's council, filed under Warszawa.
+    expect(
+      clashes([
+        run("suwalki", "teryt2063", "2024-01-01", { position: "Rada miasta" }),
+        run("warszawa", "teryt1465", "2024-01-01", {
+          position: "Rada dzielnicy",
+        }),
+      ]),
+    ).toEqual([
+      {
+        election: "kowalski 2024 local",
+        offices: ["Rada miasta", "Rada dzielnicy"],
+        ids: ["suwalki", "warszawa"],
+      },
+    ]);
+  });
+
+  it("reads a candidacy with no office by its year", () => {
+    // 2010 held only the local election, so a run with no office is local,
+    // and a „Samorząd” run in another województwo clashes with it: Tomasz
+    // Wiśniewski and Paweł Stolarczyk, published, on the 2026-10-25 export.
+    expect(
+      clashes([
+        run("brak", "teryt1407", "2010-01-01", { position: null }),
+        run("samorzad", "teryt3003", "2010-01-01"),
+      ]),
+    ).toEqual([
+      {
+        election: "kowalski 2010 local",
+        offices: ["Samorząd"],
+        ids: ["brak", "samorzad"],
+      },
+    ]);
+    // And 2005 held only the Sejm's and the Senat's.
+    expect(
+      clashes([
+        run("brak", "teryt02", "2005-01-01", { position: null }),
+        run("senat", "teryt30", "2005-01-01", { position: "Senat" }),
+      ]).map((clash) => clash.election),
+    ).toEqual(["kowalski 2005 parliament"]);
+  });
+
+  it("keeps a run with no office apart in a year of two elections", () => {
+    // 2014 held the local and the european election: one with no office
+    // could be either, so it does not meet a local run...
+    expect(
+      clashes([
+        run("brak", "teryt1407", "2014-01-01", { position: null }),
+        run("samorzad", "teryt3003", "2014-01-01"),
+      ]),
+    ).toEqual([]);
+    // ...but two of them of one year make a group of their own, as in the
+    // check, and their places can still disagree.
+    expect(
+      clashes([
+        run("brak", "teryt1407", "2014-01-01", { position: null }),
+        run("tez-brak", "teryt3003", "2014-01-01", { position: undefined }),
+      ]),
+    ).toEqual([
+      {
+        election: "kowalski 2014 null",
+        offices: [],
+        ids: ["brak", "tez-brak"],
       },
     ]);
   });
@@ -60,6 +169,13 @@ describe("placeClashes", () => {
       clashes([
         run("sejmik", "teryt30", "2002-01-01"),
         run("powiat", "teryt3003", "2002-01-01"),
+      ]),
+    ).toEqual([]);
+    // Whatever the offices say, as long as both are of one election.
+    expect(
+      clashes([
+        run("sejmik", "teryt30", "2024-01-01", { position: "Sejmik" }),
+        run("powiat", "teryt3003", "2024-01-01", { position: "Rada powiatu" }),
       ]),
     ).toEqual([]);
   });
@@ -75,7 +191,8 @@ describe("placeClashes", () => {
       ]),
     ).toEqual([
       {
-        election: "kowalski 2002 Samorząd",
+        election: "kowalski 2002 local",
+        offices: ["Samorząd"],
         ids: ["sejmik", "powiat", "obcy"],
       },
     ]);
@@ -92,7 +209,7 @@ describe("placeClashes", () => {
     ).toEqual([]);
   });
 
-  it("reads different years and different offices as different elections", () => {
+  it("reads different years and different kinds of election as different elections", () => {
     // 2024 held both the local and the european election.
     expect(
       clashes([
@@ -116,20 +233,17 @@ describe("placeClashes", () => {
     ).toEqual([["styczen", "kwiecien"]]);
   });
 
-  it("keeps absent and empty offices apart, as the night's check does", () => {
-    // `edge.get("position")` there: None and "" are two keys.
+  it("reads an empty office as none, as the night's check does", () => {
+    // `field(edge, "position")` there: None and "" both say nothing, and the
+    // year says the rest.
     expect(
       clashes([
         run("brak", "teryt3003", "2002-01-01", { position: null }),
         run("pusty", "teryt1407", "2002-01-01", { position: "" }),
       ]),
-    ).toEqual([]);
-    expect(
-      clashes([
-        run("brak", "teryt3003", "2002-01-01", { position: null }),
-        run("tez-brak", "teryt1407", "2002-01-01", { position: undefined }),
-      ]).map((clash) => clash.ids),
-    ).toEqual([["brak", "tez-brak"]]);
+    ).toEqual([
+      { election: "kowalski 2002 local", offices: [], ids: ["brak", "pusty"] },
+    ]);
   });
 
   it("keeps two people's runs apart", () => {
@@ -167,6 +281,61 @@ describe("placeClashes", () => {
           : undefined,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("electionStoodIn", () => {
+  const stood = (position: string | null | undefined, startDate = "2024") =>
+    electionStoodIn({ position, startDate: `${startDate}-01-01` });
+
+  it("reads a named office's kind of election", () => {
+    expect(stood("Sejm", "2015")).toBe("parliament");
+    expect(stood("Senat", "2015")).toBe("parliament");
+    expect(stood("Parlament Europejski")).toBe("european");
+    expect(stood("Rada dzielnicy")).toBe("local");
+    expect(stood("Samorząd")).toBe("local");
+  });
+
+  it("reads a missing office by the year, where the year held one election", () => {
+    expect(stood(null, "2018")).toBe("local");
+    expect(stood("", "2010")).toBe("local");
+    expect(stood(undefined, "2023")).toBe("parliament");
+    expect(stood(null, "2009")).toBe("european");
+  });
+
+  it("says nothing where the year held two elections, or none", () => {
+    expect(stood(null, "2014")).toBeNull();
+    expect(stood(null, "2019")).toBeNull();
+    expect(stood(null, "2024")).toBeNull();
+    expect(stood(null, "2016")).toBeNull();
+    expect(electionStoodIn({ position: null, startDate: null })).toBeNull();
+  });
+});
+
+describe("clashElection", () => {
+  it("names the year and each office the rows stood for", () => {
+    expect(clashElection({ year: "2002", offices: ["Samorząd"] })).toBe(
+      "2002 · Samorząd",
+    );
+    expect(clashElection({ year: "2015", offices: ["Senat", "Sejm"] })).toBe(
+      "2015 · Senat i Sejm",
+    );
+    expect(
+      clashElection({
+        year: "2024",
+        offices: ["Sejmik", "Rada miasta", "Rada dzielnicy"],
+      }),
+    ).toBe("2024 · Sejmik, Rada miasta i Rada dzielnicy");
+  });
+
+  it("names the year alone where no row has an office", () => {
+    expect(clashElection({ year: "2014", offices: [] })).toBe("2014");
+  });
+
+  it("puts the caller's separator between the two", () => {
+    expect(clashElection({ year: "2002", offices: ["Samorząd"] }, ", ")).toBe(
+      "2002, Samorząd",
+    );
   });
 });
 
