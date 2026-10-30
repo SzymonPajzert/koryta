@@ -201,6 +201,17 @@ WODOCIAGI = Category(
         ),
         Override("0000146925", "Chemar", "a steel foundry, PKD 24.52"),
         Override(
+            "0000109444",
+            "Huta Kosciuszko",
+            "a steelworks in bankruptcy liquidation, PKD 24.10; the pair is "
+            "codes 15 and 16 of its 38",
+        ),
+        Override(
+            "0000069432",
+            "Rafineria Nafty Glimar",
+            "an oil refinery, PKD 19.20; the pair is codes 16 and 17 of its 36",
+        ),
+        Override(
             "0000041661",
             "Tauron Ekoserwis",
             "services power-station equipment, PKD 33.14",
@@ -230,6 +241,11 @@ WODOCIAGI = Category(
             "0000033018",
             "Legnicka Specjalna Strefa Ekonomiczna",
             "an economic-zone operator, PKD 68.10; the water pair is the zone's mains",
+        ),
+        Override(
+            "0000047934",
+            "Lubelski Rynek Hurtowy",
+            "a wholesale market, PKD 68.20; the water pair is the market estate's",
         ),
         # Neither code is in the register any more; the node's stored activity
         # is stale. Remove this once the ingest refreshes `activity`.
