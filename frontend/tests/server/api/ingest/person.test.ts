@@ -4374,8 +4374,7 @@ describe("api/ingest/person, an edge a split moved to another page", () => {
   });
 
   it("leaves a job the split moved where it is, and gives the page it left its own", async () => {
-    // Iwona Pietrzak's board seat went back to her namesake this way on 09-10,
-    // and off the site with it.
+    // Iwona Pietrzak's board seat went back to her namesake this way on 09-10.
     movedToKrakow(job);
     bedzinPayload({ elections: [], companies: [JOB] });
 

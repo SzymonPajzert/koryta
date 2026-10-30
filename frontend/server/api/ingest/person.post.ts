@@ -1533,9 +1533,11 @@ async function findEdgeOrCreate(
  *   the fact hashes onto it. Written over, the edge went back, as a draft:
  *   Józef Pilch's 2024 sejmik run went back to his Będzin namesake on
  *   2026-10-08, five weeks after the 08-31 split gave it to him, and on 09-10
- *   Iwona Pietrzak's live Bychawa board seat went back to her namesake and
- *   off the site. Now the old page gets an edge of its own, which a reviewer
- *   removes like any other, and the moved one stays where it was put.
+ *   Iwona Pietrzak's Bychawa board seat went back to her namesake without its
+ *   approved revision. Now the old page gets an edge of its own, which a
+ *   reviewer removes like any other, and the moved one stays where it was put.
+ *   The new one is written as any new edge is: a draft, or live where the
+ *   page's register entry vouches for its jobs (`verifiedEmployments`).
  * - by another row of this request, whose write is still in the batch where no
  *   read sees it. The employments are placed concurrently, so the claim is
  *   looked at again after the read and made before anything else runs.
