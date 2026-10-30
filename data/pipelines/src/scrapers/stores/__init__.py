@@ -1491,3 +1491,145 @@ class BipPeopleStore(metaclass=ABCMeta):
         """The candidacies a declaration was downloaded for (status found),
         most wanted first, as `people_to_search` orders them."""
         raise NotImplementedError()
+
+
+@dataclass(frozen=True)
+class DeclarationFile:
+    """A file the people mode downloaded for a candidacy: what the declarations
+    job cuts (`jobs.bip_declarations`)."""
+
+    sha256: str
+    host: str
+    url: str
+    bundle: str
+    filename: str
+    #: The file holds several people's declarations: no link named anybody, or
+    #: links named more than one person. Each page then says whose it is.
+    council: bool = False
+
+
+@dataclass(frozen=True)
+class DeclarationCutRow:
+    """What the declarations job made of one file, with which version of it."""
+
+    sha256: str
+    version: int
+    #: cut, or why nothing was: no_label, no_date_line, blank_form,
+    #: scan_in_word, not_fetched, unreadable.
+    status: str
+    kind: str = ""
+    pages: int = 0
+    pages_read: int = 0
+    seconds: float = 0.0
+    error: str = ""
+
+
+@dataclass(frozen=True)
+class DeclarationCropRow:
+    """One page's crops and what the job read on it (`cutter.PageCrop`).
+
+    The pictures are loaded only with `with_images`: a few thousand of them are
+    a few hundred MB. Their hashes are always there, so a changed picture shows
+    without them."""
+
+    sha256: str
+    page: int
+    rotation: int = 0
+    #: text_layer, ocr, handwritten or blank.
+    sort: str = ""
+    birth_date: str = ""
+    score: float = 0.0
+    name: str = ""
+    declaration_year: int | None = None
+    date_png: bytes = b""
+    name_png: bytes = b""
+    date_png_hash: str = ""
+    name_png_hash: str = ""
+    notes: str = ""
+
+
+@dataclass(frozen=True)
+class DeclarationLink:
+    """A candidacy's file that came down: a ``bip_poi_docs`` row with status ok."""
+
+    key: str
+    sha256: str
+    url: str
+    page_url: str = ""
+    anchor: str = ""
+    context: str = ""
+    #: The crawler's own link named the person.
+    named: bool = True
+
+
+@dataclass(frozen=True)
+class SentRow:
+    """What the site was last sent for a record, and what it said."""
+
+    #: candidacy or extract.
+    kind: str
+    #: The candidacy's key, or the extract's `<sha256>-p<page>`.
+    id: str
+    #: A hash of what was sent: a record whose digest is unchanged is not sent again.
+    digest: str
+    #: stored, or skipped with the site's reason.
+    result: str
+    reason: str = ""
+
+
+class BipDeclarationStore(metaclass=ABCMeta):
+    """What the declarations job cut and sent (`stores.bip_declarations`), and
+    the people mode's tables it reads them from."""
+
+    @abstractmethod
+    def ensure_schema(self) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def files_to_cut(self, version: int, limit: int | None) -> list[DeclarationFile]:
+        """Files that came down for some candidacy and have no cut of this
+        version, those of people on the site first."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def record_cut(
+        self, cut: DeclarationCutRow, crops: list[DeclarationCropRow]
+    ) -> None:
+        """Keep a file's cut, in place of any earlier one and its crops."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def candidacies(self) -> list[PersonRow]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def links(self) -> list[DeclarationLink]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def unit_roots(self) -> dict[str, list[str]]:
+        """Where each unit's search started: its BIP, or its office's website."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def cuts(self) -> dict[str, DeclarationCutRow]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def crops(self, with_images: bool = False) -> list[DeclarationCropRow]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def crop_images(
+        self, ids: list[tuple[str, int]]
+    ) -> dict[tuple[str, int], tuple[bytes, bytes]]:
+        """The date's and the name's pictures of these (sha256, page) crops."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def sent(self, kind: str) -> dict[str, SentRow]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def record_sent(self, rows: list[SentRow], run_id: str) -> None:
+        raise NotImplementedError()
