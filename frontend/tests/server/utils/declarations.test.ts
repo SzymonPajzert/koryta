@@ -752,6 +752,65 @@ describe("queueFor", () => {
   });
 });
 
+describe("a reader's finds", () => {
+  it("counts the people a reader found in their queue's „Znaleziono”", async () => {
+    crop("c1");
+    stored.set("declarationReaderFinds/a_kowalska", {
+      uid: "a",
+      personId: "kowalska",
+    });
+    stored.set("declarationReaderFinds/a_nowak", {
+      uid: "a",
+      personId: "nowak",
+    });
+    stored.set("declarationReaderFinds/b_kowalska", {
+      uid: "b",
+      personId: "kowalska",
+    });
+
+    expect((await queueFor(firestore, "a", 1)).mine.found).toBe(2);
+    expect((await queueFor(firestore, "c", 1)).mine.found).toBe(0);
+  });
+
+  it("moves what a browser found to the account it signs in to, once a person", async () => {
+    crop("c1");
+    await answerAs(stranger(1), "1979-07-15", "c1");
+    const anon = `anon:${readerId(1)}`;
+    stored.set(`declarationReaderFinds/${anon}_kowalska`, {
+      uid: anon,
+      personId: "kowalska",
+      extractId: "c1",
+    });
+    stored.set(`declarationReaderFinds/${anon}_nowak`, {
+      uid: anon,
+      personId: "nowak",
+      extractId: "c9",
+    });
+    // The account found Nowak itself already.
+    stored.set("declarationReaderFinds/a_nowak", {
+      uid: "a",
+      personId: "nowak",
+      extractId: "c8",
+    });
+
+    await claim(1, account("a"));
+
+    expect(
+      [...stored.keys()].filter((path) =>
+        path.startsWith("declarationReaderFinds/"),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "declarationReaderFinds/a_kowalska",
+        "declarationReaderFinds/a_nowak",
+      ]),
+    );
+    expect(stored.has(`declarationReaderFinds/${anon}_kowalska`)).toBe(false);
+    expect(stored.has(`declarationReaderFinds/${anon}_nowak`)).toBe(false);
+    expect((await queueFor(firestore, "a", 1)).mine.found).toBe(2);
+  });
+});
+
 describe("claimAnswers", () => {
   it("moves a browser's answers onto the account, with the account's vote", async () => {
     crop("c1");

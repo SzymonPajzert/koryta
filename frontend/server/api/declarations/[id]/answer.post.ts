@@ -75,12 +75,15 @@ export default defineEventHandler(async (event) => {
     reader.votes &&
     recorded.settled?.status === "agreed" &&
     recorded.settled.kind === "date";
-  const [queue] = await Promise.all([
-    queueFor(db, reader.uid, 3, new Set([id, ...(body.holding ?? [])])),
-    settledOnDay
-      ? compareSettled(event, db, [id], PAGES_PER_ANSWER)
-      : undefined,
-  ]);
+  // The answer that settles a crop meets its pages first, so a person it
+  // found is in the reader's „Znaleziono” on the way back.
+  if (settledOnDay) await compareSettled(event, db, [id], PAGES_PER_ANSWER);
+  const queue = await queueFor(
+    db,
+    reader.uid,
+    3,
+    new Set([id, ...(body.holding ?? [])]),
+  );
 
   setResponseHeader(event, "Cache-Control", "private, no-store");
   return {

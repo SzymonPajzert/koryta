@@ -610,11 +610,10 @@ export type DeclarationQueue = {
   mine: {
     today: number;
     total: number;
-    /** Of the people whose dates this reader read, how many hold a seat in a
-     * company: the page's „Znaleziono N w spółkach”, said once the reader has
-     * read something. Left out until the server counts
-     * it; the page then says how many were read and nothing of companies. */
-    inCompanies?: number;
+    /** The people this reader found: crops they typed the date of settled
+     * on it, and it is the birth date on the person's page. The tally's
+     * „Znaleziono”. */
+    found: number;
   };
 };
 

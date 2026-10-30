@@ -112,7 +112,7 @@ async function tallyRows(page: Page) {
 const readerAtWork = () =>
   new ReadingDesk(readingCrops(), {
     open: 1284,
-    mine: { today: 3, total: 12, inCompanies: 3 },
+    mine: { today: 3, total: 12, found: 3 },
   });
 
 /** Every request went with the reader's token, none under a reader id. */
@@ -316,7 +316,7 @@ async function openWithReadings(page: Page) {
     page,
     new ReadingDesk(readingCrops(), {
       open: 1284,
-      mine: { today: 5, total: 5, inCompanies: 2 },
+      mine: { today: 5, total: 5, found: 2 },
     }),
   );
   await freezeClock(page);

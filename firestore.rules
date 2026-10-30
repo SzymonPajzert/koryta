@@ -186,6 +186,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // A reader's daily count, and who found whom: whose crops a reader read
+    // is the same personal data as their answers.
+    match /declarationReaderLimits/{key} {
+      allow read, write: if false;
+    }
+
+    match /declarationReaderFinds/{key} {
+      allow read, write: if false;
+    }
+
     // Pages captured from someone's browser. Written only by /api/ingest/page
     // and by the extractor, both of which hold admin credentials and so are not
     // subject to these rules at all — the client reads through /api/pages,
