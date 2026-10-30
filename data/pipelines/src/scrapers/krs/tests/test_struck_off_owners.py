@@ -325,6 +325,39 @@ def test_a_state_agency_makes_it_public_with_nothing_to_draw_an_edge_to():
     assert pipeline.companies[TDM_ARRTRANS].parents == []
 
 
+def two_rogowos() -> JstIndex:
+    """Kujawsko-pomorskie's two gminy wiejskie named Rogowo, as TERC has them."""
+    rows = [
+        ("04", None, None, None, "KUJAWSKO-POMORSKIE"),
+        ("04", "12", None, None, "rypiński"),
+        ("04", "12", "03", "2", "Rogowo"),
+        ("04", "19", None, None, "żniński"),
+        ("04", "19", "05", "2", "Rogowo"),
+    ]
+    return JstIndex.from_terc(
+        pd.DataFrame(rows, columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"])
+    )
+
+
+def test_a_gmina_name_two_units_share_makes_it_public_with_no_edge():
+    # Not one of the companies on file: none of their last owners is a name
+    # like this on 2026-10-30. "GMINA ROGOWO" is either of two gminy, in
+    # powiat rypiński and powiat żniński, and nothing says which.
+    company = "0000000777"
+    pipeline = CompaniesKRS()
+    pipeline.jst_index = two_rogowos()
+    for blob_name, items in struck_off(company, "2020-01-02"):
+        pipeline.process_rejestrio_blob(blob_name, items, NO_POSTAL_CODES)
+    pipeline.add_public_owners_on_file(
+        pd.DataFrame(
+            [owner_seat(company, "GMINA ROGOWO", "12", "2020-02-03", role="wspolnik")]
+        )
+    )
+
+    assert public_of(pipeline) == {company}
+    assert pipeline.companies[company].parents == []
+
+
 def test_a_state_institute_among_the_last_owners_makes_it_public():
     # BIOTON: the antibiotics institute held it with Prokom and Bank Austria
     # until entry 10 struck it off on 2004-08-02.
@@ -560,8 +593,21 @@ def test_the_odpis_strikes_off_with_its_last_entry():
         )
     )
 
-    # Ordered by number, not as text: "9" is not the entry before "93".
     assert struck_off_on_file(on_file) == {MRFP: "2026-07-02"}
+
+
+def test_the_entries_are_ordered_by_number_not_as_text():
+    # GDAŃSKIE WODOCIĄGI's odpis runs to entry 102: as text, "9" comes last.
+    on_file = pd.DataFrame(
+        entries(
+            GDANSKIE_WODOCIAGI,
+            ("9", "2003-07-22", "ZMIANA DANYCH W REJESTRZE"),
+            ("101", "2025-06-27", "ZMIANA DANYCH W REJESTRZE"),
+            ("102", "2025-07-10", STRUCK_OFF_KRS),
+        )
+    )
+
+    assert struck_off_on_file(on_file) == {GDANSKIE_WODOCIAGI: "2025-06-27"}
 
 
 def test_an_odpis_that_goes_on_after_a_strike_off_is_a_live_company():
