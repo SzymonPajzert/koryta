@@ -19,8 +19,8 @@ import { expectFitsThePhone } from "./phoneWidth";
  * logged out reader finds it: one line under the facts, that the birth date
  * agrees with them - and, on a page the site published itself, when it did -
  * and the declarations as the first cards of the section of articles, which
- * is called „Prasa i dokumenty” when it holds both. As Szymon approved it on
- * the design board (round bip-osoba-r2, 2026-10-29).
+ * is called „Prasa i dokumenty” when it holds both. As approved on the
+ * design board (round bip-osoba-r2).
  *
  * The seed has no declarations and no articles naming anybody, so both are
  * answered from ./fixtures/declarationsAdmin.ts, on the seeded Jan Kowalski.
@@ -142,7 +142,7 @@ test("osoba-prasa-i-dokumenty", SLUG, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await openPerson(page, personDeclarations, personMentions);
 
-  // Szymon's title for the two together (bip-osoba-r2): the declarations
+  // The title for the two together (bip-osoba-r2): the declarations
   // first, out to the BIP, then the articles.
   const list = await section(page, "Prasa i dokumenty", 4);
   await expect(list.getByTestId("person-declarations")).toHaveCount(2);

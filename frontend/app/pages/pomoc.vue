@@ -617,7 +617,7 @@ const checkingCards = computed(() => [
     desc: "Przepisujesz z wycinka oświadczenia majątkowego odręcznie wpisaną datę urodzenia - kilka sekund na jeden wycinek.",
     to: "/oswiadczenia",
     task: "oswiadczenia" as const,
-    // Open without an account (Szymon, bip-czytanie-r1): the readings count
+    // Open without an account: the readings count
     // once an account claims them.
     access: "none" as const,
   },

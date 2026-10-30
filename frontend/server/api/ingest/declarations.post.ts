@@ -315,7 +315,7 @@ type StoredCandidacy = {
 
 /** A live person page and how soon readers should see its crops.
  *
- * Szymon, 2026-10-29: the interest is in drafts nobody has verified yet, so
+ * The interest is in drafts nobody has verified yet, so
  * those come first - without a birth date (0), then with one (1); a published
  * page is verified already and comes last (3). The same order the crawl uses
  * (2 there is a person with no page, who never reaches the site). Only

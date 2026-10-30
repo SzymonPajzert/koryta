@@ -54,7 +54,7 @@
           placeholder="dd.mm.rrrr"
           :aria-describedby="readingId"
         />
-        <!-- One button for both ways on (Szymon, 2026-10-30): „Pomiń” while
+        <!-- One button for both ways on: „Pomiń” while
              nothing is typed, „Zapisz” once something is, and no reason
              asked of a reader who cannot read the line. Quiet while it
              skips, the page's colour once it saves; one width for both, so
@@ -107,8 +107,8 @@ import {
 import { readTyped } from "~/utils/declarationReading";
 
 /**
- * The reading card of /oswiadczenia, „jedno pole”: Szymon's pick over the
- * form-like line and the series (bip-czytanie-r1, 2026-10-29).
+ * The reading card of /oswiadczenia, „jedno pole”: picked over the form-like
+ * line and the series in round bip-czytanie-r1.
  *
  * A compact card made for a phone: the date line of the paper on a tray, and
  * under it one field for the date, typed whichever way the reader likes, with

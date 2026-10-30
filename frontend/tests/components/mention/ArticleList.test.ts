@@ -154,7 +154,7 @@ describe("MentionArticleList on a person's page", () => {
   });
 
   it("puts the declarations first, under „Prasa i dokumenty” beside articles", async () => {
-    // Szymon's title for the two together, round bip-osoba-r2 (2026-10-29).
+    // The title for the two together, from round bip-osoba-r2.
     declarationsOf.set("both", twoDeclarations);
     data.value = { mentions: [mention("x", "m1"), mention("y", "m2")] };
     const list = await mountPersonList("both");

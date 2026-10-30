@@ -107,7 +107,7 @@ describe("PomocPage", () => {
     expect(tiers).toEqual(Array(3).fill("po zalogowaniu"));
 
     // The same goes for four of the rest. Reading a declaration's crop is
-    // open to readers without an account (Szymon, bip-czytanie-r1), and the
+    // open to readers without an account, and the
     // note above the cards says so.
     const more = wrapper.get("section#wiecej-sprawdzania");
     const access = Object.fromEntries(

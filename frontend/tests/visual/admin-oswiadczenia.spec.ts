@@ -18,8 +18,8 @@ import { expectFitsThePhone } from "./phoneWidth";
 /** /admin/oswiadczenia, how far the reading of BIP declarations has got: the
  * declarations by state, the chain from a candidacy searched to a person
  * published with today's publications against the limit, and the lists an
- * admin works through. As Szymon approved it on the design board (round
- * bip-admin-r2, 2026-10-29: the bar above the chain).
+ * admin works through. As approved on the design board (round bip-admin-r2:
+ * the bar above the chain).
  *
  * The readings live in collections the seed leaves empty, so the overview and
  * the crop are answered from ./fixtures/declarationsAdmin.ts - production's
@@ -128,7 +128,7 @@ test(
 /** The automatic publication switched off (a daily limit of 0): the chain
  * ends in „Dziś” without places to count, and the queue waits with the
  * button to publish from it all the same - an admin's press goes past the
- * limit (Szymon, 2026-10-30), as round bip-admin-r2 drew it. */
+ * limit, as round bip-admin-r2 drew it. */
 test(
   "admin-oswiadczenia-wylaczone",
   OSWIADCZENIA,

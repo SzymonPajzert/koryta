@@ -12,8 +12,8 @@ import {
 /**
  * The button „Opublikuj z kolejki” on /admin/oswiadczenia: publishes the
  * people whose birth date matches their declaration now, past the automatic
- * daily limit and also while the automatic publication is switched off
- * (Szymon, 2026-10-30: "it's an admin decision"), at most `PRESS_BATCH` of
+ * daily limit and also while the automatic publication is switched off,
+ * since publishing from the queue is an admin's decision; at most `PRESS_BATCH` of
  * them a press (`drainPublications` with `pressedBy`).
  *
  * Every page still goes through every check of `publishPage`, and one a check

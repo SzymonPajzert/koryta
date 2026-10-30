@@ -23,9 +23,8 @@ import type {
 
 /** Every declaration the job sent, by where its reading stands, over the
  * chain: the bar shows the whole run at once, the chain then walks through it
- * stage by stage. Szymon kept it from round 1's tiles (bip-admin-r1,
- * 2026-10-29: "maybe we can integrate it again into the chain") and put it
- * above the chain (bip-admin-r2: "Maybe put it above the chain"). */
+ * stage by stage. It came from round 1's tiles (bip-admin-r1) and stands
+ * above the chain (bip-admin-r2). */
 const props = defineProps<{ overview: DeclarationOverview }>();
 
 /** States, so state colours: agreed is the good end, a dispute the one that

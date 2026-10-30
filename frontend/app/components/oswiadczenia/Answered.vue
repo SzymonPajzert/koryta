@@ -78,8 +78,8 @@ const host = computed(() =>
   font-weight: 500;
 }
 
-/* Dark sage, underlined, as the person page's declaration links: Szymon
-   picked it over the blue link ink (bip-osoba-r1). The two inks are the same
+/* Dark sage, underlined, as the person page's declaration links, rather than
+   the blue link ink (bip-osoba-r1). The two inks are the same
    lightness, so the underline is what tells the link from the text. */
 .ow-answered__link {
   align-items: center;

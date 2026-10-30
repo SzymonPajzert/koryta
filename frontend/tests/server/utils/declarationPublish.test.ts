@@ -684,8 +684,8 @@ describe("matchPages", () => {
 });
 
 // The admin chose the date on /admin/oswiadczenia with the pages' dates a
-// click away, so it confirms nothing: the default until Szymon decides
-// otherwise is that it holds the page and publishes nobody.
+// click away, so it confirms nothing: until decided otherwise, it holds the
+// page and publishes nobody.
 describe("a date an admin settled", () => {
   /** A crop of hers readers could not agree on, settled by an admin on
    * `BORN`, the way /admin/oswiadczenia settles it. */
@@ -1919,9 +1919,9 @@ describe("a pass that was cut short", () => {
   });
 });
 
-// Szymon, 2026-10-30: the overview's button publishes past the automatic
-// limit, also while the automatic publication is off - "it's an admin
-// decision". Through the same checks, outside the import's way, and in none
+// The overview's button publishes past the automatic limit, also while the
+// automatic publication is off: publishing from the queue is an admin's
+// decision. Through the same checks, outside the import's way, and in none
 // of the automation's places of the day.
 describe("an admin's press of „Opublikuj z kolejki”", () => {
   const needsSplit = (id: string) =>

@@ -18,8 +18,8 @@ import { NOW } from "../clock";
  * date here is counted back from it). Where each number comes from:
  *   REAL     counted on 2026-10-29, in production or in the prototype run
  *   DERIVED  nothing has run yet; worked out from the real numbers
- * This is the overview Szymon approved on the design board (round
- * bip-admin-r2) with the dates moved.
+ * This is the overview approved on the design board (round bip-admin-r2)
+ * with the dates moved.
  *
  * Every person is made up: the surnames (Atrapa, Makieta, Przykładowy...)
  * are in neither the PKW candidates' nor the KRS people's list (see SURNAMES),

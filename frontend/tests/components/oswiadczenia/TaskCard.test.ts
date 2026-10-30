@@ -46,7 +46,7 @@ const READING = '[data-testid="declaration-reading"]';
 const SKIP = '[data-testid="declaration-skip"]';
 const SAVE = '[data-testid="declaration-submit"]';
 
-/** The card a reader reads one crop on, „jedno pole”: Szymon's pick of round
+/** The card a reader reads one crop on, „jedno pole”, picked in round
  * bip-czytanie-r1. One field takes the date however it is typed and says back
  * what it understood, so a slip of a digit is seen before it is sent; one
  * button beside it skips the crop until something is typed and saves it once
@@ -65,7 +65,7 @@ describe("OswiadczeniaTaskCard", () => {
       false,
     );
     expect(wrapper.find(NAME).exists()).toBe(false);
-    // Nor the office, the unit or the year (Szymon, round bip-czytanie-r3).
+    // Nor the office, the unit or the year (round bip-czytanie-r3).
     expect(wrapper.text()).not.toContain("Testowice");
     expect(wrapper.text()).not.toContain("2019");
     // A label and the field's own „dd.mm.rrrr”, and no examples under it.

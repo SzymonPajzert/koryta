@@ -60,8 +60,7 @@
 
     <template v-if="overview">
       <!-- The whole run by state first, then the chain that walks through it
-           stage by stage: Szymon, round bip-admin-r2 (2026-10-29), "Maybe
-           put it above the chain". -->
+           stage by stage (round bip-admin-r2). -->
       <div class="dprogress">
         <AdminDeclarationsStates :overview="overview" />
         <AdminDeclarationsChain :overview="overview" :publish="publishQueued" />
