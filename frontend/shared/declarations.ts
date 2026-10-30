@@ -281,6 +281,15 @@ export type AnswerVerdict = (typeof answerVerdicts)[number];
  * typed beside it with it. */
 export const READ_NAME_MAX_LENGTH = 200;
 
+/** Whether readers are asked for the name on the declaration as well as the
+ * date. Off since Szymon's call of 2026-10-30 ("skip the first name parsing
+ * for now - keep the code that could handle it but just don't show it in the
+ * form"): /oswiadczenia shows the date line alone, and the server sends no
+ * name crop to anybody who would not be shown it. What reads names stays
+ * (`agreedName`, `nameFitsPage`, the card's name field), for the day it is
+ * switched back on. */
+export const READ_NAMES: boolean = false;
+
 /** Where a crop is in its reading. */
 export const extractStatuses = [
   "open",

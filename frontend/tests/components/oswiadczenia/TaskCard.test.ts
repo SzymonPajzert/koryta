@@ -1,10 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import TaskCard from "../../../app/components/oswiadczenia/TaskCard.vue";
-import {
-  READ_NAME_MAX_LENGTH,
-  type DeclarationTask,
-} from "../../../shared/declarations";
+import type { DeclarationTask } from "../../../shared/declarations";
 
 const task: DeclarationTask = {
   id: "crop-1",
@@ -21,17 +18,10 @@ const task: DeclarationTask = {
   },
 };
 
-const withoutName: DeclarationTask = {
-  ...task,
-  id: "crop-2",
-  images: { date: task.images.date, name: null },
-  imageSize: { date: task.imageSize.date, name: null },
-};
-
 const mounted: { unmount: () => void }[] = [];
 
-/** In the document, so the „Zapisz” button submits its form the way it does
- * in a browser: happy-dom submits only a connected form. */
+/** In the document, so the card's button submits its form the way it does in
+ * a browser: happy-dom submits only a connected form. */
 async function mount(
   props: {
     task?: DeclarationTask;
@@ -53,42 +43,35 @@ afterEach(() => {
 const DATE = '[data-testid="declaration-date-input"]';
 const NAME = '[data-testid="declaration-name-input"]';
 const READING = '[data-testid="declaration-reading"]';
+const SKIP = '[data-testid="declaration-skip"]';
+const SAVE = '[data-testid="declaration-submit"]';
 
 /** The card a reader reads one crop on, „jedno pole”: Szymon's pick of round
  * bip-czytanie-r1. One field takes the date however it is typed and says back
- * what it understood, so a slip of a digit is seen before it is sent; the
- * other answers are three text buttons under it. */
+ * what it understood, so a slip of a digit is seen before it is sent; one
+ * button beside it skips the crop until something is typed and saves it once
+ * something is (his call of 2026-10-30). The name line and its field stay off
+ * while readers are not asked for names (READ_NAMES); TaskCard.names.test.ts
+ * keeps them working for the day they are. */
 describe("OswiadczeniaTaskCard", () => {
-  it("lays out both lines of the paper, and says whose only by unit and office", async () => {
+  it("lays out the date line alone, and says whose only by unit and office", async () => {
     const wrapper = await mount();
 
     expect(
       wrapper.get('[data-testid="declaration-crop-date"]').attributes("src"),
     ).toBe(task.images.date);
-    expect(
-      wrapper.get('[data-testid="declaration-crop-name"]').attributes("src"),
-    ).toBe(task.images.name);
-    expect(wrapper.text()).toContain(
-      "Rada gminy · Testowice (gmina miejsko-wiejska) · oświadczenie za 2019",
-    );
-    expect(wrapper.find(NAME).exists()).toBe(true);
-    // Before anything is typed, the line beside the label says what the field
-    // takes.
-    expect(wrapper.get(READING).text()).toBe(
-      "np. 15.07.1979, 15 VII 1979 albo sam rok",
-    );
-  });
-
-  it("asks for no name where the paper has no name line", async () => {
-    const wrapper = await mount({ task: withoutName });
-
-    expect(wrapper.find('[data-testid="declaration-crop-date"]').exists()).toBe(
-      true,
-    );
+    // Even a task that carries a name line: names are not read for now.
     expect(wrapper.find('[data-testid="declaration-crop-name"]').exists()).toBe(
       false,
     );
     expect(wrapper.find(NAME).exists()).toBe(false);
+    expect(wrapper.text()).toContain(
+      "Rada gminy · Testowice (gmina miejsko-wiejska) · oświadczenie za 2019",
+    );
+    // A label and the field's own „dd.mm.rrrr”, and no examples under it.
+    expect(wrapper.get("label").text()).toBe("Data urodzenia");
+    expect(wrapper.get(DATE).attributes("placeholder")).toBe("dd.mm.rrrr");
+    expect(wrapper.get(READING).text()).toBe("");
   });
 
   it("says back what it understood of a day, and of a year typed alone", async () => {
@@ -103,33 +86,65 @@ describe("OswiadczeniaTaskCard", () => {
     expect(wrapper.get(READING).text()).toBe("tylko rok: 1979");
   });
 
+  it("offers „Pomiń” while nothing is typed, and skips the crop with it, asking no reason", async () => {
+    const wrapper = await mount();
+
+    expect(wrapper.get(SKIP).text()).toBe("Pomiń");
+    expect(wrapper.find(SAVE).exists()).toBe(false);
+    await wrapper.get(SKIP).trigger("click");
+
+    expect(wrapper.emitted("answer")).toEqual([[task, { verdict: "skip" }]]);
+    expect(
+      wrapper.find('[data-testid="declaration-unreadable"]').exists(),
+    ).toBe(false);
+    expect(
+      wrapper.find('[data-testid="declaration-empty-field"]').exists(),
+    ).toBe(false);
+  });
+
+  // Enter in the field submits its form in a browser; happy-dom does not do
+  // that implicit submission, so the tests submit the form themselves.
+  it("skips when the empty field is sent with Enter, as its button says", async () => {
+    const wrapper = await mount();
+
+    await wrapper.get("form").trigger("submit");
+
+    expect(wrapper.emitted("answer")).toEqual([[task, { verdict: "skip" }]]);
+  });
+
+  it("turns „Pomiń” into „Zapisz” once something is typed, and back once it is cleared", async () => {
+    const wrapper = await mount();
+    const input = wrapper.get(DATE);
+
+    await input.setValue("1");
+    expect(wrapper.get(SAVE).text()).toBe("Zapisz");
+    expect(wrapper.find(SKIP).exists()).toBe(false);
+
+    // A whitespace-only field is still empty.
+    await input.setValue("  ");
+    expect(wrapper.get(SKIP).text()).toBe("Pomiń");
+  });
+
   it("refuses a day that does not exist, and says why, without sending it", async () => {
     const wrapper = await mount();
     const input = wrapper.get(DATE);
 
     await input.setValue("31.02.1979");
-    await wrapper.get('[data-testid="declaration-submit"]').trigger("click");
+    await wrapper.get(SAVE).trigger("click");
 
     expect(wrapper.emitted("answer")).toBeUndefined();
     const reading = wrapper.get(READING);
     expect(reading.text()).toBe("Taki dzień nie istnieje.");
     expect(reading.classes()).toContain("ow-reading--error");
     expect(input.classes()).toContain("ow-card__input--error");
+
+    // Cleared after the refusal, the field is no longer in error: its button
+    // skips again, which is no mistake.
+    await input.setValue("");
+    expect(input.classes()).not.toContain("ow-card__input--error");
+    expect(wrapper.get(READING).text()).toBe("");
   });
 
-  it("asks for a date, or one of the other answers, when the field is sent empty", async () => {
-    const wrapper = await mount();
-
-    await wrapper.get("form").trigger("submit");
-
-    expect(wrapper.emitted("answer")).toBeUndefined();
-    expect(wrapper.get(READING).text()).toBe(
-      "Wpisz datę albo wybierz „Nie da się odczytać” lub „Pole jest puste”.",
-    );
-  });
-
-  // Enter in the field submits its form in a browser; happy-dom does not do
-  // that implicit submission, so the test submits the form itself.
   it("sends a typed date when its form is submitted, as YYYY-MM-DD", async () => {
     const wrapper = await mount();
 
@@ -141,61 +156,17 @@ describe("OswiadczeniaTaskCard", () => {
     ]);
   });
 
-  it("sends the name read off the paper with the date, when one was typed", async () => {
-    const wrapper = await mount();
-
-    await wrapper.get(DATE).setValue("15 VII 1979");
-    await wrapper.get(NAME).setValue("  Jan Przykładowy ");
-    await wrapper.get('[data-testid="declaration-submit"]').trigger("click");
-
-    expect(wrapper.emitted("answer")).toEqual([
-      [task, { verdict: "date", value: "1979-07-15", name: "Jan Przykładowy" }],
-    ]);
-  });
-
-  // The server turns a longer one down, and the whole answer with it
-  // (tests/server/api/declarations/endpoints.test.ts).
-  it("takes no longer a name than the server keeps", async () => {
-    const wrapper = await mount();
-
-    expect(wrapper.get(NAME).attributes("maxlength")).toBe(
-      String(READ_NAME_MAX_LENGTH),
-    );
-  });
-
-  // A skip says nothing about the crop, so it carries no name either.
-  it("answers „unreadable”, „empty” and „skip” from the three text buttons", async () => {
-    const wrapper = await mount();
-    await wrapper.get(NAME).setValue("Jan Przykładowy");
-
-    await wrapper
-      .get('[data-testid="declaration-unreadable"]')
-      .trigger("click");
-    await wrapper
-      .get('[data-testid="declaration-empty-field"]')
-      .trigger("click");
-    await wrapper.get('[data-testid="declaration-skip"]').trigger("click");
-
-    expect(wrapper.emitted("answer")).toEqual([
-      [task, { verdict: "unreadable", name: "Jan Przykładowy" }],
-      [task, { verdict: "empty", name: "Jan Przykładowy" }],
-      [task, { verdict: "skip" }],
-    ]);
-  });
-
   // A crop whose save failed comes back with what the reader had typed.
-  it("fills the fields from a draft that came back", async () => {
+  it("fills the date from a draft that came back, and offers to save it", async () => {
     const wrapper = await mount({
-      draft: { date: "15.07.1979", name: "Jan Przykładowy" },
+      draft: { date: "15.07.1979", name: "" },
     });
 
     expect((wrapper.get(DATE).element as HTMLInputElement).value).toBe(
       "15.07.1979",
     );
-    expect((wrapper.get(NAME).element as HTMLInputElement).value).toBe(
-      "Jan Przykładowy",
-    );
     expect(wrapper.get(READING).text()).toBe("15 lipca 1979");
+    expect(wrapper.get(SAVE).text()).toBe("Zapisz");
   });
 });
 
