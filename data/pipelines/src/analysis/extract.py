@@ -9,7 +9,7 @@ from analysis.utils import as_sequence, empty_list_if_nan
 from analysis.utils.elections import candidacy_teryt
 from entities.company import on_the_treasury_list
 from entities.company_bodies import RADA_SPOLECZNA, supervisory_body
-from entities.company_categories import CATEGORY_VALUES, categories_for
+from entities.company_categories import CATEGORY_VALUES, SKARB_PANSTWA, categories_for
 from scrapers.krs.columns import is_public
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import KRS_RELATION_ROLES, CompaniesKRS
@@ -65,7 +65,22 @@ def category_companies(companies: pd.DataFrame, category: str) -> set[str]:
     category - see `analysis.payloads.company`, which calls the same
     function. Not `all_descendants` like --krs: a category is a statement
     about a company, and a subsidiary of a hospital is not thereby a hospital.
+
+    Skarb Państwa is read off `treasury_share`, the share Prokuratoria's list
+    gives the Treasury, which `CompaniesKRS` has written only since
+    2026-10-28. Company data built before has no such column and files no
+    company there, so a `--company-category skarb-panstwa` run of it sends
+    nobody and a `--priority-group` of it has no members. Said out loud, as a
+    missing form is (`Extract.relevant_companies`), here where both read it.
     """
+    if category == SKARB_PANSTWA.value and "treasury_share" not in companies:
+        print(
+            "WARNING: the company data read here has no treasury_share column, "
+            f"so no company is filed under {category}: the Treasury's share on "
+            "Prokuratoria's list is what files one there, and CompaniesKRS has "
+            "written it only since 2026-10-28. Rebuild with --refresh "
+            "CompaniesKRS to include them."
+        )
     found = set()
     for company in companies.itertuples():
         form = getattr(company, "form", None)

@@ -132,6 +132,36 @@ class TestCompanyCategory:
     def test_a_company_in_another_sector_is_not(self):
         assert counting(company_category="szpitale")([BOARD_AT_WODOCIAGI]) == 0
 
+    @pytest.mark.parametrize(
+        ("category", "column", "seat"),
+        [
+            ("szpitale", "form", BOARD_AT_SPZOZ),
+            # Not a sector but an owner: Prokuratoria's list of the Treasury's
+            # stakes, a column `CompaniesKRS` has written since 2026-10-28.
+            ("skarb-panstwa", "treasury_share", BOARD_AT_SPOLKA),
+        ],
+    )
+    def test_company_data_without_a_column_the_category_reads_says_so(
+        self, capsys, category, column, seat
+    ):
+        # Built before the column, the data places fewer companies under the
+        # category - none at all under skarb-panstwa - and a run of it would
+        # send fewer people, or nobody, without a word.
+        current = COMPANIES.assign(treasury_share=["100", None, None])
+        assert counting(current, company_category=category)([seat]) == 1
+        assert "WARNING" not in capsys.readouterr().out
+
+        older = current.drop(columns=[column])
+        assert counting(older, company_category=category)([seat]) == 0
+        said = capsys.readouterr().out
+        assert f"no {column} column" in said
+        assert "--refresh CompaniesKRS" in said
+
+    def test_a_sector_reads_no_treasury_share_and_says_nothing_of_it(self, capsys):
+        assert "treasury_share" not in COMPANIES
+        assert counting(company_category="szpitale")([BOARD_AT_SPOLKA]) == 1
+        assert "WARNING" not in capsys.readouterr().out
+
 
 # Neither --employed-role nor --paid-supervision selects anything on its own:
 # they only ever take posts away, and `works_in_relevant` counts nothing until a
