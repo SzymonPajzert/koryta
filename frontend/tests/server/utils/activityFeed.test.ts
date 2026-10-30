@@ -1015,6 +1015,73 @@ describe("buildActivityFeed", () => {
       ]);
     });
 
+    it("drops a restore's own revision, which its restore row names", async () => {
+      const { batches } = await feed({
+        revisions: {
+          rres: direct({
+            collection: "edges",
+            node_id: "e1",
+            data: edgeData("p1", "c1"),
+          }),
+        },
+        audit: {
+          r1: {
+            user: "admin",
+            at: at("10:00:00").replace(".000Z", ".004Z"),
+            action: "restore",
+            collection: "edges",
+            target_id: "e1",
+            revision_id: "rres",
+            reason: "druga kandydatura, nie duplikat",
+          },
+        },
+      });
+
+      expect(batches).toMatchObject([
+        {
+          kind: "restore",
+          count: 1,
+          targets: [
+            {
+              id: "e1",
+              reason: "druga kandydatura, nie duplikat",
+              revisionId: "rres",
+            },
+          ],
+        },
+      ]);
+    });
+
+    it("leaves out a restore a migration filed, revision and all", async () => {
+      // restore-removed-edges.ts writes both under its own uid, which is a
+      // script's and not somebody's decision to watch.
+      const author = "migration:restore-removed-edges";
+      const { batches } = await feed({
+        revisions: {
+          rres: direct({
+            update_user: author,
+            review_user: author,
+            collection: "edges",
+            node_id: "e1",
+            data: edgeData("p1", "c1"),
+          }),
+        },
+        audit: {
+          r1: {
+            user: author,
+            at: at("10:00:00"),
+            action: "restore",
+            collection: "edges",
+            target_id: "e1",
+            revision_id: "rres",
+            reason: "druga kandydatura, nie duplikat",
+          },
+        },
+      });
+
+      expect(batches).toEqual([]);
+    });
+
     it("drops what a merge wrote, and keeps an edit next to it that it did not", async () => {
       const { batches } = await feed({
         nodes: {
@@ -1647,7 +1714,7 @@ describe("buildActivityFeed", () => {
           r: {
             user: "admin",
             at: at("10:00:00"),
-            action: "restore",
+            action: "archive",
             collection: "edges",
             target_id: "e1",
           },

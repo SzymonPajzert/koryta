@@ -658,8 +658,7 @@ export function readFeedAuditRow(
   const at = feedInstant(get("at"), window);
   const action = get("action");
   const targetId = get("target_id");
-  // An action this code does not know - the unmerged audit log adds `restore`
-  // - is left out rather than guessed at.
+  // An action this code does not know is left out rather than guessed at.
   if (!uid || !at || !(auditActions as readonly unknown[]).includes(action)) {
     return null;
   }
@@ -703,13 +702,14 @@ function readMerge(merge: Record<string, unknown>): FeedAuditRow["merge"] {
  * anybody: it is an administrator writing straight into the data. Most such
  * writes are the side effects of an action the audit log already names (the
  * relations a merge collapses or enriches, the person a split creates, the
- * removal behind an edge's deletion), and one of those is dropped only when an
- * audit row by the same person, stamped within `SIDE_EFFECT_BOUND_MS` after
- * it, names it - a removal by its revision id, a merge or a split by the page
- * or relation it was written on. The rest are `edit`s. Asking for both is what
- * keeps a dozen real edits made just before a merge from vanishing with it:
- * what the merge names keeps the unrelated ones, and the few seconds keep the
- * edit of a relation the merge went on to enrich.
+ * removal behind an edge's deletion and the revision that takes it back), and
+ * one of those is dropped only when an audit row by the same person, stamped
+ * within `SIDE_EFFECT_BOUND_MS` after it, names it - a removal or a restore by
+ * its revision id, a merge or a split by the page or relation it was written
+ * on. The rest are `edit`s. Asking for both is what keeps a dozen real edits
+ * made just before a merge from vanishing with it: what the merge names keeps
+ * the unrelated ones, and the few seconds keep the edit of a relation the merge
+ * went on to enrich.
  *
  * Everything else is a proposal, flagged when its author later approved it
  * themselves.
@@ -726,6 +726,7 @@ export function classifyRevisions(
   for (const row of audit) {
     if (
       row.action !== "delete" &&
+      row.action !== "restore" &&
       row.action !== "merge" &&
       row.action !== "split"
     )
@@ -787,11 +788,13 @@ function wasNeverProposed(revision: FeedRevision): boolean {
 }
 
 /** Whether an audit row names this revision as part of what it did: a removal
- * by the revision's own id, a merge or a split only by the page or relation it
- * was written on, which is why the caller also bounds it in time. */
+ * or a restore by the revision's own id, a merge or a split only by the page or
+ * relation it was written on, which is why the caller also bounds it in time. */
 function accountsFor(row: FeedAuditRow, revision: FeedRevision): boolean {
   const id = revision.targetId;
-  if (row.action === "delete") return row.revisionId === revision.id;
+  if (row.action === "delete" || row.action === "restore") {
+    return row.revisionId === revision.id;
+  }
   if (!row.merge || !id) return false;
   if (row.action === "split") return row.merge.into === id;
   return (
@@ -969,6 +972,10 @@ export function auditFeedEvents(
       case "delete":
         return [
           { ...base, kind: "delete", unit, target, ...revisionId, ...reason },
+        ];
+      case "restore":
+        return [
+          { ...base, kind: "restore", unit, target, ...revisionId, ...reason },
         ];
       case "merge": {
         const into = row.merge?.into;

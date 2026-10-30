@@ -4,6 +4,7 @@ import {
   mdiCheck,
   mdiClose,
   mdiDeleteOutline,
+  mdiDeleteRestore,
   mdiEarth,
   mdiEyeOffOutline,
   mdiFlagOutline,
@@ -46,6 +47,9 @@ export const feedKindStyle: Record<
   publish: { icon: mdiEarth, tone: "success", label: "Publikacja" },
   unpublish: { icon: mdiEyeOffOutline, tone: "neutral", label: "Ukrycie" },
   delete: { icon: mdiDeleteOutline, tone: "danger", label: "Usunięcie" },
+  // Neutral, not green: a removal unpublishes what it removes, so what a
+  // restore puts back is a draft, and the public site does not change.
+  restore: { icon: mdiDeleteRestore, tone: "neutral", label: "Przywrócenie" },
   merge: { icon: mdiCallMerge, tone: "info", label: "Scalenie" },
   split: { icon: mdiCallSplit, tone: "warning", label: "Rozdzielenie" },
   splitMark: {

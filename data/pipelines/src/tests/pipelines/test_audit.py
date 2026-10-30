@@ -45,6 +45,8 @@ pytestmark = pytest.mark.e2e
 # too - a new kind of admin decision is exactly the thing worth noticing.
 # `delete`, `merge` and `split` joined it there without joining this list, and
 # would have read as malformed entries the first night the log was exported.
+# `restore` joined both at once, before the first run of
+# scripts/migrate/restore-removed-edges.ts files one.
 AUDIT_ACTIONS = {
     "approve",
     "reject",
@@ -53,11 +55,13 @@ AUDIT_ACTIONS = {
     "delete",
     "merge",
     "split",
+    "restore",
 }
 
-#: The actions that always name a revision: the two that settle one, and a
-#: removal, which `/api/edges/delete` files as a revision of its own.
-REVISION_ACTIONS = {"approve", "reject", "delete"}
+#: The actions that always name a revision: the two that settle one, a
+#: removal, which `/api/edges/delete` files as a revision of its own, and a
+#: restore, which takes the removal back with one.
+REVISION_ACTIONS = {"approve", "reject", "delete", "restore"}
 
 #: The actions that name one only sometimes. A publication changes who may see
 #: a page rather than what it says, and `/api/nodes/publish` files it bare -

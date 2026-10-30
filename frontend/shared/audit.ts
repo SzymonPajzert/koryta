@@ -24,6 +24,11 @@ export const auditActions = [
   // node it moved off may not even be readable afterwards.
   "merge",
   "split",
+  // A removal taken back: the relation loses `deleted` and `delete_reason`
+  // through an approved revision, which the row names, as a `delete` row
+  // names the one that removed it. Only
+  // scripts/migrate/restore-removed-edges.ts files one so far.
+  "restore",
 ] as const;
 
 export type AuditAction = (typeof auditActions)[number];
@@ -44,8 +49,8 @@ export type AuditEntry = {
   /** ISO 8601, UTC. A string rather than a Timestamp so the activity scan is a
    * plain range query on one field, the way votes and notes are read. */
   at: string;
-  /** Why the suggestion was turned down, or why the entry was removed. Only a
-   * rejection and a removal carry one. */
+  /** Why the suggestion was turned down, the entry removed or put back, or the
+   * pages merged or split. Approving, publishing and hiding carry none. */
   reason?: string;
   /** Where a merged page's relations went, and which ones.
    *
@@ -81,4 +86,5 @@ export const auditActionLabels: Record<AuditAction, string> = {
   delete: "Usunięcie wpisu",
   merge: "Scalenie duplikatu",
   split: "Rozdzielenie strony",
+  restore: "Przywrócenie wpisu",
 };
