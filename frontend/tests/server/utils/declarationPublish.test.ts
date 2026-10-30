@@ -686,6 +686,91 @@ describe("matchPages", () => {
 // The admin chose the date on /admin/oswiadczenia with the pages' dates a
 // click away, so it confirms nothing: until decided otherwise, it holds the
 // page and publishes nobody.
+/** A reader's answer to Kowalska's crop. */
+function answered(uid: string, fields: Data) {
+  put(`declarationAnswers/kowalska-crop_${uid}`, {
+    extractId: "kowalska-crop",
+    uid,
+    ...fields,
+  });
+}
+
+const finds = () =>
+  [...stored.keys()]
+    .filter((path) => path.startsWith("declarationReaderFinds/"))
+    .sort();
+
+// The tally's „Znaleziono”: a person is found by the readers who typed the
+// date their crop settled on, once it is the birth date on their page.
+describe("who found the person", () => {
+  it("credits the readers who typed the date it settled on, or its year, and nobody else", async () => {
+    kowalska();
+    answered("a", { verdict: "date", value: BORN, votes: true });
+    answered("b", { verdict: "date", value: "1979", votes: true });
+    answered("c", { verdict: "date", value: "1979-07-16", votes: true });
+    answered("d", { verdict: "skip", votes: true });
+    // A reader without an account found her too, under the browser's id.
+    answered("anon:x", { verdict: "date", value: BORN, votes: false });
+
+    await matchPages(firestore, "kowalska-crop", NOON);
+
+    expect(finds()).toEqual([
+      "declarationReaderFinds/a_kowalska",
+      "declarationReaderFinds/anon:x_kowalska",
+      "declarationReaderFinds/b_kowalska",
+    ]);
+    expect(read("declarationReaderFinds/a_kowalska")).toMatchObject({
+      uid: "a",
+      personId: "kowalska",
+      extractId: "kowalska-crop",
+    });
+  });
+
+  it("credits them once: comparing again writes nothing", async () => {
+    kowalska();
+    answered("a", { verdict: "date", value: BORN, votes: true });
+    await matchPages(firestore, "kowalska-crop", NOON);
+    const counted = writes;
+
+    await matchPages(firestore, "kowalska-crop", NOON);
+
+    expect(writes).toBe(counted);
+    expect(finds()).toEqual(["declarationReaderFinds/a_kowalska"]);
+  });
+
+  it("credits nobody for another day, a date the job read, or one an admin decided", async () => {
+    kowalska();
+    answered("a", { verdict: "date", value: BORN, votes: true });
+    put("nodes/kowalska", {
+      ...read("nodes/kowalska")!,
+      birthDate: "1979-07-16",
+    });
+    await matchPages(firestore, "kowalska-crop", NOON);
+    expect(finds()).toEqual([]);
+
+    for (const by of ["machine", "admin"]) {
+      kowalska();
+      answered("a", { verdict: "date", value: BORN, votes: true });
+      extract("kowalska-crop", {
+        agreed: { value: BORN, kind: "date", by, readers: 0 },
+      });
+      await matchPages(firestore, "kowalska-crop", NOON);
+      expect(finds(), by).toEqual([]);
+    }
+  });
+
+  it("credits nobody where two pages were born that day: that is a question, not a find", async () => {
+    kowalska();
+    person("namesake");
+    extract("kowalska-crop", { personIds: ["kowalska", "namesake"] });
+    answered("a", { verdict: "date", value: BORN, votes: true });
+
+    await matchPages(firestore, "kowalska-crop", NOON);
+
+    expect(finds()).toEqual([]);
+  });
+});
+
 describe("a date an admin settled", () => {
   /** A crop of hers readers could not agree on, settled by an admin on
    * `BORN`, the way /admin/oswiadczenia settles it. */

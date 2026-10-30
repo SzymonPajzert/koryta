@@ -32,6 +32,10 @@ export const ANSWERS = "declarationAnswers";
 export const READER_LIMITS = "declarationReaderLimits";
 export const PUBLICATIONS = "declarationPublications";
 export const PUBLISH_LIMITS = "declarationPublishLimits";
+/** One record a reader and a person they found: a crop the reader typed the
+ * date of settled on that date, and it is the birth date on the person's page
+ * (`creditFinders` in declarationPublish.ts). Server-only, like the answers. */
+export const READER_FINDS = "declarationReaderFinds";
 
 /** Answers one reader may give in a Warsaw day. Far above what a person reads
  * in a sitting (the 10-29 review read 145 crops in an afternoon), low enough
@@ -335,17 +339,22 @@ export async function queueFor(
 ): Promise<DeclarationQueue> {
   const today = warsawDate();
   const mine = db.collection(ANSWERS).where("uid", "==", uid);
-  const [tasks, open, total, todays] = await Promise.all([
+  const [tasks, open, total, todays, found] = await Promise.all([
     nextTasks(db, uid, count, exclude),
     db.collection(EXTRACTS).where("status", "==", "open").count().get(),
     mine.where("counted", "==", true).count().get(),
     mine.where("counted", "==", true).where("day", "==", today).count().get(),
+    db.collection(READER_FINDS).where("uid", "==", uid).count().get(),
   ]);
   return {
     task: tasks[0] ?? null,
     upcoming: tasks.slice(1),
     open: open.data().count,
-    mine: { total: total.data().count, today: todays.data().count },
+    mine: {
+      total: total.data().count,
+      today: todays.data().count,
+      found: found.data().count,
+    },
   };
 }
 
@@ -693,8 +702,41 @@ export async function claimAnswers(
     );
   }
   await giveBackVotes(db, to, unused);
+  await moveFinds(db, from, to);
   return result;
 }
+
+/** The people a browser found go with its answers to the account, kept once
+ * where the account found the same person itself. A transaction a slice, two
+ * writes a find under a transaction's 500. */
+async function moveFinds(db: Firestore, from: string, to: string) {
+  for (;;) {
+    const moved = await db.runTransaction(async (tx) => {
+      const finds = await tx.get(
+        db
+          .collection(READER_FINDS)
+          .where("uid", "==", from)
+          .limit(FINDS_PER_MOVE),
+      );
+      for (const find of finds.docs) {
+        const personId = String(find.get("personId") ?? "");
+        if (personId) {
+          tx.set(
+            db.collection(READER_FINDS).doc(`${to}_${personId}`),
+            { ...find.data(), uid: to },
+            { merge: true },
+          );
+        }
+        tx.delete(find.ref);
+      }
+      return finds.docs.length;
+    });
+    if (moved < FINDS_PER_MOVE) return;
+  }
+}
+
+/** Finds one transaction of a claim moves. */
+const FINDS_PER_MOVE = 200;
 
 /** Takes from an account's daily limits the votes a claim gives, in one
  * transaction: as many of each day's answers as that day has room for.

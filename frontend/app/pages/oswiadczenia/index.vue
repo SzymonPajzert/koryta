@@ -60,7 +60,7 @@
             </div>
             <div class="ow-tally__row" data-tally-row>
               <dt>Znaleziono</dt>
-              <dd>{{ polishNumber(foundInCompanies) }}</dd>
+              <dd>{{ polishNumber(found) }}</dd>
             </div>
           </dl>
           <div v-if="!user" class="ow-tally__pitch">
@@ -312,9 +312,9 @@ const {
 
 const current = computed(() => queue.value[0] ?? null);
 
-/** How many crops this reader has read a date off, and how many of those
- * people sit in companies: the tally at the top, which shows from the first
- * reading on. */
+/** How many crops this reader has read a date off, and how many people they
+ * found that way: the tally at the top, which shows from the first reading
+ * on. */
 /** Why to sign in, beside the button on a wider
  * screen, and on a phone under the tally behind its "?", title and all. */
 const TALLY_INFO_TITLE = "Zaloguj się, by zapisać znalezione daty";
@@ -323,7 +323,7 @@ const TALLY_INFO =
 const tallyInfoOpen = ref(false);
 
 const readSoFar = computed(() => mine.value?.total ?? 0);
-const foundInCompanies = computed(() => mine.value?.inCompanies ?? 0);
+const found = computed(() => mine.value?.found ?? 0);
 
 /** Whether asking again can help. A reader without an account whom the day
  * has turned away has two ways on: an account, which the tally and the app

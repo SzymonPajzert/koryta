@@ -31,6 +31,8 @@ const COLLECTIONS = [
   ["declarationAnswers", "a-p0_reader"],
   ["declarationPublications", "kowalska"],
   ["declarationPublishLimits", "2026-10-29"],
+  ["declarationReaderLimits", "2026-10-29_reader"],
+  ["declarationReaderFinds", "reader_kowalska"],
 ] as const;
 
 let browsers: [string, Firestore][];

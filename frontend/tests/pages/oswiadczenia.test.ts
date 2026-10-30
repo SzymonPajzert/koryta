@@ -448,7 +448,7 @@ describe("/oswiadczenia, the tally at the top", () => {
       method: "POST",
       handler: () =>
         ({
-          ...served(["a2", "a3"], { today: 3, total: 5, inCompanies: 2 }),
+          ...served(["a2", "a3"], { today: 3, total: 5, found: 2 }),
           settled: false,
           answered: {
             id: "a1",
