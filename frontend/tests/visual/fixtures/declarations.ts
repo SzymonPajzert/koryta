@@ -43,6 +43,10 @@ export const FIRST_DATE = "15.07.1979";
 
 /** Three crops, as many as the page asks for at a time: the one on screen and
  * two behind it, so answering one never sends it back for more. */
+/** The date line of the fixture's crop `n`, as the card draws it: how a test
+ * tells which crop is on the card, now that the card says nothing else of it. */
+export const cropDate = (n: number) => png(`crop-${n}-data.png`);
+
 export function readingCrops(): DeclarationTask[] {
   const crop = (
     n: number,
@@ -76,11 +80,11 @@ export class ReadingDesk {
   readonly answers: { id: string; body: DeclarationAnswer }[] = [];
   private remaining: DeclarationTask[];
   private open: number;
-  private mine: { today: number; total: number };
+  private mine: DeclarationQueue["mine"];
 
   constructor(
     crops: DeclarationTask[],
-    counts: { open: number; mine: { today: number; total: number } },
+    counts: { open: number; mine: DeclarationQueue["mine"] },
   ) {
     this.remaining = [...crops];
     this.open = counts.open;
