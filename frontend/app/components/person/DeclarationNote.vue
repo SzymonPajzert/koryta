@@ -36,9 +36,8 @@
  * majątkowe) on BIP, under their facts: that the birth date on the page agrees
  * with them, and for a page the site published itself, that it did and when.
  * The documents are listed as cards in the section of articles that mention
- * the person (`MentionArticleList`): Szymon, round bip-osoba-r1 (2026-10-29),
- * "This could be integrated with the articles mentioning section to not
- * duplicate the ideas". This line points there.
+ * the person (`MentionArticleList`), not in a section of their own (round
+ * bip-osoba-r1). This line points there.
  *
  * Everyone sees it, logged out readers included - the page is public by the
  * time there is anything to say. A reader never gets more than the outcome and
@@ -100,8 +99,8 @@ const nounTail = computed(() => declarationNoun.value.split(" ")[1]);
 
 /** „Strona opublikowana automatycznie 29 października 2026: data urodzenia
  * zgadza się z ”, then the link. Without the publication for a page somebody
- * published by hand, whose date a declaration confirmed later (Szymon: link
- * those too, bip-osoba-r1). */
+ * published by hand, whose date a declaration confirmed later: those are
+ * linked too (bip-osoba-r1). */
 const sentenceLead = computed(() => {
   const agrees = `data urodzenia zgadza się z${NBSP}`;
   if (!autoPublished.value) {
@@ -118,7 +117,7 @@ const readers = `co najmniej ${READERS_TO_AGREE} ${plural(READERS_TO_AGREE, "oso
 /** How a date is read and what the publication brought with it - the
  * method, which a reader may want and does not need to follow the link. In
  * general terms on purpose: nothing here is about this person's crop. Only a
- * typed date the job is sure of settles without readers (Szymon, 2026-10-29);
+ * typed date the job is sure of settles without readers;
  * handwriting, scans and a typed date it is unsure of go to them, so the
  * readers are said to read everything else, not the handwritten ones alone.
  * A date an admin settled never reaches this line, nor a reading the page's
@@ -175,8 +174,8 @@ function withoutOrphans(text: string): string {
   text-wrap: pretty;
 }
 
-/* Meta text in the neutral ink, the link in the sage one (Szymon picked dark
-   sage over the blue link ink, bip-osoba-r1): sage is the site's colour but a
+/* Meta text in the neutral ink, the link in the dark sage one rather than
+   the blue link ink (bip-osoba-r1): sage is the site's colour but a
    fill, never text - `ink.sage` is the shade of it that reads at 14px (6.43:1
    on white). The two inks are the same lightness, so the link is told apart
    by its underline as well, not by its hue alone. */

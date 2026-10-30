@@ -14,12 +14,11 @@ import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
 
 /** /oswiadczenia, where readers type the birth date off a line cut out of a
- * councillor's asset declaration: Szymon's pick of round bip-czytanie-r1, one
- * field that says back what it understood (variant B), approved in round
- * bip-czytanie-r2 with reading open to readers without an account, and as he
- * shaped it on 2026-10-30: the date line alone, one button that skips until a
- * date is typed, and once something is read the tally in Oliwka at the top,
- * whose reason to sign in sits behind a „?” on a phone.
+ * councillor's asset declaration: one field that says back what it
+ * understood (variant B of round bip-czytanie-r1), open to readers without an
+ * account, with the date line alone, one button that skips until a date is
+ * typed, and once something is read the tally in Oliwka at the top, whose
+ * reason to sign in sits behind a „?” on a phone.
  *
  * Every crop is fetched in the browser - with the reader's token, or with
  * this browser's reader id when nobody is signed in - so the two endpoints the
@@ -192,7 +191,7 @@ test("oswiadczenia-zla-data", OSWIADCZENIA, async ({ page }, testInfo) => {
 });
 
 /** The next crop, and under it the line about the one just answered: what was
- * saved, the link to the whole declaration in dark sage (Szymon, round
+ * saved, the link to the whole declaration in dark sage (round
  * bip-czytanie-r2), and that the crop has enough readings now. */
 test("oswiadczenia-po-odpowiedzi", OSWIADCZENIA, async ({ page }, testInfo) => {
   test.setTimeout(120_000);

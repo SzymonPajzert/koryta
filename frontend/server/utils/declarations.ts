@@ -115,9 +115,8 @@ export function readerIdOf(value: unknown): string | null {
 
 /**
  * Who is asking for crops or answering one. Reading is open to readers
- * without an account (Szymon, round bip-czytanie-r1, 2026-10-29): "the
- * answers are aggregated under their ID - it doesn't count towards auto
- * publish for now".
+ * without an account: their answers are kept under their browser's id and
+ * count towards no automatic publication.
  *
  * A token makes the reader its account, whose answers vote once it is some
  * evidence of a person (`isCountedReader`); an account without a confirmed
@@ -277,7 +276,7 @@ export function taskOf(
 
 /** The crops this reader should read next, most useful first.
  *
- * Drafts before published pages (`priority`, Szymon's order), and within a
+ * Drafts before published pages (`priority`), and within a
  * tier the crops one reader already answered: a second reading is what
  * settles a crop, so readers are sent where one is missing before they start
  * new ones. Only answers that vote count here (`answerCount`), as only they

@@ -415,7 +415,7 @@ describe("recordAnswer", () => {
   });
 
   // A skip with a vote is a voice since three skips settle a crop as
-  // unreadable (Szymon, 2026-10-30), so it is held to the limit too; a
+  // unreadable, so it is held to the limit too; a
   // stranger's skip has no say and is not.
   it("stops a reader who votes at the daily limit, skips included", async () => {
     crop("c1");
@@ -697,7 +697,7 @@ describe("queueFor", () => {
     expect(queue.mine.total).toBe(1);
   });
 
-  // Szymon, 2026-10-30: the form asks for the date alone for now, so a
+  // The form asks for the date alone for now, so a
   // reader, with or without an account, is not sent the line with the name
   // either (READ_NAMES).
   it("sends no name crop while readers are not asked for names", async () => {

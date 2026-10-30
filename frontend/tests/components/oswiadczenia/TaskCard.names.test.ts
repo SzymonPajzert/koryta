@@ -6,8 +6,8 @@ import {
   type DeclarationTask,
 } from "../../../shared/declarations";
 
-// The card as it reads with names switched on: off since Szymon's call of
-// 2026-10-30, kept working for the day they are (READ_NAMES).
+// The card as it reads with names switched on: off for now, kept working
+// for the day they are (READ_NAMES).
 vi.mock("~~/shared/declarations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../shared/declarations")>()),
   READ_NAMES: true,

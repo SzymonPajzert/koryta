@@ -92,11 +92,10 @@ async function refreshToken(user: User) {
 }
 
 /** Where a reader without an account keeps the id their readings are filed
- * under. Szymon, round bip-czytanie-r1 (2026-10-29): reading is open to
- * readers who are not signed in, "We'd assign them some identifier and they
- * can either convert their found things to a signed up account or the answers
- * are aggregated under their ID - it doesn't count towards auto publish for
- * now". A random id in this browser, never an account: a Firebase anonymous
+ * under. Reading is open to readers who are not signed in: their answers are
+ * kept under this id, count towards no automatic publication, and move to an
+ * account once they sign in. A random id in this browser, never an account:
+ * a Firebase anonymous
  * sign-in would make the reader "signed in" everywhere, and a signed-in
  * reader sees drafts and their dates, which a blind reading must not. */
 const READER_KEY = "koryta:declaration-reader";

@@ -11,8 +11,8 @@
  *
  * The declaration is evidence against the register, so nothing on the BIP
  * side ever carries a date the site already knows: not the upload, not the
- * reading task. The two meet only here, after the reading is settled
- * (Szymon, 2026-10-29). Readers read blind.
+ * reading task. The two meet only here, after the reading is settled.
+ * Readers read blind.
  */
 import { z } from "zod";
 import { isoDay } from "./dates";
@@ -28,7 +28,7 @@ export const READERS_TO_AGREE = 2;
  * the admin list instead. */
 export const DISPUTED_AFTER = 6;
 
-/** People published automatically per Warsaw day, as proposed to Szymon. Over
+/** People published automatically per Warsaw day, as proposed. Over
  * it they wait, oldest first, for the next day.
  *
  * Not what the site enforces: that is `declarationsDailyPublishLimit` in the
@@ -136,8 +136,8 @@ export type MachineReading = z.infer<typeof machineReadingSchema>;
 /** The date the job's own reading settles, or null when readers must read.
  *
  * Only a typed date inside the candidacy's exact PKW birth-date window comes
- * as "high" (Szymon, 2026-10-29: such a date settles without readers;
- * handwriting and scans go to them). A year alone is never enough: there is
+ * as "high": such a date settles without readers, while handwriting and
+ * scans go to them. A year alone is never enough: there is
  * no day to compare with the page's. */
 export function machineSettles(
   machine: MachineReading | null | undefined,
@@ -173,7 +173,7 @@ export const declarationExtractSchema = z
     linkNamed: z.boolean().optional(),
     /** `crop`: a picture for readers. `read`: the job read a typed date
      * inside the candidacy's exact PKW window, which settles it without
-     * readers (Szymon, 2026-10-29); a picture is optional. `failed`: nothing
+     * readers; a picture is optional. `failed`: nothing
      * to read. */
     outcome: z.enum(["crop", "read", "failed"]),
     /** Why nothing could be cut, when the outcome is `failed`. */
@@ -282,9 +282,8 @@ export type AnswerVerdict = (typeof answerVerdicts)[number];
 export const READ_NAME_MAX_LENGTH = 200;
 
 /** Whether readers are asked for the name on the declaration as well as the
- * date. Off since Szymon's call of 2026-10-30 ("skip the first name parsing
- * for now - keep the code that could handle it but just don't show it in the
- * form"): /oswiadczenia shows the date line alone, and the server sends no
+ * date. Off for now: /oswiadczenia shows the date line alone, and the server
+ * sends no
  * name crop to anybody who would not be shown it. What reads names stays
  * (`agreedName`, `nameFitsPage`, the card's name field), for the day it is
  * switched back on. */
@@ -448,8 +447,7 @@ export function answerVotes(answer: ReaderAnswer): boolean {
  * automated uids are not readers. Nor is an answer that does not vote
  * (`votes: false`), given without an account or by one whose address nobody
  * confirmed: either costs nothing to make, so two of them must not publish a
- * page (Szymon, 2026-10-29, of readers without an account: "it doesn't count
- * towards auto publish for now"). An account that votes can claim the answers
+ * page. An account that votes can claim the answers
  * it gave before it signed in.
  *
  * A date is agreed when at least `READERS_TO_AGREE` readers typed it and it
@@ -461,9 +459,8 @@ export function answerVotes(answer: ReaderAnswer): boolean {
  * make the date out has not read another one - but they settle the crop as
  * unreadable when one more reader than it takes to agree says so and no day
  * has the support to agree. A skip counts with them since the form offers
- * „Pomiń” alone (Szymon, 2026-10-30: "After 3 skips it settles as
- * unreadable"); a crop nobody can read would otherwise stay in the queue for
- * good.
+ * „Pomiń” alone: a crop nobody can read would otherwise stay in the queue
+ * for good.
  *
  * The job's own reading is not a voice here: a high-confidence one settles
  * the crop at upload (`machineSettles`) and never reaches readers, and any
@@ -615,7 +612,7 @@ export type DeclarationQueue = {
     total: number;
     /** Of the people whose dates this reader read, how many hold a seat in a
      * company: the page's „Znaleziono N w spółkach”, said once the reader has
-     * read something (Szymon, 2026-10-30). Left out until the server counts
+     * read something. Left out until the server counts
      * it; the page then says how many were read and nothing of companies. */
     inCompanies?: number;
   };

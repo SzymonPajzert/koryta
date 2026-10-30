@@ -149,9 +149,8 @@ import type {
 const { nodeId, withDeclarations = false } = defineProps<{
   nodeId: string;
   /** A person's page also lists their asset declarations on BIP here, with
-   * the articles: Szymon, round bip-osoba-r1 (2026-10-29), "This could be
-   * integrated with the articles mentioning section to not duplicate the
-   * ideas". */
+   * the articles, rather than in a section of their own that would say the
+   * same twice (round bip-osoba-r1). */
   withDeclarations?: boolean;
 }>();
 
@@ -193,8 +192,7 @@ const sectionTitle = computed(() => {
       ? "Oświadczenia majątkowe"
       : "Oświadczenie majątkowe";
   }
-  // Szymon's wording, round bip-osoba-r2 (2026-10-29): "Może po prostu
-  // Prasa i dokumenty".
+  // Round bip-osoba-r2's title for the two together.
   return "Prasa i dokumenty";
 });
 

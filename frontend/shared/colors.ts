@@ -212,8 +212,8 @@ export const role = {
   /** The ring round the subject of a relation graph - sage, a shade darker
    * than `brand.primary`, which is too pale to read as a ring on white. */
   focusRing: "#5f7a54",
-  /** The reader's tally on /oswiadczenia: Oliwka of the palette rounds
-   * (Szymon's pick, 2026-10-30). White on it: 5.9:1; `tallyPale` on it 5.5:1. */
+  /** The reader's tally on /oswiadczenia: Oliwka of the palette rounds.
+   * White on it: 5.9:1; `tallyPale` on it 5.5:1. */
   tally: "#496d4a",
   /** The tally's figure labels on `tally`, and its paper beside them. */
   tallyPale: "#fff8ec",

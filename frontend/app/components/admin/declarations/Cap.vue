@@ -93,8 +93,9 @@ import { PRESS_BATCH } from "~~/shared/declarations";
  * the queue says how many days it is at that pace. "Opublikuj z kolejki" is
  * the way past it, for a day an admin has looked at the queue and wants it
  * out: it publishes now, past the limit and also while the automatic
- * publication is switched off (Szymon, 2026-10-30: "it's an admin decision"),
- * so it is there whenever somebody waits, as round bip-admin-r2 drew it. It
+ * publication is switched off: publishing from the queue is an admin's
+ * decision, so it is there whenever somebody waits, as round bip-admin-r2
+ * drew it. It
  * takes none of the day's places, so „Dziś” does not move for it
  * (server/api/declarations/publish-queued.post.ts).
  *

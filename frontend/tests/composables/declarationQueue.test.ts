@@ -239,7 +239,7 @@ afterEach(() => {
 });
 
 /** The queue behind /oswiadczenia. Reading is open to readers without an
- * account (Szymon, bip-czytanie-r1): their requests carry this browser's
+ * account: their requests carry this browser's
  * reader id instead of a token, and an account that signs in later claims
  * what they read. An answer moves the reader on at once and is saved behind
  * their back, so a save that fails has to put the crop back where they can

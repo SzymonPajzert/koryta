@@ -263,8 +263,8 @@ import { READ_NAMES } from "~~/shared/declarations";
 
 /**
  * /oswiadczenia: readers type the birth date off a line cut out of a
- * councillor's asset declaration, one crop at a time. Signed in or not
- * (Szymon, bip-czytanie-r1): without an account the readings are filed under
+ * councillor's asset declaration, one crop at a time. Signed in or not:
+ * without an account the readings are filed under
  * this browser's reader id and count for nothing until an account claims
  * them; with one that is a Google sign-in or a confirmed address they count
  * towards the agreement that can publish a page.
@@ -522,9 +522,9 @@ onMounted(() => {
   max-width: 880px;
 }
 
-/* What the reader did so far, split down the middle at every width (Szymon,
-   2026-10-30): the two figures on a coloured pane on the left, as wide as
-   they need, and the ask with its button on paper on the right. In Oliwka, his pick. */
+/* What the reader did so far, split down the middle at every width: the two
+   figures on a coloured pane on the left, as wide as they need, and the ask
+   with its button on paper on the right. In Oliwka, from the palette rounds. */
 .ow-tally {
   background: rgb(var(--v-theme-tally-pale));
   border: 1px solid rgba(var(--v-border-color), 0.16);
@@ -543,7 +543,7 @@ onMounted(() => {
 
 /* The two rows share one grid (their wrappers are `display: contents`), so
    the labels line up on the left and the figures on the right, one above the
-   other (Szymon, 2026-10-30), whatever the width of either. */
+   other, whatever the width of either. */
 .ow-tally__figures {
   align-content: center;
   align-items: baseline;
@@ -647,7 +647,7 @@ onMounted(() => {
 }
 
 /* On a phone the tally holds the button and its „?” alone; the words are
-   behind the „?” (Szymon, 2026-10-30). */
+   behind the „?”. */
 @media (max-width: 599.98px) {
   .ow-tally__words {
     display: none;
@@ -662,7 +662,7 @@ onMounted(() => {
 }
 
 /* On a wider screen the ask and its button share one line and fill the
-   paper (Szymon, 2026-10-30); on a phone the ask stands above the button. */
+   paper; on a phone the ask stands above the button. */
 @media (min-width: 600px) {
   .ow-tally__pitch {
     align-items: center;

@@ -27,7 +27,7 @@ import { readTyped } from "~/utils/declarationReading";
  * A problem is said once the text looks finished, or once the reader tried to
  * save it - not on every key of a date still being typed, when it would only
  * flicker. Until then the line is empty: the field's own „dd.mm.rrrr” says
- * how to type a date (Szymon, 2026-10-30: no examples under the field). */
+ * how to type a date, and no examples stand under the field. */
 const props = withDefaults(
   defineProps<{
     text: string;

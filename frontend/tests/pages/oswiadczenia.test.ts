@@ -380,7 +380,7 @@ const ACCOUNT_QUEUE = {
 };
 
 /** What the reader has read so far, at the top of the page, once they have
- * read something and never before (Szymon, round bip-czytanie-r3): how many
+ * read something and never before: how many
  * people, how many of them in companies when the server says, and for a
  * reader without an account the sign-in that keeps it. It takes the place
  * of the banner under the work. */
@@ -421,7 +421,7 @@ describe("/oswiadczenia, the tally at the top", () => {
         true,
       ),
     );
-    // Two lines, as Szymon laid them out: what was read, and what was found,
+    // Two lines: what was read, and what was found,
     // none until the server has found anybody.
     expect(tallyRows(wrapper)).toEqual(["Sprawdzono 1", "Znaleziono 0"]);
     expect(
@@ -476,8 +476,8 @@ describe("/oswiadczenia, the tally at the top", () => {
   });
 });
 
-/** /oswiadczenia is open to readers without an account (Szymon, round
- * bip-czytanie-r1), whose readings are filed under this browser's reader id
+/** /oswiadczenia is open to readers without an account, whose readings are
+ * filed under this browser's reader id
  * and count once an account claims them. The claim has to reach the server
  * before the account's queue is asked for, or the queue would hand the
  * account the crops it has just read once more. */
@@ -720,8 +720,7 @@ describe("/oswiadczenia turned down by the server", () => {
   });
 });
 
-/** Signing in from the banner under the work keeps the page (Szymon's CUJ
- * for round r3): a crop that came back with what a stranger typed into it is
+/** Signing in from the tally keeps the page: a crop that came back with what a stranger typed into it is
  * the account's to send, and leaving for /login would take it with the
  * page. */
 describe("/oswiadczenia, signed in from its tally", () => {

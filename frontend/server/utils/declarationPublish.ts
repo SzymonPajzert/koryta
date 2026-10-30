@@ -1,6 +1,6 @@
 /**
  * What a settled reading of a BIP asset declaration does to the pages it is
- * for (Szymon, 2026-10-29).
+ * for.
  *
  * Once readers agree on the birth date a crop shows (`recordAnswer`), or the
  * job read a typed one with high confidence at upload, the reading meets the
@@ -21,8 +21,8 @@
  * pages the same way, but a draft born that day is held (`admin_decision`)
  * and a public one is left as it is: the admin chose the date with the
  * pages' dates a click away, so it confirms nothing. It is linked on no page
- * and publishes none, the default until Szymon decides whether an admin's
- * date may.
+ * and publishes none, the default until it is decided whether an admin's
+ * date may (task decide-admin-settled-date-publication).
  *
  * What a public page shows is read off the crops when it is asked for
  * (`confirmedDeclarations`), not off the record: the record keeps what
@@ -31,7 +31,7 @@
  *
  * Publishing re-reads everything and holds the page rather than overrule
  * anybody (`publishPage`). The daily limit lives in the runtime config and is
- * 0 until Szymon sets it, so as shipped the site queues pages and publishes
+ * 0 until it is set, so as shipped the site queues pages and publishes
  * none of them on its own. An admin can publish the queue from
  * /admin/oswiadczenia past the limit, at 0 too (`drainPublications` with
  * `pressedBy`), through the same checks. Nothing is published while a people
@@ -585,8 +585,8 @@ function sameOutcomes(
  * relations it went up for is the one state nobody chose.
  *
  * `pressedBy` makes the pass an admin's press of „Opublikuj z kolejki” on
- * /admin/oswiadczenia, with the admin's uid (Szymon, 2026-10-30: "it's an
- * admin decision"). A press takes up the queue past the limit, at 0 too, and
+ * /admin/oswiadczenia, with the admin's uid: publishing from the queue is an
+ * admin's decision. A press takes up the queue past the limit, at 0 too, and
  * in no slot of the day: the slots are the automation's, which „Dziś” on the
  * overview counts, so a page held on the way has none to give back. Its claim
  * names the admin, and a page it puts up is not one the site published on its

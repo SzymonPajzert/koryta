@@ -331,7 +331,7 @@ describe("/admin/oswiadczenia", () => {
   });
 
   it("puts the declarations by state above the chain", async () => {
-    // Szymon, round bip-admin-r2 (2026-10-29): "Maybe put it above the chain".
+    // The bar stands above the chain since round bip-admin-r2.
     const page = await mountPage();
 
     const states = page.get('[data-testid="declarations-states"]');
@@ -403,7 +403,7 @@ describe("/admin/oswiadczenia", () => {
     expect(cap.get("[data-cap-queued]").text()).toBe(
       "83 osoby czekają w kolejce.",
     );
-    // An admin's press goes past the limit, at 0 too (Szymon, 2026-10-30),
+    // An admin's press goes past the limit, at 0 too,
     // so the button is there all the same, and asks without a limit to go
     // past - for one press's batch of the 83.
     await cap.get("[data-cap-publish]").trigger("click");

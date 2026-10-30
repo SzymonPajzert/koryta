@@ -154,8 +154,8 @@ describe("settleReading", () => {
     });
   });
 
-  // Szymon, 2026-10-30: the form offers „Pomiń” alone, and three skips settle
-  // a crop as unreadable.
+  // The form offers „Pomiń” alone, and three skips settle a crop as
+  // unreadable.
   it("settles as unreadable once three readers who vote skip it", () => {
     expect(settleReading(answers("skip", "skip"))).toEqual({ status: "open" });
     expect(settleReading(answers("skip", "?", "skip"))).toEqual({
