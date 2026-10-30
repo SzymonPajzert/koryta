@@ -357,6 +357,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="pages a unit's walk reads at most (default 1000)",
     )
     people.add_argument(
+        "--max-unit-minutes",
+        type=float,
+        default=30,
+        help="a unit's walk stops after this many minutes, its candidacies left "
+        "not_found:budget (default 30; 0 for no limit)",
+    )
+    people.add_argument(
+        "--max-per-host",
+        type=int,
+        default=1,
+        help="units searched at once on one start host (default 1: they share "
+        "its rate)",
+    )
+    people.add_argument(
         "--known-urls",
         default=None,
         help="newline-delimited JSON of known URLs ({url, category}, e.g. the blind "

@@ -280,7 +280,8 @@ def test_one_failing_unit_does_not_end_the_run(tmp_path, monkeypatch):
 
 
 def test_the_time_budget_stops_walks_and_leaves_units_pending(tmp_path):
-    # Each look at the clock moves it 5 s; the budget is 7 s.
+    # Each look at the clock moves it 5 s; the budget is 12 s: the scheduler's
+    # look (5) and u1's start (10) fit in it, u1's walk (20) does not.
     ticks = iter(range(0, 10_000, 5))
     sites = {"https://u1.pl": html("BIP", '<a href="/a">Oświadczenia majątkowe</a>')}
     store = MemoryBipPeopleStore()
@@ -294,7 +295,7 @@ def test_the_time_budget_stops_walks_and_leaves_units_pending(tmp_path):
         cast("BipQueue", FakeFrontier([])),
         LocalBundleStore(tmp_path / "b"),
         seeds,
-        PeopleOptions(workers=1, max_run_seconds=7),
+        PeopleOptions(workers=1, max_run_seconds=12),
         fetch=Web(sites).fetch,
         limiter=HostTokenBucket(0),
         sleep=lambda s: None,
