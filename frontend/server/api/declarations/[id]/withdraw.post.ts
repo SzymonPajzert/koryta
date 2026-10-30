@@ -1,13 +1,11 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
-import { requireAdmin } from "~~/server/utils/auth";
 import {
   decideExtract,
-  linkedOnAPage,
-  OVERVIEW_CACHE_BASE,
   type DecidedExtract,
 } from "~~/server/utils/declarationDecisions";
-import { EXTRACT_ID_PATTERN } from "~~/shared/declarations";
+import {
+  afterDecision,
+  decisionRequest,
+} from "~~/server/utils/declarationDecisionRequest";
 
 /**
  * An admin takes a crop back from /admin/oswiadczenia: it is not the
@@ -18,21 +16,12 @@ import { EXTRACT_ID_PATTERN } from "~~/shared/declarations";
  * checked before anything is read.
  */
 export default defineEventHandler(async (event): Promise<DecidedExtract> => {
-  const admin = await requireAdmin(event);
-  setResponseHeader(event, "Cache-Control", "private, no-store");
-  const id = getRouterParam(event, "id") ?? "";
-  if (!EXTRACT_ID_PATTERN.test(id)) {
-    throw createError({ statusCode: 404, message: "Nie ma takiego wycinka." });
-  }
-  const db = getFirestore(getApp(), "koryta-pl");
+  const { uid, id, db } = await decisionRequest(event);
   const decided = await decideExtract(db, {
     extractId: id,
-    uid: admin.uid,
+    uid,
     decision: { verdict: "withdraw" },
   });
-  if (await linkedOnAPage(db, id)) {
-    await useStorage("cache").clear("nitro:handlers");
-  }
-  await useStorage("cache").clear(OVERVIEW_CACHE_BASE);
+  await afterDecision(db, id);
   return decided;
 });

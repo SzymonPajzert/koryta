@@ -1,20 +1,16 @@
-import { getFirestore, type Firestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
+import type { Firestore } from "firebase-admin/firestore";
 import type { H3Event } from "h3";
 import { z } from "zod";
-import { requireAdmin } from "~~/server/utils/auth";
 import {
   decideExtract,
-  linkedOnAPage,
-  OVERVIEW_CACHE_BASE,
   type DecidedExtract,
 } from "~~/server/utils/declarationDecisions";
-import { matchAndDrain } from "~~/server/utils/declarationPublish";
 import {
-  EXTRACT_ID_PATTERN,
-  parseTypedDate,
-  publishLimitOf,
-} from "~~/shared/declarations";
+  afterDecision,
+  decisionRequest,
+} from "~~/server/utils/declarationDecisionRequest";
+import { matchAndDrain } from "~~/server/utils/declarationPublish";
+import { parseTypedDate, publishLimitOf } from "~~/shared/declarations";
 
 const settleSchema = z.discriminatedUnion("verdict", [
   z.object({
@@ -51,18 +47,12 @@ const PAGES_PER_DECISION = 1;
  * as they are when the pass published somebody.
  */
 export default defineEventHandler(async (event): Promise<DecidedExtract> => {
-  const admin = await requireAdmin(event);
-  setResponseHeader(event, "Cache-Control", "private, no-store");
-  const id = getRouterParam(event, "id") ?? "";
-  if (!EXTRACT_ID_PATTERN.test(id)) {
-    throw createError({ statusCode: 404, message: "Nie ma takiego wycinka." });
-  }
+  const { uid, id, db } = await decisionRequest(event);
   const body = await readValidatedBody(event, (raw) => settleSchema.parse(raw));
 
-  const db = getFirestore(getApp(), "koryta-pl");
   const decided = await decideExtract(db, {
     extractId: id,
-    uid: admin.uid,
+    uid,
     decision:
       body.verdict === "date"
         ? {
@@ -72,10 +62,7 @@ export default defineEventHandler(async (event): Promise<DecidedExtract> => {
         : { verdict: "unreadable" },
   });
   const published = decided.compare && (await compareWithPages(event, db, id));
-  if (published || (await linkedOnAPage(db, id))) {
-    await useStorage("cache").clear("nitro:handlers");
-  }
-  await useStorage("cache").clear(OVERVIEW_CACHE_BASE);
+  await afterDecision(db, id, published);
   return decided;
 });
 
