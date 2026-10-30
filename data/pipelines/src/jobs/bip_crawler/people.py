@@ -93,6 +93,7 @@ from scrapers.stores import (
 )
 from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import PostgresBipPeopleStore
+from stores.web import robots_lines
 
 logger = logging.getLogger(__name__)
 
@@ -454,7 +455,8 @@ class PeopleSearch:
         robots = self._get(base + "/robots.txt")
         todo: list[str] = []
         if isinstance(robots, HttpResult) and robots.ok:
-            todo = _SITEMAP.findall(robots.content.decode("utf-8", "replace"))
+            text = robots.content.decode("utf-8", "replace")
+            todo = _SITEMAP.findall("\n".join(robots_lines(text)))
         todo = todo or [base + "/sitemap.xml"]
         seen: set[str] = set()
         found: list[str] = []
