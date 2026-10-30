@@ -72,11 +72,14 @@
         <label :for="nameId" class="ow-card__label ow-card__label--name">
           Imię i nazwisko, jeśli je widać
         </label>
+        <!-- No longer than the server takes: a longer name would have the
+             whole answer, its date with it, turned down. -->
         <input
           :id="nameId"
           v-model="name"
           class="ow-card__input ow-card__input--name"
           data-testid="declaration-name-input"
+          :maxlength="READ_NAME_MAX_LENGTH"
           autocomplete="off"
           autocapitalize="words"
           spellcheck="false"
@@ -118,9 +121,10 @@
 
 <script setup lang="ts">
 import { mdiArrowRight } from "@mdi/js";
-import type {
-  DeclarationAnswer,
-  DeclarationTask,
+import {
+  READ_NAME_MAX_LENGTH,
+  type DeclarationAnswer,
+  type DeclarationTask,
 } from "~~/shared/declarations";
 import { readTyped, taskContext } from "~/utils/declarationReading";
 
@@ -191,6 +195,28 @@ function answerWith(verdict: "unreadable" | "empty") {
 
 onMounted(() => {
   if (props.autofocus) dateInput.value?.focus();
+});
+
+/** Brings the date field into the middle of the window, with the lines of
+ * the paper above it: a field that is only scrolled to the window's edge
+ * (what focusing it does) can end up under the app bar, which stays at the
+ * top of the window. */
+function show() {
+  dateInput.value?.scrollIntoView({ block: "center" });
+}
+
+defineExpose({
+  /** What is typed into the card and not sent yet. */
+  typed: () => ({ date: dateText.value, name: name.value }),
+  /** Brings the card back into the window, for a page that sent the reader
+   * elsewhere: a sign-in from under the work, say. */
+  show,
+  /** The same, with the caret in the date field, for a page that took it
+   * away: a dialog opened over the card, say. */
+  focus: () => {
+    show();
+    dateInput.value?.focus({ preventScroll: true });
+  },
 });
 </script>
 

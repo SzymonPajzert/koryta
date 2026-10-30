@@ -4,6 +4,7 @@ import { registerEndpoint } from "@nuxt/test-utils/runtime";
 import { getQuery, readBody } from "h3";
 import {
   claimStoredReadings,
+  refusalOf,
   useDeclarationQueue,
 } from "../../app/composables/declarationQueue";
 import type {
@@ -11,6 +12,14 @@ import type {
   DeclarationQueue,
   DeclarationTask,
 } from "../../shared/declarations";
+import {
+  failedWith,
+  noAnswer,
+  PAGE_SAYS,
+  refuse,
+  REFUSED,
+  type Refusing,
+} from "../serverRefusals";
 
 const { mockAuthRequest } = vi.hoisted(() => ({
   mockAuthRequest: vi.fn(),
@@ -20,9 +29,14 @@ vi.mock("../../app/composables/auth", () => ({
 }));
 
 /** Who is reading: nobody unless a test signs somebody in. Read at the moment
- * a request goes out, so a plain holder is enough. */
+ * a request goes out, so a plain holder is enough. `getIdToken(true)` is
+ * Firebase being asked for a fresh token. */
 const reader = vi.hoisted(() => ({
-  value: null as { uid: string } | null,
+  value: null as {
+    uid: string;
+    emailVerified?: boolean;
+    getIdToken?: (forceRefresh?: boolean) => Promise<string>;
+  } | null,
 }));
 vi.mock("vuefire", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vuefire")>()),
@@ -93,6 +107,35 @@ function later<T>() {
   return { response, land };
 }
 
+const {
+  noAccount: NO_ACCOUNT,
+  notConfirmed: NOT_CONFIRMED,
+  dailyLimit: DAILY_LIMIT,
+  gone: GONE,
+  claimNotConfirmed: CLAIM_NOT_CONFIRMED,
+  badToken: BAD_TOKEN,
+  noReader: NO_READER,
+} = REFUSED;
+
+/** The page's own line, for a failed answer the server gave no reason for. */
+const ANSWER_FAILED =
+  "Nie udało się zapisać odpowiedzi. Wycinek wrócił na początek kolejki.";
+
+const { gone: GONE_LINE, signedOut: SIGNED_OUT } = PAGE_SAYS;
+
+/** What a reader's request is sent again after, once, if it is a GET:
+ * ofetch's own list without 429, which a limit would only answer again. */
+const RETRY_STATUS_CODES = [408, 409, 425, 500, 502, 503, 504];
+
+/** How the endpoints below turn a request down, by path, if a test says so:
+ * every request until the test takes it back, as a day's limit holds, so a
+ * request sent again would be seen, and turned down, again. A signed-in
+ * reader's requests go through `authRequest`, mocked here, which a test makes
+ * fail with `failedWith`. */
+const refusing = new Map<string, Refusing>();
+
+const refusalFor = (path: string) => refusing.get(path);
+
 /** What reached the server without a token: the requests a reader who is not
  * signed in sends with plain `$fetch`. Served rather than stubbed, so the
  * method and the headers are the ones that went out. The next crops are
@@ -106,13 +149,33 @@ type Seen = {
 };
 let seen: Seen[] = [];
 
-registerEndpoint("/api/declarations/next", (event) => {
+/** Set while a test holds the asks for crops at the server, so that one is
+ * still on its way when something overtakes it. */
+let asksHeld: Promise<void> | null = null;
+
+/** Holds every ask for crops once it has been seen, until the returned
+ * function lets them through. */
+function holdAsksForCrops() {
+  let letThrough!: () => void;
+  asksHeld = new Promise((resolve) => {
+    letThrough = resolve;
+  });
+  return () => {
+    asksHeld = null;
+    letThrough();
+  };
+}
+
+registerEndpoint("/api/declarations/next", async (event) => {
   seen.push({
     method: event.method,
     query: getQuery(event),
     readerId: event.headers.get("x-reader-id"),
     authorization: event.headers.get("authorization"),
   });
+  if (asksHeld) await asksHeld;
+  const refusal = refusalFor("/api/declarations/next");
+  if (refusal) return refuse(event, refusal);
   return served(["a1", "a2", "a3"]);
 });
 registerEndpoint("/api/declarations/a1/answer", {
@@ -125,6 +188,8 @@ registerEndpoint("/api/declarations/a1/answer", {
       readerId: event.headers.get("x-reader-id"),
       authorization: event.headers.get("authorization"),
     });
+    const refusal = refusalFor("/api/declarations/a1/answer");
+    if (refusal) return refuse(event, refusal);
     return answeredA1();
   },
 });
@@ -147,8 +212,23 @@ async function signedInReading(crops: string[]) {
   return reading;
 }
 
+/** Failures the server gave a reader no reason for, for which the page keeps
+ * its own lines. */
+const UNEXPLAINED: [string, () => Promise<unknown>][] = [
+  ["a 500, whatever it says", () => failedWith(500, "DEADLINE_EXCEEDED")],
+  ["a 503 without words", () => failedWith(503)],
+  [
+    "a 400 worded by the validator",
+    () => failedWith(400, '[{"code": "too_big", "path": ["name"]}]'),
+  ],
+  ["a refusal without words", () => failedWith(429)],
+  ["no answer at all", noAnswer],
+];
+
 beforeEach(() => {
   seen = [];
+  asksHeld = null;
+  refusing.clear();
   reader.value = null;
   mockAuthRequest.mockReset();
   window.localStorage.removeItem(READER_KEY);
@@ -213,7 +293,12 @@ describe("useDeclarationQueue", () => {
 
     expect(mockAuthRequest).toHaveBeenCalledExactlyOnceWith(
       "/api/declarations/next",
-      { method: "GET", query: { count: 3 }, timeout: 20_000 },
+      {
+        method: "GET",
+        query: { count: 3 },
+        timeout: 20_000,
+        retryStatusCodes: RETRY_STATUS_CODES,
+      },
     );
     expect(seen).toEqual([]);
     expect(window.localStorage.getItem(READER_KEY)).toBeNull();
@@ -252,6 +337,7 @@ describe("useDeclarationQueue", () => {
           name: "Jan Przykładowy",
         },
         timeout: 20_000,
+        retryStatusCodes: RETRY_STATUS_CODES,
       },
     );
 
@@ -404,6 +490,7 @@ describe("useDeclarationQueue", () => {
       method: "GET",
       query: { count: 3 },
       timeout: 20_000,
+      retryStatusCodes: RETRY_STATUS_CODES,
     });
     expect(ids(reading.queue.value)).toEqual(["a2", "a3", "a4"]);
     expect(reading.refilling.value).toBe(false);
@@ -458,6 +545,460 @@ describe("useDeclarationQueue", () => {
   });
 });
 
+/** What the server says when it turns a reader down is written for them (a
+ * limit of the day, an address to confirm, a crop that is gone), so the page
+ * shows it in place of its own line, and a reader stopped by a limit is told
+ * why rather than to try again. */
+describe("refusalOf", () => {
+  it.each([
+    [429, NO_ACCOUNT],
+    [429, NOT_CONFIRMED],
+    [429, DAILY_LIMIT],
+    [403, CLAIM_NOT_CONFIRMED],
+    [404, GONE],
+  ])(
+    "reads the server's words off the error a %i fails with",
+    async (status, message) => {
+      const error = await failedWith(status, message);
+      // What reaches the page: the words are in the JSON only; the status
+      // text a 429 comes with is Nitro's „Server Error”.
+      expect(error).toMatchObject({
+        statusCode: status,
+        statusMessage: "Server Error",
+        data: { statusCode: status, statusMessage: "Server Error", message },
+      });
+
+      expect(refusalOf(error)).toEqual({ status, message });
+    },
+  );
+
+  // The server's words for it are a programmer's: a „token” means nothing
+  // to a reader whose sign-in lapsed.
+  it.each([
+    ["a token it will not take", BAD_TOKEN],
+    ["neither a token nor a reader id", NO_READER],
+    ["no words at all", undefined],
+  ])("says a 401 for %s in the page's own words", async (_, message) => {
+    expect(refusalOf(await failedWith(401, message))).toEqual({
+      status: 401,
+      message: SIGNED_OUT,
+    });
+  });
+
+  it.each(UNEXPLAINED)("has nothing for %s", async (_, failure) => {
+    expect(refusalOf(await failure())).toBeNull();
+  });
+});
+
+describe("useDeclarationQueue, turned down by the server", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("says why it turned down an answer without an account, with the crop back first as it was typed", async () => {
+    const reading = useDeclarationQueue();
+    await reading.start();
+    refusing.set("/api/declarations/a1/answer", {
+      status: 429,
+      message: NO_ACCOUNT,
+    });
+
+    await reading.answer(crop("a1"), {
+      verdict: "date",
+      value: "1979-07-15",
+      name: "Jan Przykładowy",
+    });
+
+    expect(seen.at(-1)).toMatchObject({ method: "POST", authorization: null });
+    expect(reading.failure.value).toBe(NO_ACCOUNT);
+    // To send again once signed in, as the reason asks.
+    expect(reading.queue.value).toEqual([
+      {
+        task: crop("a1"),
+        draft: { date: "15.07.1979", name: "Jan Przykładowy" },
+      },
+      { task: crop("a2"), draft: null },
+      { task: crop("a3"), draft: null },
+    ]);
+    // Nobody's answer to it was kept, so it is still read blind: no link.
+    expect(reading.answered.value).toBeNull();
+  });
+
+  it.each([
+    ["an account whose address nobody confirmed", NOT_CONFIRMED],
+    ["a reader past their own limit for the day", DAILY_LIMIT],
+  ])(
+    "says why it turned down an answer from %s, with the crop back first",
+    async (_, message) => {
+      const reading = await signedInReading(["a1", "a2", "a3"]);
+      mockAuthRequest.mockRejectedValueOnce(await failedWith(429, message));
+
+      await reading.answer(crop("a1"), { verdict: "unreadable", name: "Anna" });
+
+      expect(reading.failure.value).toBe(message);
+      expect(reading.queue.value[0]).toEqual({
+        task: crop("a1"),
+        draft: { date: "", name: "Anna" },
+      });
+      expect(ids(reading.queue.value)).toEqual(["a1", "a2", "a3"]);
+    },
+  );
+
+  // A token the server will not take: a sign-in that lapsed, or was ended
+  // elsewhere. Its own words speak of the token.
+  it("says in its own words that the sign-in lapsed when an answer is turned down for it, with the crop back first", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    mockAuthRequest.mockRejectedValueOnce(await failedWith(401, BAD_TOKEN));
+
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+
+    expect(reading.failure.value).toBe(SIGNED_OUT);
+    expect(reading.queue.value[0]).toEqual({
+      task: crop("a1"),
+      draft: { date: "15.07.1979", name: "" },
+    });
+  });
+
+  it.each(UNEXPLAINED)(
+    "keeps its own line for an answer that failed with %s",
+    async (_, failure) => {
+      const reading = await signedInReading(["a1", "a2", "a3"]);
+      mockAuthRequest.mockRejectedValueOnce(await failure());
+
+      await reading.answer(crop("a1"), {
+        verdict: "date",
+        value: "1979-07-15",
+      });
+
+      expect(reading.failure.value).toBe(ANSWER_FAILED);
+      expect(reading.queue.value[0]).toEqual({
+        task: crop("a1"),
+        draft: { date: "15.07.1979", name: "" },
+      });
+    },
+  );
+
+  // Withdrawn, or its declaration failed, since it was handed out: back
+  // first, it would stand there for good, as every answer to it is turned
+  // down the same way, a skip included.
+  it("leaves out a crop the server says is gone, and says an answer was not kept", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    mockAuthRequest.mockRejectedValueOnce(await failedWith(404, GONE));
+
+    await reading.answer(crop("a1"), { verdict: "skip" });
+
+    // Not the server's „Nie ma takiego wycinka.”: by now the reader is on
+    // a2, which it would seem to be about.
+    expect(reading.failure.value).toBe(GONE_LINE);
+    expect(ids(reading.queue.value)).toEqual(["a2", "a3"]);
+
+    // Nor does a response that still lists it bring it back.
+    mockAuthRequest.mockResolvedValueOnce(saved("a2", ["a1", "a3", "a4"]));
+    await reading.answer(crop("a2"), { verdict: "skip" });
+
+    expect(ids(reading.queue.value)).toEqual(["a3", "a4"]);
+  });
+
+  // A reader quicker than the server answers the next crop before the first
+  // one's refusal is back: the crop „before” the one on the card is then the
+  // second, whose answer was kept.
+  it("names no crop by its place when the one that is gone was answered before the last", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3", "a4"]);
+    let goneBack!: (error: unknown) => void;
+    mockAuthRequest.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        goneBack = reject;
+      }),
+    );
+    const savingA1 = reading.answer(crop("a1"), { verdict: "skip" });
+    mockAuthRequest.mockResolvedValueOnce(saved("a2", ["a3", "a4"]));
+    await reading.answer(crop("a2"), { verdict: "date", value: "1971-09-03" });
+
+    goneBack(await failedWith(404, GONE));
+    await savingA1;
+
+    expect(ids(reading.queue.value)).toEqual(["a3", "a4"]);
+    expect(reading.answered.value?.id).toBe("a2");
+    expect(reading.failure.value).toBe(GONE_LINE);
+    expect(reading.failure.value).not.toMatch(/poprzedni/i);
+  });
+
+  it("keeps the server's reason when it will hand out no crops, until it does", async () => {
+    refusing.set("/api/declarations/next", {
+      status: 429,
+      message: NO_ACCOUNT,
+    });
+    const reading = useDeclarationQueue();
+
+    await reading.start();
+
+    expect(reading.loadState.value).toBe("error");
+    expect(reading.refusal.value).toEqual({ status: 429, message: NO_ACCOUNT });
+    expect(reading.queue.value).toEqual([]);
+    // Asked once: each ask without a vote takes from the day's room for asks.
+    expect(seen).toHaveLength(1);
+
+    refusing.delete("/api/declarations/next");
+    await reading.start();
+
+    expect(reading.loadState.value).toBe("ready");
+    expect(reading.refusal.value).toBeNull();
+    expect(seen).toHaveLength(2);
+  });
+
+  // What ofetch does by itself is ask a GET again after a 429, which the
+  // limit answers the same way, taking a second ask from the day's room. A
+  // signed-in reader's requests get the same list (`RETRY_STATUS_CODES`
+  // above), which `authRequest` hands on (tests/composables/auth.test.ts).
+  it("never asks again by itself for crops a limit turned down", async () => {
+    refusing.set("/api/declarations/next", {
+      status: 429,
+      message: NO_ACCOUNT,
+    });
+    // That it would be seen here: a plain GET, asked twice.
+    await $fetch("/api/declarations/next", { query: { count: 3 } }).catch(
+      () => null,
+    );
+    expect(seen).toHaveLength(2);
+    seen = [];
+
+    const reading = useDeclarationQueue();
+    await reading.start();
+
+    expect(reading.refusal.value).toEqual({ status: 429, message: NO_ACCOUNT });
+    expect(seen).toHaveLength(1);
+  });
+
+  it.each(UNEXPLAINED)(
+    "has no reason to give for a queue that failed to load with %s",
+    async (_, failure) => {
+      reader.value = { uid: "me" };
+      mockAuthRequest.mockRejectedValueOnce(await failure());
+      const reading = useDeclarationQueue();
+
+      await reading.start();
+
+      expect(reading.loadState.value).toBe("error");
+      expect(reading.refusal.value).toBeNull();
+    },
+  );
+
+  it("reads on when the server will hand out no more, and says why once the page has run out", async () => {
+    const refused = await failedWith(429, NOT_CONFIRMED);
+    reader.value = { uid: "me" };
+    // One crop, so the queue asks for more at once: turned down.
+    mockAuthRequest
+      .mockResolvedValueOnce(served(["a1"]))
+      .mockRejectedValueOnce(refused);
+    const reading = useDeclarationQueue();
+    await reading.start();
+    await flushPromises();
+
+    expect(askedForMore()).toBe(2);
+    expect(reading.loadState.value).toBe("ready");
+    expect(reading.refusal.value).toBeNull();
+
+    // The answer brings back only the crop it answered, which the server has
+    // not caught up with, so the queue asks again: turned down, and nothing
+    // is left to read.
+    mockAuthRequest
+      .mockResolvedValueOnce(saved("a1", ["a1"]))
+      .mockRejectedValueOnce(refused);
+    await reading.answer(crop("a1"), { verdict: "skip" });
+    await flushPromises();
+
+    expect(askedForMore()).toBe(3);
+    expect(reading.loadState.value).toBe("error");
+    expect(reading.refusal.value).toEqual({
+      status: 429,
+      message: NOT_CONFIRMED,
+    });
+  });
+
+  // The server reads whether the address is confirmed off the token, which
+  // says what was true when it was issued, up to an hour ago.
+  it("asks Firebase for a fresh token for the request after a refusal, and only that one", async () => {
+    const getIdToken = vi.fn(async (_force?: boolean) => "token");
+    reader.value = { uid: "me", getIdToken };
+    mockAuthRequest.mockResolvedValueOnce(served(["a1", "a2", "a3"]));
+    const reading = useDeclarationQueue();
+    await reading.start();
+    mockAuthRequest.mockRejectedValueOnce(await failedWith(429, NOT_CONFIRMED));
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+
+    expect(getIdToken).not.toHaveBeenCalled();
+
+    // Confirmed since, and sent again.
+    mockAuthRequest.mockResolvedValueOnce(answeredA1());
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+
+    expect(getIdToken).toHaveBeenCalledExactlyOnceWith(true);
+    expect(getIdToken.mock.invocationCallOrder[0]).toBeLessThan(
+      mockAuthRequest.mock.invocationCallOrder.at(-1)!,
+    );
+    expect(ids(reading.queue.value)).toEqual(["a2", "a3"]);
+
+    mockAuthRequest.mockResolvedValueOnce(saved("a2", ["a3", "a4"]));
+    await reading.answer(crop("a2"), { verdict: "skip" });
+
+    expect(getIdToken).toHaveBeenCalledTimes(1);
+  });
+
+  // On the last crop, the answer turned down brings it back alone and the
+  // queue asks for more at once, on the fresh token that refusal set up.
+  // That ask is turned down as well, and has to set up a fresh token in its
+  // turn: the answer sent again once the address is confirmed would go on
+  // the old token otherwise, and be turned down for nothing.
+  it("asks for a fresh token again after a refill it was turned down for, for the answer sent next", async () => {
+    const getIdToken = vi.fn(async (_force?: boolean) => "token");
+    reader.value = { uid: "me", getIdToken };
+    const refused = await failedWith(429, NOT_CONFIRMED);
+    // One crop, so the queue asks for more at once: that ask fails for no
+    // reason it was given, which leaves the token as it is.
+    mockAuthRequest
+      .mockResolvedValueOnce(served(["a1"]))
+      .mockRejectedValueOnce(await failedWith(503));
+    const reading = useDeclarationQueue();
+    await reading.start();
+    await flushPromises();
+
+    expect(askedForMore()).toBe(2);
+
+    mockAuthRequest
+      .mockRejectedValueOnce(refused)
+      .mockRejectedValueOnce(refused);
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+    await flushPromises();
+
+    // The answer, then the ask for more, both turned down; the crop is back.
+    expect(askedForMore()).toBe(3);
+    expect(ids(reading.queue.value)).toEqual(["a1"]);
+    expect(getIdToken).toHaveBeenCalledExactlyOnceWith(true);
+
+    // Confirmed since, and sent again.
+    mockAuthRequest.mockResolvedValueOnce(saved("a1", ["a2", "a3"]));
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+
+    expect(getIdToken.mock.calls).toEqual([[true], [true]]);
+    // Requests: the queue, the ask that failed, the answer turned down, the
+    // ask turned down, the answer sent again. A fresh token just before each
+    // of the last two.
+    const sent = mockAuthRequest.mock.invocationCallOrder;
+    const [forRefill, forResend] = getIdToken.mock.invocationCallOrder;
+    expect(sent).toHaveLength(5);
+    expect(forRefill).toBeGreaterThan(sent[2]!);
+    expect(forRefill).toBeLessThan(sent[3]!);
+    expect(forResend).toBeGreaterThan(sent[3]!);
+    expect(forResend).toBeLessThan(sent[4]!);
+    expect(ids(reading.queue.value)).toEqual(["a2", "a3"]);
+  });
+
+  // Signing in from the app bar keeps the page: the claim, then a reset.
+  it("keeps a crop that came back with what was typed when it starts over for an account, first, and lets the stranger's reason go", async () => {
+    const reading = useDeclarationQueue();
+    await reading.start();
+    refusing.set("/api/declarations/a1/answer", {
+      status: 429,
+      message: NO_ACCOUNT,
+    });
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+    expect(reading.failure.value).toBe(NO_ACCOUNT);
+
+    reader.value = { uid: "me" };
+    reading.reset();
+
+    expect(reading.queue.value).toEqual([
+      { task: crop("a1"), draft: { date: "15.07.1979", name: "" } },
+    ]);
+    // „Zaloguj się albo załóż konto” was said to the stranger: over the
+    // account's queue it would ask a reader who has signed in to sign in.
+    expect(reading.failure.value).toBe("");
+
+    mockAuthRequest.mockResolvedValueOnce(served(["b1", "a1", "b2"]));
+    await reading.start();
+
+    expect(ids(reading.queue.value)).toEqual(["a1", "b1", "b2"]);
+    expect(reading.queue.value[0]!.draft).toEqual({
+      date: "15.07.1979",
+      name: "",
+    });
+  });
+
+  // A stranger who signs in while their ask for crops is still on its way:
+  // the queue starts over as the account's, and whatever that ask brings
+  // back, crops or a refusal, is the stranger's.
+  it.each([
+    ["its crops", undefined],
+    ["its refusal", { status: 429, message: NO_ACCOUNT }],
+  ])(
+    "lands nothing of a stranger's ask for crops that a sign-in overtook: %s",
+    async (_, refusal) => {
+      if (refusal) refusing.set("/api/declarations/next", refusal);
+      const letThrough = holdAsksForCrops();
+      const reading = useDeclarationQueue();
+      const asking = reading.start();
+      await vi.waitFor(() => expect(seen).toHaveLength(1));
+
+      reader.value = { uid: "me" };
+      reading.reset();
+      mockAuthRequest.mockResolvedValueOnce(served(["b1", "b2", "b3"]));
+      await reading.start();
+
+      letThrough();
+      await asking;
+      await flushPromises();
+
+      expect(reading.loadState.value).toBe("ready");
+      expect(reading.refusal.value).toBeNull();
+      expect(ids(reading.queue.value)).toEqual(["b1", "b2", "b3"]);
+    },
+  );
+
+  // The same for an ask for more, made when the stranger's queue ran low,
+  // landing while the account's queue is still on its way.
+  it.each([
+    ["its crops", () => Promise.resolve(served(["a2", "a3"]))],
+    [
+      "its refusal",
+      async () => Promise.reject(await failedWith(429, NOT_CONFIRMED)),
+    ],
+  ])(
+    "lands nothing of an ask for more that a sign-in overtook: %s",
+    async (_, outcome) => {
+      reader.value = { uid: "me" };
+      let land!: () => void;
+      const askedForMoreBack = new Promise<void>((resolve) => {
+        land = resolve;
+      }).then(outcome);
+      // One crop, so the queue asks for more at once.
+      mockAuthRequest
+        .mockResolvedValueOnce(served(["a1"]))
+        .mockReturnValueOnce(askedForMoreBack);
+      const reading = useDeclarationQueue();
+      await reading.start();
+      await flushPromises();
+      expect(askedForMore()).toBe(2);
+      expect(reading.refilling.value).toBe(true);
+
+      reading.reset();
+      const accountQueue = later<DeclarationQueue>();
+      mockAuthRequest.mockReturnValueOnce(accountQueue.response);
+      const starting = reading.start();
+      expect(reading.refilling.value).toBe(false);
+
+      land();
+      await askedForMoreBack.catch(() => null);
+      await flushPromises();
+      accountQueue.land(served(["b1", "b2", "b3"]));
+      await starting;
+
+      expect(reading.loadState.value).toBe("ready");
+      expect(reading.refusal.value).toBeNull();
+      expect(ids(reading.queue.value)).toEqual(["b1", "b2", "b3"]);
+    },
+  );
+});
+
 describe("claimStoredReadings", () => {
   it("hands the stored reader id to the account and forgets it once the server has it", async () => {
     window.localStorage.setItem(READER_KEY, "reader-1");
@@ -479,6 +1020,73 @@ describe("claimStoredReadings", () => {
     await expect(claimStoredReadings()).rejects.toThrow("503");
 
     expect(window.localStorage.getItem(READER_KEY)).toBe("reader-1");
+  });
+
+  // Moved now, the readings would never vote; they move once the address is
+  // confirmed, on a later signed-in visit.
+  it("keeps the id when the server turns the claim down for an address nobody confirmed, and lets it go once a later claim goes through", async () => {
+    window.localStorage.setItem(READER_KEY, "reader-1");
+    reader.value = { uid: "me", emailVerified: false };
+    mockAuthRequest.mockRejectedValueOnce(
+      await failedWith(403, CLAIM_NOT_CONFIRMED),
+    );
+
+    const refused = await claimStoredReadings().then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(refusalOf(refused)).toEqual({
+      status: 403,
+      message: CLAIM_NOT_CONFIRMED,
+    });
+    expect(window.localStorage.getItem(READER_KEY)).toBe("reader-1");
+
+    reader.value = {
+      uid: "me",
+      emailVerified: true,
+      getIdToken: async () => "token",
+    };
+    mockAuthRequest.mockResolvedValueOnce({ claimed: 3 });
+
+    await expect(claimStoredReadings()).resolves.toBe(3);
+
+    expect(mockAuthRequest).toHaveBeenLastCalledWith(
+      "/api/declarations/claim",
+      { method: "POST", body: { readerId: "reader-1" }, timeout: 20_000 },
+    );
+    expect(window.localStorage.getItem(READER_KEY)).toBeNull();
+  });
+
+  // Firebase reloads the account with the page, so `emailVerified` is now;
+  // the token is up to an hour old, and the server reads the token.
+  it("claims on a fresh token for an account whose address is confirmed", async () => {
+    window.localStorage.setItem(READER_KEY, "reader-1");
+    const getIdToken = vi.fn(async (_force?: boolean) => "token");
+    reader.value = { uid: "me", emailVerified: true, getIdToken };
+    mockAuthRequest.mockResolvedValueOnce({ claimed: 3 });
+
+    await claimStoredReadings();
+
+    expect(getIdToken).toHaveBeenCalledExactlyOnceWith(true);
+    expect(getIdToken.mock.invocationCallOrder[0]).toBeLessThan(
+      mockAuthRequest.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("claims on the token there is for an account whose address is not confirmed: a fresh one would say the same", async () => {
+    window.localStorage.setItem(READER_KEY, "reader-1");
+    const getIdToken = vi.fn(async (_force?: boolean) => "token");
+    reader.value = { uid: "me", emailVerified: false, getIdToken };
+    mockAuthRequest.mockRejectedValueOnce(
+      await failedWith(403, CLAIM_NOT_CONFIRMED),
+    );
+
+    await expect(claimStoredReadings()).rejects.toMatchObject({
+      statusCode: 403,
+    });
+
+    expect(getIdToken).not.toHaveBeenCalled();
   });
 
   it("asks nothing of a browser that never read without an account", async () => {

@@ -157,6 +157,10 @@ export async function authRequest<T>(
      * request whose answer never comes waits for as long as the connection
      * stays open - for a poll, which nobody is watching, that can be hours. */
     timeout?: number;
+    /** The statuses a GET is sent again after, once, in place of ofetch's
+     * own list. That list has 429 in it, and a request a limit turned down is
+     * turned down again, the second try taken from the same limit. */
+    retryStatusCodes?: number[];
   } = {},
 ): Promise<T> {
   await waitForAuthReady();
@@ -173,6 +177,7 @@ export async function authRequest<T>(
     query: options.query as Record<string, unknown>,
     headers,
     timeout: options.timeout,
+    retryStatusCodes: options.retryStatusCodes,
   });
 }
 

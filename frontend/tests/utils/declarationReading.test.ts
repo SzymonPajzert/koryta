@@ -2,12 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   answerWords,
   documentHost,
+  lineParts,
   readingWords,
   readTyped,
   taskContext,
   typedFromValue,
 } from "~/utils/declarationReading";
 import type { DeclarationTask } from "~~/shared/declarations";
+import { REFUSED } from "../serverRefusals";
 
 const TODAY = new Date("2026-10-29T12:00:00Z");
 
@@ -170,4 +172,46 @@ describe("documentHost", () => {
   it("gives up on a link that is not one", () => {
     expect(documentHost("not a url", null)).toBeNull();
   });
+});
+
+/** The failure lines of /oswiadczenia, which carry the server's words: a
+ * hyphenated word in them is drawn on one line, as Polish breaks a line at a
+ * hyphen only by repeating it on the next, which no browser does. */
+describe("lineParts", () => {
+  it("keeps a hyphenated word whole, and the text around it as it was", () => {
+    expect(lineParts("bez potwierdzonego adresu e-mail, ile możemy.")).toEqual([
+      { text: "bez potwierdzonego adresu ", whole: false },
+      { text: "e-mail", whole: true },
+      { text: ", ile możemy.", whole: false },
+    ]);
+  });
+
+  it("leaves a hyphen with a space beside it, a dash, free to end a line", () => {
+    expect(lineParts(REFUSED.dailyLimit)).toEqual([
+      { text: "Na dziś wystarczy - dziękujemy! Wróć jutro.", whole: false },
+    ]);
+  });
+
+  it("takes a word of several hyphens, and one at either end of the line", () => {
+    expect(lineParts("Kędzierzyn-Koźle-Kłodnica i e-mail")).toEqual([
+      { text: "Kędzierzyn-Koźle-Kłodnica", whole: true },
+      { text: " i ", whole: false },
+      { text: "e-mail", whole: true },
+    ]);
+  });
+
+  it("gives nothing for an empty line, as the failure line is when closed", () => {
+    expect(lineParts("")).toEqual([]);
+  });
+
+  it.each(Object.entries(REFUSED))(
+    "puts the server's %s line back together word for word",
+    (_, message) => {
+      expect(
+        lineParts(message)
+          .map((part) => part.text)
+          .join(""),
+      ).toBe(message);
+    },
+  );
 });

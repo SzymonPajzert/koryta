@@ -1,7 +1,10 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import TaskCard from "../../../app/components/oswiadczenia/TaskCard.vue";
-import type { DeclarationTask } from "../../../shared/declarations";
+import {
+  READ_NAME_MAX_LENGTH,
+  type DeclarationTask,
+} from "../../../shared/declarations";
 
 const task: DeclarationTask = {
   id: "crop-1",
@@ -150,6 +153,16 @@ describe("OswiadczeniaTaskCard", () => {
     ]);
   });
 
+  // The server turns a longer one down, and the whole answer with it
+  // (tests/server/api/declarations/endpoints.test.ts).
+  it("takes no longer a name than the server keeps", async () => {
+    const wrapper = await mount();
+
+    expect(wrapper.get(NAME).attributes("maxlength")).toBe(
+      String(READ_NAME_MAX_LENGTH),
+    );
+  });
+
   // A skip says nothing about the crop, so it carries no name either.
   it("answers „unreadable”, „empty” and „skip” from the three text buttons", async () => {
     const wrapper = await mount();
@@ -183,5 +196,45 @@ describe("OswiadczeniaTaskCard", () => {
       "Jan Przykładowy",
     );
     expect(wrapper.get(READING).text()).toBe("15 lipca 1979");
+  });
+});
+
+type Brought = { show: () => void; focus: () => void };
+
+/** For a page that sent the reader elsewhere, a sign-in from under the work
+ * say, and brings them back. Focusing the field alone scrolls it only as far
+ * as the window's edge, where the app bar, which stays at the top, can cover
+ * it. */
+describe("OswiadczeniaTaskCard brought back into the window", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows the date field in the middle of the window, and leaves the caret where it was", async () => {
+    const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
+    const wrapper = await mount();
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    (wrapper.vm as unknown as Brought).show();
+
+    const date = wrapper.get(DATE).element;
+    expect(scrolled.mock.contexts).toEqual([date]);
+    expect(scrolled).toHaveBeenCalledWith({ block: "center" });
+    expect(document.activeElement).not.toBe(date);
+  });
+
+  it("puts the caret in the date field once it is in the middle of the window, without scrolling it again", async () => {
+    const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
+    const focused = vi.spyOn(HTMLElement.prototype, "focus");
+    const wrapper = await mount();
+
+    (wrapper.vm as unknown as Brought).focus();
+
+    const date = wrapper.get(DATE).element;
+    expect(scrolled.mock.contexts).toEqual([date]);
+    expect(scrolled).toHaveBeenCalledWith({ block: "center" });
+    expect(focused.mock.contexts).toEqual([date]);
+    expect(focused).toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.activeElement).toBe(date);
   });
 });

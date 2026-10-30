@@ -157,6 +157,32 @@ export function taskContext(task: DeclarationTask): string {
     .join(" · ");
 }
 
+/** A piece of a line of copy: a hyphenated word, kept whole, or the text
+ * between two such words. */
+export type LinePart = { text: string; whole: boolean };
+
+/**
+ * A line of copy in pieces, so that each hyphenated word („e-mail”) can be
+ * drawn on one line (`text-no-wrap`). Polish breaks a line at a hyphen only
+ * by repeating the hyphen on the next line, which no browser does: a line
+ * ending in „e-” over one starting with „mail” reads as a typo. A hyphen
+ * with a space beside it, the dash of „wystarczy - dziękujemy”, is no part
+ * of a word and may end a line.
+ */
+export function lineParts(text: string): LinePart[] {
+  const parts: LinePart[] = [];
+  let from = 0;
+  for (const word of text.matchAll(/[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+/gu)) {
+    if (word.index > from) {
+      parts.push({ text: text.slice(from, word.index), whole: false });
+    }
+    parts.push({ text: word[0], whole: true });
+    from = word.index + word[0].length;
+  }
+  if (from < text.length) parts.push({ text: text.slice(from), whole: false });
+  return parts;
+}
+
 /** The host a document link names, for the reader to see where it leads
  * before they click. The server sends it; this covers an answer without. */
 export function documentHost(url: string, host: string | null): string | null {

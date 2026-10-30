@@ -51,8 +51,13 @@
         <FormLoginForm :is-login="isLogin" @success="onLoginSuccess" />
         <div class="mt-4 text-center text-caption">
           {{ isLogin ? "Logowanie się" : "Rejestracja" }} oznacza zgodę z
-          <a href="/plik/regulamin">regulaminem</a> oraz
-          <a href="/plik/polityka_prywatnosci">polityką prywatności</a>.
+          <a href="/plik/regulamin" target="_blank" rel="noopener"
+            >regulaminem</a
+          >
+          oraz
+          <a href="/plik/polityka_prywatnosci" target="_blank" rel="noopener"
+            >polityką prywatności</a
+          >.
         </div>
       </v-card-text>
     </v-card>
@@ -68,17 +73,24 @@ import { ref } from "vue";
 import { mdiClose } from "@mdi/js";
 import { useCurrentUser } from "vuefire";
 import { signedInAs, useSignInMethod } from "~/composables/signInMethod";
+import { countSignInOnScreen } from "~/composables/signInOnScreen";
 
 const dialog = defineModel<boolean>();
-withDefaults(
+const props = withDefaults(
   defineProps<{
     hideActivator?: boolean;
+    /** The form it opens on, each time it opens: "signup" for a button that
+     * says „Rejestracja”, which should not land the reader on a login form
+     * they have no account for (/login?konto=nowe does the same). Absent, it
+     * opens on whichever form it was left on. */
+    form?: "login" | "signup";
   }>(),
   {
     hideActivator: false,
+    form: undefined,
   },
 );
-const isLogin = ref(true);
+const isLogin = ref(props.form !== "signup");
 
 const emit = defineEmits<{
   (e: "success"): void;
@@ -93,6 +105,10 @@ const signedUp = ref(false);
 
 const snackbar = ref(false);
 const snackbarText = ref("");
+
+// On screen until its note has gone too: a page with a line of its own for
+// the foot of the window holds it while the dialog is (`useSignInOnScreen`).
+countSignInOnScreen(() => !!dialog.value || snackbar.value);
 
 /** `success` has gone out for this sign-in. */
 let finished = false;
@@ -126,6 +142,7 @@ const onLoginSuccess = async () => {
 watch(dialog, (open) => {
   if (open) {
     finished = false;
+    if (props.form) isLogin.value = props.form === "login";
   } else if (stage.value === "signedIn" && !finished) {
     finish();
   }

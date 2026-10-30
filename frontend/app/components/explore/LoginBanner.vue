@@ -38,11 +38,15 @@
       <!-- One button sits as it always has. Two are a pair of equal width,
            side by side - on a phone as two halves of the banner, and one
            under the other only where halves would cut the labels. -->
-      <div :class="signupTo ? 'login-banner__pair' : 'd-flex flex-wrap ga-2'">
+      <div
+        :class="
+          signupTo || inPlace ? 'login-banner__pair' : 'd-flex flex-wrap ga-2'
+        "
+      >
         <v-btn
           color="primary"
           variant="flat"
-          :to="to"
+          :to="inPlace ? undefined : to"
           data-testid="login-banner-login"
           @click="emit('login')"
         >
@@ -51,9 +55,9 @@
         <!-- Outlined in the banner's own ink, which it inherits: in sage the
              label would be the 1.85:1 `text-primary` is on a light ground. -->
         <v-btn
-          v-if="signupTo"
+          v-if="signupTo || inPlace"
           variant="outlined"
-          :to="signupTo"
+          :to="inPlace ? undefined : signupTo"
           data-testid="login-banner-signup"
           @click="emit('signup')"
         >
@@ -87,6 +91,11 @@ withDefaults(
     /** Where „Rejestracja" leads. Absent, there is no such button - most
      * banners stand over a list, and one button is what they always had. */
     signupTo?: RouteLocationRaw;
+    /** Both buttons, leading nowhere: they only say they were clicked
+     * (`login`, `signup`), for a page that signs the reader in in a dialog
+     * of its own because it must not be left - /oswiadczenia, with what a
+     * reader typed on it. `to` and `signupTo` go unused. */
+    inPlace?: boolean;
   }>(),
   {
     hiddenCount: 0,
@@ -95,11 +104,13 @@ withDefaults(
     forms: () => ["dodatkowa osoba", "dodatkowe osoby", "dodatkowych osób"],
     to: "/login",
     signupTo: undefined,
+    inPlace: false,
   },
 );
 
 const emit = defineEmits<{
-  /** „Zaloguj się" was clicked, for a caller that counts it. */
+  /** „Zaloguj się" was clicked, for a caller that counts it, or that opens
+   * its own sign-in (`inPlace`). */
   login: [];
   /** „Rejestracja" was clicked. */
   signup: [];
