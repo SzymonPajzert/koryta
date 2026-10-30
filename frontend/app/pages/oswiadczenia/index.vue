@@ -47,16 +47,6 @@
           widzisz.
         </p>
 
-        <!-- Once the reader has read something, never before (Szymon,
-             2026-10-30: "it shows up after they've done some work"): what they
-             read, and for a reader without an account the way to keep it.
-             It takes the place of the counts that stood under the card, and
-             of the banner under the work, so one invitation to sign in shows
-             at a time. -->
-        <!-- Round 5 (Szymon, 2026-10-30: a vertical split, „Sprawdzono 5” and
-             „Znaleziono 2” in two lines on the left, „Zaloguj się, by zapisać
-             znalezione daty” above the button on the right, in colour and not
-             the call to action's blue). -->
         <section
           v-if="readSoFar > 0"
           class="ow-tally"
@@ -77,7 +67,7 @@
             <div class="ow-tally__words">
               <p class="ow-tally__ask">{{ TALLY_INFO_TITLE }}</p>
               <!-- In full beside the button on a wider screen; on a phone
-                   behind the „?” (Szymon, 2026-10-30). -->
+                   behind the "?" -->
               <p class="ow-tally__info ow-tally__info--beside">
                 {{ TALLY_INFO }}
               </p>
@@ -337,11 +327,11 @@ const current = computed(() => queue.value[0] ?? null);
 /** How many crops this reader has read a date off, and how many of those
  * people sit in companies: the tally at the top, which shows from the first
  * reading on. */
-/** Why to sign in, Szymon's words (2026-10-30): beside the button on a wider
- * screen, and on a phone under the tally behind its „?”, title and all. */
+/** Why to sign in, beside the button on a wider
+ * screen, and on a phone under the tally behind its "?", title and all. */
 const TALLY_INFO_TITLE = "Zaloguj się, by zapisać znalezione daty";
 const TALLY_INFO =
-  "Gdy dwie zalogowane osoby wpiszą tę samą datę, a zgadza się ona z datą urodzenia na naszej stronie, stronę tej osoby publikujemy automatycznie. Odczyty bez konta się nie liczą.";
+  "Gdy dwie osoby wpiszą tę samą datę, która zgadza się z datą z KRSu, stronę tej osoby publikujemy automatycznie.";
 const tallyInfoOpen = ref(false);
 
 const readSoFar = computed(() => mine.value?.total ?? 0);
