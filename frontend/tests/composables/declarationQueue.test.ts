@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { flushPromises } from "@vue/test-utils";
 import { registerEndpoint } from "@nuxt/test-utils/runtime";
 import { getQuery, readBody } from "h3";
 import {
@@ -66,10 +67,38 @@ const answeredA1 = (
   ...over,
 });
 
+/** What the server answers once it has an answer to `id`: the crops it would
+ * hand out next and the counts after it. */
+const saved = (
+  id: string,
+  next: string[],
+  over: Partial<DeclarationQueue> = {},
+): DeclarationAnswerResult => ({
+  ...served(next, over),
+  settled: false,
+  answered: {
+    id,
+    documentUrl: `https://bip.gmina-testowa.example/oswiadczenie-${id}.pdf`,
+    host: "bip.gmina-testowa.example",
+  },
+});
+
+/** A response the test lets land when it chooses, so that two can land in
+ * the other order from the one they left in. */
+function later<T>() {
+  let land!: (value: T) => void;
+  const response = new Promise<T>((resolve) => {
+    land = resolve;
+  });
+  return { response, land };
+}
+
 /** What reached the server without a token: the requests a reader who is not
  * signed in sends with plain `$fetch`. Served rather than stubbed, so the
- * headers are the ones that went out. */
+ * method and the headers are the ones that went out. The next crops are
+ * served whatever the method, so that a POST would be seen here as one. */
 type Seen = {
+  method: string;
   query: Record<string, unknown>;
   body?: unknown;
   readerId: string | null;
@@ -79,6 +108,7 @@ let seen: Seen[] = [];
 
 registerEndpoint("/api/declarations/next", (event) => {
   seen.push({
+    method: event.method,
     query: getQuery(event),
     readerId: event.headers.get("x-reader-id"),
     authorization: event.headers.get("authorization"),
@@ -89,6 +119,7 @@ registerEndpoint("/api/declarations/a1/answer", {
   method: "POST",
   handler: async (event) => {
     seen.push({
+      method: event.method,
       query: getQuery(event),
       body: await readBody(event),
       readerId: event.headers.get("x-reader-id"),
@@ -100,6 +131,21 @@ registerEndpoint("/api/declarations/a1/answer", {
 
 const ids = (queue: { task: DeclarationTask }[]) =>
   queue.map((entry) => entry.task.id);
+
+/** How many times the queue was asked for crops of its own, rather than
+ * given them with an answer. */
+const askedForMore = () =>
+  mockAuthRequest.mock.calls.filter(([url]) => url === "/api/declarations/next")
+    .length;
+
+/** A signed-in reader's queue, started with the crops the server lists. */
+async function signedInReading(crops: string[]) {
+  reader.value = { uid: "me" };
+  mockAuthRequest.mockResolvedValueOnce(served(crops));
+  const reading = useDeclarationQueue();
+  await reading.start();
+  return reading;
+}
 
 beforeEach(() => {
   seen = [];
@@ -127,6 +173,9 @@ describe("useDeclarationQueue", () => {
     expect(ids(reading.queue.value)).toEqual(["a1", "a2", "a3"]);
     expect(seen).toHaveLength(1);
     const [next] = seen;
+    // A GET, as the server routes it: a request sent without its method goes
+    // out as a POST, which the stub above would answer all the same.
+    expect(next!.method).toBe("GET");
     expect(next!.query).toEqual({ count: "3" });
     expect(next!.authorization).toBeNull();
     expect(next!.readerId).toMatch(UUID);
@@ -138,6 +187,7 @@ describe("useDeclarationQueue", () => {
 
     expect(seen).toHaveLength(2);
     expect(seen[1]).toMatchObject({
+      method: "POST",
       body: { verdict: "date", value: "1979-07-15" },
       readerId: next!.readerId,
       authorization: null,
@@ -267,6 +317,145 @@ describe("useDeclarationQueue", () => {
     await reading.start();
     expect(ids(reading.queue.value)).toEqual(["a1", "a2", "a3"]);
   });
+
+  // Saves overtake each other: the second answer's can land before the
+  // first's, which then brings counts the server had before the second.
+  it("takes the counts from the newest request only, whichever lands last", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    const first = later<DeclarationAnswerResult>();
+    const second = later<DeclarationAnswerResult>();
+    mockAuthRequest
+      .mockReturnValueOnce(first.response)
+      .mockReturnValueOnce(second.response);
+
+    const savingA1 = reading.answer(crop("a1"), {
+      verdict: "date",
+      value: "1979-07-15",
+    });
+    const savingA2 = reading.answer(crop("a2"), {
+      verdict: "date",
+      value: "1971-09-03",
+    });
+    second.land(
+      saved("a2", ["a3", "a4", "a5"], {
+        open: 38,
+        mine: { today: 2, total: 2 },
+      }),
+    );
+    await savingA2;
+    first.land(
+      saved("a1", ["a3", "a4", "a5"], {
+        open: 39,
+        mine: { today: 1, total: 1 },
+      }),
+    );
+    await savingA1;
+
+    expect(reading.open.value).toBe(38);
+    expect(reading.mine.value).toEqual({ today: 2, total: 2 });
+    // The line under the crop is about the answer given last, too.
+    expect(reading.answered.value?.id).toBe("a2");
+    expect(ids(reading.queue.value)).toEqual(["a3", "a4", "a5"]);
+  });
+
+  it("never takes back a crop answered here from a response that left before the server saw the answer", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    const first = later<DeclarationAnswerResult>();
+    const second = later<DeclarationAnswerResult>();
+    mockAuthRequest
+      .mockReturnValueOnce(first.response)
+      .mockReturnValueOnce(second.response);
+
+    const savingA1 = reading.answer(crop("a1"), { verdict: "skip" });
+    const savingA2 = reading.answer(crop("a2"), { verdict: "skip" });
+    // Served while a2's answer was still on its way, so it lists a2.
+    first.land(saved("a1", ["a2", "a3", "a4"]));
+    await savingA1;
+
+    expect(ids(reading.queue.value)).toEqual(["a3", "a4"]);
+
+    second.land(saved("a2", ["a3", "a4", "a5"]));
+    await savingA2;
+
+    expect(ids(reading.queue.value)).toEqual(["a3", "a4", "a5"]);
+  });
+
+  it("asks for more once one crop is left and no answer is on its way", async () => {
+    const reading = await signedInReading(["a1", "a2"]);
+    const saving = later<DeclarationAnswerResult>();
+    mockAuthRequest.mockReturnValueOnce(saving.response);
+
+    const answering = reading.answer(crop("a1"), { verdict: "skip" });
+    await flushPromises();
+
+    // One crop left, but the answer on its way comes back with crops of its
+    // own: asking now could only fetch the same ones twice.
+    expect(ids(reading.queue.value)).toEqual(["a2"]);
+    expect(askedForMore()).toBe(1);
+
+    // It brings nothing new, so the queue asks.
+    mockAuthRequest.mockResolvedValueOnce(served(["a2", "a3", "a4"]));
+    saving.land(saved("a1", ["a2"]));
+    await answering;
+    await flushPromises();
+
+    expect(askedForMore()).toBe(2);
+    expect(mockAuthRequest).toHaveBeenLastCalledWith("/api/declarations/next", {
+      method: "GET",
+      query: { count: 3 },
+      timeout: 20_000,
+    });
+    expect(ids(reading.queue.value)).toEqual(["a2", "a3", "a4"]);
+    expect(reading.refilling.value).toBe(false);
+    expect(reading.exhausted.value).toBe(false);
+  });
+
+  it("is exhausted after a refill that brings nothing new, and asks no more", async () => {
+    const reading = await signedInReading(["a1", "a2"]);
+    // The refill lists only what is here already: a2, on the page, and a1,
+    // answered a moment ago, which the server has not caught up with.
+    mockAuthRequest
+      .mockResolvedValueOnce(saved("a1", ["a2"]))
+      .mockResolvedValueOnce(served(["a1", "a2"]));
+
+    await reading.answer(crop("a1"), { verdict: "skip" });
+    await flushPromises();
+
+    expect(askedForMore()).toBe(2);
+    expect(reading.exhausted.value).toBe(true);
+    expect(ids(reading.queue.value)).toEqual(["a2"]);
+
+    // The last crop answered: the queue is empty and does not ask again.
+    mockAuthRequest.mockResolvedValueOnce(saved("a2", []));
+    await reading.answer(crop("a2"), { verdict: "skip" });
+    await flushPromises();
+
+    expect(askedForMore()).toBe(2);
+    expect(reading.queue.value).toEqual([]);
+    expect(reading.exhausted.value).toBe(true);
+  });
+
+  // Enter pressed twice before the next crop is drawn answers the same crop
+  // twice; the first answer has already taken it off the queue.
+  it("ignores an answer to a crop that is no longer in the queue", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    mockAuthRequest.mockResolvedValueOnce(answeredA1());
+    const body = { verdict: "date", value: "1979-07-15" } as const;
+
+    await Promise.all([
+      reading.answer(crop("a1"), body),
+      reading.answer(crop("a1"), body),
+    ]);
+
+    expect(
+      mockAuthRequest.mock.calls.filter(
+        ([url]) => url === "/api/declarations/a1/answer",
+      ),
+    ).toHaveLength(1);
+    expect(reading.given.value).toBe(1);
+    expect(reading.inFlight.value).toBe(0);
+    expect(ids(reading.queue.value)).toEqual(["a2", "a3"]);
+  });
 });
 
 describe("claimStoredReadings", () => {
@@ -296,5 +485,71 @@ describe("claimStoredReadings", () => {
     await expect(claimStoredReadings()).resolves.toBe(0);
 
     expect(mockAuthRequest).not.toHaveBeenCalled();
+  });
+});
+
+/** A private window can refuse storage outright: every call on localStorage
+ * throws. Such a reader still reads, uncounted like any reader without an
+ * account, under an id held in memory while the page is open - the server
+ * answers a request with neither a token nor a reader id with a 401.
+ *
+ * Last in the file: the id lives in the module, as it does in the page, and
+ * the claim at the end of the second test is what lets it go. */
+describe("a browser that refuses storage", () => {
+  const refuse = () => {
+    throw new DOMException("The operation is insecure.", "SecurityError");
+  };
+  const refusing = {
+    length: 0,
+    key: refuse,
+    clear: refuse,
+    getItem: vi.fn(refuse),
+    setItem: vi.fn(refuse),
+    removeItem: refuse,
+  } satisfies Storage;
+
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", refusing);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("still reads, every request under one id the page holds in memory", async () => {
+    const reading = useDeclarationQueue();
+    await reading.start();
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+
+    expect(reading.loadState.value).toBe("ready");
+    expect(ids(reading.queue.value)).toEqual(["a2", "a3"]);
+    expect(seen).toHaveLength(2);
+    const [next, answer] = seen;
+    expect(next!.authorization).toBeNull();
+    expect(next!.readerId).toMatch(UUID);
+    expect(answer!.authorization).toBeNull();
+    expect(answer!.readerId).toBe(next!.readerId);
+    // It was offered to the browser, which kept nothing.
+    expect(refusing.setItem).toHaveBeenCalledWith(READER_KEY, next!.readerId);
+  });
+
+  // Signing in from the app bar keeps the page, and the page the id.
+  it("hands that id to an account signed in before the page is left, once", async () => {
+    const reading = useDeclarationQueue();
+    await reading.start();
+    const readerId = seen[0]!.readerId;
+    expect(readerId).toMatch(UUID);
+
+    reader.value = { uid: "me" };
+    mockAuthRequest.mockResolvedValueOnce({ claimed: 1 });
+    await expect(claimStoredReadings()).resolves.toBe(1);
+
+    expect(mockAuthRequest).toHaveBeenCalledExactlyOnceWith(
+      "/api/declarations/claim",
+      { method: "POST", body: { readerId }, timeout: 20_000 },
+    );
+    // Claimed, so let go: there is nothing left to claim.
+    await expect(claimStoredReadings()).resolves.toBe(0);
+    expect(mockAuthRequest).toHaveBeenCalledTimes(1);
   });
 });

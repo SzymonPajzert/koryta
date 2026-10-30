@@ -17,6 +17,14 @@ import type {
  * 1,160 by 94, which is what OswiadczeniaCrop fits on a computer and pans on a
  * phone. The units and the BIP host are made up as well.
  *
+ * ./crops/make_crops.py draws them. To change one, edit its CASES and run it
+ * from frontend/ with data/pipelines' venv (Pillow 12.3.0), then retake the
+ * oswiadczenia baselines:
+ *
+ *     ../data/pipelines/.venv/bin/python -I tests/visual/fixtures/crops/make_crops.py tests/visual/fixtures/crops
+ *
+ * Unchanged, it draws the committed PNGs again byte for byte.
+ *
  * The endpoints live on another branch of the change, and the reader's queue is
  * not in the seed, so the page is answered from here: every crop is fetched in
  * the browser, signed in or not, where a route handler can answer it. */

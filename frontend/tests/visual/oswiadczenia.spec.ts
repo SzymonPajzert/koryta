@@ -149,6 +149,33 @@ test("oswiadczenia-data-wpisana", OSWIADCZENIA, async ({ page }, testInfo) => {
   await expectFitsThePhone(page, testInfo);
 });
 
+/** A day that does not exist, sent anyway: the field turns red, the line
+ * beside its label says why in the danger ink, and nothing is sent. */
+test("oswiadczenia-zla-data", OSWIADCZENIA, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const desk = readerAtWork();
+  await openSignedIn(page, desk);
+  await cropShown(page, "Testowice (gmina miejsko-wiejska)");
+
+  const date = page.getByTestId("declaration-date-input");
+  await date.fill("31.02.1979");
+  await date.press("Enter");
+  const reading = page.getByTestId("declaration-reading");
+  await expect(reading).toHaveText("Taki dzień nie istnieje.");
+  await expect(reading).toHaveClass(/ow-reading--error/);
+  await expect(date).toHaveClass(/ow-card__input--error/);
+  // Refused on the page: the crop stays, and the server heard nothing.
+  await expect(page.getByTestId("declaration-answered")).toHaveCount(0);
+  expect(desk.answers).toEqual([]);
+
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("oswiadczenia-zla-data.png", {
+    fullPage: true,
+  });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
 /** The next crop, and under it the line about the one just answered: what was
  * saved, the link to the whole declaration in dark sage (Szymon, round
  * bip-czytanie-r2), and that the crop has enough readings now. */
