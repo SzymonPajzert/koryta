@@ -457,10 +457,13 @@ export function answerVotes(answer: ReaderAnswer): boolean {
  * by as many: 2-0 and 3-1 settle, 2-1 and 3-2 wait. A year typed alone
  * supports every day in it.
  *
- * "Unreadable" and "empty" contradict nothing - a reader who could not make the
- * date out has not read another one - but they settle the crop as unreadable
- * when one more reader than it takes to agree says so and no day has the
- * support to agree.
+ * "Unreadable", "empty" and a skip contradict nothing - a reader who could not
+ * make the date out has not read another one - but they settle the crop as
+ * unreadable when one more reader than it takes to agree says so and no day
+ * has the support to agree. A skip counts with them since the form offers
+ * „Pomiń” alone (Szymon, 2026-10-30: "After 3 skips it settles as
+ * unreadable"); a crop nobody can read would otherwise stay in the queue for
+ * good.
  *
  * The job's own reading is not a voice here: a high-confidence one settles
  * the crop at upload (`machineSettles`) and never reaches readers, and any
@@ -480,14 +483,17 @@ export function settleReading(
   // say.
   const byReader = new Map<string, ReaderAnswer>();
   for (const answer of answers) {
-    if (!answerVotes(answer) || answer.verdict === "skip") continue;
+    if (!answerVotes(answer)) continue;
     byReader.set(answer.uid, answer);
   }
   const readings = [...byReader.values()]
     .filter((a) => a.verdict === "date" && a.value && readingKind(a.value))
     .map((a) => a.value as string);
   const unreadable = [...byReader.values()].filter(
-    (a) => a.verdict === "unreadable" || a.verdict === "empty",
+    (a) =>
+      a.verdict === "unreadable" ||
+      a.verdict === "empty" ||
+      a.verdict === "skip",
   ).length;
 
   const candidates = [...new Set(readings)].sort(

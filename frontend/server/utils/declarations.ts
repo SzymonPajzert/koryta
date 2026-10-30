@@ -358,14 +358,16 @@ function summaryOf(answers: readonly ReaderAnswer[]) {
   for (const answer of answers) {
     if (answer.verdict === "date" && answer.value) {
       readings[answer.value] = (readings[answer.value] ?? 0) + 1;
-    } else if (answer.verdict === "unreadable") unreadable += 1;
-    else if (answer.verdict === "empty") empty += 1;
+    } else if (answer.verdict === "unreadable" || answer.verdict === "skip") {
+      // A skip is a reader who could not read the line (`settleReading`).
+      unreadable += 1;
+    } else if (answer.verdict === "empty") empty += 1;
   }
   return { readings, unreadable, empty };
 }
 
-/** Whether an answer is one a crop's agreement hears: a reading, not a skip,
- * given with a vote. */
+/** Whether an answer is a reading, not a skip, given with a vote: what a
+ * claim weighs. */
 function isVotingReading(answer: ReaderAnswer): boolean {
   return answer.verdict !== "skip" && answerVotes(answer);
 }
@@ -407,7 +409,8 @@ function writeSettlement(
   answers: readonly ReaderAnswer[],
   now: Date,
 ): Settlement | null {
-  const voting = answers.filter(isVotingReading);
+  // Skips included: three of them settle a crop as unreadable.
+  const voting = answers.filter(answerVotes);
   const settlement = data.status === "open" ? settleReading(voting) : null;
   const settled =
     settlement !== null && settlement.status !== "open" ? settlement : null;
@@ -475,6 +478,10 @@ export async function recordAnswer(
   const answerRef = db.collection(ANSWERS).doc(answerId(args.extractId, uid));
   const limitRef = db.collection(READER_LIMITS).doc(`${day}_${uid}`);
   const counted = args.answer.verdict !== "skip";
+  // A skip with a vote is a voice too (three settle a crop as unreadable), so
+  // it is held to the reader's daily limit like a reading. A stranger's skip
+  // has no say: it counts in the day's room for answers without a vote only.
+  const limited = counted || votes;
 
   return db.runTransaction(async (tx) => {
     const [extract, limit] = await Promise.all([
@@ -489,7 +496,7 @@ export async function recordAnswer(
       });
     }
     const usedToday = (limit.get("count") as number | undefined) ?? 0;
-    if (counted && usedToday >= READER_DAILY_LIMIT) {
+    if (limited && usedToday >= READER_DAILY_LIMIT) {
       throw createError({
         statusCode: 429,
         message: "Na dziś wystarczy - dziękujemy! Wróć jutro.",
@@ -529,7 +536,7 @@ export async function recordAnswer(
       imageHash: data.imageHash ?? null,
       at: Timestamp.fromDate(now),
     });
-    if (counted) {
+    if (limited) {
       tx.set(limitRef, { count: usedToday + 1, day }, { merge: true });
     }
     if (room) {

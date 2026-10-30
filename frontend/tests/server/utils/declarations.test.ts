@@ -414,16 +414,58 @@ describe("recordAnswer", () => {
     });
   });
 
-  it("stops a reader at the daily limit, but never counts a skip", async () => {
+  // A skip with a vote is a voice since three skips settle a crop as
+  // unreadable (Szymon, 2026-10-30), so it is held to the limit too; a
+  // stranger's skip has no say and is not.
+  it("stops a reader who votes at the daily limit, skips included", async () => {
     crop("c1");
     stored.set(`${LIMITS}_a`, { count: READER_DAILY_LIMIT });
     await expect(answer("a", "1979-07-15")).rejects.toMatchObject({
       statusCode: 429,
     });
+    await expect(skipAs(voter("a"))).rejects.toMatchObject({
+      statusCode: 429,
+    });
+    expect(stored.has("declarationAnswers/c1_a")).toBe(false);
+
+    stored.set(`${LIMITS}_anon:${readerId(1)}`, {
+      count: READER_DAILY_LIMIT,
+    });
+    await skipAs(stranger(1));
+    expect(
+      stored.get(`declarationAnswers/c1_anon:${readerId(1)}`),
+    ).toMatchObject({ verdict: "skip", counted: false });
+  });
+
+  it("counts a skip of a reader who votes in their day, but not in their readings", async () => {
+    crop("c1");
     await skipAs(voter("a"));
+    expect(stored.get(`${LIMITS}_a`)).toMatchObject({ count: 1 });
     expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
       verdict: "skip",
       counted: false,
+      votes: true,
+    });
+  });
+
+  it("settles a crop as unreadable on the third skip of readers who vote", async () => {
+    crop("c1");
+    expect((await skipAs(voter("a"))).settled).toBeNull();
+    expect((await skipAs(voter("b"))).settled).toBeNull();
+    // Strangers' skips add nothing.
+    await skipAs(stranger(1));
+    expect(stored.get("declarationExtracts/c1")).toMatchObject({
+      status: "open",
+      answerCount: 2,
+    });
+
+    const third = await skipAs(voter("c"));
+
+    expect(third.settled).toEqual({ status: "unreadable", readers: 3 });
+    expect(stored.get("declarationExtracts/c1")).toMatchObject({
+      status: "unreadable",
+      answerCount: 3,
+      answers: { unreadable: 3 },
     });
   });
 
