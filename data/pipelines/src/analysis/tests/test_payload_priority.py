@@ -912,3 +912,33 @@ def test_a_group_s_companies_are_its_category_s_public_ones():
 
     assert found("skarb-panstwa:10") == {PUBLIC}
     assert found("energetyka:10") == {OTHER_PUBLIC}
+
+
+def test_a_skarb_panstwa_group_over_company_data_without_the_list_says_so(capsys):
+    """Company data built before `CompaniesKRS` wrote `treasury_share`
+    (2026-10-28) files no company under skarb-panstwa, so the group has no
+    members. Said here as a --company-category run says it: the group reads
+    the category through `category_companies` too, not through Extract."""
+    companies = pd.DataFrame(
+        {
+            "krs": [PUBLIC, OTHER_PUBLIC],
+            "activity": [["70.10.Z"], ["35.13.Z"]],
+            "form": [None, None],
+        }
+    )
+    payloads = PeoplePayloads()
+    payloads.people = SimpleNamespace(  # type: ignore[assignment]
+        companies=SimpleNamespace(read_or_process=lambda ctx: companies),
+        public_companies=lambda ctx: {PUBLIC, OTHER_PUBLIC},
+    )
+
+    def found(text: str) -> frozenset[str]:
+        return payloads.group_companies(None, parse_group(text))  # type: ignore[arg-type]
+
+    assert found("energetyka:10") == {OTHER_PUBLIC}
+    assert "WARNING" not in capsys.readouterr().out
+
+    assert found("skarb-panstwa:10") == frozenset()
+    said = capsys.readouterr().out
+    assert "no treasury_share column" in said
+    assert "--refresh CompaniesKRS" in said
