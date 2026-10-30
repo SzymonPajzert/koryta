@@ -6,7 +6,9 @@ selector in ``verified_selectors.json``. The platform puts the article in
 ``<main class="layoutsContainer--article">`` next to lists of other articles:
 "Najnowsze", "Wybrane dla Ciebie", "Powiązane", "Polecamy". The selector used
 to take the whole ``<main>``, so those headlines and leads reached the facts
-prompt as if the article had said them.
+prompt as if the article had said them. Inside the article the platform puts
+more of them ("Sprawdź też", "Więcej z Twojej okolicy"), along with readers'
+comments and quizzes, and ``parse.py`` takes those out by class name.
 
 The fixtures are stored pages trimmed to the template's structure: an article
 from gloswielkopolski.pl and the last page of a photo gallery (``/gh/``) from
@@ -89,3 +91,97 @@ def test_gallery_keeps_its_captions_and_leaves_out_the_column_beside_it():
     assert "Marek Sarwa, dyrektor ds. logistyki w TCZ Sp. z o.o." in text
     assert "fot. Marek Obszarny" in text
     assert "Polecamy" not in text
+
+
+@pytest.mark.parametrize(
+    "box",
+    [
+        # "Sprawdź też:" between two paragraphs: other articles' headlines
+        "Sprawdź też:",
+        "Rusz się z domu! 21 miejsc idealnych na krótką wycieczkę",
+        # a quiz between the paragraphs
+        "Poznaniak w barze mlecznym.",
+        # readers' comments, inside the <article> element
+        "Komentarze",
+        "PiS strzelił sobie w kolano",
+    ],
+)
+def test_article_leaves_out_the_boxes_inside_it(box: str):
+    assert box not in _text("gloswielkopolski_article.html", "gloswielkopolski.pl")
+
+
+@pytest.mark.parametrize(
+    "teaser",
+    [
+        # the title of the gallery that follows this one
+        "Następna galeria",
+        "nie ocaliły Antoniego Macierewicza",
+        # "Zobacz również", in the same column as the photos
+        "Zobacz również",
+        "Tak mieszka Katarzyna Grochola.",
+    ],
+)
+def test_gallery_leaves_out_what_follows_the_photos(teaser: str):
+    assert teaser not in _text("dzienniklodzki_gallery.html", "dzienniklodzki.pl")
+
+
+def test_single_recommendation_in_the_body_is_left_out():
+    # "Więcej z Twojej okolicy" as tomaszowmazowiecki.naszemiasto.pl renders
+    # it: another article's headline, lead and author between two paragraphs.
+    html = """
+    <main class="layoutsContainer layoutsContainer--article">
+    <div class="layoutsGrid"><div class="layoutsGrid__left"><article>
+      <header class="atomsArticleHead"><h1 class="atomsArticleHead__title">
+        Szpital w Tomaszowie jak partyjny folwark PiS
+      </h1></header>
+      <div class="componentsArticleContent">
+      <div class="componentsArticleContent__text">
+        <div class="md"><p>Zaczęło się od prezesa powiatowej spółki.</p></div>
+        <div class="componentsRecommendationsSingleArticle">
+          <h2 class="componentsRecommendationsSingleArticle__header">
+            Więcej z Twojej okolicy
+          </h2>
+          <a class="componentsRecommendationsSingleArticle__link"
+             href="https://naszemiasto.pl/nowy-prezes-szpitala/ar/c1p2-29209963">
+            <div class="componentsRecommendationsSingleArticle__info">
+              <h3 class="componentsRecommendationsSingleArticle__title">
+                Nowy prezes szpitala w Tomaszowie wybrany. Kto przejmie stery TCZ?
+              </h3>
+              <p class="componentsRecommendationsSingleArticle__lead">
+                Tym razem będzie to kobieta, mieszkanka Łodzi.
+              </p>
+              <div class="atomsTileAuthorWithAvatar">
+                <span class="atomsTileAuthorWithAvatar__authorName">
+                  Marek Obszarny
+                </span>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="md"><p>Kontrakt obowiązywał do końca grudnia.</p></div>
+      </div></div>
+    </article></div></div></main>
+    """.encode()
+    selector = load_verified_selectors()["tomaszowmazowiecki.naszemiasto.pl"]
+
+    text = extract_article_content(html, selector)["article_content"]
+
+    assert text == (
+        "Szpital w Tomaszowie jak partyjny folwark PiS "
+        "Zaczęło się od prezesa powiatowej spółki. "
+        "Kontrakt obowiązywał do końca grudnia."
+    )
+
+
+def test_other_sites_keep_boxes_the_platform_does_not_name():
+    html = b"""
+    <article class="post">
+      <p>Body.</p>
+      <section class="related-articles">Another article's headline</section>
+      <div class="comments">A reader's comment</div>
+    </article>
+    """
+
+    text = extract_article_content(html, "article.post")["article_content"]
+
+    assert text == "Body. Another article's headline A reader's comment"

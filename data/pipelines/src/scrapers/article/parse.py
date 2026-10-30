@@ -19,6 +19,27 @@ _EMPTY_RESULT: dict[str, Any] = {
     "extraction_method": None,
 }
 
+# Classes of the boxes the Polska Press platform (gloswielkopolski.pl,
+# pomorska.pl, *.naszemiasto.pl and the other domains that share its selector
+# in verified_selectors.json) puts inside an article or a photo gallery. None
+# of their text is the article's own, and a fact quoted from another
+# article's headline is filed under this one. The class names are the
+# platform's own, so removing them changes nothing on any other site.
+_NOT_ARTICLE_CLASS = re.compile(
+    r"^(?:"
+    # other articles' headlines and leads: "Sprawdź też", "Więcej z Twojej
+    # okolicy", "Zobacz również", "Powiązane", "Wybrane dla Ciebie"
+    r"components(?:Recommendations|Listing)\w*"
+    r"|componentsArticleLongFeed"
+    r"|atomsGalleryHybridButtonsNavigation"  # the next gallery's title
+    r"|componentsArticleNarrator"  # a live feed of other news
+    r"|componentsPromotions(?:Promoted|ArticlePromotedList)"  # sponsored
+    r"|atomsCommentsSection"  # readers' comments
+    r"|componentsQuizTeaser"
+    r"|componentsPollPoll"
+    r")$"
+)
+
 
 def _iter_ld_json_documents(soup: BeautifulSoup) -> list[Any]:
     documents: list[Any] = []
@@ -200,6 +221,8 @@ def extract_article_content(
     element = soup.select_one(selector)
 
     if element:
+        for box in element.find_all(class_=_NOT_ARTICLE_CLASS):
+            box.decompose()
         content = element.get_text(separator=" ", strip=True)
         content = content.replace("\xa0", " ")
         content = re.sub(r"\s+", " ", content).strip()
