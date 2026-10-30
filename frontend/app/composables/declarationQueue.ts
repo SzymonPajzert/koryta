@@ -289,7 +289,7 @@ export function useDeclarationQueue() {
   const queue = ref<QueuedTask[]>([]);
   /** Crops still waiting for a reader, and this reader's own count. */
   const open = ref<number | null>(null);
-  const mine = ref<{ today: number; total: number } | null>(null);
+  const mine = ref<DeclarationQueue["mine"] | null>(null);
   const loadState = ref<"idle" | "loading" | "ready" | "error">("idle");
   /** Why the queue could not load (`loadState` "error"), when the server
    * said: the day's room for readers without a vote is used up, say. */

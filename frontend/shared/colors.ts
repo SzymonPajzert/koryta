@@ -212,6 +212,11 @@ export const role = {
   /** The ring round the subject of a relation graph - sage, a shade darker
    * than `brand.primary`, which is too pale to read as a ring on white. */
   focusRing: "#5f7a54",
+  /** The reader's tally on /oswiadczenia: Oliwka of the palette rounds
+   * (Szymon's pick, 2026-10-30). White on it: 5.9:1; `tallyPale` on it 5.5:1. */
+  tally: "#496d4a",
+  /** The tally's figure labels on `tally`, and its paper beside them. */
+  tallyPale: "#fff8ec",
 } as const;
 
 /** Colours that belong to somebody else and are used as theirs. */
@@ -287,6 +292,9 @@ export const themeColors = {
   "cta-published": role.ctaPublished,
   "cta-reviewed": role.ctaReviewed,
   "cta-groove": role.ctaGroove,
+  tally: role.tally,
+  "on-tally": surface.white,
+  "tally-pale": role.tallyPale,
   "ink-sage": ink.sage,
   "ink-success": ink.success,
   "ink-warning": ink.warning,

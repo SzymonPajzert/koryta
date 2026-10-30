@@ -351,6 +351,14 @@ const cropShown = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
     ),
   );
 
+/** The tally's two lines, label and figure, as a reader reads them. */
+const tallyRows = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
+  wrapper
+    .findAll("[data-tally-row]")
+    .map((row) =>
+      `${row.get("dt").text()} ${row.get("dd").text()}`.replace(/\s+/g, " "),
+    );
+
 const CLAIM = {
   url: "/api/declarations/claim",
   method: "POST",
@@ -364,6 +372,103 @@ const ACCOUNT_QUEUE = {
   token: true,
   readerId: null,
 };
+
+/** What the reader has read so far, at the top of the page, once they have
+ * read something and never before (Szymon, round bip-czytanie-r3): how many
+ * people, how many of them in companies when the server says, and for a
+ * reader without an account the sign-in that keeps it. It takes the place
+ * of the banner under the work. */
+describe("/oswiadczenia, the tally at the top", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  const sendDate = async (wrapper: Awaited<ReturnType<typeof mountPage>>) => {
+    await wrapper
+      .get('[data-testid="declaration-date-input"]')
+      .setValue("15.07.1979");
+    await wrapper
+      .get('[data-testid="declaration-task"] form')
+      .trigger("submit");
+  };
+
+  it("says nothing before the reader has read anything, and leaves the banner under the work", async () => {
+    const wrapper = await mountPage();
+    await cropShown(wrapper);
+
+    expect(wrapper.find('[data-testid="declaration-tally"]').exists()).toBe(
+      false,
+    );
+    expect(wrapper.find('[data-testid="declaration-login"]').exists()).toBe(
+      true,
+    );
+  });
+
+  it("says what a stranger read once they saved a date, and offers the sign-in in place of the banner", async () => {
+    const wrapper = await mountPage();
+    await cropShown(wrapper);
+
+    await sendDate(wrapper);
+
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="declaration-tally"]').exists()).toBe(
+        true,
+      ),
+    );
+    // Two lines, as Szymon laid them out: what was read, and what was found,
+    // none until the server has found anybody.
+    expect(tallyRows(wrapper)).toEqual(["Sprawdzono 1", "Znaleziono 0"]);
+    expect(
+      wrapper
+        .get('[data-testid="declaration-tally"]')
+        .text()
+        .replace(/\s+/g, " "),
+    ).toContain("Zaloguj się, by zapisać znalezione daty");
+    expect(wrapper.find('[data-testid="declaration-login"]').exists()).toBe(
+      false,
+    );
+
+    await wrapper
+      .get('[data-testid="declaration-tally-login"]')
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.get("[data-sign-in]").attributes("data-sign-in")).toBe(
+      "login",
+    );
+  });
+
+  it("says how many of them it found in companies when the server counts them", async () => {
+    const unregister = registerEndpoint("/api/declarations/a1/answer", {
+      method: "POST",
+      handler: () =>
+        ({
+          ...served(["a2", "a3"], { today: 3, total: 5, inCompanies: 2 }),
+          settled: false,
+          answered: {
+            id: "a1",
+            documentUrl:
+              "https://bip.gmina-testowa.example/oswiadczenie-a1.pdf",
+            host: "bip.gmina-testowa.example",
+          },
+        }) satisfies DeclarationAnswerResult,
+    });
+    try {
+      const wrapper = await mountPage();
+      await cropShown(wrapper);
+
+      await sendDate(wrapper);
+
+      await vi.waitFor(() =>
+        expect(wrapper.find('[data-testid="declaration-tally"]').exists()).toBe(
+          true,
+        ),
+      );
+      expect(tallyRows(wrapper)).toEqual(["Sprawdzono 5", "Znaleziono 2"]);
+    } finally {
+      unregister();
+    }
+  });
+});
 
 /** /oswiadczenia is open to readers without an account (Szymon, round
  * bip-czytanie-r1), whose readings are filed under this browser's reader id
@@ -401,12 +506,11 @@ describe("/oswiadczenia", () => {
 
     expect(asked.slice(1)).toEqual([CLAIM, ACCOUNT_QUEUE]);
     expect(window.localStorage.getItem(READER_KEY)).toBeNull();
-    // The account's queue and its count, and no banner asking to sign in.
-    await vi.waitFor(() =>
-      expect(
-        wrapper.get('[data-testid="declaration-progress"]').text(),
-      ).toMatch(/razem\s+2/),
-    );
+    // The account's queue and its tally, and nothing asking to sign in.
+    await vi.waitFor(() => expect(tallyRows(wrapper)[0]).toBe("Sprawdzono 2"));
+    expect(
+      wrapper.find('[data-testid="declaration-tally-login"]').exists(),
+    ).toBe(false);
     expect(wrapper.find('[data-testid="declaration-login"]').exists()).toBe(
       false,
     );
@@ -701,9 +805,7 @@ describe("/oswiadczenia, signed in from its banner", () => {
           .element as HTMLInputElement
       ).value,
     ).toBe("15.07.1979");
-    expect(wrapper.get('[data-testid="declaration-progress"]').text()).toMatch(
-      /razem\s+2/,
-    );
+    expect(tallyRows(wrapper)[0]).toBe("Sprawdzono 2");
     // „Zaloguj się albo załóż konto” said to a reader who just did.
     expect(wrapper.find("[data-snackbar]").exists()).toBe(false);
     expect(wrapper.find('[data-testid="declaration-login"]').exists()).toBe(
