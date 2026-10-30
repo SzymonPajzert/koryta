@@ -105,10 +105,12 @@ jobs:
           cache-dependency-glob: "data/pipelines/uv.lock"
 
       # service for the same reason as the pytest job: mypy reads src/service,
-      # and an unresolvable fastapi import is an error like any other.
+      # and an unresolvable fastapi import is an error like any other. render
+      # likewise, for playwright in bip_crawler/render.py; it installs the
+      # Python package only, no browser.
       - name: Install dependencies
         working-directory: data/pipelines
-        run: uv sync --locked --group test --group service
+        run: uv sync --locked --group test --group service --group render
 
       - name: Run mypy
         working-directory: data/pipelines
