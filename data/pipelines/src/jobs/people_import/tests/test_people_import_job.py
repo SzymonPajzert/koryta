@@ -2394,6 +2394,171 @@ def test_a_request_that_cannot_be_read_fails_its_run(asked, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# --ids-file: of the people a file names, those the site lacks
+
+
+def ids(tmp_path: Path, *lines: str) -> str:
+    """An --ids-file of these lines."""
+    path = tmp_path / "ids.txt"
+    path.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+    return str(path)
+
+
+def from_file(path: str, max_new: int = 5, *more: str) -> list[str]:
+    """A not-on-koryta run kept to the file at `path`."""
+    scope = ["--scope", "not-on-koryta", "--max-new", str(max_new)]
+    return [*scope, "--ids-file", path, *more]
+
+
+@pytest.fixture
+def listed(world, monkeypatch) -> World:
+    """The world, with a build for the people a file names, and a memory of
+    what was sent."""
+
+    def build_targeted(target, koryta_date, policy):
+        world.events.append("build")
+        world.built.append({"target": target, "date": koryta_date})
+        return list(world.candidates), world.targeted
+
+    def sent_recently(client, since):
+        world.memory_since.append(since)
+        return set(world.already_sent)
+
+    monkeypatch.setattr(job, "build_targeted", build_targeted)
+    monkeypatch.setattr(job, "sent_recently", sent_recently)
+    return world
+
+
+def test_of_the_people_a_file_names_those_the_site_lacks_are_sent(listed, tmp_path):
+    path = ids(tmp_path, "# zarządy", "1", "", "https://rejestr.io/osoby/2/x", "3")
+    counts = {"matched": 5, "up_to_date": 1, "left_out": 1}
+    plan_for(listed, ["Ewa Lis"], ["Jan Kowalski", "Anna Nowak"], **counts)
+    listed.answers = [person("created", "n1"), person("created", "n2")]
+
+    assert job.main(from_file(path)) == 0
+
+    [built] = listed.built
+    assert (built["target"].kind, built["target"].registers) == (
+        "people",
+        frozenset({"1", "2", "3"}),
+    )
+    # A page the site has already is left alone, as the scope leaves it.
+    assert listed.sent() == ["Jan Kowalski", "Anna Nowak"]
+    summary = listed.summary()
+    assert (summary["scope"], summary["ids_file"], summary["listed"]) == (
+        "not-on-koryta",
+        path,
+        3,
+    )
+    assert (summary["matched"], summary["on_site"], summary["left_out"]) == (5, 2, 1)
+    assert summary["created"] == ["Jan Kowalski (n1)", "Anna Nowak (n2)"]
+    # Written down as a priority run's are: the night leaves them alone, and
+    # the scores rate the pages before an export has them.
+    assert [(row["name"], row["tier"], row["node"]) for row in sent_part(listed)] == [
+        ("Jan Kowalski", NEW, "n1"),
+        ("Anna Nowak", NEW, "n2"),
+    ]
+
+
+def lacking(name: str, number: str) -> build.Candidate:
+    """Somebody the site lacks, filed under this rejestr.io number."""
+    payload = {"name": name, "rejestrIo": f"https://rejestr.io/osoby/{number}"}
+    return build.Candidate(payload, NEW, None)
+
+
+def test_past_max_new_the_rest_of_the_file_is_the_next_run_s(listed, tmp_path):
+    # Built in the data's order, sent in the file's: who first is the list's.
+    listed.candidates = [
+        lacking("Anna Nowak", "1"),
+        lacking("Beata Kos", "2"),
+        lacking("Jan Kowalski", "3"),
+    ]
+    listed.answers = [person("created", "a"), person("created", "b")]
+
+    assert job.main(from_file(ids(tmp_path, "3", "1", "2"), 2)) == job.EXIT_TRY_LATER
+
+    # Planned out rather than sent into the guardrail: no third page, and the
+    # run is not a failure.
+    assert listed.sent() == ["Jan Kowalski", "Anna Nowak"]
+    end = listed.run().ending()
+    assert (end["state"], end["stop_reason"]) == ("partial", job.STOP_LIMIT)
+    assert listed.summary()["left_for_later"] == 1
+
+
+def test_what_a_run_took_unchanged_lately_is_not_sent_again(listed, tmp_path):
+    # Taken earlier today: the export has no page for it until tomorrow's.
+    plan_for(listed, [], ["Anna Nowak", "Jan Kowalski"])
+    taken = listed.candidates[0].payload
+    listed.already_sent = {(job.person_key(taken), job.payload_hash(taken))}
+    listed.answers = [person("created", "n2")]
+
+    assert job.main(from_file(ids(tmp_path, "1", "2"), 1)) == 0
+
+    assert listed.sent() == ["Jan Kowalski"]
+    since = date.fromisoformat(TODAY) - timedelta(days=30)
+    assert listed.memory_since == [since.isoformat()]
+    assert listed.summary()["already_sent"] == 1
+
+
+def test_a_dry_run_of_a_file_sends_and_writes_nothing(listed, tmp_path, capsys):
+    plan_for(listed, ["Ewa Lis"], ["Jan Kowalski"])
+
+    assert job.main(from_file(ids(tmp_path, "1"), 5, "--dry-run")) == 0
+
+    assert listed.sent() == []
+    assert "token" not in listed.events
+    assert listed.objects == {}
+    out = capsys.readouterr().out
+    assert "Dry run: 1 people would be sent" in out
+    # A priority run's tiers, which say nothing of a file's people.
+    assert "by tier" not in out
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        [],  # --scope on-koryta, the default
+        ["--scope", "priority"],
+        ["--request", "run-asked"],
+        ["--scope", "not-on-koryta", "--max-new", "5", "--company-category", "koleje"],
+    ],
+)
+def test_a_file_keeps_a_not_on_koryta_run_and_nothing_else(argv, tmp_path):
+    with pytest.raises(SystemExit):
+        job.parse_args([*argv, "--ids-file", ids(tmp_path, "1")])
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        [],
+        ["# nikogo", ""],
+        ["383093", "Jan Kowalski"],
+        ["383093;1012667"],
+        ["https://rejestr.io/krs/1/orlen"],
+    ],
+)
+def test_a_file_listing_nobody_or_anything_but_numbers_is_refused(lines, tmp_path):
+    with pytest.raises(SystemExit):
+        job.parse_args(from_file(ids(tmp_path, *lines)))
+
+
+def test_a_file_that_is_not_there_is_refused(tmp_path):
+    with pytest.raises(SystemExit):
+        job.parse_args(from_file(str(tmp_path / "missing.txt")))
+
+
+def test_a_file_lists_people_by_their_number_or_the_link_to_them(tmp_path):
+    link = "https://rejestr.io/osoby/1012667/jan-kowalski"
+    path = ids(tmp_path, "# komentarz", " 383093 ", "", link, "383093", "0042")
+
+    args = job.parse_args(from_file(path))
+
+    # In the file's order, each once.
+    assert args.ids_file == job.IdsFile(path, ("383093", "1012667", "42"))
+
+
+# ---------------------------------------------------------------------------
 # --companies-only: the companies the night's people need, before them
 
 

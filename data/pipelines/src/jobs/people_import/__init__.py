@@ -23,6 +23,9 @@ does - but in one process, unattended, and with guardrails a pipe has not got:
                                            # the Treasury's companies' people
                                            # first, out of 100 of their own
     koryta_people_import --request <run id>   # what a page's button asked for
+    koryta_people_import --scope not-on-koryta --max-new 100 --ids-file ids.txt
+                                           # those the site lacks of the
+                                           # people a file names
 
 `--request` is a run the datascience group asked for from a company's or a
 person's page on the site (`stores.job_requests`): the company's people, or the
@@ -31,6 +34,23 @@ person, built as the other scopes build them and kept to the same guards
 the run the site queued, so the link the site handed out follows it to its end.
 A company's run creates pages for the company's people the site lacks, and
 only those; a person's run creates none.
+
+`--ids-file` keeps a `not-on-koryta` run to the people a file names by their
+rejestr.io numbers, one a line, and creates pages for those of them the site
+lacks: a list's target, built as a page's is, so that nobody else is made a
+payload at all. It is for a list drawn up by hand of people the night reaches
+late or never: its tiers make pages only for people in a post now, a few dozen
+a night besides the new hires, so the state companies' board members an
+estimate rated likeliest wait months for their turn, and the people readers
+search for whose public post has ended never get one. It plans at most
+`--max-new` pages, as a priority run does, so that the run does not stop as
+failed at the first page past it, and takes them in the file's order; the rest
+of the file is the next run's, and the run ends partial, as at `--max-uploads`.
+It leaves alone what a run took unchanged within `--resend-after` days and
+writes down what the site took (`SENT_PREFIX`), so a second run the same day,
+before an export has the first one's pages, goes on where the first stopped.
+`--max-new-odpis-only` has nobody to cap: everybody a file names has a
+rejestr.io entry.
 
 `--company-category` keeps an `on-koryta` or `not-on-koryta` run to one
 sector's people: those in a post now, any post, at a public company
@@ -202,7 +222,7 @@ from analysis.payloads.priority import (
     REJESTRIO_CURRENT,
     TIERS,
 )
-from analysis.payloads.target import NEW, PageTarget
+from analysis.payloads.target import NEW, PageTarget, register_number
 from entities.company_categories import CATEGORY_VALUES
 from entities.priority_groups import Group, parse_group, repeated
 from jobs.nightly import export_refusal, export_time, latest_export
@@ -436,6 +456,14 @@ class RunSummary:
     matched: int = 0
     up_to_date: int = 0
     left_out: int = 0
+    #: An --ids-file run: the file and how many rejestr.io numbers it lists;
+    #: of the people it names, how many have a page already, left alone, and
+    #: how many of the rest it left to the next run, past --max-new. It fills
+    #: `matched`, `left_out`, `already_sent` and `tiers` as well.
+    ids_file: str = ""
+    listed: int = 0
+    on_site: int = 0
+    left_for_later: int = 0
     #: A --companies-only run: the people the run it goes before will send -
     #: the first --max-uploads of the plan - and each company they name that
     #: the export has no page for: its KRS number, the name it was sent under,
@@ -1066,7 +1094,8 @@ class PeopleImport:
         self.uploader: PersonUploader | None = None
         self.ending = Ending()
         self._client: Client | None = None
-        #: A priority run, or one asked for: each payload's tier, in sending order.
+        #: A priority run, one asked for, or an --ids-file run: each payload's
+        #: tier, in sending order.
         self.tiers: list[str] | None = None
         #: A priority run: whether each payload's page is published, in
         #: sending order (`Candidate.published`).
@@ -1077,7 +1106,7 @@ class PeopleImport:
         #: ...and the priority group each is sent for, "" for none
         #: (`Candidate.group`).
         self.groups: list[str] | None = None
-        #: A priority run, or one asked for: what the site took - payload,
+        #: A run that knows its tiers (`tiers`): what the site took - payload,
         #: tier, outcome, the page it filed the person under, the companies
         #: it took them without a job at, for want of a page, the priority
         #: group it was sent for, and the edges written (`edges_written`).
@@ -1126,6 +1155,8 @@ class PeopleImport:
             payloads = self.plan_request(self.request)
         elif args.scope == PRIORITY:
             payloads = self.plan()
+        elif args.ids_file is not None:
+            payloads = self.plan_ids(args.ids_file)
         else:
             payloads = build_payloads(
                 args.scope, args.koryta_date, self.policy(), args.company_category
@@ -1381,6 +1412,61 @@ class PeopleImport:
         )
         return [candidate.payload for candidate in candidates]
 
+    def plan_ids(self, ids: "IdsFile") -> list[dict]:
+        """An --ids-file run's payloads, in sending order: the people the file
+        names that the site lacks (a `people` target, `build_targeted`), less
+        what a run took unchanged within --resend-after days, at most
+        --max-new of them - in the order the file lists them, so that whoever
+        drew it up says who goes first when --max-new cuts it."""
+        args, summary = self.args, self.summary
+        target = PageTarget(
+            kind="people",
+            node_id=ids.path,
+            name=ids.path,
+            registers=frozenset(ids.numbers),
+        )
+        candidates, targeted = build_targeted(target, args.koryta_date, self.policy())
+        place = {number: n for n, number in enumerate(ids.numbers)}
+        new = sorted(
+            (candidate for candidate in candidates if candidate.tier == NEW),
+            key=lambda candidate: place.get(
+                register_number(candidate.payload.get("rejestrIo")) or "", len(place)
+            ),
+        )
+        already: set[tuple[str, str]] = set()
+        if args.resend_after:
+            since = warsaw_now().date() - timedelta(days=args.resend_after)
+            already = sent_recently(self.client(), since.isoformat())
+        unsent = [
+            candidate
+            for candidate in new
+            if (person_key(candidate.payload), payload_hash(candidate.payload))
+            not in already
+        ]
+        planned = unsent[: args.max_new]
+        self.tiers = [candidate.tier for candidate in planned]
+        summary.ids_file, summary.listed = ids.path, len(ids.numbers)
+        summary.matched, summary.left_out = targeted.matched, targeted.left_out
+        summary.on_site = len(targeted.changed) + targeted.up_to_date
+        summary.already_sent = len(new) - len(unsent)
+        summary.left_for_later = len(unsent) - len(planned)
+        summary.tiers = {NEW: len(planned)}
+        if summary.left_for_later:
+            # Left out of the plan rather than sent into the guardrail, as a
+            # priority run's pages past --max-new are; the rest of the file
+            # is the next run's all the same, as past --max-uploads.
+            self.ending.stopped = STOP_LIMIT
+        print(
+            f"Of the {summary.listed:,} people {ids.path} names: "
+            f"{targeted.matched:,} in the data, {len(new):,} without a page, "
+            f"{summary.on_site:,} with one (left alone), {targeted.left_out:,} "
+            f"left out. Planned {len(planned):,} (--max-new {args.max_new}); "
+            f"{summary.already_sent:,} left out as sent unchanged in the last "
+            f"{args.resend_after} days, {summary.left_for_later:,} left to the "
+            "next run"
+        )
+        return [candidate.payload for candidate in planned]
+
     def dry_run(self, payloads: list[dict]) -> int:
         """Say what a run would send - the first --max-uploads of the plan, as
         `send` stops there - and end as a trial. The dry run of the first
@@ -1399,7 +1485,7 @@ class PeopleImport:
             + capped
             + (f": {names}{more}" if sent else "")
         )
-        if self.tiers is not None and self.request is None:
+        if self.tiers is not None and self.args.scope == PRIORITY:
             first = Counter(self.tiers[:sent])
             print(
                 f"The first {sent} (--max-uploads) by tier: "
@@ -1788,6 +1874,48 @@ def export_stamp(text: str) -> str:
     return text
 
 
+@dataclass(frozen=True)
+class IdsFile:
+    """An `--ids-file`: where it is, and the rejestr.io numbers it lists, in
+    its order, each once."""
+
+    path: str
+    numbers: tuple[str, ...]
+
+
+def ids_file(path: str) -> IdsFile:
+    """The rejestr.io numbers an `--ids-file` lists, one a line: the number,
+    or the link to the person there (https://rejestr.io/osoby/383093/...).
+    Blank lines, and lines that start with #, are passed over.
+
+    Read with the flags, so that a line that is neither - a name, a row of a
+    CSV - stops the run before an hour of pipelines rather than leaving its
+    person out without a word."""
+    try:
+        with open(path, encoding="utf-8-sig") as file:
+            lines = file.read().splitlines()
+    except OSError as e:
+        raise argparse.ArgumentTypeError(f"{path}: {e.strerror}") from e
+    numbers: dict[str, None] = {}
+    for n, line in enumerate(lines, 1):
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        number = (
+            str(int(entry))
+            if entry.isascii() and entry.isdigit()
+            else register_number(entry)
+        )
+        if number is None:
+            raise argparse.ArgumentTypeError(
+                f"{path}, line {n}: {entry!r} is not a rejestr.io number"
+            )
+        numbers[number] = None
+    if not numbers:
+        raise argparse.ArgumentTypeError(f"{path} lists no rejestr.io number")
+    return IdsFile(path, tuple(numbers))
+
+
 def parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="koryta_people_import",
@@ -1813,6 +1941,16 @@ def parser() -> argparse.ArgumentParser:
         "the person, of the queued run RUN_ID (koryta_job_requests starts "
         "these). In place of --scope; the run may create pages only for the "
         "company's people the site lacks.",
+    )
+    parser.add_argument(
+        "--ids-file",
+        type=ids_file,
+        metavar="PATH",
+        help="With --scope not-on-koryta: only the people this file names, by "
+        "their rejestr.io number a line (or the link to them there), in place "
+        "of everybody - those the site lacks, at most --max-new of them a run "
+        "in the file's order, the rest left to the next one. What a run took "
+        "unchanged within --resend-after days is left alone.",
     )
     parser.add_argument(
         "--company-category",
@@ -1842,8 +1980,9 @@ def parser() -> argparse.ArgumentParser:
         "--resend-after",
         type=non_negative_int,
         default=30,
-        help="Priority: leave alone a payload already sent unchanged within this "
-        "many days. 0: send it again every run. Default: %(default)s.",
+        help="Priority and --ids-file: leave alone a payload already sent "
+        "unchanged within this many days. 0: send it again every run. "
+        "Default: %(default)s.",
     )
     parser.add_argument(
         "--max-uploads",
@@ -2017,6 +2156,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parse.error(
             "--companies-only creates the companies of the people a priority run "
             "sends: it needs --scope priority"
+        )
+    if args.ids_file and (args.scope != "not-on-koryta" or args.company_category):
+        parse.error(
+            "--ids-file keeps --scope not-on-koryta to the people it names: it "
+            "needs that scope, and no --company-category beside it"
         )
     if (args.priority_group or args.fill_rejestrio_current) and args.scope != PRIORITY:
         parse.error(

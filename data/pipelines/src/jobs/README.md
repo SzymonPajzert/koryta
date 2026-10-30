@@ -115,6 +115,12 @@ never failed, since the people run tries it again. The night runs it as the step
 does and keeps to their guards - a company's run creates pages for the company's people the site lacks and no one
 else, a person's run creates none - and reports as `people_request` on that same run. `koryta_job_requests` starts it.
 
+`--ids-file <path>` keeps `--scope not-on-koryta` to the people a file names by their rejestr.io numbers, one a
+line: built as a page's run is (a `people` target in `analysis/payloads/target.py`), it sends those the site lacks,
+in the file's order, at most `--max-new` a run - the rest is the next run's, and the run ends partial - leaves
+alone what a run took unchanged in the last `--resend-after` days, and writes what the site took to
+`jobs/people_import/sent/`, as a priority run does.
+
 Every `koryta_uploader --submit` run reports now too: `--type person` as `people_import`, the same job, so a hand
 upload and the daily one read as one history; `company` as `company_import`, `score` as `score_import`,
 `extraction` as `extraction_import`. A preview without `--submit` reports nothing, and nor does `computeNodes`.
