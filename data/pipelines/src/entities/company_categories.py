@@ -212,9 +212,21 @@ WODOCIAGI = Category(
             "an oil refinery, PKD 19.20; the pair is codes 16 and 17 of its 36",
         ),
         Override(
+            "0000051491",
+            "Fabryka Lozysk Tocznych - Krasnik",
+            "a bearings works, PKD 28.15",
+        ),
+        Override("0000033727", "Lerg", "a chemical works, PKD 20.16"),
+        Override(
             "0000041661",
             "Tauron Ekoserwis",
             "services power-station equipment, PKD 33.14",
+        ),
+        Override(
+            "0000191663",
+            "Ekotar",
+            "a waste-recovery company, PKD 38.32, held by Grupa Azoty Prorem, "
+            "Grupa Azoty JRCh and two others; the pair is two of its 60 codes",
         ),
         # Generators and traders. Cooling water is not a water utility.
         Override("0000517891", "Tameh Polska", "an industrial power plant, PKD 35.11"),
@@ -223,6 +235,18 @@ WODOCIAGI = Category(
         Override("0000109223", "Ekomedia", "distributes electricity, PKD 35.13"),
         Override("0000528715", "PGE Baltica 5", "an offshore wind SPV, PKD 35.14"),
         Override("0000087694", "Zaklad Energoelektryczny Energo-Stil", "PKD 35.14"),
+        Override(
+            "0000973325",
+            "ARP Energia",
+            "a generator held by Agencja Rozwoju Przemyslu, PKD 35.11",
+        ),
+        Override("0000520322", "PGE Inwest 12", "a PGE project company, PKD 35.12"),
+        Override("0000315512", "ESV Fabryczna", "a generator, PKD 35.11"),
+        Override(
+            "0001045921",
+            "Veolia Mala Kogeneracja Warszawa 1",
+            "a small cogeneration plant, PKD 35.11",
+        ),
         Override(
             "0000408185",
             "Ekoenergia Silesia",
@@ -259,6 +283,19 @@ WODOCIAGI = Category(
             "0000119699",
             "Wielkopolskie Centrum Hodowli i Rozrodu Zwierzat",
             "animal breeding services, PKD 01.62",
+        ),
+        # Companies that declare most of the classification, so the pair is
+        # there beside everything else rather than as a licence.
+        Override(
+            "0000501687",
+            "Vitamedica.eu",
+            "a development company in liquidation, PKD 41.10; the pair is two "
+            "of its 71 codes",
+        ),
+        Override(
+            "0000065962",
+            "Akwawit",
+            "PKD 01.11, crop growing; the pair is two of its 296 codes",
         ),
     ),
     include=(
