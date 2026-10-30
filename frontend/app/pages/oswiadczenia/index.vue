@@ -75,9 +75,7 @@
           </dl>
           <div v-if="!user" class="ow-tally__pitch">
             <div class="ow-tally__words">
-              <p class="ow-tally__ask">
-                Zaloguj się, by zapisać znalezione daty
-              </p>
+              <p class="ow-tally__ask">{{ TALLY_INFO_TITLE }}</p>
               <!-- In full beside the button on a wider screen; on a phone
                    behind the „?” (Szymon, 2026-10-30). -->
               <p class="ow-tally__info ow-tally__info--beside">
@@ -112,14 +110,15 @@
             </div>
           </div>
         </section>
-        <p
+        <div
           v-if="!user && readSoFar > 0 && tallyInfoOpen"
           id="declaration-tally-info"
           class="ow-tally__info ow-tally__info--below"
           data-testid="declaration-tally-info"
         >
-          {{ TALLY_INFO }}
-        </p>
+          <p class="ow-tally__ask">{{ TALLY_INFO_TITLE }}</p>
+          <p class="mb-0">{{ TALLY_INFO }}</p>
+        </div>
 
         <div class="ow-work">
           <div
@@ -338,10 +337,11 @@ const current = computed(() => queue.value[0] ?? null);
 /** How many crops this reader has read a date off, and how many of those
  * people sit in companies: the tally at the top, which shows from the first
  * reading on. */
-/** Why to sign in, at length: beside the button on a wider screen, under
- * the tally behind its „?” on a phone. */
+/** Why to sign in, Szymon's words (2026-10-30): beside the button on a wider
+ * screen, and on a phone under the tally behind its „?”, title and all. */
+const TALLY_INFO_TITLE = "Zaloguj się, by zapisać znalezione daty";
 const TALLY_INFO =
-  "Bez konta Twoje odczyty zapisujemy tylko w tej przeglądarce i nie liczą się do wyniku. Po zalogowaniu przejdą na Twoje konto i zaczną się liczyć: gdy dwie osoby odczytają tę samą datę, porównujemy ją z datą urodzenia osoby na naszej stronie. Każda zgodna data to osoba znaleziona dzięki Tobie - potwierdzamy, że to ten sam człowiek, który zasiada w spółce.";
+  "Gdy dwie zalogowane osoby wpiszą tę samą datę, a zgadza się ona z datą urodzenia na naszej stronie, stronę tej osoby publikujemy automatycznie. Odczyty bez konta się nie liczą.";
 const tallyInfoOpen = ref(false);
 
 const readSoFar = computed(() => mine.value?.total ?? 0);
@@ -651,6 +651,8 @@ onMounted(() => {
 
 /* Under the tally on a phone, in the tally's paper, when the „?” opens it. */
 .ow-tally__info--below {
+  display: grid;
+  gap: 4px;
   background: rgb(var(--v-theme-tally-pale));
   border: 1px solid rgba(var(--v-border-color), 0.16);
   border-radius: 10px;
@@ -659,8 +661,10 @@ onMounted(() => {
   padding: 12px 16px;
 }
 
+/* On a phone the tally holds the button and its „?” alone; the words are
+   behind the „?” (Szymon, 2026-10-30). */
 @media (max-width: 599.98px) {
-  .ow-tally__info--beside {
+  .ow-tally__words {
     display: none;
   }
 }
