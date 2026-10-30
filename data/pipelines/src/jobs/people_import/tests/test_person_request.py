@@ -27,8 +27,19 @@ PAGE = {
 TARGET = PageTarget(
     kind="person", node_id="p-1", name="Maria Iwona Kasprzycka", register="2346874"
 )
-SITE = [
-    PAGE,
+#: Michał Andrzej Tuszyński-Sikora's page, whose link no row holds either; his
+#: odpis writes the double surname with a space.
+SPACED_PAGE = {
+    "id": "p-2",
+    "type": "person",
+    "name": "Michał Andrzej Tuszyński-Sikora",
+    "birthDate": "1995-07-20",
+    "rejestrIo": "https://rejestr.io/osoby/491982",
+}
+SPACED_TARGET = PageTarget(
+    kind="person", node_id="p-2", name=SPACED_PAGE["name"], register="491982"
+)
+PLACES = [
     {"id": "place-1", "type": "place", "name": "Szpital", "krsNumber": KRS},
     {"id": "teryt28", "type": "region", "name": "Warmińsko-mazurskie", "teryt": "28"},
 ]
@@ -72,9 +83,15 @@ NAMESAKE = person("Maria Kasprzycka", "1953-08-14", ["1714452"])
 STRANGER = person("Jan Nowak", "1970-01-01", ["5"])
 
 
-def plan(monkeypatch, rows: list[dict]) -> Targeted:
-    """The request's plan, its pipelines reading `rows` and the export `SITE`."""
-    argv = ["koryta_people_import", *target_argv(TARGET, None)]
+def plan(
+    monkeypatch,
+    rows: list[dict],
+    page: dict | None = None,
+    target: PageTarget = TARGET,
+) -> Targeted:
+    """The request's plan for `page` (`PAGE`), its pipelines reading `rows`
+    and an export holding the page and `PLACES`."""
+    argv = ["koryta_people_import", *target_argv(target, None)]
     monkeypatch.setattr(sys, "argv", argv)
     pipeline = Pipeline.create(PeoplePayloads)
     extract = pipeline.people
@@ -86,8 +103,9 @@ def plan(monkeypatch, rows: list[dict]) -> Targeted:
     # Extract's own selection, without the context `read_or_process` decides
     # a refresh by: what Extract makes of the flags is the point.
     monkeypatch.setattr(extract, "read_or_process", extract.process)
-    pipeline._snapshot = SiteSnapshot(pd.DataFrame.from_records(SITE), pd.DataFrame())
-    return pipeline.targeted(None, TARGET)  # type: ignore[arg-type]
+    site = pd.DataFrame.from_records([page or PAGE, *PLACES])
+    pipeline._snapshot = SiteSnapshot(site, pd.DataFrame())
+    return pipeline.targeted(None, target)  # type: ignore[arg-type]
 
 
 def test_the_request_reads_the_page_by_its_link():
@@ -113,6 +131,22 @@ def test_a_link_no_row_holds_finds_the_person_by_name_and_birth_date(
     out = capsys.readouterr().out
     assert "Found 0 people" in out  # Extract, given the page's entry
     assert "No row holds rejestr.io 2346874" in out
+
+
+def test_a_link_no_row_holds_finds_a_name_spelled_another_way(monkeypatch):
+    # The ingest agrees the two names (`names_agree`), and the day is his.
+    him = person("Michał Andrzej Tuszyński Sikora", "1995-07-20", [])
+    # Agrees as well, a name with fewer words in it, but born another year.
+    namesake = person("Michał Sikora", "1981-05-14", ["2190484"])
+
+    result = plan(monkeypatch, [namesake, him, STRANGER], SPACED_PAGE, SPACED_TARGET)
+
+    [sent] = result.changed
+    assert (sent.korytaId, sent.rejestrIo, sent.birthDate) == (
+        "p-2",
+        None,
+        "1995-07-20",
+    )
 
 
 def test_a_request_matching_nobody_at_all_still_says_so(monkeypatch, capsys):

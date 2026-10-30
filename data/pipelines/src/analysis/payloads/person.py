@@ -899,14 +899,20 @@ def row_is_about(row: pd.Series, target: PageTarget) -> bool:
         str(value) for value in _cell_values(row.get("rejestrio_id"))
     }:
         return True
-    wanted = " ".join(target.name.lower().split())
-    if not wanted:
+    # By the names the ingest agrees (`names_agree`, its `namesAgree`), which
+    # with the birth date is what it lands a person on a page by. Compared as
+    # one spelling, a row writing the page's double surname with a space, or
+    # leaving out a middle name, never reached `for_person`: Michał Andrzej
+    # Tuszyński-Sikora's page links an entry no row of 10-29 holds, and his
+    # odpis spells him "Tuszyński Sikora", born the day the page stores.
+    # `for_person` still decides, by the date.
+    if not target.name.strip():
         return False
-    for column in NAME_COLUMNS:
-        for value in _cell_values(row.get(column)):
-            if isinstance(value, str) and " ".join(value.lower().split()) == wanted:
-                return True
-    return False
+    return any(
+        isinstance(value, str) and names_agree(value, target.name)
+        for column in NAME_COLUMNS
+        for value in _cell_values(row.get(column))
+    )
 
 
 def _cell_values(value: typing.Any) -> list:

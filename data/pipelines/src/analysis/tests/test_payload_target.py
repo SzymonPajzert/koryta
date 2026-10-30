@@ -248,3 +248,21 @@ def test_employment_krs_reads_either_spelling():
         SUBSIDIARY,
     ]
     assert employment_krs(None) == []
+
+
+def test_a_persons_rows_are_the_names_the_ingest_agrees():
+    # The ingest lands a person on a page by a name agreeing with the page's
+    # and the birth date (`names_agree`): a row spelling it another way may
+    # still be about the page, and `for_person` decides by the date.
+    page = PageTarget(
+        kind="person", node_id="p-1", name="Michał Andrzej Tuszyński-Sikora"
+    )
+    unnamed = PageTarget(kind="person", node_id="p-1", name=" ")
+    spaced = pd.Series({"krs_name": "Michał Andrzej Tuszyński Sikora"})
+    shorter = pd.Series({"full_name": ["MICHAL TUSZYNSKI-SIKORA"]})
+    another = pd.Series({"krs_name": "Michał Piotr Tuszyński-Sikora"})
+
+    assert row_is_about(spaced, page)
+    assert row_is_about(shorter, page)
+    assert not row_is_about(another, page)
+    assert not row_is_about(spaced, unnamed)
