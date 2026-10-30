@@ -147,3 +147,39 @@ def test_gets_verify_against_the_bundle_once_one_is_set(
     assert fetch.http_get("https://bip.x.pl/").ok
     assert RobotsCache("test-agent").allowed("https://bip.y.pl/")
     assert seen == [True, "/cache/tls/ca-bundle.pem", "/cache/tls/ca-bundle.pem"]
+
+
+def test_directives_run_together_are_split_apart() -> None:
+    """bip.malopolska.pl's robots.txt (10-30) held its Disallow lines on the
+    User-agent line, which every parser read as one robot's name."""
+    glued = (
+        "User-agent: *Disallow: /Admin.htmlDisallow: /umwm,a,7,artykul.html"
+        "Allow: /umwm,a,8,artykul.html\nDisallow: /e,pobierz,get.html?id=9\n"
+    )
+    assert web.robots_lines(glued) == [
+        "User-agent: *",
+        "Disallow: /Admin.html",
+        "Disallow: /umwm,a,7,artykul.html",
+        "Allow: /umwm,a,8,artykul.html",
+        "Disallow: /e,pobierz,get.html?id=9",
+    ]
+    tidy = "User-agent: *\nDisallow: /private\n\nSitemap: https://x.pl/s.xml"
+    assert web.robots_lines(tidy) == tidy.splitlines()
+
+
+def test_a_glued_robots_txt_applies(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Response:
+        status_code = 200
+        text = "User-agent: *Disallow: /umwm,a,7,artykul.htmlDisallow: /e,pobierz"
+
+    monkeypatch.setattr(web.cffi_requests, "get", lambda url, **_: Response())
+    cache = RobotsCache("test-agent")
+    assert not cache.allowed("https://bip.m.pl/umwm,a,7,artykul.html")
+    assert not cache.allowed("https://bip.m.pl/e,pobierz,get.html?id=1")
+    assert cache.allowed("https://bip.m.pl/umwm,a,8,artykul.html")
+
+
+def test_a_comment_stays_a_comment() -> None:
+    """bip.srodaslaska.pl's robots.txt comments both of its lines out."""
+    commented = "#User-agent: *\n#Disallow: /\nDisallow: /a # not Disallow: /b"
+    assert web.robots_lines(commented) == commented.splitlines()

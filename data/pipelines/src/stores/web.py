@@ -7,6 +7,7 @@ share it). 429 is rate limiting, not a robots verdict, so it is not cached as
 a deny. `WebImpl` keeps the old Context-facing method delegating here.
 """
 
+import re
 import threading
 from typing import Any
 from urllib.parse import urlsplit
@@ -17,6 +18,27 @@ from curl_cffi import requests as cffi_requests
 
 from scrapers.common.fetch import verify, wants_http1
 from scrapers.stores import Context, Web
+
+#: A directive run into the text before it, its line break lost. On 10-30
+#: bip.malopolska.pl's robots.txt held 18,000 Disallow lines on its User-agent
+#: line, which Python's parser and Google's alike read as one robot's name, so
+#: none applied; split onto their own lines, they all do.
+_GLUED = re.compile(
+    r"(?i)(?<=\S)(?<!dis)(?=(?:user-agent|disallow|allow|sitemap|crawl-delay)\s*:)"
+)
+
+
+def robots_lines(text: str) -> list[str]:
+    """robots.txt's lines, directives run together split apart. A comment is
+    left whole: bip.srodaslaska.pl's "#User-agent: *" / "#Disallow: /" allows
+    everything, and split after its "#" it would deny everything."""
+    lines: list[str] = []
+    for line in text.splitlines():
+        code, mark, comment = line.partition("#")
+        pieces = _GLUED.sub("\n", code).split("\n")
+        pieces[-1] += mark + comment
+        lines.extend(pieces)
+    return lines
 
 
 def _get_robots(url: str, user_agent: str) -> Any:
@@ -79,7 +101,7 @@ class RobotsCache:
                 break
             if response.status_code == 200:
                 parser = RobotFileParser()
-                parser.parse(response.text.splitlines())
+                parser.parse(robots_lines(response.text))
                 break
         with self._lock:
             # Unreachable, or an error status (403/5xx/429): deny.

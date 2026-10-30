@@ -113,6 +113,9 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   (`render.py`). Needs the `render` dependency group and its browser
   (`.venv/bin/playwright install chromium`); without it, or with `--no-render`,
   they are read as their HTML.
+- robots.txt directives run together on one line (bip.malopolska.pl's 18,000
+  Disallow lines sat on its User-agent line, so no parser applied them) are
+  split onto their own lines before parsing (`stores/web.py` `robots_lines`).
 - Certificates verify against curl's roots plus Mozilla's published
   intermediates (`stores/tls.py`, kept at `--ca-bundle`, rebuilt weekly), so a
   server that leaves its intermediate out still verifies, as in a browser.
