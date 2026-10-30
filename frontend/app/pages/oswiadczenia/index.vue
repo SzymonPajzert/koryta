@@ -652,6 +652,16 @@ onMounted(() => {
   .ow-tally__words {
     display: none;
   }
+
+  /* The sign-in takes what the „?” leaves of the column, so the „?” sits at
+     the paper's edge rather than with a gap after it. */
+  .ow-tally__actions {
+    width: 100%;
+  }
+
+  .ow-tally__login {
+    flex: 1 1 auto;
+  }
 }
 
 @media (min-width: 600px) {
