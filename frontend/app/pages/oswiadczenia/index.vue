@@ -74,20 +74,52 @@
             </div>
           </dl>
           <div v-if="!user" class="ow-tally__pitch">
-            <p class="ow-tally__ask">Zaloguj się, by zapisać znalezione daty</p>
-            <v-btn
-              color="tally"
-              variant="flat"
-              rounded="lg"
-              height="44"
-              class="text-none ow-tally__login"
-              data-testid="declaration-tally-login"
-              @click="openSignIn('login')"
-            >
-              Zaloguj się
-            </v-btn>
+            <div class="ow-tally__words">
+              <p class="ow-tally__ask">
+                Zaloguj się, by zapisać znalezione daty
+              </p>
+              <!-- In full beside the button on a wider screen; on a phone
+                   behind the „?” (Szymon, 2026-10-30). -->
+              <p class="ow-tally__info ow-tally__info--beside">
+                {{ TALLY_INFO }}
+              </p>
+            </div>
+            <div class="ow-tally__actions">
+              <v-btn
+                color="tally"
+                variant="flat"
+                rounded="lg"
+                height="44"
+                class="text-none ow-tally__login"
+                data-testid="declaration-tally-login"
+                @click="openSignIn('login')"
+              >
+                Zaloguj się
+              </v-btn>
+              <v-btn
+                :icon="mdiHelp"
+                variant="tonal"
+                rounded="lg"
+                width="44"
+                height="44"
+                class="ow-tally__more"
+                aria-label="Po co się logować"
+                aria-controls="declaration-tally-info"
+                :aria-expanded="tallyInfoOpen"
+                data-testid="declaration-tally-more"
+                @click="tallyInfoOpen = !tallyInfoOpen"
+              />
+            </div>
           </div>
         </section>
+        <p
+          v-if="!user && readSoFar > 0 && tallyInfoOpen"
+          id="declaration-tally-info"
+          class="ow-tally__info ow-tally__info--below"
+          data-testid="declaration-tally-info"
+        >
+          {{ TALLY_INFO }}
+        </p>
 
         <div class="ow-work">
           <div
@@ -239,7 +271,7 @@
 
 <script setup lang="ts">
 import type { ComponentPublicInstance } from "vue";
-import { mdiCheckAll } from "@mdi/js";
+import { mdiCheckAll, mdiHelp } from "@mdi/js";
 import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
 import {
   claimStoredReadings,
@@ -306,6 +338,12 @@ const current = computed(() => queue.value[0] ?? null);
 /** How many crops this reader has read a date off, and how many of those
  * people sit in companies: the tally at the top, which shows from the first
  * reading on. */
+/** Why to sign in, at length: beside the button on a wider screen, under
+ * the tally behind its „?” on a phone. */
+const TALLY_INFO =
+  "Bez konta Twoje odczyty zapisujemy tylko w tej przeglądarce i nie liczą się do wyniku. Po zalogowaniu przejdą na Twoje konto i zaczną się liczyć: gdy dwie osoby odczytają tę samą datę, porównujemy ją z datą urodzenia osoby na naszej stronie. Każda zgodna data to osoba znaleziona dzięki Tobie - potwierdzamy, że to ten sam człowiek, który zasiada w spółce.";
+const tallyInfoOpen = ref(false);
+
 const readSoFar = computed(() => mine.value?.total ?? 0);
 const foundInCompanies = computed(() => mine.value?.inCompanies ?? 0);
 
@@ -587,6 +625,53 @@ onMounted(() => {
   letter-spacing: 0.01em;
 }
 
+.ow-tally__words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ow-tally__actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.ow-tally__more {
+  color: rgb(var(--v-theme-ink-neutral));
+}
+
+.ow-tally__info {
+  color: rgb(var(--v-theme-ink-neutral));
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* Under the tally on a phone, in the tally's paper, when the „?” opens it. */
+.ow-tally__info--below {
+  background: rgb(var(--v-theme-tally-pale));
+  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border-radius: 10px;
+  margin-top: 8px;
+  max-width: 880px;
+  padding: 12px 16px;
+}
+
+@media (max-width: 599.98px) {
+  .ow-tally__info--beside {
+    display: none;
+  }
+}
+
+@media (min-width: 600px) {
+  .ow-tally__more,
+  .ow-tally__info--below {
+    display: none;
+  }
+}
+
 /* On a wider screen the ask and its button share one line and fill the
    paper (Szymon, 2026-10-30); on a phone the ask stands above the button. */
 @media (min-width: 600px) {
@@ -598,7 +683,7 @@ onMounted(() => {
     padding: 16px 24px;
   }
 
-  .ow-tally__ask {
+  .ow-tally__words {
     flex: 1 1 auto;
   }
 
