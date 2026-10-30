@@ -17,6 +17,7 @@ import re
 import time
 from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
 
 from tqdm import tqdm
@@ -51,6 +52,17 @@ def parse_freshness(value: str | None) -> int | None:
         raise argparse.ArgumentTypeError("freshness must look like 7d or 12h")
     amount, unit = int(match.group(1)), match.group(2).lower()
     return amount * (86400 if unit == "d" else 3600)
+
+
+def _utc_time(value: str) -> datetime:
+    """'2026-10-30T05:43Z' / '2026-10-30 05:43' (UTC) -> an aware datetime."""
+    try:
+        when = datetime.fromisoformat(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "a time must look like 2026-10-30T05:43Z"
+        ) from None
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
 
 
 def registry_xml(xml_cache: Path, *, refresh: bool) -> tuple[bytes, str]:
@@ -336,6 +348,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="not_found reasons to search again (comma-separated; 'unconfirmed' for "
         "those only unnamed files were found for); default unreachable,error,timeout,"
         "no_seed",
+    )
+    people.add_argument(
+        "--poi-retry-before",
+        type=_utc_time,
+        default=None,
+        help="with --poi-retry, only the candidacies last searched before this time "
+        "(ISO 8601, UTC unless it says): those an older walk settled, e.g. "
+        "2026-10-30T05:43Z",
     )
     people.add_argument(
         "--unit-pages",

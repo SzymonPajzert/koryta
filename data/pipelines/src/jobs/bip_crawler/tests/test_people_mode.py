@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tarfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
@@ -328,6 +329,30 @@ def test_a_second_run_searches_only_what_is_pending(run):
     _, store, _, web, counts = run(rows=newcomer, store=store)
     assert counts == {"found": 1} and store.people["new"].status == "found"
     assert store.people["kowalski"].status == "found"  # untouched
+
+
+def test_a_retry_can_take_only_what_an_older_walk_settled():
+    store = MemoryBipPeopleStore()
+    store.upsert_people(
+        [PersonRow(k, "u1", 0, 2024, "Ewa", k, {}) for k in ("old", "new", "never")]
+    )
+    store.record_person("old", "not_found", "not_listed", 0, "r1")
+    store.record_person("new", "not_found", "not_listed", 0, "r2")
+    store.checked["old"] = datetime(2026, 10, 29, tzinfo=timezone.utc)
+    cutoff = datetime(2026, 10, 30, 5, 43, tzinfo=timezone.utc)
+
+    def due(**kwargs) -> list[str]:
+        return [
+            r.key
+            for r in store.people_to_search(
+                refresh=False, max_priority=None, limit=None, **kwargs
+            )
+        ]
+
+    retry = frozenset({"not_listed"})
+    assert due(retry=retry) == ["never", "new", "old"]
+    # Pending ones are searched whatever the cutoff.
+    assert due(retry=retry, retry_before=cutoff) == ["never", "old"]
 
 
 def test_time_budget_leaves_units_pending(run):

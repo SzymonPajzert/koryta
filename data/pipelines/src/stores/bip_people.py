@@ -19,6 +19,7 @@ A later run picks up the pending candidacies only, so new people of interest
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import BipPeopleStore, PersonDocRow, PersonRow, UnitRow
@@ -134,18 +135,29 @@ class PostgresBipPeopleStore(BipPeopleStore):
         max_priority: int | None,
         limit: int | None,
         retry: frozenset[str] = frozenset(),
+        retry_before: datetime | None = None,
     ) -> list[PersonRow]:
         rows = self.pg.fetchall(
             f"""
             SELECT {_PERSON_COLUMNS} FROM bip_poi
              WHERE (%s OR status = 'pending'
-                    OR (status = 'not_found' AND reason = ANY(%s))
-                    OR (status = 'unconfirmed' AND 'unconfirmed' = ANY(%s)))
+                    OR (((status = 'not_found' AND reason = ANY(%s))
+                         OR (status = 'unconfirmed' AND 'unconfirmed' = ANY(%s)))
+                        AND (%s::timestamptz IS NULL OR checked_at < %s::timestamptz)))
                AND (%s::int IS NULL OR priority <= %s::int)
              ORDER BY priority, election_year DESC, unit, key
              LIMIT %s
             """,
-            (refresh, sorted(retry), sorted(retry), max_priority, max_priority, limit),
+            (
+                refresh,
+                sorted(retry),
+                sorted(retry),
+                retry_before,
+                retry_before,
+                max_priority,
+                max_priority,
+                limit,
+            ),
         )
         return [_person(r) for r in rows]
 
@@ -267,6 +279,8 @@ class MemoryBipPeopleStore(BipPeopleStore):
         self.people: dict[str, PersonRow] = {}
         self.docs: dict[tuple[str, str], PersonDocRow] = {}
         self.units: dict[str, UnitRow] = {}
+        #: When each candidacy was last searched (``checked_at``).
+        self.checked: dict[str, datetime] = {}
 
     def ensure_schema(self) -> None:
         return None
@@ -300,13 +314,25 @@ class MemoryBipPeopleStore(BipPeopleStore):
         max_priority: int | None,
         limit: int | None,
         retry: frozenset[str] = frozenset(),
+        retry_before: datetime | None = None,
     ) -> list[PersonRow]:
+        def old(r: PersonRow) -> bool:
+            checked = self.checked.get(r.key)
+            return retry_before is None or (
+                checked is not None and checked < retry_before
+            )
+
         def due(r: PersonRow) -> bool:
             return (
                 refresh
                 or r.status == "pending"
-                or (r.status == "not_found" and r.reason in retry)
-                or (r.status == "unconfirmed" and "unconfirmed" in retry)
+                or (
+                    (
+                        (r.status == "not_found" and r.reason in retry)
+                        or (r.status == "unconfirmed" and "unconfirmed" in retry)
+                    )
+                    and old(r)
+                )
             )
 
         rows = [
@@ -326,6 +352,7 @@ class MemoryBipPeopleStore(BipPeopleStore):
         r = self.people[key]
         if r.status == "found" and status != "found":
             return
+        self.checked[key] = datetime.now(timezone.utc)
         self.people[key] = PersonRow(
             r.key,
             r.unit,

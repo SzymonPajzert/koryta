@@ -136,8 +136,11 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   `--max-unit-minutes`, 30, ran out; not retried by default), `error`. Tables `bip_poi`, `bip_poi_docs` and `bip_units`
   (`stores/bip_people.py`) hold that. A later run searches the pending ones and
   the `--poi-retry` reasons (default `unreachable,error,timeout,no_seed`; add
-  `unconfirmed` or any other); `--poi-refresh` searches everybody. A search that
-  finds nothing never undoes an earlier find or an earlier downloaded file.
+  `unconfirmed` or any other), with `--poi-retry-before` only those last searched
+  before a time (the ones an older walk settled: `--poi-retry
+  no_declarations,not_listed,robots --poi-retry-before 2026-10-30T05:43Z`);
+  `--poi-refresh` searches everybody. A search that finds nothing never undoes
+  an earlier find or an earlier downloaded file.
 - The run ends with this run's outcomes, every candidacy's, and both per election
   year: 2014-only candidacies are past BIP's six years more often than not, and the
   per-year counts are where that shows.
