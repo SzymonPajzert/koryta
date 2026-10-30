@@ -68,9 +68,9 @@ def pipeline_argv(
     halves, and leaves out what would change nothing, itself.
 
     A `company_category` stands in for `--all`: the people in a post now, any
-    post, at a public company in that sector (`Extract --company-category
+    post, at a public company in that category (`Extract --company-category
     --currently-employed --public-employer`) - who the night's tiers make
-    pages for, kept to one sector. Extract refuses `--all` beside it, since
+    pages for, kept to one category. Extract refuses `--all` beside it, since
     `--all` would let a post at any company through.
     """
     if scope == PRIORITY:

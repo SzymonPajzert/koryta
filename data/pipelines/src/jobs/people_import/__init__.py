@@ -14,7 +14,7 @@ does - but in one process, unattended, and with guardrails a pipe has not got:
     koryta_people_import --dry-run         # build and count them; send nothing
     koryta_people_import --scope not-on-koryta --max-new 50
     koryta_people_import --scope not-on-koryta --max-new 50 --company-category obronnosc
-                                           # a sector's people the site lacks
+                                           # a category's people the site lacks
     koryta_people_import --scope priority --max-uploads 100   # the nightly VM
     koryta_people_import --scope priority --max-uploads 100 --companies-only
                                            # the companies those 100 need, first
@@ -33,15 +33,17 @@ A company's run creates pages for the company's people the site lacks, and
 only those; a person's run creates none.
 
 `--company-category` keeps an `on-koryta` or `not-on-koryta` run to one
-sector's people: those in a post now, any post, at a public company
+category's people: those in a post now, any post, at a public company
 `entities.company_categories` files under it - the same rule that puts the
 category on the company's page, so the pages a `not-on-koryta` run of a
-sector makes are the ones its filter on the site lists, once the companies
+category makes are the ones its filter on the site lists, once the companies
 carry it. Public, as the night's tiers are: a sector's codes reach the
 private firms in it too, and the site is about public posts. Asked for on
 2026-10-20 to put the whole defence sector (`obronnosc`) on the site at once,
 for the volunteers checking it first, rather than at the fifty a night the
 priority run's `rejestrio_current` tier makes of everybody in a public post.
+A category is a sector or, since 2026-10-28, `skarb-panstwa`: an owner rather
+than a sector, the companies on Prokuratoria's list of the Treasury's stakes.
 
 `--companies-only` sends no people. It plans as a priority run with the same
 flags plans, and creates the companies the people that run would send name
@@ -370,7 +372,7 @@ class RunSummary:
     started: str
     finished: str = ""
     scope: str = ""
-    #: The sector the run kept to (`--company-category`), if it kept to one.
+    #: The category the run kept to (`--company-category`), if it kept to one.
     company_category: str = ""
     endpoint: str = ""
     #: The export the payloads were compared with, as its folder is stamped.
@@ -1819,9 +1821,11 @@ def parser() -> argparse.ArgumentParser:
         choices=CATEGORY_VALUES,
         metavar="CATEGORY",
         help="With --scope on-koryta or not-on-koryta: only the people in a post "
-        "now - any post - at a public company in this sector, as "
+        "now - any post - at a public company in this category, as "
         "entities.company_categories files it, in place of everybody. One of: "
-        f"{', '.join(CATEGORY_VALUES)}.",
+        f"{', '.join(CATEGORY_VALUES)} - a sector, or skarb-panstwa, an owner "
+        "rather than a sector: the companies on Prokuratoria's list of the "
+        "Treasury's stakes.",
     )
     parser.add_argument(
         "--recent-days",
@@ -2010,7 +2014,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.company_category and args.scope not in ("on-koryta", "not-on-koryta"):
         parse.error(
             "--company-category keeps --scope on-koryta or not-on-koryta to one "
-            "sector's people; a priority run and a page's request choose their "
+            "category's people; a priority run and a page's request choose their "
             "own people"
         )
     if args.companies_only and args.scope != PRIORITY:
