@@ -26,8 +26,8 @@ import { readTyped } from "~/utils/declarationReading";
  *
  * A problem is said once the text looks finished, or once the reader tried to
  * save it - not on every key of a date still being typed, when it would only
- * flicker. Until then the line holds the formats the field takes, which is
- * also the answer to „how do I type a Roman month”. */
+ * flicker. Until then the line is empty: the field's own „dd.mm.rrrr” says
+ * how to type a date (Szymon, 2026-10-30: no examples under the field). */
 const props = withDefaults(
   defineProps<{
     text: string;
@@ -35,20 +35,16 @@ const props = withDefaults(
      * so in the danger ink rather than as a hint. */
     attempted?: boolean;
     compact?: boolean;
-    /** Holds back the formats hint: in a list of fields it belongs to the
-     * one being typed in, not to every one of them at once. */
-    quiet?: boolean;
   }>(),
-  { attempted: false, compact: false, quiet: false },
+  { attempted: false, compact: false },
 );
-
-const HINT = "np. 15.07.1979, 15 VII 1979 albo sam rok";
 
 const reading = computed(() => readTyped(props.text));
 
 const tone = computed<"idle" | "ok" | "hint" | "error">(() => {
   const r = reading.value;
   if (r.state === "ok") return "ok";
+  if (r.state === "empty") return "idle";
   if (props.attempted) return "error";
   if (r.state === "problem" && r.settled) return "hint";
   return "idle";
@@ -57,13 +53,9 @@ const tone = computed<"idle" | "ok" | "hint" | "error">(() => {
 const words = computed(() => {
   const r = reading.value;
   if (r.state === "ok") return r.words;
-  const hint = props.quiet ? "" : HINT;
-  if (r.state === "empty") {
-    return props.attempted
-      ? "Wpisz datę albo wybierz „Nie da się odczytać” lub „Pole jest puste”."
-      : hint;
-  }
-  return tone.value === "idle" ? hint : r.words;
+  // Nothing typed is no problem: the button skips the crop then.
+  if (r.state === "empty" || tone.value === "idle") return "";
+  return r.words;
 });
 </script>
 

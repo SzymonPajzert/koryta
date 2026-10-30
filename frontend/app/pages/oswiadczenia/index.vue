@@ -9,9 +9,15 @@
           publiczne.
         </p>
         <p class="mb-2">
-          Pokazujemy Ci tylko wycięte z nich linijki: z datą urodzenia i z
-          imieniem i nazwiskiem. Czytasz na ślepo - link do całego oświadczenia
-          pojawia się dopiero po odpowiedzi.
+          <template v-if="READ_NAMES">
+            Pokazujemy Ci tylko wycięte z nich linijki: z datą urodzenia i z
+            imieniem i nazwiskiem.
+          </template>
+          <template v-else>
+            Pokazujemy Ci tylko wyciętą z nich linijkę z datą urodzenia.
+          </template>
+          Czytasz na ślepo - link do całego oświadczenia pojawia się dopiero po
+          odpowiedzi.
         </p>
         <p class="mb-2">
           Każdy wycinek czyta kilka osób. Gdy dwie zalogowane osoby wpiszą tę
@@ -39,21 +45,6 @@
         <p class="ow-lead">
           Przepisz datę urodzenia z wycinka oświadczenia majątkowego tak, jak ją
           widzisz.
-        </p>
-        <p v-if="mine" class="ow-progress" data-testid="declaration-progress">
-          <span>
-            Twoje odczyty:
-            <template v-if="mine.total > 0">
-              dziś <b>{{ polishNumber(mine.today) }}</b
-              >, razem
-              <b>{{ polishNumber(mine.total) }}</b>
-            </template>
-            <template v-else>jeszcze żadnego</template>
-          </span>
-          <span class="ow-progress__sep" aria-hidden="true">·</span>
-          <span>
-            Do odczytania: <b>{{ polishNumber(open ?? 0) }}</b>
-          </span>
         </p>
 
         <div class="ow-work">
@@ -153,6 +144,25 @@
           </template>
         </div>
 
+        <!-- The counts go under the work, never above it (Szymon,
+             2026-10-30): on a phone they took the room the crop and its
+             field need. -->
+        <p v-if="mine" class="ow-progress" data-testid="declaration-progress">
+          <span>
+            Twoje odczyty:
+            <template v-if="mine.total > 0">
+              dziś <b>{{ polishNumber(mine.today) }}</b
+              >, razem
+              <b>{{ polishNumber(mine.total) }}</b>
+            </template>
+            <template v-else>jeszcze żadnego</template>
+          </span>
+          <span class="ow-progress__sep" aria-hidden="true">·</span>
+          <span>
+            Do odczytania: <b>{{ polishNumber(open ?? 0) }}</b>
+          </span>
+        </p>
+
         <!-- Under the work, never in its way: reading needs no account, and
              the banner says what one adds - that the readings count. Its
              buttons sign the reader in here, in a dialog, never on /login:
@@ -213,6 +223,7 @@ import {
 import { polishNumber } from "~/composables/polish";
 import { useSignInOnScreen } from "~/composables/signInOnScreen";
 import { lineParts } from "~/utils/declarationReading";
+import { READ_NAMES } from "~~/shared/declarations";
 
 /**
  * /oswiadczenia: readers type the birth date off a line cut out of a
@@ -499,7 +510,7 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   font-size: 0.875rem;
-  margin: 10px 0 0;
+  margin: 16px 0 0;
 }
 
 .ow-progress b {

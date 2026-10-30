@@ -655,6 +655,24 @@ describe("queueFor", () => {
     expect(queue.mine.total).toBe(1);
   });
 
+  // Szymon, 2026-10-30: the form asks for the date alone for now, so a
+  // reader, with or without an account, is not sent the line with the name
+  // either (READ_NAMES).
+  it("sends no name crop while readers are not asked for names", async () => {
+    crop("named", {
+      imageSize: {
+        date: { width: 951, height: 105 },
+        name: { width: 1160, height: 94 },
+      },
+    });
+    stored.set("declarationExtractImages/named", { date: PNG, name: PNG });
+
+    const queue = await queueFor(firestore, "a", 1);
+
+    expect(queue.task?.images.name).toBeNull();
+    expect(queue.task?.imageSize.name).toBeNull();
+  });
+
   it("leaves out the crops the page already holds", async () => {
     crop("one", { rand: 0.1 });
     crop("two", { rand: 0.2 });

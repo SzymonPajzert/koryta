@@ -14,6 +14,7 @@ import { warsawDate } from "~~/shared/dates";
 import {
   agreedName,
   answerVotes,
+  READ_NAMES,
   READER_ID_PATTERN,
   settleReading,
   type DeclarationAnswer,
@@ -266,10 +267,10 @@ export function taskOf(
     id: extract.id,
     ...unitOf(data),
     declarationYear: data.declarationYear ?? null,
-    images: { date, name: dataUrl(images?.get("name")) },
+    images: { date, name: READ_NAMES ? dataUrl(images?.get("name")) : null },
     imageSize: {
       date: size.date ?? { width: 0, height: 0 },
-      name: size.name ?? null,
+      name: READ_NAMES ? (size.name ?? null) : null,
     },
   };
 }

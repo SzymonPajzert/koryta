@@ -69,12 +69,12 @@ describe("readTyped", () => {
     ["07.1979", "Brakuje dnia. Wpisz pełną datę albo sam rok."],
     ["lipiec 1979", "Brakuje dnia. Wpisz pełną datę albo sam rok."],
     // A year and something that is no month: no telling what is missing.
-    ["15 1979", "To nie wygląda na datę - wpisz np. 15.07.1979."],
+    ["15 1979", "To nie wygląda na datę - wpisz ją jako dd.mm.rrrr."],
     ["150719790", "Za dużo cyfr na jedną datę."],
     ["15.07.1879", "Rok przed 1900 - sprawdź jeszcze raz."],
     ["1850", "Rok przed 1900 - sprawdź jeszcze raz."],
     ["30.10.2026", "To data z przyszłości - sprawdź jeszcze raz."],
-    ["15 07 19 79", "To nie wygląda na datę - wpisz np. 15.07.1979."],
+    ["15 07 19 79", "To nie wygląda na datę - wpisz ją jako dd.mm.rrrr."],
   ])("says why %j is not a date, at once", (typed, words) => {
     expect(readTyped(typed, TODAY)).toEqual({
       state: "problem",
@@ -93,7 +93,7 @@ describe("readTyped", () => {
     ["15", "Wpisz cały rok albo pełną datę."],
     // The year 1507 to the parser, the first half of 15071979 to the reader.
     ["1507", "Wpisz cały rok albo pełną datę, np. 15071979."],
-    ["abc", "To nie wygląda na datę - wpisz np. 15.07.1979."],
+    ["abc", "To nie wygląda na datę - wpisz ją jako dd.mm.rrrr."],
   ])(
     "holds back the problem with %j until it looks finished",
     (typed, words) => {

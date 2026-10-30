@@ -2,8 +2,8 @@
   <article class="ow-card" data-testid="declaration-task">
     <p class="ow-card__context">{{ context }}</p>
 
-    <!-- The paper as it is, on the desk tray: the name line above the date
-         line. -->
+    <!-- The paper as it is, on the desk tray: the date line, with the name
+         line above it while readers are asked for names (READ_NAMES). -->
     <div class="ow-card__paper">
       <OswiadczeniaCrop
         v-if="nameImage"
@@ -25,7 +25,7 @@
       />
     </div>
 
-    <form class="ow-card__answer" novalidate @submit.prevent="save">
+    <form class="ow-card__answer" novalidate @submit.prevent="submit">
       <!-- What the field understood sits beside its label, above the field
            rather than under it: on a phone the keyboard rises to the field's
            lower edge, and „15 lipca 1979” under it would be read by nobody. -->
@@ -47,7 +47,7 @@
           ref="dateInput"
           v-model="dateText"
           class="ow-card__input ow-card__input--date"
-          :class="{ 'ow-card__input--error': attempted && !valid }"
+          :class="{ 'ow-card__input--error': attempted && typing && !valid }"
           data-testid="declaration-date-input"
           inputmode="numeric"
           autocomplete="off"
@@ -56,15 +56,22 @@
           placeholder="dd.mm.rrrr"
           :aria-describedby="readingId"
         />
+        <!-- One button for both ways on (Szymon, 2026-10-30): „Pomiń” while
+             nothing is typed, „Zapisz” once something is, and no reason
+             asked of a reader who cannot read the line. Quiet while it
+             skips, the page's colour once it saves; one width for both, so
+             the field does not move under the thumb when it switches. -->
         <v-btn
           type="submit"
-          color="primary"
-          variant="flat"
+          :color="typing ? 'primary' : undefined"
+          :variant="typing ? 'flat' : 'tonal'"
+          :append-icon="typing ? undefined : mdiArrowRight"
           height="52"
+          min-width="112"
           class="text-none ow-card__save"
-          data-testid="declaration-submit"
+          :data-testid="typing ? 'declaration-submit' : 'declaration-skip'"
         >
-          Zapisz
+          {{ typing ? "Zapisz" : "Pomiń" }}
         </v-btn>
       </div>
 
@@ -87,34 +94,6 @@
           placeholder="nieobowiązkowo"
         />
       </template>
-
-      <div class="ow-card__other">
-        <v-btn
-          variant="text"
-          class="text-none"
-          data-testid="declaration-unreadable"
-          @click="answerWith('unreadable')"
-        >
-          Nie da się odczytać
-        </v-btn>
-        <v-btn
-          variant="text"
-          class="text-none"
-          data-testid="declaration-empty-field"
-          @click="answerWith('empty')"
-        >
-          Pole jest puste
-        </v-btn>
-        <v-btn
-          variant="text"
-          class="text-none"
-          :append-icon="mdiArrowRight"
-          data-testid="declaration-skip"
-          @click="emit('answer', task, { verdict: 'skip' })"
-        >
-          Pomiń
-        </v-btn>
-      </div>
     </form>
   </article>
 </template>
@@ -123,6 +102,7 @@
 import { mdiArrowRight } from "@mdi/js";
 import {
   READ_NAME_MAX_LENGTH,
+  READ_NAMES,
   type DeclarationAnswer,
   type DeclarationTask,
 } from "~~/shared/declarations";
@@ -132,11 +112,12 @@ import { readTyped, taskContext } from "~/utils/declarationReading";
  * The reading card of /oswiadczenia, „jedno pole”: Szymon's pick over the
  * form-like line and the series (bip-czytanie-r1, 2026-10-29).
  *
- * A compact card made for a phone: the two lines of the paper on a tray, and
- * under them one field for the date, typed whichever way the reader likes,
- * with what it understood said back beside the field's label. One field and
- * one button in a row is all a thumb needs; the rest of the answers are a row
- * of quiet text buttons under it.
+ * A compact card made for a phone: the date line of the paper on a tray, and
+ * under it one field for the date, typed whichever way the reader likes, with
+ * what it understood said back beside the field's label. One field and one
+ * button in a row is all a thumb needs: the button skips the crop while
+ * nothing is typed and saves what is typed once something is. The server
+ * still takes „unreadable” and „empty”; the card no longer asks for them.
  */
 const props = withDefaults(
   defineProps<{
@@ -162,10 +143,12 @@ const dateInput = useTemplateRef<HTMLInputElement>("dateInput");
 
 const context = computed(() => taskContext(props.task));
 const valid = computed(() => readTyped(dateText.value).state === "ok");
+/** Something is typed: the button saves it rather than skipping the crop. */
+const typing = computed(() => dateText.value.trim() !== "");
 
 const nameImage = computed(() => {
   const { images, imageSize } = props.task;
-  return images.name && imageSize.name
+  return READ_NAMES && images.name && imageSize.name
     ? { src: images.name, ...imageSize.name }
     : null;
 });
@@ -175,7 +158,11 @@ function withName(answer: DeclarationAnswer): DeclarationAnswer {
   return typed && nameImage.value ? { ...answer, name: typed } : answer;
 }
 
-function save() {
+function submit() {
+  if (!typing.value) {
+    emit("answer", props.task, { verdict: "skip" });
+    return;
+  }
   const reading = readTyped(dateText.value);
   if (reading.state !== "ok") {
     attempted.value = true;
@@ -187,10 +174,6 @@ function save() {
     props.task,
     withName({ verdict: "date", value: reading.value }),
   );
-}
-
-function answerWith(verdict: "unreadable" | "empty") {
-  emit("answer", props.task, withName({ verdict }));
 }
 
 onMounted(() => {
@@ -334,15 +317,6 @@ defineExpose({
    capitals, and on lower case it spaces the words apart. */
 .ow-card__answer .v-btn {
   letter-spacing: 0.01em;
-}
-
-.ow-card__other {
-  border-top: 1px solid rgba(var(--v-border-color), 0.12);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 16px;
-  padding-top: 8px;
 }
 
 /* A name crop is wider than a date crop, so fitted to the same tray it

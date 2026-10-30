@@ -114,7 +114,7 @@ function formatProblem(raw: string, tokens: string[]): string {
       if (/^\d{1,2}$/.test(day)) return "Taki dzień nie istnieje.";
     }
   }
-  return "To nie wygląda na datę - wpisz np. 15.07.1979.";
+  return "To nie wygląda na datę - wpisz ją jako dd.mm.rrrr.";
 }
 
 /** A stored reading as the reader would type it back, for a field refilled
