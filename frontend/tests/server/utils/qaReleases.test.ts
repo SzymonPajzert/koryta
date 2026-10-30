@@ -266,10 +266,15 @@ describe("qaReleases", () => {
   // the process, so each case loads it afresh.
   const load = () => import("../../../server/utils/qaReleases");
 
+  // After the newest rollout in the history, as every process that runs
+  // this code is: one started before it would list that rollout's entries
+  // above the ones it dated itself.
+  const STARTED = "2026-10-31T08:00:00.000Z";
+
   beforeEach(() => {
     vi.resetModules();
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-09-27T08:00:00.000Z"));
+    vi.setSystemTime(new Date(STARTED));
   });
 
   afterEach(() => {
@@ -286,14 +291,21 @@ describe("qaReleases", () => {
       releases.find((release) => release.item.id === id)?.at;
 
     expect(at(ROLLOUTS_BEFORE_RECORD[0]!.newest)).toBe(
-      "2026-09-25T13:45:39.000Z",
+      ROLLOUTS_BEFORE_RECORD[0]!.at,
     );
+    // The rollout of 10-29 brought three entries: its newest and the two
+    // under it, down to where the rollout before it starts.
+    expect(at("tabela-dopasowane-firmy")).toBe("2026-10-29T14:43:02.000Z");
+    expect(at("wyszukiwania-podpowiedz-udzialy")).toBe(
+      "2026-10-29T09:42:29.000Z",
+    );
+    expect(at("aktywnosc-wykres-30-dni")).toBe("2026-09-25T13:45:39.000Z");
     expect(at("tabela-kontrast-i-kolory")).toBe("2026-08-30T10:17:41.000Z");
     // Nobody knows when the floor's entries went live, so they are not listed.
     expect(at("tabela-firmy-wszystkich-wierszy")).toBeUndefined();
     // No rollout before the record shipped the newest entry: it went live
     // with this process.
-    expect(at("po-rekordzie")).toBe("2026-09-27T08:00:00.000Z");
+    expect(at("po-rekordzie")).toBe(STARTED);
   });
 
   it("lists newest first, a rollout's entries in the changelog's order", async () => {

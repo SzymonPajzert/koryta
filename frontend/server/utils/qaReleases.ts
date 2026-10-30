@@ -29,22 +29,50 @@ export function releaseBackend(): string {
 }
 
 /** koryta.pl's rollouts from before the record existed, newest first, off the
- * App Hosting build logs as of 2026-09-26: each went live at `at`, when its
- * build finished, with every entry from `newest` down to the next rollout's
- * `newest`. That split is the array order of `QA_ITEMS` - every rollout's new
- * entries turned out to be one unbroken run at the top of the list it
- * shipped - so the order is all this has to rely on.
+ * App Hosting build logs as of 2026-09-26, and again as of 2026-10-30 for the
+ * twelve from 10-07 on: each went live at `at`, when its build finished, with
+ * every entry from `newest` down to the next rollout's `newest`. That split is
+ * the array order of `QA_ITEMS` - every rollout's new entries turned out to be
+ * one unbroken run at the top of the list it shipped, and still one run, in
+ * the same order, in the list today - so the order is all this has to rely on.
  *
  * The last one is a floor rather than a rollout. Build logs are kept for 30
  * days, so the 31 entries live after the 2026-08-26 rollout went live then or
  * earlier, and nothing says which. `null` keeps them off the feed, which never
  * looks back that far anyway.
  *
- * Frozen: a rollout from here on is in the record, not here. */
+ * Frozen once this code is live on koryta.pl: a rollout from then on is in the
+ * record, not here. Until then every prod rollout made without it belongs
+ * above the first line, or the first rollout with it dates that rollout's
+ * entries as its own. */
 export const ROLLOUTS_BEFORE_RECORD: readonly {
   newest: string;
   at: string | null;
 }[] = [
+  {
+    newest: "formularz-spolki-branze-bez-skarbu-panstwa",
+    at: "2026-10-29T14:43:02.000Z",
+  },
+  { newest: "wyszukiwania-podpowiedz-udzialy", at: "2026-10-29T09:42:29.000Z" },
+  {
+    newest: "lastmod-po-zmianach-calej-witryny",
+    at: "2026-10-24T21:46:02.000Z",
+  },
+  { newest: "opis-w-wyszukiwarce", at: "2026-10-24T15:20:13.000Z" },
+  { newest: "sitemap-data-ostatniej-zmiany", at: "2026-10-24T14:08:20.000Z" },
+  { newest: "newsletter-bez-konta", at: "2026-10-24T10:41:09.000Z" },
+  { newest: "kategoria-obronnosc", at: "2026-10-21T10:10:14.000Z" },
+  { newest: "fakty-po-odswiezeniu-strony", at: "2026-10-20T06:19:43.000Z" },
+  {
+    newest: "profil-niezweryfikowany-dla-niezalogowanych",
+    at: "2026-10-14T23:45:34.000Z",
+  },
+  { newest: "zadania-priorytet-i-cele", at: "2026-10-14T13:19:33.000Z" },
+  {
+    newest: "import-zapisuje-koniec-zatrudnienia",
+    at: "2026-10-10T21:29:35.000Z",
+  },
+  { newest: "admin-procesy-noc-wstrzymana", at: "2026-10-07T12:07:38.000Z" },
   { newest: "aktywnosc-wykres-30-dni", at: "2026-09-25T13:45:39.000Z" },
   { newest: "person-birth-date-from-register", at: "2026-09-18T21:30:20.000Z" },
   { newest: "fakt-do-notatki", at: "2026-09-10T17:46:16.000Z" },
