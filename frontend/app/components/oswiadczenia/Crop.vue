@@ -63,8 +63,8 @@ import { useElementSize } from "@vueuse/core";
  * `shown` of the line still fits the first screen - „11 marca 1970 roku”
  * ends past the middle of its line - and never below `minHeight`, where it
  * stops being readable, nor above its own pixels. One way of looking at a crop
- * for every variant, and the phone's own pinch zoom for a digit that needs a
- * closer look.
+ * for the reading card, and the phone's own pinch zoom for a digit that needs
+ * a closer look.
  */
 const props = withDefaults(
   defineProps<{

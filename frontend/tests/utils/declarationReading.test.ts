@@ -63,6 +63,11 @@ describe("readTyped", () => {
     ["15131979", "Nie ma takiego miesiąca."],
     ["1979-13-15", "Nie ma takiego miesiąca."],
     ["15 XIII 1979", "Nie rozpoznaję miesiąca."],
+    // A month and a year: the year is there, the day is what is missing.
+    ["07.1979", "Brakuje dnia. Wpisz pełną datę albo sam rok."],
+    ["lipiec 1979", "Brakuje dnia. Wpisz pełną datę albo sam rok."],
+    // A year and something that is no month: no telling what is missing.
+    ["15 1979", "To nie wygląda na datę - wpisz np. 15.07.1979."],
     ["150719790", "Za dużo cyfr na jedną datę."],
     ["15.07.1879", "Rok przed 1900 - sprawdź jeszcze raz."],
     ["1850", "Rok przed 1900 - sprawdź jeszcze raz."],

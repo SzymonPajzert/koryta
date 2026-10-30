@@ -88,7 +88,15 @@ function formatProblem(raw: string, tokens: string[]): string {
       ? "Wpisz cały rok albo pełną datę."
       : "Za mało cyfr na pełną datę, np. 15071979.";
   }
-  if (tokens.length === 2) return "Brakuje roku.";
+  if (tokens.length === 2) {
+    // „07.1979” and „lipiec 1979” have their year: what they lack is the
+    // day, and the year alone would be a reading too.
+    const year = tokens.findIndex((token) => /^\d{4}$/.test(token));
+    if (year < 0) return "Brakuje roku.";
+    if (parseTypedDate(`1 ${tokens[1 - year]} 2000`).kind === "date") {
+      return "Brakuje dnia. Wpisz pełną datę albo sam rok.";
+    }
+  }
   if (tokens.length === 3) {
     // 1979-07-15 reads year first, the way `parseTypedDate` takes it too.
     const yearFirst = /^\d{4}$/.test(tokens[0]!);

@@ -127,7 +127,7 @@ describe("OswiadczeniaTaskCard", () => {
 
   // Enter in the field submits its form in a browser; happy-dom does not do
   // that implicit submission, so the test submits the form itself.
-  it("sends a typed date on Enter, as YYYY-MM-DD", async () => {
+  it("sends a typed date when its form is submitted, as YYYY-MM-DD", async () => {
     const wrapper = await mount();
 
     await wrapper.get(DATE).setValue("15.07.1979");

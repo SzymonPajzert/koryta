@@ -19,22 +19,49 @@ import { typedFromValue } from "~/utils/declarationReading";
  * reader sees drafts and their dates, which a blind reading must not. */
 const READER_KEY = "koryta:declaration-reader";
 
-/** The id of this browser's readings without an account, made on first use,
- * or null where the browser keeps nothing (a private window that refuses
- * storage): such a reader reads with no count kept. */
-export function storedReaderId(create = false): string | null {
+/** The reader id of a browser that keeps nothing, as a private window that
+ * refuses storage: made on first use and held in memory for as long as the
+ * page is open. Such a reader still reads, under one id, counted for nothing
+ * like any reader without an account; a sign-in before they leave claims it,
+ * and after a reload there is nothing left to claim. */
+let unkeptReaderId: string | null = null;
+
+function readKeptReaderId(): string | null {
   try {
-    const stored = window.localStorage.getItem(READER_KEY);
-    if (stored || !create) return stored;
-    const made = crypto.randomUUID();
-    window.localStorage.setItem(READER_KEY, made);
-    return made;
+    return window.localStorage.getItem(READER_KEY);
   } catch {
     return null;
   }
 }
 
+/** Whether the browser kept `id`: false where it refuses storage. */
+function keepReaderId(id: string): boolean {
+  try {
+    window.localStorage.setItem(READER_KEY, id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The id this browser's readings without an account are filed under, made
+ * on first use when `create` is set: kept in the browser, so the next visit
+ * files under it too, or held in memory where the browser refuses storage.
+ * Either way a request without a token carries one, as the server needs: it
+ * answers a request with neither a token nor a reader id with a 401. Null on
+ * the server, and, without `create`, where nothing has been read yet. */
+export function storedReaderId(create = false): string | null {
+  // Held in a module, which on the server every request would share.
+  if (import.meta.server) return null;
+  const known = readKeptReaderId() ?? unkeptReaderId;
+  if (known || !create) return known;
+  const made = crypto.randomUUID();
+  if (!keepReaderId(made)) unkeptReaderId = made;
+  return made;
+}
+
 function forgetReaderId() {
+  unkeptReaderId = null;
   try {
     window.localStorage.removeItem(READER_KEY);
   } catch {
