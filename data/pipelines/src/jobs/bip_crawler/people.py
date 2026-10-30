@@ -863,6 +863,7 @@ def run_people_mode(
         max_priority=args.poi_max_priority,
         limit=args.poi_limit,
         retry=retry,
+        retry_before=args.poi_retry_before,
     )
     print(
         f"people of interest: {len(people):,} candidacies ({new:,} new); "

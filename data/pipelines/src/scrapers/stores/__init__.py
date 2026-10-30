@@ -12,6 +12,7 @@ import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field, is_dataclass
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, List, NewType, Union, overload
 
@@ -1456,9 +1457,11 @@ class BipPeopleStore(metaclass=ABCMeta):
         max_priority: int | None,
         limit: int | None,
         retry: frozenset[str] = frozenset(),
+        retry_before: datetime | None = None,
     ) -> list[PersonRow]:
         """Pending candidacies, and the not_found ones whose reason (or the
-        unconfirmed ones, for "unconfirmed") is in ``retry``; all of them with
+        unconfirmed ones, for "unconfirmed") is in ``retry``, with
+        ``retry_before`` only those last searched before it; all of them with
         ``refresh``. Most wanted first."""
         raise NotImplementedError()
 
