@@ -244,7 +244,8 @@ export function unitOf(data: DocumentData): {
   };
 }
 
-function dataUrl(bytes: unknown): string | null {
+/** A crop's stored bytes as the data URL a page draws. */
+export function dataUrl(bytes: unknown): string | null {
   if (!bytes) return null;
   const buffer = Buffer.isBuffer(bytes)
     ? bytes

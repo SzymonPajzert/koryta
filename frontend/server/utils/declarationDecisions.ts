@@ -1,7 +1,12 @@
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
 import { Timestamp } from "firebase-admin/firestore";
 import { readingKind, type ExtractStatus } from "~~/shared/declarations";
-import { EXTRACT_IMAGES, EXTRACTS, PUBLICATIONS } from "./declarations";
+import {
+  dataUrl,
+  EXTRACT_IMAGES,
+  EXTRACTS,
+  PUBLICATIONS,
+} from "./declarations";
 
 /**
  * The decisions /admin/oswiadczenia offers on a crop the readers left to an
@@ -183,14 +188,6 @@ export async function decideExtract(
     });
     return { id: args.extractId, status, compare: kind === "date" };
   });
-}
-
-function dataUrl(bytes: unknown): string | null {
-  if (!bytes) return null;
-  const buffer = Buffer.isBuffer(bytes)
-    ? bytes
-    : Buffer.from(bytes as Uint8Array);
-  return `data:image/png;base64,${buffer.toString("base64")}`;
 }
 
 /** The pictures of a crop, or null for a crop that does not exist. */
