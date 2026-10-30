@@ -80,23 +80,25 @@
                 height="44"
                 class="text-none ow-tally__login"
                 data-testid="declaration-tally-login"
-                @click="openSignIn('login')"
+                @click="openSignIn()"
               >
                 Zaloguj się
               </v-btn>
               <v-btn
-                :icon="mdiHelp"
                 variant="tonal"
                 rounded="lg"
-                width="44"
-                height="44"
+                width="34"
+                min-width="34"
+                height="34"
                 class="ow-tally__more"
                 aria-label="Po co się logować"
                 aria-controls="declaration-tally-info"
                 :aria-expanded="tallyInfoOpen"
                 data-testid="declaration-tally-more"
                 @click="tallyInfoOpen = !tallyInfoOpen"
-              />
+              >
+                <v-icon :icon="mdiHelp" size="18" />
+              </v-btn>
             </div>
           </div>
         </section>
@@ -207,26 +209,12 @@
           </template>
         </div>
 
-        <!-- Under the work, never in its way: reading needs no account, and
-             the banner says what one adds - that the readings count. Its
-             buttons sign the reader in here, in a dialog, never on /login:
-             leaving the page would take with it a crop that came back with
-             what the reader typed, which the account is to send. -->
-        <div
-          v-if="!user && readSoFar === 0"
-          class="ow-login"
-          data-testid="declaration-login"
-        >
-          <ExploreLoginBanner
-            in-place
-            message="Czytasz bez konta. Twoje odczyty zapisujemy w tej przeglądarce - załóż konto, a przejdą na nie i zaczną się liczyć."
-            @login="openSignIn('login')"
-            @signup="openSignIn('signup')"
-          />
-        </div>
-        <!-- Outside the banner, which goes with the sign-in: the dialog
-             stays for what it asks a reader who has just signed in. -->
-        <DialogLogin v-model="signingIn" :form="signInForm" hide-activator />
+        <!-- The tally's „Zaloguj się” signs the reader in here, in a dialog,
+             never on /login: leaving the page would take with it a crop that
+             came back with what the reader typed, which the account is to
+             send. The dialog outlives the tally's button, for what it asks a
+             reader who has just signed in. -->
+        <DialogLogin v-model="signingIn" form="login" hide-activator />
       </template>
 
       <template #fallback>
@@ -239,7 +227,7 @@
     <!-- Vuetify holds a snackbar to 344 px at the least, wider than a 320 px
          phone's room for it and cutting off both ends of the line at 200%
          zoom; no narrower than that, unless the window is. A sign-in on
-         screen, the banner's or the app bar's, has the bottom of the window
+         screen, the tally's or the app bar's, has the bottom of the window
          for its note, and a line opened then would go over the dialog and
          the note: the line waits for both to go. -->
     <v-snackbar
@@ -338,8 +326,8 @@ const readSoFar = computed(() => mine.value?.total ?? 0);
 const foundInCompanies = computed(() => mine.value?.inCompanies ?? 0);
 
 /** Whether asking again can help. A reader without an account whom the day
- * has turned away has two ways on: an account, which the banner under the
- * work offers and whose sign-in starts the queue again by itself, or
+ * has turned away has two ways on: an account, which the tally and the app
+ * bar offer and whose sign-in starts the queue again by itself, or
  * tomorrow; asked again before either, the server says the same. A signed-in
  * reader may try again once they have confirmed the address it asked for (a
  * request after a refusal takes a fresh token), and anybody may after a
@@ -376,18 +364,15 @@ const readAny = computed(() => given.value > 0 || (mine.value?.total ?? 0) > 0);
 const coarsePointer = ref(false);
 const autofocus = computed(() => !coarsePointer.value || given.value > 0);
 
-/** The banner's sign-in, opened on the form its button names: „Rejestracja”
- * should not land a reader on a login form they have no account for. */
+/** The tally's sign-in, in a dialog on the page. */
 const signingIn = ref(false);
-const signInForm = ref<"login" | "signup">("login");
-/** What had focus when the sign-in opened: the banner's button, for a
- * reader on a keyboard. */
+/** What had focus when the sign-in opened: the tally's button, for a reader
+ * on a keyboard. */
 let signInOpener: HTMLElement | null = null;
-function openSignIn(form: "login" | "signup") {
+function openSignIn() {
   const active = document.activeElement;
   signInOpener =
     active instanceof HTMLElement && active !== document.body ? active : null;
-  signInForm.value = form;
   signingIn.value = true;
 }
 
@@ -405,8 +390,8 @@ const backToWork = ref(false);
 
 // The dialog has no activator to give focus back to, so left alone, focus
 // falls to the page's body when it closes. Closed without a sign-in, it goes
-// back to the button that opened it. After one, which takes the banner away,
-// it goes to the work, once the account's queue has answered.
+// back to the button that opened it. After one, which takes the tally's
+// button away, it goes to the work, once the account's queue has answered.
 watch(signingIn, async (open) => {
   if (open) return;
   await nextTick();
@@ -415,15 +400,15 @@ watch(signingIn, async (open) => {
     (signInOpener?.isConnected
       ? signInOpener
       : document.querySelector<HTMLElement>(
-          `[data-testid="login-banner-${signInForm.value}"]`,
+          '[data-testid="declaration-tally-login"]',
         )
     )?.focus();
   signInOpener = null;
 });
 
-// Back into the middle of the window, which the reader left for the banner
-// under the work: the banner goes with the sign-in, the page gets shorter,
-// and a phone is left at its foot. To the date field, where a crop that came
+// Back into the middle of the window, which the reader may have left for the
+// tally's sign-in: the page changes under the dialog, and a phone can be
+// left anywhere on it. To the date field, where a crop that came
 // back waits with what was typed into it, with the caret in it on a phone
 // only once the reader has answered (`autofocus`): the keyboard would cover
 // the crop. Or, where the account's queue was turned down (an address nobody
@@ -456,7 +441,7 @@ watch(signInOnScreen, (onScreen) => {
 });
 
 /** The claim's refusal, until it can be said. After a sign-in in a dialog,
- * the banner's or the app bar's, the claim is turned down while the dialog
+ * the tally's or the app bar's, the claim is turned down while the dialog
  * still asks the newsletter question, and the dialog's note („Konto
  * założone…”, or what the answer did) comes after it, where the line goes:
  * the line waits for both. Where another line has the place by then, or the
@@ -490,7 +475,7 @@ async function claim() {
 }
 
 /** Reads as whoever reads, once that is known, signed in or not. Signing in
- * from the banner's dialog or the app bar's keeps the page: the queue starts
+ * from the tally's dialog or the app bar's keeps the page: the queue starts
  * over as the account's, with a crop that came back with what was typed into
  * it still first and the stranger's failure line gone, and what this browser
  * read without an account goes over to the account before the account's
@@ -566,7 +551,8 @@ onMounted(() => {
   color: rgb(var(--v-theme-on-tally));
   column-gap: 14px;
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: max-content max-content;
+  justify-content: start;
   margin: 0;
   padding: 16px 24px;
   row-gap: 4px;
@@ -627,8 +613,17 @@ onMounted(() => {
   gap: 8px;
 }
 
+/* Smaller than the button beside it, which it serves, but still 44px to a
+   thumb: the hit area runs 5px past the drawn one on every side. */
 .ow-tally__more {
+  align-self: center;
   color: rgb(var(--v-theme-ink-neutral));
+}
+
+.ow-tally__more::after {
+  content: "";
+  inset: -5px;
+  position: absolute;
 }
 
 .ow-tally__info {
@@ -698,11 +693,6 @@ onMounted(() => {
   .ow-tally__pitch {
     padding: 14px 16px;
   }
-}
-
-.ow-login {
-  margin-top: 24px;
-  max-width: 880px;
 }
 
 .ow-head {

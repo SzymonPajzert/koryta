@@ -105,6 +105,11 @@ function holdClaim() {
  * the test takes it back, as a day's limit holds. */
 const refusing = new Map<string, Refusing>();
 
+/** What a stranger has read before, as their queue says: nothing unless a
+ * test that signs in from the tally gives them a reading, which is what puts
+ * the tally and its „Zaloguj się” on the page. */
+let strangerMine: DeclarationQueue["mine"] = { today: 0, total: 0 };
+
 /** What a signed-in reader's request fails with, by url, if a test says so:
  * an error `$fetch` failed with (`failedWith`). */
 const failing = new Map<string, unknown>();
@@ -118,7 +123,7 @@ registerEndpoint("/api/declarations/next", (event) => {
   });
   const refusal = refusing.get("/api/declarations/next");
   if (refusal) return refuse(event, refusal);
-  return served(["a1", "a2", "a3"], { today: 0, total: 0 });
+  return served(["a1", "a2", "a3"], strangerMine);
 });
 registerEndpoint("/api/declarations/a1/answer", {
   method: "POST",
@@ -193,6 +198,7 @@ const CLAIM_REFUSED_KEY = "koryta:declaration-claim-refused";
 
 beforeEach(() => {
   asked = [];
+  strangerMine = { today: 0, total: 0 };
   refusing.clear();
   failing.clear();
   currentUser.value = null;
@@ -392,16 +398,16 @@ describe("/oswiadczenia, the tally at the top", () => {
       .trigger("submit");
   };
 
-  it("says nothing before the reader has read anything, and leaves the banner under the work", async () => {
+  it("says nothing before the reader has read anything, nor asks them to sign in", async () => {
     const wrapper = await mountPage();
     await cropShown(wrapper);
 
     expect(wrapper.find('[data-testid="declaration-tally"]').exists()).toBe(
       false,
     );
-    expect(wrapper.find('[data-testid="declaration-login"]').exists()).toBe(
-      true,
-    );
+    expect(
+      wrapper.find('[data-testid="declaration-tally-login"]').exists(),
+    ).toBe(false);
   });
 
   it("says what a stranger read once they saved a date, and offers the sign-in in place of the banner", async () => {
@@ -487,9 +493,6 @@ describe("/oswiadczenia", () => {
         readerId: "reader-1",
       },
     ]);
-    expect(wrapper.find('[data-testid="declaration-login"]').exists()).toBe(
-      true,
-    );
 
     const landClaim = holdClaim();
     currentUser.value = READER;
@@ -574,12 +577,9 @@ describe("/oswiadczenia turned down by the server", () => {
       },
     ]);
     // Asked again, the server would say the same until tomorrow: the way on
-    // is the banner under it.
+    // is a sign-in, from the app bar.
     expect(wrapper.find('[data-testid="declaration-retry"]').exists()).toBe(
       false,
-    );
-    expect(wrapper.find('[data-testid="declaration-login"]').exists()).toBe(
-      true,
     );
 
     // Signed in from the app bar: the queue starts again as the account's.
@@ -724,32 +724,21 @@ describe("/oswiadczenia turned down by the server", () => {
  * for round r3): a crop that came back with what a stranger typed into it is
  * the account's to send, and leaving for /login would take it with the
  * page. */
-describe("/oswiadczenia, signed in from its banner", () => {
+describe("/oswiadczenia, signed in from its tally", () => {
   beforeEach(() => {
+    // A reading before, so the tally and its „Zaloguj się” are there.
+    strangerMine = { today: 1, total: 1 };
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("opens the sign-in on the page, on the form the button names, and goes nowhere", async () => {
+  it("opens the sign-in on the page from the tally, and goes nowhere", async () => {
     const wrapper = await mountPage();
     await cropShown(wrapper);
     const router = useRouter();
     const before = router.currentRoute.value.fullPath;
-    const login = wrapper.get('[data-testid="login-banner-login"]');
-    const signup = wrapper.get('[data-testid="login-banner-signup"]');
-    // Buttons that open a dialog, not links somewhere else.
+    const login = wrapper.get('[data-testid="declaration-tally-login"]');
+    // A button that opens a dialog, not a link somewhere else.
     expect(login.element.tagName).toBe("BUTTON");
-    expect(signup.element.tagName).toBe("BUTTON");
-    expect(wrapper.find("[data-sign-in]").exists()).toBe(false);
-
-    await signup.trigger("click");
-    await flushPromises();
-
-    expect(wrapper.get("[data-sign-in]").attributes("data-sign-in")).toBe(
-      "signup",
-    );
-
-    wrapper.findComponent(SignInStub).vm.$emit("update:modelValue", false);
-    await flushPromises();
     expect(wrapper.find("[data-sign-in]").exists()).toBe(false);
 
     await login.trigger("click");
@@ -778,7 +767,9 @@ describe("/oswiadczenia, signed in from its banner", () => {
       expect(wrapper.find("[data-snackbar]").text()).toBe(REFUSED.noAccount),
     );
 
-    await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
+    await wrapper
+      .get('[data-testid="declaration-tally-login"]')
+      .trigger("click");
     await flushPromises();
     expect(wrapper.get("[data-sign-in]").attributes("data-sign-in")).toBe(
       "login",
@@ -855,7 +846,7 @@ describe("/oswiadczenia, signed in from its banner", () => {
   it("gives focus back to the button that opened the sign-in when it is closed without one", async () => {
     const wrapper = await mountPage({ attached: true });
     await cropShown(wrapper);
-    const signup = wrapper.get('[data-testid="login-banner-signup"]');
+    const signup = wrapper.get('[data-testid="declaration-tally-login"]');
     (signup.element as HTMLElement).focus();
 
     await signup.trigger("click");
@@ -883,7 +874,7 @@ describe("/oswiadczenia, signed in from its banner", () => {
     await vi.waitFor(() =>
       expect(wrapper.find("[data-snackbar]").exists()).toBe(true),
     );
-    const login = wrapper.get('[data-testid="login-banner-login"]');
+    const login = wrapper.get('[data-testid="declaration-tally-login"]');
     (login.element as HTMLElement).focus();
     await login.trigger("click");
     await flushPromises();
@@ -929,7 +920,7 @@ describe("/oswiadczenia, signed in from its banner", () => {
     }));
     const wrapper = await mountPage({ attached: true });
     await cropShown(wrapper);
-    const login = wrapper.get('[data-testid="login-banner-login"]');
+    const login = wrapper.get('[data-testid="declaration-tally-login"]');
     (login.element as HTMLElement).focus();
     await login.trigger("click");
     await flushPromises();
@@ -964,7 +955,7 @@ describe("/oswiadczenia, signed in from its banner", () => {
       "/api/declarations/next",
       await failedWith(429, REFUSED.notConfirmed),
     );
-    const login = wrapper.get('[data-testid="login-banner-login"]');
+    const login = wrapper.get('[data-testid="declaration-tally-login"]');
     (login.element as HTMLElement).focus();
     await login.trigger("click");
     await flushPromises();
@@ -995,7 +986,7 @@ describe("/oswiadczenia, signed in from its banner", () => {
       "/api/declarations/next",
       await failedWith(429, REFUSED.notConfirmed),
     );
-    const login = wrapper.get('[data-testid="login-banner-login"]');
+    const login = wrapper.get('[data-testid="declaration-tally-login"]');
     (login.element as HTMLElement).focus();
     await login.trigger("click");
     await flushPromises();
@@ -1060,10 +1051,17 @@ async function strangerTurnedDown(wrapper: Mounted) {
   );
 }
 
-/** Signs up in the open dialog, on its registration form, and waits for
- * what the dialog does next: ask the newsletter question, or close with its
- * note. It waits half a second for Firebase before either. */
-async function signUp(wrapper: Pick<Mounted, "get" | "find">) {
+/** Signs up in the open dialog: over to its registration form by its own
+ * link (the tally's button opens it on the sign-in), then the form. Waits
+ * for what the dialog does next: ask the newsletter question, or close with
+ * its note. It waits half a second for Firebase before either. */
+async function signUp(wrapper: Pick<Mounted, "get" | "find" | "findAll">) {
+  if (wrapper.find('[data-sign-up="login"]').exists()) {
+    const toRegister = wrapper
+      .findAll("[data-dialog] a")
+      .find((link) => link.text().includes("Zarejestruj się"));
+    await toRegister!.trigger("click");
+  }
   await wrapper.get('[data-sign-up="signup"]').trigger("click");
   await vi.waitFor(
     () =>
@@ -1101,6 +1099,8 @@ const LINK_SENT = `Konto założone. Link potwierdzający wysłaliśmy na ${NEW_
  * which it hides. One line at a time. */
 describe("/oswiadczenia, signed up in a sign-in dialog", () => {
   beforeEach(() => {
+    // A reading before, so the tally and its „Zaloguj się” are there.
+    strangerMine = { today: 1, total: 1 };
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -1113,7 +1113,9 @@ describe("/oswiadczenia, signed up in a sign-in dialog", () => {
       await failedWith(403, REFUSED.claimNotConfirmed),
     );
 
-    await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
+    await wrapper
+      .get('[data-testid="declaration-tally-login"]')
+      .trigger("click");
     await flushPromises();
     // The stranger's line goes as the sign-in opens: they are doing what it
     // asked.
@@ -1154,7 +1156,9 @@ describe("/oswiadczenia, signed up in a sign-in dialog", () => {
       "/api/declarations/claim",
       await failedWith(403, REFUSED.claimNotConfirmed),
     );
-    await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
+    await wrapper
+      .get('[data-testid="declaration-tally-login"]')
+      .trigger("click");
     await flushPromises();
 
     await signUp(wrapper);
@@ -1184,7 +1188,7 @@ describe("/oswiadczenia, signed up in a sign-in dialog", () => {
       "/api/declarations/claim",
       await failedWith(403, REFUSED.claimNotConfirmed),
     );
-    await first.get('[data-testid="login-banner-signup"]').trigger("click");
+    await first.get('[data-testid="declaration-tally-login"]').trigger("click");
     await flushPromises();
     await signUp(first);
     await vi.waitFor(() =>
@@ -1213,7 +1217,9 @@ describe("/oswiadczenia, signed up in a sign-in dialog", () => {
     await cropShown(wrapper);
     await strangerTurnedDown(wrapper);
 
-    await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
+    await wrapper
+      .get('[data-testid="declaration-tally-login"]')
+      .trigger("click");
     await flushPromises();
     expect(wrapper.find("[data-dialog]").exists()).toBe(true);
     expect(snackbars(wrapper)).toEqual([]);
@@ -1237,7 +1243,9 @@ describe("/oswiadczenia, signed up in a sign-in dialog", () => {
       "/api/declarations/claim",
       await failedWith(403, REFUSED.claimNotConfirmed),
     );
-    await wrapper.get('[data-testid="login-banner-signup"]').trigger("click");
+    await wrapper
+      .get('[data-testid="declaration-tally-login"]')
+      .trigger("click");
     await flushPromises();
     await signUp(wrapper);
     // The account's own queue, under the note.
@@ -1510,6 +1518,8 @@ describe("/oswiadczenia in a browser that refuses storage", () => {
 
 describe("/oswiadczenia, a click that leaves focus on nothing (WebKit, Firefox on macOS)", () => {
   beforeEach(() => {
+    // A reading before, so the tally and its „Zaloguj się” are there.
+    strangerMine = { today: 1, total: 1 };
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -1521,7 +1531,9 @@ describe("/oswiadczenia, a click that leaves focus on nothing (WebKit, Firefox o
     // nothing: buttons are not mouse-focusable on Apple platforms.
     (document.activeElement as HTMLElement | null)?.blur();
     expect(document.activeElement).toBe(document.body);
-    await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
+    await wrapper
+      .get('[data-testid="declaration-tally-login"]')
+      .trigger("click");
     await flushPromises();
 
     currentUser.value = READER;
@@ -1545,6 +1557,8 @@ describe("/oswiadczenia, a click that leaves focus on nothing (WebKit, Firefox o
 
 describe("/oswiadczenia, an answer still on its way when the stranger signs in", () => {
   beforeEach(() => {
+    // A reading before, so the tally and its „Zaloguj się” are there.
+    strangerMine = { today: 1, total: 1 };
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -1581,7 +1595,9 @@ describe("/oswiadczenia, an answer still on its way when the stranger signs in",
         ).toHaveLength(1),
       );
 
-      await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
+      await wrapper
+        .get('[data-testid="declaration-tally-login"]')
+        .trigger("click");
       await flushPromises();
       expect(wrapper.find("[data-dialog]").exists()).toBe(true);
 
@@ -1613,6 +1629,8 @@ describe("/oswiadczenia, an answer still on its way when the stranger signs in",
 
 describe("/oswiadczenia, a date typed but not sent when the reader signs in", () => {
   beforeEach(() => {
+    // A reading before, so the tally and its „Zaloguj się” are there.
+    strangerMine = { today: 1, total: 1 };
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -1623,7 +1641,9 @@ describe("/oswiadczenia, a date typed but not sent when the reader signs in", ()
       .get('[data-testid="declaration-date-input"]')
       .setValue("15.07.1979");
 
-    await wrapper.get('[data-testid="login-banner-login"]').trigger("click");
+    await wrapper
+      .get('[data-testid="declaration-tally-login"]')
+      .trigger("click");
     await flushPromises();
     currentUser.value = READER;
     await vi.waitFor(() =>
