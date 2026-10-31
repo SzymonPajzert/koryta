@@ -176,11 +176,17 @@ function waitForStall() {
  * letter, has to come out of the field too. */
 function typeDate(event: Event) {
   const input = event.target as HTMLInputElement;
-  const { inputType, data } = event as InputEvent;
+  // A plain `input` event, as autofill sends, has no `inputType`.
+  const { inputType = "", data } = event as InputEvent;
   const next = dotTyped(
     input.value,
     input.selectionStart ?? input.value.length,
-    inputType === "insertText" ? data : null,
+    {
+      inserted: inputType === "insertText" ? data : null,
+      deleted: inputType.startsWith("delete")
+        ? { forward: inputType.includes("Forward"), before: dateText.value }
+        : undefined,
+    },
   );
   if (next.text !== input.value) {
     input.value = next.text;

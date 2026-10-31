@@ -65,24 +65,30 @@ describe("readTyped", () => {
 });
 
 /** What the field shows as a reader types: the digits with the dots put in,
- * each with the first digit after it, and the caret where the next digit
- * goes. */
+ * the one after the day and after the month as soon as they are typed, and
+ * the caret where the next digit goes. */
 describe("dotTyped", () => {
   /** The field after typing `keys` one by one at its end, as a phone's keypad
    * does. */
   function typeKeys(keys: string): string {
     let text = "";
     for (const key of keys) {
-      text = dotTyped(text + key, text.length + 1, key).text;
+      text = dotTyped(text + key, text.length + 1, { inserted: key }).text;
     }
     return text;
   }
 
+  /** The field after a Backspace at its end. */
+  const backspace = (text: string) =>
+    dotTyped(text.slice(0, -1), text.length - 1, {
+      deleted: { forward: false, before: text },
+    }).text;
+
   it.each([
     ["1", "1"],
-    ["15", "15"],
+    ["15", "15."],
     ["150", "15.0"],
-    ["1507", "15.07"],
+    ["1507", "15.07."],
     ["15071", "15.07.1"],
     ["15071979", "15.07.1979"],
   ])("shows %s as %s", (keys, shown) => {
@@ -91,12 +97,13 @@ describe("dotTyped", () => {
 
   it("takes no ninth digit, and no letter", () => {
     expect(typeKeys("150719791")).toBe("15.07.1979");
-    expect(typeKeys("15a0b7")).toBe("15.07");
+    expect(typeKeys("15a0b7")).toBe("15.07.");
     expect(typeKeys("abc")).toBe("");
   });
 
   // A computer's keyboard, or a phone's with a dot on it: the reader's own
-  // separator closes the day or the month, whichever digits it follows.
+  // separator closes the day or the month, whichever digits it follows, and
+  // one typed where the field put a dot already is that dot.
   it.each([
     ["15.", "15."],
     ["15.07.1979", "15.07.1979"],
@@ -106,36 +113,36 @@ describe("dotTyped", () => {
     ["15/07/1979", "15.07.1979"],
     ["15 07 1979", "15.07.1979"],
     ["15-07-1979", "15.07.1979"],
-    ["15..07", "15.07"],
-    [".15", "15"],
+    ["15..07", "15.07."],
+    [".15", "15."],
     ["15.07.1979.", "15.07.1979"],
   ])("reads the separators of %j as the dots of %j", (keys, shown) => {
     expect(typeKeys(keys)).toBe(shown);
   });
 
-  // A dot shows with the digit after it, so every backspace takes a digit,
-  // and a dot left with nothing after it goes with that digit.
+  // The dots are the field's: a Backspace that would take only a dot takes
+  // the digit before it too, so every press takes one digit.
   it("gives back one digit to every backspace", () => {
     const shown: string[] = [];
     let text = "15.07.1979";
     while (text) {
-      text = dotTyped(text.slice(0, -1), text.length - 1).text;
+      text = backspace(text);
       shown.push(text);
     }
     expect(shown).toEqual([
       "15.07.197",
       "15.07.19",
       "15.07.1",
-      "15.07",
+      "15.07.",
       "15.0",
-      "15",
+      "15.",
       "1",
       "",
     ]);
   });
 
   it("takes a date pasted or filled in whole, whatever its separators", () => {
-    expect(dotTyped("15.07.1979", 10, "15.07.1979")).toEqual({
+    expect(dotTyped("15.07.1979", 10, { inserted: "15.07.1979" })).toEqual({
       text: "15.07.1979",
       caret: 10,
     });
@@ -149,14 +156,34 @@ describe("dotTyped", () => {
   // the dots move around it.
   it("keeps the caret after the digit it was after", () => {
     // „15.07.1979” with its „0” taken out by a backspace.
-    expect(dotTyped("15.7.1979", 3)).toEqual({ text: "15.71.979", caret: 2 });
+    expect(
+      dotTyped("15.7.1979", 3, {
+        deleted: { forward: false, before: "15.07.1979" },
+      }),
+    ).toEqual({ text: "15.71.979", caret: 2 });
     // A „1” typed where the „0” was.
-    expect(dotTyped("151.71.979", 3, "1")).toEqual({
+    expect(dotTyped("151.71.979", 3, { inserted: "1" })).toEqual({
       text: "15.17.1979",
       caret: 4,
     });
     // A separator typed in the middle is not one that closes anything.
-    expect(dotTyped("15..07", 3, ".")).toEqual({ text: "15.07", caret: 2 });
+    expect(dotTyped("15..07", 3, { inserted: "." })).toEqual({
+      text: "15.07",
+      caret: 2,
+    });
+  });
+
+  it("takes the digit beside a dot that Backspace or Delete took in the middle", () => {
+    // Backspace with the caret after the first dot of „15.07.1979”.
+    expect(
+      dotTyped("1507.1979", 2, {
+        deleted: { forward: false, before: "15.07.1979" },
+      }),
+    ).toEqual({ text: "10.71.979", caret: 1 });
+    // Delete with the caret before it.
+    expect(
+      dotTyped("1507", 2, { deleted: { forward: true, before: "15.07." } }),
+    ).toEqual({ text: "15.7", caret: 2 });
   });
 });
 

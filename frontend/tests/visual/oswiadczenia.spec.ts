@@ -213,9 +213,10 @@ test("oswiadczenia-zla-data", OSWIADCZENIA, async ({ page }, testInfo) => {
   await expectFitsThePhone(page, testInfo);
 });
 
-/** Part of a date, and the reader stopped: the button still skips, since
- * part of a date is of no use, and after a few seconds the line beside the
- * label asks for all eight digits (round bip-czytanie-r6). */
+/** Part of a date, and the reader stopped: the dot after the month is in
+ * already, the button still skips, since part of a date is of no use, and
+ * after a few seconds the line beside the label asks for all eight digits
+ * (round bip-czytanie-r6). */
 test("oswiadczenia-niepelna-data", OSWIADCZENIA, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const desk = readerAtWork();
@@ -223,8 +224,8 @@ test("oswiadczenia-niepelna-data", OSWIADCZENIA, async ({ page }, testInfo) => {
   await cropShown(page, 1);
 
   const date = page.getByTestId("declaration-date-input");
-  await date.pressSequentially("150719");
-  await expect(date).toHaveValue("15.07.19");
+  await date.pressSequentially("1507");
+  await expect(date).toHaveValue("15.07.");
   await expect(page.getByTestId("declaration-skip")).toHaveText("Pomiń");
   const reading = page.getByTestId("declaration-reading");
   await expect(reading).toHaveText("Wpisz wszystkie 8 cyfr.", {
