@@ -443,6 +443,36 @@ describe("/oswiadczenia, the tally at the top", () => {
     );
   });
 
+  it("shows a signed-in reader whom they found, in the column a stranger is asked to sign in in", async () => {
+    window.localStorage.removeItem(READER_KEY);
+    currentUser.value = READER;
+    mockAuthRequest.mockImplementation(async () =>
+      served(["b1", "b2", "b3"], { today: 2, total: 7, found: 3 }),
+    );
+    const wrapper = await mountPage();
+    await cropShown(wrapper);
+
+    await vi.waitFor(() =>
+      expect(tallyRows(wrapper)).toEqual(["Sprawdzono 7", "Znaleziono 3"]),
+    );
+    const tally = wrapper.get('[data-testid="declaration-tally"]');
+    expect(tally.text().replace(/\s+/g, " ")).toContain(
+      "Znalezione osoby zapisujemy na Twoim koncie",
+    );
+    // The button is the router's link; the test's router draws no href.
+    const list = wrapper
+      .findAllComponents({ name: "VBtn" })
+      .find(
+        (button) =>
+          button.attributes("data-testid") === "declaration-tally-found",
+      );
+    expect(list?.text()).toBe("Zobacz listę");
+    expect(list?.props("to")).toBe("/oswiadczenia/znalezione");
+    expect(
+      wrapper.find('[data-testid="declaration-tally-login"]').exists(),
+    ).toBe(false);
+  });
+
   it("says how many of them it found in companies when the server counts them", async () => {
     const unregister = registerEndpoint("/api/declarations/a1/answer", {
       method: "POST",

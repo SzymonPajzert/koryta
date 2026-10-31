@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useRuntimeConfig } from "#app";
 import answer from "../../../../server/api/declarations/[id]/answer.post";
 import claim from "../../../../server/api/declarations/claim.post";
+import found from "../../../../server/api/declarations/found.get";
 import next from "../../../../server/api/declarations/next.get";
 import sweep from "../../../../server/api/declarations/sweep.post";
 import publishQueued from "../../../../server/api/declarations/publish-queued.post";
@@ -49,6 +50,7 @@ const mocks = vi.hoisted(() => {
     queueFor: vi.fn(),
     admitToQueue: vi.fn(),
     claimAnswers: vi.fn(),
+    findsOf: vi.fn(),
     /** What `getFirestore` hands the endpoints: nothing to read, unless a
      * test runs the real claim against something. */
     db: {} as unknown,
@@ -85,6 +87,9 @@ vi.mock("../../../../server/utils/declarations", async (original) => ({
   queueFor: mocks.queueFor,
   admitToQueue: mocks.admitToQueue,
   claimAnswers: mocks.claimAnswers,
+}));
+vi.mock("../../../../server/utils/declarationFinds", () => ({
+  findsOf: mocks.findsOf,
 }));
 vi.mock("../../../../server/utils/declarationPublish", () => ({
   matchAndDrain: mocks.matchAndDrain,
@@ -342,6 +347,37 @@ describe("api/declarations/next", () => {
 
     await expect(next({} as never)).rejects.toMatchObject({ statusCode: 401 });
     expect(mocks.queueFor).not.toHaveBeenCalled();
+  });
+});
+
+describe("api/declarations/found", () => {
+  const FINDS = { people: [], total: 0 };
+
+  beforeEach(() => {
+    mocks.findsOf.mockResolvedValue(FINDS);
+  });
+
+  it("lists whom the token's account found, never from a cache", async () => {
+    expect(await found({} as never)).toBe(FINDS);
+    expect(mocks.findsOf.mock.calls[0]![1]).toBe("reader");
+    expect(globalThis.setResponseHeader).toHaveBeenCalledWith(
+      {},
+      "Cache-Control",
+      "private, no-store",
+    );
+  });
+
+  it("shows a browser's reader id nobody: whom it found waits for an account", async () => {
+    mocks.request.headers = { "x-reader-id": READER };
+    // As the real `getUser` answers a request without a token.
+    mocks.getUser.mockRejectedValue(
+      Object.assign(new Error("Unauthorized"), { statusCode: 401 }),
+    );
+
+    await expect(found({} as never)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    expect(mocks.findsOf).not.toHaveBeenCalled();
   });
 });
 

@@ -650,6 +650,33 @@ export type DeclarationClaimResult = {
   settled: number;
 };
 
+/** People the list of a reader's finds shows at most, the newest first. */
+export const FOUND_LIST_LIMIT = 100;
+
+/** One person a reader found (`declarationReaderFinds`), as the list a
+ * signed-in reader opens from the tally shows them. */
+export type DeclarationFind = {
+  /** The person's page, followed through merges. */
+  id: string;
+  name: string;
+  /** Whether everybody may see the page (`pageIsPublic`). A draft is listed
+   * all the same: any signed-in reader may open one. */
+  published: boolean;
+  /** The declaration the crop was cut from, as the reading task named it. */
+  unit: string;
+  office: LocalOffice | null;
+  declarationYear: number | null;
+};
+
+/** `GET /api/declarations/found`: the people a signed-in reader found, the
+ * newest first. A reader without an account is shown only how many. */
+export type DeclarationFinds = {
+  people: DeclarationFind[];
+  /** Everybody the reader found, the tally's „Znaleziono”: more than
+   * `people` holds past `FOUND_LIST_LIMIT`, or where a page has gone since. */
+  total: number;
+};
+
 /** Why a page whose date matches was not published automatically. Each is
  * somebody's decision the automation must not overrule, or a doubt it cannot
  * settle itself.
