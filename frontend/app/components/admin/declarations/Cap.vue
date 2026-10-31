@@ -9,8 +9,8 @@
       />
 
       <!-- One cell a person, so a limit of ten reads as ten places and how
-           many are taken - the limit is small on purpose, and a plain bar
-           would make 7 of 10 look like 70 of 100. Past thirty cells they
+           many are taken - a plain bar would make 7 of 10 look like 70 of
+           100. Past thirty cells, at the 50 the site ships with, they
            stop being countable, and the bar is plain. The empty cells are
            the neutral ink, faint: the remainder grey of the charts all but
            vanishes on the sage tint. -->

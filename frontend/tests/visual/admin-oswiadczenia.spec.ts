@@ -1,7 +1,10 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./test";
 import { logIn, USERS } from "../e2e/helpers/auth";
-import type { DeclarationOverview } from "../../shared/declarations";
+import {
+  DAILY_AUTO_PUBLISH_LIMIT,
+  type DeclarationOverview,
+} from "../../shared/declarations";
 import { freezeClock } from "./clock";
 import { readyForElementShot } from "./elementShot";
 import {
@@ -152,8 +155,8 @@ test(
 );
 
 /** Right after the deploy, before the job's first upload: the head and the
- * chain at nought, the automatic publication switched off as it ships, and
- * one sentence where the lists will be. */
+ * chain at nought, none of the day's places taken under the limit the site
+ * ships with, and one sentence where the lists will be. */
 test("admin-oswiadczenia-puste", OSWIADCZENIA, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await openOverview(page, declarationOverviewEmpty);
@@ -163,8 +166,11 @@ test("admin-oswiadczenia-puste", OSWIADCZENIA, async ({ page }, testInfo) => {
   );
   await expect(page.getByTestId("declarations-states")).toHaveCount(0);
   const cap = page.getByTestId("declarations-cap");
-  await expect(cap).toHaveAttribute("data-limit", "0");
-  await expect(cap).toContainText("publikowanie automatyczne wyłączone");
+  await expect(cap).toHaveAttribute(
+    "data-limit",
+    String(DAILY_AUTO_PUBLISH_LIMIT),
+  );
+  await expect(cap).toContainText(`z ${DAILY_AUTO_PUBLISH_LIMIT}`);
   await expect(cap).toContainText("Nikt nie czeka w kolejce.");
 
   await page.mouse.move(0, 0);

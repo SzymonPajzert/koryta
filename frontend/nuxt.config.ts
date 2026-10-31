@@ -94,10 +94,11 @@ export default defineNuxtConfig({
       "koryta-pl",
     // People the site publishes itself a Warsaw day, once enough readers agree
     // that their asset declaration gives the birth date their page does
-    // (server/utils/declarationPublish.ts). 0 is off, and it ships off until
-    // NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT is set; the readings and the
+    // (server/utils/declarationPublish.ts): DAILY_AUTO_PUBLISH_LIMIT in
+    // shared/declarations.ts. NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT overrides
+    // it, and 0 switches the automatic publication off; the readings and the
     // queue build up either way.
-    declarationsDailyPublishLimit: 0,
+    declarationsDailyPublishLimit: 50,
     public: {
       isLocal,
       /** The published extension's id, so `/rozszerzenie` knows who to hand a

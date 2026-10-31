@@ -23,7 +23,7 @@
           Każdy wycinek czyta kilka osób. Gdy dwie zalogowane osoby wpiszą tę
           samą datę, uznajemy ją za odczytaną, a jeśli zgadza się z datą osoby,
           której szkic mamy na stronie, strona może zostać opublikowana
-          automatycznie - kilka osób dziennie.
+          automatycznie - do kilkudziesięciu osób dziennie.
         </p>
         <p class="mb-0">
           Bez konta też możesz czytać. Twoje odczyty zapisujemy wtedy w tej

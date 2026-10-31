@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "automat-publikuje-do-50-osob-dziennie",
+    title: "Automat publikuje do 50 osób dziennie",
+    description:
+      "Publikowanie automatyczne z oświadczeń majątkowych było wyłączone. Teraz serwis sam publikuje do 50 szkiców dziennie, gdy odczytana data urodzenia zgadza się z datą na stronie osoby.",
+    steps: [
+      "Na /admin/oswiadczenia „Dziś” pokazuje, ilu osób automat opublikował dziś, „z 50”, z paskiem zamiast kratek.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
     id: "dzialaj-z-nami-na-oswiadczenia",
     title: "„Działaj z nami” i koryta.pl/start prowadzą na /oswiadczenia",
     description:

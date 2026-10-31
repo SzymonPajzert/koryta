@@ -9,9 +9,9 @@
       <InfoBubble label="Znalezione osoby">
         <p class="mb-2">{{ FOUND_RULE }}</p>
         <p class="mb-0">
-          Szkic publikujemy automatycznie, kilka dziennie, gdy dwie osoby wpiszą
-          tę samą datę, która zgadza się z datą z KRSu. Szkic widzą tylko
-          zalogowani, a opublikowaną stronę wszyscy.
+          Szkic publikujemy automatycznie, do kilkudziesięciu dziennie, gdy dwie
+          osoby wpiszą tę samą datę, która zgadza się z datą z KRSu. Szkic widzą
+          tylko zalogowani, a opublikowaną stronę wszyscy.
         </p>
       </InfoBubble>
     </div>

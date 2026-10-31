@@ -28,13 +28,15 @@ export const READERS_TO_AGREE = 2;
  * the admin list instead. */
 export const DISPUTED_AFTER = 6;
 
-/** People published automatically per Warsaw day, as proposed. Over
- * it they wait, oldest first, for the next day.
+/** People published automatically per Warsaw day. Over it they wait, oldest
+ * first, for the next day; an admin's press of „Opublikuj z kolejki” goes past
+ * it.
  *
- * Not what the site enforces: that is `declarationsDailyPublishLimit` in the
- * runtime config (NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT), which ships at 0, so
- * nothing is published automatically until he sets it. */
-export const DAILY_AUTO_PUBLISH_LIMIT = 10;
+ * What the site ships as `declarationsDailyPublishLimit` in nuxt.config.ts,
+ * which the endpoints read (`publishLimitOf`) and
+ * NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT overrides; 0 switches the automatic
+ * publication off. A test keeps the two equal. */
+export const DAILY_AUTO_PUBLISH_LIMIT = 50;
 
 /** The uid the automatic publication writes under. It contains "pipeline", so
  * `isAutomatedUid` keeps it out of the contributors' stats and the activity

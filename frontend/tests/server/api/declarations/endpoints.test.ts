@@ -9,6 +9,7 @@ import next from "../../../../server/api/declarations/next.get";
 import sweep from "../../../../server/api/declarations/sweep.post";
 import publishQueued from "../../../../server/api/declarations/publish-queued.post";
 import {
+  DAILY_AUTO_PUBLISH_LIMIT,
   PRESS_BATCH,
   READ_NAME_MAX_LENGTH,
 } from "../../../../shared/declarations";
@@ -580,17 +581,21 @@ describe("the daily limit, as the endpoints read it", () => {
     expect(mocks.drainPublications.mock.calls[0]![2]).toBe(0);
   });
 
-  it("ships at 0", () => {
+  it("ships at DAILY_AUTO_PUBLISH_LIMIT", () => {
     // Read as text: loading the config would load Nuxt. The key is the one
     // the endpoints read, and NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT maps to
-    // it, so a rename shows up here and not on the day the limit is set.
+    // it, so a rename shows up here and not on a day nothing is published.
     // From the working directory: `import.meta.url` is not a file url under
     // the Nuxt test environment.
     const path = existsSync(resolve(process.cwd(), "nuxt.config.ts"))
       ? resolve(process.cwd(), "nuxt.config.ts")
       : resolve(process.cwd(), "frontend", "nuxt.config.ts");
+    expect(DAILY_AUTO_PUBLISH_LIMIT).toBe(50);
     expect(readFileSync(path, "utf8")).toMatch(
-      /^\s+declarationsDailyPublishLimit: 0,$/m,
+      new RegExp(
+        `^\\s+declarationsDailyPublishLimit: ${DAILY_AUTO_PUBLISH_LIMIT},$`,
+        "m",
+      ),
     );
   });
 });
