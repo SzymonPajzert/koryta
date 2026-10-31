@@ -172,9 +172,11 @@ describe("MentionArticleList on a person's page", () => {
     );
     // What the section holds, one sentence each.
     const lead = list.get('[data-testid="node-mentions-lead"]').text();
-    expect(lead).toContain("Teksty prasowe, w których pada ta nazwa");
     expect(lead).toContain(
-      "Oświadczenia majątkowe z BIP mają tę samą datę urodzenia co ta strona.",
+      "Artykuły prasowe wspomniające osobę i dokumenty oświadczeń majątkowych.",
+    );
+    expect(lead).toContain(
+      "Oświadczenia majątkowe z BIP mają tę samą datę urodzenia co ta osoba.",
     );
   });
 
@@ -218,7 +220,7 @@ describe("MentionArticleList on a person's page", () => {
     const one = await mountPersonList("one");
     expect(title(one)).toBe("Oświadczenie majątkowe");
     expect(one.get('[data-testid="node-mentions-lead"]').text()).toBe(
-      "Oświadczenie majątkowe z BIP ma tę samą datę urodzenia co ta strona.",
+      "Oświadczenie majątkowe z BIP ma tę samą datę urodzenia co ta osoba.",
     );
   });
 
