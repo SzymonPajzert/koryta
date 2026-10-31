@@ -105,12 +105,19 @@ def test_normalize_url_collapses_echoed_query_junk() -> None:
 
 
 def test_normalize_url_drops_image_map_coordinates() -> None:
+    assert normalize_url("https://bip.x.pl/mapa.php?x=123&y=101&id=5") == (
+        "https://bip.x.pl/mapa.php?id=5"
+    )
+
+
+def test_normalize_url_keeps_where_an_akcessnet_page_sits() -> None:
+    # Without x and y this article answers "Błąd 404" (10-31).
     assert normalize_url(
         "https://www.bip.tczow.akcessnet.net/index.php"
         "?job=wiad&idg=4&id=377&x=123&y=101&n_id=449"
     ) == (
         "https://www.bip.tczow.akcessnet.net/index.php"
-        "?id=377&idg=4&job=wiad&n_id=449"
+        "?id=377&idg=4&job=wiad&n_id=449&x=123&y=101"
     )
 
 

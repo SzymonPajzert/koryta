@@ -14,8 +14,10 @@ from jobs.bip_crawler.tests.test_people_mode_review import (
     search,
 )
 from scrapers.bip.classify import normalize_url
+from scrapers.bip.people import Seeker, candidates
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
+from scrapers.common.links import LinkContext
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.stores import BipQueue
 from stores.bip_bundles import LocalBundleStore
@@ -194,3 +196,15 @@ def test_a_paused_host_gets_no_token_until_the_pause_is_over():
     assert not bucket.acquire("h")
     now[0] = 31.5
     assert bucket.acquire("h")
+
+
+def test_akcessnet_menu_links_are_pages_not_files():
+    # An AkcessNet person page lent its person every menu link (10-31).
+    base = "https://www.bip.x.akcessnet.net"
+    links = [
+        LinkContext(f"{base}/index.php?idg=4&id=375&x=138&y=16", "Rada Gminy"),
+        LinkContext(f"{base}/upload/plik,20250430,kowalski.pdf", "za 2024"),
+    ]
+    jan = Seeker.of("k", "Jan", "Kowalski")
+    found = candidates(f"{base}/o", "Jan Kowalski - oświadczenia", links, [jan])
+    assert [c.url for c in found] == [links[1].url]

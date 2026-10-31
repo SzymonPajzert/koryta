@@ -108,14 +108,15 @@ def normalize_url(url: str) -> str:
         return clean
     pairs: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for key, value in parse_query(query):
-        key = _AMP_PREFIX_RE.sub("", key)
+    parsed = [(_AMP_PREFIX_RE.sub("", key), value) for key, value in parse_query(query)]
+    # AkcessNet (?idg=) places a page in its menu by x and y: without them every
+    # page below the top answers "Błąd 404", articles included (10-31).
+    noise = _NOISE_QUERY_PARAMS
+    if any(key.lower() == "idg" for key, _ in parsed):
+        noise = noise - {"x", "y"}
+    for key, value in parsed:
         lowered = key.lower()
-        if (
-            not key
-            or lowered in _NOISE_QUERY_PARAMS
-            or lowered.startswith(_NOISE_QUERY_PREFIXES)
-        ):
+        if not key or lowered in noise or lowered.startswith(_NOISE_QUERY_PREFIXES):
             continue
         pair = (key, value)
         if pair in seen:
