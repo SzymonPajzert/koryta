@@ -264,3 +264,64 @@ def test_a_sitemap_that_says_not_now_is_read_again_by_the_next_unit(tmp_path):
     people, _, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
     assert "u1.pl" not in people._sitemaps
     assert people._sitemap_urls("https://u1.pl") == ["https://u1.pl/oswiadczenia"]
+
+
+class Redirects(Web):
+    """A site some of whose addresses answer 301 to another."""
+
+    def __init__(self, sites, moved: dict[str, str]) -> None:
+        super().__init__(sites)
+        self.moved = moved
+
+    def fetch(self, url: str, timeout: float, user_agent: str) -> HttpResult:
+        if url in self.moved:
+            self.calls.append(url)
+            return HttpResult(url, 301, "text/html", b"", location=self.moved[url])
+        return super().fetch(url, timeout, user_agent)
+
+
+def test_a_redirect_is_asked_about_in_robots_txt_hop_by_hop(tmp_path):
+    # AkcessNet links /admin, which goes to the /admin/ robots.txt disallows.
+    sites = {
+        **DECLARATIONS,
+        "https://u1.pl": html(
+            "BIP",
+            '<a href="/admin">Oświadczenia majątkowe - panel</a>'
+            '<a href="/stare-om">Oświadczenia majątkowe radnych</a>',
+        ),
+        "https://u1.pl/admin/": html("Panel", '<a href="/f/9.pdf">Jan Nowak</a>'),
+    }
+    moved = {"https://u1.pl/admin": "/admin/", "https://u1.pl/stare-om": "om"}
+    web = Redirects(sites, moved)
+    _, store, _, _ = search(
+        tmp_path,
+        {},
+        [row("n", "u1", "Jan", "Nowak")],
+        web=web,
+        robots=lambda url: "/admin/" not in url,
+    )
+    assert "https://u1.pl/admin/" not in web.calls
+    assert "https://u1.pl/om" in web.calls
+    assert store.people["n"].status == "found"
+
+
+def test_a_start_whose_robots_txt_does_not_answer_is_unreachable(tmp_path):
+    # Not robots, which no default run retries: the start's final slash put
+    # it through the as-linked check.
+    seeds_ = {"u1": UnitSeed("u1", bip_urls=["https://u1.pl/bip/"], scopes=["u1.pl"])}
+    store = MemoryBipPeopleStore()
+    store.upsert_people([row("n", "u1", "Jan", "Nowak")])
+    people = PeopleSearch(
+        store,
+        cast("BipQueue", FakeFrontier([])),
+        LocalBundleStore(tmp_path / "b"),
+        seeds_,
+        PeopleOptions(workers=1),
+        fetch=Web({}).fetch,
+        robots_allowed=lambda url: False,
+        robots_unreachable=lambda url: True,
+        limiter=HostTokenBucket(0),
+        sleep=lambda s: None,
+    )
+    people.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
+    assert store.people["n"].reason == "unreachable"

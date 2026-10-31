@@ -1,5 +1,6 @@
 import gzip
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -267,3 +268,59 @@ def test_paths_compare_by_their_escapes() -> None:
     assert allowed("User-agent: *\nDisallow: /\n", "/robots.txt")
     assert allowed("User-agent: *\nDisallow:\n", "/x")
     assert allowed("Disallow: /\n", "/x")  # a rule outside any group
+
+
+def test_a_bom_and_a_space_before_the_first_line_hide_nothing() -> None:
+    lines = web.robots_lines("\ufeff User-agent: *\nDisallow: /admin/\n")
+    assert not web.Robots(lines, UA).allowed("https://bip.x.pl/admin/x")
+
+
+def test_a_long_file_of_plain_rules_is_read_by_lookup() -> None:
+    # bip.malopolska.pl's file held 22,884 rules on 10-31.
+    rules = "".join(f"Disallow: /ugx,a,{n},artykul.html\n" for n in range(20_000))
+    more = "Allow: /ugx,a,1,artykul.html?x\nDisallow: /*.zip$\n"
+    robots = web.Robots(f"User-agent: *\n{rules}{more}".splitlines(), UA)
+    started = time.monotonic()
+    for n in range(2_000):
+        assert not robots.allowed(f"https://bip.m.pl/ugx,a,{n},artykul.html")
+    assert time.monotonic() - started < 2
+    assert robots.allowed("https://bip.m.pl/ugx,a,1,artykul.html?x=1")
+    assert robots.allowed("https://bip.m.pl/ugx,a,30000,artykul.html")
+    assert not robots.allowed("https://bip.m.pl/f.zip")
+
+
+def test_a_robots_txt_that_says_not_now_is_a_no_for_a_while(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answers = iter([(429, ""), (200, "User-agent: *\nDisallow: /private\n")])
+
+    def get(url: str, **_: object) -> object:
+        status, text = next(answers)
+
+        class Response:
+            status_code = status
+
+        Response.text = text  # type: ignore[attr-defined]
+        return Response()
+
+    now = [0.0]
+    monkeypatch.setattr(web.cffi_requests, "get", get)
+    cache = RobotsCache("test-agent", clock=lambda: now[0])
+    assert not cache.allowed("https://bip.x.pl/a")
+    assert cache.unreachable("https://bip.x.pl/a")
+    now[0] = web.ROBOTS_BUSY_S + 1
+    assert cache.allowed("https://bip.x.pl/a")
+    assert not cache.allowed("https://bip.x.pl/private/x")
+
+
+def test_an_error_status_denies_whatever_its_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Response:
+        status_code = 500
+        text = ""
+
+    monkeypatch.setattr(web.cffi_requests, "get", lambda url, **_: Response())
+    cache = RobotsCache("test-agent")
+    assert not cache.allowed("https://bip.x.pl/a")
+    assert cache.unreachable("https://bip.x.pl/a")

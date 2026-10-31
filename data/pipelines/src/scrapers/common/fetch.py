@@ -70,6 +70,9 @@ class HttpResult:
     content_type: str
     content: bytes
     error: str = ""
+    #: Where a redirect not followed (``http_get(..., follow=False)``) points,
+    #: as its Location header says: maybe relative to ``url``.
+    location: str = ""
 
     @property
     def ok(self) -> bool:
@@ -81,13 +84,15 @@ def http_get(
     timeout: float = 15.0,
     user_agent: str = DEFAULT_UA,
     impersonate: str = "chrome136",
+    *,
+    follow: bool = True,
 ) -> HttpResult:
     def get(**http1: object) -> requests.Response:
         return _session(impersonate).get(
             url,
             headers={"User-Agent": user_agent},
             timeout=timeout,
-            allow_redirects=True,
+            allow_redirects=follow,
             # A str is taken as the CA file (CURLOPT_CAINFO); the stub says bool.
             verify=verify(),  # type: ignore[arg-type]
             **http1,  # type: ignore[arg-type]
@@ -103,7 +108,7 @@ def http_get(
                 url,
                 headers={"User-Agent": user_agent},
                 timeout=timeout,
-                allow_redirects=True,
+                allow_redirects=follow,
                 verify=verify(),  # type: ignore[arg-type]
             )
 
@@ -127,9 +132,13 @@ def http_get(
         # Gzip after all, under a name curl did not know.
         with contextlib.suppress(OSError, EOFError, zlib.error):
             content = gzip.decompress(content)
+    location = ""
+    if not follow and 300 <= response.status_code < 400:
+        location = response.headers.get("Location", "")
     return HttpResult(
         url=str(response.url),
         status=response.status_code,
         content_type=response.headers.get("Content-Type", ""),
         content=content,
+        location=location,
     )
