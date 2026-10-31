@@ -1,5 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { DecodedIdToken } from "firebase-admin/auth";
+import { findsOf } from "../../../server/utils/declarationFinds";
+import { FOUND_LIST_LIMIT } from "../../../shared/declarations";
 import {
   admitToQueue,
   anonymousUid,
@@ -809,6 +813,137 @@ describe("a reader's finds", () => {
     expect(stored.has(`declarationReaderFinds/${anon}_kowalska`)).toBe(false);
     expect(stored.has(`declarationReaderFinds/${anon}_nowak`)).toBe(false);
     expect((await queueFor(firestore, "a", 1)).mine.found).toBe(2);
+  });
+
+  /** A person page, live or a draft. */
+  function personPage(id: string, fields: Data = {}) {
+    stored.set(`nodes/${id}`, {
+      type: "person",
+      name: `Jan ${id}`,
+      published: true,
+      ...fields,
+    });
+  }
+
+  /** `uid` found `personId` through crop `extractId`, at `at` (a number here:
+   * the double orders by it as Firestore orders the stored instant). */
+  function found(uid: string, personId: string, extractId: string, at: number) {
+    stored.set(`declarationReaderFinds/${uid}_${personId}`, {
+      uid,
+      personId,
+      extractId,
+      at,
+    });
+  }
+
+  it("lists whom a reader found, the newest first, with the declaration that found them", async () => {
+    crop("c1");
+    crop("c2", {
+      declarationYear: 2024,
+      units: [{ teryt: "0264011", unitName: "Testowice", office: "Burmistrz" }],
+    });
+    personPage("szablonowy");
+    personPage("atrapowa", { published: false });
+    found("a", "szablonowy", "c1", 1);
+    found("a", "atrapowa", "c2", 2);
+    found("b", "szablonowy", "c1", 3);
+
+    expect(await findsOf(firestore, "a")).toEqual({
+      total: 2,
+      people: [
+        {
+          id: "atrapowa",
+          name: "Jan atrapowa",
+          published: false,
+          unit: "Testowice",
+          office: "Burmistrz",
+          declarationYear: 2024,
+        },
+        {
+          id: "szablonowy",
+          name: "Jan szablonowy",
+          published: true,
+          unit: "Strzelin",
+          office: "Rada gminy",
+          declarationYear: 2023,
+        },
+      ],
+    });
+    expect(await findsOf(firestore, "c")).toEqual({ people: [], total: 0 });
+  });
+
+  it("lists a page merged since as the page it went into, once", async () => {
+    crop("c1");
+    personPage("stara", { merged_into: "nowa" });
+    personPage("nowa");
+    found("a", "stara", "c1", 1);
+    found("a", "nowa", "c1", 2);
+
+    const { people, total } = await findsOf(firestore, "a");
+    expect(people.map((person) => person.id)).toEqual(["nowa"]);
+    expect(total).toBe(2);
+  });
+
+  it("leaves out a page that is gone, removed or not a person, and counts it", async () => {
+    crop("c1");
+    personPage("jest");
+    personPage("usunieta", { deleted: true });
+    personPage("firma", { type: "place" });
+    found("a", "jest", "c1", 1);
+    found("a", "usunieta", "c1", 2);
+    found("a", "firma", "c1", 3);
+    found("a", "nie-ma", "c1", 4);
+
+    const { people, total } = await findsOf(firestore, "a");
+    expect(people.map((person) => person.id)).toEqual(["jest"]);
+    expect(total).toBe(4);
+  });
+
+  it("lists a person whose crop is gone without the declaration", async () => {
+    personPage("szablonowy");
+    found("a", "szablonowy", "zniknal", 1);
+
+    expect((await findsOf(firestore, "a")).people).toEqual([
+      {
+        id: "szablonowy",
+        name: "Jan szablonowy",
+        published: true,
+        unit: "",
+        office: null,
+        declarationYear: null,
+      },
+    ]);
+  });
+
+  it("lists the newest of a long run, and counts them all", async () => {
+    crop("c1");
+    for (let n = 0; n <= FOUND_LIST_LIMIT; n++) {
+      personPage(`p${n}`);
+      found("a", `p${n}`, "c1", n);
+    }
+
+    const { people, total } = await findsOf(firestore, "a");
+    expect(people).toHaveLength(FOUND_LIST_LIMIT);
+    expect(people[0]!.id).toBe(`p${FOUND_LIST_LIMIT}`);
+    expect(people.map((person) => person.id)).not.toContain("p0");
+    expect(total).toBe(FOUND_LIST_LIMIT + 1);
+  });
+
+  it("has the index its query needs: a reader's finds, the newest first", () => {
+    const file = existsSync(resolve(process.cwd(), "firestore.indexes.json"))
+      ? resolve(process.cwd(), "firestore.indexes.json")
+      : resolve(process.cwd(), "..", "firestore.indexes.json");
+    const indexes = (
+      JSON.parse(readFileSync(file, "utf8")).indexes as {
+        collectionGroup: string;
+        fields: { fieldPath: string; order: string }[];
+      }[]
+    )
+      .filter((index) => index.collectionGroup === "declarationReaderFinds")
+      .map((index) =>
+        index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", "),
+      );
+    expect(indexes).toContain("uid ASCENDING, at DESCENDING");
   });
 });
 

@@ -7,8 +7,10 @@ import {
   DOCUMENT_HOST,
   FIRST_DATE,
   ReadingDesk,
+  readerFinds,
   readingCrops,
 } from "./fixtures/declarations";
+import type { DeclarationFinds } from "../../shared/declarations";
 import { readyForFullPage } from "./fullPage";
 import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
@@ -38,8 +40,13 @@ type Asked = {
 };
 
 /** Answers the reading endpoints from `desk`, as the real ones would: a token
- * or a reader id, or a 401. Returns what the page asked, and with what. */
-async function serveReading(page: Page, desk: ReadingDesk) {
+ * or a reader id, or a 401, and the list of whom the reader found with a token
+ * alone. Returns what the page asked, and with what. */
+async function serveReading(
+  page: Page,
+  desk: ReadingDesk,
+  finds: DeclarationFinds = readerFinds(),
+) {
   const asked: Asked[] = [];
   await page.route(
     (url) => url.pathname.startsWith("/api/declarations/"),
@@ -58,6 +65,14 @@ async function serveReading(page: Page, desk: ReadingDesk) {
           status: 401,
           json: { statusCode: 401, message: "Unauthorized" },
         });
+      }
+      if (request.method() === "GET" && url.pathname.endsWith("/found")) {
+        return headers.authorization
+          ? route.fulfill({ json: finds })
+          : route.fulfill({
+              status: 401,
+              json: { statusCode: 401, message: "Unauthorized" },
+            });
       }
       if (request.method() === "GET" && url.pathname.endsWith("/next")) {
         const count = Number(url.searchParams.get("count")) || 1;
@@ -128,11 +143,14 @@ test("oswiadczenia", OSWIADCZENIA, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const asked = await openSignedIn(page, readerAtWork());
   await cropShown(page, 1);
-  // A reader who signed in sees the tally alone: nothing asks them to sign in.
+  // A reader who signed in is shown whom they found, never asked to sign in.
   await expect
     .poll(() => tallyRows(page))
     .toEqual(["Sprawdzono 12", "Znaleziono 3"]);
   await expect(page.getByTestId("declaration-tally-login")).toHaveCount(0);
+  await expect(page.getByTestId("declaration-tally-found")).toHaveText(
+    "Zobacz listę",
+  );
   await expect(page.getByTestId("declaration-skip")).toHaveText("Pomiń");
   askedSignedIn(asked);
 
@@ -383,5 +401,56 @@ test(
 
     await more.click();
     await expect(info).toHaveCount(0);
+  },
+);
+
+const ZNALEZIONE = { tag: pageTag("oswiadczenia/znalezione") };
+
+/** The people a signed-in reader found, which the tally's „Zobacz listę”
+ * opens: two pages live and a draft, each with the declaration whose crop
+ * found them. */
+test("oswiadczenia-znalezione", ZNALEZIONE, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const asked = await serveReading(page, readerAtWork());
+  await freezeClock(page);
+  await logIn(page, USERS.normal, "/oswiadczenia/znalezione");
+  const rows = page.getByTestId("declaration-find");
+  await expect(rows).toHaveCount(3, { timeout: 30_000 });
+  await expect(rows.first()).toContainText("Jan Szablonowy");
+  await expect(page.getByTestId("declaration-find-state")).toHaveText([
+    "Opublikowana",
+    "Szkic",
+    "Opublikowana",
+  ]);
+  askedSignedIn(asked);
+
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("oswiadczenia-znalezione.png", {
+    fullPage: true,
+  });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+/** Nobody found yet: what makes a person count, and the way back to the
+ * crops. */
+test(
+  "oswiadczenia-znalezione-pusta",
+  ZNALEZIONE,
+  async ({ page }, testInfo) => {
+    test.setTimeout(120_000);
+    await serveReading(page, readerAtWork(), { people: [], total: 0 });
+    await freezeClock(page);
+    await logIn(page, USERS.normal, "/oswiadczenia/znalezione");
+    await expect(page.getByTestId("declaration-finds-empty")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await readyForFullPage(page);
+    await expect(page).toHaveScreenshot("oswiadczenia-znalezione-pusta.png", {
+      fullPage: true,
+    });
+
+    await expectFitsThePhone(page, testInfo);
   },
 );

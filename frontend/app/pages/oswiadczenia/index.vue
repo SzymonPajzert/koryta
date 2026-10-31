@@ -50,7 +50,6 @@
         <section
           v-if="readSoFar > 0"
           class="ow-tally"
-          :class="{ 'ow-tally--alone': user }"
           data-testid="declaration-tally"
         >
           <dl class="ow-tally__figures">
@@ -63,9 +62,12 @@
               <dd>{{ polishNumber(found) }}</dd>
             </div>
           </dl>
-          <div v-if="!user" class="ow-tally__pitch">
+          <!-- The same column for a reader with an account and one without:
+               the one is asked to sign in to keep what they find, the other
+               shown whom they found. -->
+          <div class="ow-tally__pitch">
             <div class="ow-tally__words">
-              <p class="ow-tally__ask">{{ TALLY_INFO_TITLE }}</p>
+              <p class="ow-tally__ask">{{ tallyTitle }}</p>
               <!-- In full beside the button on a wider screen; on a phone
                    behind the "?" -->
               <p class="ow-tally__info ow-tally__info--beside">
@@ -74,11 +76,24 @@
             </div>
             <div class="ow-tally__actions">
               <v-btn
+                v-if="user"
                 color="tally"
                 variant="flat"
                 rounded="lg"
                 height="44"
-                class="text-none ow-tally__login"
+                class="text-none ow-tally__action"
+                to="/oswiadczenia/znalezione"
+                data-testid="declaration-tally-found"
+              >
+                Zobacz listę
+              </v-btn>
+              <v-btn
+                v-else
+                color="tally"
+                variant="flat"
+                rounded="lg"
+                height="44"
+                class="text-none ow-tally__action"
                 data-testid="declaration-tally-login"
                 @click="openSignIn()"
               >
@@ -91,7 +106,9 @@
                 min-width="34"
                 height="34"
                 class="ow-tally__more"
-                aria-label="Po co się logować"
+                :aria-label="
+                  user ? 'Kogo liczymy jako znalezionego' : 'Po co się logować'
+                "
                 aria-controls="declaration-tally-info"
                 :aria-expanded="tallyInfoOpen"
                 data-testid="declaration-tally-more"
@@ -103,12 +120,12 @@
           </div>
         </section>
         <div
-          v-if="!user && readSoFar > 0 && tallyInfoOpen"
+          v-if="readSoFar > 0 && tallyInfoOpen"
           id="declaration-tally-info"
           class="ow-tally__info ow-tally__info--below"
           data-testid="declaration-tally-info"
         >
-          <p class="ow-tally__ask">{{ TALLY_INFO_TITLE }}</p>
+          <p class="ow-tally__ask">{{ tallyTitle }}</p>
           <p class="mb-0">{{ TALLY_INFO }}</p>
         </div>
 
@@ -315,12 +332,17 @@ const current = computed(() => queue.value[0] ?? null);
 /** How many crops this reader has read a date off, and how many people they
  * found that way: the tally at the top, which shows from the first reading
  * on. */
-/** Why to sign in, beside the button on a wider
- * screen, and on a phone under the tally behind its "?", title and all. */
+/** Why to sign in, or for a reader with an account where what they found
+ * is: beside the button on a wider screen, and on a phone under the tally
+ * behind its "?", title and all. */
 const TALLY_INFO_TITLE = "Zaloguj się, by zapisać znalezione daty";
+const TALLY_FOUND_TITLE = "Znalezione osoby zapisujemy na Twoim koncie";
 const TALLY_INFO =
   "Gdy dwie osoby wpiszą tę samą datę, która zgadza się z datą z KRSu, stronę tej osoby publikujemy automatycznie.";
 const tallyInfoOpen = ref(false);
+const tallyTitle = computed(() =>
+  user.value ? TALLY_FOUND_TITLE : TALLY_INFO_TITLE,
+);
 
 const readSoFar = computed(() => mine.value?.total ?? 0);
 const found = computed(() => mine.value?.found ?? 0);
@@ -523,8 +545,9 @@ onMounted(() => {
 }
 
 /* What the reader did so far, split down the middle at every width: the two
-   figures on a coloured pane on the left, as wide as they need, and the ask
-   with its button on paper on the right. In Oliwka, from the palette rounds. */
+   figures on a coloured pane on the left, as wide as they need, and on paper
+   on the right the ask with its button, to sign in or to the list of whom
+   the reader found. In Oliwka, from the palette rounds. */
 .ow-tally {
   background: rgb(var(--v-theme-tally-pale));
   border: 1px solid rgba(var(--v-border-color), 0.16);
@@ -534,11 +557,6 @@ onMounted(() => {
   margin-top: 16px;
   max-width: 880px;
   overflow: hidden;
-}
-
-/* A signed-in reader has nothing to be asked: the figures alone. */
-.ow-tally--alone {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The two rows share one grid (their wrappers are `display: contents`), so
@@ -597,7 +615,7 @@ onMounted(() => {
   text-wrap: pretty;
 }
 
-.ow-tally__login {
+.ow-tally__action {
   letter-spacing: 0.01em;
 }
 
@@ -653,13 +671,13 @@ onMounted(() => {
     display: none;
   }
 
-  /* The sign-in takes what the „?” leaves of the column, so the „?” sits at
+  /* The button takes what the „?” leaves of the column, so the „?” sits at
      the paper's edge rather than with a gap after it. */
   .ow-tally__actions {
     width: 100%;
   }
 
-  .ow-tally__login {
+  .ow-tally__action {
     flex: 1 1 auto;
   }
 }
@@ -686,7 +704,7 @@ onMounted(() => {
     flex: 1 1 auto;
   }
 
-  .ow-tally__login {
+  .ow-tally__action {
     flex: none;
   }
 }

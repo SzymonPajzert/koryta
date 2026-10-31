@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type {
   DeclarationAnswer,
   DeclarationAnswerResult,
+  DeclarationFinds,
   DeclarationQueue,
   DeclarationTask,
 } from "../../../shared/declarations";
@@ -72,6 +73,41 @@ export function readingCrops(): DeclarationTask[] {
     crop(2, "Burmistrz", "Przykładowo (gmina miejska)", 2020),
     crop(3, "Rada powiatu", "Powiat wzorcowy", 2021),
   ];
+}
+
+/** The three people the reader of `readerAtWork` found, for
+ * /oswiadczenia/znalezione: two pages live and a draft. Made up, the people
+ * and the places. */
+export function readerFinds(): DeclarationFinds {
+  return {
+    total: 3,
+    people: [
+      {
+        id: "znalezionaOsoba01",
+        name: "Jan Szablonowy",
+        published: true,
+        unit: "Testowice (gmina miejsko-wiejska)",
+        office: "Rada gminy",
+        declarationYear: 2024,
+      },
+      {
+        id: "znalezionaOsoba02",
+        name: "Anna Atrapowa",
+        published: false,
+        unit: "Przykładowo (gmina miejska)",
+        office: "Burmistrz",
+        declarationYear: 2023,
+      },
+      {
+        id: "znalezionaOsoba03",
+        name: "Piotr Próbny",
+        published: true,
+        unit: "Powiat wzorcowy",
+        office: "Rada powiatu",
+        declarationYear: 2024,
+      },
+    ],
+  };
 }
 
 /** One reader's sitting, as the server would serve it: the crops not yet
