@@ -22,6 +22,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from jobs.bip_crawler import found
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from jobs.bip_crawler.people import run_people_mode
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
@@ -440,6 +441,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     stats = sub.add_parser("stats", help="print bip_queue statistics")
     stats.set_defaults(func=cmd_stats)
+
+    found.add_parser(sub)
     return parser
 
 

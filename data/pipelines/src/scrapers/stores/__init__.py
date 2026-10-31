@@ -965,9 +965,7 @@ Should I run it? (y/n) [n]",
         ctx.io.write_file(
             LocalFile(self.output_path(filename, format), "versioned"), writer
         )
-        if not local_only and self._shared_cache_active(
-            ctx, force_upload=True
-        ):
+        if not local_only and self._shared_cache_active(ctx, force_upload=True):
             ctx.io.write_file(VersionedBackup(filename), writer)
 
     def _shared_cache_active(
@@ -1000,9 +998,8 @@ Should I run it? (y/n) [n]",
         The incremental article pipelines reuse this hook on their read path --
         it is what lets them pick up cached outputs instead of re-processing.
         """
-        if (
-            self.filename is None
-            or not self._shared_cache_active(ctx, force_download=True)
+        if self.filename is None or not self._shared_cache_active(
+            ctx, force_download=True
         ):
             return False
 
@@ -1016,10 +1013,7 @@ Should I run it? (y/n) [n]",
             )
             return False
 
-        print(
-            f"Restored {self.pipeline_name} from shared cache, "
-            f"saving to {dest_path}"
-        )
+        print(f"Restored {self.pipeline_name} from shared cache, saving to {dest_path}")
         return True
 
     def upload_output_to_shared_cache(self, ctx: Context) -> bool:
@@ -1034,9 +1028,8 @@ Should I run it? (y/n) [n]",
         they never go through write_dataframe, so this is where their outputs
         reach the shared cache.
         """
-        if (
-            self.filename is None
-            or not self._shared_cache_active(ctx, force_upload=True)
+        if self.filename is None or not self._shared_cache_active(
+            ctx, force_upload=True
         ):
             return False
 
@@ -1491,4 +1484,10 @@ class BipPeopleStore(metaclass=ABCMeta):
     @abstractmethod
     def outcomes(self) -> dict[str, int]:
         """Counts by status and reason: {"found": 12, "not_found:not_listed": 4}."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def found(self) -> list[PersonRow]:
+        """The candidacies a declaration was downloaded for (status found),
+        most wanted first, as `people_to_search` orders them."""
         raise NotImplementedError()

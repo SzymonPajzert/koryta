@@ -166,6 +166,21 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   there, so a second run on the same directory refuses to start
   (`.crawl.lock`).
 
+### `found`
+
+Write the candidacies the people mode found a declaration for (status found,
+never unconfirmed) to the shared cache, as
+`jobs/bip_crawler/found/date=<UTC day>/<UTC stamp>.jsonl.gz`: key, priority,
+docs, koryta and rejestr.io ids, no name or birth date. The night's people step
+reads the newest one for its declaration groups (`--priority-group
+oswiadczenia-szkice:N`, `oswiadczenia-bez-strony:N`), so run it after a chunk,
+before 04:30.
+
+```bash
+koryta_scrape_bip found --dry-run   # count; write nothing
+koryta_scrape_bip found
+```
+
 ### `stats`
 
 Print queue counters and the last-hour throughput.
