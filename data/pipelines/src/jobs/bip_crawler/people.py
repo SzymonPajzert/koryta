@@ -24,6 +24,10 @@ not_found with a reason, in ``bip_poi`` (``stores.bip_people``):
 - ``download_failed``: links named the person, and no file came down;
 - ``timeout``: the run's time ran out during the walk (retried by default);
 - ``budget``: the unit's own time (``--max-unit-minutes``) ran out;
+- ``throttled``: the BIP kept answering "not now" (429, 503) and pages were
+  left unread for it (retried by default);
+- ``refused``: the BIP answers the crawler with a refusal dressed as a page
+  (not retried by default: it says the same at any pace);
 - ``error``: the unit's search failed unexpectedly (retried by default).
 
 Politeness is the blind crawl's: robots.txt, one request per host per
@@ -187,10 +191,28 @@ _NOT_A_UNITS_BIP = frozenset(
     {"bip.gov.pl", "gov.pl", "epuap.gov.pl", "obywatel.gov.pl", "biznes.gov.pl"}
 )
 #: What `_get` answers instead of a response.
-ROBOTS, UNREACHABLE = "robots", "unreachable"
+ROBOTS, UNREACHABLE, REFUSED = "robots", "unreachable", "refused"
+#: A walk's end when its BIP kept saying "not now" and pages were left unread.
+THROTTLED = "throttled"
 #: Reasons a later run searches again by default: the BIP may answer next time.
 #: no_seed too: a unit that gains a start (`UNIT_STARTS`) is searched then.
-DEFAULT_RETRY = frozenset({"unreachable", "error", "timeout", "no_seed"})
+DEFAULT_RETRY = frozenset({"unreachable", "error", "timeout", "no_seed", THROTTLED})
+#: Answers that mean "not now". The host is left alone `NOT_NOW_PAUSE_S`, then
+#: asked again, `NOT_NOW_TRIES` times in all; a walk that meets
+#: `NOT_NOW_IN_A_ROW` such pages in a row stops. trol.pl's nginx (77 BIPs)
+#: and AkcessNet (26) answered 429 on 10-31; counted as pages read and never
+#: asked again, they cost walks their declarations sections. AkcessNet's limit
+#: lifted within 26 s of a client going quiet.
+_NOT_NOW = frozenset({429, 503})
+NOT_NOW_PAUSE_S = 30.0
+NOT_NOW_TRIES = 3
+NOT_NOW_IN_A_ROW = 3
+#: A refusal of the crawler dressed as a page, the same at any pace (10-31):
+#: SYSTEMDOBIP.PL's 80-byte "Zbyt dużo jednoczesnych połączeń do strony" with
+#: HTTP 200 (E-LINE, 74 BIPs), on the crawler's User-Agent only, also after an
+#: hour of silence. Read as a page with no links, it left their candidacies
+#: no_declarations.
+_REFUSAL = re.compile(r"zbyt duzo jednoczesnych polaczen")
 #: Read as they are on disk, else restored from the shared cache: the night
 #: builds the list, the crawler never rebuilds it. Unpinned, a workspace with
 #: the list but not every tree under its inputs took it for stale: the second
@@ -279,6 +301,19 @@ def _same_page(url: str) -> str:
 
 def _is_file(url: str) -> bool:
     return bool(_FILE.search(url)) or is_file_link(url)
+
+
+def _refused(result: HttpResult) -> bool:
+    """Whether an answer refuses the crawler though it looks like a page:
+    `_REFUSAL`'s notice, or WebShield's bot check ("One moment, please...",
+    10-31 on INTERmedi@'s office websites), which no pace gets past."""
+    if not result.ok:
+        return False
+    head = result.content[:65536]
+    if b"wsidchk" in head and b"One moment, please" in head:
+        return True
+    text = fold(head[:2048].decode("utf-8", "replace"))
+    return len(result.content) < 2048 and bool(_REFUSAL.search(text))
 
 
 def _app_shell(content: bytes, links: list[LinkContext]) -> bool:
@@ -388,7 +423,11 @@ class PeopleSearch:
         self.fetch = fetch
         self.robots_allowed = robots_allowed
         self.robots_unreachable = robots_unreachable
-        self.limiter = limiter or HostTokenBucket(options.rate_interval_s)
+        # No burst: the shared default lets a host take 60 requests at once, and
+        # a walk opening with them drew 429s from AkcessNet after 8 (10-31).
+        self.limiter = limiter or HostTokenBucket(
+            options.rate_interval_s, burst_window_s=options.rate_interval_s
+        )
         self.sleep = sleep
         self.clock = clock
         self.run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -416,12 +455,23 @@ class PeopleSearch:
         """robots.txt, the host's rate, then the fetch.
 
         ROBOTS when robots.txt keeps the crawler out, UNREACHABLE when the host
-        did not even answer for its robots.txt (the cache denies those too).
+        did not even answer for its robots.txt (the cache denies those too),
+        REFUSED when the answer refuses the crawler (`_refused`). A "not now"
+        (`_NOT_NOW`) is asked again after a pause, not past the run's deadline.
         """
         if not self.robots_allowed(url):
             return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
-        self._wait_turn(host_of(url))
-        return self.fetch(url, self.options.request_timeout_s, self.options.user_agent)
+        host = host_of(url)
+        for attempt in range(NOT_NOW_TRIES):
+            if attempt:
+                self.limiter.pause(host, NOT_NOW_PAUSE_S)
+            self._wait_turn(host)
+            result = self.fetch(
+                url, self.options.request_timeout_s, self.options.user_agent
+            )
+            if result.status not in _NOT_NOW or self._past_deadline():
+                break
+        return REFUSED if _refused(result) else result
 
     def _wait_turn(self, host: str) -> None:
         while not self.limiter.acquire(host):
@@ -603,8 +653,24 @@ class PeopleSearch:
         for root in roots:
             frontier.add(normalize_url(root), 100.0, 0, root)
         self._seed_known(out, frontier, roots, seekers, prefer)
-        blocked = down = requests = 0
         budget = self._budget(max(len(seekers), self.unit_sizes.get(unit, 0)))
+        self._walk(out, frontier, seekers, prefer, budget, started)
+        return out
+
+    def _walk(
+        self,
+        out: UnitSearch,
+        frontier: _Frontier,
+        seekers: list[Seeker],
+        prefer: re.Pattern[str] | None,
+        budget: int,
+        started: float,
+    ) -> None:
+        """Read the frontier's pages best first, ``budget`` of them at most, and
+        say in ``out.status`` how the walk ended."""
+        blocked = down = requests = 0
+        # Pages a "not now" kept from the walk, all told and in a row.
+        unread = unread_in_a_row = 0
         # Links that keep turning out to be files cost requests, not pages.
         while (
             frontier
@@ -633,9 +699,19 @@ class PeopleSearch:
                 continue
             result = self._get_page(url)
             if isinstance(result, str):
+                if result == REFUSED:
+                    out.status = REFUSED
+                    break
                 blocked += result == ROBOTS
                 down += result == UNREACHABLE
                 continue
+            if result.status in _NOT_NOW:
+                unread += 1
+                unread_in_a_row += 1
+                if unread_in_a_row >= NOT_NOW_IN_A_ROW:
+                    break
+                continue
+            unread_in_a_row = 0
             requests += 1
             if not result.ok or len(result.content) > self.options.max_doc_bytes:
                 down += result.status == 0
@@ -645,12 +721,13 @@ class PeopleSearch:
                 out.files[url] = result  # a file behind a page-like link
                 continue
             self._read_page(out, result, depth, frontier, seekers, prefer)
+        if unread and out.status in ("searched", "budget"):
+            out.status = THROTTLED
         # Known URLs may find everybody before a page is asked for.
         tried = requests or blocked or down
         if out.pages_ok == 0 and out.status == "searched" and tried:
             only_robots = blocked and not down and requests == 0
             out.status = ROBOTS if only_robots else UNREACHABLE
-        return out
 
     def _read_page(
         self,
@@ -920,6 +997,11 @@ def _outcome(
     if search.status != "searched":
         return "not_found", search.status, 0
     if mine:
+        statuses = {d.status for d in mine}
+        if statuses == {REFUSED}:
+            return "not_found", REFUSED, 0
+        if statuses <= {f"http {status}" for status in _NOT_NOW}:
+            return "not_found", THROTTLED, 0
         return "not_found", "download_failed", 0
     if search.declaration_pages == 0 and not any(
         c.declaration_like for c in search.found

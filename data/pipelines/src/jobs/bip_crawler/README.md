@@ -145,9 +145,13 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   find the person in them), or `not_found` with a reason: `no_seed`,
   `unreachable`, `robots`, `no_declarations`, `not_listed`, `download_failed`,
   `timeout` (the run's time ran out), `budget` (the unit's own
-  `--max-unit-minutes`, 30, ran out; not retried by default), `error`. Tables `bip_poi`, `bip_poi_docs` and `bip_units`
+  `--max-unit-minutes`, 30, ran out; not retried by default), `throttled` (the
+  BIP kept answering 429 or 503, each page asked three times 30 s apart, and
+  pages went unread), `refused` (the BIP answers the crawler with a refusal
+  dressed as a page, such as SYSTEMDOBIP.PL's "Zbyt dużo jednoczesnych
+  połączeń"; not retried by default), `error`. Tables `bip_poi`, `bip_poi_docs` and `bip_units`
   (`stores/bip_people.py`) hold that. A later run searches the pending ones and
-  the `--poi-retry` reasons (default `unreachable,error,timeout,no_seed`; add
+  the `--poi-retry` reasons (default `unreachable,error,timeout,no_seed,throttled`; add
   `unconfirmed` or any other), with `--poi-retry-before` only those last searched
   before a time (the ones an older walk settled: `--poi-retry
   no_declarations,not_listed,robots --poi-retry-before 2026-10-30T05:43Z`);
