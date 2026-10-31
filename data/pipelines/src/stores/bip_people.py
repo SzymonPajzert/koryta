@@ -271,6 +271,15 @@ class PostgresBipPeopleStore(BipPeopleStore):
         )
         return {str(k): int(v) for k, v in rows}
 
+    def found(self) -> list[PersonRow]:
+        rows = self.pg.fetchall(
+            f"""
+            SELECT {_PERSON_COLUMNS} FROM bip_poi WHERE status = 'found'
+             ORDER BY priority, election_year DESC, unit, key
+            """
+        )
+        return [_person(r) for r in rows]
+
 
 class MemoryBipPeopleStore(BipPeopleStore):
     """The same in memory: for tests, and for a run that should leave nothing behind."""
@@ -392,3 +401,8 @@ class MemoryBipPeopleStore(BipPeopleStore):
             label = f"{r.status}:{r.reason}" if r.status == "not_found" else r.status
             counts[label] = counts.get(label, 0) + 1
         return dict(sorted(counts.items()))
+
+    def found(self) -> list[PersonRow]:
+        rows = [r for r in self.people.values() if r.status == "found"]
+        rows.sort(key=lambda r: (r.priority, -r.election_year, r.unit, r.key))
+        return rows
