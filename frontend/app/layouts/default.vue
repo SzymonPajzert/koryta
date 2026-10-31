@@ -29,7 +29,10 @@
     <template #append>
       <v-btn v-if="mdAndUp" text to="/tematy">Tematy</v-btn>
       <v-btn v-if="mdAndUp" text to="/o-nas">O nas</v-btn>
-      <v-btn v-if="mdAndUp" text to="/pomoc">Działaj z nami</v-btn>
+      <!-- To the reading of declarations, not to /pomoc: it is the one task
+           anybody can start on the spot, without an account, and /pomoc is
+           linked from the bottom of it for everything else. -->
+      <v-btn v-if="mdAndUp" text to="/oswiadczenia">Działaj z nami</v-btn>
       <ClientOnly>
         <v-btn v-if="user && pictureURL" icon to="/profil" size="32">
           <v-avatar :image="pictureURL" size="32" />

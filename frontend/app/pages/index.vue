@@ -13,8 +13,8 @@
                reward on the fundraiser - a limited pin - which is spent, so
                the first thing on the page sent a reader to a finished appeal.
                /pomoc is where the current ask lives and stays right as it
-               changes. Same goal as the "Działaj z nami" button below, told
-               apart by `from`. -->
+               changes. The "Działaj z nami" button below goes to
+               /oswiadczenia instead, which links back here at its foot. -->
           <NuxtLink
             to="/pomoc"
             class="d-inline-block mb-8 mx-auto"
@@ -72,7 +72,12 @@
              stray control rather than as the search's companion, and on a
              phone the first screen is better spent getting the reader to the
              map than to a second call to action. The app bar carries the same
-             link on a desktop; the footer is where a phone finds it. -->
+             link on a desktop.
+
+             To /oswiadczenia rather than /pomoc: reading a date off a crop is
+             a task a reader can start this minute, without an account, and the
+             page ends with the way on to /pomoc. So `cta:task`, not
+             `cta:pomoc`. -->
         <v-btn
           :append-icon="mdiChevronRight"
           color="secondary"
@@ -82,9 +87,11 @@
           rounded="lg"
           slim
           text="Działaj z nami"
-          to="/pomoc"
+          to="/oswiadczenia"
           data-testid="home-cta"
-          @click="trackGoal('cta:pomoc', { from: 'home-hero' })"
+          @click="
+            trackGoal('cta:task', { task: 'oswiadczenia', from: 'home-hero' })
+          "
         />
       </v-col>
     </v-row>

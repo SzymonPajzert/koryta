@@ -154,6 +154,13 @@ test("oswiadczenia", OSWIADCZENIA, async ({ page }, testInfo) => {
     "Zobacz listę",
   );
   await expect(page.getByTestId("declaration-skip")).toHaveText("Pomiń");
+  // The way on to /pomoc, at the foot of the page: „Działaj z nami” leads
+  // here now rather than there.
+  const moreHelp = page.getByTestId("declaration-more-help");
+  await expect(moreHelp).toHaveText(
+    "Sprawdź inne sposoby pomocy na stronie - koryta.pl/pomoc.",
+  );
+  await expect(moreHelp.getByRole("link")).toHaveAttribute("href", "/pomoc");
   askedSignedIn(asked);
 
   await readyForFullPage(page);
@@ -314,6 +321,9 @@ test(
       "Pozostałe wycinki czekają na odczyty innych osób",
     );
     await expect(page.getByTestId("declaration-task")).toHaveCount(0);
+    // The card's own button leads to /pomoc, so the line at the foot of the
+    // page does not say it again.
+    await expect(page.getByTestId("declaration-more-help")).toHaveCount(0);
     askedSignedIn(asked);
 
     await readyForFullPage(page);

@@ -243,6 +243,16 @@
       </template>
     </ClientOnly>
 
+    <!-- The way on to the rest of what a reader can do. „Działaj z nami” in
+         the app bar and on the home page bring readers here rather than to
+         /pomoc, so this is how they find everything else. Outside ClientOnly,
+         so the server render carries it. Gone once everything is read: the
+         card that says so has its own button to /pomoc. -->
+    <p v-if="!allRead" class="ow-more" data-testid="declaration-more-help">
+      Sprawdź inne sposoby pomocy na stronie -
+      <NuxtLink to="/pomoc" class="text-ink-info">koryta.pl/pomoc</NuxtLink>.
+    </p>
+
     <!-- Vuetify holds a snackbar to 344 px at the least, wider than a 320 px
          phone's room for it and cutting off both ends of the line at 200%
          zoom; no narrower than that, unless the window is. A sign-in on
@@ -382,6 +392,15 @@ const failureParts = computed(() => lineParts(failure.value));
 
 const finished = computed(
   () => exhausted.value && inFlight.value === 0 && !refilling.value,
+);
+
+/** The „Na razie wszystko odczytane” card is on screen. */
+const allRead = computed(
+  () =>
+    authReady.value &&
+    loadState.value === "ready" &&
+    !current.value &&
+    finished.value,
 );
 
 /** Whether the reader has ever read a crop: a thank-you is for them only. */
@@ -788,6 +807,18 @@ onMounted(() => {
   line-height: 1.5;
   margin: 8px 0 0;
   max-width: 68ch;
+  text-wrap: pretty;
+}
+
+/* The foot of the page, ruled off by the site's hairline so it reads as the
+   page's end rather than as part of the crop's card. */
+.ow-more {
+  border-top: 1px solid rgba(var(--v-border-color), 0.12);
+  color: rgb(var(--v-theme-ink-neutral));
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  margin: 40px 0 0;
+  padding-top: 16px;
   text-wrap: pretty;
 }
 
