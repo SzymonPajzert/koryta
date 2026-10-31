@@ -39,17 +39,41 @@ test.describe("Home", () => {
     }).toPass({ timeout: 30_000 });
   });
 
-  test("the call to action leads to pomoc", async ({ page }) => {
+  test("the call to action leads to oswiadczenia", async ({ page }) => {
     // By testid, not by accessible name: „Działaj z nami” is also the app bar's
     // label, `.first()` is DOM order, and the app bar comes first - so this was
     // green for anything the home page itself did with the button.
     const cta = page.getByTestId("home-cta");
-    await expect(cta).toHaveAttribute("href", "/pomoc");
+    await expect(cta).toHaveAttribute("href", "/oswiadczenia");
 
     await expect(async () => {
       await cta.click();
-      await page.waitForURL(/\/pomoc/, { timeout: 2000 });
+      await page.waitForURL(/\/oswiadczenia$/, { timeout: 2000 });
     }).toPass({ timeout: 30_000 });
+  });
+
+  // The app bar's „Działaj z nami” goes the same way as the home page's; the
+  // footer's still goes to /pomoc, which /oswiadczenia links to at its foot.
+  test("the app bar's Działaj z nami leads to oswiadczenia", async ({
+    page,
+  }) => {
+    await expect(
+      page.locator("header").getByRole("link", { name: "Działaj z nami" }),
+    ).toHaveAttribute("href", "/oswiadczenia");
+    await expect(
+      page.locator("footer").getByRole("link", { name: "Działaj z nami" }),
+    ).toHaveAttribute("href", "/pomoc");
+  });
+
+  test("koryta.pl/start redirects to oswiadczenia", async ({ page }) => {
+    const response = await page.goto("/start", {
+      waitUntil: "domcontentloaded",
+    });
+    expect(new URL(page.url()).pathname).toBe("/oswiadczenia");
+    expect(response?.request().redirectedFrom()?.url()).toMatch(/\/start$/);
+    await expect(
+      page.getByTestId("declaration-more-help").getByRole("link"),
+    ).toHaveAttribute("href", "/pomoc");
   });
 
   test("the search fills most of its line on a desktop", async ({ page }) => {
