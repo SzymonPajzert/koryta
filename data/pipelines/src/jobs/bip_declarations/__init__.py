@@ -21,6 +21,8 @@ cutter's version changes, so a run stopped anywhere loses only the files in hand
 every candidacy with a page on the site, and the crops of their files (`upload`).
 Readers on /oswiadczenia then type the dates in; a typed date the job read from
 a PDF's text layer inside the candidacy's PKW window settles without them.
+`upload --priority 1 --sample 100` is a test run: a hundred crops not sent yet
+of drafts whose page has a birth date, and only the candidacies they serve.
 
 Exit codes: 0 when the work is done; 75 when a run stopped with work left (its
 time ran out, the site did not answer) - the next run carries on; 1 when the
@@ -211,8 +213,9 @@ def cmd_cut(args: argparse.Namespace) -> int:
 
 def cmd_upload(args: argparse.Namespace) -> int:
     store = PostgresBipDeclarationStore(PostgresClient.from_env(max_size=2))
+    priorities = set(args.priority) if args.priority else None
     if args.dry_run:
-        candidacies, extracts = plan(store)
+        candidacies, extracts = plan(store, priorities=priorities, sample=args.sample)
         outcomes = Counter(e.record["outcome"] for e in extracts)
         print(
             f"would send {len(candidacies)} candidacies and {len(extracts)} extracts "
@@ -223,7 +226,13 @@ def cmd_upload(args: argparse.Namespace) -> int:
     site = Site(args.endpoint, token_source(args.endpoint))
     try:
         result = upload(
-            store, site, tag=TAG, run_id=run_id, max_requests=args.max_requests
+            store,
+            site,
+            tag=TAG,
+            run_id=run_id,
+            max_requests=args.max_requests,
+            priorities=priorities,
+            sample=args.sample,
         )
     except SiteUnavailable as exc:
         print(f"the site did not answer: {exc}", file=sys.stderr)
@@ -284,6 +293,20 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
     )
     send.add_argument(
         "--max-requests", type=int, help="stop after this many requests (exit 75)"
+    )
+    send.add_argument(
+        "--priority",
+        type=int,
+        action="append",
+        choices=(0, 1, 3),
+        help="only the candidacies the people mode ranked so: 0 a draft without a "
+        "birth date, 1 a draft with one, 3 a published page (repeat for more)",
+    )
+    send.add_argument(
+        "--sample",
+        type=int,
+        metavar="N",
+        help="a test run: N crops not sent yet, and only the candidacies they serve",
     )
     send.set_defaults(func=cmd_upload)
     status = sub.add_parser("status", help="what is cut and sent")
