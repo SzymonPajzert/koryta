@@ -4,7 +4,7 @@ import argparse
 
 import pytest
 
-from entities.priority_groups import Group, parse_group, repeated
+from entities.priority_groups import Declared, Group, parse_group, repeated
 
 
 def test_a_category_with_a_budget_and_a_cap_on_new_pages():
@@ -48,3 +48,26 @@ def test_two_groups_of_one_category_are_named():
 
     assert repeated(groups) == ["skarb-panstwa"]
     assert repeated(groups[:2]) == []
+
+
+def test_the_two_declaration_groups_are_groups_too():
+    drafts = parse_group("oswiadczenia-szkice:200")
+    no_page = parse_group("oswiadczenia-bez-strony:200:new=100")
+
+    assert (drafts.of_declarations, no_page.of_declarations) == (True, True)
+    assert (drafts.new, no_page.new) == (200, 100)
+    assert not parse_group("skarb-panstwa:10").of_declarations
+    assert "birth date" in drafts.describe()
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_group("oswiadczenia:200")
+
+
+def test_a_declared_person_is_found_by_their_entry_or_their_page():
+    found = Declared(frozenset({"12"}), frozenset({"page"}))
+
+    assert found.covers("12", None)
+    assert found.covers(None, "page")
+    assert found.covers("99", "page")
+    assert not found.covers("99", "other")
+    assert not found.covers(None, None)
+    assert not Declared().covers("12", "page")
