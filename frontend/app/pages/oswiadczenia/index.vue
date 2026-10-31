@@ -87,9 +87,11 @@
               >
                 Zobacz listę
               </v-btn>
+              <!-- Red, where „Zobacz listę” is in Oliwka: a reader without
+                   an account missed the ask to sign in. -->
               <v-btn
                 v-else
-                color="tally"
+                color="tally-sign-in"
                 variant="flat"
                 rounded="lg"
                 height="44"

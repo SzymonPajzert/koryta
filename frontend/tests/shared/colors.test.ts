@@ -198,11 +198,13 @@ describe("roles", () => {
       whiteOnCta: ratio(surface.white, role.cta),
       paleOnCta: ratio(role.ctaPale, role.cta),
       whiteOnCtaDeep: ratio(surface.white, role.ctaDeep),
+      whiteOnTallySignIn: ratio(surface.white, role.tallySignIn),
     }).toEqual({
       blackOnBand: 11.33,
       whiteOnCta: 6.35,
       paleOnCta: 5.17,
       whiteOnCtaDeep: 7.8,
+      whiteOnTallySignIn: 6.54,
     });
   });
 

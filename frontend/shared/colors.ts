@@ -217,6 +217,10 @@ export const role = {
   tally: "#496d4a",
   /** The tally's figure labels on `tally`, and its paper beside them. */
   tallyPale: "#fff8ec",
+  /** The tally's „Zaloguj się”, for a reader without an account: red, so
+   * the ask to sign in is not missed beside the Oliwka pane. White on it:
+   * 6.54:1 */
+  tallySignIn: ink.danger,
 } as const;
 
 /** Colours that belong to somebody else and are used as theirs. */
@@ -295,6 +299,8 @@ export const themeColors = {
   tally: role.tally,
   "on-tally": surface.white,
   "tally-pale": role.tallyPale,
+  "tally-sign-in": role.tallySignIn,
+  "on-tally-sign-in": surface.white,
   "ink-sage": ink.sage,
   "ink-success": ink.success,
   "ink-warning": ink.warning,
