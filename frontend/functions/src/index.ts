@@ -173,6 +173,7 @@ export const scheduledFirestoreExport = onSchedule(
           "declarationCandidacies",
           "declarationExtracts",
           "declarationPublications",
+          "declarationAnswers",
         ],
       });
 
