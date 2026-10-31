@@ -12,11 +12,12 @@ import re
 from entities.util import format_query, parse_query
 
 # URL shapes that serve a file rather than a page. Extensionless endpoints
-# (attachments/download, getFile) are included because the response
-# content-type is the authoritative check.
+# (attachments/download, getFile, bip.net.pl's <office>-api host) are included
+# because the response content-type is the authoritative check.
 _DOC_PATTERNS = [
     re.compile(r"/attachments?/\d+/download", re.IGNORECASE),
     re.compile(r"/attachments/download/\d+", re.IGNORECASE),
+    re.compile(r"/api/attachments/\d+(?:$|[?#])", re.IGNORECASE),
     re.compile(r"/download/attachment/\d+/", re.IGNORECASE),
     re.compile(r"/api/files/\d+", re.IGNORECASE),
     re.compile(r"/fobjects/download/", re.IGNORECASE),
