@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "krotkie-strony-od-gory-ekranu",
+    title: "Krótkie strony zaczynają się u góry ekranu",
+    description:
+      "Strona krótsza niż okno, np. /crawler, adres, którego nie ma, albo /oswiadczenia na wysokim ekranie, stała w połowie jego wysokości, z pustym miejscem nad sobą. Teraz zaczyna się tuż pod paskiem, a w poziomie dalej jest na środku.",
+    steps: [
+      "Otwórz /crawler, a potem /oswiadczenia oddalone (Ctrl i minus) tak, by zostało miejsce pod treścią: tekst zaczyna się tuż pod paskiem, a puste miejsce jest tylko nad stopką.",
+    ],
+    link: "/crawler",
+    area: "public",
+  },
+  {
     id: "oswiadczenia-data-osiem-cyfr",
     title: "Pole daty na /oswiadczenia samo wstawia kropki i czeka na 8 cyfr",
     description:

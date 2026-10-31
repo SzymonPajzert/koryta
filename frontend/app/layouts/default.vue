@@ -315,12 +315,19 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
   min-width: 0;
 }
 
-/* A page narrower than the column is centred in it, not left at its start: a
-   flex item takes the room its content asks for, so a short page whose root
-   claims no width (/crawler, a lone message, a table narrower than a wide
-   screen) sat against the left edge with the rest of the column empty beside
-   it. A page that fills the column is not moved. */
+/* A page narrower than the column is centred across it, not left at its
+   start: a flex item takes the room its content asks for, so a short page
+   whose root claims no width (/crawler, a lone message, a table narrower than
+   a wide screen) sat against the left edge with the rest of the column empty
+   beside it. A page that fills the column is not moved.
+   Down the column it starts at the top. `fill-height` stretches this
+   container to the footer and brings Vuetify's `align-items: center` with it,
+   which put a page shorter than the window halfway down, as much empty space
+   above it as below. `align-content` rather than `align-items`: the home page
+   is four sections, a line each, and stretched lines would still spread them
+   down a tall screen. */
 .v-container.fill-height {
+  align-content: flex-start;
   justify-content: center;
 }
 
