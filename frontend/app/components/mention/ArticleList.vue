@@ -14,15 +14,14 @@
     <template #lead>
       <p class="k-lead" data-testid="node-mentions-lead">
         <template v-if="mentions.length > 0">
-          Teksty prasowe, w których pada ta nazwa - z artykułów
-          przeanalizowanych przez model i ze źródeł dodanych w notatkach oraz
-          przy powiązaniach.
+          Artykuły prasowe wspomniające osobę i dokumenty oświadczeń
+          majątkowych.
         </template>
         <template v-if="declarations.length > 0">
           {{
             declarations.length > 1
-              ? "Oświadczenia majątkowe z BIP mają tę samą datę urodzenia co ta strona."
-              : "Oświadczenie majątkowe z BIP ma tę samą datę urodzenia co ta strona."
+              ? "Oświadczenia majątkowe z BIP mają tę samą datę urodzenia co ta osoba."
+              : "Oświadczenie majątkowe z BIP ma tę samą datę urodzenia co ta osoba."
           }}
         </template>
       </p>
