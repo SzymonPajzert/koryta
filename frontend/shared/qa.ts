@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "oswiadczenia-czerwone-zaloguj-sie",
+    title: "Czerwony przycisk „Zaloguj się” na /oswiadczenia",
+    description:
+      "Osoba bez konta nie zauważyła prośby o zalogowanie, bo przycisk miał ten sam kolor co pasek z liczbami obok. Teraz „Zaloguj się” przy pasku „Sprawdzono” i „Znaleziono” jest czerwony.",
+    steps: [
+      "W oknie prywatnym zapisz jedną datę na /oswiadczenia: nad wycinkiem pojawia się pasek z czerwonym przyciskiem „Zaloguj się”. Po zalogowaniu jest tam zielony przycisk „Zobacz listę”, jak wcześniej.",
+    ],
+    link: "/oswiadczenia",
+    area: "public",
+  },
+  {
     id: "opublikuj-z-kolejki-w-aktywnosci",
     title: "„Opublikuj z kolejki” liczy się jako publikacja admina",
     description:
