@@ -21,7 +21,9 @@
 1. `upload`: sends `/api/ingest/declarations` every candidacy with a page on the site and the crops of their files,
    only what is new or changed since the last upload (`bip_decl_sent`), then calls `/api/declarations/sweep`.
    A typed date inside every PKW window of the person's candidacies settles without readers; the rest go to
-   /oswiadczenia. `--dry-run` says what would go and sends nothing
+   /oswiadczenia. `--dry-run` says what would go and sends nothing. `--priority 1` keeps the candidacies the people
+   mode ranked drafts with a birth date (0 drafts without one, 3 published pages), and `--sample 100` makes it a test
+   run: a hundred crops not sent yet and only the candidacies they serve
 1. Not part of the nightly yet: run it by hand on predator, beside the crawler. It signs in as the people import does
    (`KORYTA_PIPELINE_UID=pipeline-declarations`)
 

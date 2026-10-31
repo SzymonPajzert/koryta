@@ -414,24 +414,40 @@ def _sent_rows(
 
 def plan(
     store: BipDeclarationStore,
+    *,
+    priorities: set[int] | None = None,
+    sample: int | None = None,
 ) -> tuple[list[tuple[dict[str, Any], str]], list[Extract]]:
     """What a run would send: the candidacies and extracts new or changed since
-    the last, each candidacy with its digest."""
+    the last, each candidacy with its digest.
+
+    `priorities` keeps the candidacies the people mode ranked so
+    (`BipPersonOfInterest.priority`: 0 a draft page without a birth date, 1 a
+    draft with one, 3 a published page) and the extracts that serve them.
+    `sample` makes a test run of it: that many crops not sent yet, by their ids
+    so that a dry run picks the same ones, and only the candidacies they serve.
+    """
+    # Every candidacy, kept or not: a file's links tell a council's file from
+    # one person's by everybody they name.
     people = {p.key: p for p in store.candidacies()}
     roots = store.unit_roots()
     candidacies = []
     for person in people.values():
+        if priorities is not None and person.priority not in priorities:
+            continue
         record = candidacy_record(person, roots.get(person.unit, []))
         if record is not None:
             candidacies.append((record, digest(record)))
     on_site = {record["key"] for record, _ in candidacies}
-    wanted = due(((r["key"], d) for r, d in candidacies), store.sent("candidacy"))
     extracts = list(extract_records(store, on_site, people))
     wanted_extracts = due(((e.id, e.digest) for e in extracts), store.sent("extract"))
-    return (
-        [(r, d) for r, d in candidacies if r["key"] in wanted],
-        [e for e in extracts if e.id in wanted_extracts],
-    )
+    extracts = [e for e in extracts if e.id in wanted_extracts]
+    if sample is not None:
+        extracts = sorted((e for e in extracts if e.crop), key=lambda e: e.id)[:sample]
+        served = {key for e in extracts for key in e.record["candidacies"]}
+        candidacies = [(r, d) for r, d in candidacies if r["key"] in served]
+    wanted = due(((r["key"], d) for r, d in candidacies), store.sent("candidacy"))
+    return [(r, d) for r, d in candidacies if r["key"] in wanted], extracts
 
 
 def _with_images(store: BipDeclarationStore, extracts: list[Extract]) -> list[Extract]:
@@ -456,12 +472,14 @@ def upload(
     tag: str,
     run_id: str,
     max_requests: int | None = None,
+    priorities: set[int] | None = None,
+    sample: int | None = None,
     log: Callable[[str], None] = print,
 ) -> UploadResult:
     """Send what is new or changed: the candidacies first, as an extract names
     candidacies the site must already hold, then the extracts, a batch at a time,
-    each batch's answer kept as it comes."""
-    candidacies, extracts = plan(store)
+    each batch's answer kept as it comes. `priorities` and `sample` as in `plan`."""
+    candidacies, extracts = plan(store, priorities=priorities, sample=sample)
     result = UploadResult()
     log(f"to send: {len(candidacies)} candidacies, {len(extracts)} extracts")
     for start in range(0, len(candidacies), MAX_CANDIDACIES_PER_REQUEST):
